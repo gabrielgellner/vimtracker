@@ -161,7 +161,7 @@ With [just](https://github.com/casey/just) installed, `just` lists the recipes:
 | `just install` | Install the working tree's `vimtracker` into `~/.cargo/bin` |
 | `just screenshots` | Remake the manual's screenshots, as SVGs in `docs/manual/src/images` |
 | `just docs`, `just docs-serve` | Build the manual, or serve it in a browser as it changes, with [mdBook](https://rust-lang.github.io/mdBook/) |
-| `just live start`, `keys`, `text`, `screen`, `stop` | Drive the release build in a kitty window of its own, to check a change by hand |
+| `just live start`, `keys`, `text`, `screen`, `shot`, `stop` | Drive the release build in a kitty window of its own, to check a change by hand ([CONTRIBUTING.md](CONTRIBUTING.md#checking-the-real-program)) |
 | `just live-bridge-install`, `just live-bridge-uninstall` | Link the comparison harness's bridge into Ableton Live's User Library, or take it away |
 | `just changelog-preview`, `just bump`, `just release` | Make a release: see [CONTRIBUTING.md](CONTRIBUTING.md#releases) |
 

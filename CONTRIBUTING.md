@@ -38,9 +38,14 @@ just live screen                # print what's on screen
 just live stop
 ```
 
-`screen` prints text only, so images such as the filter's curve don't show. A key can't be held
-from here, so what a held key does is tested in `crates/vt-tui/tests/app.rs`, which can say when a
-key is let go.
+`screen` prints text only, so images such as the filter's curve don't show. To see them, start
+with `VT_LIVE_SHOW=1`, which opens the window where it can be seen, at the 163 by 42 the program is
+laid out for, rather than minimised, and `just live shot out.png` saves a picture of that window
+alone, kitty's images and all. Set `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` to folders of the check's
+own first, so the real ones are left alone.
+
+A key can't be held from here, so what a held key does is tested in `crates/vt-tui/tests/app.rs`,
+which can say when a key is let go.
 
 ## Pull requests and CI
 
