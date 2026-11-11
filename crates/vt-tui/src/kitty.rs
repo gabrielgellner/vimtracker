@@ -15,9 +15,11 @@ use flate2::write::ZlibEncoder;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
 use vt_engine::engine::PLAYHEADS;
+use vt_engine::track_state::LfoNow;
 use vt_model::bank::{ContentHash, Points};
 use vt_model::constants::TRACK_ENVELOPES;
 use vt_model::insert::{Compressor, Equaliser, INSERTS, Insert, MAX_PARAMS};
+use vt_model::lfo::{LFOS_PER_TRACK, Lfo};
 use vt_model::song::{FilterMode, FilterType, Machine, Track};
 
 use crate::app::App;
@@ -36,10 +38,10 @@ use crate::views::sample::{
     MarkKind, WAVE_ROWS, WaveOnScreen, lines_placed, mark_reach, marks_placed, overlaid,
 };
 use crate::views::track::{
-    DIAGRAM_HEIGHT, DIAGRAM_WIDTH, DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT,
-    FILTER_CURVE_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
-    envelope_being_edited, filter_being_edited, heard_bypassed, machine_being_edited,
-    slot_being_edited,
+    DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH,
+    MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
+    envelope_being_edited, filter_being_edited, heard_bypassed, lfo_being_edited,
+    machine_being_edited, slot_being_edited,
 };
 use crate::waveform;
 
@@ -47,7 +49,7 @@ mod panels;
 pub mod plot;
 
 use panels::{Found, PanelImages, PanelKey, Shape};
-use plot::{Plot, Shade};
+use plot::{LfoDrawing, Plot, Shade};
 
 /// The character that stands for a piece of an image.
 pub(crate) const PLACEHOLDER: char = '\u{10EEEE}';
@@ -628,30 +630,38 @@ pub fn store(out: &mut impl Write, id: u32, png: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-/// Where an image is placed directly: at a character, this many pixels into it across, with this
-/// many of its rows of pixels shown from the top.
+/// Where an image is placed directly: at a character, this many pixels into it across and down,
+/// with this many of its rows of pixels shown from the top. Each offset is less than a character.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Placement {
     pub column: u16,
     pub row: u16,
-    pub offset: usize,
+    pub across: usize,
+    pub down: usize,
     pub height: usize,
 }
 
 /// Place a stored image, or move it, as placing it again under the same placement id moves it.
 /// An image can be placed in many places at once, each under a placement id of its own. It's
-/// drawn above the text, and the terminal's cursor is put back where it was.
+/// drawn above the text, and the terminal's cursor is put back where it was. An offset down of
+/// none is left out, as the sample page's lines and marks have.
 pub fn place_at(out: &mut impl Write, id: u32, placement: u32, at: Placement) -> io::Result<()> {
     let Placement {
         column,
         row,
-        offset,
+        across,
+        down,
         height,
     } = at;
     write!(out, "\x1b7\x1b[{};{}H", row + 1, column + 1)?;
+    let down = if down > 0 {
+        format!(",Y={down}")
+    } else {
+        String::new()
+    };
     command(
         out,
-        &format!("a=p,i={id},p={placement},X={offset},h={height},C=1,z=1,q=2"),
+        &format!("a=p,i={id},p={placement},X={across}{down},h={height},C=1,z=1,q=2"),
         &[],
     )?;
     out.write_all(b"\x1b8")
@@ -713,6 +723,50 @@ struct WaveKey {
     columns: usize,
     rows: usize,
     cell: (usize, usize),
+}
+
+/// How many pixels across an LFO's dot is for characters of this size: a little over half a
+/// character, an odd number so it has a middle pixel, and never under 5. At the author's 15 by 39
+/// it's 9, four and a half times the line it rides, so it's found at a glance while it moves.
+pub fn dot_pixels(cell: (usize, usize)) -> usize {
+    ((cell.0 * 3 / 5) | 1).max(5)
+}
+
+/// Where an LFO's dot goes, for characters of this size, its cycle's picture having its top left
+/// at `corner`: centred where the LFO is now, across at its place in the cycle drawn and up at its
+/// wave's value, upside down for a negative depth as the cycle is, and kept inside the picture.
+pub fn dot_placement(
+    cell: (usize, usize),
+    corner: (u16, u16),
+    lfo: &Lfo,
+    now: LfoNow,
+    diameter: usize,
+) -> Placement {
+    let size = (MOD_PANEL_WIDTH * cell.0, MOD_PANEL_HEIGHT * cell.1);
+    let drawing = LfoDrawing::of(lfo);
+    let x = drawing.x_of(f64::from(now.phase) / (f64::from(u16::MAX) + 1.0));
+    // A random wave's cycle isn't flipped, as it's only its centre line, but its dot is.
+    let signed = LfoDrawing {
+        flipped: lfo.depth < 0,
+        ..drawing
+    };
+    let level = signed.level_of(f32::from(now.value) / f32::from(i16::MAX));
+    let (centre_x, centre_y) = plot::point_at(size, x, level);
+    let half = diameter as f32 / 2.0;
+    let left = (centre_x - half)
+        .round()
+        .clamp(0.0, size.0.saturating_sub(diameter) as f32) as usize;
+    let top = (centre_y - half)
+        .round()
+        .clamp(0.0, size.1.saturating_sub(diameter) as f32) as usize;
+    let (across, down) = (cell.0.max(1), cell.1.max(1));
+    Placement {
+        column: corner.0 + (left / across) as u16,
+        row: corner.1 + (top / down) as u16,
+        across: left % across,
+        down: top % down,
+        height: diameter,
+    }
 }
 
 /// How wide the sample page's cursor is as a line, in pixels.
@@ -914,6 +968,11 @@ pub struct Graphics {
     mark_images: Option<((usize, usize), [u32; MarkKind::ALL.len()])>,
     /// Where each of the ruler's marks is placed, by its kind and its placement id.
     marks_placed: BTreeMap<(MarkKind, u32), Placement>,
+    /// The images of the dot that rides an LFO's cycle, dim and focused, and how many pixels
+    /// across they're drawn.
+    dot_images: Option<(usize, [u32; 2])>,
+    /// Where each LFO's dot is placed, and in which shade, by its placement id less one.
+    dots_placed: [Option<(Shade, Placement)>; LFOS_PER_TRACK],
     /// A character's size in pixels, which the sample page's pictures are drawn for.
     cell: (usize, usize),
     /// The window's size in characters, as last told.
@@ -942,6 +1001,8 @@ impl Graphics {
             playheads_placed: [None; PLAYHEADS],
             mark_images: None,
             marks_placed: BTreeMap::new(),
+            dot_images: None,
+            dots_placed: [None; LFOS_PER_TRACK],
             cell: DEFAULT_CELL,
             window: None,
             frames: 0,
@@ -979,6 +1040,9 @@ impl Graphics {
             self.retired
                 .extend(self.mark_images.take().into_iter().flat_map(|(_, ids)| ids));
             self.marks_placed.clear();
+            self.retired
+                .extend(self.dot_images.take().into_iter().flat_map(|(_, ids)| ids));
+            self.dots_placed = [None; LFOS_PER_TRACK];
             self.retired.extend(self.panels.clear());
         }
         self.window = Some(characters);
@@ -999,6 +1063,7 @@ impl Graphics {
                 || self.cursor_line.is_some_and(|image| image.1 == id)
                 || self.playhead_line.is_some_and(|image| image.1 == id)
                 || self.mark_images.is_some_and(|(_, ids)| ids.contains(&id))
+                || self.dot_images.is_some_and(|(_, ids)| ids.contains(&id))
                 || self
                     .preview
                     .iter()
@@ -1043,13 +1108,102 @@ impl Graphics {
 
     /// Place what the terminal places itself rather than through placeholders, once the screen
     /// is drawn: the sample page's ruler marks, its playheads and its cursor as lines, the
-    /// cursor's last so it's over a playhead it meets. After the drawing, so they go where the
-    /// page is now, and so a clear as the window changes size has already happened.
+    /// cursor's last so it's over a playhead it meets, and the Mod page's LFO dots. After the
+    /// drawing, so they go where the page is now, and so a clear as the window changes size has
+    /// already happened.
     pub fn place(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
         self.sync_marks(app, out)?;
         self.sync_playheads(app, out)?;
         self.sync_cursor_line(app, out)?;
+        self.sync_dots(app, out)?;
         out.flush()
+    }
+
+    /// Where each LFO's dot goes on the Mod page, and in which shade: on its cycle where it is
+    /// now, while it runs, its cycle is on screen and nothing is drawn over the page. One switched
+    /// out or going nowhere has none, and while the song is stopped none has.
+    fn dots_wanted(&self, app: &App) -> [Option<(Shade, Placement)>; LFOS_PER_TRACK] {
+        let mut wanted = [None; LFOS_PER_TRACK];
+        let shown = app.view == View::Track
+            && app.track_page.page == Page::Mod
+            && !overlaid(app, std::time::Instant::now());
+        let (Some(track), Some(live)) = (app.song().tracks.get(app.cursor.track), app.live) else {
+            return wanted;
+        };
+        if !shown {
+            return wanted;
+        }
+        let edited = lfo_being_edited(app);
+        let diameter = dot_pixels(self.cell);
+        for (slot, lfo) in track.lfos.iter().enumerate() {
+            let (Some(corner), Some(now)) = (app.lfo_cycles_at[slot], live.lfos[slot]) else {
+                continue;
+            };
+            if lfo.bypassed || lfo.destination.is_none() {
+                continue;
+            }
+            let shade = Shade::of(edited == Some(slot), false);
+            wanted[slot] = Some((shade, dot_placement(self.cell, corner, lfo, now, diameter)));
+        }
+        wanted
+    }
+
+    /// Place each LFO's dot on its cycle, or take it off. The dot is an image of its own in each
+    /// of two shades, sent once, and placed once for each LFO, so moving it is placing it again,
+    /// about 60 bytes, and nothing is sent while nothing moves.
+    fn sync_dots(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
+        let wanted = self.dots_wanted(app);
+        if wanted == self.dots_placed {
+            return Ok(());
+        }
+        let diameter = dot_pixels(self.cell);
+        let ids = match self.dot_images {
+            Some((drawn, ids)) if drawn == diameter => ids,
+            // None wanted, and none drawn at this size: any placed go, with their images.
+            _ if wanted.iter().all(Option::is_none) => {
+                self.retired
+                    .extend(self.dot_images.take().into_iter().flat_map(|(_, ids)| ids));
+                self.dots_placed = [None; LFOS_PER_TRACK];
+                return Ok(());
+            }
+            old => {
+                // Drawn for another size of character: the old ones go, with their placements.
+                for id in old.into_iter().flat_map(|(_, ids)| ids) {
+                    command(out, &format!("a=d,d=I,i={id},q=2"), &[])?;
+                }
+                self.dots_placed = [None; LFOS_PER_TRACK];
+                let mut ids = [0; 2];
+                for (index, shade) in [Shade::Dim, Shade::Focused].into_iter().enumerate() {
+                    // Held as each is given its id, so the next can't be given the same.
+                    self.dot_images = Some((diameter, ids));
+                    let id = self.new_id();
+                    store(out, id, &plot::dot(diameter, shade.color()))?;
+                    ids[index] = id;
+                }
+                self.dot_images = Some((diameter, ids));
+                ids
+            }
+        };
+        let image = |shade: Shade| ids[usize::from(shade == Shade::Focused)];
+        for (slot, (now, was)) in wanted.iter().zip(&self.dots_placed).enumerate() {
+            let placement = slot as u32 + 1;
+            match (now, was) {
+                (Some(now), Some(was)) if now == was => {}
+                (Some((shade, at)), was) => {
+                    // A dot changing shade moves to the other image.
+                    if let Some((before, _)) = was
+                        && before != shade
+                    {
+                        unplace(out, image(*before), placement)?;
+                    }
+                    place_at(out, image(*shade), placement, *at)?;
+                }
+                (None, Some((before, _))) => unplace(out, image(*before), placement)?,
+                (None, None) => {}
+            }
+        }
+        self.dots_placed = wanted;
+        Ok(())
     }
 
     /// Where a line at a frame goes on the sample page's waveform: at its pixel's character, the
@@ -1062,7 +1216,8 @@ impl Graphics {
         screen.columns.contains(&column).then(|| Placement {
             column: column as u16,
             row: screen.top,
-            offset: (pixels % across) as usize,
+            across: (pixels % across) as usize,
+            down: 0,
             height: usize::from(screen.rows) * self.cell.1,
         })
     }
@@ -1438,7 +1593,8 @@ impl Graphics {
                     Placement {
                         column: (pixel / across) as u16,
                         row: screen.top - 1,
-                        offset: pixel % across,
+                        across: pixel % across,
+                        down: 0,
                         height: down,
                     },
                 );
@@ -1493,9 +1649,11 @@ impl Graphics {
         Ok(())
     }
 
-    /// Send the Mod page's envelopes, if the terminal lacks them, each faint while it's switched
-    /// out.
+    /// Send the Mod page's envelopes' shapes and LFOs' cycles, if the terminal lacks them, each
+    /// faint while it's switched out. An LFO's cycle is sent again only when its wave, its
+    /// `Phase` or its depth's sign changes.
     fn sync_mod(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
+        let size = (MOD_PANEL_WIDTH, MOD_PANEL_HEIGHT);
         let edited = envelope_being_edited(app);
         let mut envelope_ids = [0; TRACK_ENVELOPES];
         for (slot, envelope) in track.envelopes.iter().enumerate() {
@@ -1504,11 +1662,25 @@ impl Graphics {
                 out,
                 (PanelKey::Envelope(slot), shade),
                 Shape::Envelope(*envelope),
-                (DIAGRAM_WIDTH, DIAGRAM_HEIGHT),
+                size,
                 |size| plot::envelope(envelope, size).png(shade.color()),
             )?;
         }
         app.envelope_images = Some(envelope_ids);
+        let edited = lfo_being_edited(app);
+        let mut lfo_ids = [0; LFOS_PER_TRACK];
+        for (slot, lfo) in track.lfos.iter().enumerate() {
+            let shade = Shade::of(edited == Some(slot), lfo.bypassed);
+            let drawing = LfoDrawing::of(lfo);
+            lfo_ids[slot] = self.panel(
+                out,
+                (PanelKey::Lfo(slot), shade),
+                Shape::Lfo(drawing),
+                size,
+                |size| plot::lfo_cycle(drawing, size).png(shade.color()),
+            )?;
+        }
+        app.lfo_images = Some(lfo_ids);
         Ok(())
     }
 
@@ -1569,7 +1741,8 @@ impl Graphics {
             .map(|image| &image.1)
             .chain(self.cursor_line.iter().map(|image| &image.1))
             .chain(self.playhead_line.iter().map(|image| &image.1))
-            .chain(self.mark_images.iter().flat_map(|(_, ids)| ids));
+            .chain(self.mark_images.iter().flat_map(|(_, ids)| ids))
+            .chain(self.dot_images.iter().flat_map(|(_, ids)| ids));
         for id in panels
             .iter()
             .chain(scope)

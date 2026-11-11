@@ -98,6 +98,17 @@ impl GraphicPanel {
         let lines = self.parts.iter().map(|part| part.lines.len());
         lines.max().map_or(0, |lines| lines as u16 + 2)
     }
+
+    /// Its top row, in the middle of an area's rows.
+    fn top(&self, area: Rect) -> u16 {
+        area.y + area.height.saturating_sub(self.height()) / 2
+    }
+
+    /// Where the inside of its first box starts, drawn in an area: the character at the top left
+    /// of a picture in it, for the terminal to place something over it.
+    pub fn inside_at(&self, area: Rect) -> (u16, u16) {
+        (area.x + 1, self.top(area) + 1)
+    }
 }
 
 impl Part {
@@ -132,7 +143,7 @@ impl Part {
 impl Widget for GraphicPanel {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let height = self.height();
-        let top = area.y + area.height.saturating_sub(height) / 2;
+        let top = self.top(area);
         let inside = usize::from(height.saturating_sub(2));
         let gaps: Vec<u16> = self.gaps().collect();
         let mut x = area.x;

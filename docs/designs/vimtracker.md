@@ -333,7 +333,9 @@ its own state, so two quick presses can't act on an out-of-date view of it. **Te
 each block: where playback is, each track's place and levels, the watched track's live values, and
 up to four sample playheads. The live values carry the watched track's peak right after its trim
 (`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
-`Engine::take_after_trim` takes, for the Output device's meter. `Handle::latest` merges every
+`Engine::take_after_trim` takes, for the Output device's meter, and where each running LFO is
+in its wave (`LiveValues::lfos`, a phase and a value each, which `TrackState::modulate` keeps as it
+works the LFOs out, and none while stopped), for the Mod page's dots. `Handle::latest` merges every
 report since the last frame, so a meter doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
 fit, and jam changes through another.
 
@@ -611,7 +613,7 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     the Machine, from `Machine::grid` with `Machine::type_param` in its title, and the Filter,
     Output and Play, each a fixed grid of the track's own controls. A group's, a return's and the
     master's is its Output alone, the same grid with holes where it lacks a setting, the master's
-    with the song's `Control::Limiter` in Send A's place (decision 154). Every page is a rack, so
+    with the song's `Control::Limiter` in Send A's place (decision 155). Every page is a rack, so
     there are no row tables. What feeds a group or a return, its Tracks or its Sends in, is drawn
     under the Output by `views/track/sound.rs` from the song each frame, and isn't a device, as
     the cursor doesn't stop in it.
@@ -678,15 +680,22 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     picture can have up to 15 colours that each mean something, and a big one is compressed inside
     its PNG.
 *   **One drawing path for curves, `kitty/plot.rs`.** The FX page's compressor and EQ curves, the
-    Sound page's filter curve and the Mod page's envelopes are drawn by `kitty::plot` at the
+    Sound page's filter curve and the Mod page's envelopes and LFO cycles are drawn by `kitty::plot` at the
     terminal's own pixels, the characters they cover times `Graphics::cell`, so nothing is
     stretched. Its `Plot` is an anti-aliased 2-pixel line, each pixel covered in eighths by its
     distance from the line, over faint dotted gridlines, as a PNG whose palette has an alpha for
     each entry, always compressed, about 1 to 2 KB. The filter curve is the Sound page's large
     panel, 49 by 5 characters, with frequency gridlines, a 0 dB line and a dashed mark at `Cut`.
-    The scope and the pickers' waveforms stay solid dots.
+    The Mod page's panels are the half size, 24 by 5: an envelope over its baseline and stage
+    lines, and one cycle of an LFO from its `Phase`, drawn from the engine's own `lfo::wave`. The
+    scope and the pickers' waveforms stay solid dots.
+*   **Placed dots.** An LFO's dot is a small image of its own, stored once in each of two shades
+    and placed with pixel offsets across and down (`Placement`'s `X=` and `Y=`) where
+    `LiveValues::lfos` says the LFO is, after the screen is drawn, as the sample page's lines and
+    marks are; moving it is placing it again, about 60 bytes. The track page's drawing gives back
+    where each cycle is (`CyclesAt`), and a dot is taken off under anything drawn over the page.
 *   **Panel images, `kitty/panels.rs`.** `PanelImages` holds the track page's panels' images by
-    `(PanelKey, Shade)`: the filter, a sampler's thumbnail, each envelope and each FX slot, each in
+    `(PanelKey, Shade)`: the filter, a sampler's thumbnail, each envelope, each LFO and each FX slot, each in
     up to three shades, dim, focused and faint (a switched-out slot), with the shape it was drawn
     from. `Graphics::panel` sends one only when its shape is new, and one that changes again within
     a frame of a change waits a frame, so a curve following an LFO is sent at most 15 times a
