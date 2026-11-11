@@ -1,0 +1,132 @@
+# The Ladder against PRD and Filter MINI, written by filter_refs.py --write-specs, which measures
+# far more of each circuit; this draws the responses, as each side gives them, with nothing taken
+# out. Each reference's state is as filter_refs.py sets it.
+#
+# The Drop: The Drop, as the filter-taper specs set it: no drive, nothing modulating, no glide,
+# its HD circuits, its resonance's whole turn at 125%, which self-oscillates over 100%, and only
+# the section measured switched on. Circuit PRD, four poles.
+#
+# Filter MINI: Filter MINI from its Default preset, its state given twice: output volume 0.37, as
+# it loads, drive 0, dry/wet 1, and its LFO's, envelope follower's and step sequencer's modulation
+# all at 0. Its `limit_resonance` switch, measured, does the opposite of its name: off, which it
+# loads with, the resonance stops growing at 0.74 and never rings; on, it rings from 0.75. So it's
+# on, and its knob up to where it's measured to start ringing is set against ours up to 85%. Its
+# cutoff knob runs 0 to 1 with no hertz on it, so it's mapped by measuring: at no resonance, a
+# four-pole ladder's four equal poles each pass 3 dB less at its cutoff, 12 dB in all, so the knob
+# is set where its response is 12 dB under its passband three octaves lower at the frequency asked
+# for: measured at 51 points of its turn, with a parabola in octaves fitted through those from 400
+# Hz to 12 kHz and carried on under them, as at lower cutoffs a broad rise over its deepest bass
+# moves the 12 dB point from one to the next. Under 1 kHz, its response with the knob fully open
+# is taken out of every other, for its input's coupling, which takes 2.3 dB at 20 Hz.
+#
+#   uv run run.py specs/filter-refs-ladder.toml --report out/filter-refs-ladder.html
+
+rate = 48000
+duration = 2.5
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -30.0
+seconds = 2.0
+
+[ours]
+
+[[references]]
+name = "The Drop"
+plugin = "/Library/Audio/Plug-Ins/VST3/The Drop.vst3"
+buffer_size = 512
+[references.parameters]
+lp_drive = 0.0
+hp_drive = 0.0
+lp_hd = true
+hp_hd = true
+lp_safe_res = false
+hp_safe_res = false
+lp_resmax = 125.0
+hp_resmax = 125.0
+lp_keytrack = false
+hp_keytrack = false
+mod_active = false
+glide = "0.000 mS"
+mix = 100.0
+pad = 0.0
+
+[[references]]
+name = "Filter MINI"
+plugin = "/Library/Audio/Plug-Ins/VST3/Filter MINI.vst3"
+buffer_size = 512
+preset = "Default"
+[references.parameters]
+output_volume = 0.37
+drive = 0.0
+dry_wet = 1.0
+limit_resonance = true
+lfo_cut_mod_amount = 0.0
+lfo_res_mod_amount = 0.0
+lfo_seq_cut_mod = 0.0
+ef_cut_mod_amount = 0.0
+ef_res_mod_amount = 0.0
+ef_lfo_rate_mod = 0.0
+ss_cut_mod_amount = 0.0
+ss_res_mod_amount = 0.0
+ss_lfo_rate_mod = 0.0
+
+[report]
+kind = "response"
+title = "The Ladder against PRD and Filter MINI"
+figure = ["filter"]
+row = "res"
+column = "cut"
+about = """
+The Ladder against PRD and Filter MINI, by a quiet sine sweep's response at three cutoffs, at
+Res 0, half way to where each side starts to ring and 95% of the way, our first 85% of Res set
+against each reference's knob up to where it starts to ring. filter_refs.py measures each
+circuit further and gives the references' consensus.
+"""
+
+[[cases]]
+name = "lp-55-res00"
+ours = { filter = "Ladder", mode = "LP24", cut = 0x55, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "PRD", lp_4_pole = true, lp_freq = 200.0, lp_res = 0.0 }, "Filter MINI" = { cutoff = 0.2395, resonance = 0.0 } }
+
+[[cases]]
+name = "lp-55-res6C"
+ours = { filter = "Ladder", mode = "LP24", cut = 0x55, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "PRD", lp_4_pole = true, lp_freq = 200.0, lp_res = 50.0 }, "Filter MINI" = { cutoff = 0.2395, resonance = 0.3755 } }
+
+[[cases]]
+name = "lp-55-resCE"
+ours = { filter = "Ladder", mode = "LP24", cut = 0x55, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "PRD", lp_4_pole = true, lp_freq = 200.0, lp_res = 95.0 }, "Filter MINI" = { cutoff = 0.2395, resonance = 0.7134 } }
+
+[[cases]]
+name = "lp-90-res00"
+ours = { filter = "Ladder", mode = "LP24", cut = 0x90, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "PRD", lp_4_pole = true, lp_freq = 988.889, lp_res = 0.0 }, "Filter MINI" = { cutoff = 0.4982, resonance = 0.0 } }
+
+[[cases]]
+name = "lp-90-res6C"
+ours = { filter = "Ladder", mode = "LP24", cut = 0x90, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "PRD", lp_4_pole = true, lp_freq = 988.889, lp_res = 50.0 }, "Filter MINI" = { cutoff = 0.4982, resonance = 0.3755 } }
+
+[[cases]]
+name = "lp-90-resCE"
+ours = { filter = "Ladder", mode = "LP24", cut = 0x90, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "PRD", lp_4_pole = true, lp_freq = 988.889, lp_res = 95.0 }, "Filter MINI" = { cutoff = 0.4982, resonance = 0.7134 } }
+
+[[cases]]
+name = "lp-CC-res00"
+ours = { filter = "Ladder", mode = "LP24", cut = 0xCC, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "PRD", lp_4_pole = true, lp_freq = 5023.773, lp_res = 0.0 }, "Filter MINI" = { cutoff = 0.7585, resonance = 0.0 } }
+
+[[cases]]
+name = "lp-CC-res6C"
+ours = { filter = "Ladder", mode = "LP24", cut = 0xCC, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "PRD", lp_4_pole = true, lp_freq = 5023.773, lp_res = 50.0 }, "Filter MINI" = { cutoff = 0.7585, resonance = 0.3755 } }
+
+[[cases]]
+name = "lp-CC-resCE"
+ours = { filter = "Ladder", mode = "LP24", cut = 0xCC, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "PRD", lp_4_pole = true, lp_freq = 5023.773, lp_res = 95.0 }, "Filter MINI" = { cutoff = 0.7585, resonance = 0.7134 } }

@@ -2,8 +2,9 @@
 # resonance, each ringing on its own after one click, at eight cutoffs an eighth of our knob's
 # turn apart: the pitch each rings at, in cents off where it's set. M12's cutoff is in semitones,
 # as MIDI numbers notes, so it's set to the note nearest our Cut, and its cents are off that note.
-# Filter MINI would be the closer circuit, but it doesn't ring on its own: at full resonance, with
-# its limiter off, a click dies away within half a second (checked on 2026-11-10).
+# Filter MINI is the closer circuit, and rings on its own once its `limit_resonance` is on, which,
+# measured, lets it ring rather than stopping it: off, a click dies away within half a second.
+# filter_refs.py measures its ringing beside The Drop's PRD (decision 137).
 #
 #   uv run run.py specs/filter-ringing.toml --report out/filter-ringing.html
 
@@ -49,7 +50,8 @@ Our Cut has a frequency, 20 Hz times a thousand to the power of how far it's tur
 cents off that. M12's cutoff is in semitones, as MIDI numbers notes, so it's set to the note \
 nearest our Cut and its cents are off that note's frequency; our top Cut, 13.3 kHz, is past its \
 top note, 127, at 12.5 kHz. Filter MINI, the Moog ladder the response report compares against, \
-doesn't ring on its own: at full resonance a click dies away within half a second.
+rings on its own only with its `limit_resonance` switch on, which, measured, does the opposite of \
+its name; filter_refs.py measures its ringing.
 """
 
 [[cases]]

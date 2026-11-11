@@ -1,0 +1,269 @@
+# The clean state-variable filter against OSR and Filter SEM, written by filter_refs.py --write-
+# specs, which measures far more of each circuit; this draws the responses, as each side gives
+# them, with nothing taken out. Each reference's state is as filter_refs.py sets it.
+#
+# The Drop: The Drop, as the filter-taper specs set it: no drive, nothing modulating, no glide,
+# its HD circuits, its resonance's whole turn at 125%, which self-oscillates over 100%, and only
+# the section measured switched on. Circuit OSR, two poles.
+#
+# Filter SEM: Filter SEM from its Default preset, its state given twice: input gain and filter
+# output at 0 dB, dry/wet 100%, soft clip off, its noise at its lowest, −120 dB, and every LFO and
+# envelope routing at 0, so its LFO, envelope and sequencer move nothing. Its cutoff knob is in
+# hertz, from 20 Hz to 15 kHz. Its mode knob morphs low-pass at 0, through a notch at 0.5, to
+# high-pass at 1, and its band-pass is a switch. It doesn't self-oscillate at any resonance
+# (measured): so its whole turn is set against ours up to 85%. Under 1 kHz, its response as a low-
+# pass at 15 kHz is taken out of every other, for its input's coupling, which takes 3.2 dB at 20
+# Hz.
+#
+#   uv run run.py specs/filter-refs-svf.toml --report out/filter-refs-svf.html
+
+rate = 48000
+duration = 2.5
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -30.0
+seconds = 2.0
+
+[ours]
+
+[[references]]
+name = "The Drop"
+plugin = "/Library/Audio/Plug-Ins/VST3/The Drop.vst3"
+buffer_size = 512
+[references.parameters]
+lp_drive = 0.0
+hp_drive = 0.0
+lp_hd = true
+hp_hd = true
+lp_safe_res = false
+hp_safe_res = false
+lp_resmax = 125.0
+hp_resmax = 125.0
+lp_keytrack = false
+hp_keytrack = false
+mod_active = false
+glide = "0.000 mS"
+mix = 100.0
+pad = 0.0
+
+[[references]]
+name = "Filter SEM"
+plugin = "/Library/Audio/Plug-Ins/VST3/Filter SEM.vst3"
+buffer_size = 512
+preset = "Default"
+[references.parameters]
+input_gain_db = 0.0
+noise_volume_db = -120.0
+filter_out_db = 0.0
+dry_wet = 100.0
+soft_clip = false
+lfo_freq = 0.0
+lfo_res = 0.0
+lfo_mode = 0.0
+lfo_noise = 0.0
+lfo_filter_out = 0.0
+env_freq = 0.0
+env_res = 0.0
+env_mode = 0.0
+env_noise = 0.0
+env_filter_out = 0.0
+
+[report]
+kind = "response"
+title = "The clean state-variable filter against OSR and Filter SEM"
+figure = ["filter"]
+row = "res"
+column = "cut"
+about = """
+The clean state-variable filter against OSR and Filter SEM, by a quiet sine sweep's response at
+three cutoffs, at Res 0, half way to where each side starts to ring and 95% of the way, our
+first 85% of Res set against each reference's knob up to where it starts to ring. filter_refs.py
+measures each circuit further and gives the references' consensus. The Drop's band-pass is its
+high-pass and low-pass in series and its notch the two in parallel, as its manual makes them, so
+its band-pass falls at 12 dB an octave either side where a two-pole band-pass, ours and the
+SEM's, falls at 6. The SEM's notch, half way along its mode knob, is half its low-pass and half
+its high-pass, 6 dB down, so a notch's width is read against its own passband.
+"""
+
+[[cases]]
+name = "lp-55-res00"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.0, bandpass_on_off = false, multi_mode = 0.0 } }
+
+[[cases]]
+name = "lp-55-res6C"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.5, bandpass_on_off = false, multi_mode = 0.0 } }
+
+[[cases]]
+name = "lp-55-resCE"
+ours = { filter = "LP", mode = "12 dB", cut = 0x55, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.95, bandpass_on_off = false, multi_mode = 0.0 } }
+
+[[cases]]
+name = "lp-90-res00"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.889, lp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.0, bandpass_on_off = false, multi_mode = 0.0 } }
+
+[[cases]]
+name = "lp-90-res6C"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.889, lp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.5, bandpass_on_off = false, multi_mode = 0.0 } }
+
+[[cases]]
+name = "lp-90-resCE"
+ours = { filter = "LP", mode = "12 dB", cut = 0x90, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.889, lp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.95, bandpass_on_off = false, multi_mode = 0.0 } }
+
+[[cases]]
+name = "lp-CC-res00"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.773, lp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.0, bandpass_on_off = false, multi_mode = 0.0 } }
+
+[[cases]]
+name = "lp-CC-res6C"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.773, lp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.5, bandpass_on_off = false, multi_mode = 0.0 } }
+
+[[cases]]
+name = "lp-CC-resCE"
+ours = { filter = "LP", mode = "12 dB", cut = 0xCC, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = false, lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.773, lp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.95, bandpass_on_off = false, multi_mode = 0.0 } }
+
+[[cases]]
+name = "hp-55-res00"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x00 }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.0, bandpass_on_off = false, multi_mode = 1.0 } }
+
+[[cases]]
+name = "hp-55-res6C"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0x6C }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.5, bandpass_on_off = false, multi_mode = 1.0 } }
+
+[[cases]]
+name = "hp-55-resCE"
+ours = { filter = "HP", mode = "12 dB", cut = 0x55, res = 0xCE }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.95, bandpass_on_off = false, multi_mode = 1.0 } }
+
+[[cases]]
+name = "hp-90-res00"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x00 }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.889, hp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.0, bandpass_on_off = false, multi_mode = 1.0 } }
+
+[[cases]]
+name = "hp-90-res6C"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0x6C }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.889, hp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.5, bandpass_on_off = false, multi_mode = 1.0 } }
+
+[[cases]]
+name = "hp-90-resCE"
+ours = { filter = "HP", mode = "12 dB", cut = 0x90, res = 0xCE }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.889, hp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.95, bandpass_on_off = false, multi_mode = 1.0 } }
+
+[[cases]]
+name = "hp-CC-res00"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x00 }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.773, hp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.0, bandpass_on_off = false, multi_mode = 1.0 } }
+
+[[cases]]
+name = "hp-CC-res6C"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0x6C }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.773, hp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.5, bandpass_on_off = false, multi_mode = 1.0 } }
+
+[[cases]]
+name = "hp-CC-resCE"
+ours = { filter = "HP", mode = "12 dB", cut = 0xCC, res = 0xCE }
+references = { "The Drop" = { lp_active = false, hp_active = true, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.773, hp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.95, bandpass_on_off = false, multi_mode = 1.0 } }
+
+[[cases]]
+name = "bp-55-res00"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.0, bandpass_on_off = true, multi_mode = 0.0 } }
+
+[[cases]]
+name = "bp-55-res6C"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 50.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.5, bandpass_on_off = true, multi_mode = 0.0 } }
+
+[[cases]]
+name = "bp-55-resCE"
+ours = { filter = "BP", mode = "12 dB", cut = 0x55, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 95.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.95, bandpass_on_off = true, multi_mode = 0.0 } }
+
+[[cases]]
+name = "bp-90-res00"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.889, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.889, hp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.0, bandpass_on_off = true, multi_mode = 0.0 } }
+
+[[cases]]
+name = "bp-90-res6C"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.889, lp_res = 50.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.889, hp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.5, bandpass_on_off = true, multi_mode = 0.0 } }
+
+[[cases]]
+name = "bp-90-resCE"
+ours = { filter = "BP", mode = "12 dB", cut = 0x90, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.889, lp_res = 95.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.889, hp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.95, bandpass_on_off = true, multi_mode = 0.0 } }
+
+[[cases]]
+name = "bp-CC-res00"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.773, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.773, hp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.0, bandpass_on_off = true, multi_mode = 0.0 } }
+
+[[cases]]
+name = "bp-CC-res6C"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.773, lp_res = 50.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.773, hp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.5, bandpass_on_off = true, multi_mode = 0.0 } }
+
+[[cases]]
+name = "bp-CC-resCE"
+ours = { filter = "BP", mode = "12 dB", cut = 0xCC, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Serial", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.773, lp_res = 95.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.773, hp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.95, bandpass_on_off = true, multi_mode = 0.0 } }
+
+[[cases]]
+name = "notch-55-res00"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.0, bandpass_on_off = false, multi_mode = 0.5 } }
+
+[[cases]]
+name = "notch-55-res6C"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 50.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.5, bandpass_on_off = false, multi_mode = 0.5 } }
+
+[[cases]]
+name = "notch-55-resCE"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x55, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 200.0, lp_res = 95.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 200.0, hp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 200.0, resonance = 0.95, bandpass_on_off = false, multi_mode = 0.5 } }
+
+[[cases]]
+name = "notch-90-res00"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.889, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.889, hp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.0, bandpass_on_off = false, multi_mode = 0.5 } }
+
+[[cases]]
+name = "notch-90-res6C"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.889, lp_res = 50.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.889, hp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.5, bandpass_on_off = false, multi_mode = 0.5 } }
+
+[[cases]]
+name = "notch-90-resCE"
+ours = { filter = "Notch", mode = "12 dB", cut = 0x90, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 988.889, lp_res = 95.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 988.889, hp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 988.889, resonance = 0.95, bandpass_on_off = false, multi_mode = 0.5 } }
+
+[[cases]]
+name = "notch-CC-res00"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x00 }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.773, lp_res = 0.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.773, hp_res = 0.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.0, bandpass_on_off = false, multi_mode = 0.5 } }
+
+[[cases]]
+name = "notch-CC-res6C"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0x6C }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.773, lp_res = 50.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.773, hp_res = 50.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.5, bandpass_on_off = false, multi_mode = 0.5 } }
+
+[[cases]]
+name = "notch-CC-resCE"
+ours = { filter = "Notch", mode = "12 dB", cut = 0xCC, res = 0xCE }
+references = { "The Drop" = { lp_active = true, hp_active = true, routing = "Parallel", lp_circuit = "OSR", lp_4_pole = false, lp_freq = 5023.773, lp_res = 95.0, hp_circuit = "OSR", hp_4_pole = false, hp_freq = 5023.773, hp_res = 95.0 }, "Filter SEM" = { cutoff_hz = 5023.773, resonance = 0.95, bandpass_on_off = false, multi_mode = 0.5 } }

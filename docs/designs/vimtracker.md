@@ -631,7 +631,8 @@ These need no terminal and no sound device, so they run anywhere.
     Spotify's pedalboard, or Ableton Live's own devices through a control surface script in Live
     (`tools/compare/live/`), compares the outputs, and writes a report page for each spec, with the
     references' consensus where they agree and a flag where they don't; `run.py --suite nuance`
-    runs the Acid's nuance suite against Acid V and ABL3 and ranks our gaps. `--response` also
+    runs the Acid's nuance suite against Acid V and ABL3 and ranks our gaps, and `filter_refs.py`
+    checks each track filter circuit against The Drop's and an Arturia filter's. `--response` also
     writes the track filter's response as the Sound page draws it. The Python side doesn't run in
     CI, while `crates/vt-tui/tests/probe.rs` checks that the specs in `tools/compare/specs/` parse
     and prepare on our side.
