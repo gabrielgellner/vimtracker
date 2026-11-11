@@ -4,6 +4,7 @@
 //! thread. Every edit and every frame tries to send it, so the last edit always reaches audio.
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 use vt_model::constants::{
@@ -172,6 +173,9 @@ pub struct Realtime {
     reported: [JamState; MAX_TRACKS],
     /// The track whose live values are reported.
     watched: usize,
+    /// How long the engine took over the last block, apart from the queues and the report, for
+    /// `vimtracker bench --device`.
+    engine_time: Duration,
 }
 
 /// Connect an engine to the edit thread.
@@ -220,6 +224,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             heard: heard_tx,
             reported: [JamState::default(); MAX_TRACKS],
             watched: 0,
+            engine_time: Duration::ZERO,
         },
     )
 }
@@ -434,7 +439,9 @@ impl Realtime {
         {
             let _ = self.freed.push(memory);
         }
+        let started = Instant::now();
         self.engine.process(out);
+        self.engine_time = started.elapsed();
         // The scope's tap. The callback can't wait for room, so what doesn't fit is dropped.
         let frames = out.len() / 2;
         if let Ok(room) = self
@@ -473,6 +480,16 @@ impl Realtime {
     /// The engine, for tests.
     pub fn engine(&self) -> &Engine {
         &self.engine
+    }
+
+    /// How long the engine itself took over the last block.
+    pub fn engine_time(&self) -> Duration {
+        self.engine_time
+    }
+
+    /// The engine back, once the callback is done with it, to read where its time went.
+    pub fn into_engine(self) -> Engine {
+        self.engine
     }
 }
 

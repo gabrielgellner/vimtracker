@@ -459,6 +459,11 @@ impl InsertState {
         self.peak_clip.settle();
     }
 
+    /// Whether the slot has no effect in it.
+    pub fn is_empty(&self) -> bool {
+        matches!(self.insert, Insert::Empty)
+    }
+
     /// One frame through the slot, faded toward what came in as it's bypassed.
     #[inline]
     pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32, keys: &Keys) -> [f32; 2] {

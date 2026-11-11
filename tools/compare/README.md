@@ -68,7 +68,7 @@ reference plugin.
 
 `nuance-chirp-riff`, and `pedal-riff` and `live-pedal-riff` through it, play the Acid line of a
 song of yours rather than one written here, as no 303 pattern's transcription is kept in the
-repository (decision 142). The spec is a stub whose `[song]` names a project folder and the track
+repository (decision 143). The spec is a stub whose `[song]` names a project folder and the track
 to read, by `machine` or `track` name. Each run, `song_line.py` has `vimtracker notes` read that
 track's notes once through its chain, the song's tempo and the track's knobs and wave, with the
 program's own model and without writing to the song, and writes the whole spec, notes and every

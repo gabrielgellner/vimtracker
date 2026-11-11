@@ -9,6 +9,7 @@ pub mod published;
 pub mod reader;
 pub mod render;
 pub mod rng;
+pub mod timing;
 pub mod track_state;
 pub mod voice;
 

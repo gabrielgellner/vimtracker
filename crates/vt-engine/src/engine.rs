@@ -32,6 +32,7 @@ use crate::link::JamState;
 use crate::mixer::{Reading, master};
 use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::{Bank, Published, Span};
+use crate::timing::{Part as TimedPart, PartTimes, SlotTimes, Stopwatch};
 use crate::track_state::{
     Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Epoch, Keys, LiveValues, Part,
     PendingStep, Retrigger, RowKey, SongTime, TrackState, Worked, base_of,
@@ -150,6 +151,8 @@ pub struct Engine {
     /// Whether every track goes back to its start at the next line of the realign grid, as a
     /// key asks while playing.
     realign_waiting: bool,
+    /// Where its time goes, while `vimtracker bench --tracks` asks.
+    stopwatch: Stopwatch,
 }
 
 /// The next row with a length after this one, in order, and whether that went past the last. If no
@@ -223,6 +226,7 @@ impl Engine {
             fill: false,
             scale,
             realign_waiting: false,
+            stopwatch: Stopwatch::default(),
         };
         engine.follow_levels();
         engine.reset_tracks();
@@ -1558,6 +1562,7 @@ impl Engine {
     }
 
     pub fn process(&mut self, out: &mut [f32]) {
+        self.stopwatch.restart_lap();
         let mut written = 0;
         let total = out.len() / 2;
         while written < total {
@@ -1608,6 +1613,24 @@ impl Engine {
             }
             written += run;
         }
+        self.stopwatch.lap(TimedPart::Sequencing);
+    }
+
+    /// Start timing where the engine's time goes, a track and a slot at a time, from now. This
+    /// allocates, so it's done before audio starts.
+    pub fn time_parts(&mut self) {
+        self.stopwatch.start();
+        for track in self.tracks.iter_mut() {
+            track.slot_times = SlotTimes::running();
+        }
+    }
+
+    /// Where the engine's time has gone since [`Engine::time_parts`], if it was asked.
+    pub fn part_times(&mut self) -> Option<PartTimes> {
+        for (index, track) in self.tracks.iter_mut().enumerate() {
+            self.stopwatch.add_slots(index, &mut track.slot_times);
+        }
+        self.stopwatch.times().cloned()
     }
 
     /// Frames until the next step is worked out: its place on the grid, or as far before it as
@@ -2660,6 +2683,7 @@ impl Engine {
 
     /// Render voices and effects into a run of frames with no events in it.
     fn render(&mut self, out: &mut [f32]) {
+        self.stopwatch.lap(TimedPart::Sequencing);
         let samples = Arc::clone(&self.current.samples);
         let limiter = self.current.song.limiter;
         let groups = self.sounds();
@@ -2709,6 +2733,7 @@ impl Engine {
             }
         }
         for frame in out.as_chunks_mut::<2>().0 {
+            self.stopwatch.lap(TimedPart::Mixing);
             let mut mix = [0.0_f32; 2];
             let mut buses = [[0.0_f32; 2]; MAX_GROUPS];
             let mut send_a = [0.0_f32; 2];
@@ -2718,10 +2743,12 @@ impl Engine {
                 let preview = self.previews.next(&previews, index, &samples, &self.files);
                 if !track.sounding() && preview.is_none() && !track.ringing(self.rate) {
                     self.keys.frames[index] = [0.0; 2];
+                    self.stopwatch.lap(TimedPart::Voice(index));
                     continue;
                 }
                 let main = track.voice.next(samples.get(track.voice.sample()));
                 let tail = track.tail.next(samples.get(track.tail.sample()));
+                self.stopwatch.lap(TimedPart::Voice(index));
                 let preview = preview.unwrap_or([0.0; 2]);
                 let shaped = track.shape(
                     [
@@ -2758,6 +2785,7 @@ impl Engine {
                 send_a[1] += shaped.send_a[1] * heard;
                 send_b[0] += shaped.send_b[0] * heard;
                 send_b[1] += shaped.send_b[1] * heard;
+                self.stopwatch.lap(TimedPart::Shaping(index));
             }
             let (smoothing, fast, rate) = (self.smoothing, self.fast_smoothing, self.rate);
             let keys = &mut self.keys;
@@ -2773,22 +2801,28 @@ impl Engine {
                 send_a[1] += shaped.send_a[1];
                 send_b[0] += shaped.send_b[0];
                 send_b[1] += shaped.send_b[1];
+                self.stopwatch.lap(TimedPart::Shaping(index));
             }
             let from_a = self.tracks[return_a].process_return(send_a, smoothing, fast, rate, keys);
             keys.frames[return_a] = self.tracks[return_a].key;
+            self.stopwatch.lap(TimedPart::Shaping(return_a));
             let from_b = self.tracks[return_b].process_return(send_b, smoothing, fast, rate, keys);
             keys.frames[return_b] = self.tracks[return_b].key;
+            self.stopwatch.lap(TimedPart::Shaping(return_b));
             let mixed = [
                 mix[0] + from_a[0] + from_b[0],
                 mix[1] + from_a[1] + from_b[1],
             ];
             let mastered =
                 self.tracks[master_track].process_master(mixed, smoothing, fast, rate, &self.keys);
+            self.stopwatch.lap(TimedPart::Shaping(master_track));
             let out = master(mastered, limiter);
             self.tracks[master_track].reading.add(mastered, out);
             self.reading.add(mastered, out);
             *frame = out;
+            self.stopwatch.lap(TimedPart::Limiting);
         }
+        self.stopwatch.lap(TimedPart::Mixing);
     }
 }
 

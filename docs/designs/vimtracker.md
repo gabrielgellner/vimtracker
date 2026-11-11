@@ -659,9 +659,19 @@ These need no terminal and no sound device, so they run anywhere.
     add up to the whole; `--split` writes one for each sound track, those in groups too. Each is a
     render with that track or group soloed. `:render` does the same from the program, on the edit
     thread, for the song as it is.
-*   **`vimtracker bench <project>`** (`run::bench`) plays a project through an `Engine` on this
+*   **`vimtracker bench <project>`** (`bench.rs`) plays a project through an `Engine` on this
     thread, in blocks the size a device asks for, stopped and then playing, and prints the share of
-    a core it takes and its worst block, as the status line's CPU figure measures it.
+    a core it takes and its worst block, as the status line's CPU figure measures it, with how much
+    of the worst block its thread was on the CPU, so a block the system put aside reads as that, and
+    how long starting to play took. `--paced` plays each block when its time comes rather than flat
+    out. `--device` plays through the output device's own callback (`Output::start_measured`), at
+    its rate and buffer, sending it only silence, and splits each callback's time into the
+    engine's (`Realtime::engine_time`), the queues' and the report's, and the rest. `--tracks` also
+    times each track's voices and the rest of its work, each slot with an effect in it, each group,
+    return and the master, the limiter, the mixing and the sequencing, with `Engine::time_parts`:
+    a `Stopwatch` (`vt-engine`'s `timing.rs`) reads the clock between parts, and each track's
+    `SlotTimes` around its slots, both doing nothing until asked, and the clock's own cost is taken
+    off.
 *   **`vimtracker probe <spec> <out.wav>`** (`dsp_probe.rs`) plays one voice or one effect through a
     track with no song, from a TOML spec, whose cases can each play notes of their own.
     `tools/compare/` renders the same spec through one or more reference plugins hosted by
