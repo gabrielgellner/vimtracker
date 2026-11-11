@@ -6,7 +6,7 @@
 //! Ghostty may draw an icon over the space after it as well, which only makes it bigger. The
 //! explorer's icons are followed by a no-break space, `ICON_SPACE`, which they don't draw over, so
 //! each keeps to its cell and every row's icon is the same size. The switches are the other way
-//! round: always followed by a plain space, so they're drawn over two cells (decision 156).
+//! round: always followed by a plain space, so they're drawn over two cells (decision 157).
 
 use std::time::Duration;
 

@@ -5,7 +5,7 @@
 //!
 //! A toggle is two cells wide: its glyph, then a plain space, which kitty and Ghostty draw the
 //! glyph over, so the switch is as wide as it's drawn to be rather than squeezed into one cell as
-//! a tiny pill (decision 156). Both cells are always written, on or off, so nothing after a
+//! a tiny pill (decision 157). Both cells are always written, on or off, so nothing after a
 //! toggle moves when it flips.
 
 use ratatui::style::Style;

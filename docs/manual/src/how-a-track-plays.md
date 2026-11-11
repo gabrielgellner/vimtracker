@@ -1,9 +1,13 @@
-# How a track plays: time, gates and lanes
+# How a track plays: time, gates, lanes and routing
 
-This chapter explains how a track turns its rows into sound over time. Most of the
-time you won't need it, as a track plays its rows in order, one step each, as in any
-tracker. It matters once rows have gates of different lengths, FX columns loop on
-their own, or a phrase plays its rows in another order.
+This chapter explains how a track turns its rows into sound over time, and where
+that sound goes. Most of the time you won't need it, as a track plays its rows in
+order, one step each, as in any tracker. It matters once rows have gates of different
+lengths, FX columns loop on their own, or a phrase plays its rows in another order.
+
+The track settings named here are on its track pages, `Space 4`: `Gate`, `Glide`,
+`Speed`, `Groove` and `Reset` in the Play device on the Sound page, the accumulator and
+the arpeggio on the Mod page, and the effects on the FX page.
 
 ## What a track plays
 
@@ -38,7 +42,9 @@ loop:                  [03 ............. 08]     only these play
   and what the note does over that time. An empty cell, `----`, is one pulse of `SGL`,
   as every row was before gates. The dim pair after it is how long the note lasts, and
   `--` leaves that to the track.
-- **FX columns** hold commands such as `CUT`, `RET` and `CHA`.
+- **FX columns** hold commands such as `CUT`, `RET` and `CHA`. A step has three. They
+  aren't the FX page's four effect slots, though a step's commands can reach those,
+  as `1BYP` does.
 
 ## Time: one count, which everything reads
 
@@ -113,9 +119,9 @@ what they start in it. `z a` collapses the view to a line a row, and opens it ag
 ## A tie glides as long as `Glide` says
 
 A `HLD` ties its note into the next row's, which carries the same note on at a new
-pitch with no new attack. The track's `Glide`, on its Sound page, is how long the
-pitch takes to get there, in ms. `Off`, the default, jumps, as a tie always has, but
-`Acid` slides by its own `Slide`, as a 303 does. Set, it glides on every voice: a
+pitch with no new attack. The track's `Glide`, in the Play device on its Sound page,
+is how long the pitch takes to get there, in ms. `Off`, the default, jumps, as a tie
+always has, but `Acid` slides by its own `Slide`, as a 303 does. Set, it glides on every voice: a
 synth by its pitch and a sample by its speed, so a sample's pitch and its speed move
 together, as a tape's do.
 
@@ -216,10 +222,10 @@ starts its next step there, even if that cuts the one before short.
 
 ### A track's own reset
 
-`Reset` on the track page, under `Speed`, starts the track's chain again every so
-many of the song's steps, while the other tracks drift on. A 5-step part with
-`Reset` at `1bar` plays five, five, five and one, the same bar every time, while a
-7-step part beside it drifts:
+`Reset`, in the Play device on the Sound page, under `Speed` and `Groove`, starts the
+track's chain again every so many of the song's steps, while the other tracks drift
+on. A 5-step part with `Reset` at `1bar` plays five, five, five and one, the same bar
+every time, while a 7-step part beside it drifts:
 
 ```text
 song:        0 1 2 3 4 5 6 7 8 9 A B C D E F | 0 1 2 3 4 5 6 7 8 9 A B C D E F
@@ -402,6 +408,27 @@ only changes the pitch, as a tie does; on, each starts again, as a `RET`'s does.
 `Random` draws from a stream of the track's own, so `CHA` rolls as it would
 without it, and a render repeats.
 
+## Envelopes follow notes, LFOs follow the song
+
+Each track has three envelopes and three LFOs, on its Mod page. An **envelope** belongs
+to the note: it starts where the note does, after the groove, the nudge and any `DEL`,
+holds while the note lasts and releases when it ends, so it moves with everything that
+moves the note. An **LFO** keeps the song's time: its `Rate` is a note division, bars or
+steps of the song, never of the track's `Speed`, or hertz, and it runs on through rows,
+lanes, orders and resets. Playing starts every LFO again, and a `:reset` doesn't, as
+that's about patterns. With `Retrig` on, it starts again on each of its track's notes
+instead.
+
+```text
+notes:      C-3 ─────────   E-3 ───   OFF
+Env 2:      ╱╲___________   ╱╲____    ╲__          starts with each note
+LFO 1:      ∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿∿         runs on, whatever the notes do
+```
+
+`b` on the Mod page switches an envelope or an LFO out, and what it moves glides back
+over 5 ms. It keeps running underneath, so switched back in, an LFO is in phase with
+one that was never out, and an envelope is where the held note has it.
+
 ## A phrase's order
 
 A phrase's rows play top to bottom unless `:order` gives it another order, after
@@ -475,6 +502,28 @@ in reverse, the top row's step plays the bottom row. Changing the order, or the
 phrase's length, while it plays keeps the row that was about to play: the track
 moves to where this pass of the new walk plays it, the nearest if it plays it
 twice, or stays where it is if this pass doesn't play it.
+
+## Where the sound goes
+
+A sound track's voice goes through its settings in the order the Sound page and the FX
+page read, top to bottom, as a console's channel strip does:
+
+```text
+sound track:  voice → Trim → Filter → slots 1 to 4 → Level, Pan ─┬─ its group, or the master
+                                                                 ├─ Send A → return A
+                                                                 └─ Send B → return B
+group:        its tracks → Trim → slots 1 to 4 → Level, Pan → the master, and its own sends
+return:       its sends in → Trim → slots 1 to 4 → Level, Pan → the master
+master:       everything → Trim → slots 1 to 4 → Level → Limiter → what you hear
+```
+
+`Trim` is the gain at the input, so it sets how hard the filter's `Drive` and the slots
+are hit, and `Level` after them is left for the mix. The sends are taken after `Level`
+and `Pan`, so turning a track down turns down what it sends too. A track in a group
+still sends from itself, so a snare can go to the reverb on its own while the kit is
+glued together in the group. An empty slot passes the sound on and costs nothing, and a
+bypassed one crossfades out over 5 ms and keeps running underneath, so a reverb's tail
+carries on.
 
 ## The keys, by column
 

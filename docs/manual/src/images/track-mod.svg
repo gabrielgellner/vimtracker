@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1467 798" width="1467" height="798" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Symbols Nerd Font Mono', 'JetBrainsMono Nerd Font Mono', 'FiraCode Nerd Font Mono', 'Hack Nerd Font Mono', monospace" font-size="15">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1467 798" width="1467" height="798" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="15">
+<defs><path id="sf204" d="M1366 1070H682Q590 1070 506.0 1033.5Q422 997 361.0 936.0Q300 875 264.0 791.0Q228 707 228.0 614.5Q228 522 264.0 438.0Q300 354 361.0 293.0Q422 232 506.0 196.0Q590 160 682 160H1366Q1458 160 1542.0 196.0Q1626 232 1687.0 293.0Q1748 354 1784.0 438.0Q1820 522 1820.0 614.5Q1820 707 1784.0 791.0Q1748 875 1687.0 936.0Q1626 997 1542.0 1033.5Q1458 1070 1366 1070ZM1366 -68H682Q544 -68 417.5 -14.0Q291 40 200.0 131.5Q109 223 54.5 349.5Q0 476 0.0 614.5Q0 753 54.5 879.5Q109 1006 200.0 1097.0Q291 1188 417.5 1242.0Q544 1296 682 1296H1366Q1504 1296 1630.5 1242.0Q1757 1188 1848.0 1097.0Q1939 1006 1993.5 879.5Q2048 753 2048.0 614.5Q2048 476 1993.5 349.5Q1939 223 1848.0 131.5Q1757 40 1630.5 -14.0Q1504 -68 1366 -68ZM854.0 319.0Q775 274 682.5 274.0Q590 274 511.0 319.0Q432 364 387.0 443.0Q342 522 342.0 614.5Q342 707 387.0 786.0Q432 865 511.0 910.5Q590 956 682.5 956.0Q775 956 854.0 910.5Q933 865 978.5 786.0Q1024 707 1024.0 614.5Q1024 522 978.5 443.0Q933 364 854.0 319.0Z"/><path id="sf205" d="M682 1296H1366Q1504 1296 1630.5 1242.0Q1757 1188 1848.0 1097.0Q1939 1006 1993.5 879.5Q2048 753 2048.0 614.5Q2048 476 1993.5 349.5Q1939 223 1848.0 131.5Q1757 40 1630.5 -14.0Q1504 -68 1366 -68H682Q544 -68 417.5 -14.0Q291 40 200.0 131.5Q109 223 54.5 349.5Q0 476 0.0 614.5Q0 753 54.5 879.5Q109 1006 200.0 1097.0Q291 1188 417.5 1242.0Q544 1296 682 1296ZM1536.5 910.0Q1458 956 1365.0 956.0Q1272 956 1193.5 910.5Q1115 865 1069.5 786.0Q1024 707 1024.0 614.5Q1024 522 1069.5 443.0Q1115 364 1193.5 319.0Q1272 274 1365.0 274.0Q1458 274 1536.5 319.5Q1615 365 1660.5 443.0Q1706 521 1706.0 614.5Q1706 708 1660.5 786.0Q1615 864 1536.5 910.0Z"/><path id="sf040a" d="M220 1638V-410L1828 614Z"/><path id="sf147d" d="M2048 614 1846 513 1740 407 1638 513 1538 205 1432 513 1332 -309 1230 513 1124 306 1024 513 922 100 818 513 716 -410 616 513 510 -102 408 513 308 407 202 513 0 614 202 715 308 821 408 715 510 1330 616 715 716 1638 818 715 922 1128 1024 715 1124 922 1230 715 1332 1537 1432 715 1538 1023 1638 715 1740 821 1846 715Z"/></defs>
 <rect width="100%" height="100%" fill="#303446"/>
-<text x="0" y="14" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">󱑽 </text>
+<use href="#sf147d" transform="matrix(0.0043945313 0 0 -0.0043945313 0 12.198242)" fill="#949cbb"/>
 <text x="18" y="14" fill="#c6d0f5" font-weight="bold" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Track 01 </text>
 <text x="99" y="14" fill="#949cbb" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Sound </text>
 <text x="162" y="14" fill="#c6d0f5" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Mod </text>
@@ -8,12 +9,12 @@
 <text x="1125" y="14" fill="#949cbb" textLength="225" lengthAdjust="spacingAndGlyphs" xml:space="preserve">CPU  0%  late 0  xruns 0 </text>
 <text x="0" y="52" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="52" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Env 1</text>
-<text x="90" y="52" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 52.896484)" fill="#a6d189"/>
 <text x="108" y="52" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Vol </text>
 <text x="153" y="52" fill="#51576d" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <text x="684" y="52" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="52" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">LFO 1</text>
-<text x="774" y="52" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 52.896484)" fill="#a6d189"/>
 <text x="801" y="52" fill="#c6d0f5" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Cut</text>
 <text x="837" y="52" fill="#949cbb" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <text x="0" y="71" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -61,7 +62,7 @@
 <text x="711" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Rate      </text>
 <text x="801" y="128" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4        </text>
 <text x="900" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Retrig    </text>
-<text x="990" y="128" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 990 128.89648)" fill="#737994"/>
 <text x="1089" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="128" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│   6 </text>
@@ -83,7 +84,7 @@
 <text x="27" y="166" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Release   </text>
 <text x="117" y="166" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">400 ms     </text>
 <text x="216" y="166" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Reset     </text>
-<text x="306" y="166" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 306 166.89648)" fill="#a6d189"/>
 <text x="405" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="630" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="657" y="166" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -113,12 +114,12 @@
 <rect x="1449" y="190" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="223" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="223" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Env 2</text>
-<text x="90" y="223" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 223.89648)" fill="#a6d189"/>
 <text x="108" y="223" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Cut </text>
 <text x="153" y="223" fill="#51576d" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <text x="684" y="223" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="223" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">LFO 2</text>
-<text x="774" y="223" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 223.89648)" fill="#a6d189"/>
 <text x="801" y="223" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="837" y="223" fill="#51576d" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <rect x="1395" y="209" width="18" height="19" fill="#292c3c"/>
@@ -176,7 +177,7 @@
 <text x="711" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Rate      </text>
 <text x="801" y="299" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4        </text>
 <text x="900" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Retrig    </text>
-<text x="990" y="299" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 990 299.89648)" fill="#737994"/>
 <text x="1089" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="299" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -198,7 +199,7 @@
 <text x="27" y="337" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Release   </text>
 <text x="117" y="337" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">50 ms      </text>
 <text x="216" y="337" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Reset     </text>
-<text x="306" y="337" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 306 337.89648)" fill="#a6d189"/>
 <text x="405" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="630" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="657" y="337" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -228,12 +229,12 @@
 <rect x="1449" y="361" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="394" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Env 3</text>
-<text x="90" y="394" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 394.89648)" fill="#a6d189"/>
 <text x="117" y="394" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="153" y="394" fill="#51576d" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <text x="684" y="394" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">LFO 3</text>
-<text x="774" y="394" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 394.89648)" fill="#a6d189"/>
 <text x="801" y="394" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="837" y="394" fill="#51576d" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <rect x="1395" y="380" width="18" height="19" fill="#292c3c"/>
@@ -291,7 +292,7 @@
 <text x="711" y="470" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Rate      </text>
 <text x="801" y="470" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4        </text>
 <text x="900" y="470" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Retrig    </text>
-<text x="990" y="470" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 990 470.89648)" fill="#737994"/>
 <text x="1089" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="470" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -313,7 +314,7 @@
 <text x="27" y="508" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Release   </text>
 <text x="117" y="508" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">50 ms      </text>
 <text x="216" y="508" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Reset     </text>
-<text x="306" y="508" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 306 508.89648)" fill="#a6d189"/>
 <text x="405" y="508" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="630" y="508" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="657" y="508" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -390,7 +391,7 @@
 <text x="711" y="641" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mode      </text>
 <text x="801" y="641" fill="#c6d0f5" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Up            </text>
 <text x="927" y="641" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Retrig    </text>
-<text x="1017" y="641" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> </text>
+<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 1017 641.8965)" fill="#737994"/>
 <text x="1341" y="641" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="627" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="627" width="18" height="19" fill="#292c3c"/>
@@ -435,7 +436,7 @@
 <text x="0" y="774" fill="#303446" font-weight="bold" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> TRACK </text>
 <rect x="63" y="760" width="108" height="19" fill="#51576d"/>
 <text x="63" y="774" fill="#c6d0f5" font-weight="bold" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Depth, +30 </text>
-<text x="180" y="774" fill="#a6d189" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">󰐊</text>
+<use href="#sf040a" transform="matrix(0.0043945313 0 0 -0.0043945313 180 772.19824)" fill="#a6d189"/>
 <text x="189" y="774" fill="#c6d0f5" textLength="1278" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  120 BPM  Groove Straight  Oct 3 Vel 64  TVol E0 *                                                                                           </text>
 <image x="1359" y="0" width="108" height="57" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANgAAABsAQMAAAAyte7NAAAABlBMVEUAAACUnLveOgbxAAAAAXRSTlMAQObYZgAAC9tJREFUeAEB0Asv9AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///////////////////////////////////8A////////////////////////////////////AP///////////////////////////////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHPTULAMhoX3AAAAAElFTkSuQmCC"/>
 <image x="414" y="76" width="216" height="95" preserveAspectRatio="none" href="data:image/png;base64,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"/>

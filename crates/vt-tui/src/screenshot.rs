@@ -3,7 +3,7 @@
 //! like the filter curve, are put in where their placeholders are, as the terminal shows them, and
 //! those the program places itself, like the sample page's ruler marks, where they're placed.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::Write;
 
 use base64::Engine;
@@ -11,6 +11,7 @@ use base64::engine::general_purpose::STANDARD;
 use ratatui::buffer::Buffer;
 use ratatui::style::{Color, Modifier};
 
+use crate::glyphs;
 use crate::kitty::{PLACEHOLDER, POSITIONS};
 use crate::theme;
 
@@ -22,10 +23,50 @@ const FONT_SIZE: f32 = 15.0;
 const BASELINE: f32 = 14.0;
 /// Where an underline is drawn, from a cell's top: a little under the text, as a font puts it.
 const UNDERLINE: f32 = BASELINE + 2.0;
-/// The fonts the picture asks for: ordinary monospace ones for the text, then Nerd Fonts, which a
-/// browser falls back to a character at a time for the icons the others don't have.
-const FONTS: &str = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Symbols Nerd Font Mono', \
-    'JetBrainsMono Nerd Font Mono', 'FiraCode Nerd Font Mono', 'Hack Nerd Font Mono', monospace";
+/// The fonts the picture asks for, for its text. Its Nerd Font symbols are drawn as paths.
+const FONTS: &str = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
+
+// Made by a script, with a path a line.
+#[rustfmt::skip]
+mod symbols;
+
+/// A Nerd Font symbol's outline, as an SVG path in the font's units, if it's one the program
+/// draws. A picture shown on a page with `<img>` can't use the page's fonts, and a font carried
+/// in the picture can be drawn before it has loaded, so each symbol is drawn as its outline,
+/// from the manual's cut-down Symbols Nerd Font Mono (`scripts/symbols-font.sh`).
+fn symbol_path(c: char) -> Option<&'static str> {
+    let at = symbols::PATHS
+        .binary_search_by_key(&c, |&(symbol, _)| symbol)
+        .ok()?;
+    Some(symbols::PATHS[at].1)
+}
+
+/// A cell's symbol, if it's a single Nerd Font symbol drawn as a path.
+fn cell_symbol(symbol: &str) -> Option<char> {
+    let mut chars = symbol.chars();
+    let c = chars.next()?;
+    (chars.next().is_none() && symbol_path(c).is_some()).then_some(c)
+}
+
+/// How many cells a symbol is drawn across: a switch before a plain space fills both, as kitty
+/// and Ghostty draw it over the space (decision 157), and every other symbol keeps to its cell.
+fn symbol_cells(symbol: char, next: Option<&str>) -> u16 {
+    let switch = symbol == glyphs::SWITCH_ON || symbol == glyphs::SWITCH_OFF;
+    if switch && next == Some(" ") { 2 } else { 1 }
+}
+
+/// Where a symbol's outline is put to fill the width of its cells, as kitty draws a Nerd Font
+/// Mono symbol, upright and in the middle of the cell's height: an SVG transform from the font's
+/// units, y up, to the picture's, from the first cell's top left.
+fn symbol_transform(left: f32, top: f32, cells: u16) -> String {
+    let scale = f32::from(cells) * CELL_WIDTH / symbols::ADVANCE;
+    let middle = (symbols::ASCENT + symbols::DESCENT) / 2.0;
+    format!(
+        "matrix({scale} 0 0 {} {left} {})",
+        -scale,
+        top + CELL_HEIGHT / 2.0 + middle * scale
+    )
+}
 
 /// A colour as SVG writes it, or the screen's own for the terminal's default.
 fn colour(color: Color, default: Color) -> String {
@@ -271,6 +312,20 @@ pub fn to_svg_placed(
         svg,
         r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" font-family="{FONTS}" font-size="{FONT_SIZE}">"#
     );
+    // Each symbol shown, once, for the cells that show it to use.
+    let shown: BTreeSet<char> = buffer
+        .content
+        .iter()
+        .filter_map(|cell| cell_symbol(cell.symbol()))
+        .collect();
+    if !shown.is_empty() {
+        svg.push_str("<defs>");
+        for symbol in &shown {
+            let path = symbol_path(*symbol).unwrap_or_default();
+            let _ = write!(svg, r#"<path id="s{:x}" d="{path}"/>"#, u32::from(*symbol));
+        }
+        svg.push_str("</defs>\n");
+    }
     let _ = writeln!(
         svg,
         r#"<rect width="100%" height="100%" fill="{}"/>"#,
@@ -282,14 +337,19 @@ pub fn to_svg_placed(
             let here = look(buffer, x, y);
             let start = x;
             let mut text = String::new();
+            let mut drawn = Vec::new();
             while x < area.width && look(buffer, x, y) == here {
                 let symbol = buffer[(x, y)].symbol();
-                // A placeholder is drawn as its image, below.
-                text.push_str(if symbol.starts_with(PLACEHOLDER) {
-                    " "
+                // A placeholder is drawn as its image, below, and a Nerd Font symbol as its path.
+                if let Some(symbol) = cell_symbol(symbol) {
+                    let next = (x + 1 < area.width).then(|| buffer[(x + 1, y)].symbol());
+                    drawn.push((x, symbol, symbol_cells(symbol, next)));
+                    text.push(' ');
+                } else if symbol.starts_with(PLACEHOLDER) {
+                    text.push(' ');
                 } else {
-                    symbol
-                });
+                    text.push_str(symbol);
+                }
                 x += 1;
             }
             let (left, top) = (f32::from(start) * CELL_WIDTH, f32::from(y) * CELL_HEIGHT);
@@ -320,6 +380,15 @@ pub fn to_svg_placed(
                     top + BASELINE,
                     here.fg,
                     escaped(&text)
+                );
+            }
+            for (at, symbol, cells) in drawn {
+                let _ = writeln!(
+                    svg,
+                    r##"<use href="#s{:x}" transform="{}" fill="{}"/>"##,
+                    u32::from(symbol),
+                    symbol_transform(f32::from(at) * CELL_WIDTH, top, cells),
+                    here.fg
                 );
             }
         }
@@ -405,6 +474,77 @@ mod tests {
             "the cursor's background"
         );
         assert!(svg.trim_end().ends_with("</svg>"));
+    }
+
+    #[test]
+    fn a_nerd_font_symbol_is_drawn_as_its_outline_in_its_cells_colour() {
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 2));
+        buffer.set_string(0, 0, "C-3", Style::new());
+        let plain = to_svg(&buffer, &HashMap::new());
+        assert!(!plain.contains("<defs>"), "{plain}");
+
+        let play = crate::glyphs::PLAY;
+        buffer.set_string(4, 1, play.to_string(), Style::new().fg(theme::GREEN));
+        buffer.set_string(6, 1, play.to_string(), Style::new().fg(theme::GREEN));
+        let svg = to_svg(&buffer, &HashMap::new());
+        assert!(!svg.contains(play), "the symbol isn't text: {svg}");
+        assert_eq!(svg.matches(r#"<path id="sf040a""#).count(), 1, "{svg}");
+        let path = symbol_path(play).unwrap();
+        assert!(svg.contains(&format!(r#"d="{path}""#)));
+        assert_eq!(svg.matches(r##"<use href="#sf040a""##).count(), 2, "{svg}");
+        assert!(
+            svg.contains(&format!(
+                r##"<use href="#sf040a" transform="{}" fill="{}"/>"##,
+                symbol_transform(36.0, 19.0, 1),
+                colour(theme::GREEN, theme::TEXT)
+            )),
+            "{svg}"
+        );
+    }
+
+    #[test]
+    fn a_toggle_is_drawn_across_its_two_cells_as_the_terminals_draw_it() {
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 1));
+        let toggle = crate::views::widgets::toggle::span(true);
+        buffer.set_span(2, 0, &toggle, 2);
+        // A switch with no plain space after it, as at a line's end, keeps to its cell.
+        buffer.set_string(9, 0, glyphs::SWITCH_OFF.to_string(), Style::new());
+        let svg = to_svg(&buffer, &HashMap::new());
+        let green = colour(theme::GREEN, theme::TEXT);
+        assert!(
+            svg.contains(&format!(
+                r##"<use href="#sf205" transform="{}" fill="{green}"/>"##,
+                symbol_transform(18.0, 0.0, 2)
+            )),
+            "{svg}"
+        );
+        assert!(
+            svg.contains(&format!(
+                r##"<use href="#sf204" transform="{}""##,
+                symbol_transform(81.0, 0.0, 1)
+            )),
+            "{svg}"
+        );
+    }
+
+    /// The paths have every symbol `glyphs.rs` names: run `scripts/symbols-font.sh` after
+    /// adding one.
+    #[test]
+    fn every_symbol_the_program_draws_has_a_path() {
+        let glyphs = include_str!("glyphs.rs");
+        let mut rest = glyphs;
+        while let Some(at) = rest.find("\\u{") {
+            rest = &rest[at + 3..];
+            let hex = &rest[..rest.find('}').unwrap()];
+            let symbol = char::from_u32(u32::from_str_radix(hex, 16).unwrap()).unwrap();
+            let private = matches!(symbol, '\u{e000}'..='\u{f8ff}' | '\u{f0000}'..='\u{ffffd}');
+            assert!(
+                !private || symbol_path(symbol).is_some(),
+                "U+{:04X} has no path: run scripts/symbols-font.sh",
+                u32::from(symbol)
+            );
+        }
+        assert!(symbols::PATHS.windows(2).all(|pair| pair[0].0 < pair[1].0));
     }
 
     #[test]
