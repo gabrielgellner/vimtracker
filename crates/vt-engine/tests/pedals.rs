@@ -1,11 +1,17 @@
 //! Distort's guitar pedals, `Overdrive` and `Distortion` (#361): their level, their harmonics,
-//! their tone, mix and bypass, and that nothing goes wrong at the extremes.
+//! their tone, mix and bypass, and that nothing goes wrong at the extremes. Also that a sound the
+//! same on both sides, which `Distort` works out once for both, comes out as it did, as does one
+//! that isn't, and one that goes from one to the other.
+
+mod support;
 
 use std::f32::consts::TAU;
 
 use vt_engine::dsp::effects::distort::InsertState;
 use vt_engine::track_state::Keys;
 use vt_model::insert::{Distort, DistortType, Insert};
+
+use support::golden;
 
 const RATE: u32 = 48_000;
 /// Settings take effect at once, as the smoother has nothing to do.
@@ -299,5 +305,110 @@ fn the_oversampling_keeps_aliasing_well_under_the_harmonics() {
             "{kind:?}: the 7th harmonic folded to 13 kHz is {} dB under the fundamental",
             fundamental - folded
         );
+    }
+}
+
+/// Every `Distort` type that runs at a higher rate, each side through its own filters.
+const OVERSAMPLED: [DistortType; 6] = [
+    DistortType::Overdrive,
+    DistortType::Distortion,
+    DistortType::Soft,
+    DistortType::Hard,
+    DistortType::Fold,
+    DistortType::Sine,
+];
+
+/// Both sides of what comes out, side by side.
+fn play_sides(state: &mut InsertState, input: &[[f32; 2]]) -> Vec<f32> {
+    input
+        .iter()
+        .flat_map(|&frame| state.process(frame, NO_SMOOTHING, RATE, &Keys::default()))
+        .collect()
+}
+
+/// The acid line on both sides.
+fn mono(seconds: f32) -> Vec<[f32; 2]> {
+    acid_line(seconds).into_iter().map(|s| [s; 2]).collect()
+}
+
+/// The acid line on the left, and on the right quieter and a little later, as a sound panned or
+/// through a chorus is.
+fn stereo(seconds: f32) -> Vec<[f32; 2]> {
+    let line = acid_line(seconds);
+    (0..line.len())
+        .map(|at| [line[at], 0.7 * line[at.saturating_sub(31)]])
+        .collect()
+}
+
+/// Turns of the same on both sides and not, each straight after the other mid-note, one frame
+/// that differs, then nothing for long enough to rest, and the same on both sides again.
+fn switching() -> Vec<[f32; 2]> {
+    let mut input = mono(0.2);
+    input.extend(stereo(0.2));
+    input.extend(mono(0.2));
+    let mut once = mono(0.1);
+    once[2400][1] += 0.01;
+    input.extend(once);
+    input.extend(std::iter::repeat_n([0.0; 2], 3 * RATE as usize));
+    input.extend(mono(0.2));
+    input
+}
+
+fn oversampled(kind: DistortType) -> InsertState {
+    let mut state = InsertState::default();
+    state.set(Insert::Distort(Distort {
+        kind,
+        amount: 0xA0,
+        tone: 0x90,
+        mix: 0xFF,
+        ..Distort::default()
+    }));
+    state.settle();
+    state
+}
+
+#[test]
+fn golden_sides_stay_the_same() {
+    for kind in OVERSAMPLED {
+        let mut out = play_sides(&mut oversampled(kind), &mono(0.5));
+        out.extend(play_sides(&mut oversampled(kind), &stereo(0.5)));
+        out.extend(play_sides(&mut oversampled(kind), &switching()));
+        golden(&format!("sides-{kind:?}").to_lowercase(), &out);
+    }
+}
+
+#[test]
+fn the_same_on_both_sides_comes_out_the_same_on_both() {
+    for kind in OVERSAMPLED {
+        let out = play_sides(&mut oversampled(kind), &mono(0.5));
+        for frame in out.as_chunks::<2>().0 {
+            assert_eq!(frame[0].to_bits(), frame[1].to_bits(), "{kind:?}");
+        }
+    }
+}
+
+#[test]
+fn each_side_is_as_it_would_be_alone_whatever_the_other_does() {
+    // Each side alone, the same on both sides of a slot of its own, is what that side of the pair
+    // should be, so going between the same and not can't jump or click on either side. Only the
+    // pedal's rest in the silence differs, as a pair rests once both sides have rung out: until
+    // then, a side that's rung out still gives what's left, far under a millionth.
+    let resting = |found: f32, wanted: f32| found.abs() < 1e-6 && wanted.abs() < 1e-6;
+    for kind in OVERSAMPLED {
+        for input in [stereo(0.5), switching()] {
+            let out = play_sides(&mut oversampled(kind), &input);
+            for side in 0..2 {
+                let alone: Vec<[f32; 2]> = input.iter().map(|frame| [frame[side]; 2]).collect();
+                let expected = play_sides(&mut oversampled(kind), &alone);
+                let found = out.iter().skip(side).step_by(2);
+                let wanted = expected.iter().skip(side).step_by(2);
+                for (at, (&found, &wanted)) in found.zip(wanted).enumerate() {
+                    assert!(
+                        found.to_bits() == wanted.to_bits() || resting(found, wanted),
+                        "{kind:?}, side {side}, frame {at}: {found} against {wanted}"
+                    );
+                }
+            }
+        }
     }
 }

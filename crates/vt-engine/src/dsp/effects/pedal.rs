@@ -26,6 +26,7 @@ use vt_model::insert::DistortType;
 
 use crate::dsp::blocks::oversampler::QuadrupleOversampler;
 use crate::dsp::blocks::plaits_parts::Svf;
+use crate::dsp::blocks::sides::{SameBits, Sides};
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// How many volts full scale stands for in the Tube Screamer: about what a TB-303 puts out, a volt
@@ -163,16 +164,68 @@ impl Channel {
             && self.top.abs() < QUIET
             && self.coupling.abs() < QUIET
     }
+
+    /// One side through the Tube Screamer.
+    #[inline]
+    fn overdrive(&mut self, input: f32, worked: &Coefficients) -> f32 {
+        let Coefficients {
+            gain,
+            diodes,
+            gain_branch: branch,
+            feedback,
+            ..
+        } = *worked;
+        let Self {
+            oversampler,
+            high_pass,
+            feedback: held,
+            ..
+        } = &mut *self;
+        let volts = input * VOLTS_AT_FULL_SCALE;
+        let driven = oversampler.process(volts, |x| {
+            // The current through the gain branch, as a voltage across the feedback's resistance.
+            high_pass[0] += (x - high_pass[0]) * branch;
+            let through = (x - high_pass[0]) * gain;
+            *held += (through - *held) * feedback;
+            x + diode_pair(*held, diodes)
+        });
+        self.tone += (driven - self.tone) * worked.tone_low_pass;
+        let toned = self.tone + (driven - self.tone) * worked.treble;
+        self.top += (toned - self.top) * worked.top;
+        self.top * OVERDRIVE_LEVEL / VOLTS_AT_FULL_SCALE
+    }
+
+    /// One side through the op-amp distortion.
+    #[inline]
+    fn distortion(&mut self, input: f32, worked: &Coefficients) -> f32 {
+        let (drive, high_pass) = (worked.drive, worked.distortion_high_pass);
+        let mut x = input * drive;
+        for state in &mut self.high_pass {
+            *state += (x - *state) * high_pass;
+            x -= *state;
+        }
+        let clipped = self.oversampler.process(x, off_centre_clip);
+        self.low_pass.low_pass(clipped) * DISTORTION_CEILING
+    }
 }
 
-/// What the pedals keep from frame to frame, small enough to keep in every slot. Nothing here
-/// allocates.
+impl SameBits for Channel {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        // The output's first, as what's most likely to differ.
+        self.coupling.same_bits(&other.coupling)
+            && self.top.same_bits(&other.top)
+            && self.tone.same_bits(&other.tone)
+            && self.feedback.same_bits(&other.feedback)
+            && self.high_pass.same_bits(&other.high_pass)
+            && self.low_pass.same_bits(&other.low_pass)
+            && self.oversampler.same_bits(&other.oversampler)
+    }
+}
+
+/// The coefficients for the pedals' settings, the same on both sides.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Pedal {
-    channels: [Channel; 2],
-    tone: Smoothed,
-    /// The settings and rate the coefficients below were worked out for.
-    worked_out: (f32, f32, f32),
+struct Coefficients {
     /// The Tube Screamer's gain, its diodes' `k`, and its one-poles: the gain branch and feedback
     /// at the higher rate, and its tone and output at the normal rate.
     gain: f32,
@@ -187,16 +240,11 @@ pub(crate) struct Pedal {
     distortion_high_pass: f32,
     /// The output coupling's one-pole.
     coupling: f32,
-    /// Whether it's resting at zero, with nothing going in.
-    resting: bool,
 }
 
-impl Default for Pedal {
+impl Default for Coefficients {
     fn default() -> Self {
         Self {
-            channels: [Channel::default(); 2],
-            tone: Smoothed::at(0.5),
-            worked_out: (f32::NAN, f32::NAN, f32::NAN),
             gain: 0.0,
             diodes: 1.0,
             gain_branch: 0.0,
@@ -207,6 +255,33 @@ impl Default for Pedal {
             drive: 1.0,
             distortion_high_pass: 0.0,
             coupling: 0.0,
+        }
+    }
+}
+
+/// What the pedals keep from frame to frame, small enough to keep in every slot. Nothing here
+/// allocates.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Pedal {
+    /// Each side's filters and oversampling, worked out once for both while a sound is the same
+    /// on both sides, as a mono voice's is: most of a pedal's time is its clipping at four times
+    /// the rate.
+    channels: Sides<Channel>,
+    tone: Smoothed,
+    /// The settings and rate the coefficients below were worked out for.
+    worked_out: (f32, f32, f32),
+    coefficients: Coefficients,
+    /// Whether it's resting at zero, with nothing going in.
+    resting: bool,
+}
+
+impl Default for Pedal {
+    fn default() -> Self {
+        Self {
+            channels: Sides::default(),
+            tone: Smoothed::at(0.5),
+            worked_out: (f32::NAN, f32::NAN, f32::NAN),
+            coefficients: Coefficients::default(),
             resting: true,
         }
     }
@@ -230,36 +305,38 @@ impl Pedal {
         }
         self.worked_out = (amount, tone, rate);
         let higher = rate * OVERSAMPLING;
+        let worked = &mut self.coefficients;
         // The Tube Screamer.
         let feedback = OVERDRIVE_FEEDBACK_RESISTOR + OVERDRIVE_DRIVE_POT * audio_taper(amount);
-        self.gain = feedback / OVERDRIVE_GAIN_RESISTOR;
-        self.diodes = 2.0 * DIODE_SATURATION_CURRENT * feedback;
+        worked.gain = feedback / OVERDRIVE_GAIN_RESISTOR;
+        worked.diodes = 2.0 * DIODE_SATURATION_CURRENT * feedback;
         let branch_hz = 1.0 / (TAU * OVERDRIVE_GAIN_RESISTOR * OVERDRIVE_GAIN_CAPACITOR);
-        self.gain_branch = one_pole(branch_hz, higher);
+        worked.gain_branch = one_pole(branch_hz, higher);
         let feedback_hz = 1.0 / (TAU * feedback * OVERDRIVE_FEEDBACK_CAPACITOR);
-        self.feedback = one_pole(feedback_hz.min(higher * 0.45), higher);
-        self.tone_low_pass = one_pole(OVERDRIVE_TONE_HZ, rate);
-        self.top = one_pole(OVERDRIVE_TOP_HZ.min(rate * 0.45), rate);
-        self.treble = tone * OVERDRIVE_MOST_TREBLE;
+        worked.feedback = one_pole(feedback_hz.min(higher * 0.45), higher);
+        worked.tone_low_pass = one_pole(OVERDRIVE_TONE_HZ, rate);
+        worked.top = one_pole(OVERDRIVE_TOP_HZ.min(rate * 0.45), rate);
+        worked.treble = tone * OVERDRIVE_MOST_TREBLE;
         // The op-amp distortion.
-        self.drive =
+        worked.drive =
             10_f32.powf((DISTORTION_LEAST_GAIN_DB + amount * DISTORTION_GAIN_RANGE_DB) / 20.0);
-        self.distortion_high_pass = one_pole(DISTORTION_HIGH_PASS_HZ, rate);
-        self.coupling = one_pole(OUTPUT_COUPLING_HZ, rate);
+        worked.distortion_high_pass = one_pole(DISTORTION_HIGH_PASS_HZ, rate);
+        worked.coupling = one_pole(OUTPUT_COUPLING_HZ, rate);
         let tone_hz =
             DISTORTION_DARKEST_HZ * (DISTORTION_BRIGHTEST_HZ / DISTORTION_DARKEST_HZ).powf(tone);
-        for channel in &mut self.channels {
+        for channel in self.channels.both_mut() {
             channel.low_pass.set_exact(tone_hz / rate, BUTTERWORTH);
         }
     }
 
     /// One frame through the pedal `kind`, driven by `amount` from `0` to `1`. A kind that isn't a
-    /// pedal leaves it as it is.
+    /// pedal leaves it as it is. `same` says its two sides are the same, bit for bit.
     #[inline]
     pub(crate) fn process(
         &mut self,
         kind: DistortType,
         input: [f32; 2],
+        same: bool,
         amount: f32,
         smoothing: f32,
         rate: u32,
@@ -271,71 +348,31 @@ impl Pedal {
         self.resting = false;
         let tone = self.tone.next(smoothing);
         self.work_out(amount, tone, rate as f32);
-        let coupling = self.coupling;
-        let out = [0, 1].map(|side| {
+        let worked = self.coefficients;
+        let out = self.channels.process(input, same, |channel, input| {
             let pedal = match kind {
-                DistortType::Overdrive => self.overdrive(side, input[side]),
-                DistortType::Distortion => self.distortion(side, input[side]),
-                _ => return input[side],
+                DistortType::Overdrive => channel.overdrive(input, &worked),
+                DistortType::Distortion => channel.distortion(input, &worked),
+                _ => return input,
             };
-            let channel = &mut self.channels[side];
-            channel.coupling += (pedal - channel.coupling) * coupling;
+            channel.coupling += (pedal - channel.coupling) * worked.coupling;
             pedal - channel.coupling
         });
         if nothing_in
             && self
                 .channels
+                .current()
                 .iter()
                 .zip(out)
                 .all(|(channel, last)| channel.rung_out(last))
         {
             // Start again from nothing, so no filter decays into denormals.
-            self.channels = [Channel::default(); 2];
+            self.channels = Sides::default();
             self.worked_out = (f32::NAN, f32::NAN, f32::NAN);
             self.resting = true;
             return [0.0; 2];
         }
         out
-    }
-
-    /// One side through the Tube Screamer.
-    #[inline]
-    fn overdrive(&mut self, side: usize, input: f32) -> f32 {
-        let (gain, diodes, branch, feedback) =
-            (self.gain, self.diodes, self.gain_branch, self.feedback);
-        let channel = &mut self.channels[side];
-        let Channel {
-            oversampler,
-            high_pass,
-            feedback: held,
-            ..
-        } = &mut *channel;
-        let volts = input * VOLTS_AT_FULL_SCALE;
-        let driven = oversampler.process(volts, |x| {
-            // The current through the gain branch, as a voltage across the feedback's resistance.
-            high_pass[0] += (x - high_pass[0]) * branch;
-            let through = (x - high_pass[0]) * gain;
-            *held += (through - *held) * feedback;
-            x + diode_pair(*held, diodes)
-        });
-        channel.tone += (driven - channel.tone) * self.tone_low_pass;
-        let toned = channel.tone + (driven - channel.tone) * self.treble;
-        channel.top += (toned - channel.top) * self.top;
-        channel.top * OVERDRIVE_LEVEL / VOLTS_AT_FULL_SCALE
-    }
-
-    /// One side through the op-amp distortion.
-    #[inline]
-    fn distortion(&mut self, side: usize, input: f32) -> f32 {
-        let (drive, high_pass) = (self.drive, self.distortion_high_pass);
-        let channel = &mut self.channels[side];
-        let mut x = input * drive;
-        for state in &mut channel.high_pass {
-            *state += (x - *state) * high_pass;
-            x -= *state;
-        }
-        let clipped = channel.oversampler.process(x, off_centre_clip);
-        channel.low_pass.low_pass(clipped) * DISTORTION_CEILING
     }
 }
 

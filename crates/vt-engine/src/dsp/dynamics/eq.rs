@@ -8,6 +8,7 @@ use std::f32::consts::PI;
 use vt_model::insert::Equaliser as Settings;
 use vt_model::settings::{band_db, band_q};
 
+use crate::dsp::blocks::sides::{SameBits, Sides};
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// The shelves' width: a gentle slope with no bump.
@@ -144,6 +145,13 @@ struct Band {
     ic2: f32,
 }
 
+impl SameBits for Band {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.ic1.same_bits(&other.ic1) && self.ic2.same_bits(&other.ic2)
+    }
+}
+
 impl Band {
     #[inline]
     fn process(&mut self, c: &Coefficients, input: f32) -> f32 {
@@ -159,7 +167,8 @@ impl Band {
 /// The three bands on both sides, with each setting moving smoothly to where it's set.
 #[derive(Debug, Clone, Copy)]
 pub struct ThreeBands {
-    bands: [[Band; 3]; 2],
+    /// Each side's bands, worked out once for both while a sound is the same on both.
+    bands: Sides<[Band; 3]>,
     coefficients: [Coefficients; 3],
     /// Each band's frequency and boost, and the middle's Q, on the `00` to `FF` scale.
     settings: [Smoothed; 7],
@@ -170,7 +179,7 @@ pub struct ThreeBands {
 impl Default for ThreeBands {
     fn default() -> Self {
         let mut eq = Self {
-            bands: [[Band::default(); 3]; 2],
+            bands: Sides::default(),
             coefficients: [Coefficients::default(); 3],
             settings: [Smoothed::at(0.0); 7],
             worked_out: [f32::NAN; 7],
@@ -198,12 +207,12 @@ impl ThreeBands {
 
     /// Forget what's ringing, for a fresh start.
     pub fn clear(&mut self) {
-        self.bands = [[Band::default(); 3]; 2];
+        self.bands = Sides::default();
     }
 
-    /// One frame through the bands.
+    /// One frame through the bands. `same` says its two sides are the same, bit for bit.
     #[inline]
-    pub fn process(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
+    pub fn process(&mut self, input: [f32; 2], same: bool, smoothing: f32, rate: u32) -> [f32; 2] {
         let now = self
             .settings
             .each_mut()
@@ -212,13 +221,13 @@ impl ThreeBands {
             self.worked_out = now;
             self.coefficients = bands(now, rate);
         }
-        let mut out = input;
-        for (side, sample) in out.iter_mut().enumerate() {
-            for (band, coefficients) in self.bands[side].iter_mut().zip(&self.coefficients) {
-                *sample = band.process(coefficients, *sample);
+        let coefficients = &self.coefficients;
+        self.bands.process(input, same, |bands, mut sample| {
+            for (band, coefficients) in bands.iter_mut().zip(coefficients) {
+                sample = band.process(coefficients, sample);
             }
-        }
-        out
+            sample
+        })
     }
 }
 
@@ -237,7 +246,7 @@ mod tests {
         let (mut input, mut output) = (0.0_f32, 0.0_f32);
         for frame in 0..frames {
             let sample = (frame as f32 / RATE as f32 * hertz * std::f32::consts::TAU).sin();
-            let out = eq.process([sample; 2], 1.0, RATE)[0];
+            let out = eq.process([sample; 2], true, 1.0, RATE)[0];
             if frame > frames / 2 {
                 input += sample * sample;
                 output += out * out;
@@ -352,7 +361,7 @@ mod tests {
                 ..Settings::DEFAULT
             });
             let sample = (frame as f32 * 0.05).sin() * 0.5;
-            let out = eq.process([sample; 2], 0.01, RATE);
+            let out = eq.process([sample; 2], true, 0.01, RATE);
             assert!(
                 out.iter().all(|s| s.is_finite() && s.abs() < 4.0),
                 "{out:?}"
