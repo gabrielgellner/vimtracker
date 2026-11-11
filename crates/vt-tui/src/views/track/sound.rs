@@ -74,6 +74,7 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
         Control::Trim => Some((track.trim, true)),
         Control::Base(TrackControl::Pan) => Some((track.pan, true)),
         Control::Base(TrackControl::Pitch) => Some((track.pitch, true)),
+        Control::Base(TrackControl::VelocityDelta) => Some((track.velocity_delta, true)),
         // Those with a middle that's a setting of its own show where they are around it.
         Control::Setting(_) => {
             let id = control.setting_on(track)?;

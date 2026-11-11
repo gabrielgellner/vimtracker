@@ -159,7 +159,8 @@ impl Family {
             | Units::Makeup
             | Units::Range
             | Units::Input
-            | Units::Ceiling => Self::Level,
+            | Units::Ceiling
+            | Units::VelocityDelta => Self::Level,
             Units::Hertz | Units::Boost | Units::Q | Units::AcidCutoff | Units::Vowel => Self::Tone,
             Units::Pan => Self::Space,
             Units::Semitones
@@ -393,6 +394,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                     TrackControl::Pan => track.pan,
                     TrackControl::SendA => track.send_a,
                     TrackControl::SendB => track.send_b,
+                    TrackControl::VelocityDelta => track.velocity_delta,
                     _ => track.pitch,
                 };
                 registry(id, coarse, track.fine(id))

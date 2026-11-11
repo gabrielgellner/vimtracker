@@ -125,6 +125,7 @@ impl Control {
             Self::Base(TrackControl::LowCut) => "Low cut",
             Self::Base(TrackControl::HighCut) => "High cut",
             Self::Base(TrackControl::Pitch) => "Pitch",
+            Self::Base(TrackControl::VelocityDelta) => "Velocity",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::GateLength => "Gate",
@@ -227,6 +228,9 @@ impl Control {
             Self::Base(TrackControl::SendA) => base(SettingId::SEND_A, track.send_a),
             Self::Base(TrackControl::SendB) => base(SettingId::SEND_B, track.send_b),
             Self::Base(TrackControl::Pitch) => base(SettingId::PITCH, track.pitch),
+            Self::Base(TrackControl::VelocityDelta) => {
+                base(SettingId::VELOCITY_DELTA, track.velocity_delta)
+            }
             Self::GateLength => Some((SettingId::GATE_LENGTH, u16::from(track.gate_length()) << 8)),
             Self::Speed => Some((SettingId::SPEED, u16::from(track.speed.index()) << 8)),
             Self::Glide => Some((SettingId::GLIDE, u16::from(track.glide) << 8)),
@@ -280,7 +284,7 @@ impl Control {
             Self::Base(TrackControl::SendA | TrackControl::SendB) => {
                 track.is_sound() || track.is_group()
             }
-            Self::Base(TrackControl::Pitch)
+            Self::Base(TrackControl::Pitch | TrackControl::VelocityDelta)
             | Self::Choke
             | Self::Group
             | Self::GateLength

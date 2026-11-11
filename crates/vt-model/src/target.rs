@@ -9,7 +9,7 @@ use crate::song::{Machine, Track, TrackKind};
 use crate::step::FxCommand;
 
 /// What each of the track's own settings does, in the table's order.
-const TRACK_MEANINGS: [&str; 13] = [
+const TRACK_MEANINGS: [&str; 14] = [
     "Volume",
     "Pan",
     "Filter cutoff",
@@ -23,11 +23,12 @@ const TRACK_MEANINGS: [&str; 13] = [
     "Groove: how late or early the steps land, from this one",
     "Speed: how long the steps are, from this one",
     "Glide: how long a tied note takes to reach the next",
+    "Velocity, up or down from the note's own",
 ];
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
-/// gate, time and glide.
-const TRACK_ORDER: [SettingId; 13] = [
+/// velocity, gate, time and glide.
+const TRACK_ORDER: [SettingId; 14] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
@@ -36,6 +37,7 @@ const TRACK_ORDER: [SettingId; 13] = [
     SettingId::SEND_A,
     SettingId::SEND_B,
     SettingId::PITCH,
+    SettingId::VELOCITY_DELTA,
     SettingId::GATE_LENGTH,
     SettingId::GATE_DELTA,
     SettingId::GROOVE,
@@ -299,6 +301,25 @@ mod tests {
             assert!(offered.contains(&SettingId::GATE_LENGTH));
             assert!(!offered.contains(&SettingId::GATE_DELTA));
         }
+    }
+
+    #[test]
+    fn velocity_is_moved_by_steps_and_modulation_alike() {
+        let track = Track::default();
+        let delta = FxCommand::Set(SettingId::VELOCITY_DELTA);
+        assert!(FxCommand::on_track(&track).contains(&delta));
+        assert_eq!(delta.name(), "VDLT");
+        for offered in [SettingId::for_mod(&track, 3), SettingId::for_mod(&track, 0)] {
+            assert!(offered.contains(&SettingId::VELOCITY_DELTA));
+        }
+        let group = Track {
+            kind: TrackKind::Group(1),
+            ..Track::default()
+        };
+        assert!(
+            !SettingId::VELOCITY_DELTA.exists_on(&group),
+            "a group plays no notes"
+        );
     }
 
     #[test]
