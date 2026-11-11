@@ -4,7 +4,9 @@
 reached with `k` (question 1), and two-state settings as the bypass switch's glyph (question 2,
 #375). It's milestone M28: step 1, the devices, the three-row grid and today's graphics in a framed
 panel, is #374 and decision 139; the bypass switch is #375; bigger, smooth graphics are #376. The
-study is kept as it was written, so its "now" is the page before #374.
+study is kept as it was written, so its "now" is the page before #374. Steps 1 to 3 are built
+(decisions 139 to 141), with four slots (decision 138); step 4, a zoom view of one device, is
+#377, still open.
 
 A design study for the user's request of 2026-11-10: a bypass toggle, three rows of settings, a
 bigger and smoother compressor graphic with a border, and a rethought FX page in Ableton's device

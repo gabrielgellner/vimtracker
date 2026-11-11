@@ -1,7 +1,9 @@
 # vimtracker
 
 *   **Author:** gabrielgellner
-*   **Status:** Proposed
+*   **Status:** Built and in use, with milestones up to M29 on GitHub. The sections before
+    Architecture, the Technical Plan and the milestone designs are the plan as it was written,
+    kept for its reasoning.
 *   **Date:** 2026-11-05
 *   **As built:** [Architecture](#architecture) describes the code as it is now, and is kept current.
 *   **Decisions:** numbered, and kept as history in [decisions.md](decisions.md). "Decision 94"
@@ -11,15 +13,17 @@
 
 ## Overview
 
-vimtracker is an experimental music tracker that runs in a terminal, is written in Rust,
-and is edited with a keyboard grammar modelled on Neovim. It plays samples on a laptop.
-It takes ideas from the Dirtywave M8, Elektron sequencers, the Polyend Tracker and
-Jeskola Buzz, but it is a new program. It does not port their code, copy their
-appearance, read their files or try to match their sound.
+vimtracker is a music tracker that runs in a terminal, is written in Rust, and is edited
+with a keyboard grammar modelled on Neovim. It takes ideas from the Dirtywave M8, Elektron
+sequencers, the Polyend Tracker and Jeskola Buzz, but it is a new program. It does not port
+their code, copy their appearance or read their files.
 
-The first goal is to find out whether this can become an instrument the author wants to
-pick up. The prototype is built to answer that as cheaply as possible, given the premise
-below, while avoiding decisions that would be expensive to undo.
+The first goal was to find out whether this could become an instrument the author wants to
+pick up, and the author's jams answered it (G1, below). It has since grown from an M8 or
+Polyend-sized tool into one at about an Octatrack's scale (decision 138): sampler and synth
+machines, four effect slots, three LFOs and three envelopes a track, groups, returns and a
+master, used alongside Ableton Live rather than in place of it. It runs only in kitty and
+Ghostty (decisions 50 and 56).
 
 ## The Problem
 
@@ -108,7 +112,9 @@ Per-note tables are a further idea, and they get their own decision after the mi
     project starts with 8 tracks, and the core tests pass with 1, 8 and 64 tracks. FX commands
     address a limited range, which is settled when tables are designed.
 *   **G6: Terminal first.** The program runs in a normal terminal, including inside tmux, and
-    graphics are drawn with text characters. No core feature depends on key release.
+    graphics are drawn with text characters. No core feature depends on key release. *Since
+    changed by decisions 50 and 56: it runs only in kitty and Ghostty, with the kitty keyboard
+    protocol's releases and the kitty graphics protocol's images, and not inside tmux.*
 *   **G7: Steady timing.** Sequencing does not depend on redraw timing. On the author's laptop,
     16 active tracks run for 10 minutes while editing and redrawing, with a late-block count of
     zero, no stream errors, and nothing audible.
@@ -133,10 +139,12 @@ Per-note tables are a further idea, and they get their own decision after the mi
 *   Matching the sound of any other tracker exactly.
 *   Using the names, logos or visual design of Polyend, Dirtywave or Elektron products.
 *   Sample recording, streaming long samples, MIDI, plugin hosting and live performance mode for now.
-    Synth engines and granular effects are planned under Direction, and were non-goals for the first prototype.
+    Synth engines and granular effects were non-goals for the first prototype, and are built now,
+    under Direction.
 *   Becoming a DAW, or an MPC-style workstation. The scale in mind is full songs at about Maschine's size.
 *   Image graphics. Text-mode graphics come first. Kitty's image protocol remains possible
-    later if text cannot do what is needed.
+    later if text cannot do what is needed. *Since reversed: decision 56 requires the kitty
+    graphics protocol, and every curve is an image.*
 *   Live-coding, where running code generates the music during playback.
 *   Official support for Linux or Windows. The code avoids depending on macOS without a reason,
     but only macOS is tested.
@@ -144,6 +152,8 @@ Per-note tables are a further idea, and they get their own decision after the mi
 ## Open Questions
 
 *   **Key input:** Which keys do the author's terminal and tmux setup deliver? Issue 2 tests this.
+    *Answered by M16: the kitty keyboard protocol, in kitty and Ghostty only (decision 50), and
+    [terminal-notes.md](../terminal-notes.md).*
 *   **Track capacity:** How many active tracks does the author's laptop sustain? Issue 23 measures it.
 *   **Sweep smoothing:** Do sweeps sound stepped on a sustained sample? Issue 15 ends with a
     listening test, and the Audio path section states the fallback.
@@ -152,6 +162,7 @@ Per-note tables are a further idea, and they get their own decision after the mi
     particularly for sparse values.
 *   **Braille graphics:** Can text-mode graphics deliver the desired feel, such as an old MPC
     screen or an M8-style scope? A small throwaway demo can answer this before Issue 20.
+    *Answered: images replaced Braille (decisions 20 and 56).*
 
 ## Critical User Journeys (CUJs)
 
@@ -348,17 +359,16 @@ against optimised code too.
 
 **Work skipped.** Playing from the top resets only the track states the song's versions have had a
 track in since the last reset, `Engine::used`; the rest keep the empty track's settings that reset
-gave them. A track looks once a frame at whether its sound is the same on both sides after its
-filter, and each slot passes that on: an effect that says it works each side alone
-(`Mono::OneSide`) works out one side for both, keeping each side's state in `Sides`, and one with
-linked sides (`Mono::Linked`) passes it on unchecked (decision 147).
+gave them (decision 147). What a block skips as it plays is under
+[The engine's block](#the-engines-block).
 
 **Samples.** The pool only grows during a session, and sample IDs stay stable, so a voice keeps
 reading its sample until its note ends, and a replaced sample stays in memory until the project
 reloads.
 
-**Decisions:** 33, 54, 57, 75, 98 and 114, the [M10 design](#m10-design-tracks-that-process)'s
-memory, and the first of the [Known Gaps From Review](#known-gaps-from-review).
+**Decisions:** 33, 54, 57, 75, 98, 114, 147, 150 and 153, the
+[M10 design](#m10-design-tracks-that-process)'s memory, and the first of the
+[Known Gaps From Review](#known-gaps-from-review).
 
 ### Song model
 
@@ -376,7 +386,7 @@ Song                               song.ron, refused unless format_version is FO
  |   |- machine                    Sampler, or Plaits(voice)
  |   |- settings{id}, fine{id}     machine settings changed from their defaults
  |   |- filter, filter_mode, cutoff, resonance, drive, low_cut, high_cut
- |   |- inserts[3], bypassed[3]    an effect and its settings in each slot
+ |   |- inserts[4], bypassed[4]    an effect and its settings in each slot
  |   |- level, trim, pan, send_a, send_b
  |   |- pitch, choke, gate_length, speed, reset, glide, groove
  |   |- group                      the group a sound track plays through, or none
@@ -437,9 +447,13 @@ Song                               song.ron, refused unless format_version is FO
     `reset` restarts its chain every so many of the song's steps, and the song's `launch` says when
     launched chains start.
 *   **Saving.** A project is a folder holding `song.ron`. Loading reads `format_version` first and
-    refuses any other version, with no migration. What belongs to the machine rather than the song,
-    such as where kits are, the audio choice and the command history, is in the config folder, and
-    sample analyses are in the cache folder.
+    refuses any other version, with no migration. What belongs to the machine rather than the song
+    is in the config folder, `$XDG_CONFIG_HOME/vimtracker` or `~/.config/vimtracker`: where kits
+    and samples are (`settings.ron`, `config.rs`), the audio choice (`audio.ron`), the command
+    history (`history.ron`) and the explorer's last folders (`places.ron`). The cache folder,
+    `$XDG_CACHE_HOME/vimtracker` or `~/Library/Caches/vimtracker` on macOS, holds the sample
+    analyses and `full-speed.txt`. Autosave (`autosave.rs`) writes `song.autosave.ron` beside
+    `song.ron` every `AUTOSAVE_SECONDS`, and offers it back after a crash.
 
 **Decisions:** 2, 5, 8, 10, 11, 15, 17, 29, 30, 37, 70, 78 to 82, 84 to 88, 91, 94, 95, 105, 111,
 123, 126, 136 and 138;
@@ -473,6 +487,48 @@ a slice's settings cost the voice nothing; and `SLI 'a` is looked up rather than
 `vt-engine` names nothing from `vt_model::bank`.
 
 **Decisions:** 94, 97, 98, 105 and 111.
+
+### The engine's block
+
+`Engine::process` (`engine.rs`) plays a block in runs. Each run goes up to the next thing that
+happens at a frame: the song's next step, a track's own step at its `Speed`, a delayed, cut,
+release, gate, retrigger or arpeggio event, or the LFOs' update every `LFO_UPDATE_FRAMES`
+(32). So a step lands on its frame, and nothing inside a run asks whether one
+is due. `Engine::render` then plays the run's frames.
+
+*   **Who plays.** A note or a preview only starts between runs, so a track that's silent as a run
+    starts, with no voice, preview or slot still ringing, is skipped for the whole run, and the
+    rest are listed once, with where each goes: its group, or the master.
+*   **A sound track's frame** is its voice (`voice.rs`: the sampler, reading its span through
+    `reader.rs`, or a Plaits voice), the tail of the note before, fading out over
+    `DECLICK_FRAMES`, and any preview voice on it (`preview.rs`), through `TrackState::shape`:
+    the trim, after which the Output device's meter reads its peak (`after_trim`); the filter and
+    its drive; the low and high cuts; the slots in order (`through_slots`); then the level and
+    pan, and the sends, which follow the level.
+*   **Groups, returns and the master.** A grouped track's frame goes to its group, which plays the
+    sum through its own trim, slots, level and pan and sends from there (`process_group`); each
+    return plays what's sent to it (`process_return`); and the master plays the sum through its
+    trim, slots and level (`process_master`). Last, `mixer::master` turns anything that isn't a
+    number into silence and, with the song's `limiter` on, clips at full level; the callback
+    clamps what it gives the device at full level either way.
+*   **Sidechains.** Each track's frame after its slots, before its level and mute, is kept in
+    `Keys` for a compressor, Warps or a gate whose `Source` names it. A track later in the order is
+    heard a frame late, far too little to hear.
+*   **One side for both** (decision 147). `through_slots` looks once whether a frame's sides are the
+    same, and each slot passes that on. An effect says what it does with such a sound
+    (`effects::distort::Mono`): `OneSide` works the left side out and gives it to both, keeping the
+    right's state in `Sides` to take over the moment they differ; `Linked`, such as a compressor's
+    linked detector, passes "the same" on without looking; and `Stereo` works out both and the
+    slot looks again.
+*   **Smoothing.** Every continuous setting moves through a one-pole `Smoothed`
+    (`blocks/smoother.rs`), over 10 ms (`SMOOTHING_MS`) for a change by hand and 1 ms
+    (`FAST_SMOOTHING_MS`) while modulation moves it, so nothing clicks.
+*   **Timing** (`timing.rs`). For `bench --tracks`, a `Stopwatch` laps between the parts, the
+    sequencing, each track's voice and the rest of its work, each slot, the mixing and the limiter,
+    so they add up to the block. Unless asked, a lap is a check of an empty option.
+
+**Decisions:** 36, 123, 136, 142 and 147, and the [M10 design](#m10-design-tracks-that-process) for
+the routing.
 
 ### DSP layout
 
@@ -512,9 +568,10 @@ where they were written and are borrowed across folders; #260 may move shared sh
 
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the history, the engine's `Handle`, the last `Published`, the sample
-pool, the view and the mode, the cursor, the picker, the sample page and much more: over 80 fields,
-and 24 feature files besides `app.rs` add an `impl App` block each, such as `track_page.rs`,
-`banking.rs`, `slicing.rs`, `shaping.rs`, `picking.rs` and `sample_page.rs`.
+pool, the view and the mode, the cursor, the picker, the sample page and much more: over 120
+fields, and 31 files besides `app.rs` add an `impl App` block each, such as `track_page.rs`,
+`banking.rs`, `slicing.rs`, `shaping.rs`, `picking.rs`, `recording.rs` (live recording, `Space r`),
+`project_page.rs`, `audio_page.rs` and `sample_page.rs`.
 
 **Pages and modes** (`input/mode.rs`). A `View` is a page: the song view (`Space 1`), the chain view
 (`Space 2`), the phrase view (`Space 3`), the track page (`Space 4`) with its Sound, Mod and FX pages
@@ -625,6 +682,9 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     `widgets::device::rack_areas`.
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
+The guides (`guides.rs`) are the Markdown files in `crates/vt-tui/guides/`, built into the program
+with `include_str!` and opened with `Space ?`; the manual includes the same files, so the two can't
+differ.
 
 **The phrase view's timeline** (`timeline.rs`). The phrase view draws lines, not rows: a row of the
 loop takes a line for each of its pulses, a line being one step of the track's `Speed`, unless
@@ -659,7 +719,8 @@ given to it rather than borrowed through a `Ctx`, while its edits are still `imp
 selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
 in `placing.rs` and `sample_settings.rs` for editing its points and settings.
 
-**Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122, 126, 128 and 145, with #320 and #330.
+**Decisions:** 49 to 53, 73 to 75, 100 to 104, 108, 122, 126, 128, 139, 140, 144, 145, 148, 149 and
+151 to 155, with #320 and #330.
 
 ### Graphics
 
@@ -668,8 +729,8 @@ program asks the terminal for at start. `kitty.rs` makes the PNGs and the comman
 keeps track of which images the terminal has. Every command is sent with `q=2`, so the terminal's
 answers never arrive as keys. A picture reaches the screen in one of two ways.
 
-*   **Unicode placeholders, for pictures that fill cells.** The filter's curve, a sampler's waveform
-    on its Sound page, the envelopes, the LFOs' shapes, the FX slots' drawings, the scope, the
+*   **Unicode placeholders, for pictures that fill cells.** The filter's curve, a sampler's thumbnail
+    on its Sound page, the envelopes, the LFOs' cycles, the FX slots' drawings, the scope, the
     picker's previews, and the sample page's waveform and overview are sent with `a=T,U=1` and
     drawn as placeholder characters, whose colour is the image's id and whose marks number its rows
     and columns, up to 297 each way. As they're text, ratatui moves and clears them as it does any
@@ -723,7 +784,7 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
 `just screenshots` puts the pictures in its SVGs as the terminal would be sent them.
 `docs/terminal-notes.md` has what's been measured and what's left to check by hand.
 
-**Decisions:** 20, 50, 56, 57, 93, 102, 107, 109, 114 and 141.
+**Decisions:** 20, 50, 56, 57, 93, 102, 107, 109, 114, 141, 153 and 154.
 
 ### Offline paths
 
@@ -780,7 +841,7 @@ These need no terminal and no sound device, so they run anywhere.
 
 ### Testing
 
-About 2,000 tests. CI runs `cargo fmt --check`, `cargo clippy` and `cargo test` on Apple silicon
+About 2,100 tests. CI runs `cargo fmt --check`, `cargo clippy` and `cargo test` on Apple silicon
 macOS, the one platform the golden hashes hold on.
 
 | Kind | Where | What it checks |
@@ -790,9 +851,10 @@ macOS, the one platform the golden hashes hold on.
 | Golden renders | `crates/vt-engine/tests/golden/`, through `tests/support/` | An FNV-1a hash of a render's exact samples. `VT_BLESS=1` updates one after a change to the sound on purpose, and `VT_DUMP` writes the samples, to compare two builds |
 | DSP | Unit tests beside each module in `dsp/` | Each voice, filter and effect on its own |
 | Real-time safety | The tests in `crates/vt-engine/src/link.rs`, under `rt_guard` | That a block allocates and frees nothing |
-| Interface | `crates/vt-tui/tests/`: `app.rs`, and files of their own for the track page's Sound page and settings (`track_page.rs`), its Mod page's rack (`mod_page.rs`), its FX page (`fx_page.rs`) and the sample page (`sample_page.rs`), with the helpers they share in `common/`; and `grammar.rs` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated` |
+| Interface | `crates/vt-tui/tests/`: `app.rs`, and files of their own for the track page's settings and keys (`track_page.rs`), its Sound page's rack (`sound_page.rs`), its Mod page's rack (`mod_page.rs`), its FX page (`fx_page.rs`) and the sample page (`sample_page.rs`), with the helpers they share in `common/`; and `grammar.rs` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated` |
 | Graphics | Unit tests in `kitty.rs` and `views/` | The commands sent, and the PNGs, pinned by their size and CRC |
-| Other paths | `crates/vt-tui/tests/probe.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, the analysis thread and its cache, and importing kits from Ableton |
+| Other paths | `crates/vt-tui/tests/probe.rs`, `notes.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, `notes`' timing of a song's track, the analysis thread and its cache, and importing kits from Ableton |
+| Comparison harness | `tools/compare/tests/`, with `uv run python -m unittest discover tests` | The Live bridge, against stand-ins for Live's objects. Not in CI, as nothing in `tools/compare` is |
 | Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | Not a test: the SVGs are committed, so a change to what's drawn shows in the PR's diff |
 
 `crates/vt-tui/examples/big_image.rs` and `sample_page_cost.rs` measure what sending pictures costs,
@@ -945,9 +1007,9 @@ sweep's own values with no look-ahead into the audio, and hand-entered values ke
 
 **Scope and meters.** The main output meter is built: each report carries the master's peak before and after the
 limiter and its summed power, and reports merge so a hit between two frames isn't missed. The meter's own motion is
-in `meter.rs`, apart from its drawing, so a mixer can have one per track. A scope is still to come: the callback copies a
-master signal into a preallocated ring buffer that drops frames when full, so it never waits on the UI. Track levels go
-through telemetry.
+in `meter.rs`, apart from its drawing, so a mixer can have one per track. The scope is built too (decision 57): the
+callback copies the master's signal into a preallocated ring that drops frames when full, so it never waits on the UI,
+and `scope.rs` folds it for the picture at the top of the meter's column. Track levels go through telemetry.
 
 ### Editing
 
@@ -1051,7 +1113,9 @@ path, and the rest of the project still loads. Memory is not bounded beyond trac
 
 ## Direction: a track is one sound
 
-This section is the plan from the author's design review after playing with the prototype, and it is **decided, not yet built**. Where it differs from
+*Since built, in M5 to M15 and after: machines, the shared list of settings (M14), returns, groups and a master as tracks, inserts and the three track pages. [Architecture](#architecture) describes them as they are.*
+
+This section is the plan from the author's design review after playing with the prototype, and it was **decided, not yet built** when written. Where it differs from
 the rest of this document, this section wins. The rest describes what's built or was planned earlier, and has drifted from the code in places. The author reports the instrument already exceeds their expectations in
 jams, and has drifted toward an Elektron feel on purpose, as those are the machines they know best. The aim is to make full songs at
 about the scale of a Maschine, with the UI as the deciding concern, and not to replace Ableton.
@@ -1093,7 +1157,7 @@ A bus, send or mix track has steps like any other, so writing `DEC40` on a rever
 
 ### FX inserts
 
-A track has 3 inserts, each holding one effect chosen with `K`, and their settings have their own page. Inserts are rows on that page, so `dd` and `p` move an effect to change the order, in place of the Heat's Flow page. A fixed number keeps it readable in a terminal, with no patching. A track can hold two of the same effect, though that won't be common: a step's command reaches the first one, and a second is set from its page and through modulation. Core effects, in order: compressor with sidechain from another track, saturation and bitcrush, 3-band EQ, chorus, then character delay and granular. Delay and reverb move to send tracks, and need real settings: decay, damping and pre-delay on a reverb after Mutable's Griesinger design, replacing the fixed Freeverb, and time, feedback, a filter and ping-pong on the delay.
+A track has 3 inserts (*four since decision 138*), each holding one effect chosen with `K`, and their settings have their own page. Inserts are rows on that page, so `dd` and `p` move an effect to change the order, in place of the Heat's Flow page. A fixed number keeps it readable in a terminal, with no patching. A track can hold two of the same effect, though that won't be common: a step's command reaches the first one, and a second is set from its page and through modulation. Core effects, in order: compressor with sidechain from another track, saturation and bitcrush, 3-band EQ, chorus, then character delay and granular. Delay and reverb move to send tracks, and need real settings: decay, damping and pre-delay on a reverb after Mutable's Griesinger design, replacing the fixed Freeverb, and time, feedback, a filter and ping-pong on the delay.
 
 ### Pages
 
@@ -1113,7 +1177,7 @@ So keep the columns, and remove what's weak about them:
 | Only a few commands can be named | A slot can name any parameter in the track's list, with `K` to choose |
 | Values always hold | Each value has a **lock**, **hold** or **glide** mark, below, with lock the default as an Elektron p-lock is |
 | Values step, with nothing between rows | A glide moves across the steps between values, which is the line between points in DAW automation. This also answers the sweep smoothing question |
-| 3 slots | The number of slots becomes a per-track setting, and folding hides what isn't needed |
+| 3 slots | The number of slots becomes a per-track setting, and folding hides what isn't needed. *Not built: a step still has three FX slots (`FX_SLOTS`)* |
 | Nothing longer than a phrase | Long moves use a long phrase, or a bus or send track's own steps |
 
 The shape panel is already what makes ramps here. It needs only to learn glide.
@@ -1274,7 +1338,7 @@ Work is split into issues, each intended as one pull request. Every issue leaves
 
 ### Fixed Specifications
 
-These apply to every issue. Change them by updating this document.
+These applied to every issue of M1 to M3, as first written. Some rows have been kept current, such as the note names and the constants; others describe the first prototype, such as instruments, which machines replaced in M5, and the views on `Space 1` to `Space 6`. Where they differ, [Architecture](#architecture), the binding table (`Space k`) and the manual describe the program as it is.
 
 **Toolchain and dependencies.** Rust 2024 edition. `gmuse` builds with most of these versions. A separate test confirmed the `ron` version with `serde`'s `rc` feature, including an `Arc` round trip. The `rc` feature writes each `Arc` in full and does not preserve sharing on reload. This is safe because reuse is by ID, so a shared phrase is stored once. Issue 1 confirms the full set builds together.
 
@@ -1295,8 +1359,9 @@ These apply to every issue. Change them by updating this document.
 
 | Constant | Value | Meaning |
 |---|---|---|
-| `FORMAT_VERSION` | 1 | Current `song.ron` format |
-| `MAX_TRACKS` | 64 | Tracks the engine prepares state for |
+| `FORMAT_VERSION` | 8 | Current `song.ron` format |
+| `MAX_SOUND_TRACKS` | 64 | Sound tracks a song can have |
+| `MAX_TRACKS` | 71 | Tracks the engine prepares state for: the sound tracks and the 7 fixed ones, `G1` to `G4`, `A`, `B` and `M` |
 | `DEFAULT_TRACKS` | 8 | Tracks in a new project |
 | `TICKS_PER_STEP` | 240 | Clock ticks per step, at 960 per quarter note |
 | `GROOVE_UNIT_TICKS` | 40 | One unit for `DEL`, `KIL`, `OFF` and `RET`, 6 per step |
@@ -1304,9 +1369,9 @@ These apply to every issue. Change them by updating this document.
 | `MAX_PHRASE_STEPS` | 4096 | The most steps a phrase keeps, so a big count can't use up memory |
 | `BEAT_STEPS` | 4 | Steps per beat, for `ib` and `{ }` |
 | `FX_SLOTS` | 3 | FX slots per step |
-| `DEFAULT_BPM` | 120.000 | New project tempo |
+| `DEFAULT_MILLIBPM` | 120000 | New project tempo, in thousandths of a BPM |
 | `HISTORY_LIMIT` | 1000 | Undo versions kept |
-| `DEFAULT_RENDER_RATE` | 44100 | Hz, for tests and `render` |
+| `DEFAULT_RENDER_RATE` | 44100 | Hz, for tests; `vimtracker render` defaults to 48000 |
 | `PUBLISH_QUEUE` | 1 | Song versions waiting for the callback |
 | `RETURN_QUEUE` | 16 | Versions waiting to be freed |
 | `COMMAND_QUEUE` | 64 | Transport, preview and mute messages |
@@ -1443,13 +1508,13 @@ Targets are `ib` and `ic`, and `ip` before G1, as in the Technical Plan. In Inse
 | `:set scale=kind`, `:set root=note` | A scale's kind and root, either turning it on |
 | `:set scale=on`, `off` | Turn the scale on or off |
 | `:scale`, `:scale fit` | Choose a kind from a list, or move this phrase's notes into the scale |
-| `:set limiter=on\|off` | Whether a render clips at full level or keeps levels above it. The live output always clips at full. It starts on and is saved with the project |
+| `:set limiter=on\|off` | Whether a render clips at full level or keeps levels above it. The live output always clips at full. It starts on and is saved with the project, and is the master's `Limiter`, in its Output device after `Level` (decision 155) |
 | `:len n` | How many steps the loop plays, while stopped. Decimal, or hex after `0x` as in Rust: `:len 0x10`. `:reset` reads numbers the same way. Steps outside it are kept and saved |
 | `:double` | Double the loop, while stopped |
 | `:gen apply` | Apply the live generator under the cursor |
 | `:render path [--rows n] [--tail]` | Render to WAV |
 
-The subcommands are `vimtracker render <project> <out.wav> [--rate n] [--rows n] [--seed n] [--tail]` and `vimtracker probe-keys`. `vimtracker [project]` starts the program.
+The subcommands are `vimtracker render <project> <out.wav> [--rate n] [--rows n] [--seed n] [--tail]` and `vimtracker probe-keys`. `vimtracker [project]` starts the program. *Since joined by `--stems` and `--split`, `bench`, `probe`, `notes` and `kits import-ableton`: see [Offline paths](#offline-paths).*
 
 **Rendering.** A render plays one pass silently to fill delay and reverb, then captures the next pass, so the file is exactly the loop's length. `--tail` appends up to 10 seconds, ending at silence. `--rows n` sets the length in steps. An existing file is overwritten. Output is 32-bit float stereo.
 
@@ -1571,7 +1636,7 @@ Transport behaviour follows `audio::transported` and `audio::cued` in `gmuse` wh
 
 ### Milestones after M3
 
-These milestones build the section Direction: a track is one sound, in order, and G7 runs before M4. Each gets a short design when it starts, and ends when the author has used it in a jam. M5 comes before M8 so songs aren't made in a format about to break, and M9 comes before M10 as send tracks reuse inserts. The Filters milestone on GitHub stays open for #50 alongside these.
+These milestones build the section Direction: a track is one sound, in order, and G7 runs before M4. Each gets a short design when it starts, and ends when the author has used it in a jam. *Each design below was written before its milestone was built, so "Not built yet" in one means then; M4 to M14b are built, with M15's effects and machines, and later milestones (M16 to M29) are on GitHub, with their designs in the decision log and in [song-flow.md](song-flow.md), [fx-page.md](fx-page.md) and [track-pages.md](track-pages.md).* M5 comes before M8 so songs aren't made in a format about to break, and M9 comes before M10 as send tracks reuse inserts. The Filters milestone on GitHub stays open for #50 alongside these.
 
 *   **M4: Marks.** Lock and hold on the existing value commands, with `~` to change them, then glide. **Tests:** a lock returns to the value beneath it at the next note or value, a hold stays until playing from the top, and a glide lands exactly on its next value.
 *   **M5: A track is one sound.** Remove instruments from steps, name tracks, kits as sets of sounds, a `Sound` type with the one-shot sampler as its first machine, a sample browser, the Sound and Mod pages, and `:render --stems`. This stops old songs loading. **Tests:** a track's sound saves and loads, stems sum to the full render without sends, and renders stay repeatable.
@@ -1581,7 +1646,7 @@ These milestones build the section Direction: a track is one sound, in order, an
 *   **M8b: Jamming.** Launch a chain on one track while playing, and capture what's playing as a new section. **Tests:** a launch waits for the track's chain to end, stopping a track, a launch ending with its section, capturing without a break, and no allocation in the callback.
 *   **M8d: Session workflow.** Launch timing on a beat or bar grid, one-phrase chains opening straight to their phrase, chain labels, and cloning a chain with its phrases from the song view. **Tests:** as [its design](song-flow.md) lists.
 *   **M8c: Song flow.** One position rule for rows and launches, so a changed chain starts from its top and a part can span rows, and rows that repeat. **Tests:** as [its design](song-flow.md) lists.
-*   **M9: FX inserts.** 3 inserts on a track, the first effect, the FX page, the shared parameter list for effects, and slots naming any parameter on that list. **Tests:** as [its design](#m9-design-fx-inserts) lists.
+*   **M9: FX inserts.** 3 inserts on a track (four since decision 138), the first effect, the FX page, the shared parameter list for effects, and slots naming any parameter on that list. **Tests:** as [its design](#m9-design-fx-inserts) lists.
 *   **M10: Tracks that process.** Returns and a master in a fixed routing, delay and reverb as effects with real settings, and a better reverb. **Tests:** as [its design](#m10-design-tracks-that-process) lists.
 *   **M11: Live lengths.** A track's length changes while it plays, and the playhead stays on its row. **Tests:** as [its design](#m11-design-live-lengths) lists.
 *   **M12: Lanes.** FX columns with their own loops, which drift against the notes. **Tests:** as [its design](#m12-design-lanes) lists.
@@ -1725,7 +1790,7 @@ Built, from [Song flow and session workflow](song-flow.md), which replaces parts
 
 ### M9 design: FX inserts
 
-Made with the author's agreement on 2026-11-06. Not built yet. It adds 3 insert slots to each track, one effect to put in them, and an FX page, and sets up what later effects reuse.
+Made with the author's agreement on 2026-11-06. Not built yet. *Since built, with four slots since decision 138.* It adds 3 insert slots to each track, one effect to put in them, and an FX page, and sets up what later effects reuse.
 
 **Prior art.** The boxes nearest this workflow mostly have a fixed chain per track: the Digitakt II has bit reduction, overdrive and sample rate reduction before its filter, the M8 has `DEGRADE` and a limiter per instrument, and tracker-ce has overdrive and bit depth per instrument. Slots come from Maschine, which has as many as you like on sounds, groups and master, and the Tonverk, which has two. Slots are kept here because order matters once M14 adds a compressor, and a fixed chain would get long.
 
@@ -1856,7 +1921,7 @@ It opens on the list, on the current choice. A group comes from what's on the tr
 
 **Keeping up.** Modulation moves values through the 1 ms smoother envelopes use, as a 10 ms one takes 16 dB off an LFO at 100 Hz. A change with nothing moving that value still takes 10 ms, so it doesn't jump. LFOs stop at 100 Hz, and true audio rate is left out: it needs working out waves on every sample and updating filters far more often, and the `FM` voice already does what it's most wanted for.
 
-**Order.** Each update runs envelopes, then LFO 1, then LFO 2, then everything else, and each object reads what's before it. `LFO 2`'s `Dest` list has `LFO 1`'s settings, and not the reverse, so there's no feedback to detect and a project always sounds the same.
+**Order.** Each update runs envelopes, then LFO 1, then LFO 2, then everything else, and each object reads what's before it. `LFO 2`'s `Dest` list has `LFO 1`'s settings, and not the reverse, so there's no feedback to detect and a project always sounds the same. *Since decision 138 there are three of each, in the same one-way order: `LFO 1` reaches `LFO 2` and `LFO 3`, `LFO 2` reaches `LFO 3`, and every envelope reaches every LFO.*
 
 **Resolving a slot's settings.** Each setting of a filled slot has the same layers as `Cut`: a setting, a lock or glide on top, then what modulation adds, then smoothing. The engine works out a finished copy of the effect each update and hands that over, so an effect needs no code for any of this. Empty slots are skipped. `LiveValues` gains each slot's settings, so the FX page's bars move with what's playing.
 
@@ -1912,7 +1977,7 @@ Track 1..n -> slots -> Level, Pan ----------------> M -> slots -> Level -> limit
 | `Delay` | `Time`, `Feedback`, `Ping-pong`, `Width`, `Low cut`, `High cut`, `Drive`, `Mix`, `Gain` |
 | `Reverb` | `Pre`, `Decay`, `Damp`, `Low cut`, `High cut`, `Mix`, `Gain` |
 
-`MAX_PARAMS` grows to 9, and the FX page keeps its columns of two, top then bottom. The places in `Target` and the commands for slots grow with it.
+`MAX_PARAMS` grows to 9, and the FX page keeps its columns of two, top then bottom. The places in `Target` and the commands for slots grow with it. *Since: `MAX_PARAMS` is 12 (decision 135), and the FX page is a rack of devices of three rows (decision 139).*
 
 **`Delay`.** After #88, and built. `Time` is a place in the list of note divisions, from `1/64` to `1 bar`, so a step or an LFO moves it in whole divisions. It reads between samples through four of them, easing to a new time with a half life of 50 ms, so it glides. What comes round goes through `Low cut`, `High cut` and a soft clip, so repeats darken and degrade, and the clip keeps `Feedback` at `FF` bounded. `Drive` pushes into the clip and brings it back down by as much, which leaves quiet repeats alone. `Ping-pong` on sums what goes in to one side, and each side feeds the other. `Width` narrows what comes out. Its buffer holds a bar at 20 BPM, about 4.6 MB at 48 kHz. Beads' wow and flutter would suit it, and is left for later.
 
@@ -2145,7 +2210,7 @@ Plaits has the same problem in its settings. Its voices share the hardware's thr
 |---|---|
 | The track | Volume, pan, cutoff, resonance, sends, and pitch for modulation only |
 | Each machine | Its own, as many as it has, up to `MAX_MACHINE_SETTINGS`, which is 4 |
-| Each effect, in each of the 3 slots | Its own, as effects declare them now, by their `Setting` |
+| Each effect, in each of the 3 slots (four since decision 138) | Its own, as effects declare them now, by their `Setting` |
 | Each LFO | Its depth and phase, for modulation only |
 
 Each entry has:

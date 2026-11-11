@@ -1,7 +1,10 @@
 # The track pages as devices: Sound, Mod and the fixed tracks
 
 **Status:** approved by the author on 2026-11-10 as milestone M29, after M28's FX page
-([`fx-page.md`](fx-page.md)). Their answers to §6 are under it, as **Decided**.
+([`fx-page.md`](fx-page.md)). Their answers to §6 are under it, as **Decided**. Built in #380 to
+#387, decisions 144, 145, 149 and 151 to 155, and the `track-capacity` branch below merged as decision
+138. The study is kept as it was written, so its "now" is the pages before #380; the design's
+[Architecture](vimtracker.md#architecture) describes them as built.
 
 A design study for the user's request of 2026-11-10: take the FX page's new standard (option A of
 [`fx-page.md`](fx-page.md), milestone M28, #374–#377) to the other track pages, and see what else we might want.
