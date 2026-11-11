@@ -1949,6 +1949,46 @@ fn nudges_move_a_point_by_a_pixel_a_column_and_a_frame_at_every_zoom() {
     );
 }
 
+/// What a key does to the song from where the cursor is, undone after, with the cursor put back.
+fn change_by(app: &mut App, key: &str) -> Song {
+    let (before, at) = (Song::clone(app.song()), cursor(app));
+    keys(app, key);
+    let after = Song::clone(app.song());
+    if after != before {
+        keys(app, "u");
+    }
+    put_cursor(app, at);
+    after
+}
+
+#[test]
+fn cmd_keys_nudge_as_their_keys_but_cmd_h_and_l_by_a_frame_and_on_a_setting_all_four_as_theirs() {
+    let (mut app, _realtime) = on_page_in_pixels();
+    command(&mut app, "slice 4");
+    keys(&mut app, "j");
+    let start = Song::clone(app.song());
+    // Up and down a column, as `+` and `_`.
+    for (plain, cmd) in [("+", "D-k"), ("_", "D-j")] {
+        let by_plain = change_by(&mut app, plain);
+        assert_ne!(by_plain, start, "{plain} nudges");
+        assert_eq!(change_by(&mut app, cmd), by_plain, "{cmd} as {plain}");
+    }
+    // Left and right a frame, where `=` and `-` go a pixel: the sample page's own, kept.
+    let from = slices(&app)[1].0;
+    keys(&mut app, "D-l");
+    assert_eq!(slices(&app)[1].0, from + 1);
+    keys(&mut app, "u");
+    // On a setting, all four are the keys they stand for.
+    keys(&mut app, "K j Enter l");
+    assert_eq!(app.sample_page.setting, Some(SampleSetting::Pan));
+    let start = Song::clone(app.song());
+    for (plain, cmd) in [("=", "D-l"), ("-", "D-h"), ("+", "D-k"), ("_", "D-j")] {
+        let by_plain = change_by(&mut app, plain);
+        assert_ne!(by_plain, start, "{plain} changes the pan");
+        assert_eq!(change_by(&mut app, cmd), by_plain, "{cmd} as {plain}");
+    }
+}
+
 #[test]
 fn g_s_g_e_g_l_and_g_upper_l_put_the_points_at_the_cursor_and_x_takes_them_back() {
     let (mut app, _realtime) = on_page();

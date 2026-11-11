@@ -47,9 +47,9 @@ use vt_model::step::{
     MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step, octave_start,
 };
 
-use crate::grammar::Change;
+use crate::grammar::{Adjustments, Change, SelectionPlace};
 use crate::guides::Guide;
-use crate::input::bindings::{Cmd, Op, Resolved, Table, degree_key, note_key};
+use crate::input::bindings::{Cmd, Op, Resolved, Table, adjusting_key, degree_key, note_key};
 use crate::input::command::Line;
 use crate::input::command_history::CommandHistory;
 use crate::input::completion::CommandMenu;
@@ -379,6 +379,10 @@ pub struct App {
     pub(crate) anchor: Option<(usize, Scope)>,
     /// How far a selection reaches across tracks from the cursor's.
     pub(crate) anchor_track: Option<usize>,
+    /// What the changes kept on the selection have moved its values by, for the status line.
+    pub(crate) adjustments: Adjustments,
+    /// The selection a replace across it comes back to, once its value is in or it's cancelled.
+    pub(crate) replace_returns_to: Option<SelectionPlace>,
     /// The open shape panel.
     pub shape: Option<ShapePanel>,
     /// The search for a setting under way.
@@ -550,6 +554,8 @@ impl App {
             registers: HashMap::new(),
             anchor: None,
             anchor_track: None,
+            adjustments: Adjustments::default(),
+            replace_returns_to: None,
             shape: None,
             field_jump: None,
             taken_insert: None,
@@ -921,8 +927,12 @@ impl App {
         format!("vimtracker: {}", self.project_name())
     }
 
-    /// Whether a key, after any typed before it, means something here.
+    /// Whether a key, after any typed before it, means something here. The shape panel reads its
+    /// own keys, `=` `-` `+` `_` among them, so their Cmd keys mean something there too.
     fn binds(&self, key: Key) -> bool {
+        if self.mode == Mode::Shape {
+            return adjusting_key(key).is_some();
+        }
         let mut keys = self.pending.clone();
         keys.push(key);
         self.table.resolve(self.key_scope(), &keys) != Resolved::Unbound
@@ -1468,6 +1478,9 @@ impl App {
                 if self.history.undo().is_some() {
                     self.keep_row(before);
                     self.after_history();
+                    if self.mode.is_visual() {
+                        self.undid_while_selecting(true);
+                    }
                 } else {
                     self.status = "Nothing to undo".to_owned();
                 }
@@ -1477,6 +1490,9 @@ impl App {
                 if self.history.redo().is_some() {
                     self.keep_row(before);
                     self.after_history();
+                    if self.mode.is_visual() {
+                        self.undid_while_selecting(false);
+                    }
                 } else {
                     self.status = "Nothing to redo".to_owned();
                 }
@@ -1942,6 +1958,7 @@ impl App {
                 }
                 if let Some((selection, _)) = self.replacing_selection.take() {
                     self.cursor.step = selection.range.first;
+                    self.cancel_selection_replace();
                 }
             }
             KeyCode::Backspace => {

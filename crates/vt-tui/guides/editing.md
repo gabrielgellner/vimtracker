@@ -32,22 +32,38 @@ Follow one with a motion or a target, or double it for this whole step:
 | `V` | Select whole steps |
 | `W` `B`, `]b` `[b` | In a selection, reach the next or previous track |
 | `gv` | Select the last selection again |
+| `=` `-` `+` `_` | Move every value a small or large step, and stay selected |
+| `D-l` `D-h` `D-k` `D-j` | Cmd and `l` `h` `k` `j`: as `=` `-` `+` `_` |
+| `>` `<`, `C-a` `C-x` | Move every value a step, and stay selected |
+| `r` | Fill the cursor's column, and stay selected |
+| `u` `C-r` | Undo or redo one change, and stay selected |
+| `d` `x` `y` `S` `~` | Clear, copy, shape or mark, and stop selecting |
 | `Esc` | Stop selecting |
 
 Move to grow the selection. The cursor shows which end is moving. Then press
 `d`, `x`, `y`, `>`, `<`, `-`, `=`, `_`, `+`, `r`, `S` or `.`.
 
+A selection stays until `Esc` while you change its values, so `+ + -` can go in
+one after the other as the loop plays, as Vim's popular `vnoremap > >gv` does.
+Each press is its own undo, so `u` takes them back one at a time and the
+selection stays. The status line keeps the running total for the selection, as
+`+11 semitones` for notes, or `+1 large step, -2 steps` for other values. With
+the scale on, `=` and `-` count in degrees of it. `d`, `x`, `y`, `S` and `~` end
+the selection, and `gv` brings back the last one, even after `Esc`.
+
 `r` fills the cursor's column across the selection, as one undo: `vGra` writes
 a C on every step to the end of the loop. Notes already there keep their
 velocity. A velocity only goes on steps with a
-note, an FX value only on steps with a command, and `.` repeats it.
+note, an FX value only on steps with a command, and `.` repeats it. The
+selection comes back afterwards, so another `r` picks again.
 
 ## Across tracks
 
 In `v` or `V`, `W` and `B` reach other tracks, so `VGWWW` covers a whole drum
 part. `d`, `y`, `p`, `>`, `<`, `=`, `-`, `+`, `_`, `r` and `~` then act on each of them as one
 undo. Rows count from each phrase's own loop start, as on screen. `p` puts each track's part on the track the
-same distance along from the cursor.
+same distance along from the cursor. `vjW` then `+ + -` moves both tracks' notes
+up 23 semitones, a press at a time, with the selection kept.
 
 ## Shaping a column
 
@@ -104,7 +120,7 @@ spacing along it. A velocity only ever goes on a note, so for Velocity, Every
 and Chance choose among the notes. On an FX column, the command is the first one
 selected, and a row holding a different command keeps it.
 
-The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+`, `i` to type, `K`
+The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+` and Cmd with `h` `l` `j` `k` for them, `i` to type, `K`
 to choose from a list and `x` for the default. `Tab` still plays and pauses.
 `.` applies the same shape to another selection. A ramp or random fill takes that
 selection's own ends, `Wave` and `Alternate` keep theirs, and `List` keeps its
@@ -119,8 +135,8 @@ list.
 | `s` | Clear this field and start Insert there, as in Vim |
 | `=` `-` | Up or down a small step. `C-a` and `C-x` do the same |
 | `+` `_` | Up or down a large step: the same keys with Shift |
-| `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving |
-| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving |
+| `D-l` `D-h` | Cmd and `l` `h`: as `=` `-`, without moving, here and wherever they work |
+| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_`, without moving, here and wherever they work |
 | `K` | On an FX column, choose from a list |
 | `.` | Repeat the last change |
 | `p` | Paste over, from the cursor down. Past the end it stores more |

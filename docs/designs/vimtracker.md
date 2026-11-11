@@ -512,9 +512,15 @@ only name Normal's keys on those pages, for the binding table.
     `App::key_released`. A press of the key that's already down counts as a repeat, as kitty on macOS
     sends some repeats as presses.
 *   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description. The
-    which-key popup and `Space k` are generated from it.
+    which-key popup and `Space k` are generated from it. `CMD_ADJUSTS` is the one rule for Cmd
+    with `h` `j` `k` `l`: `bindings` gives every mode that binds `=` `-` `+` `_` their Cmd keys
+    beside them, unless the mode binds one itself, and `adjusting_key` turns them into those keys
+    for the shape panel, which reads its own (decision 147).
 *   **`grammar.rs`:** counts, registers, operators, Visual modes and `.`, on top of the table. A
-    command ends in an `Action` through `App::apply`, or a `Command` to the engine.
+    command ends in an `Action` through `App::apply`, or a `Command` to the engine. A selection
+    stays through what moves or fills its values, and `Adjustments` counts those for the status
+    line's running total, going back and forward with undo and redo; `SelectionPlace` is a
+    selection to come back to after `r` (decision 147).
 *   **`picker.rs`:** one picker for every list, with categories as a tree one level deep, which is
     also the file explorer. `picking.rs`, `explorer.rs` and `exploring.rs` open it and act on what it
     chooses.

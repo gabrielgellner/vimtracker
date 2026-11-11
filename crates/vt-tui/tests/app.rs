@@ -3120,6 +3120,151 @@ fn cmd_with_the_movement_keys_changes_the_mixer() {
     assert_eq!(app.song().tracks[0].level, 0xD1);
 }
 
+/// Each Cmd key does here what the key it stands for does (decision 147): the same change to the
+/// song, the cursor left where that leaves it, and the mode the same. Each is undone after, so
+/// the next starts from the same place, and at least one of them changes something.
+#[track_caller]
+fn cmd_keys_do_as_their_adjust_keys(app: &mut App, place: &str) {
+    use vt_tui::input::bindings::CMD_ADJUSTS;
+    let start = Song::clone(app.song());
+    let mut changed = false;
+    for (plain, cmd) in CMD_ADJUSTS {
+        let where_it_was = (app.cursor, app.track_page.clone(), app.mode);
+        press(app, plain);
+        let by_plain = Song::clone(app.song());
+        let left_at = (app.cursor, app.track_page.clone(), app.mode);
+        changed |= by_plain != start;
+        if by_plain != start {
+            press(app, "u");
+        }
+        assert_eq!(**app.song(), start, "{plain} undone {place}");
+        (app.cursor, app.track_page) = (where_it_was.0, where_it_was.1.clone());
+        with_cmd(app, cmd);
+        assert_eq!(**app.song(), by_plain, "{cmd} as {plain} {place}");
+        assert_eq!(
+            (app.cursor, app.track_page.clone(), app.mode),
+            left_at,
+            "{cmd} leaves the cursor as {plain} does {place}"
+        );
+        if by_plain != start {
+            press(app, "u");
+        }
+        (app.cursor, app.track_page) = (where_it_was.0, where_it_was.1);
+    }
+    assert!(changed, "the keys change something {place}");
+}
+
+#[test]
+fn cmd_with_the_movement_keys_does_as_the_adjust_keys_on_every_page() {
+    // The phrase's grid, on a note, and on a selection, which stays.
+    let (mut app, _realtime) = app();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "gg");
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on a note");
+    press(&mut app, "l");
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on a velocity");
+    press(&mut app, "hV");
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on a selection");
+    assert_eq!(app.mode, Mode::VisualStep);
+    special(&mut app, KeyCode::Esc);
+
+    // The chain's phrase and transpose columns, on a second row with a phrase of its own, so
+    // there's another to go to.
+    press(&mut app, " 2Ggd 2");
+    assert_eq!(app.view, View::Chain);
+    assert_eq!(app.cursor.slot, 1);
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on a chain's phrase");
+    press(&mut app, "l");
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on a chain's transpose");
+
+    // The song's length and a track's chain.
+    press(&mut app, " 1");
+    assert_eq!(app.view, View::Song);
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on a section's length");
+
+    // The project page's tempo.
+    press(&mut app, " 9");
+    assert_eq!(app.view, View::Project);
+    project_cursor_on(&mut app, vt_tui::project_page::ProjectControl::Bpm);
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on the tempo");
+    project_cursor_on(&mut app, vt_tui::project_page::ProjectControl::Groove);
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on the groove");
+
+    // The mixer's Trim, Level and Pan.
+    press(&mut app, " 6");
+    assert_eq!(app.view, View::Mixer);
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on Level");
+    press(&mut app, "k");
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on Trim");
+    press(&mut app, "jj");
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on Pan");
+
+    // The track page's Sound and Mod pages.
+    press(&mut app, " 4jjjjjjjj");
+    assert_eq!(app.view, View::Track);
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on the Sound page");
+    press(&mut app, "L0l");
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on the Mod page");
+}
+
+#[test]
+fn cmd_with_the_movement_keys_does_as_the_adjust_keys_in_the_fx_rack() {
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "K");
+    press(&mut app, "Comp");
+    special(&mut app, KeyCode::Enter);
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on a slot's effect");
+    press(&mut app, "l");
+    assert_eq!(vt_tui::views::status::column_name(&app), "Type");
+    cmd_keys_do_as_their_adjust_keys(&mut app, "on the type in a slot's title");
+    press(&mut app, "j");
+    assert_eq!(vt_tui::views::status::column_name(&app), "Attack");
+    cmd_keys_do_as_their_adjust_keys(&mut app, "in a device's grid");
+}
+
+#[test]
+fn cmd_with_the_movement_keys_steps_through_the_audio_pages_choices() {
+    let (mut app, _realtime) = on_the_audio_page();
+    // On the buffer, playing at 256, so there's a choice either way.
+    press(&mut app, "jj");
+    app.audio.buffer = Some(256);
+    // With no large step through a list, Cmd-k and Cmd-j step as Cmd-l and Cmd-h, as before.
+    for (plain, cmds) in [("=", ["D-l", "D-k"]), ("-", ["D-h", "D-j"])] {
+        press(&mut app, plain);
+        let by_plain = app.audio_request.take();
+        assert!(by_plain.is_some(), "{plain} chooses");
+        for cmd in cmds {
+            with_cmd(&mut app, cmd);
+            assert_eq!(app.audio_request.take(), by_plain, "{cmd} as {plain}");
+        }
+    }
+}
+
+#[test]
+fn every_mode_that_binds_the_adjust_keys_binds_their_cmd_keys() {
+    use vt_tui::input::bindings::{CMD_ADJUSTS, Resolved, Table, bindings};
+    let table = Table::default();
+    for row in bindings() {
+        if let Some((_, cmd)) = CMD_ADJUSTS.iter().find(|(plain, _)| *plain == row.keys) {
+            let key = parse_sequence(cmd).unwrap();
+            let means = table.resolve(row.mode, &key);
+            // The sample page's Cmd-l and Cmd-h nudge a frame, finer than `=` and `-`'s pixel.
+            if row.mode == Mode::Sample && matches!(*cmd, "D-l" | "D-h") {
+                assert!(matches!(means, Resolved::Command(_)));
+                continue;
+            }
+            assert_eq!(
+                means,
+                Resolved::Command(row.cmd),
+                "{cmd} as {} in {:?}",
+                row.keys,
+                row.mode
+            );
+        }
+    }
+}
+
 #[test]
 fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
     let (mut app, _realtime) = app();

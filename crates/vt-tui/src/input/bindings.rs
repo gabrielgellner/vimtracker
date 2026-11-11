@@ -7,7 +7,7 @@
 use vt_model::constants::BEAT_STEPS;
 use vt_model::selection::{Motion, Target};
 
-use crate::input::keys::{Key, parse_sequence};
+use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::placing::Edge;
 use crate::sample_page::SampleKey;
@@ -274,47 +274,21 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
 /// One beat, as a slide.
 const BEAT: isize = BEAT_STEPS as isize;
 
-/// Cmd with the movement keys changes the value instead, like holding Edit on the M8, so the
-/// hand that moves can nudge without leaving the home row. Left and right are a small step, up
-/// and down a large one.
-const ADJUST: &[(&str, Cmd, &str)] = &[
-    ("D-l", Cmd::Increase, "Increase the value, as ="),
-    ("D-h", Cmd::Decrease, "Decrease the value, as -"),
-    (
-        "D-k",
-        Cmd::IncreaseLarge,
-        "Increase the value, a large step, as +",
-    ),
-    (
-        "D-j",
-        Cmd::DecreaseLarge,
-        "Decrease the value, a large step, as _",
-    ),
-];
+/// Cmd with the movement keys means the key that changes a value, like holding Edit on the M8,
+/// so the hand that moves can nudge without leaving the home row: left and right a small step, up
+/// and down a large one. This is the one place the rule is kept: every mode that binds `=`, `-`,
+/// `+` or `_` gets its Cmd key beside it, meaning the same, unless the mode binds that Cmd key
+/// itself, as the sample page's frame nudge does (decision 147).
+pub const CMD_ADJUSTS: [(&str, &str); 4] = [("=", "D-l"), ("-", "D-h"), ("+", "D-k"), ("_", "D-j")];
 
-/// [`ADJUST`] for a selection.
-const ADJUST_SELECTION: &[(&str, Cmd, &str)] = &[
-    (
-        "D-l",
-        Cmd::Increase,
-        "Increase the selection's values, as =",
-    ),
-    (
-        "D-h",
-        Cmd::Decrease,
-        "Decrease the selection's values, as -",
-    ),
-    (
-        "D-k",
-        Cmd::IncreaseLarge,
-        "Increase the selection's values, a large step, as +",
-    ),
-    (
-        "D-j",
-        Cmd::DecreaseLarge,
-        "Decrease the selection's values, a large step, as _",
-    ),
-];
+/// The key a Cmd key stands for by [`CMD_ADJUSTS`], for the keys read outside the table, as the
+/// shape panel's are.
+pub fn adjusting_key(key: Key) -> Option<Key> {
+    CMD_ADJUSTS
+        .iter()
+        .find(|(_, with_cmd)| parse(with_cmd).is_ok_and(|named| named == key))
+        .and_then(|(plain, _)| parse(plain).ok())
+}
 
 /// Keys for Normal mode only.
 const NORMAL: &[(&str, Cmd, &str)] = &[
@@ -697,8 +671,6 @@ const SAMPLE: &[(&str, Cmd, &str)] = &[
         Cmd::Sample(SampleKey::NudgeFrame { later: false }),
         "Nudge the point here a frame earlier",
     ),
-    ("D-k", Cmd::IncreaseLarge, "Nudge a column later, as +"),
-    ("D-j", Cmd::DecreaseLarge, "Nudge a column earlier, as _"),
     (
         "g s",
         Cmd::Sample(SampleKey::SetPoint(Edge::Start)),
@@ -756,6 +728,10 @@ const AUDIO: &[(&str, Cmd, &str)] = &[
     ("G", Cmd::Move(Motion::Last), "Last setting"),
     ("=", Cmd::Increase, "The next choice"),
     ("-", Cmd::Decrease, "The previous choice"),
+    // There's no large step through a list of choices, so `+` and `_` aren't bound, but Cmd-k
+    // and Cmd-j stepped through it before the one rule for Cmd keys, and still do (decision 147).
+    ("D-k", Cmd::IncreaseLarge, "The next choice, as D-l"),
+    ("D-j", Cmd::DecreaseLarge, "The previous choice, as D-h"),
     ("x", Cmd::ClearField, "Back to the system's own choice"),
     ("K", Cmd::PickValue, "List the choices"),
 ];
@@ -873,6 +849,12 @@ const VISUAL: &[(&str, Cmd, &str)] = &[
     ),
     ("~", Cmd::CycleMark, "Cycle the selected values' marks"),
     (".", Cmd::Repeat, "Repeat the last change on the selection"),
+    (
+        "u",
+        Cmd::Undo,
+        "Undo the last change, keeping the selection",
+    ),
+    ("C-r", Cmd::Redo, "Redo, keeping the selection"),
 ];
 
 /// Keys for Insert on the Note column, beside the note keys, which are its own and aren't listed
@@ -915,28 +897,21 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Normal, MOTIONS);
     add(Mode::Normal, VIEWPORT);
     add(Mode::Normal, NORMAL);
-    add(Mode::Normal, ADJUST);
     add(Mode::Normal, EVERY_VIEW);
     add(Mode::Insert, INSERT_NOTE);
     add(Mode::Chain, CHAIN);
-    add(Mode::Chain, ADJUST);
     add(Mode::Chain, EVERY_VIEW);
     add(Mode::Track, TRACK_PAGE);
-    add(Mode::Track, ADJUST);
     add(Mode::Track, EVERY_VIEW);
     add(Mode::Song, SONG);
     add(Mode::Song, FOLDS);
-    add(Mode::Song, ADJUST);
     add(Mode::Song, EVERY_VIEW);
     add(Mode::Mixer, MIXER);
     add(Mode::Mixer, FOLDS);
-    add(Mode::Mixer, ADJUST);
     add(Mode::Mixer, EVERY_VIEW);
     add(Mode::Audio, AUDIO);
-    add(Mode::Audio, ADJUST);
     add(Mode::Audio, EVERY_VIEW);
     add(Mode::Project, PROJECT);
-    add(Mode::Project, ADJUST);
     add(Mode::Project, EVERY_VIEW);
     add(Mode::Sample, SAMPLE);
     add(Mode::Sample, EVERY_VIEW);
@@ -948,9 +923,28 @@ pub fn bindings() -> Vec<Binding> {
         add(mode, VIEWPORT);
         add(mode, TARGETS);
         add(mode, VISUAL);
-        add(mode, ADJUST_SELECTION);
     }
-    rows
+    with_cmd_adjusts(rows)
+}
+
+/// Each row of `=`, `-`, `+` or `_` followed by its Cmd key's, by [`CMD_ADJUSTS`], in every mode
+/// that doesn't bind that Cmd key itself.
+fn with_cmd_adjusts(rows: Vec<Binding>) -> Vec<Binding> {
+    let bound =
+        |mode: Mode, keys: &str| rows.iter().any(|row| row.mode == mode && row.keys == keys);
+    let mut all = Vec::with_capacity(rows.len() + 4 * 8);
+    for row in &rows {
+        all.push(*row);
+        if let Some((_, with_cmd)) = CMD_ADJUSTS.iter().find(|(plain, _)| *plain == row.keys)
+            && !bound(row.mode, with_cmd)
+        {
+            all.push(Binding {
+                keys: with_cmd,
+                ..*row
+            });
+        }
+    }
+    all
 }
 
 /// What a key sequence means so far.

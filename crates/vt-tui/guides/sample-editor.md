@@ -77,7 +77,8 @@ slices back or on. Every other key works as it does, so `;` still plays.
 | `x` | Take the point under the cursor away |
 | `=` `-` | Nudge the point under the cursor a pixel later or earlier |
 | `+` `_` | Nudge it a column later or earlier |
-| `Cmd-l` `Cmd-h` | Nudge it a frame later or earlier |
+| `D-l` `D-h` | Cmd and `l` `h`: nudge it a frame later or earlier, finer than `=` `-` |
+| `D-k` `D-j` | Cmd and `k` `j`: as `+` `_` |
 | `g s` `g e` | Start or end the sample at the cursor |
 | `g l` `g L` | Start or end the loop at the cursor |
 
@@ -94,7 +95,8 @@ it.
 `K` lists the settings: `Snap`, for the whole sample, and the slice's `Gain`,
 `Pan`, `Tune`, `Reverse`, `Fade in` and `Fade out`. Choosing one puts the focus
 on it. There `h` and `l` go along the settings, `0` and `$` to their ends, `=`
-`-` change it a small step and `+` `_` a large one, `K` lists its values, and
+`-` change it a small step and `+` `_` a large one, Cmd with `l` `h` `k` `j` as
+those four, `K` lists its values, and
 `x` puts a slice's own back to the sample's. `j` and `k` still go from slice to
 slice, so a setting can be set slice after slice. `Esc` goes back to the
 waveform.
