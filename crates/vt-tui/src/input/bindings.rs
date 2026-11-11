@@ -446,12 +446,12 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     (
         "}",
         Cmd::Move(Motion::NextBeat),
-        "Next device down, on the Mod and FX pages",
+        "Next device down, in the same column",
     ),
     (
         "{",
         Cmd::Move(Motion::PreviousBeat),
-        "Previous device up, on the Mod and FX pages",
+        "Previous device up, in the same column",
     ),
     (
         "h",

@@ -6,8 +6,8 @@ the sample plays, and `u` takes it back.
 
 ## Opening it
 
-`Space 0` shows the current track's sample, or `g d` on the Sound page's
-`Sample` row, or on a step's `SLI` to land on that slice. `C-o` goes back to
+`Space 0` shows the current track's sample, or `g d` on the sample in the Sound
+page's Machine title, or on a step's `SLI` to land on that slice. `C-o` goes back to
 where you came from. `W` and `B` show the next or previous track's sample.
 
 The start is marked in teal, the end in red, the loop in blue, and each slice's

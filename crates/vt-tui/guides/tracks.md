@@ -1,7 +1,7 @@
 # The track page, envelopes and LFOs
 
 Press `Space 4` for what a track holds apart from its steps, on three pages: Sound
-has its machine, filter and output, with a bar beside each value showing where
+has its machine, filter, output and how it plays, with a bar beside each value showing where
 it sits between the lines at each end of its range, and moving with whatever
 plays it, with a dim mark left where it's set, Mod its envelopes,
 LFOs, accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page. FX columns belong
@@ -18,6 +18,7 @@ each machine.
 | `H` `L` | The Sound page or the Mod page |
 | `W` `B`, `]b` `[b` | Next or previous track |
 | `j` `k` | Next or previous row, back in the column they left |
+| `{` `}` | Previous or next device, on the same row and column. `2}` goes two |
 | `h` `l` | Previous or next setting. `0` and `$` go to the line's ends |
 | `/` | Jump to a setting by its name |
 | `=` `-` | Up or down a small step. A count goes further, as in `10=` |
@@ -40,6 +41,37 @@ the dim pair of digits after the value, as FX values do in a phrase. `l` stops o
 it before the next setting, and there `=` `-` `+` `_`, `i` and `x` work on the
 fine part alone, carrying into the value past `FF` or below `00`. The value's own
 digits keep it, and at the top there's none. An effect's settings are whole.
+
+## The Sound page
+
+A sound track's Sound page is four devices, one under the other, as the FX page's
+slots are: each a frame with its name and what gives it its character in its title,
+and its settings in up to four columns of three.
+
+| Device | Title | Settings, column by column |
+|---|---|---|
+| Machine | Machine, type | The machine's own |
+| Filter | Type, mode | `Cut` `Res` `Drive`; `Low cut` `High cut` |
+| Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
+| Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` |
+
+A machine's type is the setting that changes its character: the sample the sampler
+plays, `Acid`'s `Wave`, 6-op's `Patch`, and the chord of `Chord` and `Chiptune`.
+Other synths have none. `K` lists whatever's under the cursor in a title, as on a
+setting, and `g d` on the sample opens the sample page. Each machine places its own
+settings: most go down the columns in order, the sampler has `Slice` and `Play` in
+one column and `Start` and `Length` in the next, and `Acid`'s are in pairs as a
+TB-303's knobs are, `Cutoff` and `Resonance`, `Env mod` and `Decay`, `Accent` and
+`Slide`, then `Drive`.
+
+`j` and `k` go from a device's title down its rows and on into the next device,
+keeping the column, and pass the Output's and Play's titles by, as there's nothing
+in them. `{` and `}` keep the row and column: from `Cut`, `}` goes to `Trim` and
+`2}` to `Pitch`. The device with the cursor has the brighter frame. A sampler's
+waveform is in a box at the right of the Machine.
+
+A group's, a return's and the master's Sound pages are still rows of their output's
+settings, as below.
 
 ## The filter
 
@@ -101,7 +133,7 @@ names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP`, `05`
 `HP12`, `06` `HP24`, `07` `Notch`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
 `0B` `-1 oct`. Changing mode glides over about 10 ms, so a lock doesn't click.
 
-A curve in a box under the filter's rows shows what the filter and utility filter
+A curve in a box at the right of the Filter shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right, in the track's
 `Mode`. It moves with what's playing `Cut` and `Res`, including step commands,
 LFOs and envelopes, but it doesn't show `Drive`'s saturation. For `Dirty` it shows the resonance `Drive`

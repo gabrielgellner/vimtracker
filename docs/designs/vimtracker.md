@@ -579,12 +579,13 @@ back itself, the edits, which change the song: `editing.rs` (`=`, `-`, the fine 
 `pickers.rs` (`K`) and `typing.rs` (`i`), with `b`, `dd` and `p` in `fx.rs`. `App::track_control`
 is the control under the cursor on the track page or the mixer, whose own cursor is in `mixer.rs`.
 
-*   **Each page's settings in its own file:** `sound.rs` has the Sound page's row tables for each
-    kind of track and machine, `modulation.rs` the Mod page's devices, and `fx.rs` the slots;
-    `controls.rs` has `Control`, what each setting is called and holds on a track.
-*   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s, the FX
-    page a slot each (`DeviceSpec::slot`) and the Mod page an envelope, then the LFO beside it, for
-    each number, then the accumulator and the arpeggio (decision 149); a `DeviceSpec` is its
+*   **Each page's settings in its own file:** `sound.rs` has the Sound page's devices on a sound
+    track and its row tables for the fixed tracks, `modulation.rs` the Mod page's devices, and
+    `fx.rs` the slots; `controls.rs` has `Control`, what each setting is called and holds on a
+    track.
+*   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s: the FX
+    page a slot each (`DeviceSpec::slot`), and the Mod page an envelope, then the LFO beside it,
+    for each number, then the accumulator and the arpeggio (decision 150). A `DeviceSpec` is its
     identity, its title controls over the grid's first columns, its grid of `Control`s and its
     width, full or half, built by `DeviceSpec::new` from a model's `Grid` (`vt-model`'s
     `grid.rs`), as `Insert::grid` is. `rack_places` lays a page's devices out in the order they're
@@ -592,14 +593,20 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     left and right. A page with devices is a rack: its cursor rows are the devices' rows one after
     another, each `DEVICE_ROWS` long, with holes `h`, `l`, `0` and `$` step over and `j` and `k`
     land beside, and `TrackPage::device_cursor` reads the cursor as a device, a row (the title is
-    0) and a column. `j`, `k`, `{`, `}`, `gg` and `G` keep to the cursor's column of devices
-    (`rack_column`), and `h` and `l` go on past a row's ends into the device beside it
-    (`device_beside`). The Sound page gives none yet (`sound::devices` is empty), so it's rows of
-    settings (`Page::rows`) with no holes.
-
-The Mod page is drawn by `views/track/modulation.rs`, apart from the Sound and FX pages in
-`views/track.rs`: compact cells, an envelope's shape in its panel, and `rack_areas` for the
-columns.
+    0) and a column; a row with nothing in it, such as an empty title, stands for the nearest row
+    with something in the same device. `j`, `k`, `{`, `}`, `gg` and `G` keep to the cursor's
+    column of devices (`rack_column`), and `h` and `l` go on past a row's ends into the device
+    beside it (`device_beside`). A sound track's Sound page is a rack of four (`sound::devices`):
+    the Machine, from `Machine::grid` with `Machine::type_param` in its title, and the Filter,
+    Output and Play, each a fixed grid of the track's own controls. A track whose page gives none
+    is rows of settings (`TrackPage::page_rows`) with no holes, as the fixed tracks' Sound pages
+    are.
+*   **Drawing** is in `views/track.rs`, with the Sound page's in `views/track/sound.rs` and the Mod
+    page's in `views/track/modulation.rs`: a device's frame and title (`widgets::device`), its grid
+    read through a `CellSource` (`widgets::grid`: `CellWidths::FX`, `CellWidths::SOUND`, whose
+    value has room for its fine digits, and `CellWidths::COMPACT`, with no bar, for the Mod page's
+    half-width devices), its panel (`widgets::panel`), and, for the Mod page's two columns,
+    `widgets::device::rack_areas`.
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 

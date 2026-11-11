@@ -16,13 +16,14 @@ use crate::constants::{
     MAX_TRACK_RESET, TRACK_ENVELOPES, UNITY_LEVEL, UNITY_TRIM,
 };
 use crate::envelope::{Envelope, default_envelopes};
+use crate::grid::{GRID_ROWS, Grid};
 use crate::groove::{Groove, GrooveId};
 use crate::insert::{INSERTS, Insert};
 use crate::lfo::{LFOS_PER_TRACK, Lfo};
 use crate::order::{Deal, Dealer, Order, Round};
 use crate::scale::Scale;
 use crate::selection::Extent;
-use crate::settings::{Owner, SettingId};
+use crate::settings::{Owner, SAMPLER_SETTINGS, SettingId, voice_entries};
 use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Step};
 
@@ -788,6 +789,70 @@ impl Machine {
             Self::Sampler => "A sample from the bank, at the speed of its note",
             Self::Plaits(voice) => voice.meaning(),
         }
+    }
+
+    /// Its settings, by their places among them: the sampler's own, or a synth's.
+    pub fn settings(self) -> impl Iterator<Item = SettingId> {
+        let count = match self {
+            Self::Sampler => SAMPLER_SETTINGS,
+            Self::Plaits(voice) => voice_entries(voice).len(),
+        };
+        (0..count).filter_map(move |at| match self {
+            Self::Sampler => SettingId::sampler(at),
+            Self::Plaits(voice) => SettingId::voice(voice, at),
+        })
+    }
+
+    /// The place of a setting it has, by the key its file saves it under.
+    fn setting_at(self, key: &str) -> Option<usize> {
+        self.settings().position(|id| id.entry().key == key)
+    }
+
+    /// The setting that gives it its character, which its device's title shows after it, as an
+    /// effect's type is: the sample the sampler plays, `Acid`'s wave, 6-op's patch, and the chord
+    /// of `Chord` and `Chiptune`. Other synths have none.
+    pub fn type_param(self) -> Option<usize> {
+        let key = match self {
+            Self::Sampler => "sample",
+            Self::Plaits(SynthVoice::Acid) => "wave",
+            Self::Plaits(SynthVoice::SixOp) => "patch",
+            Self::Plaits(SynthVoice::Chord | SynthVoice::Chiptune) => "chord",
+            Self::Plaits(_) => return None,
+        };
+        self.setting_at(key)
+    }
+
+    /// Where its settings sit on the Sound page, by their places among them, its type being in the
+    /// title instead. Most have theirs down each column in the order they're listed. The sampler's
+    /// say which part of the sample plays and how down its first column, and where that part starts
+    /// and how long it is down its second, as the sample page has them; `Acid`'s are in pairs as a
+    /// TB-303's knobs are, the filter's, its envelope's, then accent and slide, with the Devil
+    /// Fish's drive after them.
+    pub fn grid(self) -> Grid {
+        let placed: &[&[&str]] = match self {
+            Self::Sampler => &[&["slice", "play"], &["start", "length"]],
+            Self::Plaits(SynthVoice::Acid) => &[
+                &["cutoff", "resonance"],
+                &["envmod", "decay"],
+                &["accent", "slide"],
+                &["drive"],
+            ],
+            Self::Plaits(_) => {
+                let own: Vec<usize> = (0..self.settings().count())
+                    .filter(|at| Some(*at) != self.type_param())
+                    .collect();
+                let columns: Vec<Vec<Option<usize>>> = own
+                    .chunks(GRID_ROWS)
+                    .map(|column| column.iter().copied().map(Some).collect())
+                    .collect();
+                return Grid::from_columns(&columns);
+            }
+        };
+        let columns: Vec<Vec<Option<usize>>> = placed
+            .iter()
+            .map(|column| column.iter().map(|key| self.setting_at(key)).collect())
+            .collect();
+        Grid::from_columns(&columns)
     }
 }
 
@@ -1905,6 +1970,62 @@ pub fn lowest_unused<T>(items: &BTreeMap<u32, T>) -> u32 {
 mod tests {
     use super::*;
     use crate::insert::{Distort, DistortType};
+
+    #[test]
+    fn every_machines_grid_places_each_of_its_settings_once_with_its_type_in_the_title() {
+        use crate::grid::GRID_COLUMNS;
+        use crate::settings::Kind;
+        for machine in Machine::ALL {
+            let grid = machine.grid();
+            let count = machine.settings().count();
+            assert!(
+                grid.places_each_once(count, machine.type_param()),
+                "{machine:?}: {grid:?}"
+            );
+            // A type is a choice from a list, as an effect's is.
+            if let Some(at) = machine.type_param() {
+                let id = machine.settings().nth(at).unwrap();
+                assert!(
+                    matches!(id.entry().kind, Kind::Stepped { .. }),
+                    "{machine:?}"
+                );
+            }
+            // No column is left empty before one that's used.
+            let used: Vec<usize> = (0..GRID_COLUMNS)
+                .filter(|column| (0..GRID_ROWS).any(|row| grid.at(row, *column).is_some()))
+                .collect();
+            assert_eq!(used, (0..used.len()).collect::<Vec<_>>(), "{machine:?}");
+        }
+    }
+
+    #[test]
+    fn the_sampler_and_acid_place_their_settings_by_what_they_mean() {
+        let names = |machine: Machine, row: usize| {
+            let ids: Vec<SettingId> = machine.settings().collect();
+            machine
+                .grid()
+                .row(row)
+                .map(|at| at.map_or("", |at| ids[at].name()))
+        };
+        assert_eq!(Machine::Sampler.type_param(), Some(0), "the sample");
+        assert_eq!(names(Machine::Sampler, 0), ["Slice", "Start", "", ""]);
+        assert_eq!(names(Machine::Sampler, 1), ["Play", "Length", "", ""]);
+        let acid = Machine::Plaits(SynthVoice::Acid);
+        assert_eq!(acid.type_param(), Some(0), "the wave");
+        assert_eq!(names(acid, 0), ["Cutoff", "Env mod", "Accent", "Drive"]);
+        assert_eq!(names(acid, 1), ["Resonance", "Decay", "Slide", ""]);
+        assert_eq!(names(acid, 2), ["", "", "", ""]);
+        let kick = Machine::Plaits(SynthVoice::Kick);
+        assert_eq!(kick.type_param(), None);
+        assert_eq!(names(kick, 0), ["Punch", "Accent", "", ""]);
+        assert_eq!(names(kick, 2), ["Decay", "", "", ""]);
+        let six_op = Machine::Plaits(SynthVoice::SixOp);
+        assert_eq!(names(six_op, 0), ["Bright", "", "", ""]);
+        assert_eq!(names(six_op, 2), ["Accent", "", "", ""]);
+        let chord = Machine::Plaits(SynthVoice::Chord);
+        assert_eq!(chord.type_param(), Some(0), "the chord");
+        assert_eq!(names(chord, 1), ["Wave", "", "", ""]);
+    }
 
     #[test]
     fn a_tracks_reset_is_named_in_bars_or_steps() {

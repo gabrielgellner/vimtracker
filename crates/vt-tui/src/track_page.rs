@@ -20,15 +20,12 @@ pub use device::{
 };
 pub use fx::TakenInsert;
 pub use mixer::{MIXER, MIXER_ROWS, MIXER_START};
-pub use sound::{
-    GROUP_ROWS, MASTER_ROWS, RETURN_ROWS, SAMPLE_ROWS, SYNTH_ROWS, SYNTH3_ROWS, SYNTH8_ROWS,
-};
+pub use sound::{GROUP_ROWS, MASTER_ROWS, RETURN_ROWS};
 
 use std::sync::Arc;
 
 use vt_model::selection::Motion;
-use vt_model::settings::voice_entries;
-use vt_model::song::{Machine, Track, TrackKind};
+use vt_model::song::{Track, TrackKind};
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -65,10 +62,11 @@ impl Page {
     }
 
     /// The page's devices, in the order they're read, on a page that's a rack of them, each page's
-    /// from its own file: the Mod page's envelopes, LFOs, accumulator and arpeggio, and the FX
-    /// page's slots. A page with none is rows of settings (`Page::rows`). The cursor, `j`, `k`,
-    /// `h`, `l`, `{` and `}` go through whatever devices a page gives, laid out as its rack
-    /// ([`rack_places`]), so a page becomes a rack by giving them.
+    /// from its own file: a sound track's Sound page, the Mod page's envelopes, LFOs, accumulator
+    /// and arpeggio, and the FX page's slots. A page with none is rows of settings
+    /// (`TrackPage::page_rows`). The cursor, `j`, `k`, `h`, `l`, `{` and `}` go through whatever
+    /// devices a page gives, laid out as its rack ([`rack_places`]), so a page becomes a rack by
+    /// giving them.
     pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {
         match self {
             Self::Sound => sound::devices(track),
@@ -76,25 +74,14 @@ impl Page {
             Self::Fx => fx::devices(track),
         }
     }
-
-    /// The page's rows, top to bottom, for a track with this machine.
-    pub fn rows(self, machine: Machine) -> &'static [&'static [Control]] {
-        match (self, machine) {
-            (Self::Sound, Machine::Sampler) => &SAMPLE_ROWS,
-            (Self::Sound, Machine::Plaits(voice)) if voice_entries(voice).len() > 4 => &SYNTH8_ROWS,
-            (Self::Sound, Machine::Plaits(voice)) if voice_entries(voice).len() > 3 => &SYNTH_ROWS,
-            (Self::Sound, Machine::Plaits(_)) => &SYNTH3_ROWS,
-            // Each is a rack, whose rows depend on the track: see `Page::devices`.
-            (Self::Mod | Self::Fx, _) => &[],
-        }
-    }
 }
 
 /// The place nearest a row and field that holds a setting: in a row with none, the nearest row
 /// above with some, and on a hole, the nearest setting along the row, the left one of two as near.
-/// In a rack it's the nearest row in the same device, above or else below, as a device's title can
-/// have nothing in it, as the accumulator's hasn't.
-fn place_in(rows: &[Vec<Option<Control>>], row: usize, field: usize, rack: bool) -> (usize, usize) {
+/// In a rack it's the nearest row in the same device, above or else below, so a device's title
+/// with nothing in it, as the Sound page's `Output` and the accumulator have, stands for its first
+/// row with some, and `}` onto it lands in the device rather than above it.
+fn place_in(rows: &[Vec<Option<Control>>], rack: bool, row: usize, field: usize) -> (usize, usize) {
     let row = row.min(rows.len().saturating_sub(1));
     let filled = |row: &usize| {
         rows.get(*row)
@@ -153,16 +140,16 @@ impl TrackPage {
         track.map_or_else(Vec::new, |track| self.page.devices(track))
     }
 
-    /// The rows of the page showing, which depend on the track's kind and machine.
+    /// The rows of the page showing, on a page that isn't a rack: a fixed track's Sound page, which
+    /// depends on its kind. Every other page is a rack, whose rows are its devices'
+    /// (`Page::devices`).
     pub fn page_rows(&self, track: Option<&Track>) -> &'static [&'static [Control]] {
         let kind = track.map_or(TrackKind::Sound, |track| track.kind);
         match (self.page, kind) {
             (Page::Sound, TrackKind::Group(_)) => &GROUP_ROWS,
             (Page::Sound, TrackKind::ReturnA | TrackKind::ReturnB) => &RETURN_ROWS,
             (Page::Sound, TrackKind::Master) => &MASTER_ROWS,
-            _ => self
-                .page
-                .rows(track.map_or(Machine::Sampler, |track| track.machine)),
+            _ => &[],
         }
     }
 
@@ -201,7 +188,7 @@ impl TrackPage {
     /// The place nearest a row and field that holds a setting, as [`TrackPage::place`] finds it.
     fn nearest(&self, track: Option<&Track>, row: usize, field: usize) -> (usize, usize) {
         let rack = !self.devices(track).is_empty();
-        place_in(&self.rows(track), row, field, rack)
+        place_in(&self.rows(track), rack, row, field)
     }
 
     /// On a rack, the devices in a device's column, top to bottom, which `j`, `k`, `{`, `}`, `gg`
@@ -264,7 +251,7 @@ impl TrackPage {
             Cmd::Move(Motion::NextBeat | Motion::PreviousBeat)
                 if self.devices(track).is_empty() =>
             {
-                return Outcome::Refused("{ and } go between devices, on the Mod and FX pages");
+                return Outcome::Refused("{ and } go between devices, and this page has none");
             }
             Cmd::Move(Motion::NextBeat) => self.move_device(times as isize, track),
             Cmd::Move(Motion::PreviousBeat) => self.move_device(-(times as isize), track),

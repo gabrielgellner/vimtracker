@@ -53,6 +53,14 @@ impl CellWidths {
         gap: 3,
     };
 
+    /// The Sound page's: four digits, a value's coarse ones and its fine ones set back, as `A000`,
+    /// with the same bars, so a column lines up with the FX page's but for its value. That's 29
+    /// columns a cell.
+    pub const SOUND: Self = Self {
+        value: 5,
+        ..Self::FX
+    };
+
     /// Compact cells, for a half-width device, where a panel rather than a bar shows the values:
     /// a name, a value as long as `2 bars` or `8000 ms`, and no bar. That's 21 columns a cell.
     pub const COMPACT: Self = Self {
@@ -134,7 +142,13 @@ impl<S: CellSource> Widget for SettingsGrid<'_, S> {
                         put(value, widths.name, widths.value);
                         put(Line::from(bar), widths.name + widths.value, widths.bar());
                     }
-                    None => put(value, widths.name, widths.value + widths.bar()),
+                    // A word or a choice can run on into the gap, short of the next column's
+                    // name, as a slice's time needs.
+                    None => put(
+                        value,
+                        widths.name,
+                        widths.value + widths.bar() + widths.gap.saturating_sub(1),
+                    ),
                 }
             }
         }

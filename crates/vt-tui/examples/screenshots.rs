@@ -116,7 +116,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-sound",
         rows: GATES,
-        keys: " 4jjji60<Enter>ji90<Enter>k",
+        keys: " 4jli60<Enter>ji90<Enter>k",
         play: 0,
         voice: None,
         kick: true,
@@ -151,8 +151,8 @@ const SHOTS: &[Shot] = &[
     },
 ];
 
-/// The sample page's, the FX page's and the Mod page's shots are of the author's screen, kitty full
-/// screen on a MacBook, where the FX and Mod pages' four rows of devices fit beside the main meter.
+/// The sample page's and the Sound, Mod and FX pages' shots are of the author's screen, kitty full
+/// screen on a MacBook, where each track page's four rows of devices fit beside the main meter.
 const SAMPLE_WIDTH: u16 = 163;
 const SAMPLE_HEIGHT: u16 = 42;
 
@@ -346,7 +346,7 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let now = play(&mut app, &mut realtime, shot.play, start);
     let size = match shot.name {
         "project" => (WIDTH, PROJECT_HEIGHT),
-        "sample" | "track-fx" | "track-mod" => (SAMPLE_WIDTH, SAMPLE_HEIGHT),
+        "sample" | "track-fx" | "track-sound" | "track-mod" => (SAMPLE_WIDTH, SAMPLE_HEIGHT),
         _ => (WIDTH, HEIGHT),
     };
     let path = folder.join(format!("{}.svg", shot.name));
