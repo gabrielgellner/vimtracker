@@ -2,7 +2,8 @@
 //! out as Polyend Tracker's mixer is. The sound tracks, the groups, and the returns and master each
 //! stand apart, and a group's strip and the tracks in it share its colour (decision 126). A folded
 //! group's tracks are left out, with its name marked, and an empty group is folded away unless it's
-//! opened (decision 128).
+//! opened (decision 128). Over each part, on the row under the title, is its name on a rule, as a
+//! device's title is on its frame, the cursor's brighter (decision 144).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -21,7 +22,7 @@ use crate::views::track::value;
 use crate::views::widgets::group::{self, Switched};
 use crate::views::widgets::meter::{EIGHTHS, level_cell};
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
-use crate::views::widgets::table::{Cells, Columns, take_top};
+use crate::views::widgets::table::{Cells, Columns, fitted, take_top};
 
 /// Room for the names of the settings, at the left. Beside the meters it holds the scale's mark,
 /// with a gap after it.
@@ -32,7 +33,12 @@ const STRIP_WIDTH: u16 = 7;
 /// The room before the first group's strip and before the first return's, so the sound tracks,
 /// the groups and the returns with the master read as three parts.
 const SECTION_GAP: u16 = 2;
-/// The rows that aren't the meters: the title, a gap, the track names, and under them the group a
+/// The rule's line, as a device frame's top border is drawn.
+const RULE: char = '─';
+/// The names of the parts, over their strips: the sound tracks, the groups, and the returns with
+/// the master.
+const PART_NAMES: [&str; 3] = ["Tracks", "Groups", "Returns"];
+/// The rows that aren't the meters: the title, the parts' names, the track names, and under them the group a
 /// track is in, or the tracks a group sums.
 const ROWS_ABOVE_METERS: u16 = 4;
 
@@ -82,6 +88,15 @@ impl Strips {
     /// Whether the strip at this place starts a part, after another shown before it.
     fn gap_before(&self, place: usize) -> bool {
         place > 0 && self.part(self.shown[place]) != self.part(self.shown[place - 1])
+    }
+
+    /// How many strips are shown from this place on that are in the same part as it.
+    fn run_from(&self, place: usize) -> usize {
+        let part = self.part(self.shown[place]);
+        self.shown[place..]
+            .iter()
+            .take_while(|&&index| self.part(index) == part)
+            .count()
     }
 
     /// The columns: the labels' two, then each strip's, with a gap's before each part.
@@ -154,6 +169,48 @@ fn routing_cell(song: &Song, index: usize) -> Line<'static> {
     group::mark(song, index).map_or_else(Line::default, Line::from)
 }
 
+/// A part's name on a rule this wide, such as `─ Tracks ────`, in the frame's colour and the name
+/// dim, as a device's title is, or both brighter with the cursor in it. Too narrow for the rule as
+/// well, as over a lone strip, it's the name alone, cut to fit if it must be.
+fn part_rule(name: &str, width: usize, focused: bool) -> Line<'static> {
+    let (rule, name_style) = if focused {
+        (theme::OVERLAY2, Style::new().fg(theme::TEXT))
+    } else {
+        (theme::SURFACE1, theme::dim())
+    };
+    let rule = Style::new().fg(rule);
+    let label = format!(" {name} ");
+    let named = 2 + label.chars().count();
+    if width < named {
+        return fitted(Line::styled(name.to_owned(), name_style), width);
+    }
+    Line::from(vec![
+        Span::styled(RULE.to_string(), rule),
+        Span::styled(label, name_style),
+        Span::styled(RULE.to_string().repeat(width - named + 1), rule),
+    ])
+}
+
+/// The row of the parts' names, each on a rule over its strips that stops a column short of the
+/// next part's gap.
+fn parts_row(app: &App, columns: &Columns, strips: &Strips) -> Row<'static> {
+    let mut cells = columns.row();
+    cells.skip(2);
+    let cursor = strips.part(app.cursor.track);
+    let mut place = 0;
+    while place < strips.shown.len() {
+        if strips.gap_before(place) {
+            cells.skip(1);
+        }
+        let count = strips.run_from(place);
+        let part = strips.part(strips.shown[place]);
+        let width = usize::from(STRIP_WIDTH) * count - 1;
+        cells.span(part_rule(PART_NAMES[part], width, part == cursor), count);
+        place += count;
+    }
+    cells.done()
+}
+
 /// One row of the meters, counting rows up from the bottom.
 fn meter_row(
     app: &App,
@@ -210,7 +267,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mut rest = area;
     frame.render_widget(
         Paragraph::new(Line::styled("Mixer", bold)),
-        take_top(&mut rest, 2),
+        take_top(&mut rest, 1),
     );
     let mut names = columns.row();
     names.skip(2);
@@ -218,7 +275,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mut routing = columns.row();
     routing.skip(2);
     strips.fill(&mut routing, |index| routing_cell(song, index));
-    let mut rows = vec![names.done(), routing.done()];
+    let mut rows = vec![
+        parts_row(app, &columns, &strips),
+        names.done(),
+        routing.done(),
+    ];
 
     let settings = MIXER.len() as u16;
     let meter_rows = usize::from(area.height.saturating_sub(ROWS_ABOVE_METERS + settings));
