@@ -1,13 +1,14 @@
-//! vimtracker's devices as the Roto shows them live: each device of a track, as the track page
-//! lays it out (`DeviceSpec`), becomes a device of knobs, each with its setting's name, the feel
-//! its kind gives it, where it's set, and its family's colour. Pure: a track and its song in, the
-//! Roto's description out, so it's tested with no Roto at all.
+//! vimtracker's devices as the Roto shows them: each device of a track becomes a device of knobs,
+//! and buttons if it's stored, each with its setting's name, the feel its kind gives it, where
+//! it's set, and its family's colour. Pure: a track and its song in, the Roto's description out,
+//! so it's tested with no Roto at all.
 //!
-//! **Knob order** is row by row through the device's grid, holes kept, then its title's controls
-//! (the author's decision of 2026-11-11, the design note's §3): knobs 1 to 4 are the grid's top
-//! row and 5 to 8 its middle, and the second page is its bottom row and then the title, so a
-//! column's settings are always four knobs apart. A page with nothing on it at the end is left
-//! off.
+//! **Where each setting goes** is its kind of device's layout ([`layouts`]), and nothing else:
+//! not the track page's grid, which is laid out for the screen (issue #419). A device with off/on
+//! settings is stored on the Roto, once vimtracker's setups are there, so they're on buttons; a
+//! live device has them on two-step knobs.
+//!
+//! **Colours** are by family, from the one table [`FAMILY_COLOURS`].
 //!
 //! **Feel** follows the setting's kind, as issue #411's table has it: a list of up to 16 choices
 //! clicks through them, each named; of 17 to 24, it clicks with names for the first 16; a longer
@@ -21,7 +22,6 @@ use vt_model::arpeggio::{ArpMode, ArpRate, MOST_OCTAVES};
 use vt_model::constants::{
     BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET, TICKS_PER_STEP,
 };
-use vt_model::grid::GRID_ROWS;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{MAX_LFO_DEPTH, Rate, Shape};
@@ -32,13 +32,15 @@ use vt_roto::Label;
 use vt_roto::bytes::Rgb;
 use vt_roto::colour;
 use vt_roto::live::{Feel, LiveControl, LiveDevice, LiveTrack, position_at, position_of};
+use vt_roto::store::{NAMESPACE, OwnSetup};
 use vt_roto::sysex::{CONTROLS, MAX_STEPS};
 
 use ratatui::style::Color;
 
+use super::layouts::{self, Setting, Turn};
 use crate::theme;
 use crate::track_page::{
-    AccumulatorField, ArpField, Control, DEVICE_COLUMNS, DeviceSpec, EnvelopeField, LfoField, Page,
+    AccumulatorField, ArpField, Control, DeviceSpec, EnvelopeField, LfoField, Page,
 };
 use crate::views::track::toggle_on;
 
@@ -62,23 +64,91 @@ pub enum Family {
     Choice,
 }
 
+/// One family's colours: on screen, on the Roto, and what goes in it, for the guide's legend.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FamilyColour {
+    pub family: Family,
+    /// Its colour in the app's palette.
+    pub screen: Color,
+    /// Its colour scheme on the Roto, an index into `vt_roto::colour::SCHEMES`: the vivid scheme
+    /// of the screen colour's hue, as the nearest to the palette's pastels read too alike on the
+    /// Roto's small screens.
+    pub scheme: u8,
+    /// The colour's name, and what has it.
+    pub name: &'static str,
+    pub holds: &'static str,
+}
+
+/// The one table of what colour each kind of setting is, on screen and on the Roto. A knob's or
+/// a button's colour is its family's here, unless its layout gives it another family.
+pub const FAMILY_COLOURS: [FamilyColour; 7] = [
+    FamilyColour {
+        family: Family::Level,
+        screen: theme::GREEN,
+        scheme: 19,
+        name: "green",
+        holds: "levels, sends, trims, mixes, gains, and a compressor's dynamics",
+    },
+    FamilyColour {
+        family: Family::Tone,
+        screen: theme::BLUE,
+        scheme: 22,
+        name: "blue",
+        holds: "a filter's cutoff, resonance, type and cuts, and an EQ's bands",
+    },
+    FamilyColour {
+        family: Family::Space,
+        screen: theme::TEAL,
+        scheme: 20,
+        name: "teal",
+        holds: "pan",
+    },
+    FamilyColour {
+        family: Family::Time,
+        screen: theme::YELLOW,
+        scheme: 17,
+        name: "yellow",
+        holds: "times, rates, lengths, glides and pitches",
+    },
+    FamilyColour {
+        family: Family::Modulation,
+        screen: theme::MAUVE,
+        scheme: 24,
+        name: "violet",
+        holds: "what an envelope, an LFO, the accumulator or the arpeggio does",
+    },
+    FamilyColour {
+        family: Family::Character,
+        screen: theme::PEACH,
+        scheme: 15,
+        name: "orange",
+        holds: "drive, and a machine's or an effect's own character",
+    },
+    FamilyColour {
+        family: Family::Choice,
+        screen: theme::TEXT,
+        scheme: 13,
+        name: "white",
+        holds: "choices: a machine, an effect, a sample, a type, off and on",
+    },
+];
+
 impl Family {
-    /// The family's colour, from the app's palette.
-    pub fn colour(self) -> Color {
-        match self {
-            Self::Level => theme::GREEN,
-            Self::Tone => theme::BLUE,
-            Self::Space => theme::TEAL,
-            Self::Time => theme::YELLOW,
-            Self::Modulation => theme::MAUVE,
-            Self::Character => theme::PEACH,
-            Self::Choice => theme::TEXT,
-        }
+    fn colours(self) -> &'static FamilyColour {
+        FAMILY_COLOURS
+            .iter()
+            .find(|colours| colours.family == self)
+            .expect("every family has a row")
     }
 
-    /// The Roto's colour scheme nearest the family's colour.
+    /// The family's colour, from the app's palette.
+    pub fn colour(self) -> Color {
+        self.colours().screen
+    }
+
+    /// The family's colour scheme on the Roto.
     pub fn scheme(self) -> u8 {
-        scheme_of(self.colour())
+        self.colours().scheme
     }
 
     /// A setting of the registry's family, by its units.
@@ -130,9 +200,17 @@ pub fn family(control: Control, track: &Track) -> Family {
     if let Some(id) = registry_setting(control, track) {
         let entry = id.entry();
         // A resonance and an effect's cuts are the filter's kind, though each is a share like
-        // any other, and a rate or a time chosen from note divisions is a time.
+        // any other; an effect's mix is how loud it is, as its gain is; and a rate or a time
+        // chosen from note divisions is a time.
         return match (entry.kind, entry.key) {
             (_, "res" | "resonance" | "lowcut" | "highcut") => Family::Tone,
+            (_, "mix") => Family::Level,
+            // A compressor's ratio and times chosen from its own list are a ratio and times,
+            // as the ones that sweep are.
+            (Kind::Stepped { .. }, key) if key.ends_with("ratio") => Family::Level,
+            (Kind::Stepped { .. }, key) if key.ends_with("attack") || key.ends_with("release") => {
+                Family::Time
+            }
             (Kind::Stepped { .. }, "time" | "rate") => Family::Time,
             (Kind::Continuous { units, .. }, _) => Family::of_units(units),
             (Kind::Stepped { .. }, _) => Family::Choice,
@@ -391,6 +469,8 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                         .position(|shape| *shape == lfo.shape)
                         .unwrap_or(0),
                 ),
+                // Smooth over every kind of rate, its value shown as it turns: a stored knob keeps
+                // at most 16 steps, and a note value has 24 (the author's choice, 2026-11-11).
                 LfoField::Rate => (Feel::Smooth, rate_position(lfo.rate)),
                 LfoField::Depth => depth(lfo.depth),
                 LfoField::Phase => value(lfo.phase.min(359), 359, false),
@@ -509,7 +589,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
     Some(found)
 }
 
-/// One knob, for a control on this track, or nothing for a hole.
+/// One knob, for a control on this track, as its kind has it, or nothing for a hole.
 pub fn knob(control: Control, track: &Track, song: &Song) -> Option<LiveControl> {
     let (feel, position) = feel(control, track, song)?;
     Some(LiveControl {
@@ -520,25 +600,86 @@ pub fn knob(control: Control, track: &Track, song: &Song) -> Option<LiveControl>
     })
 }
 
-/// A device's controls in knob order: its grid row by row, then its title, holes kept, with an
-/// empty last page left off.
-pub fn knob_order(spec: &DeviceSpec) -> Vec<Option<Control>> {
-    let mut order: Vec<Option<Control>> = (0..GRID_ROWS)
-        .flat_map(|row| spec.grid[row])
-        .chain(spec.title)
-        .collect();
-    debug_assert_eq!(order.len(), (GRID_ROWS + 1) * DEVICE_COLUMNS);
-    while order.len() > CONTROLS && order[order.len() - CONTROLS..].iter().all(Option::is_none) {
-        order.truncate(order.len() - CONTROLS);
+/// One knob or button as a layout places it, with its slot's colour and turn where it gives
+/// them.
+pub fn placed(
+    control: Control,
+    setting: &Setting,
+    track: &Track,
+    song: &Song,
+) -> Option<LiveControl> {
+    let mut knob = knob(control, track, song)?;
+    if let Some(family) = setting.family {
+        knob.colour = family.scheme();
     }
-    order
+    match setting.turn {
+        Some(Turn::Smooth) if knob.feel != Feel::Switch => knob.feel = Feel::Smooth,
+        Some(Turn::CentreNotch) if knob.feel != Feel::Switch => knob.feel = Feel::CentreNotch,
+        _ => {}
+    }
+    Some(knob)
+}
+
+/// Where a device's settings are on the Roto: its knobs and its buttons, each a page of eight
+/// after another, holes kept, from its layout alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Placement {
+    /// Whether it's shown as one of vimtracker's stored setups, with its buttons.
+    pub stored: bool,
+    pub knobs: Vec<Option<(Control, Setting)>>,
+    pub buttons: Vec<Option<(Control, Setting)>>,
+}
+
+/// A device's placement: stored, its knobs and buttons as its layout has them, if it's a kind
+/// that's stored and vimtracker's setups are on the Roto (`stored_on_roto`); otherwise live, its
+/// buttons moved onto knobs.
+pub fn placement(spec: &DeviceSpec, track: &Track, stored_on_roto: bool) -> Placement {
+    let layout = layouts::layout_of(spec, track);
+    let resolve = |setting: &Setting| {
+        layouts::resolve(setting, spec, track).map(|control| (control, *setting))
+    };
+    if layout.stored && stored_on_roto {
+        Placement {
+            stored: true,
+            knobs: layout
+                .layout
+                .knobs()
+                .into_iter()
+                .map(|slot| slot.and_then(resolve))
+                .collect(),
+            buttons: layout
+                .layout
+                .buttons()
+                .into_iter()
+                .map(|slot| slot.and_then(resolve))
+                .collect(),
+        }
+    } else {
+        Placement {
+            stored: false,
+            knobs: layout
+                .layout
+                .live_knobs()
+                .into_iter()
+                .map(|slot| slot.and_then(|placed| resolve(placed.setting)))
+                .collect(),
+            buttons: Vec::new(),
+        }
+    }
 }
 
 /// What a device is called on the Roto, and the key its hash is made from: a machine by its name,
-/// a slot by its number and effect, and the rest as the track page names them.
-fn identity(page: Page, spec: &DeviceSpec, track: &Track, slot: usize) -> (String, String) {
+/// a slot by its number and effect, and the rest as the track page names them. A stored device's
+/// key is its stored setup's, in vimtracker's namespace, the same for every device of its kind.
+fn identity(
+    page: Page,
+    spec: &DeviceSpec,
+    track: &Track,
+    slot: usize,
+    stored: bool,
+) -> (String, String) {
     let lower = |text: &str| text.to_ascii_lowercase().replace(' ', "-");
-    match page {
+    let (name, key) = match page {
         Page::Fx => {
             let insert = track.inserts[slot];
             let name = if insert == Insert::Empty {
@@ -559,7 +700,12 @@ fn identity(page: Page, spec: &DeviceSpec, track: &Track, slot: usize) -> (Strin
             spec.identity.clone(),
             format!("vimtracker/{}", lower(&spec.identity)),
         ),
+    };
+    if stored {
+        let kind = layouts::layout_of(spec, track).kind;
+        return (name, format!("{NAMESPACE}{kind}"));
     }
+    (name, key)
 }
 
 /// Whether a device is switched in: an FX slot that's filled and not bypassed, an envelope or an
@@ -574,32 +720,46 @@ fn enabled(control: Option<Control>, track: &Track) -> bool {
     }
 }
 
-/// One device of a page as the Roto shows it.
+/// One device of a page as the Roto shows it, stored with its buttons if it's a kind that's
+/// stored and vimtracker's setups are on the Roto, and live otherwise.
 pub fn live_device(
     page: Page,
     slot: usize,
     spec: &DeviceSpec,
     track: &Track,
     song: &Song,
+    stored_on_roto: bool,
 ) -> LiveDevice {
-    let (name, key) = identity(page, spec, track, slot);
+    let placement = placement(spec, track, stored_on_roto);
+    let (name, key) = identity(page, spec, track, slot, placement.stored);
+    let shown = |slots: Vec<Option<(Control, Setting)>>| {
+        slots
+            .into_iter()
+            .map(|slot| slot.and_then(|(control, setting)| placed(control, &setting, track, song)))
+            .collect()
+    };
     LiveDevice {
         key,
         name: Label::new(&name),
         enabled: enabled(spec.title[0], track),
-        controls: knob_order(spec)
-            .into_iter()
-            .map(|control| control.and_then(|control| knob(control, track, song)))
-            .collect(),
+        stored: placement.stored,
+        // An empty slot has nothing on the Roto, as its effect is chosen in the app: a page of
+        // nothing.
+        controls: if placement.knobs.is_empty() {
+            vec![None; CONTROLS]
+        } else {
+            shown(placement.knobs)
+        },
+        switches: shown(placement.buttons),
     }
 }
 
 /// A track's devices as the Roto's plugin list shows them, in the order the design note's §3 has:
 /// the Sound page's, then the FX page's slots, then the Mod page's.
-pub fn live_devices(track: &Track, song: &Song) -> Vec<LiveDevice> {
+pub fn live_devices(track: &Track, song: &Song, stored_on_roto: bool) -> Vec<LiveDevice> {
     track_devices(track)
         .into_iter()
-        .map(|(page, slot, spec)| live_device(page, slot, &spec, track, song))
+        .map(|(page, slot, spec)| live_device(page, slot, &spec, track, song, stored_on_roto))
         .collect()
 }
 
@@ -620,10 +780,103 @@ pub fn track_devices(track: &Track) -> Vec<(Page, usize, DeviceSpec)> {
 
 /// The setting on the knob the Roto numbers `index`, from 1 across the pages, of a track's
 /// `device`th device, if there's one there.
-pub fn control_at(track: &Track, device: usize, index: u16) -> Option<Control> {
+pub fn control_at(
+    track: &Track,
+    device: usize,
+    index: u16,
+    stored_on_roto: bool,
+) -> Option<Control> {
     let (_, _, spec) = track_devices(track).into_iter().nth(device)?;
     let at = usize::from(index.checked_sub(1)?);
-    knob_order(&spec).get(at).copied().flatten()
+    let placement = placement(&spec, track, stored_on_roto);
+    placement
+        .knobs
+        .get(at)
+        .copied()
+        .flatten()
+        .map(|(control, _)| control)
+}
+
+/// The setting on the button the Roto numbers `index`, from 1 across the pages, of a track's
+/// `device`th device, if it's stored and has one there.
+pub fn button_at(
+    track: &Track,
+    device: usize,
+    index: u16,
+    stored_on_roto: bool,
+) -> Option<Control> {
+    let (_, _, spec) = track_devices(track).into_iter().nth(device)?;
+    let at = usize::from(index.checked_sub(1)?);
+    let placement = placement(&spec, track, stored_on_roto);
+    placement
+        .buttons
+        .get(at)
+        .copied()
+        .flatten()
+        .map(|(control, _)| control)
+}
+
+/// One of each kind of device, each as a song, the track it's on, its page and its place there:
+/// every machine, every effect in each of its types, the filter, each kind of track's output,
+/// the Play device and each modulator. The stored setups are made from these, and the tests go
+/// through them.
+pub fn every_kind_of_device() -> Vec<(Song, usize, Page, usize)> {
+    let mut base = Song::new(1);
+    base.tracks[0].filter = FilterType::ALL
+        .iter()
+        .copied()
+        .find(|filter| filter.has_modes())
+        .unwrap_or_default();
+    let mut found = Vec::new();
+    for machine in Machine::ALL {
+        let mut song = base.clone();
+        song.tracks[0].machine = machine;
+        found.push((song, 0, Page::Sound, 0));
+    }
+    for slot in 1..Page::Sound.devices(&base.tracks[0]).len() {
+        found.push((base.clone(), 0, Page::Sound, slot));
+    }
+    for slot in 0..Page::Mod.devices(&base.tracks[0]).len() {
+        found.push((base.clone(), 0, Page::Mod, slot));
+    }
+    for insert in Insert::ALL {
+        let types = insert
+            .type_param()
+            .map_or(1, |at| insert.params()[at].choices.len());
+        for kind in 0..types {
+            let mut song = base.clone();
+            song.tracks[0].inserts[0] = match insert.type_param() {
+                Some(at) => insert.with_value(at, kind as u8),
+                None => insert,
+            };
+            found.push((song, 0, Page::Fx, 0));
+        }
+    }
+    for (at, track) in base.tracks.iter().enumerate().skip(1) {
+        if !track.is_sound() {
+            found.push((base.clone(), at, Page::Sound, 0));
+        }
+    }
+    found
+}
+
+/// vimtracker's stored setups: one for each kind of device that's stored, made from its layout
+/// as a device of that kind is shown.
+pub fn stored_setups() -> Vec<OwnSetup> {
+    let mut setups: Vec<OwnSetup> = Vec::new();
+    for (song, at, page, slot) in every_kind_of_device() {
+        let track = &song.tracks[at];
+        let spec = &page.devices(track)[slot];
+        let layout = layouts::layout_of(spec, track);
+        let key = format!("{NAMESPACE}{}", layout.kind);
+        if !layout.stored || setups.iter().any(|setup| setup.key == key) {
+            continue;
+        }
+        let device = live_device(page, slot, spec, track, &song, true);
+        let name = layout.layout.pages.first().map_or("", |first| first.name);
+        setups.push(OwnSetup::of(&device, name));
+    }
+    setups
 }
 
 /// What switches a track's `device`th device in and out, as its enabled state on the Roto: an

@@ -40,13 +40,17 @@ fn devices() -> Vec<LiveDevice> {
             key: "vimtracker/filter".to_owned(),
             name: Label::new("Filter"),
             enabled: true,
+            stored: false,
             controls: filter,
+            switches: Vec::new(),
         },
         LiveDevice {
             key: "vimtracker/fx1/delay".to_owned(),
             name: Label::new("1 Delay"),
             enabled: false,
+            stored: false,
             controls: delay,
+            switches: Vec::new(),
         },
     ]
 }
@@ -388,7 +392,9 @@ fn twelve() -> Vec<LiveDevice> {
             key: format!("vimtracker/test/{at}"),
             name: Label::new(&format!("Dev {at}")),
             enabled: true,
+            stored: false,
             controls: vec![knob("Knob", Feel::Smooth, 0, 1); 8],
+            switches: Vec::new(),
         })
         .collect()
 }

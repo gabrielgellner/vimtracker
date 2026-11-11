@@ -416,7 +416,8 @@ fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Acti
                 ..track.arpeggio
             },
         }),
-        // The song's limiter is the master's alone, on the mixer, which no device has.
+        // The song's limiter, on the master's output.
+        Control::Limiter => Some(Action::SetLimiter(on)),
         _ => None,
     }
 }

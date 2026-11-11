@@ -19,7 +19,7 @@ use vt_roto::serial::Mode;
 use vt_roto::sysex::{PluginKind, ToRoto};
 use vt_tui::app::App;
 use vt_tui::input::mode::View;
-use vt_tui::roto::devices::{Family, knob, knob_order, live_devices, name};
+use vt_tui::roto::devices::{Family, knob, live_devices, name, placement};
 use vt_tui::roto::edits::value_text;
 use vt_tui::roto::{Connection, RotoSetting};
 use vt_tui::track_page::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField, Page};
@@ -43,55 +43,6 @@ fn every_kind_of_device() -> Song {
     song
 }
 
-/// Whether a control should have a knob on this track: every setting it has, but a filter's
-/// `Mode` when its type has no modes.
-fn has_knob(control: Control, track: &Track) -> bool {
-    control.exists_on(track) && !(control == Control::FilterMode && !track.filter.has_modes())
-}
-
-#[test]
-fn every_device_places_every_setting_once_row_by_row_with_holes_kept() {
-    let song = every_kind_of_device();
-    let mut effects_seen = BTreeSet::new();
-    for track in &song.tracks {
-        for page in Page::ALL {
-            for spec in page.devices(track) {
-                let order = knob_order(&spec);
-                assert!(order.len() == 8 || order.len() == 16, "{}", spec.identity);
-                // Row by row through the grid, then the title.
-                let mut expected: Vec<Option<Control>> =
-                    spec.grid.iter().flatten().copied().collect();
-                expected.extend(spec.title);
-                assert_eq!(order[..], expected[..order.len()], "{}", spec.identity);
-                assert!(expected[order.len()..].iter().all(Option::is_none));
-                for control in spec.rows().flatten().flatten() {
-                    assert_eq!(
-                        order.iter().filter(|at| **at == Some(control)).count(),
-                        1,
-                        "{control:?} in {}",
-                        spec.identity
-                    );
-                    let found = knob(control, track, &song);
-                    assert_eq!(
-                        found.is_some(),
-                        has_knob(control, track),
-                        "{control:?} on {:?}",
-                        track.kind
-                    );
-                    if let Control::InsertParam(slot, _) = control {
-                        effects_seen.insert(track.inserts[slot].name());
-                    }
-                }
-            }
-        }
-    }
-    assert_eq!(
-        effects_seen.len(),
-        Insert::ALL.len() - 1,
-        "every effect was seen: {effects_seen:?}"
-    );
-}
-
 #[test]
 fn every_knobs_name_fits_the_rotos_twelve_characters_uncut() {
     let song = every_kind_of_device();
@@ -112,7 +63,7 @@ fn every_knobs_name_fits_the_rotos_twelve_characters_uncut() {
                 }
             }
         }
-        for device in live_devices(track, &song) {
+        for device in live_devices(track, &song, false) {
             assert!(device.name.as_str().chars().count() <= 12);
             assert!(!device.name.is_empty());
         }
@@ -124,9 +75,9 @@ fn every_knobs_name_fits_the_rotos_twelve_characters_uncut() {
 fn every_position_is_on_the_knob_and_every_device_a_macro_of_its_pages() {
     let song = every_kind_of_device();
     for track in &song.tracks {
-        for device in live_devices(track, &song) {
+        for device in live_devices(track, &song, false) {
             assert!(
-                device.pages() == 1 || device.pages() == 2,
+                (1..=vt_roto::live::MAX_PAGES).contains(&device.pages()),
                 "{}",
                 device.name
             );
@@ -336,7 +287,7 @@ fn the_roto_is_off_until_turned_on_on_the_audio_page() {
 fn turned_on_the_roto_shows_the_tracks_devices_live_and_stores_nothing() {
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
     app.set_roto(true);
-    let devices = live_devices(&app.song().tracks[0], app.song());
+    let devices = live_devices(&app.song().tracks[0], app.song(), false);
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.knob(1).is_some_and(|knob| knob.learned.is_some())
     }));
@@ -382,21 +333,24 @@ fn a_stepped_knob_turned_on_the_roto_shows_its_steps_name() {
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
     app.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
-    // The Play device, whose second knob is `Speed`, seven steps from `1/32` to `1/4`.
-    ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(3))]);
+    // The Play device, whose fifth knob is `Speed`, seven steps from `1/32` to `1/4`.
+    ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(PLAY))]);
     assert!(tick_until(&mut app, &ports, |fake| {
-        fake.shown == Some((3, 0)) && fake.knob(2).is_some_and(|knob| knob.learned.is_some())
+        fake.shown == Some((PLAY, 0))
+            && fake
+                .knob(u16::from(SPEED_KNOB) + 1)
+                .is_some_and(|knob| knob.learned.is_some())
     }));
     let turned = ports.with(|fake| {
         fake.control(ControlEvent::Knob {
-            index: 1,
+            index: SPEED_KNOB,
             value: KNOB_TOP,
         })
     });
     ports.from_roto(turned);
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.received.iter().any(|message| {
-            matches!(message, ToRoto::ShowControlValue { index: 1, value, .. }
+            matches!(message, ToRoto::ShowControlValue { index: SPEED_KNOB, value, .. }
                 if value.as_str() == "1/4")
         })
     }));
@@ -549,10 +503,14 @@ fn values_shown(fake: &FakeRoto, knob: u8) -> Vec<String> {
         .collect()
 }
 
-/// The Output device, the third, has `Trim` on its first knob and `Level` on its fifth.
+/// The Output device, the third, has `Level` on its first knob and `Trim` on its fifth.
 const OUTPUT: u8 = 2;
-const TRIM_KNOB: u8 = 0;
-const LEVEL_KNOB: u8 = 4;
+const TRIM_KNOB: u8 = 4;
+const LEVEL_KNOB: u8 = 0;
+
+/// The Play device, the fourth, has `Speed` on its fifth knob.
+const PLAY: u8 = 3;
+const SPEED_KNOB: u8 = 4;
 
 #[test]
 fn a_knob_edits_its_own_track_whatever_the_cursor_is_on() {
@@ -613,13 +571,12 @@ fn touching_a_knob_to_letting_it_go_is_one_undo_step() {
 fn a_stepped_knob_moves_through_its_list() {
     use vt_model::speed::Speed;
     use vt_roto::live::position_of;
-    // The Play device's second knob is `Speed`.
-    let (mut app, _realtime, ports) = showing(3);
+    let (mut app, _realtime, ports) = showing(PLAY);
     for (at, speed) in Speed::ALL.iter().enumerate().rev() {
-        turn(&ports, 1, position_of(at, Speed::ALL.len()));
+        turn(&ports, SPEED_KNOB, position_of(at, Speed::ALL.len()));
         assert!(tick_until_song(&mut app, |song| song.tracks[0].speed == *speed));
         assert!(tick_until(&mut app, &ports, |fake| {
-            values_shown(fake, 1).last().map(String::as_str) == Some(speed.name())
+            values_shown(fake, SPEED_KNOB).last().map(String::as_str) == Some(speed.name())
         }));
     }
 }
@@ -783,7 +740,7 @@ fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
             messages.push(ports.with(|fake| fake.choose_plugin(1)));
         }
         ports.from_roto(messages);
-        let lfo = live_devices(&app.song().tracks[0], app.song())[9].clone();
+        let lfo = live_devices(&app.song().tracks[0], app.song(), false)[9].clone();
         let first = lfo.control(1).unwrap().name.clone();
         assert!(tick_until(&mut app, &ports, |fake| {
             fake.shown == Some((9, 0)) && fake.knob(1).is_some_and(|knob| knob.name == first)
@@ -863,9 +820,15 @@ fn every_knob_left_where_it_is_edits_nothing_and_each_end_is_an_edit_that_holds(
     let mut checked = 0;
     for (at, track) in song.tracks.iter().enumerate() {
         for (device, (_, _, spec)) in track_devices(track).into_iter().enumerate() {
-            for (place, control) in knob_order(&spec).into_iter().enumerate() {
-                let Some(control) = control else { continue };
-                assert_eq!(control_at(track, device, place as u16 + 1), Some(control));
+            let knobs = placement(&spec, track, false).knobs;
+            for (place, control) in knobs.into_iter().enumerate() {
+                let Some((control, _)) = control else {
+                    continue;
+                };
+                assert_eq!(
+                    control_at(track, device, place as u16 + 1, false),
+                    Some(control)
+                );
                 let Some(shown) = knob(control, track, &song) else {
                     continue;
                 };
@@ -913,4 +876,140 @@ fn a_smooth_knob_sets_the_fine_digits_and_values_read_as_the_app_writes_them() {
     let at = vt_roto::live::position_of(6, 8);
     let next = edit(&next, &turned(control, 0, &next, at).unwrap()).unwrap();
     assert_eq!(value_text(control, &next.tracks[0], &next), "Overdrive");
+}
+
+/// An app whose fake Roto takes vimtracker's setups over its serial port too, and stores one of
+/// Ableton Live's already.
+fn app_with_stored_setups() -> (App, vt_engine::link::Realtime, FakePorts) {
+    use vt_roto::bytes::PluginHash;
+    use vt_roto::fake::StoredSetup;
+    use vt_roto::serial::{StoredKind, StoredPlugin};
+    use vt_roto::store::Serial;
+    let (mut app, realtime, ports) = app_with_a_fake_roto();
+    ports.with(|fake| {
+        fake.setups.push(StoredSetup {
+            plugin: StoredPlugin {
+                hash: PluginHash::of("ableton drift"),
+                name: vt_roto::Label::new("Drift"),
+                kind: StoredKind::Normal,
+            },
+            knobs: Default::default(),
+            switches: Default::default(),
+        });
+    });
+    let serial = ports.clone();
+    app.roto.serial = Some(std::sync::Arc::new(move || {
+        Ok(Box::new(serial.clone()) as Box<dyn Serial + Send>)
+    }));
+    (app, realtime, ports)
+}
+
+fn press_button(ports: &FakePorts, button: u8) {
+    for value in [0x7F, 0x00] {
+        let ccs = ports.with(|fake| {
+            fake.control(ControlEvent::Switch {
+                index: button,
+                value,
+            })
+        });
+        ports.from_roto(ccs);
+    }
+}
+
+#[test]
+fn a_device_with_buttons_is_stored_and_its_buttons_switch_its_settings_lit_from_the_song() {
+    use vt_model::action::Action;
+    use vt_roto::bytes::PluginHash;
+    use vt_tui::roto::devices::stored_setups;
+    let (mut app, _realtime, ports) = app_with_stored_setups();
+    let comp = Insert::ALL[6];
+    let glue = comp.with_value(comp.type_param().unwrap(), 2);
+    app.apply(&Action::SetInsert {
+        track: 0,
+        slot: 0,
+        insert: glue,
+    });
+    let auto = glue.params().iter().position(|p| p.key == "auto").unwrap();
+    let auto_on = |song: &Song| song.tracks[0].inserts[0].value(auto) != 0;
+    app.set_roto(true);
+    // vimtracker's setups are written beside Live's, under its own hashes alone.
+    let wanted = stored_setups().len();
+    assert!(tick_until(&mut app, &ports, |fake| fake.setups.len() == wanted + 1));
+    let ours: BTreeSet<PluginHash> = stored_setups().iter().map(|s| s.hash()).collect();
+    ports.with(|fake| {
+        assert_eq!(fake.setups[0].plugin.name.as_str(), "Drift");
+        for request in &fake.serial_changes {
+            if let Some(hash) = request.plugin_changed() {
+                assert!(ours.contains(&hash), "{request:?}");
+            }
+        }
+    });
+    // The slot is then listed as the stored Glue, and chosen it maps its buttons, lit as the
+    // song has them.
+    let glue_hash = PluginHash::of("vimtracker:fx/comp-glue");
+    assert!(tick_until(&mut app, &ports, |fake| fake
+        .plugins
+        .get(&4)
+        .is_some_and(
+            |p| p.kind == PluginKind::Normal && p.hash == glue_hash
+        )));
+    ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(4))]);
+    let was = auto_on(app.song());
+    assert!(tick_until(&mut app, &ports, |fake| {
+        fake.shown == Some((4, 0)) && fake.light(4) == Some(was)
+    }));
+    ports.with(|fake| {
+        let threshold = fake.knob(1).unwrap().learned.clone().unwrap();
+        assert_eq!(threshold.name.as_str(), "Threshold");
+        assert!(!threshold.macro_param, "a stored device's knob");
+    });
+    // Auto's button, under the makeup, switches it, one undo step a press, and its light follows.
+    let depth = app.history.undo_depth();
+    press_button(&ports, 4);
+    assert!(tick_until_song(&mut app, |song| auto_on(song) != was));
+    assert!(tick_until(&mut app, &ports, |fake| fake.light(4) == Some(!was)));
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    press_button(&ports, 4);
+    assert!(tick_until_song(&mut app, |song| auto_on(song) == was));
+    assert!(tick_until(&mut app, &ports, |fake| fake.light(4) == Some(was)));
+    // Switched from the keys, the light follows too.
+    app.apply(&Action::SetInsert {
+        track: 0,
+        slot: 0,
+        insert: glue.with_value(auto, u8::from(!was)),
+    });
+    assert!(tick_until(&mut app, &ports, |fake| fake.light(4) == Some(!was)));
+    // A button with nothing on it changes nothing.
+    let depth = app.history.undo_depth();
+    press_button(&ports, 0);
+    settle(&mut app, 30);
+    assert_eq!(app.history.undo_depth(), depth);
+}
+
+#[test]
+fn without_vimtrackers_setups_a_devices_buttons_are_two_step_knobs() {
+    use vt_roto::store::Serial;
+    let (mut app, _realtime, ports) = app_with_a_fake_roto();
+    app.roto.serial = Some(std::sync::Arc::new(|| {
+        Err::<Box<dyn Serial + Send>, _>(vt_roto::transport::LinkError::NotFound)
+    }));
+    app.set_roto(true);
+    assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
+    // The serial port is tried a few times, a second apart, before it gives up.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !app.status.contains("knobs for now") && Instant::now() < deadline {
+        settle(&mut app, 20);
+    }
+    assert!(app.status.contains("knobs for now"), "{}", app.status);
+    assert!(!app.roto.stored_on_roto);
+    ports.with(|fake| {
+        assert!(fake.plugins.values().all(|p| p.kind == PluginKind::Macro));
+        assert!(fake.serial_changes.is_empty());
+    });
+    // The envelope's reset is on its sixth knob, as two steps.
+    let envelope = live_devices(&app.song().tracks[0], app.song(), false)
+        .into_iter()
+        .find(|device| device.name.as_str() == "Env 1")
+        .unwrap();
+    assert_eq!(envelope.controls[5].as_ref().unwrap().feel, Feel::Switch);
 }
