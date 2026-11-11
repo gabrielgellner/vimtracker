@@ -1147,6 +1147,10 @@ impl Engine {
                 if !run {
                     live.reduction = Default::default();
                 }
+                // A note heard while stopped works the LFOs out once, but they aren't moving.
+                if self.transport == Transport::Stopped {
+                    live.lfos = Default::default();
+                }
                 live
             }
             _ => LiveValues::default(),

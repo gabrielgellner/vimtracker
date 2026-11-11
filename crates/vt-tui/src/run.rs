@@ -402,10 +402,14 @@ pub fn draw_screen(
     } else {
         views::meter::split(body)
     };
+    // Only the Mod page has LFO cycles for the terminal to place dots on.
+    app.lfo_cycles_at = Default::default();
     match app.view {
         View::Chain => views::chain::draw(frame, view, app),
         View::Phrase => views::phrase::draw(frame, view, app),
-        View::Track => views::track::draw(frame, view, app),
+        View::Track => {
+            app.lfo_cycles_at = views::track::draw_finding_cycles(frame, view, app);
+        }
         View::Mixer => views::mixer::draw(frame, view, app),
         View::Audio => views::audio::draw(frame, view, app),
         View::Project => views::project::draw(frame, view, app),

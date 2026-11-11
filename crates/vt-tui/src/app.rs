@@ -34,6 +34,7 @@ use vt_model::constants::{
 use vt_model::groove::GrooveId;
 use vt_model::history::History;
 use vt_model::kit::KitEntry;
+use vt_model::lfo::LFOS_PER_TRACK;
 use vt_model::names::Names;
 use vt_model::order::Dealer;
 use vt_model::project::{self, ProjectError};
@@ -244,6 +245,10 @@ pub struct App {
     pub track_page: TrackPage,
     /// The ids of the envelopes' images, when they're drawn with kitty's graphics protocol.
     pub envelope_images: Option<[u32; TRACK_ENVELOPES]>,
+    /// The terminal's images of the Mod page's LFOs' cycles.
+    pub lfo_images: Option<[u32; LFOS_PER_TRACK]>,
+    /// Where each LFO's cycle was last drawn, for the terminal to place its dot on.
+    pub lfo_cycles_at: crate::views::track::CyclesAt,
     /// The id of the image of the filter's curve, likewise.
     pub filter_image: Option<u32>,
     /// The id of the image of the waveform of the sample the cursor's track plays, if it has one.
@@ -469,6 +474,8 @@ impl App {
             jam: vec![JamState::default(); MAX_TRACKS],
             track_page: TrackPage::default(),
             envelope_images: None,
+            lfo_images: None,
+            lfo_cycles_at: Default::default(),
             filter_image: None,
             waveform_image: None,
             slot_images: [None; vt_model::insert::INSERTS],

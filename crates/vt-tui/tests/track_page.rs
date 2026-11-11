@@ -422,6 +422,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         reduction: Default::default(),
         bypassed: Default::default(),
         after_trim: Default::default(),
+        lfos: Default::default(),
     });
     assert!(cut(&app).contains("FF00 ▕██▎     │▏"), "{}", cut(&app));
 }
@@ -1023,8 +1024,8 @@ fn the_track_page_draws_each_envelopes_shape() {
         terminal.backend().buffer().clone()
     };
     // `Env 1`'s device is the first, at the top left, with its title on the page's third row and
-    // its shape's first cell inside its panel's box, 42 along and two down.
-    let (top, image) = (2, (42, 4));
+    // its shape's first cell inside its panel's box, 46 along and two down.
+    let (top, image) = (2, (46, 4));
     let line = |buffer: &ratatui::buffer::Buffer, y: u16| {
         (0..74).map(|x| buffer[(x, y)].symbol()).collect::<String>()
     };
@@ -1471,10 +1472,10 @@ fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
         let title: String = (0..9).map(|x| buffer[(x, top)].symbol()).collect();
         assert_eq!(title, format!("╭─ Env {} ", slot + 1));
         // Its panel is against its right side, 2 in from its frame, in a faint box that's as tall
-        // as all inside the frame but its last row, which the settings' rows sit beside.
+        // as all inside the frame, the half size's 24 by 5 inside it.
         assert_eq!(buffer[(73, top)].symbol(), "╮");
-        assert_eq!(buffer[(41, top + 1)].symbol(), "┌");
-        assert_eq!(buffer[(70, top + 6)].symbol(), "┘");
+        assert_eq!(buffer[(45, top + 1)].symbol(), "┌");
+        assert_eq!(buffer[(70, top + 7)].symbol(), "┘");
         for x in 71..73 {
             assert_eq!(
                 buffer[(x, top + 3)].symbol(),
@@ -1483,13 +1484,14 @@ fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
             );
         }
         // The shape fills the box, each cell holding its row and column.
-        let first = &buffer[(42, top + 2)];
+        let first = &buffer[(46, top + 2)];
         assert_eq!(first.symbol(), "\u{10EEEE}\u{305}\u{305}");
         assert_eq!(first.fg, ratatui::style::Color::Rgb(red, green, blue));
-        assert_eq!(buffer[(43, top + 3)].symbol(), "\u{10EEEE}\u{30D}\u{30D}");
-        assert_eq!(buffer[(69, top + 2)].symbol(), "\u{10EEEE}\u{305}\u{36D}");
+        assert_eq!(buffer[(47, top + 3)].symbol(), "\u{10EEEE}\u{30D}\u{30D}");
+        assert_eq!(buffer[(69, top + 2)].symbol(), "\u{10EEEE}\u{305}\u{369}");
+        assert_eq!(buffer[(46, top + 6)].fg, first.fg, "five rows down");
         // The settings stop short of it.
-        let sustain: String = (24..41).map(|x| buffer[(x, top + 2)].symbol()).collect();
+        let sustain: String = (24..45).map(|x| buffer[(x, top + 2)].symbol()).collect();
         assert!(sustain.starts_with("Sustain   "), "{sustain}");
         assert!(sustain.ends_with("  "), "{sustain}");
     }
@@ -1504,14 +1506,15 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
         let mut out = Vec::new();
         graphics.sync(app, &mut out).unwrap();
         let out = String::from_utf8(out).unwrap();
-        (out.matches(",c=28,").count(), out)
+        (out.matches(",c=24,r=5,").count(), out)
     };
     // Nothing is sent until the page that shows them.
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
     press(&mut app, " 4L");
+    // The envelopes' shapes and the LFOs' cycles, all at the half size.
     assert_eq!(
         sync(&mut app, &mut graphics).0,
-        vt_model::constants::TRACK_ENVELOPES
+        vt_model::constants::TRACK_ENVELOPES + vt_model::lfo::LFOS_PER_TRACK
     );
     let first = app.envelope_images.unwrap();
     assert_ne!(first[0], first[1]);
@@ -1635,6 +1638,7 @@ fn the_filter_curve_moves_with_what_plays() {
         reduction: Default::default(),
         bypassed: Default::default(),
         after_trim: Default::default(),
+        lfos: Default::default(),
     };
 
     // Each new value draws it once, and it holds while the value does.
@@ -2145,20 +2149,21 @@ fn the_filter_curve_and_the_envelopes_are_smooth_at_their_sizes() {
     let filter = &sent[&app.filter_image.unwrap()];
     assert_eq!(png_size(filter), (735, 195));
     assert_eq!(png_chunk(filter, b"tRNS").len(), 11);
-    // The envelopes keep their 28 by 4.
+    // The envelopes and the LFOs' cycles are the half size, 24 by 5.
     press(&mut app, "L");
     let mut out = Vec::new();
     graphics.sync(&mut app, &mut out).unwrap();
     assert_eq!(
         String::from_utf8(out.clone())
             .unwrap()
-            .matches(",c=28,r=4,")
+            .matches(",c=24,r=5,")
             .count(),
-        3
+        6
     );
     let sent = vt_tui::screenshot::sent_images(&out);
-    for id in app.envelope_images.unwrap() {
-        assert_eq!(png_size(&sent[&id]), (420, 156));
+    let ids = app.envelope_images.unwrap().into_iter();
+    for id in ids.chain(app.lfo_images.unwrap()) {
+        assert_eq!(png_size(&sent[&id]), (360, 195));
         assert!(sent[&id].len() < 6000, "{}", sent[&id].len());
     }
 }

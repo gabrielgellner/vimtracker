@@ -143,8 +143,8 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-mod",
         rows: GATES,
-        keys: " 4Lji20<Enter>ji300<Enter>ji400<Enter>lkki60<Enter>gglK/cut<Enter>jjji+30<Enter>",
-        play: 0,
+        keys: " 4Lji20<Enter>ji300<Enter>ji400<Enter>lkki60<Enter>gglK/cut<Enter>jjji+30<Enter><Tab>",
+        play: 3,
         voice: None,
         kick: false,
         drums: false,

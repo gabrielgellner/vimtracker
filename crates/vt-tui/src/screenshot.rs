@@ -101,13 +101,15 @@ pub fn sent_images(sent: &[u8]) -> HashMap<u32, Vec<u8>> {
 }
 
 /// An image the program places itself rather than through placeholders, as it was last placed: at
-/// a cell, this many of the image's pixels into it across, with this many of its rows shown.
+/// a cell, this many of the image's pixels into it across and down, with this many of its rows
+/// shown.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Placed {
     pub id: u32,
     pub column: u16,
     pub row: u16,
-    pub offset: usize,
+    pub across: usize,
+    pub down: usize,
     pub height: usize,
 }
 
@@ -159,7 +161,8 @@ pub fn sent_placements(sent: &[u8], cell: (usize, usize)) -> Placements {
                             id: image,
                             column: column.saturating_sub(1),
                             row: row.saturating_sub(1),
-                            offset: number("X").unwrap_or(0) as usize,
+                            across: number("X").unwrap_or(0) as usize,
+                            down: number("Y").unwrap_or(0) as usize,
                             height: number("h").unwrap_or(0) as usize,
                         },
                     );
@@ -361,8 +364,8 @@ pub fn to_svg_placed(
             let _ = writeln!(
                 svg,
                 r#"<svg x="{}" y="{}" width="{}" height="{}" overflow="hidden"><image width="{}" height="{}" preserveAspectRatio="none" href="data:image/png;base64,{}"/></svg>"#,
-                f32::from(placed.column) * CELL_WIDTH + placed.offset as f32 * scale_x,
-                f32::from(placed.row) * CELL_HEIGHT,
+                f32::from(placed.column) * CELL_WIDTH + placed.across as f32 * scale_x,
+                f32::from(placed.row) * CELL_HEIGHT + placed.down as f32 * scale_y,
                 width as f32 * scale_x,
                 shown as f32 * scale_y,
                 width as f32 * scale_x,
@@ -460,10 +463,11 @@ mod tests {
         let png = png.png();
         let mut sent = Vec::new();
         store(&mut sent, 5, &png).unwrap();
-        let at = |column, offset| Placement {
+        let at = |column, across| Placement {
             column,
             row: 2,
-            offset,
+            across,
+            down: 0,
             height: 6,
         };
         place_at(&mut sent, 5, 1, at(1, 0)).unwrap();
@@ -477,7 +481,7 @@ mod tests {
         let columns: Vec<_> = placements
             .placed
             .iter()
-            .map(|placed| (placed.column, placed.offset))
+            .map(|placed| (placed.column, placed.across))
             .collect();
         assert_eq!(columns, [(4, 2), (3, 1)]);
 
