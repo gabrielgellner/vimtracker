@@ -57,7 +57,6 @@ command changes, with undo where the command has it:
 | Launch | When launched chains start | `:launch` |
 | Reset | When this section starts tracks again | `:reset` |
 | Seed | The seed chance FX play from | `:seed` |
-| Limiter | The limiter on the output | `:set limiter` |
 | Scale, Root | The scale for entering notes | `:set scale`, `root` |
 | Grid | How far the arrows move in Insert | `:set skip` |
 | Auto-jump | Whether entering moves on | `;` in Insert |
@@ -67,13 +66,15 @@ command changes, with undo where the command has it:
 | Audio | The device and rate | `Space 7` |
 
 `i` on Name edits it, and `C-r` there rolls a new one. `l` on BPM goes onto its fine
-part, the digits after the point. `Enter` on Audio opens the audio page.
+part, the digits after the point. `Enter` on Audio opens the audio page. The limiter
+isn't here: it's on the master's Sound page, after its `Level`, and `:set limiter`
+switches it too.
 
 It moves as the track page does: `j` `k` go between rows and keep their column,
 `h` `l` between settings, `=` `-` `+` `_` change a value, as do Cmd with `l` `h` `k`
 `j` without moving, `i` types one, as its
 command takes it, `K` lists the choices on Groove, Edit, Launch, Scale, Root and Grid,
-and switches the Limiter and Auto-jump, and `x` puts one back as a new project has it.
+and switches Auto-jump, and `x` puts one back as a new project has it.
 
 At the bottom are Save, Save as, Render, Open and New, which `Enter` does: they are
 `:w`, `:w` to a new folder, `:render`, `:e` and `:new`, and open the file explorer

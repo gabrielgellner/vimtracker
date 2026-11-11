@@ -7669,7 +7669,7 @@ fn the_project_page_sets_the_tempo_and_its_fine_part_as_bpm_does_with_undo() {
 #[test]
 fn the_project_page_edits_the_values_its_commands_set() {
     use vt_model::song::Launch;
-    use vt_tui::project_page::ProjectControl;
+    use vt_tui::project_page::{PROJECT_ROWS, ProjectControl};
     let (mut app, _realtime) = on_the_project_page();
 
     project_cursor_on(&mut app, ProjectControl::Groove);
@@ -7730,14 +7730,19 @@ fn the_project_page_edits_the_values_its_commands_set() {
     tap(&mut app, "u");
     assert_eq!(app.song().seed, 42);
 
-    project_cursor_on(&mut app, ProjectControl::Limiter);
-    assert!(app.song().limiter);
-    tap(&mut app, "K");
-    assert!(!app.song().limiter, "K switches it");
-    tap(&mut app, "=");
-    assert!(app.song().limiter, "= switches it on");
-    tap(&mut app, "u");
-    assert!(!app.song().limiter);
+    // The limiter is on the master's Sound page now, not here.
+    assert!(
+        !project_page_lines(&app)
+            .iter()
+            .any(|line| line.contains("Limiter")),
+        "{:#?}",
+        project_page_lines(&app)
+    );
+    assert!(
+        PROJECT_ROWS
+            .iter()
+            .all(|row| !row.iter().any(|control| control.label() == "Limiter"))
+    );
 
     project_cursor_on(&mut app, ProjectControl::Grid);
     assert_eq!(app.song().skip, 4);
@@ -7952,7 +7957,7 @@ fn the_project_page_keeps_the_column_through_j_and_k() {
     assert_eq!(app.project_control(), ProjectControl::AutoJump);
     tap(&mut app, "j");
     assert_eq!(app.project_control(), ProjectControl::Seed, "a row of one");
-    tap(&mut app, "jj");
+    tap(&mut app, "j");
     assert_eq!(app.project_control(), ProjectControl::GrooveShown);
     tap(&mut app, "j");
     assert_eq!(
@@ -7960,7 +7965,7 @@ fn the_project_page_keeps_the_column_through_j_and_k() {
         ProjectControl::Humanise,
         "back in the right column"
     );
-    tap(&mut app, "kkkk");
+    tap(&mut app, "kkk");
     assert_eq!(app.project_control(), ProjectControl::AutoJump);
     // A count goes further, and gg and G go to the ends, keeping it too.
     tap(&mut app, "2k");

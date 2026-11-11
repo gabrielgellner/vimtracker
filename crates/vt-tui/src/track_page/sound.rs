@@ -1,21 +1,28 @@
 //! The Sound page: a sound track's is a rack of four devices, its machine, its filter, its output
 //! and how it plays its notes, each with a grid of its own (the track pages study,
-//! `docs/designs/track-pages.md`, §2.1). A group's, a return's and the master's are still rows of
-//! their output's settings, the tables below.
+//! `docs/designs/track-pages.md`, §2.1). A group's, a return's and the master's is the same Output
+//! with holes where they lack a setting (§2.3). What feeds a group or a return is drawn under it,
+//! but has nothing for the cursor, so it isn't one of the page's devices.
 
 use vt_model::action::TrackControl;
 use vt_model::grid::GRID_ROWS;
-use vt_model::song::{Machine, Track};
+use vt_model::song::{Machine, Track, TrackKind};
 
 use super::controls::base;
 use super::{Control, DEVICE_COLUMNS, DeviceSpec, DeviceWidth};
 
-/// The Sound page's devices on a sound track, top to bottom: its machine, its filter, its output
-/// and how it plays. Each is a full-width device, and the four fill the rows inside the
-/// keyboard's box, as the FX page's slots do. Other tracks have none, and their page is rows.
+/// The Sound page's devices, top to bottom: on a sound track its machine, its filter, its output
+/// and how it plays, each a full-width device, the four filling the rows inside the keyboard's
+/// box, as the FX page's slots do. A group, a return and the master have only their output.
 pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
+    let output: &[&[Control]] = match track.kind {
+        TrackKind::Sound => &OUTPUT,
+        TrackKind::Group(_) => &GROUP_OUTPUT,
+        TrackKind::ReturnA | TrackKind::ReturnB => &RETURN_OUTPUT,
+        TrackKind::Master => &MASTER_OUTPUT,
+    };
     if !track.is_sound() {
-        return Vec::new();
+        return vec![device("Output", [], output)];
     }
     vec![
         machine(track.machine),
@@ -24,7 +31,7 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
             [Some(Control::FilterType), Some(Control::FilterMode)],
             &FILTER,
         ),
-        device("Output", [], &OUTPUT),
+        device("Output", [], output),
         device("Play", [], &PLAY),
     ]
 }
@@ -49,6 +56,20 @@ const OUTPUT: [&[Control]; 2] = [
         Control::Group,
     ],
 ];
+
+/// A group's output: a sound track's, with a hole where `Group` is, as a group can't be in one.
+const GROUP_OUTPUT: [&[Control]; 2] = [
+    &[Control::Trim, Control::Level, base(TrackControl::Pan)],
+    &[base(TrackControl::SendA), base(TrackControl::SendB)],
+];
+
+/// A return's: its gain, fader and place, with holes where the sends and `Group` are, as a return
+/// goes only to the master.
+const RETURN_OUTPUT: [&[Control]; 1] = [&[Control::Trim, Control::Level, base(TrackControl::Pan)]];
+
+/// The master's: its gain and fader, with a hole where `Pan` is, then the song's limiter. Down the
+/// columns it reads as the master plays: `Trim`, its slots, `Level`, then the limiter.
+const MASTER_OUTPUT: [&[Control]; 2] = [&[Control::Trim, Control::Level], &[Control::Limiter]];
 
 /// How it plays its notes: their pitch and how they join and end, then the steps' timing, then
 /// what cuts them off.
@@ -98,22 +119,3 @@ fn device<const TITLE: usize>(
         grid,
     }
 }
-
-/// The Sound page of a return, which has no machine or filter.
-pub const RETURN_ROWS: [&[Control]; 3] = [
-    &[Control::Trim],
-    &[Control::Level],
-    &[base(TrackControl::Pan)],
-];
-
-/// The Sound page of a group, which sends to the returns as well.
-pub const GROUP_ROWS: [&[Control]; 5] = [
-    &[Control::Trim],
-    &[Control::Level],
-    &[base(TrackControl::Pan)],
-    &[base(TrackControl::SendA)],
-    &[base(TrackControl::SendB)],
-];
-
-/// The Sound page of the master.
-pub const MASTER_ROWS: [&[Control]; 2] = [&[Control::Trim], &[Control::Level]];

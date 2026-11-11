@@ -46,6 +46,11 @@ down, an EQ with its curve, a limiter with its meter, and an empty slot:
 
 ![A track's FX page: four framed devices, a Glue compressor with its curve and gain reduction, an EQ with its curve, a limiter with its gain reduction and an empty slot](images/track-fx.svg)
 
+and a return's Sound page: the same Output a track has, with a meter of what reaches it after
+its trim, and under it Sends in, every track and group sending to it with how much:
+
+![Return B's Sound page: its Output with Trim, Level and Pan and a meter after its trim, and under it Sends in, listing three tracks and group 1 with their sends and bars](images/track-return.svg)
+
 and the sample page, on `Space 0`, with the track's sample as a big waveform, left above right,
 its start, end and loop marked, and an overview of the whole sample below with the part in view:
 

@@ -19,7 +19,8 @@ use super::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField};
 impl App {
     pub(super) fn open_control_picker(&mut self) {
         let control = self.track_control();
-        if matches!(control, Control::Mute | Control::Solo) {
+        // Something that's only on or off switches, as there's nothing to choose between.
+        if matches!(control, Control::Mute | Control::Solo | Control::Limiter) {
             self.toggle_control(control);
             return;
         }

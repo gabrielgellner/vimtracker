@@ -70,7 +70,7 @@ impl App {
     fn commit_control(&mut self, control: Control, text: &str) {
         let track = self.page_track();
         match control {
-            Control::Mute | Control::Solo => {}
+            Control::Mute | Control::Solo | Control::Limiter => {}
             Control::Sample => {}
             Control::Insert(_) => {}
             Control::InsertParam(slot, param) => {

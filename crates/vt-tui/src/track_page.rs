@@ -21,12 +21,11 @@ pub use device::{
 pub use fx::TakenInsert;
 pub use mixer::{MIXER, MIXER_ROWS, MIXER_START};
 pub(crate) use modulation::modulator_bypassed;
-pub use sound::{GROUP_ROWS, MASTER_ROWS, RETURN_ROWS};
 
 use std::sync::Arc;
 
 use vt_model::selection::Motion;
-use vt_model::song::{Track, TrackKind};
+use vt_model::song::Track;
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -62,12 +61,11 @@ impl Page {
         Self::ALL[to.min(Self::ALL.len() - 1)]
     }
 
-    /// The page's devices, in the order they're read, on a page that's a rack of them, each page's
-    /// from its own file: a sound track's Sound page, the Mod page's envelopes, LFOs, accumulator
-    /// and arpeggio, and the FX page's slots. A page with none is rows of settings
-    /// (`TrackPage::page_rows`). The cursor, `j`, `k`, `h`, `l`, `{` and `}` go through whatever
-    /// devices a page gives, laid out as its rack ([`rack_places`]), so a page becomes a rack by
-    /// giving them.
+    /// The page's devices, in the order they're read, each page's from its own file: the Sound
+    /// page's machine, filter, output and play, or a fixed track's output alone, the Mod page's
+    /// envelopes, LFOs, accumulator and arpeggio, and the FX page's slots. The cursor, `j`, `k`,
+    /// `h`, `l`, `{` and `}` go through whatever devices a page gives, laid out as its rack
+    /// ([`rack_places`]).
     pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {
         match self {
             Self::Sound => sound::devices(track),
@@ -136,45 +134,18 @@ pub struct TrackPage {
 }
 
 impl TrackPage {
-    /// The page's devices, on a page that's a rack of them.
+    /// The page's devices, or none with no track.
     pub fn devices(&self, track: Option<&Track>) -> Vec<DeviceSpec> {
         track.map_or_else(Vec::new, |track| self.page.devices(track))
     }
 
-    /// The rows of the page showing, on a page that isn't a rack: a fixed track's Sound page, which
-    /// depends on its kind. Every other page is a rack, whose rows are its devices'
-    /// (`Page::devices`).
-    pub fn page_rows(&self, track: Option<&Track>) -> &'static [&'static [Control]] {
-        let kind = track.map_or(TrackKind::Sound, |track| track.kind);
-        match (self.page, kind) {
-            (Page::Sound, TrackKind::Group(_)) => &GROUP_ROWS,
-            (Page::Sound, TrackKind::ReturnA | TrackKind::ReturnB) => &RETURN_ROWS,
-            (Page::Sound, TrackKind::Master) => &MASTER_ROWS,
-            _ => &[],
-        }
-    }
-
-    /// The page's rows as the cursor goes through them, each a list of places that can be holes it
-    /// steps over. On a rack they're each device's in turn. Elsewhere they're each row's settings
-    /// up to the first this track doesn't have.
+    /// The page's rows as the cursor goes through them, each device's in turn, each a list of
+    /// places that can be holes it steps over.
     pub fn rows(&self, track: Option<&Track>) -> Vec<Vec<Option<Control>>> {
-        let devices = self.devices(track);
-        if !devices.is_empty() {
-            return devices
-                .iter()
-                .flat_map(DeviceSpec::rows)
-                .map(Vec::from)
-                .collect();
-        }
-        self.page_rows(track)
+        self.devices(track)
             .iter()
-            .map(|row| {
-                row[..fields_in(row, track)]
-                    .iter()
-                    .copied()
-                    .map(Some)
-                    .collect()
-            })
+            .flat_map(DeviceSpec::rows)
+            .map(Vec::from)
             .collect()
     }
 
@@ -407,16 +378,6 @@ impl TrackPage {
             .min(column.len().saturating_sub(1));
         self.row = column[to] * DEVICE_ROWS + self.row % DEVICE_ROWS;
     }
-}
-
-/// How many settings a row of a page other than FX has on this track.
-fn fields_in(row: &[Control], track: Option<&Track>) -> usize {
-    track.map_or(row.len(), |track| {
-        row.iter()
-            .take_while(|control| control.exists_on(track))
-            .count()
-            .max(1)
-    })
 }
 
 impl App {

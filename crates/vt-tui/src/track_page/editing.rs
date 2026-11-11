@@ -15,6 +15,7 @@ use vt_model::song::{FilterType, Machine, Track};
 use vt_model::speed::Speed;
 
 use crate::app::App;
+use crate::input::command::Line;
 
 use super::controls::no_modes;
 use super::{AccumulatorField, ArpField, Control, EnvelopeField, LfoField};
@@ -292,6 +293,9 @@ impl App {
                     self.toggle_control(control);
                 }
             }
+            // `=` puts it on and `-` takes it off, as on the project page it was on.
+            Control::Limiter if self.song().limiter != up => self.set_limiter(up),
+            Control::Limiter => {}
             Control::Setting(_) => {
                 if let Some(id) = control.setting_on(&track) {
                     self.set_hex(control, change(track.setting(id)));
@@ -579,6 +583,9 @@ impl App {
                     self.toggle_control(control);
                 }
             }
+            // A new song's is on.
+            Control::Limiter if !self.song().limiter => self.set_limiter(true),
+            Control::Limiter => {}
             Control::Setting(_) => {
                 if let Some(id) = control.setting_on(&track)
                     && track.setting(id) != id.entry().default
@@ -801,11 +808,17 @@ impl App {
         found.unwrap_or(from)
     }
 
+    /// Switch the track's mute or solo, or the song's limiter.
     pub(super) fn toggle_control(&mut self, control: Control) {
-        if control == Control::Mute {
-            self.toggle_mute();
-        } else {
-            self.toggle_solo();
+        match control {
+            Control::Mute => self.toggle_mute(),
+            Control::Limiter => self.set_limiter(!self.song().limiter),
+            _ => self.toggle_solo(),
         }
+    }
+
+    /// Switch the song's limiter on or off, as `:set limiter` does, saying what that means.
+    fn set_limiter(&mut self, on: bool) {
+        self.line(Line::SetLimiter(on));
     }
 }

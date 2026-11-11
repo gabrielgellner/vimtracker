@@ -11,6 +11,7 @@ use ratatui::style::Color;
 use vt_engine::engine::Engine;
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
+use vt_model::action::{Action, TrackControl};
 use vt_model::constants::MAX_GROUPS;
 use vt_model::groove::GrooveId;
 use vt_model::lfo::{Lfo, Rate, Shape};
@@ -37,23 +38,84 @@ fn to_track(app: &mut App, track: usize) {
 
 #[test]
 fn a_fixed_tracks_pages_only_show_what_it_has() {
+    use vt_tui::track_page::Control;
     let (mut app, _rt) = app();
-    to_track(&mut app, 2 + MAX_GROUPS);
+    // Each fixed track's Output, with its settings where a sound track's are, and the keys that
+    // reach each from the top: a return's, a group's and the master's.
+    let pan = Control::Base(TrackControl::Pan);
+    let (send_a, send_b) = (
+        Control::Base(TrackControl::SendA),
+        Control::Base(TrackControl::SendB),
+    );
+    let all = [
+        Control::Trim,
+        Control::Level,
+        pan,
+        send_a,
+        send_b,
+        Control::Group,
+        Control::Limiter,
+    ];
+    let return_a = app.song().fixed_track(TrackKind::ReturnA).unwrap();
+    let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    let master = app.song().fixed_track(TrackKind::Master).unwrap();
+    let pages = [
+        (
+            return_a,
+            format!("{} Return A", vt_tui::glyphs::RETURN),
+            vec![(Control::Trim, "gg0"), (Control::Level, "j"), (pan, "j")],
+        ),
+        (
+            group,
+            format!("{} Group 1", vt_tui::glyphs::GROUP),
+            vec![
+                (Control::Trim, "gg0"),
+                (Control::Level, "j"),
+                (pan, "j"),
+                (send_a, "ggl"),
+                (send_b, "j"),
+            ],
+        ),
+        (
+            master,
+            format!("{} Master", vt_tui::glyphs::MASTER),
+            vec![
+                (Control::Trim, "gg0"),
+                (Control::Level, "j"),
+                (Control::Limiter, "ggl"),
+            ],
+        ),
+    ];
     press(&mut app, " 4");
-    let lines = track_page_text(&app);
-    let fixed = format!("{} Return A", vt_tui::glyphs::RETURN);
-    assert!(lines[0].starts_with(&fixed), "{}", lines[0]);
-    assert!(lines[2].starts_with("Trim"), "{}", lines[2]);
-    assert!(lines[3].starts_with("Level"), "{}", lines[3]);
-    assert!(lines[4].starts_with("Pan"), "{}", lines[4]);
-    assert!(!lines.iter().any(|line| line.contains("Machine")));
-    press(&mut app, "WW");
-    let lines = track_page_text(&app);
-    let master = format!("{} Master", vt_tui::glyphs::MASTER);
-    assert!(lines[0].starts_with(&master), "{}", lines[0]);
-    assert!(lines[2].starts_with("Trim"), "{}", lines[2]);
-    assert!(lines[3].starts_with("Level"), "{}", lines[3]);
-    assert!(!lines.iter().any(|line| line.contains("Pan")));
+    for (track, title, reached) in pages {
+        app.cursor.track = track;
+        let lines = track_text(&app);
+        assert!(lines[0].starts_with(&title), "{}", lines[0]);
+        assert_eq!(device_at(&lines, "Output"), (2, 0));
+        for found in ["Machine", "Filter", "Play"] {
+            assert!(
+                !lines
+                    .iter()
+                    .any(|line| line.contains(&format!("─ {found} ")))
+            );
+        }
+        for control in all {
+            let has = reached.iter().any(|(reached, _)| *reached == control);
+            let cell = format!("  {} ", control.label());
+            let shown = lines[2..11].iter().any(|line| line.contains(&cell));
+            assert_eq!(
+                shown,
+                has,
+                "{} on {title}:\n{}",
+                control.label(),
+                lines.join("\n")
+            );
+        }
+        for (control, keys) in reached {
+            press(&mut app, keys);
+            assert_eq!(app.track_control(), control, "{keys} on {title}");
+        }
+    }
 }
 
 /// The track page as lines of text, as big as it is on the author's screen: 150 by 40, beside the
@@ -2717,27 +2779,24 @@ fn the_track_page_puts_a_track_in_a_group_and_a_group_has_its_own_page() {
     press(&mut app, "x");
     assert_eq!(group(&app), None);
 
-    // A group's own page has its trim, level, pan and sends, on the right where a track's output
-    // is.
+    // A group's own page is an Output with its trim, level, pan and sends where a track's are,
+    // and a hole where its `Group` would be.
     // The empty groups are folded away, so this is with them shown.
     let at = app.song().fixed_track(TrackKind::Group(2)).unwrap();
     app.folds.set_all(false);
     to_track(&mut app, at);
-    let lines = track_page_text(&app);
+    let lines = track_text(&app);
     assert!(lines[0].contains("Group 2"), "{}", lines[0]);
-    let output = lines[2].find("Trim").unwrap();
-    assert!(output > 30, "{}", lines[2]);
-    let labels = [
-        (2, "Trim"),
-        (3, "Level"),
-        (4, "Pan"),
-        (5, "Send A"),
-        (6, "Send B"),
-    ];
-    for (line, label) in labels {
-        assert_eq!(lines[line].find(label), Some(output), "{}", lines[line]);
+    assert_eq!(device_at(&lines, "Output"), (2, 0));
+    // Where a label starts along its line, in characters.
+    let column = |line: &str, label: &str| line.find(label).map(|at| line[..at].chars().count());
+    let (trim, send) = (column(&lines[4], "Trim"), column(&lines[4], "Send A"));
+    let labels = [(4, "Trim", trim), (6, "Level", trim), (8, "Pan", trim)];
+    for (line, label, at) in labels.into_iter().chain([(6, "Send B", send)]) {
+        assert_eq!(column(&lines[line], label), at, "{}", lines[line]);
     }
-    press(&mut app, "ggjjjj");
+    assert!(!lines[8].contains("Group"), "{}", lines[8]);
+    press(&mut app, "gglj");
     assert_eq!(app.track_control().label(), "Send B");
     typed(&mut app, "60");
     assert_eq!(app.song().tracks[at].send_b, 0x60);
@@ -2750,20 +2809,55 @@ fn a_groups_page_lists_its_tracks_with_their_mutes_and_solos() {
     command(&mut app, "group 1 2-4");
     let at = app.song().fixed_track(TrackKind::Group(1)).unwrap();
     press(&mut app, &"W".repeat(at));
-    let lines = track_page_text(&app);
-    assert!(lines[2].starts_with("Tracks    02"), "{}", lines[2]);
-    assert!(lines[3].starts_with("          03"), "{}", lines[3]);
-    assert!(lines[4].starts_with("          04"), "{}", lines[4]);
-    assert!(!lines[5].contains("05"), "{}", lines[5]);
-    // The output stays beside the list.
-    assert!(lines[2].contains("Trim"), "{}", lines[2]);
-    assert!(lines[3].contains("Level"), "{}", lines[3]);
+    // The tracks the group sums, in a device of their own under its Output, three down each
+    // column, as the Output's settings go.
+    let tracks = |app: &App| {
+        let lines = track_text(app);
+        let (top, _) = device_at(&lines, "Tracks");
+        assert_eq!(top, 11, "under the Output");
+        let places: Vec<String> = [0, 29, 58, 87]
+            .into_iter()
+            .flat_map(|column| [2, 4, 6].map(|row| (column, row)))
+            .map(|(column, row)| {
+                let line = from_column(&lines[top + row], 3 + column);
+                line.chars().take(26).collect::<String>().trim().to_owned()
+            })
+            .filter(|place| !place.is_empty())
+            .collect();
+        places
+    };
+    assert_eq!(tracks(&app), ["02", "03", "04"]);
+    // Each with its own mute or solo.
     app.levels[2].mute = true;
-    assert!(
-        track_page_text(&app)[3].contains(vt_tui::glyphs::MUTE),
-        "{}",
-        track_page_text(&app)[3]
+    app.levels[3].solo = true;
+    let glyph = |glyph: char| format!("03 {glyph}");
+    assert_eq!(
+        tracks(&app),
+        [
+            "02".to_owned(),
+            glyph(vt_tui::glyphs::MUTE),
+            format!("04 {}", vt_tui::glyphs::SOLO)
+        ]
     );
+    app.levels[2].mute = false;
+    app.levels[3].solo = false;
+    // It follows the song: a track that joins, or leaves, as the cursor stays on the group.
+    command(&mut app, "group 1 6");
+    assert_eq!(tracks(&app), ["02", "03", "04", "06"]);
+    command(&mut app, "group off 3");
+    assert_eq!(tracks(&app), ["02", "04", "06"]);
+    press(&mut app, "u");
+    assert_eq!(tracks(&app), ["02", "03", "04", "06"]);
+    // Past twelve, the last place says how many more there are.
+    command(&mut app, "track add 8");
+    command(&mut app, "group 1 1-16");
+    let at = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    assert_eq!(app.cursor.track, at);
+    let shown = tracks(&app);
+    assert_eq!(shown.len(), 12);
+    assert_eq!(shown[..2], ["01", "02"]);
+    assert_eq!(shown[10], "11");
+    assert_eq!(shown[11], "+5 more");
     // An empty group says so. It's folded away, so `W` steps over it, and the picker reaches it.
     let empty = app.song().fixed_track(TrackKind::Group(2)).unwrap();
     press(&mut app, "W");
@@ -2771,7 +2865,81 @@ fn a_groups_page_lists_its_tracks_with_their_mutes_and_solos() {
     press(&mut app, " fbG2");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.cursor.track, empty);
-    assert!(track_page_text(&app)[2].starts_with("Tracks    None"));
+    assert_eq!(tracks(&app), ["None"]);
+}
+
+#[test]
+fn a_returns_sends_in_lists_what_sends_to_it_and_follows_the_song() {
+    let (mut app, _realtime) = on_track_page();
+    command(&mut app, "track add 4");
+    let return_b = app.song().fixed_track(TrackKind::ReturnB).unwrap();
+    let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    let send = |app: &mut App, track: usize, control: TrackControl, value: u8| {
+        app.apply(&Action::SetTrackBase {
+            track,
+            control,
+            value,
+        });
+    };
+    // Track 03 and a group send to B, and track 02 only to A.
+    send(&mut app, 1, TrackControl::SendA, 0x40);
+    send(&mut app, 2, TrackControl::SendB, 0x0C);
+    send(&mut app, group, TrackControl::SendB, 0x18);
+    app.cursor.track = return_b;
+    let sends_in = |app: &App| {
+        let lines = track_text(app);
+        let (top, _) = device_at(&lines, "Sends in");
+        assert_eq!(top, 11, "under the Output");
+        [0, 29, 58, 87]
+            .into_iter()
+            .flat_map(|column| [2, 4, 6].map(|row| (column, row)))
+            .map(|(column, row)| {
+                let line = from_column(&lines[top + row], 3 + column);
+                line.chars().take(26).collect::<String>().trim().to_owned()
+            })
+            .filter(|place| !place.is_empty())
+            .collect::<Vec<String>>()
+    };
+    // Each by its number and name, or a group by its letters, with its send and the send's bar.
+    let name = |track: usize| format!("{:02} {}", track + 1, app.song().tracks[track].name);
+    let hats = format!("{:<10}0C00 ▕▍        ▏", name(2).trim_end());
+    assert_eq!(
+        sends_in(&app),
+        [hats.clone(), "G1        1800 ▕▊        ▏".to_owned()]
+    );
+    // It follows the song: a send turned up joins, in the song's order, and one turned down to
+    // nothing leaves.
+    send(&mut app, 3, TrackControl::SendB, 0x30);
+    let shown = sends_in(&app);
+    assert_eq!(shown.len(), 3, "{shown:#?}");
+    assert!(shown[1].starts_with("04"), "{shown:#?}");
+    assert!(shown[1].contains("3000"), "{shown:#?}");
+    send(&mut app, 2, TrackControl::SendB, 0);
+    let shown = sends_in(&app);
+    assert_eq!(shown.len(), 2, "{shown:#?}");
+    assert!(shown[0].starts_with("04"), "{shown:#?}");
+    // Return A has its own: only track 02.
+    let return_a = app.song().fixed_track(TrackKind::ReturnA).unwrap();
+    app.cursor.track = return_a;
+    let shown = sends_in(&app);
+    assert_eq!(shown.len(), 1);
+    assert!(shown[0].starts_with("02"), "{shown:#?}");
+    assert!(shown[0].contains("4000"), "{shown:#?}");
+    // With nothing sending, it says so.
+    send(&mut app, 1, TrackControl::SendA, 0);
+    assert_eq!(sends_in(&app), ["None"]);
+    // Past twelve, the last place says how many more there are.
+    command(&mut app, "track add 8");
+    for track in 0..app.song().sound_tracks() {
+        send(&mut app, track, TrackControl::SendA, 0x10);
+    }
+    let return_a = app.song().fixed_track(TrackKind::ReturnA).unwrap();
+    app.cursor.track = return_a;
+    let sending = app.song().sound_tracks();
+    assert!(sending > 12);
+    let shown = sends_in(&app);
+    assert_eq!(shown.len(), 12);
+    assert_eq!(shown[11], format!("+{} more", sending - 11));
 }
 
 #[test]
