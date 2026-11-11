@@ -10,7 +10,6 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 
-use crate::glyphs;
 use crate::theme;
 use crate::views::widgets;
 use crate::views::widgets::grid::GRID_HEIGHT;
@@ -151,20 +150,17 @@ impl Widget for Device {
             .border_style(Style::new().fg(frame))
             .render(area, buf);
         let mut title = vec![Span::raw(" "), Span::styled(self.identity, theme::dim())];
-        // A switch's glyph is followed by the no-break space that keeps it to its cell, which is
-        // the first column of the gap after it, and the room for one is as wide.
+        // A switch is two cells, its glyph and the space it's drawn over, which is the first
+        // column of the gap after it, and the room for one is as wide.
         let switch = match self.switch {
-            Some(Switch::Toggle(on)) => Some(vec![
-                toggle::span(on),
-                Span::raw(glyphs::ICON_SPACE.to_string()),
-            ]),
-            Some(Switch::Room) => Some(vec![Span::raw("  ")]),
+            Some(Switch::Toggle(on)) => Some(toggle::span(on)),
+            Some(Switch::Room) => Some(Span::raw(" ".repeat(toggle::WIDTH))),
             None => None,
         };
         let mut gap = TITLE_GAP;
         if let Some(switch) = switch {
             title.push(Span::raw(TITLE_GAP));
-            title.extend(switch);
+            title.push(switch);
             gap = &TITLE_GAP[1..];
         }
         for control in self.controls {

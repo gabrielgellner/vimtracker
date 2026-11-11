@@ -268,21 +268,21 @@ pub fn fx_page_text(app: &App) -> Vec<String> {
 }
 
 /// A slot's title as the FX page writes it on its frame's top: its digit, its bypass's toggle, on
-/// or off, with the no-break space that keeps it to its cell, or on an empty slot the room for one,
+/// or off, two cells with the plain space it's drawn over, or on an empty slot the room for one,
 /// then what's after it.
 pub fn slot_title(slot: usize, switch: Option<bool>, controls: &str) -> String {
     let switch = match switch {
-        Some(on) => format!("{}\u{a0}", vt_tui::views::widgets::toggle::glyph(on)),
+        Some(on) => format!("{} ", vt_tui::views::widgets::toggle::glyph(on)),
         None => "  ".to_owned(),
     };
     format!("╭─ {}  {switch} {controls}", slot + 1)
 }
 
 /// An envelope's or an LFO's title, as `device_title` gives it: its name, its switch on or off,
-/// then what follows, such as its destination.
+/// two cells with the plain space it's drawn over, then what follows, such as its destination.
 pub fn modulator_title(identity: &str, on: bool, controls: &str) -> String {
     let switch = vt_tui::views::widgets::toggle::glyph(on);
-    format!("╭─ {identity}  {switch}\u{a0} {controls}")
+    format!("╭─ {identity}  {switch}  {controls}")
 }
 
 /// The chain the FX page's design shows: Glue, EQ3, an Overdrive and a Delay, with the cursor back
@@ -346,6 +346,50 @@ pub fn track_page_buffer(app: &App) -> ratatui::buffer::Buffer {
         .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
         .unwrap();
     terminal.backend().buffer().clone()
+}
+
+/// Where two drawings of the same page differ, which should be only toggles flipped: every other
+/// cell's character is the same, so nothing has moved, and every toggle in either is its glyph
+/// then a plain space in its colours, two cells, which the terminal draws the glyph over. Gives
+/// the cells that flipped.
+pub fn toggles_flipped(
+    before: &ratatui::buffer::Buffer,
+    after: &ratatui::buffer::Buffer,
+) -> Vec<(u16, u16)> {
+    use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
+    let switch = |symbol: &str| {
+        [SWITCH_ON, SWITCH_OFF]
+            .iter()
+            .any(|glyph| symbol == glyph.to_string())
+    };
+    assert_eq!(before.area, after.area);
+    let area = before.area;
+    let mut flipped = Vec::new();
+    for y in 0..area.height {
+        for x in 0..area.width {
+            for buffer in [before, after] {
+                if switch(buffer[(x, y)].symbol()) {
+                    let space = &buffer[(x + 1, y)];
+                    assert_eq!(
+                        space.symbol(),
+                        " ",
+                        "the second cell of the toggle at {x}, {y}"
+                    );
+                    assert_eq!(space.fg, buffer[(x, y)].fg, "at {x}, {y}");
+                    assert_eq!(space.bg, buffer[(x, y)].bg, "at {x}, {y}");
+                }
+            }
+            let (was, now) = (before[(x, y)].symbol(), after[(x, y)].symbol());
+            if was != now {
+                assert!(
+                    switch(was) && switch(now),
+                    "{was:?} became {now:?} at {x}, {y}, which isn't a toggle flipping"
+                );
+                flipped.push((x, y));
+            }
+        }
+    }
+    flipped
 }
 
 /// A cell's glyph and colours.

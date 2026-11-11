@@ -1314,8 +1314,8 @@ fn a_slots_toggle_follows_b_and_a_lock_while_the_song_plays() {
         assert_eq!(buffer[(3, first)].symbol(), "1");
         assert_eq!(
             buffer[(7, first)].symbol(),
-            "\u{a0}",
-            "it keeps to its cell"
+            " ",
+            "a plain space, which the terminal draws it over"
         );
         assert_eq!(buffer[(9, first)].symbol(), "D");
         let (glyph, color, _) = glyph_at(&buffer, (6, first));
@@ -1421,4 +1421,28 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
         Outcome::Done
     );
     assert_eq!(page.device_cursor(fixed), at(0, 1, 0));
+}
+
+#[test]
+fn a_toggle_takes_two_cells_and_nothing_moves_when_one_flips() {
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = on_fx_page();
+    // Glue, with its slot's switch in its title and Auto and Peak Clip in its grid, and the cursor
+    // on Auto, its colours over both the toggle's cells.
+    press(&mut app, "K");
+    press(&mut app, "Comp");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "l==hjjll");
+    assert_eq!(column_name(&app), "Auto");
+    let before = track_page_buffer(&app);
+    // Auto on and the slot bypassed: only those two toggles change, and nothing else moves.
+    press(&mut app, "=b");
+    let after = track_page_buffer(&app);
+    let flipped = toggles_flipped(&before, &after);
+    assert_eq!(flipped.len(), 2, "{flipped:?}");
+    // And back.
+    press(&mut app, "-b");
+    let back = track_page_buffer(&app);
+    assert_eq!(toggles_flipped(&after, &back), flipped);
+    assert!(toggles_flipped(&before, &back).is_empty());
 }

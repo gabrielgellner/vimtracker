@@ -923,3 +923,21 @@ fn three_lfos_dots_move_by_placing_alone_at_about_60_bytes_each() {
     assert!(all_moved > (frames - 1) * 9 / 10, "{all_moved}");
     assert!(bytes <= placements * 80, "{bytes} for {placements}");
 }
+
+#[test]
+fn a_modulators_toggles_take_two_cells_and_nothing_moves_when_one_flips() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    // On LFO 1's Retrig, which is off, its colours over both the toggle's cells.
+    press(&mut app, &format!("{}jjl", to_lfo(0)));
+    assert_eq!(app.track_control(), Control::Lfo(0, LfoField::Retrig));
+    let before = track_page_buffer(&app);
+    // Retrig on and LFO 1 switched out: only its title's switch and Retrig change, and nothing
+    // else moves.
+    press(&mut app, "=b");
+    let after = track_page_buffer(&app);
+    let flipped = toggles_flipped(&before, &after);
+    assert_eq!(flipped.len(), 2, "{flipped:?}");
+    press(&mut app, "-b");
+    assert!(toggles_flipped(&before, &track_page_buffer(&app)).is_empty());
+}
