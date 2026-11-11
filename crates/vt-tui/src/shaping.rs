@@ -1,5 +1,5 @@
 //! The shape panel: fill a selected column with a ramp, random values, a wave, two values in turn
-//! or a short list of them, heard while it's adjusted.
+//! or a short list of them, or rework the values there, heard while it's adjusted.
 
 use std::sync::Arc;
 
@@ -97,18 +97,25 @@ pub struct ShapePanel {
 impl ShapePanel {
     /// The rows on show. `Fill` comes first, as it decides the rest: a wave and `Alternate` have
     /// their own settings in place of a curve, a `List` has its values in place of the two ends,
+    /// a transform but `Scale` works from the values there with no settings of its own,
     /// and `Amount` only means something for some choices of rows, as `Hits` and `Rotate` do for
     /// a Euclidean one.
     pub fn rows(&self) -> Vec<ShapeRow> {
         let mut rows = vec![ShapeRow::Fill];
-        if self.shape.kind != FillKind::List {
-            rows.extend_from_slice(&[ShapeRow::From, ShapeRow::To]);
-        }
         rows.extend_from_slice(match self.shape.kind {
-            FillKind::Ramp | FillKind::Random => &[ShapeRow::Curve, ShapeRow::S],
-            FillKind::Wave => &[ShapeRow::Wave, ShapeRow::Rate, ShapeRow::Phase],
-            FillKind::Alternate => &[ShapeRow::Run],
+            FillKind::Ramp | FillKind::Random | FillKind::Scale => {
+                &[ShapeRow::From, ShapeRow::To, ShapeRow::Curve, ShapeRow::S]
+            }
+            FillKind::Wave => &[
+                ShapeRow::From,
+                ShapeRow::To,
+                ShapeRow::Wave,
+                ShapeRow::Rate,
+                ShapeRow::Phase,
+            ],
+            FillKind::Alternate => &[ShapeRow::From, ShapeRow::To, ShapeRow::Run],
             FillKind::List => &[ShapeRow::Values, ShapeRow::Run],
+            FillKind::Invert | FillKind::Shuffle | FillKind::Reverse => &[],
         });
         rows.push(ShapeRow::Where);
         match self.shape.place {
@@ -305,7 +312,8 @@ impl App {
     }
 
     /// Apply a shape to a range. A ramp's or random fill's ends are chosen again from what's there,
-    /// a wave or `Alternate` keeps the two values it moves between, and a `List` keeps its list.
+    /// a wave or `Alternate` keeps the two values it moves between, a `List` keeps its list, and
+    /// `Scale` the two it scales onto.
     pub(crate) fn shape_again(&mut self, range: StepRange, column: ShapeColumn, shape: Shape) {
         let Some(phrase) = self.phrase_id() else {
             return;
@@ -317,7 +325,7 @@ impl App {
             .map_or(&[][..], |p| p.steps());
         let (from, to) = match shape.kind {
             FillKind::Ramp | FillKind::Random => default_ends(steps, range, column),
-            FillKind::Wave | FillKind::Alternate | FillKind::List => (shape.from, shape.to),
+            _ => (shape.from, shape.to),
         };
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = song.seed.wrapping_add(self.shape_seed);

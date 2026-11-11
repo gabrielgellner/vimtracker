@@ -1,5 +1,5 @@
 //! Filling a column across a selection with a shaped ramp, random values, a wave, two values in
-//! turn, or a short list of them in turn.
+//! turn, or a short list of them in turn, or reworking the values already there.
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
 use crate::lfo::{Rate, Shape as Wave, wave};
@@ -34,16 +34,28 @@ pub enum FillKind {
     Alternate,
     /// Each value of a short list in turn, on the rows it fills, then round again.
     List,
+    /// The values there, from their own lowest and highest onto the two values, along the curve.
+    Scale,
+    /// The values there, each flipped within their own range.
+    Invert,
+    /// The values there, dealt to the same rows in a new order.
+    Shuffle,
+    /// The values there, in the opposite order.
+    Reverse,
 }
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 9] = [
         Self::Ramp,
         Self::Random,
         Self::Wave,
         Self::Alternate,
         Self::List,
+        Self::Scale,
+        Self::Invert,
+        Self::Shuffle,
+        Self::Reverse,
     ];
 
     /// The name on screen.
@@ -54,6 +66,10 @@ impl FillKind {
             Self::Wave => "Wave",
             Self::Alternate => "Alternate",
             Self::List => "List",
+            Self::Scale => "Scale",
+            Self::Invert => "Invert",
+            Self::Shuffle => "Shuffle",
+            Self::Reverse => "Reverse",
         }
     }
 
@@ -65,7 +81,19 @@ impl FillKind {
             Self::Wave => "Swinging between the two",
             Self::Alternate => "One value, then the other",
             Self::List => "A few values in turn",
+            Self::Scale => "The values there onto the two",
+            Self::Invert => "The values there, upside down",
+            Self::Shuffle => "The values there, in a new order",
+            Self::Reverse => "The values there, the other way",
         }
+    }
+
+    /// Whether it reworks the values already in the rows, rather than making new ones.
+    pub fn reworks(self) -> bool {
+        matches!(
+            self,
+            Self::Scale | Self::Invert | Self::Shuffle | Self::Reverse
+        )
     }
 }
 
@@ -182,6 +210,18 @@ impl ShapeColumn {
                 .get(slot)
                 .filter(|fx| fx.command == Some(command))
                 .map(|fx| fx.coarse()),
+        }
+    }
+
+    /// This column's value on a step with its fine part, if it has one. A velocity has none.
+    fn exact(self, step: &Step) -> Option<u16> {
+        match self {
+            Self::Velocity => self.value(step).map(|value| u16::from(value) << 8),
+            Self::Fx { slot, command } => step
+                .fx
+                .get(slot)
+                .filter(|fx| fx.command == Some(command))
+                .map(|fx| fx.value),
         }
     }
 
@@ -420,6 +460,9 @@ fn shaped(
     shape: &Shape,
 ) -> Vec<(usize, Shaped)> {
     let rows = targets(steps, range, column, shape.place, shape.seed);
+    if shape.kind.reworks() {
+        return reworked(steps, &rows, column, shape);
+    }
     let (Some(&first), Some(&last)) = (rows.first(), rows.last()) else {
         return Vec::new();
     };
@@ -437,13 +480,7 @@ fn shaped(
             let value = match shape.kind {
                 FillKind::Ramp => {
                     let t = (row - first) as f64 / across;
-                    let along = curved(t, shape.curve, shape.s);
-                    // Rounding the distance travelled means falling mirrors rising exactly.
-                    let moved = ((to - from).abs() * along + 0.5).floor();
-                    Shaped {
-                        exact: from + (to - from) * along,
-                        whole: (from + moved.copysign(to - from)).clamp(0.0, top) as u8,
-                    }
+                    along_line(from, to, curved(t, shape.curve, shape.s), top)
                 }
                 FillKind::Random => {
                     let span = high - low + 1;
@@ -472,8 +509,85 @@ fn shaped(
                     let value = list.get(turn % list.len().max(1)).copied().unwrap_or(0);
                     whole(f64::from(value).min(top))
                 }
+                FillKind::Scale | FillKind::Invert | FillKind::Shuffle | FillKind::Reverse => {
+                    unreachable!("reworked above")
+                }
             };
             (row, value)
+        })
+        .collect()
+}
+
+/// Where a line from one value to the other is, `along` of the way. Rounding the distance
+/// travelled means falling mirrors rising exactly.
+fn along_line(from: f64, to: f64, along: f64, top: f64) -> Shaped {
+    let moved = ((to - from).abs() * along + 0.5).floor();
+    Shaped {
+        exact: from + (to - from) * along,
+        whole: (from + moved.copysign(to - from)).clamp(0.0, top) as u8,
+    }
+}
+
+/// A transform's values: the ones already on the rows chosen, reworked. A row chosen with no value
+/// of this column's is left as it is.
+fn reworked(
+    steps: &[Step],
+    rows: &[usize],
+    column: ShapeColumn,
+    shape: &Shape,
+) -> Vec<(usize, Shaped)> {
+    let present: Vec<(usize, f64)> = rows
+        .iter()
+        .filter_map(|&row| {
+            let value = column.exact(steps.get(row)?)?;
+            Some((row, f64::from(value) / 256.0))
+        })
+        .collect();
+    let lowest = present
+        .iter()
+        .map(|(_, value)| *value)
+        .fold(f64::MAX, f64::min);
+    let highest = present
+        .iter()
+        .map(|(_, value)| *value)
+        .fold(f64::MIN, f64::max);
+    let top = f64::from(column.highest());
+    let (from, to) = (f64::from(shape.from).min(top), f64::from(shape.to).min(top));
+    // A value moved whole keeps its fine part.
+    let kept = |value: f64| Shaped {
+        exact: value,
+        whole: value.floor().clamp(0.0, top) as u8,
+    };
+    let mut values: Vec<f64> = present.iter().map(|(_, value)| *value).collect();
+    match shape.kind {
+        FillKind::Reverse => values.reverse(),
+        FillKind::Shuffle => {
+            // Fisher and Yates, from the seed, so the same seed deals the same.
+            for index in (1..values.len()).rev() {
+                let other = (mix(shape.seed ^ 0xA5A5, index) % (index as u64 + 1)) as usize;
+                values.swap(index, other);
+            }
+        }
+        _ => {}
+    }
+    present
+        .iter()
+        .zip(values)
+        .map(|(&(row, _), value)| {
+            let shaped = match shape.kind {
+                FillKind::Scale => {
+                    // All one value has no range to scale, so it goes to `from`.
+                    let t = if highest > lowest {
+                        (value - lowest) / (highest - lowest)
+                    } else {
+                        0.0
+                    };
+                    along_line(from, to, curved(t, shape.curve, shape.s), top)
+                }
+                FillKind::Invert => kept(lowest + highest - value),
+                _ => kept(value),
+            };
+            (row, shaped)
         })
         .collect()
 }
@@ -965,6 +1079,142 @@ mod tests {
         };
         let out = values(&steps, all(&steps), vol, &shape);
         assert_eq!(out[1].1, 0xF8);
+    }
+
+    fn reworking(kind: FillKind, from: u8, to: u8) -> Shape {
+        Shape {
+            kind,
+            ..ramp(from, to, 0, 0)
+        }
+    }
+
+    fn on_cut(values: &[u8]) -> Vec<Step> {
+        values
+            .iter()
+            .map(|value| format!("C-3 -- cut:{value:02X} --- ---").parse().unwrap())
+            .collect()
+    }
+
+    fn cut_values(steps: &[Step], shape: Shape) -> Vec<u8> {
+        let shape = Shape {
+            place: Where::Commands,
+            ..shape
+        };
+        values(steps, all(steps), CUT, &shape)
+            .iter()
+            .map(|(_, value)| *value)
+            .collect()
+    }
+
+    #[test]
+    fn scale_maps_the_values_own_range_onto_the_ends_along_the_curve() {
+        let steps = on_cut(&[0x20, 0x40, 0x60]);
+        let scaled = |from, to, curve| {
+            cut_values(
+                &steps,
+                Shape {
+                    curve,
+                    ..reworking(FillKind::Scale, from, to)
+                },
+            )
+        };
+        assert_eq!(scaled(0, 0xFF, 0), [0x00, 0x80, 0xFF]);
+        assert_eq!(scaled(0x40, 0x60, 0), [0x40, 0x50, 0x60]);
+        assert_eq!(scaled(0xFF, 0, 0), [0xFF, 0x7F, 0x00], "upside down");
+        let bent = scaled(0, 0xFF, 60);
+        assert_eq!((bent[0], bent[2]), (0, 0xFF));
+        assert!(bent[1] > 0x80, "{bent:X?}");
+        // All one value has no range, so it goes to From.
+        assert_eq!(
+            cut_values(&on_cut(&[0x30; 3]), reworking(FillKind::Scale, 0x10, 0x70)),
+            [0x10; 3]
+        );
+    }
+
+    #[test]
+    fn invert_flips_each_value_within_their_range() {
+        let steps = on_cut(&[0x10, 0x30, 0x70]);
+        assert_eq!(
+            cut_values(&steps, reworking(FillKind::Invert, 0, 0)),
+            [0x70, 0x50, 0x10]
+        );
+        // A fine part is flipped too.
+        let steps: Vec<Step> = ["cut:1080", "cut:2000", "cut:3000"]
+            .iter()
+            .map(|fx| format!("C-3 -- {fx} --- ---").parse().unwrap())
+            .collect();
+        let shape = Shape {
+            place: Where::Commands,
+            ..reworking(FillKind::Invert, 0, 0)
+        };
+        let out: Vec<u16> = exact_values(&steps, all(&steps), CUT, &shape)
+            .into_iter()
+            .map(|(_, value)| value)
+            .collect();
+        assert_eq!(out, [0x3000, 0x2080, 0x1080]);
+    }
+
+    #[test]
+    fn shuffle_deals_the_same_values_again_from_its_seed() {
+        let list: Vec<u8> = (0..16).map(|value| value * 8).collect();
+        let steps = on_cut(&list);
+        let dealt = |seed| {
+            cut_values(
+                &steps,
+                Shape {
+                    seed,
+                    ..reworking(FillKind::Shuffle, 0, 0)
+                },
+            )
+        };
+        let first = dealt(1);
+        assert_ne!(first, list);
+        assert_eq!(first, dealt(1));
+        assert_ne!(first, dealt(2));
+        let mut sorted = first.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, list, "the same values");
+    }
+
+    #[test]
+    fn reverse_gives_the_rows_their_values_the_other_way_and_keeps_to_where() {
+        let steps = rows(&[
+            "C-3 10 --- --- ---",
+            "--- -- --- --- ---",
+            "C-3 20 --- --- ---",
+            "C-3 30 --- --- ---",
+            "--- -- --- --- ---",
+        ]);
+        let out = values(
+            &steps,
+            all(&steps),
+            VEL,
+            &reworking(FillKind::Reverse, 0, 0),
+        );
+        assert_eq!(out, [(0, 0x30), (2, 0x20), (3, 0x10)]);
+        // On an FX column, the rows chosen without the command keep nothing.
+        let steps = rows(&[
+            "C-3 -- cut:10 --- ---",
+            "--- -- --- --- ---",
+            "C-3 -- cut:20 --- ---",
+            "--- -- cut:30 --- ---",
+        ]);
+        let shape = Shape {
+            place: Where::Notes,
+            ..reworking(FillKind::Reverse, 0, 0)
+        };
+        assert_eq!(
+            values(&steps, all(&steps), CUT, &shape),
+            [(0, 0x20), (2, 0x10)]
+        );
+        let shape = Shape {
+            place: Where::AllRows,
+            ..shape
+        };
+        assert_eq!(
+            values(&steps, all(&steps), CUT, &shape),
+            [(0, 0x30), (2, 0x20), (3, 0x10)]
+        );
     }
 
     #[test]

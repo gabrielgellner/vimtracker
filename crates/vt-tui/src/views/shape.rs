@@ -108,7 +108,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     }
     let hint = match panel.shape.kind {
         FillKind::Random if app.mode == Mode::Shape => "~ swap  r reroll",
+        FillKind::Shuffle if app.mode == Mode::Shape => "r deals again",
         FillKind::List => "~ reverse the list",
+        FillKind::Invert | FillKind::Shuffle | FillKind::Reverse => "From the values there",
         _ => "~ swap the ends",
     };
     lines.push(Line::styled(hint, theme::dim()));
