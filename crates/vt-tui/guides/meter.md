@@ -200,4 +200,32 @@ knob to letting it go is one undo step. A smooth knob sets the fine digits too. 
 screen shows the value as the app writes it, such as `-14.8 dB`, `1/16` or `Overdrive`,
 as it turns or when it's touched. When the keys, an undo or another song change a
 setting the Roto shows, its knob turns to it by itself and shows the new value; a knob
-being touched is never moved under your hand. MIX mode isn't vimtracker's mixer yet.
+being touched is never moved under your hand.
+
+In its MIX mode the Roto is the mixer, as it is for Live, and again it doesn't follow the
+cursor:
+
+*   **The knobs** are eight tracks' levels at first, and **the buttons** their mutes, lit
+    while a track is muted. The sound tracks come first, then the four groups, each in its
+    group's colour, and the arrows page through them eight at a time. Touching a knob
+    chooses its track.
+*   **Level's knob has a notch at 0 dB**, the Roto's own; fully down is silent and fully up
+    +6 dB.
+*   **Hold SEL** to change what they do: the knobs to Level, Pan or a send, and the buttons
+    to mutes or solos. To choose a send, press the SEND button again while holding SEL:
+    each press steps on, Send A to Send B. Let go of SEL and the knobs move it.
+*   **FUNC** shows the track you last touched alone: its Level, Pan, Send A and Send B on
+    the first four knobs.
+*   **Both arrows together** show the returns and the master, the arrows blinking green;
+    both again go back. The master can't be muted or soloed, so its button does nothing.
+*   **The meters** show each track's level as the mixer page does, turning yellow at -6 dB
+    and red at 0 dB.
+
+Its knobs edit the song as the keys do, one undo step from touch to let-go, and its mutes
+and solos are the keys' `Space m` and `Space s`. In either mode the Roto's transport button puts PLAY,
+STOP and RECORD on its buttons: PLAY plays from where it stopped, STOP pauses and, pressed
+again, goes back to the start, and RECORD arms recording as the keys do. PLAY is lit while
+it plays.
+
+Only one vimtracker can have the Roto. If another one has it, this one's `Roto` row says
+so; turn it off in the other and this one takes it within a second.

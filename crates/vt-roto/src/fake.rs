@@ -98,6 +98,16 @@ pub struct FakeRoto {
     pub tracks: BTreeMap<u16, TrackDetails>,
     /// The track the program last said was chosen.
     pub selected_track: Option<TrackDetails>,
+    /// The first track of the bank the program last said was shown.
+    pub first_track: u16,
+    /// How many sends the program last said MIX mode has.
+    pub sends: Option<u8>,
+    /// The sends' names the program last sent, by place.
+    pub send_names: BTreeMap<u8, Label>,
+    /// Where the program last said MIX mode's meters turn yellow and red.
+    pub meter_thresholds: Option<(u8, u8)>,
+    /// Which of MIX mode's meters the program last said are lit.
+    pub meter_states: Option<[bool; CONTROLS]>,
 }
 
 impl Default for FakeRoto {
@@ -132,6 +142,11 @@ impl FakeRoto {
             serial_changes: Vec::new(),
             tracks: BTreeMap::new(),
             selected_track: None,
+            first_track: 0,
+            sends: None,
+            send_names: BTreeMap::new(),
+            meter_thresholds: None,
+            meter_states: None,
         }
     }
 
@@ -211,6 +226,27 @@ impl FakeRoto {
             .iter()
             .rev()
             .find(|cc| cc[0] == cc::CONTROL_CHANGE && cc[1] == cc::SWITCH + button)
+            .map(|cc| cc[2] >= 0x40)
+    }
+
+    /// One side of a MIX meter as the program last set it, by the meter's place, or nothing if it
+    /// never sent it.
+    pub fn meter(&self, meter: u8, side: cc::Side) -> Option<u8> {
+        let number = cc::meter(meter, side, 0)[1];
+        self.received_ccs
+            .iter()
+            .rev()
+            .find(|cc| cc[1] == number)
+            .map(|cc| cc[2])
+    }
+
+    /// Whether the program last lit a transport button, by the Roto's number for it, or nothing
+    /// if it never sent its light.
+    pub fn transport_light(&self, button: u8) -> Option<bool> {
+        self.received_ccs
+            .iter()
+            .rev()
+            .find(|cc| cc[1] == cc::TRANSPORT + button)
             .map(|cc| cc[2] >= 0x40)
     }
 
@@ -319,6 +355,28 @@ impl FakeRoto {
             }
             ToRoto::DawSelectTrack(details) => {
                 self.selected_track = Some(details);
+                Vec::new()
+            }
+            ToRoto::FirstTrack(first) => {
+                self.first_track = first;
+                Vec::new()
+            }
+            ToRoto::NumSendTracks(count) => {
+                self.sends = Some(count);
+                Vec::new()
+            }
+            ToRoto::SendTrackNames { first, names } => {
+                for (at, name) in names.into_iter().enumerate() {
+                    self.send_names.insert(first.saturating_add(at as u8), name);
+                }
+                Vec::new()
+            }
+            ToRoto::SetVuMeterThresholds { yellow, red } => {
+                self.meter_thresholds = Some((yellow, red));
+                Vec::new()
+            }
+            ToRoto::SetVuMeterStates(states) => {
+                self.meter_states = Some(states);
                 Vec::new()
             }
             // The real one answers only a change of what's shown, in PLUGIN mode, of a macro

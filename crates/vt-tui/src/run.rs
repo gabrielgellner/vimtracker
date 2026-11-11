@@ -248,6 +248,9 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     app.roto.serial = Some(crate::roto::system_serial());
     app.roto.versions_path = vt_model::analysis::program_cache_folder()
         .map(|folder| folder.join(crate::roto::VERSIONS_FILE));
+    // Only one vimtracker on this machine has the Roto at a time: the one holding this lock.
+    app.roto.lock_path = vt_model::analysis::program_cache_folder()
+        .map(|folder| folder.join(crate::roto::LOCK_FILE));
     app.start_roto_if_on();
     // Off unless it was turned on here before, so the terminal keeps its mouse otherwise.
     if let Some(path) = crate::wheel::WheelSetting::path() {

@@ -1850,24 +1850,30 @@ impl Song {
     /// group heard, and soloing a group plays all its tracks. The returns and the master are
     /// always counted heard.
     pub fn heard(&self, track: usize) -> bool {
+        self.heard_by(track, |at| (self.tracks[at].mute, self.tracks[at].solo))
+    }
+
+    /// Whether a track is heard as [`Song::heard`] has it, by mutes and solos given for each
+    /// track as `(mute, solo)`, such as the ones the keys set while playing.
+    pub fn heard_by(&self, track: usize, silenced: impl Fn(usize) -> (bool, bool) + Copy) -> bool {
         let Some(this) = self.tracks.get(track) else {
             return false;
         };
         if this.is_group() {
-            return self.group_members(track).any(|member| self.heard(member));
+            return self
+                .group_members(track)
+                .any(|member| self.heard_by(member, silenced));
         }
         if !this.is_sound() {
             return true;
         }
-        let group = self.group_track_of(track).map(|group| &self.tracks[group]);
-        let any_solo = self
-            .tracks
-            .iter()
-            .take(self.sound_tracks() + MAX_GROUPS)
-            .any(|track| track.solo);
-        !this.mute
-            && !group.is_some_and(|group| group.mute)
-            && (!any_solo || this.solo || group.is_some_and(|group| group.solo))
+        let (mute, solo) = silenced(track);
+        let group = self.group_track_of(track).map(silenced);
+        let any_solo =
+            (0..self.tracks.len().min(self.sound_tracks() + MAX_GROUPS)).any(|at| silenced(at).1);
+        !mute
+            && !group.is_some_and(|(mute, _)| mute)
+            && (!any_solo || solo || group.is_some_and(|(_, solo)| solo))
     }
 
     /// A groove's pushes: one that comes with the program, or the project's own, which is a bar

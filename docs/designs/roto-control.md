@@ -1,12 +1,13 @@
 # The Roto-Control: a second, separate way of working
 
-**Status:** steps 1, 2 and 4 of milestone M30 (#410, #411 and #413) and #419, with decisions
-158 to 161. This note covers the whole milestone, #410 to #415, so the protocol layer fits what
+**Status:** steps 1 to 4 of milestone M30 (#410 to #413) and #419, with decisions 158 to 161
+and 164. This note covers the whole milestone, #410 to #415, so the protocol layer fits what
 the later steps need. Step 1 built the protocol, the link and `vimtracker roto-probe`; step 2
 shows a track's devices live on the Roto behind an on/off setting on the audio page, off by
 default (§4); step 4 makes its knobs edit the song, chooses its track and devices with its own
 FUNC and SEL, and switches devices in and out (§4.2); #419 lays each kind of device out for the
-Roto from data, and stores the devices with off/on settings on it, for their buttons (§4.3). §8
+Roto from data, and stores the devices with off/on settings on it, for their buttons (§4.3);
+step 3 makes MIX mode vimtracker's mixer and the transport buttons its transport (§4.4). §8
 has the author's answers.
 
 **The rule (the author's):** the Roto works independently of the screen. It's a separate,
@@ -123,7 +124,7 @@ track's mode has Level and Pan on its first page and the sends after them, as Ab
 Roto names those knobs itself, so Trim, which it has no name for, is on the Output device in PLUGIN
 mode instead. The meters are each track's peak from `Handle::latest`, the levels the mixer page
 draws. The Roto shows up to 64 tracks in its manual; vimtracker has up to 64 sound tracks and 4
-groups, so #412 checks how far `NUM TRACKS`' two bytes go before choosing what to leave off.
+groups, so #412 sends all 68 in `NUM TRACKS`' two bytes and leaves none off (§4.4).
 
 **PLUGIN mode is the device racks** (#413; the knob order below was #411's, and is now each kind of
 device's layout, §4.3). The Roto's plugin list is one track's devices, in the
@@ -449,6 +450,79 @@ Roto, saw Acid's, the envelope's and the arpeggio's pages as they should be, Glu
 `Retrig` labelled under `Phase`, its `Rate` showing each value as it turned and its `Phase` in
 `deg`.
 
+### 4.4 MIX mode and the transport, as built (#412)
+
+**The buttons are the firmware's, as in PLUGIN mode.** vimtracker follows the manual's MIX mode
+exactly and answers what the Roto says, as Ableton's script answers it, so nothing on screen
+changes what it shows (`vt-roto`'s `mix::MixView`, with the song as strips from `roto/mix.rs`):
+
+*   **The first view** is Level on the knobs and mutes on the buttons, for a bank of eight of the
+    sound tracks then the four groups, each named as the track list names it and in its group's
+    colour, a group marked as one. Every message that changes the view, `SET MIX ALL TRACKS
+    MODE`, `SET MIX TRACK MODE`, `SET ALL TRACKS MODE` and `SET FIRST TRACK`, is answered with
+    `NUM SEND TRACKS` (2), `NUM TRACKS`, `FIRST TRACK`, the bank's `TRACK DETAILS`, `TRACK
+    DETAILS END`, `DAW SELECT TRACK`, `SEND TRACK NAMES` (the returns' names, from the block of
+    eight the send shown is in), `SET MIX VU METER STATES`, then each knob's position and each
+    button's light as CCs.
+*   **Holding SEL** chooses the knobs' function, Level, Pan or a send, and the buttons', Mute or
+    Solo; Arm has no meaning yet and stays dark. The SEND button is a list: each press while SEL
+    is held steps to the next send, Send A to Send B (the author's check: only Send A seemed to
+    be offered until the button was pressed again).
+*   **FUNC** is track focus, on the track last touched: Level and Pan on knobs 1 and 2, then the
+    sends, six on the first page and eight on each after, as Ableton's script lays them out. The
+    page comes in `SET MIX TRACK MODE` in multiples of 8 (`00`, `08`), as the SysEx API has it.
+    A return or the master shows no sends. Its meter is the first, and its buttons do nothing,
+    as in both vendor scripts.
+*   **The arrows** page the banks (`SET FIRST TRACK`); **both together** go to the returns and
+    the master and back (`SET ALL TRACKS MODE`), each list keeping its own bank.
+*   **Touching a knob** says `ROTO SELECT TRACK`: it's the Roto's chosen track, the one PLUGIN
+    mode then shows the devices of, as Live's selected track is both modes'.
+*   **The default** (CC 64 with a knob's number) puts its fader where a new track has it.
+
+**Edits and lights.** A knob's move is the edit its key makes, through `App::apply`, one undo
+step from touch to let-go, as in PLUGIN mode (§4.2), on its own track whatever the cursor is on.
+Mutes and solos are the keys' `Space m` and `Space s`: live, not undo steps, and saved with the
+song. A mute button is lit while its track is muted, as both scripts light it, and an empty slot
+is lit too, as Ableton's script lights it; the master can't be muted, so its button is dark and
+does nothing. A meter is lit while its track is heard, by every mute and solo
+(`Song::heard_by`). After every change, from the Roto, the keys or an undo, only what differs is
+sent, a touched knob never moved under the hand and a knob just turned not sent back.
+
+**Level's notch is 0 dB.** The firmware gives MIX mode's Level knob a notch of its own, where Live
+has 0 dB. Measured on the author's Roto (firmware 3.3.0), a knob let go in it read 13004 of
+16383 every time; the API doesn't say. So MIX mode's Level has a curve of its own, both ways:
+`00` (-inf) at the bottom, `E0` (0 dB) at 13004, `F8` (+6 dB) at the top, even in dB either side
+(`mix::level_position` and `level_at`). On the plain scale `E0` would sit above the notch, which
+read -6.8 dB. Pan's centre is the knob's middle, and the sends have no notch.
+
+**The meters** are each shown track's peak as the mixer page draws it (`Meter`'s falling peak,
+by the app's meter scale, 0 to 127), sent 12 times a second, only those that moved. Their
+thresholds, set as the Roto connects, are where the app's own meters turn yellow and peach:
+-6 dB (95) and 0 dB (111).
+
+**On connecting** vimtracker also sends the send count and names, as Ableton's script does, and
+`REFRESH MIX MODE`. A Roto in MIX mode answers that by saying so, and is shown the mixer at
+once; one in PLUGIN mode says nothing.
+
+**How many tracks.** `NUM TRACKS` takes all 68 of a full song's sound tracks and groups, sent as
+two bytes, and nothing is left off. On the hardware the author paged through banks up to tracks
+33 to 40 of a 64-track song. Whether the firmware shows the ninth bank, the four groups after
+64 sound tracks, past its manual's "up to 64 tracks across 8 pages", is still to be seen.
+
+**The transport.** The Roto's transport button puts PLAY, STOP and RECORD on its buttons, in
+either mode, as CCs 28 to 30: PLAY plays from where it stopped, STOP pauses in place and, pressed
+again, goes back to the start, as Live's does, and RECORD arms recording as the keys do. The Roto
+asks for the transport's state as it shows them (`REQUEST TRANSPORT STATUS`), and from then until
+it says which mode it's in, PLAY's and RECORD's lights follow the app. The other five and the
+arrows are left for later (§8's answer 4).
+
+**What the real Roto did** (the author's, firmware 3.3.0, 2026-11-11): names, colours, levels,
+pans, both sends, mutes and solos, the banks, track focus, the returns and the master and the
+meters all as above; the knobs' motors following the keyboard's level changes; the transport
+playing, stopping and lit. The first transport check did nothing because that copy's audio
+output had stopped; with it playing, it worked.
+
+
 ## 5. Edits, feedback and rates
 
 **The same path as keys.** A knob's move becomes the same `Action` its key would, through
@@ -492,6 +566,14 @@ script answers the pings and takes it back without a replug. The serial port is 
 vimtracker opens it only for the second or so it takes, as the Roto connects, to check its own
 stored setups (§4.3), and with the Roto-Setup app holding it they're left as they are and the
 devices with buttons are shown live.
+
+**Two vimtrackers.** Two copies of vimtracker on one machine would answer the Roto as Live and
+vimtracker would, so only one has it (#412): the one holding `roto.lock` in the cache folder
+locked, which the system lets go of however the program ends. A second one turned on leaves the
+Roto alone, says so on its status line and its audio page's Roto row ("On, but another vimtracker
+has it: turn it off there"), and looks again every second, so it takes the Roto once the first
+lets it go. On the author's hardware check, a second copy left running had made the Roto's edits
+seem not to reach what was playing: they reached the copy that wasn't being heard.
 
 ## 7. Where the work happens
 
@@ -540,8 +622,8 @@ IOKit on macOS and from `/sys` on Linux. Both are pinned, as every dependency is
     doesn't follow the screen's grid; each kind of device has a layout of its own, in a musical
     order (§4.3).
 4.  **The extra transport buttons are unassigned for now**: session record, loop, punch in and
-    out, and automation stay dark. Play, stop and record go to vimtracker's transport, and the
-    arrows move between sections (#415).
+    out, and automation stay dark. Play, stop and record go to vimtracker's transport (#412,
+    §4.4), and the arrows move between sections (#415).
 
 The questions as they were put:
 
