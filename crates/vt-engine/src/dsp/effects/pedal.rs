@@ -56,8 +56,8 @@ const OVERDRIVE_TONE_HZ: f32 = 723.0;
 const OVERDRIVE_MOST_TREBLE: f32 = 1.5;
 /// Where its output's highs roll off.
 const OVERDRIVE_TOP_HZ: f32 = 12_000.0;
-/// Its `Level`, set so the Blade riff of `confusion-pump-panel`, at about -16 dBFS RMS, comes out
-/// as loud as it went in at `Amount`'s and `Tone`'s defaults.
+/// Its `Level`, set so a 303 line at about -16 dBFS RMS, as the riff decision 130 fitted it on was,
+/// comes out as loud as it went in at `Amount`'s and `Tone`'s defaults.
 const OVERDRIVE_LEVEL: f32 = 0.43;
 
 /// `Distortion`'s gain before it clips, in dB, at `Amount` `00`, and how much more `FF` adds:
@@ -72,7 +72,7 @@ const DISTORTION_KNEE: f32 = 10.0;
 /// OPAMP-21's 2nd harmonic, about 28 dB under the fundamental just over the clip and falling as
 /// it's driven harder.
 const DISTORTION_OFFSET: f32 = 0.086;
-/// What its clip's ceiling comes out at: Dist OPAMP-21's, 0.157, raised 3 dB so the Blade riff
+/// What its clip's ceiling comes out at: Dist OPAMP-21's, 0.157, raised 3 dB so a 303 line
 /// comes out as loud as it went in at the defaults.
 const DISTORTION_CEILING: f32 = 0.22;
 /// Its two high-passes going in, as Dist OPAMP-21's bass falls.

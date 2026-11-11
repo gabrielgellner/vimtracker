@@ -55,6 +55,19 @@ enum Command {
         #[arg(long)]
         response: Option<PathBuf>,
     },
+    /// Write one track's notes from a saved project, once through its chain, with the tempo and
+    /// its machine's settings, as TOML for tools/compare to play on every side. The project is
+    /// only read.
+    Notes {
+        project: PathBuf,
+        out: PathBuf,
+        /// The track by its name, instead of the first sound track.
+        #[arg(long)]
+        track: Option<String>,
+        /// The first sound track on this machine, `sampler` or a synth voice's key such as `acid`.
+        #[arg(long)]
+        machine: Option<String>,
+    },
     /// Make and manage kits.
     Kits {
         #[command(subcommand)]
@@ -160,6 +173,17 @@ fn main() -> std::process::ExitCode {
             case,
             write_input,
             response,
+        })
+        .map_err(|e| e.to_string()),
+        Some(Command::Notes {
+            project,
+            out,
+            track,
+            machine,
+        }) => vt_tui::track_notes::run(&vt_tui::track_notes::NotesRequest {
+            project,
+            out,
+            choice: vt_tui::track_notes::Choice { track, machine },
         })
         .map_err(|e| e.to_string()),
         None => vt_tui::run::run(cli.project).map_err(|e| e.to_string()),

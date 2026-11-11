@@ -1,8 +1,8 @@
 """Render a spec through both sides, ours with `vimtracker probe` and the reference with its plugin,
 print a first comparison of the two, and write a report of it as a web page.
 
-Usage: run.py <spec.toml> [--case NAME ...] [--binary PATH] [--out FOLDER] [--report PAGE] [--fresh-live]
-       run.py --suite NAME [--binary PATH] [--fresh-live]
+Usage: run.py <spec.toml> [--case NAME ...] [--binary PATH] [--out FOLDER] [--report PAGE] [--fresh-live] [--song FOLDER]
+       run.py --suite NAME [--binary PATH] [--fresh-live] [--song FOLDER]
 
 Every case is rendered unless some are named. The WAVs go in `out/<spec>/` beside this script,
 as `<case>-ours.wav` and `<case>-<reference>.wav` for each of the spec's references. Each case
@@ -18,6 +18,10 @@ A reference can be one of Ableton Live's devices, rendered through Live in real 
 `--suite nuance` runs every `specs/nuance-*.toml`, writes each one's report into `out/nuance/`,
 and an `index.html` there ranking our biggest gaps from the references' consensus first
 (`consensus.py`).
+
+A spec that plays a song's line reads it from the song as it runs (`song_line.py`), from the
+project folder `--song` gives, or else `VT_COMPARE_SONG`, or else the spec's own. With no song
+there, it's skipped with a message, as is a spec whose input is its render.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ import numpy as np
 from scipy.io import wavfile
 
 import render_reference
+import song_line
 import spec as specs
 from measure import octave_response, static_curve, summary
 
@@ -107,7 +112,9 @@ def make_input(spec, case, binary) -> None:
         return
     target = (spec.folder / given["path"]).resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
-    probe(binary, spec.folder / made_by["spec"], target, made_by.get("case"))
+    # Read as a spec, so one that plays a song's line is written from the song first.
+    maker = specs.read(spec.folder / made_by["spec"])
+    probe(binary, maker.path, target, made_by.get("case"))
 
 
 def compare_case(spec, case, binary, folder, references, quiet=False) -> Rendered:
@@ -190,7 +197,11 @@ def run_suite(name: str, binary: Path) -> None:
     pages = []
     for path in paths:
         print(f"{path.name}: rendering", file=sys.stderr, flush=True)
-        spec, _, rendered = run_spec(path, binary, folder=folder / path.stem, quiet=True)
+        try:
+            spec, _, rendered = run_spec(path, binary, folder=folder / path.stem, quiet=True)
+        except song_line.Skipped as skipped:
+            print(skipped, file=sys.stderr, flush=True)
+            continue
         page = folder / f"{path.stem}.html"
         built = report.write(spec, rendered, page)
         pages.append((spec, page, built))
@@ -214,6 +225,11 @@ def main() -> None:
     parser.add_argument("--out", type=Path, help="where the WAVs go")
     parser.add_argument("--report", type=Path, help="write a report of the spec to this page")
     parser.add_argument("--fresh-live", action="store_true", help="render Live's devices again, not from the cache")
+    parser.add_argument(
+        "--song",
+        type=Path,
+        help=f"the project folder a spec that plays a song's line reads, over {song_line.ENVIRONMENT} and the spec's own",
+    )
     args = parser.parse_args()
     if args.fresh_live:
         import live_bridge
@@ -221,12 +237,18 @@ def main() -> None:
         live_bridge.FRESH = True
     if not args.binary.exists():
         raise SystemExit(f"{args.binary} isn't there: run `cargo build --release` first")
+    song_line.BINARY = args.binary
+    song_line.CHOSEN = args.song
     if args.suite:
         run_suite(args.suite, args.binary)
         return
     if args.spec is None:
         parser.error("give a spec, or a --suite")
-    spec, folder, rendered = run_spec(args.spec, args.binary, args.case, args.out)
+    try:
+        spec, folder, rendered = run_spec(args.spec, args.binary, args.case, args.out)
+    except song_line.Skipped as skipped:
+        print(skipped, file=sys.stderr)
+        return
     sys.stdout.flush()
     print(f"\nWAVs in {folder}", file=sys.stderr)
     if args.report is not None:

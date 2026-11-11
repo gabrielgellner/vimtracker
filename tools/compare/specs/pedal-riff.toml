@@ -1,6 +1,7 @@
-# The Blade riff, our Acid's render of `nuance-chirp-riff`, through Distort's `Distortion` pedal
-# and through Arturia's Dist OPAMP-21, the same samples into both, for the spectrum and dynamics a
-# pedal gives a 303 line (#361). The riff is rendered first, into `out/inputs/`, by `run.py`.
+# A song's Acid line, our Acid's render of `nuance-chirp-riff`, through Distort's `Distortion`
+# pedal and through Arturia's Dist OPAMP-21, the same samples into both, for the spectrum and
+# dynamics a pedal gives a 303 line (#361). The line is read from the song and rendered first, into
+# `out/inputs/`, by `run.py`, which skips this spec if the song isn't there (song_line.py).
 #
 #   uv run run.py specs/pedal-riff.toml --report out/pedal-riff.html
 
@@ -8,8 +9,8 @@ rate = 48000
 
 [input]
 signal = "file"
-path = "../out/inputs/blade-acid.wav"
-made_by = { spec = "nuance-chirp-riff.toml", case = "blade" }
+path = "../out/inputs/song-acid.wav"
+made_by = { spec = "nuance-chirp-riff.toml", case = "song" }
 
 [ours]
 effects = ["distort"]
@@ -34,9 +35,9 @@ input_lpf_hz = 20000.0
 
 [report]
 kind = "spectrum"
-title = "The Blade riff through Distortion and Dist OPAMP-21"
+title = "A song's Acid line through Distortion and Dist OPAMP-21"
 about = """
-The Acid line of `confusion-pump-panel`, the Blade riff, as our Acid plays it in \
+A song's Acid line, read from the song as this ran, as our Acid plays it in \
 `nuance-chirp-riff`, put through our Distort slot's `Distortion` and through Arturia's Dist \
 OPAMP-21, the same samples into both. `Amount`'s place is OPAMP-21's `Drive`.
 
@@ -45,8 +46,8 @@ alone is compared. At our default `Tone`, `80`, it's against OPAMP-21's `Normal`
 SansAmp's own voicing, whose amp and speaker roll off the highs much more steeply than our tone's \
 12 dB an octave.
 
-Our `Distortion` comes out about 3 dB louder than OPAMP-21 by design: its ceiling is raised so the \
-riff comes out as loud as it went in at the defaults. The shape and the level over time are \
+Our `Distortion` comes out about 3 dB louder than OPAMP-21 by design: its ceiling is raised so a \
+303 line comes out as loud as it went in at the defaults. The shape and the level over time are \
 compared with that taken out.
 """
 

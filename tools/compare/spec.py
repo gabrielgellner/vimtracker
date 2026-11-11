@@ -143,6 +143,11 @@ def flatten(table: dict, prefix: str = "") -> dict:
 
 
 def read(path: Path) -> Spec:
+    """A spec, or for a stub that names a song, the whole spec written from the song, which
+    raises `song_line.Skipped` if the song isn't there."""
+    import song_line
+
+    path = song_line.resolve(path)
     with open(path, "rb") as file:
         return Spec(path=path, data=tomllib.load(file))
 

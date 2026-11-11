@@ -39,7 +39,7 @@ fn sine(hertz: f32, level: f32, seconds: f32) -> Vec<f32> {
 }
 
 /// Something like an acid line: a bright sawtooth at 55 Hz, falling and coming back each eighth
-/// of a second as a 303's notes do, at about the Blade riff's level, -16 dBFS RMS.
+/// of a second as a 303's notes do, at about -16 dBFS RMS, the level the pedals were fitted at.
 fn acid_line(seconds: f32) -> Vec<f32> {
     let mut low = 0.0;
     (0..(seconds * RATE as f32) as usize)

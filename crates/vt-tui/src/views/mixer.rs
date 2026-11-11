@@ -3,7 +3,7 @@
 //! stand apart, and a group's strip and the tracks in it share its colour (decision 126). A folded
 //! group's tracks are left out, with its name marked, and an empty group is folded away unless it's
 //! opened (decision 128). Over each part, on the row under the title, is its name on a rule, as a
-//! device's title is on its frame, the cursor's brighter (decision 143).
+//! device's title is on its frame, the cursor's brighter (decision 144).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
