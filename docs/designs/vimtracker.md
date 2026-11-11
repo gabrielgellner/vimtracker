@@ -787,7 +787,7 @@ writes from the manual's cut-down Symbols Nerd Font Mono, as a picture on a page
 Font to use (decision 156).
 `docs/terminal-notes.md` has what's been measured and what's left to check by hand.
 
-**Decisions:** 20, 50, 56, 57, 93, 102, 107, 109, 114, 141, 153 and 154.
+**Decisions:** 20, 50, 56, 57, 93, 102, 107, 109, 114, 141, 153, 154 and 156.
 
 ### Offline paths
 

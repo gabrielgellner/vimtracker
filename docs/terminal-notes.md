@@ -221,9 +221,10 @@ A `symbol_map` in `kitty.conf` that sends those codepoints to a font without the
 glyph is a constant in `glyphs.rs` named after its Nerd Font name and codepoint, such as
 `nf-fa-toggle_on`, U+F205.
 
-The manual's screenshots name ordinary monospace fonts first, then `Symbols Nerd Font Mono` and
-a few patched Nerd Fonts, which a browser falls back to a character at a time, so the icons show
-where any of those is installed and are boxes elsewhere. The explorer's screenshot has them.
+A browser has no Nerd Font, so the web manual carries its own (decision 156): Symbols Nerd Font
+Mono cut down to the symbols `glyphs.rs` names, which its CSS uses for the private use areas only,
+and the screenshots draw each symbol as its outline from the same font, as an SVG shown as an image
+can't use the page's fonts. `just symbols-font` makes both again after a symbol is added.
 
 ### Width
 
