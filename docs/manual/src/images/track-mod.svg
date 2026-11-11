@@ -9,12 +9,12 @@
 <text x="1125" y="14" fill="#949cbb" textLength="225" lengthAdjust="spacingAndGlyphs" xml:space="preserve">CPU  0%  late 0  xruns 0 </text>
 <text x="0" y="52" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="52" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Env 1</text>
-<use href="#sf205" transform="matrix(0.0043945313 0 0 -0.0043945313 90 50.198242)" fill="#a6d189"/>
-<text x="99" y="52" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Vol </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 52.896484)" fill="#a6d189"/>
+<text x="108" y="52" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Vol </text>
 <text x="153" y="52" fill="#51576d" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <text x="684" y="52" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="52" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">LFO 1</text>
-<use href="#sf205" transform="matrix(0.0043945313 0 0 -0.0043945313 774 50.198242)" fill="#a6d189"/>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 52.896484)" fill="#a6d189"/>
 <text x="801" y="52" fill="#c6d0f5" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Cut</text>
 <text x="837" y="52" fill="#949cbb" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <text x="0" y="71" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -62,7 +62,7 @@
 <text x="711" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Rate      </text>
 <text x="801" y="128" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4        </text>
 <text x="900" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Retrig    </text>
-<use href="#sf204" transform="matrix(0.0043945313 0 0 -0.0043945313 990 126.19824)" fill="#737994"/>
+<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 990 128.89648)" fill="#737994"/>
 <text x="1089" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="128" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│   6 </text>
@@ -84,7 +84,7 @@
 <text x="27" y="166" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Release   </text>
 <text x="117" y="166" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">400 ms     </text>
 <text x="216" y="166" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Reset     </text>
-<use href="#sf205" transform="matrix(0.0043945313 0 0 -0.0043945313 306 164.19824)" fill="#a6d189"/>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 306 166.89648)" fill="#a6d189"/>
 <text x="405" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="630" y="166" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="657" y="166" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -114,12 +114,12 @@
 <rect x="1449" y="190" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="223" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="223" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Env 2</text>
-<use href="#sf205" transform="matrix(0.0043945313 0 0 -0.0043945313 90 221.19824)" fill="#a6d189"/>
-<text x="99" y="223" fill="#c6d0f5" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Cut </text>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 223.89648)" fill="#a6d189"/>
+<text x="108" y="223" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Cut </text>
 <text x="153" y="223" fill="#51576d" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <text x="684" y="223" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="223" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">LFO 2</text>
-<use href="#sf205" transform="matrix(0.0043945313 0 0 -0.0043945313 774 221.19824)" fill="#a6d189"/>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 223.89648)" fill="#a6d189"/>
 <text x="801" y="223" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="837" y="223" fill="#51576d" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <rect x="1395" y="209" width="18" height="19" fill="#292c3c"/>
@@ -177,7 +177,7 @@
 <text x="711" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Rate      </text>
 <text x="801" y="299" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4        </text>
 <text x="900" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Retrig    </text>
-<use href="#sf204" transform="matrix(0.0043945313 0 0 -0.0043945313 990 297.19824)" fill="#737994"/>
+<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 990 299.89648)" fill="#737994"/>
 <text x="1089" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="299" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -199,7 +199,7 @@
 <text x="27" y="337" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Release   </text>
 <text x="117" y="337" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">50 ms      </text>
 <text x="216" y="337" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Reset     </text>
-<use href="#sf205" transform="matrix(0.0043945313 0 0 -0.0043945313 306 335.19824)" fill="#a6d189"/>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 306 337.89648)" fill="#a6d189"/>
 <text x="405" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="630" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="657" y="337" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -229,12 +229,12 @@
 <rect x="1449" y="361" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="394" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Env 3</text>
-<use href="#sf205" transform="matrix(0.0043945313 0 0 -0.0043945313 90 392.19824)" fill="#a6d189"/>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 394.89648)" fill="#a6d189"/>
 <text x="117" y="394" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="153" y="394" fill="#51576d" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <text x="684" y="394" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">LFO 3</text>
-<use href="#sf205" transform="matrix(0.0043945313 0 0 -0.0043945313 774 392.19824)" fill="#a6d189"/>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 394.89648)" fill="#a6d189"/>
 <text x="801" y="394" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="837" y="394" fill="#51576d" textLength="513" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────────────────╮</text>
 <rect x="1395" y="380" width="18" height="19" fill="#292c3c"/>
@@ -292,7 +292,7 @@
 <text x="711" y="470" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Rate      </text>
 <text x="801" y="470" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4        </text>
 <text x="900" y="470" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Retrig    </text>
-<use href="#sf204" transform="matrix(0.0043945313 0 0 -0.0043945313 990 468.19824)" fill="#737994"/>
+<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 990 470.89648)" fill="#737994"/>
 <text x="1089" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="470" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -314,7 +314,7 @@
 <text x="27" y="508" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Release   </text>
 <text x="117" y="508" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">50 ms      </text>
 <text x="216" y="508" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Reset     </text>
-<use href="#sf205" transform="matrix(0.0043945313 0 0 -0.0043945313 306 506.19824)" fill="#a6d189"/>
+<use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 306 508.89648)" fill="#a6d189"/>
 <text x="405" y="508" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="630" y="508" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="657" y="508" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -391,7 +391,7 @@
 <text x="711" y="641" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mode      </text>
 <text x="801" y="641" fill="#c6d0f5" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Up            </text>
 <text x="927" y="641" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Retrig    </text>
-<use href="#sf204" transform="matrix(0.0043945313 0 0 -0.0043945313 1017 639.19824)" fill="#737994"/>
+<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 1017 641.8965)" fill="#737994"/>
 <text x="1341" y="641" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="627" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="627" width="18" height="19" fill="#292c3c"/>

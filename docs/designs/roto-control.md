@@ -1,6 +1,6 @@
 # The Roto-Control: a second, separate way of working
 
-**Status:** step 1 of milestone M30 (#410), with decision 157. This note covers the whole milestone,
+**Status:** step 1 of milestone M30 (#410), with decision 158. This note covers the whole milestone,
 #410 to #415, so the protocol layer built now fits what the later steps need. Step 1 builds only the
 protocol, the link and `vimtracker roto-probe`; nothing the Roto does reaches the song yet. §8 has
 the questions for the author.

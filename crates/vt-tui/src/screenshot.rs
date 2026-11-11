@@ -11,6 +11,7 @@ use base64::engine::general_purpose::STANDARD;
 use ratatui::buffer::Buffer;
 use ratatui::style::{Color, Modifier};
 
+use crate::glyphs;
 use crate::kitty::{PLACEHOLDER, POSITIONS};
 use crate::theme;
 
@@ -47,11 +48,18 @@ fn cell_symbol(symbol: &str) -> Option<char> {
     (chars.next().is_none() && symbol_path(c).is_some()).then_some(c)
 }
 
-/// Where a symbol's outline is put to fill a cell's width, as kitty draws a Nerd Font Mono
-/// symbol, upright and in the middle of the cell's height: an SVG transform from the font's
-/// units, y up, to the picture's, from the cell's top left.
-fn symbol_transform(left: f32, top: f32) -> String {
-    let scale = CELL_WIDTH / symbols::ADVANCE;
+/// How many cells a symbol is drawn across: a switch before a plain space fills both, as kitty
+/// and Ghostty draw it over the space (decision 157), and every other symbol keeps to its cell.
+fn symbol_cells(symbol: char, next: Option<&str>) -> u16 {
+    let switch = symbol == glyphs::SWITCH_ON || symbol == glyphs::SWITCH_OFF;
+    if switch && next == Some(" ") { 2 } else { 1 }
+}
+
+/// Where a symbol's outline is put to fill the width of its cells, as kitty draws a Nerd Font
+/// Mono symbol, upright and in the middle of the cell's height: an SVG transform from the font's
+/// units, y up, to the picture's, from the first cell's top left.
+fn symbol_transform(left: f32, top: f32, cells: u16) -> String {
+    let scale = f32::from(cells) * CELL_WIDTH / symbols::ADVANCE;
     let middle = (symbols::ASCENT + symbols::DESCENT) / 2.0;
     format!(
         "matrix({scale} 0 0 {} {left} {})",
@@ -334,7 +342,8 @@ pub fn to_svg_placed(
                 let symbol = buffer[(x, y)].symbol();
                 // A placeholder is drawn as its image, below, and a Nerd Font symbol as its path.
                 if let Some(symbol) = cell_symbol(symbol) {
-                    drawn.push((x, symbol));
+                    let next = (x + 1 < area.width).then(|| buffer[(x + 1, y)].symbol());
+                    drawn.push((x, symbol, symbol_cells(symbol, next)));
                     text.push(' ');
                 } else if symbol.starts_with(PLACEHOLDER) {
                     text.push(' ');
@@ -373,12 +382,12 @@ pub fn to_svg_placed(
                     escaped(&text)
                 );
             }
-            for (at, symbol) in drawn {
+            for (at, symbol, cells) in drawn {
                 let _ = writeln!(
                     svg,
                     r##"<use href="#s{:x}" transform="{}" fill="{}"/>"##,
                     u32::from(symbol),
-                    symbol_transform(f32::from(at) * CELL_WIDTH, top),
+                    symbol_transform(f32::from(at) * CELL_WIDTH, top, cells),
                     here.fg
                 );
             }
@@ -486,8 +495,33 @@ mod tests {
         assert!(
             svg.contains(&format!(
                 r##"<use href="#sf040a" transform="{}" fill="{}"/>"##,
-                symbol_transform(36.0, 19.0),
+                symbol_transform(36.0, 19.0, 1),
                 colour(theme::GREEN, theme::TEXT)
+            )),
+            "{svg}"
+        );
+    }
+
+    #[test]
+    fn a_toggle_is_drawn_across_its_two_cells_as_the_terminals_draw_it() {
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 1));
+        let toggle = crate::views::widgets::toggle::span(true);
+        buffer.set_span(2, 0, &toggle, 2);
+        // A switch with no plain space after it, as at a line's end, keeps to its cell.
+        buffer.set_string(9, 0, glyphs::SWITCH_OFF.to_string(), Style::new());
+        let svg = to_svg(&buffer, &HashMap::new());
+        let green = colour(theme::GREEN, theme::TEXT);
+        assert!(
+            svg.contains(&format!(
+                r##"<use href="#sf205" transform="{}" fill="{green}"/>"##,
+                symbol_transform(18.0, 0.0, 2)
+            )),
+            "{svg}"
+        );
+        assert!(
+            svg.contains(&format!(
+                r##"<use href="#sf204" transform="{}""##,
+                symbol_transform(81.0, 0.0, 1)
             )),
             "{svg}"
         );

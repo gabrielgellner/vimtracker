@@ -287,7 +287,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     label for the grid, a kind and a default. The track page, `K`, the grid and the engine all read
     that table.
 
-**Decisions:** 29, 30, 59, 60 and 157, the [M14](#m14-design-one-list-of-settings) and
+**Decisions:** 29, 30, 59, 60 and 158, the [M14](#m14-design-one-list-of-settings) and
 [M14b](#m14b-design-kinds-of-setting) designs, and the three crates of the
 [Detailed Implementation Plan](#detailed-implementation-plan).
 
@@ -374,7 +374,7 @@ gave them (decision 147). What a block skips as it plays is under
 reading its sample until its note ends, and a replaced sample stays in memory until the project
 reloads.
 
-**Decisions:** 33, 54, 57, 75, 98, 114, 147, 150, 153 and 157, the
+**Decisions:** 33, 54, 57, 75, 98, 114, 147, 150, 153 and 158, the
 [M10 design](#m10-design-tracks-that-process)'s memory, and the first of the
 [Known Gaps From Review](#known-gaps-from-review).
 
