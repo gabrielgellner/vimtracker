@@ -73,7 +73,7 @@ up 23 semitones, a press at a time, with the selection kept.
 
 ## Shaping a column
 
-Select part of a Velocity or FX column with `v`, then press `S` for a panel
+Select part of a Note, Velocity, Nudge, length or FX column with `v`, then press `S` for a panel
 beside the grid. The column changes as you adjust it, and you hear it if the
 loop is playing. `Enter` keeps it as one undo, and `Esc` puts everything back.
 
@@ -159,6 +159,31 @@ The ramp's ends land on the first and last rows it changes, and rows keep their
 spacing along it. A velocity only ever goes on a note, so for Velocity, Every,
 Chance and Euclid choose among the notes. On an FX column, the command is the first one
 selected, and a row holding a different command keeps it.
+
+### On the Note column
+
+On the Note column, `S` gives the notes already there new pitches, keeping
+their rhythm, velocities and gates, and leaving `OFF` and empty rows alone: keep
+this rhythm, give me another line. From and To are notes, typed as `C-3`, `c3`
+or `c#3`. With the scale on, every fill moves in its degrees, so it lands in key
+as it's made; with it off, in semitones. `=` and `-` move an end a degree, or a
+semitone with the scale off, and `+` and `_` an octave.
+
+A `Ramp` walks a run up or down the scale, `Random` picks degrees between the
+ends, and `Wave` draws a contour. `List` repeats a motif typed as notes, like
+`c3 d#3 g3`, and `Alternate` two notes, both written as they are. `Invert`
+turns a melody upside down within its range, in degrees with the scale on;
+`Reverse` plays it backwards and `Shuffle` deals the same notes in a new order.
+
+`Snap`, on the Note column only, moves each note to the nearest one in the
+scale, the lower of two as near, for a take played without it. It's the only
+way notes are forced into the scale: playing never does. A note outside the
+scale shows in the panel in the grid's colour for one.
+
+On Nudge, the ends run from `-B` to `+B`, in 24ths of a step, so `Random`
+between `-3` and `+3` is a humanise you can see, and a `Ramp` rushes or drags
+into a fill. On a gate's length, a `Wave` or `List` of lengths shapes the
+phrasing; a row with no length of its own, `--`, keeps it unless filled.
 
 The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+` and Cmd with `h` `l` `j` `k` for them, `i` to type, `K`
 to choose from a list and `x` for the default. `Tab` still plays and pauses.

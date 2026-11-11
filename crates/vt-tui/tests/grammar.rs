@@ -1821,6 +1821,100 @@ fn a_list_fill_types_its_values_and_goes_round_them() {
     assert_eq!(vel(&app), ["10", "7F", "--", "70", "70", "40", "40"]);
 }
 
+/// The note on each row.
+fn notes_of(app: &App) -> Vec<String> {
+    steps(app).iter().map(|s| s[..3].to_owned()).collect()
+}
+
+#[test]
+fn shape_on_the_note_column_re_pitches_in_degrees_and_snaps() {
+    use vt_tui::shaping::ShapeRow;
+    let start = [
+        "C-3 40 --- --- ---",
+        "C-3 20 --- --- ---",
+        E,
+        "OFF -- --- --- ---",
+        "C-3 70 --- --- ---",
+        "C#3 30 --- --- ---",
+    ];
+    let (mut app, _rt) = app_with(&start);
+    app.scale.on = true;
+    keys(&mut app, "vGS");
+    assert_eq!(app.mode, Mode::Shape);
+    let panel = |app: &App| app.shape.clone().unwrap();
+    // It opens on the first and last notes, and keeps the rhythm, velocities, offs and rests.
+    assert_eq!((panel(&app).shape.from, panel(&app).shape.to), (60, 61));
+    keys(&mut app, "jj");
+    assert_eq!(panel(&app).row, ShapeRow::To);
+    keys(&mut app, "ic4<Enter>");
+    assert_eq!(panel(&app).shape.to, 72);
+    assert_eq!(notes_of(&app), ["C-3", "D-3", "---", "OFF", "B-3", "C-4"]);
+    assert_eq!(vel(&app), ["40", "20", "--", "--", "70", "30"]);
+    // `=` moves an end a degree, `+` an octave.
+    keys(&mut app, "-");
+    assert_eq!(panel(&app).shape.to, 71);
+    keys(&mut app, "_");
+    assert_eq!(panel(&app).shape.to, 59);
+    keys(&mut app, "ih3<Enter>");
+    assert!(app.status.contains("C#3"), "{}", app.status);
+    keys(&mut app, "x");
+    assert_eq!(panel(&app).shape.to, 61);
+
+    // Snap, only on notes, moves each to the nearest degree: C# down to C.
+    keys(&mut app, "kkKsnap<Enter>");
+    assert_eq!(panel(&app).shape.kind, vt_model::shape::FillKind::Snap);
+    assert_eq!(notes_of(&app), ["C-3", "C-3", "---", "OFF", "C-3", "C-3"]);
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.history.undo_depth(), 1);
+
+    // A motif is typed as notes.
+    keys(&mut app, "u");
+    keys(&mut app, "vGSK/list<Enter>j");
+    assert_eq!(panel(&app).row, ShapeRow::Values);
+    keys(&mut app, "ic3 d#3 g3<Enter>");
+    assert_eq!(notes_of(&app), ["C-3", "D#3", "---", "OFF", "G-3", "C-3"]);
+    keys(&mut app, "ic3 q3<Enter>");
+    assert!(app.status.contains("C-3"), "{}", app.status);
+    keys(&mut app, "<Esc>");
+    assert_eq!(steps(&app), start);
+}
+
+#[test]
+fn shape_fills_a_nudge_and_a_length() {
+    let (mut app, _rt) = app_with(&[
+        "C-3 40 --- --- ---",
+        E,
+        "C-3 40 --- --- ---",
+        "C-3 40 SGL1 80 --- --- ---",
+    ]);
+    keys(&mut app, "llvGS");
+    let panel = |app: &App| app.shape.clone().unwrap();
+    assert_eq!(panel(&app).column, vt_model::shape::ShapeColumn::Nudge);
+    keys(&mut app, "ji-3<Enter>ji+3<Enter>");
+    assert_eq!(
+        steps(&app),
+        [
+            "C-3 40 -3 --- --- ---",
+            E,
+            "C-3 40 +1 --- --- ---",
+            "C-3 40 +3 SGL1 80 --- --- ---",
+        ]
+    );
+    keys(&mut app, "<Enter>");
+    keys(&mut app, "ggllvGS");
+    assert_eq!(panel(&app).column, vt_model::shape::ShapeColumn::Length);
+    keys(&mut app, "ji20ji80");
+    assert_eq!(
+        steps(&app),
+        [
+            "C-3 40 -3 SGL1 20 --- --- ---",
+            E,
+            "C-3 40 +1 SGL1 60 --- --- ---",
+            "C-3 40 +3 SGL1 80 --- --- ---",
+        ]
+    );
+}
+
 #[test]
 fn shape_refuses_what_it_cannot_fill() {
     let reason = |rows: &[&str], typed: &str| {
@@ -1830,7 +1924,9 @@ fn shape_refuses_what_it_cannot_fill() {
         app.status.clone()
     };
     let notes = ["C-3 -- --- --- ---"; 3];
-    assert!(reason(&notes, "vGS").contains("Velocity and FX"));
+    assert!(reason(&notes, "lllvGS").contains("length"));
+    let rests = [E; 3];
+    assert!(reason(&rests, "vGS").contains("no notes"));
     assert!(reason(&notes, "VGS").contains("one column"));
     assert!(reason(&notes, "lvllGS").contains("one column"));
     assert!(reason(&notes, "lvS").contains("2 rows"));

@@ -14,7 +14,8 @@ use crate::shaping::{ShapePanel, ShapeRow};
 use crate::theme;
 use crate::views::widgets;
 
-const WIDTH: u16 = 38;
+/// Room for eight notes in a `List`'s values.
+const WIDTH: u16 = 42;
 /// The border, the heading and the keys, beyond the rows.
 const AROUND_ROWS: u16 = 4;
 /// Clear of the CPU figure at the top of the screen.
@@ -33,8 +34,8 @@ fn bend(value: i8) -> String {
 fn value(panel: &ShapePanel, row: ShapeRow) -> String {
     let shape = &panel.shape;
     match row {
-        ShapeRow::From => format!("{:02X}", shape.from),
-        ShapeRow::To => format!("{:02X}", shape.to),
+        ShapeRow::From => panel.column.show(shape.from),
+        ShapeRow::To => panel.column.show(shape.to),
         ShapeRow::Curve | ShapeRow::S if shape.kind == FillKind::Random => "--".to_owned(),
         ShapeRow::Curve => bend(shape.curve),
         ShapeRow::S => bend(shape.s),
@@ -42,7 +43,7 @@ fn value(panel: &ShapePanel, row: ShapeRow) -> String {
         ShapeRow::Wave => shape.wave.name().to_owned(),
         ShapeRow::Rate => shape.rate.to_string(),
         ShapeRow::Phase => format!("{}°", shape.phase),
-        ShapeRow::Values => shape.values.to_string(),
+        ShapeRow::Values => panel.column.show_list(&shape.values),
         ShapeRow::Run => shape.run.to_string(),
         ShapeRow::Where => shape.place.name().to_owned(),
         ShapeRow::Amount => match shape.place {
@@ -64,6 +65,32 @@ fn value(panel: &ShapePanel, row: ShapeRow) -> String {
     }
 }
 
+/// A row's value in spans, with a note outside the scale coloured as the grid colours it.
+fn spans(panel: &ShapePanel, row: ShapeRow) -> Vec<Span<'static>> {
+    let ShapeColumn::Note { scale } = panel.column else {
+        return vec![Span::raw(value(panel, row))];
+    };
+    let notes: Vec<u8> = match row {
+        ShapeRow::From => vec![panel.shape.from],
+        ShapeRow::To => vec![panel.shape.to],
+        ShapeRow::Values => panel.shape.values.as_slice().to_vec(),
+        _ => return vec![Span::raw(value(panel, row))],
+    };
+    let mut spans = Vec::new();
+    for (index, note) in notes.into_iter().enumerate() {
+        if index > 0 {
+            spans.push(Span::raw(" "));
+        }
+        let style = if scale.on && !scale.contains(note) {
+            theme::out_of_scale()
+        } else {
+            Style::new()
+        };
+        spans.push(Span::styled(panel.column.show(note), style));
+    }
+    spans
+}
+
 /// Draw the panel.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     let rows = panel.rows();
@@ -76,7 +103,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         height,
     };
     let name = match panel.column {
+        ShapeColumn::Note { .. } => "Note".to_owned(),
         ShapeColumn::Velocity => "Velocity".to_owned(),
+        ShapeColumn::Nudge => "Nudge".to_owned(),
+        ShapeColumn::Length => "Length".to_owned(),
         ShapeColumn::Fx { command, .. } => app
             .song()
             .tracks
@@ -92,20 +122,19 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     for row in rows {
         let current = row == panel.row;
         let typing = current.then_some(panel.typing.as_ref()).flatten();
-        let text = typing.map_or_else(|| value(panel, row), |text| format!("{text}_"));
-        let style = if current {
-            theme::cursor(if panel.typing.is_some() {
+        let mut line = vec![Span::raw(format!("{:<8}", row.label()))];
+        if current {
+            let text = typing.map_or_else(|| value(panel, row), |text| format!("{text}_"));
+            let style = theme::cursor(if panel.typing.is_some() {
                 Mode::Insert
             } else {
                 Mode::Normal
-            })
+            });
+            line.push(Span::styled(text, style));
         } else {
-            Style::new()
-        };
-        lines.push(Line::from(vec![
-            Span::raw(format!("{:<8}", row.label())),
-            Span::styled(text, style),
-        ]));
+            line.extend(spans(panel, row));
+        }
+        lines.push(Line::from(line));
     }
     let hint = match panel.shape.kind {
         FillKind::Random if app.mode == Mode::Shape => "~ swap  r reroll",
@@ -114,6 +143,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         }
         FillKind::Shuffle if app.mode == Mode::Shape => "r deals again",
         FillKind::List => "~ reverse the list",
+        FillKind::Snap => match panel.column {
+            ShapeColumn::Note { scale } if scale.on => "To the nearest note in the scale",
+            _ => "The scale is off, so nothing moves",
+        },
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse => "From the values there",
         _ => "~ swap the ends",
     };

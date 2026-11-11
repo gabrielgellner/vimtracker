@@ -3329,7 +3329,10 @@ fn the_shape_panel_draws_its_settings_beside_the_grid() {
         assert!(all.contains(expected), "{expected} in {all}");
     }
     // The grid's own columns are left showing.
-    assert!(text.iter().all(|line| line[..40].trim().is_empty()));
+    assert!(
+        text.iter()
+            .all(|line| line.chars().take(38).all(|c| c == ' '))
+    );
 }
 
 #[test]

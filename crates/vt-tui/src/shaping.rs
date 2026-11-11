@@ -123,7 +123,7 @@ impl ShapePanel {
             ],
             FillKind::Alternate => &[ShapeRow::From, ShapeRow::To, ShapeRow::Run],
             FillKind::List => &[ShapeRow::Values, ShapeRow::Run],
-            FillKind::Invert | FillKind::Shuffle | FillKind::Reverse => &[],
+            FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &[],
         });
         rows.push(ShapeRow::Where);
         match self.shape.place {
@@ -180,6 +180,40 @@ fn moved(value: i16, by: i16, low: i16, high: i16) -> i16 {
     (value + by).clamp(low, high)
 }
 
+/// The longest list of notes or nudges that can be typed: eight notes and the spaces between.
+const NAMED_LIST_TEXT: usize = 40;
+
+/// An end moved a small or a large step: a note by a semitone or an octave, or by a degree or an
+/// octave of them while the scale is on; a nudge by one or four 24ths; anything else by one or
+/// `10` in hex.
+fn stepped(column: ShapeColumn, value: u8, sign: i16, large: bool) -> u8 {
+    let jump = match column {
+        ShapeColumn::Note { scale } if scale.on => {
+            let degrees = if large {
+                scale.kind.intervals().len()
+            } else {
+                1
+            };
+            return scale.moved(value, degrees as i32 * i32::from(sign));
+        }
+        ShapeColumn::Note { .. } => 12,
+        ShapeColumn::Nudge => 4,
+        _ => HEX_JUMP,
+    };
+    let (low, top) = (i16::from(column.lowest()), i16::from(column.highest()));
+    moved(
+        i16::from(value),
+        sign * if large { jump } else { 1 },
+        low,
+        top,
+    ) as u8
+}
+
+/// Whether a column's values are typed as two hex digits, rather than as notes or nudges.
+fn typed_in_hex(column: ShapeColumn) -> bool {
+    !matches!(column, ShapeColumn::Note { .. } | ShapeColumn::Nudge)
+}
+
 impl App {
     /// The column a selection can fill, or why it can't.
     fn shape_column(
@@ -198,21 +232,24 @@ impl App {
         }
         let steps = self.phrase_here().map_or(&[][..], |phrase| phrase.steps());
         let rows = || (selection.range.first..=selection.range.last).filter_map(|r| steps.get(r));
-        match field {
-            Field::Velocity => {
-                if rows().any(|step| matches!(step.note, vt_model::step::Note::On(_))) {
-                    Ok(ShapeColumn::Velocity)
-                } else {
-                    Err("There are no notes in the selection")
-                }
+        // A note, its velocity, nudge and length are only shaped where there's a note.
+        let on_notes = |column| {
+            if rows().any(|step| matches!(step.note, vt_model::step::Note::On(_))) {
+                Ok(column)
+            } else {
+                Err("There are no notes in the selection")
             }
+        };
+        match field {
+            Field::Note => on_notes(ShapeColumn::Note { scale: self.scale }),
+            Field::Velocity => on_notes(ShapeColumn::Velocity),
+            Field::Nudge => on_notes(ShapeColumn::Nudge),
+            Field::GateLength => on_notes(ShapeColumn::Length),
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => rows()
                 .find_map(|step| step.fx.get(slot).and_then(|fx| fx.command))
                 .map(|command| ShapeColumn::Fx { slot, command })
                 .ok_or("Type an FX command on a row of the selection first"),
-            Field::Note | Field::Nudge | Field::Gate | Field::GateLength => {
-                Err("Shape works on Velocity and FX columns")
-            }
+            Field::Gate => Err("Shape works on a gate's length, not its type and pulses"),
         }
     }
 
@@ -331,6 +368,11 @@ impl App {
             .phrases
             .get(&phrase)
             .map_or(&[][..], |p| p.steps());
+        // Notes go through the scale as it is now.
+        let column = match column {
+            ShapeColumn::Note { .. } => ShapeColumn::Note { scale: self.scale },
+            column => column,
+        };
         let (from, to) = match shape.kind {
             FillKind::Ramp | FillKind::Random => default_ends(steps, range, column),
             _ => (shape.from, shape.to),
@@ -423,29 +465,30 @@ impl App {
     }
 
     fn adjust_shape(&mut self, sign: i16, large: bool) {
-        if self
-            .shape
-            .as_ref()
-            .is_some_and(|panel| panel.row == ShapeRow::Values)
-        {
-            self.status = "Type the values with i, as hex values like 70 40 55".to_owned();
+        if let Some(panel) = self.shape.as_ref().filter(|p| p.row == ShapeRow::Values) {
+            self.status = match panel.column {
+                ShapeColumn::Note { .. } => "Type the notes with i, like C-3 E-3 G-3",
+                ShapeColumn::Nudge => "Type the nudges with i, like -3 0 +3",
+                _ => "Type the values with i, as hex values like 70 40 55",
+            }
+            .to_owned();
             return;
         }
         self.change_shape(|panel| {
-            let top = i16::from(panel.column.highest());
+            let column = panel.column;
             let open = panel.open_rows() as i16;
+            let fills = column.fills();
             let shape = &mut panel.shape;
-            let hex = sign * if large { HEX_JUMP } else { 1 };
             let bend = sign * if large { BEND_JUMP } else { BEND_NUDGE };
             let most = i16::from(MAX_BEND);
             match panel.row {
-                ShapeRow::From => shape.from = moved(i16::from(shape.from), hex, 0, top) as u8,
-                ShapeRow::To => shape.to = moved(i16::from(shape.to), hex, 0, top) as u8,
+                ShapeRow::From => shape.from = stepped(column, shape.from, sign, large),
+                ShapeRow::To => shape.to = stepped(column, shape.to, sign, large),
                 ShapeRow::Curve => {
                     shape.curve = moved(i16::from(shape.curve), bend, -most, most) as i8;
                 }
                 ShapeRow::S => shape.s = moved(i16::from(shape.s), bend, -most, most) as i8,
-                ShapeRow::Fill => shape.kind = turned(&FillKind::ALL, shape.kind, sign),
+                ShapeRow::Fill => shape.kind = turned(&fills, shape.kind, sign),
                 ShapeRow::Wave => shape.wave = turned(&WAVES, shape.wave, sign),
                 ShapeRow::Rate if large => shape.rate = shape.rate.jumped(sign > 0),
                 ShapeRow::Rate => shape.rate = shape.rate.nudged(sign > 0),
@@ -543,18 +586,20 @@ impl App {
             return;
         };
         let (title, items, position): (&'static str, Vec<Item>, usize) = match panel.row {
-            ShapeRow::Fill => (
-                "Fill",
-                FillKind::ALL
+            ShapeRow::Fill => {
+                let fills = panel.column.fills();
+                let position = fills
+                    .iter()
+                    .position(|kind| *kind == panel.shape.kind)
+                    .unwrap_or(0);
+                let items = fills
+                    .into_iter()
                     .map(|kind| {
                         Item::new(kind.name(), Pick::ShapeFill(kind)).meaning(kind.description())
                     })
-                    .to_vec(),
-                FillKind::ALL
-                    .iter()
-                    .position(|kind| *kind == panel.shape.kind)
-                    .unwrap_or(0),
-            ),
+                    .collect();
+                ("Fill", items, position)
+            }
             ShapeRow::Wave => (
                 "Shape",
                 WAVES
@@ -632,19 +677,34 @@ impl App {
         let Some(panel) = &mut self.shape else {
             return;
         };
-        let hex = matches!(panel.row, ShapeRow::From | ShapeRow::To);
+        let in_hex = typed_in_hex(panel.column);
+        let end = matches!(panel.row, ShapeRow::From | ShapeRow::To);
+        let hex = end && in_hex;
+        // A note's name or a nudge, alone or in a list, ended with Enter.
+        let named = (end || panel.row == ShapeRow::Values) && !in_hex;
         let signed = matches!(panel.row, ShapeRow::Curve | ShapeRow::S);
         let rate = panel.row == ShapeRow::Rate;
         let list = panel.row == ShapeRow::Values;
         let Some(text) = &mut panel.typing else {
             return;
         };
+        let longest = if list { NAMED_LIST_TEXT } else { 4 };
         match code {
             KeyCode::Esc => panel.typing = None,
             KeyCode::Backspace => {
                 text.pop();
             }
             KeyCode::Enter => self.commit_shape_typing(),
+            KeyCode::Char(c)
+                if named
+                    && text.len() < longest
+                    && (c.is_ascii_alphanumeric()
+                        || matches!(c, '#' | '-' | '+' | '_')
+                        || (list && c == ' ')) =>
+            {
+                text.push(c);
+            }
+            KeyCode::Char(_) if named => {}
             KeyCode::Char(c) if list => type_list(text, c),
             KeyCode::Char(c) if hex && c.is_ascii_hexdigit() => {
                 text.push(c.to_ascii_uppercase());
@@ -678,20 +738,20 @@ impl App {
         };
         let mut refused = None;
         self.change_shape(|panel| {
-            let top = panel.column.highest();
+            let column = panel.column;
             let open = panel.open_rows() as u16;
             let shape = &mut panel.shape;
+            let unknown = match column {
+                ShapeColumn::Note { .. } => "A note is like C-3, C#3 or c3",
+                ShapeColumn::Nudge => "A nudge is like -3, 0 or +B, up to B either way",
+                _ => "A value is two hex digits",
+            };
             match panel.row {
-                ShapeRow::From | ShapeRow::To => {
-                    if let Ok(value) = u8::from_str_radix(&text, 16) {
-                        let value = value.min(top);
-                        if panel.row == ShapeRow::From {
-                            shape.from = value;
-                        } else {
-                            shape.to = value;
-                        }
-                    }
-                }
+                ShapeRow::From | ShapeRow::To => match column.parse(&text) {
+                    Some(value) if panel.row == ShapeRow::From => shape.from = value,
+                    Some(value) => shape.to = value,
+                    None => refused = Some(unknown),
+                },
                 ShapeRow::Curve | ShapeRow::S => match text.parse::<i16>() {
                     Ok(value) => {
                         let most = i16::from(MAX_BEND);
@@ -746,10 +806,11 @@ impl App {
                 ShapeRow::Values => {
                     let typed: Option<Vec<u8>> = text
                         .split_whitespace()
-                        .map(|value| u8::from_str_radix(value, 16).ok().map(|v| v.min(top)))
+                        .map(|value| column.parse(value))
                         .collect();
                     match typed {
                         Some(list) if !list.is_empty() => shape.values = Values::new(&list),
+                        _ if !typed_in_hex(column) => refused = Some(unknown),
                         _ => refused = Some("Values are hex values like 70 40 55, up to 8 of them"),
                     }
                 }
