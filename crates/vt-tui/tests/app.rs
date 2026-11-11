@@ -5255,8 +5255,8 @@ fn stepping_dest_goes_through_a_slots_settings() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "=H");
     press(&mut app, &format!("{}$", to_lfo(0)));
-    // Past the thirteen a sample track has, as a synth's settings aren't on it.
-    for _ in 0..14 {
+    // Past the fourteen a sample track has, as a synth's settings aren't on it.
+    for _ in 0..15 {
         press(&mut app, "=");
     }
     assert_eq!(
@@ -5540,12 +5540,12 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
         "changing nothing"
     );
 
-    // On a sample track, Machine holds Pitch and Gate, and l opens it on Pitch.
+    // On a sample track, Machine holds Pitch, Velocity and Gate, and l opens it on Pitch.
     press(&mut app, "Kgg");
     let at = picker(&app)
         .rows()
         .iter()
-        .position(|row| matches!(row, Row::Category(category) if picker(&app).category(*category) == ("Machine", 2, false)))
+        .position(|row| matches!(row, Row::Category(category) if picker(&app).category(*category) == ("Machine", 3, false)))
         .unwrap();
     for _ in 0..at {
         press(&mut app, "j");
@@ -8620,6 +8620,17 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
         value_shown(&app).as_deref(),
         Some("1ST, the first time round only")
     );
+
+    // A build is in the list too, and `+` moves its pass by four.
+    press(&mut app, "K>5");
+    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, ">5");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).coarse(), 0x95);
+    assert_eq!(value_shown(&app).as_deref(), Some(">5, from pass 5 on"));
+    press(&mut app, "+");
+    assert_eq!(slot(&app).coarse(), 0x99);
+    press(&mut app, "rA3");
+    assert_eq!(value_shown(&app).as_deref(), Some("<3, before pass 3 only"));
 }
 
 #[test]
