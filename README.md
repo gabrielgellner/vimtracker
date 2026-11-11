@@ -147,6 +147,7 @@ These run in any terminal, with no sound device unless asked:
 | `vimtracker notes <project> <out.toml> [--track name] [--machine key]` | Write one track's notes from a song as a probe spec's, for tools/compare. The project is only read |
 | `vimtracker probe-keys` | Show what your terminal sends, with the kitty keyboard protocol on as the program has it |
 | `vimtracker kits import-ableton` | Write a kit for each of Ableton Live's drum racks |
+| `vimtracker roto-probe` | List the MIDI and serial ports, and connect to a Roto-Control if one is plugged in: its firmware and API versions, its mode and the setups it stores, all only read |
 
 `cargo build --profile profiling` builds with symbols for a profiler.
 
