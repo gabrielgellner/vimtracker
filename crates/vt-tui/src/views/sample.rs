@@ -26,6 +26,7 @@ use crate::sample_wave::{
 };
 use crate::theme;
 use crate::views::help::POPUP_DELAY;
+use crate::views::widgets::toggle;
 
 /// The waveform's rows: 14 for each channel of a stereo sample, left above right, or 28 for a
 /// mono one.
@@ -531,16 +532,22 @@ fn ruler(app: &App, shown: &Shown) -> Line<'static> {
 }
 
 /// A setting's value on the rows: in the cursor's colours while the focus is on it, the text's
-/// if it's the slice's own, and dimmer if it's the entry's, which the slice plays as.
+/// if it's the slice's own, and dimmer if it's the entry's, which the slice plays as. `Snap` and
+/// `Reverse`, which are off or on, are a toggle, in its own colour where it's the slice's own.
 fn setting_span(state: &SamplePage, shown: &Shown, setting: SampleSetting) -> Span<'static> {
     let (value, own) = shown.setting_value(setting, state.cursor);
-    let text = setting.text(value, shown.rate());
+    let toggle =
+        matches!(setting, SampleSetting::Snap | SampleSetting::Reverse).then_some(value != 0);
+    let text = match toggle {
+        Some(on) => toggle::text(on),
+        None => setting.text(value, shown.rate()),
+    };
     let style = if state.setting == Some(setting) {
         theme::cursor(Mode::Normal)
-    } else if own {
-        Style::new()
-    } else {
+    } else if !own {
         theme::dim()
+    } else {
+        toggle.map_or_else(Style::new, toggle::style)
     };
     Span::styled(text, style)
 }

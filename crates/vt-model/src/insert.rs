@@ -347,6 +347,16 @@ pub struct Param {
     pub default: u8,
 }
 
+/// The choices of a setting that's off or on, such as a delay's `Ping-pong`.
+pub const OFF_ON: [&str; 2] = ["Off", "On"];
+
+impl Param {
+    /// Whether it's off or on and nothing else, which the pages show as a toggle.
+    pub fn is_toggle(&self) -> bool {
+        self.choices == OFF_ON
+    }
+}
+
 /// The most settings any effect shows at once, in the type or mode it's in.
 pub const MAX_PARAMS: usize = 12;
 /// The most settings any effect keeps across all of its types and modes, of which it shows at
@@ -530,7 +540,7 @@ pub(crate) const DELAY_PARAMS: [Param; 9] = [
         key: "pingpong",
         label: Some("PING"),
         setting: Setting::PingPong,
-        choices: &["Off", "On"],
+        choices: &OFF_ON,
         wraps: true,
         default: Delay::DEFAULT.ping_pong,
     },
@@ -721,7 +731,7 @@ const AUTO_GAIN_PARAM: Param = Param {
     key: "auto",
     label: Some("AUTO"),
     setting: Setting::AutoGain,
-    choices: &["Off", "On"],
+    choices: &OFF_ON,
     wraps: true,
     default: 0,
 };
@@ -806,7 +816,7 @@ const PEAK_CLIP_PARAM: Param = Param {
     key: "peakclip",
     label: Some("PCLP"),
     setting: Setting::PeakClip,
-    choices: &["Off", "On"],
+    choices: &OFF_ON,
     wraps: true,
     default: Compressor::DEFAULT.peak_clip,
 };
@@ -1208,7 +1218,7 @@ pub(crate) const GRAINS_PARAMS: [Param; 10] = [
         key: "freeze",
         label: Some("FRZ"),
         setting: Setting::Freeze,
-        choices: &["Off", "On"],
+        choices: &OFF_ON,
         wraps: true,
         default: Grains::DEFAULT.freeze,
     },
@@ -3440,6 +3450,25 @@ mod tests {
                 None => vec![effect],
             })
             .collect()
+    }
+
+    #[test]
+    fn the_settings_that_are_off_or_on_are_toggles_and_no_others() {
+        let mut toggles: Vec<&str> = every_kind()
+            .iter()
+            .flat_map(|effect| effect.params().iter())
+            .filter(|param| param.is_toggle())
+            .map(|param| param.name)
+            .collect();
+        toggles.sort_unstable();
+        toggles.dedup();
+        assert_eq!(toggles, ["Auto", "Freeze", "Peak Clip", "Ping-pong"]);
+        // A two-way list of anything else isn't one.
+        let chorus = Insert::ALL
+            .into_iter()
+            .find(|effect| effect.name() == "Chorus")
+            .unwrap();
+        assert!(!chorus.params()[chorus.type_param().unwrap()].is_toggle());
     }
 
     #[test]
