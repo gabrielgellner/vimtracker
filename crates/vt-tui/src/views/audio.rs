@@ -1,5 +1,5 @@
-//! The audio page: the output playing, its rate and buffer, how it's keeping up, and whether
-//! vimtracker drives the Roto-Control.
+//! The audio page: the output playing, its rate and buffer, how it's keeping up, whether
+//! vimtracker drives the Roto-Control, and whether the mouse wheel turns the cursor's setting.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -40,12 +40,20 @@ fn value(app: &App, row: AudioRow) -> String {
             }
         }
         AudioRow::Roto => app.roto.connection.describe(),
+        AudioRow::Wheel if app.wheel.setting.on => {
+            "Scrolling turns the setting under the cursor. Shift-drag selects text".to_owned()
+        }
+        AudioRow::Wheel => "Off: the terminal keeps its mouse".to_owned(),
     }
 }
 
-/// The Roto's row's value: its switch in its own colour, or the cursor's, then how its link is.
-fn roto_value(app: &App, here: bool) -> Line<'static> {
-    let on = app.roto.setting.on;
+/// An off/on row's value, the Roto's or the wheel's: its switch in its own colour, or the
+/// cursor's, then what it says, dim while it's off.
+fn switch_value(app: &App, row: AudioRow, here: bool) -> Line<'static> {
+    let on = match row {
+        AudioRow::Wheel => app.wheel.setting.on,
+        _ => app.roto.setting.on,
+    };
     let switch = if here {
         Span::styled(toggle::text(on), setting::style(app, true, false))
     } else {
@@ -55,7 +63,7 @@ fn roto_value(app: &App, here: bool) -> Line<'static> {
     Line::from(vec![
         switch,
         Span::raw(" "),
-        Span::styled(value(app, AudioRow::Roto), style),
+        Span::styled(value(app, row), style),
     ])
 }
 
@@ -82,7 +90,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     for (index, row) in AudioRow::ALL.into_iter().enumerate() {
         let here = index == app.audio_row;
         let line = match row {
-            AudioRow::Roto => roto_value(app, here),
+            AudioRow::Roto | AudioRow::Wheel => switch_value(app, row, here),
             _ => Line::styled(value(app, row), setting::style(app, here, false)),
         };
         rows.push(named(row.name(), line));

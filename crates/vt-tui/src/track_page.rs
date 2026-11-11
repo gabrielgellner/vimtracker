@@ -258,7 +258,7 @@ impl TrackPage {
     }
 
     /// Whether the setting under the cursor has fine digits to stop on.
-    fn has_fine_here(&self, track: Option<&Track>) -> bool {
+    pub(crate) fn has_fine_here(&self, track: Option<&Track>) -> bool {
         let control = self.control(track);
         match track {
             Some(track) => control.fine_on(track).is_some(),

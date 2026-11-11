@@ -147,38 +147,54 @@ enum Adjustment {
 /// them back and bring them again.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Adjustments {
-    done: Vec<Adjustment>,
+    /// Each undo step's changes, in order: one each, or several for a wheel's gesture.
+    done: Vec<Vec<Adjustment>>,
     /// What undo took back, the latest last, with nothing for an undo step from before the
     /// selection, so redo brings them back in step with the history.
-    undone: Vec<Option<Adjustment>>,
+    undone: Vec<Option<Vec<Adjustment>>>,
 }
 
 impl Adjustments {
     fn record(&mut self, adjustment: Adjustment) {
-        self.done.push(adjustment);
+        self.done.push(vec![adjustment]);
         self.undone.clear();
     }
 
     fn undo(&mut self) {
-        let adjustment = self.done.pop();
-        self.undone.push(adjustment);
+        let step = self.done.pop();
+        self.undone.push(step);
     }
 
     fn redo(&mut self) {
-        if let Some(Some(adjustment)) = self.undone.pop() {
-            self.done.push(adjustment);
+        if let Some(Some(step)) = self.undone.pop() {
+            self.done.push(step);
         }
+    }
+
+    /// How many undo steps the changes kept are.
+    pub(crate) fn steps(&self) -> usize {
+        self.done.len()
+    }
+
+    /// Make the changes from undo step `from` on one step, as the history squashes them, so undo
+    /// takes them back together.
+    pub(crate) fn join_from(&mut self, from: usize) {
+        if from + 1 >= self.done.len() {
+            return;
+        }
+        let joined = self.done.split_off(from).concat();
+        self.done.push(joined);
     }
 
     /// What the moves since the selection started, or since its last fill, add up to, as
     /// "+11 semitones" or "+1 large step, -2 steps"; nothing if none has been made.
     pub fn total(&self) -> Option<String> {
-        let since = self
-            .done
+        let done: Vec<Adjustment> = self.done.concat();
+        let since = done
             .iter()
             .rposition(|adjustment| *adjustment == Adjustment::Filled)
             .map_or(0, |at| at + 1);
-        let moves: Vec<(Unit, i32)> = self.done[since..]
+        let moves: Vec<(Unit, i32)> = done[since..]
             .iter()
             .filter_map(|adjustment| match adjustment {
                 Adjustment::Moved(unit, by) => Some((*unit, *by)),

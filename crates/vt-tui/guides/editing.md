@@ -35,6 +35,7 @@ Follow one with a motion or a target, or double it for this whole step:
 | `gv` | Select the last selection again |
 | `=` `-` `+` `_` | Move every value a small or large step, and stay selected |
 | `D-l` `D-h` `D-k` `D-j` | Cmd and `l` `h` `k` `j`: as `=` `-` `+` `_` |
+| The mouse wheel | As `=` `-`, and with Shift as `+` `_`, once it's on |
 | `>` `<`, `C-a` `C-x` | Move every value a step, and stay selected |
 | `r` | Fill the cursor's column, and stay selected |
 | `u` `C-r` | Undo or redo one change, and stay selected |
@@ -157,6 +158,30 @@ in hex, which changes the left digit. Counts work: `3=`. `RET` is different,
 since its digits mean separate things: `=` `-` change only the right digit,
 the rate, and `+` `_` only the left, the fade, so one never carries into the
 other.
+
+## The mouse wheel
+
+With `Wheel` on, on the audio page (`Space 7`), the mouse wheel or the trackpad
+is a knob on whatever the cursor is on, as Cmd with `h` `j` `k` `l` is from the
+keyboard. Where the pointer is doesn't matter.
+
+| Wheel | Does |
+|---|---|
+| Up, down | As `=` `-`, in the setting's finest step |
+| Shift and up or down | As `+` `_` |
+| Right, left | As `+` `_` |
+
+Each tick is the finest step there is: on a value with fine digits, its fine
+digits, as if the cursor were on them; on the tempo, its hundredths; on the
+sample page, a point's frame, as Cmd-l and Cmd-h nudge it. Ticks that come
+quickly take more of the fine step at a time, up to one of `=`'s, so a slow turn
+lands on any value and a quick flick sweeps across. Everywhere else a tick is
+one of `=`'s steps: a semitone on a note, the next choice in a list. On a
+selection it moves every value, as `=` does, and keeps it selected.
+
+One turn is one undo: `u` takes back everything from the first tick until the
+wheel stops for a moment, or a key is pressed. `.` still repeats the last
+change made with keys.
 
 `K` on an FX column lists the commands by group, searching as it opens. If the
 slot is empty, type the value next. If it has one, it stays.
