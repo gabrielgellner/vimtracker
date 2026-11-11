@@ -28,9 +28,9 @@ use crate::input::picker::{Item, Pick, Picker};
 use crate::views::status::grid_name;
 
 /// How far a small and a large step move the tempo, in thousandths of a BPM, and its fine part.
-const BPM_NUDGE: i64 = 1000;
+pub(crate) const BPM_NUDGE: i64 = 1000;
 const BPM_JUMP: i64 = 10_000;
-const FINE_NUDGE: i64 = 10;
+pub(crate) const FINE_NUDGE: i64 = 10;
 const FINE_JUMP: i64 = 100;
 /// How far a large step moves the seed.
 const SEED_JUMP: u64 = 10;

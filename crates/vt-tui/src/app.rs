@@ -227,6 +227,8 @@ pub struct App {
     pub audio_row: usize,
     /// The Roto-Control: whether it's on, the link to it, and what it shows.
     pub roto: crate::roto::Roto,
+    /// The mouse wheel as a knob on the cursor's setting, while its setting is on.
+    pub wheel: crate::wheel::Wheel,
     /// Where this machine keeps its kits and samples.
     pub settings: Settings,
     /// The sample library the sample explorer lists, such as Ableton Live's, if this machine has
@@ -497,6 +499,7 @@ impl App {
             library: None,
             audio_row: 0,
             roto: crate::roto::Roto::default(),
+            wheel: crate::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
             picker: None,
             chain_column: ChainColumn::Phrase,
@@ -908,6 +911,7 @@ impl App {
         self.take_loaded();
         self.take_analyses();
         self.tick_roto();
+        self.end_paused_wheel(now);
         self.follow_recording();
         let working = self.loader.is_waiting() || self.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
@@ -969,6 +973,8 @@ impl App {
     /// A key pressed.
     pub fn key(&mut self, key: Key, now: Instant) {
         self.now = now;
+        // Any key ends a turn of the wheel, as its own undo step.
+        self.end_wheel_gesture();
         // A real second press comes after a release, so a press of the key that's down is the
         // terminal repeating it. kitty on macOS has been seen sending a held `a`'s repeats as
         // presses. A key holding a note is down too, even after another key has gone down.
@@ -985,6 +991,7 @@ impl App {
     /// held, and a note on the keyboard is already held; anything else repeats as a press.
     pub fn key_repeated(&mut self, key: Key, now: Instant) {
         self.now = now;
+        self.end_wheel_gesture();
         if (self.repeats_ignored && self.key_down == Some(key.physical()))
             || self.holds_note(key)
             || self.holds_flag(key)
@@ -1127,7 +1134,7 @@ impl App {
     }
 
     /// Act on a press, or a repeat that acts as one.
-    fn press(&mut self, key: Key, now: Instant) {
+    pub(crate) fn press(&mut self, key: Key, now: Instant) {
         let was = self.mode;
         self.started = None;
         self.handle_key(key, now);

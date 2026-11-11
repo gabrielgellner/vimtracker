@@ -272,7 +272,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 | `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, and sample analysis | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
 | `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues and `hound` to write WAVs |
 | `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
-| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
+| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
 
 *   **One direction.** `vt-tui` uses `vt-engine`, which uses `vt-model`, and never the other way. The
     model doesn't know how it's played or shown, so its tests need neither, and the engine never
@@ -587,7 +587,7 @@ where they were written and are borrowed across folders; #260 may move shared sh
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the history, the engine's `Handle`, the last `Published`, the sample
 pool, the view and the mode, the cursor, the picker, the sample page and much more: over 120
-fields, and 31 files besides `app.rs` add an `impl App` block each, such as `track_page.rs`,
+fields, and 33 files besides `app.rs` add an `impl App` block each, such as `track_page.rs`,
 `banking.rs`, `slicing.rs`, `shaping.rs`, `picking.rs`, `recording.rs` (live recording, `Space r`),
 `project_page.rs`, `audio_page.rs` and `sample_page.rs`.
 
@@ -606,6 +606,14 @@ only name Normal's keys on those pages, for the binding table.
     repeat or a release. `App::key_event` sends each to `App::key`, `App::key_repeated` or
     `App::key_released`. A press of the key that's already down counts as a repeat, as kitty on macOS
     sends some repeats as presses.
+*   **`wheel.rs`** (beside `input/`): the mouse wheel as a knob on the cursor's setting, while its
+    setting, `wheel.ron` in the config folder, is on; the main loop asks the terminal for mouse
+    reports only then. `App::mouse_event` turns a tick into a press of `=` `-` `+` `_`, or the
+    sample page's Cmd-l and Cmd-h, through `App::press`, in whatever mode binds them, so every
+    page and a locked selection take it as they take the key. Where the setting has a finer step
+    than `=`, the cursor is put on its fine part for the tick and back after. A gesture's ticks are
+    squashed into one undo step (`History::squash_to`, as the Roto's touch to let-go), and in a
+    selection `Adjustments::join_from` keeps its running total in step (decision 162).
 *   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description. The
     which-key popup and `Space k` are generated from it. `CMD_ADJUSTS` is the one rule for Cmd
     with `h` `j` `k` `l`: `bindings` gives every mode that binds `=` `-` `+` `_` their Cmd keys

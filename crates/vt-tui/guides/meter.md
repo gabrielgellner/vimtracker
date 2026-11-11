@@ -101,6 +101,22 @@ times, `late` and `xruns` together, until the device is opened again.
 If the device changes or goes away while playing, audio stops and the status line says
 so. Choose one on the audio page to play again.
 
+## The mouse wheel
+
+The audio page's `Wheel` row turns the mouse wheel and the trackpad into a knob on the
+setting under the cursor. It's off until you turn it on: `=` turns it on and `-` off, `K`,
+`i` or Enter switch it, and `x` puts it back off. This machine remembers it, in
+`~/.config/vimtracker/wheel.ron`.
+
+While it's on, scrolling up raises the setting under the cursor and scrolling down lowers
+it, wherever `=` and `-` change something, a selection included. Where the pointer is
+doesn't matter, and clicks and drags do nothing. The guide to selecting and
+editing says how far each tick goes.
+
+kitty and Ghostty send vimtracker the mouse while it's on, so a plain drag no longer
+selects text. Hold Shift and drag to select, in either. Turning it off gives the terminal
+its mouse back.
+
 ## The Roto-Control
 
 The audio page's last row, `Roto`, turns on Melbourne Instruments' Roto-Control. It's

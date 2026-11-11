@@ -34,6 +34,7 @@ use crate::kitty::{self, Graphics};
 use crate::places::RecentPlaces;
 use crate::theme;
 use crate::views;
+use crate::wheel;
 
 /// Why the program stopped with an error.
 #[derive(Debug, Error)]
@@ -248,6 +249,11 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     app.roto.versions_path = vt_model::analysis::program_cache_folder()
         .map(|folder| folder.join(crate::roto::VERSIONS_FILE));
     app.start_roto_if_on();
+    // Off unless it was turned on here before, so the terminal keeps its mouse otherwise.
+    if let Some(path) = crate::wheel::WheelSetting::path() {
+        app.wheel.setting = crate::wheel::WheelSetting::load_from(&path);
+        app.wheel.setting_path = Some(path);
+    }
     app.status = status;
     app.offer_restore();
     let mut graphics = Graphics::new();
@@ -255,7 +261,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     let mut terminal = ratatui::init();
     // Every key comes as a press, a repeat or a release from here to quitting. The terminal also
     // says when its window loses focus, as a key let go then is never reported. ratatui's own hook
-    // puts the terminal back after a panic, and this lets go of the flags first.
+    // puts the terminal back after a panic, and this lets go of the flags, and the mouse, first.
     execute!(
         std::io::stdout(),
         PushKeyboardEnhancementFlags(KEYBOARD_FLAGS),
@@ -268,9 +274,13 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
             PopKeyboardEnhancementFlags,
             DisableFocusChange
         );
+        let _ = wheel::capture(&mut std::io::stdout(), false);
         restore(info);
     }));
     let result = main_loop(&mut terminal, &mut app, &stats, &mut graphics, &mut stream);
+    if app.wants_mouse() {
+        wheel::capture(&mut std::io::stdout(), false)?;
+    }
     execute!(
         std::io::stdout(),
         PopKeyboardEnhancementFlags,
@@ -296,7 +306,13 @@ fn main_loop(
     let mut title = String::new();
     // Asked about now and then, as it changes seldom.
     let mut power_asked: Option<Instant> = None;
+    // Whether the terminal is sending the mouse, which the wheel's setting turns on and off.
+    let mut mouse = false;
     while !app.should_quit {
+        if app.wants_mouse() != mouse {
+            mouse = app.wants_mouse();
+            wheel::capture(&mut std::io::stdout(), mouse)?;
+        }
         if app.window_title() != title {
             title = app.window_title();
             execute!(std::io::stdout(), SetTitle(&title))?;
@@ -350,6 +366,7 @@ fn main_loop(
                     Event::Key(key) => {
                         app.key_event(Key::from_event(key), key.kind, Instant::now())
                     }
+                    Event::Mouse(report) => app.mouse_event(report, Instant::now()),
                     Event::FocusLost => app.focus_lost(Instant::now()),
                     _ => {}
                 }
