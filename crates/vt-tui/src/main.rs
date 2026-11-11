@@ -95,6 +95,9 @@ enum Command {
         /// silence, and split the callback's time into the engine's and the rest.
         #[arg(long)]
         device: bool,
+        /// Through the device, the buffer in frames to ask it for, in place of the audio page's.
+        #[arg(long, requires = "device")]
+        buffer: Option<u32>,
     },
 }
 
@@ -126,6 +129,7 @@ fn main() -> std::process::ExitCode {
             tracks,
             paced,
             device,
+            buffer,
         }) => vt_tui::bench::run(&vt_tui::bench::BenchRequest {
             project,
             rate,
@@ -139,6 +143,7 @@ fn main() -> std::process::ExitCode {
                 vt_tui::bench::Pace::FlatOut
             },
             tracks,
+            buffer,
         })
         .map_err(|e| e.to_string()),
         Some(Command::Render {

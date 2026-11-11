@@ -11,6 +11,7 @@ use cpal::{BufferSize, ErrorKind, SampleFormat, StreamConfig, SupportedBufferSiz
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use vt_engine::link::Realtime;
+use vt_engine::slowdown::{Look, SlowdownCheck};
 
 /// The most frames rendered at once, so the scratch buffer can be made ahead of time.
 const MAX_BLOCK: usize = 4096;
@@ -42,12 +43,21 @@ pub struct AudioStats {
     /// How long from the callback to the sound leaving the device, in microseconds, as the device
     /// reports it: the buffer and the device's own delay, which on Bluetooth is most of it.
     pub latency: AtomicU64,
+    /// How many times slower than full speed the system is running the callback, in thousandths,
+    /// as it last looked, or 0 before it has.
+    pub slowdown: AtomicU64,
 }
 
 impl AudioStats {
     /// Start counting afresh, for a new stream.
     pub fn reset(&self) {
-        for counter in [&self.late, &self.errors, &self.load, &self.latency] {
+        for counter in [
+            &self.late,
+            &self.errors,
+            &self.load,
+            &self.latency,
+            &self.slowdown,
+        ] {
             counter.store(0, Ordering::Relaxed);
         }
         self.lost.store(false, Ordering::Release);
@@ -86,6 +96,202 @@ impl LoadReadout {
     /// The figure to show, as a whole percent.
     pub fn percent(&self) -> u64 {
         self.shown
+    }
+}
+
+/// How many times slower than full speed the audio thread runs, for the leaf beside the CPU
+/// figure. The callback looks four times a second and each look varies, so this smooths them, and
+/// shows the leaf above ×1.6 and hides it below ×1.3, so it doesn't flicker about one figure.
+#[derive(Debug, Clone)]
+pub struct SlowdownReadout {
+    /// The smoothed factor, which starts at full speed.
+    factor: f64,
+    /// When the last look was taken in.
+    last: Option<Instant>,
+    /// Whether the leaf is showing.
+    slowed: bool,
+    /// What the system says it's doing to save power, as last asked, for the explanation.
+    pub power: PowerState,
+}
+
+impl Default for SlowdownReadout {
+    fn default() -> Self {
+        Self {
+            factor: 1.0,
+            last: None,
+            slowed: false,
+            power: PowerState::default(),
+        }
+    }
+}
+
+impl SlowdownReadout {
+    /// The leaf shows once the smoothed factor is over this.
+    pub const SHOW_ABOVE: f64 = 1.6;
+    /// And goes once it's under this.
+    pub const HIDE_BELOW: f64 = 1.3;
+    /// How quickly the factor follows the looks: it goes nearly two thirds of the way to a new
+    /// one in this long.
+    const SETTLING: Duration = Duration::from_secs(2);
+
+    /// Take in the callback's last look, in thousandths of full speed, or 0 before it has looked.
+    pub fn sample(&mut self, thousandths: u64, now: Instant) {
+        if thousandths == 0 {
+            return;
+        }
+        let look = thousandths as f64 / 1000.0;
+        if let Some(last) = self.last {
+            let elapsed = now.saturating_duration_since(last).as_secs_f64();
+            let share = 1.0 - (-elapsed / Self::SETTLING.as_secs_f64()).exp();
+            self.factor += (look - self.factor) * share;
+        }
+        self.last = Some(now);
+        if self.factor > Self::SHOW_ABOVE {
+            self.slowed = true;
+        } else if self.factor < Self::HIDE_BELOW {
+            self.slowed = false;
+        }
+    }
+
+    /// Whether the leaf shows: the system is running the audio thread slowly enough to matter.
+    pub fn slowed(&self) -> bool {
+        self.slowed
+    }
+
+    /// How many times slower than full speed, smoothed.
+    pub fn factor(&self) -> f64 {
+        self.factor
+    }
+
+    /// What the leaf means, for a CPU figure, while it shows: how slowed, and the figure at full
+    /// speed, as `slowed ×3.6 by power saving, about 8% at full speed`.
+    pub fn explanation(&self, cpu: u64) -> Option<String> {
+        if !self.slowed {
+            return None;
+        }
+        let full = (cpu as f64 / self.factor).round();
+        let full = if full < 1.0 {
+            "under 1%".to_owned()
+        } else {
+            format!("about {full:.0}%")
+        };
+        // Heat slows every core hardest, and Low Power Mode every core, where otherwise it's the
+        // system's own choice of core and clock for a light load.
+        let cause = if self.power.hot {
+            "heat"
+        } else if self.power.low_power {
+            "Low Power Mode"
+        } else {
+            "power saving"
+        };
+        Some(format!(
+            "slowed ×{:.1} by {cause}, {full} at full speed",
+            self.factor
+        ))
+    }
+}
+
+/// Start working out the slowdown check's time at full speed on this machine, on a thread of its
+/// own that asks for the performance cores, for 100 ms while other work goes on. Join it before
+/// audio starts.
+pub fn measure_full_speed() -> std::thread::JoinHandle<Duration> {
+    std::thread::spawn(|| {
+        ask_for_performance_cores();
+        full_speed_here()
+    })
+}
+
+/// The slowdown check's time at full speed on this machine: the faster of what it takes now and
+/// the fastest it has taken before, which is kept in the cache folder. Starting in Low Power Mode,
+/// which slows every core, or while the machine is busy, then still has full speed to go by.
+fn full_speed_here() -> Duration {
+    let now = vt_engine::slowdown::full_speed();
+    let Some(path) = full_speed_path() else {
+        return now;
+    };
+    let kept = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| read_full_speed(&text));
+    match kept {
+        Some(kept) if kept <= now => kept,
+        _ => {
+            // Nothing is lost if it can't be kept but the next start's comparison.
+            if let Some(folder) = path.parent() {
+                let _ = std::fs::create_dir_all(folder);
+            }
+            let _ = std::fs::write(&path, write_full_speed(now));
+            now
+        }
+    }
+}
+
+/// Ask the system to run this thread as work the user is waiting on, which it puts on the
+/// performance cores at their full clock.
+#[cfg(target_os = "macos")]
+fn ask_for_performance_cores() {
+    // SAFETY: it changes only this thread's class, and takes no pointers.
+    unsafe {
+        libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_USER_INTERACTIVE, 0);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn ask_for_performance_cores() {}
+
+/// Where the fastest kernel time is kept: `full-speed.txt` in the program's cache folder.
+fn full_speed_path() -> Option<PathBuf> {
+    Some(vt_model::analysis::program_cache_folder()?.join("full-speed.txt"))
+}
+
+/// What a kept time is for: this kernel, in this kind of build, as a debug build runs it slower.
+fn full_speed_key() -> String {
+    let build = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    format!("kernel {} {build}", vt_engine::slowdown::KERNEL_VERSION)
+}
+
+/// A kept time, as `kernel 1 release 2125` in nanoseconds.
+fn write_full_speed(time: Duration) -> String {
+    format!("{} {}\n", full_speed_key(), time.as_nanos())
+}
+
+/// A kept time, if it's for this kernel and build.
+fn read_full_speed(text: &str) -> Option<Duration> {
+    let (key, nanos) = text.trim().rsplit_once(' ')?;
+    let nanos: u64 = nanos.parse().ok().filter(|nanos| *nanos > 0)?;
+    (key == full_speed_key()).then(|| Duration::from_nanos(nanos))
+}
+
+/// What the system says it's doing that slows every core.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PowerState {
+    /// Low Power Mode is on.
+    pub low_power: bool,
+    /// The Mac is hot enough that the system is slowing it to cool down: a thermal state of
+    /// serious or critical.
+    pub hot: bool,
+}
+
+impl PowerState {
+    /// Ask the system. It's for the interface's thread, never the audio thread.
+    #[cfg(target_os = "macos")]
+    pub fn now() -> Self {
+        use objc2_foundation::{NSProcessInfo, NSProcessInfoThermalState};
+        objc2::rc::autoreleasepool(|_| {
+            let process = NSProcessInfo::processInfo();
+            Self {
+                low_power: process.isLowPowerModeEnabled(),
+                hot: process.thermalState().0 >= NSProcessInfoThermalState::Serious.0,
+            }
+        })
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn now() -> Self {
+        Self::default()
     }
 }
 
@@ -300,17 +506,20 @@ impl Output {
     }
 
     /// Start playing. Audio stops when the returned stream is dropped. The buffer it plays with
-    /// is the second part, if the device says.
+    /// is the second part, if the device says. `full_speed` is the slowdown check's time at full
+    /// speed, from [`vt_engine::slowdown::full_speed`].
     pub fn start(
         self,
         mut realtime: Realtime,
         stats: Arc<AudioStats>,
+        full_speed: Duration,
     ) -> Result<(cpal::Stream, Option<u32>), AudioError> {
         stats.reset();
         let channels = usize::from(self.config.channels);
         let rate = f64::from(self.config.sample_rate);
         let error_stats = Arc::clone(&stats);
         let mut scratch = vec![0.0_f32; MAX_BLOCK * 2];
+        let mut slowdown = SlowdownCheck::new(full_speed, self.config.sample_rate);
         let stream = self
             .device
             .build_output_stream(
@@ -336,7 +545,8 @@ impl Output {
                             frame[2..].fill(0.0);
                         }
                     }
-                    let budget = (out.len() / channels) as f64 / rate;
+                    let frames = out.len() / channels;
+                    let budget = frames as f64 / rate;
                     let spent = started.elapsed().as_secs_f64();
                     if spent > budget {
                         stats.late.fetch_add(1, Ordering::Relaxed);
@@ -344,6 +554,11 @@ impl Output {
                     if budget > 0.0 {
                         let load = (spent / budget * 1000.0) as u64;
                         stats.load.store(load, Ordering::Relaxed);
+                    }
+                    // After the figure is taken, so the look isn't counted in it.
+                    if let Some(look) = slowdown.after(frames) {
+                        let factor = (look.factor * 1000.0) as u64;
+                        stats.slowdown.store(factor, Ordering::Relaxed);
                     }
                 },
                 // Never print from here: the terminal is showing the interface. A device that
@@ -380,6 +595,10 @@ pub struct CallbackTime {
     /// The callback's thread's own CPU time, which leaves out any time it was put aside for
     /// another thread.
     pub cpu: Duration,
+    /// The slowdown check's look, if it took one after this callback.
+    pub look: Option<Look>,
+    /// How long the check took, looking or not.
+    pub looking: Duration,
 }
 
 /// How the system runs the callback's thread, as it says from inside the first callback.
@@ -469,8 +688,10 @@ impl Output {
         self,
         realtime: Realtime,
         blocks: usize,
+        full_speed: Duration,
     ) -> Result<(cpal::Stream, Measured), AudioError> {
         let channels = usize::from(self.config.channels);
+        let mut slowdown = SlowdownCheck::new(full_speed, self.config.sample_rate);
         let mut scratch = vec![0.0_f32; MAX_BLOCK * 2];
         let (mut times_in, times) = rtrb::RingBuffer::new(blocks.max(1));
         let (mut thread_in, thread) = rtrb::RingBuffer::new(1);
@@ -521,12 +742,21 @@ impl Output {
                     }
                     // Then nothing is heard.
                     std::hint::black_box(&mut *out).fill(0.0);
+                    let frames = out.len() / channels;
+                    let callback = started.elapsed();
+                    let cpu = thread_cpu_time().saturating_sub(cpu);
+                    // After the times are taken, as the playing stream's is.
+                    let looking = Instant::now();
+                    let look = slowdown.after(frames);
+                    let looking = looking.elapsed();
                     let _ = times_in.push(CallbackTime {
-                        frames: (out.len() / channels) as u32,
-                        callback: started.elapsed(),
+                        frames: frames as u32,
+                        callback,
                         process,
                         engine,
-                        cpu: thread_cpu_time().saturating_sub(cpu),
+                        cpu,
+                        look,
+                        looking,
                     });
                 },
                 move |error| {
@@ -597,5 +827,110 @@ mod tests {
         assert_eq!(readout.percent(), 7);
         readout.sample(100, at(1000));
         assert_eq!(readout.percent(), 50);
+    }
+
+    /// A readout given the same look every frame, 30 a second, for so long.
+    fn held(readout: &mut SlowdownReadout, thousandths: u64, from: Instant, ms: u64) -> Instant {
+        let mut now = from;
+        for _ in 0..ms / 33 {
+            now += Duration::from_millis(33);
+            readout.sample(thousandths, now);
+        }
+        now
+    }
+
+    #[test]
+    fn the_slowdown_is_smoothed_and_only_counts_once_looked_at() {
+        let start = Instant::now();
+        let mut readout = SlowdownReadout::default();
+        // Before the callback has looked, it's at full speed.
+        readout.sample(0, start);
+        assert_eq!(readout.factor(), 1.0);
+        readout.sample(3600, start);
+        assert_eq!(readout.factor(), 1.0, "the first look starts the clock");
+        // Nearly two thirds of the way in two seconds.
+        let now = held(&mut readout, 3600, start, 2000);
+        assert!((readout.factor() - 2.6).abs() < 0.1, "{}", readout.factor());
+        held(&mut readout, 3600, now, 10_000);
+        assert!((readout.factor() - 3.6).abs() < 0.01);
+    }
+
+    #[test]
+    fn the_leaf_shows_over_one_point_six_and_goes_under_one_point_three() {
+        let start = Instant::now();
+        let mut readout = SlowdownReadout::default();
+        readout.sample(1000, start);
+        let now = held(&mut readout, 1500, start, 20_000);
+        assert!(!readout.slowed(), "x1.5 isn't enough to show it");
+        let now = held(&mut readout, 1700, now, 20_000);
+        assert!(readout.slowed());
+        // Between the two, it stays as it was, either way.
+        let now = held(&mut readout, 1400, now, 20_000);
+        assert!(readout.slowed(), "x1.4 doesn't hide it");
+        let now = held(&mut readout, 1200, now, 20_000);
+        assert!(!readout.slowed());
+        held(&mut readout, 1400, now, 20_000);
+        assert!(!readout.slowed(), "x1.4 doesn't show it again");
+    }
+
+    #[test]
+    fn a_short_spike_doesnt_show_the_leaf() {
+        let start = Instant::now();
+        let mut readout = SlowdownReadout::default();
+        readout.sample(1000, start);
+        let now = held(&mut readout, 1000, start, 5000);
+        // A look stays up a quarter of a second until the next: one at four times.
+        let now = held(&mut readout, 4000, now, 250);
+        assert!(!readout.slowed(), "{}", readout.factor());
+        held(&mut readout, 1000, now, 5000);
+        assert!(!readout.slowed());
+    }
+
+    #[test]
+    fn the_explanation_says_how_slowed_and_the_figure_at_full_speed() {
+        let start = Instant::now();
+        let mut readout = SlowdownReadout::default();
+        readout.sample(3600, start);
+        assert_eq!(
+            readout.explanation(29),
+            None,
+            "not while it's at full speed"
+        );
+        held(&mut readout, 3600, start, 30_000);
+        assert_eq!(
+            readout.explanation(29).as_deref(),
+            Some("slowed ×3.6 by power saving, about 8% at full speed")
+        );
+        assert_eq!(
+            readout.explanation(1).as_deref(),
+            Some("slowed ×3.6 by power saving, under 1% at full speed")
+        );
+        readout.power.low_power = true;
+        assert_eq!(
+            readout.explanation(29).as_deref(),
+            Some("slowed ×3.6 by Low Power Mode, about 8% at full speed")
+        );
+        readout.power.hot = true;
+        assert_eq!(
+            readout.explanation(29).as_deref(),
+            Some("slowed ×3.6 by heat, about 8% at full speed")
+        );
+    }
+
+    #[test]
+    fn a_kept_full_speed_is_read_back_only_for_this_kernel_and_build() {
+        let time = Duration::from_nanos(1458);
+        let text = write_full_speed(time);
+        assert_eq!(read_full_speed(&text), Some(time));
+        let other = text.replacen(&full_speed_key(), "kernel 0 release", 1);
+        let other = if other == text {
+            text.replacen(&full_speed_key(), "kernel 0 debug", 1)
+        } else {
+            other
+        };
+        assert_eq!(read_full_speed(&other), None);
+        assert_eq!(read_full_speed(""), None);
+        assert_eq!(read_full_speed(&format!("{} 0", full_speed_key())), None);
+        assert_eq!(read_full_speed(&format!("{} x", full_speed_key())), None);
     }
 }

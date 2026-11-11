@@ -406,9 +406,14 @@ pub enum Found {
     Built,
 }
 
-/// The folder analyses are kept in: `vimtracker/analysis` in `$XDG_CACHE_HOME` if it's set, or else
-/// in `~/Library/Caches` on macOS and `~/.cache` elsewhere.
+/// The folder analyses are kept in: `vimtracker/analysis` in the program's cache folder.
 pub fn cache_folder() -> Option<PathBuf> {
+    Some(program_cache_folder()?.join("analysis"))
+}
+
+/// The program's cache folder: `vimtracker` in `$XDG_CACHE_HOME` if it's set, or else in
+/// `~/Library/Caches` on macOS and `~/.cache` elsewhere.
+pub fn program_cache_folder() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_CACHE_HOME")
         .filter(|base| !base.is_empty())
         .map(PathBuf::from)
@@ -420,7 +425,7 @@ pub fn cache_folder() -> Option<PathBuf> {
                 home.join(".cache")
             })
         })?;
-    Some(base.join("vimtracker").join("analysis"))
+    Some(base.join("vimtracker"))
 }
 
 /// Where a content's analysis is kept in a cache folder.

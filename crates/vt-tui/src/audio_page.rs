@@ -5,7 +5,9 @@ use vt_model::selection::Motion;
 
 use crate::app::App;
 use crate::audio::{AudioChoice, DeviceInfo};
+use crate::glyphs;
 use crate::input::bindings::Cmd;
+use crate::input::mode::View;
 use crate::input::picker::{Item, Pick, Picker};
 
 /// The page's rows, in order.
@@ -34,6 +36,17 @@ pub fn buffer_ms(frames: u32, rate: u32) -> f64 {
 }
 
 impl App {
+    /// What the status line says on the audio page while nothing else is said there: what the
+    /// leaf before the CPU figure means, while it shows, as `󰌪 CPU slowed ×3.6 by power saving,
+    /// about 8% at full speed`.
+    pub fn audio_page_hint(&self) -> Option<String> {
+        if self.view != View::Audio {
+            return None;
+        }
+        let meaning = self.slowdown.explanation(self.cpu.percent())?;
+        Some(format!("{} CPU {meaning}", glyphs::LEAF))
+    }
+
     /// The row the cursor is on.
     pub fn audio_row_here(&self) -> AudioRow {
         AudioRow::ALL[self.audio_row.min(AudioRow::ALL.len() - 1)]

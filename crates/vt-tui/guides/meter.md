@@ -80,6 +80,19 @@ but leaves less room when the CPU is busy, so it drops out sooner. Lower it unti
 or `xruns` start to count up, then go back a step. `Latency` is the time from working the
 sound out to it leaving the device. On Bluetooth, most of it is the headset's own.
 
+`CPU` at the top right is how much of each block's time the sound took to work out, so
+how close it comes to dropping out. A dim `󰌪` before it means the system is running the
+audio thread slowly to save power: on an efficiency core or a lower clock, which macOS
+chooses for a light load at a large buffer, in Low Power Mode, or because the Mac is
+hot. The same work then takes longer, so the figure reads higher than the song is
+heavy. On the audio page, the line under the status line says by how much, and about
+what the figure would be at full speed:
+
+    󰌪 CPU slowed ×3.6 by power saving, about 8% at full speed
+
+The system speeds the thread up as the work grows, so the leaf is nothing to worry
+about while `late` and `xruns` stay at `0`.
+
 Once audio has dropped out, the right of the status line shows a red `󰀦` and how many
 times, `late` and `xruns` together, until the device is opened again.
 

@@ -499,7 +499,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     } else if let Some(jump) = &app.field_jump {
         format!("/{}", jump.query)
     } else if app.status.is_empty()
-        && let Some(hint) = app.sample_mode_hint()
+        && let Some(hint) = app.sample_mode_hint().or_else(|| app.audio_page_hint())
     {
         hint
     } else if app.status.is_empty()
