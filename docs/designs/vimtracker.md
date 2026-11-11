@@ -720,7 +720,10 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     whenever the character's size in pixels changes, so they're drawn again at the new pixels and
     none is left blank. Retired images are deleted with `a=d,d=I` at the start of the next frame.
 
-`just screenshots` puts the pictures in its SVGs as the terminal would be sent them.
+`just screenshots` puts the pictures in its SVGs as the terminal would be sent them, and draws
+each Nerd Font symbol as its outline from `screenshot/symbols.rs`, which `just symbols-font`
+writes from the manual's cut-down Symbols Nerd Font Mono, as a picture on a page has no Nerd
+Font to use (decision 156).
 `docs/terminal-notes.md` has what's been measured and what's left to check by hand.
 
 **Decisions:** 20, 50, 56, 57, 93, 102, 107, 109, 114 and 141.
