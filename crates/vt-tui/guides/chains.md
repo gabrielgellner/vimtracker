@@ -150,6 +150,7 @@ the section the cursor is on, and `Sec 2/4` on the status line says which.
 | `Enter` | While playing, play this chain on its track next, or stop it on `--` |
 | `C` | While playing, add a section of what's playing, and stay on it |
 | `;` | Hear its first row |
+| `V` | Select sections, for `:loop`. `V` again or `Esc` ends it |
 
 `z a` folds a group's tracks into its column, `z M` folds every group and `z R`
 opens them: see **Folding a group** in **The track page, envelopes and LFOs**.
@@ -176,6 +177,19 @@ plays from that step of this track's chain, and the other tracks stand as they w
 at that step of the section. `:loop` keeps playing the section being edited while you
 work on it, and `:loop` again goes back to the song. A `:render` of a song covers
 it once through, and `--stems` does too.
+
+To loop several sections, press `V` on the first, move to the last, and `:loop`.
+They play in turn, each from its start, and round again, so a verse and a chorus
+can alternate for as long as you like. A bar down the left of the song view marks
+the sections looping, and the status line says `Sec 2/4 loop 2-3`. `:loop` alone,
+on one of them, goes back to the song: the section playing plays to its end, and
+the song moves on from there.
+
+While playing a section outside the new loop, the loop's first section starts on
+the next line of the launch grid, as a launch does. Until then the bar is dim and
+the status line shows `󰔟 LOOP`. So
+`V` over the chorus and `:loop` jumps to it on the next bar, and `V` back over the
+verse and chorus and `:loop` takes the song back round both.
 
 ## Jamming
 

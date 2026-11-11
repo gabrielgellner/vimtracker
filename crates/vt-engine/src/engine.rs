@@ -79,6 +79,53 @@ pub struct Playhead {
     pub frame: u64,
 }
 
+/// Sections kept playing in turn, `:loop`'s, rather than the song moving on: from the first to the
+/// last, in order, and back to the first. One section loops on itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SectionLoop {
+    pub first: usize,
+    pub last: usize,
+}
+
+impl SectionLoop {
+    /// The sections from one to the other, whichever way round they're given.
+    pub fn new(one: usize, other: usize) -> Self {
+        Self {
+            first: one.min(other),
+            last: one.max(other),
+        }
+    }
+
+    /// One section, looping on itself.
+    pub fn one(section: usize) -> Self {
+        Self::new(section, section)
+    }
+
+    /// Whether a section is one of these.
+    pub fn holds(self, section: usize) -> bool {
+        (self.first..=self.last).contains(&section)
+    }
+
+    /// The section after this one, and whether that went back round to the first: the next of
+    /// these with a length, or from outside them, the first with one. If none has, the first.
+    fn next(self, song: &Song, from: usize) -> (usize, bool) {
+        let last = self.last.min(song.sections.len().saturating_sub(1));
+        let first = self.first.min(last);
+        let long = |at: &usize| song.section_length(&song.sections[*at]) > 0;
+        if (first..=last).contains(&from) {
+            if let Some(at) = (from + 1..=last).find(long) {
+                return (at, false);
+            }
+            if let Some(at) = (first..=from).find(long) {
+                return (at, at != from);
+            }
+        } else if let Some(at) = (first..=last).find(long) {
+            return (at, false);
+        }
+        (first, false)
+    }
+}
+
 /// Whether the sequencer is moving.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Transport {
@@ -122,8 +169,10 @@ pub struct Engine {
     /// The section playing, and how many steps of it have fired.
     section: usize,
     section_place: u64,
-    /// A section to keep playing rather than moving on.
-    loop_section: Option<usize>,
+    /// Sections to keep playing rather than moving on.
+    looping: Option<SectionLoop>,
+    /// Sections to loop from the next line of the launch grid, as `:loop` asks while playing.
+    loop_cued: Option<SectionLoop>,
     /// The next step to fire, for timing. It never wraps.
     next_step: u64,
     /// Where the next step falls for the tracks, which each loop at their own length. Separate from
@@ -216,7 +265,8 @@ impl Engine {
             transport: Transport::Stopped,
             section: 0,
             section_place: 0,
-            loop_section: None,
+            looping: None,
+            loop_cued: None,
             next_step: 0,
             place: 0,
             heard_place: 0,
@@ -576,7 +626,8 @@ impl Engine {
     pub fn continue_in(&mut self, section: usize, length: usize) {
         self.section = section;
         self.section_place %= (length as u64).max(1);
-        self.loop_section = Some(section);
+        self.looping = Some(SectionLoop::one(section));
+        self.loop_cued = None;
     }
 
     /// What a track is launched onto and cued to, while jamming.
@@ -688,9 +739,36 @@ impl Engine {
             .min(self.current.song.sections.len().saturating_sub(1))
     }
 
-    /// Keep playing this section rather than moving on, or go back to playing the song.
+    /// Keep playing this section rather than moving on, from now, or go back to playing the song.
     pub fn set_loop_section(&mut self, section: Option<usize>) {
-        self.loop_section = section;
+        self.looping = section.map(SectionLoop::one);
+        self.loop_cued = None;
+    }
+
+    /// Keep playing these sections in turn rather than moving on, or go back to playing the song.
+    /// While playing a section that isn't one of them, a loop waits for the next line of the
+    /// launch grid, where the first of them starts; a section ending is a line too. Otherwise it's
+    /// at once, as nothing moves until the section playing ends, which is a line anyway, and so is
+    /// going back to the song, as the section playing then plays to its end and moves on.
+    pub fn loop_sections(&mut self, sections: Option<SectionLoop>) {
+        self.loop_cued = None;
+        let playing = self.transport == Transport::Playing;
+        match sections {
+            Some(sections) if playing && !sections.holds(self.section()) => {
+                self.loop_cued = Some(sections);
+            }
+            _ => self.looping = sections,
+        }
+    }
+
+    /// Whether a loop is waiting for its line of the grid.
+    pub fn loop_waiting(&self) -> bool {
+        self.loop_cued.is_some()
+    }
+
+    /// The sections being kept playing, if any.
+    pub fn looping(&self) -> Option<SectionLoop> {
+        self.looping
     }
 
     /// Go back to the first section's start without touching anything sounding, for a render. A
@@ -719,6 +797,16 @@ impl Engine {
         self.section = self.section.min(count - 1);
         let here = &song.sections[self.section];
         if self.section_place < song.section_plays(here) as u64 {
+            // A loop cued lands on the grid's next line, and its first section starts there if
+            // the one playing isn't one of its.
+            if self.loop_cued.is_some() && self.on_grid_line(self.realign_grid()) {
+                let sections = self.loop_cued.take().unwrap_or_else(|| unreachable!());
+                self.looping = Some(sections);
+                if !sections.holds(self.section) {
+                    let (from, first) = (self.section, sections.first.min(count - 1));
+                    return self.enter_section(&song, first, from, false);
+                }
+            }
             // Each repeat of a resetting section starts it over.
             let length = song.section_length(here) as u64;
             if here.start == SectionStart::Reset
@@ -729,11 +817,22 @@ impl Engine {
             }
             return true;
         }
+        // A section's start is a line of the grid, so a loop cued lands here.
+        if let Some(sections) = self.loop_cued.take() {
+            self.looping = Some(sections);
+        }
         let from = self.section;
-        let (next, wrapped) = match self.loop_section {
-            Some(section) if section < count => (section, false),
+        let (next, wrapped) = match self.looping {
+            Some(sections) if sections.first < count => sections.next(&song, from),
             _ => next_row(&song, from),
         };
+        self.enter_section(&song, next, from, wrapped)
+    }
+
+    /// Start a section, coming from another or the same one, and going back round to the first if
+    /// `wrapped`: it runs its `Start`, ends launches if it's another, and starts what's cued. False
+    /// if it has no length.
+    fn enter_section(&mut self, song: &Song, next: usize, from: usize, wrapped: bool) -> bool {
         self.section = next;
         self.section_place = 0;
         let section = &song.sections[next];
@@ -1224,6 +1323,10 @@ impl Engine {
         }
         self.transport = to;
         self.realign_waiting = false;
+        // A loop waiting for the grid is the loop from now, as there's no line coming round.
+        if let Some(sections) = self.loop_cued.take() {
+            self.looping = Some(sections);
+        }
         for track in self.tracks.iter_mut() {
             track.realign_waiting = false;
         }

@@ -1,7 +1,7 @@
 //! What keys do in the song view: a row per section, and a column for each track's chain.
 
 use ratatui::crossterm::event::KeyCode;
-use vt_engine::engine::Transport;
+use vt_engine::engine::{SectionLoop, Transport};
 use vt_engine::link::Command;
 use vt_model::action::Action;
 use vt_model::constants::BAR_STEPS;
@@ -102,6 +102,12 @@ impl App {
                 self.go_to_section(section);
             }
             Cmd::Audition => self.audition_section(section, 0),
+            Cmd::VisualStep => {
+                self.section_anchor = match self.section_anchor {
+                    Some(_) => None,
+                    None => Some(section),
+                };
+            }
             _ => {
                 self.count = count;
                 return false;
@@ -393,8 +399,8 @@ impl App {
             .and_then(|here| here.chains.get(track).copied().flatten());
         self.handle.send(Command::Launch { track, chain });
         if self.looping.is_none() {
-            self.looping = Some(self.playing_section);
-            self.handle.send(Command::LoopSection(self.looping));
+            self.looping = Some(SectionLoop::one(self.playing_section));
+            self.handle.send(Command::Loop(self.looping));
         }
         let when = self.song().launch.when();
         self.status = match chain {
@@ -462,23 +468,42 @@ impl App {
             section: at,
             length,
         });
-        self.looping = Some(at);
+        self.looping = Some(SectionLoop::one(at));
         self.go_to_section(at);
         self.status = format!("Captured to section {:02}, and staying on it", at + 1);
     }
 
-    /// `:loop`: keep playing the section being edited, or go back to playing the song.
+    /// The sections selected with `V`, from where it started to the cursor's, if they are.
+    pub(crate) fn selected_sections(&self) -> Option<SectionLoop> {
+        let anchor = self.section_anchor?;
+        (self.view == View::Song).then(|| SectionLoop::new(anchor, self.cursor.section))
+    }
+
+    /// `:loop`: keep playing the sections selected with `V`, or the section being edited, or go
+    /// back to playing the song if that one is already looping. While playing, a loop starts on
+    /// the next line of the launch grid, with its first section if the one playing isn't in it.
     pub(crate) fn toggle_loop(&mut self) {
         let section = self.cursor.section;
-        self.looping = if self.looping == Some(section) {
-            None
-        } else {
-            Some(section)
+        self.looping = match (self.selected_sections(), self.looping) {
+            (Some(selected), _) => Some(selected),
+            (None, Some(looping)) if looping.holds(section) => None,
+            (None, _) => Some(SectionLoop::one(section)),
         };
-        self.handle.send(Command::LoopSection(self.looping));
-        self.status = match self.looping {
-            Some(section) => format!("Looping section {:02}", section + 1),
-            None => "Playing the song".to_owned(),
+        self.handle.send(Command::Loop(self.looping));
+        let Some(looping) = self.looping else {
+            self.status = "Playing the song".to_owned();
+            return;
+        };
+        let sections = if looping.first == looping.last {
+            format!("section {:02}", looping.first + 1)
+        } else {
+            format!("sections {:02}-{:02}", looping.first + 1, looping.last + 1)
+        };
+        self.status = if self.transport == Transport::Playing {
+            let when = self.grid_when();
+            format!("Looping {sections} {when}")
+        } else {
+            format!("Looping {sections}")
         };
     }
 }

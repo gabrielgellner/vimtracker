@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::KeyCode;
 use ratatui::style::Color;
-use vt_engine::engine::{Engine, Transport};
+use vt_engine::engine::{Engine, SectionLoop, Transport};
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::constants::{FIXED_TRACKS, MAX_GROUPS};
@@ -4699,7 +4699,7 @@ fn loop_and_transport_keys_reach_the_section_being_edited() {
     press(&mut app, " 1a");
     block(&mut realtime, &mut app);
     command(&mut app, "loop");
-    assert_eq!(app.looping, Some(1));
+    assert_eq!(app.looping, Some(SectionLoop::one(1)));
     assert!(app.status.contains("section 02"), "{}", app.status);
     press(&mut app, " c");
     block(&mut realtime, &mut app);
@@ -4709,9 +4709,82 @@ fn loop_and_transport_keys_reach_the_section_being_edited() {
     press(&mut app, " 1k");
     assert!(song_text(&app)[4].contains(">02"), "{:?}", song_text(&app));
     command(&mut app, "loop");
-    assert_eq!(app.looping, Some(0));
+    assert_eq!(app.looping, Some(SectionLoop::one(0)));
     command(&mut app, "loop");
     assert_eq!(app.looping, None);
+}
+
+#[test]
+fn capital_v_over_sections_then_loop_loops_them_from_the_next_launch_line() {
+    use vt_tui::glyphs::{PLAY, WAITING};
+    let (mut app, mut rt) = app();
+    with_a_sound(&mut app);
+    // Three sections, and the cursor on the second.
+    press(&mut app, " 1aak");
+    press(&mut app, "V");
+    assert!(
+        status_line(&app).starts_with(" VISUAL "),
+        "{}",
+        status_line(&app)
+    );
+    press(&mut app, "j");
+    command(&mut app, "loop");
+    assert_eq!(app.looping, Some(SectionLoop::new(1, 2)));
+    assert_eq!(app.status, "Looping sections 02-03");
+    assert_eq!(app.section_anchor, None, "the command ends the selection");
+    assert!(status_line(&app).contains("Sec 3/3 loop 2-3"));
+    block(&mut rt, &mut app);
+    assert_eq!(rt.engine().looping(), Some(SectionLoop::new(1, 2)));
+    let rows = song_text(&app);
+    assert!(rows[3].starts_with(" 01  "), "{rows:?}");
+    assert!(rows[4].starts_with(" 02\u{2502} ") && rows[5].starts_with(" 03\u{2502} "));
+
+    // Set while playing a section outside it, it waits for the bar, and its first section
+    // starts there.
+    special(&mut app, KeyCode::BackTab);
+    block(&mut rt, &mut app);
+    press(&mut app, "kVj");
+    command(&mut app, "loop");
+    assert_eq!(app.status, "Looping sections 02-03 on the 1bar grid");
+    block(&mut rt, &mut app);
+    assert!(app.loop_waiting);
+    assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} LOOP  ")));
+    assert_eq!(app.playing_section, 0);
+    for _ in 0..800 {
+        block(&mut rt, &mut app);
+    }
+    assert!(!app.loop_waiting, "landed on the bar");
+    assert_eq!(app.playing_section, 1);
+
+    // One that holds the section playing only changes what comes next, so it's at once.
+    press(&mut app, "kkVj");
+    command(&mut app, "loop");
+    block(&mut rt, &mut app);
+    assert!(!app.loop_waiting);
+    assert_eq!(rt.engine().looping(), Some(SectionLoop::new(0, 1)));
+
+    // `:loop` alone on one of them goes back to the song.
+    command(&mut app, "loop");
+    assert_eq!(app.looping, None);
+    assert_eq!(app.status, "Playing the song");
+    block(&mut rt, &mut app);
+    assert_eq!(rt.engine().looping(), None);
+}
+
+#[test]
+fn esc_or_v_again_ends_a_selection_of_sections_and_so_does_leaving_the_view() {
+    let (mut app, _rt) = app();
+    press(&mut app, " 1aV");
+    assert!(app.section_anchor.is_some());
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.section_anchor, None);
+    press(&mut app, "VV");
+    assert_eq!(app.section_anchor, None);
+    press(&mut app, "V 3");
+    assert_eq!(app.section_anchor, None);
+    press(&mut app, " 1V:");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.section_anchor, None, "a command line left ends it too");
 }
 
 #[test]
@@ -4767,7 +4840,7 @@ fn enter_cues_this_chain_on_one_track_and_holds_the_section() {
     assert_eq!(app.playing_section, 0);
     press(&mut app, "0lll");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.looping, Some(0), "the jam stays here");
+    assert_eq!(app.looping, Some(SectionLoop::one(0)), "the jam stays here");
     play_on(&mut app, &mut realtime, 1);
     assert_eq!(app.jam[0].cued, Some(Some(1)));
     assert!(
@@ -4824,7 +4897,7 @@ fn c_captures_what_each_track_is_playing_as_one_undo() {
         "the row it came from"
     );
     assert_eq!(app.cursor.section, 1);
-    assert_eq!(app.looping, Some(1));
+    assert_eq!(app.looping, Some(SectionLoop::one(1)));
     play_on(&mut app, &mut realtime, 1);
     assert_eq!(app.playing_section, 1, "it carries on in the new row");
     assert_eq!(app.jam[0].playing, Some(Some(1)), "without restarting");

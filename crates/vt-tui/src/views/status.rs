@@ -332,8 +332,8 @@ pub(crate) fn grid_name(skip: u32) -> String {
 
 /// The transport as glyphs in place of words: play in the active colour, pause and stop dim, and a
 /// red record beside play while recording. Fill changes what the conditions play, so it's named
-/// while it's on, and a realign and a cued launch are named, with the glyph for waiting, until the
-/// launch grid comes round.
+/// while it's on, and a realign, a cued launch and a loop are named, with the glyph for waiting,
+/// until the launch grid comes round.
 pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
     let (glyph, style) = match app.transport {
         Transport::Playing => (glyphs::PLAY, theme::active()),
@@ -353,7 +353,11 @@ pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
     }
     let realigning = app.realigning || app.realigning_tracks.contains(&true);
     let cued = app.jam.iter().any(|jam| jam.cued.is_some());
-    for (waiting, name) in [(realigning, "REALIGN"), (cued, "LAUNCH")] {
+    for (waiting, name) in [
+        (realigning, "REALIGN"),
+        (cued, "LAUNCH"),
+        (app.loop_waiting, "LOOP"),
+    ] {
         if waiting {
             spans.push(Span::raw(" "));
             spans.push(Span::styled(glyphs::WAITING.to_string(), theme::dim()));
@@ -385,7 +389,11 @@ pub fn right_spans(app: &App) -> Vec<Span<'static>> {
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // The sample page's modes in their own colours: the keys mode's, Visual's, and with the focus
     // on the settings rows, the cursor's, as the setting it's on is drawn.
-    let badge = match app.sample_mode() {
+    // Sections selected with `V` in the song view are Visual's too.
+    let special = app
+        .sample_mode()
+        .or_else(|| app.section_anchor.map(|_| Mode::VisualField.label()));
+    let badge = match special {
         Some("SETTINGS") => Some(theme::ROSEWATER),
         Some(mode) if mode == Mode::VisualField.label() => Some(theme::MAUVE),
         _ => None,
@@ -444,7 +452,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .map_or_else(String::new, |steps| format!("Reset {steps}  "));
     let sections = app.song().sections.len();
     let section = if sections > 1 {
-        let looping = if app.looping.is_some() { " loop" } else { "" };
+        let looping = match app.looping {
+            Some(sections) if sections.first != sections.last => {
+                format!(" loop {}-{}", sections.first + 1, sections.last + 1)
+            }
+            Some(_) => " loop".to_owned(),
+            None => String::new(),
+        };
         format!("Sec {}/{sections}{looping}  ", app.cursor.section + 1)
     } else {
         String::new()
@@ -473,7 +487,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 " {} ",
                 // The sample page's modes keep its keys, but each is named, so `h` is never a
                 // pad or a setting's move without the badge saying so.
-                if let Some(mode) = app.sample_mode() {
+                if let Some(mode) = special {
                     mode
                 } else if app.mode == Mode::Keys {
                     Mode::Keys.label()
