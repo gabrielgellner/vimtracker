@@ -38,6 +38,13 @@ symbols-font:
 test:
     cargo test --workspace
 
+# What a pull request must pass before it merges, run here rather than on GitHub: formatting,
+# clippy with warnings as errors, then every test
+ci:
+    cargo fmt --all --check
+    cargo clippy --workspace --all-targets --locked -- -D warnings
+    cargo test --workspace --locked
+
 # Show what the next release would add to the changelog
 changelog-preview:
     git-cliff --unreleased

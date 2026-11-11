@@ -1,13 +1,13 @@
-# Checks every pull request and every push to main.
+# The same checks as `just ci`, which is what pull requests run before they merge, on the
+# author's machine (2026-11-11): the hosted runs were too slow and kept timing out. This one is
+# kept to run by hand, from the Actions tab or `gh workflow run ci`.
 #
 # It runs on Apple silicon macOS because the render tests compare hashes of the audio, and the
 # filter and reverb use library maths that can round differently on another platform.
 name: ci
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
