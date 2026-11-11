@@ -49,6 +49,9 @@ commit_parsers = [
     # Merge commits repeat the branch's own commits, which are listed already.
     { message = "^Merge pull request", skip = true },
     { message = "^Merge branch", skip = true },
+    # Bringing main into a branch before it merges, which agents do instead of rebasing.
+    { message = "^Merge remote-tracking branch", skip = true },
+    { message = "^Merge main into", skip = true },
     { message = "^\\w+(\\(.*\\))?!?: merge ", skip = true },
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Bug Fixes" },
