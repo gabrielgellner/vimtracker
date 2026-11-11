@@ -160,7 +160,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     press(&mut app, "x");
     assert_eq!(machine_value(&app, 1), 0);
     // Onto Square's fine digits, and no further: it's the row's last.
-    press(&mut app, "ll");
+    press(&mut app, "l");
     assert_eq!(column_name(&app), "Square");
     // `}` goes to the same row in the devices below.
     press(&mut app, "}");
@@ -421,6 +421,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         inserts: Default::default(),
         reduction: Default::default(),
         bypassed: Default::default(),
+        after_trim: Default::default(),
     });
     assert!(cut(&app).contains("FF00 ▕██▎     │▏"), "{}", cut(&app));
 }
@@ -1573,7 +1574,7 @@ fn the_filter_curve_follows_its_settings_and_the_cursor() {
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
         graphics.sync(app, &mut out).unwrap();
-        String::from_utf8(out).unwrap().matches(",c=24,").count()
+        String::from_utf8(out).unwrap().matches(",c=49,").count()
     };
     press(&mut app, " 4");
     assert_eq!(sync(&mut app, &mut graphics), 1);
@@ -1616,7 +1617,7 @@ fn the_filter_curve_moves_with_what_plays() {
         let mut out = Vec::new();
         graphics.sync(app, &mut out).unwrap();
         let out = String::from_utf8(out).unwrap();
-        (out.matches(",c=24,").count(), out.matches("a=d,").count())
+        (out.matches(",c=49,").count(), out.matches("a=d,").count())
     };
     press(&mut app, " 4");
     sync(&mut app, &mut graphics);
@@ -1633,6 +1634,7 @@ fn the_filter_curve_moves_with_what_plays() {
         inserts: Default::default(),
         reduction: Default::default(),
         bypassed: Default::default(),
+        after_trim: Default::default(),
     };
 
     // Each new value draws it once, and it holds while the value does.
@@ -2041,17 +2043,29 @@ fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
 
 /// An app whose first track plays one sample and whose second plays another, and a third with none.
 fn app_with_samples() -> (App, Realtime) {
-    use vt_model::sample::SampleData;
+    use vt_model::analysis::Analysis;
+    use vt_model::bank::{BankEntry, ContentHash};
+    use vt_model::sample::{Decoded, SampleData};
     let mut song = Song::new(3);
     let mut pool = SamplePool::default();
     for (track, (path, level)) in [("a.wav", 0.5), ("b.wav", -0.25)].iter().enumerate() {
+        let samples = vec![*level; 9600];
         pool.insert(
             path,
             SampleData {
-                frames: vec![[*level; 2]; 100],
+                frames: samples.as_chunks::<2>().0.to_vec(),
             },
         );
-        song.sample_on(track, path);
+        let hash = ContentHash(track as u128 + 1);
+        let decoded = Decoded {
+            samples,
+            channels: 2,
+            rate: 48_000,
+        };
+        pool.insert_analysis(Arc::new(Analysis::of(hash, &decoded)));
+        let number = song.bank.add(BankEntry::of_file(*path, hash)).unwrap();
+        song.tracks[track].machine = Machine::Sampler;
+        song.tracks[track].set_setting(SettingId::SAMPLE, number);
     }
     let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
@@ -2060,8 +2074,9 @@ fn app_with_samples() -> (App, Realtime) {
 }
 
 #[test]
-fn a_samples_waveform_is_sent_once_and_follows_the_cursor_and_the_track() {
+fn a_samplers_thumbnail_is_sent_once_and_again_only_for_a_change() {
     use vt_tui::kitty::Graphics;
+    use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app_with_samples();
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
@@ -2069,36 +2084,49 @@ fn a_samples_waveform_is_sent_once_and_follows_the_cursor_and_the_track() {
         graphics.sync(app, &mut out).unwrap();
         String::from_utf8(out)
             .unwrap()
-            .matches(",c=24,r=3,")
+            .matches(",c=49,r=5,")
             .count()
     };
     press(&mut app, " 4");
-    // The filter's curve and the waveform.
+    // The filter's curve and the thumbnail, picked out as the cursor's in the Machine.
     assert_eq!(sync(&mut app, &mut graphics), 2);
-    let plain = app.waveform_image.unwrap();
-    assert_ne!(Some(plain), app.filter_image);
-    assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
-
-    // On the sample, in the Machine's title, it's picked out, once.
-    press(&mut app, "l");
-    assert_eq!(sync(&mut app, &mut graphics), 1);
     let picked = app.waveform_image.unwrap();
-    assert_ne!(picked, plain);
-    press(&mut app, "h");
+    assert_ne!(Some(picked), app.filter_image);
+    assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
+    // Moving about the Machine sends nothing.
+    press(&mut app, "j");
+    assert_eq!(column_name(&app), "Slice");
     assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.waveform_image, Some(plain));
+    assert_eq!(app.waveform_image, Some(picked));
+
+    // Out of it, it's dim, once, and back in, it's the one already sent.
+    press(&mut app, "}");
+    assert_eq!(
+        sync(&mut app, &mut graphics),
+        2,
+        "the filter's is picked out too"
+    );
+    let plain = app.waveform_image.unwrap();
+    assert_ne!(plain, picked);
+    press(&mut app, "{");
+    assert_eq!(sync(&mut app, &mut graphics), 0, "each shade has been sent");
+    assert_eq!(app.waveform_image, Some(picked));
+
+    // A new start draws it again, once.
+    press(&mut app, "l");
+    assert!(!app.track_page.fine);
+    assert_eq!(column_name(&app), "Start");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    press(&mut app, "=");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(app.waveform_image, Some(picked));
+    assert_eq!(sync(&mut app, &mut graphics), 0);
 
     // Another track's sample is drawn for it, and one with no sample has none.
     app.cursor.track = 1;
     assert_eq!(sync(&mut app, &mut graphics), 1);
     assert_ne!(app.waveform_image, Some(plain));
     app.cursor.track = 2;
-    assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.waveform_image, None);
-    // A synth has none either, whatever file it still names.
-    app.cursor.track = 0;
-    press(&mut app, "=");
-    assert_ne!(app.song().tracks[0].machine, Machine::Sampler);
     sync(&mut app, &mut graphics);
     assert_eq!(app.waveform_image, None);
 }
@@ -2111,11 +2139,11 @@ fn the_filter_curve_and_the_envelopes_are_smooth_at_their_sizes() {
     let mut out = Vec::new();
     graphics.sync(&mut app, &mut out).unwrap();
     let sent = vt_tui::screenshot::sent_images(&out);
-    // The filter's curve keeps its 24 by 3 characters, now at their pixels, in a palette with an
-    // alpha for each of its entries: the line at eighths, and the gridlines.
-    assert!(String::from_utf8(out).unwrap().contains(",c=24,r=3,"));
+    // The filter's curve is the large panel's 49 by 5 characters, at their pixels, in a palette
+    // with an alpha for each of its entries: the line at eighths, and the gridlines.
+    assert!(String::from_utf8(out).unwrap().contains(",c=49,r=5,"));
     let filter = &sent[&app.filter_image.unwrap()];
-    assert_eq!(png_size(filter), (360, 117));
+    assert_eq!(png_size(filter), (735, 195));
     assert_eq!(png_chunk(filter, b"tRNS").len(), 11);
     // The envelopes keep their 28 by 4.
     press(&mut app, "L");

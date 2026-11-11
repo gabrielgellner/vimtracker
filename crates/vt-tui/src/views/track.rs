@@ -39,13 +39,18 @@ mod sound;
 
 pub(crate) use modulation::{DIAGRAM_HEIGHT, DIAGRAM_WIDTH, envelope_being_edited};
 
-/// The size of the filter's curve, in characters. With its box, it's as wide as a value and its bar.
-pub(crate) const FILTER_CURVE_WIDTH: usize = 24;
-pub(crate) const FILTER_CURVE_HEIGHT: usize = 3;
-/// The size of a sample's waveform, in characters. It sits beside the filter's curve, under the
-/// output's column, and is as big, so the two boxes line up.
-pub(crate) const WAVEFORM_WIDTH: usize = FILTER_CURVE_WIDTH;
-pub(crate) const WAVEFORM_HEIGHT: usize = FILTER_CURVE_HEIGHT;
+/// The size of the Sound page's large panels, in characters: the filter's curve, a sampler's
+/// thumbnail and the Output's meter, each beside a grid of two columns. At the author's 15 by 39
+/// pixels a character the pictures are 735 by 195.
+pub(crate) const LARGE_PANEL_WIDTH: usize = 49;
+pub(crate) const LARGE_PANEL_HEIGHT: usize = 5;
+/// The size of the filter's curve, in characters, the large panel's.
+pub(crate) const FILTER_CURVE_WIDTH: usize = LARGE_PANEL_WIDTH;
+pub(crate) const FILTER_CURVE_HEIGHT: usize = LARGE_PANEL_HEIGHT;
+/// The size of a sampler's thumbnail, in the Machine's panel, as big as the filter's curve under
+/// it, so the two boxes line up.
+pub(crate) const WAVEFORM_WIDTH: usize = LARGE_PANEL_WIDTH;
+pub(crate) const WAVEFORM_HEIGHT: usize = LARGE_PANEL_HEIGHT;
 
 /// The size of a compressor's curve on the FX page, in characters, the graphic panel's small
 /// size, which is square at the author's 15 by 39 pixels a character: 195 by 195. The rows a
@@ -240,6 +245,16 @@ fn value_line(
         ),
     };
     Line::from(value_spans(app, control, text, style))
+}
+
+/// Whether the cursor is in a sound track's Machine device, on the machine, its type, its
+/// sample or one of its settings, so its thumbnail is the focused one.
+pub(crate) fn machine_being_edited(app: &App) -> bool {
+    app.track_page.page == Page::Sound
+        && matches!(
+            app.track_control(),
+            Control::Machine | Control::Sample | Control::Setting(_)
+        )
 }
 
 /// Whether the cursor is on something the filter's curve shows.

@@ -11,12 +11,15 @@
 //! move without it being sent again.
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use ratatui::style::Color;
 use vt_model::analysis::{Analysis, MinMax, Pyramid};
-use vt_model::bank::Points;
+use vt_model::bank::{BankEntry, Points};
 use vt_model::sample::SampleData;
 use vt_model::samples::Rates;
+use vt_model::settings::{PlayMode, SettingId};
+use vt_model::song::Track;
 
 use crate::kitty::{Picture, rgb};
 use crate::theme;
@@ -284,6 +287,133 @@ impl Drawing<'_> {
     }
 }
 
+/// What a sampler's thumbnail on the Sound page shows: the whole of the slice its `Slice` is on,
+/// in the file's frames, with where its `Start` starts a note and where its `Length` ends one, in
+/// the order it plays, so a reversed slice's start is near its end. It's drawn by [`Drawing`],
+/// as the sample page's waveform is, with the start's teal line and the end's red one, the sound
+/// between them in the text's colour and the rest dim.
+#[derive(Debug, Clone)]
+pub struct Thumbnail {
+    /// The file's analysis, held so another file can't be mistaken for it.
+    pub analysis: Arc<Analysis>,
+    /// Its frames at the program's rate, if they're in, to draw closer than the analysis goes.
+    pub frames: Option<(Arc<SampleData>, Rates)>,
+    /// The slice, from its first frame to one past its last, as the file has them.
+    pub slice: Range<u64>,
+    /// Where a note starts playing and where it stops, in the file's frames.
+    pub start: u64,
+    pub end: u64,
+}
+
+impl PartialEq for Thumbnail {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.analysis, &other.analysis)
+            && self.frames.is_some() == other.frames.is_some()
+            && (&self.slice, self.start, self.end) == (&other.slice, other.start, other.end)
+    }
+}
+
+impl Thumbnail {
+    /// The thumbnail of what a sampler track plays of a bank entry, from its `Slice`, `Play`,
+    /// `Start` and `Length` as they're set, cut as the engine cuts a note's span: `Start` and
+    /// `Length` are shares of the slice from where it starts in play order, and `Thru` plays on
+    /// past the slice to the entry's end.
+    pub fn of(
+        entry: &BankEntry,
+        analysis: Arc<Analysis>,
+        frames: Option<(Arc<SampleData>, Rates)>,
+        track: &Track,
+    ) -> Self {
+        let length = analysis.frames();
+        let points = &entry.edit.points;
+        let number = usize::from(track.setting(SettingId::SLICE));
+        let slice = points.slice_frames(number, length);
+        let play = match points.slices.get(number.min(points.slice_count() - 1)) {
+            Some(own) => own.over.over(entry.edit.play),
+            None => entry.edit.play,
+        };
+        let reverse = play.reverse;
+        let whole_entry = points.slice_frames(0, length).start..points.end_in(length);
+        let slice = match PlayMode::from_index(track.setting(SettingId::PLAY)) {
+            PlayMode::Thru if reverse => whole_entry.start..slice.end,
+            PlayMode::Thru => slice.start..whole_entry.end,
+            _ => slice,
+        };
+        let share = |id: SettingId| {
+            let value = f64::from(track.setting(id)) + f64::from(track.fine(id)) / 256.0;
+            (value / 255.0).clamp(0.0, 1.0)
+        };
+        let whole = (slice.end - slice.start) as f64;
+        let into = (whole * share(SettingId::SAMPLE_START)).round() as u64;
+        let playing = (whole * share(SettingId::SAMPLE_LENGTH)).round() as u64;
+        let (start, end) = if reverse {
+            let start = slice.end - into;
+            (start, start.saturating_sub(playing).max(slice.start))
+        } else {
+            let start = slice.start + into;
+            (start, (start + playing).min(slice.end))
+        };
+        Self {
+            analysis,
+            frames,
+            slice,
+            start,
+            end,
+        }
+    }
+
+    /// Its picture, `columns` by `rows` characters of `cell` pixels each, both channels together
+    /// in one lane: the sound that plays in `sound` and the rest in `outside`.
+    pub fn picture(
+        &self,
+        (columns, rows): (usize, usize),
+        cell: (usize, usize),
+        sound: [u8; 3],
+        outside: [u8; 3],
+    ) -> Picture {
+        // The points in the order they're across, so what's between them plays.
+        let points = Points {
+            start: self.start.min(self.end),
+            end: Some(self.start.max(self.end)),
+            ..Points::default()
+        };
+        let span = self.slice.end - self.slice.start;
+        let drawing = Drawing {
+            analysis: &self.analysis,
+            frames: self
+                .frames
+                .as_ref()
+                .map(|(data, rates)| (data.as_ref(), *rates)),
+            points: &points,
+            first: self.slice.start,
+            // As few frames a character as leave room for the end's line inside the picture.
+            zoom: thumbnail_zoom(span, columns, cell.0),
+            columns,
+            rows,
+            cell,
+            merged: true,
+        };
+        let mut picture = drawing.picture();
+        picture.colors[usize::from(WAVE - 1)] = sound;
+        picture.colors[usize::from(OUTSIDE - 1)] = outside;
+        // Reversed, the start is the later of the two, so the colours change places.
+        if self.start > self.end {
+            picture
+                .colors
+                .swap(usize::from(START - 1), usize::from(END - 1));
+        }
+        picture
+    }
+}
+
+/// How many frames each character of a thumbnail covers, for a span of frames across so many
+/// characters of so many pixels: as few as put the span's end where a point's line at it is
+/// still whole inside the picture.
+fn thumbnail_zoom(span: u64, columns: usize, across: usize) -> u64 {
+    let room = (columns * across).saturating_sub(POINT_PIXELS).max(1) as u64;
+    (span * across as u64).div_ceil(room).max(1)
+}
+
 /// One channel's band of the picture.
 struct Lane {
     top: usize,
@@ -480,5 +610,103 @@ mod tests {
         // 48 columns of the 60 hold the file, and the overview has no zero line.
         assert!(column(&picture, 48 * 4 - 1).contains(&WAVE));
         assert!(column(&picture, 48 * 4 + 2).iter().all(|pixel| *pixel == 0));
+    }
+
+    /// A sampler track's thumbnail of the sine, its slice, start and end, and its picture at the
+    /// Sound page's size at the author's pixels.
+    fn thumbnail(entry: &BankEntry, settings: &[(SettingId, u8)]) -> (Thumbnail, Picture) {
+        let (analysis, data) = sine();
+        let mut track = Track::default();
+        for (id, value) in settings {
+            track.set_setting(*id, *value);
+        }
+        let thumbnail = Thumbnail::of(
+            entry,
+            Arc::new(analysis),
+            Some((Arc::new(data), Rates::SAME)),
+            &track,
+        );
+        let picture = thumbnail.picture((49, 5), (15, 39), [1; 3], [2; 3]);
+        (thumbnail, picture)
+    }
+
+    /// The column of pixels a frame is at in a thumbnail's picture.
+    fn x_at(thumbnail: &Thumbnail, frame: u64) -> usize {
+        let span = thumbnail.slice.end - thumbnail.slice.start;
+        ((frame - thumbnail.slice.start) * 15 / thumbnail_zoom(span, 49, 15)) as usize
+    }
+
+    #[test]
+    fn a_thumbnails_lines_are_at_its_start_and_where_its_length_ends_it() {
+        let entry = BankEntry::of_file("sine.wav", ContentHash(1));
+        // A quarter in, and half of it on from there.
+        let settings = [
+            (SettingId::SAMPLE_START, 0x40),
+            (SettingId::SAMPLE_LENGTH, 0x80),
+        ];
+        let (shown, picture) = thumbnail(&entry, &settings);
+        assert_eq!((picture.width, picture.height), (735, 195));
+        assert_eq!(shown.slice, 0..48_000);
+        assert_eq!(shown.start, (48_000.0 * 64.0 / 255.0_f64).round() as u64);
+        assert_eq!(
+            shown.end,
+            shown.start + (48_000.0 * 128.0 / 255.0_f64).round() as u64
+        );
+        for (frame, color) in [(shown.start, START), (shown.end, END)] {
+            let x = x_at(&shown, frame);
+            assert!(column(&picture, x).iter().all(|pixel| *pixel == color));
+            assert!(column(&picture, x + 1).iter().all(|pixel| *pixel == color));
+        }
+        // What plays is between them, the sound's colour, and the rest is dim.
+        assert!(column(&picture, 10).contains(&OUTSIDE));
+        assert!(!column(&picture, 10).contains(&WAVE));
+        assert!(column(&picture, x_at(&shown, shown.start) + 10).contains(&WAVE));
+        assert!(column(&picture, 730).contains(&OUTSIDE));
+        // In the colours given for them, and the points' own.
+        assert_eq!(picture.colors[usize::from(WAVE - 1)], [1; 3]);
+        assert_eq!(picture.colors[usize::from(OUTSIDE - 1)], [2; 3]);
+        assert_eq!(picture.colors[usize::from(START - 1)], rgb(START_COLOR));
+        assert_eq!(picture.colors[usize::from(END - 1)], rgb(END_COLOR));
+        // All of it, from the start, has both lines inside the picture.
+        let (whole, picture) = thumbnail(&entry, &[(SettingId::SAMPLE_LENGTH, 0xFF)]);
+        assert_eq!((whole.start, whole.end), (0, 48_000));
+        let end = x_at(&whole, whole.end);
+        assert!(
+            (picture.width - 3..=picture.width - 2).contains(&end),
+            "{end}"
+        );
+        assert!(column(&picture, end + 1).iter().all(|p| *p == END));
+        assert!(
+            column(&picture, x_at(&whole, 48_000))
+                .iter()
+                .all(|p| *p == END)
+        );
+    }
+
+    #[test]
+    fn a_thumbnail_shows_its_slice_reversed_or_played_on_through() {
+        let mut entry = BankEntry::of_file("sine.wav", ContentHash(1));
+        entry.edit.points.reslice(&[0, 12_000, 36_000]);
+        let slice = [(SettingId::SLICE, 1), (SettingId::SAMPLE_LENGTH, 0x80)];
+        let (shown, _) = thumbnail(&entry, &slice);
+        assert_eq!(shown.slice, 12_000..36_000);
+        assert_eq!((shown.start, shown.end), (12_000, 24_047));
+        // On through, it's to the entry's end.
+        let thru = [slice[0], slice[1], (SettingId::PLAY, 3)];
+        let (shown, _) = thumbnail(&entry, &thru);
+        assert_eq!(shown.slice, 12_000..48_000);
+        // Reversed, it starts at the slice's end, so the start's teal is the later line.
+        entry.edit.play.reverse = true;
+        let (shown, picture) = thumbnail(&entry, &slice);
+        assert_eq!((shown.start, shown.end), (36_000, 23_953));
+        assert_eq!(picture.colors[usize::from(START - 1)], rgb(END_COLOR));
+        assert_eq!(picture.colors[usize::from(END - 1)], rgb(START_COLOR));
+        let later = x_at(&shown, shown.start);
+        assert!(column(&picture, later).iter().all(|pixel| *pixel == END));
+        assert!(
+            column(&picture, x_at(&shown, shown.end))
+                .iter()
+                .all(|pixel| *pixel == START)
+        );
     }
 }

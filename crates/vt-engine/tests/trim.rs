@@ -11,7 +11,7 @@ use vt_model::constants::UNITY_TRIM;
 use vt_model::insert::{Distort, DistortType, Insert};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Song, TrackKind, trim_db, trim_gain};
+use vt_model::song::{FilterType, Song, TrackKind, trim_db, trim_gain};
 
 const RATE: u32 = 48_000;
 /// A step at 120 BPM.
@@ -266,4 +266,44 @@ fn a_fixed_tracks_trim_comes_before_its_slots() {
     let master = plain.fixed_track(TrackKind::Master).unwrap();
     let squeezed = squeezed_by_its_slots(plain, master);
     assert!(squeezed < -1.0, "and the master's: {squeezed} dB");
+}
+
+/// The highest level right after a track's trim over a step of its note, as the Output device's
+/// meter reads it, and the loudest of what it gives the mix.
+fn after_the_trim(song: Song) -> ([f32; 2], f32) {
+    let mut engine = Engine::new(RATE, published(song));
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP * 2];
+    engine.process(&mut out);
+    (engine.take_after_trim(0), loudest(&out))
+}
+
+#[test]
+fn the_output_meter_reads_right_after_the_trim_and_before_the_filter() {
+    let (plain, heard) = after_the_trim(song("steady"));
+    assert!(plain[0] > 0.2, "{plain:?}");
+    assert_eq!(plain[0], plain[1]);
+    assert!((plain[0] - heard).abs() < 1e-3, "{plain:?} against {heard}");
+    // Turned up 12 dB, it reads 12 dB more.
+    let boosted = trimmed(song("steady"), 0, UNITY_TRIM + 48);
+    let (hot, _) = after_the_trim(boosted.clone());
+    assert!((db(hot[0] / plain[0]) - 12.0).abs() < 1e-3, "{hot:?}");
+    // A high-pass at the top takes away all of a steady level, and a fader at the bottom all of
+    // what's left, but the meter hears neither, as they're after it.
+    let mut filtered = boosted;
+    filtered.tracks[0].filter = FilterType::HighPass;
+    filtered.tracks[0].cutoff = 0xFF;
+    filtered.tracks[0].level = 0;
+    let (still, silent) = after_the_trim(filtered);
+    assert!(silent < 1e-3, "{silent}");
+    assert_eq!(still, hot);
+    // Taking it starts it again, so the next report has only what's played since.
+    let mut engine = Engine::new(RATE, published(song("steady")));
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP * 2];
+    engine.process(&mut out);
+    assert!(engine.take_after_trim(0)[0] > 0.2);
+    assert_eq!(engine.take_after_trim(0), [0.0; 2]);
+    // A track that doesn't exist reads silence.
+    assert_eq!(engine.take_after_trim(usize::MAX), [0.0; 2]);
 }

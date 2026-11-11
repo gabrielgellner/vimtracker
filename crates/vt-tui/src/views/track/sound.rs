@@ -23,13 +23,14 @@ use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellSource, CellWidths, SettingsGrid};
 use crate::views::widgets::group;
 use crate::views::widgets::image;
+use crate::views::widgets::meter::level_across;
 use crate::views::widgets::panel::GraphicPanel;
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
 use crate::views::widgets::table::{Cells, Columns, take_top};
 
 use super::{
-    BAR_CELLS, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
-    at_default, value,
+    BAR_CELLS, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH, LARGE_PANEL_WIDTH, WAVEFORM_HEIGHT,
+    WAVEFORM_WIDTH, at_default, value,
 };
 
 /// How wide a value is on the Sound page, its coarse digits and its fine ones, as `A000`, and its
@@ -210,9 +211,55 @@ fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'st
         .collect()
 }
 
-/// A device's graphic panel: the filter's curve beside the filter's settings, and the waveform of
-/// the sample a sampler plays beside the machine's, each in its box once its image has been sent.
+/// The Output meter's scale: from -60 dB at its left, 1.5 dB a character, to +6 dB, 44
+/// characters, after the side's name.
+const OUTPUT_METER_FLOOR_DB: f32 = -60.0;
+const OUTPUT_METER_DB_PER_CELL: f32 = 1.5;
+const OUTPUT_METER_CELLS: usize = 44;
+/// The room before the bar for its side's name, as ` L `.
+const OUTPUT_METER_LABEL: usize = 3;
+/// The levels the scale under the bars names, each ending under the character it starts at.
+const OUTPUT_METER_SCALE_DB: [i32; 5] = [-48, -36, -24, -12, 0];
+
+/// The Output's meter, in its panel: each side's level right after the trim, so the trim can be
+/// set by eye, as horizontal eighths in the level colours, with a faint mark at the highest it
+/// was lately, and a faint scale under them. It's text, so it moves every frame for nothing.
+fn output_meter(app: &App) -> Vec<Line<'static>> {
+    let blank = || Line::raw(" ".repeat(LARGE_PANEL_WIDTH));
+    let mut lines = vec![blank()];
+    for (side, held) in ["L", "R"].into_iter().zip(app.after_trim) {
+        let mut spans = vec![Span::styled(format!(" {side} "), theme::dim())];
+        spans.extend(level_across(
+            held.now,
+            held.top,
+            OUTPUT_METER_FLOOR_DB,
+            OUTPUT_METER_DB_PER_CELL,
+            OUTPUT_METER_CELLS,
+        ));
+        let rest = LARGE_PANEL_WIDTH - OUTPUT_METER_LABEL - OUTPUT_METER_CELLS;
+        spans.push(Span::raw(" ".repeat(rest)));
+        lines.push(Line::from(spans));
+    }
+    let mut scale = " ".repeat(LARGE_PANEL_WIDTH);
+    for db in OUTPUT_METER_SCALE_DB {
+        let text = db.to_string();
+        let cell = ((db as f32 - OUTPUT_METER_FLOOR_DB) / OUTPUT_METER_DB_PER_CELL) as usize;
+        let end = OUTPUT_METER_LABEL + cell + 1;
+        scale.replace_range(end - text.len()..end, &text);
+    }
+    lines.push(Line::styled(scale, theme::faint()));
+    lines.push(blank());
+    lines
+}
+
+/// A device's graphic panel: the filter's curve beside the filter's settings, the thumbnail of
+/// what a sampler plays beside the machine's, each in its box once its image has been sent, and
+/// the Output's meter.
 fn panel(app: &App, track: &Track, device: &DeviceSpec) -> GraphicPanel {
+    // The Output is the device that starts with `Trim`.
+    if device.grid[0][0] == Some(Control::Trim) {
+        return GraphicPanel::new().boxed(output_meter(app), LARGE_PANEL_WIDTH as u16, None);
+    }
     let image = match device.title[0] {
         Some(Control::FilterType) => app
             .filter_image

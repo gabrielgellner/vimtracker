@@ -1581,6 +1581,20 @@ impl Engine {
         readings
     }
 
+    /// The highest level of a track's sides since this was last asked, right after its trim and
+    /// before its filter, for the Output device's meter. Every track's starts again from silence,
+    /// so one watched next doesn't begin with what it played while it wasn't.
+    pub fn take_after_trim(&mut self, index: usize) -> [f32; 2] {
+        let taken = self
+            .tracks
+            .get(index)
+            .map_or([0.0; 2], |track| track.after_trim);
+        for track in &mut self.tracks {
+            track.after_trim = [0.0; 2];
+        }
+        taken
+    }
+
     pub fn process(&mut self, out: &mut [f32]) {
         self.stopwatch.restart_lap();
         let mut written = 0;

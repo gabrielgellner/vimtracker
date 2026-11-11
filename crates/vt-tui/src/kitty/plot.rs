@@ -11,7 +11,7 @@ use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
 use vt_model::envelope::Envelope;
 use vt_model::insert::{Compressor, Equaliser, threshold_db};
-use vt_model::song::Track;
+use vt_model::song::{FilterType, Track};
 
 use super::{indexed_png, rgb};
 use crate::theme;
@@ -310,12 +310,30 @@ pub fn filter_level(db: f32) -> f32 {
     (db - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB)
 }
 
-/// A track's filter and utility filter: what they let through at each frequency.
+/// A track's filter and utility filter: what they let through at each frequency, from 20 Hz to
+/// 20 kHz across and -36 dB to +24 dB up, over a dotted line at 0 dB and fainter ones down it at
+/// 100 Hz, 1 kHz and 10 kHz, as the EQ's is. A dashed line rises from the bottom to the curve at
+/// `Cut`, as the compressor's does at its threshold, unless the filter is open and out of the way.
 pub fn filter(track: &Track, rate: u32, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
+    decades(&mut plot);
+    plot.across(filter_level(0.0), Mark::Grid);
     let level = |x: f32| filter_level(track_response_db(track, rate, frequency_at(x)));
+    if !filter_open(track) {
+        // `Cut` is evenly in pitch from 20 Hz to 20 kHz, as the plot is across.
+        let cut = f32::from(track.cutoff) / 255.0;
+        plot.dashed_up(cut, level(cut), Mark::Grid);
+    }
     plot.curve(level, level(0.0), &[]);
     plot
+}
+
+/// Whether a track's filter has nothing to do, so it's out of the way, as it is when playing.
+fn filter_open(track: &Track) -> bool {
+    track.filter == FilterType::LowPass
+        && track.cutoff == u8::MAX
+        && track.resonance == 0
+        && track.drive == 0
 }
 
 /// An envelope's shape, from silence, with a point at the end of each stage so its corners are
@@ -534,18 +552,93 @@ mod tests {
             high_cut: 0xFF,
             ..Track::default()
         };
-        let plot = filter(&open, 48_000, (360, 117));
+        let plot = filter(&open, 48_000, (735, 195));
         let flat = plot.at(0.0, filter_level(0.0)).1;
-        for x in 0..360 {
+        for x in 0..735 {
             assert!((middle(&plot, x).unwrap() - flat).abs() < 0.5, "{x}");
         }
-        assert!(plot.png([255; 3]).len() < 3000);
+        assert!(plot.png([255; 3]).len() < 6000);
+        // Open, it has nothing to mark at its cut: only the 0 dB line under the curve and the
+        // fainter lines down it.
+        let pixels = plot.pixels();
+        let zero = flat as usize;
+        for y in (0..195_usize).filter(|y| y.abs_diff(zero) > 1) {
+            assert!((0..735).all(|x| pixels[y * 735 + x] != GRID), "{y}");
+        }
         let closed = Track {
             cutoff: 0x80,
             ..open
         };
-        let plot = filter(&closed, 48_000, (360, 117));
-        assert!(middle(&plot, 10).unwrap() < middle(&plot, 350).unwrap());
+        let plot = filter(&closed, 48_000, (735, 195));
+        assert!(middle(&plot, 10).unwrap() < middle(&plot, 725).unwrap());
+    }
+
+    #[test]
+    fn a_filter_curve_is_within_a_pixel_of_its_response_with_gridlines_and_a_mark_at_cut() {
+        use vt_model::song::{FilterMode, FilterType};
+        let size = (735, 195);
+        for (filter_type, mode, cutoff, resonance) in [
+            (FilterType::LowPass, FilterMode::Slope12, 0x80, 0x00),
+            (FilterType::LowPass, FilterMode::Slope24, 0x60, 0xC0),
+            (FilterType::HighPass, FilterMode::Slope12, 0x70, 0x40),
+            (FilterType::BandPass, FilterMode::Slope12, 0x90, 0x80),
+            (FilterType::Ladder, FilterMode::Slope24, 0xB4, 0x70),
+        ] {
+            let track = Track {
+                filter: filter_type,
+                filter_mode: mode,
+                cutoff,
+                resonance,
+                drive: 0,
+                low_cut: 0x28,
+                high_cut: 0xFF,
+                ..Track::default()
+            };
+            let plot = filter(&track, 48_000, size);
+            // At each column the line's middle is where the filter's own response puts it,
+            // within a pixel, where it's on the plot and not running steeply off its bottom.
+            for x in 1..size.0 - 1 {
+                let share = (x as f32 + 0.5 - 1.0) / (size.0 as f32 - LINE_PIXELS);
+                let db = track_response_db(&track, 48_000, frequency_at(share));
+                let next = track_response_db(&track, 48_000, frequency_at(share + 0.002));
+                if db < CURVE_BOTTOM_DB + 2.0 || (next - db).abs() > 1.0 {
+                    continue;
+                }
+                let expected = plot.at(share, filter_level(db)).1;
+                let found = middle(&plot, x).unwrap();
+                assert!(
+                    (found - expected).abs() < 1.0,
+                    "{filter_type:?} {x}: {found} against {expected}"
+                );
+            }
+            let pixels = plot.pixels();
+            // The 0 dB line, where the curve isn't, and the fainter line down it at 1 kHz.
+            let zero = plot.at(0.0, filter_level(0.0)).1 as usize;
+            assert!(
+                (0..size.0)
+                    .filter(|x| pixels[zero * size.0 + x] == GRID)
+                    .count()
+                    > 60,
+                "{filter_type:?}"
+            );
+            let kilohertz = plot.at(frequency_x(1000.0), 0.0).0 as usize;
+            assert!(
+                (0..size.1)
+                    .filter(|y| pixels[y * size.0 + kilohertz] == FAINTER)
+                    .count()
+                    > 40,
+                "{filter_type:?}"
+            );
+            // The dashes up from the bottom at `Cut`'s frequency, which is its share across.
+            let cut = f32::from(cutoff) / 255.0;
+            let (x, bottom) = plot.at(cut, 0.0);
+            let dashes = (0..20)
+                .map(|step| bottom as usize - step)
+                .filter(|y| pixels[y * size.0 + x as usize] == GRID)
+                .count();
+            assert!(dashes >= 10, "{filter_type:?}: {dashes}");
+            assert!(plot.png([255; 3]).len() < 8000, "{filter_type:?}");
+        }
     }
 
     #[test]
