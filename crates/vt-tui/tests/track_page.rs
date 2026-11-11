@@ -1030,7 +1030,7 @@ fn the_track_page_draws_each_envelopes_shape() {
     };
     press(&mut app, "L");
     let drawn = page(&mut app, &mut graphics);
-    assert!(line(&drawn, top).starts_with("╭─ Env 1     Vol ─"));
+    assert!(line(&drawn, top).starts_with(&modulator_title("Env 1", true, "Vol ─")));
     let first = app.envelope_images.unwrap()[0];
     assert_eq!(drawn[image].fg, id_color(first));
 
@@ -1273,16 +1273,16 @@ fn the_track_page_shows_its_settings_in_columns() {
     typed(&mut app, "90");
     let lines = screen_cells(&mut app);
     assert!(lines[0].contains(" Track 01 "), "{}", lines[0]);
-    // Each modulator's destination is in its title, after the room for its switch.
+    // Each modulator's destination is in its title, after its switch.
     let title = |identity: &str| {
         let (top, left) = device_at(&lines, identity);
         from_column(&lines[top], left)
     };
-    assert!(title("Env 1").starts_with("╭─ Env 1     Vol ─"));
-    assert!(title("Env 2").starts_with("╭─ Env 2     Cut ─"));
-    assert!(title("Env 3").starts_with("╭─ Env 3     --- ─"));
-    assert!(title("LFO 1").starts_with("╭─ LFO 1     Cut ─"));
-    assert!(title("LFO 2").starts_with("╭─ LFO 2     --- ─"));
+    assert!(title("Env 1").starts_with(&modulator_title("Env 1", true, "Vol ─")));
+    assert!(title("Env 2").starts_with(&modulator_title("Env 2", true, "Cut ─")));
+    assert!(title("Env 3").starts_with(&modulator_title("Env 3", true, "--- ─")));
+    assert!(title("LFO 1").starts_with(&modulator_title("LFO 1", true, "Cut ─")));
+    assert!(title("LFO 2").starts_with(&modulator_title("LFO 2", true, "--- ─")));
     // An envelope's times down its left and its levels down its right.
     let (top, left) = device_at(&lines, "Env 1");
     let row = |at: usize| from_column(&lines[top + at], left);

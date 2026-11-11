@@ -596,6 +596,7 @@ fn moved_by_lfo(
         depth,
         phase: 0,
         retrig: false,
+        bypassed: false,
     };
     slot_live(moved, steps)
 }

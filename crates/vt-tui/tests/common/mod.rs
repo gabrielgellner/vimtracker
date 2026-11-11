@@ -190,7 +190,7 @@ pub fn to_lfo(lfo: usize) -> String {
 }
 
 /// A device's title on the track page, by its name, from its frame's corner to the other, as
-/// `╭─ LFO 1     Cut ───…╮`, drawn as wide as the author's screen has room for.
+/// `╭─ LFO 1     Cut ───…╮` with its switch after its name, drawn as wide as the author's screen has room for.
 pub fn device_title(app: &App, identity: &str) -> String {
     let (width, height) = (150, 40);
     let backend = ratatui::backend::TestBackend::new(width, height);
@@ -276,6 +276,13 @@ pub fn slot_title(slot: usize, switch: Option<bool>, controls: &str) -> String {
         None => "  ".to_owned(),
     };
     format!("╭─ {}  {switch} {controls}", slot + 1)
+}
+
+/// An envelope's or an LFO's title, as `device_title` gives it: its name, its switch on or off,
+/// then what follows, such as its destination.
+pub fn modulator_title(identity: &str, on: bool, controls: &str) -> String {
+    let switch = vt_tui::views::widgets::toggle::glyph(on);
+    format!("╭─ {identity}  {switch}\u{a0} {controls}")
 }
 
 /// The chain the FX page's design shows: Glue, EQ3, an Overdrive and a Delay, with the cursor back

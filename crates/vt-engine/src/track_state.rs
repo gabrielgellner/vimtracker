@@ -18,7 +18,7 @@ use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, 
 use vt_model::step::{FxSlot, Mark, slice_letter};
 
 use crate::dsp::blocks::sides::same_sides;
-use crate::dsp::distort::InsertState;
+use crate::dsp::distort::{BYPASS_FADE_MS, InsertState};
 use crate::dsp::filter::{Channel, Coefficients, Trim};
 use crate::dsp::memory::MemoryPool;
 use crate::dsp::smoother::Smoothed;
@@ -620,6 +620,13 @@ pub struct TrackState {
     held_sampler: [f32; SAMPLER_SETTINGS],
     /// Whether each slot is switched out as it's heard: its own bypass, or a step's lock of it.
     bypassed: [bool; INSERTS],
+    /// How much of what each envelope and LFO moves is heard, from 1 while it's in to 0 while it's
+    /// switched out, gliding between them over [`BYPASS_FADE_MS`] as a slot's bypass does, so
+    /// switching one doesn't jump.
+    envelope_shares: [f32; TRACK_ENVELOPES],
+    lfo_shares: [f32; LFOS_PER_TRACK],
+    /// The frames rendered when the shares last moved.
+    shared_at: u64,
     /// The loaded voice's held settings, in its order, on `0..=1`.
     synth: [f32; MAX_MACHINE_SETTINGS],
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
@@ -814,6 +821,9 @@ impl TrackState {
                 SettingId::sampler(at).map_or(0.0, |id| f32::from(id.entry().default))
             }),
             bypassed: [false; INSERTS],
+            envelope_shares: [1.0; TRACK_ENVELOPES],
+            lfo_shares: [1.0; LFOS_PER_TRACK],
+            shared_at: 0,
             filter_moving: false,
             key: [0.0; 2],
             slot_times: SlotTimes::default(),
@@ -870,6 +880,7 @@ impl TrackState {
     pub fn reset_held(&mut self, seed: u64, index: usize, track: &Track, clock: u64) {
         self.reset_all_but_settings(seed, index, clock);
         self.load(track);
+        self.settle_shares(track);
         for id in SettingId::all() {
             let base = base_of(id, track);
             self.values[id.index()] = ValueLayers::at(base);
@@ -938,6 +949,7 @@ impl TrackState {
         if !stopped {
             self.advance_glides(now);
         }
+        self.move_shares(track, now.rendered, now.rate);
         self.filter_moving = false;
         // Envelopes, then each LFO, so each reads what's before it, and there's no way back round.
         // What the envelopes move is kept by setting, as there are only a few.
@@ -946,8 +958,11 @@ impl TrackState {
             let Some(destination) = envelope.destination else {
                 continue;
             };
-            // The first one on `Vol` is each note's own shape, which the voice follows itself.
+            // The first one on `Vol` is each note's own shape, which the voice follows itself. One
+            // switched out does nothing, as if it had no depth, once it has faded.
+            let share = self.envelope_shares[slot];
             if envelope.depth == 0
+                || share == 0.0
                 || (slot == 0 && destination == SettingId::VOL)
                 || !destination.exists_on(track)
             {
@@ -960,7 +975,7 @@ impl TrackState {
             let level = run.level(envelope, now.clock, now.rate);
             moved.add(
                 destination.index(),
-                level * f32::from(envelope.depth) / 255.0,
+                level * f32::from(envelope.depth) / 255.0 * share,
             );
         }
         // Only what was moved last time needs clearing.
@@ -979,8 +994,9 @@ impl TrackState {
             };
             let [depth, phase] = self.lfo_values[slot];
             let depth = depth_of(depth) + moved_by(0) * 255.0;
-            // A target that isn't on this track does no work.
-            if depth == 0.0 || !destination.exists_on(track) {
+            let share = self.lfo_shares[slot];
+            // A target that isn't on this track does no work, and nor does one switched out.
+            if depth == 0.0 || share == 0.0 || !destination.exists_on(track) {
                 continue;
             }
             self.filter_moving |= matches!(destination, SettingId::CUT | SettingId::RES);
@@ -993,7 +1009,7 @@ impl TrackState {
             let phase = f64::from(phase_of(phase) + moved_by(1));
             let value = wave(lfo.shape, cycles + phase, key);
             let depth = depth.clamp(-f32::from(MAX_LFO_DEPTH), f32::from(MAX_LFO_DEPTH));
-            offsets[destination.index()] += value * depth / 255.0;
+            offsets[destination.index()] += value * depth / 255.0 * share;
             self.offset_marks[marks] = Some(destination.index());
             marks += 1;
         }
@@ -1049,6 +1065,37 @@ impl TrackState {
         self.voice.set_synth(self.synth_settings());
         self.update_gains();
         self.tell_slots_the_note();
+    }
+
+    /// Move each modulator's share toward 1 if it's in or 0 if it's switched out, over
+    /// [`BYPASS_FADE_MS`]. It goes by the frames rendered since last time, so a note's extra
+    /// update between the regular ones moves it no further.
+    fn move_shares(&mut self, track: &Track, rendered: u64, rate: u32) {
+        let frames = rendered.saturating_sub(self.shared_at);
+        self.shared_at = rendered;
+        let by = frames as f32 * 1000.0 / (BYPASS_FADE_MS * rate as f32);
+        let glide = |share: &mut f32, bypassed: bool| {
+            let to = if bypassed { 0.0 } else { 1.0 };
+            *share = if to > *share {
+                (*share + by).min(to)
+            } else {
+                (*share - by).max(to)
+            };
+        };
+        for (share, envelope) in self.envelope_shares.iter_mut().zip(&track.envelopes) {
+            glide(share, envelope.bypassed);
+        }
+        for (share, lfo) in self.lfo_shares.iter_mut().zip(&track.lfos) {
+            glide(share, lfo.bypassed);
+        }
+    }
+
+    /// Put each modulator's share where its switch is, with no glide, for a song that starts
+    /// playing with some switched out.
+    fn settle_shares(&mut self, track: &Track) {
+        let share = |bypassed: bool| if bypassed { 0.0 } else { 1.0 };
+        self.envelope_shares = track.envelopes.map(|envelope| share(envelope.bypassed));
+        self.lfo_shares = track.lfos.map(|lfo| share(lfo.bypassed));
     }
 
     /// The pan gains for a position, worked out again only when it moves.

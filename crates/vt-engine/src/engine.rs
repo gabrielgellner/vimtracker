@@ -1153,14 +1153,15 @@ impl Engine {
         }
     }
 
-    /// The shape of a track's notes: its first envelope if that's on `Vol`.
+    /// The shape of a track's notes: its first envelope if that's on `Vol` and in. Switched out,
+    /// its notes have the plain shape a new track's have, from the next one.
     fn note_shape(&self, index: usize) -> Envelope {
         self.current
             .song
             .tracks
             .get(index)
             .map(|track| track.envelopes[0])
-            .filter(|envelope| envelope.destination == Some(SettingId::VOL))
+            .filter(|envelope| envelope.destination == Some(SettingId::VOL) && !envelope.bypassed)
             .unwrap_or_default()
     }
 

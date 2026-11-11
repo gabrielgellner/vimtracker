@@ -336,9 +336,9 @@ fn the_keys_move_across_the_mod_page_in_the_app() {
 fn each_modulators_destination_is_in_its_title() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4L");
-    assert!(device_title(&app, "Env 1").starts_with("╭─ Env 1     Vol ─"));
-    assert!(device_title(&app, "Env 2").starts_with("╭─ Env 2     Cut ─"));
-    assert!(device_title(&app, "Env 3").starts_with("╭─ Env 3     --- ─"));
+    assert!(device_title(&app, "Env 1").starts_with(&modulator_title("Env 1", true, "Vol ─")));
+    assert!(device_title(&app, "Env 2").starts_with(&modulator_title("Env 2", true, "Cut ─")));
+    assert!(device_title(&app, "Env 3").starts_with(&modulator_title("Env 3", true, "--- ─")));
     // The accumulator and the arpeggio have no destination, and no room for a switch.
     assert!(device_title(&app, "Accumulator").starts_with("╭─ Accumulator ───"));
     assert!(device_title(&app, "Arpeggio").starts_with("╭─ Arpeggio ───"));
@@ -350,11 +350,11 @@ fn each_modulators_destination_is_in_its_title() {
         app.song().tracks[0].lfos[2].destination,
         Some(SettingId::PAN)
     );
-    assert!(device_title(&app, "LFO 3").starts_with("╭─ LFO 3     Pan ─"));
+    assert!(device_title(&app, "LFO 3").starts_with(&modulator_title("LFO 3", true, "Pan ─")));
     // `k` from the grid's first row reaches it.
     press(&mut app, "jkx");
     assert_eq!(app.song().tracks[0].lfos[2].destination, None);
-    assert!(device_title(&app, "LFO 3").starts_with("╭─ LFO 3     --- ─"));
+    assert!(device_title(&app, "LFO 3").starts_with(&modulator_title("LFO 3", true, "--- ─")));
 
     // Going nowhere, it's dim, as an empty slot's title is; set, it's the value's own colour.
     // `Env 1`'s title is on the page's third row and `Env 3`'s two bands down, each 13 in.
@@ -465,4 +465,100 @@ fn the_mod_page_goes_by_whole_bands_where_fewer_fit() {
     // Back up, it follows the cursor.
     press(&mut app, "gg");
     assert_eq!(titles(&draw(&app)), ["Env 1", "Env 2"]);
+}
+
+#[test]
+fn b_switches_a_modulator_out_and_back_with_its_toggle_in_the_title() {
+    use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
+    use vt_tui::theme;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    let lfo = |app: &App| app.song().tracks[0].lfos[0];
+    // Every envelope and LFO is in, with its switch green.
+    let buffer = track_page_buffer(&app);
+    let (env_switch, lfo_switch) = ((10, 2), (86, 2));
+    assert_eq!(glyph_at(&buffer, env_switch).0, SWITCH_ON);
+    assert_eq!(buffer[env_switch].fg, theme::GREEN);
+    assert_eq!(glyph_at(&buffer, lfo_switch).0, SWITCH_ON);
+    let name_colour = buffer[(79, 4)].fg;
+
+    // `b` from any row of LFO 1, here its Rate, switches it out, as one undo step.
+    press(&mut app, &format!("{}jj", to_lfo(0)));
+    assert_eq!(app.track_control(), Control::Lfo(0, LfoField::Rate));
+    let depth = app.history.undo_depth();
+    press(&mut app, "b");
+    assert!(lfo(&app).bypassed);
+    assert!(app.status.contains("Switched LFO 1 out"), "{}", app.status);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert!(device_title(&app, "LFO 1").starts_with(&modulator_title("LFO 1", false, "--- ─")));
+    assert!(device_title(&app, "Env 1").starts_with(&modulator_title("Env 1", true, "Vol ─")));
+
+    // Its switch is faint, and so is all in it but the cursor: its destination and its settings.
+    let buffer = track_page_buffer(&app);
+    assert_eq!(glyph_at(&buffer, lfo_switch).0, SWITCH_OFF);
+    assert_eq!(buffer[lfo_switch].fg, theme::OVERLAY0);
+    assert_eq!(buffer[(89, 2)].symbol(), "-");
+    assert_eq!(buffer[(89, 2)].fg, theme::OVERLAY0);
+    assert_eq!(buffer[(79, 4)].symbol(), "S");
+    assert_eq!(buffer[(79, 4)].fg, theme::OVERLAY0);
+    assert_eq!(buffer[(89, 6)].bg, theme::ROSEWATER, "the cursor");
+    // The envelope beside it isn't.
+    assert_eq!(buffer[(3, 4)].symbol(), "A");
+    assert_eq!(buffer[(3, 4)].fg, name_colour);
+    assert_eq!(buffer[env_switch].fg, theme::GREEN);
+
+    // Again brings it back, and undo takes it back out.
+    press(&mut app, "b");
+    assert!(!lfo(&app).bypassed);
+    assert!(app.status.contains("LFO 1 is back in"), "{}", app.status);
+    assert_eq!(track_page_buffer(&app)[(79, 4)].fg, name_colour);
+    press(&mut app, "u");
+    assert!(lfo(&app).bypassed);
+
+    // An envelope's flips the same way, from its title too.
+    press(&mut app, "gghb");
+    assert_eq!(
+        app.track_control(),
+        Control::Envelope(0, EnvelopeField::Destination)
+    );
+    assert!(app.song().tracks[0].envelopes[0].bypassed);
+    assert!(device_title(&app, "Env 1").starts_with(&modulator_title("Env 1", false, "Vol ─")));
+    assert!(lfo(&app).bypassed, "and only it");
+}
+
+#[test]
+fn b_refuses_what_has_no_switch() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    let before = app.song().tracks[0].clone();
+    let depth = app.history.undo_depth();
+    // The arpeggio, at the bottom of the LFOs' column, has nothing to switch.
+    press(&mut app, &format!("{}3}}b", to_lfo(0)));
+    assert_eq!(app.track_control(), Control::Arpeggio(ArpField::Rate));
+    assert!(app.status.contains("no switch"), "{}", app.status);
+    // Nor has the Sound page.
+    press(&mut app, "Hb");
+    assert_eq!(app.track_page.page, Page::Sound);
+    assert!(app.status.contains("FX and Mod pages"), "{}", app.status);
+    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.song().tracks[0], before);
+}
+
+#[test]
+fn a_switched_out_envelopes_shape_is_sent_faint_and_its_own_comes_back() {
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    press(&mut app, " 4L");
+    graphics.sync(&mut app, &mut Vec::new()).unwrap();
+    let shown = app.envelope_images.unwrap();
+    press(&mut app, "b");
+    graphics.sync(&mut app, &mut Vec::new()).unwrap();
+    let faint = app.envelope_images.unwrap();
+    assert_ne!(faint[0], shown[0], "a faint picture of its shape");
+    assert_eq!(faint[1..], shown[1..], "the others' stay");
+    // Back in, the picture it had is still held, so it's placed again.
+    press(&mut app, "b");
+    graphics.sync(&mut app, &mut Vec::new()).unwrap();
+    assert_eq!(app.envelope_images.unwrap(), shown);
 }

@@ -38,6 +38,15 @@ pub struct Envelope {
     pub depth: i16,
     /// Whether each note starts it from zero. Otherwise it goes on from where it is.
     pub reset: bool,
+    /// Whether it's switched out, to hear the track without it. It keeps running underneath, so
+    /// it comes back where it would have been. The first on `Vol` leaves notes the plain shape a
+    /// new track's have.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub bypassed: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl Default for Envelope {
@@ -57,6 +66,7 @@ impl Envelope {
             release_ms: 50,
             depth: 0,
             reset: true,
+            bypassed: false,
         }
     }
 
