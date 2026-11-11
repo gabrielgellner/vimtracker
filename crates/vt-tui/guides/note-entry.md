@@ -169,7 +169,9 @@ project.
 `Backspace` clears a note with the velocity it was written with. A `--` in the Velocity column plays at full.
 
 For how loud a whole track is, use its `Level`, on the mixer or the Sound page's
-Output, or `:tvol`. See **Phrases and chains**.
+Output, or `:tvol`. See **Phrases and chains**. To move the notes' velocities as
+they play, leaving what's written, use `VDLT` on a step, in a lane or from a mod
+slot, or the track's `Velocity` on the Sound page. See **FX commands**.
 
 ## The other columns
 

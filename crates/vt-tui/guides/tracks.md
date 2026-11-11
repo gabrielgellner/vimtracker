@@ -56,7 +56,7 @@ and its settings in up to four columns of three.
 | Machine | Machine, type | The machine's own |
 | Filter | Type, mode | `Cut` `Res` `Drive`; `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
-| Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` |
+| Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` `Velocity` |
 
 A machine's type is the setting that changes its character: the sample the sampler
 plays, `Acid`'s `Wave`, 6-op's `Patch`, and the chord of `Chord` and `Chip`.
@@ -628,6 +628,13 @@ percent, `+` and `_` ten, and `i` takes a percent. Dimmed, it's the machine's
 own: `100%`, which holds a note until the next, or `50%` on `Acid`, as a 303's
 gate closes halfway through each step. `x` goes back to that. See **Note entry**
 for what it does to each gate.
+
+`Velocity` moves every note's velocity up or down from its own as it starts, a
+step of velocity a step either side of `80`, which leaves them, and kept from `00`
+to `7F`. It's where held `VDLT` starts, so a step's `VDLT` or a lane's replaces it
+and an LFO on `VDLT` moves around it, and on the Roto it's the Play device's last
+knob, for playing dynamics live. The notes keep what's written. On `Acid` it only
+moves notes across the accent at `70`. See **FX commands**.
 
 `Speed` is how long each of the track's steps is, from `1/32` to `1/4` with the
 triplets between, so one track can play eighths or triplets against the others'
