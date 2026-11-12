@@ -11,7 +11,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::bank::{Hints, Loop, Points, SampleEdit, is_mark};
+use crate::bank::{Loop, Points, SampleEdit, is_mark};
 use crate::octatrack::{OtFile, OtLoop};
 use crate::riff::{self, Markers};
 use crate::step::Note;
@@ -20,7 +20,9 @@ use crate::step::Note;
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct FileSeed {
     pub points: Points,
-    pub hints: Hints,
+    /// For the entry's hints: the root note, as a MIDI note, and the tempo in thousandths of a BPM.
+    pub root: Option<u8>,
+    pub millibpm: Option<u32>,
     /// In decibels, an `.ot`'s, if it isn't 0.
     pub gain_db: Option<f32>,
     /// Where the points came from, as `"its markers"` or `"kick.ot"`, in words for the status line.
@@ -32,13 +34,17 @@ pub struct FileSeed {
 impl FileSeed {
     /// Whether the file says nothing of how it plays.
     pub fn is_empty(&self) -> bool {
-        self.points.is_whole() && self.hints.is_empty() && self.gain_db.is_none()
+        self.points.is_whole()
+            && self.root.is_none()
+            && self.millibpm.is_none()
+            && self.gain_db.is_none()
     }
 
     /// Give an entry's edit what the file says.
     pub fn apply(&self, edit: &mut SampleEdit) {
         edit.points = self.points.clone();
-        edit.hints = self.hints;
+        edit.hints.root = self.root;
+        edit.hints.millibpm = self.millibpm;
         if let Some(gain) = self.gain_db {
             edit.play.gain_db = gain;
         }
@@ -65,10 +71,10 @@ impl FileSeed {
         if let Some(gain) = self.gain_db {
             what.push(format!("a gain of {gain:+.1} dB"));
         }
-        if let Some(root) = self.hints.root {
+        if let Some(root) = self.root {
             what.push(format!("its root {}", Note::On(root)));
         }
-        if let Some(tempo) = self.hints.millibpm {
+        if let Some(tempo) = self.millibpm {
             what.push(format!("{} BPM", f64::from(tempo) / 1000.0));
         }
         format!("{}, from {}", and_list(&what), and_list(&self.from))
@@ -102,7 +108,7 @@ pub fn seed(file: &Path, bytes: &[u8], frames: u64) -> FileSeed {
         problems: wav.problems,
         ..FileSeed::default()
     };
-    seed.hints.root = wav.markers.root;
+    seed.root = wav.markers.root;
     let ot = ot_beside(file).map(|path| {
         let name = path
             .file_name()
@@ -117,7 +123,7 @@ pub fn seed(file: &Path, bytes: &[u8], frames: u64) -> FileSeed {
         Some((name, Ok(ot))) => {
             seed.points = ot_points(&ot, frames);
             seed.gain_db = Some(ot.gain_db()).filter(|gain| *gain != 0.0);
-            seed.hints.millibpm = ot.millibpm();
+            seed.millibpm = ot.millibpm();
             seed.from.push(name);
         }
         Some((name, Err(problem))) => {
@@ -128,7 +134,7 @@ pub fn seed(file: &Path, bytes: &[u8], frames: u64) -> FileSeed {
         None => seed.points = wav_points(&wav.markers, frames, &mut seed.problems),
     }
     let from_ot = !seed.from.is_empty();
-    if seed.hints.root.is_some() || (!from_ot && !seed.points.is_whole()) {
+    if seed.root.is_some() || (!from_ot && !seed.points.is_whole()) {
         seed.from.push("its markers".to_owned());
     }
     seed

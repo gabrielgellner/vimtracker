@@ -368,8 +368,9 @@ of them, and which the steps drive and a hand has taken over, from `TrackState::
 track's live values, and up to four sample playheads. Each report says which version it's of (`Telemetry::version`, the `Published::id` playing), and the app keeps the songs it has sent until a report is of a later one, so a bar draws what's playing against the setting it was worked out from (`App::reported_track`, decision 210). The live values carry the watched track's peak right after its trim
 (`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
 `Engine::take_after_trim` takes, for the Output device's meter, and where each mod slot running as
-an LFO is in its wave (`LiveValues::mods`, a phase and a value each, which `TrackState::modulate`
-keeps as it works the slots out, and none while stopped), for the Mod page's dots, and which step each
+an LFO is in its wave, or where a Track slot's last note is on its map (`LiveValues::mods`, a phase
+and a value each, which `TrackState::modulate` keeps as it works the slots out, and none while
+stopped), for the Mod page's dots, and which step each
 running as Steps plays (`LiveValues::steps`), which its panel lights. `Handle::latest` merges every
 report since the last frame, so a meter doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
 fit, and jam changes through another.
@@ -404,7 +405,7 @@ Song                               song.ron, refused unless format_version is FO
  |   '- SampleEdit                 timeline (one whole file for now), points, play, hints
  |       |- Points                 start, end, loop, slices[], next_id, marks{a..z}
  |       |- PlayParams             gain, tune, cents, reverse, fades, normalize, snap_zero
- |       '- Hints                  root note, tempo: what the file's markers say it is
+ |       '- Hints                  sens, bars, root note, tempo: what the sound is like
  |- tracks[]                       sound tracks, then the groups G1 to G4, Return A, Return B
  |   |                             and Master
  |   |- kind, name, mute, solo     kind: Sound, Group(n), ReturnA, ReturnB or Master
@@ -469,7 +470,7 @@ Song                               song.ron, refused unless format_version is FO
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
 *   **Mod slots** (`modulation.rs`, decision 165). Each track has `MOD_SLOTS` (6) slots on its
-    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum`, `Lpg`, `Lfo` or `Steps`, with a destination
+    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum`, `Lpg`, `Lfo`, `Steps` or `Track`, with a destination
     setting, a depth, a switch and a polarity (`Uni` or `Bi`, its type's until one is chosen),
     which every type shares, and each type's own settings, which a
     slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
@@ -484,7 +485,13 @@ Song                               song.ron, refused unless format_version is FO
     `fire_track` sets as a step lands), each way its `Loop` says; which step plays is worked out from
     the time or count, as an LFO's place is, and its start is the slot's phase. Its `Mutate`
     (decision 204) is the one part kept as it plays: the values drawn again, in the slot's run, from
-    a seeded stream of its own, reset when playing starts from the top. Any slot can go to `Pitch`
+    a seeded stream of its own, reset when playing starts from the top. Track (`tracking.rs`,
+    decision 223) maps the last note's pitch, velocity or a roll from `Low` to `High` onto its
+    depth, each source with its own map: `modulate` reads it from `TrackState::last_note` (a
+    `NoteOn` carries its velocity), and every slot rolls at each note from a stream of its own after
+    `Mutate`'s. As a step's modulation is worked out before its note is, a note starting or tied
+    into sets `TrackState::new_note`, and `Engine::track_new_notes` works a track with a Track slot
+    out again before the next frame is rendered. Any slot can go to `Pitch`
     in scale (`ModSlot::in_scale`), which `modulate` snaps from the note playing along the song's
     scale, which `SongTime` carries. The first
     envelope-type slot on `Vol` shapes the notes (`note_shape_slot`): its `ModSlot::envelope`, an
@@ -598,9 +605,9 @@ module per file, each keeping its port's licence notice:
 
 | Folder | Holds | Modules |
 |---|---|---|
-| `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `braids_vocal`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
+| `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_noise`, `braids_physical`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `braids_vocal`, `braids_waves`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `speech`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves, DX7 patches and words and Braids' waves |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `space`, `spring`, `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `space`, `spring`, `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
 | `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler` (also its `Decimator`, for a sound made at twice the rate), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 
@@ -825,11 +832,12 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     each entry, always compressed, about 1 to 2 KB. The filter curve is the Sound page's large
     panel, 49 by 5 characters, with frequency gridlines, a 0 dB line and a dashed mark at `Cut`.
     The Mod page's panels are the half size, 24 by 5: an envelope over its baseline and stage
-    lines, and one cycle of an LFO from its `Phase`, drawn from the engine's own `lfo::wave`. The
+    lines, one cycle of an LFO from its `Phase`, drawn from the engine's own `lfo::wave`, and a
+    Track slot's map across its source's span. The
     scope and the pickers' waveforms stay solid dots.
 *   **Placed dots.** An LFO's dot is a small image of its own, stored once in each of two shades
     and placed with pixel offsets across and down (`Placement`'s `X=` and `Y=`) where
-    `LiveValues::mods` says the LFO is, after the screen is drawn, as the sample page's lines and
+    `LiveValues::mods` says the LFO is, or a Track slot's last note, after the screen is drawn, as the sample page's lines and
     marks are; moving it is placing it again, about 60 bytes. The track page's drawing gives back
     where each cycle is (`CyclesAt`), and a dot is taken off under anything drawn over the page.
 *   **Panel images, `kitty/panels.rs`.** `PanelImages` holds the track page's panels' images by

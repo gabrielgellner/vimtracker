@@ -91,6 +91,22 @@ fn tick_until_app(app: &mut App, done: impl Fn(&App) -> bool) -> bool {
     false
 }
 
+/// Runs the audio side a block at a time, ticking the app between, until the engine is as wanted,
+/// for up to five seconds. An edit reaches the engine as a new version, which waits behind one
+/// sent before it, such as the one a sample's analysis sends when it's done, so a test that hears
+/// an edit waits for the engine to have it rather than for a number of blocks.
+fn heard_until(app: &mut App, realtime: &mut Realtime, done: impl Fn(&Engine) -> bool) -> bool {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        block(realtime, app);
+        if done(realtime.engine()) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    false
+}
+
 /// Ticks the app for a while, for what's sent to settle.
 fn settle(app: &mut App, for_ms: u64) {
     let until = Instant::now() + Duration::from_millis(for_ms);
@@ -594,9 +610,11 @@ fn the_rotos_play_level_and_mute_reach_what_the_engine_plays() {
     const LOOP: usize = 2 * 96_000;
     let heard = common::loudest(&mut realtime, LOOP);
     assert!(heard > 0.05, "{heard}");
-    // The level all the way down on the Roto: silent.
+    // The level all the way down on the Roto: silent, once the engine has it.
+    let level = |engine: &Engine| engine.current().song.tracks[0].level;
     roto_does(&ports, ControlEvent::Knob { index: 0, value: 0 });
     assert!(tick_until_app(&mut app, |app| app.song().tracks[0].level == 0));
+    assert!(heard_until(&mut app, &mut realtime, |engine| level(engine) == 0));
     let _ = common::loudest(&mut realtime, 4800);
     let down = common::loudest(&mut realtime, LOOP);
     assert!(down < 1e-4, "{down}");
@@ -609,11 +627,15 @@ fn the_rotos_play_level_and_mute_reach_what_the_engine_plays() {
         },
     );
     assert!(tick_until_app(&mut app, |app| app.song().tracks[0].level > 0));
+    assert!(heard_until(&mut app, &mut realtime, |engine| level(engine) > 0));
     let _ = common::loudest(&mut realtime, 4800);
     let up = common::loudest(&mut realtime, LOOP);
     assert!(up > 0.05, "{up}");
     press_button(&ports, 0);
     assert!(tick_until_app(&mut app, |app| app.levels[0].mute));
+    assert!(heard_until(&mut app, &mut realtime, |engine| engine
+        .jam(0)
+        .mute));
     let _ = common::loudest(&mut realtime, 4800);
     let muted = common::loudest(&mut realtime, LOOP);
     assert!(muted < 1e-4, "{muted}");

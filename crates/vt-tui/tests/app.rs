@@ -24,15 +24,6 @@ use vt_tui::input::picker::Pick;
 mod common;
 use common::*;
 
-/// Press and let go of each key in turn, as typing does, so a key typed twice isn't taken as held.
-fn tap(app: &mut App, keys: &str) {
-    let now = Instant::now();
-    for c in keys.chars() {
-        app.key(Key::char(c), now);
-        app.key_released(Key::char(c), Instant::now());
-    }
-}
-
 /// The explorer's rows as they're shown: each indented by its depth, a folder with its arrow, and
 /// a folder at the top by why it's there.
 fn explorer_rows(app: &App) -> Vec<String> {
@@ -589,7 +580,7 @@ fn a_sliced_wav_comes_in_with_its_slices_and_u_leaves_them_out() {
     press(&mut app, "u");
     let plain_entry = entry_of(&app);
     assert!(plain_entry.edit.points.is_whole(), "the file stays, plain");
-    assert!(plain_entry.edit.hints.is_empty());
+    assert!(plain_entry.edit.hints.is_default());
     press(&mut app, "u");
     assert_eq!(sample_of(&app, 0), None);
     std::fs::remove_dir_all(&dir).unwrap();
@@ -2608,7 +2599,8 @@ fn semicolon_auditions_in_every_view_and_changes_nothing() {
     let _ = loudest(&mut rt, 96_000);
     assert_eq!(loudest(&mut rt, 2000), 0.0);
 
-    press(&mut app, "k;");
+    press(&mut app, "k");
+    tap(&mut app, ";");
     assert!(
         loudest(&mut rt, 2000) > 0.01,
         "the phrase view auditions a row"
@@ -2616,11 +2608,13 @@ fn semicolon_auditions_in_every_view_and_changes_nothing() {
     assert!(Arc::ptr_eq(&version, app.song()));
     assert_eq!(app.transport, Transport::Stopped);
 
-    press(&mut app, "j;");
+    press(&mut app, "j");
+    tap(&mut app, ";");
     let _ = loudest(&mut rt, 4800);
     assert_eq!(loudest(&mut rt, 2000), 0.0, "an empty row is silent");
 
-    press(&mut app, " 2;");
+    press(&mut app, " 2");
+    tap(&mut app, ";");
     assert!(
         loudest(&mut rt, 2000) > 0.01,
         "the chain view auditions its row"
@@ -3408,7 +3402,9 @@ fn every_mode_that_binds_the_adjust_keys_binds_their_cmd_keys() {
             let key = parse_sequence(cmd).unwrap();
             let means = table.resolve(row.mode, &key);
             // The sample page's Cmd-l and Cmd-h nudge a frame, finer than `=` and `-`'s pixel.
-            if row.mode == Mode::Sample && matches!(*cmd, "D-l" | "D-h") {
+            if matches!(row.mode, Mode::Sample | Mode::SampleVisual)
+                && matches!(*cmd, "D-l" | "D-h")
+            {
                 assert!(matches!(means, Resolved::Command(_)));
                 continue;
             }

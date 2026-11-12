@@ -67,7 +67,7 @@ fn a_sliced_wavs_cue_points_are_its_slices() {
     assert_eq!(starts, [0, 2500, 5000, 7500]);
     assert_eq!(seed.points.loop_, None);
     assert_eq!(seed.points.end, None);
-    assert_eq!(seed.hints.root, None);
+    assert_eq!(seed.root, None);
     assert_eq!(seed.describe(), "4 slices, from its markers");
     assert!(seed.problems.is_empty());
     assert_eq!(load_sample(&path, 44_100).unwrap().frames.len(), 10_000);
@@ -118,7 +118,7 @@ fn a_smpl_loop_is_the_loop_and_its_root_a_hint() {
         },
         "a loop shorter than what follows keeps the tail"
     );
-    assert_eq!(seed.hints.root, Some(48));
+    assert_eq!(seed.root, Some(48));
     assert_eq!(seed.describe(), "a loop and its root C-2, from its markers");
 }
 
@@ -174,7 +174,7 @@ fn cues_and_a_loop_together() {
         seed.points.loop_.map(|l| (l.start, l.end)),
         Some((4000, 8000))
     );
-    assert_eq!(seed.hints.root, Some(60));
+    assert_eq!(seed.root, Some(60));
     assert_eq!(
         seed.describe(),
         "2 slices, an end, a loop and its root C-3, from its markers"
@@ -227,12 +227,8 @@ fn an_ot_beside_the_file_gives_its_trim_loop_gain_tempo_and_slices() {
         Some((10_000, 19_000))
     );
     assert_eq!(seed.gain_db, Some(3.0));
-    assert_eq!(seed.hints.millibpm, Some(90_000));
-    assert_eq!(
-        seed.hints.root,
-        Some(36),
-        "the root still comes from the WAV"
-    );
+    assert_eq!(seed.millibpm, Some(90_000));
+    assert_eq!(seed.root, Some(36), "the root still comes from the WAV");
     assert_eq!(
         seed.describe(),
         "3 slices, a start and end, a loop, a gain of +3.0 dB, its root C-1 and 90 BPM, \

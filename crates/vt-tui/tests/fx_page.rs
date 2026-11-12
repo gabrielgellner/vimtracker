@@ -209,13 +209,15 @@ fn an_insert_set_on_the_page_is_heard() {
     special(&mut app, KeyCode::Esc);
     block(&mut realtime, &mut app);
     let _ = loudest(&mut realtime, 96_000);
-    press(&mut app, " 3k;");
+    press(&mut app, " 3k");
+    tap(&mut app, ";");
     let plain = loudest(&mut realtime, 2000);
     assert!(plain > 0.0);
     press(&mut app, " 4LL=lj");
     press(&mut app, "iff");
     block(&mut realtime, &mut app);
-    press(&mut app, " 3;");
+    press(&mut app, " 3");
+    tap(&mut app, ";");
     let driven = loudest(&mut realtime, 2000);
     assert!(driven > 0.0);
     assert_ne!(plain, driven, "{plain} and {driven}");

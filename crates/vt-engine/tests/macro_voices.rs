@@ -1,4 +1,5 @@
-//! The voices from Braids, each rendered as a golden, so any change to how one sounds is caught.
+//! The voices from Braids, and Plaits' speech, each rendered as a golden, so any change to how one
+//! sounds is caught.
 
 mod support;
 
@@ -39,7 +40,8 @@ fn song(voice: SynthVoice) -> Song {
 
 #[test]
 fn each_macro_voice_renders_as_it_did() {
-    for voice in SynthVoice::ALL.into_iter().filter(|voice| voice.is_macro()) {
+    let ported = |voice: &SynthVoice| voice.is_macro() || *voice == SynthVoice::Speech;
+    for voice in SynthVoice::ALL.into_iter().filter(ported) {
         let published = Arc::new(Published::new(
             Arc::new(song(voice)),
             Arc::new(SamplePool::default()),

@@ -47,7 +47,7 @@ mod panels;
 pub mod plot;
 
 use panels::{Found, PanelImages, PanelKey, Shape};
-use plot::{LfoDrawing, Plot, Shade};
+use plot::{LfoDrawing, Plot, Shade, TrackDrawing};
 
 /// The character that stands for a piece of an image.
 pub(crate) const PLACEHOLDER: char = '\u{10EEEE}';
@@ -732,7 +732,8 @@ pub fn dot_pixels(cell: (usize, usize)) -> usize {
 
 /// Where an LFO's dot goes, for characters of this size, its cycle's picture having its top left
 /// at `corner`: centred where the LFO is now, across at its place in the cycle drawn and up at its
-/// wave's value, upside down for a negative depth as the cycle is, and kept inside the picture.
+/// wave's value, upside down for a negative depth as the cycle is, and kept inside the picture. A
+/// Track slot's goes on its map where its last note is.
 pub fn dot_placement(
     cell: (usize, usize),
     corner: (u16, u16),
@@ -741,14 +742,27 @@ pub fn dot_placement(
     diameter: usize,
 ) -> Placement {
     let size = (MOD_PANEL_WIDTH * cell.0, MOD_PANEL_HEIGHT * cell.1);
-    let drawing = LfoDrawing::of(&modulator.lfo, modulator.depth).in_polarity(modulator.polarity());
-    let x = drawing.x_of(f64::from(now.phase) / (f64::from(u16::MAX) + 1.0));
-    // A random wave's cycle isn't flipped, as it's only its centre line, but its dot is.
-    let signed = LfoDrawing {
-        flipped: modulator.depth < 0,
-        ..drawing
+    let (x, level) = if modulator.kind == ModKind::Track {
+        let drawing = TrackDrawing::of(modulator);
+        let x = f32::from(now.phase) / f32::from(u16::MAX);
+        (
+            x,
+            drawing.level_of(f32::from(now.value) / f32::from(i16::MAX)),
+        )
+    } else {
+        let drawing =
+            LfoDrawing::of(&modulator.lfo, modulator.depth).in_polarity(modulator.polarity());
+        let x = drawing.x_of(f64::from(now.phase) / (f64::from(u16::MAX) + 1.0));
+        // A random wave's cycle isn't flipped, as it's only its centre line, but its dot is.
+        let signed = LfoDrawing {
+            flipped: modulator.depth < 0,
+            ..drawing
+        };
+        (
+            x,
+            signed.level_of(f32::from(now.value) / f32::from(i16::MAX)),
+        )
     };
-    let level = signed.level_of(f32::from(now.value) / f32::from(i16::MAX));
     let (centre_x, centre_y) = plot::point_at(size, x, level);
     let half = diameter as f32 / 2.0;
     let left = (centre_x - half)
@@ -1118,7 +1132,8 @@ impl Graphics {
     }
 
     /// Where each LFO's dot goes on the Mod page, and in which shade: on its cycle where it is
-    /// now, while it runs, its cycle is on screen and nothing is drawn over the page. One switched
+    /// now, while it runs, its cycle is on screen and nothing is drawn over the page. A Track
+    /// slot's goes on its map at its last note. One switched
     /// out or going nowhere has none, and while the song is stopped none has.
     fn dots_wanted(&self, app: &App) -> [Option<(Shade, Placement)>; MOD_SLOTS] {
         let mut wanted = [None; MOD_SLOTS];
@@ -1137,7 +1152,7 @@ impl Graphics {
             let (Some(corner), Some(now)) = (app.lfo_cycles_at[slot], live.mods[slot]) else {
                 continue;
             };
-            if modulator.kind != ModKind::Lfo
+            if !matches!(modulator.kind, ModKind::Lfo | ModKind::Track)
                 || modulator.bypassed
                 || modulator.destination.is_none()
             {
@@ -1652,7 +1667,7 @@ impl Graphics {
     }
 
     /// Send each of the Mod page's slots' pictures, if the terminal lacks them, each faint while
-    /// it's switched out: an envelope's shape or an LFO's cycle, by its type. An LFO's cycle is
+    /// it's switched out: an envelope's shape, an LFO's cycle or a Track slot's map, by its type. An LFO's cycle is
     /// sent again only when its wave, its `Phase` or its depth's sign changes, and a slot's when
     /// its type does.
     fn sync_mod(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
@@ -1678,6 +1693,12 @@ impl Graphics {
                         .in_polarity(modulator.polarity());
                     self.panel(out, key, Shape::Lfo(drawing), size, |size| {
                         plot::lfo_cycle(drawing, size).png(shade.color())
+                    })?
+                }
+                ModKind::Track => {
+                    let drawing = TrackDrawing::of(modulator);
+                    self.panel(out, key, Shape::Track(drawing), size, |size| {
+                        plot::track_map(drawing, size).png(shade.color())
                     })?
                 }
                 // Steps' values are a row of bars drawn as text, which the cursor edits, so

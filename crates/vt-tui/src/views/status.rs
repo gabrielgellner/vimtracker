@@ -423,7 +423,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             | Mode::Song
             | Mode::Audio
             | Mode::Project
-            | Mode::Sample => theme::BLUE,
+            | Mode::Sample
+            | Mode::SampleVisual => theme::BLUE,
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,
