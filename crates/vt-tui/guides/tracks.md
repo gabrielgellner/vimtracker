@@ -1267,9 +1267,13 @@ from there up.
 
 | Source | Follows |
 |---|---|
-| `Note` | The note as it plays, after `ACU`, `ARP` and the chain's transpose, from `c_1` to `G-8`. A new slot maps `C-1` to `C-5` |
-| `Velocity` | The velocity as it's heard, after `VDLT` and the groove, from `00` to `7F`. The default |
-| `Random` | A value rolled at each note, `00` to `FF`, from the project's seed |
+| `Note` | The note as it plays, `c_1` to `G-8` |
+| `Velocity` | The velocity as it's heard, `00` to `7F` |
+| `Random` | A value rolled at each note, `00` to `FF` |
+
+`Note` is after `ACU`, `ARP` and the chain's transpose, and a new slot maps `C-1`
+to `C-5`. `Velocity`, the default, is after `VDLT` and the groove. `Random` rolls
+from the project's seed.
 
 Each source keeps its own `Low` and `High`, so trying another and coming back finds
 them as they were. `Random`'s rolls are the slot's own, so a render repeats and
