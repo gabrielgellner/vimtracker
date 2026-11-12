@@ -2,7 +2,7 @@
 
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meaning};
-use vt_model::envelope::{Adsr, Ahd, Curve};
+use vt_model::envelope::{Adsr, Ahd, Curve, Drum};
 use vt_model::insert::Insert;
 use vt_model::lfo::{Lfo, LfoMode, Shape, note_rates};
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
@@ -383,7 +383,7 @@ impl App {
             slot,
             modulator,
         };
-        let (adsr, ahd, lfo) = (modulator.adsr, modulator.ahd, modulator.lfo);
+        let (adsr, ahd, drum, lfo) = (modulator.adsr, modulator.ahd, modulator.drum, modulator.lfo);
         let (title, items): (&'static str, Vec<Item>) = match field {
             ModField::Type => {
                 let kinds = ModKind::ALL.map(|kind| {
@@ -404,6 +404,14 @@ impl App {
                 let curves = Curve::ALL.map(|curve| {
                     let ahd = Ahd { curve, ..ahd };
                     Item::new(curve.name(), pick(ModSlot { ahd, ..modulator }))
+                        .meaning(curve.meaning())
+                });
+                (CURVE_TITLES[slot], curves.to_vec())
+            }
+            ModField::Mode if modulator.kind == ModKind::Drum => {
+                let curves = Curve::ALL.map(|curve| {
+                    let drum = Drum { curve, ..drum };
+                    Item::new(curve.name(), pick(ModSlot { drum, ..modulator }))
                         .meaning(curve.meaning())
                 });
                 (CURVE_TITLES[slot], curves.to_vec())

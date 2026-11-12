@@ -916,3 +916,13 @@ requests, curves then AHD:
 * **The LFO's grid** is `Shape`, `Rate` and `Depth` down the left, and `Phase`, the hole for
   `Fade`, then `Deform` down the right. `Deform` bends the wave between its peaks, or sets a
   square's width, and is a lock, `DFM4`–`DFM6`, and a destination for earlier slots.
+
+**As built for #45's Drum (decision 194),** the first half of §11's PR 4, which went as two pull
+requests, Drum then LPG:
+
+* **No `Reset`:** a drum always strikes from full, so there's nothing to start from where it is.
+  Its grid is `Peak`, `Body` and `Decay` down the left, and `Depth` and `Ratchet` down the right.
+* **`Ratchet`,** 1 to 8, strikes the peak again before the body, for claps and flams (the DSP
+  parts review's oscillators Part B, trick 13).
+* **The peak's fall** is `Snap`'s, whatever the curve, which bends the body's decay.
+* **The Roto** stores Drum as a setup of its own, `Ratchet` on knob 4, so there are 11.

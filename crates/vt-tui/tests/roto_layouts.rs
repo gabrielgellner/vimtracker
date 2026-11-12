@@ -747,3 +747,67 @@ fn an_ahd_is_attack_hold_decay_then_depth_and_curve_stored_with_an_adsrs_buttons
     assert!(!next.tracks[0].mods[1].ahd.reset);
     assert!(next.tracks[0].mods[1].adsr.reset);
 }
+
+#[test]
+fn a_drum_is_peak_body_decay_and_ratchet_then_depth_and_curve_stored_for_its_polarity() {
+    use vt_model::action::edit;
+    use vt_model::modulation::ModKind;
+    use vt_roto::live::{KNOB_TOP, position_of};
+    use vt_tui::roto::edits::{turned, value_text};
+    use vt_tui::track_page::ModField;
+    let drum = layout_named("drum");
+    assert!(drum.stored);
+    assert_eq!(
+        first_knobs(drum)[..6],
+        ["peak", "body", "decay", "ratchet", "depth", "mode"]
+    );
+    assert_eq!(
+        button_key(drum, 0, 0),
+        None,
+        "no reset, as it strikes from full"
+    );
+    assert_eq!(button_key(drum, 0, 4), Some("polarity"), "under Depth");
+    assert_eq!(first_knobs_of(&drum.layout.pages[1])[0], "dest");
+    // `Mod 2` made a drum has its layout, named for it, with its own settings on the knobs.
+    let mut song = Song::new(1);
+    song.tracks[0].mods[1].kind = ModKind::Drum;
+    let song = std::sync::Arc::new(song);
+    let track = &song.tracks[0];
+    let spec = &Page::Mod.devices(track)[2];
+    assert_eq!(layout_of(spec, track).kind, "drum");
+    let device = live_device(Page::Mod, 2, spec, track, &song, true);
+    assert_eq!(device.name.as_str(), "M2 Drum");
+    assert_eq!(device.key, "vimtracker:drum");
+    let names: Vec<&str> = device.controls[..6]
+        .iter()
+        .map(|knob| knob.as_ref().map_or("-", |knob| knob.name.as_str()))
+        .collect();
+    assert_eq!(
+        names,
+        ["Peak", "Body", "Decay", "Ratchet", "Depth", "Curve"]
+    );
+    let ratchet = device.controls[3].as_ref().unwrap();
+    let steps: Vec<String> = ratchet
+        .feel
+        .step_names()
+        .iter()
+        .map(|name| name.as_str().to_owned())
+        .collect();
+    assert_eq!(steps, ["1", "2", "3", "4", "5", "6", "7", "8"]);
+    // Turned, each sets the drum's own, and leaves its ADSR as it was.
+    let control = Control::Mod(1, ModField::Ratchet);
+    let next = edit(
+        &song,
+        &turned(control, 0, &song, position_of(2, 8)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(next.tracks[0].mods[1].drum.ratchet, 3);
+    assert_eq!(value_text(control, &next.tracks[0], &next), "3");
+    let body = Control::Mod(1, ModField::Body);
+    let next = edit(&song, &turned(body, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].drum.body, 100);
+    let decay = Control::Mod(1, ModField::Decay);
+    let next = edit(&song, &turned(decay, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].drum.decay_ms, 8000);
+    assert_eq!(next.tracks[0].mods[1].adsr, song.tracks[0].mods[1].adsr);
+}
