@@ -150,6 +150,9 @@ pub struct Telemetry {
     /// Each track's faders as they're heard: where the steps have them, and whether a hand has
     /// taken them over.
     pub faders: [Faders; MAX_TRACKS],
+    /// The version playing, by its [`Published::id`](crate::published::Published::id), which the
+    /// live values were worked out from.
+    pub version: u64,
     /// The track being watched, and what it's playing with.
     pub watched: usize,
     pub live: LiveValues,
@@ -515,6 +518,7 @@ impl Realtime {
             reading,
             tracks: self.engine.take_track_readings(reading.frames),
             faders: std::array::from_fn(|track| self.engine.faders(track)),
+            version: self.engine.version(),
             watched: self.watched,
             live,
             playheads: self.engine.playheads(self.watched),
