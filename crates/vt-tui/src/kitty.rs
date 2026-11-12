@@ -1663,11 +1663,15 @@ impl Graphics {
             let shade = Shade::of(edited == Some(slot), modulator.bypassed);
             let key = (PanelKey::Mod(slot), shade);
             ids[slot] = match modulator.kind {
-                ModKind::Adsr => {
-                    let (adsr, polarity) = (modulator.adsr, modulator.polarity());
-                    self.panel(out, key, Shape::Envelope(adsr, polarity), size, |size| {
-                        plot::envelope_in(&adsr, polarity, size).png(shade.color())
-                    })?
+                ModKind::Adsr | ModKind::Ahd => {
+                    let (envelope, polarity) = (modulator.envelope(), modulator.polarity());
+                    self.panel(
+                        out,
+                        key,
+                        Shape::Envelope(envelope, polarity),
+                        size,
+                        |size| plot::envelope_in(&envelope, polarity, size).png(shade.color()),
+                    )?
                 }
                 ModKind::Lfo => {
                     let drawing = LfoDrawing::of(&modulator.lfo, modulator.depth)

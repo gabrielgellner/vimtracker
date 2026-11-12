@@ -7,8 +7,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
 use vt_model::action::TrackControl;
+use vt_model::envelope::Hold;
 use vt_model::insert::Insert;
-use vt_model::modulation::{depth_text, note_shape_slot};
+use vt_model::modulation::{ModKind, depth_text, note_shape_slot};
 use vt_model::settings::{SettingId, gate_percent};
 use vt_model::song::{Song, SynthVoice, Track, TrackKind, reset_name};
 use vt_model::speed::Speed;
@@ -173,8 +174,10 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
 /// A mod slot's setting as the page shows it, under the slot's type.
 fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
     let modulator = &track.mods[slot];
-    let (adsr, lfo) = (&modulator.adsr, &modulator.lfo);
+    let (adsr, ahd, lfo) = (&modulator.adsr, &modulator.ahd, &modulator.lfo);
+    let ahd_kind = modulator.kind == ModKind::Ahd;
     let ms = |value: u16| format!("{value} ms");
+    let on = |on: bool| if on { "on" } else { "off" }.to_owned();
     match field {
         ModField::Type => modulator.kind.name().to_owned(),
         ModField::Mode => modulator.mode_name().unwrap_or("--").to_owned(),
@@ -187,11 +190,18 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         // The slot that shapes each note does so with its level, rather than moving a value.
         ModField::Depth if note_shape_slot(&track.mods) == Some(slot) => "--".to_owned(),
         ModField::Depth => depth_text(modulator.depth),
+        ModField::Attack if ahd_kind => ms(ahd.attack_ms),
         ModField::Attack => ms(adsr.attack_ms),
+        ModField::Decay if ahd_kind => ms(ahd.decay_ms),
         ModField::Decay => ms(adsr.decay_ms),
+        ModField::Hold => match ahd.hold {
+            Hold::Note => "Note".to_owned(),
+            Hold::Ms(hold) => ms(hold),
+        },
         ModField::Sustain => format!("{}%", adsr.sustain),
         ModField::Release => ms(adsr.release_ms),
-        ModField::Reset => if adsr.reset { "on" } else { "off" }.to_owned(),
+        ModField::Reset if ahd_kind => on(ahd.reset),
+        ModField::Reset => on(adsr.reset),
         ModField::Shape => lfo.shape.name().to_owned(),
         ModField::Rate => lfo.rate.to_string(),
         ModField::Phase => format!("{}°", lfo.phase),
@@ -210,7 +220,7 @@ pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<
             let found = insert.params().get(param)?;
             found.is_toggle().then(|| insert.value(param) != 0)
         }
-        Control::Mod(slot, ModField::Reset) => Some(track.mods[slot].adsr.reset),
+        Control::Mod(slot, ModField::Reset) => Some(track.mods[slot].envelope().reset()),
         Control::Arpeggio(ArpField::Retrig) => Some(track.arpeggio.retrig),
         _ => None,
     }

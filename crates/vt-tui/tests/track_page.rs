@@ -1116,7 +1116,11 @@ fn the_track_page_draws_each_envelopes_shape() {
     };
     press(&mut app, "L");
     let drawn = page(&mut app, &mut graphics);
-    assert!(line(&drawn, top).starts_with(&modulator_title("Mod 1", true, "ADSR  --  → Vol ─")));
+    assert!(line(&drawn, top).starts_with(&modulator_title(
+        "Mod 1",
+        true,
+        "ADSR  Exp  --  → Vol ─"
+    )));
     let first = app.mod_images.unwrap()[0];
     assert_eq!(drawn[image].fg, id_color(first));
 
@@ -1369,9 +1373,9 @@ fn the_track_page_shows_its_settings_in_columns() {
         let (top, left) = device_at(&lines, identity);
         from_column(&lines[top], left)
     };
-    assert!(title("Mod 1").starts_with(&modulator_title("Mod 1", true, "ADSR  --  → Vol ─")));
-    assert!(title("Mod 2").starts_with(&modulator_title("Mod 2", true, "ADSR  Uni  → Cut ─")));
-    assert!(title("Mod 3").starts_with(&modulator_title("Mod 3", true, "ADSR  Uni  → --- ─")));
+    assert!(title("Mod 1").starts_with(&modulator_title("Mod 1", true, "ADSR  Exp  --  → Vol ─")));
+    assert!(title("Mod 2").starts_with(&modulator_title("Mod 2", true, "ADSR  Exp  Uni  → Cut ─")));
+    assert!(title("Mod 3").starts_with(&modulator_title("Mod 3", true, "ADSR  Exp  Uni  → --- ─")));
     assert!(title("Mod 4").starts_with(&modulator_title("Mod 4", true, "LFO  Free  Bi  → Cut ─")));
     assert!(title("Mod 5").starts_with(&modulator_title("Mod 5", true, "LFO  Free  Bi  → --- ─")));
     // An envelope's times down its left and its levels down its right.

@@ -2,7 +2,7 @@
 
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meaning};
-use vt_model::envelope::Adsr;
+use vt_model::envelope::{Adsr, Ahd, Curve};
 use vt_model::insert::Insert;
 use vt_model::lfo::{Lfo, LfoMode, Shape, note_rates};
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
@@ -32,6 +32,14 @@ const MODE_TITLES: [&str; MOD_SLOTS] = [
     "Mod 4 mode",
     "Mod 5 mode",
     "Mod 6 mode",
+];
+const CURVE_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 curve",
+    "Mod 2 curve",
+    "Mod 3 curve",
+    "Mod 4 curve",
+    "Mod 5 curve",
+    "Mod 6 curve",
 ];
 const POLARITY_TITLES: [&str; MOD_SLOTS] = [
     "Mod 1 polarity",
@@ -375,7 +383,7 @@ impl App {
             slot,
             modulator,
         };
-        let (adsr, lfo) = (modulator.adsr, modulator.lfo);
+        let (adsr, ahd, lfo) = (modulator.adsr, modulator.ahd, modulator.lfo);
         let (title, items): (&'static str, Vec<Item>) = match field {
             ModField::Type => {
                 let kinds = ModKind::ALL.map(|kind| {
@@ -383,6 +391,22 @@ impl App {
                         .meaning(kind.meaning())
                 });
                 (TYPE_TITLES[slot], kinds.to_vec())
+            }
+            ModField::Mode if modulator.kind == ModKind::Adsr => {
+                let curves = Curve::ALL.map(|curve| {
+                    let adsr = Adsr { curve, ..adsr };
+                    Item::new(curve.name(), pick(ModSlot { adsr, ..modulator }))
+                        .meaning(curve.meaning())
+                });
+                (CURVE_TITLES[slot], curves.to_vec())
+            }
+            ModField::Mode if modulator.kind == ModKind::Ahd => {
+                let curves = Curve::ALL.map(|curve| {
+                    let ahd = Ahd { curve, ..ahd };
+                    Item::new(curve.name(), pick(ModSlot { ahd, ..modulator }))
+                        .meaning(curve.meaning())
+                });
+                (CURVE_TITLES[slot], curves.to_vec())
             }
             ModField::Mode if modulator.kind == ModKind::Lfo => {
                 let modes = LfoMode::ALL.map(|mode| {
@@ -436,8 +460,18 @@ impl App {
                     } else {
                         ("off", "Each note goes on from where it is")
                     };
-                    let adsr = Adsr { reset, ..adsr };
-                    Item::new(name, pick(ModSlot { adsr, ..modulator })).meaning(meaning)
+                    let chosen = if modulator.kind == ModKind::Ahd {
+                        ModSlot {
+                            ahd: Ahd { reset, ..ahd },
+                            ..modulator
+                        }
+                    } else {
+                        ModSlot {
+                            adsr: Adsr { reset, ..adsr },
+                            ..modulator
+                        }
+                    };
+                    Item::new(name, pick(chosen)).meaning(meaning)
                 });
                 ("Envelope reset", choices.to_vec())
             }

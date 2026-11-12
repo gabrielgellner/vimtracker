@@ -26,6 +26,17 @@ const ADSR_SETTINGS: [ModField; 6] = [
 const ADSR_GRID: [[Option<usize>; 3]; 2] =
     [[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]];
 
+/// An AHD's settings: its times down the left, and how far it goes and its reset down the right,
+/// with a hole left for a `Delay` before the attack, Vital's DAHD, if one is missed.
+const AHD_SETTINGS: [ModField; 5] = [
+    ModField::Attack,
+    ModField::Hold,
+    ModField::Decay,
+    ModField::Depth,
+    ModField::Reset,
+];
+const AHD_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
+
 /// An LFO's settings: what it plays down the left, and where it starts down the right, with a hole
 /// under `Phase` for the `Fade` that #86 brings. Whether notes start it is its mode, in the title.
 const LFO_SETTINGS: [ModField; 4] = [
@@ -63,6 +74,7 @@ const ARPEGGIO_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), None], [Some(
 fn type_grid(kind: ModKind) -> (&'static [ModField], Grid) {
     match kind {
         ModKind::Adsr => (&ADSR_SETTINGS, Grid::from_columns(&ADSR_GRID)),
+        ModKind::Ahd => (&AHD_SETTINGS, Grid::from_columns(&AHD_GRID)),
         ModKind::Lfo => (&LFO_SETTINGS, Grid::from_columns(&LFO_GRID)),
     }
 }

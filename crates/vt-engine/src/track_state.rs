@@ -3,7 +3,7 @@
 use vt_model::accumulator::{Accumulation, Moves, Walk};
 use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
-use vt_model::envelope::Adsr;
+use vt_model::envelope::Envelope;
 use vt_model::groove::Groove;
 use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS};
 use vt_model::lfo::{LfoMode, phase_of, phase_value, wave};
@@ -93,7 +93,7 @@ enum EnvelopeRun {
 }
 
 impl EnvelopeRun {
-    fn level(self, envelope: &Adsr, clock: u64, rate: u32) -> f32 {
+    fn level(self, envelope: &Envelope, clock: u64, rate: u32) -> f32 {
         match self {
             Self::Idle => 0.0,
             Self::Held { at, from } => envelope.held(clock.saturating_sub(at), from, rate),
@@ -184,10 +184,11 @@ impl SlotRun {
 /// Start one slot's envelope for a note, from nothing or from where it is, and its cycles again if
 /// its LFO's mode follows the notes.
 fn trigger_slot(slot: &ModSlot, run: &mut SlotRun, now: SongTime) {
-    let from = if slot.adsr.reset {
+    let envelope = slot.envelope();
+    let from = if envelope.reset() {
         0.0
     } else {
-        run.envelope.level(&slot.adsr, now.clock, now.rate)
+        run.envelope.level(&envelope, now.clock, now.rate)
     };
     run.envelope = EnvelopeRun::Held {
         at: now.clock,
@@ -1183,7 +1184,7 @@ impl TrackState {
             let polarity = run.polarity(slot);
             // An envelope's depth is whole, as its page sets it, so it moves by exactly that.
             let held = match slot.kind {
-                ModKind::Adsr => depth_of(depth).round(),
+                ModKind::Adsr | ModKind::Ahd => depth_of(depth).round(),
                 ModKind::Lfo => depth_of(depth),
             };
             let depth = held + moved_by(0) * 255.0;
@@ -1206,8 +1207,8 @@ impl TrackState {
             }
             let depth = depth.clamp(-f32::from(MAX_DEPTH), f32::from(MAX_DEPTH));
             match slot.kind {
-                ModKind::Adsr => {
-                    let level = run.envelope.level(&slot.adsr, now.clock, now.rate);
+                ModKind::Adsr | ModKind::Ahd => {
+                    let level = run.envelope.level(&slot.envelope(), now.clock, now.rate);
                     let level = polarity.of(Polarity::Uni, level);
                     let added = run.add(slot.kind, level * depth / 255.0 * share);
                     moved.add(destination.index(), added);
@@ -1408,11 +1409,13 @@ impl TrackState {
         }
     }
 
-    /// Start the release of every slot's envelope, when a note ends.
+    /// Start the release of every slot's envelope, when a note ends, but a one-shot's, which plays
+    /// through whatever the note's length.
     pub fn release_mods(&mut self, track: &Track, now: SongTime) {
         for (slot, run) in track.mods.iter().zip(&mut self.slots) {
-            if matches!(run.envelope, EnvelopeRun::Held { .. }) {
-                let from = run.envelope.level(&slot.adsr, now.clock, now.rate);
+            let envelope = slot.envelope();
+            if matches!(run.envelope, EnvelopeRun::Held { .. }) && !envelope.one_shot() {
+                let from = run.envelope.level(&envelope, now.clock, now.rate);
                 run.envelope = EnvelopeRun::Released {
                     at: now.clock,
                     from,
@@ -1448,7 +1451,7 @@ impl TrackState {
     }
 
     fn begin(&mut self, note: NoteOn, rate: u32, arpeggio: bool) {
-        let from = if note.shape.reset {
+        let from = if note.shape.reset() {
             0.0
         } else {
             self.voice.level()
