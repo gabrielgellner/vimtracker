@@ -14,6 +14,8 @@ const MAX_RATE_BARS: u32 = 64;
 const MAX_RATE_STEPS: u32 = 4096;
 const MIN_CENTIHERTZ: u32 = 1;
 const MAX_CENTIHERTZ: u32 = 10_000;
+/// The furthest either way an LFO's deform goes.
+pub const MAX_DEFORM: i16 = 0xFF;
 
 /// The note divisions `+` and `-` go through, shortest first, as ticks per cycle. Whole bars follow.
 const DIVISIONS: [(&str, u32); 18] = [
@@ -319,36 +321,68 @@ impl Shape {
 /// values, so tracks and LFOs differ.
 #[inline]
 pub fn wave(shape: Shape, cycles: f64, key: u64) -> f32 {
+    deformed_wave(shape, cycles, key, 0.0)
+}
+
+/// A wave bent by an LFO's `Deform`, from -1 to 1 (#468): Surge's `bend1`, one bend for every
+/// shape, which skews `Sine`, `Tri`, `Saw` and `Ramp` toward a log or an exp shape while keeping
+/// their peaks where they are, and is the width of `Square`'s high part. The random shapes have
+/// nothing to bend. At 0 it's the wave exactly.
+#[inline]
+pub fn deformed_wave(shape: Shape, cycles: f64, key: u64, deform: f32) -> f32 {
     let position = cycles.rem_euclid(1.0) as f32;
+    let bend = |value: f32| bent(value, deform);
     match shape {
-        Shape::Sine => (position * std::f32::consts::TAU).sin(),
-        Shape::Tri => {
-            if position < 0.25 {
-                position * 4.0
-            } else if position < 0.75 {
-                2.0 - position * 4.0
-            } else {
-                position * 4.0 - 4.0
-            }
-        }
-        Shape::Saw => 1.0 - position * 2.0,
-        Shape::Ramp => position * 2.0 - 1.0,
+        Shape::Sine => bend((position * std::f32::consts::TAU).sin()),
+        Shape::Tri => bend(if position < 0.25 {
+            position * 4.0
+        } else if position < 0.75 {
+            2.0 - position * 4.0
+        } else {
+            position * 4.0 - 4.0
+        }),
+        Shape::Saw => bend(1.0 - position * 2.0),
+        Shape::Ramp => bend(position * 2.0 - 1.0),
         Shape::Square => {
-            if position < 0.5 {
+            if position < 0.5 + 0.5 * deform {
                 1.0
             } else {
                 -1.0
             }
         }
         Shape::Random => random(key, cycles.floor() as i64),
-        // It starts each cycle on the value `Random` holds for it, and eases to the next one.
+        // A Catmull-Rom curve through the values `Random` holds for this cycle and its neighbours,
+        // so it glides through each with the slope its neighbours give rather than stopping there,
+        // as Surge's `Noise` does. It's still worked out on the spot from the four values, and it
+        // overshoots a little, so it's kept within the wave's range.
         Shape::Smooth => {
             let cycle = cycles.floor() as i64;
-            let eased = position * position * (3.0 - 2.0 * position);
-            let from = random(key, cycle);
-            from + (random(key, cycle.wrapping_add(1)) - from) * eased
+            let at = |offset: i64| random(key, cycle.wrapping_add(offset));
+            catmull_rom([at(-1), at(0), at(1), at(2)], position).clamp(-1.0, 1.0)
         }
     }
+}
+
+/// Surge's `bend1` (`LFOModulationSource.cpp`, GPL-3.0-or-later): `x - a x^2 + a`, twice, with `a`
+/// half the deform, which keeps -1 and 1 where they are and never turns back between them.
+#[inline]
+fn bent(value: f32, deform: f32) -> f32 {
+    if deform == 0.0 {
+        return value;
+    }
+    let a = 0.5 * deform.clamp(-1.0, 1.0);
+    let once = value - a * value * value + a;
+    once - a * once * once + a
+}
+
+/// The Catmull-Rom curve through `points[1]` at 0 and `points[2]` at 1.
+#[inline]
+fn catmull_rom([before, from, to, after]: [f32; 4], t: f32) -> f32 {
+    let (t2, t3) = (t * t, t * t * t);
+    0.5 * (2.0 * from
+        + (to - before) * t
+        + (2.0 * before - 5.0 * from + 4.0 * to - after) * t2
+        + (3.0 * from - before - 3.0 * to + after) * t3)
 }
 
 /// A value from -1 to 1 for one cycle, from a stateless mix so nothing has to be stepped.
@@ -403,6 +437,14 @@ pub struct Lfo {
     /// Where in the cycle it starts, in degrees.
     pub phase: u16,
     pub mode: LfoMode,
+    /// How far its wave is bent, from `-FF` to `+FF`: a skew toward a log or an exp shape, or a
+    /// square's width (#468).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub deform: i16,
+}
+
+fn is_zero(value: &i16) -> bool {
+    *value == 0
 }
 
 impl Default for Lfo {
@@ -412,6 +454,7 @@ impl Default for Lfo {
             rate: Rate::Note(TICKS_PER_QUARTER as u32),
             phase: 0,
             mode: LfoMode::Free,
+            deform: 0,
         }
     }
 }
@@ -419,7 +462,7 @@ impl Default for Lfo {
 impl Lfo {
     /// Whether these are settings that can be set.
     pub fn in_range(&self) -> bool {
-        self.rate.in_range() && self.phase < 360
+        self.rate.in_range() && self.phase < 360 && self.deform.abs() <= MAX_DEFORM
     }
 }
 
@@ -570,21 +613,112 @@ mod tests {
                 wave(Shape::Random, cycles, 5),
             );
         }
-        // The steepest an eased path between values 2 apart can be is 3 per cycle.
+        // It stays in range, and never jumps: the steepest a Catmull-Rom path through values
+        // at most 2 apart can be is under 4 per cycle.
         let steps = 10_000;
         let at = |step: i32| wave(Shape::Smooth, f64::from(step) / f64::from(steps), 5);
         for step in -steps..steps * 100 {
             let (here, next) = (at(step), at(step + 1));
             assert!((-1.0..=1.0).contains(&here), "{here}");
-            assert!((next - here).abs() <= 3.01 / steps as f32, "{here} {next}");
+            assert!((next - here).abs() <= 4.0 / steps as f32, "{here} {next}");
         }
     }
 
     #[test]
-    fn smooth_is_flat_at_each_value_and_follows_its_key() {
-        let start = wave(Shape::Smooth, 2.0, 5);
-        assert!((wave(Shape::Smooth, 2.001, 5) - start).abs() < 1e-4);
-        assert_ne!(wave(Shape::Smooth, 2.5, 5), start);
+    fn smooth_glides_through_each_value_with_its_neighbours_slope_and_follows_its_key() {
+        // At a value it moves on at the slope from the value before to the one after, rather than
+        // stopping there as an eased path does, so it doesn't read as stop and go.
+        let mut moving = 0;
+        for cycle in 0..50 {
+            let at = f64::from(cycle);
+            let slope = (wave(Shape::Smooth, at + 1e-3, 5) - wave(Shape::Smooth, at, 5)) / 1e-3;
+            let expected =
+                (wave(Shape::Random, at + 1.0, 5) - wave(Shape::Random, at - 1.0, 5)) / 2.0;
+            if wave(Shape::Smooth, at, 5).abs() < 0.9 {
+                assert!((slope - expected).abs() < 0.05, "{slope} {expected}");
+                moving += usize::from(expected.abs() > 0.1);
+            }
+        }
+        assert!(moving > 10, "{moving}");
+        // Its slope is the same either side of a value.
+        let left = (wave(Shape::Smooth, 3.0, 5) - wave(Shape::Smooth, 3.0 - 1e-3, 5)) / 1e-3;
+        let right = (wave(Shape::Smooth, 3.0 + 1e-3, 5) - wave(Shape::Smooth, 3.0, 5)) / 1e-3;
+        assert!((left - right).abs() < 0.05, "{left} {right}");
         assert_ne!(wave(Shape::Smooth, 2.5, 5), wave(Shape::Smooth, 2.5, 6));
+    }
+
+    #[test]
+    fn deform_bends_every_shape_between_its_peaks_and_is_a_squares_width() {
+        for shape in [Shape::Sine, Shape::Tri, Shape::Saw, Shape::Ramp] {
+            for deform in [-1.0, -0.4, 0.3, 1.0] {
+                for i in 0..=200 {
+                    let cycles = f64::from(i) / 200.0 * 0.999;
+                    let plain = wave(shape, cycles, 0);
+                    let bent = deformed_wave(shape, cycles, 0, deform);
+                    assert!((-1.0..=1.0).contains(&bent), "{shape:?} {bent}");
+                    // The peaks stay where they are, and it bends one way throughout.
+                    if (plain.abs() - 1.0).abs() < 1e-6 {
+                        close(bent, plain);
+                    } else if plain.abs() < 0.99 {
+                        assert!((bent - plain) * deform > 0.0, "{shape:?} {plain} {bent}");
+                    }
+                }
+            }
+        }
+        // Raised, a tri spends longer high; lowered, longer low.
+        let high = |deform: f32| {
+            (0..1000)
+                .filter(|i| deformed_wave(Shape::Tri, f64::from(*i) / 1000.0, 0, deform) > 0.0)
+                .count()
+        };
+        assert!(
+            high(0.5) > 600 && high(-0.5) < 400,
+            "{} {}",
+            high(0.5),
+            high(-0.5)
+        );
+        // A square's high part is as wide as it says.
+        let wide = |deform: f32| {
+            (0..1000)
+                .filter(|i| deformed_wave(Shape::Square, f64::from(*i) / 1000.0, 0, deform) > 0.0)
+                .count()
+        };
+        assert_eq!(wide(0.0), 500);
+        assert_eq!(wide(0.5), 750);
+        assert_eq!(wide(-0.5), 250);
+        // At none it's the wave to the bit, and the random shapes have nothing to bend.
+        for shape in Shape::ALL {
+            for i in 0..50 {
+                let cycles = f64::from(i) * 0.137;
+                assert_eq!(
+                    deformed_wave(shape, cycles, 3, 0.0).to_bits(),
+                    wave(shape, cycles, 3).to_bits()
+                );
+            }
+        }
+        assert_eq!(
+            deformed_wave(Shape::Random, 2.3, 3, 0.8),
+            wave(Shape::Random, 2.3, 3)
+        );
+    }
+
+    #[test]
+    fn a_deform_is_saved_only_once_set() {
+        let plain = ron::to_string(&Lfo::default()).unwrap();
+        assert!(!plain.contains("deform"), "{plain}");
+        let bent = Lfo {
+            deform: -0x40,
+            ..Lfo::default()
+        };
+        let text = ron::to_string(&bent).unwrap();
+        assert!(text.contains("deform:-64"), "{text}");
+        assert_eq!(ron::from_str::<Lfo>(&text).unwrap(), bent);
+        assert!(
+            !Lfo {
+                deform: 0x100,
+                ..bent
+            }
+            .in_range()
+        );
     }
 }

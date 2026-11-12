@@ -1,6 +1,6 @@
 //! Two-operator FM, from Mutable Instruments' Plaits. Ported to Rust from `fm_engine.cc`,
-//! `sine_oscillator.h` and `4x_downsampler.h`, with its main output, and a sine worked out rather
-//! than read from a table. Its ratios come from `resources/lookup_tables.py`.
+//! `sine_oscillator.h` and `4x_downsampler.h`, with its main output, reading Plaits' sine table
+//! as it does. Its ratios come from `resources/lookup_tables.py`.
 //!
 //! Copyright 2016, 2021 Emilie Gillet.
 //!
@@ -19,9 +19,8 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use std::f32::consts::TAU;
-
 use super::virtual_analog::{BLOCK, Moving, Settings};
+use crate::dsp::blocks::sine_table::sine_pm;
 
 const OVERSAMPLING: usize = 4;
 #[allow(clippy::excessive_precision)]
@@ -50,12 +49,6 @@ const RATIOS: [f32; 130] = [
 ];
 /// How loud it is against the other machines.
 const LEVEL: f32 = 0.5;
-
-/// A sine at a phase, moved by a number of turns.
-#[inline]
-fn sine_pm(phase: u32, modulation: f32) -> f32 {
-    (TAU * (phase as f32 / 4_294_967_296.0 + modulation)).sin()
-}
 
 /// How far the modulator is from the carrier for a `Harm` on `0..=1`, in semitones.
 pub(super) fn ratio(harmonics: f32) -> f32 {

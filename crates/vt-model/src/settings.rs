@@ -20,8 +20,9 @@ use crate::song::{DEFAULT_ACCENT, FILTER_MODE_NAMES, FULL_GATE, SynthVoice};
 use crate::speed::{SPEED_NAMES, Speed};
 use crate::step::{FxCommand, MAX_VELOCITY};
 
-/// The most settings a machine has.
-pub const MAX_MACHINE_SETTINGS: usize = 8;
+/// The most settings a machine has: `Acid`'s, a TB-303's knobs with two of the Devil Fish's and
+/// `Drift` (decision 190).
+pub const MAX_MACHINE_SETTINGS: usize = 9;
 
 /// What values a setting takes, and what they mean.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -583,21 +584,27 @@ const TRACK_GROUPS: [&str; 15] = [
 ];
 
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
+/// How far each note of an analog-style voice strays, from none at `00`: its oscillators' tuning,
+/// a slow wander in pitch, its cutoff, level and envelope times, and, but for `Acid`'s, which
+/// always runs free, where its oscillators start (decision 190).
+const DRIFT: Entry = level("drift", "Drift", "DRFT", 0x00);
 
-const VA: [Entry; 3] = [
+const VA: [Entry; 4] = [
     centred("detune", "Detune", "DTUN"),
     level("square", "Square", "SQR", 0x00),
     level("saw", "Saw", "SAW", 0x80),
+    DRIFT,
 ];
 const FM: [Entry; 3] = [
     level("ratio", "Ratio", "RAT", 0x80),
     level("index", "Index", "INDX", 0x00),
     centred("feedback", "Feedback", "FDBK"),
 ];
-const VCF: [Entry; 3] = [
+const VCF: [Entry; 4] = [
     centred("resonance", "Resonance", "RESO"),
     level("frequency", "Frequency", "FREQ", 0x80),
     level("wave", "Wave", "WAVE", 0x40),
+    DRIFT,
 ];
 const PD: [Entry; 3] = [
     level("ratio", "Ratio", "RAT", 0x80),
@@ -641,8 +648,8 @@ const fn in_units(
 }
 /// The acid voice's waves: the saw, and the square a TB-303 shapes from it.
 const ACID_WAVES: [&str; 2] = ["Saw", "Square"];
-/// The acid voice's, in the order of a TB-303's knobs, then two of the Devil Fish's.
-const ACID: [Entry; 8] = [
+/// The acid voice's, in the order of a TB-303's knobs, then two of the Devil Fish's, then `Drift`.
+const ACID: [Entry; 9] = [
     Entry {
         key: "wave",
         name: "Wave",
@@ -660,6 +667,7 @@ const ACID: [Entry; 8] = [
     level("accent", "Accent", "ACC", 0x80),
     in_units("slide", "Slide", "SLID", 0x00, Units::Slide),
     in_units("drive", "Drive", "DRIV", 0x00, Units::AcidDrive),
+    DRIFT,
 ];
 /// The chords Chord and Chiptune play, in the order Plaits lists them.
 const CHORD_NAMES: [&str; 11] = [
@@ -686,10 +694,11 @@ const CHORD: [Entry; 3] = [
     level("inversion", "Inversion", "INV", 0x66),
     level("wave", "Wave", "WAVE", 0x40),
 ];
-const CHIPTUNE: [Entry; 3] = [
+const CHIPTUNE: [Entry; 4] = [
     CHORD_TYPE,
     level("inversion", "Inversion", "INV", 0x66),
     centred("shape", "Shape", "SHPE"),
+    DRIFT,
 ];
 const FOLD: [Entry; 3] = [
     centred("shape", "Shape", "SHPE"),
@@ -1001,8 +1010,8 @@ fn param_entry(param: &Param) -> Entry {
 }
 
 /// A mod slot's settings that steps can lock: its depth and polarity, whatever its type, and an
-/// LFO's phase.
-const MOD: [Entry; 3] = [
+/// LFO's phase and deform.
+const MOD: [Entry; 4] = [
     Entry {
         key: "depth",
         name: "Depth",
@@ -1036,6 +1045,17 @@ const MOD: [Entry; 3] = [
         },
         // Each type has its own, which the track's value gives; this is an LFO's.
         default: 0x01,
+    },
+    Entry {
+        key: "deform",
+        name: "Deform",
+        label: Some("DFM"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::Depth,
+        },
+        default: 0x80,
     },
 ];
 
@@ -1848,7 +1868,15 @@ mod tests {
                 .default,
             DEFAULT_ACCENT
         );
-        assert_eq!(SettingId::voice(SynthVoice::VirtualAnalog, 3), None);
+        let drift = SettingId::voice(SynthVoice::VirtualAnalog, 3)
+            .unwrap()
+            .entry();
+        assert_eq!(
+            (drift.key, drift.default),
+            ("drift", 0x00),
+            "none unless asked"
+        );
+        assert_eq!(SettingId::voice(SynthVoice::VirtualAnalog, 4), None);
     }
 
     #[test]

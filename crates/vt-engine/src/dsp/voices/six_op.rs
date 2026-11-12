@@ -29,7 +29,7 @@
 #![allow(clippy::needless_range_loop)]
 
 use super::virtual_analog::Settings;
-use crate::dsp::blocks::sine_table::SINE;
+use crate::dsp::blocks::sine_table::sine_pm;
 
 /// How many frames are worked out at once, as in Plaits, whose envelopes move once a block.
 const BLOCK: usize = 24;
@@ -697,19 +697,6 @@ fn is_modulator(algorithm: usize, op: usize) -> bool {
 }
 
 // Operators, from `operator.h`.
-
-/// A sine at a phase moved by a number of turns, up to 32 either way.
-#[inline]
-fn sine_pm(phase: u32, pm: f32) -> f32 {
-    const SCALE: f32 = 4_294_967_296.0 / 64.0;
-    let offset = ((pm + 32.0) * SCALE) as u32;
-    let phase = phase.wrapping_add(offset.wrapping_mul(64));
-    let index = (phase >> 23) as usize;
-    let fraction = (phase << 9) as f32 / 4_294_967_296.0;
-    let a = SINE[index];
-    let b = SINE[index + 1];
-    a + (b - a) * fraction
-}
 
 #[derive(Debug, Clone, Copy, Default)]
 struct Operator {

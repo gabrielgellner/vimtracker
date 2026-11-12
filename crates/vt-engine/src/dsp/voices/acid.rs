@@ -32,6 +32,7 @@
 
 use super::drums::soft_clip;
 use super::virtual_analog::Settings;
+use crate::dsp::blocks::drift::Drift;
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient as smoothing_coefficient};
 use crate::dsp::filters::diode_filter::{
@@ -179,7 +180,8 @@ const DECAY: usize = 3;
 const ACCENT: usize = 4;
 const SLIDE: usize = 5;
 const DRIVE: usize = 6;
-const SMOOTHED: usize = 7;
+const DRIFT: usize = 7;
+const SMOOTHED: usize = 8;
 /// How many frames go by between working out what follows from the settings, which are smoothed,
 /// so they move little in that time.
 const CONTROL_FRAMES: u32 = 16;
@@ -264,6 +266,11 @@ pub struct Acid {
     falling_slide: f32,
     /// How long the slide under way takes, if it was given a time rather than taking `Slide`'s.
     slide_ms: Option<f32>,
+    /// The note's drift and the noise floor under the filter, and what the drift makes of the
+    /// pitch and the level, worked out with the rest.
+    drift: Drift,
+    detune: f32,
+    drift_level: f32,
     // Coefficients for the fixed times.
     attack: f32,
     level_decay: f32,
@@ -309,6 +316,9 @@ impl Acid {
             slide: 0.0,
             falling_slide: 0.0,
             slide_ms: None,
+            drift: Drift::new(),
+            detune: 1.0,
+            drift_level: 1.0,
             attack: one_pole(ATTACK_MS, rate),
             level_decay: falling(LEVEL_DECAY_MS, rate),
             hold_frames: (RELEASE_HOLD_MS * rate / 1000.0) as u32,
@@ -322,8 +332,18 @@ impl Acid {
         }
     }
 
+    /// Seed a voice starting from silence, so each differs but a render repeats. A 303's
+    /// oscillator runs free, and its gate only opens the envelopes, so a note from silence starts
+    /// anywhere in its cycle, whatever `Drift` is, and a note after it carries on from where the
+    /// last left it (decision 191).
+    pub fn seed(&mut self, seed: u32) {
+        self.drift.seed(seed);
+        self.phase = self.drift.phase();
+    }
+
     /// Start a note, from wherever the last one left the filter and the accent sweep.
     pub fn trigger(&mut self, accent: bool) {
+        self.drift.roll();
         // A note let go and played again before it has fallen away starts from where it fell to.
         if !self.gate && !self.accented {
             let closing = self.closing();
@@ -413,7 +433,11 @@ impl Acid {
             } else {
                 plain_decay
             };
-            self.decay = falling(decay, self.rate);
+            let drift = values[DRIFT];
+            self.decay = falling(decay * self.drift.time(drift), self.rate);
+            self.drift.step();
+            self.detune = self.drift.ratio(0, drift);
+            self.drift_level = self.drift.level(drift);
             let slide = self
                 .slide_ms
                 .unwrap_or_else(|| slide_ms(values[SLIDE] * 255.0));
@@ -497,11 +521,13 @@ impl Acid {
         let octaves = softened_sweep(scale * (self.envelope - centre)) + accent_octaves;
         // `acid_cutoff_hz`, in octaves, so one power of two does both.
         let knob_octaves = knob * (ACID_HIGHEST_CUTOFF / ACID_LOWEST_CUTOFF).log2();
-        self.cutoff =
-            (ACID_LOWEST_CUTOFF * (knob_octaves + octaves).exp2()).clamp(10.0, HIGHEST_HZ);
+        let drifted = self.drift.cutoff_octaves(values[DRIFT]);
+        self.cutoff = (ACID_LOWEST_CUTOFF * (knob_octaves + octaves + drifted).exp2())
+            .clamp(10.0, HIGHEST_HZ);
 
-        // The oscillator, high-passed as a 303's is on its way to the filter.
-        let increment = self.heard;
+        // The oscillator, high-passed as a 303's is on its way to the filter, which is as good as
+        // a DC blocker, so it needs no other (decision 191).
+        let increment = self.heard * self.detune;
         self.phase += increment;
         if self.phase >= 1.0 {
             self.phase -= 1.0;
@@ -514,7 +540,8 @@ impl Acid {
             2.0 * self.phase - 1.0 - blep(self.phase, increment)
         };
         self.high_pass += (wave - self.high_pass) * self.high_pass_coefficient;
-        let input = wave - self.high_pass;
+        // Over a floor of noise the filter can ring from.
+        let input = wave - self.high_pass + self.drift.noise();
 
         // `acid_drive_db` as a gain.
         let drive = (acid_drive_db(values[DRIVE] * 255.0) / DECIBELS_PER_OCTAVE).exp2();
@@ -531,7 +558,7 @@ impl Acid {
             filter.next(sample, cutoff, resonance, drive, feedback, HIGH_PASS_RATIO)
         }) * loss
             / FILTER_LEVEL;
-        HEADROOM * soft_clip(filtered * self.amplitude * LEVEL / HEADROOM)
+        HEADROOM * soft_clip(filtered * self.amplitude * self.drift_level * LEVEL / HEADROOM)
     }
 }
 
@@ -541,9 +568,13 @@ mod tests {
 
     const RATE: u32 = 48_000;
 
-    /// Settings in their places: wave, cutoff, resonance, env mod, decay, accent, slide, drive.
+    /// Settings in their places: wave, cutoff, resonance, env mod, decay, accent, slide, drive,
+    /// with no drift.
     fn places(values: [f32; 8]) -> Settings {
-        Settings::from_places(values)
+        let [wave, cutoff, resonance, envmod, decay, accent, slide, drive] = values;
+        Settings::from_places([
+            wave, cutoff, resonance, envmod, decay, accent, slide, drive, 0.0,
+        ])
     }
 
     fn plain() -> Settings {

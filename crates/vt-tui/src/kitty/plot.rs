@@ -12,7 +12,7 @@ use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
 use vt_model::envelope::{Adsr, Envelope};
 use vt_model::insert::{Compressor, Equaliser, threshold_db};
-use vt_model::lfo::{self, Lfo, wave};
+use vt_model::lfo::{self, Lfo, deformed_wave};
 use vt_model::modulation::Polarity;
 use vt_model::song::{FilterType, Track};
 
@@ -398,6 +398,8 @@ pub struct LfoDrawing {
     pub phase: u16,
     pub flipped: bool,
     pub unipolar: bool,
+    /// How far its wave is bent, as its `Deform` says.
+    pub deform: i16,
 }
 
 impl LfoDrawing {
@@ -409,6 +411,7 @@ impl LfoDrawing {
                 phase: lfo.phase % 360,
                 flipped: depth < 0,
                 unipolar: false,
+                deform: lfo.deform,
             }
         } else {
             Self {
@@ -416,6 +419,7 @@ impl LfoDrawing {
                 phase: 0,
                 flipped: false,
                 unipolar: false,
+                deform: 0,
             }
         }
     }
@@ -446,7 +450,12 @@ impl LfoDrawing {
     /// isn't drawn up the edge.
     pub fn level_at(self, x: f32) -> f32 {
         let turns = f64::from(x.min(1.0 - JUMP)) + self.start();
-        self.level_of(wave(self.shape, turns, 0))
+        self.level_of(deformed_wave(self.shape, turns, 0, self.deform_share()))
+    }
+
+    /// Its deform from -1 to 1, as the engine bends the wave.
+    fn deform_share(self) -> f32 {
+        f32::from(self.deform) / f32::from(lfo::MAX_DEFORM)
     }
 
     /// Where a point so far round the wave, from 0 to 1, is across the cycle drawn.
@@ -457,10 +466,12 @@ impl LfoDrawing {
     /// Where the wave has a corner across the cycle: a point at each peak, and one either side of
     /// each jump, so the line goes straight up or down there.
     fn corners(self) -> Vec<f32> {
+        // A deformed square falls where its width ends.
+        let width = [0.0, 0.5 + 0.5 * f64::from(self.deform_share())];
         let (peaks, jumps): (&[f64], &[f64]) = match self.shape {
             lfo::Shape::Tri => (&[0.25, 0.75], &[]),
             lfo::Shape::Saw | lfo::Shape::Ramp => (&[], &[0.0]),
-            lfo::Shape::Square => (&[], &[0.0, 0.5]),
+            lfo::Shape::Square => (&[], &width),
             _ => (&[], &[]),
         };
         let mut corners: Vec<f32> = peaks.iter().map(|turns| self.x_of(*turns)).collect();
@@ -951,10 +962,12 @@ mod tests {
         use vt_model::lfo::Shape as Wave;
         let size = (360, 195);
         for shape in [Wave::Sine, Wave::Tri, Wave::Saw, Wave::Ramp, Wave::Square] {
-            for (phase, depth) in [(0, 0x40), (90, 0x40), (200, -0x30)] {
+            // A deform bends the drawing as it bends the engine's wave.
+            for (phase, depth, deform) in [(0, 0x40, 0), (90, 0x40, 0x60), (200, -0x30, -0xA0)] {
                 let lfo = Lfo {
                     shape,
                     phase,
+                    deform,
                     ..Lfo::default()
                 };
                 let drawing = LfoDrawing::of(&lfo, depth);
@@ -963,7 +976,8 @@ mod tests {
                 let sign = if depth < 0 { -1.0 } else { 1.0 };
                 let level = |x: f32| {
                     let turns = f64::from(x.min(0.9999)) + f64::from(phase) / 360.0;
-                    0.5 + 0.5 * sign * wave(shape, turns, 0)
+                    let bend = f32::from(deform) / f32::from(lfo::MAX_DEFORM);
+                    0.5 + 0.5 * sign * deformed_wave(shape, turns, 0, bend)
                 };
                 for x in 1..size.0 - 1 {
                     let share = (x as f32 + 0.5 - 1.0) / (size.0 as f32 - LINE_PIXELS);
@@ -1049,7 +1063,8 @@ mod tests {
         assert!((drawing.x_of(0.0) - 0.75).abs() < 1e-6);
         // And the level there is the wave's.
         assert!(
-            (drawing.level_at(0.5) - drawing.level_of(wave(lfo::Shape::Tri, 0.75, 0))).abs() < 1e-6
+            (drawing.level_at(0.5) - drawing.level_of(lfo::wave(lfo::Shape::Tri, 0.75, 0))).abs()
+                < 1e-6
         );
     }
 
