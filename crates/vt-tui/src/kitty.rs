@@ -845,7 +845,7 @@ pub fn supports_graphics() -> io::Result<bool> {
 type PreviewImages = (Vec<Option<u32>>, Option<u32>);
 
 /// The settings a filter curve is drawn from.
-pub(crate) type FilterSettings = (FilterType, FilterMode, u8, u8, u8, u8, u8);
+pub(crate) type FilterSettings = (FilterType, FilterMode, u8, u8, u8, bool, u8, u8);
 
 /// What an FX slot's drawing shows, which is all that's compared to tell if it's changed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1350,6 +1350,7 @@ impl Graphics {
             cutoff,
             resonance,
             track.drive,
+            track.safe,
             track.low_cut,
             track.high_cut,
         );

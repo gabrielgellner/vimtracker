@@ -410,7 +410,7 @@ Song                               song.ron, refused unless format_version is FO
  |   |- kind, name, mute, solo     kind: Sound, Group(n), ReturnA, ReturnB or Master
  |   |- machine                    Sampler, or Plaits(voice)
  |   |- settings{id}, fine{id}     machine settings changed from their defaults
- |   |- filter, filter_mode, cutoff, resonance, drive, punch, low_cut, high_cut
+ |   |- filter, filter_mode, cutoff, resonance, drive, punch, safe, low_cut, high_cut
  |   |- inserts[4], bypassed[4]    an effect and its settings in each slot
  |   |- level, trim, pan, send_a, send_b
  |   |- pitch, velocity_delta, choke, gate_length, speed, reset, glide, groove
@@ -1065,7 +1065,7 @@ whose depth is in semitones. A second envelope on `Vol` moves the level by its d
 
 **Filter.** A track has one, with `Filter`, `Cut`, `Res` and `Drive` on its page. `LP`, `HP`, `BP` and `Notch` are outputs of one TPT state-variable filter, the same design as Mutable Instruments' `stmlib::Svf`, so they cost about the same. `Ladder` is the
 character filter: a saturating four-pole ladder at 2x, from Huovilainen's model, Zavalishin's integrators and Mystran's linearisation, after VCV Fundamental's VCF, which is GPL 3 or later. It self-oscillates, and its cost only falls on tracks using it. `Diode` is Vital's diode ladder, the one in `Acid`, at 2x too (decision 47). `MS20 LP` and `MS20 HP` are the Korg 35, the MS-20's filter, from sst-filters' K35, at 2x too (decision 61). `Dirty` is Vital's Dirty filter, a 24 dB low-pass whose resonance loop saturates, at 2x too (decision 71). `OB-X` is OB-Xd's two-pole, from OB-Xf, a state-variable filter whose damping grows with its level, so it sings by itself in tune at the top of `Res` with no clipper, at 2x too (decision 200). `Mode`, under `Filter`, gives each type its other responses from what it already has, rather than more types: `12 dB` or `24 dB` for the clean four, a second state-variable filter after the first; `LP24`, `LP12`, `BP24`, `HP12`, `HP24` and `N24` for `Ladder` and `Dirty`, their stages mixed as Vital mixes them, and eleven more of the Oberheim Xpander's mixes for `Ladder` (decision 184); `LP12`, `BP12`, `HP12` and `N12` for `OB-X`; and where the diode's input high-pass sits. The MS-20's have none. A track keeps its mode across types, a type that doesn't offer it plays its first, steps can lock `MODE`, and a change glides (decision 72). `Res` turns each family on a taper of its own, so each equal turn raises the peak about as much as Cytomic's The Drop's knob does, and the types that self-oscillate start to from about `D9`, 85% of its turn (decision 120).
-``Drive` turns up the input, soft-clips the feedback and the output at 2x, and compensates for level. At `00` the state-variable path is untouched and not oversampled. `Punch`, on the clean four, raises the first state-variable filter's cutoff and damping as its low-pass swings, after Braids' SVF, so a ring starts higher and falls in pitch to `Cut` (decision 217). Changing `Filter` starts the new filter from silence. A low-pass with nothing to do is skipped.
+``Drive` turns up the input, soft-clips the feedback and the output at 2x, and compensates for level. At `00` the state-variable path is untouched and not oversampled. `Punch`, on the clean four, raises the first state-variable filter's cutoff and damping as its low-pass swings, after Braids' SVF, so a ring starts higher and falls in pitch to `Cut` (decision 217). `Safe`, on the types that ring by themselves, takes `Res`'s whole turn onto the type's range up to where a struck ring still dies away, after The Drop's `SAFE`, from tables measured over `Cut` (decision 242). Changing `Filter` starts the new filter from silence. A low-pass with nothing to do is skipped.
 
 **Utility filter.** Each track also has `Low cut` and `High cut` after its main filter, as Elektron's Digitakt II and Digitone II pair a swappable filter with a base-width one. They use the same
 state-variable filter at 12 dB and Q 0.707 on the same 20 Hz to 20 kHz scale, with no resonance, modulation or FX for now. `00` and `FF` are off, cost nothing, and leave renders unchanged. The position is fixed after the main filter, so it can tame a driven ladder, rather than movable as on the Digitone II.
@@ -2415,7 +2415,7 @@ Every setting is a place in fixed arrays the size of the table, so the callback 
 **Left out.**
 
 *   **Locking LFO settings and Pitch from a step,** which issue #139 decides along with their kinds.
-*   **Making the track's Drive, Punch, Low cut and High cut lockable,** a label each once there's a reason.
+*   **Making the track's Drive, Punch, Safe, Low cut and High cut lockable,** a label each once there's a reason.
 *   **A list of settings saved as a preset.**
 *   **Settings with the same meaning sharing an id across voices,** so String's Decay lock plays on a Kick, until one phrase on different voices needs it.
 
