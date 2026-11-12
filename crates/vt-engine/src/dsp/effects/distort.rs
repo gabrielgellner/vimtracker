@@ -6,8 +6,8 @@
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Flanger,
-    FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb, Tape,
-    Vowel, Warps,
+    FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb,
+    Space, Tape, Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -141,7 +141,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Reso(_), Insert::Reso(_))
         | (Insert::Comb(_), Insert::Comb(_))
         | (Insert::Vowel(_), Insert::Vowel(_))
-        | (Insert::FreqShift(_), Insert::FreqShift(_)) => true,
+        | (Insert::FreqShift(_), Insert::FreqShift(_))
+        | (Insert::Space(_), Insert::Space(_)) => true,
         _ => false,
     }
 }
@@ -268,6 +269,7 @@ impl InsertState {
             | Insert::Flanger(Flanger { mix, gain, .. })
             | Insert::Tape(Tape { mix, gain, .. })
             | Insert::Plate(Plate { mix, gain, .. })
+            | Insert::Space(Space { mix, gain, .. })
             | Insert::Pitch(Pitch { mix, gain, .. })
             | Insert::Grains(Grains { mix, gain, .. })
             | Insert::Warps(Warps { mix, gain, .. })
@@ -522,7 +524,8 @@ impl InsertState {
             | Insert::Warps(_)
             | Insert::Reso(_)
             | Insert::Comb(_)
-            | Insert::FreqShift(_) => Mono::Stereo,
+            | Insert::FreqShift(_)
+            | Insert::Space(_) => Mono::Stereo,
         }
     }
 
@@ -676,6 +679,7 @@ impl InsertState {
             | Insert::Flanger(_)
             | Insert::Tape(_)
             | Insert::Plate(_)
+            | Insert::Space(_)
             | Insert::Pitch(_)
             | Insert::Grains(_) => (None, 0),
         };
@@ -1071,6 +1075,8 @@ mod tests {
                 decay: 0xE0,
                 ..Plate::DEFAULT
             }),
+            // Its longest tail takes over a minute to die away, so this one's its middle.
+            Insert::Space(Space::DEFAULT),
             Insert::Phaser(Phaser {
                 feedback: 0xFF,
                 ..Phaser::DEFAULT
