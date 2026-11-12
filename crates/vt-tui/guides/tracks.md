@@ -291,16 +291,25 @@ from 10 ms to half a second, and a change that comes while it fades waits for it
 `Wow` bends the two sides' pitch opposite ways, by up to about 9 cents, going round once every
 two seconds.
 
-`Chorus` thickens a sound with copies of it that drift in time, after Mutable
-Instruments' Rings. It starts half wet, which is the classic sound. Its `Chorus` type
-has two slowly drifting copies, and `Ensemble` three on a slow and a fast wobble, as a
-string machine has.
+`Chorus` thickens a sound with copies of it that drift in time. It starts half wet,
+which is the classic sound. Its first two types are after Mutable Instruments' Rings:
+`Chorus` has two slowly drifting copies, and `Ensemble` three on a slow and a fast
+wobble, as a string machine has. The other three are a Roland Juno's, the short, bright
+shimmer of its two chorus buttons: each side a copy a few ms late, swept by a triangle,
+the left getting longer as the right gets shorter, so even a sound in the middle comes
+out wide.
 
 | Setting | Does |
 |---|---|
-| `Type` | `Chorus` or `Ensemble` |
-| `Rate` | How fast they move: as Rings has it at `80` |
+| `Type` | `Chorus`, `Ensemble`, `Juno I`, `Juno II` or `Juno I+II` |
+| `Rate` | How fast they move: as Rings or the Juno has it at `80` |
 | `Depth` | How far they move. `00` leaves fixed copies |
+
+`Juno I` sweeps each side from 0.7 to 4.9 ms and back once every two seconds, 0.5 Hz,
+and `Juno II` the same a little faster, 0.83 Hz. `Juno I+II`, both
+buttons down, is a fast, shallow wobble at 8 Hz, nearer a vibrato. `Depth` at `80` is the
+Juno's own sweep, `FF` twice as long, and `Rate` goes two octaves either way. Each copy
+loses a little of its top, as the Juno's bucket brigade does, but doesn't dull as it moves.
 
 `EQ3` shapes the tone with three bands: a shelf at the bottom, a bell in the middle and a
 shelf at the top. Each band's boost or cut is centred on `80`, where it leaves the sound
