@@ -697,8 +697,9 @@ built from, so a new page uses them rather than working out its layout again:
 
 **The track page** (`track_page.rs` and `track_page/`, decision 145) is the first page that's a
 component (#320). `App::track_page` is a `TrackPage`: the page showing (`Page`: Sound, Mod or FX),
-the cursor's row and field, the field `j` and `k` aim for, and whether it's on a value's fine
-digits. Its methods are given the cursor's track (`App::track_here`) and read no `App`:
+the cursor's row and field, the field `j` and `k` aim for, whether it's on a value's fine
+digits, and where it was left on each of the other pages, which `TrackPage::show` goes back to
+(decision 209). Its methods are given the cursor's track (`App::track_here`) and read no `App`:
 `TrackPage::rows`, `place`, `control`, `devices` and `device_cursor` say where the cursor is and on
 what, and `TrackPage::key` runs the page's own keys, the moves, `{` and `}` and the pages either
 side, returning an `Outcome`: done, refused with a reason for the status line, or passed back.

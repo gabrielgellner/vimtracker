@@ -1494,9 +1494,10 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
     press(&mut app, "H");
     assert_eq!(app.track_page.page, Page::Sound, "it stops at the first");
     press(&mut app, "j$");
+    let sound_place = (app.track_page.row, app.track_page.field);
     press(&mut app, "L");
     assert_eq!(app.track_page.page, Page::Mod);
-    assert_eq!(app.track_page.row, 0);
+    assert_eq!((app.track_page.row, app.track_page.field), (0, 0));
     let modulation: Vec<_> = Page::Mod
         .devices(&app.song().tracks[0])
         .iter()
@@ -1508,7 +1509,11 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
     );
     press(&mut app, "GH");
     assert_eq!(app.track_page.page, Page::Sound);
-    assert_eq!(app.track_page.row, 0);
+    assert_eq!(
+        (app.track_page.row, app.track_page.field),
+        sound_place,
+        "each page keeps its place"
+    );
     let sound: Vec<_> = Page::Sound
         .devices(&app.song().tracks[0])
         .iter()
@@ -3171,4 +3176,52 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     let step = track.phrases[&0].steps()[0].to_string();
     assert!(step.contains(&format!("{INSERTS}.bypass:01")), "{step}");
     std::fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn each_page_keeps_its_own_cursor_and_starts_on_its_first_setting() {
+    use vt_model::insert::Insert;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app_with_distort();
+    press(&mut app, " 4L$");
+    assert_eq!(column_name(&app), "Dest");
+    // The FX page starts on its first slot's effect, not on its type under the Mod page's column,
+    // so `x` empties the slot.
+    press(&mut app, "L");
+    assert_eq!(column_name(&app), "Effect");
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
+    // The Mod page kept its place.
+    press(&mut app, "H");
+    assert_eq!(column_name(&app), "Dest");
+    // The Sound page kept its own, the Machine, so `K` lists the machines.
+    press(&mut app, "H");
+    assert_eq!(column_name(&app), "Machine");
+    // Each keeps a place in a grid too, and the column `j` and `k` aim for starts again from it.
+    press(&mut app, "}jlL");
+    assert_eq!(column_name(&app), "Dest");
+    press(&mut app, "H");
+    let sound = column_name(&app);
+    press(&mut app, "LH");
+    assert_eq!(column_name(&app), sound);
+
+    // From the Sound page's last column straight through to the FX page, too.
+    let (mut app, _realtime) = app_with_distort();
+    press(&mut app, " 4$");
+    assert_eq!(column_name(&app), "Sample");
+    press(&mut app, "LL");
+    assert_eq!(column_name(&app), "Effect");
+    press(&mut app, "HH");
+    assert_eq!(column_name(&app), "Sample");
+}
+
+/// Two tracks, the first with a Distort in its first slot.
+fn app_with_distort() -> (App, Realtime) {
+    let (mut app, realtime) = app();
+    app.apply(&Action::SetInsert {
+        track: 0,
+        slot: 0,
+        insert: vt_model::insert::Insert::ALL[1],
+    });
+    (app, realtime)
 }
