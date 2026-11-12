@@ -1602,10 +1602,11 @@ fn other_tracks_light_the_step_they_are_playing() {
     };
     on_the_row_being_edited(&mut app);
     app.set_playhead(2);
-    assert_eq!(color(&app, 2), vt_tui::theme::OVERLAY2, "stopped");
+    // Its rows are empty, so faint, as an empty cell on the grid is.
+    assert_eq!(color(&app, 2), vt_tui::theme::OVERLAY0, "stopped");
     app.transport = Transport::Playing;
     assert_eq!(color(&app, 2), vt_tui::theme::GREEN);
-    assert_eq!(color(&app, 3), vt_tui::theme::OVERLAY2);
+    assert_eq!(color(&app, 3), vt_tui::theme::OVERLAY0);
     app.transport = Transport::Paused;
     assert_eq!(color(&app, 2), vt_tui::theme::GREEN);
 }
@@ -1724,15 +1725,24 @@ fn insert_turns_the_cursor_green_and_boxes_the_track_without_moving_anything() {
     assert_eq!(normal[(9, 2)].bg, vt_tui::theme::ROSEWATER);
     assert_eq!(normal[(8, 1)].symbol(), " ");
     assert_eq!(normal[(8, 2)].symbol(), " ");
+    let headings: String = (9..57).map(|x| normal[(x, 1)].symbol()).collect();
+    assert_eq!(headings, "Note              FX 1         FX 2         FX 3");
 
     press(&mut app, "i");
     let insert = screen(&app);
     assert_eq!(insert[(9, 2)].bg, vt_tui::theme::GREEN);
     assert_eq!(insert[(9, 2)].fg, vt_tui::theme::BASE);
-    assert_eq!(insert[(8, 1)].symbol(), "┌");
+    assert_eq!(insert[(8, 1)].symbol(), "╭");
     assert_eq!(insert[(8, 2)].symbol(), "│");
-    assert_eq!(insert[(8, 18)].symbol(), "└");
+    assert_eq!(insert[(8, 18)].symbol(), "╰");
     assert_eq!(insert[(8, 2)].fg, vt_tui::theme::GREEN);
+    // Each heading is set into the top edge over its column, a space either side.
+    let edge: String = (8..66).map(|x| insert[(x, 1)].symbol()).collect();
+    assert_eq!(
+        edge,
+        "╭Note ──────────── FX 1 ─────── FX 2 ─────── FX 3 ───────╮"
+    );
+    assert_eq!(insert[(65, 18)].symbol(), "╯");
 
     // Take away the box, and the steps are where they were.
     assert_eq!(
@@ -2960,6 +2970,45 @@ fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, C
 }
 
 #[test]
+fn the_overview_shows_empty_notes_faint_and_written_ones_dim() {
+    let mut song = Song::new(2);
+    let steps: Vec<Step> = ["C-3 40 --- --- ---", "--- -- --- --- ---"]
+        .iter()
+        .map(|text| text.parse().unwrap())
+        .collect();
+    song.tracks[1]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let app = App::new(song, None, samples, handle, 48_000);
+    let buffer = screen(&app);
+    assert_eq!(
+        beside(&buffer, 0, 0),
+        (" C-3".to_owned(), vt_tui::theme::OVERLAY2)
+    );
+    assert_eq!(
+        beside(&buffer, 0, 1),
+        (" ---".to_owned(), vt_tui::theme::OVERLAY0)
+    );
+}
+
+#[test]
+fn empty_cells_are_faint_dots_and_an_empty_slot_has_no_value() {
+    let (app, _realtime) = app();
+    let buffer = screen(&app);
+    // Row 01 of a new phrase, past the cursor's.
+    let row: String = (9..65).map(|x| buffer[(x, 3)].symbol()).collect();
+    assert_eq!(
+        row,
+        "--- ··    ···· ·· ···   ··     ···   ··     ···   ··    "
+    );
+    assert_eq!(buffer[(13, 3)].fg, vt_tui::theme::OVERLAY0);
+    assert_eq!(buffer[(33, 3)].fg, vt_tui::theme::OVERLAY0);
+}
+
+#[test]
 fn other_tracks_show_their_own_length_and_playhead() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     let (dim, green) = (vt_tui::theme::OVERLAY2, vt_tui::theme::GREEN);
@@ -3042,7 +3091,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
             .collect::<String>()
     };
     assert!(text(3).contains('│'), "{}", text(3));
-    assert!(text(4).contains('└'), "{}", text(4));
+    assert!(text(4).contains('╰'), "{}", text(4));
     assert!(text(5).contains(" 05"), "{}", text(5));
     assert_eq!(beside(&buffer, 1, 4).0, " E-3");
     assert_eq!(beside(&buffer, 1, 5).0, " F-3");
@@ -3601,7 +3650,7 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
         row(2)
     );
     assert!(
-        row(3).contains("DEL   10     ---   00     ---   00"),
+        row(3).contains("DEL   10     ···   ··     ···   ··"),
         "{}",
         row(3)
     );
@@ -3772,7 +3821,7 @@ fn each_kind_of_cell_has_its_own_colours() {
 }
 
 #[test]
-fn a_gate_cell_shows_its_own_length_dim_and_the_tracks_as_faint_dashes() {
+fn a_gate_cell_shows_its_own_length_dim_and_the_tracks_as_faint_dots() {
     use vt_tui::theme;
     use vt_tui::views::status::{column_name, value_shown};
     let mut song = Song::new(1);
@@ -3798,10 +3847,10 @@ fn a_gate_cell_shows_its_own_length_dim_and_the_tracks_as_faint_dashes() {
         "{}",
         row(2)
     );
-    assert!(row(3).starts_with("C-3 40    HLD2 -- ---"), "{}", row(3));
+    assert!(row(3).starts_with("C-3 40    HLD2 ·· ···"), "{}", row(3));
     // The `HLD2` lasts two lines of the timeline.
     assert_eq!(row(4).trim_end(), " │", "{}", row(4));
-    assert!(row(5).starts_with("C-3 40    ---- -- ---"), "{}", row(5));
+    assert!(row(5).starts_with("C-3 40    ···· ·· ···"), "{}", row(5));
     // The length is the cell's third part, after the gate and its pulses.
     let length = 9 + 15;
     assert_eq!(Some(buffer[(length, 2)].fg), theme::dim().fg);
@@ -3847,8 +3896,8 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
         "{}",
         row(2)
     );
-    assert!(row(3).starts_with("C-3 40    ---- -- ---"), "{}", row(3));
-    assert!(row(4).starts_with("--- -- +B ---- -- ---"), "{}", row(4));
+    assert!(row(3).starts_with("C-3 40    ···· ·· ···"), "{}", row(3));
+    assert!(row(4).starts_with("--- ·· +B ···· ·· ···"), "{}", row(4));
     let nudge = 9 + 7;
     assert_eq!(Some(buffer[(nudge, 2)].fg), theme::dim().fg);
     assert_eq!(Some(buffer[(nudge + 1, 4)].fg), theme::dim().fg);
@@ -5577,7 +5626,7 @@ fn the_phrase_view_names_a_slots_setting_in_a_wide_column() {
         })
         .collect();
     assert!(text.contains("1AMNT 80"), "{text}");
-    assert!(text.contains("---   00"), "{text}");
+    assert!(text.contains("···   ··"), "{text}");
 }
 
 #[test]
