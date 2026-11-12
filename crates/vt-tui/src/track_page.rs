@@ -26,6 +26,7 @@ use std::sync::Arc;
 
 use vt_model::selection::Motion;
 use vt_model::song::Track;
+use vt_model::steps::STEPS;
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
@@ -137,6 +138,9 @@ pub struct TrackPage {
     pub(crate) wanted: Option<(usize, usize, usize)>,
     /// Whether the cursor is on the fine digits of the setting.
     pub fine: bool,
+    /// Which of a Steps slot's values the cursor is on, counted from 0, while it's in the slot's
+    /// panel, which is one stop on the page that `h` and `l` go across.
+    pub step: u8,
     /// The row and field the cursor was kept at on each page, by [`Page::index`], the showing
     /// page's being `row` and `field`.
     kept: [(usize, usize); Page::ALL.len()],
@@ -192,14 +196,28 @@ impl TrackPage {
         }
     }
 
-    /// What the cursor is on.
+    /// What the cursor is on. In a Steps slot's panel, it's the value it's on there.
     pub fn control(&self, track: Option<&Track>) -> Control {
         let (row, field) = self.place(track);
         let rows = self.rows(track);
         let place = rows
             .get(row)
             .and_then(|row| row.get(field).copied().flatten());
-        place.unwrap_or(Control::Machine)
+        match place {
+            Some(Control::Mod(slot, ModField::Step(_))) => {
+                let last = steps_played(track, slot) - 1;
+                Control::Mod(slot, ModField::Step(self.step.min(last)))
+            }
+            place => place.unwrap_or(Control::Machine),
+        }
+    }
+
+    /// The Steps slot whose panel the cursor is in, and how many values it plays, if it's in one.
+    fn in_steps(&self, track: Option<&Track>) -> Option<(usize, u8)> {
+        match self.control(track) {
+            Control::Mod(slot, ModField::Step(_)) => Some((slot, steps_played(track, slot))),
+            _ => None,
+        }
     }
 
     /// Where the cursor is in the page's rack, on a page that's one.
@@ -303,6 +321,14 @@ impl TrackPage {
             self.fine = true;
             return;
         }
+        // Across a Steps slot's values, then on out of its panel past the last.
+        let inside = self.in_steps(track);
+        if let Some((_, played)) = inside
+            && self.step + 1 < played
+        {
+            self.step += 1;
+            return;
+        }
         let (row, field) = self.place(track);
         let next = self.rows(track)[row]
             .iter()
@@ -313,6 +339,10 @@ impl TrackPage {
             (None, Some(beside)) => self.move_to(track, beside, 0),
             _ => self.move_to(track, row, next.unwrap_or(field)),
         }
+        // Into a panel from its left, on its first value.
+        if inside.is_none() && self.in_steps(track).is_some() {
+            self.step = 0;
+        }
     }
 
     /// `h`: back off the fine digits, and onto the previous setting's if it has them. Before the
@@ -320,6 +350,14 @@ impl TrackPage {
     fn step_left(&mut self, track: Option<&Track>) {
         if self.fine {
             self.fine = false;
+            return;
+        }
+        // Back across a Steps slot's values, then out of its panel to the grid before the first.
+        let inside = self.in_steps(track);
+        if let Some((_, played)) = inside
+            && self.step > 0
+        {
+            self.step = self.step.min(played - 1) - 1;
             return;
         }
         let (row, field) = self.place(track);
@@ -330,6 +368,12 @@ impl TrackPage {
         match (before, beside) {
             (None, Some(beside)) => self.move_to(track, beside, usize::MAX),
             _ => self.move_to(track, row, before.unwrap_or(field)),
+        }
+        // Into a panel from its right, on its last value.
+        if inside.is_none()
+            && let Some((_, played)) = self.in_steps(track)
+        {
+            self.step = played - 1;
         }
         self.fine = (before.is_some() || beside.is_some()) && self.has_fine_here(track);
     }
@@ -377,6 +421,13 @@ impl TrackPage {
 
     /// `0` and `$`: the first or the last setting on the cursor's row, over any holes.
     fn row_end(&mut self, last: bool, track: Option<&Track>) {
+        // In a Steps slot's panel, its first or last value, and from the first, the grid's start.
+        if let Some((_, played)) = self.in_steps(track)
+            && (last || self.step > 0)
+        {
+            self.step = if last { played - 1 } else { 0 };
+            return;
+        }
         let row = self.place(track).0;
         let field = if last { usize::MAX } else { 0 };
         self.move_to(track, row, field);
@@ -400,6 +451,13 @@ impl TrackPage {
             .min(column.len().saturating_sub(1));
         self.row = column[to] * DEVICE_ROWS + self.row % DEVICE_ROWS;
     }
+}
+
+/// How many values a track's Steps slot plays, 1 to 16, or all 16 with no track.
+fn steps_played(track: Option<&Track>, slot: usize) -> u8 {
+    track.map_or(STEPS as u8, |track| {
+        track.mods[slot].steps.played_count() as u8
+    })
 }
 
 impl App {

@@ -14,6 +14,7 @@ use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, default_mod};
 use vt_model::settings::{SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Track};
 use vt_model::speed::Speed;
+use vt_model::steps::{Loop, MAX_STEP, STEPS, Steps, StepsMode};
 
 use crate::app::App;
 use crate::input::command::Line;
@@ -80,6 +81,7 @@ fn adjust_mod(
         &mut modulator.lpg,
         &mut modulator.lfo,
     );
+    let steps = &mut modulator.steps;
     let ahd_kind = kind == ModKind::Ahd;
     let lpg_kind = kind == ModKind::Lpg;
     match field {
@@ -89,6 +91,7 @@ fn adjust_mod(
             ModKind::Ahd => ahd.curve = next_in(&Curve::ALL, ahd.curve, up),
             ModKind::Drum => drum.curve = next_in(&Curve::ALL, drum.curve, up),
             ModKind::Lfo => lfo.mode = next_in(&LfoMode::ALL, lfo.mode, up),
+            ModKind::Steps => steps.mode = next_in(&StepsMode::ALL, steps.mode, up),
             ModKind::Lpg => {}
         },
         ModField::Polarity => modulator.polarity = Some(modulator.polarity().other()),
@@ -145,6 +148,7 @@ fn adjust_mod(
         ModField::Reset if lpg_kind => lpg.reset = !lpg.reset,
         ModField::Reset => adsr.reset = !adsr.reset,
         ModField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),
+        ModField::Rate if kind == ModKind::Steps => steps.rate = steps.rate.nudged(up, large),
         ModField::Rate if large => lfo.rate = lfo.rate.jumped(up),
         ModField::Rate => lfo.rate = lfo.rate.nudged(up),
         ModField::Phase => {
@@ -158,8 +162,26 @@ fn adjust_mod(
             lfo.deform = moved.clamp(-MAX_DEFORM, MAX_DEFORM);
         }
         ModField::Fade => lfo.fade = lfo.fade.nudged(up, large),
+        ModField::Length => {
+            let by = if up { 1 } else { -1 };
+            steps.length = (i16::from(steps.length) + by).clamp(1, STEPS as i16) as u8;
+        }
+        ModField::Start => {
+            let by = if up { 1 } else { -1 };
+            steps.start = (i16::from(steps.start) + by).clamp(0, STEPS as i16 - 1) as u8;
+        }
+        ModField::Loop => steps.looping = next_in(&Loop::ALL, steps.looping, up),
+        // A large step is an octave, as a step's value on `Pitch` is semitones.
+        ModField::Step(at) => {
+            let size = if large { OCTAVE } else { 1 };
+            let value = &mut steps.values[usize::from(at)];
+            *value = (*value + if up { size } else { -size }).clamp(-MAX_STEP, MAX_STEP);
+        }
     }
 }
+
+/// How far a large step moves one of Steps' values: an octave, `0C`.
+const OCTAVE: i16 = 12;
 
 /// A mod slot with one setting back at its default: the slot's own for what every type shares,
 /// and for a type's own the default that type has in this slot. `Type` goes back to the slot's
@@ -174,6 +196,8 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         modulator.lpg,
         modulator.lfo,
     );
+    let mut steps = modulator.steps;
+    let new = Steps::default();
     let ahd_kind = modulator.kind == ModKind::Ahd;
     let lpg_kind = modulator.kind == ModKind::Lpg;
     match field {
@@ -217,6 +241,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
             ModKind::Ahd => ahd.curve = fresh.ahd.curve,
             ModKind::Drum => drum.curve = fresh.drum.curve,
             ModKind::Lfo => lfo.mode = fresh.lfo.mode,
+            ModKind::Steps => steps.mode = new.mode,
             ModKind::Lpg => {}
         },
         ModField::Attack if ahd_kind => ahd.attack_ms = fresh.ahd.attack_ms,
@@ -237,10 +262,15 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         ModField::Release => adsr.release_ms = fresh.adsr.release_ms,
         ModField::Reset => adsr.reset = fresh.adsr.reset,
         ModField::Shape => lfo.shape = fresh.lfo.shape,
+        ModField::Rate if modulator.kind == ModKind::Steps => steps.rate = new.rate,
         ModField::Rate => lfo.rate = fresh.lfo.rate,
         ModField::Phase => lfo.phase = fresh.lfo.phase,
         ModField::Deform => lfo.deform = fresh.lfo.deform,
         ModField::Fade => lfo.fade = fresh.lfo.fade,
+        ModField::Length => steps.length = new.length,
+        ModField::Start => steps.start = new.start,
+        ModField::Loop => steps.looping = new.looping,
+        ModField::Step(at) => steps.values[usize::from(at)] = 0,
     }
     ModSlot {
         adsr,
@@ -248,6 +278,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         drum,
         lpg,
         lfo,
+        steps,
         ..modulator
     }
 }
