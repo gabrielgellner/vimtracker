@@ -37,6 +37,7 @@ pub enum Insert {
     Space(Space),
     Rotary(Rotary),
     Exciter(Exciter),
+    Stutter(Stutter),
 }
 
 /// What a distortion does to the sound. The waveshapers come first; the guitar pedals after them
@@ -294,6 +295,12 @@ pub enum Setting {
     Spin,
     Chaos,
     Knock,
+    /// A stutter's: whether it's repeating, how long the piece it repeats is, as a note division
+    /// up to a beat, how many times it plays it again, and how much quieter each time.
+    Trig,
+    RepeatLength,
+    Repeats,
+    RepeatDecay,
     /// An exciter's: where the highs it excites start, and how fast its level detector rises and
     /// falls. Its `Drive` is the delay's.
     ExciterTone,
@@ -347,7 +354,9 @@ impl Setting {
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
             Self::SweepRate => SWEEP_NAMES.len() as u8 - 1,
             Self::Stages => STAGE_NAMES.len() as u8 - 1,
-            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast => 1,
+            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast | Self::Trig => 1,
+            Self::RepeatLength => REPEAT_LENGTH_NAMES.len() as u8 - 1,
+            Self::Repeats => REPEAT_NAMES.len() as u8 - 1,
             Self::Retime => RETIMES.len() as u8 - 1,
             Self::Shift => SHIFT_NAMES.len() as u8 - 1,
             Self::Wave => WAVE_NAMES.len() as u8 - 1,
@@ -376,7 +385,9 @@ impl Setting {
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
             Self::Stages => (STAGE_NAMES.len() - 1) as f32,
-            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast => 1.0,
+            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast | Self::Trig => 1.0,
+            Self::RepeatLength => (REPEAT_LENGTH_NAMES.len() - 1) as f32,
+            Self::Repeats => (REPEAT_NAMES.len() - 1) as f32,
             Self::Retime => (RETIMES.len() - 1) as f32,
             Self::Shift => (SHIFT_NAMES.len() - 1) as f32,
             Self::Wave => (WAVE_NAMES.len() - 1) as f32,
@@ -2013,6 +2024,79 @@ pub(crate) const EXCITER_PARAMS: [Param; 6] = [
     GAIN_PARAM,
 ];
 
+/// How many of the note divisions a stutter's `Length` goes through, shortest first: up to a
+/// beat, `1/4`, as a stutter is a roll or a glitch rather than a loop.
+pub const REPEAT_LENGTHS: usize = 13;
+/// Their names.
+pub const REPEAT_LENGTH_NAMES: [&str; REPEAT_LENGTHS] = {
+    let mut names = [""; REPEAT_LENGTHS];
+    let mut at = 0;
+    while at < REPEAT_LENGTHS {
+        names[at] = DIVISION_NAMES[at];
+        at += 1;
+    }
+    names
+};
+/// How many times a stutter plays its piece again after it's first heard, and `Hold`, which
+/// repeats it for as long as `Trig` is on.
+pub const REPEAT_NAMES: [&str; 17] = [
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "Hold",
+];
+/// The place of `Hold` among them.
+pub const HOLD_REPEATS: u8 = REPEAT_NAMES.len() as u8 - 1;
+/// How much quieter each of a stutter's repeats is than the one before at most, in dB.
+pub const MOST_REPEAT_DECAY_DB: f32 = 12.0;
+
+/// How much quieter each of a stutter's repeats is than the one before, in dB, for a value on the
+/// `00` to `FF` scale: none at `00`, in proportion to 12 dB at `FF`, so `80` about halves each.
+pub fn repeat_decay_db(value: f32) -> f32 {
+    (value / 255.0).clamp(0.0, 1.0) * MOST_REPEAT_DECAY_DB
+}
+
+/// A stutter's, in the order the page shows them, as columns: its trigger; then how long a piece
+/// it repeats, how many times and how it fades; then the mix and gain.
+pub(crate) const STUTTER_PARAMS: [Param; 6] = [
+    Param {
+        name: "Trig",
+        key: "trig",
+        label: Some("TRIG"),
+        setting: Setting::Trig,
+        choices: &OFF_ON,
+        wraps: true,
+        default: Stutter::DEFAULT.trig,
+    },
+    Param {
+        name: "Length",
+        key: "length",
+        label: Some("LEN"),
+        setting: Setting::RepeatLength,
+        choices: &REPEAT_LENGTH_NAMES,
+        wraps: false,
+        default: Stutter::DEFAULT.length,
+    },
+    Param {
+        name: "Repeats",
+        key: "repeats",
+        label: Some("RPTS"),
+        setting: Setting::Repeats,
+        choices: &REPEAT_NAMES,
+        wraps: false,
+        default: Stutter::DEFAULT.repeats,
+    },
+    hex_param(
+        "Decay",
+        "decay",
+        "DCAY",
+        Setting::RepeatDecay,
+        Stutter::DEFAULT.decay,
+    ),
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -2021,7 +2105,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 25] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -2046,6 +2130,7 @@ impl Insert {
         Self::Space(Space::DEFAULT),
         Self::Rotary(Rotary::DEFAULT),
         Self::Exciter(Exciter::DEFAULT),
+        Self::Stutter(Stutter::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -2084,6 +2169,7 @@ impl Insert {
             Self::Vowel(_) => "Vowel",
             Self::FreqShift(_) => "Freq Shift",
             Self::Spring(_) => "Spring",
+            Self::Stutter(_) => "Stutter",
             Self::Exciter(_) => "Exciter",
             Self::Rotary(_) => "Rotary",
             Self::Space(_) => "Space",
@@ -2116,6 +2202,7 @@ impl Insert {
             Self::Spring(_) => {
                 "Puts the sound in a spring tank, as a guitar amp has: drips and boings"
             }
+            Self::Stutter(_) => "Repeats a piece of the sound when a step says: rolls and glitches",
             Self::Exciter(_) => "Adds air: harmonics made from the highs, more as they get louder",
             Self::Rotary(_) => "Spins it in a Leslie's cabinet, slow or fast, for organs and more",
             Self::Space(_) => "Washes the sound into a huge, nearly endless pad",
@@ -2158,6 +2245,7 @@ impl Insert {
             Self::Space(_) => &SPACE_PARAMS,
             Self::Rotary(_) => &ROTARY_PARAMS,
             Self::Exciter(_) => &EXCITER_PARAMS,
+            Self::Stutter(_) => &STUTTER_PARAMS,
         }
     }
 
@@ -2298,6 +2386,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| spring.read(setting));
             }
+            Self::Stutter(stutter) => {
+                return STUTTER_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| stutter.read(setting));
+            }
             Self::Exciter(exciter) => {
                 return EXCITER_PARAMS
                     .iter()
@@ -2360,6 +2454,7 @@ impl Insert {
             Self::Vowel(vowel) => return Self::Vowel(vowel.written(setting, whole)),
             Self::FreqShift(shifter) => return Self::FreqShift(shifter.written(setting, whole)),
             Self::Spring(spring) => return Self::Spring(spring.written(setting, whole)),
+            Self::Stutter(stutter) => return Self::Stutter(stutter.written(setting, whole)),
             Self::Exciter(exciter) => return Self::Exciter(exciter.written(setting, whole)),
             Self::Rotary(rotary) => return Self::Rotary(rotary.written(setting, whole)),
             Self::Space(space) => return Self::Space(space.written(setting, whole)),
@@ -2441,6 +2536,11 @@ impl Insert {
                 &[S::Decay, S::SpringSize, S::Damp],
                 &[S::Spin, S::Reflections],
                 &[S::Chaos, S::Knock],
+                &[S::Mix, S::Gain],
+            ],
+            Self::Stutter(_) => &[
+                &[S::Trig],
+                &[S::RepeatLength, S::Repeats, S::RepeatDecay],
                 &[S::Mix, S::Gain],
             ],
             Self::Exciter(_) => &[
@@ -4207,6 +4307,74 @@ impl Exciter {
     }
 }
 
+/// A stutter's settings: a piece of what comes in, repeated on the grid when a step switches
+/// `Trig` on, after sst's Microgate. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Stutter {
+    /// Switched on, by a step's lock or by hand, it takes the next piece of what comes in and
+    /// repeats it. A step that locks it on starts again, even if it's on already.
+    pub trig: u8,
+    /// How long the piece is, as a place among the note divisions up to `1/4`.
+    pub length: u8,
+    /// How many times it plays the piece again after it's first heard, from 1 at `0` to 16, and
+    /// at `HOLD_REPEATS` for as long as `Trig` stays on.
+    pub repeats: u8,
+    /// How much quieter each repeat is than the one before, from not at all at `00` to 12 dB.
+    pub decay: u8,
+    /// From `00`, all dry, to `FF`, all wet, where the repeats take the place of the sound.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Stutter {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Stutter {
+    /// As it starts: off, waiting for a step, and then a sixteenth played three times more, a
+    /// beat in all, as loud each time, all wet.
+    pub const DEFAULT: Self = Self {
+        trig: 0,
+        length: 6,
+        repeats: 2,
+        decay: 0x00,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Trig => self.trig,
+            Setting::RepeatLength => self.length,
+            Setting::Repeats => self.repeats,
+            Setting::RepeatDecay => self.decay,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut stutter = self;
+        match setting {
+            Setting::Trig => stutter.trig = value,
+            Setting::RepeatLength => stutter.length = value,
+            Setting::Repeats => stutter.repeats = value,
+            Setting::RepeatDecay => stutter.decay = value,
+            Setting::Mix => stutter.mix = value,
+            Setting::Gain => stutter.gain = value,
+            _ => {}
+        }
+        stutter
+    }
+}
+
 fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
@@ -4301,7 +4469,8 @@ mod tests {
                 "Mu-law",
                 "Peak Clip",
                 "Ping-pong",
-                "Track"
+                "Track",
+                "Trig"
             ]
         );
         // A two-way list of anything else isn't one.
