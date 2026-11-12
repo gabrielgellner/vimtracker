@@ -1590,25 +1590,25 @@ fn other_tracks_light_the_step_they_are_playing() {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    let color = |app: &App, row: u16| {
-        let backend = ratatui::backend::TestBackend::new(80, 24);
-        let mut terminal = ratatui::Terminal::new(backend).unwrap();
-        terminal
-            .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
-            .unwrap();
-        // The next track's column in the overview, on a step two rows below the title.
-        let buffer = terminal.backend().buffer();
-        buffer[(68, row + 2)].fg
-    };
+    // The first track's column in the overview, its marker's cell and then its note's, on a step
+    // two rows below the title.
+    let color = |app: &App, x: u16, row: u16| screen(app)[(x, row + 2)].fg;
+    let (marker, note) = (67, 68);
+    let dimmed_green = vt_tui::theme::dimmed(vt_tui::theme::GREEN);
     on_the_row_being_edited(&mut app);
     app.set_playhead(2);
     // Its rows are empty, so faint, as an empty cell on the grid is.
-    assert_eq!(color(&app, 2), vt_tui::theme::OVERLAY0, "stopped");
+    assert_eq!(color(&app, note, 2), vt_tui::theme::OVERLAY0, "stopped");
     app.transport = Transport::Playing;
-    assert_eq!(color(&app, 2), vt_tui::theme::GREEN);
-    assert_eq!(color(&app, 3), vt_tui::theme::OVERLAY0);
+    assert_eq!(color(&app, marker, 2), vt_tui::theme::GREEN);
+    assert_eq!(
+        color(&app, note, 2),
+        dimmed_green,
+        "an empty row playing is lit, set back"
+    );
+    assert_eq!(color(&app, note, 3), vt_tui::theme::OVERLAY0);
     app.transport = Transport::Paused;
-    assert_eq!(color(&app, 2), vt_tui::theme::GREEN);
+    assert_eq!(color(&app, marker, 2), vt_tui::theme::GREEN);
 }
 
 #[test]
@@ -2853,6 +2853,43 @@ fn row_number_at(buffer: &ratatui::buffer::Buffer, y: u16) -> String {
 }
 
 #[test]
+fn the_row_playing_lights_what_is_written_and_sets_back_what_is_empty() {
+    let mut song = Song::new(1);
+    let steps: Vec<Step> = ["C-3 40 --- --- ---", "--- -- --- --- ---"]
+        .iter()
+        .map(|text| text.parse().unwrap())
+        .collect();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    on_the_row_being_edited(&mut app);
+    app.transport = Transport::Playing;
+    let (green, set_back) = (
+        vt_tui::theme::GREEN,
+        vt_tui::theme::dimmed(vt_tui::theme::GREEN),
+    );
+    // Row 00: its note and velocity lit, its empty gate and FX set back.
+    app.set_playhead(0);
+    let buffer = screen(&app);
+    assert_eq!(buffer[(7, 2)].fg, green, "the marker");
+    assert_eq!(buffer[(13, 2)].fg, green, "the velocity");
+    assert_eq!(buffer[(19, 2)].fg, set_back, "the empty gate");
+    assert_eq!(buffer[(27, 2)].fg, set_back, "the empty FX slot");
+    // Row 01, empty, is set back throughout, and row 00 goes back to how it was.
+    app.set_playhead(1);
+    let buffer = screen(&app);
+    assert_eq!(buffer[(7, 3)].fg, green, "the marker");
+    for x in [9, 13, 19, 27] {
+        assert_eq!(buffer[(x, 3)].fg, set_back, "cell {x}");
+    }
+    assert_eq!(buffer[(19, 2)].fg, vt_tui::theme::OVERLAY0);
+}
+
+#[test]
 fn rows_count_from_the_loop_start_and_dim_outside_it() {
     let (mut app, _realtime) = app();
     command(&mut app, "len 4");
@@ -3686,12 +3723,23 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
         row(2).contains(&format!(
-            "CUT   4000 {} SNA   20   h RES   1000 g",
-            vt_tui::glyphs::LOCK
+            "CUT   4000 {} SNA   20   {} RES   1000 {}",
+            vt_tui::glyphs::LOCK,
+            vt_tui::glyphs::HOLD,
+            vt_tui::glyphs::GLIDE
         )),
         "{}",
         row(2)
     );
+    // The lock is dim, and a hold and a glide are in the value's fine colour.
+    let at = |glyph: char| row(2).chars().position(|c| c == glyph).unwrap() as u16;
+    let fine = vt_tui::theme::fine(vt_tui::theme::MAUVE);
+    assert_eq!(
+        buffer[(at(vt_tui::glyphs::LOCK), 2)].fg,
+        vt_tui::theme::OVERLAY2
+    );
+    assert_eq!(buffer[(at(vt_tui::glyphs::HOLD), 2)].fg, fine);
+    assert_eq!(buffer[(at(vt_tui::glyphs::GLIDE), 2)].fg, fine);
     assert!(
         row(3).contains("DEL   10     ···   ··     ···   ··"),
         "{}",

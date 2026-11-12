@@ -427,7 +427,7 @@ fn column_spans(
         .zip(tracks)
         .flat_map(|(column, track)| {
             let Some(column) = column else {
-                return [Span::raw(" ".repeat(NEIGHBOUR_WIDTH - 1)), Span::raw(" ")];
+                return [Span::raw(" "), Span::raw("   "), Span::raw(" ")];
             };
             // The row shown, whether the playhead is in this line, and whether more rows start.
             let (shown, playing, more) = match at {
@@ -468,19 +468,38 @@ fn column_spans(
                 theme::dim()
             };
             let mark = if more { MORE_STARTS } else { ' ' };
-            let cells = match note {
-                Some(note) if playing => Span::styled(format!(">{note}"), theme::active()),
-                // The playhead is on a row that started in an earlier line.
-                None if playing => Span::styled(">   ", theme::active()),
-                Some(note) if in_selection => {
-                    Span::styled(format!("{mark}{note}"), theme::selected())
+            // The marker's cell, the note's, then the gap.
+            let (marker, note) = match note {
+                // Playing, a note is lit and an empty row's `---` dimmed, as on the grid.
+                Some(note) if playing => {
+                    let lit = if written == Some(Note::Empty) {
+                        playing_empty()
+                    } else {
+                        theme::active()
+                    };
+                    (Span::styled(">", theme::active()), Span::styled(note, lit))
                 }
-                Some(note) => Span::styled(format!("{mark}{note}"), look),
-                None => Span::raw(" ".repeat(NEIGHBOUR_WIDTH - 1)),
+                // The playhead is on a row that started in an earlier line.
+                None if playing => (Span::styled(">", theme::active()), Span::raw("   ")),
+                Some(note) if in_selection => (
+                    Span::styled(mark.to_string(), theme::selected()),
+                    Span::styled(note, theme::selected()),
+                ),
+                Some(note) => (
+                    Span::styled(mark.to_string(), look),
+                    Span::styled(note, look),
+                ),
+                None => (Span::raw(" "), Span::raw("   ")),
             };
-            [cells, Span::raw(" ")]
+            [marker, note, Span::raw(" ")]
         })
         .collect()
+}
+
+/// An empty cell on the row playing: the playhead's green pushed toward the screen, as the part of
+/// a bar that isn't solid is.
+fn playing_empty() -> Style {
+    Style::new().fg(theme::dimmed(theme::GREEN))
 }
 
 /// How far a row is from the cursor's, as the count to type before `j` or `k`, so it is decimal.
@@ -953,6 +972,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         };
         let mut styles = vec![body; text.len()];
         // What's empty is faint, as a code editor dims whitespace, so what's written stands out.
+        // On the row playing it's the playhead's green set back, so the row reads as one lit bar
+        // that keeps its shape, and an empty row isn't the brightest thing on screen.
+        let lit = playhead == Some(index) && !skipped;
+        let empty_look = if lit { playing_empty() } else { theme::faint() };
         let mut empty = Vec::new();
         if step.note == Note::Empty {
             empty.push(field_range(Field::Note));
@@ -973,8 +996,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
         for &(start, end) in &empty {
             for style in &mut styles[start..end.min(text.len())] {
-                if style.fg.is_none() {
-                    *style = style.patch(theme::faint());
+                if style.fg.is_none() || lit {
+                    *style = style.patch(empty_look);
                 }
             }
         }
@@ -1074,18 +1097,25 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 *style = style.bg(theme::FX_BAND);
             }
         }
-        // A value's `Lock` mark is a lock, dim, as it's what a value does unless marked otherwise.
-        // The text is worked on a character to a cell, so the glyph goes in last.
+        // A value's mark is a glyph beside it: a lock, dim, as it's what a value does unless
+        // marked otherwise; a pin for a hold and a rising slope for a glide in the value's fine
+        // colour, as they change what the value does and belong to it. The text keeps the
+        // letters, worked on a character to a cell, so the glyphs go in last.
         let mut shown: Vec<char> = text.chars().collect();
         for (slot, fx) in step.fx.iter().enumerate() {
-            if fx.is_value() && fx.mark == Mark::Lock {
-                let at = field_range(Field::FxValue(slot)).1 + FINE_WIDTH + MARK_WIDTH - 1;
-                if styles[at].fg.is_none() {
-                    styles[at] = styles[at].patch(theme::dim());
-                }
-                if shown.get(at) == Some(&Mark::Lock.glyph()) {
-                    shown[at] = glyphs::LOCK;
-                }
+            if !fx.is_value() {
+                continue;
+            }
+            let at = field_range(Field::FxValue(slot)).1 + FINE_WIDTH + MARK_WIDTH - 1;
+            let look = match fx.mark {
+                Mark::Lock => theme::dim(),
+                Mark::Hold | Mark::Glide => Style::new().fg(theme::fine(theme::MAUVE)),
+            };
+            if styles[at].fg.is_none() {
+                styles[at] = styles[at].patch(look);
+            }
+            if shown.get(at) == Some(&fx.mark.glyph()) {
+                shown[at] = glyphs::mark(fx.mark);
             }
         }
         for &(start, end) in &empty {
