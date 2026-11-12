@@ -302,6 +302,7 @@ impl MemoryCount {
                 Insert::Space(_) => count.space += 1,
                 Insert::Empty
                 | Insert::Distort(_)
+                | Insert::Exciter(_)
                 | Insert::Eq(_)
                 | Insert::Compressor(_)
                 | Insert::Lpg(_)
@@ -463,6 +464,7 @@ impl MemoryPool {
             Insert::Space(_) => &mut self.spaces,
             Insert::Empty
             | Insert::Distort(_)
+            | Insert::Exciter(_)
             | Insert::Eq(_)
             | Insert::Compressor(_)
             | Insert::Lpg(_)

@@ -11,3 +11,4 @@ vt-model.workspace = true
 hound.workspace = true
 rtrb.workspace = true
 thiserror.workspace = true
+wide.workspace = true

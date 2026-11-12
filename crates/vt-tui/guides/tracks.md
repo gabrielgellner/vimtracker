@@ -61,13 +61,15 @@ and its settings in up to four columns of three.
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` `Velocity` |
 
 A machine's type is the setting that changes its character: the sample the sampler
-plays, `Acid`'s `Wave`, 6-op's `Patch`, and the chord of `Chord` and `Chip`.
-Other synths have none. `K` lists whatever's under the cursor in a title, as on a
-setting, and `g d` on the sample opens the sample page. Each machine places its own
+plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
+and `Chip`. Other synths have none. `K` lists whatever's under the cursor in a title, as
+on a setting, and `g d` on the sample opens the sample page. Each machine places its own
 settings: most go down the columns in order, the sampler has `Slice` and `Play` in
-one column and `Start` and `Length` in the next, and `Acid`'s are in pairs as a
+one column and `Start` and `Length` in the next, `Acid`'s are in pairs as a
 TB-303's knobs are, `Cutoff` and `Resonance`, `Env mod` and `Decay`, `Accent` and
-`Slide`, then `Drive` and `Drift`.
+`Slide`, then `Drive` and `Drift`, and `Supersaw` has its stack's spread, `Saws`,
+`Detune` and `Warp`, down its first column, how it sounds, `Mix`, `Shape` and `Width`,
+down its second, and `Phase` and `Drift` in its third.
 
 `j` and `k` go from a device's title down its rows and on into the next device,
 keeping the column, and pass the Output's and Play's titles by, as there's nothing
@@ -434,6 +436,24 @@ more with wow, so `Mix` below `FF` can blend in a faint chorus.
 | `Bump` | How much the heads lift the lows. It starts half way |
 | `Wow` | A slow, drifting wobble in pitch, as a worn transport has |
 | `Flutter` | A faster, steady wobble, about twice a second |
+
+`Exciter` adds air, after the Aphex Aural Exciter as ChowDSP models it in
+Surge: it takes the highs of the sound, drives them into a soft clip for
+new harmonics, and adds those to the sound. A level detector turns what it
+makes up as the highs get louder, so loud hats and consonants sparkle while
+quiet ones are barely touched. It suits hats, vocals and a whole mix.
+
+| Setting | Does |
+|---|---|
+| `Drive` | How hard the highs are driven, so how much it makes |
+| `Tone` | Where the highs start, from 500 Hz at `00` to 10 kHz at `FF` |
+| `Attack` | How fast the detector rises, from 5 ms to 20 ms |
+| `Release` | How fast it falls, from 50 ms to 200 ms |
+
+`Mix` is how much of what it makes is added: at `00` the sound is left as
+it is, and it starts at `80`. The higher `Tone` is, the less gets through
+to be driven, so `Drive` gives it more to make up. Each side has a detector
+of its own, so loud highs on one side don't excite the other.
 
 `Plate` is a second reverb, after Jon Dattorro's plate: brighter and denser
 than `Reverb`, and wide from a single sound. It starts half wet, and its tail

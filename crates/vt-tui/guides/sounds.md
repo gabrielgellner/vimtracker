@@ -22,14 +22,15 @@ the track starts from its own defaults.
 | `Saw` | The saw: a triangle at `00`, a plain saw at `80`, then a notch |
 | `Drift` | How far each note strays, as on an analog synth. None at `00` |
 
-**Drift.** `VA`, `VA VCF`, `Acid` and `Chip` have a `Drift`, for the life of an analog
-synth, whose notes are never quite alike. At `00` every note sounds the same, as it
+**Drift.** `VA`, `VA VCF`, `Acid`, `Supersaw` and `Chip` have a `Drift`, for the life of an
+analog synth, whose notes are never quite alike. At `00` every note sounds the same, as it
 always has. Going up, each note is tuned a little off, each of its oscillators on its own,
 so they beat against each other; its pitch wanders slowly while it's held, which a long
 note shows; and its level, its envelope's times and, on `VA VCF` and `Acid`, which have
 filters of their own, its cutoff move a little. At `FF` an oscillator can be 10 cents out,
-the cutoff three semitones, the level 1.5 dB and the envelope's times a fifth. Above `00`, the oscillators also start anywhere in their cycles,
-so each note's attack is a little different. Each note's drift is chosen at random, but
+the cutoff three semitones, the level 1.5 dB and the envelope's times a fifth. Above `00`,
+the oscillators also start anywhere in their cycles, so each note's attack is a little
+different; `Supersaw` has its own `Phase` for that. Each note's drift is chosen at random, but
 the same each time the song plays, so a render repeats.
 
 `VA VCF` is a saw or a square, with a sub an octave down, through a resonant filter, for
@@ -89,6 +90,32 @@ notes around `C-1`, with `Resonance` well up.
 
 The track's own filter comes after it, as for any voice. It's best left open, with `Cut`
 at `FF`, so the diode ladder does the work.
+
+`Supersaw` is up to eight saws played together, each a little out of tune with the
+others, as on Roland's JP-8000: for trance leads, big pads and stabs. Try a chord around
+`C-3`, and bring `Cut` down a little. The saws spread across both sides, every other one
+to the other side, as far as `Width` says; at `00` it's mono. Each note starts every saw
+somewhere new in its cycle, as `Phase` says, which is what makes it shimmer from the
+first moment rather than sweep in.
+
+`Stack` is its type, in the device's title, and a list, as `Acid`'s `Wave` is:
+`Unison` plays every saw at the note, `Fifths` takes every other one up a fifth, and
+`Sub` takes every other one down an octave. Adding or taking away saws while a note
+plays fades them in or out over about a millisecond, so it doesn't click.
+
+| Setting | Does |
+|---|---|
+| `Stack` | `Unison`, `Fifths` or `Sub`, as above |
+| `Saws` | How many saws, from 1 to 8. Seven, as on the JP-8000, to start |
+| `Detune` | How far apart: none at `00`, a whole tone either way at `FF` |
+| `Warp` | Even at `80`; above, gathered by the note; below, pushed out |
+| `Mix` | How loud the outer saws are, or in `Fifths` and `Sub` the moved ones |
+| `Shape` | Saws at `00`, squares at `FF`, blending between |
+| `Width` | How far the saws spread across the sides. Mono at `00` |
+| `Phase` | Where saws start each note: the top at `00`, anywhere at `FF` |
+| `Drift` | How far each note strays, each saw on its own. None at `00` |
+
+On the Roto, `Drift` is on the `Supersaw` device's second page, one arrow on, as `Acid`'s is.
 
 `FM` is two sine waves, one bending the other, for bass, bells and keys.
 

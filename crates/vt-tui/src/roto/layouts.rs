@@ -230,6 +230,27 @@ const ACID: DeviceLayout = live(
         knobs("Drift", [s("drift"), __, __, __, __, __, __, __]),
     ],
 );
+/// The stack's spread and blend first, then how many saws, how they're laid out and shaped and
+/// where they start, with `Drift` on a page of its own, as `Acid`'s is.
+const SUPERSAW: DeviceLayout = live(
+    "machine/supersaw",
+    &[
+        knobs(
+            "Supersaw",
+            [
+                s("detune"),
+                s("mix"),
+                s("saws"),
+                s("warp"),
+                s("shape"),
+                s("width"),
+                s("stack"),
+                s("phase"),
+            ],
+        ),
+        knobs("Drift", [s("drift"), __, __, __, __, __, __, __]),
+    ],
+);
 const FM: DeviceLayout = live(
     "machine/fm",
     &[knobs(
@@ -1339,6 +1360,23 @@ const SPRING: DeviceLayout = stored(
         button(5, "knock"),
     )],
 );
+/// How hard it drives and where the highs start, then how its detector rises and falls.
+const EXCITER: DeviceLayout = live(
+    "fx/exciter",
+    &[knobs(
+        "Exciter",
+        [
+            s("drive"),
+            s("tone"),
+            GAP,
+            s("attack"),
+            s("release"),
+            GAP,
+            s("mix"),
+            s("gain"),
+        ],
+    )],
+);
 /// How long the rotors take to change, the horn's Doppler and swell, the drive and the width,
 /// with the fast and slow switch on the button under the inertia, as an organist's half-moon.
 const ROTARY: DeviceLayout = stored(
@@ -1377,11 +1415,12 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 91] = [
+pub const ALL: [&DeviceLayout; 93] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
     &ACID,
+    &SUPERSAW,
     &FM,
     &PD,
     &FOLD,
@@ -1469,6 +1508,7 @@ pub const ALL: [&DeviceLayout; 91] = [
     &SPRING,
     &SPACE,
     &ROTARY,
+    &EXCITER,
 ];
 
 /// A machine's layout.
@@ -1479,6 +1519,7 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::VirtualAnalog => &VA,
             SynthVoice::VirtualAnalogVcf => &VA_VCF,
             SynthVoice::Acid => &ACID,
+            SynthVoice::Supersaw => &SUPERSAW,
             SynthVoice::Fm => &FM,
             SynthVoice::PhaseDistortion => &PD,
             SynthVoice::Waveshaping => &FOLD,
@@ -1563,6 +1604,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::FreqShift(_) => &FREQ_SHIFT,
         Insert::Spring(_) => &SPRING,
         Insert::Rotary(_) => &ROTARY,
+        Insert::Exciter(_) => &EXCITER,
         Insert::Space(_) => &SPACE,
     }
 }
