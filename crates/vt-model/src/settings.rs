@@ -9,11 +9,11 @@ use crate::insert::{
     ALGORITHM_NAMES, CHORUS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS,
     EQ_PARAMS, FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS,
     LPG_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS,
-    Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend,
-    attack_ms, ceiling_db, fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms,
-    grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio,
-    release_ms, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db,
-    vowel_blend,
+    SPRING_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS,
+    algorithm_blend, attack_ms, ceiling_db, fine_cents, flanger_delay_ms, grain_density,
+    grain_length, grain_ms, grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size,
+    range_db, ratio, release_ms, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db,
+    threshold_db, vowel_blend,
 };
 use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -787,6 +787,89 @@ const HAT: [Entry; 4] = [
     ACCENT,
 ];
 
+/// Braids' models have its `Timbre` and `Color` first, named for what they do on each.
+const CSAW: [Entry; 2] = [
+    level("notch", "Notch", "NTCH", 0x40),
+    level("depth", "Depth", "DPTH", 0x80),
+];
+const MORPH: [Entry; 2] = [
+    level("shape", "Shape", "SHPE", 0x55),
+    level("fuzz", "Fuzz", "FUZZ", 0x00),
+];
+const SAW_SQUARE: [Entry; 2] = [
+    level("width", "Width", "WDTH", 0x00),
+    level("mix", "Mix", "MIX", 0x80),
+];
+/// The waves `Sync` plays both of its oscillators with.
+const SYNC_WAVES: [&str; 2] = ["Square", "Saw"];
+const SYNC: [Entry; 3] = [
+    Entry {
+        key: "wave",
+        name: "Wave",
+        label: Some("WAVE"),
+        kind: Kind::Stepped {
+            choices: &SYNC_WAVES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    level("interval", "Interval", "INTV", 0x40),
+    level("mix", "Mix", "MIX", 0xC0),
+];
+/// The waves `Triple` plays all three of its oscillators with.
+const TRIPLE_WAVES: [&str; 4] = ["Saw", "Square", "Triangle", "Sine"];
+/// Its second and third oscillators start a fifth and an octave up.
+const TRIPLE: [Entry; 3] = [
+    Entry {
+        key: "wave",
+        name: "Wave",
+        label: Some("WAVE"),
+        kind: Kind::Stepped {
+            choices: &TRIPLE_WAVES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    level("second", "Second", "SCND", 0xA8),
+    level("third", "Third", "THRD", 0xC0),
+];
+const RING: [Entry; 2] = [
+    level("first", "First", "FRST", 0xA0),
+    level("second", "Second", "SCND", 0xB0),
+];
+const SAW_COMB: [Entry; 2] = [
+    level("tune", "Tune", "TUNE", 0xA0),
+    Entry {
+        default: 0xC0,
+        ..centred("feedback", "Feedback", "FDBK")
+    },
+];
+/// The filters `Z Filter` sounds like.
+const Z_FILTER_TYPES: [&str; 4] = ["LP", "Peak", "BP", "HP"];
+const Z_FILTER: [Entry; 3] = [
+    Entry {
+        key: "type",
+        name: "Type",
+        label: Some("TYPE"),
+        kind: Kind::Stepped {
+            choices: &Z_FILTER_TYPES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    level("cutoff", "Cutoff", "FREQ", 0x60),
+    level("shape", "Shape", "SHPE", 0x40),
+];
+/// Feedback and chaotic FM start at 1:1, where `Ratio` holds from `6C` to `6F`.
+const FEEDBACK_FM: [Entry; 2] = [
+    level("amount", "Amount", "AMNT", 0x60),
+    level("ratio", "Ratio", "RAT", 0x6E),
+];
+const TOY: [Entry; 2] = [
+    level("clock", "Clock", "CLCK", 0xC0),
+    level("bend", "Bend", "BEND", 0x00),
+];
+
 /// A voice's settings, in the order it takes them.
 pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
     match voice {
@@ -810,6 +893,16 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Kick => &KICK,
         SynthVoice::Snare => &SNARE,
         SynthVoice::Hat => &HAT,
+        SynthVoice::CSaw => &CSAW,
+        SynthVoice::Morph => &MORPH,
+        SynthVoice::SawSquare => &SAW_SQUARE,
+        SynthVoice::HardSync => &SYNC,
+        SynthVoice::Triple => &TRIPLE,
+        SynthVoice::Ring => &RING,
+        SynthVoice::SawComb => &SAW_COMB,
+        SynthVoice::Toy => &TOY,
+        SynthVoice::ZFilter => &Z_FILTER,
+        SynthVoice::FeedbackFm | SynthVoice::ChaoticFm => &FEEDBACK_FM,
     }
 }
 
@@ -837,6 +930,17 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::Kick => "kick",
         SynthVoice::Snare => "snare",
         SynthVoice::Hat => "hat",
+        SynthVoice::CSaw => "csaw",
+        SynthVoice::Morph => "morph",
+        SynthVoice::SawSquare => "sawsquare",
+        SynthVoice::HardSync => "sync",
+        SynthVoice::Triple => "triple",
+        SynthVoice::Ring => "ring",
+        SynthVoice::SawComb => "sawcomb",
+        SynthVoice::Toy => "toy",
+        SynthVoice::ZFilter => "zfilter",
+        SynthVoice::FeedbackFm => "fbfm",
+        SynthVoice::ChaoticFm => "chaosfm",
     }
 }
 
@@ -862,10 +966,11 @@ pub enum Effect {
     Comb,
     Vowel,
     FreqShift,
+    Spring,
 }
 
 impl Effect {
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -885,6 +990,7 @@ impl Effect {
         Self::Comb,
         Self::Vowel,
         Self::FreqShift,
+        Self::Spring,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -910,6 +1016,7 @@ impl Effect {
             Self::Comb => &COMB_PARAMS,
             Self::Vowel => &VOWEL_PARAMS,
             Self::FreqShift => &FREQ_SHIFT_PARAMS,
+            Self::Spring => &SPRING_PARAMS,
         }
     }
 
@@ -934,6 +1041,7 @@ impl Effect {
             Self::Comb => "comb",
             Self::Vowel => "vowel",
             Self::FreqShift => "freqshift",
+            Self::Spring => "spring",
         }
     }
 
@@ -958,6 +1066,7 @@ impl Effect {
             Self::Comb => "Comb",
             Self::Vowel => "Vowel",
             Self::FreqShift => "Freq Shift",
+            Self::Spring => "Spring",
         }
     }
 
@@ -984,6 +1093,7 @@ impl Effect {
             Insert::Comb(_) => Some(Self::Comb),
             Insert::Vowel(_) => Some(Self::Vowel),
             Insert::FreqShift(_) => Some(Self::FreqShift),
+            Insert::Spring(_) => Some(Self::Spring),
         }
     }
 }
@@ -1462,6 +1572,27 @@ const fn effect_start(effect: Effect) -> usize {
                 + COMB_PARAMS.len()
                 + VOWEL_PARAMS.len()
         }
+        Effect::Spring => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+                + PITCH_PARAMS.len()
+                + GRAINS_PARAMS.len()
+                + WARPS_PARAMS.len()
+                + LPG_PARAMS.len()
+                + RESO_PARAMS.len()
+                + COMB_PARAMS.len()
+                + VOWEL_PARAMS.len()
+                + FREQ_SHIFT_PARAMS.len()
+        }
     }
 }
 
@@ -1486,7 +1617,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + RESO_PARAMS.len()
     + COMB_PARAMS.len()
     + VOWEL_PARAMS.len()
-    + FREQ_SHIFT_PARAMS.len();
+    + FREQ_SHIFT_PARAMS.len()
+    + SPRING_PARAMS.len();
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();

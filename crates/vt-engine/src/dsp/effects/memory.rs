@@ -17,6 +17,7 @@ use crate::dsp::effects::pitch_shifter::PitchShifter;
 use crate::dsp::effects::plate::Plate;
 use crate::dsp::effects::resonator::Resonator;
 use crate::dsp::effects::reverb::Reverb;
+use crate::dsp::effects::spring::Spring;
 use crate::dsp::effects::tape::Tape;
 use crate::dsp::effects::warps::Warps;
 use crate::dsp::filters::comb::Comb;
@@ -44,6 +45,7 @@ pub enum Memory {
     Reso(Box<Resonator>),
     Comb(Box<Comb>),
     FreqShift(Box<FreqShifter>),
+    Spring(Box<Spring>),
 }
 
 impl Memory {
@@ -114,6 +116,11 @@ impl Memory {
         Self::FreqShift(Box::new(FreqShifter::new(rate)))
     }
 
+    /// A spring reverb's, long enough for the biggest.
+    pub fn spring(rate: u32) -> Self {
+        Self::Spring(Box::new(Spring::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -131,6 +138,7 @@ impl Memory {
             Self::Reso(resonator) => resonator.process_alone(input),
             Self::Comb(comb) => comb.process_alone(input),
             Self::FreqShift(shifter) => shifter.process_alone(input),
+            Self::Spring(spring) => spring.process(input),
         }
     }
 
@@ -138,7 +146,9 @@ impl Memory {
     pub fn quiet_frames(&self, rate: u32) -> u32 {
         match self {
             Self::Delay(delay) => delay.reach() as u32,
-            Self::Reverb(_) | Self::Plate(_) => (REVERB_QUIET_SECONDS * rate as f32) as u32,
+            Self::Reverb(_) | Self::Plate(_) | Self::Spring(_) => {
+                (REVERB_QUIET_SECONDS * rate as f32) as u32
+            }
             Self::Chorus(chorus) => chorus.frames() as u32,
             Self::Limit(limiter) => limiter.frames() as u32,
             Self::Flanger(flanger) => flanger.frames() as u32,
@@ -173,8 +183,15 @@ impl Memory {
             (Self::Reso(resonator), Insert::Reso(settings)) => resonator.follow(settings),
             (Self::Comb(comb), Insert::Comb(settings)) => comb.follow(settings),
             (Self::FreqShift(shifter), Insert::FreqShift(settings)) => shifter.follow(settings),
+            (Self::Spring(spring), Insert::Spring(settings)) => spring.follow(settings),
             _ => {}
         }
+    }
+
+    /// Whether it's about to play something of its own with nothing going in, as a spring that's
+    /// just been knocked does, so it has to be woken.
+    pub fn waking(&self) -> bool {
+        matches!(self, Self::Spring(spring) if spring.knocking())
     }
 
     /// Jump to what's set, as it's only just started.
@@ -193,6 +210,7 @@ impl Memory {
             Self::Reso(resonator) => resonator.settle(),
             Self::Comb(comb) => comb.settle(),
             Self::FreqShift(shifter) => shifter.settle(),
+            Self::Spring(spring) => spring.settle(),
         }
     }
 
@@ -211,6 +229,7 @@ impl Memory {
             Self::Reso(resonator) => resonator.clear(),
             Self::Comb(comb) => comb.clear(),
             Self::FreqShift(shifter) => shifter.clear(),
+            Self::Spring(spring) => spring.clear(),
         }
     }
 }
@@ -231,6 +250,7 @@ pub struct MemoryCount {
     pub reso: u16,
     pub comb: u16,
     pub freq_shift: u16,
+    pub spring: u16,
 }
 
 impl MemoryCount {
@@ -252,6 +272,7 @@ impl MemoryCount {
                 Insert::Reso(_) => count.reso += 1,
                 Insert::Comb(_) => count.comb += 1,
                 Insert::FreqShift(_) => count.freq_shift += 1,
+                Insert::Spring(_) => count.spring += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Eq(_)
@@ -281,6 +302,7 @@ pub struct MemoryPool {
     reso: Vec<Memory>,
     comb: Vec<Memory>,
     freq_shift: Vec<Memory>,
+    springs: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -305,6 +327,7 @@ impl MemoryPool {
             reso: Vec::with_capacity(POOL_CAPACITY),
             comb: Vec::with_capacity(POOL_CAPACITY),
             freq_shift: Vec::with_capacity(POOL_CAPACITY),
+            springs: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -347,6 +370,9 @@ impl MemoryPool {
         for _ in 0..needed.freq_shift {
             pool.put(Memory::freq_shift(rate));
         }
+        for _ in 0..needed.spring {
+            pool.put(Memory::spring(rate));
+        }
         pool
     }
 
@@ -366,6 +392,7 @@ impl MemoryPool {
             Memory::Reso(_) => &mut self.reso,
             Memory::Comb(_) => &mut self.comb,
             Memory::FreqShift(_) => &mut self.freq_shift,
+            Memory::Spring(_) => &mut self.springs,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -392,6 +419,7 @@ impl MemoryPool {
             Insert::Reso(_) => &mut self.reso,
             Insert::Comb(_) => &mut self.comb,
             Insert::FreqShift(_) => &mut self.freq_shift,
+            Insert::Spring(_) => &mut self.springs,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Eq(_)
@@ -422,6 +450,7 @@ impl MemoryPool {
         self.owed.reso += count.reso;
         self.owed.comb += count.comb;
         self.owed.freq_shift += count.freq_shift;
+        self.owed.spring += count.spring;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -504,6 +533,12 @@ impl MemoryPool {
             self.owed.freq_shift -= 1;
             return Some(memory);
         }
+        if self.owed.spring > 0
+            && let Some(memory) = self.springs.pop()
+        {
+            self.owed.spring -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -522,6 +557,7 @@ impl MemoryPool {
             + self.reso.len()
             + self.comb.len()
             + self.freq_shift.len()
+            + self.springs.len()
     }
 }
 
