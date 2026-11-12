@@ -137,8 +137,17 @@ fn a_curve_bends_a_notes_attack_decay_and_release() {
         snap_half < exp_half && exp_half < 0.2,
         "{snap_half} {exp_half}"
     );
+    // `Analog` starts fast, where `Exp` starts slowly, and falls between `Exp` and `Snap`.
+    let analog = curved(Curve::Analog, 0, 0);
+    close(left(&analog, 5 * MS), Curve::Analog.rise(0.5));
+    assert!(left(&analog, 5 * MS) > 0.6);
+    let analog_half = left(&analog, 30 * MS);
+    assert!(
+        snap_half < analog_half && analog_half < exp_half,
+        "{analog_half}"
+    );
     // Each lands on time all the same.
-    for out in [&lin, &exp, &snap] {
+    for out in [&lin, &exp, &snap, &analog] {
         close(left(out, 50 * MS), 0.0);
     }
     // A release bends too.
@@ -191,6 +200,25 @@ fn reset_off_carries_on_from_the_level_it_had() {
     // A step is 125 ms, so the first note has finished its attack.
     close(left(&kept, STEP + 10), 1.0);
     assert!(left(&reset, STEP + 10 * MS) < 0.3);
+}
+
+#[test]
+fn reset_off_takes_only_what_is_left_of_the_attack_in_its_shape() {
+    // A straight 200 ms attack is five eighths of the way up when the next note comes a step, 125
+    // ms, later. Carrying on from there, it has 75 ms left, at the same slope, not 200 ms more.
+    let mut carry = adsr(200, 0, 100, 0);
+    carry.adsr.curve = Curve::Lin;
+    carry.adsr.reset = false;
+    let out = render(song(&[NOTE, NOTE], carry), flat(), STEP + 100 * MS);
+    // Once the last note's quick fade has gone, 5 ms in, it's 5 ms on from five eighths.
+    close(left(&out, STEP + 5 * MS), 0.65);
+    close(left(&out, STEP + 75 * MS / 2), 0.8125);
+    close(left(&out, STEP + 76 * MS), 1.0);
+    // An `Analog` attack's curve is turned round the same way.
+    carry.adsr.curve = Curve::Analog;
+    let out = render(song(&[NOTE, NOTE], carry), flat(), STEP + 100 * MS);
+    close(left(&out, STEP + 5 * MS), Curve::Analog.rise(0.65));
+    close(left(&out, STEP + 76 * MS), 1.0);
 }
 
 #[test]
