@@ -368,7 +368,8 @@ whichever row plays next. A `CND 1:2` counts passes, whatever the order, and
 an `ACU` adds each time its row plays. `shuffle` and `random` are dealt from
 the project's `:seed` and the pass, so a render repeats, playing from a step
 hears what playing to it would, and `CHA` rolls as it did. Lanes keep their
-own loops, forward. The playhead shows the row playing, and `Space c` on a row
+own loops, forward. The playhead shows the row playing, green where something is
+written and a darker green where a cell is empty, and `Space c` on a row
 plays from that row's step, with the walk wherever it is there. Changing the
 order while it plays keeps the row that was next, where the new walk plays it
 in the same pass, or stays put if that pass doesn't play it.
