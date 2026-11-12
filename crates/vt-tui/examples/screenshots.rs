@@ -415,9 +415,10 @@ fn kick_file(path: &Path, gain: f32) -> std::io::Result<()> {
 
 /// The sample explorer, `Space 5`, over a folder of samples with a kit, some loops and a sound
 /// whose file has gone, so each of its icons shows. The folder is made in the system's temporary
-/// folder and named from it as `~`, so the picture is the same wherever it's taken.
+/// folder and named from it as `~`, so the picture is the same wherever it's taken. It's this
+/// process's own, so two runs at once, as CI's on one machine, don't share it.
 fn take_explorer(folder: &Path) -> std::io::Result<PathBuf> {
-    let home = std::env::temp_dir().join("vimtracker-screenshots");
+    let home = std::env::temp_dir().join(format!("vimtracker-screenshots-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&home);
     let samples = home.join("Samples");
     for inside in ["Drums", "Loops", "Vocals"] {
