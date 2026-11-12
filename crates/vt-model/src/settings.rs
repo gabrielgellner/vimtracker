@@ -908,6 +908,22 @@ const PARAPHONIC: [Entry; 2] = [
     level("wave", "Wave", "WAVE", 0x40),
     level("chord", "Chord", "CHRD", 0x88),
 ];
+const TWIN_PEAKS: [Entry; 2] = [
+    level("sharpness", "Sharpness", "SHRP", 0xA0),
+    level("spacing", "Spacing", "SPAC", 0xA0),
+];
+const CLOCKED: [Entry; 2] = [
+    level("loop", "Loop", "LOOP", 0x00),
+    level("steps", "Steps", "STEP", 0xFF),
+];
+const GRAIN_CLOUD: [Entry; 2] = [
+    level("length", "Length", "LENG", 0x80),
+    level("spread", "Spread", "SPRD", 0x40),
+];
+const MODEM: [Entry; 2] = [
+    level("baud", "Baud", "BAUD", 0xC0),
+    level("data", "Data", "DATA", 0x80),
+];
 const TOY: [Entry; 2] = [
     level("clock", "Clock", "CLCK", 0xC0),
     level("bend", "Bend", "BEND", 0x00),
@@ -956,6 +972,10 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::WaveMap => &WAVE_MAP,
         SynthVoice::WaveLine => &WAVE_LINE,
         SynthVoice::Paraphonic => &PARAPHONIC,
+        SynthVoice::TwinPeaks => &TWIN_PEAKS,
+        SynthVoice::Clocked => &CLOCKED,
+        SynthVoice::GrainCloud => &GRAIN_CLOUD,
+        SynthVoice::Modem => &MODEM,
     }
 }
 
@@ -1004,6 +1024,10 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::WaveMap => "wavemap",
         SynthVoice::WaveLine => "waveline",
         SynthVoice::Paraphonic => "paraphonic",
+        SynthVoice::TwinPeaks => "twinpeaks",
+        SynthVoice::Clocked => "clocked",
+        SynthVoice::GrainCloud => "graincloud",
+        SynthVoice::Modem => "modem",
     }
 }
 

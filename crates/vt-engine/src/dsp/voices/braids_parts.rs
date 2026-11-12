@@ -88,6 +88,12 @@ pub struct Pitch {
 }
 
 impl Pitch {
+    /// Twice the program's rate, in Hz, which it runs at.
+    #[inline]
+    pub(super) fn rate(self) -> f32 {
+        self.rate
+    }
+
     /// Another note at the same rate.
     #[inline]
     pub(super) fn at(self, note: f32) -> Self {

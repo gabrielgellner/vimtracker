@@ -206,6 +206,11 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
         let out = play(with_some(&[NOTE, REST]), 2);
         assert!(peak(&out, 0) > 0.05, "{voice:?}: {}", peak(&out, 0));
         assert!(peak(&out, 0) < 1.5, "{voice:?}: {}", peak(&out, 0));
+        // `Modem` sends a steady carrier for its preamble's first 32 symbols, longer than these
+        // two steps, whatever its settings; its own tests hear them.
+        if voice == SynthVoice::Modem {
+            continue;
+        }
         // Its first three, or both of a voice with two.
         for (setting, id) in (0..3).filter_map(|at| Some((at, SettingId::voice(voice, at)?))) {
             // A list, like 6-op's patches or the chords, takes a place half way along it.

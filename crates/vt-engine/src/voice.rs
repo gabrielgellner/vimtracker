@@ -5,6 +5,7 @@ use crate::dsp::additive::Additive;
 use crate::dsp::braids_analog::{CSaw, HardSync, Morph, SawSquare, Triple};
 use crate::dsp::braids_digital::{Ring, SawComb, Toy};
 use crate::dsp::braids_filter_fm::{ChaoticFm, DigitalFilter, FeedbackFm};
+use crate::dsp::braids_noise::{ClockedNoise, DigitalModulation, GranularCloud, TwinPeaks};
 use crate::dsp::braids_physical::{Blown, Bowed, Fluted, StruckBell, StruckDrum};
 use crate::dsp::braids_vocal::{Fof, Vosim};
 use crate::dsp::braids_waves::{Paraphonic, WaveLine, WaveMap};
@@ -118,6 +119,10 @@ enum Synth {
     WaveMap(WaveMap),
     WaveLine(WaveLine),
     Paraphonic(Paraphonic),
+    TwinPeaks(TwinPeaks),
+    Clocked(ClockedNoise),
+    GrainCloud(GranularCloud),
+    Modem(DigitalModulation),
 }
 
 impl Synth {
@@ -166,6 +171,10 @@ impl Synth {
             SynthVoice::WaveMap => Self::WaveMap(WaveMap::new(rate)),
             SynthVoice::WaveLine => Self::WaveLine(WaveLine::new(rate)),
             SynthVoice::Paraphonic => Self::Paraphonic(Paraphonic::new(rate)),
+            SynthVoice::TwinPeaks => Self::TwinPeaks(TwinPeaks::new(rate)),
+            SynthVoice::Clocked => Self::Clocked(ClockedNoise::new(rate)),
+            SynthVoice::GrainCloud => Self::GrainCloud(GranularCloud::new(rate)),
+            SynthVoice::Modem => Self::Modem(DigitalModulation::new(rate)),
         }
     }
 
@@ -214,6 +223,10 @@ impl Synth {
             Self::WaveMap(synth) => synth.next(frequency, settings),
             Self::WaveLine(synth) => synth.next(frequency, settings),
             Self::Paraphonic(synth) => synth.next(frequency, settings),
+            Self::TwinPeaks(synth) => synth.next(frequency, settings),
+            Self::Clocked(synth) => synth.next(frequency, settings),
+            Self::GrainCloud(synth) => synth.next(frequency, settings),
+            Self::Modem(synth) => synth.next(frequency, settings),
         }
     }
 
@@ -437,6 +450,9 @@ impl Voice {
             Some(Synth::Fluted(synth)) => synth.seed(seed),
             Some(Synth::Drum(synth)) => synth.seed(seed),
             Some(Synth::Paraphonic(synth)) => synth.seed(seed),
+            Some(Synth::TwinPeaks(synth)) => synth.seed(seed),
+            Some(Synth::Clocked(synth)) => synth.seed(seed),
+            Some(Synth::GrainCloud(synth)) => synth.seed(seed),
             _ => {}
         }
     }
@@ -472,6 +488,9 @@ impl Voice {
                     | Synth::Fluted(_)
                     | Synth::Drum(_)
                     | Synth::Paraphonic(_)
+                    | Synth::TwinPeaks(_)
+                    | Synth::Clocked(_)
+                    | Synth::GrainCloud(_)
             )
         )
     }

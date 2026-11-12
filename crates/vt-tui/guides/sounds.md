@@ -435,6 +435,39 @@ them, for sweeps that stutter or glide.
 | `Wave` | Which wave along the line, blending between them |
 | `Chord` | A detuned unison at `00`, then fifths, minor, major and octaves |
 
+`Twin Peaks` is noise through two resonant peaks, one at the note and one up to five octaves
+either way, for whistles, wind and breathy tones.
+
+| Setting | Does |
+|---|---|
+| `Sharpness` | How narrow the peaks are: wide at `00`, whistling at `FF` |
+| `Spacing` | The second peak: five octaves under at `00`, at the note at `80` |
+
+`Clocked` is noise held for each tick of a clock above the note, in a few steps, that loops
+after a while, for 8-bit noise, bleeps and glitches.
+
+| Setting | Does |
+|---|---|
+| `Loop` | How soon it repeats: hardly ever at `00`, every few ticks at `FF` |
+| `Steps` | How many levels it takes: two at `00`, up to 32 at `FF` |
+
+`Grain Cloud` is a cloud of sine grains around the note, each starting at random, for shimmer
+and texture.
+
+| Setting | Does |
+|---|---|
+| `Length` | How long each grain is: long at `00`, short and dense at `FF` |
+| `Spread` | How far each grain strays from the note |
+
+`Modem` is a carrier at the note keyed through four phases, as a modem sends data, for
+data bursts and digital chatter. Each note starts with a preamble, then sends its byte over
+and over.
+
+| Setting | Does |
+|---|---|
+| `Baud` | How fast the symbols go: slow at `00`, an octave under the note |
+| `Data` | The byte it sends |
+
 A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
 `Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX
 slot lists them under the voice's name, and an LFO's or envelope's `Dest` lists them by

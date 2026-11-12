@@ -560,6 +560,34 @@ const PARAPHONIC: DeviceLayout = live(
         [s("wave"), s("chord"), __, __, __, __, __, __],
     )],
 );
+const TWIN_PEAKS: DeviceLayout = live(
+    "machine/twinpeaks",
+    &[knobs(
+        "Twin Peaks",
+        [s("sharpness"), s("spacing"), __, __, __, __, __, __],
+    )],
+);
+const CLOCKED: DeviceLayout = live(
+    "machine/clocked",
+    &[knobs(
+        "Clocked",
+        [s("loop"), s("steps"), __, __, __, __, __, __],
+    )],
+);
+const GRAIN_CLOUD: DeviceLayout = live(
+    "machine/graincloud",
+    &[knobs(
+        "Grain Cloud",
+        [s("length"), s("spread"), __, __, __, __, __, __],
+    )],
+);
+const MODEM: DeviceLayout = live(
+    "machine/modem",
+    &[knobs(
+        "Modem",
+        [s("baud"), s("data"), __, __, __, __, __, __],
+    )],
+);
 const TOY: DeviceLayout = live(
     "machine/toy",
     &[knobs(
@@ -1245,7 +1273,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 83] = [
+pub const ALL: [&DeviceLayout; 87] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1289,6 +1317,10 @@ pub const ALL: [&DeviceLayout; 83] = [
     &WAVE_MAP,
     &WAVE_LINE,
     &PARAPHONIC,
+    &TWIN_PEAKS,
+    &CLOCKED,
+    &GRAIN_CLOUD,
+    &MODEM,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1378,6 +1410,10 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::WaveMap => &WAVE_MAP,
             SynthVoice::WaveLine => &WAVE_LINE,
             SynthVoice::Paraphonic => &PARAPHONIC,
+            SynthVoice::TwinPeaks => &TWIN_PEAKS,
+            SynthVoice::Clocked => &CLOCKED,
+            SynthVoice::GrainCloud => &GRAIN_CLOUD,
+            SynthVoice::Modem => &MODEM,
         },
     }
 }

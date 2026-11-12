@@ -8,6 +8,7 @@ pub mod additive;
 pub mod braids_analog;
 pub mod braids_digital;
 pub mod braids_filter_fm;
+pub mod braids_noise;
 mod braids_parts;
 pub mod braids_physical;
 pub mod braids_vocal;

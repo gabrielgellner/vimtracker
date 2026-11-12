@@ -1049,11 +1049,19 @@ pub enum SynthVoice {
     WaveLine,
     /// A chord of four voices on a line of waves.
     Paraphonic,
+    /// Noise through two resonant peaks.
+    TwinPeaks,
+    /// Clocked noise in a few steps, that loops.
+    Clocked,
+    /// A cloud of sine grains.
+    GrainCloud,
+    /// A carrier keyed through four phases, as a modem sends data.
+    Modem,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 42] = [
+    pub const ALL: [Self; 46] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1096,6 +1104,10 @@ impl SynthVoice {
         Self::WaveMap,
         Self::WaveLine,
         Self::Paraphonic,
+        Self::TwinPeaks,
+        Self::Clocked,
+        Self::GrainCloud,
+        Self::Modem,
     ];
 
     /// The name on screen.
@@ -1143,6 +1155,10 @@ impl SynthVoice {
             Self::WaveMap => "Wave Map",
             Self::WaveLine => "Wave Line",
             Self::Paraphonic => "Paraphonic",
+            Self::TwinPeaks => "Twin Peaks",
+            Self::Clocked => "Clocked",
+            Self::GrainCloud => "Grain Cloud",
+            Self::Modem => "Modem",
         }
     }
 
@@ -1191,6 +1207,10 @@ impl SynthVoice {
             Self::WaveMap => "A map of waves to wander over, for digital tones",
             Self::WaveLine => "A line of waves to scan, rough or smooth",
             Self::Paraphonic => "A chord of four voices on waves, for pads",
+            Self::TwinPeaks => "Noise through two resonant peaks, for whistles",
+            Self::Clocked => "Looping 8-bit noise, for bleeps and glitches",
+            Self::GrainCloud => "A cloud of sine grains, for shimmer and texture",
+            Self::Modem => "A modem's data tone, for digital chatter",
         }
     }
 
@@ -1233,6 +1253,10 @@ impl SynthVoice {
                 | Self::WaveMap
                 | Self::WaveLine
                 | Self::Paraphonic
+                | Self::TwinPeaks
+                | Self::Clocked
+                | Self::GrainCloud
+                | Self::Modem
         )
     }
 
@@ -1261,6 +1285,10 @@ impl SynthVoice {
                 | Self::WaveMap
                 | Self::WaveLine
                 | Self::Paraphonic
+                | Self::TwinPeaks
+                | Self::Clocked
+                | Self::GrainCloud
+                | Self::Modem
         )
     }
 }
