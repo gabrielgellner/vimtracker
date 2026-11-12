@@ -7,9 +7,11 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use crate::app::App;
+use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::theme;
 use crate::tree::ChainColumn;
+use crate::views::phrase::track_name;
 use crate::views::widgets::group;
 
 /// Draw the view.
@@ -19,16 +21,30 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         return;
     };
     let song = app.song();
-    let shared = if app.chain_uses() > 1 { "*" } else { "" };
     let bold = Style::new().add_modifier(Modifier::BOLD);
-    // A track in a group carries its mark, in the group's colour, as on the mixer.
-    let mut title = vec![Span::raw(format!("Track {:02}", app.cursor.track + 1))];
-    if let Some(mark) = group::mark(song, app.cursor.track) {
-        title.extend([Span::raw(" "), mark]);
+    // The track as the phrase view names it, with its machine or kind as a glyph before it, and a
+    // track in a group carries its mark, in the group's colour, as on the mixer.
+    let mut title = vec![];
+    if let Some(track) = app.track_here() {
+        title.push(Span::styled(
+            format!("{} ", glyphs::track(track)),
+            theme::dim(),
+        ));
     }
-    title.push(Span::raw(format!("  Chain {chain:02X}{shared}")));
+    title.push(Span::styled(
+        format!("Track {}", track_name(app, app.cursor.track)),
+        bold,
+    ));
+    if let Some(mark) = group::mark(song, app.cursor.track) {
+        title.extend([Span::raw(" "), mark.patch_style(bold)]);
+    }
+    title.push(Span::styled(format!("  Chain {chain:02X}"), bold));
+    // A chain that plays in more than one place is linked, as a phrase is.
+    if app.chain_uses() > 1 {
+        title.push(Span::styled(format!(" {}", glyphs::LINK), theme::dim()));
+    }
     let mut lines = vec![
-        Line::from(title).style(bold),
+        Line::from(title),
         Line::styled("Slot    Phrase  Trans  Steps", bold),
     ];
     let playing = app
@@ -49,17 +65,21 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     for slot in (first..=entries.len()).take(room) {
         let entry = entries.get(slot);
         let marker = if playing == Some(slot) { ">" } else { " " };
+        // A phrase that plays in more than one place is linked, and the space after the glyph is
+        // one it isn't drawn over.
+        let linked = entry.is_some_and(|entry| app.phrase_uses(entry.phrase).len() > 1);
         let phrase = entry.map_or_else(
             || "--".to_owned(),
             |entry| {
-                let mark = if app.phrase_uses(entry.phrase).len() > 1 {
-                    "*"
+                let mark = if linked {
+                    glyphs::LINK.to_string()
                 } else {
-                    ""
+                    String::new()
                 };
                 format!("{:02X}{mark}", entry.phrase)
             },
         );
+        let after = if linked { glyphs::ICON_SPACE } else { ' ' };
         let transpose = entry.map_or_else(String::new, |entry| format!("{:+03}", entry.transpose));
         let here = slot == app.cursor.slot;
         let shown = |column: ChainColumn, text: String| {
@@ -86,7 +106,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 format!("{:<3}", shown(ChainColumn::Phrase, phrase)),
                 style(ChainColumn::Phrase),
             ),
-            Span::raw("     "),
+            Span::raw(format!("{after}    ")),
             Span::styled(
                 format!("{:<3}", shown(ChainColumn::Transpose, transpose)),
                 style(ChainColumn::Transpose),

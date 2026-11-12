@@ -720,9 +720,9 @@ mod tests {
                 sound.group = (track + round % 3 < 6).then_some((1 + track % 4) as u8);
                 sound.send_a = 0x80;
             }
-            for group in 8..8 + vt_model::constants::MAX_GROUPS {
-                next.tracks[group].inserts = [bus, COMB, LIMIT, COMB];
-                next.tracks[group].send_b = 0x80;
+            for group in &mut next.tracks[8..8 + vt_model::constants::MAX_GROUPS] {
+                group.inserts = [bus, COMB, LIMIT, COMB];
+                group.send_b = 0x80;
             }
             next
         };
