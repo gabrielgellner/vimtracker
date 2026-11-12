@@ -910,11 +910,13 @@ impl Machine {
 
     /// The setting that gives it its character, which its device's title shows after it, as an
     /// effect's type is: the sample the sampler plays, the wave of `Acid`, `Sync` and `Triple`,
-    /// 6-op's patch, and the chord of `Chord` and `Chiptune`. Other synths have none.
+    /// `Z Filter`'s type, 6-op's patch, and the chord of `Chord` and `Chiptune`. Other synths have
+    /// none.
     pub fn type_param(self) -> Option<usize> {
         let key = match self {
             Self::Sampler => "sample",
             Self::Plaits(SynthVoice::Acid | SynthVoice::HardSync | SynthVoice::Triple) => "wave",
+            Self::Plaits(SynthVoice::ZFilter) => "type",
             Self::Plaits(SynthVoice::SixOp) => "patch",
             Self::Plaits(SynthVoice::Chord | SynthVoice::Chiptune) => "chord",
             Self::Plaits(_) => return None,
@@ -1021,11 +1023,17 @@ pub enum SynthVoice {
     SawComb,
     /// A low-resolution, circuit-bent tone.
     Toy,
+    /// A resonant filter faked as Casio's CZ did, by a sine restarted each cycle.
+    ZFilter,
+    /// A sine bent by a second, which its own output bends.
+    FeedbackFm,
+    /// A sine bent by a second, whose speed its own output moves.
+    ChaoticFm,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 29] = [
+    pub const ALL: [Self; 32] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1055,6 +1063,9 @@ impl SynthVoice {
         Self::Ring,
         Self::SawComb,
         Self::Toy,
+        Self::ZFilter,
+        Self::FeedbackFm,
+        Self::ChaoticFm,
     ];
 
     /// The name on screen.
@@ -1089,6 +1100,9 @@ impl SynthVoice {
             Self::Ring => "Ring",
             Self::SawComb => "Saw Comb",
             Self::Toy => "Toy",
+            Self::ZFilter => "Z Filter",
+            Self::FeedbackFm => "FB FM",
+            Self::ChaoticFm => "Chaos FM",
         }
     }
 
@@ -1124,6 +1138,9 @@ impl SynthVoice {
             Self::Ring => "Three sines ring modulated, for bells and clangs",
             Self::SawComb => "A saw through a tuned comb, for flanged leads",
             Self::Toy => "A low-resolution, circuit-bent tone, for lo-fi",
+            Self::ZFilter => "A resonant filter faked by phase, for CZ sweeps",
+            Self::FeedbackFm => "FM with feedback, for growling bass and leads",
+            Self::ChaoticFm => "FM that never settles, for chaotic tones",
         }
     }
 
@@ -1155,6 +1172,9 @@ impl SynthVoice {
                 | Self::Ring
                 | Self::SawComb
                 | Self::Toy
+                | Self::ZFilter
+                | Self::FeedbackFm
+                | Self::ChaoticFm
         )
     }
 
@@ -1170,6 +1190,9 @@ impl SynthVoice {
                 | Self::Ring
                 | Self::SawComb
                 | Self::Toy
+                | Self::ZFilter
+                | Self::FeedbackFm
+                | Self::ChaoticFm
         )
     }
 }

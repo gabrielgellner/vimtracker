@@ -469,6 +469,27 @@ const SAW_COMB: DeviceLayout = live(
         [s("tune"), s("feedback"), __, __, __, __, __, __],
     )],
 );
+const Z_FILTER: DeviceLayout = live(
+    "machine/zfilter",
+    &[knobs(
+        "Z Filter",
+        [s("cutoff"), s("shape"), s("type"), __, __, __, __, __],
+    )],
+);
+const FB_FM: DeviceLayout = live(
+    "machine/fbfm",
+    &[knobs(
+        "FB FM",
+        [s("amount"), s("ratio"), __, __, __, __, __, __],
+    )],
+);
+const CHAOS_FM: DeviceLayout = live(
+    "machine/chaosfm",
+    &[knobs(
+        "Chaos FM",
+        [s("amount"), s("ratio"), __, __, __, __, __, __],
+    )],
+);
 const TOY: DeviceLayout = live(
     "machine/toy",
     &[knobs(
@@ -1118,7 +1139,7 @@ const FREQ_SHIFT: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 68] = [
+pub const ALL: [&DeviceLayout; 71] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1149,6 +1170,9 @@ pub const ALL: [&DeviceLayout; 68] = [
     &RING,
     &SAW_COMB,
     &TOY,
+    &Z_FILTER,
+    &FB_FM,
+    &CHAOS_FM,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1223,6 +1247,9 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::Ring => &RING,
             SynthVoice::SawComb => &SAW_COMB,
             SynthVoice::Toy => &TOY,
+            SynthVoice::ZFilter => &Z_FILTER,
+            SynthVoice::FeedbackFm => &FB_FM,
+            SynthVoice::ChaoticFm => &CHAOS_FM,
         },
     }
 }

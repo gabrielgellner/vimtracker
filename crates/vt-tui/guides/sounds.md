@@ -332,6 +332,32 @@ chip would, for lo-fi leads and noise.
 | `Clock` | How fast it's worked out: low and gritty at `00`, cleaner at `FF` |
 | `Bend` | Which bits are bent: plain at `00`, more and more broken going up |
 
+`Z Filter` is a resonant filter's sound faked as Casio's CZ synths did, with no filter at all:
+a sine at the cutoff, started again each cycle of the note and shaped by a window, blended
+with a square made the same way, for resonant sweeps and acid tones.
+
+| Setting | Does |
+|---|---|
+| `Type` | `LP`, `Peak`, `BP` or `HP`, the filter it sounds like. `K` lists them |
+| `Cutoff` | Where it rings, from just under the note to ten octaves over |
+| `Shape` | A saw's window at `00`, the square at `80`, a triangle's at `FF` |
+
+`FB FM` is a sine bent by a second, which its own last output bends in turn, for growling
+bass and harsh leads. It feeds back less on high notes, where it would turn to noise.
+
+| Setting | Does |
+|---|---|
+| `Amount` | How hard it bends: a pure sine at `00`, and harsher going up |
+| `Ratio` | The second sine's pitch, catching on ratios. 1:1 from `6C` to `6F` |
+
+`Chaos FM` is a sine bent by a second, whose speed its own output moves, for unstable,
+chaotic tones that never quite settle.
+
+| Setting | Does |
+|---|---|
+| `Amount` | How hard it bends: a pure sine at `00`, chaotic going up |
+| `Ratio` | The second sine's pitch, catching on ratios. 1:1 from `6C` to `6F` |
+
 A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
 `Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX
 slot lists them under the voice's name, and an LFO's or envelope's `Dest` lists them by

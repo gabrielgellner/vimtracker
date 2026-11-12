@@ -844,6 +844,27 @@ const SAW_COMB: [Entry; 2] = [
         ..centred("feedback", "Feedback", "FDBK")
     },
 ];
+/// The filters `Z Filter` sounds like.
+const Z_FILTER_TYPES: [&str; 4] = ["LP", "Peak", "BP", "HP"];
+const Z_FILTER: [Entry; 3] = [
+    Entry {
+        key: "type",
+        name: "Type",
+        label: Some("TYPE"),
+        kind: Kind::Stepped {
+            choices: &Z_FILTER_TYPES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    level("cutoff", "Cutoff", "FREQ", 0x60),
+    level("shape", "Shape", "SHPE", 0x40),
+];
+/// Feedback and chaotic FM start at 1:1, where `Ratio` holds from `6C` to `6F`.
+const FEEDBACK_FM: [Entry; 2] = [
+    level("amount", "Amount", "AMNT", 0x60),
+    level("ratio", "Ratio", "RAT", 0x6E),
+];
 const TOY: [Entry; 2] = [
     level("clock", "Clock", "CLCK", 0xC0),
     level("bend", "Bend", "BEND", 0x00),
@@ -880,6 +901,8 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Ring => &RING,
         SynthVoice::SawComb => &SAW_COMB,
         SynthVoice::Toy => &TOY,
+        SynthVoice::ZFilter => &Z_FILTER,
+        SynthVoice::FeedbackFm | SynthVoice::ChaoticFm => &FEEDBACK_FM,
     }
 }
 
@@ -915,6 +938,9 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::Ring => "ring",
         SynthVoice::SawComb => "sawcomb",
         SynthVoice::Toy => "toy",
+        SynthVoice::ZFilter => "zfilter",
+        SynthVoice::FeedbackFm => "fbfm",
+        SynthVoice::ChaoticFm => "chaosfm",
     }
 }
 
