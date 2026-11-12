@@ -187,6 +187,11 @@ pub struct ModSlot {
     /// type change keeps one that was chosen and follows the type's if none was.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub polarity: Option<Polarity>,
+    /// Whether, going to `Pitch`, it moves the note along the song's scale, to the nearest of its
+    /// notes, so a random LFO or Steps play in key (#235's and #86's comments). It's one switch
+    /// for every type, and does nothing going anywhere else.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub in_scale: bool,
     #[serde(default, skip_serializing_if = "is_default")]
     pub adsr: Adsr,
     #[serde(default, skip_serializing_if = "is_default")]
@@ -210,6 +215,7 @@ impl ModSlot {
             depth: 0,
             bypassed: false,
             polarity: None,
+            in_scale: false,
             adsr,
             ahd: Ahd::default(),
             drum: Drum::default(),
@@ -227,6 +233,7 @@ impl ModSlot {
             depth: 0,
             bypassed: false,
             polarity: None,
+            in_scale: false,
             adsr: Adsr::default(),
             ahd: Ahd::default(),
             drum: Drum::default(),
@@ -288,6 +295,11 @@ impl ModSlot {
             && self.lpg.in_range()
             && self.lfo.in_range()
             && self.steps.in_range()
+    }
+
+    /// Whether it moves the note along the song's scale: it's in scale and goes to `Pitch`.
+    pub fn goes_in_scale(&self) -> bool {
+        self.in_scale && self.destination == Some(SettingId::PITCH)
     }
 
     /// Which way it moves what it reaches: its own if it's been chosen, else its type's. Steps

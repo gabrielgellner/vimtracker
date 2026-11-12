@@ -74,21 +74,23 @@ const LFO_SETTINGS: [ModField; 6] = [
 const LFO_GRID: [[Option<usize>; 3]; 2] =
     [[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]];
 
-/// Steps' settings: how fast, how many and how far down the left, and where each note starts it
-/// down the right, with two holes; then its values, a cursor stop of its own in the panel beside
-/// them, on every row, so `l` from any of the grid goes in. What it does at its end is in its
-/// title, with its mode.
-const STEPS_SETTINGS: [ModField; 5] = [
+/// Steps' settings: how fast, how many and how far down the left, and where each note starts it,
+/// how it drifts and how it goes from step to step down the right; then its values, a cursor stop
+/// of its own in the panel beside them, on every row, so `l` from any of the grid goes in. What it
+/// does at its end is in its title, with its mode.
+const STEPS_SETTINGS: [ModField; 7] = [
     ModField::Rate,
     ModField::Length,
     ModField::Depth,
     ModField::Start,
+    ModField::Mutate,
+    ModField::Smooth,
     ModField::Step(0),
 ];
 const STEPS_GRID: [[Option<usize>; 3]; 3] = [
     [Some(0), Some(1), Some(2)],
-    [Some(3), None, None],
-    [Some(4), Some(4), Some(4)],
+    [Some(3), Some(4), Some(5)],
+    [Some(6), Some(6), Some(6)],
 ];
 
 /// The accumulator's settings: how far it goes down the left, and what it does there and when

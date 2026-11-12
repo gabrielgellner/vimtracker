@@ -238,3 +238,57 @@ fn a_depth_scales_the_values_and_a_negative_one_turns_them_over() {
     half.tracks[0].mods[2].depth = -0x80;
     assert_eq!(cutoffs(&half, STEP, 1), [0x60]);
 }
+
+#[test]
+fn mutate_draws_values_again_from_the_seed_and_none_plays_them_as_written() {
+    let written = Steps {
+        values: values(&[0x10, 0x20, 0x30, 0x40]),
+        length: 4,
+        ..Steps::default()
+    };
+    let laps = |mutate| {
+        let song = song(&["C-3 -- --- --- ---"], Steps { mutate, ..written });
+        cutoffs(&song, STEP, 16)
+    };
+    let as_written = [0x90, 0xA0, 0xB0, 0xC0];
+    assert_eq!(laps(0), as_written.repeat(4));
+    // At 100% every value is drawn again each time round, and a render draws the same.
+    let all = laps(100);
+    assert_ne!(all[..4], all[4..8]);
+    assert_eq!(all, laps(100), "a render repeats");
+    // Between, some are as written and some drawn.
+    let half = laps(50);
+    assert!(
+        half.iter().any(|cut| as_written.contains(cut)),
+        "{half:02X?}"
+    );
+    assert!(
+        half.iter().any(|cut| !as_written.contains(cut)),
+        "{half:02X?}"
+    );
+}
+
+#[test]
+fn smooth_glides_into_each_step_or_plucks_it() {
+    // `+40` then `-40` at a 16th from the song's position, heard a quarter and three quarters of
+    // the way through the second step.
+    let two = Steps {
+        values: values(&[0x40, -0x40]),
+        length: 2,
+        mode: StepsMode::Free,
+        ..Steps::default()
+    };
+    let through = |smooth| {
+        let cut = cutoffs(&song(&[], Steps { smooth, ..two }), STEP / 4, 8);
+        (i16::from(cut[4]), i16::from(cut[6]))
+    };
+    let close = |(a, b): (i16, i16), (x, y): (i16, i16)| {
+        assert!((a - x).abs() <= 3 && (b - y).abs() <= 3, "{a:02X} {b:02X}");
+    };
+    // Stepped, it's the step's value throughout.
+    close(through(0), (0x40, 0x40));
+    // Halfway, a straight glide from the step before across the whole step.
+    close(through(0x80), (0xA0, 0x60));
+    // Down to `-80`, a pluck: the step's value falling to nothing across it.
+    close(through(-0x80), (0x50, 0x70));
+}

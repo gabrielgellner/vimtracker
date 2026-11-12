@@ -46,6 +46,10 @@ pub enum ModField {
     Length,
     Start,
     Loop,
+    /// Steps': the chance each value is drawn again as it comes round, and how it goes from one
+    /// to the next.
+    Mutate,
+    Smooth,
     /// One of Steps' values, by its place, counted from 0: what the cursor is on in its panel.
     Step(u8),
 }
@@ -68,7 +72,12 @@ impl ModField {
             Self::Hold => kind == ModKind::Ahd,
             Self::Shape | Self::Phase | Self::Deform | Self::Fade => kind == ModKind::Lfo,
             Self::Rate => matches!(kind, ModKind::Lfo | ModKind::Steps),
-            Self::Length | Self::Start | Self::Loop | Self::Step(_) => kind == ModKind::Steps,
+            Self::Length
+            | Self::Start
+            | Self::Loop
+            | Self::Mutate
+            | Self::Smooth
+            | Self::Step(_) => kind == ModKind::Steps,
         }
     }
 }
@@ -196,6 +205,8 @@ impl Control {
                 ModField::Length => "Length",
                 ModField::Start => "Start",
                 ModField::Loop => "Loop",
+                ModField::Mutate => "Mutate",
+                ModField::Smooth => "Smooth",
                 ModField::Step(_) => "Step",
             },
             Self::Accumulator(AccumulatorField::Up) => "Up",
