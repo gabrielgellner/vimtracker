@@ -18,6 +18,7 @@ pub mod chord;
 mod chord_bank;
 pub mod drums;
 pub mod fm;
+pub mod four_op;
 pub mod grain;
 pub mod kick;
 pub mod modal;

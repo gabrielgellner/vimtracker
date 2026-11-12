@@ -23,7 +23,9 @@ use crate::modulation::{MOD_SLOTS, ModSlot, default_mods};
 use crate::order::{Deal, Dealer, Order, Round};
 use crate::scale::Scale;
 use crate::selection::{Extent, StepRange};
-use crate::settings::{Owner, SAMPLER_SETTINGS, SettingId, voice_entries};
+use crate::settings::{
+    FOUR_OP_EACH, FOUR_OP_SHARED, Owner, SAMPLER_SETTINGS, SettingId, voice_entries,
+};
 use crate::shape::{Shape, ShapeColumn};
 use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Step};
@@ -935,8 +937,8 @@ impl Machine {
 
     /// The setting that gives it its character, which its device's title shows after it, as an
     /// effect's type is: the sample the sampler plays, the wave of `Acid`, `Sync` and `Triple`,
-    /// `Z Filter`'s type, `Supersaw`'s stack, 6-op's patch, and the chord of `Chord` and
-    /// `Chiptune`. Other synths have none.
+    /// `Z Filter`'s type, `Supersaw`'s stack, 6-op's patch, 4-op's algorithm, and the chord of
+    /// `Chord` and `Chiptune`. Other synths have none.
     pub fn type_param(self) -> Option<usize> {
         let key = match self {
             Self::Sampler => "sample",
@@ -944,6 +946,7 @@ impl Machine {
             Self::Plaits(SynthVoice::ZFilter) => "type",
             Self::Plaits(SynthVoice::Supersaw) => "stack",
             Self::Plaits(SynthVoice::SixOp) => "patch",
+            Self::Plaits(SynthVoice::FourOp) => "algorithm",
             Self::Plaits(SynthVoice::Chord | SynthVoice::Chiptune) => "chord",
             Self::Plaits(_) => return None,
         };
@@ -955,10 +958,12 @@ impl Machine {
     /// say which part of the sample plays and how down its first column, and where that part starts
     /// and how long it is down its second, as the sample page has them; `Acid`'s are in pairs as a
     /// TB-303's knobs are, the filter's, its envelope's, then accent and slide, with the Devil
-    /// Fish's drive and `Drift` after them; and `Supersaw`'s go by what they do: the stack's spread,
-    /// then how it sounds, then how each note starts and strays.
+    /// Fish's drive and `Drift` after them; `Supersaw`'s go by what they do: the stack's spread,
+    /// then how it sounds, then how each note starts and strays. 4-op's Machine has only what its
+    /// operators share, each operator's being on a device of its own (see [`Machine::operators`]).
     pub fn grid(self) -> Grid {
         let placed: &[&[&str]] = match self {
+            Self::Plaits(SynthVoice::FourOp) => &[&["feedback", "ring", "beat"]],
             Self::Sampler => &[&["slice", "play"], &["start", "length"]],
             Self::Plaits(SynthVoice::Acid) => &[
                 &["cutoff", "resonance"],
@@ -987,6 +992,28 @@ impl Machine {
             .map(|column| column.iter().map(|key| self.setting_at(key)).collect())
             .collect();
         Grid::from_columns(&columns)
+    }
+
+    /// The devices its settings go on past its own, for a machine with more than a device holds:
+    /// 4-op's four operators, `Op 1` to `Op 4`, each its pitch, its sound and its envelope down
+    /// four columns, by their places among the machine's settings (decision 234). Other machines
+    /// have none.
+    pub fn operators(self) -> Vec<(String, Grid)> {
+        if self != Self::Plaits(SynthVoice::FourOp) {
+            return Vec::new();
+        }
+        (0..4)
+            .map(|operator| {
+                let at = |setting: usize| Some(FOUR_OP_SHARED + operator * FOUR_OP_EACH + setting);
+                let grid = Grid::from_columns(&[
+                    vec![at(0), at(1), at(2)],
+                    vec![at(3), at(4), at(5)],
+                    vec![at(6), at(7)],
+                    vec![at(8), at(9)],
+                ]);
+                (format!("Op {}", operator + 1), grid)
+            })
+            .collect()
     }
 }
 
@@ -1025,6 +1052,8 @@ pub enum SynthVoice {
     Chiptune,
     /// Six-operator FM, playing DX7 patches.
     SixOp,
+    /// Four-operator FM you build yourself, after TetraOP's matrix.
+    FourOp,
     /// A cloud of eight saws in grains.
     Swarm,
     /// A plucked string.
@@ -1097,7 +1126,7 @@ pub enum SynthVoice {
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 48] = [
+    pub const ALL: [Self; 49] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1110,6 +1139,7 @@ impl SynthVoice {
         Self::Wavetable,
         Self::WaveTerrain,
         Self::SixOp,
+        Self::FourOp,
         Self::Chord,
         Self::Chiptune,
         Self::Swarm,
@@ -1166,6 +1196,7 @@ impl SynthVoice {
             Self::Chiptune => "Chip",
             Self::Wavetable => "Waves",
             Self::SixOp => "6-op",
+            Self::FourOp => "4-op",
             Self::String => "String",
             Self::Modal => "Modal",
             Self::Dust => "Dust",
@@ -1220,6 +1251,7 @@ impl SynthVoice {
             Self::Waveshaping => "A wave folded into harmonics, for bass and leads",
             Self::Wavetable => "Waves in four banks to sweep, for pads and leads",
             Self::SixOp => "Six-op FM with 96 DX7 patches, for keys and bells",
+            Self::FourOp => "Four-op FM you build, for bass, bells and keys",
             Self::String => "A plucked string, from a sitar's buzz to metal",
             Self::Modal => "A struck resonator, for bells, bars and wood",
             Self::Dust => "Random clicks, filtered, for crackle and rain",
@@ -1272,6 +1304,7 @@ impl SynthVoice {
                 | Self::Wavetable
                 | Self::WaveTerrain
                 | Self::SixOp
+                | Self::FourOp
                 | Self::Chord
                 | Self::Chiptune
                 | Self::Swarm
@@ -2403,10 +2436,15 @@ mod tests {
         for machine in Machine::ALL {
             let grid = machine.grid();
             let count = machine.settings().count();
-            assert!(
-                grid.places_each_once(count, machine.type_param()),
-                "{machine:?}: {grid:?}"
-            );
+            let mut placed: Vec<usize> = grid.settings().collect();
+            for (_, operator) in machine.operators() {
+                placed.extend(operator.settings());
+            }
+            placed.sort_unstable();
+            let wanted: Vec<usize> = (0..count)
+                .filter(|at| Some(*at) != machine.type_param())
+                .collect();
+            assert_eq!(placed, wanted, "{machine:?}: {grid:?}");
             // A type is a choice from a list, as an effect's is.
             if let Some(at) = machine.type_param() {
                 let id = machine.settings().nth(at).unwrap();

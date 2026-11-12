@@ -13,6 +13,7 @@ use crate::dsp::chiptune::Chiptune;
 use crate::dsp::chord::Chord;
 use crate::dsp::drums::{Hat, Snare};
 use crate::dsp::fm::Fm;
+use crate::dsp::four_op::FourOp;
 use crate::dsp::grain::Grain;
 use crate::dsp::kick::Kick;
 use crate::dsp::modal::Modal;
@@ -97,6 +98,7 @@ enum Synth {
     Waveshaping(Waveshaping),
     Wavetable(Wavetable),
     SixOp(SixOp),
+    FourOp(FourOp),
     String(StringModel),
     Modal(Modal),
     Dust(ParticleNoise),
@@ -148,6 +150,7 @@ impl Synth {
             SynthVoice::Waveshaping => Self::Waveshaping(Waveshaping::new()),
             SynthVoice::Wavetable => Self::Wavetable(Wavetable::new()),
             SynthVoice::SixOp => Self::SixOp(SixOp::new(rate)),
+            SynthVoice::FourOp => Self::FourOp(FourOp::new(rate)),
             SynthVoice::String => Self::String(StringModel::new(rate)),
             SynthVoice::Modal => Self::Modal(Modal::new()),
             SynthVoice::Dust => Self::Dust(ParticleNoise::new()),
@@ -218,6 +221,7 @@ impl Synth {
             Self::Waveshaping(synth) => synth.next(frequency, settings),
             Self::Wavetable(synth) => synth.next(frequency, settings),
             Self::SixOp(synth) => synth.next(frequency, settings),
+            Self::FourOp(synth) => synth.next(frequency, settings),
             Self::String(synth) => synth.next(frequency, settings),
             Self::Modal(synth) => synth.next(frequency, settings),
             Self::Dust(synth) => synth.next(frequency, settings),
@@ -255,6 +259,7 @@ impl Synth {
     fn release(&mut self) {
         match self {
             Self::SixOp(synth) => synth.release(),
+            Self::FourOp(synth) => synth.release(),
             Self::Acid(synth) => synth.release(),
             _ => {}
         }

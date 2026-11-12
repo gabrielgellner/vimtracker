@@ -71,6 +71,13 @@ TB-303's knobs are, `Cutoff` and `Resonance`, `Env mod` and `Decay`, `Accent` an
 `Detune` and `Warp`, down its first column, how it sounds, `Mix`, `Shape` and `Width`,
 down its second, and `Phase` and `Drift` in its third.
 
+A machine with more settings than one device holds has more devices after its own.
+`4-op`'s type is its `Algorithm`, and its Machine has the settings its operators share;
+under it are `Op 1` to `Op 4`, each an operator's pitch and level, then its sound, then
+its envelope in pairs. With them the page is taller than the screen, so it goes down by
+whole devices to keep the cursor's in view, and `j` and `k` go from one to the next as
+from any device.
+
 `j` and `k` go from a device's title down its rows and on into the next device,
 keeping the column, and pass the Output's and Play's titles by, as there's nothing
 in them. `{` and `}` keep the row and column: from `Cut`, `}` goes to `Trim` and

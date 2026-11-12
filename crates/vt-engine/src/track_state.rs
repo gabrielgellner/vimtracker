@@ -375,7 +375,7 @@ pub struct SongTime {
 
 /// What a track is playing with right now, after step commands and modulation, on the same `00` to
 /// `FF` scale as its settings.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LiveValues {
     pub level: u8,
     pub pan: u8,
@@ -402,6 +402,27 @@ pub struct LiveValues {
     /// Which step each mod slot that's Steps is playing now, counted from 0, for the Mod page to
     /// light: none for one that isn't running, as an LFO's place is.
     pub steps: [Option<u8>; MOD_SLOTS],
+}
+
+/// Written out, as an array as long as `4-op`'s settings has no `Default` of its own.
+impl Default for LiveValues {
+    fn default() -> Self {
+        Self {
+            level: 0,
+            pan: 0,
+            cutoff: 0,
+            resonance: 0,
+            send_a: 0,
+            send_b: 0,
+            machine: [0; MAX_MACHINE_SETTINGS],
+            inserts: Default::default(),
+            reduction: Default::default(),
+            bypassed: Default::default(),
+            after_trim: Default::default(),
+            mods: Default::default(),
+            steps: Default::default(),
+        }
+    }
 }
 
 /// A track's faders as they're heard, `LEV`, `PAN`, `SNA` and `SNB` in [`FADERS`]' order, for the

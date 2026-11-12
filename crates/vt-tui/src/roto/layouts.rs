@@ -44,6 +44,7 @@ use vt_roto::sysex::CONTROLS;
 
 use super::devices::Family;
 use vt_model::modulation::ModKind;
+use vt_model::settings::{FOUR_OP_EACH, FOUR_OP_SHARED};
 use vt_model::steps::STEPS;
 
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField};
@@ -300,6 +301,67 @@ const TERRAIN: DeviceLayout = live(
         [s("terrain"), s("size"), s("offset"), __, __, __, __, __],
     )],
 );
+/// What the operators share, the Machine device's own; each operator's are on its own device's.
+const FOUR_OP: DeviceLayout = live(
+    "machine/4op",
+    &[knobs(
+        "4-op",
+        [
+            s("algorithm"),
+            s("feedback"),
+            s("ring"),
+            s("beat"),
+            __,
+            __,
+            __,
+            __,
+        ],
+    )],
+);
+/// One of 4-op's operators' devices, `$n` its number: its pitch, level and sound, then its
+/// envelope in its order, its sustain and release on a second page.
+macro_rules! operator {
+    ($n:literal) => {
+        live(
+            concat!("machine/4op/op", $n),
+            &[
+                knobs(
+                    concat!("Op ", $n),
+                    [
+                        s(concat!("ratio", $n)),
+                        s(concat!("fine", $n)),
+                        s(concat!("level", $n)),
+                        s(concat!("wave", $n)),
+                        s(concat!("warp", $n)),
+                        s(concat!("amount", $n)),
+                        s(concat!("attack", $n)),
+                        s(concat!("decay", $n)),
+                    ],
+                ),
+                knobs(
+                    concat!("Env ", $n),
+                    [
+                        s(concat!("sustain", $n)),
+                        s(concat!("release", $n)),
+                        __,
+                        __,
+                        __,
+                        __,
+                        __,
+                        __,
+                    ],
+                ),
+            ],
+        )
+    };
+}
+/// 4-op's operators' devices, `Op 1` to `Op 4`.
+const FOUR_OP_OPERATORS: [DeviceLayout; 4] = [
+    operator!("1"),
+    operator!("2"),
+    operator!("3"),
+    operator!("4"),
+];
 const SIX_OP: DeviceLayout = live(
     "machine/6-op",
     &[knobs(
@@ -1436,7 +1498,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 94] = [
+pub const ALL: [&DeviceLayout; 99] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1450,6 +1512,11 @@ pub const ALL: [&DeviceLayout; 94] = [
     &WAVES,
     &TERRAIN,
     &SIX_OP,
+    &FOUR_OP,
+    &FOUR_OP_OPERATORS[0],
+    &FOUR_OP_OPERATORS[1],
+    &FOUR_OP_OPERATORS[2],
+    &FOUR_OP_OPERATORS[3],
     &CHORD,
     &CHIP,
     &SWARM,
@@ -1550,6 +1617,7 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::Wavetable => &WAVES,
             SynthVoice::WaveTerrain => &TERRAIN,
             SynthVoice::SixOp => &SIX_OP,
+            SynthVoice::FourOp => &FOUR_OP,
             SynthVoice::Chord => &CHORD,
             SynthVoice::Chiptune => &CHIP,
             SynthVoice::Swarm => &SWARM,
@@ -1638,6 +1706,10 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
     let first = spec.rows().flatten().flatten().next();
     match first {
         Some(Control::Machine) => machine_layout(track.machine),
+        // An operator's device, after 4-op's own.
+        Some(Control::Setting(at)) if track.machine == Machine::Plaits(SynthVoice::FourOp) => {
+            &FOUR_OP_OPERATORS[at.saturating_sub(FOUR_OP_SHARED) / FOUR_OP_EACH]
+        }
         Some(Control::Insert(slot)) => effect_layout(track.inserts[slot]),
         Some(Control::FilterType) => &FILTER,
         Some(Control::Base(TrackControl::Pitch)) => &PLAY,

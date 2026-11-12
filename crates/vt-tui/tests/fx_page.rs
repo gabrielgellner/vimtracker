@@ -475,7 +475,11 @@ fn the_fx_pages_bars_follow_what_plays() {
         resonance: 0,
         send_a: 0,
         send_b: 0,
-        machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0, 0],
+        machine: {
+            let mut machine = [0; vt_model::settings::MAX_MACHINE_SETTINGS];
+            machine[..4].copy_from_slice(&[0x80, 0, 0x80, 0xCC]);
+            machine
+        },
         inserts: Default::default(),
         reduction: Default::default(),
         bypassed: Default::default(),

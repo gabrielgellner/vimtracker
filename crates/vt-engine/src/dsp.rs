@@ -21,7 +21,7 @@ pub use effects::{distort, memory};
 pub use filters::filter;
 pub use voices::{
     acid, additive, braids_analog, braids_digital, braids_filter_fm, braids_noise, braids_physical,
-    braids_vocal, braids_waves, chiptune, chord, drums, fm, grain, kick, modal, noise, particle,
-    phase_distortion, six_op, speech, string_model, supersaw, swarm, virtual_analog,
+    braids_vocal, braids_waves, chiptune, chord, drums, fm, four_op, grain, kick, modal, noise,
+    particle, phase_distortion, six_op, speech, string_model, supersaw, swarm, virtual_analog,
     virtual_analog_vcf, wave_terrain, waveshaping, wavetable,
 };

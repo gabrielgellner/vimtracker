@@ -525,7 +525,11 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         resonance: 0,
         send_a: 0,
         send_b: 0,
-        machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0, 0],
+        machine: {
+            let mut machine = [0; vt_model::settings::MAX_MACHINE_SETTINGS];
+            machine[..4].copy_from_slice(&[0x80, 0, 0x80, 0xCC]);
+            machine
+        },
         inserts: Default::default(),
         reduction: Default::default(),
         bypassed: Default::default(),
@@ -3342,4 +3346,49 @@ fn app_with_distort() -> (App, Realtime) {
         insert: vt_model::insert::Insert::ALL[1],
     });
     (app, realtime)
+}
+
+#[test]
+fn four_op_has_a_device_for_each_operator_and_the_page_goes_down_to_them() {
+    let (mut app, _realtime) = app();
+    choose_machine(&mut app, "4-op");
+    assert_eq!(
+        app.song().tracks[0].machine,
+        Machine::Plaits(SynthVoice::FourOp)
+    );
+    let lines = screen_cells(&mut app);
+    // The algorithm is the machine's type, in its title, and what the operators share is under it.
+    let (top, left) = device_at(&lines, "Machine");
+    assert!(
+        from_column(&lines[top], left).contains("4>3>2>1"),
+        "{}",
+        lines[top]
+    );
+    assert!(from_column(&lines[top + 2], left).contains("Feedback"));
+    // Each operator is a device of its own: its pitch, its sound and its envelope in columns.
+    let (top, left) = device_at(&lines, "Op 1");
+    let row = |at: usize| from_column(&lines[top + at], left);
+    assert!(
+        row(2).contains("Ratio 1") && row(2).contains("Wave 1"),
+        "{}",
+        row(2)
+    );
+    assert!(
+        row(2).contains("Attack 1") && row(2).contains("Sustain 1"),
+        "{}",
+        row(2)
+    );
+    assert!(
+        row(6).contains("Level 1") && row(6).contains("Amount 1"),
+        "{}",
+        row(6)
+    );
+    // Going down past them, the page goes down by whole devices to keep the cursor's in view.
+    press(&mut app, "jjjjjjjjjjjjjjjj");
+    let lines = screen_cells(&mut app);
+    let shown = |identity: &str| {
+        let title = format!("╭─ {identity} ");
+        lines.iter().any(|line| line.contains(&title))
+    };
+    assert!(shown("Op 4") && !shown("Machine"), "{lines:#?}");
 }

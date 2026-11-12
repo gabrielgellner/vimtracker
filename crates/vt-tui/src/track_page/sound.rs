@@ -13,7 +13,10 @@ use super::{Control, DEVICE_COLUMNS, DeviceSpec, DeviceWidth};
 
 /// The Sound page's devices, top to bottom: on a sound track its machine, its filter, its output
 /// and how it plays, each a full-width device, the four filling the rows inside the keyboard's
-/// box, as the FX page's slots do. A group, a return and the master have only their output.
+/// box, as the FX page's slots do. A machine with more settings than a device holds, as 4-op's
+/// operators are, has devices of them after its own, and the page goes down by whole devices to
+/// keep the cursor's in view (decision 234). A group, a return and the master have only their
+/// output.
 pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
     let output: &[&[Control]] = match track.kind {
         TrackKind::Sound => &OUTPUT,
@@ -24,8 +27,13 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
     if !track.is_sound() {
         return vec![device("Output", [], output)];
     }
-    vec![
-        machine(track.machine),
+    let mut devices = vec![machine(track.machine)];
+    devices.extend(
+        track.machine.operators().into_iter().map(|(name, grid)| {
+            DeviceSpec::new(name, [None; DEVICE_COLUMNS], grid, Control::Setting)
+        }),
+    );
+    devices.extend([
         device(
             "Filter",
             [Some(Control::FilterType), Some(Control::FilterMode)],
@@ -33,7 +41,8 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
         ),
         device("Output", [], output),
         device("Play", [], &PLAY),
-    ]
+    ]);
+    devices
 }
 
 /// The filter's settings, in columns: the filter itself, its punch and `Safe` beside `Res`, then

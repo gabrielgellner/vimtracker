@@ -22,9 +22,12 @@ use crate::song::{DEFAULT_ACCENT, FILTER_MODE_NAMES, FULL_GATE, SynthVoice};
 use crate::speed::{SPEED_NAMES, Speed};
 use crate::step::{FxCommand, MAX_VELOCITY};
 
-/// The most settings a machine has: `Acid`'s, a TB-303's knobs with two of the Devil Fish's and
-/// `Drift` (decision 190).
-pub const MAX_MACHINE_SETTINGS: usize = 9;
+/// The most settings a machine has: `4-op`'s, four it shares and ten for each of its four
+/// operators (decision 234).
+pub const MAX_MACHINE_SETTINGS: usize = 44;
+/// How many settings `4-op` has before its operators', and how many each operator has.
+pub const FOUR_OP_SHARED: usize = 4;
+pub const FOUR_OP_EACH: usize = 10;
 
 /// What values a setting takes, and what they mean.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -988,6 +991,151 @@ const TOY: [Entry; 2] = [
     level("bend", "Bend", "BEND", 0x00),
 ];
 
+/// `4-op`'s algorithms, by which operators bend which: `4>3>2>1` is a stack heard from operator
+/// 1, and those with nothing after them are heard together. They're TetraOP's ten layouts, with
+/// its A as operator 1 and its D as 4, the last all four heard.
+pub const FOUR_OP_ALGORITHMS: [&str; 10] = [
+    "4>3>2>1", "3>1 4>2", "4>2 1 3", "4>1,2,3", "2,3,4>1", "4>3>2 1", "4>3>1,2", "4>2,3>1",
+    "3,4>2>1", "1 2 3 4",
+];
+/// The ratios an operator's `Ratio` steps through, as the Digitone's do.
+const FOUR_OP_RATIOS: [&str; 20] = [
+    "1/4", "1/2", "3/4", "1", "3/2", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12",
+    "13", "14", "15", "16",
+];
+/// An operator's waves, the TX81Z's eight.
+const FOUR_OP_WAVES: [&str; 8] = [
+    "Sine", "Sine²", "Half", "Half²", "Twice", "Twice²", "Bumps", "Bumps²",
+];
+/// What bends an operator's cycle: TetraOP's phase distortions, but its `Bend`.
+const FOUR_OP_WARPS: [&str; 8] = [
+    "Off", "Skew", "Bias", "Pulse", "Sync", "Fold", "Steps", "Formant",
+];
+
+/// A choice from a list, starting at `default`.
+const fn listed(
+    key: &'static str,
+    name: &'static str,
+    label: &'static str,
+    choices: &'static [&'static str],
+    default: u8,
+) -> Entry {
+    Entry {
+        key,
+        name,
+        label: Some(label),
+        kind: Kind::Stepped {
+            choices,
+            wraps: false,
+        },
+        default,
+    }
+}
+
+/// One of `4-op`'s operators, `$n` its number: its pitch, its level, its sound and its envelope,
+/// starting at a ratio and level of its own.
+macro_rules! operator {
+    ($n:literal, $ratio:expr, $level:expr) => {
+        [
+            listed(
+                concat!("ratio", $n),
+                concat!("Ratio ", $n),
+                concat!("RAT", $n),
+                &FOUR_OP_RATIOS,
+                $ratio,
+            ),
+            centred(
+                concat!("fine", $n),
+                concat!("Fine ", $n),
+                concat!("FIN", $n),
+            ),
+            level(
+                concat!("level", $n),
+                concat!("Level ", $n),
+                concat!("LVL", $n),
+                $level,
+            ),
+            listed(
+                concat!("wave", $n),
+                concat!("Wave ", $n),
+                concat!("WAV", $n),
+                &FOUR_OP_WAVES,
+                0,
+            ),
+            listed(
+                concat!("warp", $n),
+                concat!("Warp ", $n),
+                concat!("WRP", $n),
+                &FOUR_OP_WARPS,
+                0,
+            ),
+            centred(
+                concat!("amount", $n),
+                concat!("Amount ", $n),
+                concat!("AMT", $n),
+            ),
+            level(
+                concat!("attack", $n),
+                concat!("Attack ", $n),
+                concat!("ATK", $n),
+                0x00,
+            ),
+            level(
+                concat!("decay", $n),
+                concat!("Decay ", $n),
+                concat!("DEC", $n),
+                0x80,
+            ),
+            level(
+                concat!("sustain", $n),
+                concat!("Sustain ", $n),
+                concat!("SUS", $n),
+                0xFF,
+            ),
+            level(
+                concat!("release", $n),
+                concat!("Release ", $n),
+                concat!("REL", $n),
+                0x60,
+            ),
+        ]
+    };
+}
+
+/// `4-op`'s: its algorithm, feedback, ring modulation and beating, then each operator's. It
+/// starts as a stack with only operator 2 bending 1, a little, for a plain, warm tone.
+const FOUR_OP: [Entry; MAX_MACHINE_SETTINGS] = {
+    let shared = [
+        listed("algorithm", "Algorithm", "ALGO", &FOUR_OP_ALGORITHMS, 0),
+        centred("feedback", "Feedback", "FDBK"),
+        level("ring", "Ring", "RING", 0x00),
+        level("beat", "Beat", "BEAT", 0x00),
+    ];
+    // Ratios 1, 1, 2 and 1; operator 1 heard in full, 2 bending it a little, 3 and 4 off.
+    let operators = [
+        operator!("1", 3, 0xFF),
+        operator!("2", 3, 0x60),
+        operator!("3", 5, 0x00),
+        operator!("4", 3, 0x00),
+    ];
+    let mut all = [shared[0]; MAX_MACHINE_SETTINGS];
+    let mut at = 0;
+    while at < FOUR_OP_SHARED {
+        all[at] = shared[at];
+        at += 1;
+    }
+    let mut operator = 0;
+    while operator < 4 {
+        let mut setting = 0;
+        while setting < FOUR_OP_EACH {
+            all[FOUR_OP_SHARED + operator * FOUR_OP_EACH + setting] = operators[operator][setting];
+            setting += 1;
+        }
+        operator += 1;
+    }
+    all
+};
+
 /// A voice's settings, in the order it takes them.
 pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
     match voice {
@@ -1006,6 +1154,7 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Chiptune => &CHIPTUNE,
         SynthVoice::Wavetable => &WAVES,
         SynthVoice::SixOp => &SIX_OP,
+        SynthVoice::FourOp => &FOUR_OP,
         SynthVoice::String | SynthVoice::Modal => &STRUCK,
         SynthVoice::Dust => &DUST,
         SynthVoice::Noise => &NOISE,
@@ -1058,6 +1207,7 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::Chiptune => "chiptune",
         SynthVoice::Wavetable => "waves",
         SynthVoice::SixOp => "6op",
+        SynthVoice::FourOp => "4op",
         SynthVoice::String => "string",
         SynthVoice::Modal => "modal",
         SynthVoice::Dust => "dust",
@@ -2265,6 +2415,12 @@ mod tests {
                 }
                 Owner::Mod(slot) => {
                     assert!(label.ends_with(&(slot + 1).to_string()), "{label}");
+                    &label[..label.len() - 1]
+                }
+                // 4-op's operators' settings end in the operator's number, as a mod slot's do.
+                Owner::Voice(SynthVoice::FourOp)
+                    if label.ends_with(|c: char| c.is_ascii_digit()) =>
+                {
                     &label[..label.len() - 1]
                 }
                 _ => &label[..],
