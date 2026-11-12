@@ -420,6 +420,83 @@ const HAT: DeviceLayout = live(
         ],
     )],
 );
+const CSAW: DeviceLayout = live(
+    "machine/csaw",
+    &[knobs(
+        "CSaw",
+        [s("notch"), s("depth"), __, __, __, __, __, __],
+    )],
+);
+const MORPH: DeviceLayout = live(
+    "machine/morph",
+    &[knobs(
+        "Morph",
+        [s("shape"), s("fuzz"), __, __, __, __, __, __],
+    )],
+);
+const SAW_SQUARE: DeviceLayout = live(
+    "machine/sawsquare",
+    &[knobs(
+        "Saw Sq",
+        [s("width"), s("mix"), __, __, __, __, __, __],
+    )],
+);
+const SYNC: DeviceLayout = live(
+    "machine/sync",
+    &[knobs(
+        "Sync",
+        [s("interval"), s("mix"), s("wave"), __, __, __, __, __],
+    )],
+);
+const TRIPLE: DeviceLayout = live(
+    "machine/triple",
+    &[knobs(
+        "Triple",
+        [s("second"), s("third"), s("wave"), __, __, __, __, __],
+    )],
+);
+const RING: DeviceLayout = live(
+    "machine/ring",
+    &[knobs(
+        "Ring",
+        [s("first"), s("second"), __, __, __, __, __, __],
+    )],
+);
+const SAW_COMB: DeviceLayout = live(
+    "machine/sawcomb",
+    &[knobs(
+        "Saw Comb",
+        [s("tune"), s("feedback"), __, __, __, __, __, __],
+    )],
+);
+const Z_FILTER: DeviceLayout = live(
+    "machine/zfilter",
+    &[knobs(
+        "Z Filter",
+        [s("cutoff"), s("shape"), s("type"), __, __, __, __, __],
+    )],
+);
+const FB_FM: DeviceLayout = live(
+    "machine/fbfm",
+    &[knobs(
+        "FB FM",
+        [s("amount"), s("ratio"), __, __, __, __, __, __],
+    )],
+);
+const CHAOS_FM: DeviceLayout = live(
+    "machine/chaosfm",
+    &[knobs(
+        "Chaos FM",
+        [s("amount"), s("ratio"), __, __, __, __, __, __],
+    )],
+);
+const TOY: DeviceLayout = live(
+    "machine/toy",
+    &[knobs(
+        "Toy",
+        [s("clock"), s("bend"), __, __, __, __, __, __],
+    )],
+);
 
 // The track's own devices.
 
@@ -1121,6 +1198,17 @@ pub const ALL: [&DeviceLayout; 62] = [
     &KICK,
     &SNARE,
     &HAT,
+    &CSAW,
+    &MORPH,
+    &SAW_SQUARE,
+    &SYNC,
+    &TRIPLE,
+    &RING,
+    &SAW_COMB,
+    &TOY,
+    &Z_FILTER,
+    &FB_FM,
+    &CHAOS_FM,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1189,6 +1277,17 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::Kick => &KICK,
             SynthVoice::Snare => &SNARE,
             SynthVoice::Hat => &HAT,
+            SynthVoice::CSaw => &CSAW,
+            SynthVoice::Morph => &MORPH,
+            SynthVoice::SawSquare => &SAW_SQUARE,
+            SynthVoice::HardSync => &SYNC,
+            SynthVoice::Triple => &TRIPLE,
+            SynthVoice::Ring => &RING,
+            SynthVoice::SawComb => &SAW_COMB,
+            SynthVoice::Toy => &TOY,
+            SynthVoice::ZFilter => &Z_FILTER,
+            SynthVoice::FeedbackFm => &FB_FM,
+            SynthVoice::ChaoticFm => &CHAOS_FM,
         },
     }
 }
