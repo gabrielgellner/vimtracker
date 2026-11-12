@@ -1695,19 +1695,42 @@ const fn voices_size() -> usize {
     total
 }
 
-/// Where a voice's settings start among the voices'.
-const fn voice_start(voice: SynthVoice) -> usize {
+/// Where each voice's settings start among the voices', by the voice's number, worked out as the
+/// program is built. Searched for at run time, it went through every voice before, and `owner`
+/// did that for each voice in turn, which came to a fifth of a stopped song's time (#187).
+const VOICE_STARTS: [usize; SynthVoice::ALL.len()] = {
+    let mut starts = [0; SynthVoice::ALL.len()];
     let mut start = 0;
     let mut at = 0;
     while at < SynthVoice::ALL.len() {
-        if SynthVoice::ALL[at] as usize == voice as usize {
-            return start;
-        }
+        starts[SynthVoice::ALL[at] as usize] = start;
         start += voice_entries(SynthVoice::ALL[at]).len();
         at += 1;
     }
-    start
+    starts
+};
+
+/// Where a voice's settings start among the voices'.
+const fn voice_start(voice: SynthVoice) -> usize {
+    VOICE_STARTS[voice as usize]
 }
+
+/// Whose each of the voices' settings is, as a place in `SynthVoice::ALL`, so `owner` finds it at
+/// once rather than going through the voices.
+const VOICE_OF: [u8; voices_size()] = {
+    let mut owners = [0; voices_size()];
+    let mut start = 0;
+    let mut at = 0;
+    while at < SynthVoice::ALL.len() {
+        let end = start + voice_entries(SynthVoice::ALL[at]).len();
+        while start < end {
+            owners[start] = at as u8;
+            start += 1;
+        }
+        at += 1;
+    }
+    owners
+};
 
 const fn effect_start(effect: Effect) -> usize {
     match effect {
@@ -2219,12 +2242,8 @@ impl SettingId {
         }
         if at < SLOTS_START {
             let within = at - VOICES_START;
-            for voice in SynthVoice::ALL {
-                let start = voice_start(voice);
-                if within < start + voice_entries(voice).len() {
-                    return (Owner::Voice(voice), within - start);
-                }
-            }
+            let voice = SynthVoice::ALL[VOICE_OF[within] as usize];
+            return (Owner::Voice(voice), within - voice_start(voice));
         }
         if at < MODS_START {
             let within = at - SLOTS_START;
