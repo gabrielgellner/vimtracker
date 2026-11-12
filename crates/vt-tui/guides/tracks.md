@@ -330,9 +330,11 @@ out wide.
 | `Rate` | How fast they move: as Rings or the Juno has it at `80` |
 | `Depth` | How far they move. `00` leaves fixed copies |
 
-`Juno I` sweeps each side from 0.7 to 4.9 ms and back once every two seconds, 0.5 Hz,
-and `Juno II` the same a little faster, 0.83 Hz. `Juno I+II`, both
-buttons down, is a fast, shallow wobble at 8 Hz, nearer a vibrato. `Depth` at `80` is the
+`Juno I` sweeps each side from 1.66 to 5.35 ms and back once every two seconds, 0.5 Hz,
+and `Juno II` the same a little faster, 0.83 Hz, as a Juno-60 measures. `Juno I+II`, both
+buttons down, is a fast, shallow wobble from 3.3 to 3.7 ms at 8 Hz, nearer a vibrato, its
+sweep rounded to a sine and both sides moving together, so it doesn't widen the sound as
+the other two do. `Depth` at `80` is the
 Juno's own sweep, `FF` twice as long, and `Rate` goes two octaves either way. Each copy
 loses a little of its top, as the Juno's bucket brigade does, but doesn't dull as it moves.
 
