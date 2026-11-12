@@ -136,7 +136,8 @@ impl Reverb {
             line
         });
         let size = base.next_power_of_two();
-        let pre_frames = (LONGEST_PRE * rate as f32) as usize + 2;
+        // A power of two long, so reading round it is a mask.
+        let pre_frames = ((LONGEST_PRE * rate as f32) as usize + 2).next_power_of_two();
         let mut reverb = Self {
             lines: Lines {
                 buffer: vec![0.0; size],
@@ -224,14 +225,14 @@ impl Reverb {
         if let Some((_, c)) = &self.high_cut {
             sample = self.trim.high_cut(sample, c);
         }
-        let length = self.pre.len();
+        let mask = self.pre.len() - 1;
         self.pre[self.pre_write] = sample;
         let back = self.pre_frames.next(self.smoothing);
         let whole = back as usize;
         let fraction = back - whole as f32;
-        let a = self.pre[(self.pre_write + length - whole) % length];
-        let b = self.pre[(self.pre_write + length - whole - 1) % length];
-        self.pre_write = (self.pre_write + 1) % length;
+        let a = self.pre[self.pre_write.wrapping_sub(whole) & mask];
+        let b = self.pre[self.pre_write.wrapping_sub(whole + 1) & mask];
+        self.pre_write = (self.pre_write + 1) & mask;
         if fraction == 0.0 {
             a
         } else {

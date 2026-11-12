@@ -1,6 +1,9 @@
 //! A stereo chorus and a string machine's ensemble, as in Mutable Instruments' Rings: copies of
 //! the sound read from short delay lines whose length a sine wobbles. Rings' delays and wobbles
-//! are tuned at 48 kHz and scaled here to the rate it runs at, and read between samples.
+//! are tuned at 48 kHz and scaled here to the rate it runs at, and read between samples. Each
+//! wobble is a point going round a circle rather than a sine worked out, as Surge's quadrature
+//! oscillators are (`sst-basic-blocks/dsp/QuadratureOscillators.h:98-132`, GPL 3 or later), so
+//! the copies' other phases are fixed turns of it.
 //!
 //! Adapted from `rings/dsp/fx/chorus.h` and `rings/dsp/fx/ensemble.h`:
 //!
@@ -47,6 +50,50 @@ const ENSEMBLE_DEPTH: f32 = 128.0;
 const ENSEMBLE_SPEEDS: [f32; 2] = [1.57e-05, 1.37e-04];
 /// How much of the slow wobble the fast one adds.
 const ENSEMBLE_FAST: f32 = 0.1;
+/// The cosine and sine of the ensemble's copies' places, in sixths of a turn: Rings' three a
+/// third apart on the left, and on the right those a sixth on.
+const SIXTHS: [(f32, f32); 6] = [
+    (1.0, 0.0),
+    (0.5, 0.866_025_4),
+    (-0.5, 0.866_025_4),
+    (-1.0, 0.0),
+    (-0.5, -0.866_025_4),
+    (0.5, -0.866_025_4),
+];
+
+/// A wobble, as a point going round a circle: its sine and cosine without working either out.
+#[derive(Debug, Clone, Copy)]
+struct Wobble {
+    cos: f32,
+    sin: f32,
+}
+
+impl Wobble {
+    const START: Self = Self { cos: 1.0, sin: 0.0 };
+
+    /// Go round by some turns, under a hundredth of a radian.
+    #[inline]
+    fn turn(&mut self, turns: f32) {
+        let angle = turns * TAU;
+        let squared = angle * angle;
+        // The series' first terms, which are as close as an f32 gets at angles this small.
+        let (cos, sin) = (1.0 - squared * 0.5, angle * (1.0 - squared / 6.0));
+        let (c, s) = (
+            self.cos * cos - self.sin * sin,
+            self.sin * cos + self.cos * sin,
+        );
+        // A step of Newton's back toward the circle, so rounding never moves it off.
+        let back = 1.5 - 0.5 * (c * c + s * s);
+        self.cos = c * back;
+        self.sin = s * back;
+    }
+
+    /// The sine some of a turn further on, from that turn's cosine and sine.
+    #[inline]
+    fn sine_on(self, (cos, sin): (f32, f32)) -> f32 {
+        self.sin * cos + self.cos * sin
+    }
+}
 
 /// A chorus's delay lines and wobbles.
 #[derive(Debug, Clone)]
@@ -54,7 +101,7 @@ pub struct Chorus {
     lines: [Vec<f32>; 2],
     mask: usize,
     write: usize,
-    phases: [f32; 2],
+    wobbles: [Wobble; 2],
     kind: ChorusType,
     /// How much faster than Rings the wobbles go.
     speed: Smoothed,
@@ -76,7 +123,7 @@ impl Chorus {
             lines: [vec![0.0; size], vec![0.0; size]],
             mask: size - 1,
             write: 0,
-            phases: [0.0; 2],
+            wobbles: [Wobble::START; 2],
             kind: ChorusType::Chorus,
             speed: Smoothed::at(1.0),
             depth: Smoothed::at(0.5),
@@ -95,7 +142,7 @@ impl Chorus {
         for line in &mut self.lines {
             line.fill(0.0);
         }
-        self.phases = [0.0; 2];
+        self.wobbles = [Wobble::START; 2];
     }
 
     /// Take what's set now. The speed is two octaves either way of Rings' at `80`.
@@ -132,13 +179,9 @@ impl Chorus {
             ChorusType::Chorus => CHORUS_SPEEDS,
             ChorusType::Ensemble => ENSEMBLE_SPEEDS,
         };
-        for (phase, step) in self.phases.iter_mut().zip(speeds) {
-            *phase += step * speed;
-            if *phase >= 1.0 {
-                *phase -= 1.0;
-            }
+        for (wobble, step) in self.wobbles.iter_mut().zip(speeds) {
+            wobble.turn(step * speed);
         }
-        let sine = |turns: f32| (turns * TAU).sin();
         self.write = (self.write + 1) & self.mask;
         let longer = self.longer;
         match self.kind {
@@ -146,11 +189,12 @@ impl Chorus {
                 // Both sides go down one line, and two taps each wobble apart from the other.
                 self.lines[0][self.write] = (input[0] + input[1]) * 0.5;
                 let amount = depth * CHORUS_DEPTH;
-                let [first, second] = self.phases;
-                let left = self.read(0, (sine(first) * amount + CHORUS_TAPS[0]) * longer)
-                    + self.read(0, (sine(second) * amount + CHORUS_TAPS[1]) * longer);
-                let right = self.read(0, (sine(first + 0.25) * amount + CHORUS_TAPS[1]) * longer)
-                    + self.read(0, (sine(second + 0.25) * amount + CHORUS_TAPS[0]) * longer);
+                // The right side's are a quarter of a turn on: the cosines.
+                let [first, second] = self.wobbles;
+                let left = self.read(0, (first.sin * amount + CHORUS_TAPS[0]) * longer)
+                    + self.read(0, (second.sin * amount + CHORUS_TAPS[1]) * longer);
+                let right = self.read(0, (first.cos * amount + CHORUS_TAPS[1]) * longer)
+                    + self.read(0, (second.cos * amount + CHORUS_TAPS[0]) * longer);
                 [left * 0.5, right * 0.5]
             }
             ChorusType::Ensemble => {
@@ -161,17 +205,17 @@ impl Chorus {
                     depth * ENSEMBLE_DEPTH,
                     depth * ENSEMBLE_DEPTH * ENSEMBLE_FAST,
                 );
-                let [first, second] = self.phases;
-                let wobble = |third: f32| {
-                    (sine(first + third) * slow + sine(second + third) * fast + ENSEMBLE_TAP)
-                        * longer
+                let [first, second] = self.wobbles;
+                let wobble = |sixths: usize| {
+                    let on = SIXTHS[sixths];
+                    (first.sine_on(on) * slow + second.sine_on(on) * fast + ENSEMBLE_TAP) * longer
                 };
                 // Rings took a stereo string, so each side's copies mirrored the other's. A track's
                 // sound is mostly one, so the right side's copies are a sixth of a turn on from the
                 // left's, which spreads even a single sound.
-                let (one, two, three) = (wobble(0.0), wobble(1.0 / 3.0), wobble(2.0 / 3.0));
+                let (one, two, three) = (wobble(0), wobble(2), wobble(4));
                 let left = self.read(0, one) + self.read(0, two) + self.read(1, three);
-                let (four, five, six) = (wobble(1.0 / 6.0), wobble(0.5), wobble(5.0 / 6.0));
+                let (four, five, six) = (wobble(1), wobble(3), wobble(5));
                 let right = self.read(1, four) + self.read(1, five) + self.read(0, six);
                 [left * 0.33, right * 0.33]
             }
@@ -263,5 +307,21 @@ mod tests {
                 assert!(out.iter().all(|s| s.is_finite() && s.abs() <= 1.0));
             }
         }
+    }
+
+    #[test]
+    fn a_wobble_stays_on_its_sine_for_minutes() {
+        // Its fastest, two octaves up, for five minutes.
+        let step = ENSEMBLE_SPEEDS[1] * 4.0;
+        let mut wobble = Wobble::START;
+        let mut worst = 0.0_f64;
+        for frame in 1..=RATE * 300 {
+            wobble.turn(step);
+            let exact = (f64::from(step) * f64::from(frame) * std::f64::consts::TAU).sin();
+            worst = worst.max((f64::from(wobble.sin) - exact).abs());
+        }
+        assert!(worst < 1e-3, "{worst}");
+        let radius = wobble.cos.hypot(wobble.sin);
+        assert!((radius - 1.0).abs() < 1e-6, "{radius}");
     }
 }
