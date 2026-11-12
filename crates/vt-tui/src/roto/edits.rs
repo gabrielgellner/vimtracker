@@ -313,6 +313,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 ModField::Shape => lfo.shape = pick(&Shape::ALL, position),
                 ModField::Rate => lfo.rate = rate_at(lfo.rate, position),
                 ModField::Phase => lfo.phase = whole(position, 359) as u16,
+                ModField::Deform => lfo.deform = depth_at(position),
             }
             changed(modulator, was, |modulator| Action::SetMod {
                 track: at,

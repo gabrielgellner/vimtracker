@@ -225,7 +225,10 @@ fn an_envelope_is_attack_decay_sustain_release_first_and_an_lfo_what_it_plays() 
         ["attack", "decay", "sustain", "release", "depth"]
     );
     let lfo = layout_named("lfo");
-    assert_eq!(first_knobs(lfo)[..4], ["rate", "shape", "depth", "phase"]);
+    assert_eq!(
+        first_knobs(lfo)[..5],
+        ["rate", "shape", "depth", "phase", "deform"]
+    );
     // Where each goes is on a page of its own, one arrow on.
     for layout in [envelope, lfo] {
         assert_eq!(first_knobs_of(&layout.layout.pages[1])[0], "dest");
@@ -599,6 +602,27 @@ fn everything_the_roto_is_sent_is_ascii_its_font_can_draw() {
     let phase = Control::Mod(3, vt_tui::track_page::ModField::Phase);
     let text = value_text(phase, &song.tracks[0], &song);
     assert_eq!(Label::new(&text).as_str(), "0deg", "{text}");
+}
+
+#[test]
+fn an_lfos_deform_is_a_knob_with_a_centre_notch_that_sets_it() {
+    use vt_model::action::edit;
+    use vt_roto::live::KNOB_TOP;
+    use vt_tui::roto::edits::{turned, value_text};
+    use vt_tui::track_page::ModField;
+    let song = std::sync::Arc::new(Song::new(1));
+    let track = &song.tracks[0];
+    // `Mod 4`, read second.
+    let spec = &Page::Mod.devices(track)[1];
+    let device = live_device(Page::Mod, 1, spec, track, &song, true);
+    let knob = device.controls[4].as_ref().unwrap();
+    assert_eq!(knob.name.as_str(), "Deform");
+    let deform = Control::Mod(3, ModField::Deform);
+    let next = edit(&song, &turned(deform, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[3].lfo.deform, 0xFF);
+    assert_eq!(value_text(deform, &next.tracks[0], &next), "+FF");
+    let next = edit(&song, &turned(deform, 0, &song, 0).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[3].lfo.deform, -0xFF);
 }
 
 #[test]

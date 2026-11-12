@@ -542,10 +542,10 @@ const AHD: DeviceLayout = stored(
     ],
 );
 
-/// An LFO slot's: its rate and shape, how far it goes and where in its cycle it starts, with its
-/// polarity on the button under `Depth`, lit for `Bi`, and its mode under `Phase`, lit for `Trig`,
-/// as each note then starts it there; where it
-/// goes on the next page. #86's five modes make the button a knob, and the device live.
+/// An LFO slot's: its rate and shape, how far it goes, where in its cycle it starts and how its
+/// wave bends, with its polarity on the button under `Depth`, lit for `Bi`, and its mode under
+/// `Phase`, lit for `Trig`, as each note then starts it there; where it goes on the next page.
+/// #86's five modes make the button a knob, and the device live.
 const LFO: DeviceLayout = stored(
     "lfo",
     &[
@@ -556,7 +556,7 @@ const LFO: DeviceLayout = stored(
                 s("shape"),
                 s("depth"),
                 s("phase"),
-                __,
+                s("deform"),
                 __,
                 __,
                 __,
@@ -1191,6 +1191,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Shape => "shape",
             ModField::Rate => "rate",
             ModField::Phase => "phase",
+            ModField::Deform => "deform",
         },
         Control::Accumulator(field) => match field {
             AccumulatorField::Up => "up",

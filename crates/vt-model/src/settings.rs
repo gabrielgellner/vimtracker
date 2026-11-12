@@ -1001,8 +1001,8 @@ fn param_entry(param: &Param) -> Entry {
 }
 
 /// A mod slot's settings that steps can lock: its depth and polarity, whatever its type, and an
-/// LFO's phase.
-const MOD: [Entry; 3] = [
+/// LFO's phase and deform.
+const MOD: [Entry; 4] = [
     Entry {
         key: "depth",
         name: "Depth",
@@ -1036,6 +1036,17 @@ const MOD: [Entry; 3] = [
         },
         // Each type has its own, which the track's value gives; this is an LFO's.
         default: 0x01,
+    },
+    Entry {
+        key: "deform",
+        name: "Deform",
+        label: Some("DFM"),
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::Depth,
+        },
+        default: 0x80,
     },
 ];
 

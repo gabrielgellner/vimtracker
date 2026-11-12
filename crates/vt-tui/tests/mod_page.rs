@@ -59,6 +59,7 @@ fn every_mod_setting(sound: bool) -> Vec<Control> {
             ModField::Rate,
             ModField::Depth,
             ModField::Phase,
+            ModField::Deform,
         ] {
             all.push(Control::Mod(slot, field));
         }
@@ -229,11 +230,14 @@ fn h_and_l_cross_between_the_columns_on_the_same_row() {
     assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Phase));
     page.key(Cmd::Move(Motion::RowStart), 1, Some(&track));
     assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Shape));
-    // An LFO's last row has a hole beside `Depth`, so `l` from `Depth` goes nowhere in it, and
+    // An LFO's last row has `Depth` and `Deform`, so `l` from `Depth` goes to `Deform`, and
     // from `Mod 1`'s `Reset` it lands on `Depth`.
     keys(&mut page, &track, &[(DOWN, 2), (RIGHT, 1)]);
-    assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Depth));
-    page.key(LEFT, 1, Some(&track));
+    assert_eq!(
+        page.control(Some(&track)),
+        Control::Mod(3, ModField::Deform)
+    );
+    keys(&mut page, &track, &[(LEFT, 2)]);
     assert_eq!(page.control(Some(&track)), Control::Mod(0, ModField::Reset));
     page.key(RIGHT, 1, Some(&track));
     assert_eq!(page.control(Some(&track)), Control::Mod(3, ModField::Depth));
@@ -1079,7 +1083,7 @@ fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_pla
 }
 
 #[test]
-fn an_lfos_cycle_is_sent_again_only_for_its_wave_phase_or_depths_sign() {
+fn an_lfos_cycle_is_sent_again_only_for_its_wave_phase_deform_or_depths_sign() {
     let (mut app, _realtime) = with_lfos([
         lfo_on(SettingId::CUT, Shape::Sine, 0, 0x40),
         unassigned(),
@@ -1112,10 +1116,11 @@ fn an_lfos_cycle_is_sent_again_only_for_its_wave_phase_or_depths_sign() {
     set(&mut app, &|slot| slot.destination = Some(SettingId::PAN));
     set(&mut app, &|slot| slot.lfo.mode = LfoMode::Trig);
     assert_eq!(sync(&mut app), (first, 0));
-    // Its wave, its phase and its depth's sign each send it again.
-    let changes: [&dyn Fn(&mut ModSlot); 3] = [
+    // Its wave, its phase, its deform and its depth's sign each send it again.
+    let changes: [&dyn Fn(&mut ModSlot); 4] = [
         &|slot| slot.lfo.shape = Shape::Square,
         &|slot| slot.lfo.phase = 45,
+        &|slot| slot.lfo.deform = 0x40,
         &|slot| slot.depth = -0x7F,
     ];
     let mut seen = vec![first];
