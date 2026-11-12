@@ -564,6 +564,31 @@ const AHD: DeviceLayout = stored(
     ],
 );
 
+/// A drum slot's: its peak, body and decay, then how many times its peak strikes, a list of eight,
+/// in the gap an AHD leaves, as it shapes the strike; then how far it goes and its curve, with its
+/// polarity under `Depth` as the other envelopes'. It has no reset to put under `Peak`, as it
+/// always strikes from full.
+const DRUM: DeviceLayout = stored(
+    "drum",
+    &[
+        page(
+            "Drum",
+            [
+                s("peak"),
+                s("body"),
+                s("decay"),
+                s("ratchet"),
+                s("depth"),
+                s("mode"),
+                __,
+                __,
+            ],
+            [GAP, GAP, GAP, GAP, s("polarity"), __, __, __],
+        ),
+        DEST_PAGE,
+    ],
+);
+
 /// An LFO slot's: its rate and shape, how far it goes, where in its cycle it starts and how its
 /// wave bends, with its polarity on the button under `Depth`, lit for `Bi`, and its mode under
 /// `Phase`, lit for `Trig`, as each note then starts it there; where it goes on the next page.
@@ -992,7 +1017,7 @@ const VOWEL: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 57] = [
+pub const ALL: [&DeviceLayout; 58] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1023,6 +1048,7 @@ pub const ALL: [&DeviceLayout; 57] = [
     &PLAY,
     &ADSR,
     &AHD,
+    &DRUM,
     &LFO,
     &ACCUMULATOR,
     &ARPEGGIO,
@@ -1130,6 +1156,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         Some(Control::Mod(slot, _)) => match track.mods[slot].kind {
             ModKind::Adsr => &ADSR,
             ModKind::Ahd => &AHD,
+            ModKind::Drum => &DRUM,
             ModKind::Lfo => &LFO,
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
@@ -1214,6 +1241,9 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Release => "release",
             ModField::Reset => "reset",
             ModField::Hold => "hold",
+            ModField::Peak => "peak",
+            ModField::Body => "body",
+            ModField::Ratchet => "ratchet",
             ModField::Shape => "shape",
             ModField::Rate => "rate",
             ModField::Phase => "phase",

@@ -6,7 +6,7 @@ use vt_model::accumulator::{Accumulation, MOST_DEGREES};
 use vt_model::action::Action;
 use vt_model::arpeggio::{Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Adsr, Ahd, Hold, MAX_HOLD_MS};
+use vt_model::envelope::{Adsr, Ahd, Drum, Hold, MAX_HOLD_MS, MAX_RATCHET};
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Lfo, Rate};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
@@ -177,10 +177,11 @@ impl App {
     /// sustain or hold, or an LFO's rate or phase. The rest are lists, chosen with `K`.
     fn type_mod(&mut self, slot: usize, field: ModField, text: &str) {
         let current = self.page_track().mods[slot];
-        let (adsr, ahd, lfo) = (current.adsr, current.ahd, current.lfo);
+        let (adsr, ahd, drum, lfo) = (current.adsr, current.ahd, current.drum, current.lfo);
         let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
         let with_adsr = |adsr: Adsr| ModSlot { adsr, ..current };
         let with_ahd = |ahd: Ahd| ModSlot { ahd, ..current };
+        let with_drum = |drum: Drum| ModSlot { drum, ..current };
         let with_lfo = |lfo: Lfo| ModSlot { lfo, ..current };
         let ahd_kind = current.kind == ModKind::Ahd;
         let times = format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}");
@@ -200,6 +201,27 @@ impl App {
             ModField::Decay if ahd_kind => {
                 (ms.map(|decay_ms| with_ahd(Ahd { decay_ms, ..ahd })), times)
             }
+            ModField::Decay if current.kind == ModKind::Drum => (
+                ms.map(|decay_ms| with_drum(Drum { decay_ms, ..drum })),
+                times,
+            ),
+            ModField::Peak => (ms.map(|peak_ms| with_drum(Drum { peak_ms, ..drum })), times),
+            ModField::Body => (
+                text.trim_end_matches('%')
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|body| *body <= 100)
+                    .map(|body| with_drum(Drum { body, ..drum })),
+                "Body is a percent from 0 to 100".to_owned(),
+            ),
+            ModField::Ratchet => (
+                text.trim()
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|ratchet| (1..=MAX_RATCHET).contains(ratchet))
+                    .map(|ratchet| with_drum(Drum { ratchet, ..drum })),
+                format!("Ratchet is how many strikes, from 1 to {MAX_RATCHET}"),
+            ),
             ModField::Decay => (
                 ms.map(|decay_ms| with_adsr(Adsr { decay_ms, ..adsr })),
                 times,
