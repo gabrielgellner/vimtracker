@@ -13,7 +13,7 @@ use vt_engine::published::Published;
 use vt_model::insert::Insert;
 use vt_model::samples::SamplePool;
 use vt_model::selection::Motion;
-use vt_model::settings::SettingId;
+use vt_model::settings::{FOUR_OP_SHARED, SettingId};
 use vt_model::song::{Machine, Song, SynthVoice, Track, TrackKind};
 use vt_tui::app::App;
 use vt_tui::input::bindings::Cmd;
@@ -140,7 +140,14 @@ fn each_machines_device_shows_every_setting_once_and_its_type_in_its_title() {
         // The Machine's rows, inside its frame.
         let device = lines[top + 1..top + 8].join("\n");
         let names: Vec<&str> = machine.settings().map(SettingId::name).collect();
-        for (at, name) in names.iter().enumerate() {
+        // 4-op's operators' settings are on devices of their own, which `track_page`'s
+        // `four_op_has_a_device_for_each_operator_and_the_page_goes_down_to_them` reads.
+        let own = if machine.operators().is_empty() {
+            names.len()
+        } else {
+            FOUR_OP_SHARED
+        };
+        for (at, name) in names.iter().enumerate().take(own) {
             let shown = device.matches(&format!("  {name} ")).count();
             if Some(at) == machine.type_param() {
                 assert_eq!(shown, 0, "{machine:?}: {name} is in the title");
