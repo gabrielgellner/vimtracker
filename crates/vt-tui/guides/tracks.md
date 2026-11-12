@@ -4,7 +4,7 @@ Press `Space 4` for what a track holds apart from its steps, on three pages: Sou
 has its machine, filter, output and how it plays, with a bar beside each value showing where
 it sits between the lines at each end of its range, and moving with whatever
 plays it, with a dim mark left where it's set once it's a cell or more away, Mod its six mod slots,
-envelopes and LFOs, its accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page. FX columns belong
+envelopes and LFOs, its accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page, each with the cursor where you left it, or on its first setting the first time. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -15,7 +15,7 @@ each machine.
 
 | Keys | Does |
 |---|---|
-| `H` `L` | The previous or next page: Sound, Mod or FX |
+| `H` `L` | The previous or next page, back where you left it |
 | `W` `B`, `]b` `[b` | Next or previous track |
 | `j` `k` | Next or previous row, back in the column they left |
 | `gg` `G` | The top or bottom of this column of devices |
@@ -102,7 +102,7 @@ shows what it plays.
 |---|---|
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
-| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` |
+| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` `OB-X` |
 | Mode | How the type responds: `--` where it has none |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
@@ -127,8 +127,12 @@ saturates. It thins the bass as `Res` rises, though less than `Ladder` does,
 and it sings by itself sooner, from about `DB`, at `Cut`. A loud sound comes
 out a little crunched even at `Drive 00`. `Drive` grits up what comes straight
 in, less so as `Res` rises so the peak isn't swamped, and adds a little
-resonance. These five cost more than the others, which matters only for tracks
-using them.
+resonance. `OB-X` is the Oberheim OB-X's 12 dB filter, after OB-Xd's: it
+sounds as the clean `LP` does when quiet, but its damping grows as it gets
+louder, so its resonance holds itself in with no clipper, and loud notes tame
+it, the OB's squelch. From about `D9` it sings by itself at `Cut`, in tune, so
+it plays as an oscillator. These six cost more than the others, which matters
+only for tracks using them.
 
 `Mode` gives a type its other responses, made from what it already has, and `K`
 on it lists the ones the type offers:
@@ -139,6 +143,7 @@ on it lists the ones the type offers:
 | `Ladder` | `LP24` `Fat24` `LP18` `LP12` `LP6` `BP24` `BP12` `HP6` `HP12` `HP18` `HP24` |
 | | `N24` `N12` `PH18` `HP12+LP6` `HP18+LP6` `N12+LP6` `PH18+LP6` |
 | `Dirty` | `LP24` `LP12` `BP24` `HP12` `HP24` `N24` |
+| `OB-X` | `LP12` `BP12` `HP12` `N12` |
 | `Diode` | `Full`, or a low cut `-3 oct` `-2 oct` `-1 oct` under `Cut` |
 
 At `24 dB` a low-pass or high-pass is twice as steep with the same peak, a
@@ -155,7 +160,11 @@ ladder's `LP24` with much of the bass its resonance takes given back, as
 Surge's compensated ladders do: about 10 dB more near full `Res`, so the peak
 rides on a full bass, and runs into its saturation sooner. The ladder's notches
 take out the very pitch it sings at, so they hardly sing at all, where
-`Dirty`'s still does. `Diode` at `Full` has all its
+`Dirty`'s still does. `OB-X`'s modes are the low-pass, band-pass and high-pass
+of its one filter, and its notch the low-pass and high-pass together, so its
+`BP12` and `HP12` sing as its `LP12` does and its `N12` hardly at all. Its
+`BP12` peaks at 0 dB with no resonance, and as loud as `LP12` is at `Cut` once
+it has some. `Diode` at `Full` has all its
 bass, as in `Acid`. The others cut the bass before the ladder, from that many
 octaves under `Cut`, moving with it, so `Drive` grits up only what's left. The
 MS-20's have no modes, and show `--`.
@@ -165,7 +174,7 @@ plays its own first, so going to another type and back finds it again. A step
 can lock `MODE` to any mode, by its place in this list, which the status line
 names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP24`, `05`
 `HP12`, `06` `HP24`, `07` `N24`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
-`0B` `-1 oct`, then the ladder's own: `0C` `LP18`, `0D` `LP6`, `0E` `BP12`, `0F`
+`0B` `-1 oct`, then the ladder's own, which `OB-X` shares two of: `0C` `LP18`, `0D` `LP6`, `0E` `BP12`, `0F`
 `HP6`, `10` `HP18`, `11` `N12`, `12` `PH18`, `13` `HP12+LP6`, `14` `HP18+LP6`,
 `15` `N12+LP6`, `16` `PH18+LP6`, `17` `Fat24`. Changing mode glides over about 10 ms, so a lock doesn't click.
 
@@ -242,7 +251,11 @@ Screamer's circuit, which clips the mids softly and adds them to the clean sound
 stays tight, and `Distortion` an op-amp distortion, as a RAT is, with high gain and a hard clip.
 Each mode has its own setting: `Amount` for how hard the four shaping modes and the pedals
 drive, `Bits` on `Crush`, whole numbers from `12` to `2`, where anything quieter than half a
-step drops out, and `Rate` on `Down`, how long each sample is held. The pedals have a `Tone`
+step drops out, and `Rate` on `Down`, how long each sample is held. A change of `Bits` eases
+over a few ms, so an LFO on it sweeps rather than steps. `Mu-law` on `Crush` squeezes the sound
+before it's rounded, as an 8-bit sampler did, so quiet sounds keep finer steps and loud ones
+grit. `Track` on `Down` holds at a whole number of times the note's pitch, from 256 times at
+`00` to once a cycle at `FF`, so what it folds back stays in tune with the note. The pedals have a `Tone`
 as well, dark at `00` and bright at `FF`. A mode keeps its own as you change to another and
 back. Few bits gate quiet sounds, so one press up brings them in, and `Mix` blends it with the
 sound going in, from `00` dry to `FF` wet. `Gain` turns down what comes out, as `Amount` can
@@ -1027,19 +1040,47 @@ their values aren't known ahead.
 
 | Setting | Value |
 |---|---|
-| Mode | In the title: `Free` follows the song, `Trig` starts at each note |
+| Mode | In the title: how notes start it, below |
 | Dest | In the title: what it moves, such as `Cut`, or `---` |
 | Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` |
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
 | Phase | Where in the cycle it starts, in degrees |
+| Fade | `Off`, or how long it fades in (`+`) or out (`-`) after each note |
 | Deform | How its wave bends, in hex from `-FF` to `+FF` |
 
 With `Cut 80` and `Depth +40`, the filter moves between `40` and `C0`. `Saw`
 falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` glides
 through one after another, never stopping at any, which suits a slow drift on
-`Cut`. An LFO's `Shape`, `Rate` and `Depth` are down its left, and its `Phase` and
-`Deform` down its right, with a space between them.
+`Cut`. An LFO's `Shape`, `Rate` and `Depth` are down its left, and its `Phase`,
+`Fade` and `Deform` down its right.
+
+**The mode** is the Digitakt's five, in the title:
+
+| Mode | Does |
+|---|---|
+| `Free` | Runs from the song's position, whatever the notes do |
+| `Trig` | Each note starts it again at its `Phase` |
+| `Hold` | Runs free, and each note holds where it is until the next |
+| `One` | Each note plays one cycle, then it stays where it ended |
+| `Half` | The same, for half a cycle |
+
+`Hold` is a sample and hold of the wave. `One` is like an envelope, and `Half`
+makes a rise and fall from `Tri`, or a single sweep from `Saw`.
+
+`Random` in `Hold` gives each note a new value, and `One` or `Half` on `Cut` is a
+shaped sweep a note long. `Half` draws its half cycle, then a flat line where it
+stays, and the dot of a held or ended LFO sits where it holds. Before a track's
+first note, `Hold` holds where its wave starts, and `One` and `Half` are already
+at their end.
+
+**Fade** fades the LFO in or out over a note division or bars after each note,
+from `1/64` to `16 bars`: `+1 bar` brings it in from nothing over a bar, and
+`-1 bar` takes it out to nothing. `=` goes from the longest fade out, through
+`Off`, to the longest fade in, and `+` and `_` skip the dotted and triplet lengths.
+It counts from the track's last note in every mode, so in `Free` only the fade
+starts again, not the wave. Before a track's first note, a fade in is done and a
+fade out is over. `K` lists them all, and `i` types one, like `+1/4` or `-2 bars`.
 
 **Deform** bends `Sine`, `Tri`, `Saw` and `Ramp` between their peaks, which stay
 where they are: raised, the wave bulges up and spends longer high, as a log curve
@@ -1059,7 +1100,8 @@ A large step is `10` in hex, or 90° of phase. On a rate it skips
 dotted and triplet divisions, moves 4 steps, or doubles or halves the hertz.
 
 `i` on the mode, Dest or Shape opens the list too. `K` on Rate lists the note
-divisions and bars, and `i` is for anything else, like `7st` or `2.5hz`.
+divisions and bars, and `i` is for anything else, like `7st` or `2.5hz`. `K` on
+Fade lists every fade, out, `Off` and in.
 
 **Reaching other slots.** A slot's `Dest` lists the depth, phase and deform of
 every slot after it, as `M5 Depth`, `M5 Phase` and `M5 Deform`, so `Mod 4` can bring in `Mod 5`'s depth,
@@ -1070,8 +1112,9 @@ moved, as LFOs work out where they are from the song's position.
 ## When an LFO restarts
 
 Playing from the top restarts every LFO. A `:reset` doesn't, since that is
-about patterns. To follow the steps, set its mode to `Trig`. While stopped, a track
-sits at its held values, so `;` hears those. Pausing freezes the LFO.
+about patterns. To follow the steps, set its mode to `Trig`, `One` or `Half`, or
+`Hold` to take one value from it at each note. While stopped, a track sits at its
+held values, so `;` hears those. Pausing freezes the LFO.
 
 `Vol`, `Send A` and `Send B` swing in dB, on the level scale in **Phrases and
 chains**, so `Depth +40` on `Vol` is 16 dB each way. They stop at `F8`, which

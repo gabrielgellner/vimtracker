@@ -77,11 +77,14 @@ pub enum FilterType {
     Ms20HighPass,
     /// Vital's `Dirty` low-pass, whose resonance loop saturates, which costs more too.
     Dirty,
+    /// The OB-X's two-pole state-variable filter, after OB-Xd's, whose damping falls as it gets
+    /// quieter, so it sings by itself near the top of `Res`, and costs more too.
+    ObX,
 }
 
 impl FilterType {
     /// Every type, in the order a list shows them.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::LowPass,
         Self::HighPass,
         Self::BandPass,
@@ -91,6 +94,7 @@ impl FilterType {
         Self::Ms20LowPass,
         Self::Ms20HighPass,
         Self::Dirty,
+        Self::ObX,
     ];
 
     /// The name on screen.
@@ -105,6 +109,7 @@ impl FilterType {
             Self::Ms20LowPass => "MS20 LP",
             Self::Ms20HighPass => "MS20 HP",
             Self::Dirty => "Dirty",
+            Self::ObX => "OB-X",
         }
     }
 
@@ -120,6 +125,7 @@ impl FilterType {
             Self::Ms20LowPass => "Korg 35 low-pass, MS-20 style, 12 dB, screams",
             Self::Ms20HighPass => "Korg 35 high-pass, MS-20 style, 6 dB, screams",
             Self::Dirty => "Vital's low-pass and more, saturating resonance",
+            Self::ObX => "OB-X state-variable, 12 dB, multimode, sings",
         }
     }
 
@@ -127,7 +133,12 @@ impl FilterType {
     pub fn saturates(self) -> bool {
         matches!(
             self,
-            Self::Ladder | Self::Diode | Self::Ms20LowPass | Self::Ms20HighPass | Self::Dirty
+            Self::Ladder
+                | Self::Diode
+                | Self::Ms20LowPass
+                | Self::Ms20HighPass
+                | Self::Dirty
+                | Self::ObX
         )
     }
 
@@ -166,6 +177,8 @@ impl FilterType {
                 LowPass24, LowPass12, BandPass, HighPass12, HighPass24, Notch,
             ],
             Self::Diode => &[Full, LowCut3, LowCut2, LowCut1],
+            // OB-Xd's two-pole morphs from low-pass through band-pass or notch to high-pass.
+            Self::ObX => &[LowPass12, BandPass12, HighPass12, Notch12],
             Self::Ms20LowPass | Self::Ms20HighPass => &[],
         }
     }
@@ -188,7 +201,7 @@ impl FilterType {
 }
 
 /// How a track's filter type responds: how steep the clean types are, which of their responses the
-/// ladder and `Dirty` give out, or where the diode's low cut sits. Each type offers some of these.
+/// ladder, `Dirty` and `OB-X` give out, or where the diode's low cut sits. Each type offers some of these.
 /// A track keeps its mode when its type changes, and a type that doesn't offer it plays its own
 /// first, so going to another type and back finds the mode again.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -211,7 +224,8 @@ pub enum FilterMode {
     LowCut2,
     LowCut1,
     /// The rest of the Oberheim Xpander's mixes of the ladder's stages, which only the ladder
-    /// offers. They come after the others, so a step's value for those stays as it was.
+    /// offers, but for `BP12` and `N12`, which `OB-X` has too. They come after the others, so a
+    /// step's value for those stays as it was.
     LowPass18,
     LowPass6,
     BandPass12,
