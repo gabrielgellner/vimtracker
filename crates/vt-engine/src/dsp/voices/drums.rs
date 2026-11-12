@@ -20,6 +20,7 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use super::virtual_analog::{BLOCK, Settings};
+use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::plaits_parts::Svf;
 use crate::rng::Pcg32;
 
@@ -28,15 +29,13 @@ fn semitones(interval: f32) -> f32 {
     2_f32.powf(interval / 12.0)
 }
 
+/// Stmlib's soft clip, which holds a sample within -1 to 1. It's exactly ±1 at ±3, so holding what
+/// goes in to that range does what Stmlib's branches do, but a NaN comes out at an end: the delay
+/// feeds back through it, and a NaN that went round would stay there for good.
 #[inline]
 pub(crate) fn soft_clip(x: f32) -> f32 {
-    if x < -3.0 {
-        -1.0
-    } else if x > 3.0 {
-        1.0
-    } else {
-        x * (27.0 + x * x) / (27.0 + 9.0 * x * x)
-    }
+    let x = within(x, -3.0, 3.0);
+    x * (27.0 + x * x) / (27.0 + 9.0 * x * x)
 }
 
 /// Noise on `0..1`.

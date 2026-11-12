@@ -418,4 +418,23 @@ mod tests {
         let out = hit(&mut delay, [0.0, 0.0], 30_000);
         assert!(sounding(&out).is_empty());
     }
+
+    #[test]
+    fn a_nan_in_the_line_comes_out_once_and_what_goes_round_dies_away() {
+        let mut delay = delay(Settings {
+            feedback: 0xC0,
+            time: 0,
+            ..settings()
+        });
+        delay.process([0.5; 2]);
+        let last = (delay.write + delay.buffer.len() - 1) % delay.buffer.len();
+        delay.buffer[last] = [f32::NAN; 2];
+        // Read once, it's held to the soft clip's end on the way round, so it repeats as a click.
+        let out: Vec<f32> = (0..RATE * 4)
+            .flat_map(|_| delay.process([0.0; 2]))
+            .collect();
+        let after = &out[delay.frames() as usize * 2 + 8..];
+        assert!(after.iter().all(|s| s.is_finite()));
+        assert!(after[after.len() - 100..].iter().all(|s| s.abs() < 1e-4));
+    }
 }

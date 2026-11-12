@@ -505,4 +505,24 @@ mod tests {
             assert_eq!(shifter.process([0.0, 0.0]), [0.0, 0.0]);
         }
     }
+
+    #[test]
+    fn a_nan_in_the_line_comes_out_once_and_what_goes_round_dies_away() {
+        let mut shifter = shifter(
+            Settings {
+                feedback: 0xFF,
+                ..shifted(7)
+            },
+            RATE,
+        );
+        shifter.process([0.5; 2]);
+        shifter.lines[0][shifter.write] = f32::NAN;
+        // Past its longest window, it's only what went round, held to the clip's end.
+        let out: Vec<f32> = (0..RATE * 10)
+            .flat_map(|_| shifter.process([0.0; 2]))
+            .collect();
+        let window = shifter.lines[0].len();
+        assert!(out[window * 2..].iter().all(|s| s.is_finite()));
+        assert!(out[out.len() - 100..].iter().all(|s| s.abs() < 1e-4));
+    }
 }
