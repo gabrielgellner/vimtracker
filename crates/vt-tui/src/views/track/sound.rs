@@ -16,6 +16,7 @@ use vt_model::settings::{Kind, SettingId};
 use vt_model::song::{Machine, Track, TrackKind};
 
 use crate::app::App;
+use crate::automating::{as_heard, fader_of};
 use crate::glyphs;
 use crate::theme;
 use crate::track_page::{Control, DEVICE_COLUMNS, DeviceSpec, Page};
@@ -96,11 +97,12 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
 }
 
 /// A setting's value's style on the Sound page: as any page's, but the group a track is in is in
-/// its colour, as on the mixer.
+/// its colour, as on the mixer, and a fader the steps drive is in the playing colour.
 fn value_style(app: &App, track: &Track, control: Control, here: bool) -> Style {
     let style = setting::style(app, here, at_default(control, track));
     match group::style(app.song(), app.cursor.track) {
         Some(tint) if control == Control::Group && !here => tint,
+        _ if !here && app.follows_steps(app.cursor.track, control) => theme::automated(),
         _ => style,
     }
 }
@@ -114,9 +116,15 @@ struct SoundCells<'a> {
 impl CellSource for SoundCells<'_> {
     type Id = Control;
 
+    /// Its name, with a fader a hand has taken over from the steps marked after it.
     fn name(&self, control: Control, room: u16) -> Line<'static> {
         let labels = jump_label(self.app, control);
-        name_line(self.app, control.label_on(self.track), &labels, room)
+        let mut line = name_line(self.app, control.label_on(self.track), &labels, room);
+        if self.app.taken_over(self.app.cursor.track, control) {
+            line.push_span(Span::raw(" "));
+            line.push_span(Span::styled(glyphs::TAKEN.to_string(), theme::taken()));
+        }
+        line
     }
 
     /// A value and its fine part, set back, as `A000`, with the cursor on either; a word, as
@@ -163,6 +171,9 @@ impl CellSource for SoundCells<'_> {
         Line::from(spans)
     }
 
+    /// A bar filled to what's heard, with a mark where it's set. A fader's is the other way round:
+    /// filled to the fader, which `VOL` and modulation don't move, with a thin mark at what's heard
+    /// (decision 174).
     fn bar(&self, control: Control) -> Option<ValueBar> {
         let (value, centred) = bar_value(control, self.track)?;
         let live = self
@@ -170,11 +181,12 @@ impl CellSource for SoundCells<'_> {
             .live
             .and_then(|live| live_value(control, &live))
             .unwrap_or(value);
-        Some(
-            ValueBar::new(value, BAR_CELLS)
-                .playing(live)
-                .centred(centred),
-        )
+        let bar = if fader_of(control).is_some() {
+            ValueBar::new(live, BAR_CELLS).playing(value)
+        } else {
+            ValueBar::new(value, BAR_CELLS).playing(live)
+        };
+        Some(bar.centred(centred))
     }
 }
 
@@ -285,7 +297,10 @@ fn draw_device(
         .focused(focused);
     frame.render_widget(widget, area);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
-    let source = SoundCells { app, track };
+    // Its faders show where the steps have them while they drive them.
+    let faders = app.faders(app.cursor.track);
+    let heard = as_heard(track, &faders);
+    let source = SoundCells { app, track: &heard };
     let grid = SettingsGrid::new(&source, rows, CellWidths::SOUND);
     frame.render_widget(grid, Device::settings_area(area));
     let panel = panel(app, track, device);

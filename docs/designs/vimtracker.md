@@ -272,7 +272,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 | `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, and sample analysis | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
 | `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues and `hound` to write WAVs |
 | `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
-| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
+| `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), the faders as the steps automate them and a hand takes them over (`automating.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
 
 *   **One direction.** `vt-tui` uses `vt-engine`, which uses `vt-model`, and never the other way. The
     model doesn't know how it's played or shown, so its tests need neither, and the engine never
@@ -359,10 +359,13 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     as an `Arc<SampleData>` with an optional `Span`, and come back on the `heard` queue.
 
 **Commands** carry what isn't an edit: transport, previews and held notes, auditions, mute and
-solo, fill, realigns, launches, the scale and which track to watch. The engine resolves each against
-its own state, so two quick presses can't act on an out-of-date view of it. **Telemetry** comes back
-each block: where playback is, each track's place and levels, the watched track's live values, and
-up to four sample playheads. The live values carry the watched track's peak right after its trim
+solo, fill, realigns, launches, the scale, which track to watch, and a hand taking a fader over
+from the steps or giving it back (`TakeOver` and `GiveBack`, decision 174). The engine resolves each
+against its own state, so two quick presses can't act on an out-of-date view of it. **Telemetry**
+comes back each block: where playback is, each track's place and levels, each track's faders as
+they're heard (`Faders`: where `LEV`, `PAN`, `SNA` and `SNB` put them, what `VOL` and modulation make
+of them, and which the steps drive and a hand has taken over, from `TrackState::faders`), the watched
+track's live values, and up to four sample playheads. The live values carry the watched track's peak right after its trim
 (`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
 `Engine::take_after_trim` takes, for the Output device's meter, and where each mod slot running as
 an LFO is in its wave (`LiveValues::mods`, a phase and a value each, which `TrackState::modulate`
@@ -959,6 +962,14 @@ cuts a preview.
 
 **Mute and solo.** These are live controls, not edits. They go through the command queue, take effect
 immediately, and are not in undo history. Their state is saved with the project.
+
+**Faders taken over.** A hand moving a fader the steps drive takes it over (decision 174): `App::apply`
+sees the edit move a fader that the last report says the steps drive, and sends `TakeOver` before
+publishing it. The engine keeps each fader's track page value and the steps' last hold of it apart from
+its layers, so a takeover hears the hand's value, and `GiveBack` the steps', whichever of the
+command and the version comes first. Like the mutes it's live, not in undo history, and it isn't
+saved; opening a song gives every fader back. What the app has asked and the engine hasn't yet
+reported is kept in `automating.rs` for half a second, so the mark doesn't flicker.
 
 ### Time
 

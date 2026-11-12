@@ -9,7 +9,7 @@ use crate::song::{Machine, Track, TrackKind};
 use crate::step::FxCommand;
 
 /// What each of the track's own settings does, in the table's order.
-const TRACK_MEANINGS: [&str; 14] = [
+const TRACK_MEANINGS: [&str; 15] = [
     "Volume",
     "Pan",
     "Filter cutoff",
@@ -24,15 +24,17 @@ const TRACK_MEANINGS: [&str; 14] = [
     "Speed: how long the steps are, from this one",
     "Glide: how long a tied note takes to reach the next",
     "Velocity, up or down from the note's own",
+    "Level: the fader, under Volume",
 ];
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
 /// velocity, gate, time and glide.
-const TRACK_ORDER: [SettingId; 14] = [
+const TRACK_ORDER: [SettingId; 15] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
     SettingId::PAN,
+    SettingId::LEVEL,
     SettingId::VOL,
     SettingId::SEND_A,
     SettingId::SEND_B,
@@ -51,7 +53,7 @@ impl SettingId {
     /// or tune, only a group of them sends, and the master has no pan.
     pub fn exists_on(self, track: &Track) -> bool {
         match self.owner() {
-            (Owner::Track, _) if self == Self::VOL => true,
+            (Owner::Track, _) if self == Self::VOL || self == Self::LEVEL => true,
             (Owner::Track, _) if self == Self::PAN => track.kind != TrackKind::Master,
             (Owner::Track, _) if self == Self::SEND_A || self == Self::SEND_B => {
                 track.is_sound() || track.is_group()
@@ -186,7 +188,8 @@ impl SettingId {
         }
     }
 
-    /// What's on a track for modulation to move. `LDLT` is left out, as moving it would only move
+    /// What's on a track for modulation to move. `LEV` is left out, as `Vol` is where modulation
+    /// moves the volume, on top of the fader. `LDLT` is too, as moving it would only move
     /// `Gate`, which modulation already moves up or down from each note's own length, and so are
     /// `GRV`, `RATE`, `PLY` and a slot's bypass, as a groove, a speed, a way of playing and whether
     /// a slot's in are chosen rather than moved through, and `GLD`, which is read only as a tie
@@ -195,6 +198,7 @@ impl SettingId {
         let mut settings = Self::on_track(track);
         settings.retain(|id| {
             ![
+                Self::LEVEL,
                 Self::GATE_DELTA,
                 Self::GROOVE,
                 Self::SPEED,
@@ -292,6 +296,21 @@ mod tests {
     }
 
     #[test]
+    fn a_step_can_set_the_fader_but_modulation_moves_vol_instead() {
+        let song = Song::new(1);
+        let master = song.tracks.last().unwrap().clone();
+        assert_eq!(master.kind, TrackKind::Master);
+        for track in [Track::default(), master] {
+            assert!(FxCommand::on_track(&track).contains(&FxCommand::Set(SettingId::LEVEL)));
+            for slot in 0..MOD_SLOTS {
+                let offered = SettingId::for_mod(&track, slot);
+                assert!(!offered.contains(&SettingId::LEVEL));
+                assert!(offered.contains(&SettingId::VOL));
+            }
+        }
+    }
+
+    #[test]
     fn a_step_can_move_a_notes_length_but_modulation_moves_gate_itself() {
         let track = Track::default();
         let delta = FxCommand::Set(SettingId::GATE_DELTA);
@@ -370,9 +389,10 @@ mod tests {
         let song = Song::new(1);
         let group = &song.tracks[song.fixed_track(TrackKind::Group(1)).unwrap()];
         assert_eq!(
-            SettingId::on_track(group)[..4],
+            SettingId::on_track(group)[..5],
             [
                 SettingId::PAN,
+                SettingId::LEVEL,
                 SettingId::VOL,
                 SettingId::SEND_A,
                 SettingId::SEND_B
@@ -386,13 +406,19 @@ mod tests {
         let return_a = &song.tracks[song.fixed_track(TrackKind::ReturnA).unwrap()];
         let master = &song.tracks[song.fixed_track(TrackKind::Master).unwrap()];
         let offered = SettingId::on_track(return_a);
-        assert_eq!(offered[..2], [SettingId::PAN, SettingId::VOL]);
+        assert_eq!(
+            offered[..3],
+            [SettingId::PAN, SettingId::LEVEL, SettingId::VOL]
+        );
         assert_eq!(
             offered.len(),
-            2 + 9 + 1,
+            3 + 9 + 1,
             "and its delay's settings and bypass"
         );
-        assert_eq!(SettingId::on_track(master)[0], SettingId::VOL);
+        assert_eq!(
+            SettingId::on_track(master)[..2],
+            [SettingId::LEVEL, SettingId::VOL]
+        );
         assert!(!SettingId::on_track(master).contains(&SettingId::PAN));
         assert!(
             FxCommand::on_track(return_a)

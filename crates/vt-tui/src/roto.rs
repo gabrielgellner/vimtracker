@@ -44,7 +44,8 @@ use serde::{Deserialize, Serialize};
 use vt_engine::engine::Transport;
 use vt_engine::link::Command;
 use vt_model::action::Action;
-use vt_model::song::Song;
+use vt_model::settings::FADER_COUNT;
+use vt_model::song::{Song, Track};
 use vt_roto::Label;
 use vt_roto::cc::{self, ControlEvent};
 use vt_roto::link::{Event, Link, Options};
@@ -58,6 +59,7 @@ use vt_roto::transport::{LinkError, Ports, SerialLink, SystemPorts};
 use crate::track_page::Control;
 
 use crate::app::{App, TrackLive};
+use crate::automating::as_heard;
 
 /// The setting's file, in the config folder beside `audio.ron`.
 pub const SETTING_FILE: &str = "roto.ron";
@@ -265,6 +267,9 @@ pub struct Roto {
     sent_song: Option<Arc<Song>>,
     /// The mutes and solos as MIX mode was last sent them, which aren't the song's.
     sent_levels: Vec<TrackLive>,
+    /// The faders the steps drive as they were last sent, and when that was.
+    sent_faders: Vec<[Option<u16>; FADER_COUNT]>,
+    faders_sent: Option<Instant>,
     /// When the meters were last sent.
     meters_sent: Option<Instant>,
     /// Whether the Roto's buttons are its transport's, from its asking for the transport's state
@@ -312,6 +317,8 @@ impl Default for Roto {
             values: Default::default(),
             sent_song: None,
             sent_levels: Vec::new(),
+            sent_faders: Vec::new(),
+            faders_sent: None,
             meters_sent: None,
             transport_buttons: false,
             transport_lights: None,
@@ -613,10 +620,53 @@ impl App {
     /// The devices PLUGIN mode shows, from the song as it is.
     fn roto_devices(&self) -> Vec<LiveDevice> {
         let tracks = &self.song().tracks;
-        let Some(track) = tracks.get(self.roto.track).or_else(|| tracks.first()) else {
+        let at = if self.roto.track < tracks.len() {
+            self.roto.track
+        } else {
+            0
+        };
+        let Some(track) = tracks.get(at) else {
             return Vec::new();
         };
-        devices::live_devices(track, self.song(), self.roto.stored_on_roto)
+        // The Output device's faders follow the steps while they drive them.
+        let heard = as_heard(track, &self.faders(at));
+        devices::live_devices(&heard, self.song(), self.roto.stored_on_roto)
+    }
+
+    /// A track as the Roto shows it, with its faders where the steps have them while they drive
+    /// them.
+    fn roto_heard(&self, at: usize) -> Track {
+        self.track_as_heard(at)
+            .map(std::borrow::Cow::into_owned)
+            .unwrap_or_default()
+    }
+
+    /// Whether the steps have moved a fader since the Roto was last sent them, at most as often
+    /// as the meters are sent, so a glide's motor moves smoothly without flooding the Roto.
+    fn roto_faders_moved(&self, now: Instant) -> bool {
+        self.roto.sent_faders != self.roto_faders_shown()
+            && self
+                .roto
+                .faders_sent
+                .is_none_or(|sent| now.duration_since(sent) >= METERS_EVERY)
+    }
+
+    /// Note the faders as the Roto has just been sent them.
+    fn roto_sent_faders(&mut self, now: Instant) {
+        self.roto.sent_faders = self.roto_faders_shown();
+        self.roto.faders_sent = Some(now);
+    }
+
+    /// Each track's faders where the steps have them, for those they drive: what the Roto's knobs
+    /// show that the song doesn't.
+    fn roto_faders_shown(&self) -> Vec<[Option<u16>; FADER_COUNT]> {
+        let tracks = self.song().tracks.len().min(self.faders.len());
+        self.faders[..tracks]
+            .iter()
+            .map(|faders| {
+                std::array::from_fn(|fader| faders.follows_steps(fader).then_some(faders.at[fader]))
+            })
+            .collect()
     }
 
     /// Sends the Roto everything PLUGIN mode shows: the track list and the track's devices.
@@ -711,7 +761,7 @@ impl App {
                         // Touching a knob shows what it's set to, as turning it does.
                         if let Some((control, at)) = self.roto_knob(index) {
                             let text =
-                                edits::value_text(control, &self.song().tracks[at], self.song());
+                                edits::value_text(control, &self.roto_heard(at), self.song());
                             self.roto.show_value(index, &text);
                         }
                     } else {
@@ -746,7 +796,11 @@ impl App {
         }
         let turned = self.roto_turn(moves, now);
         self.roto_close_gesture(now);
-        self.roto_send_back(turned, let_go);
+        let faders_moved = self.roto_faders_moved(now);
+        self.roto_send_back(turned, let_go || faders_moved);
+        if faders_moved {
+            self.roto_sent_faders(now);
+        }
         self.roto.send_values(now);
         // A button pressed is lit as its setting now is, whatever the Roto drew as it went down.
         if mixing {
@@ -877,7 +931,7 @@ impl App {
                 self.roto_apply(&action);
             }
             turned[knob] = true;
-            let text = edits::value_text(control, &self.song().tracks[at], self.song());
+            let text = edits::value_text(control, &self.roto_heard(at), self.song());
             self.roto.show_value(knob as u8, &text);
         }
         turned
@@ -939,7 +993,7 @@ impl App {
         // turned by hand does.
         for (knob, _) in &refresh.positions {
             if let Some((control, at)) = self.roto_knob(*knob) {
-                let text = edits::value_text(control, &self.song().tracks[at], self.song());
+                let text = edits::value_text(control, &self.roto_heard(at), self.song());
                 self.roto.show_value(*knob, &text);
             }
         }
@@ -1111,7 +1165,7 @@ impl App {
     fn roto_mix_message(&mut self, message: &FromRoto) {
         let place = mix::place_of(self.song(), self.roto.track);
         self.roto.mix.select(place);
-        let lists = mix::strips(self.song(), &self.levels);
+        let lists = mix::strips(self.song(), &self.levels, &self.faders);
         let (refresh, chosen) = self.roto.mix.receive(message, lists, mix::send_names());
         self.roto.send(refresh.messages.clone());
         self.roto.send_ccs(refresh.ccs());
@@ -1139,7 +1193,7 @@ impl App {
         }
         let place = mix::place_of(self.song(), self.roto.track);
         self.roto.mix.select(place);
-        let lists = mix::strips(self.song(), &self.levels);
+        let lists = mix::strips(self.song(), &self.levels, &self.faders);
         let refresh = self
             .roto
             .mix
@@ -1150,7 +1204,7 @@ impl App {
         // turned by hand does.
         for (knob, _) in &refresh.positions {
             if let Some((control, at)) = self.roto_knob(*knob) {
-                let text = edits::value_text(control, &self.song().tracks[at], self.song());
+                let text = edits::value_text(control, &self.roto_heard(at), self.song());
                 self.roto.show_value(*knob, &text);
             }
         }
@@ -1198,7 +1252,7 @@ impl App {
         };
         if let Some(action) = mix::turned(control, at, self.song(), position) {
             self.roto_apply(&action);
-            let text = edits::value_text(control, &self.song().tracks[at], self.song());
+            let text = edits::value_text(control, &self.roto_heard(at), self.song());
             self.roto.show_value(knob, &text);
         }
     }

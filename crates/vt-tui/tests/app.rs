@@ -3440,7 +3440,7 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
         row(2).contains(&format!(
-            "CUT   4000 {} SNA   2000 h RES   1000 g",
+            "CUT   4000 {} SNA   20   h RES   1000 g",
             vt_tui::glyphs::LOCK
         )),
         "{}",

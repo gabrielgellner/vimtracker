@@ -189,7 +189,7 @@ fn registry_setting(control: Control, track: &Track) -> Option<SettingId> {
     match control {
         Control::Setting(_) => control.setting_on(track),
         Control::Base(which) => which.setting(),
-        Control::Level => Some(SettingId::VOL),
+        Control::Level => Some(SettingId::LEVEL),
         Control::InsertParam(..) => control.value_on(track).map(|(id, _)| id),
         _ => None,
     }
@@ -408,7 +408,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 value(u16::from(coarse), 0xFF, false)
             }
         },
-        Control::Level => registry(SettingId::VOL, track.level, track.fine(SettingId::VOL)),
+        Control::Level => registry(SettingId::LEVEL, track.level, 0),
         // `80` is 0 dB, so the notch is where it neither cuts nor boosts.
         Control::Trim => value(u16::from(track.trim), 0xFF, true),
         Control::Groove => {

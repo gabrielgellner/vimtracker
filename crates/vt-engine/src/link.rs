@@ -19,7 +19,7 @@ use crate::dsp::memory::{Memory, MemoryCount};
 use crate::engine::{Engine, PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
 use crate::mixer::Reading;
 use crate::published::{Published, Span};
-use crate::track_state::LiveValues;
+use crate::track_state::{Faders, LiveValues};
 
 /// A transport or preview message. The engine resolves it against its own state, so two quick
 /// presses can't act on an out-of-date view of whether it is playing.
@@ -70,6 +70,11 @@ pub enum Command {
     /// An audition's key on a preview voice was tapped: let its note go once it has sounded
     /// as long as a preview does.
     FinishPreview { track: usize, note: u8 },
+    /// A hand moved one of a track's faders, by its place in `FADERS`, that the steps drive: the
+    /// track page's value is heard from now, and the steps' aren't, until it's given back.
+    TakeOver { track: usize, fader: usize },
+    /// `Space e` and `Space E`: give a track's faders, or every track's, back to the steps.
+    GiveBack { track: Option<usize> },
     /// Mute or unmute a track.
     SetMute { track: usize, mute: bool },
     /// Solo or unsolo a track.
@@ -142,6 +147,9 @@ pub struct Telemetry {
     pub reading: Reading,
     /// Each track's levels.
     pub tracks: [Reading; MAX_TRACKS],
+    /// Each track's faders as they're heard: where the steps have them, and whether a hand has
+    /// taken them over.
+    pub faders: [Faders; MAX_TRACKS],
     /// The track being watched, and what it's playing with.
     pub watched: usize,
     pub live: LiveValues,
@@ -439,6 +447,8 @@ impl Realtime {
                 Command::FinishPreview { track, note } => {
                     self.engine.finish_preview(track, note);
                 }
+                Command::TakeOver { track, fader } => self.engine.take_over(track, fader),
+                Command::GiveBack { track } => self.engine.give_back(track),
                 Command::SetMute { track, mute } => self.engine.set_mute(track, mute),
                 Command::SetFill { on } => self.engine.set_fill(on),
                 Command::Realign => self.engine.toggle_realign(),
@@ -496,6 +506,7 @@ impl Realtime {
             loop_waiting: self.engine.loop_waiting(),
             reading,
             tracks: self.engine.take_track_readings(reading.frames),
+            faders: std::array::from_fn(|track| self.engine.faders(track)),
             watched: self.watched,
             live,
             playheads: self.engine.playheads(self.watched),
