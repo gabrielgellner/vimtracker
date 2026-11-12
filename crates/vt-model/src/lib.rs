@@ -32,5 +32,6 @@ pub mod shape;
 pub mod song;
 pub mod speed;
 pub mod step;
+pub mod steps;
 pub mod steptext;
 pub mod target;

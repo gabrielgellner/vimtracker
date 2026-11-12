@@ -10,7 +10,7 @@ use vt_model::bank::{BankEntry, PlayParams};
 use vt_model::condition::Condition;
 use vt_model::groove::GrooveId;
 use vt_model::kit::{KitEntry, load_kit};
-use vt_model::modulation::ModSlot;
+use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
 use vt_model::order::Order;
 use vt_model::sample::load_sample;
 use vt_model::scale::{Scale, ScaleKind};
@@ -580,18 +580,30 @@ impl App {
 
     /// Replace one of a track's mod slots with what was chosen. A new type keeps the slot's
     /// destination, depth and switch, and finds its own settings as the slot last had them.
-    fn pick_mod(&mut self, track: usize, slot: usize, modulator: ModSlot) {
+    fn pick_mod(&mut self, track: usize, slot: usize, mut modulator: ModSlot) {
         let was = self
             .song()
             .tracks
             .get(track)
             .map(|found| found.mods[slot].kind);
+        let changed = was.is_some_and(|kind| kind != modulator.kind);
+        // Steps' values are heard as written at `+FF`, so one with no depth is given that, in the
+        // same undo step, rather than playing nothing.
+        let given = changed && modulator.kind == ModKind::Steps && modulator.depth == 0;
+        if given {
+            modulator.depth = MAX_DEPTH;
+        }
         self.apply(&Action::SetMod {
             track,
             slot,
             modulator,
         });
-        if was.is_some_and(|kind| kind != modulator.kind) {
+        if given {
+            self.status = format!(
+                "Mod {} is Steps now, at a depth of +FF so its values are heard as written",
+                slot + 1
+            );
+        } else if changed {
             self.status = format!(
                 "Mod {} is {} now, with its destination, depth and switch kept",
                 slot + 1,

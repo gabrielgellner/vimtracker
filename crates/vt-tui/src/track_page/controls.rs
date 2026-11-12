@@ -35,19 +35,27 @@ pub enum ModField {
     /// A low-pass gate's: how far its fall closes the filter. Its `Attack`, `Decay` and `Reset`
     /// are its own.
     Colour,
-    /// An LFO's.
+    /// An LFO's. `Rate` is Steps' too.
     Shape,
     Rate,
     Phase,
     Deform,
     Fade,
+    /// Steps': how many it plays, where each note starts it, and what it does at the end, which
+    /// is in its title.
+    Length,
+    Start,
+    Loop,
+    /// One of Steps' values, by its place, counted from 0: what the cursor is on in its panel.
+    Step(u8),
 }
 
 impl ModField {
     /// Whether a slot of this type has it.
     pub fn on(self, kind: ModKind) -> bool {
         match self {
-            Self::Type | Self::Polarity | Self::Destination | Self::Depth => true,
+            Self::Type | Self::Destination | Self::Depth => true,
+            Self::Polarity => kind.has_polarity(),
             Self::Mode => kind.has_mode(),
             Self::Decay => kind.is_envelope(),
             // A drum always strikes from full, so it has no attack to reset.
@@ -58,9 +66,9 @@ impl ModField {
             Self::Colour => kind == ModKind::Lpg,
             Self::Sustain | Self::Release => kind == ModKind::Adsr,
             Self::Hold => kind == ModKind::Ahd,
-            Self::Shape | Self::Rate | Self::Phase | Self::Deform | Self::Fade => {
-                kind == ModKind::Lfo
-            }
+            Self::Shape | Self::Phase | Self::Deform | Self::Fade => kind == ModKind::Lfo,
+            Self::Rate => matches!(kind, ModKind::Lfo | ModKind::Steps),
+            Self::Length | Self::Start | Self::Loop | Self::Step(_) => kind == ModKind::Steps,
         }
     }
 }
@@ -185,6 +193,10 @@ impl Control {
                 ModField::Phase => "Phase",
                 ModField::Deform => "Deform",
                 ModField::Fade => "Fade",
+                ModField::Length => "Length",
+                ModField::Start => "Start",
+                ModField::Loop => "Loop",
+                ModField::Step(_) => "Step",
             },
             Self::Accumulator(AccumulatorField::Up) => "Up",
             Self::Accumulator(AccumulatorField::Down) => "Down",
@@ -377,6 +389,7 @@ impl Control {
                         | ModField::Destination
                         | ModField::Shape
                         | ModField::Reset
+                        | ModField::Loop
                 )
                 | Self::Accumulator(
                     AccumulatorField::Moves

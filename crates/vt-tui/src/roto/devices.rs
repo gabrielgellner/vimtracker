@@ -30,6 +30,7 @@ use vt_model::modulation::{MAX_DEPTH, ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
 use vt_model::speed::Speed;
+use vt_model::steps::{Loop, STEPS, StepRate, StepsMode};
 use vt_roto::Label;
 use vt_roto::bytes::Rgb;
 use vt_roto::colour;
@@ -506,7 +507,40 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             let ahd_kind = modulator.kind == ModKind::Ahd;
             let drum_kind = modulator.kind == ModKind::Drum;
             let lpg_kind = modulator.kind == ModKind::Lpg;
+            let steps = &modulator.steps;
+            let numbered = |at: u8| {
+                list(
+                    (1..=STEPS).map(|step| step.to_string()),
+                    usize::from(at).min(STEPS - 1),
+                )
+            };
             match field {
+                // Steps' mode, rate and loop are musical lists, which leave the layout as it is.
+                ModField::Mode if modulator.kind == ModKind::Steps => list(
+                    StepsMode::ALL.iter().map(|mode| mode.name().to_owned()),
+                    StepsMode::ALL
+                        .iter()
+                        .position(|mode| *mode == steps.mode)
+                        .unwrap_or(0),
+                ),
+                ModField::Rate if modulator.kind == ModKind::Steps => list(
+                    StepRate::ALL.iter().map(ToString::to_string),
+                    StepRate::ALL
+                        .iter()
+                        .position(|rate| *rate == steps.rate)
+                        .unwrap_or(0),
+                ),
+                ModField::Length => numbered(steps.length.saturating_sub(1)),
+                ModField::Start => numbered(steps.start),
+                ModField::Loop => list(
+                    Loop::ALL.iter().map(ToString::to_string),
+                    Loop::ALL
+                        .iter()
+                        .position(|each| *each == steps.looping)
+                        .unwrap_or(0),
+                ),
+                // Each value either way of none, with the depth's centre notch.
+                ModField::Step(at) => depth(steps.values[usize::from(at)]),
                 // An envelope's curve is a musical list, which leaves the layout as it is.
                 ModField::Mode if modulator.kind.is_envelope() => {
                     let curve = match modulator.kind {

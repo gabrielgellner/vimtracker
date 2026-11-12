@@ -946,3 +946,15 @@ requests, Drum then LPG:
   down the right.
 * **The Roto** keeps the LFO stored, for the polarity's button: `Fade` and the five-step `Mode`
   are knobs 6 and 7.
+
+**As built for #235's Steps (decision 203),** the first of two pull requests, the type then
+`Mutate`, `Smooth` and `In scale`:
+
+* **The loop is in the title,** after the mode, in the place a polarity takes, as Steps have
+  none: their values are signed. The grid is `Rate`, `Length` and `Depth` down the left, and
+  `Start` and two holes, for `Mutate` and `Smooth`, down the right.
+* **`Rate`** adds `Pass`, one step each time round the chain, and **`Loop`** adds `Shuffle`, a
+  dealt order each time round (#235's comments).
+* **The panel** is a row of braille bars drawn as text, not a picture, with the step playing lit
+  and a `▲` under the cursor's.
+* **The Roto** shows Steps live, as it has nothing to switch.
