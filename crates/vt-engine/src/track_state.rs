@@ -2763,6 +2763,7 @@ mod tests {
             seed: 0,
             frames_per_tick: 100.0,
             rendered: 0,
+            scale: Default::default(),
         };
         state.modulate(track, 0, now, true, &mut memory);
         state.settle();
