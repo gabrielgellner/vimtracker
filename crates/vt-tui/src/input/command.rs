@@ -1518,6 +1518,15 @@ mod tests {
             Ok(Some(SampleChange::Tune(-2, 30)))
         );
         assert_eq!(change("sample tune 7"), Ok(Some(SampleChange::Tune(7, 0))));
+        assert_eq!(
+            change("sample bars 2"),
+            Ok(Some(SampleChange::Bars(Some(2))))
+        );
+        assert_eq!(
+            change("sample bars off"),
+            Ok(Some(SampleChange::Bars(None)))
+        );
+        assert_eq!(change("sample bars 0"), Err(LineError::SampleChange));
         for bad in [
             "sample start -1",
             "sample start soon",
