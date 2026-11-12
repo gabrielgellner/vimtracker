@@ -79,7 +79,7 @@ impl DistortType {
     }
 }
 
-/// How a chorus moves its copies, after Mutable Instruments' Rings.
+/// How a chorus moves its copies: Mutable Instruments' Rings' two, then a Roland Juno's three.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ChorusType {
     /// Two copies, slowly drifting apart from each other.
@@ -87,13 +87,31 @@ pub enum ChorusType {
     Chorus,
     /// Three copies on a slow and a fast wobble, a third of a turn apart, as a string machine has.
     Ensemble,
+    /// A Juno's chorus I: a short delay on each side swept by a slow triangle, the two sides in
+    /// antiphase.
+    JunoI,
+    /// Its chorus II: the same, a little faster.
+    JunoII,
+    /// Both buttons down: a fast, shallow wobble, nearer a vibrato.
+    JunoBoth,
 }
 
 impl ChorusType {
-    pub const ALL: [Self; 2] = [Self::Chorus, Self::Ensemble];
+    pub const ALL: [Self; 5] = [
+        Self::Chorus,
+        Self::Ensemble,
+        Self::JunoI,
+        Self::JunoII,
+        Self::JunoBoth,
+    ];
+
+    /// Whether it's one of the Juno's.
+    pub fn is_juno(self) -> bool {
+        matches!(self, Self::JunoI | Self::JunoII | Self::JunoBoth)
+    }
 }
 
-const CHORUS_TYPE_NAMES: [&str; 2] = ["Chorus", "Ensemble"];
+const CHORUS_TYPE_NAMES: [&str; 5] = ["Chorus", "Ensemble", "Juno I", "Juno II", "Juno I+II"];
 
 /// A compressor's character, each modelled on its own reference and tuned against it (#338).
 /// `VCA`, `FET` and `Diode` come after these, in this order, so a song's types keep their places.
@@ -157,6 +175,9 @@ pub enum Setting {
     Type,
     Amount,
     Bits,
+    /// Whether `Crush` compands as mu-law does, and whether `Down` holds at a multiple of the note.
+    MuLaw,
+    FollowNote,
     /// How long `Down` holds each sample, or how fast a chorus moves.
     Rate,
     /// A chorus's kind.
@@ -303,6 +324,7 @@ impl Setting {
             Self::GlueAttack => GLUE_ATTACK_NAMES.len() as u8 - 1,
             Self::GlueRelease => GLUE_AUTO_RELEASE,
             Self::Bits => MOST_BITS - LEAST_BITS,
+            Self::MuLaw | Self::FollowNote => 1,
             Self::Gain => MAX_LEVEL,
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
             Self::SweepRate => SWEEP_NAMES.len() as u8 - 1,
@@ -332,6 +354,7 @@ impl Setting {
             Self::GlueAttack => (GLUE_ATTACK_NAMES.len() - 1) as f32,
             Self::GlueRelease => GLUE_AUTO_RELEASE as f32,
             Self::Bits => (MOST_BITS - LEAST_BITS) as f32,
+            Self::MuLaw | Self::FollowNote => 1.0,
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
             Self::Stages => (STAGE_NAMES.len() - 1) as f32,
@@ -452,6 +475,28 @@ const RATE_PARAM: Param = Param {
     wraps: false,
     default: 0x40,
 };
+/// Whether `Crush` squeezes the sound by its log before it rounds and opens it out after, so
+/// quiet sounds keep finer steps, as an 8-bit sampler's mu-law does.
+const MU_LAW_PARAM: Param = Param {
+    name: "Mu-law",
+    key: "mulaw",
+    label: Some("MULW"),
+    setting: Setting::MuLaw,
+    choices: &OFF_ON,
+    wraps: true,
+    default: 0,
+};
+/// Whether `Down` holds at a whole number of times the note's frequency, so what it folds back
+/// lands on the note's harmonics.
+const FOLLOW_PARAM: Param = Param {
+    name: "Track",
+    key: "track",
+    label: Some("TRCK"),
+    setting: Setting::FollowNote,
+    choices: &OFF_ON,
+    wraps: true,
+    default: 0,
+};
 /// A pedal's tone control: from dark at `00` to bright at `FF`.
 const PEDAL_TONE_PARAM: Param = Param {
     name: "Tone",
@@ -464,7 +509,7 @@ const PEDAL_TONE_PARAM: Param = Param {
 };
 /// Every setting a distortion has in any of its modes, in the order songs number them. Each mode
 /// shows only its own.
-pub(crate) const DISTORT_PARAMS: [Param; 7] = [
+pub(crate) const DISTORT_PARAMS: [Param; 9] = [
     TYPE_PARAM,
     AMOUNT_PARAM,
     BITS_PARAM,
@@ -472,6 +517,8 @@ pub(crate) const DISTORT_PARAMS: [Param; 7] = [
     MIX_PARAM,
     GAIN_PARAM,
     PEDAL_TONE_PARAM,
+    MU_LAW_PARAM,
+    FOLLOW_PARAM,
 ];
 /// What the shaping modes have: how hard it drives.
 const SHAPING_PARAMS: [Param; 4] = [TYPE_PARAM, AMOUNT_PARAM, MIX_PARAM, GAIN_PARAM];
@@ -484,9 +531,9 @@ const PEDAL_PARAMS: [Param; 5] = [
     GAIN_PARAM,
 ];
 /// `Crush` has whole bits in place of an `Amount`.
-const CRUSH_PARAMS: [Param; 4] = [TYPE_PARAM, BITS_PARAM, MIX_PARAM, GAIN_PARAM];
+const CRUSH_PARAMS: [Param; 5] = [TYPE_PARAM, BITS_PARAM, MU_LAW_PARAM, MIX_PARAM, GAIN_PARAM];
 /// `Down` has how long it holds each sample.
-const DOWN_PARAMS: [Param; 4] = [TYPE_PARAM, RATE_PARAM, MIX_PARAM, GAIN_PARAM];
+const DOWN_PARAMS: [Param; 5] = [TYPE_PARAM, RATE_PARAM, FOLLOW_PARAM, MIX_PARAM, GAIN_PARAM];
 
 /// A delay or reverb's mix. It starts half wet in a slot, so the sound stays under it.
 const WET_MIX_PARAM: Param = Param {
@@ -1875,7 +1922,7 @@ impl Insert {
             Self::Distort(_) => "Clips, folds or crushes the sound, or drives it as a pedal",
             Self::Delay(_) => "Repeats the sound, bouncing side to side",
             Self::Reverb(_) => "Puts the sound in a room",
-            Self::Chorus(_) => "Thickens it with drifting copies, or an ensemble",
+            Self::Chorus(_) => "Thickens it with drifting copies, an ensemble or a Juno's",
             Self::Eq(_) => "Shapes its tone: a low and a high shelf, and a middle band",
             Self::Compressor(_) => "Evens out its level, or ducks it under another track",
             Self::Limit(_) => "Keeps its peaks under a ceiling, looking 2 ms ahead",
@@ -2077,6 +2124,8 @@ impl Insert {
             Setting::Amount => distort.amount,
             Setting::Bits => distort.bits - LEAST_BITS,
             Setting::Rate => distort.rate,
+            Setting::MuLaw => distort.mu_law,
+            Setting::FollowNote => distort.track,
             Setting::Mix => distort.mix,
             Setting::Gain => distort.gain,
             Setting::Tone => distort.tone,
@@ -2120,6 +2169,8 @@ impl Insert {
             Setting::Amount => distort.amount = whole,
             Setting::Bits => distort.bits = whole + LEAST_BITS,
             Setting::Rate => distort.rate = whole,
+            Setting::MuLaw => distort.mu_law = whole,
+            Setting::FollowNote => distort.track = whole,
             Setting::Mix => distort.mix = whole,
             Setting::Gain => distort.gain = whole,
             Setting::Tone => distort.tone = whole,
@@ -2252,6 +2303,12 @@ pub struct Distort {
     /// The pedals' tone control, from dark at `00` to bright at `FF`.
     #[serde(default = "default_tone")]
     pub tone: u8,
+    /// Whether `Crush` compands as mu-law does: `1`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub mu_law: u8,
+    /// Whether `Down` holds at a whole number of times the note's frequency: `1`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub track: u8,
 }
 
 /// A delay's settings. One a file doesn't have starts as new.
@@ -3762,6 +3819,8 @@ impl Distort {
         mix: MIX_PARAM.default,
         gain: GAIN_PARAM.default,
         tone: PEDAL_TONE_PARAM.default,
+        mu_law: 0,
+        track: 0,
     };
 }
 
@@ -3815,7 +3874,15 @@ mod tests {
         toggles.dedup();
         assert_eq!(
             toggles,
-            ["Auto", "Freeze", "Knock", "Peak Clip", "Ping-pong"]
+            [
+                "Auto",
+                "Freeze",
+                "Knock",
+                "Mu-law",
+                "Peak Clip",
+                "Ping-pong",
+                "Track"
+            ]
         );
         // A two-way list of anything else isn't one.
         let chorus = Insert::ALL
@@ -4266,8 +4333,14 @@ mod tests {
         };
         assert_eq!(names(DistortType::Soft), ["Type", "Amount", "Mix", "Gain"]);
         assert_eq!(names(DistortType::Fold), ["Type", "Amount", "Mix", "Gain"]);
-        assert_eq!(names(DistortType::Crush), ["Type", "Bits", "Mix", "Gain"]);
-        assert_eq!(names(DistortType::Down), ["Type", "Rate", "Mix", "Gain"]);
+        assert_eq!(
+            names(DistortType::Crush),
+            ["Type", "Bits", "Mu-law", "Mix", "Gain"]
+        );
+        assert_eq!(
+            names(DistortType::Down),
+            ["Type", "Rate", "Track", "Mix", "Gain"]
+        );
         for pedal in [DistortType::Overdrive, DistortType::Distortion] {
             assert!(pedal.is_pedal());
             assert_eq!(names(pedal), ["Type", "Amount", "Tone", "Mix", "Gain"]);
