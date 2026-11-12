@@ -18,7 +18,10 @@ impl App {
         }
         let menu_was_open = self.command_menu.is_some();
         match key.code {
-            KeyCode::Esc => self.leave_command_line(),
+            KeyCode::Esc => {
+                self.leave_command_line();
+                self.section_anchor = None;
+            }
             KeyCode::Enter => {
                 self.leave_command_line();
                 let text = std::mem::take(&mut self.command_line);
@@ -27,6 +30,8 @@ impl App {
                     Ok(line) => self.line(line),
                     Err(error) => self.status = error.to_string(),
                 }
+                // Sections selected for the command are done with, as Vim's `:'<,'>` ends Visual.
+                self.section_anchor = None;
                 if let Err(error) = kept
                     && self.status.is_empty()
                 {

@@ -308,6 +308,7 @@ impl App {
     pub(crate) fn command_key_normal(&mut self, key: Key, now: Instant) {
         if key.code == KeyCode::Esc {
             self.reset_pending();
+            self.section_anchor = None;
             // `Esc` is what ends a selection kept through its changes, and `gv` brings it back,
             // as in Vim. Its total goes with it.
             if self.mode.is_visual() {

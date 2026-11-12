@@ -1,7 +1,8 @@
-//! The song view: a row per section, with its length, how it starts and each track's chain. A group
-//! with no tracks in it is faint, as it plays nothing (decision 126). A group and its tracks are
-//! named in its colour, and a folded group's tracks are left out, its name marked, while an empty
-//! group is folded away unless it's opened (decision 128).
+//! The song view: a row per section, with its length, how it starts and each track's chain, and a
+//! bar down the sections `:loop` keeps playing (decision 173). A group with no tracks in it is
+//! faint, as it plays nothing (decision 126). A group and its tracks are named in its colour, and
+//! a folded group's tracks are left out, its name marked, while an empty group is folded away
+//! unless it's opened (decision 128).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -18,8 +19,10 @@ use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, STAR
 use crate::theme;
 use crate::views::widgets::group;
 
-/// Room for a section's number and playing marker.
+/// Room for a section's number, its playing marker and its loop's bar.
 const NUMBER_WIDTH: usize = 5;
+/// Down the side of the sections `:loop` keeps playing.
+const LOOP_BAR: &str = "\u{2502}";
 const LENGTH_WIDTH: usize = 8;
 const REPEAT_WIDTH: usize = 5;
 const START_WIDTH: usize = 7;
@@ -81,6 +84,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let rows = usize::from(area.height.saturating_sub(ROWS_AROUND_SECTIONS));
     let first = first_shown(app.cursor.section, song.sections.len(), rows);
     let moving = matches!(app.transport, Transport::Playing | Transport::Paused);
+    let selection = app.selected_sections();
     for (index, section) in song
         .sections
         .iter()
@@ -94,18 +98,30 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             " "
         };
+        let chosen = selection.is_some_and(|sections| sections.holds(index));
         let number = format!("{marker}{:02}", index + 1);
         let number_style = if marker == ">" {
             theme::active()
+        } else if chosen {
+            theme::selected()
         } else if here {
             bold
         } else {
             Style::new()
         };
-        let mut spans = vec![Span::styled(
-            format!("{number:<NUMBER_WIDTH$}"),
-            number_style,
-        )];
+        // A bar down the sections being looped, dim while the loop waits for the launch grid.
+        let looped = app.looping.is_some_and(|sections| sections.holds(index));
+        let bar = if looped { LOOP_BAR } else { " " };
+        let bar_style = if app.loop_waiting {
+            theme::dim()
+        } else {
+            theme::active()
+        };
+        let mut spans = vec![
+            Span::styled(number, number_style),
+            Span::styled(bar, bar_style),
+            Span::raw(" ".repeat(NUMBER_WIDTH - 4)),
+        ];
         let playing_here = moving && index == app.playing_section;
         let mut cell = |text: String, column: usize, width: usize, faint: Option<Style>| {
             let selected = here && app.song_column == column;
@@ -117,6 +133,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             };
             let style = if selected {
                 theme::cursor(app.mode)
+            } else if chosen {
+                theme::selected()
             } else if let Some(faint) = faint {
                 faint
             } else {

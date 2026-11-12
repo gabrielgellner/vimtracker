@@ -543,6 +543,11 @@ const SONG: &[(&str, Cmd, &str)] = &[
     ),
     ("d d", Cmd::RemoveRow, "Remove this section"),
     (";", Cmd::Audition, "Hear the start of this section"),
+    (
+        "V",
+        Cmd::VisualStep,
+        "Select sections, for :loop; V or Esc ends it",
+    ),
 ];
 
 /// Keys for the sample page. A sample is a buffer and a cell column a character, and the slice is

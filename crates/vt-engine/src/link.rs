@@ -16,7 +16,7 @@ use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
 
 use crate::dsp::memory::{Memory, MemoryCount};
-use crate::engine::{Engine, PLAYHEADS, Playhead, TrackPlace, Transport};
+use crate::engine::{Engine, PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
 use crate::mixer::Reading;
 use crate::published::{Published, Span};
 use crate::track_state::LiveValues;
@@ -36,8 +36,9 @@ pub enum Command {
         step: usize,
         track: Option<usize>,
     },
-    /// `:loop`: keep playing a section, or go back to playing the song.
-    LoopSection(Option<usize>),
+    /// `:loop`: keep playing sections in turn, from the next line of the launch grid while
+    /// playing, or go back to playing the song.
+    Loop(Option<SectionLoop>),
     /// `Tab`: pause in place, or play from there.
     PauseOrResume,
     /// Opening a project: stop, and go back to the start.
@@ -136,6 +137,8 @@ pub struct Telemetry {
     pub realigning: bool,
     /// Whether each track's own realign is waiting for its line of the grid.
     pub realigning_tracks: [bool; MAX_TRACKS],
+    /// Whether a loop is waiting for its line of the grid.
+    pub loop_waiting: bool,
     pub reading: Reading,
     /// Each track's levels.
     pub tracks: [Reading; MAX_TRACKS],
@@ -426,7 +429,7 @@ impl Realtime {
                     step,
                     track,
                 } => self.engine.play_section_at(section, step, track),
-                Command::LoopSection(section) => self.engine.set_loop_section(section),
+                Command::Loop(sections) => self.engine.loop_sections(sections),
                 Command::Audition {
                     section,
                     section_step,
@@ -490,6 +493,7 @@ impl Realtime {
             realigning_tracks: std::array::from_fn(|track| {
                 self.engine.track_realign_waiting(track)
             }),
+            loop_waiting: self.engine.loop_waiting(),
             reading,
             tracks: self.engine.take_track_readings(reading.frames),
             watched: self.watched,

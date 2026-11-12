@@ -19,7 +19,7 @@ use crate::places::RecentPlaces;
 use crate::timeline;
 use crate::views::picker::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
 use ratatui::crossterm::event::{KeyCode, KeyEventKind};
-use vt_engine::engine::{PLAYHEADS, Playhead, TrackPlace, Transport};
+use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
@@ -241,8 +241,12 @@ pub struct App {
     pub song_column: usize,
     /// The section the engine is on.
     pub playing_section: usize,
-    /// A section being kept playing, set with `:loop`.
-    pub looping: Option<usize>,
+    /// The sections being kept playing, set with `:loop`.
+    pub looping: Option<SectionLoop>,
+    /// Whether that loop is waiting for the launch grid's next line, as the engine last said.
+    pub loop_waiting: bool,
+    /// Where a selection of sections in the song view started, while `V` selects them.
+    pub section_anchor: Option<usize>,
     /// What each track is launched onto and cued to, as the engine last said.
     pub jam: Vec<JamState>,
     /// The track page: which of its pages shows, and where its cursor is.
@@ -474,6 +478,8 @@ impl App {
             song_column: 0,
             playing_section: 0,
             looping: None,
+            loop_waiting: false,
+            section_anchor: None,
             jam: vec![JamState::default(); MAX_TRACKS],
             track_page: TrackPage::default(),
             mod_images: None,
@@ -882,6 +888,7 @@ impl App {
             self.playing_section = report.section;
             self.transport = report.transport;
             self.realigning = report.realigning;
+            self.loop_waiting = report.loop_waiting;
             self.realigning_tracks = report.realigning_tracks;
             self.live = (report.watched == track).then_some(report.live);
             self.playheads = if report.watched == track {
@@ -1264,6 +1271,10 @@ impl App {
         self.count = None;
         // The audio page lists the devices afresh each time it opens.
         self.audio.refresh |= view == View::Audio && self.view != View::Audio;
+        // Sections selected in the song view are left there.
+        if view != View::Song {
+            self.section_anchor = None;
+        }
         self.view = view;
         self.note_view(view);
         self.clamp_cursor();
