@@ -167,6 +167,51 @@ takes over on the next note.
 | `Bright` | How hard the modulators bend the sound: as the patch has it at `80` |
 | `Time` | Attack and decay: as patched at `80`, faster below, slower above |
 
+`4-op` is FM you build yourself: four sines, as on the Digitone, the TX81Z and the
+M8's FM synth, for basses, bells, keys, brass and metal. Each operator either bends
+another's pitch, as a modulator, or is heard, as a carrier. `Algorithm`, the voice's type
+in the Machine device's title, says which, and `K` lists them: `4>3>2>1` is a stack, 4
+bending 3, 3 bending 2 and 2 bending 1, which is heard; `3>1 4>2` is two pairs, both
+heard; `1 2 3 4` is four carriers added, like an organ. It starts as a plain tone with
+a little of operator 2 on 1: turn up `Level 2` for a brighter one.
+
+| Setting | Does |
+|---|---|
+| `Algorithm` | Which operators bend which, and which are heard |
+| `Feedback` | 4 bending itself: none at `80`, brighter above, rougher below |
+| `Ring` | Each bent operator times what bends it, faded in: bells, clangs |
+| `Beat` | Up to 10 Hz between modulators, one up and the next down |
+
+Each operator has a device of its own under the Machine, `Op 1` to `Op 4`, as there are
+more settings than one device holds. The page goes down by whole devices to keep the
+cursor's in view. On the Roto, the `4-op`
+device's first page has the shared settings and each operator's `Level`, then each
+operator has a page, and their envelopes are two to a page.
+
+Each operator has these, `N` its number, so `Ratio 1` is operator 1's and `Ratio 4`
+operator 4's. A modulator's `Level` is how hard it bends, and a carrier's how loud it
+is. Its envelope moves its level through each note: a modulator's is the sound's
+brightness, a carrier's its loudness, under the track's own envelope. High notes bend
+less, so they don't turn to noise, and the whole voice runs at twice the rate.
+
+| Setting | Does |
+|---|---|
+| `Ratio N` | Its pitch against the note's, from 1/4 to 16 |
+| `Fine N` | Moves that up to six semitones either way, finely near `80` |
+| `Level N` | How hard it bends, or how loud it is |
+| `Wave N` | One of the TX81Z's eight waves, from `Sine` to `Bumps²` |
+| `Warp N` | Bends its cycle: `Skew`, `Bias`, `Pulse`, `Sync`, `Fold`, `Steps`, `Formant` |
+| `Amount N` | How far `Warp` bends, either way of `80`. Nothing when it's `Off` |
+| `Attack N` | How long its level takes to rise, from half a ms to 20 s |
+| `Decay N` | How long it takes to fall to `Sustain N` |
+| `Sustain N` | Where it holds while the note does |
+| `Release N` | How long it takes to fall once the note's let go |
+
+The waves are a sine, `Sine²` a sine squared, `Half` its first half, `Half²` that
+squared, `Twice` a sine at twice the pitch in the first half, `Twice²` that squared, and
+`Bumps` and `Bumps²` those with their second halves turned up. `Formant` restarts the
+cycle faster, under a window at the note's pitch, for a vocal formant.
+
 `Chord` plays a chord from one note, on an organ or a string machine below `80` on
 `Wave`, and on waves above it. `Chord` is a list: `=` steps through it, and `K` lists
 them by name.

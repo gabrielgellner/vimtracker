@@ -572,9 +572,10 @@ mod tests {
     /// with no drift.
     fn places(values: [f32; 8]) -> Settings {
         let [wave, cutoff, resonance, envmod, decay, accent, slide, drive] = values;
-        Settings::from_places([
-            wave, cutoff, resonance, envmod, decay, accent, slide, drive, 0.0,
-        ])
+        let mut places = [0.0; vt_model::settings::MAX_MACHINE_SETTINGS];
+        places[..8]
+            .copy_from_slice(&[wave, cutoff, resonance, envmod, decay, accent, slide, drive]);
+        Settings::from_places(places)
     }
 
     fn plain() -> Settings {

@@ -279,6 +279,104 @@ const TERRAIN: DeviceLayout = live(
         [s("terrain"), s("size"), s("offset"), __, __, __, __, __],
     )],
 );
+/// What the operators share and how loud each is first, then each operator's sound a page each,
+/// and their envelopes two to a page, an envelope's four in its order.
+const FOUR_OP: DeviceLayout = live(
+    "machine/4op",
+    &[
+        knobs(
+            "4-op",
+            [
+                s("algorithm"),
+                s("feedback"),
+                s("ring"),
+                s("beat"),
+                s("level1"),
+                s("level2"),
+                s("level3"),
+                s("level4"),
+            ],
+        ),
+        knobs(
+            "Op 1",
+            [
+                s("ratio1"),
+                s("fine1"),
+                s("wave1"),
+                s("warp1"),
+                s("amount1"),
+                __,
+                __,
+                __,
+            ],
+        ),
+        knobs(
+            "Op 2",
+            [
+                s("ratio2"),
+                s("fine2"),
+                s("wave2"),
+                s("warp2"),
+                s("amount2"),
+                __,
+                __,
+                __,
+            ],
+        ),
+        knobs(
+            "Op 3",
+            [
+                s("ratio3"),
+                s("fine3"),
+                s("wave3"),
+                s("warp3"),
+                s("amount3"),
+                __,
+                __,
+                __,
+            ],
+        ),
+        knobs(
+            "Op 4",
+            [
+                s("ratio4"),
+                s("fine4"),
+                s("wave4"),
+                s("warp4"),
+                s("amount4"),
+                __,
+                __,
+                __,
+            ],
+        ),
+        knobs(
+            "Env 1-2",
+            [
+                s("attack1"),
+                s("decay1"),
+                s("sustain1"),
+                s("release1"),
+                s("attack2"),
+                s("decay2"),
+                s("sustain2"),
+                s("release2"),
+            ],
+        ),
+        knobs(
+            "Env 3-4",
+            [
+                s("attack3"),
+                s("decay3"),
+                s("sustain3"),
+                s("release3"),
+                s("attack4"),
+                s("decay4"),
+                s("sustain4"),
+                s("release4"),
+            ],
+        ),
+    ],
+);
 const SIX_OP: DeviceLayout = live(
     "machine/6-op",
     &[knobs(
@@ -1377,7 +1475,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 91] = [
+pub const ALL: [&DeviceLayout; 92] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1390,6 +1488,7 @@ pub const ALL: [&DeviceLayout; 91] = [
     &WAVES,
     &TERRAIN,
     &SIX_OP,
+    &FOUR_OP,
     &CHORD,
     &CHIP,
     &SWARM,
@@ -1487,6 +1586,7 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::Wavetable => &WAVES,
             SynthVoice::WaveTerrain => &TERRAIN,
             SynthVoice::SixOp => &SIX_OP,
+            SynthVoice::FourOp => &FOUR_OP,
             SynthVoice::Chord => &CHORD,
             SynthVoice::Chiptune => &CHIP,
             SynthVoice::Swarm => &SWARM,

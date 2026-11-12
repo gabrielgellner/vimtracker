@@ -8,7 +8,7 @@ use vt_engine::render::{RenderOptions, render_loop, render_stems};
 use vt_model::lfo::{Lfo, Rate};
 use vt_model::modulation::ModSlot;
 use vt_model::samples::SamplePool;
-use vt_model::settings::SettingId;
+use vt_model::settings::{FOUR_OP_EACH, FOUR_OP_SHARED, SettingId};
 use vt_model::song::{FULL_GATE, Machine, Phrase, Song, SynthVoice};
 
 const RATE: u32 = 48_000;
@@ -201,6 +201,13 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
         let with_some = |steps: &[&str]| {
             let mut song = on(voice, steps);
             song.tracks[0].set_machine_value(1, 0x40);
+            // 4-op's feedback is operator 4's, which starts silent with 3, so the whole stack bends.
+            if voice == SynthVoice::FourOp {
+                for operator in [2, 3] {
+                    let level = FOUR_OP_SHARED + operator * FOUR_OP_EACH + 2;
+                    song.tracks[0].set_machine_value(level, 0x99);
+                }
+            }
             song
         };
         let out = play(with_some(&[NOTE, REST]), 2);

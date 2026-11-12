@@ -428,8 +428,16 @@ mod tests {
         for machine in vt_model::song::Machine::ALL {
             assert!(names(sounds, machine.name()), "{}", machine.name());
             for setting in machine.settings() {
+                // An operator's settings end in its number, which the guide writes as `N`.
+                let name = setting.name();
+                let name = match name.rsplit_once(' ') {
+                    Some((base, n)) if n.len() == 1 && n.chars().all(|c| c.is_ascii_digit()) => {
+                        format!("{base} N")
+                    }
+                    _ => name.to_owned(),
+                };
                 assert!(
-                    names(sounds, setting.name()),
+                    names(sounds, &name),
                     "{}'s {}",
                     machine.name(),
                     setting.name()
