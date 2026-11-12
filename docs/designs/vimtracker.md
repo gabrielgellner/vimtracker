@@ -369,7 +369,8 @@ track's live values, and up to four sample playheads. Each report says which ver
 (`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
 `Engine::take_after_trim` takes, for the Output device's meter, and where each mod slot running as
 an LFO is in its wave (`LiveValues::mods`, a phase and a value each, which `TrackState::modulate`
-keeps as it works the slots out, and none while stopped), for the Mod page's dots. `Handle::latest` merges every
+keeps as it works the slots out, and none while stopped), for the Mod page's dots, and which step each
+running as Steps plays (`LiveValues::steps`), which its panel lights. `Handle::latest` merges every
 report since the last frame, so a meter doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
 fit, and jam changes through another.
 
@@ -463,7 +464,7 @@ Song                               song.ron, refused unless format_version is FO
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
 *   **Mod slots** (`modulation.rs`, decision 165). Each track has `MOD_SLOTS` (6) slots on its
-    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum`, `Lpg` or `Lfo`, with a destination
+    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum`, `Lpg`, `Lfo` or `Steps`, with a destination
     setting, a depth, a switch and a polarity (`Uni` or `Bi`, its type's until one is chosen),
     which every type shares, and each type's own settings, which a
     slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
@@ -472,7 +473,11 @@ Song                               song.ron, refused unless format_version is FO
     ADSR is in milliseconds, with a reset and a curve (`Exp`, `Lin` or `Snap`, its mode), and an
     AHD the same with a hold of a time or `Note` in place of a sustain and release, and a drum
     envelope a steep peak from full onto a body, struck one to eight times, then a decay, and a low-pass gate Plaits' vactrol solved in closed
-    form, which also closes the track's `Cut` by its `Colour`. The first
+    form, which also closes the track's `Cut` by its `Colour`. Steps (`steps.rs`, decision 203) are
+    up to 16 signed values played in turn, from each note, from the song's position or one a note,
+    at a division, a sixth of the track's step or a pass of its chain (`TrackState::chain_pass`, which
+    `fire_track` sets as a step lands), each way its `Loop` says; which step plays is worked out from
+    the time or count, as an LFO's place is, and its start is the slot's phase. The first
     envelope-type slot on `Vol` shapes the notes (`note_shape_slot`): its `ModSlot::envelope`, an
     `envelope::Envelope` of any of these types, is what each voice keeps as its `shape`, and a
     one-shot (an AHD with a timed hold, a drum or a gate) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
