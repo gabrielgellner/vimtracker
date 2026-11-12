@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use vt_model::analysis::{ANALYSIS_VERSION, Analysis, Found, analyse, cache_file};
 use vt_model::bank::{BankEntry, ContentHash, PlayParams, Points};
+use vt_model::onsets::DEFAULT_SENS;
 use vt_model::project::{analyse_samples, load_samples};
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
@@ -157,4 +158,35 @@ fn a_songs_samples_are_analysed_into_the_pool_and_normalise_from_it() {
     let gain = entry.edit.play.normalize_gain(Some(analysis.peak));
     assert!((20.0 * (0.5 * gain).log10() + 0.3).abs() < 1e-4);
     assert!(pool.analysis(ContentHash(1)).is_none());
+}
+
+#[test]
+fn where_sounds_start_is_kept_with_the_rest_and_read_back_not_found_again() {
+    let folder = folder("onsets");
+    let cache = folder.join("cache");
+    let file = folder.join("clicks.wav");
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 44_100,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let clicks = [3000, 14_025, 25_050, 36_075];
+    let mut writer = hound::WavWriter::create(&file, spec).unwrap();
+    for at in 0..44_100 {
+        let hit = clicks
+            .iter()
+            .any(|click| (*click..*click + 50).contains(&at));
+        writer
+            .write_sample(if hit { 20_000_i16 } else { 0 })
+            .unwrap();
+    }
+    writer.finalize().unwrap();
+    let hash = ContentHash::of_file(&file).unwrap();
+    let (built, found) = analyse(&file, hash, Some(&cache)).unwrap();
+    assert_eq!(found, Found::Built);
+    assert_eq!(built.onsets(DEFAULT_SENS), clicks);
+    let (read, found) = analyse(&file, hash, Some(&cache)).unwrap();
+    assert_eq!(found, Found::Cached);
+    assert_eq!(read.onsets, built.onsets);
 }
