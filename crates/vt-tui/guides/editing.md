@@ -210,8 +210,8 @@ Euclidean velocity accent is the one to try: keep it live, then turn its
 `gl` works from any row of the column, and after the song is saved and opened
 again. In the panel it opens, `L` keeps the new settings live, `Enter` applies
 it with them, and `Esc` leaves it as it was. A live column's values are drawn
-in the shape panel's colour, and the phrase's title names its live columns,
-like `Live:Vel,FX1`.
+in the shape panel's colour, and the phrase's title names its live columns
+after a wand, like `󰁨 Vel,FX1`.
 
 Typing over one of its values takes over by hand: it's applied, its values
 stay, and the status line says so; `u` makes it live again. Editing any other
