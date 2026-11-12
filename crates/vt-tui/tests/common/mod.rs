@@ -34,6 +34,18 @@ pub fn press(app: &mut App, keys: &str) {
     }
 }
 
+/// Press and let go of each key in turn, as typing does, so a key typed twice isn't taken as
+/// held. Each is let go the moment it's pressed, so a key that lasts while it's held, as `;` does,
+/// is a tap however slowly the test runs. With `press` it's held until the next such key goes
+/// down, a tap or a hold by how long the test took in between.
+pub fn tap(app: &mut App, keys: &str) {
+    let now = Instant::now();
+    for c in keys.chars() {
+        app.key(Key::char(c), now);
+        app.key_released(Key::char(c), now);
+    }
+}
+
 /// An item as a list shows it: its name, and its meaning beside it.
 pub fn listed(item: &vt_tui::input::picker::Item) -> String {
     if item.meaning.is_empty() {
@@ -161,6 +173,9 @@ pub fn with_a_sound(app: &mut App) {
     }
     writer.finalize().unwrap();
     command(app, &format!("sample {}", path.display()));
+    // Its analysis sends a version of its own when it's done, which could otherwise come in
+    // between a test's edit and the audio that hears it, on whichever frame the thread finishes.
+    app.finish_analysis();
 }
 
 /// A selected 4-step track beside a 2-step track and an 8-step track, whose steps are numbered by
