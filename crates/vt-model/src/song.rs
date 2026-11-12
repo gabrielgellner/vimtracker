@@ -899,7 +899,7 @@ impl Machine {
     /// say which part of the sample plays and how down its first column, and where that part starts
     /// and how long it is down its second, as the sample page has them; `Acid`'s are in pairs as a
     /// TB-303's knobs are, the filter's, its envelope's, then accent and slide, with the Devil
-    /// Fish's drive after them.
+    /// Fish's drive and `Drift` after them.
     pub fn grid(self) -> Grid {
         let placed: &[&[&str]] = match self {
             Self::Sampler => &[&["slice", "play"], &["start", "length"]],
@@ -907,7 +907,7 @@ impl Machine {
                 &["cutoff", "resonance"],
                 &["envmod", "decay"],
                 &["accent", "slide"],
-                &["drive"],
+                &["drive", "drift"],
             ],
             Self::Plaits(_) => {
                 let own: Vec<usize> = (0..self.settings().count())
@@ -2184,7 +2184,7 @@ mod tests {
         let acid = Machine::Plaits(SynthVoice::Acid);
         assert_eq!(acid.type_param(), Some(0), "the wave");
         assert_eq!(names(acid, 0), ["Cutoff", "Env mod", "Accent", "Drive"]);
-        assert_eq!(names(acid, 1), ["Resonance", "Decay", "Slide", ""]);
+        assert_eq!(names(acid, 1), ["Resonance", "Decay", "Slide", "Drift"]);
         assert_eq!(names(acid, 2), ["", "", "", ""]);
         let kick = Machine::Plaits(SynthVoice::Kick);
         assert_eq!(kick.type_param(), None);

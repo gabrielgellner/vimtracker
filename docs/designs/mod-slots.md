@@ -909,3 +909,10 @@ requests, curves then AHD:
   and falls that are true RC curves, 30 dB down halfway. The sustain isn't squared, as Surge's is.
 * **An attack from a level** (`Reset` off) starts where its curve reaches that level and takes only
   what's left of its time. It's how `Reset` off always works, not a setting.
+
+**As built for #468 (decision 193):**
+
+* **`Smooth`** is a Catmull-Rom curve through four of `Random`'s values, still stateless.
+* **The LFO's grid** is `Shape`, `Rate` and `Depth` down the left, and `Phase`, the hole for
+  `Fade`, then `Deform` down the right. `Deform` bends the wave between its peaks, or sets a
+  square's width, and is a lock, `DFM4`–`DFM6`, and a destination for earlier slots.

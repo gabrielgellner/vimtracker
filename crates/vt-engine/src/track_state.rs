@@ -6,7 +6,7 @@ use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::groove::Groove;
 use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS};
-use vt_model::lfo::{LfoMode, phase_of, phase_value, wave};
+use vt_model::lfo::{LfoMode, MAX_DEFORM, deformed_wave, phase_of, phase_value};
 use vt_model::modulation::{
     MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, depth_value, note_shape_slot,
 };
@@ -114,9 +114,9 @@ struct SlotRun {
     envelope: EnvelopeRun,
     /// Where its cycles count from.
     start: LfoStart,
-    /// Its held depth, phase and polarity, on the `00` to `FF` scale, as steps and the page set
-    /// them. The polarity is below zero until it's first set, which is the slot's own.
-    values: [f32; 3],
+    /// Its held depth, phase, polarity and deform, on the `00` to `FF` scale, as steps and the
+    /// page set them. The polarity is below zero until it's first set, which is the slot's own.
+    values: [f32; 4],
     /// How much of what it moves is heard, from 1 while it's in to 0 while it's switched out,
     /// gliding between them over [`BYPASS_FADE_MS`] as a slot's bypass does, so switching one
     /// doesn't jump.
@@ -137,7 +137,7 @@ impl Default for SlotRun {
             seen: None,
             envelope: EnvelopeRun::Idle,
             start: LfoStart::default(),
-            values: [128.0, 0.0, -1.0],
+            values: [128.0, 0.0, -1.0, 128.0],
             share: 1.0,
             out: 0.0,
             glide: 0.0,
@@ -721,6 +721,9 @@ pub struct TrackState {
     pub arp: Option<Arpeggiating>,
     /// The rolls an arpeggio in `Random` takes, apart from `rng` so `CHA` rolls as it did.
     pub arp_rng: Pcg32,
+    /// The seeds of each note's drift, for a synth that drifts as an analog one does, apart from
+    /// `rng` so `CHA` rolls as it did.
+    drift_rng: Pcg32,
     /// Steps, or parts of them, waiting for where their groove and nudge land them, and when the
     /// soonest lands, so a track with none waiting isn't looked through.
     pub pending: [Option<PendingStep>; PENDING_PARTS],
@@ -852,7 +855,8 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
     let modulator = |slot: usize, at: usize| match at {
         0 => depth_value(track.mods[slot].depth),
         1 => phase_value(track.mods[slot].lfo.phase),
-        _ => u16::from(track.mods[slot].polarity().index()) << 8,
+        2 => u16::from(track.mods[slot].polarity().index()) << 8,
+        _ => depth_value(track.mods[slot].lfo.deform),
     };
     let whole = match id.owner() {
         (Owner::Mod(n), at) => return modulator(n, at),
@@ -898,6 +902,11 @@ fn groove_rng(seed: u64, index: usize) -> Pcg32 {
 /// The generator for a track's random arpeggios, on streams after every track's humanise.
 fn arp_rng(seed: u64, index: usize) -> Pcg32 {
     Pcg32::new(seed, (2 * MAX_TRACKS + index) as u64)
+}
+
+/// The generator for a track's notes' drift, on streams after every track's arpeggios.
+fn drift_rng(seed: u64, index: usize) -> Pcg32 {
+    Pcg32::new(seed, (3 * MAX_TRACKS + index) as u64)
 }
 
 /// What's heard of a value: its lock over its base. A glide is moved along by the song.
@@ -947,6 +956,7 @@ impl TrackState {
             retrigger: None,
             arp: None,
             arp_rng: arp_rng(seed, index),
+            drift_rng: drift_rng(seed, index),
             values: {
                 let mut values = [ValueLayers::at(0); SettingId::COUNT];
                 for id in SettingId::all() {
@@ -1097,6 +1107,7 @@ impl TrackState {
         self.forget_accumulators();
         self.groove_rng = groove_rng(seed, index);
         self.arp_rng = arp_rng(seed, index);
+        self.drift_rng = drift_rng(seed, index);
         self.arp = None;
         self.last_note = None;
         for run in &mut self.slots {
@@ -1182,7 +1193,7 @@ impl TrackState {
                 SettingId::modulator(at, setting)
                     .map_or(0.0, |id| offsets[id.index()] + moved.at(id.index()))
             };
-            let [depth, phase, _] = run.values;
+            let [depth, phase, _, deform] = run.values;
             let polarity = run.polarity(slot);
             // An envelope's depth is whole, as its page sets it, so it moves by exactly that.
             let held = match slot.kind {
@@ -1221,7 +1232,9 @@ impl TrackState {
                     let cycles = slot.lfo.rate.cycles(now.tick - start.tick, seconds);
                     let key = now.seed ^ ((index as u64) << 8 | wave_key(at));
                     let phase = f64::from(phase_of(phase) + moved_by(1));
-                    let value = wave(slot.lfo.shape, cycles + phase, key);
+                    let deform = ((depth_of(deform) + moved_by(3) * 255.0) / f32::from(MAX_DEFORM))
+                        .clamp(-1.0, 1.0);
+                    let value = deformed_wave(slot.lfo.shape, cycles + phase, key, deform);
                     run.now = Some(LfoNow::of(cycles + phase, value));
                     let value = polarity.of(Polarity::Bi, value);
                     offsets[destination.index()] +=
@@ -1482,6 +1495,10 @@ impl TrackState {
                 &mut self.rng
             };
             self.voice.seed_noise(rng.next_u32());
+        }
+        // A note carrying on keeps the drift it has, and rolls its own offsets as it starts.
+        if !carries_on && self.voice.drifts() {
+            self.voice.seed_drift(self.drift_rng.next_u32());
         }
     }
 
