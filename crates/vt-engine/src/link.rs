@@ -150,6 +150,9 @@ pub struct Telemetry {
     /// Each track's faders as they're heard: where the steps have them, and whether a hand has
     /// taken them over.
     pub faders: [Faders; MAX_TRACKS],
+    /// The version playing, by its [`Published::id`](crate::published::Published::id), which the
+    /// live values were worked out from.
+    pub version: u64,
     /// The track being watched, and what it's playing with.
     pub watched: usize,
     pub live: LiveValues,
@@ -515,6 +518,7 @@ impl Realtime {
             reading,
             tracks: self.engine.take_track_readings(reading.frames),
             faders: std::array::from_fn(|track| self.engine.faders(track)),
+            version: self.engine.version(),
             watched: self.watched,
             live,
             playheads: self.engine.playheads(self.watched),
@@ -1143,8 +1147,10 @@ mod tests {
         for (track, voice) in played.tracks.iter_mut().zip(voices) {
             track.machine = vt_model::song::Machine::Plaits(voice);
             let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
-            let key = |setting| {
-                vt_model::settings::SettingId::voice(voice, setting)
+            // A voice with only two settings locks its second where others lock their third.
+            let count = vt_model::settings::voice_entries(voice).len();
+            let key = |setting: usize| {
+                vt_model::settings::SettingId::voice(voice, setting.min(count - 1))
                     .unwrap()
                     .key()
             };

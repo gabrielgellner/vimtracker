@@ -3,7 +3,7 @@
 Press `Space 4` for what a track holds apart from its steps, on three pages: Sound
 has its machine, filter, output and how it plays, with a bar beside each value showing where
 it sits between the lines at each end of its range, and moving with whatever
-plays it, with a dim mark left where it's set, Mod its six mod slots,
+plays it, with a dim mark left where it's set once it's a cell or more away, Mod its six mod slots,
 envelopes and LFOs, its accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page, each with the cursor where you left it, or on its first setting the first time. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.

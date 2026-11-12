@@ -2,6 +2,9 @@
 
 use crate::dsp::acid::Acid;
 use crate::dsp::additive::Additive;
+use crate::dsp::braids_analog::{CSaw, HardSync, Morph, SawSquare, Triple};
+use crate::dsp::braids_digital::{Ring, SawComb, Toy};
+use crate::dsp::braids_filter_fm::{ChaoticFm, DigitalFilter, FeedbackFm};
 use crate::dsp::chiptune::Chiptune;
 use crate::dsp::chord::Chord;
 use crate::dsp::drums::{Hat, Snare};
@@ -91,6 +94,17 @@ enum Synth {
     Modal(Modal),
     Dust(ParticleNoise),
     Noise(Noise),
+    CSaw(CSaw),
+    Morph(Morph),
+    SawSquare(SawSquare),
+    HardSync(HardSync),
+    Triple(Triple),
+    Ring(Ring),
+    SawComb(SawComb),
+    Toy(Toy),
+    ZFilter(DigitalFilter),
+    FeedbackFm(FeedbackFm),
+    ChaoticFm(ChaoticFm),
 }
 
 impl Synth {
@@ -118,6 +132,17 @@ impl Synth {
             SynthVoice::Kick => Self::Kick(Kick::new(rate)),
             SynthVoice::Snare => Self::Snare(Snare::new(rate)),
             SynthVoice::Hat => Self::Hat(Hat::new(rate)),
+            SynthVoice::CSaw => Self::CSaw(CSaw::new(rate)),
+            SynthVoice::Morph => Self::Morph(Morph::new(rate)),
+            SynthVoice::SawSquare => Self::SawSquare(SawSquare::new(rate)),
+            SynthVoice::HardSync => Self::HardSync(HardSync::new(rate)),
+            SynthVoice::Triple => Self::Triple(Triple::new(rate)),
+            SynthVoice::Ring => Self::Ring(Ring::new(rate)),
+            SynthVoice::SawComb => Self::SawComb(SawComb::new(rate)),
+            SynthVoice::Toy => Self::Toy(Toy::new(rate)),
+            SynthVoice::ZFilter => Self::ZFilter(DigitalFilter::new(rate)),
+            SynthVoice::FeedbackFm => Self::FeedbackFm(FeedbackFm::new(rate)),
+            SynthVoice::ChaoticFm => Self::ChaoticFm(ChaoticFm::new(rate)),
         }
     }
 
@@ -145,6 +170,17 @@ impl Synth {
             Self::Modal(synth) => synth.next(frequency, settings),
             Self::Dust(synth) => synth.next(frequency, settings),
             Self::Noise(synth) => synth.next(frequency, settings),
+            Self::CSaw(synth) => synth.next(frequency, settings),
+            Self::Morph(synth) => synth.next(frequency, settings),
+            Self::SawSquare(synth) => synth.next(frequency, settings),
+            Self::HardSync(synth) => synth.next(frequency, settings),
+            Self::Triple(synth) => synth.next(frequency, settings),
+            Self::Ring(synth) => synth.next(frequency, settings),
+            Self::SawComb(synth) => synth.next(frequency, settings),
+            Self::Toy(synth) => synth.next(frequency, settings),
+            Self::ZFilter(synth) => synth.next(frequency, settings),
+            Self::FeedbackFm(synth) => synth.next(frequency, settings),
+            Self::ChaoticFm(synth) => synth.next(frequency, settings),
         }
     }
 
