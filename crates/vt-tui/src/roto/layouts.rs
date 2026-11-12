@@ -423,7 +423,7 @@ const HAT: DeviceLayout = live(
 
 // The track's own devices.
 
-/// The filter itself, its type and mode, then the utility filter's cuts.
+/// The filter itself and its punch, its type and mode, then the utility filter's cuts.
 const FILTER: DeviceLayout = live(
     "filter",
     &[knobs(
@@ -432,7 +432,7 @@ const FILTER: DeviceLayout = live(
             s("cutoff"),
             s("resonance"),
             s("drive"),
-            GAP,
+            s("punch"),
             s("type"),
             s("mode"),
             s("lowcut"),
@@ -1258,6 +1258,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::Cutoff => "cutoff",
             TrackControl::Resonance => "resonance",
             TrackControl::Drive => "drive",
+            TrackControl::Punch => "punch",
             TrackControl::LowCut => "lowcut",
             TrackControl::HighCut => "highcut",
             TrackControl::Pan => "pan",
