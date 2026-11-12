@@ -23,6 +23,7 @@ use crate::dsp::phase_distortion::PhaseDistortion;
 use crate::dsp::six_op::SixOp;
 use crate::dsp::speech::Speech;
 use crate::dsp::string_model::StringModel;
+use crate::dsp::supersaw::Supersaw;
 use crate::dsp::swarm::Swarm;
 use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
 use crate::dsp::virtual_analog_vcf::VirtualAnalogVcf;
@@ -82,6 +83,7 @@ enum Synth {
     VirtualAnalog(VirtualAnalog),
     VirtualAnalogVcf(VirtualAnalogVcf),
     Acid(Acid),
+    Supersaw(Supersaw),
     Fm(Fm),
     PhaseDistortion(PhaseDistortion),
     Formant(Grain),
@@ -136,6 +138,7 @@ impl Synth {
             SynthVoice::VirtualAnalog => Self::VirtualAnalog(VirtualAnalog::new()),
             SynthVoice::VirtualAnalogVcf => Self::VirtualAnalogVcf(VirtualAnalogVcf::new()),
             SynthVoice::Acid => Self::Acid(Acid::new(rate)),
+            SynthVoice::Supersaw => Self::Supersaw(Supersaw::new(rate)),
             SynthVoice::PhaseDistortion => Self::PhaseDistortion(PhaseDistortion::new()),
             SynthVoice::Formant => Self::Formant(Grain::new()),
             SynthVoice::Additive => Self::Additive(Additive::new()),
@@ -184,9 +187,23 @@ impl Synth {
         }
     }
 
+    /// The next frame, on both sides: the same on each but for `Supersaw`, which spreads its saws.
+    #[inline]
+    fn next_sides(&mut self, frequency: f32, settings: Settings) -> [f32; 2] {
+        if let Self::Supersaw(synth) = self {
+            return synth.next(frequency, settings);
+        }
+        let sample = self.next(frequency, settings);
+        [sample, sample]
+    }
+
     #[inline]
     fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         match self {
+            Self::Supersaw(synth) => {
+                let [left, right] = synth.next(frequency, settings);
+                0.5 * (left + right)
+            }
             Self::VirtualAnalog(synth) => synth.next(frequency, settings),
             Self::VirtualAnalogVcf(synth) => synth.next(frequency, settings),
             Self::Acid(synth) => synth.next(frequency, settings),
@@ -268,7 +285,11 @@ impl Synth {
     fn drifts(&self) -> bool {
         matches!(
             self,
-            Self::VirtualAnalog(_) | Self::VirtualAnalogVcf(_) | Self::Acid(_) | Self::Chiptune(_)
+            Self::VirtualAnalog(_)
+                | Self::VirtualAnalogVcf(_)
+                | Self::Acid(_)
+                | Self::Chiptune(_)
+                | Self::Supersaw(_)
         )
     }
 
@@ -279,6 +300,7 @@ impl Synth {
             Self::VirtualAnalog(synth) => synth.seed(seed, settings),
             Self::VirtualAnalogVcf(synth) => synth.seed(seed, settings),
             Self::Chiptune(synth) => synth.seed(seed, settings),
+            Self::Supersaw(synth) => synth.seed(seed, settings),
             Self::Acid(synth) => synth.seed(seed),
             _ => {}
         }
@@ -291,6 +313,7 @@ impl Synth {
             Self::VirtualAnalog(synth) => synth.time(settings),
             Self::VirtualAnalogVcf(synth) => synth.time(settings),
             Self::Chiptune(synth) => synth.time(settings),
+            Self::Supersaw(synth) => synth.time(settings),
             _ => 1.0,
         }
     }
@@ -677,8 +700,7 @@ impl Voice {
         }
         let source = if let Some(synth) = &mut self.synth {
             let frequency = MIDDLE_C * self.increment * self.pitch / f64::from(self.rate);
-            let sample = synth.next(frequency as f32, self.settings);
-            [sample, sample]
+            synth.next_sides(frequency as f32, self.settings)
         } else {
             let Some(frame) = data.and_then(|data| self.reader.next(data)) else {
                 self.stage = Stage::Idle;

@@ -7,13 +7,14 @@ use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::groove::GROOVE_CHOICES;
 use crate::insert::{
     ALGORITHM_NAMES, CHORUS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS,
-    EQ_PARAMS, FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS,
-    LPG_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS,
-    ROTARY_PARAMS, SPACE_PARAMS, SPRING_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES,
-    VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db, fine_cents,
-    flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, input_db,
-    limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms, shift_delay_ms,
-    shift_hertz, spread_hertz, tape_drive_db, threshold_db, vowel_blend,
+    EQ_PARAMS, EXCITER_PARAMS, FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert,
+    LIMIT_PARAMS, LPG_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS,
+    REVERB_PARAMS, ROTARY_PARAMS, SPACE_PARAMS, SPRING_PARAMS, Setting, TAPE_PARAMS, Triggering,
+    VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db,
+    exciter_attack_ms, exciter_release_ms, exciter_tone_hz, fine_cents, flanger_delay_ms,
+    grain_density, grain_length, grain_ms, grain_time_seconds, input_db, limit_release_ms,
+    makeup_db, plate_size, range_db, ratio, release_ms, shift_delay_ms, shift_hertz, spread_hertz,
+    tape_drive_db, threshold_db, vowel_blend,
 };
 use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -97,6 +98,10 @@ pub enum Units {
     ShiftHertz,
     SpreadHertz,
     LoopTime,
+    /// Where an exciter's highs start, and how fast its detector rises and falls.
+    ExciterTone,
+    ExciterAttack,
+    ExciterRelease,
     /// The acid voice's cutoff, its filter envelope's decay, how long it slides and how hard it
     /// drives its filter.
     AcidCutoff,
@@ -330,6 +335,9 @@ impl Kind {
                     ms if ms < 0.005 => "0 ms".to_owned(),
                     ms => milliseconds(ms),
                 },
+                Units::ExciterTone => hertz(f64::from(exciter_tone_hz(coarse as f32))),
+                Units::ExciterAttack => milliseconds(exciter_attack_ms(coarse as f32)),
+                Units::ExciterRelease => milliseconds(exciter_release_ms(coarse as f32)),
                 Units::AcidCutoff => hertz(f64::from(acid_cutoff_hz(coarse as f32))),
                 Units::AcidDecay => milliseconds(acid_decay_ms(coarse as f32)),
                 Units::Slide => milliseconds(slide_ms(coarse as f32)),
@@ -656,6 +664,42 @@ const SWARM: [Entry; 3] = [
     level("spread", "Spread", "SPRD", 0x66),
     level("density", "Density", "DENS", 0x80),
     level("overlap", "Overlap", "OVLP", 0x99),
+];
+/// How many saws `Supersaw` stacks.
+const SAW_COUNTS: [&str; 8] = ["1", "2", "3", "4", "5", "6", "7", "8"];
+/// What `Supersaw`'s stack is: every saw on its own pitch, or every other one a fifth up or an
+/// octave down.
+const SUPERSAW_MODES: [&str; 3] = ["Unison", "Fifths", "Sub"];
+/// `Supersaw`'s: seven saws a little apart, as Roland's has, all as loud, half wide, each starting
+/// anywhere in its cycle.
+const SUPERSAW: [Entry; 9] = [
+    Entry {
+        key: "stack",
+        name: "Stack",
+        label: Some("STCK"),
+        kind: Kind::Stepped {
+            choices: &SUPERSAW_MODES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    level("detune", "Detune", "DTUN", 0x60),
+    centred("warp", "Warp", "WARP"),
+    level("mix", "Mix", "MIX", 0xFF),
+    Entry {
+        key: "saws",
+        name: "Saws",
+        label: Some("SAWS"),
+        kind: Kind::Stepped {
+            choices: &SAW_COUNTS,
+            wraps: false,
+        },
+        default: 6,
+    },
+    level("shape", "Shape", "SHPE", 0x00),
+    level("width", "Width", "WDTH", 0x80),
+    level("phase", "Phase", "PHAS", 0xFF),
+    DRIFT,
 ];
 /// A continuous setting from `00` to `FF` that reads in these units.
 const fn in_units(
@@ -1098,6 +1142,7 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Formant => &FORMANT,
         SynthVoice::Additive => &ADDITIVE,
         SynthVoice::Swarm => &SWARM,
+        SynthVoice::Supersaw => &SUPERSAW,
         SynthVoice::WaveTerrain => &TERRAIN,
         SynthVoice::Chord => &CHORD,
         SynthVoice::Chiptune => &CHIPTUNE,
@@ -1150,6 +1195,7 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::Formant => "formant",
         SynthVoice::Additive => "additive",
         SynthVoice::Swarm => "swarm",
+        SynthVoice::Supersaw => "supersaw",
         SynthVoice::WaveTerrain => "terrain",
         SynthVoice::Chord => "chord",
         SynthVoice::Chiptune => "chiptune",
@@ -1217,10 +1263,11 @@ pub enum Effect {
     Spring,
     Space,
     Rotary,
+    Exciter,
 }
 
 impl Effect {
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 23] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -1243,6 +1290,7 @@ impl Effect {
         Self::Spring,
         Self::Space,
         Self::Rotary,
+        Self::Exciter,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -1269,6 +1317,7 @@ impl Effect {
             Self::Vowel => &VOWEL_PARAMS,
             Self::FreqShift => &FREQ_SHIFT_PARAMS,
             Self::Spring => &SPRING_PARAMS,
+            Self::Exciter => &EXCITER_PARAMS,
             Self::Rotary => &ROTARY_PARAMS,
             Self::Space => &SPACE_PARAMS,
         }
@@ -1296,6 +1345,7 @@ impl Effect {
             Self::Vowel => "vowel",
             Self::FreqShift => "freqshift",
             Self::Spring => "spring",
+            Self::Exciter => "exciter",
             Self::Rotary => "rotary",
             Self::Space => "space",
         }
@@ -1323,6 +1373,7 @@ impl Effect {
             Self::Vowel => "Vowel",
             Self::FreqShift => "Freq Shift",
             Self::Spring => "Spring",
+            Self::Exciter => "Exciter",
             Self::Rotary => "Rotary",
             Self::Space => "Space",
         }
@@ -1352,6 +1403,7 @@ impl Effect {
             Insert::Vowel(_) => Some(Self::Vowel),
             Insert::FreqShift(_) => Some(Self::FreqShift),
             Insert::Spring(_) => Some(Self::Spring),
+            Insert::Exciter(_) => Some(Self::Exciter),
             Insert::Rotary(_) => Some(Self::Rotary),
             Insert::Space(_) => Some(Self::Space),
         }
@@ -1396,6 +1448,9 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::ShiftHertz => (true, Units::ShiftHertz),
                 Setting::ShiftSpread => (false, Units::SpreadHertz),
                 Setting::LoopTime => (false, Units::LoopTime),
+                Setting::ExciterTone => (false, Units::ExciterTone),
+                Setting::ExciterAttack => (false, Units::ExciterAttack),
+                Setting::ExciterRelease => (false, Units::ExciterRelease),
                 _ => (false, Units::Percent),
             };
             Kind::Continuous {
@@ -1853,6 +1908,30 @@ const fn effect_start(effect: Effect) -> usize {
                 + VOWEL_PARAMS.len()
                 + FREQ_SHIFT_PARAMS.len()
         }
+        Effect::Exciter => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+                + PITCH_PARAMS.len()
+                + GRAINS_PARAMS.len()
+                + WARPS_PARAMS.len()
+                + LPG_PARAMS.len()
+                + RESO_PARAMS.len()
+                + COMB_PARAMS.len()
+                + VOWEL_PARAMS.len()
+                + FREQ_SHIFT_PARAMS.len()
+                + SPRING_PARAMS.len()
+                + SPACE_PARAMS.len()
+                + ROTARY_PARAMS.len()
+        }
         Effect::Rotary => {
             DISTORT_PARAMS.len()
                 + DELAY_PARAMS.len()
@@ -1925,7 +2004,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + FREQ_SHIFT_PARAMS.len()
     + SPRING_PARAMS.len()
     + SPACE_PARAMS.len()
-    + ROTARY_PARAMS.len();
+    + ROTARY_PARAMS.len()
+    + EXCITER_PARAMS.len();
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();

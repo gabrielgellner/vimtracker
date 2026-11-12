@@ -169,7 +169,8 @@ impl Family {
             | Units::Q
             | Units::AcidCutoff
             | Units::Vowel
-            | Units::ShiftHertz => Self::Tone,
+            | Units::ShiftHertz
+            | Units::ExciterTone => Self::Tone,
             Units::Pan | Units::SpreadHertz => Self::Space,
             Units::Semitones
             | Units::Cents
@@ -186,7 +187,9 @@ impl Family {
             | Units::GateLength
             | Units::GateDelta
             | Units::Glide
-            | Units::LoopTime => Self::Time,
+            | Units::LoopTime
+            | Units::ExciterAttack
+            | Units::ExciterRelease => Self::Time,
             Units::Depth | Units::Degrees => Self::Modulation,
             _ => Self::Character,
         }

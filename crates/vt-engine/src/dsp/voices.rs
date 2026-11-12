@@ -28,6 +28,7 @@ pub mod phase_distortion;
 pub mod six_op;
 pub mod speech;
 pub mod string_model;
+pub mod supersaw;
 pub mod swarm;
 mod variable_shape;
 pub mod virtual_analog;
