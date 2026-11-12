@@ -11,6 +11,7 @@ use vt_model::insert::{
 };
 use vt_model::song::level_gain;
 
+use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::sides::{Sides, same_sides};
 use crate::dsp::blocks::smoother::Smoothed;
@@ -183,7 +184,7 @@ fn crush_step(bits: u8) -> f32 {
 fn shaped(kind: DistortType, driven: f32) -> f32 {
     match kind {
         DistortType::Soft => soft_clip(driven),
-        DistortType::Hard => driven.clamp(-1.0, 1.0),
+        DistortType::Hard => within(driven, -1.0, 1.0),
         DistortType::Fold => {
             let adjusted = driven * 0.25 + 0.75;
             (adjusted - adjusted.floor()).mul_add(-4.0, 2.0).abs() - 1.0
@@ -535,6 +536,10 @@ impl InsertState {
         rate: u32,
         keys: &Keys,
     ) -> ([f32; 2], bool) {
+        // A NaN or an infinity would stay in any filter or loop it reached, silencing the slot for
+        // good whatever clips it on the way round, so it's heard as a frame of silence instead
+        // (#461). Sides that were the same, bit for bit, still are.
+        let input = input.map(|sample| if sample.is_finite() { sample } else { 0.0 });
         let kept = same && self.mono() == Mono::Linked;
         let wet = self.effect(input, same, smoothing, rate, keys);
         let out = if self.on.value == self.on.target {
@@ -1027,5 +1032,106 @@ mod tests {
             last = out;
         }
         assert_eq!(last, 0.5);
+    }
+    /// Every effect, with what comes round set high, fed a NaN once among ordinary sound: what
+    /// comes out after stays finite and dies away, rather than the slot going silent for good.
+    #[test]
+    fn a_nan_going_in_is_gone_at_once_and_what_was_ringing_dies_away() {
+        use vt_model::insert::*;
+        let looped = [
+            Insert::Delay(Delay {
+                feedback: 0xE0,
+                time: 6,
+                ..Delay::DEFAULT
+            }),
+            Insert::Delay(Delay {
+                feedback: 0xE0,
+                time: 6,
+                low_cut: 0x40,
+                high_cut: 0xC0,
+                drive: 0xFF,
+                ..Delay::DEFAULT
+            }),
+            Insert::Reverb(Reverb {
+                decay: 0xE0,
+                ..Reverb::DEFAULT
+            }),
+            Insert::Plate(Plate {
+                decay: 0xE0,
+                ..Plate::DEFAULT
+            }),
+            Insert::Phaser(Phaser {
+                feedback: 0xFF,
+                ..Phaser::DEFAULT
+            }),
+            Insert::Flanger(Flanger {
+                feedback: 0xFF,
+                ..Flanger::DEFAULT
+            }),
+            Insert::Pitch(Pitch {
+                feedback: 0xFF,
+                ..Pitch::DEFAULT
+            }),
+            Insert::Reso(Resonator::DEFAULT),
+            Insert::Comb(Comb::DEFAULT),
+            Insert::Comb(Comb {
+                feedback: 0x10,
+                ..Comb::DEFAULT
+            }),
+        ];
+        let filtered = [
+            Insert::Chorus(Chorus::DEFAULT),
+            Insert::Chorus(Chorus {
+                kind: ChorusType::Ensemble,
+                ..Chorus::DEFAULT
+            }),
+            Insert::Eq(Equaliser::DEFAULT),
+            Insert::Compressor(Compressor::DEFAULT),
+            Insert::Limit(Limiter::DEFAULT),
+            Insert::Tape(Tape::DEFAULT),
+            Insert::Grains(Grains::DEFAULT),
+            Insert::Warps(Warps::DEFAULT),
+            Insert::Lpg(LowPassGate::DEFAULT),
+            Insert::Vowel(Vowel::DEFAULT),
+            Insert::Distort(Distort {
+                kind: DistortType::Hard,
+                ..Distort::DEFAULT
+            }),
+            Insert::Distort(Distort {
+                kind: DistortType::Overdrive,
+                ..Distort::DEFAULT
+            }),
+        ];
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        let keys = Keys::default();
+        for insert in looped.into_iter().chain(filtered) {
+            let mut song = vt_model::song::Song::new(1);
+            song.tracks[0].inserts[0] = insert;
+            let mut pool = MemoryPool::for_song(&song, RATE);
+            let mut state = InsertState::default();
+            state.hold(insert, &mut pool, 25.0, 0);
+            state.settle();
+            for sample in sine(220.0, 0.5, RATE as usize / 4) {
+                state.process([sample, -sample * 0.5], smoothing, RATE, &keys);
+            }
+            state.process([f32::NAN, f32::INFINITY], smoothing, RATE, &keys);
+            let after: Vec<f32> = (0..RATE * 12)
+                .flat_map(|_| state.process([0.0; 2], smoothing, RATE, &keys))
+                .collect();
+            assert!(after.iter().all(|s| s.is_finite()), "{insert:?}");
+            let last = peak(&after[after.len() - RATE as usize / 5..]);
+            assert!(last < 1e-3, "{insert:?}: {last}");
+        }
+    }
+
+    #[test]
+    fn the_clips_hold_a_nan_to_an_end() {
+        for clip in [soft_clip, crate::dsp::filters::filter::soft_clip, |x| {
+            shaped(DistortType::Hard, x)
+        }] {
+            assert!(clip(f32::NAN).is_finite());
+            assert!(clip(f32::INFINITY).is_finite());
+            assert!(clip(f32::NEG_INFINITY).is_finite());
+        }
     }
 }
