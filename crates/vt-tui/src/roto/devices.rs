@@ -991,7 +991,10 @@ pub fn every_kind_of_device() -> Vec<(Song, usize, Page, usize)> {
     for machine in Machine::ALL {
         let mut song = base.clone();
         song.tracks[0].machine = machine;
-        found.push((song, 0, Page::Sound, 0));
+        // Its own device, and those of 4-op's operators after it.
+        for slot in 0..=machine.operators().len() {
+            found.push((song.clone(), 0, Page::Sound, slot));
+        }
     }
     for slot in 1..Page::Sound.devices(&base.tracks[0]).len() {
         found.push((base.clone(), 0, Page::Sound, slot));
