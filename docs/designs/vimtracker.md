@@ -189,8 +189,8 @@ Per-note tables are a further idea, and they get their own decision after the mi
 *   **When**: The user presses `S`, adjusts onset and S-shape, then presses `Enter`.
 *   **Then**: Every adjustment is heard during playback and shown in the column. `Enter` closes the
     controls and leaves plain values, one `u` restores the original values, and `Esc` cancels
-    with no change. `.` applies the same shape to another selection, with its own ends. Leaving the sweep
-    live is deferred: see Generators.
+    with no change. `.` applies the same shape to another selection, with its own ends. `L` in place of
+    `Enter` leaves the sweep live: see CUJ 4.
 
 ### CUJ 4: Adjust a live sweep, then take over by hand
 
@@ -199,7 +199,7 @@ Per-note tables are a further idea, and they get their own decision after the mi
     edits one of its fields by hand.
 *   **Then**: Reshaping rerenders the column while the loop plays. The hand edit applies the sweep,
     leaving plain values, and the status line says so. `u` restores both the old value and the live
-    sweep. Editing notes in the same phrase does not apply it. `Space ga` applies it explicitly.
+    sweep. Editing notes in the same phrase does not apply it. `Space g a` applies it explicitly.
 
 ### CUJ 5: Reuse and vary a phrase
 
@@ -1109,13 +1109,16 @@ Actions are plain data, so `.` can replay them and tests can run editing without
 
 ### Generators
 
-A generator is a pure function of its parameters and target, and later a seed. The live sweep is the first one.
-Later generators combine a **mask**, which chooses the steps to change (as with Polyend's Fill tool), with a **value
-source** that chooses what to write. Those are built when a second generator needs them.
+A generator is a pure function of its parameters, its target and a seed. The shape panel is the generator: it combines a
+**mask**, `Where`, which chooses the rows to change (as Polyend's Fill tool does), with a **value source**, `Fill`, which
+chooses what to write or reworks what's there, and a `Shape` holds every setting of both, the seed included, as plain
+data. A generator that can still be changed is that panel kept live (decision 178), so there's one interface for both.
 
-**Shape panel.** Built ahead of live sweeps, by the author's decision: Visual `S` opens a panel whose result is a preview
-with no undo step, `Enter` keeps it as one undo and leaves plain values, and `Esc` restores what was there. Issue 18's live
-state is deferred until plain values are found wanting. Selecting and pressing `S` again reshapes, from the values now there.
+**Shape panel.** Built ahead of live generators, by the author's decision: Visual `S` opens a panel whose result is a
+preview with no undo step, `Enter` keeps it as one undo and leaves plain values, and `Esc` restores what was there.
+Selecting and pressing `S` again reshapes, from the values now there, and `.` repeats the last `Shape` on another
+selection. A selection across tracks shapes each track's column with the same settings and a seed of its own, as one undo
+(decision 179).
 
 **Sweep.** A sweep covers one column, Note, Velocity, Nudge, gate length or FX, across at least two rows (decision 171 for the note's columns). A multi-column, gate-pulses or instrument-column
 selection is refused with a message. `From` and `To` default to the first and last values selected, or if those match the lowest and
@@ -1128,16 +1131,32 @@ value is `start + (end - start) x f(t)`. `bias(t,a) = t / ((1/a - 2)(1 - t) + 1)
 them as `Curve` and `S`, from -100 to 100 with 0 a straight line, where `a = 0.5 + Curve/200` and `g = 0.5 - S/200`. The distance travelled rounds half up, so
 falling mirrors rising exactly, and results clamp to the column's range.
 
-**Live state.** A live generator is saved on the phrase with its parameters, column, range and both end values, so
-changing its shape never depends on what is currently in the fields. It owns every column it touches.
+**Live state.** A live generator is the shape panel kept live: a saved `Shape` and its target, the phrase it's saved on,
+the track that phrase is on, the column, and the rows or the lane it fills. It also keeps the column's values from under
+it, so moving `Where` or `Rotate` puts back what a row had, and a transform reworks the same values each time; changing
+its shape never depends on what it last wrote. It **owns** the cells it fills, its column on its rows, and **reads** the
+notes there when its rows are chosen by them: always on Velocity, Nudge and a length, whose rows are the notes, and on an
+FX column whose `Where` is Notes or No notes.
 
-*   Changing parameters rerenders it. A rerender never applies it.
-*   A hand edit to a field in an owned column applies it, shows a status message, and leaves plain values. Editing any
-    other column does not.
-*   `Space ga` or `:gen apply` applies the live generator under the cursor.
-*   Doubling a phrase, or shortening it past an owned range, applies it. A new sweep overlapping a live one replaces it.
+*   The panel has two ways out: `Enter` leaves plain values, as one-shot shaping does, and `L` keeps it live. `gl` on any
+    row of a live column reopens the same panel on its saved `Shape`, from anywhere and after a reload; there `Enter`
+    applies it with the new settings, `L` keeps it live, and `Esc` leaves it as it was.
+*   Changing parameters rerenders it, changing owned cells only. A rerender never applies it.
+*   A hand edit to an owned cell applies it, shows a status message, and leaves plain values. `u` restores both.
+*   A hand edit to a column it reads but doesn't own rerenders it, as Elektron's Euclidean mode follows the rhythm, and the
+    edit and the rerender are one undo step: a note added under a velocity generator gets a generated velocity. A note
+    that comes or goes takes the velocity, nudge or length the edit gave it as what's under it. Editing any other column
+    does neither.
+*   On an FX column with a lane, a live generator owns the lane's steps, filling the lane as its own loop, and follows
+    the lane when it moves or changes length. Taking the lane away applies it.
+*   A selection across tracks kept live is one generator per track, each reopened, changed and applied on its own, with
+    its own seed.
+*   `Space g a` or `:gen apply` applies the live generator under the cursor.
+*   Doubling a phrase applies its generators, as the rows after the loop move. Rotating the loop's steps applies those on
+    the rows it moves. Changing the loop's length doesn't, as every step is kept. A new live generator overlapping one on
+    the same column applies the old one, then starts from the values it left.
 *   Undo restores the live state, because it is part of the phrase. Cloning copies it, and each clone renders on its own.
-*   Live columns are marked in the grid. `gl` on a live column reopens its controls, from anywhere and after a reload.
+*   Live cells are marked in the grid, and the phrase's heading names its live columns.
 
 ### Saving and loading
 
@@ -1316,11 +1335,14 @@ The author's decisions on this direction, from decision 1, and every one made si
 *   **Cons**: Every edit path must write to the layer, and edits can land on steps that no longer make musical sense.
 *   **Reason for Rejection**: Hand editing should need no syncing. An edit to an owned column applies the generator, a model close to Elektron's Euclidean mode.
 
-### One-shot generators with remembered settings
+### One-shot generators with remembered settings, and nothing more
 
 *   **Pros**: Nothing to store or keep linked. This is how the Polyend Fill tool works.
 *   **Cons**: Settings are not tied to a part, so an older part cannot be adjusted.
-*   **Reason for Rejection**: The author wants a generated part to stay adjustable until they take over by hand.
+*   **Reason for Rejection**: Not rejected as a start: it's what ships, as the shape panel, with `.` repeating the last
+    `Shape` on another selection. It's rejected only as the whole answer, as the author wants a generated part to stay
+    adjustable until they take over by hand. Live generators (issue 18) are the upgrade, and they're that same panel
+    kept live with its `Shape` saved on the phrase, rather than a second interface (decision 178).
 
 ### Growing tracks live
 
@@ -1381,7 +1403,7 @@ This list comes after Milestones after M3, in order, as jams ask for it. Each en
 2.  **Sample slicing and waveform view.** The slicer moves up to M15, and `:bpm fit` and waveforms stay here. Chopping a break into slices, triggering them from the grid, `:bpm fit <bars>` to set the tempo from a sample's length, and waveforms drawn as images (decision 56). The M8 and Polyend are the references.
 3.  **Score view.** Moved up: full multi-track editing and selections across tracks to M6, and column folding (`za zc zo zM zR`) to M15.
 4.  **Song view and looping.** Moved up to M8, apart from per-track speed and grooves, which stay here. Song view and section navigation. Unequal looping with the author's decision: each section has a length, and a section either **resets** tracks or **carries** their positions on. The default is to carry, and `:reset` is the one-section form of this. Any mid-song guarantee covers track positions only. Also per-track speed, M8-style grooves with `GRV`, how groove units scale with speed, a rounding rule, and sections ending mid-step.
-5.  **Generators.** Masks and value sources, Euclidean with two pulse generators and boolean operators, stage sequences, chords across tracks with strum, and transformers modelled on Ableton's MIDI tools. When one generator writes to several tracks, decide whether editing one applies them all.
+5.  **Generators.** The shape panel already has masks and value sources, Euclid among them, and the transforms modelled on Ableton's MIDI tools; live generators keep it live. Still to come: Euclidean with two pulse generators and boolean operators, stage sequences, and chords across tracks with strum. One generator writing to several tracks is one per track, edited on its own (decision 178).
 6.  **Smaller items.** Chasing held values on play, a fine-timing nudge command, keyframes in sweeps, track groups, macros, Vim-style marks, `/` search, sequence increments across cursors, Harpoon-style assignable view slots, Elektron-style conditions and fill mode, swing at group level as in Maschine, MIDI, device recovery, a portable project file, and `vimtracker export-json <project> [out.json]`, which an earlier test showed round-trips between RON 0.12.3 and JSON. Comments are not kept.
 
 --------------------------------------------------------------------------------
@@ -1493,7 +1515,7 @@ Step:  NOTE VOL INST FX FX FX     C-3 64 01 CUT40 ---00 RET14
 | Normal | `gc`, `gC` | Clone, deep-clone |
 | Normal | `gv` | Reselect the last selection |
 | Normal | `gl` | Reopen controls for the live generator under the cursor |
-| Normal | `Space ga` | Apply the live generator under the cursor |
+| Normal | `Space g a` | Apply the live generator under the cursor |
 | Normal | `Space pd` | Double the current phrase |
 | Normal | `Tab` | Play, or pause in place |
 | Normal | `Shift-Tab` | Play from the start |
@@ -1502,12 +1524,13 @@ Step:  NOTE VOL INST FX FX FX     C-3 64 01 CUT40 ---00 RET14
 | Normal | `i`, `v`, `V`, `:` | Insert, field Visual, step Visual, Command |
 | Visual | Motions, targets, `d y > < = - + _ .` | Extend, then apply to the selection |
 | Visual | `r`, then a value | Fill the cursor's column across the selection, as one undo. `vGra` writes C on each step. Velocity and instrument only go on notes, and FX values only on commands |
-| Visual | `S` | Open the shape panel on one Velocity or FX column |
+| Visual | `S` | Open the shape panel on one Note, Velocity, Nudge, length or FX column, on each track selected |
 | Visual | `Esc` | Normal mode |
-| Shape | `h l` | Onset (curve bias) down or up by 0.05, within 0.05 to 0.95 |
-| Shape | `j k` | S-shape (curve gain) down or up by 0.05, within 0.05 to 0.95 |
-| Shape | `r` | Swap the end values |
-| Shape | `Enter` | Close the controls. The sweep stays live |
+| Shape | `j k` | The row above or below |
+| Shape | `= - + _` | Change the row's value, a small or a large step |
+| Shape | `~`, `r` | Swap the ends, pick the random values again |
+| Shape | `Enter` | Keep it as plain values, as one undo |
+| Shape | `L` | Keep it live, as one undo |
 | Shape | `Esc` | Cancel, restoring the version from before Shape mode |
 | Insert (note) | `a w s e d f t g y h u j` | C to B, current octave, as in Ableton's computer keyboard |
 | Insert (note) | `k o l p ;` | C to E, one octave up |
@@ -1682,7 +1705,7 @@ Transport behaviour follows `audio::transported` and `audio::cued` in `gmuse` wh
 *   **Issue 16: Swing.** Add `:swing` and `:tswing`. **Tests:** 66.7% gives exactly 80 ticks; 50% gives none; a track override does not move another track.
 *   **Issue 17: Curves.** Add `curve.rs`. **Tests:** end values are exact in both directions; curves stay monotonic; over 9 steps from `00` to `7F`, curve bias 0.8 gives `00 2E 49 5A 66 6E 75 7B 7F` and curve gain 0.2 gives `00 05 0D 1B 40 64 72 7A 7F`; refused selections give a message.
 *   **Issue 18: Live generators.** Add `generator.rs`, the `Phrase` field for them, their marker and `:gen apply`. `edit` applies any live generator whose owned columns it changes, except for a rerender. **Tests:** the rules under Live state; a rerender changes owned columns only and keeps it live; a live generator round-trips through saving; two generators on different columns are independent.
-*   **Issue 19: Shape mode.** Add `shape.rs`, Visual `S`, `gl`, and `Space ga`. Each change rerenders and publishes without adding history. `Enter` adds one history entry and `Esc` restores the starting version. `.` applies the last shape to the current selection. **Done when:** CUJ 3 and CUJ 4 work with audio.
+*   **Issue 19: Shape mode.** Add `shape.rs`, Visual `S`, `gl`, and `Space g a`. Each change rerenders and publishes without adding history. `Enter` adds one history entry and `Esc` restores the starting version. `.` applies the last shape to the current selection. **Done when:** CUJ 3 and CUJ 4 work with audio.
 *   **Issue 20: Scope and meters.** Add the scope tap to `link.rs` and `views/scope.rs`, with a small master scope and per-track level meters using Braille and block characters. **Tests:** the real-time guard stays at zero with the tap active; a full tap drops frames rather than waiting.
 *   **Issue 21: Render command.** Add `vimtracker render` and `:render`. **Tests:** golden hash tests; a render is exactly the loop's length; `--tail` extends it; `VT_BLESS=1` updates hashes. **Done when:** CUJ 7 works.
 *   **Issue 22: Autosave.** Add autosave to `project.rs`. **Tests:** only a changed project is written; a newer autosave is offered on opening; audio is unaffected.

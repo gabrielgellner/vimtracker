@@ -76,6 +76,9 @@ up 23 semitones, a press at a time, with the selection kept.
 Select part of a Note, Velocity, Nudge, length or FX column with `v`, then press `S` for a panel
 beside the grid. The column changes as you adjust it, and you hear it if the
 loop is playing. `Enter` keeps it as one undo, and `Esc` puts everything back.
+A selection reaching other tracks with `W` shapes the same column on each of
+them with the same settings, and each picks its own random values; a track with
+nothing to shape there is left alone.
 
 | Row | Does |
 |---|---|

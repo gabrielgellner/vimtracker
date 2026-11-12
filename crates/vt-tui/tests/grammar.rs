@@ -2218,11 +2218,57 @@ fn dot_repeats_across_as_many_tracks_and_gv_comes_back() {
 }
 
 #[test]
-fn shape_refuses_several_tracks() {
-    let (mut app, _rt) = tracks_with(&[&[N, N], &[N, N]]);
+fn shape_across_tracks_gives_each_the_same_settings_and_a_seed_of_its_own() {
+    let rows = [N; 8];
+    let (mut app, _rt) = tracks_with(&[&rows, &rows, &[GONE; 8]]);
+    let velocities = |app: &App, track: usize| -> Vec<String> {
+        track_steps(app, track)
+            .iter()
+            .map(|s| s[4..6].to_owned())
+            .collect()
+    };
+    let depth = app.history.undo_depth();
+    // A ramp from 00 to 70 on both tracks; the third has no notes, so it's passed over.
+    keys(&mut app, "lvGWWSji00ji70");
+    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.shape.as_ref().unwrap().parts.len(), 2);
+    let ramp = ["00", "10", "20", "30", "40", "50", "60", "70"];
+    assert_eq!(velocities(&app, 0), ramp);
+    assert_eq!(velocities(&app, 1), ramp);
+    assert_eq!(track_steps(&app, 2), [GONE; 8]);
+    // A random fill picks for each track on its own.
+    keys(&mut app, "kkKrandom<Enter><Enter>");
+    assert_ne!(velocities(&app, 0), velocities(&app, 1));
+    assert_eq!(app.history.undo_depth(), depth + 1, "one undo for both");
+    keys(&mut app, "u");
+    assert_eq!(track_steps(&app, 0), rows);
+    assert_eq!(track_steps(&app, 1), rows);
+    // `.` shapes both again.
+    keys(&mut app, ".");
+    assert_ne!(track_steps(&app, 0), rows);
+    assert_ne!(track_steps(&app, 1), rows);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+}
+
+#[test]
+fn shape_across_tracks_takes_each_tracks_own_fx_command_and_refuses_when_none_has_one() {
+    let (mut app, _rt) = tracks_with(&[
+        &["C-3 40 cut:00 --- ---", "C-3 40 cut:40 --- ---"],
+        &["C-3 40 res:00 --- ---", "C-3 40 res:40 --- ---"],
+    ]);
+    keys(&mut app, "lllllvjWS");
+    assert_eq!(app.mode, Mode::Shape);
+    keys(&mut app, "<Enter>");
+    assert_eq!(track_steps(&app, 0)[0], "C-3 40 cut:00 --- ---");
+    assert!(
+        track_steps(&app, 1)[1].contains("res:40"),
+        "{:?}",
+        track_steps(&app, 1)
+    );
+    let (mut app, _rt) = tracks_with(&[&[GONE, GONE], &[GONE, GONE]]);
     keys(&mut app, "lvjWS");
     assert_ne!(app.mode, Mode::Shape);
-    assert!(app.status.contains("one track"), "{}", app.status);
+    assert!(app.status.contains("no notes"), "{}", app.status);
 }
 
 #[test]
