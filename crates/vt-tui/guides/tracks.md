@@ -466,8 +466,8 @@ for guitars, electric pianos and pads. It starts slow, all wet.
 
 | Setting | Does |
 |---|---|
-| `Fast` | Switched on, the rotors spin fast, the tremolo; off, slow, the chorale |
-| `Inertia` | How long they take to change speed: at once at `00`, a Leslie's at `80` |
+| `Fast` | Switched on, the rotors spin fast; off, slow |
+| `Inertia` | How long they take to change speed, a Leslie's at `80` |
 | `Doppler` | How far the horn's pitch wavers |
 | `Tremolo` | How far the loudness swells as the rotors turn |
 | `Drive` | How hard its amplifier is driven, from clean at `00` |
@@ -478,7 +478,7 @@ on a step speeds a rotary in slot 1 up, and the next note slows it again,
 or a hold mark keeps it fast. The horn is light and gets there in about a
 second; the drum is heavy and takes about five, so for a while the two turn
 at different speeds, the sound of a Leslie changing over. `Inertia` at
-`FF` takes twice as long.
+`00` changes at once, and `FF` takes twice as long.
 
 `Space` is a huge, bright wash that rings on and on, after Airwindows'
 Galactic: for pads, drones and ambient tails that hang under a whole
