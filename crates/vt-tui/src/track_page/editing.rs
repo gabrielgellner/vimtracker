@@ -5,7 +5,7 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Curve, Hold, MAX_HOLD_MS};
+use vt_model::envelope::{Curve, Hold, MAX_HOLD_MS, MAX_RATCHET};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
@@ -73,13 +73,19 @@ fn adjust_mod(
         }
     };
     let kind = modulator.kind;
-    let (adsr, ahd, lfo) = (&mut modulator.adsr, &mut modulator.ahd, &mut modulator.lfo);
+    let (adsr, ahd, drum, lfo) = (
+        &mut modulator.adsr,
+        &mut modulator.ahd,
+        &mut modulator.drum,
+        &mut modulator.lfo,
+    );
     let ahd_kind = kind == ModKind::Ahd;
     match field {
         ModField::Type => {}
         ModField::Mode => match kind {
             ModKind::Adsr => adsr.curve = next_in(&Curve::ALL, adsr.curve, up),
             ModKind::Ahd => ahd.curve = next_in(&Curve::ALL, ahd.curve, up),
+            ModKind::Drum => drum.curve = next_in(&Curve::ALL, drum.curve, up),
             ModKind::Lfo => lfo.mode = next_in(&LfoMode::ALL, lfo.mode, up),
         },
         ModField::Polarity => modulator.polarity = Some(modulator.polarity().other()),
@@ -96,7 +102,18 @@ fn adjust_mod(
         ModField::Attack if ahd_kind => ahd.attack_ms = time(ahd.attack_ms),
         ModField::Attack => adsr.attack_ms = time(adsr.attack_ms),
         ModField::Decay if ahd_kind => ahd.decay_ms = time(ahd.decay_ms),
+        ModField::Decay if kind == ModKind::Drum => drum.decay_ms = time(drum.decay_ms),
         ModField::Decay => adsr.decay_ms = time(adsr.decay_ms),
+        ModField::Peak => drum.peak_ms = time(drum.peak_ms),
+        ModField::Body => {
+            let size = if large { SUSTAIN_JUMP } else { 1 };
+            let by = if up { size } else { -size };
+            drum.body = (i16::from(drum.body) + by).clamp(0, 100) as u8;
+        }
+        ModField::Ratchet => {
+            let by = if up { 1 } else { -1 };
+            drum.ratchet = (i16::from(drum.ratchet) + by).clamp(1, i16::from(MAX_RATCHET)) as u8;
+        }
         // `Note` is below no time, so `-` from 0 ms holds for the note.
         ModField::Hold => {
             ahd.hold = match (ahd.hold, up) {
@@ -130,7 +147,8 @@ fn adjust_mod(
 /// switch, as choosing a type does.
 fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
     let fresh = default_mod(slot);
-    let (mut adsr, mut ahd, mut lfo) = (modulator.adsr, modulator.ahd, modulator.lfo);
+    let (mut adsr, mut ahd, mut drum, mut lfo) =
+        (modulator.adsr, modulator.ahd, modulator.drum, modulator.lfo);
     let ahd_kind = modulator.kind == ModKind::Ahd;
     match field {
         ModField::Type => {
@@ -171,12 +189,17 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         ModField::Mode => match modulator.kind {
             ModKind::Adsr => adsr.curve = fresh.adsr.curve,
             ModKind::Ahd => ahd.curve = fresh.ahd.curve,
+            ModKind::Drum => drum.curve = fresh.drum.curve,
             ModKind::Lfo => lfo.mode = fresh.lfo.mode,
         },
         ModField::Attack if ahd_kind => ahd.attack_ms = fresh.ahd.attack_ms,
         ModField::Attack => adsr.attack_ms = fresh.adsr.attack_ms,
         ModField::Decay if ahd_kind => ahd.decay_ms = fresh.ahd.decay_ms,
+        ModField::Decay if modulator.kind == ModKind::Drum => drum.decay_ms = fresh.drum.decay_ms,
         ModField::Decay => adsr.decay_ms = fresh.adsr.decay_ms,
+        ModField::Peak => drum.peak_ms = fresh.drum.peak_ms,
+        ModField::Body => drum.body = fresh.drum.body,
+        ModField::Ratchet => drum.ratchet = fresh.drum.ratchet,
         ModField::Hold => ahd.hold = fresh.ahd.hold,
         ModField::Reset if ahd_kind => ahd.reset = fresh.ahd.reset,
         ModField::Sustain => adsr.sustain = fresh.adsr.sustain,
@@ -189,6 +212,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
     ModSlot {
         adsr,
         ahd,
+        drum,
         lfo,
         ..modulator
     }

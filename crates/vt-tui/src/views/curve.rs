@@ -2,7 +2,7 @@
 //! [`kitty::plot`](crate::kitty::plot) draws.
 
 use vt_model::constants::MAX_ENVELOPE_MS;
-use vt_model::envelope::{Adsr, Ahd, Hold};
+use vt_model::envelope::{Adsr, Ahd, Drum, Hold};
 
 /// The most of a diagram's width each stage can take, with a sustain always taking this much.
 const STAGE_SHARE: f32 = 0.25;
@@ -87,6 +87,34 @@ pub(crate) fn ahd_stage_ends(envelope: &Ahd) -> [f32; 3] {
     let attack = stage_width(envelope.attack_ms);
     let hold = attack + hold_width(envelope.hold);
     [attack, hold, hold + stage_width(envelope.decay_ms)]
+}
+
+/// Where each of a drum envelope's stages ends across its diagram: each strike of its peak, then
+/// its body's decay, laid out as an ADSR's stages are, each strike its peak's width.
+pub(crate) fn drum_stage_ends(envelope: &Drum) -> Vec<f32> {
+    let peak = stage_width(envelope.peak_ms);
+    let mut ends: Vec<f32> = (1..=envelope.ratchet.max(1))
+        .map(|strike| peak * f32::from(strike))
+        .collect();
+    let struck = ends.last().copied().unwrap_or(0.0);
+    ends.push(struck + stage_width(envelope.decay_ms));
+    ends
+}
+
+/// A drum envelope's level at `x` from 0 to 1 across its diagram, as [`drum_stage_ends`] lays it
+/// out: each strike falling from full to its body, then the body's decay.
+pub(crate) fn drum_level_at(envelope: &Drum, x: f32) -> f32 {
+    let peak = stage_width(envelope.peak_ms);
+    let struck = peak * f32::from(envelope.ratchet.max(1));
+    if x < struck {
+        return envelope.strike((x % peak) / peak);
+    }
+    let decay = stage_width(envelope.decay_ms);
+    let at = x - struck;
+    if at < decay {
+        return envelope.body_level() * (1.0 - envelope.curve.fall(at / decay));
+    }
+    0.0
 }
 
 #[cfg(test)]
@@ -187,6 +215,35 @@ mod tests {
         assert!((width(Hold::Note) - STAGE_SHARE).abs() < 1e-6);
         assert!(width(Hold::Ms(30)) < width(Hold::Ms(2000)));
         assert!(width(Hold::Ms(0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_drum_is_drawn_as_the_engine_plays_it_each_strike_a_stage_of_its_own() {
+        const RATE: u32 = 48_000;
+        let envelope = Drum {
+            peak_ms: 100,
+            body: 30,
+            decay_ms: 100,
+            ratchet: 3,
+            ..Drum::default()
+        };
+        let ends = drum_stage_ends(&envelope);
+        assert_eq!(ends.len(), 4, "three strikes and the body");
+        let (peak, struck) = (ends[0], ends[2]);
+        for share in [0.1_f32, 0.3, 0.5, 0.8] {
+            let frames = (4800.0 * share) as u64;
+            for strike in 0..3 {
+                let drawn = drum_level_at(&envelope, peak * (strike as f32 + share));
+                let played = envelope.held(strike * 4800 + frames, RATE);
+                assert!((drawn - played).abs() < 1e-3, "{drawn} {played}");
+            }
+            let drawn = drum_level_at(&envelope, struck + (ends[3] - struck) * share);
+            let played = envelope.held(3 * 4800 + frames, RATE);
+            assert!((drawn - played).abs() < 1e-3, "{drawn} {played}");
+        }
+        // Full at each strike, and nothing once it's decayed.
+        assert_eq!(drum_level_at(&envelope, peak), 1.0);
+        assert_eq!(drum_level_at(&envelope, ends[3]), 0.0);
     }
 
     #[test]

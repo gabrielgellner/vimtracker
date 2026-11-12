@@ -26,6 +26,11 @@ pub enum ModField {
     Release,
     Reset,
     Hold,
+    /// A drum envelope's: how long its peak takes, the level it falls to, and how many times it
+    /// strikes. Its `Decay` is the body's.
+    Peak,
+    Body,
+    Ratchet,
     /// An LFO's.
     Shape,
     Rate,
@@ -38,7 +43,10 @@ impl ModField {
         match self {
             Self::Type | Self::Polarity | Self::Destination | Self::Depth => true,
             Self::Mode => kind.has_mode(),
-            Self::Attack | Self::Decay | Self::Reset => kind.is_envelope(),
+            Self::Decay => kind.is_envelope(),
+            // A drum always strikes from full, so it has no attack to reset.
+            Self::Attack | Self::Reset => matches!(kind, ModKind::Adsr | ModKind::Ahd),
+            Self::Peak | Self::Body | Self::Ratchet => kind == ModKind::Drum,
             Self::Sustain | Self::Release => kind == ModKind::Adsr,
             Self::Hold => kind == ModKind::Ahd,
             Self::Shape | Self::Rate | Self::Phase => kind == ModKind::Lfo,
@@ -157,6 +165,9 @@ impl Control {
                 ModField::Release => "Release",
                 ModField::Reset => "Reset",
                 ModField::Hold => "Hold",
+                ModField::Peak => "Peak",
+                ModField::Body => "Body",
+                ModField::Ratchet => "Ratchet",
                 ModField::Shape => "Shape",
                 ModField::Rate => "Rate",
                 ModField::Phase => "Phase",

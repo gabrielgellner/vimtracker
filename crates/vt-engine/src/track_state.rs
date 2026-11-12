@@ -1186,7 +1186,7 @@ impl TrackState {
             let polarity = run.polarity(slot);
             // An envelope's depth is whole, as its page sets it, so it moves by exactly that.
             let held = match slot.kind {
-                ModKind::Adsr | ModKind::Ahd => depth_of(depth).round(),
+                ModKind::Adsr | ModKind::Ahd | ModKind::Drum => depth_of(depth).round(),
                 ModKind::Lfo => depth_of(depth),
             };
             let depth = held + moved_by(0) * 255.0;
@@ -1209,7 +1209,7 @@ impl TrackState {
             }
             let depth = depth.clamp(-f32::from(MAX_DEPTH), f32::from(MAX_DEPTH));
             match slot.kind {
-                ModKind::Adsr | ModKind::Ahd => {
+                ModKind::Adsr | ModKind::Ahd | ModKind::Drum => {
                     let level = run.envelope.level(&slot.envelope(), now.clock, now.rate);
                     let level = polarity.of(Polarity::Uni, level);
                     let added = run.add(slot.kind, level * depth / 255.0 * share);

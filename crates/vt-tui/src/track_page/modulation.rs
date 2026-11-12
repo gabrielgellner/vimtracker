@@ -37,6 +37,18 @@ const AHD_SETTINGS: [ModField; 5] = [
 ];
 const AHD_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
 
+/// A drum envelope's settings: its peak, body and decay down the left, and how far it goes and how
+/// many times its peak strikes down the right, with a hole. It has no reset, as it always strikes
+/// from full.
+const DRUM_SETTINGS: [ModField; 5] = [
+    ModField::Peak,
+    ModField::Body,
+    ModField::Decay,
+    ModField::Depth,
+    ModField::Ratchet,
+];
+const DRUM_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
+
 /// An LFO's settings: what it plays down the left, and where it starts down the right, with a hole
 /// under `Phase` for the `Fade` that #86 brings. Whether notes start it is its mode, in the title.
 const LFO_SETTINGS: [ModField; 4] = [
@@ -75,6 +87,7 @@ fn type_grid(kind: ModKind) -> (&'static [ModField], Grid) {
     match kind {
         ModKind::Adsr => (&ADSR_SETTINGS, Grid::from_columns(&ADSR_GRID)),
         ModKind::Ahd => (&AHD_SETTINGS, Grid::from_columns(&AHD_GRID)),
+        ModKind::Drum => (&DRUM_SETTINGS, Grid::from_columns(&DRUM_GRID)),
         ModKind::Lfo => (&LFO_SETTINGS, Grid::from_columns(&LFO_GRID)),
     }
 }
