@@ -539,6 +539,27 @@ const STRUCK_DRUM: DeviceLayout = live(
         [s("decay"), s("tone"), __, __, __, __, __, __],
     )],
 );
+const WAVE_MAP: DeviceLayout = live(
+    "machine/wavemap",
+    &[knobs(
+        "Wave Map",
+        [s("across"), s("down"), __, __, __, __, __, __],
+    )],
+);
+const WAVE_LINE: DeviceLayout = live(
+    "machine/waveline",
+    &[knobs(
+        "Wave Line",
+        [s("scan"), s("steps"), __, __, __, __, __, __],
+    )],
+);
+const PARAPHONIC: DeviceLayout = live(
+    "machine/paraphonic",
+    &[knobs(
+        "Paraphonic",
+        [s("wave"), s("chord"), __, __, __, __, __, __],
+    )],
+);
 const TOY: DeviceLayout = live(
     "machine/toy",
     &[knobs(
@@ -1207,7 +1228,7 @@ const SPRING: DeviceLayout = stored(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 79] = [
+pub const ALL: [&DeviceLayout; 82] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1248,6 +1269,9 @@ pub const ALL: [&DeviceLayout; 79] = [
     &FLUTED,
     &STRUCK_BELL,
     &STRUCK_DRUM,
+    &WAVE_MAP,
+    &WAVE_LINE,
+    &PARAPHONIC,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1333,6 +1357,9 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::Fluted => &FLUTED,
             SynthVoice::Bell => &STRUCK_BELL,
             SynthVoice::Drum => &STRUCK_DRUM,
+            SynthVoice::WaveMap => &WAVE_MAP,
+            SynthVoice::WaveLine => &WAVE_LINE,
+            SynthVoice::Paraphonic => &PARAPHONIC,
         },
     }
 }

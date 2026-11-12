@@ -412,6 +412,29 @@ away by itself.
 | `Decay` | How long it rings. Near `FF` it rings on without dying away |
 | `Tone` | From a dull thud at `00` through brighter partials to a noisy skin |
 
+`Wave Map` wanders over a 16 by 16 map of Braids' waves, blending the four nearest, for
+evolving digital tones.
+
+| Setting | Does |
+|---|---|
+| `Across` | Where on the map, across it |
+| `Down` | Where on the map, down it |
+
+`Wave Line` scans along a line of 64 of Braids' waves, with rough or smooth steps between
+them, for sweeps that stutter or glide.
+
+| Setting | Does |
+|---|---|
+| `Scan` | Where along the line |
+| `Steps` | Stepped jumps low, smooth sweeps in the middle, coarse steps at `FF` |
+
+`Paraphonic` is a chord of four voices on a line of Braids' waves, for pads and stabs.
+
+| Setting | Does |
+|---|---|
+| `Wave` | Which wave along the line, blending between them |
+| `Chord` | A detuned unison at `00`, then fifths, minor, major and octaves |
+
 A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
 `Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX
 slot lists them under the voice's name, and an LFO's or envelope's `Dest` lists them by

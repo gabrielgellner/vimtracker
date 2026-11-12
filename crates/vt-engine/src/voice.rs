@@ -7,6 +7,7 @@ use crate::dsp::braids_digital::{Ring, SawComb, Toy};
 use crate::dsp::braids_filter_fm::{ChaoticFm, DigitalFilter, FeedbackFm};
 use crate::dsp::braids_physical::{Blown, Bowed, Fluted, StruckBell, StruckDrum};
 use crate::dsp::braids_vocal::{Fof, Vosim};
+use crate::dsp::braids_waves::{Paraphonic, WaveLine, WaveMap};
 use crate::dsp::chiptune::Chiptune;
 use crate::dsp::chord::Chord;
 use crate::dsp::drums::{Hat, Snare};
@@ -114,6 +115,9 @@ enum Synth {
     Fluted(Fluted),
     Bell(StruckBell),
     Drum(StruckDrum),
+    WaveMap(WaveMap),
+    WaveLine(WaveLine),
+    Paraphonic(Paraphonic),
 }
 
 impl Synth {
@@ -159,6 +163,9 @@ impl Synth {
             SynthVoice::Fluted => Self::Fluted(Fluted::new(rate)),
             SynthVoice::Bell => Self::Bell(StruckBell::new(rate)),
             SynthVoice::Drum => Self::Drum(StruckDrum::new(rate)),
+            SynthVoice::WaveMap => Self::WaveMap(WaveMap::new(rate)),
+            SynthVoice::WaveLine => Self::WaveLine(WaveLine::new(rate)),
+            SynthVoice::Paraphonic => Self::Paraphonic(Paraphonic::new(rate)),
         }
     }
 
@@ -204,6 +211,9 @@ impl Synth {
             Self::Fluted(synth) => synth.next(frequency, settings),
             Self::Bell(synth) => synth.next(frequency, settings),
             Self::Drum(synth) => synth.next(frequency, settings),
+            Self::WaveMap(synth) => synth.next(frequency, settings),
+            Self::WaveLine(synth) => synth.next(frequency, settings),
+            Self::Paraphonic(synth) => synth.next(frequency, settings),
         }
     }
 
@@ -426,6 +436,7 @@ impl Voice {
             Some(Synth::Blown(synth)) => synth.seed(seed),
             Some(Synth::Fluted(synth)) => synth.seed(seed),
             Some(Synth::Drum(synth)) => synth.seed(seed),
+            Some(Synth::Paraphonic(synth)) => synth.seed(seed),
             _ => {}
         }
     }
@@ -460,6 +471,7 @@ impl Voice {
                     | Synth::Blown(_)
                     | Synth::Fluted(_)
                     | Synth::Drum(_)
+                    | Synth::Paraphonic(_)
             )
         )
     }

@@ -896,6 +896,18 @@ const STRUCK_DRUM: [Entry; 2] = [
     level("decay", "Decay", "DCAY", 0x80),
     level("tone", "Tone", "TONE", 0x40),
 ];
+const WAVE_MAP: [Entry; 2] = [
+    level("across", "Across", "ACRS", 0x40),
+    level("down", "Down", "DOWN", 0x40),
+];
+const WAVE_LINE: [Entry; 2] = [
+    level("scan", "Scan", "SCAN", 0x40),
+    level("steps", "Steps", "STEP", 0x60),
+];
+const PARAPHONIC: [Entry; 2] = [
+    level("wave", "Wave", "WAVE", 0x40),
+    level("chord", "Chord", "CHRD", 0x88),
+];
 const TOY: [Entry; 2] = [
     level("clock", "Clock", "CLCK", 0xC0),
     level("bend", "Bend", "BEND", 0x00),
@@ -941,6 +953,9 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Fluted => &FLUTED,
         SynthVoice::Bell => &STRUCK_BELL,
         SynthVoice::Drum => &STRUCK_DRUM,
+        SynthVoice::WaveMap => &WAVE_MAP,
+        SynthVoice::WaveLine => &WAVE_LINE,
+        SynthVoice::Paraphonic => &PARAPHONIC,
     }
 }
 
@@ -986,6 +1001,9 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::Fluted => "fluted",
         SynthVoice::Bell => "bell",
         SynthVoice::Drum => "drum",
+        SynthVoice::WaveMap => "wavemap",
+        SynthVoice::WaveLine => "waveline",
+        SynthVoice::Paraphonic => "paraphonic",
     }
 }
 

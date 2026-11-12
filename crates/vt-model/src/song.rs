@@ -1043,11 +1043,17 @@ pub enum SynthVoice {
     Bell,
     /// A drum of six partials and noise, struck.
     Drum,
+    /// A map of waves to wander over.
+    WaveMap,
+    /// A line of waves to scan.
+    WaveLine,
+    /// A chord of four voices on a line of waves.
+    Paraphonic,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 39] = [
+    pub const ALL: [Self; 42] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1087,6 +1093,9 @@ impl SynthVoice {
         Self::Fluted,
         Self::Bell,
         Self::Drum,
+        Self::WaveMap,
+        Self::WaveLine,
+        Self::Paraphonic,
     ];
 
     /// The name on screen.
@@ -1131,6 +1140,9 @@ impl SynthVoice {
             Self::Fluted => "Fluted",
             Self::Bell => "Bell",
             Self::Drum => "Drum",
+            Self::WaveMap => "Wave Map",
+            Self::WaveLine => "Wave Line",
+            Self::Paraphonic => "Paraphonic",
         }
     }
 
@@ -1176,6 +1188,9 @@ impl SynthVoice {
             Self::Fluted => "A jet of air across a bore, for flutes and pipes",
             Self::Bell => "A struck bell of eleven partials, which rings out",
             Self::Drum => "A struck drum of partials and noise, for toms",
+            Self::WaveMap => "A map of waves to wander over, for digital tones",
+            Self::WaveLine => "A line of waves to scan, rough or smooth",
+            Self::Paraphonic => "A chord of four voices on waves, for pads",
         }
     }
 
@@ -1215,6 +1230,9 @@ impl SynthVoice {
                 | Self::Bowed
                 | Self::Blown
                 | Self::Fluted
+                | Self::WaveMap
+                | Self::WaveLine
+                | Self::Paraphonic
         )
     }
 
@@ -1240,6 +1258,9 @@ impl SynthVoice {
                 | Self::Fluted
                 | Self::Bell
                 | Self::Drum
+                | Self::WaveMap
+                | Self::WaveLine
+                | Self::Paraphonic
         )
     }
 }

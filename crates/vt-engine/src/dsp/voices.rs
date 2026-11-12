@@ -11,6 +11,7 @@ pub mod braids_filter_fm;
 mod braids_parts;
 pub mod braids_physical;
 pub mod braids_vocal;
+pub mod braids_waves;
 pub mod chiptune;
 pub mod chord;
 mod chord_bank;
