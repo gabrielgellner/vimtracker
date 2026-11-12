@@ -31,6 +31,7 @@ use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
 use vt_model::speed::Speed;
 use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
+use vt_model::tracking::Source;
 use vt_roto::Label;
 use vt_roto::bytes::Rgb;
 use vt_roto::colour;
@@ -230,7 +231,7 @@ pub fn family(control: Control, track: &Track) -> Family {
         Control::Base(TrackControl::LowCut | TrackControl::HighCut)
         | Control::FilterType
         | Control::FilterMode => Family::Tone,
-        Control::Base(TrackControl::Drive) => Family::Character,
+        Control::Base(TrackControl::Drive | TrackControl::Punch) => Family::Character,
         Control::GateLength
         | Control::Speed
         | Control::Groove
@@ -436,6 +437,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             None => {
                 let coarse = match which {
                     TrackControl::Drive => track.drive,
+                    TrackControl::Punch => track.punch,
                     TrackControl::LowCut => track.low_cut,
                     _ => track.high_cut,
                 };
@@ -543,6 +545,30 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 ModField::Smooth => depth(steps.smooth),
                 // Each value either way of none, with the depth's centre notch.
                 ModField::Step(at) => depth(steps.values[usize::from(at)]),
+                // What Track follows is a musical list of three, which leaves the layout as it is.
+                ModField::Mode if modulator.kind == ModKind::Track => list(
+                    Source::ALL.iter().map(|source| source.name().to_owned()),
+                    Source::ALL
+                        .iter()
+                        .position(|source| *source == modulator.track.source)
+                        .unwrap_or(0),
+                ),
+                // Smooth across its source's values, its note or hex shown as it turns.
+                ModField::Low | ModField::High => {
+                    let tracking = &modulator.track;
+                    let bounds = tracking.bounds();
+                    let at = if field == ModField::Low {
+                        bounds.low
+                    } else {
+                        bounds.high
+                    };
+                    let (lowest, highest) = tracking.source.span();
+                    value(
+                        u16::from(at.clamp(lowest, highest) - lowest),
+                        u16::from(highest - lowest),
+                        false,
+                    )
+                }
                 // An envelope's curve is a musical list, which leaves the layout as it is.
                 ModField::Mode if modulator.kind.is_envelope() => {
                     let curve = match modulator.kind {

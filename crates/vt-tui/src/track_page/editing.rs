@@ -15,6 +15,7 @@ use vt_model::settings::{SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Track};
 use vt_model::speed::Speed;
 use vt_model::steps::{Loop, MAX_MUTATE, MAX_STEP, STEPS, Steps, StepsMode};
+use vt_model::tracking::{Source, Tracking};
 
 use crate::app::App;
 use crate::input::command::Line;
@@ -92,6 +93,10 @@ fn adjust_mod(
             ModKind::Drum => drum.curve = next_in(&Curve::ALL, drum.curve, up),
             ModKind::Lfo => lfo.mode = next_in(&LfoMode::ALL, lfo.mode, up),
             ModKind::Steps => steps.mode = next_in(&StepsMode::ALL, steps.mode, up),
+            ModKind::Track => {
+                let tracking = &mut modulator.track;
+                tracking.source = next_in(&Source::ALL, tracking.source, up);
+            }
             ModKind::Lpg => {}
         },
         ModField::Polarity => modulator.polarity = Some(modulator.polarity().other()),
@@ -194,6 +199,25 @@ fn adjust_mod(
             let value = &mut steps.values[usize::from(at)];
             *value = (*value + if up { size } else { -size }).clamp(-MAX_STEP, MAX_STEP);
         }
+        // A large step is an octave of notes, or `10` in hex.
+        ModField::Low | ModField::High => {
+            let tracking = &mut modulator.track;
+            let source = tracking.source;
+            let size = match (large, source) {
+                (false, _) => 1,
+                (true, Source::Note) => OCTAVE,
+                (true, _) => HEX_JUMP as i16,
+            };
+            let bounds = tracking.bounds_mut();
+            let value = if field == ModField::Low {
+                &mut bounds.low
+            } else {
+                &mut bounds.high
+            };
+            let (lowest, highest) = source.span();
+            let moved = i16::from(*value) + if up { size } else { -size };
+            *value = moved.clamp(i16::from(lowest), i16::from(highest)) as u8;
+        }
     }
 }
 
@@ -218,6 +242,8 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
     );
     let mut steps = modulator.steps;
     let new = Steps::default();
+    let mut tracking = modulator.track;
+    let untouched = Tracking::default();
     let ahd_kind = modulator.kind == ModKind::Ahd;
     let lpg_kind = modulator.kind == ModKind::Lpg;
     match field {
@@ -263,6 +289,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
             ModKind::Drum => drum.curve = fresh.drum.curve,
             ModKind::Lfo => lfo.mode = fresh.lfo.mode,
             ModKind::Steps => steps.mode = new.mode,
+            ModKind::Track => tracking.source = untouched.source,
             ModKind::Lpg => {}
         },
         ModField::Attack if ahd_kind => ahd.attack_ms = fresh.ahd.attack_ms,
@@ -294,6 +321,8 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         ModField::Mutate => steps.mutate = new.mutate,
         ModField::Smooth => steps.smooth = new.smooth,
         ModField::Step(at) => steps.values[usize::from(at)] = 0,
+        ModField::Low => tracking.bounds_mut().low = untouched.bounds_of(tracking.source).low,
+        ModField::High => tracking.bounds_mut().high = untouched.bounds_of(tracking.source).high,
     }
     ModSlot {
         adsr,
@@ -302,6 +331,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         lpg,
         lfo,
         steps,
+        track: tracking,
         ..modulator
     }
 }
@@ -523,6 +553,7 @@ impl App {
                     TrackControl::SendA => track.send_a,
                     TrackControl::SendB => track.send_b,
                     TrackControl::Drive => track.drive,
+                    TrackControl::Punch => track.punch,
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
                     TrackControl::Pitch => track.pitch,
@@ -756,6 +787,7 @@ impl App {
                     TrackControl::SendA => track.send_a,
                     TrackControl::SendB => track.send_b,
                     TrackControl::Drive => track.drive,
+                    TrackControl::Punch => track.punch,
                     TrackControl::LowCut => track.low_cut,
                     TrackControl::HighCut => track.high_cut,
                     TrackControl::Pitch => track.pitch,

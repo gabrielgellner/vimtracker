@@ -87,6 +87,7 @@ fn at_default(control: Control, track: &Track) -> bool {
         || control == Control::Reset && track.reset.is_none()
         || control == Control::Glide && track.glide == 0
         || control == Control::FilterMode && !track.filter.has_modes()
+        || control == Control::Base(TrackControl::Punch) && !track.filter.has_punch()
 }
 
 /// A setting's value as text.
@@ -103,6 +104,7 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
         Control::Base(TrackControl::SendA) => hex(track.send_a),
         Control::Base(TrackControl::SendB) => hex(track.send_b),
         Control::Base(TrackControl::Drive) => hex(track.drive),
+        Control::Base(TrackControl::Punch) => hex(track.punch),
         Control::Base(TrackControl::LowCut) => hex(track.low_cut),
         Control::Base(TrackControl::HighCut) => hex(track.high_cut),
         Control::Base(TrackControl::Pitch) => hex(track.pitch),
@@ -239,6 +241,14 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Phase => format!("{}°", lfo.phase),
         ModField::Deform => depth_text(lfo.deform),
         ModField::Fade => lfo.fade.to_string(),
+        ModField::Low => {
+            let tracking = &modulator.track;
+            tracking.source.text(tracking.bounds().low)
+        }
+        ModField::High => {
+            let tracking = &modulator.track;
+            tracking.source.text(tracking.bounds().high)
+        }
     }
 }
 
@@ -308,6 +318,7 @@ pub(crate) fn filter_being_edited(app: &App) -> bool {
                 TrackControl::Cutoff
                     | TrackControl::Resonance
                     | TrackControl::Drive
+                    | TrackControl::Punch
                     | TrackControl::LowCut
                     | TrackControl::HighCut
             )

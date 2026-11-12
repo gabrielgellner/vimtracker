@@ -206,6 +206,11 @@ fn every_synth_sounds_with_no_sample_and_goes_through_its_settings() {
         let out = play(with_some(&[NOTE, REST]), 2);
         assert!(peak(&out, 0) > 0.05, "{voice:?}: {}", peak(&out, 0));
         assert!(peak(&out, 0) < 1.5, "{voice:?}: {}", peak(&out, 0));
+        // `Modem` sends a steady carrier for its preamble's first 32 symbols, longer than these
+        // two steps, whatever its settings; its own tests hear them.
+        if voice == SynthVoice::Modem {
+            continue;
+        }
         // Its first three, or both of a voice with two.
         for (setting, id) in (0..3).filter_map(|at| Some((at, SettingId::voice(voice, at)?))) {
             // A list, like 6-op's patches or the chords, takes a place half way along it.
@@ -317,8 +322,12 @@ fn a_tailed_render_releases_a_held_note_rather_than_running_on() {
 fn the_drums_die_away_by_themselves() {
     let steps = [NOTE, REST, REST, REST, REST, REST, REST, REST];
     for voice in SynthVoice::ALL.into_iter().filter(|voice| !voice.holds()) {
+        // With a short `Decay`, wherever the voice has it.
+        let decay = (0..9)
+            .find(|at| SettingId::voice(voice, *at).is_some_and(|id| id.entry().key == "decay"))
+            .unwrap_or(2);
         let mut drum = on(voice, &steps);
-        drum.tracks[0].set_machine_value(2, 0x20);
+        drum.tracks[0].set_machine_value(decay, 0x20);
         let out = play(drum, 8);
         assert!(
             peak(&out, 7) < peak(&out, 0) * 0.05,
