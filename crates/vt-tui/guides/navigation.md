@@ -57,6 +57,11 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space fb` | Pick a track by number or name, like a buffer |
 | `C-o` `C-i` | Jump back or forward, as in Vim's jump list |
 
+The phrase view's title shows the chain the phrase is in, `Chain 02  00 03 03 07`,
+its phrases in order with this one in the cursor's colour, so `]p` and `[p` are
+seen moving along it. A phrase that plays in more than one place has a link after
+its number, and a chain too long for the title is cut with `…`.
+
 ## Lists
 
 `K`, `Space Space`, `Space 5` and the others open the same list, in a box over the page,

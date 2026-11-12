@@ -3050,11 +3050,7 @@ fn the_phrase_title_is_in_groups_and_the_track_labels_head_their_columns() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     let buffer = screen(&app);
     let lines = drawn_lines(&buffer);
-    assert!(
-        lines[0].contains("Track 01  Phrase 00  1/1"),
-        "{}",
-        lines[0]
-    );
+    assert!(lines[0].contains("Track 01  Chain 00  00"), "{}", lines[0]);
     assert!(!lines[0].contains("01  02"), "the labels left the title");
     // Each label over its column's note, past the marker's cell.
     let headings: String = lines[1].chars().skip(67).collect();
@@ -3083,9 +3079,80 @@ fn a_shared_phrase_and_chain_are_linked_rather_than_starred() {
     press(&mut app, " 3");
     let title = drawn_lines(&screen(&app))[0].clone();
     assert!(
-        title.contains(&format!("Phrase 00 {LINK}{ICON_SPACE} 2/2")),
+        title.contains(&format!("Chain 00  00{LINK}{ICON_SPACE}00{LINK}")),
         "{title}"
     );
+}
+
+#[test]
+fn the_title_shows_the_chain_with_this_phrase_in_the_cursors_colour_cut_to_its_room() {
+    // A chain of 40 phrases, more than the title has room for.
+    let mut song = Song::new(1);
+    for id in 1..40 {
+        song.tracks[0].phrases.insert(id, Arc::new(Phrase::new(4)));
+    }
+    let entries = (0..40)
+        .map(|phrase| ChainEntry {
+            phrase,
+            transpose: 0,
+        })
+        .collect();
+    let chain = song.sections[0].chains[0].unwrap();
+    song.tracks[0].chains.insert(
+        chain,
+        Arc::new(Chain {
+            entries,
+            label: String::new(),
+        }),
+    );
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, "]p");
+    assert_eq!(app.cursor.slot, 1);
+    let buffer = screen_wide(&app);
+    let title = drawn_lines(&buffer)[0].clone();
+    assert!(title.contains("Chain 00  00 01 02 03"), "{title}");
+    assert!(
+        title.trim_end().ends_with('\u{2026}'),
+        "cut, with a sign: {title}"
+    );
+    assert!(
+        !title.trim_end().contains("\u{2026} "),
+        "not cut before the start: {title}"
+    );
+    let at = title.find("Chain 00  ").unwrap();
+    let first = (title[..at].chars().count() + "Chain 00  ".len()) as u16;
+    assert_eq!(buffer[(first, 0)].fg, vt_tui::theme::OVERLAY2);
+    assert_eq!(
+        buffer[(first + 3, 0)].fg,
+        vt_tui::theme::ROSEWATER,
+        "{title}"
+    );
+    // `]p` moves along it.
+    press(&mut app, "]p");
+    assert_eq!(app.cursor.slot, 2);
+    let buffer = screen_wide(&app);
+    assert_eq!(buffer[(first + 3, 0)].fg, vt_tui::theme::OVERLAY2);
+    assert_eq!(buffer[(first + 6, 0)].fg, vt_tui::theme::ROSEWATER);
+    // At the end, it's cut before the start instead, and the last phrase is still shown.
+    for _ in 0..40 {
+        press(&mut app, "]p");
+    }
+    let title = drawn_lines(&screen_wide(&app))[0].clone();
+    assert!(title.contains("Chain 00  \u{2026} "), "{title}");
+    assert!(title.trim_end().ends_with("27"), "{title}");
+}
+
+/// The phrase view at the author's 163 columns, less the meter beside it.
+fn screen_wide(app: &App) -> ratatui::buffer::Buffer {
+    let backend = ratatui::backend::TestBackend::new(148, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
+        .unwrap();
+    terminal.backend().buffer().clone()
 }
 
 #[test]
@@ -6899,14 +6966,14 @@ fn a_tracks_heading_has_its_machine_and_mute_or_solo_glyphs() {
     };
     let machine = app.song().tracks[0].machine;
     let glyph = vt_tui::glyphs::machine(machine);
-    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01  Phrase")));
+    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01  Chain")));
     tap(&mut app, " m");
-    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01 {MUTE}  Phrase")));
+    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01 {MUTE}  Chain")));
     // Over its column in the overview too, in place of the number's last cell.
     assert!(heading(&app, 1).contains(&format!(" 01{MUTE}")));
     tap(&mut app, " m");
     app.levels[0].solo = true;
-    assert!(heading(&app, 0).contains(&format!("Track 01 {SOLO}  Phrase")));
+    assert!(heading(&app, 0).contains(&format!("Track 01 {SOLO}  Chain")));
     assert_eq!(vt_tui::glyphs::machine(Machine::Sampler), SAMPLER);
     assert_eq!(
         vt_tui::glyphs::machine(Machine::Plaits(SynthVoice::Kick)),
