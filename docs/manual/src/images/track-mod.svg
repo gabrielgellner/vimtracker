@@ -10,8 +10,8 @@
 <text x="0" y="52" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="52" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 1</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 52.896484)" fill="#a6d189"/>
-<text x="108" y="52" fill="#c6d0f5" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  --  → Vol </text>
-<text x="261" y="52" fill="#51576d" textLength="405" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────────────────────────────────────╮</text>
+<text x="108" y="52" fill="#c6d0f5" textLength="198" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Exp  --  → Vol </text>
+<text x="306" y="52" fill="#51576d" textLength="360" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────╮</text>
 <text x="684" y="52" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="52" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 4</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 52.896484)" fill="#a6d189"/>
@@ -116,8 +116,8 @@
 <text x="0" y="223" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="223" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 2</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 223.89648)" fill="#a6d189"/>
-<text x="108" y="223" fill="#c6d0f5" textLength="162" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Uni  → Cut </text>
-<text x="270" y="223" fill="#51576d" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────────╮</text>
+<text x="108" y="223" fill="#c6d0f5" textLength="207" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Exp  Uni  → Cut </text>
+<text x="315" y="223" fill="#51576d" textLength="351" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────╮</text>
 <text x="684" y="223" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="223" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 5</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 223.89648)" fill="#a6d189"/>
@@ -230,9 +230,9 @@
 <text x="0" y="394" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 3</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 394.89648)" fill="#a6d189"/>
-<text x="108" y="394" fill="#c6d0f5" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Uni  </text>
-<text x="216" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">→ ---</text>
-<text x="270" y="394" fill="#51576d" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────────╮</text>
+<text x="108" y="394" fill="#c6d0f5" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Exp  Uni  </text>
+<text x="261" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">→ ---</text>
+<text x="315" y="394" fill="#51576d" textLength="351" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────╮</text>
 <text x="684" y="394" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 6</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 394.89648)" fill="#a6d189"/>

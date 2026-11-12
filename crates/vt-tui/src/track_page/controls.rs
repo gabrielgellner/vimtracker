@@ -18,12 +18,14 @@ pub enum ModField {
     Polarity,
     Destination,
     Depth,
-    /// An envelope's.
+    /// An envelope's: an ADSR's and an AHD's attack, decay and reset, an ADSR's sustain and
+    /// release, and an AHD's hold.
     Attack,
     Decay,
     Sustain,
     Release,
     Reset,
+    Hold,
     /// An LFO's.
     Shape,
     Rate,
@@ -36,9 +38,9 @@ impl ModField {
         match self {
             Self::Type | Self::Polarity | Self::Destination | Self::Depth => true,
             Self::Mode => kind.has_mode(),
-            Self::Attack | Self::Decay | Self::Sustain | Self::Release | Self::Reset => {
-                kind == ModKind::Adsr
-            }
+            Self::Attack | Self::Decay | Self::Reset => kind.is_envelope(),
+            Self::Sustain | Self::Release => kind == ModKind::Adsr,
+            Self::Hold => kind == ModKind::Ahd,
             Self::Shape | Self::Rate | Self::Phase => kind == ModKind::Lfo,
         }
     }
@@ -154,6 +156,7 @@ impl Control {
                 ModField::Sustain => "Sustain",
                 ModField::Release => "Release",
                 ModField::Reset => "Reset",
+                ModField::Hold => "Hold",
                 ModField::Shape => "Shape",
                 ModField::Rate => "Rate",
                 ModField::Phase => "Phase",
@@ -302,6 +305,9 @@ impl Control {
 
     /// The setting's name on screen, on this track, as each machine names its own.
     pub fn label_on(self, track: &Track) -> &'static str {
+        if let Self::Mod(slot, ModField::Mode) = self {
+            return track.mods[slot].kind.mode_label();
+        }
         self.setting_on(track)
             .map_or_else(|| self.label(), SettingId::name)
     }

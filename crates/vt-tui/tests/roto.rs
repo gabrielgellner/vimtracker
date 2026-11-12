@@ -1025,10 +1025,10 @@ fn without_vimtrackers_setups_a_devices_buttons_are_two_step_knobs() {
         assert!(fake.plugins.values().all(|p| p.kind == PluginKind::Macro));
         assert!(fake.serial_changes.is_empty());
     });
-    // The envelope's reset is on its sixth knob, as two steps.
+    // The envelope's reset is on its seventh knob, after its curve, as two steps.
     let envelope = live_devices(&app.song().tracks[0], app.song(), false)
         .into_iter()
         .find(|device| device.name.as_str() == "M1 ADSR")
         .unwrap();
-    assert_eq!(envelope.controls[5].as_ref().unwrap().feel, Feel::Switch);
+    assert_eq!(envelope.controls[6].as_ref().unwrap().feel, Feel::Switch);
 }

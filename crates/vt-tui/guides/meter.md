@@ -143,7 +143,7 @@ keys edit an instrument on another track.
 
 In its PLUGIN mode the Roto shows one track's devices: the Sound page's (the machine,
 `Filter`, `Output` and `Play`), then the FX slots, then the Mod page's (the six mod
-slots, named by number and type as `M1 ADSR` and `M4 LFO`, then `Accumulator` and
+slots, named by number and type as `M1 ADSR`, `M2 AHD` and `M4 LFO`, then `Accumulator` and
 `Arpeggio`). Its buttons work as they do for Live and
 Bitwig:
 
@@ -180,7 +180,7 @@ Off/on settings are on the buttons, under the knob they go with, such as Glue's 
 under `Makeup`, an LFO's mode under `Phase`, lit for `Trig` and dark for `Free`, and a mod slot's
 polarity under `Depth`, lit for `Bi`: a press switches it, `u` undoes it, and its light is on while it is. The
 Roto shows buttons only for devices stored on it, so vimtracker stores the ones that
-have off/on settings there, 9 setups named `vt ...`, beside Live's, when it first
+have off/on settings there, 10 setups named `vt ...`, beside Live's, when it first
 connects and again only when one changes. It never touches another program's setups.
 `vimtracker roto-probe --clear-own` removes vimtracker's, asking first. Until they're
 written, or if the Roto-Setup app has the Roto's serial port, those devices are shown

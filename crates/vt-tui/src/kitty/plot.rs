@@ -10,7 +10,7 @@
 use vt_engine::dsp::compressor::curve_db;
 use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
-use vt_model::envelope::Adsr;
+use vt_model::envelope::{Adsr, Envelope};
 use vt_model::insert::{Compressor, Equaliser, threshold_db};
 use vt_model::lfo::{self, Lfo, wave};
 use vt_model::modulation::Polarity;
@@ -18,7 +18,7 @@ use vt_model::song::{FilterType, Track};
 
 use super::{indexed_png, rgb};
 use crate::theme;
-use crate::views::curve::{level_at, stage_ends};
+use crate::views::curve::{ahd_level_at, ahd_stage_ends, level_at, stage_ends};
 
 /// How wide the line is, in pixels.
 const LINE_PIXELS: f32 = 2.0;
@@ -349,24 +349,36 @@ fn filter_open(track: &Track) -> bool {
 /// sharp, over a dotted baseline and fainter dotted lines down it between the stages, so each of
 /// its times has a part of the picture to point at.
 pub fn envelope(envelope: &Adsr, size: (usize, usize)) -> Plot {
-    envelope_in(envelope, Polarity::Uni, size)
+    envelope_in(&Envelope::Adsr(*envelope), Polarity::Uni, size)
 }
 
 /// An envelope's shape in a polarity: over its baseline one way, or its centre line both ways, as
-/// what it moves is then at rest half way up.
-pub fn envelope_in(envelope: &Adsr, polarity: Polarity, (width, height): (usize, usize)) -> Plot {
+/// what it moves is then at rest half way up. An AHD's hold is a stage of its own, with its lines
+/// either side.
+pub fn envelope_in(
+    envelope: &Envelope,
+    polarity: Polarity,
+    (width, height): (usize, usize),
+) -> Plot {
     let mut plot = Plot::new(width, height);
     let rest = match polarity {
         Polarity::Uni => 0.0,
         Polarity::Bi => 0.5,
     };
     plot.across(rest, Mark::Grid);
-    let ends = stage_ends(envelope);
-    // Between attack and decay, decay and sustain, and sustain and release.
-    for end in &ends[..3] {
+    let ends: Vec<f32> = match envelope {
+        Envelope::Adsr(adsr) => stage_ends(adsr).to_vec(),
+        Envelope::Ahd(ahd) => ahd_stage_ends(ahd).to_vec(),
+    };
+    // Between each stage and the next: attack and decay, decay and sustain, and sustain and
+    // release, or attack and hold, and hold and decay.
+    for end in &ends[..ends.len() - 1] {
         plot.down(*end, Mark::Fainter);
     }
-    plot.curve(|x| level_at(envelope, x), 0.0, &ends);
+    match envelope {
+        Envelope::Adsr(adsr) => plot.curve(|x| level_at(adsr, x), 0.0, &ends),
+        Envelope::Ahd(ahd) => plot.curve(|x| ahd_level_at(ahd, x), 0.0, &ends),
+    }
     plot
 }
 
@@ -503,6 +515,7 @@ pub fn dot(diameter: usize, color: [u8; 3]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vt_model::envelope::Curve;
 
     /// Where the line's middle is down a column of pixels, weighting each by how much of it the
     /// line covers, if the line is in it.
@@ -827,14 +840,17 @@ mod tests {
     #[test]
     fn an_envelopes_shape_is_its_adsr_within_a_pixel_over_its_baseline_and_stages() {
         let size = (360, 195);
-        for (attack_ms, decay_ms, sustain, release_ms) in
-            [(1, 200, 0x40, 50), (300, 80, 0xC0, 2000), (20, 20, 0, 400)]
+        let times = [(1, 200, 0x40, 50), (300, 80, 0xC0, 2000), (20, 20, 0, 400)];
+        for ((attack_ms, decay_ms, sustain, release_ms), curve) in times
+            .into_iter()
+            .flat_map(|times| Curve::ALL.map(|curve| (times, curve)))
         {
             let shape = Adsr {
                 attack_ms,
                 decay_ms,
                 sustain,
                 release_ms,
+                curve,
                 ..Adsr::default()
             };
             let plot = envelope(&shape, size);
@@ -875,6 +891,58 @@ mod tests {
                 let marked = (0..size.1).filter(|y| pixels[y * size.0 + x] == FAINTER);
                 assert!(marked.count() > 30, "{shape:?} at {end}");
             }
+        }
+    }
+
+    #[test]
+    fn an_ahds_shape_is_its_stages_within_a_pixel_with_a_line_either_side_of_its_hold() {
+        use vt_model::envelope::{Ahd, Hold};
+        let size = (360, 195);
+        for (attack_ms, hold, decay_ms, curve) in [
+            (1, Hold::Ms(30), 200, Curve::Exp),
+            (100, Hold::Note, 400, Curve::Snap),
+            (20, Hold::Ms(2000), 50, Curve::Lin),
+        ] {
+            let shape = Ahd {
+                attack_ms,
+                hold,
+                decay_ms,
+                curve,
+                ..Ahd::default()
+            };
+            let plot = envelope_in(&Envelope::Ahd(shape), Polarity::Uni, size);
+            let level = |x: f32| ahd_level_at(&shape, x);
+            for x in 1..size.0 - 1 {
+                let share = (x as f32 + 0.5 - 1.0) / (size.0 as f32 - LINE_PIXELS);
+                if steep(&plot, level, share) {
+                    continue;
+                }
+                let expected = plot.at(share, level(share)).1;
+                let found = middle(&plot, x).unwrap();
+                assert!(
+                    (found - expected).abs() < 1.0,
+                    "{shape:?} {x}: {found} against {expected}"
+                );
+            }
+            // Full through its hold, and a fainter line at either end of it, but none after.
+            let ends = ahd_stage_ends(&shape);
+            let column = plot.at((ends[0] + ends[1]) / 2.0, 0.0).0 as usize;
+            let top = plot.at(0.0, 1.0).1;
+            assert!(
+                (middle(&plot, column).unwrap() - top).abs() < 0.5,
+                "{shape:?}"
+            );
+            let pixels = plot.pixels();
+            let marked = |end: f32| {
+                let x = plot.at(end, 0.0).0 as usize;
+                (0..size.1)
+                    .filter(|y| pixels[y * size.0 + x] == FAINTER)
+                    .count()
+            };
+            for end in &ends[..2] {
+                assert!(marked(*end) > 30, "{shape:?} at {end}");
+            }
+            assert!(marked(ends[2]) < 30, "{shape:?}");
         }
     }
 
