@@ -941,8 +941,11 @@ mod tests {
                     modulator.kind = if round % 2 == slot % 2 {
                         [ModKind::Adsr, ModKind::Ahd, ModKind::Drum, ModKind::Lpg][round / 2 % 4]
                     } else {
-                        ModKind::Lfo
+                        [ModKind::Lfo, ModKind::Steps][round / 2 % 2]
                     };
+                    modulator.steps.values =
+                        [0x20, -0x20, 0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+                    modulator.steps.rate = vt_model::steps::StepRate::Tick;
                     modulator.destination = Some(SettingId::CUT);
                     modulator.depth = 0x40;
                 }

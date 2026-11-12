@@ -1680,6 +1680,9 @@ impl Graphics {
                         plot::lfo_cycle(drawing, size).png(shade.color())
                     })?
                 }
+                // Steps' values are a row of bars drawn as text, which the cursor edits, so
+                // there's no picture to send.
+                ModKind::Steps => 0,
             };
         }
         app.mod_images = Some(ids);

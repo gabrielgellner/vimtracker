@@ -44,6 +44,7 @@ use vt_roto::sysex::CONTROLS;
 
 use super::devices::Family;
 use vt_model::modulation::ModKind;
+use vt_model::steps::STEPS;
 
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField};
 
@@ -714,6 +715,56 @@ const LFO: DeviceLayout = stored(
     ],
 );
 
+/// A Steps slot's: how fast, how many and how far, then where each note starts it, what it does at
+/// its end and its mode, musical lists that leave the layout as it is; then its values, eight to a
+/// page, each with a centre notch, a small step sequencer under the hand; and where it goes last
+/// (decided in the study's §12, question 3). It has no off/on settings, so it's live.
+const STEPS_LAYOUT: DeviceLayout = live(
+    "steps",
+    &[
+        knobs(
+            "Steps",
+            [
+                s("rate"),
+                s("length"),
+                s("depth"),
+                s("start"),
+                s("loop"),
+                s("mode"),
+                __,
+                __,
+            ],
+        ),
+        knobs(
+            "Steps 1-8",
+            [
+                s("step1"),
+                s("step2"),
+                s("step3"),
+                s("step4"),
+                s("step5"),
+                s("step6"),
+                s("step7"),
+                s("step8"),
+            ],
+        ),
+        knobs(
+            "Steps 9-16",
+            [
+                s("step9"),
+                s("step10"),
+                s("step11"),
+                s("step12"),
+                s("step13"),
+                s("step14"),
+                s("step15"),
+                s("step16"),
+            ],
+        ),
+        DEST_PAGE,
+    ],
+);
+
 /// How far it goes either way, what it does there and when it starts again, then what it moves
 /// and by how much.
 const ACCUMULATOR: DeviceLayout = live(
@@ -1239,6 +1290,7 @@ pub const ALL: [&DeviceLayout; 74] = [
     &DRUM,
     &LPG_ENVELOPE,
     &LFO,
+    &STEPS_LAYOUT,
     &ACCUMULATOR,
     &ARPEGGIO,
     &EMPTY,
@@ -1367,6 +1419,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
             ModKind::Drum => &DRUM,
             ModKind::Lpg => &LPG_ENVELOPE,
             ModKind::Lfo => &LFO,
+            ModKind::Steps => &STEPS_LAYOUT,
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
@@ -1390,13 +1443,26 @@ pub fn app_only(control: Control, track: &Track) -> bool {
     }
 }
 
-/// The control of a device a layout's setting names, if the device has it.
+/// The control of a device a layout's setting names, if the device has it. Steps' values are one
+/// cursor stop on the page, so each of their keys finds the slot's by its number.
 pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Control> {
-    spec.rows()
-        .flatten()
-        .flatten()
-        .find(|control| key(*control, track) == setting.key)
+    let controls = || spec.rows().flatten().flatten();
+    if let Some(at) = STEP_KEYS.iter().position(|step| *step == setting.key) {
+        return controls().find_map(|control| match control {
+            Control::Mod(slot, ModField::Step(_)) => {
+                Some(Control::Mod(slot, ModField::Step(at as u8)))
+            }
+            _ => None,
+        });
+    }
+    controls().find(|control| key(*control, track) == setting.key)
 }
+
+/// Steps' values' keys, by their place.
+const STEP_KEYS: [&str; STEPS] = [
+    "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8", "step9", "step10",
+    "step11", "step12", "step13", "step14", "step15", "step16",
+];
 
 /// The key a layout names a control by on this track: a machine's setting and an effect's by the
 /// key songs store them under, and the track's own settings by a name of their own.
@@ -1459,6 +1525,10 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Phase => "phase",
             ModField::Deform => "deform",
             ModField::Fade => "fade",
+            ModField::Length => "length",
+            ModField::Start => "start",
+            ModField::Loop => "loop",
+            ModField::Step(at) => STEP_KEYS[usize::from(at).min(STEPS - 1)],
         },
         Control::Accumulator(field) => match field {
             AccumulatorField::Up => "up",
