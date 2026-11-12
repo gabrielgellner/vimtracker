@@ -518,7 +518,7 @@ impl App {
                     step(Finer::TempoFine, feel::TEMPO_LEAST, most)
                 }
             }
-            (Mode::Sample, _) if self.sample_page.setting.is_none() => {
+            (Mode::Sample | Mode::SampleVisual, _) if self.sample_page.setting.is_none() => {
                 // A pixel's frames, as `=` nudges a point by a pixel.
                 let zoom = self.sample_page.zoom.max(1);
                 let pixel = match self.sample_page.cell_width {

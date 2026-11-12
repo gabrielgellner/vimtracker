@@ -481,6 +481,7 @@ pub enum TrackControl {
     SendA,
     SendB,
     Drive,
+    Punch,
     LowCut,
     HighCut,
     Pitch,
@@ -498,7 +499,7 @@ impl TrackControl {
             Self::SendB => Some(SettingId::SEND_B),
             Self::Pitch => Some(SettingId::PITCH),
             Self::VelocityDelta => Some(SettingId::VELOCITY_DELTA),
-            Self::Drive | Self::LowCut | Self::HighCut => None,
+            Self::Drive | Self::Punch | Self::LowCut | Self::HighCut => None,
         }
     }
 }
@@ -927,6 +928,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::SendA => track.send_a = (*value).min(MAX_LEVEL),
                 TrackControl::SendB => track.send_b = (*value).min(MAX_LEVEL),
                 TrackControl::Drive => track.drive = *value,
+                TrackControl::Punch => track.punch = *value,
                 TrackControl::LowCut => track.low_cut = *value,
                 TrackControl::HighCut => track.high_cut = *value,
                 TrackControl::Pitch => track.pitch = *value,

@@ -33,6 +33,41 @@ pub(super) const OVERSAMPLING: usize = 2;
 /// How many frames a model renders at once, at twice the rate.
 pub(super) const INNER: usize = BLOCK * OVERSAMPLING;
 
+/// How many frames Braids renders at once, at 96 kHz, which its per-block decays are set for.
+pub(super) const BRAIDS_BLOCK: usize = 24;
+
+/// A setting on `0..=1` as Braids' parameters have it, from 0 to 32 767.
+#[inline]
+pub(super) fn whole(value: f32) -> i32 {
+    (value.clamp(0.0, 1.0) * 32_767.0) as i32
+}
+
+/// stmlib's `Random`, a linear congruential generator, seeded for each note so a render repeats.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Lcg {
+    state: u32,
+}
+
+impl Lcg {
+    pub(super) fn new(seed: u32) -> Self {
+        Self { state: seed }
+    }
+
+    #[inline]
+    pub(super) fn word(&mut self) -> u32 {
+        self.state = self
+            .state
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
+        self.state
+    }
+
+    /// A 16-bit sample of noise.
+    #[inline]
+    pub(super) fn sample(&mut self) -> i16 {
+        (self.word() >> 16) as u16 as i16
+    }
+}
 /// Braids' highest note for its analog oscillators, as a MIDI note: about 13.3 kHz.
 const HIGHEST_NOTE: f32 = 128.0;
 /// Where the output's offset is taken out, as the module's output coupling does.
@@ -53,6 +88,12 @@ pub struct Pitch {
 }
 
 impl Pitch {
+    /// Twice the program's rate, in Hz, which it runs at.
+    #[inline]
+    pub(super) fn rate(self) -> f32 {
+        self.rate
+    }
+
     /// Another note at the same rate.
     #[inline]
     pub(super) fn at(self, note: f32) -> Self {
@@ -111,6 +152,9 @@ pub trait Model: Copy {
     const LEVEL: f32;
     fn new() -> Self;
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]);
+    /// Choose the noise it draws, for a model that draws any, so each note differs but a render
+    /// repeats.
+    fn seed(&mut self, _seed: u32) {}
 }
 
 /// A voice playing one of Braids' models, at twice the rate and brought back down. It's plain
@@ -137,6 +181,11 @@ impl<M: Model> Macro<M> {
             output: [0.0; BLOCK],
             at: BLOCK,
         }
+    }
+
+    /// Choose the noise its model draws, if it draws any.
+    pub fn seed(&mut self, seed: u32) {
+        self.model.seed(seed);
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.

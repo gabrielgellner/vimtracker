@@ -1,5 +1,5 @@
 //! What's worked out from a sample file once and kept: its waveform as a pyramid of peaks, its peak
-//! level, and where its sound starts and ends. It's kept by the file's content hash in the cache
+//! level, where its sound starts and ends, and where each sound in it starts. It's kept by the file's content hash in the cache
 //! folder, as Ableton keeps an `.asd` beside a sample, but never beside the user's files and never
 //! in the song, so it can always be built again.
 //!
@@ -13,11 +13,12 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use crate::bank::ContentHash;
+use crate::onsets::{Onset, find_onsets};
 use crate::sample::{Decoded, SampleError, decode_sample};
 
 /// The cache file's format. A file of another version is built again rather than misread, so this
 /// goes up whenever what's written changes.
-pub const ANALYSIS_VERSION: u32 = 1;
+pub const ANALYSIS_VERSION: u32 = 2;
 
 /// The finest buckets of the pyramid are `2^FINEST` frames, 256, as Audacity's finest summary is.
 /// A view closer than that reads the frames themselves.
@@ -242,6 +243,9 @@ pub struct Analysis {
     /// From the first frame above [`SILENCE_DB`] in any channel to just past the last, or none if
     /// it's all silence.
     pub sound: Option<Range<u64>>,
+    /// Where each sound starts, in order, each with how strong its onset is, for `Sens` to keep
+    /// or drop.
+    pub onsets: Vec<Onset>,
 }
 
 impl Analysis {
@@ -267,7 +271,13 @@ impl Analysis {
             pyramid,
             peak,
             sound,
+            onsets: find_onsets(samples, channels, decoded.rate),
         }
+    }
+
+    /// Where the sounds kept at a `Sens` start, in order.
+    pub fn onsets(&self, sens: u8) -> Vec<u64> {
+        crate::onsets::kept(&self.onsets, sens).collect()
     }
 
     pub fn channels(&self) -> usize {
@@ -283,7 +293,7 @@ impl Analysis {
     pub fn encode(&self) -> Vec<u8> {
         let pyramid = &self.pyramid;
         let buckets: usize = pyramid.levels.iter().map(Vec::len).sum();
-        let mut bytes = Vec::with_capacity(64 + buckets * 8);
+        let mut bytes = Vec::with_capacity(64 + buckets * 8 + self.onsets.len() * 12);
         bytes.extend_from_slice(MAGIC);
         bytes.extend_from_slice(&ANALYSIS_VERSION.to_le_bytes());
         bytes.extend_from_slice(&self.hash.0.to_le_bytes());
@@ -301,6 +311,11 @@ impl Analysis {
                 bytes.extend_from_slice(&fold.min.to_le_bytes());
                 bytes.extend_from_slice(&fold.max.to_le_bytes());
             }
+        }
+        bytes.extend_from_slice(&(self.onsets.len() as u64).to_le_bytes());
+        for onset in &self.onsets {
+            bytes.extend_from_slice(&onset.frame.to_le_bytes());
+            bytes.extend_from_slice(&onset.strength.to_le_bytes());
         }
         bytes
     }
@@ -343,6 +358,14 @@ impl Analysis {
             levels.push(level);
             expected = (expected / channels).div_ceil(2) * channels;
         }
+        let count = reader.u64()?;
+        let mut onsets = Vec::with_capacity((count as usize).min(reader.0.len() / 12));
+        for _ in 0..count {
+            onsets.push(Onset {
+                frame: reader.u64()?,
+                strength: f32::from_le_bytes(reader.array()?),
+            });
+        }
         // A pyramid goes up to one bucket over the whole file, or has no levels if it's empty.
         let top = levels.last().map_or(0, Vec::len);
         if !reader.0.is_empty() || top != if frames == 0 { 0 } else { channels } {
@@ -358,6 +381,7 @@ impl Analysis {
             },
             peak,
             sound: (sound.start != u64::MAX).then_some(sound),
+            onsets,
         })
     }
 }

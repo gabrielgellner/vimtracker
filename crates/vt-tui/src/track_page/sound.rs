@@ -36,13 +36,15 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
     ]
 }
 
-/// The filter's settings, in columns: the filter itself, then the utility filter's two cuts.
-const FILTER: [&[Control]; 2] = [
+/// The filter's settings, in columns: the filter itself, its punch, then the utility filter's two
+/// cuts.
+const FILTER: [&[Control]; 3] = [
     &[
         base(TrackControl::Cutoff),
         base(TrackControl::Resonance),
         base(TrackControl::Drive),
     ],
+    &[base(TrackControl::Punch)],
     &[base(TrackControl::LowCut), base(TrackControl::HighCut)],
 ];
 
