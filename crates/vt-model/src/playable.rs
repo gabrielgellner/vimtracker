@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use crate::bank::{BankEntry, MARK_COUNT, MARK_LETTERS, PlayParams, SliceParams, mark_index};
+use crate::bank::{BankEntry, MARK_COUNT, MARK_LETTERS, PlayParams, SliceParams, Warp, mark_index};
 use crate::sample::SampleData;
 use crate::samples::{SampleId, SamplePool};
 
@@ -31,6 +31,10 @@ pub struct Playable {
     pub end: u64,
     /// The number of the slice each letter names, `a` first, or none for a letter naming none.
     pub marks: [Option<u8>; MARK_COUNT],
+    /// Where its sounds start, between its start and its end, for `Play`'s `Tempo` to start each
+    /// at its own time when its warp is `Beats`: its slices' starts, or the sounds its `Sens`
+    /// finds once its analysis is in if it has no slices. Empty for any other warp.
+    pub beats: Box<[u64]>,
 }
 
 /// A stretch of a sample and how it plays, in the pool's frames, at the program's rate.
@@ -53,6 +57,11 @@ pub struct Span {
     pub speed: f64,
     /// What its pan multiplies the left and the right by: 1 for both in the middle.
     pub pan: [f32; 2],
+    /// How many of its frames each of the song's steps plays, for `Play`'s `Tempo`, so the entry
+    /// lasts as many steps as it says from its start to its end: none if it doesn't say.
+    pub step_frames: Option<f64>,
+    /// Whether `Tempo` starts each of its sounds at its own time, rather than changing its speed.
+    pub beats: bool,
 }
 
 /// A loop in a span: its first frame, one past its last, and how many frames its crossfade lasts.
@@ -77,6 +86,8 @@ impl Span {
             gain: 1.0,
             speed: 1.0,
             pan: [1.0, 1.0],
+            step_frames: None,
+            beats: false,
         }
     }
 }
@@ -113,6 +124,13 @@ impl Playable {
                 crossfade: crossfade.min(start).min((end - start) / 2) as u32,
             });
         let gain = play.normalize_gain(normalize_peak(entry, samples));
+        let step_frames = entry
+            .edit
+            .hints
+            .length_steps()
+            .filter(|_| end > start)
+            .map(|steps| (end - start) as f64 / f64::from(steps.max(1)));
+        let beats = play.warp == Warp::Beats;
         let span = |from: u64, to: u64, over: &SliceParams, sliced: bool| {
             let play: PlayParams = over.over(play);
             Span {
@@ -128,6 +146,8 @@ impl Playable {
                 gain: play.gain() * gain,
                 speed: play.speed(),
                 pan: over.pan_gains(),
+                step_frames,
+                beats,
             }
         };
         let spans: Box<[Span]> = if points.slices.is_empty() {
@@ -147,6 +167,24 @@ impl Playable {
         for (letter, slot) in MARK_LETTERS.zip(marks.iter_mut()) {
             *slot = points.marked(letter).map(|number| number as u8);
         }
+        let beats: Box<[u64]> = match beats {
+            false => Box::new([]),
+            true => {
+                let starts: Vec<u64> = match points.slices.is_empty() {
+                    false => points.slices.iter().map(|slice| slice.start).collect(),
+                    true => onset_analysis(entry, samples)
+                        .map(|analysis| analysis.onsets(entry.edit.hints.sens))
+                        .unwrap_or_default(),
+                };
+                let mut beats: Vec<u64> = starts
+                    .into_iter()
+                    .map(at)
+                    .filter(|frame| (start + 1..end).contains(frame))
+                    .collect();
+                beats.dedup();
+                beats.into()
+            }
+        };
         Some(Self {
             sample,
             frames,
@@ -155,7 +193,34 @@ impl Playable {
             start,
             end,
             marks,
+            beats,
         })
+    }
+
+    /// Where a place in play order is among the sounds `Beats` starts in a span: the place the
+    /// sound it's in starts, and the place the next one does, or the span's end. A reversed span
+    /// plays each from its end back, so its sounds start where the forward ones end.
+    pub fn beat_around(&self, span: &Span, place: f64) -> (f64, f64) {
+        let frames = span.frames as f64;
+        let (first, last) = if span.reverse {
+            (frames - span.end as f64, frames - span.start as f64)
+        } else {
+            (span.start as f64, span.end as f64)
+        };
+        let mut from = first;
+        let mut until = last;
+        let cuts = self.beats.iter().map(|frame| match span.reverse {
+            false => *frame as f64,
+            true => frames - *frame as f64,
+        });
+        for cut in cuts.filter(|cut| (first..last).contains(cut)) {
+            if cut <= place {
+                from = from.max(cut);
+            } else {
+                until = until.min(cut);
+            }
+        }
+        (from, until)
     }
 
     /// The number of the slice a letter names, if it names one.
@@ -182,6 +247,18 @@ impl Playable {
             },
         }
     }
+}
+
+/// The analysis an entry starts its sounds by under `Beats`, when it has no slices to start them,
+/// if it's in. A [`Playable`] worked out before it came in is out of date once it has.
+pub fn onset_analysis<'a>(
+    entry: &BankEntry,
+    samples: &'a SamplePool,
+) -> Option<&'a Arc<crate::analysis::Analysis>> {
+    if entry.edit.play.warp != Warp::Beats || !entry.edit.points.slices.is_empty() {
+        return None;
+    }
+    samples.analysis(entry.source()?.hash)
 }
 
 /// The peak normalising an entry works from, if it asks to be normalised and its file's analysis
@@ -352,5 +429,63 @@ mod tests {
             playable.span(1, true).loop_.is_none(),
             "on through never loops"
         );
+    }
+
+    #[test]
+    fn a_length_in_steps_gives_each_span_the_frames_a_step_plays_at_the_programs_rate() {
+        let mut entry = sliced();
+        assert_eq!(
+            Playable::of(&entry, &pool(Rates::SAME))
+                .unwrap()
+                .whole
+                .step_frames,
+            None
+        );
+        entry.edit.hints.set_length_steps(Some(16));
+        let rates = Rates {
+            file: 44_100,
+            loaded: 48_000,
+        };
+        let playable = Playable::of(&entry, &pool(rates)).unwrap();
+        // From 0.1 s to 0.9 s of the second, at the program's rate.
+        let step = Some((43_200.0 * 48.0 / 44.1 - 4800.0 * 48.0 / 44.1) / 16.0);
+        let close = |found: Option<f64>| (found.unwrap() - step.unwrap()).abs() < 1.0;
+        assert!(close(playable.whole.step_frames));
+        assert!(
+            close(playable.span(2, false).step_frames),
+            "every slice keeps the entry's"
+        );
+    }
+
+    #[test]
+    fn beats_start_at_the_slices_and_a_reversed_span_starts_them_from_their_ends() {
+        let mut entry = sliced();
+        assert!(
+            Playable::of(&entry, &pool(Rates::SAME))
+                .unwrap()
+                .beats
+                .is_empty()
+        );
+        entry.edit.play.warp = Warp::Beats;
+        let playable = Playable::of(&entry, &pool(Rates::SAME)).unwrap();
+        assert_eq!(&*playable.beats, &[14_400, 24_000, 33_600]);
+        let whole = playable.whole;
+        assert!(whole.beats);
+        assert_eq!(playable.beat_around(&whole, 20_000.0), (14_400.0, 24_000.0));
+        assert_eq!(playable.beat_around(&whole, 5000.0), (4800.0, 14_400.0));
+        assert_eq!(playable.beat_around(&whole, 40_000.0), (33_600.0, 43_200.0));
+        // In play order, reversed: the last slice's end, 43 200, is place 4800.
+        let reversed = Span {
+            reverse: true,
+            ..whole
+        };
+        assert_eq!(playable.beat_around(&reversed, 5000.0), (4800.0, 14_400.0));
+        assert_eq!(
+            playable.beat_around(&reversed, 20_000.0),
+            (14_400.0, 24_000.0)
+        );
+        // Within a slice's span, only its own.
+        let slice = playable.span(1, false);
+        assert_eq!(playable.beat_around(&slice, 20_000.0), (14_400.0, 24_000.0));
     }
 }

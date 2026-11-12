@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use vt_model::bank::{BankEntry, ContentHash, Loop, PlayParams, Points, SliceParams};
+use vt_model::bank::{BankEntry, ContentHash, Loop, PlayParams, Points, SliceParams, Warp};
 use vt_model::constants::{FIXED_TRACKS, FORMAT_VERSION, MAX_GROUPS};
 use vt_model::insert::{Compressor, CompressorType, Insert};
 use vt_model::lfo::LfoMode;
@@ -156,6 +156,7 @@ fn a_bank_round_trips_with_its_numbers_hashes_and_play_settings() {
         fade_out: 4800,
         normalize: Some(-0.5),
         snap_zero: true,
+        warp: Warp::Beats,
     };
     kick.edit.points = Points {
         start: 100,

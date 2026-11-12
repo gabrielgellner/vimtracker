@@ -432,7 +432,8 @@ background, so the list doesn't wait for it, and the last few are kept.
 | `:sample fade 10ms 0.2` | Fade in and out over these. `off` for none |
 | `:sample gain -3` | Its gain in dB, up to 24 either way |
 | `:sample tune 12 -20` | Its tune, in semitones and cents |
-| `:sample bars 2` | Two bars long, for `:slice beat`; `off` for the tempo |
+| `:sample bars 2` | Two bars long, for `:slice beat` and `Tempo`; `off` for none |
+| `:sample steps 8` | Eight steps long, as `bars` says in bars |
 
 Wherever a start or an end cuts into the sound, it fades over a millisecond or so, so
 it never clicks. A loop with no crossfade of its own gets one as short. The track's own
@@ -445,7 +446,7 @@ can lock any of them:
 | `Slice` | `SLI` | Which slice plays, once it's sliced: see **Slices** |
 | `Start` | `STA` | Where a note starts: `80` is half way in |
 | `Length` | `SLEN` | How much plays from there. `FF` is all of it |
-| `Play` | `PLY` | `One-shot`, round its `Loop`, `Ping-pong`, or `Thru` |
+| `Play` | `PLY` | `One-shot`, round its `Loop`, `Ping-pong`, `Thru`, or `Tempo` |
 
 `Loop` and `Ping-pong` go round the sample's own loop, or round all that plays if it
 has none, until the note ends. `Thru` plays once from the slice on to the sample's
@@ -453,7 +454,47 @@ end. `Start` and `Length` are shares of the slice, or of the whole, counted
 from where the sample starts playing, so on a reversed sample they count back from
 its end. An LFO or an envelope can move them, read as each note starts, as an
 Elektron's sample start is. A sample's fade out is for a one-shot, as a looping note
-never reaches its end.
+never reaches its end. `Tempo` loops in time with the song: see **Loop to tempo**.
+
+## Loop to tempo
+
+`Play`'s `Tempo` goes round the loop as `Loop` does, at whatever speed has the
+sample last as many steps as it says, from its start to its end, so a one-bar
+loop stays a bar long at any tempo, as the Deluge's audio clips and the
+Octatrack's synced loops do. Say how long it is with `:sample bars 1`,
+`:sample steps 8`, or `Steps` on the sample page's settings row. One that doesn't
+say loops at its own speed. Moving its start or end changes its speed, as the
+length in steps stays.
+
+| Command | Does |
+|---|---|
+| `:sample steps 16` | It lasts 16 steps, a bar |
+| `:bpm sample` | Set the tempo so the track's sample plays at its own speed |
+
+`:bpm sample` grabs the tempo from the track's sample, as the Deluge's grab tempo
+does: the tempo at which it lasts its steps at the speed it was recorded. A
+sample that doesn't say how long it is is taken to be the power of two of steps,
+1, 2, 4 and on, whose tempo is nearest the song's now, and says so from then on.
+`u` takes back the tempo and the length together.
+
+`Warp`, on the sample page's settings row, says how `Tempo` keeps it to the tempo:
+
+| Warp | Does |
+|---|---|
+| `Re-pitch` | Faster or slower, its pitch moving with its speed, as a record's does |
+| `Beats` | Each slice starts at its own time and plays at its own speed |
+
+With `Re-pitch`, the note and the sample's tune don't change its speed, which
+the tempo has, as Ableton's Re-Pitch takes no transpose. With `Beats`, each
+slice, or each sound its `Sens` finds if it has no slices, starts when its time
+comes at the tempo and plays as recorded, its note and tune moving its pitch: a
+slice the next one's start comes before is cut short with a fade, and one that
+ends first leaves a gap, as Ableton's Beats does. It's the cleanest for drums;
+stretching that keeps the pitch comes later.
+
+A note on `Tempo` starts its loop from the top as it starts, as any note does:
+playing from the middle of the song, or unmuting the track, it comes in on its
+next note rather than part way through.
 
 ## The bank
 

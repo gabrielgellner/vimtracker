@@ -1283,9 +1283,10 @@ pub const SLICE_CHOICES: [&str; 256] = {
     choices
 };
 
-/// How a sampler's note plays its sample: through once, round its loop, back and forth in it, or
-/// on through the slices after its own, as [`PlayMode`] says.
-pub const PLAY_CHOICES: [&str; 4] = ["One-shot", "Loop", "Ping-pong", "Thru"];
+/// How a sampler's note plays its sample: through once, round its loop, back and forth in it, on
+/// through the slices after its own, or round its loop in time with the song, as [`PlayMode`]
+/// says.
+pub const PLAY_CHOICES: [&str; 5] = ["One-shot", "Loop", "Ping-pong", "Thru", "Tempo"];
 
 /// How a sampler's note plays its sample, its `Play`. A loop is the entry's own if it has one,
 /// or else the whole of what plays.
@@ -1301,6 +1302,11 @@ pub enum PlayMode {
     /// From its slice's start on past the slice's end, to the entry's, once, as tracker-ce's Play
     /// Thru and Simpler's Thru do. Reversed, it plays back past the slice's start to the entry's.
     Thru,
+    /// Round its loop as `Loop` does, at the speed that has the entry last as many of the song's
+    /// steps as its hints say, whatever the tempo: loop to tempo, as the Deluge's audio clips and
+    /// the Octatrack's and Simpler's synced loops play. Its warp says how it gets there. An entry
+    /// that doesn't say how long it is loops at its own speed.
+    Tempo,
 }
 
 impl PlayMode {
@@ -1310,7 +1316,8 @@ impl PlayMode {
             0 => Self::OneShot,
             1 => Self::Loop,
             2 => Self::PingPong,
-            _ => Self::Thru,
+            3 => Self::Thru,
+            _ => Self::Tempo,
         }
     }
 }

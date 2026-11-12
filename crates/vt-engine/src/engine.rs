@@ -2951,6 +2951,7 @@ impl Engine {
     /// Render voices and effects into a run of frames with no events in it.
     fn render(&mut self, out: &mut [f32]) {
         self.stopwatch.lap(TimedPart::Sequencing);
+        self.keep_time();
         let samples = Arc::clone(&self.current.samples);
         let limiter = self.current.song.limiter;
         let groups = self.sounds();
@@ -3091,6 +3092,39 @@ impl Engine {
         }
         self.stopwatch.lap(TimedPart::Mixing);
     }
+}
+
+impl Engine {
+    /// Tell every note keeping to the song's tempo, under `Play`'s `Tempo`, how long a step is at
+    /// the tempo now, before a run: from the same tempo the sequencer times its steps by, so a
+    /// loop lasting 16 steps comes round again as the 17th step does, however long it plays.
+    fn keep_time(&mut self) {
+        let step = TICKS_PER_STEP as f64 * 60.0 * f64::from(self.rate) * 1000.0
+            / (TICKS_PER_QUARTER as f64 * f64::from(self.millibpm));
+        let bank = &self.current.bank;
+        for track in self.tracks.iter_mut() {
+            keep_voice_time(&mut track.voice, bank, step);
+            keep_voice_time(&mut track.tail, bank, step);
+        }
+        self.previews
+            .follow(|voice| keep_voice_time(voice, bank, step), |_| {});
+    }
+}
+
+/// Tell a voice keeping to the tempo how long a step is, and with `Beats`, where its entry's sounds
+/// are around its clock.
+fn keep_voice_time(voice: &mut Voice, bank: &Bank, step: f64) {
+    if !voice.keeps_time() {
+        return;
+    }
+    let playable = voice
+        .entry()
+        .and_then(|entry| bank.get(usize::from(entry))?.as_deref())
+        .filter(|playable| playable.sample == voice.sample());
+    voice.keep_time(step, |span, place| match playable {
+        Some(playable) => playable.beat_around(span, place),
+        None => (f64::NEG_INFINITY, f64::INFINITY),
+    });
 }
 
 /// The span a voice's slice of its entry plays now, if the entry still plays the voice's sample.

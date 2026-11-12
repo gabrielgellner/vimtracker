@@ -527,9 +527,12 @@ none.
 A `Playable` is one bank entry ready to play: its `SampleId` and frames, a `Span` for each slice in
 `SLI`'s order, or one for the whole entry, the whole entry's span for the sample page, its start
 and end, and the slice number each mark's letter names. A `Span` is in the pool's frames at the
-program's rate: its start and end, its loop and crossfade, whether it's reversed, its fades, and
-its gain, speed and pan. A slice's own settings are already in place of the entry's, and the gain
-already takes in what normalising needs, from the file's analysis.
+program's rate: its start and end, its loop and crossfade, whether it's reversed, its fades, its
+gain, speed and pan, and for `Play`'s `Tempo` how many frames a step of the song plays and whether
+its warp is `Beats`. A slice's own settings are already in place of the entry's, and the gain
+already takes in what normalising needs, from the file's analysis. With `Beats`, the `Playable`
+also has where its sounds start: its slices', or its onsets at its `Sens`, so one whose analysis
+comes in later is worked out again.
 
 **Why the engine never sees `SampleEdit`.** An entry is edited in its file's own frames and rate,
 by path and content hash, with settings a slice may or may not override. Working that out takes
@@ -548,7 +551,9 @@ a slice's settings cost the voice nothing; and `SLI 'a` is looked up rather than
 happens at a frame: the song's next step, a track's own step at its `Speed`, a delayed, cut,
 release, gate, retrigger or arpeggio event, or the mod slots' update every `LFO_UPDATE_FRAMES`
 (32). So a step lands on its frame, and nothing inside a run asks whether one
-is due. `Engine::render` then plays the run's frames.
+is due. `Engine::render` then plays the run's frames, first telling each sampler note on `Play`'s
+`Tempo` how long a step is at the tempo, so it moves through its loop in time with the steps from
+the same clock (decision 239).
 
 *   **Who plays.** A note or a preview only starts between runs, so a track that's silent as a run
     starts, with no voice, preview or slot still ringing, is skipped for the whole run, and the

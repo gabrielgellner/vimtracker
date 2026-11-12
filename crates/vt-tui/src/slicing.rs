@@ -7,6 +7,7 @@
 use vt_model::action::{Action, FieldValue};
 use vt_model::analysis::{Analysis, Pyramid};
 use vt_model::bank::{BankEntry, MAX_SLICES, SliceParams};
+use vt_model::constants::BAR_STEPS;
 use vt_model::onsets::{MIN_GAP_SECONDS, MIN_SILENCE_SECONDS, after_silence, quiet_level};
 use vt_model::settings::SettingId;
 use vt_model::song::Machine;
@@ -229,14 +230,17 @@ impl App {
                 (starts, said)
             }
             SliceChange::Beat(note) => {
-                let bar = match entry.edit.hints.bars {
-                    Some(bars) => (whole.end - whole.start) as f64 / f64::from(bars.max(1)),
+                let steps = entry.edit.hints.length_steps();
+                let bar = match steps {
+                    Some(steps) => {
+                        (whole.end - whole.start) as f64 * BAR_STEPS as f64
+                            / f64::from(steps.max(1))
+                    }
                     None => 4.0 * beat_frames(rate, self.song().millibpm),
                 };
                 let starts = beat_starts(&within, bar / f64::from(note.max(1)));
-                let by = match entry.edit.hints.bars {
-                    Some(1) => "as it's a bar long".to_owned(),
-                    Some(bars) => format!("as it's {bars} bars long"),
+                let by = match steps {
+                    Some(steps) => format!("as it lasts {}", crate::points::steps_text(steps)),
                     None => "at the song's tempo".to_owned(),
                 };
                 let said = format!("{} slices of 1/{note}, {by}", starts.len());
