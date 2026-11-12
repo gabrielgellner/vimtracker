@@ -101,8 +101,9 @@ pub fn wav(path: &std::path::Path) {
     writer.finalize().unwrap();
 }
 
+/// The phrase view, wide enough for the grid and a few of the overview's five-cell columns.
 pub fn screen(app: &App) -> ratatui::buffer::Buffer {
-    let backend = ratatui::backend::TestBackend::new(80, 24);
+    let backend = ratatui::backend::TestBackend::new(100, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
         .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))

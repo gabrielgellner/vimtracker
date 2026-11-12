@@ -1561,18 +1561,18 @@ fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
     let (mut app, _realtime) = app();
     press(&mut app, "W");
     let buffer = screen(&app);
-    let title: String = (67..80).map(|x| buffer[(x, 0)].symbol()).collect();
+    let labels: String = (67..100).map(|x| buffer[(x, 1)].symbol()).collect();
     assert_eq!(
-        title.trim_end(),
-        " 01  02",
+        labels.trim_end(),
+        " 01   02",
         "the returns and master are left out"
     );
     assert_eq!(
-        buffer[(72, 0)].bg,
+        buffer[(73, 1)].bg,
         vt_tui::theme::GREEN,
         "track 02 is marked"
     );
-    assert_ne!(buffer[(68, 0)].bg, vt_tui::theme::GREEN);
+    assert_ne!(buffer[(68, 1)].bg, vt_tui::theme::GREEN);
     let headings: String = (0..30).map(|x| buffer[(x, 1)].symbol()).collect();
     assert_eq!(headings.trim_end(), "         Note              FX");
     assert_eq!(
@@ -2896,7 +2896,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     press(&mut app, "]L");
     app.top = 0;
     let buffer = screen(&app);
-    let neighbour = |y: u16| -> String { (72..75).map(|x| buffer[(x, y)].symbol()).collect() };
+    let neighbour = |y: u16| -> String { (73..76).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
     assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
     assert_eq!(
@@ -2964,7 +2964,7 @@ fn a_loop_survives_saving_with_what_is_outside_it() {
 /// Another track's column on one row of steps: its marker and note, and its colour.
 /// A column of the overview past the track being edited, which is the overview's first here.
 fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
-    let x = 71 + column * 4;
+    let x = 72 + column * 5;
     let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
     (text, buffer[(x + 1, row + 2)].fg)
 }
@@ -3006,6 +3006,49 @@ fn empty_cells_are_faint_dots_and_an_empty_slot_has_no_value() {
     );
     assert_eq!(buffer[(13, 3)].fg, vt_tui::theme::OVERLAY0);
     assert_eq!(buffer[(33, 3)].fg, vt_tui::theme::OVERLAY0);
+}
+
+#[test]
+fn the_phrase_title_is_in_groups_and_the_track_labels_head_their_columns() {
+    let (mut app, _realtime) = tracks_of_different_lengths();
+    let buffer = screen(&app);
+    let lines = drawn_lines(&buffer);
+    assert!(
+        lines[0].contains("Track 01  Phrase 00  1/1"),
+        "{}",
+        lines[0]
+    );
+    assert!(!lines[0].contains("01  02"), "the labels left the title");
+    // Each label over its column's note, past the marker's cell.
+    let headings: String = lines[1].chars().skip(67).collect();
+    assert!(headings.starts_with(" 01   02   03 "), "{headings}");
+    assert_eq!(buffer[(68, 1)].bg, vt_tui::theme::GREEN);
+    // In Insert they sit beside the box's top edge, in the same columns.
+    app.key(Key::char('i'), Instant::now());
+    let insert = drawn_lines(&screen(&app))[1].clone();
+    let after: String = insert.chars().skip(65).collect();
+    assert!(after.starts_with("╮  01   02   03 "), "{after}");
+}
+
+#[test]
+fn a_shared_phrase_and_chain_are_linked_rather_than_starred() {
+    use vt_tui::glyphs::{ICON_SPACE, LINK};
+    let (mut app, _realtime) = app();
+    // A second row of the chain plays phrase 00 again.
+    press(&mut app, " 2yyp");
+    let chain = drawn_lines(&drawn(&app, vt_tui::views::chain::draw));
+    assert!(
+        chain[2].contains(&format!("00{LINK}{ICON_SPACE}")),
+        "{}",
+        chain[2]
+    );
+    assert!(!chain.iter().any(|line| line.contains('*')), "{chain:?}");
+    press(&mut app, " 3");
+    let title = drawn_lines(&screen(&app))[0].clone();
+    assert!(
+        title.contains(&format!("Phrase 00 {LINK}{ICON_SPACE} 2/2")),
+        "{title}"
+    );
 }
 
 #[test]
@@ -6802,20 +6845,20 @@ fn dropouts_put_a_warning_at_the_right_of_the_status_line_only_once_there_are_an
 fn a_tracks_heading_has_its_machine_and_mute_or_solo_glyphs() {
     use vt_tui::glyphs::{DRUM, MUTE, SAMPLER, SOLO, SYNTH};
     let (mut app, _rt) = app();
-    let heading = |app: &App| -> String {
+    let heading = |app: &App, y: u16| -> String {
         let buffer = screen(app);
-        (0..80).map(|x| buffer[(x, 0)].symbol()).collect()
+        (0..100).map(|x| buffer[(x, y)].symbol()).collect()
     };
     let machine = app.song().tracks[0].machine;
     let glyph = vt_tui::glyphs::machine(machine);
-    assert!(heading(&app).starts_with(&format!("{glyph} Track 01 Phrase")));
+    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01  Phrase")));
     tap(&mut app, " m");
-    assert!(heading(&app).starts_with(&format!("{glyph} Track 01 {MUTE} Phrase")));
+    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01 {MUTE}  Phrase")));
     // Over its column in the overview too, in place of the number's last cell.
-    assert!(heading(&app).contains(&format!(" 01{MUTE}")));
+    assert!(heading(&app, 1).contains(&format!(" 01{MUTE}")));
     tap(&mut app, " m");
     app.levels[0].solo = true;
-    assert!(heading(&app).contains(&format!("Track 01 {SOLO} Phrase")));
+    assert!(heading(&app, 0).contains(&format!("Track 01 {SOLO}  Phrase")));
     assert_eq!(vt_tui::glyphs::machine(Machine::Sampler), SAMPLER);
     assert_eq!(
         vt_tui::glyphs::machine(Machine::Plaits(SynthVoice::Kick)),
@@ -9753,10 +9796,10 @@ fn grouped() -> (App, Realtime) {
     (app, realtime)
 }
 
-/// Where the phrase view's overview starts on its title line: past the grid's heading.
-fn overview_start(title: &str) -> usize {
-    let heading = title.find("Phrase").unwrap();
-    title[..heading].chars().count() + "Phrase 00 1/1".len()
+/// Where the phrase view's overview starts on its headings row: past the grid's last heading.
+fn overview_start(headings: &str) -> usize {
+    let last = headings.find("FX 3").unwrap();
+    headings[..last].chars().count() + "FX 3".len()
 }
 
 #[test]
@@ -9774,18 +9817,15 @@ fn a_group_and_its_tracks_are_named_in_its_colour_where_tracks_are_listed() {
     press(&mut app, " 3");
     let phrase = drawn(&app, vt_tui::views::phrase::draw);
     let title = drawn_lines(&phrase)[0].clone();
-    let from = overview_start(&title);
-    assert_eq!(color_from(&phrase, 0, from, "02"), blue);
-    assert_eq!(color_from(&phrase, 0, from, "05"), peach);
-    assert_ne!(color_from(&phrase, 0, from, "04"), blue);
+    let headings = drawn_lines(&phrase)[1].clone();
+    let from = overview_start(&headings);
+    assert_eq!(color_from(&phrase, 1, from, "02"), blue);
+    assert_eq!(color_from(&phrase, 1, from, "05"), peach);
+    assert_ne!(color_from(&phrase, 1, from, "04"), blue);
     // The titles of a track in a group carry its mark.
     assert!(title.contains("Track 01 G1 "), "{title}");
     let chain = drawn_lines(&drawn(&app, vt_tui::views::chain::draw));
-    assert!(
-        chain[0].starts_with("Track 01 G1  Chain 00"),
-        "{}",
-        chain[0]
-    );
+    assert!(chain[0].contains("Track 01 G1  Chain 00"), "{}", chain[0]);
     let page = drawn_lines(&drawn(&app, vt_tui::views::track::draw));
     assert!(page[0].contains("Track 01 G1 "), "{}", page[0]);
     // The track picker.
@@ -9898,10 +9938,10 @@ fn the_phrase_views_overview_shows_a_folded_group_as_a_column_of_its_own() {
     press(&mut app, " 6lza0");
     assert_eq!(app.cursor.track, 3);
     press(&mut app, " 3");
-    let title = drawn_lines(&drawn(&app, vt_tui::views::phrase::draw))[0].clone();
-    let overview: String = title.chars().skip(overview_start(&title)).collect();
+    let headings = drawn_lines(&drawn(&app, vt_tui::views::phrase::draw))[1].clone();
+    let overview: String = headings.chars().skip(overview_start(&headings)).collect();
     assert!(
-        overview.contains(&format!(" G1{FOLDED}{ICON_SPACE}04 ")),
+        overview.contains(&format!(" G1{FOLDED}{ICON_SPACE} 04 ")),
         "{overview}"
     );
     assert!(!overview.contains("01"), "{overview}");
