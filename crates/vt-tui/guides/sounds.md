@@ -432,7 +432,7 @@ background, so the list doesn't wait for it, and the last few are kept.
 | `:sample fade 10ms 0.2` | Fade in and out over these. `off` for none |
 | `:sample gain -3` | Its gain in dB, up to 24 either way |
 | `:sample tune 12 -20` | Its tune, in semitones and cents |
-| `:sample bars 2` | It's two bars long, for `:slice beat`. `off` for the song's tempo |
+| `:sample bars 2` | Two bars long, for `:slice beat`; `off` for the tempo |
 
 Wherever a start or an end cuts into the sound, it fades over a millisecond or so, so
 it never clicks. A loop with no crossfade of its own gets one as short. The track's own
@@ -508,9 +508,9 @@ step of depth.
 | Command | Does |
 |---|---|
 | `:slice 16` | Cut it into 16 of the same length |
-| `:slice transients` | A slice at each hit, as the sample's `Sens` finds them |
-| `:slice beat 1/16` | A slice each sixteenth at the song's tempo, or of its bars |
-| `:slice silence` | A slice at each sound after silence, for hits in a row |
+| `:slice transients` | A slice at each hit, as its `Sens` finds them |
+| `:slice beat 1/16` | A slice each sixteenth, at the tempo or its bars |
+| `:slice silence` | A slice at each sound after silence |
 | `:slice clear` | Play it whole again |
 | `:slice gain -3` | This slice's own gain, in dB |
 | `:slice pan -25` | Its own pan, from -50 at the left to 50 at the right |
