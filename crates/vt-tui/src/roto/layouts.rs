@@ -504,6 +504,41 @@ const FOF: DeviceLayout = live(
         [s("vowel"), s("voice"), __, __, __, __, __, __],
     )],
 );
+const BOWED: DeviceLayout = live(
+    "machine/bowed",
+    &[knobs(
+        "Bowed",
+        [s("pressure"), s("position"), __, __, __, __, __, __],
+    )],
+);
+const BLOWN: DeviceLayout = live(
+    "machine/blown",
+    &[knobs(
+        "Blown",
+        [s("breath"), s("tone"), __, __, __, __, __, __],
+    )],
+);
+const FLUTED: DeviceLayout = live(
+    "machine/fluted",
+    &[knobs(
+        "Fluted",
+        [s("breath"), s("jet"), __, __, __, __, __, __],
+    )],
+);
+const STRUCK_BELL: DeviceLayout = live(
+    "machine/bell",
+    &[knobs(
+        "Bell",
+        [s("decay"), s("detune"), __, __, __, __, __, __],
+    )],
+);
+const STRUCK_DRUM: DeviceLayout = live(
+    "machine/drum",
+    &[knobs(
+        "Drum",
+        [s("decay"), s("tone"), __, __, __, __, __, __],
+    )],
+);
 const TOY: DeviceLayout = live(
     "machine/toy",
     &[knobs(
@@ -1172,7 +1207,7 @@ const SPRING: DeviceLayout = stored(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 74] = [
+pub const ALL: [&DeviceLayout; 79] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1208,6 +1243,11 @@ pub const ALL: [&DeviceLayout; 74] = [
     &CHAOS_FM,
     &VOSIM,
     &FOF,
+    &BOWED,
+    &BLOWN,
+    &FLUTED,
+    &STRUCK_BELL,
+    &STRUCK_DRUM,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1288,6 +1328,11 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::ChaoticFm => &CHAOS_FM,
             SynthVoice::Vosim => &VOSIM,
             SynthVoice::Fof => &FOF,
+            SynthVoice::Bowed => &BOWED,
+            SynthVoice::Blown => &BLOWN,
+            SynthVoice::Fluted => &FLUTED,
+            SynthVoice::Bell => &STRUCK_BELL,
+            SynthVoice::Drum => &STRUCK_DRUM,
         },
     }
 }

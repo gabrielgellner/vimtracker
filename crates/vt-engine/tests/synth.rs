@@ -317,8 +317,12 @@ fn a_tailed_render_releases_a_held_note_rather_than_running_on() {
 fn the_drums_die_away_by_themselves() {
     let steps = [NOTE, REST, REST, REST, REST, REST, REST, REST];
     for voice in SynthVoice::ALL.into_iter().filter(|voice| !voice.holds()) {
+        // With a short `Decay`, wherever the voice has it.
+        let decay = (0..9)
+            .find(|at| SettingId::voice(voice, *at).is_some_and(|id| id.entry().key == "decay"))
+            .unwrap_or(2);
         let mut drum = on(voice, &steps);
-        drum.tracks[0].set_machine_value(2, 0x20);
+        drum.tracks[0].set_machine_value(decay, 0x20);
         let out = play(drum, 8);
         assert!(
             peak(&out, 7) < peak(&out, 0) * 0.05,

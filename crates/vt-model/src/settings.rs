@@ -874,6 +874,28 @@ const FOF: [Entry; 2] = [
     level("vowel", "Vowel", "VOWL", 0x00),
     level("voice", "Voice", "VOIC", 0x40),
 ];
+const BOWED: [Entry; 2] = [
+    level("pressure", "Pressure", "PRES", 0x80),
+    level("position", "Position", "POSN", 0x40),
+];
+/// A reed speaks most readily with little noise in its breath.
+const BLOWN: [Entry; 2] = [
+    level("breath", "Breath", "BRTH", 0xC0),
+    level("tone", "Tone", "TONE", 0x40),
+];
+const FLUTED: [Entry; 2] = [
+    level("breath", "Breath", "BRTH", 0x80),
+    level("jet", "Jet", "JET", 0x80),
+];
+/// The struck ones ring on without dying away from `FA` up.
+const STRUCK_BELL: [Entry; 2] = [
+    level("decay", "Decay", "DCAY", 0xA0),
+    level("detune", "Detune", "DTUN", 0x20),
+];
+const STRUCK_DRUM: [Entry; 2] = [
+    level("decay", "Decay", "DCAY", 0x80),
+    level("tone", "Tone", "TONE", 0x40),
+];
 const TOY: [Entry; 2] = [
     level("clock", "Clock", "CLCK", 0xC0),
     level("bend", "Bend", "BEND", 0x00),
@@ -914,6 +936,11 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::FeedbackFm | SynthVoice::ChaoticFm => &FEEDBACK_FM,
         SynthVoice::Vosim => &VOSIM,
         SynthVoice::Fof => &FOF,
+        SynthVoice::Bowed => &BOWED,
+        SynthVoice::Blown => &BLOWN,
+        SynthVoice::Fluted => &FLUTED,
+        SynthVoice::Bell => &STRUCK_BELL,
+        SynthVoice::Drum => &STRUCK_DRUM,
     }
 }
 
@@ -954,6 +981,11 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::ChaoticFm => "chaosfm",
         SynthVoice::Vosim => "vosim",
         SynthVoice::Fof => "fof",
+        SynthVoice::Bowed => "bowed",
+        SynthVoice::Blown => "blown",
+        SynthVoice::Fluted => "fluted",
+        SynthVoice::Bell => "bell",
+        SynthVoice::Drum => "drum",
     }
 }
 

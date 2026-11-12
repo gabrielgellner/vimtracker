@@ -375,15 +375,52 @@ choirs, chants and singing pads.
 | `Vowel` | a at `00`, then e, i and o, to u at `FF`, blending between |
 | `Voice` | A bass at `00`, tenor, countertenor and alto, a soprano at `FF` |
 
+`Bowed` is a bowed string: a bow's friction against a string between a bridge and a nut, for
+cellos, fiddles and drones. It's bowed for as long as the note is held.
+
+| Setting | Does |
+|---|---|
+| `Pressure` | How hard the bow grips: airy at `00`, scratchy going up |
+| `Position` | Where the bow sits, from near the bridge at `00` towards the middle |
+
+`Blown` is a reed blown into a bore, as a clarinet's is, for woodwinds.
+
+| Setting | Does |
+|---|---|
+| `Breath` | The breath's noise: breathy at `00`, pure at `FF` |
+| `Tone` | The bore's tone: dark at `00`, and brighter going up |
+
+`Fluted` is a jet of air across a flute's bore, for flutes and pipes.
+
+| Setting | Does |
+|---|---|
+| `Breath` | The breath's noise: breathy at `00`, pure at `FF` |
+| `Jet` | How long the jet is against the bore, which overblows it |
+
+`Bell` is a bell of eleven partials, struck as the note starts, which dies away by itself.
+
+| Setting | Does |
+|---|---|
+| `Decay` | How long it rings. Near `FF` it rings on without dying away |
+| `Detune` | How far its pairs of partials are pulled apart, for a beating bell |
+
+`Drum` is a drum of six partials and filtered noise, struck as the note starts, which dies
+away by itself.
+
+| Setting | Does |
+|---|---|
+| `Decay` | How long it rings. Near `FF` it rings on without dying away |
+| `Tone` | From a dull thud at `00` through brighter partials to a noisy skin |
+
 A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
 `Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX
 slot lists them under the voice's name, and an LFO's or envelope's `Dest` lists them by
 their names, like `Punch`. Each belongs to its voice, so a lock does nothing while the
 track plays another.
 
-A note on any synth but the drums, `String` and `Modal` holds until the next note, `OFF`
-or `KIL`, shaped by the first envelope, so shorten its Sustain for plucks; those five die
-away by themselves. A track plays one note at a time.
+A note on any synth but the drums, `String`, `Modal`, `Bell` and `Drum` holds until the next
+note, `OFF` or `KIL`, shaped by the first envelope, so shorten its Sustain for plucks; those
+seven die away by themselves. A track plays one note at a time.
 
 ## Accent
 

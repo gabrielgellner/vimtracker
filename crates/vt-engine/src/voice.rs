@@ -5,6 +5,7 @@ use crate::dsp::additive::Additive;
 use crate::dsp::braids_analog::{CSaw, HardSync, Morph, SawSquare, Triple};
 use crate::dsp::braids_digital::{Ring, SawComb, Toy};
 use crate::dsp::braids_filter_fm::{ChaoticFm, DigitalFilter, FeedbackFm};
+use crate::dsp::braids_physical::{Blown, Bowed, Fluted, StruckBell, StruckDrum};
 use crate::dsp::braids_vocal::{Fof, Vosim};
 use crate::dsp::chiptune::Chiptune;
 use crate::dsp::chord::Chord;
@@ -108,6 +109,11 @@ enum Synth {
     ChaoticFm(ChaoticFm),
     Vosim(Vosim),
     Fof(Fof),
+    Bowed(Bowed),
+    Blown(Blown),
+    Fluted(Fluted),
+    Bell(StruckBell),
+    Drum(StruckDrum),
 }
 
 impl Synth {
@@ -148,6 +154,11 @@ impl Synth {
             SynthVoice::ChaoticFm => Self::ChaoticFm(ChaoticFm::new(rate)),
             SynthVoice::Vosim => Self::Vosim(Vosim::new(rate)),
             SynthVoice::Fof => Self::Fof(Fof::new(rate)),
+            SynthVoice::Bowed => Self::Bowed(Bowed::new(rate)),
+            SynthVoice::Blown => Self::Blown(Blown::new(rate)),
+            SynthVoice::Fluted => Self::Fluted(Fluted::new(rate)),
+            SynthVoice::Bell => Self::Bell(StruckBell::new(rate)),
+            SynthVoice::Drum => Self::Drum(StruckDrum::new(rate)),
         }
     }
 
@@ -188,6 +199,11 @@ impl Synth {
             Self::ChaoticFm(synth) => synth.next(frequency, settings),
             Self::Vosim(synth) => synth.next(frequency, settings),
             Self::Fof(synth) => synth.next(frequency, settings),
+            Self::Bowed(synth) => synth.next(frequency, settings),
+            Self::Blown(synth) => synth.next(frequency, settings),
+            Self::Fluted(synth) => synth.next(frequency, settings),
+            Self::Bell(synth) => synth.next(frequency, settings),
+            Self::Drum(synth) => synth.next(frequency, settings),
         }
     }
 
@@ -407,6 +423,9 @@ impl Voice {
             Some(Synth::Dust(synth)) => synth.seed(seed),
             Some(Synth::Noise(synth)) => synth.seed(seed),
             Some(Synth::Swarm(synth)) => synth.seed(seed),
+            Some(Synth::Blown(synth)) => synth.seed(seed),
+            Some(Synth::Fluted(synth)) => synth.seed(seed),
+            Some(Synth::Drum(synth)) => synth.seed(seed),
             _ => {}
         }
     }
@@ -438,6 +457,9 @@ impl Voice {
                     | Synth::Dust(_)
                     | Synth::Noise(_)
                     | Synth::Swarm(_)
+                    | Synth::Blown(_)
+                    | Synth::Fluted(_)
+                    | Synth::Drum(_)
             )
         )
     }

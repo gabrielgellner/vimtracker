@@ -1033,11 +1033,21 @@ pub enum SynthVoice {
     Vosim,
     /// A saw through five formant filters, from vowel to vowel.
     Fof,
+    /// A bowed string.
+    Bowed,
+    /// A reed blown into a bore.
+    Blown,
+    /// A jet of air across a flute's bore.
+    Fluted,
+    /// A bell of eleven partials, struck.
+    Bell,
+    /// A drum of six partials and noise, struck.
+    Drum,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 34] = [
+    pub const ALL: [Self; 39] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1072,6 +1082,11 @@ impl SynthVoice {
         Self::ChaoticFm,
         Self::Vosim,
         Self::Fof,
+        Self::Bowed,
+        Self::Blown,
+        Self::Fluted,
+        Self::Bell,
+        Self::Drum,
     ];
 
     /// The name on screen.
@@ -1111,6 +1126,11 @@ impl SynthVoice {
             Self::ChaoticFm => "Chaos FM",
             Self::Vosim => "VOSIM",
             Self::Fof => "FOF",
+            Self::Bowed => "Bowed",
+            Self::Blown => "Blown",
+            Self::Fluted => "Fluted",
+            Self::Bell => "Bell",
+            Self::Drum => "Drum",
         }
     }
 
@@ -1151,6 +1171,11 @@ impl SynthVoice {
             Self::ChaoticFm => "FM that never settles, for chaotic tones",
             Self::Vosim => "Two windowed sines, for nasal and vocal leads",
             Self::Fof => "A saw through vowel formants, for choirs and pads",
+            Self::Bowed => "A bowed string, for cellos, fiddles and drones",
+            Self::Blown => "A reed blown into a bore, for woodwinds",
+            Self::Fluted => "A jet of air across a bore, for flutes and pipes",
+            Self::Bell => "A struck bell of eleven partials, which rings out",
+            Self::Drum => "A struck drum of partials and noise, for toms",
         }
     }
 
@@ -1187,6 +1212,9 @@ impl SynthVoice {
                 | Self::ChaoticFm
                 | Self::Vosim
                 | Self::Fof
+                | Self::Bowed
+                | Self::Blown
+                | Self::Fluted
         )
     }
 
@@ -1207,6 +1235,11 @@ impl SynthVoice {
                 | Self::ChaoticFm
                 | Self::Vosim
                 | Self::Fof
+                | Self::Bowed
+                | Self::Blown
+                | Self::Fluted
+                | Self::Bell
+                | Self::Drum
         )
     }
 }
