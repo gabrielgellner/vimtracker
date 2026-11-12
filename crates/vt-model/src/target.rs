@@ -283,13 +283,13 @@ mod tests {
         );
         track.inserts[1] = Insert::ALL[2];
         let offered = SettingId::on_track(&track);
-        assert_eq!(offered.len(), own + 4 + 9 + 1);
+        assert_eq!(offered.len(), own + 4 + 11 + 1);
         assert_eq!(
             offered[own + 4],
             SettingId::slot(1, Effect::Delay, 0).unwrap()
         );
         assert_eq!(
-            offered[own + 4 + 9],
+            offered[own + 4 + 11],
             SettingId::bypass(1).unwrap(),
             "the slot's bypass after its effect's"
         );
@@ -414,7 +414,7 @@ mod tests {
         );
         assert_eq!(
             offered.len(),
-            3 + 9 + 1,
+            3 + 11 + 1,
             "and its delay's settings and bypass"
         );
         assert_eq!(

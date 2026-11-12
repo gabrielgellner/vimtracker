@@ -147,14 +147,15 @@ impl FilterType {
         use FilterMode::{
             BandPass, BandPass12, Full, HighPass6, HighPass12, HighPass12LowPass6, HighPass18,
             HighPass18LowPass6, HighPass24, LowCut1, LowCut2, LowCut3, LowPass6, LowPass12,
-            LowPass18, LowPass24, Notch, Notch12, Notch12LowPass6, Phaser, PhaserLowPass6, Slope12,
-            Slope24,
+            LowPass18, LowPass24, LowPass24Fat, Notch, Notch12, Notch12LowPass6, Phaser,
+            PhaserLowPass6, Slope12, Slope24,
         };
         match self {
             Self::LowPass | Self::HighPass | Self::BandPass | Self::Notch => &[Slope12, Slope24],
             // The Oberheim Xpander's fifteen, and Vital's notch.
             Self::Ladder => &[
                 LowPass24,
+                LowPass24Fat,
                 LowPass18,
                 LowPass12,
                 LowPass6,
@@ -238,11 +239,13 @@ pub enum FilterMode {
     HighPass18LowPass6,
     Notch12LowPass6,
     PhaserLowPass6,
+    /// The ladder's low-pass with what its resonance takes from the bass partly given back.
+    LowPass24Fat,
 }
 
 impl FilterMode {
     /// Every mode, in the order a step's value counts them.
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 24] = [
         Self::Slope12,
         Self::Slope24,
         Self::LowPass24,
@@ -266,6 +269,7 @@ impl FilterMode {
         Self::HighPass18LowPass6,
         Self::Notch12LowPass6,
         Self::PhaserLowPass6,
+        Self::LowPass24Fat,
     ];
 
     /// The name on screen.
@@ -279,6 +283,7 @@ impl FilterMode {
             Self::Slope12 => "12 dB an octave, one filter",
             Self::Slope24 => "24 dB an octave, a second filter after the first",
             Self::LowPass24 => "Low-pass, 24 dB",
+            Self::LowPass24Fat => "Low-pass, 24 dB, keeps more bass as Res rises",
             Self::LowPass18 => "Low-pass, 18 dB",
             Self::LowPass12 => "Low-pass, 12 dB",
             Self::LowPass6 => "Low-pass, 6 dB",
@@ -314,10 +319,10 @@ impl FilterMode {
 }
 
 /// Each mode's name, in the list's order, for a step's value to show.
-pub const FILTER_MODE_NAMES: [&str; 23] = [
+pub const FILTER_MODE_NAMES: [&str; 24] = [
     "12 dB", "24 dB", "LP24", "LP12", "BP24", "HP12", "HP24", "N24", "Full", "-3 oct", "-2 oct",
     "-1 oct", "LP18", "LP6", "BP12", "HP6", "HP18", "N12", "PH18", "HP12+LP6", "HP18+LP6",
-    "N12+LP6", "PH18+LP6",
+    "N12+LP6", "PH18+LP6", "Fat24",
 ];
 
 /// What a track is. Only `Sound` tracks have a machine, and the rest are fixed, after them, in this

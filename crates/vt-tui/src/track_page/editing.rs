@@ -73,13 +73,15 @@ fn adjust_mod(
         }
     };
     let kind = modulator.kind;
-    let (adsr, ahd, drum, lfo) = (
+    let (adsr, ahd, drum, lpg, lfo) = (
         &mut modulator.adsr,
         &mut modulator.ahd,
         &mut modulator.drum,
+        &mut modulator.lpg,
         &mut modulator.lfo,
     );
     let ahd_kind = kind == ModKind::Ahd;
+    let lpg_kind = kind == ModKind::Lpg;
     match field {
         ModField::Type => {}
         ModField::Mode => match kind {
@@ -87,6 +89,7 @@ fn adjust_mod(
             ModKind::Ahd => ahd.curve = next_in(&Curve::ALL, ahd.curve, up),
             ModKind::Drum => drum.curve = next_in(&Curve::ALL, drum.curve, up),
             ModKind::Lfo => lfo.mode = next_in(&LfoMode::ALL, lfo.mode, up),
+            ModKind::Lpg => {}
         },
         ModField::Polarity => modulator.polarity = Some(modulator.polarity().other()),
         ModField::Destination => {
@@ -100,9 +103,19 @@ fn adjust_mod(
             modulator.depth = moved.clamp(-MAX_DEPTH, MAX_DEPTH);
         }
         ModField::Attack if ahd_kind => ahd.attack_ms = time(ahd.attack_ms),
+        ModField::Attack if lpg_kind => lpg.attack_ms = time(lpg.attack_ms),
         ModField::Attack => adsr.attack_ms = time(adsr.attack_ms),
         ModField::Decay if ahd_kind => ahd.decay_ms = time(ahd.decay_ms),
         ModField::Decay if kind == ModKind::Drum => drum.decay_ms = time(drum.decay_ms),
+        ModField::Decay if lpg_kind => lpg.decay_ms = time(lpg.decay_ms),
+        ModField::Colour => {
+            let size = if large { HEX_JUMP as u8 } else { 1 };
+            lpg.colour = if up {
+                lpg.colour.saturating_add(size)
+            } else {
+                lpg.colour.saturating_sub(size)
+            };
+        }
         ModField::Decay => adsr.decay_ms = time(adsr.decay_ms),
         ModField::Peak => drum.peak_ms = time(drum.peak_ms),
         ModField::Body => {
@@ -129,6 +142,7 @@ fn adjust_mod(
             adsr.sustain = (i16::from(adsr.sustain) + by).clamp(0, 100) as u8;
         }
         ModField::Reset if ahd_kind => ahd.reset = !ahd.reset,
+        ModField::Reset if lpg_kind => lpg.reset = !lpg.reset,
         ModField::Reset => adsr.reset = !adsr.reset,
         ModField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),
         ModField::Rate if large => lfo.rate = lfo.rate.jumped(up),
@@ -152,9 +166,15 @@ fn adjust_mod(
 /// switch, as choosing a type does.
 fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
     let fresh = default_mod(slot);
-    let (mut adsr, mut ahd, mut drum, mut lfo) =
-        (modulator.adsr, modulator.ahd, modulator.drum, modulator.lfo);
+    let (mut adsr, mut ahd, mut drum, mut lpg, mut lfo) = (
+        modulator.adsr,
+        modulator.ahd,
+        modulator.drum,
+        modulator.lpg,
+        modulator.lfo,
+    );
     let ahd_kind = modulator.kind == ModKind::Ahd;
+    let lpg_kind = modulator.kind == ModKind::Lpg;
     match field {
         ModField::Type => {
             return ModSlot {
@@ -196,17 +216,22 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
             ModKind::Ahd => ahd.curve = fresh.ahd.curve,
             ModKind::Drum => drum.curve = fresh.drum.curve,
             ModKind::Lfo => lfo.mode = fresh.lfo.mode,
+            ModKind::Lpg => {}
         },
         ModField::Attack if ahd_kind => ahd.attack_ms = fresh.ahd.attack_ms,
+        ModField::Attack if lpg_kind => lpg.attack_ms = fresh.lpg.attack_ms,
         ModField::Attack => adsr.attack_ms = fresh.adsr.attack_ms,
         ModField::Decay if ahd_kind => ahd.decay_ms = fresh.ahd.decay_ms,
         ModField::Decay if modulator.kind == ModKind::Drum => drum.decay_ms = fresh.drum.decay_ms,
+        ModField::Decay if lpg_kind => lpg.decay_ms = fresh.lpg.decay_ms,
+        ModField::Colour => lpg.colour = fresh.lpg.colour,
         ModField::Decay => adsr.decay_ms = fresh.adsr.decay_ms,
         ModField::Peak => drum.peak_ms = fresh.drum.peak_ms,
         ModField::Body => drum.body = fresh.drum.body,
         ModField::Ratchet => drum.ratchet = fresh.drum.ratchet,
         ModField::Hold => ahd.hold = fresh.ahd.hold,
         ModField::Reset if ahd_kind => ahd.reset = fresh.ahd.reset,
+        ModField::Reset if lpg_kind => lpg.reset = fresh.lpg.reset,
         ModField::Sustain => adsr.sustain = fresh.adsr.sustain,
         ModField::Release => adsr.release_ms = fresh.adsr.release_ms,
         ModField::Reset => adsr.reset = fresh.adsr.reset,
@@ -219,6 +244,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         adsr,
         ahd,
         drum,
+        lpg,
         lfo,
         ..modulator
     }

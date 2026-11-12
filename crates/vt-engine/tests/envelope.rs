@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Hold};
+use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Hold, Lpg};
 use vt_model::modulation::ModSlot;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -200,6 +200,28 @@ fn reset_off_carries_on_from_the_level_it_had() {
     // A step is 125 ms, so the first note has finished its attack.
     close(left(&kept, STEP + 10), 1.0);
     assert!(left(&reset, STEP + 10 * MS) < 0.3);
+}
+
+#[test]
+fn a_low_pass_gate_on_vol_pings_falls_as_a_vactrol_and_ends_the_note() {
+    let gate = Lpg {
+        attack_ms: 2,
+        decay_ms: 100,
+        colour: 0,
+        reset: true,
+    };
+    let slot = ModSlot::lpg(Some(SettingId::VOL), gate);
+    let out = render(song(&[NOTE], slot), flat(), STEP);
+    close(left(&out, MS), 0.5);
+    close(left(&out, 2 * MS), 1.0);
+    // Its fall is the model's, fast and then slow, whatever the gate.
+    for ms in [5, 20, 50, 90] {
+        let expected = gate.held((ms * MS) as u64, 0.0, RATE);
+        close(left(&out, ms * MS), expected);
+    }
+    assert!(left(&out, 22 * MS) < 0.5, "fast at first");
+    assert_eq!(left(&out, 102 * MS + 2), 0.0);
+    assert_eq!(left(&out, STEP - 1), 0.0);
 }
 
 #[test]

@@ -2,7 +2,7 @@
 //! [`kitty::plot`](crate::kitty::plot) draws.
 
 use vt_model::constants::MAX_ENVELOPE_MS;
-use vt_model::envelope::{Adsr, Ahd, Drum, Hold};
+use vt_model::envelope::{Adsr, Ahd, Drum, Hold, Lpg};
 
 /// The most of a diagram's width each stage can take, with a sustain always taking this much.
 const STAGE_SHARE: f32 = 0.25;
@@ -117,6 +117,27 @@ pub(crate) fn drum_level_at(envelope: &Drum, x: f32) -> f32 {
     0.0
 }
 
+/// Where a low-pass gate's stages end across its diagram: its rise, then its fall, laid out as an
+/// ADSR's stages are.
+pub(crate) fn lpg_stage_ends(envelope: &Lpg) -> [f32; 2] {
+    let attack = stage_width(envelope.attack_ms);
+    [attack, attack + stage_width(envelope.decay_ms)]
+}
+
+/// A low-pass gate's level at `x` from 0 to 1 across its diagram: its straight rise, then its
+/// vactrol's fall, worked out by the model at the same share of its time.
+pub(crate) fn lpg_level_at(envelope: &Lpg, x: f32) -> f32 {
+    let [attack, fall] = lpg_stage_ends(envelope);
+    if x < attack {
+        return x / attack;
+    }
+    if x < fall {
+        let seconds = (x - attack) / (fall - attack) * f32::from(envelope.decay_ms) / 1000.0;
+        return envelope.fall(seconds);
+    }
+    0.0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,6 +236,26 @@ mod tests {
         assert!((width(Hold::Note) - STAGE_SHARE).abs() < 1e-6);
         assert!(width(Hold::Ms(30)) < width(Hold::Ms(2000)));
         assert!(width(Hold::Ms(0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn an_lpg_is_drawn_as_the_engine_plays_it() {
+        const RATE: u32 = 48_000;
+        let envelope = Lpg {
+            attack_ms: 100,
+            decay_ms: 100,
+            ..Lpg::default()
+        };
+        let [attack, fall] = lpg_stage_ends(&envelope);
+        for share in [0.1_f32, 0.3, 0.5, 0.8] {
+            let frames = (4800.0 * share) as u64;
+            let drawn = lpg_level_at(&envelope, attack * share);
+            assert!((drawn - envelope.held(frames, 0.0, RATE)).abs() < 1e-3);
+            let drawn = lpg_level_at(&envelope, attack + (fall - attack) * share);
+            let played = envelope.held(4800 + frames, 0.0, RATE);
+            assert!((drawn - played).abs() < 1e-3, "{drawn} {played}");
+        }
+        assert_eq!(lpg_level_at(&envelope, fall), 0.0);
     }
 
     #[test]
