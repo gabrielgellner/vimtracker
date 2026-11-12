@@ -920,13 +920,14 @@ impl Machine {
 
     /// The setting that gives it its character, which its device's title shows after it, as an
     /// effect's type is: the sample the sampler plays, the wave of `Acid`, `Sync` and `Triple`,
-    /// `Z Filter`'s type, 6-op's patch, and the chord of `Chord` and `Chiptune`. Other synths have
-    /// none.
+    /// `Z Filter`'s type, `Supersaw`'s stack, 6-op's patch, and the chord of `Chord` and
+    /// `Chiptune`. Other synths have none.
     pub fn type_param(self) -> Option<usize> {
         let key = match self {
             Self::Sampler => "sample",
             Self::Plaits(SynthVoice::Acid | SynthVoice::HardSync | SynthVoice::Triple) => "wave",
             Self::Plaits(SynthVoice::ZFilter) => "type",
+            Self::Plaits(SynthVoice::Supersaw) => "stack",
             Self::Plaits(SynthVoice::SixOp) => "patch",
             Self::Plaits(SynthVoice::Chord | SynthVoice::Chiptune) => "chord",
             Self::Plaits(_) => return None,
@@ -939,7 +940,8 @@ impl Machine {
     /// say which part of the sample plays and how down its first column, and where that part starts
     /// and how long it is down its second, as the sample page has them; `Acid`'s are in pairs as a
     /// TB-303's knobs are, the filter's, its envelope's, then accent and slide, with the Devil
-    /// Fish's drive and `Drift` after them.
+    /// Fish's drive and `Drift` after them; and `Supersaw`'s go by what they do: the stack's spread,
+    /// then how it sounds, then how each note starts and strays.
     pub fn grid(self) -> Grid {
         let placed: &[&[&str]] = match self {
             Self::Sampler => &[&["slice", "play"], &["start", "length"]],
@@ -948,6 +950,11 @@ impl Machine {
                 &["envmod", "decay"],
                 &["accent", "slide"],
                 &["drive", "drift"],
+            ],
+            Self::Plaits(SynthVoice::Supersaw) => &[
+                &["saws", "detune", "warp"],
+                &["mix", "shape", "width"],
+                &["phase", "drift"],
             ],
             Self::Plaits(_) => {
                 let own: Vec<usize> = (0..self.settings().count())
@@ -981,6 +988,8 @@ pub enum SynthVoice {
     VirtualAnalogVcf,
     /// A saw or a square through a diode ladder, with accent and slide, after Roland's TB-303.
     Acid,
+    /// Up to eight detuned saws, after Roland's JP-8000.
+    Supersaw,
     /// Two-operator FM.
     Fm,
     /// A sine bent by a second wave's phase.
@@ -1073,10 +1082,11 @@ pub enum SynthVoice {
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 47] = [
+    pub const ALL: [Self; 48] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
+        Self::Supersaw,
         Self::Fm,
         Self::PhaseDistortion,
         Self::Waveshaping,
@@ -1129,6 +1139,7 @@ impl SynthVoice {
             Self::VirtualAnalog => "VA",
             Self::VirtualAnalogVcf => "VA VCF",
             Self::Acid => "Acid",
+            Self::Supersaw => "Supersaw",
             Self::Fm => "FM",
             Self::PhaseDistortion => "PD",
             Self::Waveshaping => "Fold",
@@ -1182,6 +1193,7 @@ impl SynthVoice {
             Self::VirtualAnalog => "A square and a saw, for bass and leads",
             Self::VirtualAnalogVcf => "A saw or square with a sub, through a filter",
             Self::Acid => "A 303-style bass, with accent and slide",
+            Self::Supersaw => "Up to eight detuned saws, for trance leads and pads",
             Self::PhaseDistortion => "A sine bent out of shape, as on Casio's CZ",
             Self::Formant => "Two formants of grains, for vowels and leads",
             Self::Additive => "24 harmonics in bumps, for organs and glass",
@@ -1236,6 +1248,7 @@ impl SynthVoice {
             Self::VirtualAnalog
                 | Self::VirtualAnalogVcf
                 | Self::Acid
+                | Self::Supersaw
                 | Self::Fm
                 | Self::PhaseDistortion
                 | Self::Waveshaping

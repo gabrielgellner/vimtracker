@@ -61,13 +61,15 @@ and its settings in up to four columns of three.
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` `Velocity` |
 
 A machine's type is the setting that changes its character: the sample the sampler
-plays, `Acid`'s `Wave`, 6-op's `Patch`, and the chord of `Chord` and `Chip`.
-Other synths have none. `K` lists whatever's under the cursor in a title, as on a
-setting, and `g d` on the sample opens the sample page. Each machine places its own
+plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
+and `Chip`. Other synths have none. `K` lists whatever's under the cursor in a title, as
+on a setting, and `g d` on the sample opens the sample page. Each machine places its own
 settings: most go down the columns in order, the sampler has `Slice` and `Play` in
-one column and `Start` and `Length` in the next, and `Acid`'s are in pairs as a
+one column and `Start` and `Length` in the next, `Acid`'s are in pairs as a
 TB-303's knobs are, `Cutoff` and `Resonance`, `Env mod` and `Decay`, `Accent` and
-`Slide`, then `Drive` and `Drift`.
+`Slide`, then `Drive` and `Drift`, and `Supersaw` has its stack's spread, `Saws`,
+`Detune` and `Warp`, down its first column, how it sounds, `Mix`, `Shape` and `Width`,
+down its second, and `Phase` and `Drift` in its third.
 
 `j` and `k` go from a device's title down its rows and on into the next device,
 keeping the column, and pass the Output's and Play's titles by, as there's nothing
