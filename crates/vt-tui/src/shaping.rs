@@ -9,11 +9,11 @@ use vt_model::lfo::{Shape as Wave, note_rates};
 use vt_model::selection::{Field, StepRange};
 use vt_model::shape::{
     DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_BEND, MAX_VALUES, Shape, ShapeColumn, Values, WAVES,
-    WaveRate, Where, default_ends, open_rows,
+    WaveRate, Where, default_ends, open_rows, track_seed,
 };
 use vt_model::song::Song;
 
-use crate::app::{App, Selection};
+use crate::app::{App, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
@@ -81,12 +81,23 @@ impl ShapeRow {
     }
 }
 
+/// One track's part of what the panel shapes: the phrase it's on, its rows, and its column, whose
+/// FX command is the first on its own rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Part {
+    pub track: usize,
+    pub phrase: u32,
+    pub range: StepRange,
+    pub column: ShapeColumn,
+}
+
 /// The open panel. The song underneath it is a preview until `Enter` keeps it.
 #[derive(Debug, Clone)]
 pub struct ShapePanel {
     pub selection: Selection,
-    pub track: usize,
-    pub phrase: u32,
+    /// A part for each track shaped, the first track's first. Each track takes the same settings
+    /// with a seed of its own.
+    pub parts: Vec<Part>,
     pub column: ShapeColumn,
     pub shape: Shape,
     pub row: ShapeRow,
@@ -134,19 +145,52 @@ impl ShapePanel {
         rows
     }
 
-    /// How many rows of the selection the column could change, which a Euclidean `Where`'s hits
-    /// are spread over.
+    /// How many rows the column could change, which a Euclidean `Where`'s hits are spread over:
+    /// the most of any track's.
     pub fn open_rows(&self) -> usize {
-        open_rows(self.base_steps(), self.selection.range, self.column)
+        self.parts
+            .iter()
+            .map(|part| open_rows(self.base_steps(part), part.range, part.column))
+            .max()
+            .unwrap_or(0)
     }
 
-    /// The steps underneath, as they were when the panel opened.
-    pub fn base_steps(&self) -> &[vt_model::step::Step] {
+    /// A part's steps, as they were when the panel opened.
+    pub fn base_steps(&self, part: &Part) -> &[vt_model::step::Step] {
         self.base
             .tracks
-            .get(self.track)
-            .and_then(|track| track.phrases.get(&self.phrase))
+            .get(part.track)
+            .and_then(|track| track.phrases.get(&part.phrase))
             .map_or(&[], |phrase| phrase.steps())
+    }
+
+    /// The shape each part takes: the panel's, with the part's own seed.
+    pub fn shape_of(&self, nth: usize) -> Shape {
+        Shape {
+            seed: track_seed(self.shape.seed, nth),
+            ..self.shape
+        }
+    }
+
+    /// The edit that gives every part its shape.
+    fn action(&self) -> Action {
+        let mut actions: Vec<Action> = self
+            .parts
+            .iter()
+            .enumerate()
+            .map(|(nth, part)| Action::Shape {
+                track: part.track,
+                phrase: part.phrase,
+                range: part.range,
+                column: part.column,
+                shape: self.shape_of(nth),
+            })
+            .collect();
+        if actions.len() == 1 {
+            actions.remove(0)
+        } else {
+            Action::Batch(actions)
+        }
     }
 }
 
@@ -215,23 +259,17 @@ fn typed_in_hex(column: ShapeColumn) -> bool {
 }
 
 impl App {
-    /// The column a selection can fill, or why it can't.
+    /// The column a track's rows can fill, or why they can't.
     fn shape_column(
         &self,
-        selection: Selection,
+        steps: &[vt_model::step::Step],
+        range: StepRange,
         field: Field,
     ) -> Result<ShapeColumn, &'static str> {
-        if selection.range.len() < 2 {
+        if range.len() < 2 {
             return Err("Select at least 2 rows to shape");
         }
-        if selection.tracks.count() > 1 {
-            return Err("Shape works on one track at a time");
-        }
-        if selection.scope.first != selection.scope.last {
-            return Err("Shape works on one column at a time. Select with v");
-        }
-        let steps = self.phrase_here().map_or(&[][..], |phrase| phrase.steps());
-        let rows = || (selection.range.first..=selection.range.last).filter_map(|r| steps.get(r));
+        let rows = || (range.first..=range.last).filter_map(|r| steps.get(r));
         // A note, its velocity, nudge and length are only shaped where there's a note.
         let on_notes = |column| {
             if rows().any(|step| matches!(step.note, vt_model::step::Note::On(_))) {
@@ -253,32 +291,68 @@ impl App {
         }
     }
 
+    /// What a selection shapes on each track it covers, or why it shapes nothing. A track whose
+    /// rows have nothing to shape is passed over.
+    fn shape_parts(&self, selection: Selection, field: Field) -> Result<Vec<Part>, &'static str> {
+        if selection.range.len() < 2 {
+            return Err("Select at least 2 rows to shape");
+        }
+        if selection.scope.first != selection.scope.last {
+            return Err("Shape works on one column at a time. Select with v");
+        }
+        let song = self.song();
+        let mut parts = Vec::new();
+        let mut refused = None;
+        for track in selection.tracks.first..=selection.tracks.last {
+            let Some((phrase, range)) = self.place_on(track, selection.range) else {
+                continue;
+            };
+            let steps = song.tracks[track]
+                .phrases
+                .get(&phrase)
+                .map_or(&[][..], |p| p.steps());
+            match self.shape_column(steps, range, field) {
+                Ok(column) => parts.push(Part {
+                    track,
+                    phrase,
+                    range,
+                    column,
+                }),
+                Err(reason) => {
+                    refused.get_or_insert(reason);
+                }
+            }
+        }
+        if parts.is_empty() {
+            Err(refused.unwrap_or("There's nothing to shape here"))
+        } else {
+            Ok(parts)
+        }
+    }
+
     /// Open the panel on the selection, and show its first result.
     pub(crate) fn open_shape(&mut self) {
         let selection = self.current_selection();
         let field = self.cursor.field;
-        let column = match self.shape_column(selection, field) {
-            Ok(column) => column,
+        let parts = match self.shape_parts(selection, field) {
+            Ok(parts) => parts,
             Err(reason) => {
                 self.status = reason.to_owned();
                 return;
             }
         };
-        let Some(phrase) = self.phrase_id() else {
-            return;
-        };
         let base = Arc::clone(self.song());
-        let steps = base.tracks[self.cursor.track]
+        let first = parts[0];
+        let steps = base.tracks[first.track]
             .phrases
-            .get(&phrase)
+            .get(&first.phrase)
             .map_or(&[][..], |p| p.steps());
-        let (from, to) = default_ends(steps, selection.range, column);
+        let (from, to) = default_ends(steps, first.range, first.column);
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let panel = ShapePanel {
             selection,
-            track: self.cursor.track,
-            phrase,
-            column,
+            parts,
+            column: first.column,
             shape: Shape {
                 from,
                 to,
@@ -290,7 +364,7 @@ impl App {
                 phase: 0,
                 run: 1,
                 values: Values::default(),
-                place: column.default_where(),
+                place: first.column.default_where(),
                 seed: base.seed.wrapping_add(self.shape_seed),
             },
             row: ShapeRow::Fill,
@@ -309,14 +383,7 @@ impl App {
         let Some(panel) = &self.shape else {
             return;
         };
-        let action = Action::Shape {
-            track: panel.track,
-            phrase: panel.phrase,
-            range: panel.selection.range,
-            column: panel.column,
-            shape: panel.shape,
-        };
-        if let Ok(next) = edit(&panel.base, &action) {
+        if let Ok(next) = edit(&panel.base, &panel.action()) {
             self.history.replace_current(next);
             self.publish();
         }
@@ -356,41 +423,64 @@ impl App {
         }
     }
 
-    /// Apply a shape to a range. A ramp's or random fill's ends are chosen again from what's there,
-    /// a wave or `Alternate` keeps the two values it moves between, a `List` keeps its list, and
-    /// `Scale` the two it scales onto.
-    pub(crate) fn shape_again(&mut self, range: StepRange, column: ShapeColumn, shape: Shape) {
-        let Some(phrase) = self.phrase_id() else {
-            return;
-        };
-        let song = Arc::clone(self.song());
-        let steps = song.tracks[self.cursor.track]
-            .phrases
-            .get(&phrase)
-            .map_or(&[][..], |p| p.steps());
+    /// Apply a shape to a range, on each of these tracks. A ramp's or random fill's ends are
+    /// chosen again from what's there on the first, a wave or `Alternate` keeps the two values it
+    /// moves between, a `List` keeps its list, and `Scale` the two it scales onto. Each track has
+    /// a seed of its own.
+    pub(crate) fn shape_again(
+        &mut self,
+        range: StepRange,
+        tracks: TrackSpan,
+        column: ShapeColumn,
+        shape: Shape,
+    ) {
         // Notes go through the scale as it is now.
         let column = match column {
             ShapeColumn::Note { .. } => ShapeColumn::Note { scale: self.scale },
             column => column,
         };
+        let places: Vec<(usize, u32, StepRange)> = (tracks.first..=tracks.last)
+            .filter_map(|track| {
+                let (phrase, range) = self.place_on(track, range)?;
+                Some((track, phrase, range))
+            })
+            .collect();
+        let Some(&(track, phrase, first)) = places.first() else {
+            return;
+        };
+        let song = Arc::clone(self.song());
+        let steps = song.tracks[track]
+            .phrases
+            .get(&phrase)
+            .map_or(&[][..], |p| p.steps());
         let (from, to) = match shape.kind {
-            FillKind::Ramp | FillKind::Random => default_ends(steps, range, column),
+            FillKind::Ramp | FillKind::Random => default_ends(steps, first, column),
             _ => (shape.from, shape.to),
         };
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = song.seed.wrapping_add(self.shape_seed);
-        self.apply(&Action::Shape {
-            track: self.cursor.track,
-            phrase,
-            range,
-            column,
-            shape: Shape {
-                from,
-                to,
-                seed,
-                ..shape
-            },
-        });
+        let mut actions: Vec<Action> = places
+            .into_iter()
+            .enumerate()
+            .map(|(nth, (track, phrase, range))| Action::Shape {
+                track,
+                phrase,
+                range,
+                column,
+                shape: Shape {
+                    from,
+                    to,
+                    seed: track_seed(seed, nth),
+                    ..shape
+                },
+            })
+            .collect();
+        let action = if actions.len() == 1 {
+            actions.remove(0)
+        } else {
+            Action::Batch(actions)
+        };
+        self.apply(&action);
     }
 
     /// Handle a key while the panel is open.
@@ -540,7 +630,8 @@ impl App {
     /// Put the current row back to what it started as.
     fn reset_shape_row(&mut self) {
         self.change_shape(|panel| {
-            let (from, to) = default_ends(panel.base_steps(), panel.selection.range, panel.column);
+            let first = panel.parts[0];
+            let (from, to) = default_ends(panel.base_steps(&first), first.range, first.column);
             let default_where = panel.column.default_where();
             let shape = &mut panel.shape;
             match panel.row {

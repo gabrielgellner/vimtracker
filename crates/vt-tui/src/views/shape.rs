@@ -110,13 +110,21 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         ShapeColumn::Fx { command, .. } => app
             .song()
             .tracks
-            .get(panel.track)
+            .get(panel.parts[0].track)
             .map_or_else(|| command.name().to_owned(), |track| command.name_on(track)),
     };
-    let range = panel.selection.range;
-    let filled = values(panel.base_steps(), range, panel.column, &panel.shape).len();
+    let (mut filled, mut rows_shaped) = (0, 0);
+    for (nth, part) in panel.parts.iter().enumerate() {
+        let steps = panel.base_steps(part);
+        filled += values(steps, part.range, part.column, &panel.shape_of(nth)).len();
+        rows_shaped += part.range.len();
+    }
+    let tracks = match panel.parts.len() {
+        1 => String::new(),
+        count => format!(" on {count} tracks"),
+    };
     let mut lines = vec![Line::styled(
-        format!("{name}: {filled} of {} rows", range.len()),
+        format!("{name}{tracks}: {filled} of {rows_shaped} rows"),
         theme::dim(),
     )];
     for row in rows {

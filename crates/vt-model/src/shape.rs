@@ -623,6 +623,18 @@ fn mix(seed: u64, row: usize) -> u64 {
     mixed ^ (mixed >> 31)
 }
 
+/// The seed a shape uses on the `nth` of the tracks it shapes at once, counted from 0, so each
+/// track's random values, chance rows and shuffle are its own, and the first keeps the seed as it
+/// is.
+pub fn track_seed(seed: u64, nth: usize) -> u64 {
+    // Mixed rather than added, as a seed one step on would only move the rows along.
+    if nth == 0 {
+        seed
+    } else {
+        seed ^ mix(0xC0FF_EE00, nth)
+    }
+}
+
 /// The rows that get a value.
 pub fn targets(
     steps: &[Step],

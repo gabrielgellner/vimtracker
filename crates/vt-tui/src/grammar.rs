@@ -51,6 +51,7 @@ pub enum Change {
         column: ShapeColumn,
         shape: Shape,
         steps: usize,
+        tracks: usize,
     },
     /// A field replaced, with the step that holds its new value.
     Replace {
@@ -608,7 +609,7 @@ impl App {
 
     /// Where these rows of the focused phrase fall on a track. Rows count from each phrase's own
     /// loop start, as they do on screen, and any a phrase doesn't have are left out.
-    fn place_on(&self, track: usize, range: StepRange) -> Option<(u32, StepRange)> {
+    pub(crate) fn place_on(&self, track: usize, range: StepRange) -> Option<(u32, StepRange)> {
         let (phrase, start) = self.phrase_beside(track)?;
         let focus = self.extent().start as isize;
         let stored = self.song().tracks[track]
@@ -1010,10 +1011,21 @@ impl App {
                 column,
                 shape,
                 steps,
+                tracks,
             } => {
                 let last = self.extent().last_stored();
                 let end = self.cursor.step.saturating_add(*steps - 1).min(last);
-                self.shape_again(StepRange::between(self.cursor.step, end), *column, *shape);
+                let tracks = self.span_of(Cover::Sized {
+                    steps: *steps,
+                    scope: Scope::WHOLE,
+                    tracks: *tracks,
+                });
+                self.shape_again(
+                    StepRange::between(self.cursor.step, end),
+                    tracks,
+                    *column,
+                    *shape,
+                );
             }
             Change::Replace {
                 field,
@@ -1188,7 +1200,7 @@ impl App {
                     self.fill(selection.range, selection.tracks, field, &value);
                 }
                 Change::Shape { column, shape, .. } => {
-                    self.shape_again(selection.range, column, shape);
+                    self.shape_again(selection.range, selection.tracks, column, shape);
                 }
                 Change::Paste { .. } => {}
             }
@@ -1258,6 +1270,7 @@ impl App {
             column: panel.column,
             shape: panel.shape,
             steps: panel.selection.range.len(),
+            tracks: panel.selection.tracks.count(),
         });
     }
 
