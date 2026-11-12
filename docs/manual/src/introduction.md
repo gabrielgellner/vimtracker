@@ -74,7 +74,7 @@ Every track has a **Trim** at its input, a gain for gain staging before the filt
 the slots, so `Level` is left for the mix, as a console's input trim and fader are.
 
 **Effects** include a delay, two reverbs, chorus, phaser, flanger, tape, a three-band
-EQ, a pitch shifter, granular, Warps' cross-modulation and vocoder, a low-pass gate, a
+EQ, a pitch shifter, a frequency shifter, granular, Warps' cross-modulation and vocoder, a low-pass gate, a
 resonator, comb and formant filters, a limiter and a compressor. The compressor has three
 types: `Clean`; `Console`, an SSL bus compressor fitted to Arturia's Bus FORCE; and
 `Glue`, fitted to Ableton Live's Glue Compressor. `Distort` has six modes and two

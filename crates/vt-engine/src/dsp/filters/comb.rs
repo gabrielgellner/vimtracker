@@ -157,6 +157,15 @@ fn geometric(x: f32, power: f32, count: f32) -> f32 {
     }
 }
 
+/// What goes round, held within 1 by sst-basic-blocks' cubic soft clip, `x - 4/27 x^3` up to 1.5
+/// and 1 past it (`Clippers.h`, GPL-3.0-or-later), which Surge's comb feeds back through, in place
+/// of Vital's hard clip at 1. A runaway rounds off rather than squaring. A NaN comes out at an end.
+#[inline]
+fn soft_clip_cubic(x: f32) -> f32 {
+    let x = within(x, -1.5, 1.5);
+    x - 4.0 / 27.0 * x * x * x
+}
+
 /// A trapezoidal one-pole low-pass, with its gain `g / (1 + g)`.
 #[inline]
 fn low_pass(state: &mut f32, input: f32, gain: f32) -> f32 {
@@ -464,8 +473,9 @@ impl Comb {
             };
             let low = low_pass(&mut self.low[side], read, now.low);
             let band = (low - low_pass(&mut self.high[side], low, now.high)) * now.boost;
-            // Vital's clip, so however long it rings, what goes round never runs away.
-            let fed = within(band * now.feedback, -1.0, 1.0);
+            // A cubic soft clip, so however long it rings, what goes round never runs away, and
+            // rounds off as it reaches the top rather than squaring.
+            let fed = soft_clip_cubic(band * now.feedback);
             let [first, second] = &mut self.cleaned[side];
             let cleaned = input[side] - low_pass(first, input[side], now.cleaning);
             let cleaned = cleaned - low_pass(second, cleaned, now.cleaning);
