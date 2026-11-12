@@ -1815,7 +1815,7 @@ impl Insert {
             Self::Reso(_) => "Rings it like a bell or bar tuned to the note",
             Self::Comb(_) => "Rings it through a comb or flanger tuned to the note",
             Self::Vowel(_) => "Makes it say a vowel, morphing from A to U",
-            Self::FreqShift(_) => "Moves every frequency by the same Hz, for bells and spirals",
+            Self::FreqShift(_) => "Moves every frequency by the same Hz: bells and spirals",
         }
     }
 
