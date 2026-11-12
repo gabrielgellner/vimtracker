@@ -437,6 +437,24 @@ more with wow, so `Mix` below `FF` can blend in a faint chorus.
 | `Wow` | A slow, drifting wobble in pitch, as a worn transport has |
 | `Flutter` | A faster, steady wobble, about twice a second |
 
+`Exciter` adds air, after the Aphex Aural Exciter as ChowDSP models it in
+Surge: it takes the highs of the sound, drives them into a soft clip for
+new harmonics, and adds those to the sound. A level detector turns what it
+makes up as the highs get louder, so loud hats and consonants sparkle while
+quiet ones are barely touched. It suits hats, vocals and a whole mix.
+
+| Setting | Does |
+|---|---|
+| `Drive` | How hard the highs are driven, so how much it makes |
+| `Tone` | Where the highs start, from 500 Hz at `00` to 10 kHz at `FF` |
+| `Attack` | How fast the detector rises, from 5 ms to 20 ms |
+| `Release` | How fast it falls, from 50 ms to 200 ms |
+
+`Mix` is how much of what it makes is added: at `00` the sound is left as
+it is, and it starts at `80`. The higher `Tone` is, the less gets through
+to be driven, so `Drive` gives it more to make up. Each side has a detector
+of its own, so loud highs on one side don't excite the other.
+
 `Plate` is a second reverb, after Jon Dattorro's plate: brighter and denser
 than `Reverb`, and wide from a single sound. It starts half wet, and its tail
 carries on after a note ends. `Pre`, `Decay`, `Damp` and `High cut` work as
