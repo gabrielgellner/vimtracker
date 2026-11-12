@@ -449,7 +449,7 @@ impl Model for DrumModel {
         let cutoff = ((pitch.note - 12.0 + (tone >> 2) as f32 / 128.0) / 2.0).clamp(0.0, 128.0);
         let f = pitch.svf_cutoff(cutoff);
         let harmonics_gain = if tone < 12_888 { tone + 4096 } else { 16_384 } as f32 / 16_384.0;
-        let noise_gain = (tone - 16_384).max(0) * 12_888 >> 14;
+        let noise_gain = ((tone - 16_384).max(0) * 12_888) >> 14;
         let (first_noise, second_noise) = (
             (12_288 - noise_gain) as f32 / 16_384.0,
             noise_gain as f32 / 16_384.0,
