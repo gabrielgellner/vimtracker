@@ -1060,9 +1060,28 @@ const FREQ_SHIFT: DeviceLayout = live(
         ],
     )],
 );
+/// How long a piece it repeats, how many times and how it fades, with the trigger on the button
+/// under the length, so a press repeats what's playing.
+const STUTTER: DeviceLayout = stored(
+    "fx/stutter",
+    &[page(
+        "Stutter",
+        [
+            s("length"),
+            s("repeats"),
+            s("decay"),
+            GAP,
+            GAP,
+            GAP,
+            s("mix"),
+            s("gain"),
+        ],
+        button(0, "trig"),
+    )],
+);
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 60] = [
+pub const ALL: [&DeviceLayout; 61] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1123,6 +1142,7 @@ pub const ALL: [&DeviceLayout; 60] = [
     &COMB,
     &VOWEL,
     &FREQ_SHIFT,
+    &STUTTER,
 ];
 
 /// A machine's layout.
@@ -1189,6 +1209,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::Comb(_) => &COMB,
         Insert::Vowel(_) => &VOWEL,
         Insert::FreqShift(_) => &FREQ_SHIFT,
+        Insert::Stutter(_) => &STUTTER,
     }
 }
 

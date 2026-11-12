@@ -9,11 +9,11 @@ use crate::insert::{
     ALGORITHM_NAMES, CHORUS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS,
     EQ_PARAMS, FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS,
     LPG_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS,
-    Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend,
-    attack_ms, ceiling_db, fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms,
-    grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio,
-    release_ms, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db,
-    vowel_blend,
+    STUTTER_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS,
+    algorithm_blend, attack_ms, ceiling_db, fine_cents, flanger_delay_ms, grain_density,
+    grain_length, grain_ms, grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size,
+    range_db, ratio, release_ms, repeat_decay_db, shift_delay_ms, shift_hertz, spread_hertz,
+    tape_drive_db, threshold_db, vowel_blend,
 };
 use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -94,6 +94,8 @@ pub enum Units {
     ShiftHertz,
     SpreadHertz,
     LoopTime,
+    /// How much quieter each of a stutter's repeats is than the one before.
+    RepeatDecay,
     /// The acid voice's cutoff, its filter envelope's decay, how long it slides and how hard it
     /// drives its filter.
     AcidCutoff,
@@ -326,6 +328,10 @@ impl Kind {
                 Units::LoopTime => match shift_delay_ms(coarse as f32) {
                     ms if ms < 0.005 => "0 ms".to_owned(),
                     ms => milliseconds(ms),
+                },
+                Units::RepeatDecay => match repeat_decay_db(coarse as f32) {
+                    db if db < 0.05 => "0 dB".to_owned(),
+                    db => format!("-{db:.1} dB"),
                 },
                 Units::AcidCutoff => hertz(f64::from(acid_cutoff_hz(coarse as f32))),
                 Units::AcidDecay => milliseconds(acid_decay_ms(coarse as f32)),
@@ -862,10 +868,11 @@ pub enum Effect {
     Comb,
     Vowel,
     FreqShift,
+    Stutter,
 }
 
 impl Effect {
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -885,6 +892,7 @@ impl Effect {
         Self::Comb,
         Self::Vowel,
         Self::FreqShift,
+        Self::Stutter,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -910,6 +918,7 @@ impl Effect {
             Self::Comb => &COMB_PARAMS,
             Self::Vowel => &VOWEL_PARAMS,
             Self::FreqShift => &FREQ_SHIFT_PARAMS,
+            Self::Stutter => &STUTTER_PARAMS,
         }
     }
 
@@ -934,6 +943,7 @@ impl Effect {
             Self::Comb => "comb",
             Self::Vowel => "vowel",
             Self::FreqShift => "freqshift",
+            Self::Stutter => "stutter",
         }
     }
 
@@ -958,6 +968,7 @@ impl Effect {
             Self::Comb => "Comb",
             Self::Vowel => "Vowel",
             Self::FreqShift => "Freq Shift",
+            Self::Stutter => "Stutter",
         }
     }
 
@@ -984,6 +995,7 @@ impl Effect {
             Insert::Comb(_) => Some(Self::Comb),
             Insert::Vowel(_) => Some(Self::Vowel),
             Insert::FreqShift(_) => Some(Self::FreqShift),
+            Insert::Stutter(_) => Some(Self::Stutter),
         }
     }
 }
@@ -1026,6 +1038,7 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::ShiftHertz => (true, Units::ShiftHertz),
                 Setting::ShiftSpread => (false, Units::SpreadHertz),
                 Setting::LoopTime => (false, Units::LoopTime),
+                Setting::RepeatDecay => (false, Units::RepeatDecay),
                 _ => (false, Units::Percent),
             };
             Kind::Continuous {
@@ -1462,6 +1475,27 @@ const fn effect_start(effect: Effect) -> usize {
                 + COMB_PARAMS.len()
                 + VOWEL_PARAMS.len()
         }
+        Effect::Stutter => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+                + PITCH_PARAMS.len()
+                + GRAINS_PARAMS.len()
+                + WARPS_PARAMS.len()
+                + LPG_PARAMS.len()
+                + RESO_PARAMS.len()
+                + COMB_PARAMS.len()
+                + VOWEL_PARAMS.len()
+                + FREQ_SHIFT_PARAMS.len()
+        }
     }
 }
 
@@ -1486,7 +1520,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + RESO_PARAMS.len()
     + COMB_PARAMS.len()
     + VOWEL_PARAMS.len()
-    + FREQ_SHIFT_PARAMS.len();
+    + FREQ_SHIFT_PARAMS.len()
+    + STUTTER_PARAMS.len();
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();

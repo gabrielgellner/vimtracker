@@ -303,6 +303,9 @@ impl Handle {
         for _ in self.held.freq_shift..needed.freq_shift {
             self.unsent.push(Memory::freq_shift(self.rate));
         }
+        for _ in self.held.stutter..needed.stutter {
+            self.unsent.push(Memory::stutter(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
@@ -317,6 +320,7 @@ impl Handle {
             reso: self.held.reso.saturating_sub(needed.reso),
             comb: self.held.comb.saturating_sub(needed.comb),
             freq_shift: self.held.freq_shift.saturating_sub(needed.freq_shift),
+            stutter: self.held.stutter.saturating_sub(needed.stutter),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -576,6 +580,11 @@ mod tests {
     const COMB: Insert = Insert::Comb(vt_model::insert::Comb::DEFAULT);
     /// A frequency shifter, which takes the lines of its loop from the pool.
     const SHIFT: Insert = Insert::FreqShift(vt_model::insert::FreqShift::DEFAULT);
+    /// A stutter, switched on so it's stuttering as it comes, which takes its pieces from the pool.
+    const STUTTER: Insert = Insert::Stutter(vt_model::insert::Stutter {
+        trig: 1,
+        ..vt_model::insert::Stutter::DEFAULT
+    });
 
     const BLOCK: usize = 256;
 
@@ -747,7 +756,7 @@ mod tests {
             } else if round % 8 == 1 {
                 next.tracks[round % 8].inserts = [FLANGER, PHASER, FLANGER, PHASER];
             } else if round % 8 == 5 {
-                next.tracks[round % 8].inserts = [SHIFT, COMB, SHIFT, COMB];
+                next.tracks[round % 8].inserts = [SHIFT, COMB, STUTTER, COMB];
             } else if round % 8 == 3 {
                 next.tracks[round % 8].inserts = [TAPE, LIMIT, TAPE, LIMIT];
             } else if round % 16 == 7 {
@@ -792,7 +801,7 @@ mod tests {
         more.tracks[1].inserts = [LIMIT, FLANGER, TAPE, Insert::Empty];
         more.tracks[2].inserts = [PLATE, Insert::Empty, Insert::Empty, Insert::Empty];
         more.tracks[3].inserts = [Insert::Empty, PITCH, Insert::Empty, Insert::Empty];
-        more.tracks[4].inserts = [Insert::Empty, Insert::Empty, Insert::Empty, GRAINS];
+        more.tracks[4].inserts = [Insert::Empty, Insert::Empty, STUTTER, GRAINS];
         more.tracks[5].inserts = [WARPS, COMB, RESO, SHIFT];
         handle.publish(published(more, &pool));
         assert_eq!(
@@ -811,6 +820,7 @@ mod tests {
                 reso: needed.reso + 1,
                 comb: needed.comb + 1,
                 freq_shift: needed.freq_shift + 1,
+                stutter: needed.stutter + 1,
             }
         );
         blocks(&mut rt, 1);
@@ -825,7 +835,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 13);
+        assert_eq!(freed, 14);
     }
 
     #[test]

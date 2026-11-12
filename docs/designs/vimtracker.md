@@ -543,6 +543,11 @@ is due. `Engine::render` then plays the run's frames.
     the trim, after which the Output device's meter reads its peak (`after_trim`); the filter and
     its drive; the low and high cuts; the slots in order (`through_slots`); then the level and
     pan, and the sends, which follow the level.
+*   **Slot settings.** `TrackState::modulate` gives each slot its finished values, a step's locks
+    and what modulation adds, through `InsertState::hold`, every `LFO_UPDATE_FRAMES` and as a note
+    starts. A slot sees values, not steps, so a step that locks a `Trig` on also marks its slot
+    `struck`, and the slot is told with `InsertState::strike` as it's next given its values: a
+    stutter starts again even where `Trig` was on already (decision 219).
 *   **Groups, returns and the master.** A grouped track's frame goes to its group, which plays the
     sum through its own trim, slots, level and pan and sends from there (`process_group`); each
     return plays what's sent to it (`process_return`); and the master plays the sum through its
@@ -586,7 +591,7 @@ module per file, each keeping its port's licence notice:
 |---|---|---|
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `stutter`, `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
 | `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler`, `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 

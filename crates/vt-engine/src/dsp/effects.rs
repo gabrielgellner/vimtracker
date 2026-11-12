@@ -15,5 +15,6 @@ pub mod pitch_shifter;
 pub mod plate;
 pub mod resonator;
 pub mod reverb;
+pub mod stutter;
 pub mod tape;
 pub mod warps;
