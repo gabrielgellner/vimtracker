@@ -560,6 +560,14 @@ pub struct Hints {
     /// `bars`: one or the other says how long it is, never both.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub steps: Option<u16>,
+    /// The note it sounds at as recorded, as a MIDI note, `60` being `C-3`, as a WAV's `smpl` or
+    /// `inst` chunk says (#279).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root: Option<u8>,
+    /// Its tempo, in thousandths of a BPM, as a song keeps its own, as an Octatrack `.ot` beside it
+    /// says (#279).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub millibpm: Option<u32>,
 }
 
 fn default_sens() -> u8 {
@@ -576,6 +584,8 @@ impl Default for Hints {
             sens: default_sens(),
             bars: None,
             steps: None,
+            root: None,
+            millibpm: None,
         }
     }
 }
