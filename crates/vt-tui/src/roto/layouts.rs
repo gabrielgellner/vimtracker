@@ -1132,7 +1132,7 @@ const SPRING: DeviceLayout = stored(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 61] = [
+pub const ALL: [&DeviceLayout; 62] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
