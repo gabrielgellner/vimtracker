@@ -751,6 +751,27 @@ fn the_track_page_sets_the_filters_punch_beside_cut() {
 }
 
 #[test]
+fn the_track_page_switches_the_filters_safe_beside_res() {
+    let (mut app, _realtime) = on_track_page();
+    let safe = |app: &App| app.song().tracks[0].safe;
+    press(&mut app, "$hj");
+    assert_eq!(app.track_control().label(), "Safe");
+    // `K` switches it, `=` puts it on and `-` takes it off, each one undo step.
+    press(&mut app, "K");
+    assert!(safe(&app));
+    press(&mut app, "-");
+    assert!(!safe(&app));
+    press(&mut app, "=");
+    assert!(safe(&app));
+    press(&mut app, "=");
+    assert!(safe(&app));
+    press(&mut app, "u");
+    assert!(!safe(&app));
+    press(&mut app, "=x");
+    assert!(!safe(&app), "off is its default");
+}
+
+#[test]
 fn the_track_page_sets_the_filters_type_and_drive() {
     let (mut app, _realtime) = on_track_page();
     let track = |app: &App| app.song().tracks[0].clone();
@@ -1496,7 +1517,7 @@ fn the_track_page_shows_its_settings_in_columns() {
         ),
         (
             15,
-            "│  Res       0000 ▕         ▏                                High cut  FF   ▕█████████▏   ",
+            "│  Res       0000 ▕         ▏   Safe      \u{f204}                  High cut  FF   ▕█████████▏   ",
         ),
         (17, "│  Drive     00   ▕         ▏   "),
         (20, "╭─ Output ─"),

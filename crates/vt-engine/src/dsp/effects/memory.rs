@@ -20,6 +20,7 @@ use crate::dsp::effects::reverb::Reverb;
 use crate::dsp::effects::rotary::Rotary;
 use crate::dsp::effects::space::Space;
 use crate::dsp::effects::spring::Spring;
+use crate::dsp::effects::stutter::Stutter;
 use crate::dsp::effects::tape::Tape;
 use crate::dsp::effects::warps::Warps;
 use crate::dsp::filters::comb::Comb;
@@ -50,6 +51,7 @@ pub enum Memory {
     Spring(Box<Spring>),
     Space(Box<Space>),
     Rotary(Box<Rotary>),
+    Stutter(Box<Stutter>),
 }
 
 impl Memory {
@@ -125,6 +127,11 @@ impl Memory {
         Self::Spring(Box::new(Spring::new(rate)))
     }
 
+    /// A stutter's, which holds a beat at the slowest tempo.
+    pub fn stutter(rate: u32) -> Self {
+        Self::Stutter(Box::new(Stutter::new(rate)))
+    }
+
     /// A rotary speaker's, with a line for the horn's furthest delay.
     pub fn rotary(rate: u32) -> Self {
         Self::Rotary(Box::new(Rotary::new(rate)))
@@ -153,6 +160,7 @@ impl Memory {
             Self::Comb(comb) => comb.process_alone(input),
             Self::FreqShift(shifter) => shifter.process_alone(input),
             Self::Spring(spring) => spring.process(input),
+            Self::Stutter(stutter) => stutter.process(input),
             Self::Rotary(rotary) => rotary.process_alone(input),
             Self::Space(space) => space.process(input),
         }
@@ -175,6 +183,7 @@ impl Memory {
             Self::Reso(resonator) => resonator.quiet_frames(),
             Self::Comb(comb) => comb.quiet_frames(),
             Self::FreqShift(shifter) => shifter.frames() as u32,
+            Self::Stutter(stutter) => stutter.quiet_frames(),
             Self::Rotary(rotary) => rotary.frames() as u32,
         }
     }
@@ -201,6 +210,9 @@ impl Memory {
             (Self::Comb(comb), Insert::Comb(settings)) => comb.follow(settings),
             (Self::FreqShift(shifter), Insert::FreqShift(settings)) => shifter.follow(settings),
             (Self::Spring(spring), Insert::Spring(settings)) => spring.follow(settings),
+            (Self::Stutter(stutter), Insert::Stutter(settings)) => {
+                stutter.follow(settings, frames_per_tick);
+            }
             (Self::Rotary(rotary), Insert::Rotary(settings)) => rotary.follow(settings),
             (Self::Space(space), Insert::Space(settings)) => space.follow(settings),
             _ => {}
@@ -208,9 +220,20 @@ impl Memory {
     }
 
     /// Whether it's about to play something of its own with nothing going in, as a spring that's
-    /// just been knocked does, so it has to be woken.
+    /// just been knocked does, or a stutter that's just been triggered, so it has to be woken.
     pub fn waking(&self) -> bool {
-        matches!(self, Self::Spring(spring) if spring.knocking())
+        match self {
+            Self::Spring(spring) => spring.knocking(),
+            Self::Stutter(stutter) => stutter.waking(),
+            _ => false,
+        }
+    }
+
+    /// A step has switched its trigger on, so a stutter starts again, whether or not it was on.
+    pub fn strike(&mut self) {
+        if let Self::Stutter(stutter) = self {
+            stutter.strike();
+        }
     }
 
     /// Jump to what's set, as it's only just started.
@@ -230,6 +253,7 @@ impl Memory {
             Self::Comb(comb) => comb.settle(),
             Self::FreqShift(shifter) => shifter.settle(),
             Self::Spring(spring) => spring.settle(),
+            Self::Stutter(_) => {}
             Self::Rotary(rotary) => rotary.settle(),
             Self::Space(space) => space.settle(),
         }
@@ -251,6 +275,7 @@ impl Memory {
             Self::Comb(comb) => comb.clear(),
             Self::FreqShift(shifter) => shifter.clear(),
             Self::Spring(spring) => spring.clear(),
+            Self::Stutter(stutter) => stutter.clear(),
             Self::Rotary(rotary) => rotary.clear(),
             Self::Space(space) => space.clear(),
         }
@@ -276,6 +301,7 @@ pub struct MemoryCount {
     pub spring: u16,
     pub space: u16,
     pub rotary: u16,
+    pub stutter: u16,
 }
 
 impl MemoryCount {
@@ -298,6 +324,7 @@ impl MemoryCount {
                 Insert::Comb(_) => count.comb += 1,
                 Insert::FreqShift(_) => count.freq_shift += 1,
                 Insert::Spring(_) => count.spring += 1,
+                Insert::Stutter(_) => count.stutter += 1,
                 Insert::Rotary(_) => count.rotary += 1,
                 Insert::Space(_) => count.space += 1,
                 Insert::Empty
@@ -331,6 +358,7 @@ pub struct MemoryPool {
     comb: Vec<Memory>,
     freq_shift: Vec<Memory>,
     springs: Vec<Memory>,
+    stutters: Vec<Memory>,
     rotaries: Vec<Memory>,
     spaces: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
@@ -358,6 +386,7 @@ impl MemoryPool {
             comb: Vec::with_capacity(POOL_CAPACITY),
             freq_shift: Vec::with_capacity(POOL_CAPACITY),
             springs: Vec::with_capacity(POOL_CAPACITY),
+            stutters: Vec::with_capacity(POOL_CAPACITY),
             rotaries: Vec::with_capacity(POOL_CAPACITY),
             spaces: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
@@ -405,6 +434,9 @@ impl MemoryPool {
         for _ in 0..needed.spring {
             pool.put(Memory::spring(rate));
         }
+        for _ in 0..needed.stutter {
+            pool.put(Memory::stutter(rate));
+        }
         for _ in 0..needed.rotary {
             pool.put(Memory::rotary(rate));
         }
@@ -431,6 +463,7 @@ impl MemoryPool {
             Memory::Comb(_) => &mut self.comb,
             Memory::FreqShift(_) => &mut self.freq_shift,
             Memory::Spring(_) => &mut self.springs,
+            Memory::Stutter(_) => &mut self.stutters,
             Memory::Rotary(_) => &mut self.rotaries,
             Memory::Space(_) => &mut self.spaces,
         };
@@ -460,6 +493,7 @@ impl MemoryPool {
             Insert::Comb(_) => &mut self.comb,
             Insert::FreqShift(_) => &mut self.freq_shift,
             Insert::Spring(_) => &mut self.springs,
+            Insert::Stutter(_) => &mut self.stutters,
             Insert::Rotary(_) => &mut self.rotaries,
             Insert::Space(_) => &mut self.spaces,
             Insert::Empty
@@ -494,6 +528,7 @@ impl MemoryPool {
         self.owed.comb += count.comb;
         self.owed.freq_shift += count.freq_shift;
         self.owed.spring += count.spring;
+        self.owed.stutter += count.stutter;
         self.owed.rotary += count.rotary;
         self.owed.space += count.space;
     }
@@ -584,6 +619,12 @@ impl MemoryPool {
             self.owed.spring -= 1;
             return Some(memory);
         }
+        if self.owed.stutter > 0
+            && let Some(memory) = self.stutters.pop()
+        {
+            self.owed.stutter -= 1;
+            return Some(memory);
+        }
         if self.owed.rotary > 0
             && let Some(memory) = self.rotaries.pop()
         {
@@ -615,6 +656,7 @@ impl MemoryPool {
             + self.comb.len()
             + self.freq_shift.len()
             + self.springs.len()
+            + self.stutters.len()
             + self.rotaries.len()
             + self.spaces.len()
     }

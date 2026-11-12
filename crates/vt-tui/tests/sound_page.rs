@@ -224,9 +224,9 @@ fn braces_go_between_devices_keeping_the_row_and_column() {
     assert_eq!(column_name(&app), "Decay");
     press(&mut app, "2}");
     assert_eq!(app.track_control().label(), "Send B");
-    // The filter's second column has only `Punch`, so it's the nearest on that row, `Res`.
+    // The filter's second column has `Safe` on that row, beside `Res`.
     press(&mut app, "{");
-    assert_eq!(app.track_control().label(), "Res");
+    assert_eq!(app.track_control().label(), "Safe");
 }
 
 #[test]

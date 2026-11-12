@@ -527,6 +527,14 @@ pub struct Hints {
     /// than the song's tempo. None to go by the tempo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bars: Option<u16>,
+    /// The note it sounds at as recorded, as a MIDI note, `60` being `C-3`, as a WAV's `smpl` or
+    /// `inst` chunk says (#279).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root: Option<u8>,
+    /// Its tempo, in thousandths of a BPM, as a song keeps its own, as an Octatrack `.ot` beside it
+    /// says (#279).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub millibpm: Option<u32>,
 }
 
 fn default_sens() -> u8 {
@@ -542,6 +550,8 @@ impl Default for Hints {
         Self {
             sens: default_sens(),
             bars: None,
+            root: None,
+            millibpm: None,
         }
     }
 }

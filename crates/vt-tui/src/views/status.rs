@@ -147,6 +147,9 @@ pub fn value_shown(app: &App) -> Option<String> {
         let on = if app.song().limiter { "on" } else { "off" };
         return Some(on.to_owned());
     }
+    if app.view == View::Track && app.track_control() == Control::Safe {
+        return Some(safe_shown(track));
+    }
     if app.view == View::Track && app.track_control() == Control::Reset {
         return Some(reset_shown(track.reset));
     }
@@ -277,6 +280,17 @@ fn reset_shown(reset: Option<u16>) -> String {
         _ => format!("{bars} bars"),
     };
     format!("its chain starts again every {length} of the song")
+}
+
+fn safe_shown(track: &Track) -> String {
+    let on = if track.safe { "on" } else { "off" };
+    if !track.filter.has_safe() {
+        format!("{on}: {} never rings by itself", track.filter.name())
+    } else if track.safe {
+        "on: Res stops short of ringing by itself".to_owned()
+    } else {
+        "off: Res rings by itself from about D9".to_owned()
+    }
 }
 
 fn glide_shown(track: &Track) -> String {
