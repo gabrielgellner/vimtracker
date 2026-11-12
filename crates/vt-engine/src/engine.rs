@@ -1196,6 +1196,7 @@ impl Engine {
         let ticks_per_frame = TICKS_PER_QUARTER as f64 * f64::from(self.millibpm)
             / (60.0 * f64::from(self.rate) * 1000.0);
         SongTime {
+            scale: self.current.song.scale,
             tick: self.origin_tick as f64 + self.frames_since_origin as f64 * ticks_per_frame,
             clock: self.clock,
             rate: self.rate,

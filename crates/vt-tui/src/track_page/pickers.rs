@@ -14,6 +14,7 @@ use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
 use crate::app::App;
 use crate::glyphs;
 use crate::input::picker::{Item, Pick, Picker};
+use crate::views::track::IN_SCALE_PITCH;
 
 use super::controls::no_modes;
 
@@ -470,21 +471,39 @@ impl App {
                     "---",
                     pick(ModSlot {
                         destination: None,
+                        in_scale: false,
                         ..modulator
                     }),
                 )
                 .meaning("Off");
+                // `Pitch` twice: as it is, and moving the note along the song's scale.
                 let on = SettingId::for_mod(&page, slot)
                     .into_iter()
-                    .map(|destination| {
+                    .flat_map(|destination| {
+                        let scaled = (destination == SettingId::PITCH).then_some(true);
+                        [Some(false), scaled]
+                            .into_iter()
+                            .flatten()
+                            .map(move |in_scale| (destination, in_scale))
+                    })
+                    .map(|(destination, in_scale)| {
+                        let (name, meaning) = if in_scale {
+                            (
+                                IN_SCALE_PITCH.to_owned(),
+                                "Moves the note along the song's scale".to_owned(),
+                            )
+                        } else {
+                            (destination.name_on(&page), destination.meaning())
+                        };
                         Item::new(
-                            destination.name_on(&page),
+                            name,
                             pick(ModSlot {
                                 destination: Some(destination),
+                                in_scale,
                                 ..modulator
                             }),
                         )
-                        .meaning(destination.meaning())
+                        .meaning(meaning)
                         .category(destination.group())
                     });
                 (

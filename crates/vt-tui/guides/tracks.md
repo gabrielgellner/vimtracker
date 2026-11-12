@@ -1160,6 +1160,8 @@ so its values are heard as written.
 | Length | How many steps it plays, from 1 to 16 |
 | Depth | How far, in hex: at `+FF` the values are heard as written |
 | Start | The step each note starts it at |
+| Mutate | The chance each value is drawn again as it comes round, `0%` to `100%` |
+| Smooth | How it goes from step to step, in hex from `-FF` to `+FF` |
 
 **The mode**: `Trig` starts it at its `Start` with each note, and waits for the
 first; `Free` runs from the song's position, as an LFO in `Free` does; and `Note`
@@ -1181,6 +1183,18 @@ goes into the box, on the first step, and the cursor is a `▲` under it:
 
 Steps past the `Length` keep their values and aren't drawn, so shortening and
 lengthening it finds them again.
+
+**Mutate** is the Turing Machine's knob: each time a step comes round, it's drawn
+again with that chance, anywhere within the slot's `Depth`, and keeps what it drew
+until it's drawn again. `0%` plays the values as written, `100%` a new one each
+time, and between them the loop drifts. It draws from the project's seed, so a
+render repeats, and back at `0%` the values are as written again.
+
+**Smooth** at `00` steps. Up to `+80` each step glides in from the one before over
+its first part, all of it at `+80`, and on to `+FF` the glide becomes a curve
+through the steps. Down to `-80` each step falls to nothing over its last part, a
+pluck a step, and past it the fall is sharper. It follows time, so in `Note` mode
+or at `Pass` the steps are as they are.
 
 **The rate.** `Tick` is a sixth of the track's step, as `DEL` counts, so six go by in
 each step, for a fast burst. `Pass` moves on once each time round the track's chain,
@@ -1209,6 +1223,15 @@ times round and starts again with the chain. `=` is faster, as an LFO's is.
 `Length` over 256 picks the step, so `PHS3 80` starts an eight-step run on step 5.
 `DEP` locks its depth, as for any slot. A later slot's `Dest` lists it as `M3 Start`.
 Steps have no polarity, as their values say which way.
+
+## Pitch in scale
+
+Any slot's `Dest` lists `Pitch` twice: as it is, and `Pitch in scale`, which moves
+the note along the song's scale (`:scale`) to the nearest of its notes, the lower of
+two as near: `+03` from `C-3` in C major plays `D-3`. So a random LFO, or Steps with
+`Mutate`, on pitch play in key; a `Depth` of `+0C` keeps them within an octave. Only
+what the slot adds moves: the notes as written never do, and with the scale off
+it's plain `Pitch`.
 
 ## The accumulator
 

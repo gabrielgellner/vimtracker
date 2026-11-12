@@ -646,8 +646,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        18,
-        "what a sample track has, its Sample, Slice, Start and Length, none, and Mod 6's three"
+        19,
+        "what a sample track has, its Sample, Slice, Start and Length, Pitch in scale, none, and Mod 6's three"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");

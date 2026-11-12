@@ -172,6 +172,9 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
     }
 }
 
+/// What a slot going to `Pitch` in scale shows as its destination.
+pub(crate) const IN_SCALE_PITCH: &str = "Pitch in scale";
+
 /// A mod slot's setting as the page shows it, under the slot's type.
 fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
     let modulator = &track.mods[slot];
@@ -193,6 +196,7 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         // The note-shaping slot's level is the note's, one way only.
         ModField::Polarity if note_shape_slot(&track.mods) == Some(slot) => "--".to_owned(),
         ModField::Polarity => modulator.polarity().name().to_owned(),
+        ModField::Destination if modulator.goes_in_scale() => IN_SCALE_PITCH.to_owned(),
         ModField::Destination => modulator
             .destination
             .map_or_else(|| "---".to_owned(), |d| d.name_on(track)),
@@ -229,6 +233,8 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Length => steps.length.to_string(),
         ModField::Start => (steps.start + 1).to_string(),
         ModField::Loop => steps.looping.to_string(),
+        ModField::Mutate => format!("{}%", steps.mutate),
+        ModField::Smooth => depth_text(steps.smooth),
         ModField::Step(at) => depth_text(steps.values[usize::from(at)]),
         ModField::Phase => format!("{}°", lfo.phase),
         ModField::Deform => depth_text(lfo.deform),
