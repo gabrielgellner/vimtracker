@@ -201,12 +201,14 @@ const OBX_TAPER: [f32; TAPER_POINTS] = [
 
 /// How fast a struck ring dies away at the top of `Res` with `Safe` on, in dB a cycle of its
 /// pitch: 60 dB in 120 cycles, a little over a second at 100 Hz, so it rings on long after a
-/// strike and fades, where a little more `Res` would keep it going by itself.
+/// strike and fades, where a little more `Res` would keep it going by itself. The tables below
+/// were measured to it, so only their tests read it.
+#[cfg(test)]
 const SAFE_DECAY_DB: f32 = 0.5;
 /// How many points each type's `Safe` table has, a sixteenth of `Cut`'s turn apart.
 const SAFE_POINTS: usize = 17;
 /// Where `Safe` takes the top of `Res` on each type that rings by itself, as a share of its turn,
-/// at each sixteenth of `Cut`'s: where a quiet click's ring dies away by [`SAFE_DECAY_DB`] a
+/// at each sixteenth of `Cut`'s: where a quiet click's ring dies away by `SAFE_DECAY_DB` a
 /// cycle, the lower of 44.1 and 48 kHz's and of no drive and full, measured by
 /// `where_safe_stops` (decision 242). That's 1 to 5 steps of `Res` short of where each starts to
 /// ring by itself, between `D9` and `E0` (decision 120), at any `Cut`, but for two. The diode
