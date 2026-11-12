@@ -472,7 +472,7 @@ fn the_fx_pages_bars_follow_what_plays() {
         resonance: 0,
         send_a: 0,
         send_b: 0,
-        machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0],
+        machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0, 0],
         inserts: Default::default(),
         reduction: Default::default(),
         bypassed: Default::default(),

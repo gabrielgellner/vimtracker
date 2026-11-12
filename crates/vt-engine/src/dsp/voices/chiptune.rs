@@ -21,8 +21,14 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use super::chord_bank::{ChordBank, VOICES};
-use super::virtual_analog::{BLOCK, Moving, Settings, SyncedSquare};
+use super::virtual_analog::{BLOCK, DRIFT, Moving, Settings, SyncedSquare};
+use crate::dsp::blocks::drift::{Drift, OSCILLATORS};
 use crate::dsp::blocks::plaits_parts::DcBlocker;
+
+const _: () = assert!(
+    VOICES <= OSCILLATORS,
+    "Drift detunes each of the chord's squares"
+);
 
 /// How loud it is against the other machines. A major chord of plain squares at its root comes
 /// out of the engine 6 dB louder than the virtual analog voice's defaults, over a second at
@@ -46,6 +52,7 @@ pub struct Chiptune {
     /// Thin pulses leave an offset, which Plaits' output coupling takes away in hardware. Here it
     /// would thump as the track's envelope opens and closes.
     dc_blocker: DcBlocker,
+    drift: Drift,
 }
 
 impl Default for Chiptune {
@@ -64,7 +71,24 @@ impl Chiptune {
             at: BLOCK,
             fresh: true,
             dc_blocker: DcBlocker::new(DC_POLE),
+            drift: Drift::new(),
         }
+    }
+
+    /// Roll a note's drift from its seed, so each note differs but a render repeats. With `Drift`
+    /// up as the note starts, each square starts anywhere in its cycle (decision 190).
+    pub fn seed(&mut self, seed: u32, settings: Settings) {
+        self.drift.seed(seed);
+        if settings.at(DRIFT) > 0.0 {
+            for square in &mut self.squares {
+                square.start_at(self.drift.phase());
+            }
+        }
+    }
+
+    /// What its note's envelope times are multiplied by.
+    pub fn time(&self, settings: Settings) -> f32 {
+        self.drift.time(settings.at(DRIFT))
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
@@ -96,6 +120,12 @@ impl Chiptune {
         for amplitude in amplitudes.iter_mut().skip(1).step_by(2) {
             *amplitude = -*amplitude;
         }
+        let drift = settings.at(DRIFT);
+        self.drift.step();
+        let level = self.drift.level(drift);
+        for amplitude in &mut amplitudes {
+            *amplitude *= level;
+        }
         if self.fresh {
             self.amplitudes = amplitudes;
             self.fresh = false;
@@ -104,7 +134,7 @@ impl Chiptune {
         self.output = [0.0; BLOCK];
         let mut square = [0.0; BLOCK];
         for voice in 0..VOICES {
-            let voice_f0 = f0 * ratios[voice];
+            let voice_f0 = f0 * ratios[voice] * self.drift.ratio(voice, drift);
             self.squares[voice].render(voice_f0, voice_f0 * slave_ratio, 0.5, &mut square);
             // Plaits sets each level once a block. Moving it across the block instead keeps an
             // inversion fading between voices from stepping.
@@ -232,5 +262,33 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn seeded(seed: u32, settings: Settings, frames: usize) -> Vec<f32> {
+        let mut voice = Chiptune::new();
+        voice.seed(seed, settings);
+        (0..frames)
+            .map(|_| voice.next(220.0 / RATE, settings))
+            .collect()
+    }
+
+    #[test]
+    fn without_drift_a_seeded_chord_is_as_it_was_and_with_it_each_differs() {
+        // `Drift` is in place 3, `accent`'s, which Plaits' defaults set.
+        let plain = Settings {
+            accent: 0.0,
+            ..at(1.0, 0.4, 0.5)
+        };
+        assert_eq!(seeded(4, plain, 4_800), run(220.0, plain, 4_800));
+        let drifting = Settings {
+            accent: 1.0,
+            ..plain
+        };
+        let (a, b) = (seeded(1, drifting, 4_800), seeded(2, drifting, 4_800));
+        assert_ne!(a, b);
+        assert!(
+            a.iter()
+                .all(|sample| sample.is_finite() && sample.abs() < 2.0)
+        );
     }
 }

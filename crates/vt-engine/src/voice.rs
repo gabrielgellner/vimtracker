@@ -172,6 +172,37 @@ impl Synth {
             synth.trigger(accent);
         }
     }
+
+    /// Whether it drifts as an analog synth does, which a seed for each note gives it.
+    fn drifts(&self) -> bool {
+        matches!(
+            self,
+            Self::VirtualAnalog(_) | Self::VirtualAnalogVcf(_) | Self::Acid(_) | Self::Chiptune(_)
+        )
+    }
+
+    /// Roll a new note's drift, and its noise floor, from a seed. `Drift` as the note starts
+    /// says whether its oscillators start anywhere in their cycles.
+    fn seed_drift(&mut self, seed: u32, settings: Settings) {
+        match self {
+            Self::VirtualAnalog(synth) => synth.seed(seed, settings),
+            Self::VirtualAnalogVcf(synth) => synth.seed(seed, settings),
+            Self::Chiptune(synth) => synth.seed(seed, settings),
+            Self::Acid(synth) => synth.seed(seed),
+            _ => {}
+        }
+    }
+
+    /// What `Drift` multiplies the note's envelope times by. `Acid`'s own envelopes take it
+    /// themselves.
+    fn time(&self, settings: Settings) -> f32 {
+        match self {
+            Self::VirtualAnalog(synth) => synth.time(settings),
+            Self::VirtualAnalogVcf(synth) => synth.time(settings),
+            Self::Chiptune(synth) => synth.time(settings),
+            _ => 1.0,
+        }
+    }
 }
 
 /// One playing note. It keeps its sample ID until it ends, so replacing an instrument's sample
@@ -204,6 +235,9 @@ pub struct Voice {
     level: f32,
     shape: Envelope,
     rate: u32,
+    /// The rate its envelope is worked out at, which `Drift` moves from `rate` to make its times
+    /// longer or shorter.
+    envelope_rate: u32,
     /// Frames since the stage began.
     elapsed: u64,
     /// Frames until a timed release starts, for previews.
@@ -235,6 +269,7 @@ impl Default for Voice {
             level: 0.0,
             shape: Envelope::note_shape(),
             rate: 48_000,
+            envelope_rate: 48_000,
             elapsed: 0,
             release_after: None,
             synth: None,
@@ -310,6 +345,7 @@ impl Voice {
             level: from,
             shape: note.shape,
             rate,
+            envelope_rate: rate,
             elapsed: 0,
             release_after: note.release_after,
             synth,
@@ -330,6 +366,22 @@ impl Voice {
             Some(Synth::Swarm(synth)) => synth.seed(seed),
             _ => {}
         }
+    }
+
+    /// Roll this note's drift from a seed, for a synth that drifts as an analog one does, once
+    /// its settings are set, as `Drift` as it starts says how far its envelope's times move and
+    /// whether its oscillators start anywhere in their cycles (decision 190).
+    pub fn seed_drift(&mut self, seed: u32) {
+        if let Some(synth) = &mut self.synth {
+            synth.seed_drift(seed, self.settings);
+            let time = synth.time(self.settings);
+            self.envelope_rate = (self.rate as f32 * time).round() as u32;
+        }
+    }
+
+    /// Whether this note's synth drifts, and so wants [`Voice::seed_drift`].
+    pub fn drifts(&self) -> bool {
+        self.synth.as_ref().is_some_and(Synth::drifts)
     }
 
     /// Whether this note's synth draws noise.
@@ -526,8 +578,8 @@ impl Voice {
             frame
         };
         self.level = match self.stage {
-            Stage::Held { from } => self.shape.held(self.elapsed, from, self.rate),
-            Stage::Released { from } => self.shape.released(self.elapsed, from, self.rate),
+            Stage::Held { from } => self.shape.held(self.elapsed, from, self.envelope_rate),
+            Stage::Released { from } => self.shape.released(self.elapsed, from, self.envelope_rate),
             Stage::Fading { per_frame } => self.level - per_frame,
             Stage::Idle => 0.0,
         }
@@ -569,9 +621,12 @@ impl Voice {
             }
         }
         let finished = match self.stage {
-            Stage::Held { .. } => self.shape.finished_holding(self.elapsed, self.rate),
+            Stage::Held { .. } => self
+                .shape
+                .finished_holding(self.elapsed, self.envelope_rate),
             Stage::Released { .. } => {
-                self.shape.finished_releasing(self.elapsed, self.rate)
+                self.shape
+                    .finished_releasing(self.elapsed, self.envelope_rate)
                     && self.synth.as_ref().is_none_or(Synth::settled)
             }
             Stage::Fading { .. } => self.level <= 0.0,

@@ -190,7 +190,8 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     );
     assert_eq!(app.history.undo_depth(), depth + 1);
     let text = track_text(&app);
-    // The machine in its title, with no type after it, and its three settings down a column.
+    // The machine in its title, with no type after it, its three settings down a column, and
+    // `Drift` beside `Detune`, at the top of the next.
     assert!(text[2].starts_with("╭─ Machine  VA ─"), "{text:?}");
     assert!(
         text[4].starts_with("│  Detune    8000 ▕    │    ▏ "),
@@ -204,7 +205,8 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
         text[8].starts_with("│  Saw       8000 ▕████▌    ▏ "),
         "{text:?}"
     );
-    for row in [4, 6, 8] {
+    assert!(text[4].contains("Drift     0000 ▕         ▏"), "{text:?}");
+    for row in [6, 8] {
         assert_eq!(text[row].matches('▕').count(), 1, "one column: {text:?}");
     }
     assert!(
@@ -480,7 +482,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         resonance: 0,
         send_a: 0,
         send_b: 0,
-        machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0],
+        machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0, 0],
         inserts: Default::default(),
         reduction: Default::default(),
         bypassed: Default::default(),
@@ -582,8 +584,8 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "-");
     assert_eq!(
         lfo(&app).destination,
-        Some(SettingId::modulator(MOD_SLOTS - 1, 1).unwrap()),
-        "the last for Mod 4 on a sample track: the last slot's phase"
+        Some(SettingId::modulator(MOD_SLOTS - 1, 3).unwrap()),
+        "the last for Mod 4 on a sample track: the last slot's deform"
     );
 
     press(&mut app, "0j=");
@@ -643,8 +645,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        17,
-        "what a sample track has, its Sample, Slice, Start and Length, none, and Mod 6's two"
+        18,
+        "what a sample track has, its Sample, Slice, Start and Length, none, and Mod 6's three"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
@@ -757,7 +759,7 @@ fn the_track_page_sets_the_filters_mode_for_its_type() {
         "round the two"
     );
 
-    // The ladder lists its six, and starts on its own first.
+    // The ladder lists its seventeen, and starts on its own first.
     press(&mut app, "hK");
     press(&mut app, "/ladder");
     special(&mut app, KeyCode::Enter);
@@ -765,7 +767,7 @@ fn the_track_page_sets_the_filters_mode_for_its_type() {
     assert!(title_line(&app, "Filter").contains("LP24"));
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 6);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 17);
     press(&mut app, "/hp24");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app).filter_mode, FilterMode::HighPass24);
@@ -797,6 +799,13 @@ fn the_track_page_sets_the_filters_mode_for_its_type() {
     press(&mut app, "lx");
     assert_eq!(track(&app).filter_mode, FilterMode::default());
     assert!(title_line(&app, "Filter").contains("LP24"));
+
+    // The longest of the ladder's names shows whole.
+    press(&mut app, "K");
+    press(&mut app, "/ph18+lp6");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(track(&app).filter_mode, FilterMode::PhaserLowPass6);
+    assert!(title_line(&app, "Filter").contains("PH18+LP6"));
 }
 
 #[test]
@@ -1385,8 +1394,8 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(row(2).starts_with("│  Attack    1 ms       Sustain   100%"));
     assert!(row(4).starts_with("│  Decay     0 ms       Depth     --"));
     assert!(row(6).starts_with(&format!("│  Release   50 ms      Reset     {on}")));
-    // An LFO's shape, rate and depth down its left, and its phase down its right, with holes
-    // under it, as its mode is in its title.
+    // An LFO's shape, rate and depth down its left, and its phase and deform down its right, with
+    // a hole between them, as its mode is in its title.
     let (top, left) = device_at(&lines, "Mod 4");
     let row = |at: usize| from_column(&lines[top + at], left);
     assert!(
@@ -1397,7 +1406,7 @@ fn the_track_page_shows_its_settings_in_columns() {
     let inside: String = row(4).chars().take(44).collect();
     assert_eq!(inside.trim_end(), "│  Rate      1/8d");
     let inside: String = row(6).chars().take(73).collect();
-    assert_eq!(inside.trim_end(), "│  Depth     +40");
+    assert_eq!(inside.trim_end(), "│  Depth     +40        Deform    00");
     press(&mut app, "H");
     let lines = track_text(&app);
     // Four devices, each with its settings down columns and its title on its frame's top.

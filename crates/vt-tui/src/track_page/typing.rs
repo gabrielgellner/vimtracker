@@ -244,6 +244,10 @@ impl App {
                     .map(|phase| with_lfo(Lfo { phase, ..lfo })),
                 "Phase is degrees from 0 to 359".to_owned(),
             ),
+            ModField::Deform => (
+                parse_depth(text).map(|deform| with_lfo(Lfo { deform, ..lfo })),
+                "Deform is hex from -FF to +FF".to_owned(),
+            ),
             ModField::Type
             | ModField::Mode
             | ModField::Polarity

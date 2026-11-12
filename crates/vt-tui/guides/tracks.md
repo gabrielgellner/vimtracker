@@ -67,7 +67,7 @@ setting, and `g d` on the sample opens the sample page. Each machine places its 
 settings: most go down the columns in order, the sampler has `Slice` and `Play` in
 one column and `Start` and `Length` in the next, and `Acid`'s are in pairs as a
 TB-303's knobs are, `Cutoff` and `Resonance`, `Env mod` and `Decay`, `Accent` and
-`Slide`, then `Drive`.
+`Slide`, then `Drive` and `Drift`.
 
 `j` and `k` go from a device's title down its rows and on into the next device,
 keeping the column, and pass the Output's and Play's titles by, as there's nothing
@@ -136,15 +136,23 @@ on it lists the ones the type offers:
 | Filter | Modes |
 |---|---|
 | `LP` `HP` `BP` `Notch` | `12 dB`, or `24 dB` with a second filter after the first |
-| `Ladder` `Dirty` | `LP24` `LP12` `BP` `HP12` `HP24` `Notch` |
+| `Ladder` | `LP24` `LP18` `LP12` `LP6` `BP24` `BP12` `HP6` `HP12` `HP18` `HP24` |
+| | `N24` `N12` `PH18` `HP12+LP6` `HP18+LP6` `N12+LP6` `PH18+LP6` |
+| `Dirty` | `LP24` `LP12` `BP24` `HP12` `HP24` `N24` |
 | `Diode` | `Full`, or a low cut `-3 oct` `-2 oct` `-1 oct` under `Cut` |
 
 At `24 dB` a low-pass or high-pass is twice as steep with the same peak, a
-band-pass is narrower and a notch wider. `Ladder` and `Dirty` mix their stages
-as Vital does, so whichever mode they're in, their resonance still sings at
-`Cut` and they still saturate. Their `BP` peaks as loud as `LP24` is at its
-loudest. The ladder's `Notch` takes out the very pitch it sings at, so it
-hardly sings at all, where `Dirty`'s still does. `Diode` at `Full` has all its
+band-pass is narrower and a notch wider. `Ladder` and `Dirty` mix their stages,
+so whichever mode they're in, their resonance still sings at `Cut` and they
+still saturate. The number is the slope in dB an octave: `BP24` falls at 12 dB
+either side and `BP12`, wider, at 6. `N24` is Vital's notch and `N12` a
+narrower one. The ladder's extra modes are the Oberheim Xpander's: `PH18` is
+its phaser, three stages' shift against the input, which dips at about 1.7
+times `Cut` and thins the bass, and the four with `+LP6` add a gentle low-pass
+to a high-pass, notch or phaser, so `HP12+LP6` and `HP18+LP6` are lopsided
+bands. Each band peaks as loud as `LP24` is at its loudest. The ladder's notches
+take out the very pitch it sings at, so they hardly sing at all, where
+`Dirty`'s still does. `Diode` at `Full` has all its
 bass, as in `Acid`. The others cut the bass before the ladder, from that many
 octaves under `Cut`, moving with it, so `Drive` grits up only what's left. The
 MS-20's have no modes, and show `--`.
@@ -152,9 +160,11 @@ MS-20's have no modes, and show `--`.
 A track keeps its mode when its type changes, and a type that doesn't offer it
 plays its own first, so going to another type and back finds it again. A step
 can lock `MODE` to any mode, by its place in this list, which the status line
-names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP`, `05`
-`HP12`, `06` `HP24`, `07` `Notch`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
-`0B` `-1 oct`. Changing mode glides over about 10 ms, so a lock doesn't click.
+names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP24`, `05`
+`HP12`, `06` `HP24`, `07` `N24`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
+`0B` `-1 oct`, then the ladder's own: `0C` `LP18`, `0D` `LP6`, `0E` `BP12`, `0F`
+`HP6`, `10` `HP18`, `11` `N12`, `12` `PH18`, `13` `HP12+LP6`, `14` `HP18+LP6`,
+`15` `N12+LP6`, `16` `PH18+LP6`. Changing mode glides over about 10 ms, so a lock doesn't click.
 
 A curve in a box at the right of the Filter shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right, in the track's
@@ -919,11 +929,20 @@ their values aren't known ahead.
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
 | Phase | Where in the cycle it starts, in degrees |
+| Deform | How its wave bends, in hex from `-FF` to `+FF` |
 
 With `Cut 80` and `Depth +40`, the filter moves between `40` and `C0`. `Saw`
-falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` eases
-from one to the next, which suits a slow drift on `Cut`. An LFO's `Shape`, `Rate`
-and `Depth` are down its left, and its `Phase` down its right.
+falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` glides
+through one after another, never stopping at any, which suits a slow drift on
+`Cut`. An LFO's `Shape`, `Rate` and `Depth` are down its left, and its `Phase` and
+`Deform` down its right, with a space between them.
+
+**Deform** bends `Sine`, `Tri`, `Saw` and `Ramp` between their peaks, which stay
+where they are: raised, the wave bulges up and spends longer high, as a log curve
+does; lowered, it sags and spends longer low, as an exp curve. On `Square` it's the
+width: `+80` is high for three quarters of the cycle, `-80` for a quarter. The
+random shapes have nothing to bend. The picture draws the bent wave. A step locks
+it with `DFM`, as `DFM4 C0`, where `80` is none.
 
 | Type this as a rate | For |
 |---|---|
@@ -938,8 +957,8 @@ dotted and triplet divisions, moves 4 steps, or doubles or halves the hertz.
 `i` on the mode, Dest or Shape opens the list too. `K` on Rate lists the note
 divisions and bars, and `i` is for anything else, like `7st` or `2.5hz`.
 
-**Reaching other slots.** A slot's `Dest` lists the depth and phase of every slot
-after it, as `M5 Depth` and `M5 Phase`, so `Mod 4` can bring in `Mod 5`'s depth,
+**Reaching other slots.** A slot's `Dest` lists the depth, phase and deform of
+every slot after it, as `M5 Depth`, `M5 Phase` and `M5 Deform`, so `Mod 4` can bring in `Mod 5`'s depth,
 and an envelope in `Mod 2` can bring in an LFO's depth, or a later envelope's, with
 each note. It only goes one way, so `Mod 6` can't reach any other. `Rate` can't be
 moved, as LFOs work out where they are from the song's position.

@@ -134,12 +134,34 @@ impl FilterType {
     /// The modes it offers, the one it starts in first. The MS-20's offer none.
     pub fn modes(self) -> &'static [FilterMode] {
         use FilterMode::{
-            BandPass, Full, HighPass12, HighPass24, LowCut1, LowCut2, LowCut3, LowPass12,
-            LowPass24, Notch, Slope12, Slope24,
+            BandPass, BandPass12, Full, HighPass6, HighPass12, HighPass12LowPass6, HighPass18,
+            HighPass18LowPass6, HighPass24, LowCut1, LowCut2, LowCut3, LowPass6, LowPass12,
+            LowPass18, LowPass24, Notch, Notch12, Notch12LowPass6, Phaser, PhaserLowPass6, Slope12,
+            Slope24,
         };
         match self {
             Self::LowPass | Self::HighPass | Self::BandPass | Self::Notch => &[Slope12, Slope24],
-            Self::Ladder | Self::Dirty => &[
+            // The Oberheim Xpander's fifteen, and Vital's notch.
+            Self::Ladder => &[
+                LowPass24,
+                LowPass18,
+                LowPass12,
+                LowPass6,
+                BandPass,
+                BandPass12,
+                HighPass6,
+                HighPass12,
+                HighPass18,
+                HighPass24,
+                Notch,
+                Notch12,
+                Phaser,
+                HighPass12LowPass6,
+                HighPass18LowPass6,
+                Notch12LowPass6,
+                PhaserLowPass6,
+            ],
+            Self::Dirty => &[
                 LowPass24, LowPass12, BandPass, HighPass12, HighPass24, Notch,
             ],
             Self::Diode => &[Full, LowCut3, LowCut2, LowCut1],
@@ -187,11 +209,26 @@ pub enum FilterMode {
     LowCut3,
     LowCut2,
     LowCut1,
+    /// The rest of the Oberheim Xpander's mixes of the ladder's stages, which only the ladder
+    /// offers. They come after the others, so a step's value for those stays as it was.
+    LowPass18,
+    LowPass6,
+    BandPass12,
+    HighPass6,
+    HighPass18,
+    Notch12,
+    /// Three stages' phase shift against what goes in: a dip above `Cut`.
+    Phaser,
+    /// A high-pass, notch or phaser and a 6 dB low-pass at once.
+    HighPass12LowPass6,
+    HighPass18LowPass6,
+    Notch12LowPass6,
+    PhaserLowPass6,
 }
 
 impl FilterMode {
     /// Every mode, in the order a step's value counts them.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 23] = [
         Self::Slope12,
         Self::Slope24,
         Self::LowPass24,
@@ -204,6 +241,17 @@ impl FilterMode {
         Self::LowCut3,
         Self::LowCut2,
         Self::LowCut1,
+        Self::LowPass18,
+        Self::LowPass6,
+        Self::BandPass12,
+        Self::HighPass6,
+        Self::HighPass18,
+        Self::Notch12,
+        Self::Phaser,
+        Self::HighPass12LowPass6,
+        Self::HighPass18LowPass6,
+        Self::Notch12LowPass6,
+        Self::PhaserLowPass6,
     ];
 
     /// The name on screen.
@@ -217,11 +265,22 @@ impl FilterMode {
             Self::Slope12 => "12 dB an octave, one filter",
             Self::Slope24 => "24 dB an octave, a second filter after the first",
             Self::LowPass24 => "Low-pass, 24 dB",
+            Self::LowPass18 => "Low-pass, 18 dB",
             Self::LowPass12 => "Low-pass, 12 dB",
+            Self::LowPass6 => "Low-pass, 6 dB",
             Self::BandPass => "Band-pass, 12 dB either side",
+            Self::BandPass12 => "Band-pass, 6 dB either side, wider",
+            Self::HighPass6 => "High-pass, 6 dB",
             Self::HighPass12 => "High-pass, 12 dB",
+            Self::HighPass18 => "High-pass, 18 dB",
             Self::HighPass24 => "High-pass, 24 dB",
             Self::Notch => "Notch, 24 dB",
+            Self::Notch12 => "Notch, 12 dB, narrower",
+            Self::Phaser => "Phaser: a dip above Cut, the bass thinned",
+            Self::HighPass12LowPass6 => "High-pass 12 dB and low-pass 6 dB, a lopsided band",
+            Self::HighPass18LowPass6 => "High-pass 18 dB and low-pass 6 dB, a lopsided band",
+            Self::Notch12LowPass6 => "Notch 12 dB and low-pass 6 dB",
+            Self::PhaserLowPass6 => "Phaser and low-pass 6 dB",
             Self::Full => "All the bass goes in, as in Acid",
             Self::LowCut3 => "Low cut 3 octaves under Cut",
             Self::LowCut2 => "Low cut 2 octaves under Cut",
@@ -241,9 +300,10 @@ impl FilterMode {
 }
 
 /// Each mode's name, in the list's order, for a step's value to show.
-pub const FILTER_MODE_NAMES: [&str; 12] = [
-    "12 dB", "24 dB", "LP24", "LP12", "BP", "HP12", "HP24", "Notch", "Full", "-3 oct", "-2 oct",
-    "-1 oct",
+pub const FILTER_MODE_NAMES: [&str; 23] = [
+    "12 dB", "24 dB", "LP24", "LP12", "BP24", "HP12", "HP24", "N24", "Full", "-3 oct", "-2 oct",
+    "-1 oct", "LP18", "LP6", "BP12", "HP6", "HP18", "N12", "PH18", "HP12+LP6", "HP18+LP6",
+    "N12+LP6", "PH18+LP6",
 ];
 
 /// What a track is. Only `Sound` tracks have a machine, and the rest are fixed, after them, in this
@@ -839,7 +899,7 @@ impl Machine {
     /// say which part of the sample plays and how down its first column, and where that part starts
     /// and how long it is down its second, as the sample page has them; `Acid`'s are in pairs as a
     /// TB-303's knobs are, the filter's, its envelope's, then accent and slide, with the Devil
-    /// Fish's drive after them.
+    /// Fish's drive and `Drift` after them.
     pub fn grid(self) -> Grid {
         let placed: &[&[&str]] = match self {
             Self::Sampler => &[&["slice", "play"], &["start", "length"]],
@@ -847,7 +907,7 @@ impl Machine {
                 &["cutoff", "resonance"],
                 &["envmod", "decay"],
                 &["accent", "slide"],
-                &["drive"],
+                &["drive", "drift"],
             ],
             Self::Plaits(_) => {
                 let own: Vec<usize> = (0..self.settings().count())
@@ -2124,7 +2184,7 @@ mod tests {
         let acid = Machine::Plaits(SynthVoice::Acid);
         assert_eq!(acid.type_param(), Some(0), "the wave");
         assert_eq!(names(acid, 0), ["Cutoff", "Env mod", "Accent", "Drive"]);
-        assert_eq!(names(acid, 1), ["Resonance", "Decay", "Slide", ""]);
+        assert_eq!(names(acid, 1), ["Resonance", "Decay", "Slide", "Drift"]);
         assert_eq!(names(acid, 2), ["", "", "", ""]);
         let kick = Machine::Plaits(SynthVoice::Kick);
         assert_eq!(kick.type_param(), None);

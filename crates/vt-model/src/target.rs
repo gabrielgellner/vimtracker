@@ -72,8 +72,8 @@ impl SettingId {
                         .any(|param| param.setting == effect.params()[at].setting)
             }),
             // A slot's depth and polarity do nothing on the one shaping the notes, and only an LFO
-            // has a phase.
-            (Owner::Mod(slot), 1) => track.mods[slot].kind == ModKind::Lfo,
+            // has a phase and a deform.
+            (Owner::Mod(slot), 1 | 3) => track.mods[slot].kind == ModKind::Lfo,
             (Owner::Mod(slot), _) => note_shape_slot(&track.mods) != Some(slot),
             (Owner::Sampler, _) => track.is_sound() && track.machine == Machine::Sampler,
             (Owner::Bypass(slot), _) => track
@@ -114,6 +114,7 @@ impl SettingId {
             (Owner::Slot { slot, effect }, _) => format!("{} in slot {}", effect.name(), slot + 1),
             (Owner::Mod(slot), 0) => format!("How far Mod {} moves", slot + 1),
             (Owner::Mod(slot), 1) => format!("Where Mod {} is in its cycle", slot + 1),
+            (Owner::Mod(slot), 3) => format!("How far Mod {} bends its wave", slot + 1),
             (Owner::Mod(slot), _) => {
                 format!("Whether Mod {} moves one way or both", slot + 1)
             }
@@ -168,13 +169,14 @@ impl SettingId {
         settings
     }
 
-    /// What a mod slot can move: what's on the track, and the depths and phases the slots after
-    /// it have, as the slots run in order, so there's never a way back round. A polarity is
-    /// chosen, so steps lock it but nothing moves it.
+    /// What a mod slot can move: what's on the track, and the depths, phases and deforms the
+    /// slots after it have, as the slots run in order, so there's never a way back round. A
+    /// polarity is chosen, so steps lock it but nothing moves it.
     pub fn for_mod(track: &Track, slot: usize) -> Vec<Self> {
         let mut settings = Self::to_modulate(track);
         settings.extend(mod_settings().filter(|id| {
-            matches!(id.owner(), (Owner::Mod(other), 0 | 1) if other > slot) && id.exists_on(track)
+            matches!(id.owner(), (Owner::Mod(other), 0 | 1 | 3) if other > slot)
+                && id.exists_on(track)
         }));
         settings
     }
@@ -468,11 +470,18 @@ mod tests {
         };
         assert_eq!(
             mods(SettingId::for_mod(&track, 3)),
-            ["mod5.depth", "mod5.phase", "mod6.depth", "mod6.phase"]
+            [
+                "mod5.depth",
+                "mod5.phase",
+                "mod5.deform",
+                "mod6.depth",
+                "mod6.phase",
+                "mod6.deform"
+            ]
         );
         assert_eq!(
             mods(SettingId::for_mod(&track, 4)),
-            ["mod6.depth", "mod6.phase"]
+            ["mod6.depth", "mod6.phase", "mod6.deform"]
         );
         assert!(mods(SettingId::for_mod(&track, MOD_SLOTS - 1)).is_empty());
         assert_eq!(
@@ -482,18 +491,21 @@ mod tests {
                 "mod3.depth",
                 "mod4.depth",
                 "mod4.phase",
+                "mod4.deform",
                 "mod5.depth",
                 "mod5.phase",
+                "mod5.deform",
                 "mod6.depth",
-                "mod6.phase"
+                "mod6.phase",
+                "mod6.deform"
             ],
             "envelopes reach every LFO and the envelopes after them"
         );
         track.mods[4].kind = ModKind::Adsr;
         assert_eq!(
             mods(SettingId::for_mod(&track, 3)),
-            ["mod5.depth", "mod6.depth", "mod6.phase"],
-            "a phase only on an LFO"
+            ["mod5.depth", "mod6.depth", "mod6.phase", "mod6.deform"],
+            "a phase and a deform only on an LFO"
         );
         let depth = |slot| SettingId::modulator(slot, 0).unwrap();
         assert!(depth(5).reached_from(3, &track));
