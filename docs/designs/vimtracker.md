@@ -463,16 +463,17 @@ Song                               song.ron, refused unless format_version is FO
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
 *   **Mod slots** (`modulation.rs`, decision 165). Each track has `MOD_SLOTS` (6) slots on its
-    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd` or `Lfo`, with a destination
+    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum` or `Lfo`, with a destination
     setting, a depth, a switch and a polarity (`Uni` or `Bi`, its type's until one is chosen),
     which every type shares, and each type's own settings, which a
     slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
     rate is a note division or bars, a count of steps, or hertz, and its mode `Free` or `Trig`. An
     ADSR is in milliseconds, with a reset and a curve (`Exp`, `Lin` or `Snap`, its mode), and an
-    AHD the same with a hold of a time or `Note` in place of a sustain and release. The first
+    AHD the same with a hold of a time or `Note` in place of a sustain and release, and a drum
+    envelope a steep peak from full onto a body, struck one to eight times, then a decay. The first
     envelope-type slot on `Vol` shapes the notes (`note_shape_slot`): its `ModSlot::envelope`, an
-    `envelope::Envelope` of either type, is what each voice keeps as its `shape`, and a one-shot
-    (an AHD with a timed hold) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
+    `envelope::Envelope` of any of these types, is what each voice keeps as its `shape`, and a
+    one-shot (an AHD with a timed hold, or a drum) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
     of a slot after it (`SettingId::for_mod`), never one before.
 *   **Accumulators and arpeggios.** A step's `ACU` and `ARP` say how far, and the track's
     `accumulation` and `arpeggio` say how they move and when they start again.
@@ -1039,7 +1040,7 @@ whose depth is in semitones. A second envelope on `Vol` moves the level by its d
 *   **Diagram:** the track page draws each envelope. A stage's width depends only on its own time, on a log scale so a 1 ms attack shows beside a long release, and changing a stage only moves what comes after it.
 
 **Filter.** A track has one, with `Filter`, `Cut`, `Res` and `Drive` on its page. `LP`, `HP`, `BP` and `Notch` are outputs of one TPT state-variable filter, the same design as Mutable Instruments' `stmlib::Svf`, so they cost about the same. `Ladder` is the
-character filter: a saturating four-pole ladder at 2x, from Huovilainen's model, Zavalishin's integrators and Mystran's linearisation, after VCV Fundamental's VCF, which is GPL 3 or later. It self-oscillates, and its cost only falls on tracks using it. `Diode` is Vital's diode ladder, the one in `Acid`, at 2x too (decision 47). `MS20 LP` and `MS20 HP` are the Korg 35, the MS-20's filter, from sst-filters' K35, at 2x too (decision 61). `Dirty` is Vital's Dirty filter, a 24 dB low-pass whose resonance loop saturates, at 2x too (decision 71). `Mode`, under `Filter`, gives each type its other responses from what it already has, rather than more types: `12 dB` or `24 dB` for the clean four, a second state-variable filter after the first; `LP24`, `LP12`, `BP`, `HP12`, `HP24` and `Notch` for `Ladder` and `Dirty`, their stages mixed as Vital mixes them; and where the diode's input high-pass sits. The MS-20's have none. A track keeps its mode across types, a type that doesn't offer it plays its first, steps can lock `MODE`, and a change glides (decision 72). `Res` turns each family on a taper of its own, so each equal turn raises the peak about as much as Cytomic's The Drop's knob does, and the types that self-oscillate start to from about `D9`, 85% of its turn (decision 120).
+character filter: a saturating four-pole ladder at 2x, from Huovilainen's model, Zavalishin's integrators and Mystran's linearisation, after VCV Fundamental's VCF, which is GPL 3 or later. It self-oscillates, and its cost only falls on tracks using it. `Diode` is Vital's diode ladder, the one in `Acid`, at 2x too (decision 47). `MS20 LP` and `MS20 HP` are the Korg 35, the MS-20's filter, from sst-filters' K35, at 2x too (decision 61). `Dirty` is Vital's Dirty filter, a 24 dB low-pass whose resonance loop saturates, at 2x too (decision 71). `Mode`, under `Filter`, gives each type its other responses from what it already has, rather than more types: `12 dB` or `24 dB` for the clean four, a second state-variable filter after the first; `LP24`, `LP12`, `BP24`, `HP12`, `HP24` and `N24` for `Ladder` and `Dirty`, their stages mixed as Vital mixes them, and eleven more of the Oberheim Xpander's mixes for `Ladder` (decision 184); and where the diode's input high-pass sits. The MS-20's have none. A track keeps its mode across types, a type that doesn't offer it plays its first, steps can lock `MODE`, and a change glides (decision 72). `Res` turns each family on a taper of its own, so each equal turn raises the peak about as much as Cytomic's The Drop's knob does, and the types that self-oscillate start to from about `D9`, 85% of its turn (decision 120).
 ``Drive` turns up the input, soft-clips the feedback and the output at 2x, and compensates for level. At `00` the state-variable path is untouched and not oversampled. Changing `Filter` starts the new filter from silence. A low-pass with nothing to do is skipped.
 
 **Utility filter.** Each track also has `Low cut` and `High cut` after its main filter, as Elektron's Digitakt II and Digitone II pair a swappable filter with a base-width one. They use the same

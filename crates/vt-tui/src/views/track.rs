@@ -174,7 +174,12 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
 /// A mod slot's setting as the page shows it, under the slot's type.
 fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
     let modulator = &track.mods[slot];
-    let (adsr, ahd, lfo) = (&modulator.adsr, &modulator.ahd, &modulator.lfo);
+    let (adsr, ahd, drum, lfo) = (
+        &modulator.adsr,
+        &modulator.ahd,
+        &modulator.drum,
+        &modulator.lfo,
+    );
     let ahd_kind = modulator.kind == ModKind::Ahd;
     let ms = |value: u16| format!("{value} ms");
     let on = |on: bool| if on { "on" } else { "off" }.to_owned();
@@ -193,6 +198,10 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Attack if ahd_kind => ms(ahd.attack_ms),
         ModField::Attack => ms(adsr.attack_ms),
         ModField::Decay if ahd_kind => ms(ahd.decay_ms),
+        ModField::Decay if modulator.kind == ModKind::Drum => ms(drum.decay_ms),
+        ModField::Peak => ms(drum.peak_ms),
+        ModField::Body => format!("{}%", drum.body),
+        ModField::Ratchet => drum.ratchet.to_string(),
         ModField::Decay => ms(adsr.decay_ms),
         ModField::Hold => match ahd.hold {
             Hold::Note => "Note".to_owned(),
@@ -205,6 +214,7 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Shape => lfo.shape.name().to_owned(),
         ModField::Rate => lfo.rate.to_string(),
         ModField::Phase => format!("{}°", lfo.phase),
+        ModField::Deform => depth_text(lfo.deform),
     }
 }
 

@@ -22,7 +22,7 @@ use vt_model::arpeggio::{ArpMode, ArpRate, MOST_OCTAVES};
 use vt_model::constants::{
     BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET, TICKS_PER_STEP,
 };
-use vt_model::envelope::{Curve, Hold, MAX_HOLD_MS};
+use vt_model::envelope::{Curve, Hold, MAX_HOLD_MS, MAX_RATCHET};
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{LfoMode, Rate, Shape};
@@ -494,12 +494,22 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
         }
         Control::Mod(slot, field) => {
             let modulator = &track.mods[slot];
-            let (adsr, ahd, lfo) = (&modulator.adsr, &modulator.ahd, &modulator.lfo);
+            let (adsr, ahd, drum, lfo) = (
+                &modulator.adsr,
+                &modulator.ahd,
+                &modulator.drum,
+                &modulator.lfo,
+            );
             let ahd_kind = modulator.kind == ModKind::Ahd;
+            let drum_kind = modulator.kind == ModKind::Drum;
             match field {
                 // An envelope's curve is a musical list, which leaves the layout as it is.
                 ModField::Mode if modulator.kind.is_envelope() => {
-                    let curve = if ahd_kind { ahd.curve } else { adsr.curve };
+                    let curve = match modulator.kind {
+                        ModKind::Ahd => ahd.curve,
+                        ModKind::Drum => drum.curve,
+                        _ => adsr.curve,
+                    };
                     list(
                         Curve::ALL.iter().map(|curve| curve.name().to_owned()),
                         Curve::ALL
@@ -524,6 +534,13 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 ModField::Attack if ahd_kind => (Feel::Smooth, time_position(ahd.attack_ms)),
                 ModField::Attack => (Feel::Smooth, time_position(adsr.attack_ms)),
                 ModField::Decay if ahd_kind => (Feel::Smooth, time_position(ahd.decay_ms)),
+                ModField::Decay if drum_kind => (Feel::Smooth, time_position(drum.decay_ms)),
+                ModField::Peak => (Feel::Smooth, time_position(drum.peak_ms)),
+                ModField::Body => value(u16::from(drum.body.min(100)), 100, false),
+                ModField::Ratchet => list(
+                    (1..=MAX_RATCHET).map(|strikes| strikes.to_string()),
+                    usize::from(drum.ratchet.clamp(1, MAX_RATCHET) - 1),
+                ),
                 ModField::Decay => (Feel::Smooth, time_position(adsr.decay_ms)),
                 // Smooth, its value shown as it turns, with `Note` at the bottom.
                 ModField::Hold => (Feel::Smooth, hold_position(ahd.hold)),
@@ -540,6 +557,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 // at most 16 steps, and a note value has 24 (the author's choice, 2026-11-11).
                 ModField::Rate => (Feel::Smooth, rate_position(lfo.rate)),
                 ModField::Phase => value(lfo.phase.min(359), 359, false),
+                ModField::Deform => depth(lfo.deform),
             }
         }
         Control::Accumulator(field) => {

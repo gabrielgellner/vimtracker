@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::envelope::{Adsr, Ahd, Curve, Hold};
+use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Hold};
 use vt_model::modulation::ModSlot;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -200,6 +200,28 @@ fn reset_off_carries_on_from_the_level_it_had() {
     // A step is 125 ms, so the first note has finished its attack.
     close(left(&kept, STEP + 10), 1.0);
     assert!(left(&reset, STEP + 10 * MS) < 0.3);
+}
+
+#[test]
+fn a_drum_on_vol_strikes_its_ratchet_then_its_body_decays_and_ends_the_note() {
+    let clap = Drum {
+        peak_ms: 10,
+        body: 20,
+        decay_ms: 50,
+        ratchet: 3,
+        curve: Curve::Lin,
+    };
+    let slot = ModSlot::drum(Some(SettingId::VOL), clap);
+    let out = render(song(&[NOTE], slot), flat(), STEP);
+    // Full at each strike, falling steeply toward the body between them.
+    for strike in 0..3 {
+        close(left(&out, strike * 10 * MS), 1.0);
+        assert!(left(&out, strike * 10 * MS + 9 * MS) < 0.25);
+    }
+    // The body falls straight from the end of the third, and the note ends with it.
+    close(left(&out, 30 * MS + 25 * MS), 0.1);
+    assert_eq!(left(&out, 80 * MS + 2), 0.0);
+    assert_eq!(left(&out, STEP - 1), 0.0);
 }
 
 #[test]
