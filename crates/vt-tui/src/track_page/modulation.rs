@@ -74,6 +74,25 @@ const LFO_SETTINGS: [ModField; 6] = [
 const LFO_GRID: [[Option<usize>; 3]; 2] =
     [[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]];
 
+/// Steps' settings: how fast, how many and how far down the left, and where each note starts it,
+/// how it drifts and how it goes from step to step down the right; then its values, a cursor stop
+/// of its own in the panel beside them, on every row, so `l` from any of the grid goes in. What it
+/// does at its end is in its title, with its mode.
+const STEPS_SETTINGS: [ModField; 7] = [
+    ModField::Rate,
+    ModField::Length,
+    ModField::Depth,
+    ModField::Start,
+    ModField::Mutate,
+    ModField::Smooth,
+    ModField::Step(0),
+];
+const STEPS_GRID: [[Option<usize>; 3]; 3] = [
+    [Some(0), Some(1), Some(2)],
+    [Some(3), Some(4), Some(5)],
+    [Some(6), Some(6), Some(6)],
+];
+
 /// The accumulator's settings: how far it goes down the left, and what it does there and when
 /// down the right.
 const ACCUMULATOR_SETTINGS: [AccumulatorField; 6] = [
@@ -105,18 +124,20 @@ fn type_grid(kind: ModKind) -> (&'static [ModField], Grid) {
         ModKind::Drum => (&DRUM_SETTINGS, Grid::from_columns(&DRUM_GRID)),
         ModKind::Lpg => (&LPG_SETTINGS, Grid::from_columns(&LPG_GRID)),
         ModKind::Lfo => (&LFO_SETTINGS, Grid::from_columns(&LFO_GRID)),
+        ModKind::Steps => (&STEPS_SETTINGS, Grid::from_columns(&STEPS_GRID)),
     }
 }
 
 /// A mod slot as a half-width device, `Mod 1` to `Mod 6`, with its switch, then its type, its
-/// type's mode if it has one, its polarity and its destination in its title, in that order for `h`
-/// and `l`.
+/// type's mode if it has one, Steps' loop, its polarity if it has one to choose and its destination
+/// in its title, in that order for `h` and `l`.
 fn mod_device(slot: usize, modulator: &ModSlot) -> DeviceSpec {
     let kind = modulator.kind;
     let mut title = [None; DEVICE_COLUMNS];
     let fields = [
         ModField::Type,
         ModField::Mode,
+        ModField::Loop,
         ModField::Polarity,
         ModField::Destination,
     ];

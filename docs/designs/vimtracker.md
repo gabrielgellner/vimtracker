@@ -365,11 +365,12 @@ against its own state, so two quick presses can't act on an out-of-date view of 
 comes back each block: where playback is, each track's place and levels, each track's faders as
 they're heard (`Faders`: where `LEV`, `PAN`, `SNA` and `SNB` put them, what `VOL` and modulation make
 of them, and which the steps drive and a hand has taken over, from `TrackState::faders`), the watched
-track's live values, and up to four sample playheads. The live values carry the watched track's peak right after its trim
+track's live values, and up to four sample playheads. Each report says which version it's of (`Telemetry::version`, the `Published::id` playing), and the app keeps the songs it has sent until a report is of a later one, so a bar draws what's playing against the setting it was worked out from (`App::reported_track`, decision 210). The live values carry the watched track's peak right after its trim
 (`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
 `Engine::take_after_trim` takes, for the Output device's meter, and where each mod slot running as
 an LFO is in its wave (`LiveValues::mods`, a phase and a value each, which `TrackState::modulate`
-keeps as it works the slots out, and none while stopped), for the Mod page's dots. `Handle::latest` merges every
+keeps as it works the slots out, and none while stopped), for the Mod page's dots, and which step each
+running as Steps plays (`LiveValues::steps`), which its panel lights. `Handle::latest` merges every
 report since the last frame, so a meter doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
 fit, and jam changes through another.
 
@@ -463,7 +464,7 @@ Song                               song.ron, refused unless format_version is FO
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
 *   **Mod slots** (`modulation.rs`, decision 165). Each track has `MOD_SLOTS` (6) slots on its
-    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum`, `Lpg` or `Lfo`, with a destination
+    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum`, `Lpg`, `Lfo` or `Steps`, with a destination
     setting, a depth, a switch and a polarity (`Uni` or `Bi`, its type's until one is chosen),
     which every type shares, and each type's own settings, which a
     slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
@@ -472,7 +473,15 @@ Song                               song.ron, refused unless format_version is FO
     ADSR is in milliseconds, with a reset and a curve (`Exp`, `Lin` or `Snap`, its mode), and an
     AHD the same with a hold of a time or `Note` in place of a sustain and release, and a drum
     envelope a steep peak from full onto a body, struck one to eight times, then a decay, and a low-pass gate Plaits' vactrol solved in closed
-    form, which also closes the track's `Cut` by its `Colour`. The first
+    form, which also closes the track's `Cut` by its `Colour`. Steps (`steps.rs`, decision 203) are
+    up to 16 signed values played in turn, from each note, from the song's position or one a note,
+    at a division, a sixth of the track's step or a pass of its chain (`TrackState::chain_pass`, which
+    `fire_track` sets as a step lands), each way its `Loop` says; which step plays is worked out from
+    the time or count, as an LFO's place is, and its start is the slot's phase. Its `Mutate`
+    (decision 204) is the one part kept as it plays: the values drawn again, in the slot's run, from
+    a seeded stream of its own, reset when playing starts from the top. Any slot can go to `Pitch`
+    in scale (`ModSlot::in_scale`), which `modulate` snaps from the note playing along the song's
+    scale, which `SongTime` carries. The first
     envelope-type slot on `Vol` shapes the notes (`note_shape_slot`): its `ModSlot::envelope`, an
     `envelope::Envelope` of any of these types, is what each voice keeps as its `shape`, and a
     one-shot (an AHD with a timed hold, a drum or a gate) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
@@ -586,7 +595,7 @@ module per file, each keeping its port's licence notice:
 |---|---|---|
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `spring`, `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `space`, `spring`, `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
 | `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler` (also its `Decimator`, for a sound made at twice the rate), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 
