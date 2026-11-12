@@ -885,6 +885,11 @@ impl Engine {
         self.memory.spare()
     }
 
+    /// The id of the version playing, [`Published::id`].
+    pub fn version(&self) -> u64 {
+        self.current.id
+    }
+
     /// Switch to a new version, returning the old one so it can be freed elsewhere.
     ///
     /// A track whose chain changed length stays on the row it was going to play next. An ID that
