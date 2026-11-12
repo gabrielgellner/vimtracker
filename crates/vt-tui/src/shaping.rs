@@ -380,14 +380,17 @@ impl App {
         let song = self.song();
         let mut parts = Vec::new();
         let mut refused = None;
-        for track in selection.tracks.first..=selection.tracks.last {
+        let covered = song
+            .tracks
+            .iter()
+            .enumerate()
+            .take(selection.tracks.last + 1)
+            .skip(selection.tracks.first);
+        for (track, sound) in covered {
             let Some((phrase, range)) = self.place_on(track, selection.range) else {
                 continue;
             };
-            let steps = song.tracks[track]
-                .phrases
-                .get(&phrase)
-                .map_or(&[][..], |p| p.steps());
+            let steps = sound.phrases.get(&phrase).map_or(&[][..], |p| p.steps());
             match self.shape_column(steps, range, field) {
                 Ok(column) => parts.push(Part {
                     track,
