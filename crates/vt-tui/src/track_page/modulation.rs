@@ -93,6 +93,11 @@ const STEPS_GRID: [[Option<usize>; 3]; 3] = [
     [Some(6), Some(6), Some(6)],
 ];
 
+/// Track's settings: where its map starts and ends, and how far it goes, down the left, with the
+/// right left empty. What it follows is its mode, in the title, and its map is drawn beside them.
+const TRACK_SETTINGS: [ModField; 3] = [ModField::Low, ModField::High, ModField::Depth];
+const TRACK_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [None, None, None]];
+
 /// The accumulator's settings: how far it goes down the left, and what it does there and when
 /// down the right.
 const ACCUMULATOR_SETTINGS: [AccumulatorField; 6] = [
@@ -125,6 +130,7 @@ fn type_grid(kind: ModKind) -> (&'static [ModField], Grid) {
         ModKind::Lpg => (&LPG_SETTINGS, Grid::from_columns(&LPG_GRID)),
         ModKind::Lfo => (&LFO_SETTINGS, Grid::from_columns(&LFO_GRID)),
         ModKind::Steps => (&STEPS_SETTINGS, Grid::from_columns(&STEPS_GRID)),
+        ModKind::Track => (&TRACK_SETTINGS, Grid::from_columns(&TRACK_GRID)),
     }
 }
 

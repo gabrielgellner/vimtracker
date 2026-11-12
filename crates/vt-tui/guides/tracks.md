@@ -892,7 +892,7 @@ can't be muted or soloed.
 ## The Mod page
 
 Each track has six mod slots, `Mod 1` to `Mod 6`, and each slot is a type you choose:
-an `ADSR`, an `AHD` or a `Drum` envelope, an `LPG`, an `LFO`, or `Steps`, in any mix. A new track has three ADSRs, then three
+an `ADSR`, an `AHD` or a `Drum` envelope, an `LPG`, an `LFO`, `Steps` or `Track`, in any mix. A new track has three ADSRs, then three
 LFOs. The slots work out in order, so a slot can move only those after it, and never
 round again.
 
@@ -902,7 +902,7 @@ accumulator beside the arpeggio under them. A return, a group and the master hav
 no notes to move, so their page ends with the slots.
 
 A slot's title says what it is and where it goes: `Mod 4`, its switch, green while
-it's in, its type, its mode (an envelope's curve, or how notes start an LFO), its
+it's in, its type, its mode (an envelope's curve, how notes start an LFO, or what Track follows), its
 polarity, and `→` its `Dest`,
 so `Mod 4  LFO  Trig  Bi  → Cut` reads as what it's for. `---` there is dim, as it goes
 nowhere. Its settings are in two columns of three, and its shape or cycle is in a
@@ -919,7 +919,7 @@ box on its right. The device with the cursor has the brighter frame.
 | `x` | Put back the slot's first type, or on the polarity, the type's |
 | `b` | Switch this slot out, to hear without it, or back in |
 
-**Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum`, `LPG` and `LFO`, each with what it
+**Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum`, `LPG`, `LFO`, `Steps` and `Track`, each with what it
 does. Choosing one is one undo step, and the slot keeps its `Dest`, its `Depth` and
 its switch. Each slot also keeps every type's own settings, so trying an LFO in
 `Mod 2` and going back finds its envelope as it was. What it moves glides from the
@@ -1253,6 +1253,54 @@ times round and starts again with the chain. `=` is faster, as an LFO's is.
 `Length` over 256 picks the step, so `PHS3 80` starts an eight-step run on step 5.
 `DEP` locks its depth, as for any slot. A later slot's `Dest` lists it as `M3 Start`.
 Steps have no polarity, as their values say which way.
+
+## Track
+
+A `Track` slot follows each note: its pitch, for key tracking, how hard it's played,
+or a value rolled for it. What it follows is its mode, in the title, so
+`Track  Note  Bi  → Cut` opens the filter for the high notes and closes it for the
+low ones. It takes its value as each note starts and holds it to the next, and
+before the first note it moves nothing.
+
+| Setting | Value |
+|---|---|
+| Source | In the title: `Note`, `Velocity` or `Random`, below |
+| Dest | In the title: what it moves, such as `Cut`, or `---` |
+| Low | Where its map starts: a note such as `C-1`, or hex |
+| High | Where its map ends |
+| Depth | How far `High` moves it, in hex. Negative flips it |
+
+**The map** is none of the `Depth` at `Low` and all of it at `High`, a straight
+line between and flat either side. Its picture in the box on its right goes across
+all of the source's values, with a faint line down at `Low` and at `High`, and a dot
+where the last note fell. `Low` above `High` turns it round, so the low notes or the
+soft ones move it most. The same in both is a switch: nothing below it, all of it
+from there up.
+
+| Source | Follows |
+|---|---|
+| `Note` | The note as it plays, `c_1` to `G-8` |
+| `Velocity` | The velocity as it's heard, `00` to `7F` |
+| `Random` | A value rolled at each note, `00` to `FF` |
+
+`Note` is after `ACU`, `ARP` and the chain's transpose, and a new slot maps `C-1`
+to `C-5`. `Velocity`, the default, is after `VDLT` and the groove. `Random` rolls
+from the project's seed.
+
+Each source keeps its own `Low` and `High`, so trying another and coming back finds
+them as they were. `Random`'s rolls are the slot's own, so a render repeats and
+`CHA` rolls as it did without it.
+
+**Key tracking.** `Note` at `Bi` is centred half way between `Low` and `High`: with
+`C-1` to `C-5`, `C-3` leaves the setting where it is, and at a `Depth` of `+30` each
+octave moves `Cut` by `18`, up above `C-3` and down below it. At `Uni`, the polarity's
+own, it rises from the setting: velocity from `00` to `7F` on `Vol` or `Cut` adds up
+to the `Depth` for the hardest notes.
+
+`=` and `-` move `Low` and `High` by a note or `01`, and `+` and `_` by an octave or
+`10`. `i` types a note, such as `C-3`, or hex. `x` puts back the source's own. On
+the Roto, `Low`, `High`, `Depth` and `Source` are the first four knobs, with the
+polarity on the button under `Depth`, and `Dest` on the next page.
 
 ## Pitch in scale
 

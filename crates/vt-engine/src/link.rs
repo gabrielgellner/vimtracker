@@ -930,7 +930,7 @@ mod tests {
                     modulator.kind = if round % 2 == slot % 2 {
                         [ModKind::Adsr, ModKind::Ahd, ModKind::Drum, ModKind::Lpg][round / 2 % 4]
                     } else {
-                        [ModKind::Lfo, ModKind::Steps][round / 2 % 2]
+                        [ModKind::Lfo, ModKind::Steps, ModKind::Track][round / 2 % 3]
                     };
                     modulator.steps.values =
                         [0x20, -0x20, 0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];

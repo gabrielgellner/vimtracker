@@ -1043,11 +1043,37 @@ pub enum SynthVoice {
     Vosim,
     /// A saw through five formant filters, from vowel to vowel.
     Fof,
+    /// A bowed string.
+    Bowed,
+    /// A reed blown into a bore.
+    Blown,
+    /// A jet of air across a flute's bore.
+    Fluted,
+    /// A bell of eleven partials, struck.
+    Bell,
+    /// A drum of six partials and noise, struck.
+    Drum,
+    /// A map of waves to wander over.
+    WaveMap,
+    /// A line of waves to scan.
+    WaveLine,
+    /// A chord of four voices on a line of waves.
+    Paraphonic,
+    /// Noise through two resonant peaks.
+    TwinPeaks,
+    /// Clocked noise in a few steps, that loops.
+    Clocked,
+    /// A cloud of sine grains.
+    GrainCloud,
+    /// A carrier keyed through four phases, as a modem sends data.
+    Modem,
+    /// Formants, vowels and the words of old speech chips.
+    Speech,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 34] = [
+    pub const ALL: [Self; 47] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1069,6 +1095,7 @@ impl SynthVoice {
         Self::Kick,
         Self::Snare,
         Self::Hat,
+        Self::Speech,
         Self::CSaw,
         Self::Morph,
         Self::SawSquare,
@@ -1082,6 +1109,18 @@ impl SynthVoice {
         Self::ChaoticFm,
         Self::Vosim,
         Self::Fof,
+        Self::Bowed,
+        Self::Blown,
+        Self::Fluted,
+        Self::Bell,
+        Self::Drum,
+        Self::WaveMap,
+        Self::WaveLine,
+        Self::Paraphonic,
+        Self::TwinPeaks,
+        Self::Clocked,
+        Self::GrainCloud,
+        Self::Modem,
     ];
 
     /// The name on screen.
@@ -1121,6 +1160,19 @@ impl SynthVoice {
             Self::ChaoticFm => "Chaos FM",
             Self::Vosim => "VOSIM",
             Self::Fof => "FOF",
+            Self::Bowed => "Bowed",
+            Self::Blown => "Blown",
+            Self::Fluted => "Fluted",
+            Self::Bell => "Bell",
+            Self::Drum => "Drum",
+            Self::WaveMap => "Wave Map",
+            Self::WaveLine => "Wave Line",
+            Self::Paraphonic => "Paraphonic",
+            Self::TwinPeaks => "Twin Peaks",
+            Self::Clocked => "Clocked",
+            Self::GrainCloud => "Grain Cloud",
+            Self::Modem => "Modem",
+            Self::Speech => "Speech",
         }
     }
 
@@ -1161,6 +1213,19 @@ impl SynthVoice {
             Self::ChaoticFm => "FM that never settles, for chaotic tones",
             Self::Vosim => "Two windowed sines, for nasal and vocal leads",
             Self::Fof => "A saw through vowel formants, for choirs and pads",
+            Self::Bowed => "A bowed string, for cellos, fiddles and drones",
+            Self::Blown => "A reed blown into a bore, for woodwinds",
+            Self::Fluted => "A jet of air across a bore, for flutes and pipes",
+            Self::Bell => "A struck bell of eleven partials, which rings out",
+            Self::Drum => "A struck drum of partials and noise, for toms",
+            Self::WaveMap => "A map of waves to wander over, for digital tones",
+            Self::WaveLine => "A line of waves to scan, rough or smooth",
+            Self::Paraphonic => "A chord of four voices on waves, for pads",
+            Self::TwinPeaks => "Noise through two resonant peaks, for whistles",
+            Self::Clocked => "Looping 8-bit noise, for bleeps and glitches",
+            Self::GrainCloud => "A cloud of sine grains, for shimmer and texture",
+            Self::Modem => "A modem's data tone, for digital chatter",
+            Self::Speech => "Formants, vowels and words, for robots and chants",
         }
     }
 
@@ -1197,6 +1262,17 @@ impl SynthVoice {
                 | Self::ChaoticFm
                 | Self::Vosim
                 | Self::Fof
+                | Self::Bowed
+                | Self::Blown
+                | Self::Fluted
+                | Self::WaveMap
+                | Self::WaveLine
+                | Self::Paraphonic
+                | Self::TwinPeaks
+                | Self::Clocked
+                | Self::GrainCloud
+                | Self::Modem
+                | Self::Speech
         )
     }
 
@@ -1217,6 +1293,18 @@ impl SynthVoice {
                 | Self::ChaoticFm
                 | Self::Vosim
                 | Self::Fof
+                | Self::Bowed
+                | Self::Blown
+                | Self::Fluted
+                | Self::Bell
+                | Self::Drum
+                | Self::WaveMap
+                | Self::WaveLine
+                | Self::Paraphonic
+                | Self::TwinPeaks
+                | Self::Clocked
+                | Self::GrainCloud
+                | Self::Modem
         )
     }
 }
