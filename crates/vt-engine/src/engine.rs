@@ -1097,18 +1097,18 @@ impl Engine {
                 continue;
             };
             let new_count = place - state.started;
-            for slot in 0..FX_SLOTS {
+            for (slot, lane_offset) in state.lane_offsets.iter_mut().enumerate() {
                 let (old_lane, lane) = (old_phrase.lane(slot), phrase.lane(slot));
                 if !moved && old_lane == lane && was_at.phrase == at.phrase {
                     continue;
                 }
                 let Some(lane) = lane else {
-                    state.lane_offsets[slot] = 0;
+                    *lane_offset = 0;
                     continue;
                 };
                 // The step this column was going to read, which it keeps if its lane still has it.
                 let was_reading = match old_lane {
-                    Some(old_lane) => old_lane.step_at(count + state.lane_offsets[slot]),
+                    Some(old_lane) => old_lane.step_at(count + *lane_offset),
                     None => old_phrase.start() + was_at.step,
                 };
                 let target = if was_at.phrase == at.phrase && lane.contains(was_reading) {
@@ -1117,7 +1117,7 @@ impl Engine {
                     lane.start
                 };
                 let offset = (target - lane.start) as i64 - new_count;
-                state.lane_offsets[slot] = offset.rem_euclid(lane.length.max(1) as i64);
+                *lane_offset = offset.rem_euclid(lane.length.max(1) as i64);
             }
         }
     }

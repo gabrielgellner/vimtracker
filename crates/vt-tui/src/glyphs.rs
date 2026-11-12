@@ -94,6 +94,9 @@ pub const LOCK: char = '\u{f033e}';
 /// A live generator, in the phrase's title before the columns it keeps live, as it makes their
 /// values: a wand, `nf-md-auto_fix`, U+F0068 (decision 182).
 pub const LIVE: char = '\u{f0068}';
+/// A phrase or chain that plays in more than one place on its track, after its number, so `*`
+/// means only unsaved changes: `nf-md-link`, U+F0337.
+pub const LINK: char = '\u{f0337}';
 
 // Spinners, while work goes on in the background (decision 104).
 

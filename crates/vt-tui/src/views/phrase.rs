@@ -20,8 +20,9 @@ use crate::theme;
 use crate::timeline::{self, Line as TimeLine};
 use crate::views::widgets::group::{self, Switched};
 
-/// The width of a read-only note column for another track: its playhead marker and a note.
-const NEIGHBOUR_WIDTH: usize = 4;
+/// The width of a read-only note column for another track: its playhead marker, a note and a gap,
+/// so a marker has a cell of its own and the playing line reads as columns, not one string.
+const NEIGHBOUR_WIDTH: usize = 5;
 /// Room for the distance from the cursor, the row number, the playhead marker and a gap.
 const GUTTER: usize = 9;
 /// In another track's column, in its playhead's place before a note: more than one of its rows
@@ -424,9 +425,9 @@ fn column_spans(
     columns
         .iter()
         .zip(tracks)
-        .map(|(column, track)| {
+        .flat_map(|(column, track)| {
             let Some(column) = column else {
-                return Span::raw(" ".repeat(NEIGHBOUR_WIDTH));
+                return [Span::raw(" ".repeat(NEIGHBOUR_WIDTH - 1)), Span::raw(" ")];
             };
             // The row shown, whether the playhead is in this line, and whether more rows start.
             let (shown, playing, more) = match at {
@@ -467,7 +468,7 @@ fn column_spans(
                 theme::dim()
             };
             let mark = if more { MORE_STARTS } else { ' ' };
-            match note {
+            let cells = match note {
                 Some(note) if playing => Span::styled(format!(">{note}"), theme::active()),
                 // The playhead is on a row that started in an earlier line.
                 None if playing => Span::styled(">   ", theme::active()),
@@ -475,8 +476,9 @@ fn column_spans(
                     Span::styled(format!("{mark}{note}"), theme::selected())
                 }
                 Some(note) => Span::styled(format!("{mark}{note}"), look),
-                None => Span::raw(" ".repeat(NEIGHBOUR_WIDTH)),
-            }
+                None => Span::raw(" ".repeat(NEIGHBOUR_WIDTH - 1)),
+            };
+            [cells, Span::raw(" ")]
         })
         .collect()
 }
@@ -498,7 +500,7 @@ fn row_number(row: isize) -> String {
 }
 
 /// A track's name, or its number if it has none.
-fn track_name(app: &App, track: usize) -> String {
+pub(crate) fn track_name(app: &App, track: usize) -> String {
     let name = app.song().tracks.get(track).map_or("", |t| t.name.as_str());
     if name.is_empty() {
         format!("{:02}", track + 1)
@@ -539,25 +541,15 @@ fn column_label(app: &App, track: usize) -> (String, Option<(char, Style)>) {
         (glyphs::FOLDED, style)
     });
     match level_glyph(app, track).or(folded) {
-        Some(glyph) => (name.chars().take(2).collect(), Some(glyph)),
+        Some(glyph) => (
+            format!("{:<2}", name.chars().take(2).collect::<String>()),
+            Some(glyph),
+        ),
         None => (
             format!("{:<3}", name.chars().take(3).collect::<String>()),
             None,
         ),
     }
-}
-
-/// Spans cut to a width, and padded to it, counting cells.
-fn fitted(spans: Vec<Span<'static>>, width: usize) -> Vec<Span<'static>> {
-    let mut room = width;
-    let mut fitted = Vec::new();
-    for span in spans {
-        let kept: String = span.content.chars().take(room).collect();
-        room -= kept.chars().count();
-        fitted.push(Span::styled(kept, span.style));
-    }
-    fitted.push(Span::raw(" ".repeat(room)));
-    fitted
 }
 
 /// A continuation line of a row, one of the lines of its pulses after its first, in the timeline:
@@ -705,24 +697,23 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         }
     };
     let id = app.phrase_id().unwrap_or(0);
-    let shared = if app.phrase_uses(id).len() > 1 {
-        "*"
-    } else {
-        ""
-    };
-    let mut heading = format!(
-        " Phrase {id:02X}{shared} {}/{}",
+    let shared = app.phrase_uses(id).len() > 1;
+    // What's said about the phrase after its number, each a group of its own, dim as a device
+    // title's second words are: where it is in the chain, an order other than forward, and its
+    // lanes' lengths.
+    let mut details = vec![format!(
+        "{}/{}",
         app.cursor.slot + 1,
-        app.chain_entries().len(),
-    );
-    // An order other than forward is named, as a lane's length is.
+        app.chain_entries().len()
+    )];
     if !phrase.order().is_forward() {
-        heading.push_str(&format!(" {}", phrase.order()));
+        details.push(phrase.order().to_string());
     }
-    for slot in 0..FX_SLOTS {
-        if let Some(lane) = phrase.lane(slot) {
-            heading.push_str(&format!(" FX{}:{}", slot + 1, lane.length));
-        }
+    let lanes: Vec<String> = (0..FX_SLOTS)
+        .filter_map(|slot| Some(format!("FX{}:{}", slot + 1, phrase.lane(slot)?.length)))
+        .collect();
+    if !lanes.is_empty() {
+        details.push(lanes.join(" "));
     }
     // Its live columns are named, in the shape panel's colour, as their cells are drawn.
     let mut live_names: Vec<String> = phrase
@@ -737,49 +728,44 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .filter_map(|generator| Some((generator.rows()?, generator.column)))
         .collect();
     let bold = Style::new().add_modifier(Modifier::BOLD);
-    // The track's machine or kind as a glyph before it, and whether it's muted or soloed after.
-    let mut named = vec![];
+    // The title in groups two spaces apart, as the track page's is: the track, with its machine
+    // or kind as a glyph before it and whether it's muted or soloed after; the phrase, with a link
+    // if it plays in more than one place; then what's said about it.
+    let mut title = vec![];
     if let Some(track) = app.track_here() {
-        named.push(Span::styled(
+        title.push(Span::styled(
             format!("{} ", glyphs::track(track)),
             theme::dim(),
         ));
     }
-    named.push(Span::styled(
+    title.push(Span::styled(
         format!("Track {}", track_name(app, app.cursor.track)),
         bold,
     ));
     // A track in a group carries its mark, in the group's colour, as on the mixer.
     if let Some(mark) = group::mark(app.song(), app.cursor.track) {
-        named.extend([Span::raw(" "), mark.patch_style(bold)]);
+        title.extend([Span::raw(" "), mark.patch_style(bold)]);
     }
     if let Some((glyph, style)) = level_glyph(app, app.cursor.track) {
-        named.push(Span::styled(format!(" {glyph}"), style));
+        title.push(Span::styled(format!(" {glyph}"), style));
     }
-    named.push(Span::styled(heading, bold));
+    title.push(Span::styled(format!("  Phrase {id:02X}"), bold));
+    // The space after a glyph is one it isn't drawn over, so it keeps to its cell.
+    let gap = if shared {
+        title.push(Span::styled(format!(" {}", glyphs::LINK), theme::dim()));
+        format!("{} ", glyphs::ICON_SPACE)
+    } else {
+        "  ".to_owned()
+    };
+    title.push(Span::styled(
+        format!("{gap}{}", details.join("  ")),
+        theme::dim(),
+    ));
     if !live_names.is_empty() {
-        named.push(Span::styled(
-            format!(" {} {}", glyphs::LIVE, live_names.join(",")),
+        title.push(Span::styled(
+            format!("  {} {}", glyphs::LIVE, live_names.join(",")),
             bold.fg(theme::TEAL),
         ));
-    }
-    let mut title = fitted(named, GUTTER + body_width);
-    title.push(Span::raw("  "));
-    let mut after_glyph = false;
-    for track in &others {
-        // Over the note, past the column's marker. The track being edited is marked out, so the
-        // overview shows every track in its place, and a group and its tracks are in its colour.
-        let (label, glyph) = column_label(app, *track);
-        // The space after a glyph is one it isn't drawn over.
-        let gap = if after_glyph { glyphs::ICON_SPACE } else { ' ' };
-        title.push(Span::raw(gap.to_string()));
-        let marked = (*track == app.cursor.track).then(|| bold.fg(theme::BASE).bg(theme::GREEN));
-        let named = group::style(app.song(), *track).map_or(bold, |tint| bold.patch(tint));
-        title.push(Span::styled(label, marked.unwrap_or(named)));
-        after_glyph = glyph.is_some();
-        if let Some((glyph, style)) = glyph {
-            title.push(Span::styled(glyph.to_string(), marked.unwrap_or(style)));
-        }
     }
     let cursor_style = theme::cursor(app.mode);
     let boxed = app.mode == Mode::Insert;
@@ -793,19 +779,40 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Line::raw("")
         }
     };
-    // The top edge names the grid's parts, set into the box in Insert.
-    let top_rule = if boxed {
+    // The headings row: the grid's parts, set into the box's top edge in Insert, and each other
+    // track's label over its column's note, as `Note` is over the notes.
+    let mut top_rule = if boxed {
         let inside = headings_line(body_width, '─');
-        Line::styled(format!("{}╭{inside}╮", " ".repeat(GUTTER - 1)), edge)
+        vec![Span::styled(
+            format!("{}╭{inside}╮ ", " ".repeat(GUTTER - 1)),
+            edge,
+        )]
     } else {
         let headings = headings_line(body_width, ' ');
-        Line::styled(
-            format!("{}{}", " ".repeat(GUTTER), headings.trim_end()),
+        vec![Span::styled(
+            format!("{}{headings}  ", " ".repeat(GUTTER)),
             theme::dim(),
-        )
+        )]
     };
+    for track in &others {
+        // The track being edited is marked out, so the overview shows every track in its place,
+        // and a group and its tracks are in its colour.
+        let (label, glyph) = column_label(app, *track);
+        top_rule.push(Span::raw(" "));
+        let marked = (*track == app.cursor.track).then(|| bold.fg(theme::BASE).bg(theme::GREEN));
+        let named = group::style(app.song(), *track).map_or(bold, |tint| bold.patch(tint));
+        top_rule.push(Span::styled(label, marked.unwrap_or(named)));
+        let gap = match glyph {
+            Some((glyph, style)) => {
+                top_rule.push(Span::styled(glyph.to_string(), marked.unwrap_or(style)));
+                glyphs::ICON_SPACE
+            }
+            None => ' ',
+        };
+        top_rule.push(Span::raw(gap.to_string()));
+    }
     let side = if boxed { "│" } else { " " };
-    let mut lines = vec![Line::from(title), top_rule];
+    let mut lines = vec![Line::from(title), Line::from(top_rule)];
     for (at_line, line) in time_lines.iter().enumerate().skip(first_line).take(height) {
         let index = line.index;
         let row = extent.row(index);
