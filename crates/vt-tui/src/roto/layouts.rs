@@ -230,6 +230,27 @@ const ACID: DeviceLayout = live(
         knobs("Drift", [s("drift"), __, __, __, __, __, __, __]),
     ],
 );
+/// The stack's spread and blend first, then how many saws, how they're laid out and shaped and
+/// where they start, with `Drift` on a page of its own, as `Acid`'s is.
+const SUPERSAW: DeviceLayout = live(
+    "machine/supersaw",
+    &[
+        knobs(
+            "Supersaw",
+            [
+                s("detune"),
+                s("mix"),
+                s("saws"),
+                s("warp"),
+                s("shape"),
+                s("width"),
+                s("stack"),
+                s("phase"),
+            ],
+        ),
+        knobs("Drift", [s("drift"), __, __, __, __, __, __, __]),
+    ],
+);
 const FM: DeviceLayout = live(
     "machine/fm",
     &[knobs(
@@ -1241,11 +1262,12 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 76] = [
+pub const ALL: [&DeviceLayout; 77] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
     &ACID,
+    &SUPERSAW,
     &FM,
     &PD,
     &FOLD,
@@ -1328,6 +1350,7 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::VirtualAnalog => &VA,
             SynthVoice::VirtualAnalogVcf => &VA_VCF,
             SynthVoice::Acid => &ACID,
+            SynthVoice::Supersaw => &SUPERSAW,
             SynthVoice::Fm => &FM,
             SynthVoice::PhaseDistortion => &PD,
             SynthVoice::Waveshaping => &FOLD,
