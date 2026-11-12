@@ -89,6 +89,9 @@ pub fn track(track: &Track) -> char {
 /// A value's `Lock` mark in the phrase grid, which holds it until the next note:
 /// `nf-md-lock`, U+F033E.
 pub const LOCK: char = '\u{f033e}';
+/// A live generator, in the phrase's title before the columns it keeps live, as it makes their
+/// values: a wand, `nf-md-auto_fix`, U+F0068 (decision 182).
+pub const LIVE: char = '\u{f0068}';
 
 // Spinners, while work goes on in the background (decision 104).
 

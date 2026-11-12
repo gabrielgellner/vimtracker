@@ -2864,7 +2864,8 @@ fn a_live_column_is_drawn_in_the_shape_panels_colour_and_named_over_the_grid() {
         .unwrap();
     let buffer = terminal.backend().buffer().clone();
     let title: String = (0..120).map(|x| buffer[(x, 0)].symbol()).collect();
-    assert!(title.contains("Live:Vel"), "{title}");
+    // The wand, `glyphs::LIVE`, before the live columns.
+    assert!(title.contains("\u{f0068} Vel"), "{title}");
     // The velocity on the second step, clear of the cursor; the note isn't marked.
     let row = 3;
     let at = (0..120)

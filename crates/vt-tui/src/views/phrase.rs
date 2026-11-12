@@ -712,7 +712,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     named.push(Span::styled(heading, bold));
     if !live_names.is_empty() {
         named.push(Span::styled(
-            format!(" Live:{}", live_names.join(",")),
+            format!(" {} {}", glyphs::LIVE, live_names.join(",")),
             bold.fg(theme::TEAL),
         ));
     }
