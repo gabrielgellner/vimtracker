@@ -67,7 +67,7 @@ setting, and `g d` on the sample opens the sample page. Each machine places its 
 settings: most go down the columns in order, the sampler has `Slice` and `Play` in
 one column and `Start` and `Length` in the next, and `Acid`'s are in pairs as a
 TB-303's knobs are, `Cutoff` and `Resonance`, `Env mod` and `Decay`, `Accent` and
-`Slide`, then `Drive`.
+`Slide`, then `Drive` and `Drift`.
 
 `j` and `k` go from a device's title down its rows and on into the next device,
 keeping the column, and pass the Output's and Play's titles by, as there's nothing

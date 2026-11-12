@@ -190,7 +190,8 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     );
     assert_eq!(app.history.undo_depth(), depth + 1);
     let text = track_text(&app);
-    // The machine in its title, with no type after it, and its three settings down a column.
+    // The machine in its title, with no type after it, its three settings down a column, and
+    // `Drift` beside `Detune`, at the top of the next.
     assert!(text[2].starts_with("╭─ Machine  VA ─"), "{text:?}");
     assert!(
         text[4].starts_with("│  Detune    8000 ▕    │    ▏ "),
@@ -204,7 +205,8 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
         text[8].starts_with("│  Saw       8000 ▕████▌    ▏ "),
         "{text:?}"
     );
-    for row in [4, 6, 8] {
+    assert!(text[4].contains("Drift     0000 ▕         ▏"), "{text:?}");
+    for row in [6, 8] {
         assert_eq!(text[row].matches('▕').count(), 1, "one column: {text:?}");
     }
     assert!(
@@ -480,7 +482,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         resonance: 0,
         send_a: 0,
         send_b: 0,
-        machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0],
+        machine: [0x80, 0, 0x80, 0xCC, 0, 0, 0, 0, 0],
         inserts: Default::default(),
         reduction: Default::default(),
         bypassed: Default::default(),
