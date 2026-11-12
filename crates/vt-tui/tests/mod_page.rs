@@ -8,7 +8,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_engine::link::Realtime;
 use vt_engine::track_state::{LfoNow, LiveValues};
 use vt_model::action::Action;
-use vt_model::lfo::{Lfo, LfoMode, Rate, Shape, wave};
+use vt_model::lfo::{Fade, Lfo, LfoMode, Rate, Shape, wave};
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
 use vt_model::selection::Motion;
 use vt_model::settings::SettingId;
@@ -60,6 +60,7 @@ fn every_mod_setting(sound: bool) -> Vec<Control> {
             ModField::Rate,
             ModField::Depth,
             ModField::Phase,
+            ModField::Fade,
             ModField::Deform,
         ] {
             all.push(Control::Mod(slot, field));
@@ -795,9 +796,53 @@ fn k_on_an_lfos_mode_sets_whether_notes_start_it() {
         true,
         "LFO  Trig  Bi  → --- ─"
     )));
-    // `=` and `-` go through the modes, as any list does.
+    // `=` and `-` go through the modes, as any list does: the Digitakt's five.
     press(&mut app, "-");
     assert_eq!(app.song().tracks[0].mods[3].lfo.mode, LfoMode::Free);
+    for mode in [LfoMode::Trig, LfoMode::Hold, LfoMode::One, LfoMode::Half] {
+        press(&mut app, "=");
+        assert_eq!(app.song().tracks[0].mods[3].lfo.mode, mode);
+    }
+    assert!(device_title(&app, "Mod 4").starts_with(&modulator_title(
+        "Mod 4",
+        true,
+        "LFO  Half  Bi  → --- ─"
+    )));
+    press(&mut app, "=");
+    assert_eq!(app.song().tracks[0].mods[3].lfo.mode, LfoMode::Free);
+}
+
+#[test]
+fn an_lfos_fade_is_under_its_phase_as_a_signed_length() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    press(&mut app, &format!("{}jlj", to_lfo(0)));
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Fade));
+    let fade = |app: &App| app.song().tracks[0].mods[3].lfo.fade;
+    assert_eq!(fade(&app), Fade::Off);
+    // `=` fades in over the shortest length, `-` out, and `+` goes by straight lengths.
+    press(&mut app, "=");
+    assert_eq!(fade(&app), Fade::In(60));
+    press(&mut app, "--");
+    assert_eq!(fade(&app), Fade::Out(60));
+    press(&mut app, "x+++");
+    assert_eq!(fade(&app), Fade::In(240));
+    // `i` types one, signed, and `K` lists them all, out, none and in.
+    press(&mut app, "i-1 bar");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(fade(&app), Fade::Out(3840));
+    press(&mut app, "itoo long");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(fade(&app), Fade::Out(3840));
+    press(&mut app, "K");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.title, "LFO fade");
+    assert_eq!(picker.items().len(), Fade::ALL.len());
+    press(&mut app, "/+2 bars");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(fade(&app), Fade::In(7680));
+    press(&mut app, "x");
+    assert_eq!(fade(&app), Fade::Off);
 }
 
 #[test]

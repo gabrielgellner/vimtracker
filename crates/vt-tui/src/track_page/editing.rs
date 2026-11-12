@@ -161,6 +161,7 @@ fn adjust_mod(
             let moved = lfo.deform + if up { size } else { -size };
             lfo.deform = moved.clamp(-MAX_DEFORM, MAX_DEFORM);
         }
+        ModField::Fade => lfo.fade = lfo.fade.nudged(up, large),
         ModField::Length => {
             let by = if up { 1 } else { -1 };
             steps.length = (i16::from(steps.length) + by).clamp(1, STEPS as i16) as u8;
@@ -265,6 +266,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         ModField::Rate => lfo.rate = fresh.lfo.rate,
         ModField::Phase => lfo.phase = fresh.lfo.phase,
         ModField::Deform => lfo.deform = fresh.lfo.deform,
+        ModField::Fade => lfo.fade = fresh.lfo.fade,
         ModField::Length => steps.length = new.length,
         ModField::Start => steps.start = new.start,
         ModField::Loop => steps.looping = new.looping,

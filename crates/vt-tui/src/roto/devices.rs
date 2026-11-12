@@ -25,7 +25,7 @@ use vt_model::constants::{
 use vt_model::envelope::{Curve, Hold, MAX_HOLD_MS, MAX_RATCHET};
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{LfoMode, Rate, Shape};
+use vt_model::lfo::{Fade, LfoMode, Rate, Shape};
 use vt_model::modulation::{MAX_DEPTH, ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
@@ -373,14 +373,10 @@ fn depth(depth: i16) -> (Feel, u16) {
     )
 }
 
-/// Whether a mod slot's two-way choices are on, as its buttons show them: an LFO's mode is
-/// `Trig` (the button under its `Phase`, the `Retrig` it took over, while the mode has two;
-/// #86's five make it a knob), and any slot's polarity is `Bi` (the button under its `Depth`).
+/// Whether a mod slot's two-way choice is on, as its button shows it: any slot's polarity is `Bi`
+/// (the button under its `Depth`).
 fn mod_switch_on(control: Control, track: &Track) -> Option<bool> {
     match control {
-        Control::Mod(slot, ModField::Mode) if track.mods[slot].kind == ModKind::Lfo => {
-            Some(track.mods[slot].lfo.mode == LfoMode::Trig)
-        }
         Control::Mod(slot, ModField::Polarity) => Some(track.mods[slot].polarity() == Polarity::Bi),
         _ => None,
     }
@@ -560,10 +556,16 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                             .unwrap_or(0),
                     )
                 }
-                // What a slot is, the app's alone; an LFO's mode is a switch while it has two.
-                ModField::Type | ModField::Mode | ModField::Polarity | ModField::Reset => {
-                    return None;
-                }
+                // How notes start an LFO, a musical list of five, which leaves the layout as it is.
+                ModField::Mode => list(
+                    LfoMode::ALL.iter().map(|mode| mode.name().to_owned()),
+                    LfoMode::ALL
+                        .iter()
+                        .position(|mode| *mode == lfo.mode)
+                        .unwrap_or(0),
+                ),
+                // What a slot is, the app's alone.
+                ModField::Type | ModField::Polarity | ModField::Reset => return None,
                 ModField::Destination => {
                     let choices = SettingId::for_mod(track, slot);
                     let at = modulator
@@ -603,6 +605,14 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 ModField::Rate => (Feel::Smooth, rate_position(lfo.rate)),
                 ModField::Phase => value(lfo.phase.min(359), 359, false),
                 ModField::Deform => depth(lfo.deform),
+                // Smooth through every fade, out, none and in, its value shown as it turns.
+                ModField::Fade => list(
+                    Fade::ALL.iter().map(ToString::to_string),
+                    Fade::ALL
+                        .iter()
+                        .position(|fade| *fade == lfo.fade)
+                        .unwrap_or(0),
+                ),
             }
         }
         Control::Accumulator(field) => {

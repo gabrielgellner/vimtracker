@@ -6,7 +6,7 @@ use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_engine::track_state::LiveValues;
 use vt_model::insert::{Distort, DistortType, Insert};
-use vt_model::lfo::{Lfo, LfoMode, Rate, Shape};
+use vt_model::lfo::{Fade, Lfo, LfoMode, Rate, Shape};
 use vt_model::modulation::{MOD_SLOTS, ModSlot};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -227,6 +227,94 @@ fn retrig_restarts_it_on_each_note() {
         level_gain(HELD - SWING * 0.5),
     );
     close(left(&ramp(LfoMode::Trig), frame), level_gain(HELD - SWING));
+    // `Hold` runs free underneath and holds where it is at each note: the bottom from the first
+    // note, then a quarter of the way up from the second.
+    let hold = ramp(LfoMode::Hold);
+    close(left(&hold, STEP * 2), level_gain(HELD - SWING));
+    close(left(&hold, STEP * 4 + 2000), level_gain(HELD - SWING * 0.5));
+    close(left(&hold, STEP * 5 + 4000), level_gain(HELD - SWING * 0.5));
+    assert_eq!(hold, ramp(LfoMode::Hold), "a render repeats");
+}
+
+#[test]
+fn one_and_half_play_from_each_note_and_stay_where_they_end() {
+    let ramp = |mode| {
+        moving(Lfo {
+            shape: Shape::Ramp,
+            rate: Rate::Note(QUARTER),
+            mode,
+            ..Lfo::default()
+        })
+    };
+    // A quarter is four steps: `One` rises from the bottom to the top over them, then stays.
+    let one = render(ramp(LfoMode::One), flat(), STEP * 8);
+    close(left(&one, STEP), level_gain(HELD - SWING * 0.5));
+    close(left(&one, STEP * 2), level_gain(HELD));
+    close(left(&one, STEP * 6), level_gain(HELD + SWING));
+    close(left(&one, STEP * 7 + 3000), level_gain(HELD + SWING));
+    // `Half` rises to the middle over two steps, then stays there.
+    let half = render(ramp(LfoMode::Half), flat(), STEP * 8);
+    close(left(&half, STEP), level_gain(HELD - SWING * 0.5));
+    close(left(&half, STEP * 3), level_gain(HELD));
+    close(left(&half, STEP * 7), level_gain(HELD));
+    // Free, it goes on round.
+    let free = render(ramp(LfoMode::Free), flat(), STEP * 8);
+    close(left(&free, STEP * 3), level_gain(HELD + SWING * 0.5));
+}
+
+#[test]
+fn a_held_or_ended_lfos_place_stays_where_it_holds() {
+    // A ramp a bar long: `Hold` stays where the first note found it, at its start, and `One`, a
+    // quarter long, at the end of its cycle, while `Free` moves on.
+    let place = |mode, rate, steps| {
+        let lfo = Lfo {
+            shape: Shape::Ramp,
+            rate: Rate::Note(rate),
+            mode,
+            ..Lfo::default()
+        };
+        live_after(moving(lfo), steps).mods[3].unwrap()
+    };
+    let bar = QUARTER * 4;
+    assert_eq!(place(LfoMode::Hold, bar, 3), place(LfoMode::Hold, bar, 6));
+    assert_eq!(place(LfoMode::Hold, bar, 3).value, -i16::MAX);
+    assert_ne!(place(LfoMode::Free, bar, 3), place(LfoMode::Free, bar, 6));
+    let ended = place(LfoMode::One, QUARTER, 6);
+    assert_eq!(ended, place(LfoMode::One, QUARTER, 9));
+    assert!(ended.value > i16::MAX - 10, "{ended:?}");
+    assert!(ended.phase > u16::MAX - 10, "{ended:?}");
+}
+
+#[test]
+fn a_fade_counts_from_each_note_in_every_mode() {
+    // A square four bars long is at its top for the first two, so only the fade moves it.
+    let square = |fade| {
+        let mut song = song(&["C-3 -- vol:80h --- ---"]);
+        let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+        *phrase.step_mut(8).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
+        let lfo = Lfo {
+            shape: Shape::Square,
+            rate: Rate::Note(QUARTER * 16),
+            fade,
+            ..Lfo::default()
+        };
+        song.tracks[0].mods[3] = ModSlot::lfo(Some(SettingId::VOL), lfo).with_depth(0x40);
+        render(song, flat(), STEP * 16)
+    };
+    let bar = QUARTER * 4;
+    let fade_in = square(Fade::In(bar));
+    close(left(&fade_in, STEP * 4), level_gain(HELD + SWING * 0.25));
+    close(
+        left(&fade_in, STEP * 7),
+        level_gain(HELD + SWING * 7.0 / 16.0),
+    );
+    // The second note starts the fade again, but not the wave.
+    close(left(&fade_in, STEP * 12), level_gain(HELD + SWING * 0.25));
+    let fade_out = square(Fade::Out(bar));
+    close(left(&fade_out, STEP * 4), level_gain(HELD + SWING * 0.75));
+    close(left(&fade_out, STEP * 12), level_gain(HELD + SWING * 0.75));
+    let none = square(Fade::Off);
+    close(left(&none, STEP * 12), level_gain(HELD + SWING));
 }
 
 #[test]
@@ -630,6 +718,7 @@ fn moved_by_lfo(
         phase: 0,
         mode: LfoMode::Free,
         deform: 0,
+        fade: Fade::Off,
     };
     moved.tracks[0].mods[3] = ModSlot::lfo(Some(target), lfo).with_depth(depth);
     slot_live(moved, steps)

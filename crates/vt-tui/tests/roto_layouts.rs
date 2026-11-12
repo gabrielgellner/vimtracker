@@ -240,9 +240,10 @@ fn an_envelope_is_attack_decay_sustain_release_first_and_an_lfo_what_it_plays() 
         ["attack", "decay", "sustain", "release", "depth"]
     );
     let lfo = layout_named("lfo");
+    // An LFO's five modes are a knob of their own, after how it fades (#86).
     assert_eq!(
-        first_knobs(lfo)[..5],
-        ["rate", "shape", "depth", "phase", "deform"]
+        first_knobs(lfo)[..7],
+        ["rate", "shape", "depth", "phase", "deform", "fade", "mode"]
     );
     // Where each goes is on a page of its own, one arrow on.
     for layout in [envelope, lfo] {
@@ -251,7 +252,7 @@ fn an_envelope_is_attack_decay_sustain_release_first_and_an_lfo_what_it_plays() 
     }
     // Each restart is under what it starts again.
     assert_eq!(button_key(envelope, 0, 0), Some("reset"), "under Attack");
-    assert_eq!(button_key(lfo, 0, 3), Some("mode"), "under Phase");
+    assert_eq!(button_key(lfo, 0, 3), None, "nothing under Phase");
     // And a modulator's polarity under its depth, which it turns the way of.
     assert_eq!(
         button_key(envelope, 0, 4),

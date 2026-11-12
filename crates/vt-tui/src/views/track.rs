@@ -232,6 +232,7 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Step(at) => depth_text(steps.values[usize::from(at)]),
         ModField::Phase => format!("{}°", lfo.phase),
         ModField::Deform => depth_text(lfo.deform),
+        ModField::Fade => lfo.fade.to_string(),
     }
 }
 

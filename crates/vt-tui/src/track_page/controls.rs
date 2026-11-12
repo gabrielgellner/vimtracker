@@ -12,7 +12,8 @@ use vt_model::song::{FilterType, Track, TrackKind};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModField {
     Type,
-    /// The type's mode, as an LFO's `Free` or `Trig`, for a type that has one.
+    /// The type's mode, as an envelope's curve or an LFO's `Free`, `Trig`, `Hold`, `One` or
+    /// `Half`, for a type that has one.
     Mode,
     /// Whether it moves what it reaches one way or both (#434).
     Polarity,
@@ -39,6 +40,7 @@ pub enum ModField {
     Rate,
     Phase,
     Deform,
+    Fade,
     /// Steps': how many it plays, where each note starts it, and what it does at the end, which
     /// is in its title.
     Length,
@@ -64,7 +66,7 @@ impl ModField {
             Self::Colour => kind == ModKind::Lpg,
             Self::Sustain | Self::Release => kind == ModKind::Adsr,
             Self::Hold => kind == ModKind::Ahd,
-            Self::Shape | Self::Phase | Self::Deform => kind == ModKind::Lfo,
+            Self::Shape | Self::Phase | Self::Deform | Self::Fade => kind == ModKind::Lfo,
             Self::Rate => matches!(kind, ModKind::Lfo | ModKind::Steps),
             Self::Length | Self::Start | Self::Loop | Self::Step(_) => kind == ModKind::Steps,
         }
@@ -190,6 +192,7 @@ impl Control {
                 ModField::Rate => "Rate",
                 ModField::Phase => "Phase",
                 ModField::Deform => "Deform",
+                ModField::Fade => "Fade",
                 ModField::Length => "Length",
                 ModField::Start => "Start",
                 ModField::Loop => "Loop",

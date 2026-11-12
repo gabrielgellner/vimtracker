@@ -935,6 +935,18 @@ requests, Drum then LPG:
   `---`.
 * **The Roto** stores LPG as a setup of its own, so there are 12.
 
+**As built for #86 (decision 202):**
+
+* **Stateless:** `Hold` works its wave out at the time of the track's last note rather than
+  keeping the value, and `One` and `Half` are `Trig` held just short of a cycle or half of one.
+  Before any note, `Hold` holds where its wave starts and the one-shots are at their end.
+* **Fade** is `lfo::Fade`, `Off`, `In(ticks)` or `Out(ticks)`, a straight line from the last note;
+  before any note a fade in is done and a fade out is over.
+* **The grid** is `Shape`, `Rate` and `Depth` down the left, and `Phase`, `Fade` and `Deform`
+  down the right.
+* **The Roto** keeps the LFO stored, for the polarity's button: `Fade` and the five-step `Mode`
+  are knobs 6 and 7.
+
 **As built for #235's Steps (decision 203),** the first of two pull requests, the type then
 `Mutate`, `Smooth` and `In scale`:
 

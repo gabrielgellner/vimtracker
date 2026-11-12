@@ -61,17 +61,18 @@ const LPG_SETTINGS: [ModField; 5] = [
 ];
 const LPG_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
 
-/// An LFO's settings: what it plays down the left, and where it starts and how its wave bends down
-/// the right, with a hole under `Phase` for the `Fade` that #86 brings. Whether notes start it is
-/// its mode, in the title.
-const LFO_SETTINGS: [ModField; 5] = [
+/// An LFO's settings: what it plays down the left, and where it starts, how it fades after each
+/// note and how its wave bends down the right. How notes start it is its mode, in the title.
+const LFO_SETTINGS: [ModField; 6] = [
     ModField::Shape,
     ModField::Rate,
     ModField::Depth,
     ModField::Phase,
+    ModField::Fade,
     ModField::Deform,
 ];
-const LFO_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), None, Some(4)]];
+const LFO_GRID: [[Option<usize>; 3]; 2] =
+    [[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]];
 
 /// Steps' settings: how fast, how many and how far down the left, and where each note starts it
 /// down the right, with two holes; then its values, a cursor stop of its own in the panel beside

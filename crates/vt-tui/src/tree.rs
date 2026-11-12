@@ -82,7 +82,7 @@ impl App {
         self.cursor = place.cursor;
         self.clamp_cursor();
         if place.view == View::Track {
-            self.track_page.page = place.track_page;
+            self.track_page.show(place.track_page);
             self.move_control(place.track_row, place.track_field);
         }
         if place.view == View::Mixer {

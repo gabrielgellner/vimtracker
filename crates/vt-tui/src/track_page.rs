@@ -55,6 +55,11 @@ impl Page {
         }
     }
 
+    /// Where the page is in [`Page::ALL`].
+    fn index(self) -> usize {
+        self as usize
+    }
+
     /// The page next to this one, or this one at either end.
     fn beside(self, next: bool) -> Self {
         let at = Self::ALL.iter().position(|page| *page == self).unwrap_or(0);
@@ -116,7 +121,8 @@ pub enum Outcome {
 }
 
 /// The track page as a component: which of its pages shows, and where its cursor is, kept while
-/// other views are shown. What's on a page depends on the cursor's track, so each move is given
+/// other views are shown. Each page keeps its own place, which the cursor goes back to when that
+/// page shows again, and starts on its first setting. What's on a page depends on the cursor's track, so each move is given
 /// that track, or none, and the page holds no song of its own.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TrackPage {
@@ -135,6 +141,9 @@ pub struct TrackPage {
     /// Which of a Steps slot's values the cursor is on, counted from 0, while it's in the slot's
     /// panel, which is one stop on the page that `h` and `l` go across.
     pub step: u8,
+    /// The row and field the cursor was kept at on each page, by [`Page::index`], the showing
+    /// page's being `row` and `field`.
+    kept: [(usize, usize); Page::ALL.len()],
 }
 
 impl TrackPage {
@@ -224,6 +233,20 @@ impl TrackPage {
         })
     }
 
+    /// Show a page, with the cursor where it was kept on that page, and this page's place kept for
+    /// coming back to it. A place is kept as it was, which can be on a hole, and is seen where
+    /// [`TrackPage::place`] puts it on the page as it is now.
+    pub fn show(&mut self, page: Page) {
+        if page == self.page {
+            return;
+        }
+        self.kept[self.page.index()] = (self.row, self.field);
+        self.page = page;
+        (self.row, self.field) = self.kept[page.index()];
+        self.wanted = None;
+        self.fine = false;
+    }
+
     /// Put the cursor at the place nearest a row and field that holds a setting, off any fine
     /// digits.
     pub fn move_to(&mut self, track: Option<&Track>, row: usize, field: usize) {
@@ -234,7 +257,6 @@ impl TrackPage {
     /// Run one of the page's own keys: the moves, `{` and `}` across a rack's devices, and the
     /// keys to the pages either side. `times` is its count, at least 1.
     pub fn key(&mut self, cmd: Cmd, times: usize, track: Option<&Track>) -> Outcome {
-        let field = self.field;
         match cmd {
             Cmd::Move(Motion::Down) => (0..times).for_each(|_| self.step_row(1, track)),
             Cmd::Move(Motion::Up) => (0..times).for_each(|_| self.step_row(-1, track)),
@@ -256,8 +278,8 @@ impl TrackPage {
             Cmd::Move(Motion::RowStart) => self.row_end(false, track),
             Cmd::Move(Motion::RowEnd) => self.row_end(true, track),
             Cmd::PreviousPage | Cmd::NextPage => {
-                self.page = self.page.beside(cmd == Cmd::NextPage);
-                self.move_to(track, 0, field);
+                self.show(self.page.beside(cmd == Cmd::NextPage));
+                self.settle(track);
             }
             _ => return Outcome::Passed,
         }
