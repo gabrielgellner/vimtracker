@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, edit};
+use vt_model::generator::{Span, applied};
 use vt_model::lfo::{Shape as Wave, note_rates};
-use vt_model::selection::{Field, StepRange};
+use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::{
     DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_BEND, MAX_VALUES, Shape, ShapeColumn, Values, WAVES,
     WaveRate, Where, default_ends, open_rows, track_seed,
@@ -103,6 +104,9 @@ pub struct ShapePanel {
     pub row: ShapeRow,
     /// What's being typed into the current row.
     pub typing: Option<String>,
+    /// The live generator it was opened on with `gl`, by its place in its phrase's list, which
+    /// it reshapes rather than shaping the rows once.
+    pub live: Option<usize>,
     /// The song from before the panel opened.
     base: Arc<Song>,
 }
@@ -172,8 +176,17 @@ impl ShapePanel {
         }
     }
 
-    /// The edit that gives every part its shape.
+    /// The edit that gives every part its shape: once, or the live generator a new shape.
     fn action(&self) -> Action {
+        if let Some(generator) = self.live {
+            let part = self.parts[0];
+            return Action::Reshape {
+                track: part.track,
+                phrase: part.phrase,
+                generator,
+                shape: self.shape,
+            };
+        }
         let mut actions: Vec<Action> = self
             .parts
             .iter()
@@ -191,6 +204,70 @@ impl ShapePanel {
         } else {
             Action::Batch(actions)
         }
+    }
+
+    /// The edit that keeps every part live, one generator to a track: on its column's lane, if
+    /// it has one, and on its rows otherwise.
+    fn live_action(&self) -> Action {
+        let mut actions: Vec<Action> = self
+            .parts
+            .iter()
+            .enumerate()
+            .map(|(nth, part)| Action::Generate {
+                track: part.track,
+                phrase: part.phrase,
+                column: part.column,
+                span: if self.on_lane(part) {
+                    Span::Lane
+                } else {
+                    Span::rows(part.range)
+                },
+                shape: self.shape_of(nth),
+            })
+            .collect();
+        if actions.len() == 1 {
+            actions.remove(0)
+        } else {
+            Action::Batch(actions)
+        }
+    }
+
+    /// Whether a part is on an FX column with a lane, which a live generator fills.
+    fn on_lane(&self, part: &Part) -> bool {
+        let ShapeColumn::Fx { slot, .. } = part.column else {
+            return false;
+        };
+        self.base
+            .tracks
+            .get(part.track)
+            .and_then(|track| track.phrases.get(&part.phrase))
+            .is_some_and(|phrase| phrase.lane(slot).is_some())
+    }
+}
+
+/// A column's short name, as the phrase's heading names its live ones.
+pub fn column_label(column: ShapeColumn) -> String {
+    match column {
+        ShapeColumn::Note { .. } => "Note".to_owned(),
+        ShapeColumn::Velocity => "Vel".to_owned(),
+        ShapeColumn::Nudge => "Nudge".to_owned(),
+        ShapeColumn::Length => "Len".to_owned(),
+        ShapeColumn::Fx { slot, .. } => format!("FX{}", slot + 1),
+    }
+}
+
+/// Whether the cursor on a field is on a live generator's column.
+fn on_column(field: Field, column: ShapeColumn) -> bool {
+    match (field, column) {
+        (Field::Note, ShapeColumn::Note { .. })
+        | (Field::Velocity, ShapeColumn::Velocity)
+        | (Field::Nudge, ShapeColumn::Nudge)
+        | (Field::Gate | Field::GateLength, ShapeColumn::Length) => true,
+        (
+            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot),
+            ShapeColumn::Fx { slot: owned, .. },
+        ) => slot == owned,
+        _ => false,
     }
 }
 
@@ -369,6 +446,7 @@ impl App {
             },
             row: ShapeRow::Fill,
             typing: None,
+            live: None,
             base,
         };
         self.leave_selection(selection);
@@ -389,19 +467,152 @@ impl App {
         }
     }
 
-    /// Keep what's showing, as one undo step.
-    fn keep_shape(&mut self) {
+    /// Keep what's showing, as one undo step: as plain values, or live. A live generator reopened
+    /// and kept as plain values is applied.
+    fn keep_shape(&mut self, live: bool) {
         let Some(panel) = self.shape.take() else {
             return;
         };
         self.mode = Mode::Normal;
-        let result = Arc::clone(self.song());
+        let part = panel.parts[0];
+        let action = match (panel.live, live) {
+            (None, false) | (Some(_), true) => None,
+            (None, true) => Some(panel.live_action()),
+            (Some(generator), false) => Some(Action::Batch(vec![
+                panel.action(),
+                Action::ApplyGenerator {
+                    track: part.track,
+                    phrase: part.phrase,
+                    generator,
+                },
+            ])),
+        };
+        let shown = Arc::clone(self.song());
+        let result = match action.map(|action| edit(&panel.base, &action)) {
+            None => shown,
+            Some(Ok(result)) => result,
+            Some(Err(error)) => {
+                self.status = error.to_string();
+                shown
+            }
+        };
         self.history.replace_current(Arc::clone(&panel.base));
         if *result != *panel.base {
+            if panel.live.is_none() {
+                self.say_applied(&result);
+            }
             self.history.commit(result);
             self.dirty = true;
         }
+        self.publish();
         self.remember_shape(&panel);
+        let name = column_label(part.column);
+        match (panel.live, live) {
+            (None, true) => {
+                let lane = panel.on_lane(&part);
+                self.status = match panel.parts.len() {
+                    1 if lane => format!(
+                        "{name} is live on its lane: gl opens it again, Space g a applies it"
+                    ),
+                    1 => format!("{name} is live: gl opens it again, Space g a applies it"),
+                    tracks => format!(
+                        "{name} is live on {tracks} tracks, each on its own: gl opens one again"
+                    ),
+                };
+            }
+            (Some(_), true) => self.status = format!("{name} stays live"),
+            (Some(_), false) => {
+                self.status = format!("{name} is applied, as plain values");
+            }
+            (None, false) => {}
+        }
+    }
+
+    /// Say so if an edit applied a live generator, as it changed one of its cells by hand.
+    pub(crate) fn say_applied(&mut self, next: &Arc<Song>) {
+        if let Some(column) = applied(self.song(), next).first() {
+            self.status = format!(
+                "{} was live: it's plain values now. u makes it live again",
+                column_label(*column)
+            );
+        }
+    }
+
+    /// The live generator under the cursor: its phrase, and its place in the phrase's list. On the
+    /// cursor's column, it's the one covering the cursor's row, or else the nearest.
+    pub(crate) fn generator_here(&self) -> Option<(u32, usize)> {
+        let phrase = self.phrase_id()?;
+        let step = self.cursor.step;
+        self.phrase_here()?
+            .generators()
+            .iter()
+            .enumerate()
+            .filter(|(_, generator)| on_column(self.cursor.field, generator.column))
+            .filter_map(|(index, generator)| {
+                let rows = generator.rows()?;
+                let away = if step < rows.first {
+                    rows.first - step
+                } else {
+                    step.saturating_sub(rows.last)
+                };
+                Some((away, index))
+            })
+            .min()
+            .map(|(_, index)| (phrase, index))
+    }
+
+    /// Open the panel again on the live generator under the cursor, on its saved shape.
+    pub(crate) fn reopen_generator(&mut self) {
+        let Some((phrase, index)) = self.generator_here() else {
+            self.status =
+                "No live column here. Select rows, press S, then L to keep it live".to_owned();
+            return;
+        };
+        let base = Arc::clone(self.song());
+        let track = self.cursor.track;
+        let generator = &base.tracks[track].phrases[&phrase].generators()[index];
+        let Some(range) = generator.rows() else {
+            return;
+        };
+        let part = Part {
+            track,
+            phrase,
+            range,
+            column: generator.column,
+        };
+        let shape = generator.shape;
+        self.shape = Some(ShapePanel {
+            selection: Selection {
+                range,
+                scope: Scope::column(self.cursor.field.group()),
+                tracks: TrackSpan::between(track, track),
+            },
+            parts: vec![part],
+            column: part.column,
+            shape,
+            row: ShapeRow::Fill,
+            typing: None,
+            live: Some(index),
+            base,
+        });
+        self.mode = Mode::Shape;
+        self.preview_shape();
+    }
+
+    /// Apply the live generator under the cursor, leaving its values as plain ones.
+    pub(crate) fn apply_generator_here(&mut self) {
+        let Some((phrase, generator)) = self.generator_here() else {
+            self.status = "No live column here to apply".to_owned();
+            return;
+        };
+        let track = self.cursor.track;
+        let column = self.song().tracks[track].phrases[&phrase].generators()[generator].column;
+        self.apply(&Action::ApplyGenerator {
+            track,
+            phrase,
+            generator,
+        });
+        self.status = format!("{} is applied, as plain values", column_label(column));
     }
 
     /// Put back what was there before the panel opened.
@@ -504,7 +715,8 @@ impl App {
         }
         match key.code {
             KeyCode::Esc => self.cancel_shape(),
-            KeyCode::Enter => self.keep_shape(),
+            KeyCode::Enter => self.keep_shape(false),
+            KeyCode::Char('L') => self.keep_shape(true),
             KeyCode::Char('j') | KeyCode::Down => self.move_shape_row(1),
             KeyCode::Char('k') | KeyCode::Up => self.move_shape_row(-1),
             KeyCode::Char('=') => self.adjust_shape(1, false),

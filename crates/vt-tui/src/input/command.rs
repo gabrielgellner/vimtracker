@@ -80,6 +80,8 @@ pub enum Line {
     Mute,
     Solo,
     Double,
+    /// Apply the live generator under the cursor.
+    GenApply,
     SetSkip(u32),
     SetLimiter(bool),
     SetScale(ScaleKind),
@@ -333,6 +335,8 @@ pub enum LineError {
     Len,
     #[error(":lane takes a number of steps, 1 or more, or nothing to follow the notes again")]
     Lane,
+    #[error(":gen takes apply, to apply the live column under the cursor")]
+    Gen,
     #[error(
         ":order takes forward, reverse, up-down, up-down-inc, down-up, down-up-inc, odd-even, converge, diverge, pedal, shuffle or random, or nothing to choose"
     )]
@@ -590,7 +594,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 40] = [
+pub const COMMANDS: [Command; 41] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -920,6 +924,15 @@ pub const COMMANDS: [Command; 40] = [
         meaning: "Double the phrase, notes and all",
         takes: Takes::Nothing,
         parse: |_| Ok(Line::Double),
+    },
+    Command {
+        name: "gen",
+        meaning: "gen apply: apply the live column here, leaving plain values",
+        takes: Takes::Nothing,
+        parse: |argument| match argument {
+            "apply" => Ok(Line::GenApply),
+            _ => Err(LineError::Gen),
+        },
     },
     Command {
         name: "loop",

@@ -194,6 +194,42 @@ to choose from a list and `x` for the default. `Tab` still plays and pauses.
 selection's own ends, `Wave`, `Alternate` and `Scale` keep theirs, `List` keeps
 its list, and the other transforms rework that selection's own values.
 
+### Keeping it live
+
+`L` in place of `Enter` keeps the shape live: the column stays tied to its
+settings, so you can come back and change them while the loop plays. A
+Euclidean velocity accent is the one to try: keep it live, then turn its
+`Rotate` later.
+
+| Keys | Does |
+|---|---|
+| `L` | In the panel, keep it live, as one undo |
+| `gl` | Open the panel again on the live column here |
+| `Space g a`, `:gen apply` | Apply it: keep its values as plain ones |
+
+`gl` works from any row of the column, and after the song is saved and opened
+again. In the panel it opens, `L` keeps the new settings live, `Enter` applies
+it with them, and `Esc` leaves it as it was. A live column's values are drawn
+in the shape panel's colour, and the phrase's title names its live columns,
+like `Live:Vel,FX1`.
+
+Typing over one of its values takes over by hand: it's applied, its values
+stay, and the status line says so; `u` makes it live again. Editing any other
+column leaves it live. Where it chooses its rows by the notes, as Velocity,
+Nudge and length always do and an FX column does with Where on Notes or No
+notes, editing the notes fills it again, so a note added gets a generated
+velocity, as one undo with the note. Under the hood it keeps what was in its
+rows before it, so turning `Rotate` puts back the values of the rows the hits
+leave.
+
+On an FX column with a lane, a live column fills the lane's steps, whichever
+rows you selected, and follows the lane when `:lane`, `gs`, `ge` or `]l` move
+it; `:lane` alone applies it. Across tracks, each track gets a live column of
+its own, which `gl` opens and `Space g a` applies on its own. Doubling a phrase
+applies its live columns, and so does `]r` on the rows it rotates. A new live
+shape over one on the same column applies the old one first, and starts from
+the values it left.
+
 ## Values and small edits
 
 | Keys | Does |

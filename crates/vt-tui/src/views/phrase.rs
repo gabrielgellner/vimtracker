@@ -8,7 +8,8 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS, TICKS_PER_STEP};
-use vt_model::selection::Scope;
+use vt_model::selection::{Scope, StepRange};
+use vt_model::shape::ShapeColumn;
 use vt_model::song::{Phrase, Track};
 use vt_model::step::{FxCommand, GateKind, Mark, Note, Step};
 
@@ -250,6 +251,30 @@ fn slot_columns(slot: usize) -> (usize, usize) {
         start,
         field_range(Field::FxValue(slot)).1 + FINE_WIDTH + MARK_WIDTH,
     )
+}
+
+/// The characters a live generator's cells take in a step's text: an FX column's by its command,
+/// so its values keep their colour.
+fn live_cells(column: ShapeColumn) -> (usize, usize) {
+    match column {
+        ShapeColumn::Note { .. } => field_range(Field::Note),
+        ShapeColumn::Velocity => field_range(Field::Velocity),
+        ShapeColumn::Nudge => field_range(Field::Nudge),
+        ShapeColumn::Length => field_range(Field::GateLength),
+        ShapeColumn::Fx { slot, .. } => field_range(Field::FxCommand(slot)),
+    }
+}
+
+/// Whether a step has a value in a live generator's column to mark: a note, a velocity, a nudge,
+/// a length of its own, or an FX command.
+fn live_value(step: &Step, column: ShapeColumn) -> bool {
+    match column {
+        ShapeColumn::Note { .. } => step.note != Note::Empty,
+        ShapeColumn::Velocity => step.velocity.is_some(),
+        ShapeColumn::Nudge => step.nudge != 0,
+        ShapeColumn::Length => step.length().is_some(),
+        ShapeColumn::Fx { slot, .. } => step.fx.get(slot).is_some_and(|fx| fx.command.is_some()),
+    }
 }
 
 /// Which tracks fit in the overview beside the grid, in order, with the focused one among them and
@@ -652,6 +677,18 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             heading.push_str(&format!(" FX{}:{}", slot + 1, lane.length));
         }
     }
+    // Its live columns are named, in the shape panel's colour, as their cells are drawn.
+    let mut live_names: Vec<String> = phrase
+        .generators()
+        .iter()
+        .map(|generator| crate::shaping::column_label(generator.column))
+        .collect();
+    live_names.dedup();
+    let live: Vec<(StepRange, ShapeColumn)> = phrase
+        .generators()
+        .iter()
+        .filter_map(|generator| Some((generator.rows()?, generator.column)))
+        .collect();
     let bold = Style::new().add_modifier(Modifier::BOLD);
     // The track's machine or kind as a glyph before it, and whether it's muted or soloed after.
     let mut named = vec![];
@@ -673,6 +710,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         named.push(Span::styled(format!(" {glyph}"), style));
     }
     named.push(Span::styled(heading, bold));
+    if !live_names.is_empty() {
+        named.push(Span::styled(
+            format!(" Live:{}", live_names.join(",")),
+            bold.fg(theme::TEAL),
+        ));
+    }
     let mut title = fitted(named, GUTTER + body_width);
     title.push(Span::raw("  "));
     let mut after_glyph = false;
@@ -922,6 +965,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             };
             if start < end {
                 styles[start - 1..end].fill(style);
+            }
+        }
+        // A live generator's cells are in the shape panel's colour, an FX column by its command,
+        // so its values keep theirs.
+        for (rows, column) in &live {
+            let (start, end) = live_cells(*column);
+            if (rows.first..=rows.last).contains(&index) && live_value(step, *column) {
+                let end = end.min(text.len());
+                for style in &mut styles[start.min(end)..end] {
+                    *style = style.fg(theme::TEAL);
+                }
             }
         }
         // A lock for a voice or an effect this track doesn't have now stays, grey with no colour

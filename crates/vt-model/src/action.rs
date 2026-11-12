@@ -12,6 +12,7 @@ use crate::constants::{
     MAX_PROJECT_NAME_CHARS, MAX_SOUND_TRACKS, MAX_TRACK_RESET, MAX_TRANSPOSE, MIN_MILLIBPM,
     MIN_TRANSPOSE,
 };
+use crate::generator::{Generator, Span};
 use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
 use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
@@ -115,6 +116,28 @@ pub enum Action {
         range: StepRange,
         column: ShapeColumn,
         shape: Shape,
+    },
+    /// Keep a shape live on a column of a phrase, on rows or on the column's lane, starting from
+    /// the values there.
+    Generate {
+        track: usize,
+        phrase: u32,
+        column: ShapeColumn,
+        span: Span,
+        shape: Shape,
+    },
+    /// Give one of a phrase's live generators, by its place in the phrase's list, a new shape.
+    Reshape {
+        track: usize,
+        phrase: u32,
+        generator: usize,
+        shape: Shape,
+    },
+    /// Apply one of a phrase's live generators, leaving its values as plain ones.
+    ApplyGenerator {
+        track: usize,
+        phrase: u32,
+        generator: usize,
     },
     /// Write one value across steps.
     Fill {
@@ -549,6 +572,10 @@ pub enum EditError {
     NoPhrase(u32),
     #[error("phrase {phrase:02X} has no step {step}")]
     NoStep { phrase: u32, step: usize },
+    #[error("phrase {phrase:02X} has no live generator {generator}")]
+    NoGenerator { phrase: u32, generator: usize },
+    #[error("a live generator on a lane needs an FX column with a lane")]
+    NoLane,
     #[error("tempo must be from 20 to 400 BPM")]
     Tempo,
     #[error("a project can have at most {MAX_SOUND_TRACKS} tracks")]
@@ -660,6 +687,43 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             for (row, value) in exact_values(found.steps(), *range, *column, shape) {
                 column.write_exact(step_mut(&mut next, *track, *phrase, row)?, value);
             }
+        }
+        Action::Generate {
+            track,
+            phrase,
+            column,
+            span,
+            shape,
+        } => {
+            let generator = Generator::new(*column, *span, *shape);
+            if !phrase_mut(&mut next, *track, *phrase)?.add_generator(generator) {
+                return Err(EditError::NoLane);
+            }
+        }
+        Action::Reshape {
+            track,
+            phrase,
+            generator,
+            shape,
+        } => {
+            if !phrase_mut(&mut next, *track, *phrase)?.reshape_generator(*generator, *shape) {
+                return Err(EditError::NoGenerator {
+                    phrase: *phrase,
+                    generator: *generator,
+                });
+            }
+        }
+        Action::ApplyGenerator {
+            track,
+            phrase,
+            generator,
+        } => {
+            phrase_mut(&mut next, *track, *phrase)?
+                .apply_generator(*generator)
+                .ok_or(EditError::NoGenerator {
+                    phrase: *phrase,
+                    generator: *generator,
+                })?;
         }
         Action::Fill {
             track,
@@ -1297,7 +1361,26 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .filter_mode = *mode;
         }
     }
+    follow_generators(song, &mut next);
     Ok(Arc::new(next))
+}
+
+/// Let the live generators of every phrase an edit changed follow it: one whose cells it changed
+/// by hand is applied, and one whose notes it changed rerenders, as part of the same edit.
+fn follow_generators(before: &Song, after: &mut Song) {
+    for (index, track) in after.tracks.iter_mut().enumerate() {
+        let old = before.tracks.get(index);
+        for (id, phrase) in &mut track.phrases {
+            if phrase.generators().is_empty()
+                || old
+                    .and_then(|old| old.phrases.get(id))
+                    .is_some_and(|old| Arc::ptr_eq(old, phrase))
+            {
+                continue;
+            }
+            Arc::make_mut(phrase).follow_generators();
+        }
+    }
 }
 
 fn check_transpose(entry: &ChainEntry) -> Result<(), EditError> {

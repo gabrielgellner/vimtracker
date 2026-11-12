@@ -2,6 +2,8 @@
 //! turn, or a short list of them in turn, or reworking the values already there. On the Note
 //! column, the steps are the scale's degrees while it's on.
 
+use serde::{Deserialize, Serialize};
+
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
 use crate::lfo::{Rate, Shape as Wave, wave};
 use crate::scale::Scale;
@@ -29,7 +31,7 @@ pub const MAX_CYCLES: u16 = 64;
 
 /// How long a wave's cycle is: a length in time, as an LFO's, or a whole number of cycles across
 /// the selection, so they fit it whatever its length.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WaveRate {
     Time(Rate),
     Cycles(u16),
@@ -104,7 +106,7 @@ const EUCLID: Where = Where::Euclid {
 pub const MAX_VALUES: usize = 8;
 
 /// What goes in the rows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FillKind {
     /// From one value to the other, along the curve.
     Ramp,
@@ -185,7 +187,7 @@ impl FillKind {
 }
 
 /// Which rows get a value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Where {
     /// Rows with a note.
     Notes,
@@ -520,8 +522,9 @@ impl Ladder {
     }
 }
 
-/// The values a `List` fill goes through, up to `MAX_VALUES` of them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// The values a `List` fill goes through, up to `MAX_VALUES` of them. Saved as a list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(from = "Vec<u8>", into = "Vec<u8>")]
 pub struct Values {
     values: [u8; MAX_VALUES],
     len: u8,
@@ -554,6 +557,18 @@ impl Values {
     }
 }
 
+impl From<Vec<u8>> for Values {
+    fn from(values: Vec<u8>) -> Self {
+        Self::new(&values)
+    }
+}
+
+impl From<Values> for Vec<u8> {
+    fn from(values: Values) -> Self {
+        values.as_slice().to_vec()
+    }
+}
+
 /// The values in hex with a space between each, as they're typed.
 impl std::fmt::Display for Values {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -568,7 +583,7 @@ impl std::fmt::Display for Values {
 }
 
 /// How to fill a column.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Shape {
     pub from: u8,
     pub to: u8,

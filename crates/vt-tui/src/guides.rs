@@ -86,7 +86,10 @@ impl Guide {
                 lines.push(Line::styled(line.to_owned(), code()));
             } else if let Some(title) = line.strip_prefix("# ") {
                 lines.push(Line::styled(title.to_owned(), heading(theme::MAUVE)));
-            } else if let Some(title) = line.strip_prefix("## ") {
+            } else if let Some(title) = line
+                .strip_prefix("## ")
+                .or_else(|| line.strip_prefix("### "))
+            {
                 lines.push(Line::styled(title.to_owned(), heading(theme::BLUE)));
             } else {
                 lines.push(Line::raw(""));
