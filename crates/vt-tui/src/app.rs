@@ -50,7 +50,9 @@ use vt_model::step::{
 
 use crate::grammar::{Adjustments, Change, SelectionPlace};
 use crate::guides::Guide;
-use crate::input::bindings::{Cmd, Op, Resolved, Table, adjusting_key, degree_key, note_key};
+use crate::input::bindings::{
+    Binding, Cmd, Op, Resolved, Table, adjusting_key, degree_key, note_key,
+};
 use crate::input::command::Line;
 use crate::input::command_history::CommandHistory;
 use crate::input::completion::CommandMenu;
@@ -1351,6 +1353,13 @@ impl App {
         let mut rows = Vec::new();
         let mut last = None;
         for binding in self.table.rows() {
+            // The sample page's keys while it selects are its own, and only its text objects
+            // differ.
+            let as_sample =
+                |other: &Binding| other.mode == Mode::Sample && other.keys == binding.keys;
+            if binding.mode == Mode::SampleVisual && self.table.rows().any(as_sample) {
+                continue;
+            }
             if last != Some(binding.mode) {
                 rows.push(String::new());
                 rows.push(format!("{:?}", binding.mode));
