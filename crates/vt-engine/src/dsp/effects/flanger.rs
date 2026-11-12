@@ -367,4 +367,21 @@ mod tests {
             assert!(flanger.frames() as f32 >= longest + 4.0, "{rate}");
         }
     }
+
+    #[test]
+    fn a_nan_in_the_line_comes_out_once_and_what_goes_round_dies_away() {
+        let mut flanger = flanger(Settings {
+            feedback: 0xFF,
+            ..Settings::DEFAULT
+        });
+        flanger.process([0.5; 2]);
+        flanger.lines[0][flanger.write] = f32::NAN;
+        // Past the longest it reads back, it's only what went round, held to the clip's end.
+        let longest = (LONGEST_FLANGE_MS * 2.0 / 1000.0 * RATE as f32) as usize;
+        let out: Vec<f32> = (0..RATE * 10)
+            .flat_map(|_| flanger.process([0.0; 2]))
+            .collect();
+        assert!(out[longest * 2..].iter().all(|s| s.is_finite()));
+        assert!(out[out.len() - 100..].iter().all(|s| s.abs() < 1e-4));
+    }
 }
