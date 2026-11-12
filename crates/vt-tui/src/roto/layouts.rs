@@ -1358,6 +1358,23 @@ const STUTTER: DeviceLayout = stored(
         button(0, "trig"),
     )],
 );
+/// How hard it drives and where the highs start, then how its detector rises and falls.
+const EXCITER: DeviceLayout = live(
+    "fx/exciter",
+    &[knobs(
+        "Exciter",
+        [
+            s("drive"),
+            s("tone"),
+            GAP,
+            s("attack"),
+            s("release"),
+            GAP,
+            s("mix"),
+            s("gain"),
+        ],
+    )],
+);
 /// How long the rotors take to change, the horn's Doppler and swell, the drive and the width,
 /// with the fast and slow switch on the button under the inertia, as an organist's half-moon.
 const ROTARY: DeviceLayout = stored(
@@ -1396,7 +1413,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 92] = [
+pub const ALL: [&DeviceLayout; 93] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1488,6 +1505,7 @@ pub const ALL: [&DeviceLayout; 92] = [
     &SPRING,
     &SPACE,
     &ROTARY,
+    &EXCITER,
     &STUTTER,
 ];
 
@@ -1584,6 +1602,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::Spring(_) => &SPRING,
         Insert::Stutter(_) => &STUTTER,
         Insert::Rotary(_) => &ROTARY,
+        Insert::Exciter(_) => &EXCITER,
         Insert::Space(_) => &SPACE,
     }
 }

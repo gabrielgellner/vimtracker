@@ -12,9 +12,9 @@
 
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
-    Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Flanger,
-    FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb,
-    Rotary, Space, Spring, Stutter, Tape, Vowel, Warps,
+    Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Exciter,
+    Flanger, FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator,
+    Reverb, Rotary, Space, Spring, Stutter, Tape, Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -25,6 +25,7 @@ use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::dynamics::compressor::Compressor as Dynamics;
 use crate::dsp::dynamics::eq::ThreeBands;
 use crate::dsp::dynamics::glue::PeakClip;
+use crate::dsp::effects::exciter::Exciter as Excitement;
 use crate::dsp::effects::memory::{Memory, MemoryPool, SILENT};
 use crate::dsp::effects::pedal::Pedal;
 use crate::dsp::effects::phaser::Phaser as AllPasses;
@@ -103,6 +104,8 @@ pub struct InsertState {
     gate: Gate,
     /// A vowel filter's formants, small enough as well.
     vowel: Formants,
+    /// An exciter's filters, detectors and oversampling, small enough as well.
+    exciter: Excitement,
     /// A guitar pedal's filters and oversampling, small enough as well.
     pedal: Pedal,
     /// How far the slot is switched in: `1` in, `0` bypassed. It crossfades in a straight line
@@ -133,6 +136,7 @@ impl Default for InsertState {
             phaser: AllPasses::default(),
             gate: Gate::default(),
             vowel: Formants::default(),
+            exciter: Excitement::default(),
             pedal: Pedal::default(),
             on: Smoothed::at(1.0),
             note: DEFAULT_NOTE,
@@ -166,6 +170,7 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Spring(_), Insert::Spring(_))
         | (Insert::Space(_), Insert::Space(_))
         | (Insert::Rotary(_), Insert::Rotary(_))
+        | (Insert::Exciter(_), Insert::Exciter(_))
         | (Insert::Stutter(_), Insert::Stutter(_)) => true,
         _ => false,
     }
@@ -414,6 +419,7 @@ impl InsertState {
             | Insert::Plate(Plate { mix, gain, .. })
             | Insert::Spring(Spring { mix, gain, .. })
             | Insert::Stutter(Stutter { mix, gain, .. })
+            | Insert::Exciter(Exciter { mix, gain, .. })
             | Insert::Rotary(Rotary { mix, gain, .. })
             | Insert::Space(Space { mix, gain, .. })
             | Insert::Pitch(Pitch { mix, gain, .. })
@@ -474,6 +480,13 @@ impl InsertState {
             self.vowel.follow(settings);
             if fresh {
                 self.vowel.settle();
+            }
+        }
+        if let Insert::Exciter(settings) = insert {
+            let fresh = !same_effect(self.insert, insert);
+            self.exciter.follow(settings);
+            if fresh {
+                self.exciter.settle();
             }
         }
         if let Insert::Distort(settings) = insert
@@ -659,7 +672,11 @@ impl InsertState {
     pub fn mono(&self) -> Mono {
         match self.insert {
             // Each of its types works each side alone, the same way, with nothing between them.
-            Insert::Distort(_) | Insert::Eq(_) | Insert::Lpg(_) | Insert::Vowel(_) => Mono::OneSide,
+            Insert::Distort(_)
+            | Insert::Eq(_)
+            | Insert::Lpg(_)
+            | Insert::Vowel(_)
+            | Insert::Exciter(_) => Mono::OneSide,
             // One detector for both sides, and one gain on each.
             Insert::Empty | Insert::Compressor(_) => Mono::Linked,
             // These spread the sides apart or mix them, or keep their sides in the effect pool's
@@ -810,6 +827,17 @@ impl InsertState {
                 return [
                     (wet[0] * mix + input[0] * (1.0 - mix)) * gain,
                     (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
+                ];
+            }
+            // What it makes is added to the sound, as an Aural Exciter's is, so `Mix` at `00` is
+            // the sound alone and at `FF` the sound with all it makes.
+            Insert::Exciter(_) => {
+                let wet = self.exciter.process(input, same, smoothing, rate);
+                let mix = self.mix.next(smoothing);
+                let gain = self.gain.next(smoothing);
+                return [
+                    (input[0] + wet[0] * mix) * gain,
+                    (input[1] + wet[1] * mix) * gain,
                 ];
             }
             Insert::Phaser(_) => {
@@ -1386,6 +1414,11 @@ mod tests {
                 fast: 1,
                 drive: 0xFF,
                 ..Rotary::DEFAULT
+            }),
+            Insert::Exciter(Exciter {
+                drive: 0xFF,
+                tone: 0x00,
+                ..Exciter::DEFAULT
             }),
             Insert::Stutter(Stutter {
                 trig: 1,

@@ -36,6 +36,7 @@ pub enum Insert {
     Spring(Spring),
     Space(Space),
     Rotary(Rotary),
+    Exciter(Exciter),
     Stutter(Stutter),
 }
 
@@ -300,6 +301,11 @@ pub enum Setting {
     RepeatLength,
     Repeats,
     RepeatDecay,
+    /// An exciter's: where the highs it excites start, and how fast its level detector rises and
+    /// falls. Its `Drive` is the delay's.
+    ExciterTone,
+    ExciterAttack,
+    ExciterRelease,
     /// A rotary speaker's: whether its rotors spin fast or slow, how long they take to change,
     /// how far the horn's pitch wavers and how far its loudness swells. Its `Drive` and `Width`
     /// are the delay's.
@@ -1954,6 +1960,70 @@ pub(crate) const ROTARY_PARAMS: [Param; 8] = [
     GAIN_PARAM,
 ];
 
+/// Where an exciter's high-pass is at the bottom and top of `Tone`, in Hz, as Surge's.
+pub const EXCITER_TONE_HZ: (f32, f32) = (500.0, 10_000.0);
+/// How fast its level detector rises and falls at the ends of `Attack` and `Release`, in ms, as
+/// Surge's knobs go.
+pub const EXCITER_ATTACK_MS: (f32, f32) = (5.0, 20.0);
+pub const EXCITER_RELEASE_MS: (f32, f32) = (50.0, 200.0);
+
+/// Between two ends on a log scale, for a value on the `00` to `FF` scale.
+fn exciter_scale(value: f32, (low, high): (f32, f32)) -> f32 {
+    low * (high / low).powf((value / 255.0).clamp(0.0, 1.0))
+}
+
+/// Where an exciter's high-pass is, in Hz: 500 Hz at `00` to 10 kHz at `FF`, evenly in pitch, so
+/// `80` is about 2.2 kHz.
+pub fn exciter_tone_hz(value: f32) -> f32 {
+    exciter_scale(value, EXCITER_TONE_HZ)
+}
+
+/// How fast an exciter's level detector rises, in ms: 5 at `00` to 20 at `FF`, 10 at `80`.
+pub fn exciter_attack_ms(value: f32) -> f32 {
+    exciter_scale(value, EXCITER_ATTACK_MS)
+}
+
+/// How fast it falls, in ms: 50 at `00` to 200 at `FF`, 100 at `80`.
+pub fn exciter_release_ms(value: f32) -> f32 {
+    exciter_scale(value, EXCITER_RELEASE_MS)
+}
+
+/// An exciter's, in the order the page shows them, as columns: how hard it drives and where the
+/// highs it drives start; then how its detector rises and falls; then how much is added, and the
+/// gain.
+pub(crate) const EXCITER_PARAMS: [Param; 6] = [
+    hex_param(
+        "Drive",
+        "drive",
+        "DRIV",
+        Setting::Drive,
+        Exciter::DEFAULT.drive,
+    ),
+    hex_param(
+        "Tone",
+        "tone",
+        "TONE",
+        Setting::ExciterTone,
+        Exciter::DEFAULT.tone,
+    ),
+    hex_param(
+        "Attack",
+        "attack",
+        "ATK",
+        Setting::ExciterAttack,
+        Exciter::DEFAULT.attack,
+    ),
+    hex_param(
+        "Release",
+        "release",
+        "REL",
+        Setting::ExciterRelease,
+        Exciter::DEFAULT.release,
+    ),
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
 /// How many of the note divisions a stutter's `Length` goes through, shortest first: up to a
 /// beat, `1/4`, as a stutter is a roll or a glitch rather than a loop.
 pub const REPEAT_LENGTHS: usize = 13;
@@ -2035,7 +2105,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 25] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -2059,6 +2129,7 @@ impl Insert {
         Self::Spring(Spring::DEFAULT),
         Self::Space(Space::DEFAULT),
         Self::Rotary(Rotary::DEFAULT),
+        Self::Exciter(Exciter::DEFAULT),
         Self::Stutter(Stutter::DEFAULT),
     ];
 
@@ -2099,6 +2170,7 @@ impl Insert {
             Self::FreqShift(_) => "Freq Shift",
             Self::Spring(_) => "Spring",
             Self::Stutter(_) => "Stutter",
+            Self::Exciter(_) => "Exciter",
             Self::Rotary(_) => "Rotary",
             Self::Space(_) => "Space",
         }
@@ -2131,6 +2203,7 @@ impl Insert {
                 "Puts the sound in a spring tank, as a guitar amp has: drips and boings"
             }
             Self::Stutter(_) => "Repeats a piece of the sound when a step says: rolls and glitches",
+            Self::Exciter(_) => "Adds air: harmonics made from the highs, more as they get louder",
             Self::Rotary(_) => "Spins it in a Leslie's cabinet, slow or fast, for organs and more",
             Self::Space(_) => "Washes the sound into a huge, nearly endless pad",
         }
@@ -2171,6 +2244,7 @@ impl Insert {
             Self::Spring(_) => &SPRING_PARAMS,
             Self::Space(_) => &SPACE_PARAMS,
             Self::Rotary(_) => &ROTARY_PARAMS,
+            Self::Exciter(_) => &EXCITER_PARAMS,
             Self::Stutter(_) => &STUTTER_PARAMS,
         }
     }
@@ -2318,6 +2392,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| stutter.read(setting));
             }
+            Self::Exciter(exciter) => {
+                return EXCITER_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| exciter.read(setting));
+            }
             Self::Rotary(rotary) => {
                 return ROTARY_PARAMS
                     .iter()
@@ -2375,6 +2455,7 @@ impl Insert {
             Self::FreqShift(shifter) => return Self::FreqShift(shifter.written(setting, whole)),
             Self::Spring(spring) => return Self::Spring(spring.written(setting, whole)),
             Self::Stutter(stutter) => return Self::Stutter(stutter.written(setting, whole)),
+            Self::Exciter(exciter) => return Self::Exciter(exciter.written(setting, whole)),
             Self::Rotary(rotary) => return Self::Rotary(rotary.written(setting, whole)),
             Self::Space(space) => return Self::Space(space.written(setting, whole)),
             Self::Empty => return self,
@@ -2460,6 +2541,11 @@ impl Insert {
             Self::Stutter(_) => &[
                 &[S::Trig],
                 &[S::RepeatLength, S::Repeats, S::RepeatDecay],
+                &[S::Mix, S::Gain],
+            ],
+            Self::Exciter(_) => &[
+                &[S::Drive, S::ExciterTone],
+                &[S::ExciterAttack, S::ExciterRelease],
                 &[S::Mix, S::Gain],
             ],
             Self::Rotary(_) => &[
@@ -4154,6 +4240,70 @@ impl Rotary {
             _ => {}
         }
         rotary
+    }
+}
+
+/// An exciter's settings: Chowdhury's model of the Aphex Aural Exciter, as Surge ships it. One a
+/// file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Exciter {
+    /// How hard the highs are driven into its shaper.
+    pub drive: u8,
+    /// Where the highs it excites start, from 500 Hz to 10 kHz.
+    pub tone: u8,
+    /// How fast its level detector rises and falls, from 5 to 20 ms and 50 to 200 ms.
+    pub attack: u8,
+    pub release: u8,
+    /// How much of what it makes is added to the sound, from none at `00`.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Exciter {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Exciter {
+    /// As it starts: Surge's, half way on everything.
+    pub const DEFAULT: Self = Self {
+        drive: 0x80,
+        tone: 0x80,
+        attack: 0x80,
+        release: 0x80,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Drive => self.drive,
+            Setting::ExciterTone => self.tone,
+            Setting::ExciterAttack => self.attack,
+            Setting::ExciterRelease => self.release,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut exciter = self;
+        match setting {
+            Setting::Drive => exciter.drive = value,
+            Setting::ExciterTone => exciter.tone = value,
+            Setting::ExciterAttack => exciter.attack = value,
+            Setting::ExciterRelease => exciter.release = value,
+            Setting::Mix => exciter.mix = value,
+            Setting::Gain => exciter.gain = value,
+            _ => {}
+        }
+        exciter
     }
 }
 
