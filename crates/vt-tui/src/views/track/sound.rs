@@ -134,9 +134,9 @@ impl CellSource for SoundCells<'_> {
     fn value(&self, control: Control) -> Line<'static> {
         let (app, track) = (self.app, self.track);
         let here = control == app.track_control();
-        // The master's `Limiter` is on or off, so it's a toggle.
-        if control == Control::Limiter {
-            return value_line(app, track, control, here, false);
+        // The master's `Limiter` and the filter's `Safe` are on or off, so they're toggles.
+        if matches!(control, Control::Limiter | Control::Safe) {
+            return value_line(app, track, control, here, at_default(control, track));
         }
         let on_fine = here && app.track_page.fine;
         let on_value = here && !on_fine;

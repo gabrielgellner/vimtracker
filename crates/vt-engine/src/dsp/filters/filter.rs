@@ -199,6 +199,83 @@ const OBX_TAPER: [f32; TAPER_POINTS] = [
     0.849, 0.857, 0.863, 0.9662, 0.9775, 0.9887, 1.0,
 ];
 
+/// How fast a struck ring dies away at the top of `Res` with `Safe` on, in dB a cycle of its
+/// pitch: 60 dB in 120 cycles, a little over a second at 100 Hz, so it rings on long after a
+/// strike and fades, where a little more `Res` would keep it going by itself. The tables below
+/// were measured to it, so only their tests read it.
+#[cfg(test)]
+const SAFE_DECAY_DB: f32 = 0.5;
+/// How many points each type's `Safe` table has, a sixteenth of `Cut`'s turn apart.
+const SAFE_POINTS: usize = 17;
+/// Where `Safe` takes the top of `Res` on each type that rings by itself, as a share of its turn,
+/// at each sixteenth of `Cut`'s: where a quiet click's ring dies away by `SAFE_DECAY_DB` a
+/// cycle, the lower of 44.1 and 48 kHz's and of no drive and full, measured by
+/// `where_safe_stops` (decision 242). That's 1 to 5 steps of `Res` short of where each starts to
+/// ring by itself, between `D9` and `E0` (decision 120), at any `Cut`, but for two. The diode
+/// rings sooner the higher its `Cut`, from about 2 kHz. `Dirty`'s loop is eased off at high
+/// cutoffs, so it rings later there, and `Drive` gives it more resonance, so it has a table at full
+/// drive too, read between by `Drive`; the others hardly hear `Drive`'s.
+const SAFE_LADDER: [f32; SAFE_POINTS] = [
+    0.8447, 0.8447, 0.8447, 0.8447, 0.8447, 0.8447, 0.8448, 0.8448, 0.8448, 0.8448, 0.8448, 0.8448,
+    0.8448, 0.8445, 0.8442, 0.8436, 0.8429,
+];
+const SAFE_DIODE: [f32; SAFE_POINTS] = [
+    0.8690, 0.8690, 0.8690, 0.8690, 0.8689, 0.8687, 0.8684, 0.8677, 0.8635, 0.8602, 0.8572, 0.8538,
+    0.8491, 0.8415, 0.8290, 0.8062, 0.5990,
+];
+const SAFE_KORG: [f32; SAFE_POINTS] = [
+    0.8395, 0.8397, 0.8398, 0.8397, 0.8397, 0.8397, 0.8398, 0.8397, 0.8397, 0.8397, 0.8397, 0.8396,
+    0.8396, 0.8392, 0.8378, 0.8362, 0.8308,
+];
+const SAFE_KORG_HIGH: [f32; SAFE_POINTS] = [
+    0.8464, 0.8464, 0.8463, 0.8464, 0.8464, 0.8464, 0.8464, 0.8464, 0.8464, 0.8464, 0.8464, 0.8464,
+    0.8463, 0.8462, 0.8459, 0.8451, 0.8432,
+];
+const SAFE_DIRTY: [f32; SAFE_POINTS] = [
+    0.8418, 0.8420, 0.8422, 0.8422, 0.8422, 0.8422, 0.8422, 0.8421, 0.8418, 0.8413, 0.8400, 0.8435,
+    0.8585, 0.8792, 0.9010, 0.9278, 0.9069,
+];
+const SAFE_DIRTY_DRIVEN: [f32; SAFE_POINTS] = [
+    0.8132, 0.8137, 0.8135, 0.8136, 0.8136, 0.8136, 0.8136, 0.8135, 0.8133, 0.8128, 0.8115, 0.8147,
+    0.8273, 0.8427, 0.8607, 0.8784, 0.8606,
+];
+const SAFE_OBX: [f32; SAFE_POINTS] = [
+    0.8455, 0.8457, 0.8457, 0.8457, 0.8457, 0.8457, 0.8457, 0.8457, 0.8457, 0.8457, 0.8457, 0.8456,
+    0.8456, 0.8456, 0.8453, 0.8449, 0.8438,
+];
+
+/// `Res`, from 0 to 1, as a type hears it at a cutoff and drive, both from 0 to 1, with `Safe` on
+/// as far as `safe`, from 0 for off to 1 for on, which glides between: on, its whole turn reaches
+/// only as far as the type's loudest peak that still dies away, after Cytomic The Drop's `SAFE`,
+/// which keeps its knob under where it self-oscillates. The clean types never ring by themselves,
+/// so they hear it as it is, as does any type at 0.
+pub fn safe_resonance(kind: FilterType, resonance: f32, cutoff: f32, drive: f32, safe: f32) -> f32 {
+    let at = |table: &[f32; SAFE_POINTS]| {
+        let along = cutoff.clamp(0.0, 1.0) * (SAFE_POINTS - 1) as f32;
+        let index = (along as usize).min(SAFE_POINTS - 2);
+        let within = along - index as f32;
+        table[index] + (table[index + 1] - table[index]) * within
+    };
+    let top = match kind {
+        FilterType::Ladder => at(&SAFE_LADDER),
+        FilterType::Diode => at(&SAFE_DIODE),
+        FilterType::Ms20LowPass => at(&SAFE_KORG),
+        FilterType::Ms20HighPass => at(&SAFE_KORG_HIGH),
+        FilterType::Dirty => {
+            let plain = at(&SAFE_DIRTY);
+            plain + (at(&SAFE_DIRTY_DRIVEN) - plain) * drive.clamp(0.0, 1.0)
+        }
+        FilterType::ObX => at(&SAFE_OBX),
+        FilterType::LowPass | FilterType::HighPass | FilterType::BandPass | FilterType::Notch => {
+            return resonance;
+        }
+    };
+    if safe <= 0.0 {
+        return resonance;
+    }
+    resonance * (1.0 - safe.min(1.0) * (1.0 - top))
+}
+
 /// A family's resonance, as a share of its most, for `Res` from 0 to 1, read between its taper's
 /// points.
 #[inline]
@@ -965,7 +1042,11 @@ pub fn track_response_db(track: &Track, rate: u32, hertz: f32) -> f32 {
         && track.drive == 0;
     let mut db = 0.0;
     if !open {
-        let (cutoff, resonance) = (value(track.cutoff), value(track.resonance));
+        let (cutoff, mut resonance) = (value(track.cutoff), value(track.resonance));
+        if track.safe {
+            let drive = value(track.drive);
+            resonance = safe_resonance(track.filter, resonance, cutoff, drive, 1.0);
+        }
         db += response_db(
             track.filter,
             track.filter_mode,
@@ -2609,6 +2690,237 @@ mod tests {
                     }
                     assert!(most < 20.0, "{kind:?} {mode:?} {drive} {level}: {most}");
                 }
+            }
+        }
+    }
+
+    /// How fast a filter rings down once struck, in dB a cycle of its `Cut`, between the loudest
+    /// of the second and the last quarter of 40 cycles. It reads the ring's second difference, so
+    /// a slow tail under it, such as the diode's feedback high-pass leaves, doesn't hide it. Under
+    /// 0 it rings on by itself. `strike` is held for `frames` frames, then silence.
+    #[allow(clippy::too_many_arguments)]
+    fn ring_decay_db(
+        kind: FilterType,
+        mode: FilterMode,
+        cut: f32,
+        res: f32,
+        drive: f32,
+        punch: f32,
+        rate: u32,
+        (strike, frames): (f32, usize),
+    ) -> f32 {
+        let c = Coefficients::with_mode(cut, res, kind.plays(mode), rate).punched(punch, rate);
+        let mut channel = Channel::default();
+        let hertz = (20.0 * 1000_f32.powf(cut)).min(rate as f32 * 0.45);
+        for _ in 0..frames {
+            channel.process(strike, kind, drive, &c);
+        }
+        let length = (40.0 * rate as f32 / hertz) as usize;
+        let mut loudest = [0.0_f32; 4];
+        let (mut last, mut before) = (0.0_f32, 0.0_f32);
+        for frame in 0..length {
+            let output = channel.process(0.0, kind, drive, &c);
+            assert!(output.is_finite(), "{kind:?} {mode:?}");
+            let bent = output - 2.0 * last + before;
+            (before, last) = (last, output);
+            if frame > 1 {
+                let quarter = &mut loudest[frame * 4 / length];
+                *quarter = quarter.max(bent.abs());
+            }
+        }
+        // The two quarters are 20 cycles apart.
+        20.0 * (loudest[1] / loudest[3].max(1e-30)).log10() / 20.0
+    }
+
+    /// A quiet click, as a ring that grows by itself shows.
+    const CLICK: (f32, usize) = (0.01, 1);
+
+    /// `Res` with `Safe` on, at full.
+    fn safe_top(kind: FilterType, cut: f32, drive: f32) -> f32 {
+        safe_resonance(kind, 1.0, cut, drive, 1.0)
+    }
+
+    /// Prints the tables `safe_resonance` reads: for each type that rings by itself and each
+    /// sixteenth of `Cut`, the `Res` at which a struck ring dies away by [`SAFE_DECAY_DB`] a
+    /// cycle, the lower of 44.1 and 48 kHz's and, but for `Dirty`'s two, of no drive and full.
+    /// `cargo test --release -p vt-engine where_safe_stops -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "it measures the tables, which takes a release build"]
+    fn where_safe_stops() {
+        let mode = FilterMode::default();
+        let tables = [
+            ("LADDER", FilterType::Ladder, &[0.0, 1.0][..]),
+            ("DIODE", FilterType::Diode, &[0.0, 1.0]),
+            ("KORG", FilterType::Ms20LowPass, &[0.0, 1.0]),
+            ("KORG_HIGH", FilterType::Ms20HighPass, &[0.0, 1.0]),
+            ("DIRTY", FilterType::Dirty, &[0.0]),
+            ("DIRTY_DRIVEN", FilterType::Dirty, &[1.0]),
+            ("OBX", FilterType::ObX, &[0.0, 1.0]),
+        ];
+        for (name, kind, drives) in tables {
+            let points: Vec<String> = (0..SAFE_POINTS)
+                .map(|point| {
+                    let cut = point as f32 / (SAFE_POINTS - 1) as f32;
+                    let mut lowest = 1.0_f32;
+                    for &drive in drives {
+                        for rate in [44_100, 48_000] {
+                            let decay =
+                                |res| ring_decay_db(kind, mode, cut, res, drive, 0.0, rate, CLICK);
+                            let (mut low, mut high) = (0.3_f32, 1.0_f32);
+                            for _ in 0..14 {
+                                let middle = 0.5 * (low + high);
+                                if decay(middle) > SAFE_DECAY_DB {
+                                    low = middle;
+                                } else {
+                                    high = middle;
+                                }
+                            }
+                            lowest = lowest.min(low);
+                        }
+                    }
+                    format!("{lowest:.4}")
+                })
+                .collect();
+            println!(
+                "const SAFE_{name}: [f32; SAFE_POINTS] = [{}];",
+                points.join(", ")
+            );
+        }
+    }
+
+    #[test]
+    fn with_safe_on_full_res_rings_on_after_a_strike_and_dies_away_at_every_cut() {
+        // At every 32nd of `Cut`, between the tables' points too, at both rates and through
+        // `Drive`, a quiet click rings down by about `SAFE_DECAY_DB` a cycle, 0.5 dB. `Dirty`'s
+        // `Safe` reads between its two tables by `Drive`.
+        let mode = FilterMode::default();
+        for kind in FilterType::ALL.into_iter().filter(|kind| kind.has_safe()) {
+            let drives: &[f32] = if kind == FilterType::Dirty {
+                &[0.0, 0.5, 1.0]
+            } else {
+                &[0.0, 1.0]
+            };
+            for rate in [44_100, 48_000] {
+                for &drive in drives {
+                    for step in 0..=32 {
+                        let cut = step as f32 / 32.0;
+                        let res = safe_top(kind, cut, drive);
+                        let decay = ring_decay_db(kind, mode, cut, res, drive, 0.0, rate, CLICK);
+                        // Over about 10 kHz the diode rings sooner at 44.1 kHz than at 48, so it
+                        // stops a little shorter at 48 than it needs to.
+                        let most = if kind == FilterType::Diode && cut > 0.875 {
+                            2.0
+                        } else {
+                            1.0
+                        };
+                        assert!(
+                            (0.25..most).contains(&decay),
+                            "{kind:?} at Cut {cut}, drive {drive} and {rate}: {decay} dB a cycle"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn with_safe_on_every_type_and_mode_struck_at_full_res_dies_away() {
+        // Quietly and loudly, clean and driven, with `Punch` on the clean types: the clean types
+        // hear `Res` as it is, as they never ring by themselves.
+        for (kind, mode) in every_type_and_mode() {
+            let punches: &[f32] = if kind.has_punch() {
+                &[0.0, 1.0]
+            } else {
+                &[0.0]
+            };
+            for &punch in punches {
+                for drive in [0.0, 1.0] {
+                    for hertz in [50.0, 200.0, 1000.0, 5000.0] {
+                        let cut = cutoff(hertz);
+                        let res = safe_top(kind, cut, drive);
+                        for strike in [CLICK, (0.5, 1), (10.0, 48)] {
+                            let decay =
+                                ring_decay_db(kind, mode, cut, res, drive, punch, RATE, strike);
+                            assert!(
+                                decay > 0.1,
+                                "{kind:?} {mode:?} at {hertz} Hz, drive {drive}, punch {punch}, \
+                                 struck by {strike:?}: {decay} dB a cycle"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn with_safe_off_full_res_still_rings_by_itself_just_past_where_safe_stops() {
+        // Safe stops just short of ringing: a little more `Res` keeps a click going by itself.
+        let mode = FilterMode::default();
+        for kind in FilterType::ALL.into_iter().filter(|kind| kind.has_safe()) {
+            for hertz in [200.0, 1000.0, 5000.0] {
+                let cut = cutoff(hertz);
+                let past = (safe_top(kind, cut, 0.0) + 6.0 / 255.0).min(1.0);
+                let decay = ring_decay_db(kind, mode, cut, past, 0.0, 0.0, RATE, CLICK);
+                assert!(decay < 0.05, "{kind:?} at {hertz} Hz: {decay} dB a cycle");
+                let full = ring_decay_db(kind, mode, cut, 1.0, 0.0, 0.0, RATE, CLICK);
+                assert!(
+                    full < 0.05,
+                    "{kind:?} at {hertz} Hz at full: {full} dB a cycle"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn safe_takes_res_onto_its_types_range_and_off_leaves_it_bit_for_bit() {
+        for kind in FilterType::ALL {
+            for step in 0..=16 {
+                let (res, cut) = (step as f32 / 16.0, 1.0 - step as f32 / 16.0);
+                for drive in [0.0, 1.0] {
+                    let off = safe_resonance(kind, res, cut, drive, 0.0);
+                    assert_eq!(off.to_bits(), res.to_bits(), "{kind:?}");
+                    let on = safe_resonance(kind, res, cut, drive, 1.0);
+                    if kind.has_safe() {
+                        // Evenly over the whole turn, to short of its top.
+                        let top = safe_top(kind, cut, drive);
+                        assert!(top < 0.95, "{kind:?} at {cut}: {top}");
+                        assert!((on - res * top).abs() < 1e-6, "{kind:?}");
+                        let half = safe_resonance(kind, res, cut, drive, 0.5);
+                        assert!(on <= half && half <= res, "{kind:?} glides between");
+                    } else {
+                        assert_eq!(on.to_bits(), res.to_bits(), "{kind:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_drawn_curve_follows_safe() {
+        for kind in FilterType::ALL {
+            let track = Track {
+                filter: kind,
+                cutoff: 0x80,
+                resonance: 0xFF,
+                drive: 0x40,
+                ..Track::default()
+            };
+            let safe = Track {
+                safe: true,
+                ..track.clone()
+            };
+            let (cut, drive) = (128.0 / 255.0, 64.0 / 255.0);
+            let hertz = 20.0 * 1000_f32.powf(cut);
+            let res = safe_resonance(kind, 1.0, cut, drive, 1.0);
+            let drawn = track_response_db(&safe, RATE, hertz);
+            let worked_out = response_db(kind, track.filter_mode, cut, res, drive, RATE, hertz);
+            near(drawn, worked_out, 1e-4);
+            let plain = track_response_db(&track, RATE, hertz);
+            if kind.has_safe() {
+                assert_ne!(drawn, plain, "{kind:?}");
+            } else {
+                assert_eq!(drawn.to_bits(), plain.to_bits(), "{kind:?}");
             }
         }
     }

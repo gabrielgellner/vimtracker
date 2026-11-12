@@ -230,6 +230,27 @@ const ACID: DeviceLayout = live(
         knobs("Drift", [s("drift"), __, __, __, __, __, __, __]),
     ],
 );
+/// The stack's spread and blend first, then how many saws, how they're laid out and shaped and
+/// where they start, with `Drift` on a page of its own, as `Acid`'s is.
+const SUPERSAW: DeviceLayout = live(
+    "machine/supersaw",
+    &[
+        knobs(
+            "Supersaw",
+            [
+                s("detune"),
+                s("mix"),
+                s("saws"),
+                s("warp"),
+                s("shape"),
+                s("width"),
+                s("stack"),
+                s("phase"),
+            ],
+        ),
+        knobs("Drift", [s("drift"), __, __, __, __, __, __, __]),
+    ],
+);
 const FM: DeviceLayout = live(
     "machine/fm",
     &[knobs(
@@ -616,10 +637,11 @@ const TOY: DeviceLayout = live(
 
 // The track's own devices.
 
-/// The filter itself and its punch, its type and mode, then the utility filter's cuts.
-const FILTER: DeviceLayout = live(
+/// The filter itself and its punch, its type and mode, then the utility filter's cuts, with
+/// `Safe` on the button under `Res`, as it tames it.
+const FILTER: DeviceLayout = stored(
     "filter",
-    &[knobs(
+    &[page(
         "Filter",
         [
             s("cutoff"),
@@ -631,6 +653,7 @@ const FILTER: DeviceLayout = live(
             s("lowcut"),
             s("highcut"),
         ],
+        button(1, "safe"),
     )],
 );
 
@@ -1394,11 +1417,12 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 92] = [
+pub const ALL: [&DeviceLayout; 93] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
     &ACID,
+    &SUPERSAW,
     &FM,
     &PD,
     &FOLD,
@@ -1497,6 +1521,7 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::VirtualAnalog => &VA,
             SynthVoice::VirtualAnalogVcf => &VA_VCF,
             SynthVoice::Acid => &ACID,
+            SynthVoice::Supersaw => &SUPERSAW,
             SynthVoice::Fm => &FM,
             SynthVoice::PhaseDistortion => &PD,
             SynthVoice::Waveshaping => &FOLD,
@@ -1686,6 +1711,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
         Control::Reset => "reset",
         Control::Glide => "glide",
         Control::Limiter => "limiter",
+        Control::Safe => "safe",
         Control::FilterType => "type",
         Control::FilterMode => "mode",
         Control::Mod(_, field) => match field {

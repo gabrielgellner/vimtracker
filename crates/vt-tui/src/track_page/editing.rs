@@ -525,6 +525,8 @@ impl App {
             // `=` puts it on and `-` takes it off, as on the project page it was on.
             Control::Limiter if self.song().limiter != up => self.set_limiter(up),
             Control::Limiter => {}
+            Control::Safe if track.safe != up => self.set_safe(up),
+            Control::Safe => {}
             Control::Setting(_) => {
                 if let Some(id) = control.setting_on(&track) {
                     self.set_hex(control, change(track.setting(id)));
@@ -812,6 +814,8 @@ impl App {
             // A new song's is on.
             Control::Limiter if !self.song().limiter => self.set_limiter(true),
             Control::Limiter => {}
+            Control::Safe if track.safe => self.set_safe(false),
+            Control::Safe => {}
             Control::Setting(_) => {
                 if let Some(id) = control.setting_on(&track)
                     && track.setting(id) != id.entry().default
@@ -973,13 +977,22 @@ impl App {
         found.unwrap_or(from)
     }
 
-    /// Switch the track's mute or solo, or the song's limiter.
+    /// Switch the track's mute, solo or filter's `Safe`, or the song's limiter.
     pub(super) fn toggle_control(&mut self, control: Control) {
         match control {
             Control::Mute => self.toggle_mute(),
             Control::Limiter => self.set_limiter(!self.song().limiter),
+            Control::Safe => self.set_safe(!self.page_track().safe),
             _ => self.toggle_solo(),
         }
+    }
+
+    /// Switch the track filter's `Safe` on or off.
+    fn set_safe(&mut self, on: bool) {
+        self.apply(&Action::SetTrackSafe {
+            track: self.cursor.track,
+            on,
+        });
     }
 
     /// Switch the song's limiter on or off, as `:set limiter` does, saying what that means.

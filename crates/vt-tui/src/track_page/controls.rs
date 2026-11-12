@@ -140,6 +140,8 @@ pub enum Control {
     FilterType,
     /// How the filter's type responds, which a step can lock too.
     FilterMode,
+    /// Whether the filter's `Res` stops short of ringing by itself, on or off.
+    Safe,
     /// One of a mod slot's settings, by the slot's place.
     Mod(usize, ModField),
     Accumulator(AccumulatorField),
@@ -183,6 +185,7 @@ impl Control {
             Self::Solo => "Solo",
             Self::FilterType => "Filter",
             Self::FilterMode => "Mode",
+            Self::Safe => "Safe",
             Self::Level => "Level",
             Self::Trim => "Trim",
             Self::Groove => "Groove",
@@ -395,6 +398,7 @@ impl Control {
                 | Self::Mute
                 | Self::Solo
                 | Self::Limiter
+                | Self::Safe
                 | Self::FilterType
                 | Self::FilterMode
                 | Self::Groove
