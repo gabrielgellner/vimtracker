@@ -18,7 +18,7 @@ use vt_model::envelope::{Adsr, Ahd, Curve, Lpg, MAX_RATCHET};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{Lfo, LfoMode, Rate, Shape, note_rates};
+use vt_model::lfo::{Fade, LfoMode, Rate, Shape, note_rates};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Song, Track, trim_text};
@@ -334,6 +334,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 ModField::Rate => lfo.rate = rate_at(lfo.rate, position),
                 ModField::Phase => lfo.phase = whole(position, 359) as u16,
                 ModField::Deform => lfo.deform = depth_at(position),
+                ModField::Fade => lfo.fade = pick(&Fade::ALL, position),
             }
             changed(modulator, was, |modulator| Action::SetMod {
                 track: at,
@@ -451,19 +452,6 @@ fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Acti
                 adsr: Adsr {
                     reset: on,
                     ..track.mods[slot].adsr
-                },
-                ..track.mods[slot]
-            },
-        }),
-        // An LFO's mode on its button while it has two, `Trig` lit, until #86's five make it a
-        // knob.
-        Control::Mod(slot, ModField::Mode) => Some(Action::SetMod {
-            track: at,
-            slot,
-            modulator: ModSlot {
-                lfo: Lfo {
-                    mode: if on { LfoMode::Trig } else { LfoMode::Free },
-                    ..track.mods[slot].lfo
                 },
                 ..track.mods[slot]
             },

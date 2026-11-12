@@ -1040,19 +1040,47 @@ their values aren't known ahead.
 
 | Setting | Value |
 |---|---|
-| Mode | In the title: `Free` follows the song, `Trig` starts at each note |
+| Mode | In the title: how notes start it, below |
 | Dest | In the title: what it moves, such as `Cut`, or `---` |
 | Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` |
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
 | Phase | Where in the cycle it starts, in degrees |
+| Fade | `Off`, or how long it fades in (`+`) or out (`-`) after each note |
 | Deform | How its wave bends, in hex from `-FF` to `+FF` |
 
 With `Cut 80` and `Depth +40`, the filter moves between `40` and `C0`. `Saw`
 falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` glides
 through one after another, never stopping at any, which suits a slow drift on
-`Cut`. An LFO's `Shape`, `Rate` and `Depth` are down its left, and its `Phase` and
-`Deform` down its right, with a space between them.
+`Cut`. An LFO's `Shape`, `Rate` and `Depth` are down its left, and its `Phase`,
+`Fade` and `Deform` down its right.
+
+**The mode** is the Digitakt's five, in the title:
+
+| Mode | Does |
+|---|---|
+| `Free` | Runs from the song's position, whatever the notes do |
+| `Trig` | Each note starts it again at its `Phase` |
+| `Hold` | Runs free, and each note holds where it is until the next |
+| `One` | Each note plays one cycle, then it stays where it ended |
+| `Half` | The same, for half a cycle |
+
+`Hold` is a sample and hold of the wave. `One` is like an envelope, and `Half`
+makes a rise and fall from `Tri`, or a single sweep from `Saw`.
+
+`Random` in `Hold` gives each note a new value, and `One` or `Half` on `Cut` is a
+shaped sweep a note long. `Half` draws its half cycle, then a flat line where it
+stays, and the dot of a held or ended LFO sits where it holds. Before a track's
+first note, `Hold` holds where its wave starts, and `One` and `Half` are already
+at their end.
+
+**Fade** fades the LFO in or out over a note division or bars after each note,
+from `1/64` to `16 bars`: `+1 bar` brings it in from nothing over a bar, and
+`-1 bar` takes it out to nothing. `=` goes from the longest fade out, through
+`Off`, to the longest fade in, and `+` and `_` skip the dotted and triplet lengths.
+It counts from the track's last note in every mode, so in `Free` only the fade
+starts again, not the wave. Before a track's first note, a fade in is done and a
+fade out is over. `K` lists them all, and `i` types one, like `+1/4` or `-2 bars`.
 
 **Deform** bends `Sine`, `Tri`, `Saw` and `Ramp` between their peaks, which stay
 where they are: raised, the wave bulges up and spends longer high, as a log curve
@@ -1072,7 +1100,8 @@ A large step is `10` in hex, or 90° of phase. On a rate it skips
 dotted and triplet divisions, moves 4 steps, or doubles or halves the hertz.
 
 `i` on the mode, Dest or Shape opens the list too. `K` on Rate lists the note
-divisions and bars, and `i` is for anything else, like `7st` or `2.5hz`.
+divisions and bars, and `i` is for anything else, like `7st` or `2.5hz`. `K` on
+Fade lists every fade, out, `Off` and in.
 
 **Reaching other slots.** A slot's `Dest` lists the depth, phase and deform of
 every slot after it, as `M5 Depth`, `M5 Phase` and `M5 Deform`, so `Mod 4` can bring in `Mod 5`'s depth,
@@ -1083,8 +1112,9 @@ moved, as LFOs work out where they are from the song's position.
 ## When an LFO restarts
 
 Playing from the top restarts every LFO. A `:reset` doesn't, since that is
-about patterns. To follow the steps, set its mode to `Trig`. While stopped, a track
-sits at its held values, so `;` hears those. Pausing freezes the LFO.
+about patterns. To follow the steps, set its mode to `Trig`, `One` or `Half`, or
+`Hold` to take one value from it at each note. While stopped, a track sits at its
+held values, so `;` hears those. Pausing freezes the LFO.
 
 `Vol`, `Send A` and `Send B` swing in dB, on the level scale in **Phrases and
 chains**, so `Depth +40` on `Vol` is 16 dB each way. They stop at `F8`, which

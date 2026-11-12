@@ -221,6 +221,7 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Rate => lfo.rate.to_string(),
         ModField::Phase => format!("{}°", lfo.phase),
         ModField::Deform => depth_text(lfo.deform),
+        ModField::Fade => lfo.fade.to_string(),
     }
 }
 
