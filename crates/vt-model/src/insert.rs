@@ -35,6 +35,7 @@ pub enum Insert {
     FreqShift(FreqShift),
     Spring(Spring),
     Space(Space),
+    Rotary(Rotary),
     Stutter(Stutter),
 }
 
@@ -299,6 +300,13 @@ pub enum Setting {
     RepeatLength,
     Repeats,
     RepeatDecay,
+    /// A rotary speaker's: whether its rotors spin fast or slow, how long they take to change,
+    /// how far the horn's pitch wavers and how far its loudness swells. Its `Drive` and `Width`
+    /// are the delay's.
+    Fast,
+    Inertia,
+    Doppler,
+    Tremolo,
     /// A space's: how big its tank is. Its `Decay` and `Damp` are the reverb's and its `Mod` the
     /// plate's.
     SpaceSize,
@@ -340,7 +348,7 @@ impl Setting {
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
             Self::SweepRate => SWEEP_NAMES.len() as u8 - 1,
             Self::Stages => STAGE_NAMES.len() as u8 - 1,
-            Self::PingPong | Self::Freeze | Self::Knock | Self::Trig => 1,
+            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast | Self::Trig => 1,
             Self::RepeatLength => REPEAT_LENGTH_NAMES.len() as u8 - 1,
             Self::Repeats => REPEAT_NAMES.len() as u8 - 1,
             Self::Retime => RETIMES.len() as u8 - 1,
@@ -371,7 +379,7 @@ impl Setting {
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
             Self::Stages => (STAGE_NAMES.len() - 1) as f32,
-            Self::PingPong | Self::Freeze | Self::Knock | Self::Trig => 1.0,
+            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast | Self::Trig => 1.0,
             Self::RepeatLength => (REPEAT_LENGTH_NAMES.len() - 1) as f32,
             Self::Repeats => (REPEAT_NAMES.len() - 1) as f32,
             Self::Retime => (RETIMES.len() - 1) as f32,
@@ -1888,6 +1896,64 @@ pub(crate) const SPACE_PARAMS: [Param; 6] = [
     GAIN_PARAM,
 ];
 
+/// A rotary speaker's `Fast` switched on, where its rotors spin fast.
+pub const FAST_SPEED: u8 = 1;
+
+/// A rotary speaker's, in the order the page shows them, as columns: its speed switch and how
+/// long its rotors take to change; then the horn's Doppler and swell; then the amplifier's drive
+/// and the width; then the mix and gain.
+pub(crate) const ROTARY_PARAMS: [Param; 8] = [
+    Param {
+        name: "Fast",
+        key: "fast",
+        label: Some("FAST"),
+        setting: Setting::Fast,
+        choices: &OFF_ON,
+        wraps: true,
+        default: Rotary::DEFAULT.fast,
+    },
+    hex_param(
+        "Inertia",
+        "inertia",
+        "INRT",
+        Setting::Inertia,
+        Rotary::DEFAULT.inertia,
+    ),
+    hex_param(
+        "Doppler",
+        "doppler",
+        "DOPL",
+        Setting::Doppler,
+        Rotary::DEFAULT.doppler,
+    ),
+    hex_param(
+        "Tremolo",
+        "tremolo",
+        "TREM",
+        Setting::Tremolo,
+        Rotary::DEFAULT.tremolo,
+    ),
+    hex_param(
+        "Drive",
+        "drive",
+        "DRIV",
+        Setting::Drive,
+        Rotary::DEFAULT.drive,
+    ),
+    hex_param(
+        "Width",
+        "width",
+        "WDTH",
+        Setting::Width,
+        Rotary::DEFAULT.width,
+    ),
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// How many of the note divisions a stutter's `Length` goes through, shortest first: up to a
 /// beat, `1/4`, as a stutter is a roll or a glitch rather than a loop.
 pub const REPEAT_LENGTHS: usize = 13;
@@ -1969,7 +2035,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 24] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -1992,6 +2058,7 @@ impl Insert {
         Self::FreqShift(FreqShift::DEFAULT),
         Self::Spring(Spring::DEFAULT),
         Self::Space(Space::DEFAULT),
+        Self::Rotary(Rotary::DEFAULT),
         Self::Stutter(Stutter::DEFAULT),
     ];
 
@@ -2032,6 +2099,7 @@ impl Insert {
             Self::FreqShift(_) => "Freq Shift",
             Self::Spring(_) => "Spring",
             Self::Stutter(_) => "Stutter",
+            Self::Rotary(_) => "Rotary",
             Self::Space(_) => "Space",
         }
     }
@@ -2063,6 +2131,7 @@ impl Insert {
                 "Puts the sound in a spring tank, as a guitar amp has: drips and boings"
             }
             Self::Stutter(_) => "Repeats a piece of the sound when a step says: rolls and glitches",
+            Self::Rotary(_) => "Spins it in a Leslie's cabinet, slow or fast, for organs and more",
             Self::Space(_) => "Washes the sound into a huge, nearly endless pad",
         }
     }
@@ -2101,6 +2170,7 @@ impl Insert {
             Self::FreqShift(_) => &FREQ_SHIFT_PARAMS,
             Self::Spring(_) => &SPRING_PARAMS,
             Self::Space(_) => &SPACE_PARAMS,
+            Self::Rotary(_) => &ROTARY_PARAMS,
             Self::Stutter(_) => &STUTTER_PARAMS,
         }
     }
@@ -2248,6 +2318,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| stutter.read(setting));
             }
+            Self::Rotary(rotary) => {
+                return ROTARY_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| rotary.read(setting));
+            }
             Self::Space(space) => {
                 return SPACE_PARAMS
                     .iter()
@@ -2299,6 +2375,7 @@ impl Insert {
             Self::FreqShift(shifter) => return Self::FreqShift(shifter.written(setting, whole)),
             Self::Spring(spring) => return Self::Spring(spring.written(setting, whole)),
             Self::Stutter(stutter) => return Self::Stutter(stutter.written(setting, whole)),
+            Self::Rotary(rotary) => return Self::Rotary(rotary.written(setting, whole)),
             Self::Space(space) => return Self::Space(space.written(setting, whole)),
             Self::Empty => return self,
         };
@@ -2383,6 +2460,12 @@ impl Insert {
             Self::Stutter(_) => &[
                 &[S::Trig],
                 &[S::RepeatLength, S::Repeats, S::RepeatDecay],
+                &[S::Mix, S::Gain],
+            ],
+            Self::Rotary(_) => &[
+                &[S::Fast, S::Inertia],
+                &[S::Doppler, S::Tremolo],
+                &[S::Drive, S::Width],
                 &[S::Mix, S::Gain],
             ],
             _ => return self.default_grid(),
@@ -3998,6 +4081,82 @@ impl Space {
     }
 }
 
+/// A rotary speaker's settings: a Leslie's horn and drum, after sst's, with rotors that take time
+/// to change speed. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Rotary {
+    /// Switched on, the rotors spin fast, the Leslie's tremolo; off, slow, its chorale.
+    pub fast: u8,
+    /// How long the rotors take to get to a new speed: at once at `00`, a Leslie's at `80`, twice
+    /// as long at `FF`.
+    pub inertia: u8,
+    /// How far the horn's pitch wavers as it comes and goes.
+    pub doppler: u8,
+    /// How far its loudness swells as it points at each side and away.
+    pub tremolo: u8,
+    /// How hard the amplifier is driven, from clean at `00`.
+    pub drive: u8,
+    /// How far apart its two microphones are heard, from mono at `00` to as they are at `FF`.
+    pub width: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Rotary {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Rotary {
+    /// As it starts: slow, a Leslie's inertia, half Doppler and swell, clean, wide and all wet.
+    pub const DEFAULT: Self = Self {
+        fast: 0,
+        inertia: 0x80,
+        doppler: 0x80,
+        tremolo: 0x80,
+        drive: 0x00,
+        width: 0xFF,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Fast => self.fast,
+            Setting::Inertia => self.inertia,
+            Setting::Doppler => self.doppler,
+            Setting::Tremolo => self.tremolo,
+            Setting::Drive => self.drive,
+            Setting::Width => self.width,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut rotary = self;
+        match setting {
+            Setting::Fast => rotary.fast = value,
+            Setting::Inertia => rotary.inertia = value,
+            Setting::Doppler => rotary.doppler = value,
+            Setting::Tremolo => rotary.tremolo = value,
+            Setting::Drive => rotary.drive = value,
+            Setting::Width => rotary.width = value,
+            Setting::Mix => rotary.mix = value,
+            Setting::Gain => rotary.gain = value,
+            _ => {}
+        }
+        rotary
+    }
+}
+
 /// A stutter's settings: a piece of what comes in, repeated on the grid when a step switches
 /// `Trig` on, after sst's Microgate. One a file doesn't have starts as new.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -4154,6 +4313,7 @@ mod tests {
             toggles,
             [
                 "Auto",
+                "Fast",
                 "Freeze",
                 "Knock",
                 "Mu-law",

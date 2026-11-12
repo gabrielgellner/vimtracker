@@ -213,7 +213,7 @@ impl App {
     }
 
     /// The analysis of an entry's file, waiting for it if it's on its way.
-    fn entry_analysis(&mut self, entry: &BankEntry) -> Option<Arc<Analysis>> {
+    pub(crate) fn entry_analysis(&mut self, entry: &BankEntry) -> Option<Arc<Analysis>> {
         let hash = entry.source()?.hash;
         if self.samples.analysis(hash).is_none() {
             self.analyse_bank();

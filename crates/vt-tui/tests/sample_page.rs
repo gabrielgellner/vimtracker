@@ -883,7 +883,12 @@ fn the_page_on_the_authors_screen() {
         row(&terminal, 33).starts_with(" Start 0.021 s   End 1.875 s   Loop 1.000 s to 1.500 s")
     );
     let off = vt_tui::glyphs::SWITCH_OFF;
-    assert!(row(&terminal, 33).contains(&format!("Snap {off}")));
+    assert!(
+        row(&terminal, 33).contains(&format!("Snap {off}"))
+            && row(&terminal, 33).contains("Sens 50%"),
+        "{}",
+        row(&terminal, 33)
+    );
     assert!(row(&terminal, 34).starts_with(&format!(
         " Whole sample   Gain +0.0 dB   Tune +0 st   Reverse {off}"
     )));
@@ -1979,7 +1984,7 @@ fn cmd_keys_nudge_as_their_keys_but_cmd_h_and_l_by_a_frame_and_on_a_setting_all_
     assert_eq!(slices(&app)[1].0, from + 1);
     keys(&mut app, "u");
     // On a setting, all four are the keys they stand for.
-    keys(&mut app, "K j Enter l");
+    keys(&mut app, "K j j Enter l");
     assert_eq!(app.sample_page.setting, Some(SampleSetting::Pan));
     let start = Song::clone(app.song());
     for (plain, cmd) in [("=", "D-l"), ("-", "D-h"), ("+", "D-k"), ("_", "D-j")] {
@@ -2153,8 +2158,8 @@ fn the_settings_rows_change_a_slices_own_and_the_gain_and_reverse_keys_work_from
     );
     keys(&mut app, "~");
     assert_eq!(over(&app, 1).reverse, Some(true));
-    // K, and the second setting is Gain, which x puts back as the sample's.
-    keys(&mut app, "K j Enter");
+    // K, and the third setting, after Snap and Sens, is Gain, which x puts back as the sample's.
+    keys(&mut app, "K j j Enter");
     assert_eq!(app.sample_page.setting, Some(SampleSetting::Gain));
     keys(&mut app, "x");
     assert_eq!(over(&app, 1).gain_db, None);

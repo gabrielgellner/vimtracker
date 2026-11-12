@@ -34,8 +34,9 @@ pub enum Line {
     Sample(Option<PathBuf>),
     /// Change where the sample this track plays starts, ends or loops, or how it plays.
     SampleChange(SampleChange),
-    /// Slice the sample this track plays, or change how one of its slices plays.
-    Slice(SliceChange),
+    /// Slice the sample this track plays, or change how one of its slices plays, within a range of
+    /// it or all of it.
+    Slice(SliceChange, Option<SliceRange>),
     /// Name a slice of the sample this track plays with a letter: one by its number, or the one
     /// here.
     Mark {
@@ -137,10 +138,17 @@ pub enum SampleChange {
     Gain(i32),
     /// Its tune, in semitones and cents.
     Tune(i8, i8),
+    /// How many bars long it is, for `:slice beat`, or none to go by the song's tempo.
+    Bars(Option<u16>),
 }
 
 /// The words `:sample` takes to change the track's sample, rather than a file to load.
-pub const SAMPLE_WORDS: [&str; 7] = ["start", "end", "loop", "reverse", "fade", "gain", "tune"];
+pub const SAMPLE_WORDS: [&str; 8] = [
+    "start", "end", "loop", "reverse", "fade", "gain", "tune", "bars",
+];
+
+/// The most bars `:sample bars` takes.
+pub const MOST_BARS: u16 = 256;
 
 /// A change to the slices of the sample the current track plays, from `:slice`. A slice's own
 /// setting that's none plays as the entry does.
@@ -150,6 +158,13 @@ pub enum SliceChange {
     Even(usize),
     /// Take its slices away, so it plays as one.
     Clear,
+    /// A slice at each sound's start, as its `Sens` finds them.
+    Transients,
+    /// A slice each note of this length, as `:slice beat 1/16` is a sixteenth, at the song's tempo
+    /// or the sample's length in bars.
+    Beat(u32),
+    /// A slice at each sound after silence, for single hits recorded in a row.
+    Silence,
     /// The slice's gain, in hundredths of a dB.
     Gain(Option<i32>),
     /// Its pan, from 50 to the left, below 0, to 50 to the right.
@@ -163,7 +178,81 @@ pub enum SliceChange {
 }
 
 /// The words `:slice` takes, beside a number of slices.
-pub const SLICE_WORDS: [&str; 6] = ["clear", "gain", "pan", "tune", "reverse", "fade"];
+pub const SLICE_WORDS: [&str; 9] = [
+    "clear",
+    "transients",
+    "beat",
+    "silence",
+    "gain",
+    "pan",
+    "tune",
+    "reverse",
+    "fade",
+];
+
+/// What `:slice beat` cuts by with no length: a sixteenth, a step.
+pub const DEFAULT_BEAT: u32 = 16;
+
+/// The shortest note `:slice beat` takes, as `1/128`.
+pub const SHORTEST_BEAT: u32 = 128;
+
+/// One end of a range of a sample's frames, as Vim's addresses name lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Address {
+    /// `'a`: the slice a letter names.
+    Mark(char),
+    /// `'<` and `'>`: the first and last frame of the last selection.
+    SelectionStart,
+    SelectionEnd,
+}
+
+/// The frames a command acts on, as a range of lines before a Vim command: `%` for all of the
+/// sample, or from one address to another, `'a,'b`, which is from one alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SliceRange {
+    Whole,
+    Between(Address, Address),
+}
+
+/// One address at the start of a text, and what follows it.
+fn address(text: &str) -> Option<(Address, &str)> {
+    let rest = text.strip_prefix('\'')?;
+    let mut chars = rest.chars();
+    let found = match chars.next()? {
+        '<' => Address::SelectionStart,
+        '>' => Address::SelectionEnd,
+        letter if is_mark(letter) => Address::Mark(letter),
+        _ => return None,
+    };
+    Some((found, chars.as_str()))
+}
+
+/// A command line's range, if it starts with one, as `'<,'>slice transients` does, and the rest of
+/// it. It's an error if it starts as a range but isn't one.
+pub fn split_range(text: &str) -> Result<(Option<SliceRange>, &str), LineError> {
+    let text = text.trim_start();
+    if let Some(rest) = text.strip_prefix('%') {
+        return Ok((Some(SliceRange::Whole), rest.trim_start()));
+    }
+    if !text.starts_with('\'') {
+        return Ok((None, text));
+    }
+    let (first, rest) = address(text).ok_or(LineError::Range)?;
+    let (last, rest) = match rest.strip_prefix(',') {
+        Some(rest) => address(rest).ok_or(LineError::Range)?,
+        None => (first, rest),
+    };
+    Ok((Some(SliceRange::Between(first, last)), rest.trim_start()))
+}
+
+/// A note's length as `:slice beat` takes it: `1/16`, or `16`, a sixteenth.
+fn note_length(text: &str) -> Option<u32> {
+    let denominator = text.strip_prefix("1/").unwrap_or(text);
+    denominator
+        .parse::<u32>()
+        .ok()
+        .filter(|denominator| (1..=SHORTEST_BEAT).contains(denominator))
+}
 
 /// The most an entry's gain can be moved by `:sample gain`, in dB either way.
 pub const MOST_SAMPLE_DB: f32 = 24.0;
@@ -217,6 +306,12 @@ fn sample(argument: &str) -> Result<Line, LineError> {
             .ok()
             .filter(|db| db.abs() <= MOST_SAMPLE_DB)
             .map(|db| SampleChange::Gain((db * 100.0).round() as i32)),
+        ("bars", ["off"]) => Some(SampleChange::Bars(None)),
+        ("bars", [bars]) => bars
+            .parse::<u16>()
+            .ok()
+            .filter(|bars| (1..=MOST_BARS).contains(bars))
+            .map(|bars| SampleChange::Bars(Some(bars))),
         ("tune", [semitones] | [semitones, _]) => {
             let semitones = semitones.parse::<i8>().ok().filter(|s| s.abs() <= MAX_TUNE);
             let cents = match rest.get(1) {
@@ -290,6 +385,10 @@ fn slice(argument: &str) -> Result<Line, LineError> {
             .filter(|count| *count <= MAX_SLICES)
             .map(SliceChange::Even),
         ["clear"] => Some(SliceChange::Clear),
+        ["transients"] => Some(SliceChange::Transients),
+        ["silence"] => Some(SliceChange::Silence),
+        ["beat"] => Some(SliceChange::Beat(DEFAULT_BEAT)),
+        ["beat", length] => note_length(length).map(SliceChange::Beat),
         ["gain"] => Some(SliceChange::Gain(None)),
         ["gain", db] => db
             .trim_end_matches("dB")
@@ -319,7 +418,9 @@ fn slice(argument: &str) -> Result<Line, LineError> {
             .map(|fades| SliceChange::Fade(Some(fades))),
         _ => None,
     };
-    change.map(Line::Slice).ok_or(LineError::Slice)
+    change
+        .map(|change| Line::Slice(change, None))
+        .ok_or(LineError::Slice)
 }
 
 /// Why a command line was refused.
@@ -344,17 +445,21 @@ pub enum LineError {
     #[error(":bank takes clean, or nothing to list the bank")]
     Bank,
     #[error(
-        ":sample takes a file, or start, end, loop from to [crossfade] or off, reverse, fade in out, gain dB or tune st [ct], with times as 1.5 or 250ms"
+        ":sample takes a file, or start, end, loop from to [crossfade] or off, reverse, fade in out, gain dB, tune st [ct] or bars n or off, with times as 1.5 or 250ms"
     )]
     SampleChange,
     #[error(
-        ":slice takes a number of slices up to 256, clear, or gain dB, pan -50 to 50, tune st, reverse on or off, or fade in out, each alone to play as the sample"
+        ":slice takes a number of slices up to 256, clear, transients, beat 1/16, silence, or gain dB, pan -50 to 50, tune st, reverse on or off, or fade in out, each alone to play as the sample"
     )]
     Slice,
     #[error(
         ":mark takes a letter, a to z, and a slice's number in hex, or none for the slice here"
     )]
     Mark,
+    #[error("A range is % or marks, as 'a,'b or '<,'>")]
+    Range,
+    #[error(":{0} takes no range: only :slice does")]
+    NoRange(String),
     #[error(":delmarks takes letters, as a b, abc or a-c, and :delmarks! takes every one away")]
     DelMarks,
     #[error(":normalize takes a peak level in dBFS from -60 to 0, such as -0.3, or off")]
@@ -982,11 +1087,16 @@ pub fn split(text: &str) -> (&str, &str) {
     }
 }
 
-/// Parse a command line, without its leading `:`.
+/// Parse a command line, without its leading `:`, and the range before it if it has one.
 pub fn parse(text: &str) -> Result<Line, LineError> {
+    let (range, text) = split_range(text)?;
     let (name, argument) = split(text);
     let command = find(name).ok_or_else(|| LineError::Unknown(name.to_owned()))?;
-    (command.parse)(argument)
+    match ((command.parse)(argument)?, range) {
+        (line, None) => Ok(line),
+        (Line::Slice(change, _), range) => Ok(Line::Slice(change, range)),
+        _ => Err(LineError::NoRange(name.to_owned())),
+    }
 }
 
 #[cfg(test)]
@@ -1281,7 +1391,7 @@ mod tests {
 
     #[test]
     fn slice_takes_a_count_clear_or_a_slices_own_setting() {
-        let slice = |change| Ok(Line::Slice(change));
+        let slice = |change| Ok(Line::Slice(change, None));
         assert_eq!(parse("slice 16"), slice(SliceChange::Even(16)));
         assert_eq!(parse("slice 0x40"), slice(SliceChange::Even(64)));
         assert_eq!(parse("slice 256"), slice(SliceChange::Even(256)));
@@ -1307,6 +1417,50 @@ mod tests {
         );
         assert_eq!(parse("slice fade"), slice(SliceChange::Fade(None)));
         assert_eq!(parse("slice"), Err(LineError::Slice));
+        assert_eq!(parse("slice transients"), slice(SliceChange::Transients));
+        assert_eq!(parse("slice silence"), slice(SliceChange::Silence));
+        assert_eq!(parse("slice beat 1/16"), slice(SliceChange::Beat(16)));
+        assert_eq!(parse("slice beat 8"), slice(SliceChange::Beat(8)));
+        assert_eq!(parse("slice beat"), slice(SliceChange::Beat(16)));
+        assert_eq!(parse("slice beat 1/0"), Err(LineError::Slice));
+        assert_eq!(parse("slice beat 2/3"), Err(LineError::Slice));
+    }
+
+    #[test]
+    fn slice_takes_a_range_of_marks_or_the_selection_as_vims_lines_do() {
+        use Address::{Mark, SelectionEnd, SelectionStart};
+        let ranged = |range, change| Ok(Line::Slice(change, Some(range)));
+        assert_eq!(
+            parse("'a,'b slice 8"),
+            ranged(
+                SliceRange::Between(Mark('a'), Mark('b')),
+                SliceChange::Even(8)
+            )
+        );
+        assert_eq!(
+            parse("'<,'>slice transients"),
+            ranged(
+                SliceRange::Between(SelectionStart, SelectionEnd),
+                SliceChange::Transients
+            )
+        );
+        assert_eq!(
+            parse("'c slice clear"),
+            ranged(
+                SliceRange::Between(Mark('c'), Mark('c')),
+                SliceChange::Clear
+            )
+        );
+        assert_eq!(
+            parse("%slice beat 1/8"),
+            ranged(SliceRange::Whole, SliceChange::Beat(8))
+        );
+        assert_eq!(parse("'A,'b slice 8"), Err(LineError::Range));
+        assert_eq!(parse("'a, slice 8"), Err(LineError::Range));
+        assert_eq!(
+            parse("'a,'b trim"),
+            Err(LineError::NoRange("trim".to_owned()))
+        );
     }
 
     #[test]
@@ -1364,6 +1518,15 @@ mod tests {
             Ok(Some(SampleChange::Tune(-2, 30)))
         );
         assert_eq!(change("sample tune 7"), Ok(Some(SampleChange::Tune(7, 0))));
+        assert_eq!(
+            change("sample bars 2"),
+            Ok(Some(SampleChange::Bars(Some(2))))
+        );
+        assert_eq!(
+            change("sample bars off"),
+            Ok(Some(SampleChange::Bars(None)))
+        );
+        assert_eq!(change("sample bars 0"), Err(LineError::SampleChange));
         for bad in [
             "sample start -1",
             "sample start soon",

@@ -69,7 +69,9 @@ pub const TAKEN: char = '\u{f0741}';
 pub fn machine(machine: Machine) -> char {
     match machine {
         Machine::Sampler => SAMPLER,
-        Machine::Plaits(SynthVoice::Kick | SynthVoice::Snare | SynthVoice::Hat) => DRUM,
+        Machine::Plaits(
+            SynthVoice::Kick | SynthVoice::Snare | SynthVoice::Hat | SynthVoice::Drum,
+        ) => DRUM,
         Machine::Plaits(_) => SYNTH,
     }
 }

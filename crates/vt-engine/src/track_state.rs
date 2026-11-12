@@ -153,6 +153,11 @@ struct SlotRun {
     /// What `Mutate` rolls, a stream of the slot's own from the project's seed, after every
     /// track's others, so a render repeats and `CHA`'s rolls are as they were.
     dice: Pcg32,
+    /// What a Track slot following `Random` rolled for the last note, and the stream of the slot's
+    /// own it rolls from, after every slot's `Mutate`. It rolls at every note, whatever the slot's
+    /// type, so one that becomes Track has a roll for the note sounding.
+    roll: u8,
+    rolls: Pcg32,
 }
 
 impl Default for SlotRun {
@@ -174,6 +179,8 @@ impl Default for SlotRun {
             drawn: 0,
             counted: None,
             dice: Pcg32::new(0, 0),
+            roll: 0,
+            rolls: Pcg32::new(0, 0),
         }
     }
 }
@@ -259,6 +266,7 @@ fn trigger_slot(slot: &ModSlot, run: &mut SlotRun, now: SongTime, pass: i64) {
     };
     run.notes += 1;
     run.pass_at = pass;
+    run.roll = (run.rolls.next_u32() >> 24) as u8;
     let restarts = match slot.kind {
         ModKind::Steps => slot.steps.mode == StepsMode::Trig,
         _ => slot.lfo.mode.restarts(),
@@ -387,9 +395,9 @@ pub struct LiveValues {
     /// filter, as a gain: what the Output device's meter shows, so the trim can be set by eye.
     /// The report fills it in from `Engine::take_after_trim`.
     pub after_trim: [f32; 2],
-    /// Where each mod slot that's an LFO is in its wave now, for one that's running: none while
-    /// the song is stopped, or for one with nowhere to go, no depth, or switched out once it has
-    /// faded.
+    /// Where each mod slot that's an LFO is in its wave now, or a Track slot's last note on its
+    /// map, for one that's running: none while the song is stopped, before a Track slot's first
+    /// note, or for one with nowhere to go, no depth, or switched out once it has faded.
     pub mods: [Option<LfoNow>; MOD_SLOTS],
     /// Which step each mod slot that's Steps is playing now, counted from 0, for the Mod page to
     /// light: none for one that isn't running, as an LFO's place is.
@@ -449,7 +457,7 @@ impl FaderRun {
 }
 
 /// Where an LFO is in its wave and what the wave gives there, before its depth, for the Mod page's
-/// moving dot.
+/// moving dot, or where a Track slot's last note is on its map.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LfoNow {
     /// How far round its wave it is, its `Phase` included, from `0` to a whole turn at
@@ -466,6 +474,15 @@ impl LfoNow {
         Self {
             phase: (cycles.rem_euclid(1.0) * turn) as u32 as u16,
             value: (value.clamp(-1.0, 1.0) * f32::from(i16::MAX)).round() as i16,
+        }
+    }
+
+    /// Where a Track slot's last note is on its map: `along` its source's span, from 0 to 1, as
+    /// the phase, and the map's level there, from 0 to 1, as the value.
+    pub fn along(along: f32, level: f32) -> Self {
+        Self {
+            phase: (along.clamp(0.0, 1.0) * f32::from(u16::MAX)).round() as u16,
+            value: (level.clamp(0.0, 1.0) * f32::from(i16::MAX)).round() as i16,
         }
     }
 }
@@ -941,6 +958,9 @@ pub struct TrackState {
     /// Where the track's last note started its modulation, for an LFO's fade and its hold, or
     /// none since playing started.
     noted: Option<LfoStart>,
+    /// Whether a note has started or been tied into since the modulation was last worked out,
+    /// which a Track slot follows, so the engine works it out again before the note is heard.
+    pub new_note: bool,
     /// What the LFOs add to each held value, by setting. Separate from the held values, so a
     /// step's FX moves the centre and the LFO carries on around it.
     offsets: [f32; SettingId::COUNT],
@@ -1066,6 +1086,14 @@ fn mutate_rng(seed: u64, index: usize, slot: usize) -> Pcg32 {
     Pcg32::new(seed, (4 * MAX_TRACKS + index * MOD_SLOTS + slot) as u64)
 }
 
+/// The generator for a Track mod slot's `Random`, on streams after every slot's `Mutate`.
+fn roll_rng(seed: u64, index: usize, slot: usize) -> Pcg32 {
+    Pcg32::new(
+        seed,
+        (4 * MAX_TRACKS + (MAX_TRACKS + index) * MOD_SLOTS + slot) as u64,
+    )
+}
+
 /// The generator for a track's notes' drift, on streams after every track's arpeggios.
 fn drift_rng(seed: u64, index: usize) -> Pcg32 {
     Pcg32::new(seed, (3 * MAX_TRACKS + index) as u64)
@@ -1168,6 +1196,7 @@ impl TrackState {
             slots: [SlotRun::default(); MOD_SLOTS],
             chain_pass: 0,
             noted: None,
+            new_note: false,
             offsets: [0.0; SettingId::COUNT],
             offset_marks: [None; MOVED],
             synth: {
@@ -1230,6 +1259,7 @@ impl TrackState {
     /// `GLD` says as it's heard now.
     pub fn tie(&mut self, note: NoteOn) {
         self.last_note = Some(note);
+        self.new_note = true;
         self.voice.tie(note, glide_ms(self.held_glide));
         self.tell_slots_the_note();
     }
@@ -1281,6 +1311,8 @@ impl TrackState {
             run.start = LfoStart { tick: 0.0, clock };
             run.notes = 0;
             run.dice = mutate_rng(seed, index, at);
+            run.rolls = roll_rng(seed, index, at);
+            run.roll = 0;
             run.drawn = 0;
             run.counted = None;
         }
@@ -1361,6 +1393,7 @@ impl TrackState {
         let offsets = &mut self.offsets;
         let (step_ticks, pass) = (track.speed.ticks(), self.chain_pass);
         let noted = self.noted;
+        let last_note = self.last_note;
         // The note as it's heard before modulation, for slots in scale to move from.
         let note = self
             .last_note
@@ -1389,9 +1422,12 @@ impl TrackState {
             let polarity = run.polarity(slot);
             // An envelope's depth is whole, as its page sets it, so it moves by exactly that.
             let held = match slot.kind {
-                ModKind::Adsr | ModKind::Ahd | ModKind::Drum | ModKind::Lpg | ModKind::Steps => {
-                    depth_of(depth).round()
-                }
+                ModKind::Adsr
+                | ModKind::Ahd
+                | ModKind::Drum
+                | ModKind::Lpg
+                | ModKind::Steps
+                | ModKind::Track => depth_of(depth).round(),
                 ModKind::Lfo => depth_of(depth),
             };
             let depth = held + moved_by(0) * 255.0;
@@ -1473,6 +1509,24 @@ impl TrackState {
                             }
                         }
                     };
+                    let added = run.add(slot.kind, tuned(level * depth / 255.0) * share);
+                    moved.add(destination.index(), added);
+                }
+                // The last note's value on the map, held to the next note, through the fast
+                // smoothers as a step's value is. Before any note it moves nothing.
+                ModKind::Track => {
+                    let Some(played) = last_note else {
+                        run.rest(slot.kind);
+                        continue;
+                    };
+                    let tracking = &slot.track;
+                    let value = tracking.value(played.note, played.velocity, run.roll);
+                    let level = tracking.bounds().level(f32::from(value));
+                    run.now = Some(LfoNow::along(
+                        tracking.source.along(f32::from(value)),
+                        level,
+                    ));
+                    let level = polarity.of(Polarity::Uni, level);
                     let added = run.add(slot.kind, tuned(level * depth / 255.0) * share);
                     moved.add(destination.index(), added);
                 }
@@ -1724,6 +1778,7 @@ impl TrackState {
         self.off_at = None;
         self.gate_at = None;
         self.last_note = Some(note);
+        self.new_note = true;
         self.tell_slots_the_note();
         if carries_on {
             self.voice.retrigger(note);
