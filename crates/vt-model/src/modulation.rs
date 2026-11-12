@@ -8,13 +8,14 @@ use serde::{Deserialize, Serialize};
 use crate::envelope::{Adsr, Ahd, Drum, Envelope, Lpg};
 use crate::lfo::Lfo;
 use crate::settings::SettingId;
+use crate::steps::Steps;
 
 /// How many mod slots a track has.
 pub const MOD_SLOTS: usize = 6;
 /// The furthest either way a slot's depth goes, in the units of what it moves.
 pub const MAX_DEPTH: i16 = 0xFF;
 
-/// What a mod slot is. ADSR, AHD, Drum, LPG and LFO so far; Steps and Track follow in M20.
+/// What a mod slot is. ADSR, AHD, Drum, LPG, LFO and Steps so far; Track follows in M20.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
 )]
@@ -25,11 +26,19 @@ pub enum ModKind {
     Drum,
     Lpg,
     Lfo,
+    Steps,
 }
 
 impl ModKind {
     /// Every type, in the order the type picker lists them.
-    pub const ALL: [Self; 5] = [Self::Adsr, Self::Ahd, Self::Drum, Self::Lpg, Self::Lfo];
+    pub const ALL: [Self; 6] = [
+        Self::Adsr,
+        Self::Ahd,
+        Self::Drum,
+        Self::Lpg,
+        Self::Lfo,
+        Self::Steps,
+    ];
 
     /// The name in the slot's title.
     pub fn name(self) -> &'static str {
@@ -39,6 +48,7 @@ impl ModKind {
             Self::Drum => "Drum",
             Self::Lpg => "LPG",
             Self::Lfo => "LFO",
+            Self::Steps => "Steps",
         }
     }
 
@@ -50,6 +60,7 @@ impl ModKind {
             Self::Drum => "a fast peak onto a body that decays",
             Self::Lpg => "a vactrol's fall, closing the filter",
             Self::Lfo => "a cycle, free or from each note",
+            Self::Steps => "up to 16 values, in time or a note each",
         }
     }
 
@@ -58,17 +69,23 @@ impl ModKind {
         matches!(self, Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg)
     }
 
-    /// Whether it has a mode, which its title shows after it: an envelope's curve and an LFO's
-    /// mode. A low-pass gate has none, as its curve is the point of it.
+    /// Whether it has a mode, which its title shows after it: an envelope's curve, and an LFO's
+    /// and Steps' mode. A low-pass gate has none, as its curve is the point of it.
     pub fn has_mode(self) -> bool {
-        matches!(self, Self::Adsr | Self::Ahd | Self::Drum | Self::Lfo)
+        !matches!(self, Self::Lpg)
+    }
+
+    /// Whether it has a polarity to choose. Steps' values are signed, so they say which way
+    /// themselves.
+    pub fn has_polarity(self) -> bool {
+        self != Self::Steps
     }
 
     /// What its mode is called, as the status line and the Roto name it.
     pub fn mode_label(self) -> &'static str {
         match self {
             Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg => "Curve",
-            Self::Lfo => "Mode",
+            Self::Lfo | Self::Steps => "Mode",
         }
     }
 
@@ -77,7 +94,7 @@ impl ModKind {
     pub fn polarity(self) -> Polarity {
         match self {
             Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg => Polarity::Uni,
-            Self::Lfo => Polarity::Bi,
+            Self::Lfo | Self::Steps => Polarity::Bi,
         }
     }
 }
@@ -170,6 +187,11 @@ pub struct ModSlot {
     /// type change keeps one that was chosen and follows the type's if none was.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub polarity: Option<Polarity>,
+    /// Whether, going to `Pitch`, it moves the note along the song's scale, to the nearest of its
+    /// notes, so a random LFO or Steps play in key (#235's and #86's comments). It's one switch
+    /// for every type, and does nothing going anywhere else.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub in_scale: bool,
     #[serde(default, skip_serializing_if = "is_default")]
     pub adsr: Adsr,
     #[serde(default, skip_serializing_if = "is_default")]
@@ -180,6 +202,8 @@ pub struct ModSlot {
     pub lpg: Lpg,
     #[serde(default, skip_serializing_if = "is_default")]
     pub lfo: Lfo,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub steps: Steps,
 }
 
 impl ModSlot {
@@ -191,11 +215,13 @@ impl ModSlot {
             depth: 0,
             bypassed: false,
             polarity: None,
+            in_scale: false,
             adsr,
             ahd: Ahd::default(),
             drum: Drum::default(),
             lpg: Lpg::default(),
             lfo: Lfo::default(),
+            steps: Steps::default(),
         }
     }
 
@@ -207,11 +233,13 @@ impl ModSlot {
             depth: 0,
             bypassed: false,
             polarity: None,
+            in_scale: false,
             adsr: Adsr::default(),
             ahd: Ahd::default(),
             drum: Drum::default(),
             lpg: Lpg::default(),
             lfo,
+            steps: Steps::default(),
         }
     }
 
@@ -242,6 +270,16 @@ impl ModSlot {
         }
     }
 
+    /// A Steps slot going somewhere, its values heard as written.
+    pub fn steps(destination: Option<SettingId>, steps: Steps) -> Self {
+        Self {
+            kind: ModKind::Steps,
+            steps,
+            depth: MAX_DEPTH,
+            ..Self::adsr(destination, Adsr::default())
+        }
+    }
+
     /// The same, moving its destination this far.
     #[must_use]
     pub fn with_depth(self, depth: i16) -> Self {
@@ -256,11 +294,21 @@ impl ModSlot {
             && self.drum.in_range()
             && self.lpg.in_range()
             && self.lfo.in_range()
+            && self.steps.in_range()
     }
 
-    /// Which way it moves what it reaches: its own if it's been chosen, else its type's.
+    /// Whether it moves the note along the song's scale: it's in scale and goes to `Pitch`.
+    pub fn goes_in_scale(&self) -> bool {
+        self.in_scale && self.destination == Some(SettingId::PITCH)
+    }
+
+    /// Which way it moves what it reaches: its own if it's been chosen, else its type's. Steps
+    /// always go both ways, as their values are signed.
     pub fn polarity(&self) -> Polarity {
-        self.polarity.unwrap_or_else(|| self.kind.polarity())
+        match self.kind {
+            ModKind::Steps => Polarity::Bi,
+            kind => self.polarity.unwrap_or_else(|| kind.polarity()),
+        }
     }
 
     /// The name of its mode, for a type that has one.
@@ -271,6 +319,7 @@ impl ModSlot {
             ModKind::Drum => Some(self.drum.curve.name()),
             ModKind::Lpg => None,
             ModKind::Lfo => Some(self.lfo.mode.name()),
+            ModKind::Steps => Some(self.steps.mode.name()),
         }
     }
 
@@ -282,7 +331,7 @@ impl ModSlot {
             ModKind::Ahd => Envelope::Ahd(self.ahd),
             ModKind::Drum => Envelope::Drum(self.drum),
             ModKind::Lpg => Envelope::Lpg(self.lpg),
-            ModKind::Adsr | ModKind::Lfo => Envelope::Adsr(self.adsr),
+            ModKind::Adsr | ModKind::Lfo | ModKind::Steps => Envelope::Adsr(self.adsr),
         }
     }
 }

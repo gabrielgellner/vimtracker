@@ -23,6 +23,7 @@ use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Song, Track, trim_text};
 use vt_model::speed::Speed;
+use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
 use vt_roto::live::{share_of, step_at};
 
 use crate::track_page::{AccumulatorField, ArpField, Control, ModField};
@@ -292,10 +293,22 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
             let ahd_kind = was.kind == ModKind::Ahd;
             let drum_kind = was.kind == ModKind::Drum;
             let lpg_kind = was.kind == ModKind::Lpg;
+            let steps = &mut modulator.steps;
+            let numbers: Vec<u8> = (0..STEPS as u8).collect();
             match field {
                 // What a slot is, the app's alone.
                 ModField::Type => return None,
+                ModField::Rate if was.kind == ModKind::Steps => {
+                    steps.rate = pick(&StepRate::ALL, position);
+                }
+                ModField::Length => steps.length = pick(&numbers, position) + 1,
+                ModField::Start => steps.start = pick(&numbers, position),
+                ModField::Loop => steps.looping = pick(&Loop::ALL, position),
+                ModField::Mutate => steps.mutate = whole(position, u32::from(MAX_MUTATE)) as u8,
+                ModField::Smooth => steps.smooth = depth_at(position),
+                ModField::Step(at) => steps.values[usize::from(at)] = depth_at(position),
                 ModField::Mode => match was.kind {
+                    ModKind::Steps => steps.mode = pick(&StepsMode::ALL, position),
                     ModKind::Adsr => adsr.curve = pick(&Curve::ALL, position),
                     ModKind::Ahd => ahd.curve = pick(&Curve::ALL, position),
                     ModKind::Drum => drum.curve = pick(&Curve::ALL, position),

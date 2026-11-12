@@ -377,7 +377,7 @@ fn bent(value: f32, deform: f32) -> f32 {
 
 /// The Catmull-Rom curve through `points[1]` at 0 and `points[2]` at 1.
 #[inline]
-fn catmull_rom([before, from, to, after]: [f32; 4], t: f32) -> f32 {
+pub(crate) fn catmull_rom([before, from, to, after]: [f32; 4], t: f32) -> f32 {
     let (t2, t3) = (t * t, t * t * t);
     0.5 * (2.0 * from
         + (to - before) * t

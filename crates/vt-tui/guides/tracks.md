@@ -3,7 +3,7 @@
 Press `Space 4` for what a track holds apart from its steps, on three pages: Sound
 has its machine, filter, output and how it plays, with a bar beside each value showing where
 it sits between the lines at each end of its range, and moving with whatever
-plays it, with a dim mark left where it's set, Mod its six mod slots,
+plays it, with a dim mark left where it's set once it's a cell or more away, Mod its six mod slots,
 envelopes and LFOs, its accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page, each with the cursor where you left it, or on its first setting the first time. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
@@ -457,6 +457,24 @@ time `Knock` goes on: to knock again, it has to go off first, which the next
 note does to a lock. A loud sound driven into it clips softly on the way
 round, as a real tank's driver does.
 
+`Space` is a huge, bright wash that rings on and on, after Airwindows'
+Galactic: for pads, drones and ambient tails that hang under a whole
+section. It starts half wet with its tank at its biggest, near Galactic's
+own settings. `Decay` and `Damp` work as `Reverb`'s do, but its tail doesn't
+darken as it rings, as theirs do: `Damp` darkens what goes in and what comes
+out.
+
+| Setting | Does |
+|---|---|
+| `Size` | How big its tank is: small and metallic at `00`, biggest at `FF` |
+| `Mod` | How fast and far what goes in wobbles in pitch, none at `00` |
+
+With its tank at its biggest, its tail takes about four seconds to fall away
+at `00`, eight at `80`, fifteen at `C0` and well over a minute at `FF`,
+though it always does. The longer it rings, the less of each new sound goes in, so a long
+`Decay` builds slowly as notes pile up. Hold a chord through it with `Mix` at
+`FF` on a return for an endless pad.
+
 `Pitch` shifts the sound up or down without changing its length, after the
 pitch shifter in Mutable Instruments' Clouds. Two grains read the sound back
 faster or slower than it plays, each fading in as the other fades out. It
@@ -862,7 +880,7 @@ can't be muted or soloed.
 ## The Mod page
 
 Each track has six mod slots, `Mod 1` to `Mod 6`, and each slot is a type you choose:
-an `ADSR`, an `AHD` or a `Drum` envelope, an `LPG`, or an `LFO`, in any mix. A new track has three ADSRs, then three
+an `ADSR`, an `AHD` or a `Drum` envelope, an `LPG`, an `LFO`, or `Steps`, in any mix. A new track has three ADSRs, then three
 LFOs. The slots work out in order, so a slot can move only those after it, and never
 round again.
 
@@ -1141,6 +1159,97 @@ held values, so `;` hears those. Pausing freezes the LFO.
 chains**, so `Depth +40` on `Vol` is 16 dB each way. They stop at `F8`, which
 is 6 dB above where `VOL` starts, so a deep swing stays even if you lower `VOL`
 on a step.
+
+## Steps
+
+A `Steps` slot plays up to 16 values in turn, a short sequence for any setting it
+reaches, as the M8's tables and Bitwig's Steps do. Its values are a row of thin bars
+in the box on its right, up from the middle for a value above `00` and down for one
+below, with the step playing lit. A new Steps slot has 8 steps of `00` at a `1/16`,
+started by each note, and choosing `Steps` for a slot with no depth gives it `+FF`,
+so its values are heard as written.
+
+| Setting | Value |
+|---|---|
+| Mode | In the title: `Trig`, `Free` or `Note`, below |
+| Loop | In the title: what it does at its end, below |
+| Dest | In the title: what it moves, such as `Pitch`, or `---` |
+| Rate | How long each step lasts: `Tick`, `1/64` to `1 bar`, or `Pass` |
+| Length | How many steps it plays, from 1 to 16 |
+| Depth | How far, in hex: at `+FF` the values are heard as written |
+| Start | The step each note starts it at |
+| Mutate | The chance each value is drawn again as it comes round, `0%` to `100%` |
+| Smooth | How it goes from step to step, in hex from `-FF` to `+FF` |
+
+**The mode**: `Trig` starts it at its `Start` with each note, and waits for the
+first; `Free` runs from the song's position, as an LFO in `Free` does; and `Note`
+moves on one step with each note, so its `Rate` shows `--`. A negative `Depth`
+turns the values over.
+
+**Its values** are in its units at a depth of `+FF`, so `+07` on `Pitch` is seven
+semitones up and `+10` on `Cut` is `10` above the track's cutoff. `l` from the grid
+goes into the box, on the first step, and the cursor is a `▲` under it:
+
+| Keys | Does |
+|---|---|
+| `h` `l` | Across the steps, with counts. `h` from the first goes back to the grid |
+| `0` `$` | The first or last step |
+| `=` `-` | Up or down by one |
+| `+` `_` | Up or down an octave, `0C` |
+| `i` | Type a value, signed hex such as `-0C` |
+| `x` | Back to `00` |
+
+Steps past the `Length` keep their values and aren't drawn, so shortening and
+lengthening it finds them again.
+
+**Mutate** is the Turing Machine's knob: each time a step comes round, it's drawn
+again with that chance, anywhere within the slot's `Depth`, and keeps what it drew
+until it's drawn again. `0%` plays the values as written, `100%` a new one each
+time, and between them the loop drifts. It draws from the project's seed, so a
+render repeats, and back at `0%` the values are as written again.
+
+**Smooth** at `00` steps. Up to `+80` each step glides in from the one before over
+its first part, all of it at `+80`, and on to `+FF` the glide becomes a curve
+through the steps. Down to `-80` each step falls to nothing over its last part, a
+pluck a step, and past it the fall is sharper. It follows time, so in `Note` mode
+or at `Pass` the steps are as they are.
+
+**The rate.** `Tick` is a sixth of the track's step, as `DEL` counts, so six go by in
+each step, for a fast burst. `Pass` moves on once each time round the track's chain,
+counted as `CND` counts passes, so `00 10 20 30` on `Cut` opens the filter over four
+times round and starts again with the chain. `=` is faster, as an LFO's is.
+
+**The loop**, after the mode in the title:
+
+| Loop | Does |
+|---|---|
+| `Once` | Plays to the end and holds the last |
+| `from 1` to `from 16` | Plays once, then loops from that step, as the M8's `HOP` |
+| `Bounce` | Goes back and forth |
+| `Shuffle` | Each step once each time round, in a new order each time |
+
+`from 3` on four steps plays an attack of two, then holds a shape of the last two.
+`Shuffle` deals its orders from the project's seed, so a render repeats.
+
+`K` on the mode, the loop or the rate lists them. Some uses:
+
+*   `+0C +07 00` on `Pitch` at `1/32`, `Once`: a flourish on each note.
+*   Eight cutoffs in `Note` mode: each note gets the next.
+*   `+10 -10` on `Pan` in `Free` at `1/16`: a stepped LFO.
+
+**Start** is the slot's phase, so a step locks it with `PHS`: its value times the
+`Length` over 256 picks the step, so `PHS3 80` starts an eight-step run on step 5.
+`DEP` locks its depth, as for any slot. A later slot's `Dest` lists it as `M3 Start`.
+Steps have no polarity, as their values say which way.
+
+## Pitch in scale
+
+Any slot's `Dest` lists `Pitch` twice: as it is, and `Pitch in scale`, which moves
+the note along the song's scale (`:scale`) to the nearest of its notes, the lower of
+two as near: `+03` from `C-3` in C major plays `D-3`. So a random LFO, or Steps with
+`Mutate`, on pitch play in key; a `Depth` of `+0C` keeps them within an octave. Only
+what the slot adds moves: the notes as written never do, and with the scale off
+it's plain `Pitch`.
 
 ## The accumulator
 
