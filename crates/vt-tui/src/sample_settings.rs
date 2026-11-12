@@ -476,7 +476,7 @@ impl App {
             // own speed can be seen.
             let text = match setting {
                 SampleSetting::Steps if *value > 0 => format!(
-                    "{:<12}{}",
+                    "{:<14}{}",
                     setting.text(*value, rate),
                     speed_text(shown.tempo_speed(*value as u32, millibpm))
                 ),
