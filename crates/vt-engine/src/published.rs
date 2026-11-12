@@ -1,6 +1,7 @@
 //! One complete state of the song, as the audio thread sees it.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use vt_model::constants::{NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::GrooveId;
@@ -19,6 +20,9 @@ pub type Bank = Arc<[Option<Arc<Playable>>]>;
 /// A song version, its samples, and how each of the bank's entries plays.
 #[derive(Debug)]
 pub struct Published {
+    /// Which version it is, different for each one built, for a report to say which version its
+    /// values were worked out from.
+    pub id: u64,
     pub song: Arc<Song>,
     pub samples: Arc<SamplePool>,
     /// Each bank number's entry, `00` to `FF`: always 256 places.
@@ -63,7 +67,9 @@ impl Published {
         let earliest = earliest_nudge(&song);
         let (longest, speed_steps) = longest_step(&song);
         let early = groove_lead + earliest.map_or(0, |early| early.unsigned_abs());
+        static NEXT: AtomicU64 = AtomicU64::new(0);
         Self {
+            id: NEXT.fetch_add(1, Ordering::Relaxed),
             bank,
             lead: early * longest / TICKS_PER_STEP,
             groove_lead,

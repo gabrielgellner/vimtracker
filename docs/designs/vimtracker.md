@@ -365,7 +365,7 @@ against its own state, so two quick presses can't act on an out-of-date view of 
 comes back each block: where playback is, each track's place and levels, each track's faders as
 they're heard (`Faders`: where `LEV`, `PAN`, `SNA` and `SNB` put them, what `VOL` and modulation make
 of them, and which the steps drive and a hand has taken over, from `TrackState::faders`), the watched
-track's live values, and up to four sample playheads. The live values carry the watched track's peak right after its trim
+track's live values, and up to four sample playheads. Each report says which version it's of (`Telemetry::version`, the `Published::id` playing), and the app keeps the songs it has sent until a report is of a later one, so a bar draws what's playing against the setting it was worked out from (`App::reported_track`, decision 210). The live values carry the watched track's peak right after its trim
 (`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
 `Engine::take_after_trim` takes, for the Output device's meter, and where each mod slot running as
 an LFO is in its wave (`LiveValues::mods`, a phase and a value each, which `TrackState::modulate`
