@@ -76,6 +76,12 @@ impl VariableShape {
         saw
     }
 
+    /// Start somewhere other than the top of its cycle, before it first plays. It's for a free
+    /// wave, without `SYNC` or `PHASE`.
+    pub(super) fn start_at(&mut self, phase: f32) {
+        self.slave_phase = phase;
+    }
+
     /// Fill `out`, with the settings moving in a line across it from where the last call left
     /// them. The first call starts at them.
     #[allow(clippy::too_many_arguments)]
@@ -101,6 +107,13 @@ impl VariableShape {
             self.pw = pw;
             self.waveshape = waveshape;
             self.phase_modulation = phase_modulation;
+            if self.slave_phase > 0.0 {
+                let square = (waveshape - 0.5).max(0.0) * 2.0;
+                let triangle = (1.0 - waveshape * 2.0).max(0.0);
+                let (up, down) = (1.0 / pw, 1.0 / (1.0 - pw));
+                self.high = self.slave_phase >= pw;
+                self.next_sample = Self::naive(self.slave_phase, pw, up, down, triangle, square);
+            }
             self.fresh = false;
         }
         let frames = out.len();

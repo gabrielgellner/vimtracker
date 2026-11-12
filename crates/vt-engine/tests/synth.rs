@@ -557,3 +557,53 @@ fn every_other_synth_plays_a_voice_for_each_held_key() {
         assert_eq!(engine.previews_sounding(), 3, "{voice:?}");
     }
 }
+
+/// The voices with a `Drift`, and its place among each one's settings.
+fn drifting() -> Vec<(SynthVoice, usize)> {
+    SynthVoice::ALL
+        .into_iter()
+        .filter_map(|voice| {
+            let place = (0..9).find(|at| {
+                SettingId::voice(voice, *at).is_some_and(|id| id.entry().key == "drift")
+            })?;
+            Some((voice, place))
+        })
+        .collect()
+}
+
+#[test]
+fn the_analog_voices_have_a_drift() {
+    let voices: Vec<SynthVoice> = drifting().into_iter().map(|(voice, _)| voice).collect();
+    assert_eq!(
+        voices,
+        [
+            SynthVoice::VirtualAnalog,
+            SynthVoice::VirtualAnalogVcf,
+            SynthVoice::Acid,
+            SynthVoice::Chiptune,
+        ]
+    );
+}
+
+#[test]
+fn drift_makes_each_note_differ_and_a_render_repeats() {
+    // Acid's notes carry on from each other, so they're long enough apart to start afresh.
+    let steps = [NOTE, REST, REST, REST, REST, REST, REST, REST, NOTE, REST];
+    for (voice, place) in drifting() {
+        let mut drifts = on(voice, &steps);
+        drifts.tracks[0].set_machine_value(place, 0xFF);
+        let out = play(drifts.clone(), 10);
+        let first = &out[..STEP * 2];
+        let second = &out[8 * STEP * 2..9 * STEP * 2];
+        assert!(first != second, "{voice:?}: two notes the same");
+        assert!(
+            play(drifts.clone(), 10) == out,
+            "{voice:?}: the same seed differs"
+        );
+        drifts.seed = 7;
+        assert!(
+            play(drifts, 10) != out,
+            "{voice:?}: another seed is the same"
+        );
+    }
+}

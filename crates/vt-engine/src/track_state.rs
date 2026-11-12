@@ -720,6 +720,9 @@ pub struct TrackState {
     pub arp: Option<Arpeggiating>,
     /// The rolls an arpeggio in `Random` takes, apart from `rng` so `CHA` rolls as it did.
     pub arp_rng: Pcg32,
+    /// The seeds of each note's drift, for a synth that drifts as an analog one does, apart from
+    /// `rng` so `CHA` rolls as it did.
+    drift_rng: Pcg32,
     /// Steps, or parts of them, waiting for where their groove and nudge land them, and when the
     /// soonest lands, so a track with none waiting isn't looked through.
     pub pending: [Option<PendingStep>; PENDING_PARTS],
@@ -898,6 +901,11 @@ fn arp_rng(seed: u64, index: usize) -> Pcg32 {
     Pcg32::new(seed, (2 * MAX_TRACKS + index) as u64)
 }
 
+/// The generator for a track's notes' drift, on streams after every track's arpeggios.
+fn drift_rng(seed: u64, index: usize) -> Pcg32 {
+    Pcg32::new(seed, (3 * MAX_TRACKS + index) as u64)
+}
+
 /// What's heard of a value: its lock over its base. A glide is moved along by the song.
 /// On the `00` to `FF` scale, with the fine part as the fraction.
 fn heard(layers: &ValueLayers) -> f32 {
@@ -945,6 +953,7 @@ impl TrackState {
             retrigger: None,
             arp: None,
             arp_rng: arp_rng(seed, index),
+            drift_rng: drift_rng(seed, index),
             values: {
                 let mut values = [ValueLayers::at(0); SettingId::COUNT];
                 for id in SettingId::all() {
@@ -1095,6 +1104,7 @@ impl TrackState {
         self.forget_accumulators();
         self.groove_rng = groove_rng(seed, index);
         self.arp_rng = arp_rng(seed, index);
+        self.drift_rng = drift_rng(seed, index);
         self.arp = None;
         self.last_note = None;
         for run in &mut self.slots {
@@ -1480,6 +1490,10 @@ impl TrackState {
                 &mut self.rng
             };
             self.voice.seed_noise(rng.next_u32());
+        }
+        // A note carrying on keeps the drift it has, and rolls its own offsets as it starts.
+        if !carries_on && self.voice.drifts() {
+            self.voice.seed_drift(self.drift_rng.next_u32());
         }
     }
 

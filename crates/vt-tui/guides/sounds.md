@@ -20,15 +20,28 @@ the track starts from its own defaults.
 | `Detune` | Detunes the saw, up to two octaves either way. `80` is in tune |
 | `Square` | The square: none at `00`, then a pulse, a square and hard sync |
 | `Saw` | The saw: a triangle at `00`, a plain saw at `80`, then a notch |
+| `Drift` | How far each note strays, as on an analog synth. None at `00` |
+
+**Drift.** `VA`, `VA VCF`, `Acid` and `Chip` have a `Drift`, for the life of an analog
+synth, whose notes are never quite alike. At `00` every note sounds the same, as it
+always has. Going up, each note is tuned a little off, each of its oscillators on its own,
+so they beat against each other; its pitch wanders slowly while it's held, which a long
+note shows; and its level, its envelope's times and, on `VA VCF` and `Acid`, which have
+filters of their own, its cutoff move a little. At `FF` an oscillator can be 10 cents out,
+the cutoff three semitones, the level 1.5 dB and the envelope's times a fifth. Above `00`, the oscillators also start anywhere in their cycles,
+so each note's attack is a little different. Each note's drift is chosen at random, but
+the same each time the song plays, so a render repeats.
 
 `VA VCF` is a saw or a square, with a sub an octave down, through a resonant filter, for
-acid lines and fat bass. Try a note around `C-1`.
+acid lines and fat bass. Try a note around `C-1`. As an analog filter does, it has a little
+noise under it, far too quiet to hear but for a ring at the very top of `Resonance`.
 
 | Setting | Does |
 |---|---|
 | `Resonance` | Steep below `80`, gentle above, ringing more at either end |
 | `Frequency` | The cutoff, from two octaves under the note to far above |
 | `Wave` | Saw and sub, saw, square, pulse, then square and sub at `FF` |
+| `Drift` | How far each note strays, as on an analog synth. None at `00` |
 
 `Acid` is our own take on Roland's TB-303, rather than one of Plaits': a saw or a square
 through a diode ladder filter, with the 303's accent and slide, for acid lines. It plays one
@@ -57,6 +70,10 @@ notes around `C-1`, with `Resonance` well up.
   until the next, or give one note a length of its own in its gate cell, like `SGL1 FF`.
 - From the keyboard, holding a second key slides to its note, and letting go of it slides
   back to the first, rather than playing a chord. These take `Slide`'s time.
+- **Its oscillator runs free**, as a 303's does, so a note after a rest starts anywhere in
+  its cycle, whatever `Drift` is. `Drift` moves each note's tuning, cutoff, level and
+  `Decay`, and wanders its pitch, as on the other voices; on the Roto it's on the
+  `Acid` device's second page, one arrow on.
 
 | Setting | Does |
 |---|---|
@@ -68,6 +85,7 @@ notes around `C-1`, with `Resonance` well up.
 | `Accent` | How much louder and brighter an accented note is |
 | `Slide` | How long a slide takes: 60 ms at `00`, as on a 303, to 360 ms |
 | `Drive` | How hard the saw drives the filter, up to 24 dB, for grit |
+| `Drift` | How far each note strays, as on an analog synth. None at `00` |
 
 The track's own filter comes after it, as for any voice. It's best left open, with `Cut`
 at `FF`, so the diode ladder does the work.
@@ -167,6 +185,7 @@ together, as the rows do the arpeggio.
 | `Chord` | The same chords as `Chord` |
 | `Inversion` | Moves the lowest note up an octave at a time. At pitch at `66` |
 | `Shape` | A thin pulse below `80`, a square at `80`, and hard sync above |
+| `Drift` | How far each note strays, each square on its own. None at `00` |
 
 `Swarm` is eight saws, each in grains that start and stop, for pads, drones and clouds.
 Each note starts a fresh burst of grains.
