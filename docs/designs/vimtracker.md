@@ -269,7 +269,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 
 | Crate | Owns | May depend on |
 |---|---|---|
-| `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, and sample analysis | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
+| `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
 | `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs and `wide` for `Supersaw`'s four lanes |
 | `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
 | `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), the faders as the steps automate them and a hand takes them over (`automating.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
@@ -402,9 +402,10 @@ Song                               song.ron, refused unless format_version is FO
  |- name, millibpm, seed, scale, limiter, launch, auto_jump, skip
  |- groove, grooves[]              the project's groove, and up to 8 of its own
  |- bank                           01..FF -> BankEntry: label, name, edit
- |   '- SampleEdit                 timeline (one whole file for now), points, play
+ |   '- SampleEdit                 timeline (one whole file for now), points, play, hints
  |       |- Points                 start, end, loop, slices[], next_id, marks{a..z}
- |       '- PlayParams             gain, tune, cents, reverse, fades, normalize, snap_zero
+ |       |- PlayParams             gain, tune, cents, reverse, fades, normalize, snap_zero
+ |       '- Hints                  sens, bars, root note, tempo: what the sound is like
  |- tracks[]                       sound tracks, then the groups G1 to G4, Return A, Return B
  |   |                             and Master
  |   |- kind, name, mute, solo     kind: Sound, Group(n), ReturnA, ReturnB or Master
@@ -452,7 +453,11 @@ Song                               song.ron, refused unless format_version is FO
     path and content hash, and holds its `Points` and `PlayParams`, in frames at the file's own
     rate. Slices are numbered by where they start, as Vim numbers lines, each with an id that's never
     used again and settings of its own where they differ from the entry's. The letters `a` to `z`
-    mark slices by id, so `SLI 'a` follows its slice as others come and go.
+    mark slices by id, so `SLI 'a` follows its slice as others come and go. A file joining the
+    bank is seeded once from what other tools left in and beside it (`seeding.rs`, decisions 230
+    and 231): an Octatrack `.ot` beside it (`octatrack.rs`), or else its WAV `cue ` and `smpl`
+    chunks (`riff.rs`), which `hound` passes over. Both readers take bytes and their writers give
+    bytes, so nothing is written beside a source.
 *   **Sections, chains and phrases.** A section is a row of the song view, with one chain per track,
     a length, how many times it repeats, what it does when it starts, and a reset. Each track owns
     its chains and phrases, numbered within it and shared only within it. A chain is a list of
@@ -929,7 +934,7 @@ macOS, the one platform the golden hashes hold on.
 
 | Kind | Where | What it checks |
 |---|---|---|
-| Model | `crates/vt-model/tests/`, and unit tests in its modules | Actions on songs, undo, saving and loading, kits, decoding the sample files in `tests/samples/`, slices and marks, analysis |
+| Model | `crates/vt-model/tests/`, and unit tests in its modules | Actions on songs, undo, saving and loading, kits, decoding the sample files in `tests/samples/`, slices and marks, analysis, seeds from WAV markers and `.ot` files |
 | Engine | `crates/vt-engine/tests/`, a file for each feature, such as `groove.rs`, `returns.rs` and `slices.rs` | What plays when, from songs built in code and played offline |
 | Golden renders | `crates/vt-engine/tests/golden/`, through `tests/support/` | An FNV-1a hash of a render's exact samples. `VT_BLESS=1` updates one after a change to the sound on purpose, and `VT_DUMP` writes the samples, to compare two builds |
 | DSP | Unit tests beside each module in `dsp/` | Each voice, filter and effect on its own |

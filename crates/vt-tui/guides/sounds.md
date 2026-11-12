@@ -606,6 +606,30 @@ another entry for its note, so one track can play a whole kit.
 Each entry keeps how it plays, its start, end, loop, gain, tune, slices and marks,
 whatever track plays it.
 
+### Points from the file
+
+A file can bring the points other tools left in it or beside it when it joins the
+bank:
+
+- **A WAV's cue points,** as the M8 and Digichain write for a sliced chain, become its
+  slices, and one with a one-letter label is named by that letter, as a mark. If none
+  is at the start, a slice starts there too, so the slices cover the sample.
+- **A WAV's sampler loop** becomes its loop. A loop at least as long as what follows
+  it ends the sample there as well, as the Deluge reads one.
+- **An Octatrack file** beside it, as `break.ot` beside `break.wav`, gives its trim,
+  loop, gain and slices in place of the WAV's. Slices with ends of their own play to
+  the next one's start.
+- **The root note** of a WAV's sampler or instrument chunk, and an `.ot`'s tempo, are
+  kept for later.
+
+They come in as an undo step of their own, and the status line names them, so `u`
+straight after leaves them out and keeps the file. They're read once: what you change
+after that is the project's. A chunk or an `.ot` that can't be read is skipped, the
+status line says so, and the audio still loads. Nothing is ever written to or beside
+your files.
+
+
+
 ## Normalising and trimming
 
 Neither writes audio: each changes how the track's sample plays, and `u` takes
