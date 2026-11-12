@@ -2636,6 +2636,7 @@ name = "vt-model"
 version = "0.2.0"
 dependencies = [
  "hound",
+ "realfft",
  "ron",
  "rubato",
  "serde",

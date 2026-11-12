@@ -3250,7 +3250,9 @@ fn every_mode_that_binds_the_adjust_keys_binds_their_cmd_keys() {
             let key = parse_sequence(cmd).unwrap();
             let means = table.resolve(row.mode, &key);
             // The sample page's Cmd-l and Cmd-h nudge a frame, finer than `=` and `-`'s pixel.
-            if row.mode == Mode::Sample && matches!(*cmd, "D-l" | "D-h") {
+            if matches!(row.mode, Mode::Sample | Mode::SampleVisual)
+                && matches!(*cmd, "D-l" | "D-h")
+            {
                 assert!(matches!(means, Resolved::Command(_)));
                 continue;
             }

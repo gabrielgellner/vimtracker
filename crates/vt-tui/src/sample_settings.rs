@@ -1,5 +1,5 @@
-//! The sample page's settings: whether points snap to zero crossings, and how the slice under the
-//! cursor plays, its gain, pan, tune, direction and fades, or the entry's own with no slices. `K`
+//! The sample page's settings: whether points snap to zero crossings and how readily a sound counts
+//! as starting, for the whole entry, and how the slice under the cursor plays, its gain, pan, tune, direction and fades, or the entry's own with no slices. `K`
 //! on the waveform chooses one to change, which puts the page's focus on it in the settings rows;
 //! there `h` and `l` go along them, `=` `-` and `+` `_` change it by a small or a large step, `K`
 //! lists its values, `x` puts it back, and `Esc` goes back to the waveform. `j` and `k` still go
@@ -7,8 +7,9 @@
 //! reverses it from the waveform too. Each change is one undo step on the bank entry.
 
 use vt_model::action::Action;
-use vt_model::bank::{BankEntry, MOST_PAN};
+use vt_model::bank::{BankEntry, Hints, MOST_PAN};
 use vt_model::kit::MAX_TUNE;
+use vt_model::onsets::MOST_SENS;
 
 use crate::app::App;
 use crate::input::command::MOST_SAMPLE_DB;
@@ -22,6 +23,9 @@ use crate::views::sample::time;
 pub enum SampleSetting {
     /// Whether points placed go to the nearest zero crossing, for the whole entry.
     Snap,
+    /// How readily a rise counts as a sound starting, for `w`, `b` and slicing by transients, for
+    /// the whole entry.
+    Sens,
     /// The rest are the slice's own, or the entry's with no slices.
     Gain,
     Pan,
@@ -32,8 +36,9 @@ pub enum SampleSetting {
 }
 
 impl SampleSetting {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Snap,
+        Self::Sens,
         Self::Gain,
         Self::Pan,
         Self::Tune,
@@ -45,6 +50,7 @@ impl SampleSetting {
     pub fn name(self) -> &'static str {
         match self {
             Self::Snap => "Snap",
+            Self::Sens => "Sens",
             Self::Gain => "Gain",
             Self::Pan => "Pan",
             Self::Tune => "Tune",
@@ -58,6 +64,7 @@ impl SampleSetting {
     fn meaning(self) -> &'static str {
         match self {
             Self::Snap => "Put points placed on the nearest zero crossing",
+            Self::Sens => "How readily a sound counts as starting, for w, b and :slice transients",
             Self::Gain => "How loud the slice plays",
             Self::Pan => "Where the slice sits, left to right",
             Self::Tune => "How far the slice is tuned, in semitones",
@@ -72,6 +79,11 @@ impl SampleSetting {
         self != Self::Pan || !shown.entry.edit.points.slices.is_empty()
     }
 
+    /// Whether it's the whole entry's, rather than the slice's under the cursor.
+    pub fn is_entrys(self) -> bool {
+        matches!(self, Self::Snap | Self::Sens)
+    }
+
     /// The small and the large step `=` and `+` move it by, in its own units: hundredths of a dB,
     /// pan, semitones, on or off, and frames at the file's rate for a fade, a millisecond and ten.
     fn steps(self, rate: u32) -> (i32, i32) {
@@ -79,6 +91,7 @@ impl SampleSetting {
             Self::Gain => (100, 600),
             Self::Pan => (1, 10),
             Self::Tune => (1, 12),
+            Self::Sens => (1, 10),
             Self::Snap | Self::Reverse => (1, 1),
             Self::FadeIn | Self::FadeOut => {
                 let ms = (rate / 1000).max(1) as i32;
@@ -96,6 +109,7 @@ impl SampleSetting {
             }
             Self::Pan => (-i32::from(MOST_PAN), i32::from(MOST_PAN)),
             Self::Tune => (-i32::from(MAX_TUNE), i32::from(MAX_TUNE)),
+            Self::Sens => (0, i32::from(MOST_SENS)),
             Self::Snap | Self::Reverse => (0, 1),
             Self::FadeIn | Self::FadeOut => (0, length.min(i32::MAX as u64) as i32),
         }
@@ -105,6 +119,7 @@ impl SampleSetting {
     pub fn text(self, value: i32, rate: u32) -> String {
         match self {
             Self::Snap => if value != 0 { "on" } else { "off" }.to_owned(),
+            Self::Sens => format!("{value}%"),
             Self::Gain => format!("{:+.1} dB", value as f32 / 100.0),
             Self::Pan => pan_text(value as i8),
             Self::Tune => format!("{value:+} st"),
@@ -117,6 +132,7 @@ impl SampleSetting {
     fn choices(self, rate: u32) -> Vec<i32> {
         match self {
             Self::Snap | Self::Reverse => vec![0, 1],
+            Self::Sens => (0..=10).map(|at| at * 10).collect(),
             Self::Gain => (-8..=4).map(|at| at * 300).collect(),
             Self::Pan => (-5..=5).map(|at| at * 10).collect(),
             Self::Tune => (-24..=24).collect(),
@@ -152,6 +168,7 @@ impl Shown {
         let play = self.entry.edit.play;
         let entry = match setting {
             SampleSetting::Snap => i32::from(play.snap_zero),
+            SampleSetting::Sens => i32::from(self.entry.edit.hints.sens),
             SampleSetting::Gain => (play.gain_db * 100.0).round() as i32,
             SampleSetting::Pan => 0,
             SampleSetting::Tune => i32::from(play.tune),
@@ -161,10 +178,10 @@ impl Shown {
         };
         let slice = self
             .settings_slice(frame)
-            .filter(|_| setting != SampleSetting::Snap)
+            .filter(|_| !setting.is_entrys())
             .map(|number| self.entry.edit.points.slices[number].over);
         let own = slice.and_then(|over| match setting {
-            SampleSetting::Snap => None,
+            SampleSetting::Snap | SampleSetting::Sens => None,
             SampleSetting::Gain => over.gain_db.map(|db| (db * 100.0).round() as i32),
             SampleSetting::Pan => over.pan.map(i32::from),
             SampleSetting::Tune => over.tune.map(i32::from),
@@ -187,10 +204,14 @@ impl Shown {
         let play = &mut entry.edit.play;
         match (setting, slice) {
             (SampleSetting::Snap, _) => play.snap_zero = value.unwrap_or(0) != 0,
+            (SampleSetting::Sens, _) => {
+                let sens = value.map_or(Hints::default().sens, |sens| sens as u8);
+                entry.edit.hints.sens = sens.min(MOST_SENS);
+            }
             (_, Some(number)) => {
                 let over = &mut entry.edit.points.slices[number].over;
                 match setting {
-                    SampleSetting::Snap => {}
+                    SampleSetting::Snap | SampleSetting::Sens => {}
                     SampleSetting::Gain => over.gain_db = value.map(|at| at as f32 / 100.0),
                     SampleSetting::Pan => over.pan = value.map(|pan| pan as i8),
                     SampleSetting::Tune => over.tune = value.map(|tune| tune as i8),
@@ -202,7 +223,7 @@ impl Shown {
             (_, None) => {
                 let value = value.unwrap_or(0);
                 match setting {
-                    SampleSetting::Snap | SampleSetting::Pan => {}
+                    SampleSetting::Snap | SampleSetting::Sens | SampleSetting::Pan => {}
                     SampleSetting::Gain => play.gain_db = value as f32 / 100.0,
                     SampleSetting::Tune => play.tune = value as i8,
                     SampleSetting::Reverse => play.reverse = value != 0,
@@ -231,7 +252,7 @@ impl App {
         let entry = shown.with_setting(setting, cursor, value);
         if entry == shown.entry {
             let inherits = value.is_none() && shown.settings_slice(cursor).is_some();
-            self.status = if inherits && setting != SampleSetting::Snap {
+            self.status = if inherits && !setting.is_entrys() {
                 format!("{} already plays as the sample's", setting.name())
             } else {
                 format!("{} is already that", setting.name())
@@ -249,7 +270,7 @@ impl App {
         let (value, own) = now.setting_value(setting, cursor);
         let text = setting.text(value, now.rate());
         let whose = match now.settings_slice(cursor) {
-            _ if setting == SampleSetting::Snap => String::new(),
+            _ if setting.is_entrys() => String::new(),
             Some(slice) => format!("Slice {slice:02X} "),
             None => format!("{} ", now.entry.title()),
         };
@@ -260,7 +281,15 @@ impl App {
             name.to_lowercase()
         };
         let inherited = if own { "" } else { ", as the sample" };
-        self.status = format!("{whose}{name} {text}{inherited}: u to undo");
+        let found = match setting {
+            SampleSetting::Sens => {
+                let count = now.onsets().len();
+                let sounds = if count == 1 { "sound" } else { "sounds" };
+                format!(", finding {count} {sounds}")
+            }
+            _ => String::new(),
+        };
+        self.status = format!("{whose}{name} {text}{inherited}{found}: u to undo");
     }
 
     /// `=` `-` `+` `_` on the settings rows, `>` `<` for the gain: a setting up or down a small or
@@ -338,7 +367,7 @@ impl App {
         let (current, own) = shown.setting_value(setting, cursor);
         let slice = shown
             .settings_slice(cursor)
-            .filter(|_| setting != SampleSetting::Snap);
+            .filter(|_| !setting.is_entrys());
         let mut items = Vec::new();
         if slice.is_some() {
             let (entry, _) = Shown {

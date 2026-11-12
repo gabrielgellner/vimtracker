@@ -1,9 +1,10 @@
 //! The Mod page: a rack of half-width devices, the six mod slots down two columns, `Mod 1` to
 //! `Mod 3` on the left beside `Mod 4` to `Mod 6` on the right, and the accumulator beside the
 //! arpeggio under them. A slot's title has its switch, its type, its type's mode if it has one,
-//! and `→` its destination, and a panel on its right draws an envelope's shape or one cycle of an
-//! LFO, which the terminal places a dot on where the LFO is now. One switched out is faint but for
-//! the cursor, as a bypassed FX slot is.
+//! and `→` its destination, and a panel on its right draws an envelope's shape, one cycle of an
+//! LFO, which the terminal places a dot on where the LFO is now, Steps' values as bars, or a Track
+//! slot's map, with a dot at its last note. One switched out is faint but for the cursor, as a
+//! bypassed FX slot is.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -49,8 +50,9 @@ pub(crate) fn mod_being_edited(app: &App) -> Option<usize> {
     }
 }
 
-/// Where each LFO's cycle is on screen, by its slot and the character at its top left, for the
-/// terminal to place its dot over: none for a slot that isn't an LFO or isn't drawn.
+/// Where each LFO's cycle or Track slot's map is on screen, by its slot and the character at its
+/// top left, for the terminal to place its dot over: none for a slot of another type or one that
+/// isn't drawn.
 pub type CyclesAt = [Option<(u16, u16)>; MOD_SLOTS];
 
 /// What comes before a slot's destination in its title, so `LFO  Trig  → Cut` doesn't read as
@@ -231,7 +233,7 @@ fn draw_device(
         }
         Some(Control::Mod(slot, _)) => (
             panel(app.mod_images.map(|ids| ids[slot])),
-            track.mods[slot].kind == ModKind::Lfo,
+            matches!(track.mods[slot].kind, ModKind::Lfo | ModKind::Track),
         ),
         _ => (GraphicPanel::new(), false),
     };

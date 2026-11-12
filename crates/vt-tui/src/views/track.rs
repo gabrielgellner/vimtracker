@@ -241,6 +241,14 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Phase => format!("{}°", lfo.phase),
         ModField::Deform => depth_text(lfo.deform),
         ModField::Fade => lfo.fade.to_string(),
+        ModField::Low => {
+            let tracking = &modulator.track;
+            tracking.source.text(tracking.bounds().low)
+        }
+        ModField::High => {
+            let tracking = &modulator.track;
+            tracking.source.text(tracking.bounds().high)
+        }
     }
 }
 

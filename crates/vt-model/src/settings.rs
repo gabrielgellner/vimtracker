@@ -9,11 +9,11 @@ use crate::insert::{
     ALGORITHM_NAMES, CHORUS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS,
     EQ_PARAMS, FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS,
     LPG_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS,
-    SPACE_PARAMS, SPRING_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS,
-    WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db, fine_cents, flanger_delay_ms,
-    grain_density, grain_length, grain_ms, grain_time_seconds, input_db, limit_release_ms,
-    makeup_db, plate_size, range_db, ratio, release_ms, shift_delay_ms, shift_hertz, spread_hertz,
-    tape_drive_db, threshold_db, vowel_blend,
+    ROTARY_PARAMS, SPACE_PARAMS, SPRING_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES,
+    VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db, fine_cents,
+    flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, input_db,
+    limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms, shift_delay_ms,
+    shift_hertz, spread_hertz, tape_drive_db, threshold_db, vowel_blend,
 };
 use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -816,6 +816,15 @@ const SNARE: [Entry; 4] = [
     level("decay", "Decay", "DCAY", 0x80),
     ACCENT,
 ];
+/// Plaits' speech: its three knobs, then its prosody and speed, the attenuverters it takes them
+/// from, none at `80`. It starts on the first bank of words.
+const SPEECH: [Entry; 5] = [
+    level("model", "Model", "MODL", 0x80),
+    level("species", "Species", "SPCS", 0x80),
+    level("word", "Word", "WORD", 0x00),
+    centred("prosody", "Prosody", "PROS"),
+    centred("speed", "Speed", "SPED"),
+];
 const HAT: [Entry; 4] = [
     level("noise", "Noise", "NOIS", 0x80),
     level("tone", "Tone", "TONE", 0x00),
@@ -910,6 +919,56 @@ const FOF: [Entry; 2] = [
     level("vowel", "Vowel", "VOWL", 0x00),
     level("voice", "Voice", "VOIC", 0x40),
 ];
+const BOWED: [Entry; 2] = [
+    level("pressure", "Pressure", "PRES", 0x80),
+    level("position", "Position", "POSN", 0x40),
+];
+/// A reed speaks most readily with little noise in its breath.
+const BLOWN: [Entry; 2] = [
+    level("breath", "Breath", "BRTH", 0xC0),
+    level("tone", "Tone", "TONE", 0x40),
+];
+const FLUTED: [Entry; 2] = [
+    level("breath", "Breath", "BRTH", 0x80),
+    level("jet", "Jet", "JET", 0x80),
+];
+/// The struck ones ring on without dying away from `FA` up.
+const STRUCK_BELL: [Entry; 2] = [
+    level("decay", "Decay", "DCAY", 0xA0),
+    level("detune", "Detune", "DTUN", 0x20),
+];
+const STRUCK_DRUM: [Entry; 2] = [
+    level("decay", "Decay", "DCAY", 0x80),
+    level("tone", "Tone", "TONE", 0x40),
+];
+const WAVE_MAP: [Entry; 2] = [
+    level("across", "Across", "ACRS", 0x40),
+    level("down", "Down", "DOWN", 0x40),
+];
+const WAVE_LINE: [Entry; 2] = [
+    level("scan", "Scan", "SCAN", 0x40),
+    level("steps", "Steps", "STEP", 0x60),
+];
+const PARAPHONIC: [Entry; 2] = [
+    level("wave", "Wave", "WAVE", 0x40),
+    level("chord", "Chord", "CHRD", 0x88),
+];
+const TWIN_PEAKS: [Entry; 2] = [
+    level("sharpness", "Sharpness", "SHRP", 0xA0),
+    level("spacing", "Spacing", "SPAC", 0xA0),
+];
+const CLOCKED: [Entry; 2] = [
+    level("loop", "Loop", "LOOP", 0x00),
+    level("steps", "Steps", "STEP", 0xFF),
+];
+const GRAIN_CLOUD: [Entry; 2] = [
+    level("length", "Length", "LENG", 0x80),
+    level("spread", "Spread", "SPRD", 0x40),
+];
+const MODEM: [Entry; 2] = [
+    level("baud", "Baud", "BAUD", 0xC0),
+    level("data", "Data", "DATA", 0x80),
+];
 const TOY: [Entry; 2] = [
     level("clock", "Clock", "CLCK", 0xC0),
     level("bend", "Bend", "BEND", 0x00),
@@ -951,6 +1010,19 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::FeedbackFm | SynthVoice::ChaoticFm => &FEEDBACK_FM,
         SynthVoice::Vosim => &VOSIM,
         SynthVoice::Fof => &FOF,
+        SynthVoice::Bowed => &BOWED,
+        SynthVoice::Blown => &BLOWN,
+        SynthVoice::Fluted => &FLUTED,
+        SynthVoice::Bell => &STRUCK_BELL,
+        SynthVoice::Drum => &STRUCK_DRUM,
+        SynthVoice::WaveMap => &WAVE_MAP,
+        SynthVoice::WaveLine => &WAVE_LINE,
+        SynthVoice::Paraphonic => &PARAPHONIC,
+        SynthVoice::TwinPeaks => &TWIN_PEAKS,
+        SynthVoice::Clocked => &CLOCKED,
+        SynthVoice::GrainCloud => &GRAIN_CLOUD,
+        SynthVoice::Modem => &MODEM,
+        SynthVoice::Speech => &SPEECH,
     }
 }
 
@@ -992,6 +1064,19 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::ChaoticFm => "chaosfm",
         SynthVoice::Vosim => "vosim",
         SynthVoice::Fof => "fof",
+        SynthVoice::Bowed => "bowed",
+        SynthVoice::Blown => "blown",
+        SynthVoice::Fluted => "fluted",
+        SynthVoice::Bell => "bell",
+        SynthVoice::Drum => "drum",
+        SynthVoice::WaveMap => "wavemap",
+        SynthVoice::WaveLine => "waveline",
+        SynthVoice::Paraphonic => "paraphonic",
+        SynthVoice::TwinPeaks => "twinpeaks",
+        SynthVoice::Clocked => "clocked",
+        SynthVoice::GrainCloud => "graincloud",
+        SynthVoice::Modem => "modem",
+        SynthVoice::Speech => "speech",
     }
 }
 
@@ -1019,10 +1104,11 @@ pub enum Effect {
     FreqShift,
     Spring,
     Space,
+    Rotary,
 }
 
 impl Effect {
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 22] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -1044,6 +1130,7 @@ impl Effect {
         Self::FreqShift,
         Self::Spring,
         Self::Space,
+        Self::Rotary,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -1070,6 +1157,7 @@ impl Effect {
             Self::Vowel => &VOWEL_PARAMS,
             Self::FreqShift => &FREQ_SHIFT_PARAMS,
             Self::Spring => &SPRING_PARAMS,
+            Self::Rotary => &ROTARY_PARAMS,
             Self::Space => &SPACE_PARAMS,
         }
     }
@@ -1096,6 +1184,7 @@ impl Effect {
             Self::Vowel => "vowel",
             Self::FreqShift => "freqshift",
             Self::Spring => "spring",
+            Self::Rotary => "rotary",
             Self::Space => "space",
         }
     }
@@ -1122,6 +1211,7 @@ impl Effect {
             Self::Vowel => "Vowel",
             Self::FreqShift => "Freq Shift",
             Self::Spring => "Spring",
+            Self::Rotary => "Rotary",
             Self::Space => "Space",
         }
     }
@@ -1150,6 +1240,7 @@ impl Effect {
             Insert::Vowel(_) => Some(Self::Vowel),
             Insert::FreqShift(_) => Some(Self::FreqShift),
             Insert::Spring(_) => Some(Self::Spring),
+            Insert::Rotary(_) => Some(Self::Rotary),
             Insert::Space(_) => Some(Self::Space),
         }
     }
@@ -1650,6 +1741,29 @@ const fn effect_start(effect: Effect) -> usize {
                 + VOWEL_PARAMS.len()
                 + FREQ_SHIFT_PARAMS.len()
         }
+        Effect::Rotary => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+                + PITCH_PARAMS.len()
+                + GRAINS_PARAMS.len()
+                + WARPS_PARAMS.len()
+                + LPG_PARAMS.len()
+                + RESO_PARAMS.len()
+                + COMB_PARAMS.len()
+                + VOWEL_PARAMS.len()
+                + FREQ_SHIFT_PARAMS.len()
+                + SPRING_PARAMS.len()
+                + SPACE_PARAMS.len()
+        }
         Effect::Space => {
             DISTORT_PARAMS.len()
                 + DELAY_PARAMS.len()
@@ -1698,7 +1812,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + VOWEL_PARAMS.len()
     + FREQ_SHIFT_PARAMS.len()
     + SPRING_PARAMS.len()
-    + SPACE_PARAMS.len();
+    + SPACE_PARAMS.len()
+    + ROTARY_PARAMS.len();
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
