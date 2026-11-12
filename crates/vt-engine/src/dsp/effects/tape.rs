@@ -42,6 +42,7 @@ use std::f32::consts::{PI, TAU};
 
 use vt_model::insert::{Tape as Settings, from_middle, tape_drive_db};
 
+use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 
 /// The rate Airwindows' filters and slews are tuned at, and Beads' delays.
@@ -127,7 +128,7 @@ impl Dubly {
     fn process(&mut self, sample: f32, frequency: f32, (now, later): (f32, f32), by: f32) -> f32 {
         self.lows += (sample - self.lows) * frequency;
         let highs = sample - self.lows;
-        let part = (highs * now + self.last).clamp(-1.0, 1.0);
+        let part = within(highs * now + self.last, -1.0, 1.0);
         self.last = highs * later;
         let level = part.abs();
         if level <= 0.0 {
@@ -296,7 +297,7 @@ impl Side {
                         sample = sample * stuck + previous * (1.0 - stuck);
                     }
                 }
-                sample = sample.clamp(*slew - limit, *slew + limit);
+                sample = within(sample, *slew - limit, *slew + limit);
                 *slew = sample * BIAS_LEAK;
             }
         } else {
@@ -305,9 +306,11 @@ impl Side {
 
         // A tiny hysteresis, most on what's quiet.
         let apply = (1.0 - sample.abs()).powi(2) * HYSTERESIS_SHARE;
-        self.hysteresis = (self.hysteresis + sample * sample.abs())
-            .clamp(-HYSTERESIS_MOST, HYSTERESIS_MOST)
-            * HYSTERESIS_LEAK;
+        self.hysteresis = within(
+            self.hysteresis + sample * sample.abs(),
+            -HYSTERESIS_MOST,
+            HYSTERESIS_MOST,
+        ) * HYSTERESIS_LEAK;
         sample += self.hysteresis * apply;
 
         // What moves fast is darkened, before and after it saturates, by as much each time.
@@ -319,7 +322,7 @@ impl Side {
         self.last_dark = dark;
 
         // The saturation: a sine, as the start of its series, up to where it turns back.
-        let x = sample.clamp(-SATURATION_EDGE, SATURATION_EDGE);
+        let x = within(sample, -SATURATION_EDGE, SATURATION_EDGE);
         let squared = x * x;
         let mut power = x * squared;
         let mut saturated = x - power / 6.0;
@@ -380,7 +383,7 @@ impl Side {
             sample
         };
         let most = CLIP_MOST / (1.0 + slew * CLIP_SLEW);
-        out.clamp(-most, most)
+        within(out, -most, most)
     }
 }
 
