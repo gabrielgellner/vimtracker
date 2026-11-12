@@ -88,6 +88,7 @@ fn at_default(control: Control, track: &Track) -> bool {
         || control == Control::Glide && track.glide == 0
         || control == Control::FilterMode && !track.filter.has_modes()
         || control == Control::Base(TrackControl::Punch) && !track.filter.has_punch()
+        || control == Control::Safe && !track.filter.has_safe()
 }
 
 /// A setting's value as text.
@@ -129,6 +130,7 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
         Control::Sample => sample_text(song, track.sample()),
         Control::Mute | Control::Solo => String::new(),
         Control::Limiter => if song.limiter { "on" } else { "off" }.to_owned(),
+        Control::Safe => if track.safe { "on" } else { "off" }.to_owned(),
         Control::FilterType => track.filter.name().to_owned(),
         // The MS-20's have none, so it doesn't apply.
         Control::FilterMode if !track.filter.has_modes() => "--".to_owned(),
@@ -253,12 +255,13 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
 }
 
 /// Whether a setting that's off or on, and nothing else, is on, or nothing for any other: an
-/// effect's `Off`/`On` list, an envelope's `Reset`, the arpeggio's `Retrig`, and the
-/// master's `Limiter`, which is the song's. They show as a toggle, and the status line still says
-/// the word.
+/// effect's `Off`/`On` list, an envelope's `Reset`, the arpeggio's `Retrig`, the filter's
+/// `Safe`, and the master's `Limiter`, which is the song's. They show as a toggle, and the status
+/// line still says the word.
 pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<bool> {
     match control {
         Control::Limiter => Some(song.limiter),
+        Control::Safe => Some(track.safe),
         Control::InsertParam(slot, param) => {
             let insert = track.inserts[slot];
             let found = insert.params().get(param)?;
@@ -283,8 +286,11 @@ fn value_line(
     let typing = here && app.mode == Mode::Insert;
     let (text, style) = match toggle_on(control, track, app.song()) {
         Some(on) if !typing => {
+            // One that does nothing on this track, as `Safe` on a clean filter, is dim.
             let style = if here {
                 theme::cursor(app.mode)
+            } else if default {
+                setting::style(app, false, true)
             } else {
                 toggle::style(on)
             };
@@ -314,6 +320,7 @@ pub(crate) fn filter_being_edited(app: &App) -> bool {
         app.track_control(),
         Control::FilterType
             | Control::FilterMode
+            | Control::Safe
             | Control::Base(
                 TrackControl::Cutoff
                     | TrackControl::Resonance

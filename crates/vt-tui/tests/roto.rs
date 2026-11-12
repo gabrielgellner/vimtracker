@@ -141,6 +141,7 @@ fn each_kind_of_setting_has_its_feel() {
     );
     assert_eq!(feel(Control::Mod(0, ModField::Reset), &track), Feel::Switch);
     assert_eq!(feel(Control::Limiter, &master), Feel::Switch);
+    assert_eq!(feel(Control::Safe, &track), Feel::Switch);
     let ping_pong = Insert::ALL[2]
         .params()
         .iter()

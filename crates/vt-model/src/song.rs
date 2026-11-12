@@ -188,6 +188,12 @@ impl FilterType {
         !self.saturates()
     }
 
+    /// Whether `Safe` moves it: the types that ring by themselves at the top of `Res`. The clean
+    /// types never do.
+    pub fn has_safe(self) -> bool {
+        self.saturates()
+    }
+
     /// Whether it has more than one mode, so `Mode` means something on it.
     pub fn has_modes(self) -> bool {
         !self.modes().is_empty()
@@ -442,6 +448,10 @@ pub struct Track {
     /// peak starts higher and falls in pitch as it dies away, after Braids' SVF. `00` is off.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub punch: u8,
+    /// Whether `Res` stops just short of where the filter rings by itself, after Cytomic The
+    /// Drop's `SAFE`: on, its whole turn reaches only as far as its loudest peak that dies away.
+    #[serde(default, skip_serializing_if = "is_off")]
+    pub safe: bool,
     /// The utility filter after it: a high-pass, which `00` turns off.
     #[serde(default)]
     pub low_cut: u8,
@@ -520,6 +530,10 @@ fn is_centre(value: &u8) -> bool {
 
 fn is_zero(value: &u8) -> bool {
     *value == 0
+}
+
+fn is_off(value: &bool) -> bool {
+    !*value
 }
 
 fn is_sixteenth(speed: &Speed) -> bool {
@@ -783,6 +797,7 @@ impl Default for Track {
             filter_mode: FilterMode::default(),
             drive: 0,
             punch: 0,
+            safe: false,
             low_cut: 0,
             high_cut: open_cutoff(),
             inserts: Default::default(),
@@ -2632,6 +2647,20 @@ mod tests {
         let text = ron::to_string(&track).unwrap();
         assert!(text.contains("punch:96"), "{text}");
         assert_eq!(ron::from_str::<Track>(&text).unwrap().punch, 0x60);
+    }
+
+    #[test]
+    fn a_tracks_safe_saves_and_loads_and_off_is_left_out() {
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        assert!(!track.safe);
+        assert!(!ron::to_string(&track).unwrap().contains("safe"));
+        let track = Track {
+            safe: true,
+            ..Track::default()
+        };
+        let text = ron::to_string(&track).unwrap();
+        assert!(text.contains("safe:true"), "{text}");
+        assert!(ron::from_str::<Track>(&text).unwrap().safe);
     }
 
     #[test]
