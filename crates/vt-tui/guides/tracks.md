@@ -821,7 +821,7 @@ and `Reset` down the right.
 
 | Setting | Value |
 |---|---|
-| Curve | In the title: `Exp`, `Lin` or `Snap`, how its stages bend |
+| Curve | In the title: `Exp`, `Lin`, `Snap` or `Analog`, how its stages bend |
 | Dest | In the title: what it moves, such as `Cut`, or `---` |
 | Attack, Decay | Milliseconds, up to 8000 |
 | Sustain | The percent it holds at while the note lasts |
@@ -851,14 +851,23 @@ every stage at once:
 
 | Curve | Attack | Decay and release |
 |---|---|---|
-| `Exp` | Starts slowly | Fast, then slow, as analog. The default |
+| `Exp` | Starts slowly | Fast, then slow. The default |
 | `Lin` | Straight | Straight |
 | `Snap` | Starts slowly | Twice as fast at first, then a long tail |
+| `Analog` | Starts fast | A capacitor's fall |
 
-Halfway through a decay to nothing, `Lin` is 6 dB down, `Exp` 18 and `Snap` 35, so
-`Snap` gives a drum or a pluck a sharper snap for the same time. The picture draws
-the curve it plays. `=` and `-` on it go through the three, `K` lists them, and `x`
-puts back `Exp`. A step can't lock it.
+Halfway through a decay to nothing, `Lin` is 6 dB down, `Exp` 18, `Analog` 30 and
+`Snap` 35, so `Snap` gives a drum or a pluck a sharper snap for the same time.
+`Analog` is how a hardware envelope charges and discharges a capacitor: halfway
+through its attack it's nearly two thirds of the way up, so a long one swells in
+rather than fading up from nothing, and its falls are true RC curves. The picture draws the curve it
+plays. `=` and `-` on it go through the four, `K` lists them, and `x` puts back
+`Exp`. A step can't lock it.
+
+**Without a reset,** a note starts the attack from where the envelope is, at the
+point its curve reaches that level, so the attack keeps its shape and takes only
+what's left of its time, and the decay comes that much sooner. A fast run of notes
+or a legato line keeps its punch rather than crawling up from halfway each time.
 
 ## AHD envelopes
 
@@ -870,7 +879,7 @@ are down the left, and its depth and reset down the right.
 
 | Setting | Value |
 |---|---|
-| Curve | In the title: `Exp`, `Lin` or `Snap` |
+| Curve | In the title: `Exp`, `Lin`, `Snap` or `Analog` |
 | Attack, Decay | Milliseconds, up to 8000 |
 | Hold | Milliseconds, up to 2000, or `Note` |
 | Depth | How far full moves it, in hex. Negative flips it |
