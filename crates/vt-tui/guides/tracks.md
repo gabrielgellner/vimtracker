@@ -275,12 +275,21 @@ note ends. `Reverb` has these:
 
 | Setting | Does |
 |---|---|
-| `Time` | A note division, up to `1 bar`. A change glides |
+| `Time` | A note division, up to `1 bar` |
 | `Feedback` | How much comes round again. `FF` keeps going |
 | `Ping-pong` | On, it goes side to side; off, it stays put |
 | `Width` | From `00`, sides together, to `FF`, fully apart |
 | `Low cut`, `High cut` | Take more from each repeat |
 | `Drive` | Saturates louder repeats each time round |
+| `Retime` | How a new `Time` comes in: `Glide` or `Jump` |
+| `Wow` | A slow wobble in the repeats' pitch, as worn tape has |
+
+`Glide` eases to a new time, which bends the repeats' pitch on the way, as a tape delay does.
+`Jump` fades from the old time to the new instead, so the repeats keep their pitch: it's for a
+time that a step locks, changing the rhythm without a swoop. Its fade lasts half the new time,
+from 10 ms to half a second, and a change that comes while it fades waits for it to finish.
+`Wow` bends the two sides' pitch opposite ways, by up to about 9 cents, going round once every
+two seconds.
 
 `Chorus` thickens a sound with copies of it that drift in time, after Mutable
 Instruments' Rings. It starts half wet, which is the classic sound. Its `Chorus` type
@@ -610,6 +619,46 @@ quieter; `Gain` can make that up. A tone held on a formant at full `Res`
 can ring loud, so Rings' limiter, as `Reso` has, holds what comes out
 under full scale.
 
+`Freq Shift` is a frequency shifter, after Surge's: it moves every
+frequency in the sound up or down by the same number of Hz. That's not
+what `Pitch` does, which keeps a note's harmonics in step. Shifted by the
+same Hz, they stop being whole multiples of the note, so a saw or a voice
+turns to a bell or a robot, and a few Hz up or down makes it beat and
+swirl. It starts 16 Hz up, all wet.
+
+| Setting | Does |
+|---|---|
+| `Shift` | How far it moves: 1 kHz down at `00`, none at `80`, 1 kHz up at `FF` |
+| `Spread` | How far apart the sides are moved, the left up and the right down |
+| `Track` | How far the shift follows the note, from not at all at `00` |
+| `Time` | A delay in its loop, from none at `00` to a second at `FF` |
+| `Feedback` | How much goes round again, to be shifted again |
+
+`Shift` is on a curve, so the slow shifts have room near the middle: `90`
+is about 2 Hz, `A0` 16 Hz, `C0` 128 Hz and `E0` 430 Hz. The status line
+reads it in Hz, and its fine digits go between. Shifted down past nothing,
+a low frequency folds back up, mirrored, so a big shift down turns the bass
+inside out.
+`Mix` at `80` puts the shifted sound beside the sound itself, which beats
+at the shift: a few Hz is a slow phaser-like swirl, and a few tenths of a
+Hz a slow sweep.
+
+`Spread` takes the sides apart by up to 1 kHz, half each way, so a sound in
+the middle beats differently in each ear and comes out wide.
+
+`Track` at `00` shifts by the same Hz whatever note plays. At `FF` the
+shift follows the track's note from middle C, twice as far an octave up,
+so a shift set to the note's own pitch at middle C, about 262 Hz, keeps a
+shifted saw in the same inharmonic shape up and down the keyboard.
+
+With `Feedback`, what comes out goes round again to be shifted again, so a
+note climbs or falls in a spiral. `Time` spaces the trips round: at `00`
+they run together into a ringing smear, and at a few tens of ms each
+repeat is heard a step further up or down, the barber-pole effect. Each
+time round, what goes round loses a little over 5 kHz and is softly
+limited, and what's under 15 Hz is taken out, so a spiral stays bounded and
+dies away even at `FF`.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.
@@ -770,7 +819,7 @@ can't be muted or soloed.
 ## The Mod page
 
 Each track has six mod slots, `Mod 1` to `Mod 6`, and each slot is a type you choose:
-an `ADSR` or an `AHD` envelope, or an `LFO`, in any mix. A new track has three ADSRs, then three
+an `ADSR`, an `AHD` or a `Drum` envelope, or an `LFO`, in any mix. A new track has three ADSRs, then three
 LFOs. The slots work out in order, so a slot can move only those after it, and never
 round again.
 
@@ -797,7 +846,7 @@ box on its right. The device with the cursor has the brighter frame.
 | `x` | Put back the slot's first type, or on the polarity, the type's |
 | `b` | Switch this slot out, to hear without it, or back in |
 
-**Changing a type.** `K` on the type lists `ADSR`, `AHD` and `LFO`, each with what it
+**Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum` and `LFO`, each with what it
 does. Choosing one is one undo step, and the slot keeps its `Dest`, its `Depth` and
 its switch. Each slot also keeps every type's own settings, so trying an LFO in
 `Mod 2` and going back finds its envelope as it was. What it moves glides from the
@@ -907,6 +956,31 @@ does. On `Vol`, shaping the notes, it ends each note when its decay ends.
 the Digitakt's `HOLD NOTE` does. It's below `0 ms`: `-` from `0 ms` goes to it, and
 `=` comes back. Typing `note` sets it too, and a number sets a time. A new AHD holds
 for 30 ms, with a 1 ms attack and a 200 ms decay.
+
+## Drum envelopes
+
+A `Drum` slot is the M8's drum envelope, for a kick's or a tom's pitch: each note
+strikes it at full, it falls steeply to its `Body` over its `Peak`, the click's
+sweep, then decays from there to nothing over its `Decay`, the note's drop. It's a
+one-shot, whatever the note's length, and on `Vol`, shaping the notes, it ends each
+note when its decay ends. Its peak, body and decay are down the left, and its depth
+and ratchet down the right. It has no `Reset`, as it always strikes from full.
+
+| Setting | Value |
+|---|---|
+| Curve | In the title: how its body's decay bends |
+| Peak | Milliseconds, the strike's fall from full to the body |
+| Body | The percent the peak falls to, where the decay starts |
+| Decay | Milliseconds, the body's fall to nothing |
+| Depth | How far full moves it, in hex. Negative flips it |
+| Ratchet | How many times the peak strikes before the body, 1 to 8 |
+
+**Ratchet** strikes the peak again: with `3`, it falls three times from full, a
+`Peak` apart, then the body decays from the third. A low `Body`, a `Peak` of about
+10 ms and a long `Decay` make an 808's clap from noise; `2` makes a flam. A new
+drum envelope has a 10 ms peak onto a body of 40% and a 300 ms decay, with one
+strike: on `Pitch` with a `Depth` of about `+18`, a kick's drop. The peak's fall is
+always steep, whatever the curve.
 
 ## LFOs
 

@@ -6,8 +6,8 @@
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Flanger,
-    Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb, Tape, Vowel,
-    Warps,
+    FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb, Tape,
+    Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -140,7 +140,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Lpg(_), Insert::Lpg(_))
         | (Insert::Reso(_), Insert::Reso(_))
         | (Insert::Comb(_), Insert::Comb(_))
-        | (Insert::Vowel(_), Insert::Vowel(_)) => true,
+        | (Insert::Vowel(_), Insert::Vowel(_))
+        | (Insert::FreqShift(_), Insert::FreqShift(_)) => true,
         _ => false,
     }
 }
@@ -273,7 +274,8 @@ impl InsertState {
             | Insert::Lpg(LowPassGate { mix, gain, .. })
             | Insert::Reso(Resonator { mix, gain, .. })
             | Insert::Comb(Comb { mix, gain, .. })
-            | Insert::Vowel(Vowel { mix, gain, .. }) => (0, mix, gain),
+            | Insert::Vowel(Vowel { mix, gain, .. })
+            | Insert::FreqShift(FreqShift { mix, gain, .. }) => (0, mix, gain),
             // A compressor's makeup is its own, on what it turned down, with nothing after the mix.
             Insert::Compressor(Compressor { mix, .. }) => (0, mix, UNITY_LEVEL),
             // An EQ is all wet: what it leaves alone comes through as it is.
@@ -427,9 +429,10 @@ impl InsertState {
         [warps.process(input, modulator, self.note, smoothing) * fade; 2]
     }
 
-    /// One frame through a resonator or comb, all wet, tuned to the track's note. Like `ring`, once
-    /// it's quiet with nothing going in it does no work, and when it starts again it's at the note
-    /// and what's set, rather than gliding there from where it stopped.
+    /// One frame through a resonator or comb, all wet, tuned to the track's note, or a frequency
+    /// shifter following it. Like `ring`, once it's quiet with nothing going in it does no work,
+    /// and when it starts again it's at the note and what's set, rather than gliding there from
+    /// where it stopped.
     #[inline]
     fn resonate(&mut self, input: [f32; 2], smoothing: f32, rate: u32) -> [f32; 2] {
         let nothing_in = input == [0.0, 0.0];
@@ -450,6 +453,12 @@ impl InsertState {
                 }
                 comb.process(input, self.note, smoothing)
             }
+            Some(Memory::FreqShift(shifter)) => {
+                if resting {
+                    shifter.settle();
+                }
+                shifter.process(input, self.note, smoothing)
+            }
             _ => return [0.0; 2],
         };
         let quiet = nothing_in && wet[0].abs() < SILENT && wet[1].abs() < SILENT;
@@ -461,7 +470,8 @@ impl InsertState {
         wet
     }
 
-    /// Follow the track's note, for an oscillator, resonator, comb or vowel filter of the slot's own.
+    /// Follow the track's note, for an oscillator, resonator, comb, vowel filter or frequency
+    /// shifter of the slot's own.
     pub fn follow_note(&mut self, note: f32) {
         self.note = note;
     }
@@ -511,7 +521,8 @@ impl InsertState {
             | Insert::Grains(_)
             | Insert::Warps(_)
             | Insert::Reso(_)
-            | Insert::Comb(_) => Mono::Stereo,
+            | Insert::Comb(_)
+            | Insert::FreqShift(_) => Mono::Stereo,
         }
     }
 
@@ -624,7 +635,7 @@ impl InsertState {
                     (wet[1] * mix + input[1] * (1.0 - mix)) * gain,
                 ];
             }
-            Insert::Reso(_) | Insert::Comb(_) => {
+            Insert::Reso(_) | Insert::Comb(_) | Insert::FreqShift(_) => {
                 let wet = self.resonate(input, smoothing, rate);
                 let mix = self.mix.next(smoothing);
                 let gain = self.gain.next(smoothing);

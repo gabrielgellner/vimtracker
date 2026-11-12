@@ -18,6 +18,7 @@ use vt_model::insert::{
 };
 use vt_model::lfo::SWEEP_TICKS;
 
+use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::filters::filter::soft_clip;
 
@@ -28,6 +29,9 @@ pub const MOST_FEEDBACK: f32 = 0.95;
 const HEADROOM: f32 = 4.0;
 /// How far round the right side's sweep is from the left's, as Vital starts.
 const SIDE_APART: f32 = 1.0 / 3.0;
+/// Where the DC blocker on what's fed back starts letting through, in Hz. At the most feedback the
+/// loop turns DC up twenty times, which would push the soft clip off centre (#469).
+const DC_BLOCK_HZ: f32 = 10.0;
 
 /// A triangle from -1 to 1, at a place in its turn.
 #[inline]
@@ -52,6 +56,10 @@ pub struct Flanger {
     feedback: Smoothed,
     /// The shortest the delay gets, in frames.
     shortest: f32,
+    /// Each side's DC blocker on what's fed back: what came in and went out last, and how much of
+    /// what went out it keeps.
+    blocked: [[f32; 2]; 2],
+    keep: f32,
     rate: u32,
     smoothing: f32,
 }
@@ -73,6 +81,8 @@ impl Flanger {
             delay: Smoothed::default(),
             feedback: Smoothed::default(),
             shortest: SHORTEST_FLANGE_MS * frames_per_ms,
+            blocked: [[0.0; 2]; 2],
+            keep: 1.0 - std::f32::consts::TAU * DC_BLOCK_HZ / rate as f32,
             rate,
             smoothing: coefficient(rate),
         };
@@ -91,6 +101,7 @@ impl Flanger {
             line.fill(0.0);
         }
         self.phase = 0.0;
+        self.blocked = [[0.0; 2]; 2];
     }
 
     /// Take what's set now, at a tempo.
@@ -153,7 +164,15 @@ impl Flanger {
         }
         self.write = (self.write + 1) & self.mask;
         for (side, sample) in input.into_iter().enumerate() {
-            let fed = sample + out[side] * feedback;
+            // What goes round loses its DC, as the BBD ensemble's and the spring's loops do in
+            // Surge (`BBDEnsembleEffect.cpp:273-275`); what comes out keeps it. It's held to twice
+            // the line's range first, more than reading between its samples reaches, so a NaN read
+            // from the line can't stay in the blocker.
+            let read = within(out[side], -2.0 * HEADROOM, 2.0 * HEADROOM);
+            let [came, went] = &mut self.blocked[side];
+            let blocked = read - *came + self.keep * *went;
+            (*came, *went) = (read, blocked);
+            let fed = sample + blocked * feedback;
             self.lines[side][self.write] = soft_clip(fed / HEADROOM) * HEADROOM;
         }
         out
@@ -383,5 +402,18 @@ mod tests {
             .collect();
         assert!(out[longest * 2..].iter().all(|s| s.is_finite()));
         assert!(out[out.len() - 100..].iter().all(|s| s.abs() < 1e-4));
+    }
+
+    #[test]
+    fn dc_going_in_isnt_turned_up_going_round() {
+        for feedback in [0x00, 0xFF] {
+            let mut flanger = still(0x80, feedback);
+            let mut out = [0.0; 2];
+            for _ in 0..RATE * 2 {
+                out = flanger.process([0.25; 2]);
+            }
+            // Without the blocker, 0.25 would come round to 5 and be held by the soft clip.
+            assert!((out[0] - 0.25).abs() < 0.02, "{feedback:x}: {out:?}");
+        }
     }
 }
