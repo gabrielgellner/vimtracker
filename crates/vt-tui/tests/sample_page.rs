@@ -2278,11 +2278,8 @@ fn semicolon_and_space_c_are_heard_from_a_file_loaded_at_another_rate() {
     let mut app = App::new(song, None, samples, handle, RATE);
     command(&mut app, &format!("sample {}", file.display()));
     // The page shows it once it's analysed, on a thread of its own.
-    let started = Instant::now();
-    while app.sample_shown().is_err() && started.elapsed() < Duration::from_secs(10) {
-        std::thread::sleep(Duration::from_millis(10));
-        app.tick();
-    }
+    app.finish_analysis();
+    assert!(app.sample_shown().is_ok(), "analysed");
     keys(&mut app, "Space 0");
     assert_eq!(app.view, View::Sample);
     assert!(

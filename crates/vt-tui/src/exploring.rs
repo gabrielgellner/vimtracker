@@ -404,7 +404,7 @@ impl App {
     /// Wait for the file under the explorer's cursor to be read, then take it in, for tests and
     /// the screenshots.
     pub fn finish_loading(&mut self) {
-        let done = self.loader.wait(Duration::from_secs(10));
+        let done = self.loader.wait(crate::loading::WAIT);
         self.show_loaded(&done);
     }
 
