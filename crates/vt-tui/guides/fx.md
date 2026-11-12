@@ -108,9 +108,12 @@ Each value has a mark beside it, which says how long it lasts:
 
 | Mark | Lasts |
 |---|---|
-| `󰌾` lock | The default. Until the next note or the next value of that command |
-| `h` hold | Until playback next starts from the top. A lock returns to this |
-| `g` glide | Slides to the next value of that command in the slot |
+| `󰌾` `.` lock | The default. Until the next note or that command's next value |
+| `󰐃` `h` hold | Until playback next starts from the top. A lock returns to this |
+| `󰸀` `g` glide | Slides to the next value of that command in the slot |
+
+The grid draws each mark as its glyph, the lock dim and the others in the value's colour.
+The letter is how a step's text and the command line write it.
 
 A glide wraps through the phrase's loop to find its value.
 
