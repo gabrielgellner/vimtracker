@@ -1,9 +1,12 @@
 //! The voices, which make a track's sound from its notes. Most are ported from Mutable Instruments'
-//! Plaits, and share its settings, blocks and band-limited steps through [`virtual_analog`]. The
-//! tables they read are in `voices/tables/`.
+//! Plaits, and share its settings, blocks and band-limited steps through [`virtual_analog`]; the
+//! `braids_` ones are from Braids, its older macro-oscillator, and run at twice the rate through
+//! `braids_parts`. The tables they read are in `voices/tables/`.
 
 pub mod acid;
 pub mod additive;
+pub mod braids_analog;
+mod braids_parts;
 pub mod chiptune;
 pub mod chord;
 mod chord_bank;

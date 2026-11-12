@@ -421,6 +421,34 @@ const HAT: DeviceLayout = live(
         ],
     )],
 );
+const CSAW: DeviceLayout = live(
+    "machine/csaw",
+    &[knobs(
+        "CSaw",
+        [s("notch"), s("depth"), __, __, __, __, __, __],
+    )],
+);
+const MORPH: DeviceLayout = live(
+    "machine/morph",
+    &[knobs(
+        "Morph",
+        [s("shape"), s("fuzz"), __, __, __, __, __, __],
+    )],
+);
+const SAW_SQUARE: DeviceLayout = live(
+    "machine/sawsquare",
+    &[knobs(
+        "Saw Sq",
+        [s("width"), s("mix"), __, __, __, __, __, __],
+    )],
+);
+const SYNC: DeviceLayout = live(
+    "machine/sync",
+    &[knobs(
+        "Sync",
+        [s("interval"), s("mix"), s("wave"), __, __, __, __, __],
+    )],
+);
 
 // The track's own devices.
 
@@ -1059,7 +1087,7 @@ const FREQ_SHIFT: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 60] = [
+pub const ALL: [&DeviceLayout; 64] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1082,6 +1110,10 @@ pub const ALL: [&DeviceLayout; 60] = [
     &KICK,
     &SNARE,
     &HAT,
+    &CSAW,
+    &MORPH,
+    &SAW_SQUARE,
+    &SYNC,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1148,6 +1180,10 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::Kick => &KICK,
             SynthVoice::Snare => &SNARE,
             SynthVoice::Hat => &HAT,
+            SynthVoice::CSaw => &CSAW,
+            SynthVoice::Morph => &MORPH,
+            SynthVoice::SawSquare => &SAW_SQUARE,
+            SynthVoice::HardSync => &SYNC,
         },
     }
 }

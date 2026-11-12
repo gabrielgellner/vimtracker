@@ -257,6 +257,47 @@ hat, and raise `Decay` for an open one.
 | `Tone` | How bright it is |
 | `Decay` | How long it rings |
 
+### Macro
+
+The voices under `Macro` in the machine list come from Mutable Instruments' Braids, an older
+macro-oscillator than Plaits, and the one the M8's Macrosynth plays: the models Plaits left
+out, harsher and more digital. Each has Braids' two knobs, Timbre and Color, named for what
+they do on it, and a few have a third. Like Braids, they run at 96 kHz and come down to the
+program's rate, so their sharp edges alias little.
+
+`CSaw` is a saw that starts each cycle on a step, held a little while, as the CS-80's saw
+does, for brass and buzzy leads.
+
+| Setting | Does |
+|---|---|
+| `Notch` | How long each cycle holds its step: a plain saw at `00` |
+| `Depth` | How low the step sits: deep at `00`, up near the saw's middle at `FF` |
+
+`Morph` sweeps from a triangle to a saw, a square and a narrowing pulse, with a sine under the
+pulse, through a filter that closes and overdrives, for leads with some bite.
+
+| Setting | Does |
+|---|---|
+| `Shape` | Triangle at `00`, saw at `55`, square at `AA`, a thin pulse at `FF` |
+| `Fuzz` | Closes the filter towards the note and overdrives it. Clean at `00` |
+
+`Saw Sq` is a saw with a second saw behind it, blended into a square as wide, for bass and
+leads.
+
+| Setting | Does |
+|---|---|
+| `Width` | How far behind the second saw is, and how narrow the square |
+| `Mix` | All saw at `00`, all square at `FF` |
+
+`Sync` is two squares or two saws, the second hard synced to the first, so it tears as
+`Interval` sweeps, for sync leads.
+
+| Setting | Does |
+|---|---|
+| `Wave` | `Square` or `Saw`, for both. `K` lists them |
+| `Interval` | How far above the note the synced wave is, up to 64 semitones |
+| `Mix` | The first wave at `00`, the synced one at `FF` |
+
 A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
 `Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX
 slot lists them under the voice's name, and an LFO's or envelope's `Dest` lists them by

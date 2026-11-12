@@ -337,15 +337,17 @@ impl App {
         self.show_picker(Picker::new("Filter mode", items).opened_on(position));
     }
 
-    /// List the machines, each with its glyph, a sampler, a synth or a drum, and what it does, and
-    /// the current one highlighted.
+    /// List the machines, each with its glyph, a sampler, a synth or a drum, and what it does,
+    /// Braids' models under their category, and the current one highlighted.
     fn open_machine_picker(&mut self) {
         let track = self.cursor.track;
         let current = self.page_track().machine;
         let items = Machine::ALL
             .map(|machine| {
                 let label = format!("{} {}", glyphs::machine(machine), machine.name());
-                Item::new(label, Pick::Machine { track, machine }).meaning(machine.meaning())
+                Item::new(label, Pick::Machine { track, machine })
+                    .meaning(machine.meaning())
+                    .category(machine.category())
             })
             .to_vec();
         let position = Machine::ALL.iter().position(|machine| *machine == current);

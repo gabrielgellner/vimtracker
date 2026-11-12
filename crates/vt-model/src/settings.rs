@@ -787,6 +787,36 @@ const HAT: [Entry; 4] = [
     ACCENT,
 ];
 
+/// Braids' models have its `Timbre` and `Color` first, named for what they do on each.
+const CSAW: [Entry; 2] = [
+    level("notch", "Notch", "NTCH", 0x40),
+    level("depth", "Depth", "DPTH", 0x80),
+];
+const MORPH: [Entry; 2] = [
+    level("shape", "Shape", "SHPE", 0x55),
+    level("fuzz", "Fuzz", "FUZZ", 0x00),
+];
+const SAW_SQUARE: [Entry; 2] = [
+    level("width", "Width", "WDTH", 0x00),
+    level("mix", "Mix", "MIX", 0x80),
+];
+/// The waves `Sync` plays both of its oscillators with.
+const SYNC_WAVES: [&str; 2] = ["Square", "Saw"];
+const SYNC: [Entry; 3] = [
+    Entry {
+        key: "wave",
+        name: "Wave",
+        label: Some("WAVE"),
+        kind: Kind::Stepped {
+            choices: &SYNC_WAVES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    level("interval", "Interval", "INTV", 0x40),
+    level("mix", "Mix", "MIX", 0xC0),
+];
+
 /// A voice's settings, in the order it takes them.
 pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
     match voice {
@@ -810,6 +840,10 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Kick => &KICK,
         SynthVoice::Snare => &SNARE,
         SynthVoice::Hat => &HAT,
+        SynthVoice::CSaw => &CSAW,
+        SynthVoice::Morph => &MORPH,
+        SynthVoice::SawSquare => &SAW_SQUARE,
+        SynthVoice::HardSync => &SYNC,
     }
 }
 
@@ -837,6 +871,10 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::Kick => "kick",
         SynthVoice::Snare => "snare",
         SynthVoice::Hat => "hat",
+        SynthVoice::CSaw => "csaw",
+        SynthVoice::Morph => "morph",
+        SynthVoice::SawSquare => "sawsquare",
+        SynthVoice::HardSync => "sync",
     }
 }
 

@@ -178,9 +178,15 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     );
     let depth = app.history.undo_depth();
     press(&mut app, "K");
+    // Every machine, but Braids' models, folded under their heading.
+    let top = Machine::ALL
+        .iter()
+        .filter(|machine| machine.category().is_empty());
+    let top = top.count();
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), top);
     assert_eq!(
-        app.picker.as_ref().unwrap().shown().count(),
-        Machine::ALL.len()
+        app.picker.as_ref().unwrap().category(0),
+        ("Macro", Machine::ALL.len() - top, false)
     );
     press(&mut app, "VA");
     special(&mut app, KeyCode::Enter);

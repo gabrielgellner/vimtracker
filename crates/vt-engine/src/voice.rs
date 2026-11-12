@@ -2,6 +2,7 @@
 
 use crate::dsp::acid::Acid;
 use crate::dsp::additive::Additive;
+use crate::dsp::braids_analog::{CSaw, HardSync, Morph, SawSquare};
 use crate::dsp::chiptune::Chiptune;
 use crate::dsp::chord::Chord;
 use crate::dsp::drums::{Hat, Snare};
@@ -91,6 +92,10 @@ enum Synth {
     Modal(Modal),
     Dust(ParticleNoise),
     Noise(Noise),
+    CSaw(CSaw),
+    Morph(Morph),
+    SawSquare(SawSquare),
+    HardSync(HardSync),
 }
 
 impl Synth {
@@ -118,6 +123,10 @@ impl Synth {
             SynthVoice::Kick => Self::Kick(Kick::new(rate)),
             SynthVoice::Snare => Self::Snare(Snare::new(rate)),
             SynthVoice::Hat => Self::Hat(Hat::new(rate)),
+            SynthVoice::CSaw => Self::CSaw(CSaw::new(rate)),
+            SynthVoice::Morph => Self::Morph(Morph::new(rate)),
+            SynthVoice::SawSquare => Self::SawSquare(SawSquare::new(rate)),
+            SynthVoice::HardSync => Self::HardSync(HardSync::new(rate)),
         }
     }
 
@@ -145,6 +154,10 @@ impl Synth {
             Self::Modal(synth) => synth.next(frequency, settings),
             Self::Dust(synth) => synth.next(frequency, settings),
             Self::Noise(synth) => synth.next(frequency, settings),
+            Self::CSaw(synth) => synth.next(frequency, settings),
+            Self::Morph(synth) => synth.next(frequency, settings),
+            Self::SawSquare(synth) => synth.next(frequency, settings),
+            Self::HardSync(synth) => synth.next(frequency, settings),
         }
     }
 

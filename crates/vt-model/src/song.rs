@@ -868,6 +868,15 @@ impl Machine {
         }
     }
 
+    /// The category a list shows it under, or none for the top of the list: Braids' models are
+    /// under `Macro`, as the M8's Macrosynth plays them (decision 212).
+    pub fn category(self) -> &'static str {
+        match self {
+            Self::Plaits(voice) if voice.is_macro() => "Macro",
+            _ => "",
+        }
+    }
+
     /// Its settings, by their places among them: the sampler's own, or a synth's.
     pub fn settings(self) -> impl Iterator<Item = SettingId> {
         let count = match self {
@@ -886,12 +895,12 @@ impl Machine {
     }
 
     /// The setting that gives it its character, which its device's title shows after it, as an
-    /// effect's type is: the sample the sampler plays, `Acid`'s wave, 6-op's patch, and the chord
-    /// of `Chord` and `Chiptune`. Other synths have none.
+    /// effect's type is: the sample the sampler plays, `Acid`'s and `Sync`'s wave, 6-op's patch,
+    /// and the chord of `Chord` and `Chiptune`. Other synths have none.
     pub fn type_param(self) -> Option<usize> {
         let key = match self {
             Self::Sampler => "sample",
-            Self::Plaits(SynthVoice::Acid) => "wave",
+            Self::Plaits(SynthVoice::Acid | SynthVoice::HardSync) => "wave",
             Self::Plaits(SynthVoice::SixOp) => "patch",
             Self::Plaits(SynthVoice::Chord | SynthVoice::Chiptune) => "chord",
             Self::Plaits(_) => return None,
@@ -982,11 +991,19 @@ pub enum SynthVoice {
     Snare,
     /// An 808-style hi-hat.
     Hat,
+    /// A saw that starts each cycle on a step, after the CS-80's.
+    CSaw,
+    /// A triangle morphing through a saw and a square to a pulse, through a fuzzy filter.
+    Morph,
+    /// A saw blended into a square.
+    SawSquare,
+    /// Two squares or saws in hard sync.
+    HardSync,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 25] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1008,6 +1025,10 @@ impl SynthVoice {
         Self::Kick,
         Self::Snare,
         Self::Hat,
+        Self::CSaw,
+        Self::Morph,
+        Self::SawSquare,
+        Self::HardSync,
     ];
 
     /// The name on screen.
@@ -1034,6 +1055,10 @@ impl SynthVoice {
             Self::Kick => "Kick",
             Self::Snare => "Snare",
             Self::Hat => "Hat",
+            Self::CSaw => "CSaw",
+            Self::Morph => "Morph",
+            Self::SawSquare => "Saw Sq",
+            Self::HardSync => "Sync",
         }
     }
 
@@ -1061,6 +1086,10 @@ impl SynthVoice {
             Self::Kick => "An 808-style bass drum, tuned by its note",
             Self::Snare => "An 808-style snare drum, tuned by its note",
             Self::Hat => "An 808-style hi-hat, tuned by its note",
+            Self::CSaw => "A saw with a notch, after the CS-80's, for brass",
+            Self::Morph => "Triangle to saw to pulse, with fuzz, for leads",
+            Self::SawSquare => "A saw blended into a square, for bass and leads",
+            Self::HardSync => "Two waves in hard sync, for tearing leads",
         }
     }
 
@@ -1084,6 +1113,18 @@ impl SynthVoice {
                 | Self::Swarm
                 | Self::Dust
                 | Self::Noise
+                | Self::CSaw
+                | Self::Morph
+                | Self::SawSquare
+                | Self::HardSync
+        )
+    }
+
+    /// Whether it's one of Braids' models, which the machine picker lists under `Macro`.
+    pub fn is_macro(self) -> bool {
+        matches!(
+            self,
+            Self::CSaw | Self::Morph | Self::SawSquare | Self::HardSync
         )
     }
 }

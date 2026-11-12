@@ -1127,8 +1127,10 @@ mod tests {
         for (track, voice) in played.tracks.iter_mut().zip(voices) {
             track.machine = vt_model::song::Machine::Plaits(voice);
             let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
-            let key = |setting| {
-                vt_model::settings::SettingId::voice(voice, setting)
+            // A voice with only two settings locks its second where others lock their third.
+            let count = vt_model::settings::voice_entries(voice).len();
+            let key = |setting: usize| {
+                vt_model::settings::SettingId::voice(voice, setting.min(count - 1))
                     .unwrap()
                     .key()
             };
