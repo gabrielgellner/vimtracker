@@ -17,14 +17,16 @@ settings, and the cursor's time, frame and slice.
 
 ## Moving and zooming
 
-A sample is like a text: a column of the waveform is a character, and a slice
-is a line. Every motion takes a count.
+A sample is like a text: a column of the waveform is a character, a sound is
+a word, and a slice is a line. Every motion takes a count.
 
 | Keys | Move to |
 |---|---|
 | `h` `l` | A pixel earlier or later; faster as it's held |
 | `0` `$` | The start or end of the slice |
 | `^` `g_` | Its first or last sound, above -60 dBFS |
+| `w` `b` | The next or previous sound's start: a hit, as `Sens` finds them |
+| `e` | Where the sound decays, 30 dB below its peak, or the next one's |
 | `gg` `G` | The start or end of the sample; with a count, a slice |
 | `j` `k` | The next or previous slice |
 | `}` `{` | The next or previous beat at the song's tempo |
@@ -39,6 +41,16 @@ is a line. Every motion takes a count.
 | `C-e` `C-y` | A column later or earlier |
 | `zz` `zs` `ze` | The cursor in the middle, at the left or at the right |
 | `zc` | The cursor as a thin line, or as its column |
+
+## Sounds
+
+Where each sound starts, its onset, is found once when the sample joins the bank,
+and kept with its waveform in the program's cache folder, never beside the file.
+`Sens` on the settings row says how readily a rise counts as a sound: at 0 only
+the strongest hits do, at 100 nearly every ripple, and 50 to start with. Each
+change says how many sounds it finds, and `u` takes it back. `w` and `b` go
+from sound to sound, and `e` to where each one has died away, as Vim's go by
+word.
 
 ## Slices and marks
 
@@ -92,9 +104,9 @@ it.
 
 ## The settings rows
 
-`K` lists the settings: `Snap`, for the whole sample, and the slice's `Gain`,
-`Pan`, `Tune`, `Reverse`, `Fade in` and `Fade out`. Choosing one puts the focus
-on it. There `h` and `l` go along the settings, `0` and `$` to their ends, `=`
+`K` lists the settings: `Snap` and `Sens`, for the whole sample, and the
+slice's `Gain`, `Pan`, `Tune`, `Reverse`, `Fade in` and `Fade out`. Choosing
+one puts the focus on it. There `h` and `l` go along the settings, `0` and `$` to their ends, `=`
 `-` change it a small step and `+` `_` a large one, Cmd with `l` `h` `k` `j` as
 those four, `K` lists its values, and
 `x` puts a slice's own back to the sample's. `j` and `k` still go from slice to
@@ -104,7 +116,9 @@ waveform.
 ## Selecting
 
 `v` starts selecting frames from the cursor, and `;` plays them. `o` goes to the
-other end, and `v` or `Esc` ends it. `gv` selects it again, and `'<` and `'>`
+other end, and `v` or `Esc` ends it. While selecting, `is` selects the sound
+the cursor is in, from its start to where it decays, and `ip` the slice, as
+Vim's `iw` and `ip` select a word and a paragraph; with a count, so many. `gv` selects it again, and `'<` and `'>`
 go to its first and last frame. `''` goes back to where the last jump left.
 
 ## Which mode you're in

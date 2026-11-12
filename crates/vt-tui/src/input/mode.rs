@@ -84,6 +84,9 @@ pub enum Mode {
     Project,
     /// Normal mode's keys on the sample page. Only the binding table and the label use this.
     Sample,
+    /// The sample page's keys while it selects, with its text objects. Only the binding table and
+    /// the label use this.
+    SampleVisual,
 }
 
 impl Mode {
@@ -110,6 +113,7 @@ impl Mode {
             Self::Audio => "AUDIO",
             Self::Project => "PROJECT",
             Self::Sample => "SAMPLE",
+            Self::SampleVisual => "VISUAL",
         }
     }
 

@@ -1231,7 +1231,8 @@ impl App {
             | Mode::Song
             | Mode::Audio
             | Mode::Project
-            | Mode::Sample => {
+            | Mode::Sample
+            | Mode::SampleVisual => {
                 self.command_key_normal(key, now);
             }
             Mode::Insert => self.insert_key(key),
@@ -1309,6 +1310,7 @@ impl App {
             (Mode::Normal, View::Mixer) => Mode::Mixer,
             (Mode::Normal, View::Audio) => Mode::Audio,
             (Mode::Normal, View::Project) => Mode::Project,
+            (Mode::Normal, View::Sample) if self.sample_page.anchor.is_some() => Mode::SampleVisual,
             (Mode::Normal, View::Sample) => Mode::Sample,
             (Mode::Normal, View::Song) => Mode::Song,
             (mode, _) => mode,

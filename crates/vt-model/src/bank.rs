@@ -484,10 +484,45 @@ pub struct SampleEdit {
     pub points: Points,
     #[serde(default, skip_serializing_if = "is_default_play")]
     pub play: PlayParams,
+    #[serde(default, skip_serializing_if = "Hints::is_default")]
+    pub hints: Hints,
 }
 
 fn is_default_play(play: &PlayParams) -> bool {
     *play == PlayParams::default()
+}
+
+/// What an entry's sound is like, for finding its sounds and slicing it, which never changes how
+/// it plays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hints {
+    /// How readily a rise counts as a sound starting, from 0, the strongest only, to
+    /// [`MOST_SENS`](crate::onsets::MOST_SENS), nearly every one, as Simpler's and Renoise's
+    /// slicing sensitivity. `w` and `b` on the sample page and `:slice transients` go by it.
+    #[serde(default = "default_sens", skip_serializing_if = "is_default_sens")]
+    pub sens: u8,
+}
+
+fn default_sens() -> u8 {
+    crate::onsets::DEFAULT_SENS
+}
+
+fn is_default_sens(sens: &u8) -> bool {
+    *sens == default_sens()
+}
+
+impl Default for Hints {
+    fn default() -> Self {
+        Self {
+            sens: default_sens(),
+        }
+    }
+}
+
+impl Hints {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 /// One sample in the bank.
@@ -517,6 +552,7 @@ impl BankEntry {
                 },
                 points: Points::default(),
                 play: PlayParams::default(),
+                hints: Hints::default(),
             },
         }
     }
