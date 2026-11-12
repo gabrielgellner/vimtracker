@@ -902,3 +902,10 @@ requests, curves then AHD:
   `-`.
 * **The voice's shape** is `envelope::Envelope`, an `Adsr` or an `Ahd`, as §4 has it.
 * **The Roto** stores AHD as a setup of its own, so there are 10.
+
+**As built for #467 (decision 192):**
+
+* **A fourth curve, `Analog`:** an attack charging toward 1.5 and switched at 1, `1.5 (1 - 3^-t)`,
+  and falls that are true RC curves, 30 dB down halfway. The sustain isn't squared, as Surge's is.
+* **An attack from a level** (`Reset` off) starts where its curve reaches that level and takes only
+  what's left of its time. It's how `Reset` off always works, not a setting.

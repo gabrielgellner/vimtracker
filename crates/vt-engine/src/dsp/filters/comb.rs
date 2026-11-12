@@ -38,6 +38,7 @@ use std::f32::consts::{FRAC_1_SQRT_2, PI, TAU};
 
 use vt_model::insert::{Comb as Settings, CombMode, from_middle, shift_semitones};
 
+use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::resonator::{Limiter, semitones};
 
@@ -464,7 +465,7 @@ impl Comb {
             let low = low_pass(&mut self.low[side], read, now.low);
             let band = (low - low_pass(&mut self.high[side], low, now.high)) * now.boost;
             // Vital's clip, so however long it rings, what goes round never runs away.
-            let fed = (band * now.feedback).clamp(-1.0, 1.0);
+            let fed = within(band * now.feedback, -1.0, 1.0);
             let [first, second] = &mut self.cleaned[side];
             let cleaned = input[side] - low_pass(first, input[side], now.cleaning);
             let cleaned = cleaned - low_pass(second, cleaned, now.cleaning);

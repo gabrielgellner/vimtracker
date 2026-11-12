@@ -9,6 +9,7 @@
 
 use vt_model::song::{FilterMode, FilterType, Track};
 
+use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::sides::SameBits;
 use crate::dsp::blocks::smoother;
@@ -160,10 +161,11 @@ fn tanh_over_x(x: f32) -> f32 {
     ((x2 + 105.0) * x2 + 945.0) / ((15.0 * x2 + 420.0) * x2 + 945.0)
 }
 
-/// A soft clip that leaves quiet signals alone.
+/// A soft clip that leaves quiet signals alone. The flanger, phaser and pitch shifter feed back
+/// through it, so a NaN comes out at an end rather than going round for good.
 #[inline]
 pub(crate) fn soft_clip(x: f32) -> f32 {
-    let x = x.clamp(-TANH_RANGE, TANH_RANGE);
+    let x = within(x, -TANH_RANGE, TANH_RANGE);
     x * tanh_over_x(x)
 }
 
