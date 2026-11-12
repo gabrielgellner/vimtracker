@@ -12,6 +12,7 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
 use vt_engine::engine::PLAYHEADS;
@@ -45,9 +46,11 @@ use crate::waveform;
 
 mod panels;
 pub mod plot;
+mod switches;
 
 use panels::{Found, PanelImages, PanelKey, Shape};
 use plot::{LfoDrawing, Plot, Shade, TrackDrawing};
+use switches::Look;
 
 /// The character that stands for a piece of an image.
 pub(crate) const PLACEHOLDER: char = '\u{10EEEE}';
@@ -985,6 +988,14 @@ pub struct Graphics {
     dot_images: Option<(usize, [u32; 2])>,
     /// Where each LFO's dot is placed, and in which shade, by its slot, its placement id less one.
     dots_placed: [Option<(Shade, Placement)>; MOD_SLOTS],
+    /// The pictures of the on/off switches, one for each look shown so far, drawn for the
+    /// character size in `cell` (decision 256).
+    switch_images: BTreeMap<Look, u32>,
+    /// The switches on the screen as last drawn, by the cell of each one's glyph, which
+    /// [`Graphics::find_switches`] finds once ratatui has drawn it.
+    switches_wanted: BTreeMap<(u16, u16), Look>,
+    /// Where switches are placed, and in which look, by the cell of each one's glyph.
+    switches_placed: BTreeMap<(u16, u16), Look>,
     /// A character's size in pixels, which the sample page's pictures are drawn for.
     cell: (usize, usize),
     /// The window's size in characters, as last told.
@@ -1015,6 +1026,9 @@ impl Graphics {
             marks_placed: BTreeMap::new(),
             dot_images: None,
             dots_placed: [None; MOD_SLOTS],
+            switch_images: BTreeMap::new(),
+            switches_wanted: BTreeMap::new(),
+            switches_placed: BTreeMap::new(),
             cell: DEFAULT_CELL,
             window: None,
             frames: 0,
@@ -1029,6 +1043,7 @@ impl Graphics {
         if cell.0 > 0 && cell.1 > 0 && cell != self.cell {
             self.cell = cell;
             self.retired.extend(self.panels.clear());
+            self.retire_switches();
         }
     }
 
@@ -1056,6 +1071,7 @@ impl Graphics {
                 .extend(self.dot_images.take().into_iter().flat_map(|(_, ids)| ids));
             self.dots_placed = [None; MOD_SLOTS];
             self.retired.extend(self.panels.clear());
+            self.retire_switches();
         }
         self.window = Some(characters);
     }
@@ -1076,6 +1092,7 @@ impl Graphics {
                 || self.playhead_line.is_some_and(|image| image.1 == id)
                 || self.mark_images.is_some_and(|(_, ids)| ids.contains(&id))
                 || self.dot_images.is_some_and(|(_, ids)| ids.contains(&id))
+                || self.switch_images.values().any(|held| *held == id)
                 || self
                     .preview
                     .iter()
@@ -1120,15 +1137,75 @@ impl Graphics {
 
     /// Place what the terminal places itself rather than through placeholders, once the screen
     /// is drawn: the sample page's ruler marks, its playheads and its cursor as lines, the
-    /// cursor's last so it's over a playhead it meets, and the Mod page's LFO dots. After the
-    /// drawing, so they go where the page is now, and so a clear as the window changes size has
-    /// already happened.
+    /// cursor's last so it's over a playhead it meets, the Mod page's LFO dots, and the on/off
+    /// switches [`Graphics::find_switches`] found. After the drawing, so they go where the page
+    /// is now, and so a clear as the window changes size has already happened.
     pub fn place(&mut self, app: &App, out: &mut impl Write) -> io::Result<()> {
         self.sync_marks(app, out)?;
         self.sync_playheads(app, out)?;
         self.sync_cursor_line(app, out)?;
         self.sync_dots(app, out)?;
+        self.sync_switches(out)?;
         out.flush()
+    }
+
+    /// Find the on/off switches on the screen ratatui has just drawn, for [`Graphics::place`] to
+    /// place their pictures over, and hide their glyphs under them (decision 256). Called on the
+    /// frame being drawn, before it reaches the terminal.
+    pub fn find_switches(&mut self, buffer: &mut Buffer) {
+        self.switches_wanted = switches::find(buffer);
+    }
+
+    /// Let go of the switches' pictures, as after the screen is cleared or the characters change
+    /// size, so each is drawn and stored again, and placed again where it's wanted.
+    fn retire_switches(&mut self) {
+        self.retired
+            .extend(std::mem::take(&mut self.switch_images).into_values());
+        self.switches_placed.clear();
+    }
+
+    /// Place a picture over each switch on the screen, and take it off where one has gone or
+    /// changed. Each look's picture is stored the first time it's shown and kept, and each switch
+    /// is a placement of it under an id from its cell, so a switch flipping places one picture
+    /// and takes off another, and nothing is sent while the switches stay as they are.
+    fn sync_switches(&mut self, out: &mut impl Write) -> io::Result<()> {
+        if self.switches_wanted == self.switches_placed {
+            return Ok(());
+        }
+        let placement = |(column, row): (u16, u16)| (u32::from(row) << 16 | u32::from(column)) + 1;
+        for (at, look) in &self.switches_placed {
+            if self.switches_wanted.get(at) != Some(look)
+                && let Some(id) = self.switch_images.get(look)
+            {
+                unplace(out, *id, placement(*at))?;
+            }
+        }
+        let wanted = self.switches_wanted.clone();
+        for (at, look) in &wanted {
+            if self.switches_placed.get(at) == Some(look) {
+                continue;
+            }
+            let id = match self.switch_images.get(look) {
+                Some(id) => *id,
+                None => {
+                    let id = self.new_id();
+                    store(out, id, &switches::png(*look, self.cell))?;
+                    self.switch_images.insert(*look, id);
+                    id
+                }
+            };
+            let (column, row) = *at;
+            let at = Placement {
+                column,
+                row,
+                across: 0,
+                down: 0,
+                height: self.cell.1,
+            };
+            place_at(out, id, placement((column, row)), at)?;
+        }
+        self.switches_placed = wanted;
+        Ok(())
     }
 
     /// Where each LFO's dot goes on the Mod page, and in which shade: on its cycle where it is
@@ -1769,7 +1846,8 @@ impl Graphics {
             .chain(self.cursor_line.iter().map(|image| &image.1))
             .chain(self.playhead_line.iter().map(|image| &image.1))
             .chain(self.mark_images.iter().flat_map(|(_, ids)| ids))
-            .chain(self.dot_images.iter().flat_map(|(_, ids)| ids));
+            .chain(self.dot_images.iter().flat_map(|(_, ids)| ids))
+            .chain(self.switch_images.values());
         for id in panels
             .iter()
             .chain(scope)
@@ -2092,5 +2170,79 @@ mod tests {
                 "nothing above it"
             );
         }
+    }
+
+    /// The commands in what was sent, each as its controls, its data left out.
+    fn commands(sent: &[u8]) -> Vec<String> {
+        String::from_utf8_lossy(sent)
+            .split("\x1b_G")
+            .skip(1)
+            .map(|command| command.split(';').next().unwrap_or_default().to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn a_switch_look_is_stored_once_and_placed_again_only_when_it_changes() {
+        use ratatui::layout::Rect;
+
+        use crate::views::widgets::toggle;
+
+        let screen = |switches: &[(u16, bool)]| {
+            let mut buffer = Buffer::empty(Rect::new(0, 0, 20, 2));
+            buffer.set_style(buffer.area, theme::screen());
+            for (x, on) in switches {
+                buffer.set_span(*x, 1, &toggle::span(*on), 2);
+            }
+            buffer
+        };
+        let mut graphics = Graphics::new();
+        let frame = |graphics: &mut Graphics, switches: &[(u16, bool)]| {
+            graphics.find_switches(&mut screen(switches));
+            let mut sent = Vec::new();
+            graphics.sync_switches(&mut sent).unwrap();
+            commands(&sent)
+        };
+        let first = frame(&mut graphics, &[(2, true), (8, true), (14, false)]);
+        let stores: Vec<_> = first.iter().filter(|c| c.starts_with("a=t,")).collect();
+        let places: Vec<_> = first.iter().filter(|c| c.starts_with("a=p,")).collect();
+        assert_eq!((stores.len(), places.len()), (2, 3), "{first:?}");
+        let on = graphics.switch_images[&Look {
+            on: true,
+            color: rgb(theme::GREEN),
+        }];
+        // Both switches that are on are one picture, placed under each one's cell.
+        assert!(places[0].starts_with(&format!("a=p,i={on},p={},", (1 << 16 | 2) + 1)));
+        assert!(places[1].starts_with(&format!("a=p,i={on},p={},", (1 << 16 | 8) + 1)));
+        assert!(places[0].contains(&format!(",h={},", DEFAULT_CELL.1)));
+
+        // A screen that stays the same sends nothing.
+        assert!(frame(&mut graphics, &[(2, true), (8, true), (14, false)]).is_empty());
+
+        // One flipping off takes its placement off the green picture and places the faint one,
+        // already stored, and one gone is taken off.
+        let flipped = frame(&mut graphics, &[(2, true), (8, false)]);
+        let off = graphics.switch_images[&Look {
+            on: false,
+            color: rgb(theme::OVERLAY0),
+        }];
+        assert_eq!(
+            flipped,
+            [
+                format!("a=d,d=i,i={on},p={},q=2", (1 << 16 | 8) + 1),
+                format!("a=d,d=i,i={off},p={},q=2", (1 << 16 | 14) + 1),
+                format!(
+                    "a=p,i={off},p={},X=0,h={},C=1,z=1,q=2",
+                    (1 << 16 | 8) + 1,
+                    DEFAULT_CELL.1
+                ),
+            ]
+        );
+
+        // A new character size draws the pictures again under new ids, sent as they're needed.
+        graphics.use_cell((10, 20));
+        assert_eq!(graphics.retired.len(), 2);
+        let again = frame(&mut graphics, &[(2, true), (8, false)]);
+        assert_eq!(again.iter().filter(|c| c.starts_with("a=t,")).count(), 2);
+        assert_eq!(again.iter().filter(|c| c.starts_with("a=p,")).count(), 2);
     }
 }

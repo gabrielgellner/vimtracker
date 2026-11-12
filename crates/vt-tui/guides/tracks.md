@@ -237,11 +237,11 @@ before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 
 Each slot is a device: a frame with the slot's number, its switch, its effect and the effect's
 type in its title, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`,
-a box on the right with its curve or how far it's turning down. The switch is green while the
-slot is in and faint while it's bypassed. A setting that's off or on, such as a Comp's `Auto`,
-shows the same switch rather than a word. The device with the cursor has the brighter frame. An
-empty slot keeps its frame, says `Empty` and `K  pick an effect`, so nothing moves when an
-effect goes in.
+a box on the right with its curve or how far it's turning down. The switch is a small pill, its
+knob right and green while the slot is in, and left and faint while it's bypassed. A setting
+that's off or on, such as a Comp's `Auto`, shows the same switch rather than a word. The device
+with the cursor has the brighter frame. An empty slot keeps its frame, says `Empty` and
+`K  pick an effect`, so nothing moves when an effect goes in.
 
 | Keys | Does |
 |---|---|

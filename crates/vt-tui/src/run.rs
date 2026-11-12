@@ -363,7 +363,11 @@ fn main_loop(
             graphics.use_window(size);
         }
         graphics.sync(app, &mut std::io::stdout())?;
-        terminal.draw(|frame| draw_screen(frame, app, Some(stats), Instant::now()))?;
+        terminal.draw(|frame| {
+            draw_screen(frame, app, Some(stats), Instant::now());
+            // The switches are pictures placed over their glyphs, which are hidden first.
+            graphics.find_switches(frame.buffer_mut());
+        })?;
         graphics.place(app, &mut std::io::stdout())?;
         if event::poll(frame_time)? {
             while event::poll(Duration::ZERO)? {

@@ -3,10 +3,11 @@
 //! window's hint whether its key's switch is, so one idea has one look everywhere. It's green when
 //! on and faint when off; the words `On` and `Off` are left to the status line.
 //!
-//! A toggle is two cells wide: its glyph, then a plain space, which kitty and Ghostty draw the
-//! glyph over, so the switch is as wide as it's drawn to be rather than squeezed into one cell as
-//! a tiny pill (decision 157). Both cells are always written, on or off, so nothing after a
-//! toggle moves when it flips.
+//! A toggle is two cells wide: its glyph, then a plain space (decision 157). Both cells are always
+//! written, on or off, so nothing after a toggle moves when it flips. On screen, the terminal shows
+//! a picture of a pill over the two cells, as big in any font and in the colour the toggle was
+//! written in, with the glyph hidden under it (decision 256, `kitty::switches`); tests and
+//! screenshots read the glyph.
 
 use ratatui::style::Style;
 use ratatui::text::Span;
@@ -14,7 +15,7 @@ use ratatui::text::Span;
 use crate::glyphs;
 use crate::theme;
 
-/// How many cells a toggle takes: its glyph and the space it's drawn over.
+/// How many cells a toggle takes: its glyph and the space after it, which its picture covers.
 pub const WIDTH: usize = 2;
 
 /// The glyph for on or off.
@@ -31,13 +32,13 @@ pub fn style(on: bool) -> Style {
     if on { theme::active() } else { theme::faint() }
 }
 
-/// A toggle as text: its glyph, then the plain space the terminal draws it over, two cells.
+/// A toggle as text: its glyph, then a plain space, two cells.
 pub fn text(on: bool) -> String {
     format!("{} ", glyph(on))
 }
 
 /// A toggle in its own colour, its two cells together, so a place that draws one can't leave its
-/// second cell to something the glyph would cover or that would keep it small.
+/// second cell to something its picture would cover.
 pub fn span(on: bool) -> Span<'static> {
     Span::styled(text(on), style(on))
 }
@@ -52,7 +53,7 @@ mod tests {
             assert_eq!(span(on).width(), WIDTH);
             assert!(
                 text(on).ends_with(' '),
-                "a plain space, which the glyph is drawn over"
+                "a plain space, which its picture covers"
             );
         }
     }

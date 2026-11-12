@@ -142,8 +142,8 @@ for loops or one-shots decides, as in Ableton's library, and otherwise a tempo s
 | `A` | Stop playing samples as you move, or start |
 | `/` | Search what's been opened |
 
-The hint under the list shows `H`, `P` and `A` each with a switch, green while it's on
-and faint while it's off.
+The hint under the list shows `H`, `P` and `A` each with a switch, its knob right and
+green while it's on, and left and faint while it's off.
 
 The numbers down the left count from the cursor, so `12j` can be read off them. A
 search matches names exactly, ignoring case, among the folders you've opened, and

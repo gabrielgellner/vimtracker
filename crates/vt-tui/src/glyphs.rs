@@ -6,7 +6,8 @@
 //! Ghostty may draw an icon over the space after it as well, which only makes it bigger. The
 //! explorer's icons are followed by a no-break space, `ICON_SPACE`, which they don't draw over, so
 //! each keeps to its cell and every row's icon is the same size. The switches are the other way
-//! round: always followed by a plain space, so they're drawn over two cells (decision 157).
+//! round: always followed by a plain space, so they take two cells (decision 157), which the
+//! terminal shows a picture of a pill over (decision 256).
 
 use std::time::Duration;
 
@@ -14,7 +15,7 @@ use vt_model::song::{Machine, SynthVoice, Track, TrackKind};
 use vt_model::step::Mark;
 
 /// A switch that's on: `nf-fa-toggle_on`, U+F205. It's wide, so `widgets::toggle` follows it with
-/// a plain space the terminal draws it over, as it's barely readable squeezed into one cell.
+/// a plain space, and the terminal shows a picture over both (`kitty::switches`).
 pub const SWITCH_ON: char = '\u{f205}';
 /// A switch that's off: `nf-fa-toggle_off`, U+F204, followed by a plain space as `SWITCH_ON` is.
 pub const SWITCH_OFF: char = '\u{f204}';
