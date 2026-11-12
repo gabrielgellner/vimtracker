@@ -30,7 +30,7 @@ loop:                  [03 ............. 08]     only these play
 
 ```text
  Note  Vel     Gate      FX1         FX2         FX3
- C-3   40 -3   HLD3 --   CUT   40 .  ---   00    ---   00
+ C-3   40 -3   HLD3 ··   CUT   40 .  ···   ··    ···   ··
  └─ what sounds          └─ what changes while it plays
               └─ how long it lasts
 ```
@@ -39,9 +39,9 @@ loop:                  [03 ............. 08]     only these play
   **nudge**, how far early or late its note plays, in 24ths of a step, and it's blank
   on a row on the grid.
 - **Gate** is how long the row lasts, in **pulses**, which are steps, from `0` to `8`,
-  and what the note does over that time. An empty cell, `----`, is one pulse of `SGL`,
+  and what the note does over that time. An empty cell, `····`, is one pulse of `SGL`,
   as every row was before gates. The dim pair after it is how long the note lasts, and
-  `--` leaves that to the track.
+  `··` leaves that to the track. Empty cells are faint dots, and the note's is `---`.
 - **FX columns** hold commands such as `CUT`, `RET` and `CHA`. A step has three. They
   aren't the FX page's four effect slots, though a step's commands can reach those,
   as `1BYP` does.

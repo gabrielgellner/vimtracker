@@ -6,7 +6,8 @@ command and a hex value. A setting that sweeps, like `CUT`, shows four digits,
 fine part, for dialling in between two values. One on the level scale, like
 `VOL`, `LEV`, `SNA` and `SNB`, is two digits, as a quarter of a dB is its step,
 and so are a list's value, like `1BITS`, and an event's, like `DEL`. Events are in their own colour,
-a lock the track doesn't have is grey, and empty cells are faint.
+a lock the track doesn't have is grey, and an empty slot is faint dots, `···   ··`, with no
+value.
 
 `K` on a slot lists the commands this track has, in categories as an LFO's `Dest`
 is: the filter, the output, the voice, each slot's effect, then the events. It opens
