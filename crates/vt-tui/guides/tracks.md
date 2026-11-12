@@ -136,7 +136,7 @@ on it lists the ones the type offers:
 | Filter | Modes |
 |---|---|
 | `LP` `HP` `BP` `Notch` | `12 dB`, or `24 dB` with a second filter after the first |
-| `Ladder` | `LP24` `LP18` `LP12` `LP6` `BP24` `BP12` `HP6` `HP12` `HP18` `HP24` |
+| `Ladder` | `LP24` `Fat24` `LP18` `LP12` `LP6` `BP24` `BP12` `HP6` `HP12` `HP18` `HP24` |
 | | `N24` `N12` `PH18` `HP12+LP6` `HP18+LP6` `N12+LP6` `PH18+LP6` |
 | `Dirty` | `LP24` `LP12` `BP24` `HP12` `HP24` `N24` |
 | `Diode` | `Full`, or a low cut `-3 oct` `-2 oct` `-1 oct` under `Cut` |
@@ -150,7 +150,10 @@ narrower one. The ladder's extra modes are the Oberheim Xpander's: `PH18` is
 its phaser, three stages' shift against the input, which dips at about 1.7
 times `Cut` and thins the bass, and the four with `+LP6` add a gentle low-pass
 to a high-pass, notch or phaser, so `HP12+LP6` and `HP18+LP6` are lopsided
-bands. Each band peaks as loud as `LP24` is at its loudest. The ladder's notches
+bands. Each band peaks as loud as `LP24` is at its loudest. `Fat24` is the
+ladder's `LP24` with much of the bass its resonance takes given back, as
+Surge's compensated ladders do: about 10 dB more near full `Res`, so the peak
+rides on a full bass, and runs into its saturation sooner. The ladder's notches
 take out the very pitch it sings at, so they hardly sing at all, where
 `Dirty`'s still does. `Diode` at `Full` has all its
 bass, as in `Acid`. The others cut the bass before the ladder, from that many
@@ -164,7 +167,7 @@ names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP24`, `05`
 `HP12`, `06` `HP24`, `07` `N24`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
 `0B` `-1 oct`, then the ladder's own: `0C` `LP18`, `0D` `LP6`, `0E` `BP12`, `0F`
 `HP6`, `10` `HP18`, `11` `N12`, `12` `PH18`, `13` `HP12+LP6`, `14` `HP18+LP6`,
-`15` `N12+LP6`, `16` `PH18+LP6`. Changing mode glides over about 10 ms, so a lock doesn't click.
+`15` `N12+LP6`, `16` `PH18+LP6`, `17` `Fat24`. Changing mode glides over about 10 ms, so a lock doesn't click.
 
 A curve in a box at the right of the Filter shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right, in the track's
@@ -552,7 +555,8 @@ Like `Reso`, it follows the track's note and `Pitch`, glides to a new one,
 and to keep a sample loop at its own speed, play it at `C-3` and set `Tune`
 from steps. Below `80`, `Feedback` rings on the note's odd harmonics alone,
 hollower, like a clarinet, but at the same pitch. At `FF` with `Tone` up
-it rings for many seconds. As a `Comb`, `Feedback` `80` is only the sound;
+it rings for many seconds, and what goes round is rounded off as it nears full
+level rather than clipped flat, so a runaway softens instead of squaring. As a `Comb`, `Feedback` `80` is only the sound;
 as a `Flange`, it's a flanger standing still, its notches between the
 note's harmonics, and feedback sharpens it into a ring.
 
