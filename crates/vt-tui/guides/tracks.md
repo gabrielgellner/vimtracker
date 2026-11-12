@@ -4,7 +4,7 @@ Press `Space 4` for what a track holds apart from its steps, on three pages: Sou
 has its machine, filter, output and how it plays, with a bar beside each value showing where
 it sits between the lines at each end of its range, and moving with whatever
 plays it, with a dim mark left where it's set, Mod its six mod slots,
-envelopes and LFOs, its accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page. FX columns belong
+envelopes and LFOs, its accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page, each with the cursor where you left it, or on its first setting the first time. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -15,7 +15,7 @@ each machine.
 
 | Keys | Does |
 |---|---|
-| `H` `L` | The previous or next page: Sound, Mod or FX |
+| `H` `L` | The previous or next page, back where you left it |
 | `W` `B`, `]b` `[b` | Next or previous track |
 | `j` `k` | Next or previous row, back in the column they left |
 | `gg` `G` | The top or bottom of this column of devices |
@@ -251,7 +251,11 @@ Screamer's circuit, which clips the mids softly and adds them to the clean sound
 stays tight, and `Distortion` an op-amp distortion, as a RAT is, with high gain and a hard clip.
 Each mode has its own setting: `Amount` for how hard the four shaping modes and the pedals
 drive, `Bits` on `Crush`, whole numbers from `12` to `2`, where anything quieter than half a
-step drops out, and `Rate` on `Down`, how long each sample is held. The pedals have a `Tone`
+step drops out, and `Rate` on `Down`, how long each sample is held. A change of `Bits` eases
+over a few ms, so an LFO on it sweeps rather than steps. `Mu-law` on `Crush` squeezes the sound
+before it's rounded, as an 8-bit sampler did, so quiet sounds keep finer steps and loud ones
+grit. `Track` on `Down` holds at a whole number of times the note's pitch, from 256 times at
+`00` to once a cycle at `FF`, so what it folds back stays in tune with the note. The pedals have a `Tone`
 as well, dark at `00` and bright at `FF`. A mode keeps its own as you change to another and
 back. Few bits gate quiet sounds, so one press up brings them in, and `Mix` blends it with the
 sound going in, from `00` dry to `FF` wet. `Gain` turns down what comes out, as `Amount` can
