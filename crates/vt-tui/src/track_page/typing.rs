@@ -6,7 +6,7 @@ use vt_model::accumulator::{Accumulation, MOST_DEGREES};
 use vt_model::action::Action;
 use vt_model::arpeggio::{Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Adsr, Ahd, Drum, Hold, MAX_HOLD_MS, MAX_RATCHET};
+use vt_model::envelope::{Adsr, Ahd, Drum, Hold, Lpg, MAX_HOLD_MS, MAX_RATCHET};
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Lfo, Rate};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
@@ -202,10 +202,9 @@ impl App {
                 ms.map(|attack_ms| with_lpg(Lpg { attack_ms, ..lpg })),
                 times,
             ),
-            ModField::Decay if lpg_kind => (
-                ms.map(|decay_ms| with_lpg(Lpg { decay_ms, ..lpg })),
-                times,
-            ),
+            ModField::Decay if lpg_kind => {
+                (ms.map(|decay_ms| with_lpg(Lpg { decay_ms, ..lpg })), times)
+            }
             ModField::Colour => (
                 u8::from_str_radix(text.trim(), 16)
                     .ok()

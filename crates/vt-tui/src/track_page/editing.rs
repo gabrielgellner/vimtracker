@@ -109,7 +109,7 @@ fn adjust_mod(
         ModField::Decay if kind == ModKind::Drum => drum.decay_ms = time(drum.decay_ms),
         ModField::Decay if lpg_kind => lpg.decay_ms = time(lpg.decay_ms),
         ModField::Colour => {
-            let size = if large { HEX_JUMP } else { 1 };
+            let size = if large { HEX_JUMP as u8 } else { 1 };
             lpg.colour = if up {
                 lpg.colour.saturating_add(size)
             } else {

@@ -518,7 +518,9 @@ impl Lpg {
         }
         let near_silence = (-VACTROL_FLOOR.ln() - 0.25 * VACTROL_RATIO.ln()) / decay;
         let e = (-4.0 * near_silence * seconds).exp();
-        let level = (e / (VACTROL_RATIO + (1.0 - VACTROL_RATIO) * e)).sqrt().sqrt();
+        let level = (e / (VACTROL_RATIO + (1.0 - VACTROL_RATIO) * e))
+            .sqrt()
+            .sqrt();
         ((level - VACTROL_FLOOR) / (1.0 - VACTROL_FLOOR)).max(0.0)
     }
 
@@ -1045,7 +1047,12 @@ mod tests {
                 .find(|s| lpg.fall(*s) < level)
                 .unwrap()
         };
-        assert!(reach(0.1) < reach(0.01) - reach(0.1), "{} {}", reach(0.1), reach(0.01));
+        assert!(
+            reach(0.1) < reach(0.01) - reach(0.1),
+            "{} {}",
+            reach(0.1),
+            reach(0.01)
+        );
         // It lands at its decay.
         assert_eq!(lpg.fall(0.4), 0.0);
         assert!(lpg.fall(0.399) < 1e-4);
@@ -1082,7 +1089,13 @@ mod tests {
         }
         let text = ron::to_string(&Lpg::default()).unwrap();
         assert_eq!(ron::from_str::<Lpg>(&text).unwrap(), Lpg::default());
-        assert!(!Lpg { decay_ms: MAX_ENVELOPE_MS + 1, ..lpg }.in_range());
+        assert!(
+            !Lpg {
+                decay_ms: MAX_ENVELOPE_MS + 1,
+                ..lpg
+            }
+            .in_range()
+        );
     }
 
     #[test]

@@ -14,7 +14,7 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Adsr, Ahd, Curve, MAX_RATCHET};
+use vt_model::envelope::{Adsr, Ahd, Curve, Lpg, MAX_RATCHET};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
@@ -426,6 +426,19 @@ fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Acti
                     ahd: Ahd {
                         reset: on,
                         ..track.mods[slot].ahd
+                    },
+                    ..track.mods[slot]
+                },
+            })
+        }
+        Control::Mod(slot, ModField::Reset) if track.mods[slot].kind == ModKind::Lpg => {
+            Some(Action::SetMod {
+                track: at,
+                slot,
+                modulator: ModSlot {
+                    lpg: Lpg {
+                        reset: on,
+                        ..track.mods[slot].lpg
                     },
                     ..track.mods[slot]
                 },

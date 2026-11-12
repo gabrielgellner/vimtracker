@@ -886,14 +886,14 @@ mod tests {
         let changing = |round: usize| {
             let mut next = song(4, 16);
             for track in next.tracks.iter_mut().take(4) {
-                // The notes' own shape an AHD or a drum now and then, each a one-shot.
+                // The notes' own shape an AHD, a drum or a gate now and then, each a one-shot.
                 if round.is_multiple_of(3) {
-                    track.mods[0].kind = [ModKind::Ahd, ModKind::Drum][round / 3 % 2];
+                    track.mods[0].kind = [ModKind::Ahd, ModKind::Drum, ModKind::Lpg][round / 3 % 3];
                 }
                 for slot in [1, 3] {
                     let modulator = &mut track.mods[slot];
                     modulator.kind = if round % 2 == slot % 2 {
-                        [ModKind::Adsr, ModKind::Ahd, ModKind::Drum][round / 2 % 3]
+                        [ModKind::Adsr, ModKind::Ahd, ModKind::Drum, ModKind::Lpg][round / 2 % 4]
                     } else {
                         ModKind::Lfo
                     };
