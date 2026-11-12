@@ -1885,7 +1885,7 @@ pub(crate) const EXCITER_PARAMS: [Param; 6] = [
     hex_param(
         "Drive",
         "drive",
-        "DRV",
+        "DRIV",
         Setting::Drive,
         Exciter::DEFAULT.drive,
     ),
