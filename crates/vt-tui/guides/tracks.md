@@ -56,18 +56,20 @@ and its settings in up to four columns of three.
 | Device | Title | Settings, column by column |
 |---|---|---|
 | Machine | Machine, type | The machine's own |
-| Filter | Type, mode | `Cut` `Res` `Drive`; `Punch`; `Low cut` `High cut` |
+| Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` `Velocity` |
 
 A machine's type is the setting that changes its character: the sample the sampler
-plays, `Acid`'s `Wave`, 6-op's `Patch`, and the chord of `Chord` and `Chip`.
-Other synths have none. `K` lists whatever's under the cursor in a title, as on a
-setting, and `g d` on the sample opens the sample page. Each machine places its own
+plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
+and `Chip`. Other synths have none. `K` lists whatever's under the cursor in a title, as
+on a setting, and `g d` on the sample opens the sample page. Each machine places its own
 settings: most go down the columns in order, the sampler has `Slice` and `Play` in
-one column and `Start` and `Length` in the next, and `Acid`'s are in pairs as a
+one column and `Start` and `Length` in the next, `Acid`'s are in pairs as a
 TB-303's knobs are, `Cutoff` and `Resonance`, `Env mod` and `Decay`, `Accent` and
-`Slide`, then `Drive` and `Drift`.
+`Slide`, then `Drive` and `Drift`, and `Supersaw` has its stack's spread, `Saws`,
+`Detune` and `Warp`, down its first column, how it sounds, `Mix`, `Shape` and `Width`,
+down its second, and `Phase` and `Drift` in its third.
 
 `j` and `k` go from a device's title down its rows and on into the next device,
 keeping the column, and pass the Output's and Play's titles by, as there's nothing
@@ -103,6 +105,7 @@ shows what it plays.
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
 | Punch | How high a loud ring starts over `Cut`, from `00` for none |
+| Safe | On, `Res` stops short of ringing by itself |
 | Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` `OB-X` |
 | Mode | How the type responds: `--` where it has none |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
@@ -117,6 +120,17 @@ sound hears the filter as it is, so the curve doesn't show it. Only `LP`, `HP`,
 `BP` and `Notch` have it; on the other types it's dim and does nothing, and it
 does less with `Drive`, whose clipping holds the ring down. Steps and modulators
 don't move it.
+
+`Safe`, beside `Res`, is the switch of that name on Cytomic's The Drop. On, the
+whole of `Res`'s turn reaches only as far as the loudest peak that still dies
+away, a few steps short of where the type starts to sing by itself, so `FF`
+rings on after a strike and fades, and never keeps going alone, at any `Cut`,
+`Mode` or `Drive`. Its steps are closer together for it: `FF` is about where
+`D7` was, and `80` where `6C` was. The curve shows the peak it leaves. `K`
+switches it, `=` puts it on and `-` takes it off. Steps and modulators don't
+move it, as with `Drive`, but a `RES` lock or an LFO on `Res` stops short too.
+The clean types never ring by themselves, so on `LP`, `HP`, `BP` and `Notch`
+it's dim and does nothing.
 
 `Low cut` and `High cut` are a second, simple
 filter after the main one, for thinning out a sound without giving up the main
@@ -434,6 +448,24 @@ more with wow, so `Mix` below `FF` can blend in a faint chorus.
 | `Bump` | How much the heads lift the lows. It starts half way |
 | `Wow` | A slow, drifting wobble in pitch, as a worn transport has |
 | `Flutter` | A faster, steady wobble, about twice a second |
+
+`Exciter` adds air, after the Aphex Aural Exciter as ChowDSP models it in
+Surge: it takes the highs of the sound, drives them into a soft clip for
+new harmonics, and adds those to the sound. A level detector turns what it
+makes up as the highs get louder, so loud hats and consonants sparkle while
+quiet ones are barely touched. It suits hats, vocals and a whole mix.
+
+| Setting | Does |
+|---|---|
+| `Drive` | How hard the highs are driven, so how much it makes |
+| `Tone` | Where the highs start, from 500 Hz at `00` to 10 kHz at `FF` |
+| `Attack` | How fast the detector rises, from 5 ms to 20 ms |
+| `Release` | How fast it falls, from 50 ms to 200 ms |
+
+`Mix` is how much of what it makes is added: at `00` the sound is left as
+it is, and it starts at `80`. The higher `Tone` is, the less gets through
+to be driven, so `Drive` gives it more to make up. Each side has a detector
+of its own, so loud highs on one side don't excite the other.
 
 `Plate` is a second reverb, after Jon Dattorro's plate: brighter and denser
 than `Reverb`, and wide from a single sound. It starts half wet, and its tail

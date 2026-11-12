@@ -434,7 +434,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
             })
         }
         // The mixer's, which no device has.
-        Control::Mute | Control::Solo | Control::Limiter => None,
+        Control::Mute | Control::Solo | Control::Limiter | Control::Safe => None,
     }
 }
 
@@ -501,6 +501,7 @@ fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Acti
         }),
         // The song's limiter, on the master's output.
         Control::Limiter => Some(Action::SetLimiter(on)),
+        Control::Safe => Some(Action::SetTrackSafe { track: at, on }),
         _ => None,
     }
 }

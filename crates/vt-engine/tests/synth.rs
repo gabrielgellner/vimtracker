@@ -589,6 +589,7 @@ fn the_analog_voices_have_a_drift() {
             SynthVoice::VirtualAnalog,
             SynthVoice::VirtualAnalogVcf,
             SynthVoice::Acid,
+            SynthVoice::Supersaw,
             SynthVoice::Chiptune,
         ]
     );

@@ -958,3 +958,25 @@ fn a_track_slot_is_low_high_depth_and_source_stored_with_its_polarity_under_dept
     assert_eq!(value_text(low, &low_note.tracks[0], &low_note), "G-8");
     assert_eq!(low_note.tracks[0].mods[1].track.velocity.low, 0);
 }
+
+#[test]
+fn the_filters_safe_is_on_the_button_under_res() {
+    use vt_model::action::edit;
+    use vt_roto::live::KNOB_TOP;
+    use vt_tui::roto::edits::turned;
+    let filter = layout_named("filter");
+    assert!(filter.stored);
+    assert_eq!(first_knobs(filter)[..2], ["cutoff", "resonance"]);
+    assert_eq!(button_key(filter, 0, 1), Some("safe"), "under Res");
+    let song = std::sync::Arc::new(Song::new(1));
+    let track = &song.tracks[0];
+    let spec = &Page::Sound.devices(track)[1];
+    let device = live_device(Page::Sound, 1, spec, track, &song, true);
+    assert_eq!(device.key, "vimtracker:filter");
+    assert_eq!(device.switches[1].as_ref().unwrap().name.as_str(), "Safe");
+    // A press switches it on, and another off.
+    let next = edit(&song, &turned(Control::Safe, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert!(next.tracks[0].safe);
+    let next = edit(&next, &turned(Control::Safe, 0, &next, 0).unwrap()).unwrap();
+    assert!(!next.tracks[0].safe);
+}

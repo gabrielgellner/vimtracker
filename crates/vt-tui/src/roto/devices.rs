@@ -169,7 +169,8 @@ impl Family {
             | Units::Q
             | Units::AcidCutoff
             | Units::Vowel
-            | Units::ShiftHertz => Self::Tone,
+            | Units::ShiftHertz
+            | Units::ExciterTone => Self::Tone,
             Units::Pan | Units::SpreadHertz => Self::Space,
             Units::Semitones
             | Units::Cents
@@ -186,7 +187,9 @@ impl Family {
             | Units::GateLength
             | Units::GateDelta
             | Units::Glide
-            | Units::LoopTime => Self::Time,
+            | Units::LoopTime
+            | Units::ExciterAttack
+            | Units::ExciterRelease => Self::Time,
             Units::Depth | Units::Degrees => Self::Modulation,
             _ => Self::Character,
         }
@@ -230,7 +233,8 @@ pub fn family(control: Control, track: &Track) -> Family {
         Control::Limiter => Family::Level,
         Control::Base(TrackControl::LowCut | TrackControl::HighCut)
         | Control::FilterType
-        | Control::FilterMode => Family::Tone,
+        | Control::FilterMode
+        | Control::Safe => Family::Tone,
         Control::Base(TrackControl::Drive | TrackControl::Punch) => Family::Character,
         Control::GateLength
         | Control::Speed
@@ -729,8 +733,8 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 list(names(found.choices), usize::from(set))
             }
         }
-        // The mixer's, which no device has.
-        Control::Mute | Control::Solo | Control::Limiter => return None,
+        // The mixer's, which no device has, and the off/on settings, which are switches.
+        Control::Mute | Control::Solo | Control::Limiter | Control::Safe => return None,
     };
     Some(found)
 }

@@ -6,8 +6,8 @@
 use vt_engine::dsp::distort::{InsertState, Mono};
 use vt_engine::track_state::Keys;
 use vt_model::insert::{
-    Compressor, CompressorType, Distort, DistortType, Equaliser, GateMode, Insert, LowPassGate,
-    Vowel,
+    Compressor, CompressorType, Distort, DistortType, Equaliser, Exciter, GateMode, Insert,
+    LowPassGate, Vowel,
 };
 
 const RATE: u32 = 48_000;
@@ -56,6 +56,14 @@ fn every_effect() -> Vec<Insert> {
         resonance: 0xC0,
         mix: 0xE0,
         ..Vowel::DEFAULT
+    }));
+    effects.push(Insert::Exciter(Exciter {
+        drive: 0xC0,
+        tone: 0x40,
+        attack: 0x00,
+        release: 0xFF,
+        mix: 0xFF,
+        ..Exciter::DEFAULT
     }));
     effects
 }
@@ -134,7 +142,8 @@ fn every_claim_comes_out_as_working_out_both_does() {
             );
         }
     }
-    // An empty slot, and Distort, EQ3, the compressor, the gate and Vowel as they start, then
-    // Distort's eight types, EQ3, the three compressors, the three gates and Vowel as set above.
-    assert_eq!(claims, 22);
+    // An empty slot, and Distort, EQ3, the compressor, the gate, Vowel and the exciter as they
+    // start, then Distort's eight types, EQ3, the three compressors, the three gates, Vowel and
+    // the exciter as set above.
+    assert_eq!(claims, 24);
 }

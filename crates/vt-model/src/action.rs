@@ -320,6 +320,11 @@ pub enum Action {
         track: usize,
         glide: u8,
     },
+    /// Switch a track filter's `Safe` on or off, which keeps `Res` short of ringing by itself.
+    SetTrackSafe {
+        track: usize,
+        on: bool,
+    },
     /// Set how a track's `ACU`s move its notes.
     SetAccumulation {
         track: usize,
@@ -1093,6 +1098,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .ok_or(EditError::NoTrack(*track))?
                 .glide = *glide;
         }
+        Action::SetTrackSafe { track, on } => track_mut(&mut next, *track)?.safe = *on,
         Action::SetAccumulation {
             track,
             accumulation,
