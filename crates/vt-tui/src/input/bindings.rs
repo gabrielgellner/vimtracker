@@ -144,6 +144,8 @@ pub enum Cmd {
     ToggleScale,
     /// Collapse the phrase view to a line a row, or lay it out in time again.
     ToggleTimeline,
+    /// Show the row inspector beside the phrase view's overview, or hide it.
+    ToggleInspector,
     /// Fold the group the cursor is on or in, or open it, in the song view and the mixer.
     ToggleFold,
     /// Fold every group, or open every one.
@@ -372,6 +374,11 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
         "z a",
         Cmd::ToggleTimeline,
         "Collapse the timeline to a line a row, or open it again",
+    ),
+    (
+        "Space i",
+        Cmd::ToggleInspector,
+        "Inspect the cursor's row beside the overview, or stop",
     ),
     ("Space p d", Cmd::Double, "Double this phrase"),
     (

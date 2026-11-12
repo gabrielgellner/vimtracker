@@ -127,6 +127,18 @@ impl App {
         .to_owned();
     }
 
+    /// Show the row inspector, or hide it.
+    pub(crate) fn toggle_inspector(&mut self) {
+        self.count = None;
+        self.inspector = !self.inspector;
+        self.status = if self.inspector {
+            "Row inspector: the cursor's row in words, while there's room. Space i hides it"
+        } else {
+            "Row inspector hidden. Space i shows it"
+        }
+        .to_owned();
+    }
+
     /// How many lines each stored row of the cursor's phrase takes on screen.
     pub(crate) fn row_line_counts(&self) -> Vec<usize> {
         let timeline = self.timeline_on();

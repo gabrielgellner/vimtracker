@@ -62,6 +62,13 @@ its phrases in order with this one in the cursor's colour, so `]p` and `[p` are
 seen moving along it. A phrase that plays in more than one place has a link after
 its number, and a chain too long for the title is cut with `…`.
 
+`Space i` shows the row inspector right of the other tracks' columns: the
+cursor's row spelled out, its note's MIDI number, its velocity as a bar, what
+its gate does, its length, and each FX by the setting's name, with its value in
+its units and its mark. It follows the cursor, and `Space i` hides it again. With
+many tracks it gives way, so every track keeps its column, and comes back when
+there's room.
+
 ## Lists
 
 `K`, `Space Space`, `Space 5` and the others open the same list, in a box over the page,

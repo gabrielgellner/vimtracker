@@ -18,11 +18,14 @@ use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::theme;
 use crate::timeline::{self, Line as TimeLine};
+use crate::views::inspector;
 use crate::views::widgets::group::{self, Switched};
 
 /// The width of a read-only note column for another track: its playhead marker, a note and a gap,
 /// so a marker has a cell of its own and the playing line reads as columns, not one string.
 const NEIGHBOUR_WIDTH: usize = 5;
+/// The gap between the overview and the row inspector.
+const INSPECTOR_GAP: usize = 1;
 /// Room for the distance from the cursor, the row number, the playhead marker and a gap.
 const GUTTER: usize = 9;
 /// In another track's column, in its playhead's place before a note: more than one of its rows
@@ -750,7 +753,18 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .max()
         .unwrap_or(0);
     let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
-    let others = neighbours(app, room);
+    // The row inspector takes the room right of the overview while every track's column still
+    // fits beside it, and gives way to the overview when they need the room.
+    let every = neighbours(app, usize::MAX).len() * NEIGHBOUR_WIDTH;
+    let inspector_width = app
+        .inspector
+        .then(|| room.saturating_sub(every + INSPECTOR_GAP))
+        .filter(|width| *width >= usize::from(inspector::NARROWEST))
+        .map(|width| width.min(usize::from(inspector::WIDEST)));
+    let others = neighbours(
+        app,
+        room - inspector_width.map_or(0, |width| width + INSPECTOR_GAP),
+    );
     let columns: Vec<_> = others.iter().map(|track| column(app, *track)).collect();
     // How long a line is, in ticks: one of this track's steps.
     let ticks = app
@@ -1258,4 +1272,16 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         lines.push(rule("╰", "╯"));
     }
     frame.render_widget(Paragraph::new(lines), area);
+    // Beside the overview, its top level with the grid's frame.
+    if let Some(width) = inspector_width {
+        let x = GUTTER + body_width + 2 + others.len() * NEIGHBOUR_WIDTH + INSPECTOR_GAP;
+        let at = Rect::new(
+            area.x + x as u16,
+            area.y + 1,
+            width as u16,
+            inspector::HEIGHT.min(area.height.saturating_sub(1)),
+        );
+        let row = row_number(extent.row(app.cursor.step));
+        inspector::draw(frame, at, app, row.trim_start());
+    }
 }
