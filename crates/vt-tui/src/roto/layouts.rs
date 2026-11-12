@@ -505,6 +505,107 @@ const FOF: DeviceLayout = live(
         [s("vowel"), s("voice"), __, __, __, __, __, __],
     )],
 );
+const BOWED: DeviceLayout = live(
+    "machine/bowed",
+    &[knobs(
+        "Bowed",
+        [s("pressure"), s("position"), __, __, __, __, __, __],
+    )],
+);
+const BLOWN: DeviceLayout = live(
+    "machine/blown",
+    &[knobs(
+        "Blown",
+        [s("breath"), s("tone"), __, __, __, __, __, __],
+    )],
+);
+const FLUTED: DeviceLayout = live(
+    "machine/fluted",
+    &[knobs(
+        "Fluted",
+        [s("breath"), s("jet"), __, __, __, __, __, __],
+    )],
+);
+const STRUCK_BELL: DeviceLayout = live(
+    "machine/bell",
+    &[knobs(
+        "Bell",
+        [s("decay"), s("detune"), __, __, __, __, __, __],
+    )],
+);
+const STRUCK_DRUM: DeviceLayout = live(
+    "machine/drum",
+    &[knobs(
+        "Drum",
+        [s("decay"), s("tone"), __, __, __, __, __, __],
+    )],
+);
+const WAVE_MAP: DeviceLayout = live(
+    "machine/wavemap",
+    &[knobs(
+        "Wave Map",
+        [s("across"), s("down"), __, __, __, __, __, __],
+    )],
+);
+const WAVE_LINE: DeviceLayout = live(
+    "machine/waveline",
+    &[knobs(
+        "Wave Line",
+        [s("scan"), s("steps"), __, __, __, __, __, __],
+    )],
+);
+const PARAPHONIC: DeviceLayout = live(
+    "machine/paraphonic",
+    &[knobs(
+        "Paraphonic",
+        [s("wave"), s("chord"), __, __, __, __, __, __],
+    )],
+);
+const TWIN_PEAKS: DeviceLayout = live(
+    "machine/twinpeaks",
+    &[knobs(
+        "Twin Peaks",
+        [s("sharpness"), s("spacing"), __, __, __, __, __, __],
+    )],
+);
+const CLOCKED: DeviceLayout = live(
+    "machine/clocked",
+    &[knobs(
+        "Clocked",
+        [s("loop"), s("steps"), __, __, __, __, __, __],
+    )],
+);
+const GRAIN_CLOUD: DeviceLayout = live(
+    "machine/graincloud",
+    &[knobs(
+        "Grain Cloud",
+        [s("length"), s("spread"), __, __, __, __, __, __],
+    )],
+);
+const MODEM: DeviceLayout = live(
+    "machine/modem",
+    &[knobs(
+        "Modem",
+        [s("baud"), s("data"), __, __, __, __, __, __],
+    )],
+);
+/// Plaits' speech, its prosody and speed after its three knobs.
+const SPEECH: DeviceLayout = live(
+    "machine/speech",
+    &[knobs(
+        "Speech",
+        [
+            s("model"),
+            s("species"),
+            s("word"),
+            s("prosody"),
+            s("speed"),
+            __,
+            __,
+            __,
+        ],
+    )],
+);
 const TOY: DeviceLayout = live(
     "machine/toy",
     &[knobs(
@@ -1257,7 +1358,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 77] = [
+pub const ALL: [&DeviceLayout; 90] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1293,6 +1394,19 @@ pub const ALL: [&DeviceLayout; 77] = [
     &CHAOS_FM,
     &VOSIM,
     &FOF,
+    &BOWED,
+    &BLOWN,
+    &FLUTED,
+    &STRUCK_BELL,
+    &STRUCK_DRUM,
+    &WAVE_MAP,
+    &WAVE_LINE,
+    &PARAPHONIC,
+    &TWIN_PEAKS,
+    &CLOCKED,
+    &GRAIN_CLOUD,
+    &MODEM,
+    &SPEECH,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1376,6 +1490,19 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::ChaoticFm => &CHAOS_FM,
             SynthVoice::Vosim => &VOSIM,
             SynthVoice::Fof => &FOF,
+            SynthVoice::Bowed => &BOWED,
+            SynthVoice::Blown => &BLOWN,
+            SynthVoice::Fluted => &FLUTED,
+            SynthVoice::Bell => &STRUCK_BELL,
+            SynthVoice::Drum => &STRUCK_DRUM,
+            SynthVoice::WaveMap => &WAVE_MAP,
+            SynthVoice::WaveLine => &WAVE_LINE,
+            SynthVoice::Paraphonic => &PARAPHONIC,
+            SynthVoice::TwinPeaks => &TWIN_PEAKS,
+            SynthVoice::Clocked => &CLOCKED,
+            SynthVoice::GrainCloud => &GRAIN_CLOUD,
+            SynthVoice::Modem => &MODEM,
+            SynthVoice::Speech => &SPEECH,
         },
     }
 }

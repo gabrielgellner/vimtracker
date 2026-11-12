@@ -183,12 +183,17 @@ fn a_synth_glides_by_its_pitch() {
 
 #[test]
 fn every_pitched_synth_glides() {
-    // The noises and drums have no single pitch to follow through zero, and `Formant`, `VOSIM`
-    // and `FOF` rise through zero at their formants rather than their pitch.
+    // The noises and drums have no single pitch to follow through zero, nor have the breathy
+    // `Blown` and `Fluted` or the struck `Bell` and `Drum`, and `Formant`, `VOSIM` and `FOF` rise
+    // through zero at their formants rather than their pitch.
     let unpitched = [
         SynthVoice::Formant,
         SynthVoice::Vosim,
         SynthVoice::Fof,
+        SynthVoice::Blown,
+        SynthVoice::Fluted,
+        SynthVoice::Bell,
+        SynthVoice::Drum,
         SynthVoice::Noise,
         SynthVoice::Dust,
         SynthVoice::Snare,
