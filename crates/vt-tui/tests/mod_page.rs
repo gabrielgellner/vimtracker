@@ -1500,7 +1500,10 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
         .iter()
         .map(|item| item.label.as_str())
         .collect();
-    assert_eq!(listed, ["ADSR", "AHD", "Drum", "LPG", "LFO", "Steps"]);
+    assert_eq!(
+        listed,
+        ["ADSR", "AHD", "Drum", "LPG", "LFO", "Steps", "Track"]
+    );
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).kind, ModKind::Ahd);
@@ -2011,4 +2014,134 @@ fn pitch_in_scale_is_a_destination_of_its_own_for_every_type() {
     assert!(slot(&app).goes_in_scale());
     press(&mut app, "x");
     assert!(!slot(&app).in_scale);
+}
+
+/// A track whose `Mod 4` is a Track slot, with the cursor on its type.
+fn with_tracking(tracking: ModSlot) -> (App, vt_engine::link::Realtime) {
+    let (mut app, realtime) = app();
+    app.apply(&Action::SetMod {
+        track: 0,
+        slot: 3,
+        modulator: tracking,
+    });
+    press(&mut app, " 4L");
+    press(&mut app, &to_lfo(0));
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Type));
+    (app, realtime)
+}
+
+#[test]
+fn a_track_slot_follows_velocity_with_its_source_in_the_title_and_its_map_down_the_left() {
+    use vt_model::tracking::{Source, Tracking};
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    press(&mut app, &format!("{}K", to_lfo(0)));
+    press(&mut app, "/track");
+    special(&mut app, KeyCode::Enter);
+    let slot = |app: &App| app.song().tracks[0].mods[3];
+    assert_eq!(slot(&app).kind, ModKind::Track);
+    assert_eq!(slot(&app).track, Tracking::default());
+    assert_eq!(slot(&app).depth, 0, "a new type keeps the slot's depth");
+    assert!(
+        device_title(&app, "Mod 4").starts_with(&modulator_title(
+            "Mod 4",
+            true,
+            "Track  Velocity  Uni  → --- ─"
+        )),
+        "{}",
+        device_title(&app, "Mod 4")
+    );
+    let shown = screen_cells(&mut app).join("\n");
+    for cell in ["Low       00", "High      7F", "Depth     00"] {
+        assert!(shown.contains(cell), "{cell} in\n{shown}");
+    }
+    // `Low`, `High` and `Depth` down the left, by ones and by `10`.
+    press(&mut app, "j=");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Low));
+    assert_eq!(slot(&app).track.velocity.low, 1);
+    press(&mut app, "+");
+    assert_eq!(slot(&app).track.velocity.low, 0x11);
+    typed(&mut app, "40");
+    assert_eq!(slot(&app).track.velocity.low, 0x40);
+    typed(&mut app, "80");
+    assert_eq!(
+        slot(&app).track.velocity.low,
+        0x40,
+        "past the highest velocity"
+    );
+    assert!(app.status.contains("00 to 7F"), "{}", app.status);
+    press(&mut app, "j=");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::High));
+    assert_eq!(slot(&app).track.velocity.high, 0x7F, "it stops at the top");
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Depth));
+    // The source is its mode: `=` goes through them, and `K` lists them.
+    press(&mut app, "gg0l");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Mode));
+    press(&mut app, "=");
+    assert_eq!(slot(&app).track.source, Source::Random);
+    press(&mut app, "K");
+    assert_eq!(app.picker.as_ref().unwrap().title, "Mod 4 source");
+    press(&mut app, "/note");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).track.source, Source::Note);
+    // Each source has its own map: the notes', in notes, by a semitone and an octave.
+    let shown = screen_cells(&mut app).join("\n");
+    for cell in ["Low       C-1", "High      C-5"] {
+        assert!(shown.contains(cell), "{cell} in\n{shown}");
+    }
+    press(&mut app, "gg0j=+");
+    assert_eq!(slot(&app).track.note.low, 36 + 13);
+    typed(&mut app, "G-8");
+    assert_eq!(slot(&app).track.note.low, 127);
+    typed(&mut app, "40");
+    assert_eq!(slot(&app).track.note.low, 127, "a note, not hex");
+    assert!(app.status.contains("c_1 to G-8"), "{}", app.status);
+    press(&mut app, "x");
+    assert_eq!(slot(&app).track.note.low, 36);
+    // Velocity's is as it was left.
+    assert_eq!(slot(&app).track.velocity.low, 0x40);
+    press(&mut app, "gg0lx");
+    assert_eq!(
+        slot(&app).track.source,
+        Source::Velocity,
+        "x puts back Velocity"
+    );
+}
+
+#[test]
+fn a_track_slots_map_is_sent_with_a_dot_at_the_last_note() {
+    use vt_model::tracking::Tracking;
+    let (mut app, _realtime) = with_tracking(
+        ModSlot::tracking(Some(SettingId::CUT), Tracking::default()).with_depth(0x40),
+    );
+    let mut graphics = Graphics::new();
+    let (synced, placed) = frame(&mut app, &mut graphics);
+    assert!(synced.contains("a=T"), "its map is sent");
+    assert_eq!(placed, "", "no note yet, so no dot");
+    let corner = app.lfo_cycles_at[3].expect("its map is placed");
+    // The engine says the last note was half way along its velocities, and so half way up.
+    app.live = Some(LiveValues {
+        mods: std::array::from_fn(|slot| (slot == 3).then(|| LfoNow::along(0.5, 0.5))),
+        ..LiveValues::default()
+    });
+    let (synced, placed) = frame(&mut app, &mut graphics);
+    assert!(!synced.contains("a=T"), "the map is as it was");
+    let middles = dot_middles(&placed);
+    assert_eq!(middles.len(), 1, "{placed:?}");
+    let want = on_cycle(corner, 0.5, 0.5);
+    let found = middles[0].1;
+    assert!(
+        (found.0 - want.0).abs() <= 1.0 && (found.1 - want.1).abs() <= 1.0,
+        "{found:?} against {want:?}"
+    );
+    // A depth of another size leaves the map as it is, and a map of its own sends it again.
+    press(&mut app, "jjj=");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Depth));
+    let (synced, _) = frame(&mut app, &mut graphics);
+    assert!(!synced.contains("a=T"));
+    press(&mut app, "k-");
+    assert_eq!(app.song().tracks[0].mods[3].track.velocity.high, 0x7E);
+    let (synced, _) = frame(&mut app, &mut graphics);
+    assert!(synced.contains("a=T"));
 }

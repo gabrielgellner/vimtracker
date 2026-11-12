@@ -10,6 +10,7 @@ use vt_model::settings::{Kind, SettingId};
 use vt_model::song::{FilterType, Machine};
 use vt_model::speed::Speed;
 use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
+use vt_model::tracking::{Source, Tracking};
 
 use crate::app::App;
 use crate::glyphs;
@@ -34,6 +35,14 @@ const MODE_TITLES: [&str; MOD_SLOTS] = [
     "Mod 4 mode",
     "Mod 5 mode",
     "Mod 6 mode",
+];
+const SOURCE_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 source",
+    "Mod 2 source",
+    "Mod 3 source",
+    "Mod 4 source",
+    "Mod 5 source",
+    "Mod 6 source",
 ];
 const CURVE_TITLES: [&str; MOD_SLOTS] = [
     "Mod 1 curve",
@@ -434,6 +443,17 @@ impl App {
                         .meaning(mode.meaning())
                 });
                 (MODE_TITLES[slot], modes.to_vec())
+            }
+            ModField::Mode if modulator.kind == ModKind::Track => {
+                let sources = Source::ALL.map(|source| {
+                    let track = Tracking {
+                        source,
+                        ..modulator.track
+                    };
+                    Item::new(source.name(), pick(ModSlot { track, ..modulator }))
+                        .meaning(source.meaning())
+                });
+                (SOURCE_TITLES[slot], sources.to_vec())
             }
             ModField::Rate if modulator.kind == ModKind::Steps => {
                 let rates = StepRate::ALL.map(|rate| {

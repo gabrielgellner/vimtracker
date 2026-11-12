@@ -323,6 +323,8 @@ pub struct NoteOn {
     pub synth: Option<SynthVoice>,
     /// MIDI note. `C-3` plays at original pitch.
     pub note: u8,
+    /// How hard it's played, as its gain comes from, for a Track mod slot to follow.
+    pub velocity: u8,
     pub gain: f32,
     /// The bank entry it plays, if it's a sampler's, and which of its slices.
     pub entry: Option<u8>,
