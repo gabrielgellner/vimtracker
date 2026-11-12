@@ -8,7 +8,7 @@ use vt_model::arpeggio::{Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
 use vt_model::envelope::{Adsr, Ahd, Drum, Hold, MAX_HOLD_MS, MAX_RATCHET};
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{Lfo, Rate};
+use vt_model::lfo::{Fade, Lfo, Rate};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
 use vt_model::settings::{LONGEST_GLIDE_MS, gate_value, glide_value};
 use vt_model::song::reset_named;
@@ -270,6 +270,10 @@ impl App {
                 parse_depth(text).map(|deform| with_lfo(Lfo { deform, ..lfo })),
                 "Deform is hex from -FF to +FF".to_owned(),
             ),
+            ModField::Fade => match text.parse::<Fade>() {
+                Ok(fade) => (Some(with_lfo(Lfo { fade, ..lfo })), String::new()),
+                Err(error) => (None, error.to_string()),
+            },
             ModField::Type
             | ModField::Mode
             | ModField::Polarity

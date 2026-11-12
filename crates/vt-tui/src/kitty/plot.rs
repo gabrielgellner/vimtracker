@@ -12,7 +12,7 @@ use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
 use vt_model::envelope::{Adsr, Envelope};
 use vt_model::insert::{Compressor, Equaliser, threshold_db};
-use vt_model::lfo::{self, Lfo, deformed_wave};
+use vt_model::lfo::{self, Lfo, LfoMode, deformed_wave};
 use vt_model::modulation::Polarity;
 use vt_model::song::{FilterType, Track};
 
@@ -405,6 +405,9 @@ pub struct LfoDrawing {
     pub unipolar: bool,
     /// How far its wave is bent, as its `Deform` says.
     pub deform: i16,
+    /// Whether it plays only half its cycle from each note, as `Half` does, then stays: the
+    /// picture draws that half, then a flat line where it stays.
+    pub half: bool,
 }
 
 impl LfoDrawing {
@@ -417,6 +420,7 @@ impl LfoDrawing {
                 flipped: depth < 0,
                 unipolar: false,
                 deform: lfo.deform,
+                half: lfo.mode == LfoMode::Half,
             }
         } else {
             Self {
@@ -425,8 +429,14 @@ impl LfoDrawing {
                 flipped: false,
                 unipolar: false,
                 deform: 0,
+                half: false,
             }
         }
+    }
+
+    /// How much of the cycle drawn is its wave, before any flat line where it stays.
+    fn span(self) -> f32 {
+        if self.half { 0.5 } else { 1.0 }
     }
 
     /// The same, in a polarity, which moves its dotted line.
@@ -452,9 +462,10 @@ impl LfoDrawing {
 
     /// The cycle's level at `x` from 0 to 1 across: the engine's own wave, from the cycle's start.
     /// The right edge has the end of the cycle, rather than the start of the next, so a saw's fall
-    /// isn't drawn up the edge.
+    /// isn't drawn up the edge. A half cycle stays where its half ends, just short of it, as the
+    /// engine does.
     pub fn level_at(self, x: f32) -> f32 {
-        let turns = f64::from(x.min(1.0 - JUMP)) + self.start();
+        let turns = f64::from(x.min(self.span() - JUMP)) + self.start();
         self.level_of(deformed_wave(self.shape, turns, 0, self.deform_share()))
     }
 
@@ -484,6 +495,11 @@ impl LfoDrawing {
             if jump > 0.0 {
                 corners.extend([jump - JUMP, jump]);
             }
+        }
+        // A half cycle has a corner where it stops, and none past it.
+        if self.half {
+            corners.retain(|x| *x < self.span() - JUMP);
+            corners.push(self.span() - JUMP);
         }
         corners
     }
@@ -1012,6 +1028,37 @@ mod tests {
                 assert!(plot.png([255; 3]).len() < 6000, "{shape:?} {phase}");
             }
         }
+    }
+
+    #[test]
+    fn a_half_cycle_draws_its_half_then_stays_flat_where_it_ends() {
+        let size = (360, 195);
+        let lfo = |mode| Lfo {
+            shape: lfo::Shape::Saw,
+            mode,
+            ..Lfo::default()
+        };
+        let half = LfoDrawing::of(&lfo(LfoMode::Half), 0x40);
+        assert_ne!(half, LfoDrawing::of(&lfo(LfoMode::One), 0x40));
+        let plot = lfo_cycle(half, size);
+        // A saw falls from the top to the middle over the first half, then stays there.
+        let top = plot.at(0.0, 1.0).1;
+        let centre = plot.at(0.0, 0.5).1;
+        let quarter = plot.at(0.0, 0.75).1;
+        let found = |share: f32| middle(&plot, (share * size.0 as f32) as usize).unwrap();
+        assert!((found(0.25) - quarter).abs() < 1.5, "{}", found(0.25));
+        for share in [0.6, 0.75, 0.95] {
+            assert!(
+                (found(share) - centre).abs() < 1.5,
+                "{share}: {}",
+                found(share)
+            );
+        }
+        assert!(found(0.01) - top < 3.0);
+        // `One` plays the whole cycle, as the other modes draw it.
+        let one = lfo_cycle(LfoDrawing::of(&lfo(LfoMode::One), 0x40), size);
+        let low = plot.at(0.0, 0.25).1;
+        assert!((middle(&one, size.0 * 3 / 4).unwrap() - low).abs() < 1.5);
     }
 
     #[test]

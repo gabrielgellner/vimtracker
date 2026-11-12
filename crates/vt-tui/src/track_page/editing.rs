@@ -143,6 +143,7 @@ fn adjust_mod(
             let moved = lfo.deform + if up { size } else { -size };
             lfo.deform = moved.clamp(-MAX_DEFORM, MAX_DEFORM);
         }
+        ModField::Fade => lfo.fade = lfo.fade.nudged(up, large),
     }
 }
 
@@ -214,6 +215,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         ModField::Rate => lfo.rate = fresh.lfo.rate,
         ModField::Phase => lfo.phase = fresh.lfo.phase,
         ModField::Deform => lfo.deform = fresh.lfo.deform,
+        ModField::Fade => lfo.fade = fresh.lfo.fade,
     }
     ModSlot {
         adsr,

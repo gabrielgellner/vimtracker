@@ -178,8 +178,7 @@ not like the screen, the same way for every device:
     layout under your hand, as a mod slot's layout is its type's.
 
 Off/on settings are on the buttons, under the knob they go with, such as Glue's `Auto`
-under `Makeup`, an LFO's mode under `Phase`, lit for `Trig` and dark for `Free`, and a mod slot's
-polarity under `Depth`, lit for `Bi`: a press switches it, `u` undoes it, and its light is on while it is. The
+under `Makeup` and a mod slot's polarity under `Depth`, lit for `Bi`: a press switches it, `u` undoes it, and its light is on while it is. The
 Roto shows buttons only for devices stored on it, so vimtracker stores the ones that
 have off/on settings there, 10 setups named `vt ...`, beside Live's, when it first
 connects and again only when one changes. It never touches another program's setups.

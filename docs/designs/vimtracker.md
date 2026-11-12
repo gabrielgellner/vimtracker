@@ -467,7 +467,8 @@ Song                               song.ron, refused unless format_version is FO
     setting, a depth, a switch and a polarity (`Uni` or `Bi`, its type's until one is chosen),
     which every type shares, and each type's own settings, which a
     slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
-    rate is a note division or bars, a count of steps, or hertz, and its mode `Free` or `Trig`. An
+    rate is a note division or bars, a count of steps, or hertz, its mode `Free`, `Trig`, `Hold`,
+    `One` or `Half`, and its fade `Off` or in or out over a sweep's length after each note. An
     ADSR is in milliseconds, with a reset and a curve (`Exp`, `Lin` or `Snap`, its mode), and an
     AHD the same with a hold of a time or `Note` in place of a sustain and release, and a drum
     envelope a steep peak from full onto a body, struck one to eight times, then a decay. The first
@@ -1019,8 +1020,12 @@ sample plays. Elektron's per-track idea is kept, and its `SPD` and `MULT` are no
 *   **Depth:** how far it swings either way, in hex in the destination's units, so `Cut 80` and `Depth +40` moves between
     `40` and `C0`. Negative flips the shape. **Phase:** where in the cycle it starts, in degrees.
 *   **Shape:** `Sine`, `Tri`, `Saw` (falls), `Ramp` (rises), `Square`, `Random` (a new value each cycle, from the seed) or `Smooth` (the same values, eased from one to the next).
-*   **Retrig:** when on, each note on the track restarts it. Otherwise playing from the top is the only restart. A
-    `:reset` doesn't touch LFOs, as it's about patterns, and anything that should follow steps uses Retrig.
+*   **Mode** (decision 202): `Free` runs from the song's position, and playing from the top is its only restart.
+    `Trig`, `One` and `Half` restart it at each note on the track, `One` and `Half` then staying at the end of one
+    cycle or half of one; `Hold` runs free and holds the wave's value at the track's last note, worked out from
+    the time of that note (`TrackState::noted`) rather than kept. A `:reset` doesn't touch LFOs, as it's about
+    patterns. **Fade** scales it from nothing up, or down to nothing, over a length after the last note, in every
+    mode.
 *   **Timing:** position is worked out from the song's ticks, or from frames played for hertz, rather than added up, so
     it can't drift and a render repeats exactly. It's worked out every 32 frames and smoothed like held values. A
     stopped track sits at its held values, so auditions hear those, and pausing freezes it.
@@ -1530,7 +1535,7 @@ Step:  NOTE VOL INST FX FX FX     C-3 64 01 CUT40 ---00 RET14
 | Normal | `=`, `-` | Up or down a small step: a semitone, or 1 on a value. `Ctrl-A` and `Ctrl-X` do the same |
 | Normal | `+`, `_` | Up or down a large step, the same keys with Shift: an octave, or `10` in hex. On `RET`, the small step changes only the rate digit and the large step only the fade digit, with no carry |
 | Normal | `x` | Clear a step's field. On the track page, instrument view and chain Transpose, back to the default |
-| Normal | `K` | Choose the field from a list: Instrument and FX columns, a chain row's phrase, a sample, and an LFO's `Dest`, `Shape`, `Rate` and `Retrig` |
+| Normal | `K` | Choose the field from a list: Instrument and FX columns, a chain row's phrase, a sample, and an LFO's `Dest`, `Shape`, `Rate`, `Mode` and `Fade` |
 | Normal | `~` | Cycle a value's mark: lock, hold, glide. In Visual too |
 | Normal | `.`, `u`, `Ctrl-R` | Repeat, undo, redo |
 | Normal | `gd`, `Ctrl-O`, `Ctrl-I`, `grr` | Open item, jump back, jump forward, list uses. `gr` is only a prefix |

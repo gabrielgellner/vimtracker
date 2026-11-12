@@ -195,13 +195,41 @@ fn trigger_slot(slot: &ModSlot, run: &mut SlotRun, now: SongTime) {
         at: now.clock,
         from,
     };
-    if slot.lfo.mode == LfoMode::Trig {
+    if slot.lfo.mode.restarts() {
         run.start = LfoStart {
             tick: now.tick,
             clock: now.clock,
         };
     }
 }
+
+/// How many cycles an LFO slot is through its wave now, before its phase, under its mode: from
+/// its start, which a note that restarts it moves, and for `Hold` only as far as the track's last
+/// note, or its start if none has played. A one-shot stays at the end of what it plays, just short
+/// of it so a saw is still at its bottom, and before any note it's already there.
+#[inline]
+fn lfo_cycles(slot: &ModSlot, start: LfoStart, noted: Option<LfoStart>, now: SongTime) -> f64 {
+    let mode = slot.lfo.mode;
+    let until = match (mode, noted) {
+        (LfoMode::Hold, Some(note)) => note,
+        (LfoMode::Hold, None) => start,
+        _ => LfoStart {
+            tick: now.tick,
+            clock: now.clock,
+        },
+    };
+    let seconds = until.clock.wrapping_sub(start.clock) as f64 / f64::from(now.rate);
+    let cycles = slot.lfo.rate.cycles(until.tick - start.tick, seconds);
+    match mode.plays_for() {
+        Some(most) if noted.is_some() => cycles.min(most - ONE_SHOT_END),
+        Some(most) => most - ONE_SHOT_END,
+        None => cycles,
+    }
+}
+
+/// How far short of its end a one-shot LFO stays: far enough that its place is still in the cycle
+/// it played, and too little to hear.
+const ONE_SHOT_END: f64 = 1e-6;
 
 /// The key a slot's random waves are picked by: slots 4 to 6 have the keys the three LFOs had
 /// before mod slots, so their `Random` and `Smooth` waves are as they were, and slots 1 to 3 the
@@ -785,6 +813,9 @@ pub struct TrackState {
     filter_countdown: u32,
     /// Each mod slot as it runs.
     slots: [SlotRun; MOD_SLOTS],
+    /// Where the track's last note started its modulation, for an LFO's fade and its hold, or
+    /// none since playing started.
+    noted: Option<LfoStart>,
     /// What the LFOs add to each held value, by setting. Separate from the held values, so a
     /// step's FX moves the centre and the LFO carries on around it.
     offsets: [f32; SettingId::COUNT],
@@ -1002,6 +1033,7 @@ impl TrackState {
             coefficients: None,
             filter_countdown: 0,
             slots: [SlotRun::default(); MOD_SLOTS],
+            noted: None,
             offsets: [0.0; SettingId::COUNT],
             offset_marks: [None; MOD_SLOTS],
             synth: {
@@ -1113,6 +1145,7 @@ impl TrackState {
         for run in &mut self.slots {
             run.start = LfoStart { tick: 0.0, clock };
         }
+        self.noted = None;
     }
 
     /// Count every slot's cycles from the top of the song, as playing starts there, keeping the
@@ -1121,6 +1154,7 @@ impl TrackState {
         for run in &mut self.slots {
             run.start.tick = 0.0;
         }
+        self.noted = None;
     }
 
     /// Hear the voice and effects the track has now. One that's changed is heard from its own
@@ -1183,6 +1217,7 @@ impl TrackState {
         let mut filter_moving = false;
         let shaping = note_shape_slot(&track.mods);
         let offsets = &mut self.offsets;
+        let noted = self.noted;
         for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
             run.now = None;
             let Some(destination) = slot.destination else {
@@ -1227,16 +1262,15 @@ impl TrackState {
                     moved.add(destination.index(), added);
                 }
                 ModKind::Lfo => {
-                    let start = run.start;
-                    let seconds = now.clock.wrapping_sub(start.clock) as f64 / f64::from(now.rate);
-                    let cycles = slot.lfo.rate.cycles(now.tick - start.tick, seconds);
+                    let cycles = lfo_cycles(slot, run.start, noted, now);
                     let key = now.seed ^ ((index as u64) << 8 | wave_key(at));
                     let phase = f64::from(phase_of(phase) + moved_by(1));
                     let deform = ((depth_of(deform) + moved_by(3) * 255.0) / f32::from(MAX_DEFORM))
                         .clamp(-1.0, 1.0);
                     let value = deformed_wave(slot.lfo.shape, cycles + phase, key, deform);
                     run.now = Some(LfoNow::of(cycles + phase, value));
-                    let value = polarity.of(Polarity::Bi, value);
+                    let since_note = noted.map(|note| now.tick - note.tick);
+                    let value = polarity.of(Polarity::Bi, value) * slot.lfo.fade.gain(since_note);
                     offsets[destination.index()] +=
                         run.add(slot.kind, value * depth / 255.0 * share);
                     self.offset_marks[marks] = Some(destination.index());
@@ -1422,6 +1456,10 @@ impl TrackState {
         for (slot, run) in track.mods.iter().zip(&mut self.slots) {
             trigger_slot(slot, run, now);
         }
+        self.noted = Some(LfoStart {
+            tick: now.tick,
+            clock: now.clock,
+        });
     }
 
     /// Start the release of every slot's envelope, when a note ends, but a one-shot's, which plays

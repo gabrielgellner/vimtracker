@@ -926,3 +926,15 @@ requests, Drum then LPG:
   parts review's oscillators Part B, trick 13).
 * **The peak's fall** is `Snap`'s, whatever the curve, which bends the body's decay.
 * **The Roto** stores Drum as a setup of its own, `Ratchet` on knob 4, so there are 11.
+
+**As built for #86 (decision 202):**
+
+* **Stateless:** `Hold` works its wave out at the time of the track's last note rather than
+  keeping the value, and `One` and `Half` are `Trig` held just short of a cycle or half of one.
+  Before any note, `Hold` holds where its wave starts and the one-shots are at their end.
+* **Fade** is `lfo::Fade`, `Off`, `In(ticks)` or `Out(ticks)`, a straight line from the last note;
+  before any note a fade in is done and a fade out is over.
+* **The grid** is `Shape`, `Rate` and `Depth` down the left, and `Phase`, `Fade` and `Deform`
+  down the right.
+* **The Roto** keeps the LFO stored, for the polarity's button: `Fade` and the five-step `Mode`
+  are knobs 6 and 7.
