@@ -18,8 +18,15 @@ fn the_kernel_always_gives_the_same_answer_for_a_seed() {
 fn the_kernel_takes_microseconds() {
     let fastest = full_speed();
     assert!(fastest > Duration::ZERO);
-    // A test build is slower, and a busy machine slower again, but never this slow.
-    assert!(fastest < Duration::from_millis(1), "{fastest:?}");
+    // About a microsecond at full speed in a release build. A test build is some hundreds of times
+    // slower, and a machine busy with other builds slower again, so its bound is wide: it only
+    // catches a kernel grown by orders of magnitude.
+    let most = if cfg!(debug_assertions) {
+        Duration::from_millis(20)
+    } else {
+        Duration::from_millis(1)
+    };
+    assert!(fastest < most, "{fastest:?}");
     assert!(time_kernel() >= Duration::from_nanos(1));
 }
 
