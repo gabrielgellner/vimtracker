@@ -396,8 +396,9 @@ fn random(key: u64, cycle: i64) -> f32 {
     (mixed >> 40) as f32 / (1_u64 << 23) as f32 - 1.0
 }
 
-/// How an LFO runs against the track's notes: the mode in its title. The Digitakt's five are the
-/// plan (`docs/designs/mod-slots.md` §2), and `Hold`, `One` and `Half` come with #86.
+/// How an LFO runs against the track's notes: the mode in its title, the Digitakt's five
+/// (`docs/designs/mod-slots.md` §2, #86). Every one is still worked out from the song's position
+/// and the time since the track's last note, so none is stepped along and a render repeats.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LfoMode {
     /// It runs from the song's position, and only playing from the top starts it again.
@@ -405,17 +406,27 @@ pub enum LfoMode {
     Free,
     /// Each note on the track starts it again at its `Phase`.
     Trig,
+    /// It runs free underneath, and each note holds the value it's at until the next: a sample
+    /// and hold of the wave.
+    Hold,
+    /// Each note starts it at its `Phase`, and it plays one cycle, then stays where it ended.
+    One,
+    /// The same, for half a cycle.
+    Half,
 }
 
 impl LfoMode {
     /// Every mode, in the order `+` goes through them.
-    pub const ALL: [Self; 2] = [Self::Free, Self::Trig];
+    pub const ALL: [Self; 5] = [Self::Free, Self::Trig, Self::Hold, Self::One, Self::Half];
 
     /// The name in the title.
     pub fn name(self) -> &'static str {
         match self {
             Self::Free => "Free",
             Self::Trig => "Trig",
+            Self::Hold => "Hold",
+            Self::One => "One",
+            Self::Half => "Half",
         }
     }
 
@@ -424,7 +435,157 @@ impl LfoMode {
         match self {
             Self::Free => "runs from the song's position",
             Self::Trig => "each note starts it at its phase",
+            Self::Hold => "runs free, and each note holds where it is",
+            Self::One => "each note plays one cycle, then it stays",
+            Self::Half => "each note plays half a cycle, then it stays",
         }
+    }
+
+    /// Whether each note starts its cycle again at its `Phase`.
+    pub fn restarts(self) -> bool {
+        matches!(self, Self::Trig | Self::One | Self::Half)
+    }
+
+    /// How many cycles a one-shot plays from each note before it stays where it ended.
+    pub fn plays_for(self) -> Option<f64> {
+        match self {
+            Self::One => Some(1.0),
+            Self::Half => Some(0.5),
+            _ => None,
+        }
+    }
+}
+
+/// How many lengths a fade can take either way: the sweeps', from `1/64` to 16 bars.
+const FADES: usize = SWEEPS;
+
+/// How an LFO fades in or out after each of the track's notes (#86): Elektron's `FADE` as a
+/// musical length rather than a speed, none, or in or out over a note division or whole bars, in
+/// ticks of [`SWEEP_TICKS`]. It counts from the last note in every mode, so in `Free` only the fade
+/// starts again, not the wave.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Fade {
+    #[default]
+    Off,
+    /// From nothing to its whole depth over this many ticks after each note.
+    In(u32),
+    /// From its whole depth to nothing over this many ticks after each note.
+    Out(u32),
+}
+
+/// Why typed text isn't a fade.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[error("a fade is off, or + or - and a length like 1/4, 1/8d or 2 bars")]
+pub struct FadeError;
+
+impl Fade {
+    /// Every fade in the order `+` goes through them: the longest fade out, shorter and shorter
+    /// to none, then longer and longer fades in.
+    pub const ALL: [Self; 2 * FADES + 1] = {
+        let mut all = [Self::Off; 2 * FADES + 1];
+        let mut at = 0;
+        while at < FADES {
+            all[FADES - 1 - at] = Self::Out(SWEEP_TICKS[at]);
+            all[FADES + 1 + at] = Self::In(SWEEP_TICKS[at]);
+            at += 1;
+        }
+        all
+    };
+
+    /// Whether this is a fade that can be set: none, or one of the sweeps' lengths.
+    pub fn in_range(self) -> bool {
+        match self {
+            Self::Off => true,
+            Self::In(ticks) | Self::Out(ticks) => SWEEP_TICKS.contains(&ticks),
+        }
+    }
+
+    /// How much of the wave is heard this many ticks after a note, from 0 to 1. With no note
+    /// since playing started, it's as though the note were long ago: a fade in is done, and a
+    /// fade out is over.
+    #[inline]
+    pub fn gain(self, since_note: Option<f64>) -> f32 {
+        let share = |ticks: u32| {
+            since_note.map_or(1.0, |since| {
+                (since / f64::from(ticks.max(1))).clamp(0.0, 1.0) as f32
+            })
+        };
+        match self {
+            Self::Off => 1.0,
+            Self::In(ticks) => share(ticks),
+            Self::Out(ticks) => 1.0 - share(ticks),
+        }
+    }
+
+    /// The next fade one way, stopping at either end. A large step skips the dotted and triplet
+    /// lengths, as a rate's does.
+    #[must_use]
+    pub fn nudged(self, up: bool, large: bool) -> Self {
+        let at = Self::ALL
+            .iter()
+            .position(|fade| *fade == self)
+            .unwrap_or(FADES);
+        let straight = |fade: &&Self| match **fade {
+            Self::Off => true,
+            Self::In(ticks) | Self::Out(ticks) => ticks % 60 == 0 && (ticks / 60).is_power_of_two(),
+        };
+        let found = if up {
+            Self::ALL[at + 1..]
+                .iter()
+                .find(|fade| !large || straight(fade))
+        } else {
+            Self::ALL[..at]
+                .iter()
+                .rfind(|fade| !large || straight(fade))
+        };
+        found.copied().unwrap_or(self)
+    }
+}
+
+impl fmt::Display for Fade {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = |ticks: u32| {
+            SWEEP_TICKS
+                .iter()
+                .position(|length| *length == ticks)
+                .map_or("?", |at| SWEEP_NAMES[at])
+        };
+        match *self {
+            Self::Off => f.write_str("Off"),
+            Self::In(ticks) => write!(f, "+{}", name(ticks)),
+            Self::Out(ticks) => write!(f, "-{}", name(ticks)),
+        }
+    }
+}
+
+impl FromStr for Fade {
+    type Err = FadeError;
+
+    fn from_str(text: &str) -> Result<Self, FadeError> {
+        let text: String = text
+            .to_ascii_lowercase()
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        if text == "off" || text == "0" {
+            return Ok(Self::Off);
+        }
+        let (out, length) = match text.strip_prefix('-') {
+            Some(length) => (true, length),
+            None => (false, text.strip_prefix('+').unwrap_or(&text)),
+        };
+        // `2bar` and `1bars` read as the names have them.
+        let length = length.trim_end_matches('s');
+        let at = SWEEP_NAMES
+            .iter()
+            .position(|name| name.replace(' ', "").trim_end_matches('s') == length)
+            .ok_or(FadeError)?;
+        let ticks = SWEEP_TICKS[at];
+        Ok(if out {
+            Self::Out(ticks)
+        } else {
+            Self::In(ticks)
+        })
     }
 }
 
@@ -441,10 +602,17 @@ pub struct Lfo {
     /// square's width (#468).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub deform: i16,
+    /// How it fades in or out after each note (#86).
+    #[serde(default, skip_serializing_if = "is_off")]
+    pub fade: Fade,
 }
 
 fn is_zero(value: &i16) -> bool {
     *value == 0
+}
+
+fn is_off(fade: &Fade) -> bool {
+    *fade == Fade::Off
 }
 
 impl Default for Lfo {
@@ -455,6 +623,7 @@ impl Default for Lfo {
             phase: 0,
             mode: LfoMode::Free,
             deform: 0,
+            fade: Fade::Off,
         }
     }
 }
@@ -462,7 +631,10 @@ impl Default for Lfo {
 impl Lfo {
     /// Whether these are settings that can be set.
     pub fn in_range(&self) -> bool {
-        self.rate.in_range() && self.phase < 360 && self.deform.abs() <= MAX_DEFORM
+        self.rate.in_range()
+            && self.phase < 360
+            && self.deform.abs() <= MAX_DEFORM
+            && self.fade.in_range()
     }
 }
 
@@ -720,5 +892,83 @@ mod tests {
             }
             .in_range()
         );
+    }
+
+    #[test]
+    fn a_fade_reads_and_shows_as_a_signed_length() {
+        let fade = |text: &str| text.parse::<Fade>().unwrap();
+        assert_eq!(fade("off"), Fade::Off);
+        assert_eq!(fade("+1 bar"), Fade::In(BAR_TICKS));
+        assert_eq!(fade("1bar"), Fade::In(BAR_TICKS));
+        assert_eq!(fade("-1/16"), Fade::Out(240));
+        assert_eq!(fade("+2 bar"), Fade::In(2 * BAR_TICKS));
+        assert_eq!(fade("-16 bars"), Fade::Out(16 * BAR_TICKS));
+        for fade in Fade::ALL {
+            assert!(fade.in_range());
+            assert_eq!(fade.to_string().parse::<Fade>(), Ok(fade), "{fade}");
+        }
+        assert_eq!(Fade::In(BAR_TICKS).to_string(), "+1 bar");
+        assert_eq!(Fade::Out(120).to_string(), "-1/32");
+        for text in ["", "1/3", "+3 bars", "32 bars", "fast"] {
+            assert!(text.parse::<Fade>().is_err(), "{text}");
+        }
+        assert!(!Fade::In(100).in_range());
+    }
+
+    #[test]
+    fn a_fade_steps_through_out_none_and_in_and_stops_at_the_ends() {
+        assert_eq!(Fade::Off.nudged(true, false), Fade::In(60));
+        assert_eq!(Fade::Off.nudged(false, false), Fade::Out(60));
+        assert_eq!(Fade::In(60).nudged(false, false), Fade::Off);
+        assert_eq!(Fade::Out(60).nudged(true, false), Fade::Off);
+        let longest = Fade::In(16 * BAR_TICKS);
+        assert_eq!(longest.nudged(true, false), longest);
+        assert_eq!(
+            Fade::Out(16 * BAR_TICKS).nudged(false, true),
+            Fade::Out(16 * BAR_TICKS)
+        );
+        // A large step goes by straight lengths.
+        assert_eq!(Fade::In(240).nudged(true, true), Fade::In(480));
+        assert_eq!(Fade::In(360).nudged(false, true), Fade::In(240));
+        assert_eq!(Fade::In(60).nudged(false, true), Fade::Off);
+        assert_eq!(Fade::Off.nudged(false, true), Fade::Out(60));
+    }
+
+    #[test]
+    fn a_fade_in_rises_and_a_fade_out_falls_over_its_length_after_a_note() {
+        let bar = f64::from(BAR_TICKS);
+        let fade_in = Fade::In(BAR_TICKS);
+        assert_eq!(fade_in.gain(Some(0.0)), 0.0);
+        assert_eq!(fade_in.gain(Some(bar / 4.0)), 0.25);
+        assert_eq!(fade_in.gain(Some(bar * 3.0)), 1.0);
+        let fade_out = Fade::Out(BAR_TICKS);
+        assert_eq!(fade_out.gain(Some(0.0)), 1.0);
+        assert_eq!(fade_out.gain(Some(bar / 4.0)), 0.75);
+        assert_eq!(fade_out.gain(Some(bar * 3.0)), 0.0);
+        // With no note yet, it's as though the note were long ago.
+        assert_eq!(fade_in.gain(None), 1.0);
+        assert_eq!(fade_out.gain(None), 0.0);
+        assert_eq!(Fade::Off.gain(Some(0.0)), 1.0);
+    }
+
+    #[test]
+    fn the_modes_say_which_restart_and_which_play_once() {
+        let restarts = LfoMode::ALL.map(LfoMode::restarts);
+        assert_eq!(restarts, [false, true, false, true, true]);
+        assert_eq!(LfoMode::One.plays_for(), Some(1.0));
+        assert_eq!(LfoMode::Half.plays_for(), Some(0.5));
+        assert_eq!(LfoMode::Hold.plays_for(), None);
+        let lfo = Lfo {
+            mode: LfoMode::Half,
+            fade: Fade::Out(480),
+            ..Lfo::default()
+        };
+        let text = ron::to_string(&lfo).unwrap();
+        assert!(
+            text.contains("mode:Half") && text.contains("fade:Out(480)"),
+            "{text}"
+        );
+        assert_eq!(ron::from_str::<Lfo>(&text).unwrap(), lfo);
+        assert!(!ron::to_string(&Lfo::default()).unwrap().contains("fade"));
     }
 }

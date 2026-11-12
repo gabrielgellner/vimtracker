@@ -1409,8 +1409,8 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(row(2).starts_with("│  Attack    1 ms       Sustain   100%"));
     assert!(row(4).starts_with("│  Decay     0 ms       Depth     --"));
     assert!(row(6).starts_with(&format!("│  Release   50 ms      Reset     {on}")));
-    // An LFO's shape, rate and depth down its left, and its phase and deform down its right, with
-    // a hole between them, as its mode is in its title.
+    // An LFO's shape, rate and depth down its left, and its phase, fade and deform down its right,
+    // as its mode is in its title.
     let (top, left) = device_at(&lines, "Mod 4");
     let row = |at: usize| from_column(&lines[top + at], left);
     assert!(
@@ -1419,7 +1419,7 @@ fn the_track_page_shows_its_settings_in_columns() {
         row(2)
     );
     let inside: String = row(4).chars().take(44).collect();
-    assert_eq!(inside.trim_end(), "│  Rate      1/8d");
+    assert_eq!(inside.trim_end(), "│  Rate      1/8d       Fade      Off");
     let inside: String = row(6).chars().take(73).collect();
     assert_eq!(inside.trim_end(), "│  Depth     +40        Deform    00");
     press(&mut app, "H");
@@ -1509,9 +1509,10 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
     press(&mut app, "H");
     assert_eq!(app.track_page.page, Page::Sound, "it stops at the first");
     press(&mut app, "j$");
+    let sound_place = (app.track_page.row, app.track_page.field);
     press(&mut app, "L");
     assert_eq!(app.track_page.page, Page::Mod);
-    assert_eq!(app.track_page.row, 0);
+    assert_eq!((app.track_page.row, app.track_page.field), (0, 0));
     let modulation: Vec<_> = Page::Mod
         .devices(&app.song().tracks[0])
         .iter()
@@ -1523,7 +1524,11 @@ fn h_and_l_change_pages_and_every_setting_is_on_one_page() {
     );
     press(&mut app, "GH");
     assert_eq!(app.track_page.page, Page::Sound);
-    assert_eq!(app.track_page.row, 0);
+    assert_eq!(
+        (app.track_page.row, app.track_page.field),
+        sound_place,
+        "each page keeps its place"
+    );
     let sound: Vec<_> = Page::Sound
         .devices(&app.song().tracks[0])
         .iter()
@@ -2694,7 +2699,7 @@ fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
     // On the Mod page, an envelope's Reset and the arpeggio's Retrig, after their names in the
     // second column of their devices: each band is a device tall, the left device's second
     // column 24 in and the right device's 76 further, and a value 10 after its name. An LFO's
-    // mode is in its title, as a word, so its grid has no toggle.
+    // mode is in its title, as a word, so its grid has no toggle: under its phase is its fade.
     press(&mut app, "H");
     let buffer = track_page_buffer(&app);
     let top = |band: u16| 2 + 9 * band;
@@ -2702,7 +2707,7 @@ fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
         let reset = (34, top(band) + 6);
         assert_eq!(glyph_at(&buffer, reset).0, SWITCH_ON, "Mod {}", band + 1);
         let under_phase = (76 + 34, top(band) + 4);
-        assert_eq!(glyph_at(&buffer, under_phase).0, ' ', "Mod {}", band + 4);
+        assert_eq!(glyph_at(&buffer, under_phase).0, 'O', "Mod {}", band + 4);
     }
     // The arpeggio's values have room for its longest mode, so its second column is further in.
     assert_eq!(buffer[(76 + 27, top(3) + 4)].symbol(), "R");
@@ -3186,4 +3191,52 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     let step = track.phrases[&0].steps()[0].to_string();
     assert!(step.contains(&format!("{INSERTS}.bypass:01")), "{step}");
     std::fs::remove_dir_all(&folder).unwrap();
+}
+
+#[test]
+fn each_page_keeps_its_own_cursor_and_starts_on_its_first_setting() {
+    use vt_model::insert::Insert;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = app_with_distort();
+    press(&mut app, " 4L$");
+    assert_eq!(column_name(&app), "Dest");
+    // The FX page starts on its first slot's effect, not on its type under the Mod page's column,
+    // so `x` empties the slot.
+    press(&mut app, "L");
+    assert_eq!(column_name(&app), "Effect");
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
+    // The Mod page kept its place.
+    press(&mut app, "H");
+    assert_eq!(column_name(&app), "Dest");
+    // The Sound page kept its own, the Machine, so `K` lists the machines.
+    press(&mut app, "H");
+    assert_eq!(column_name(&app), "Machine");
+    // Each keeps a place in a grid too, and the column `j` and `k` aim for starts again from it.
+    press(&mut app, "}jlL");
+    assert_eq!(column_name(&app), "Dest");
+    press(&mut app, "H");
+    let sound = column_name(&app);
+    press(&mut app, "LH");
+    assert_eq!(column_name(&app), sound);
+
+    // From the Sound page's last column straight through to the FX page, too.
+    let (mut app, _realtime) = app_with_distort();
+    press(&mut app, " 4$");
+    assert_eq!(column_name(&app), "Sample");
+    press(&mut app, "LL");
+    assert_eq!(column_name(&app), "Effect");
+    press(&mut app, "HH");
+    assert_eq!(column_name(&app), "Sample");
+}
+
+/// Two tracks, the first with a Distort in its first slot.
+fn app_with_distort() -> (App, Realtime) {
+    let (mut app, realtime) = app();
+    app.apply(&Action::SetInsert {
+        track: 0,
+        slot: 0,
+        insert: vt_model::insert::Insert::ALL[1],
+    });
+    (app, realtime)
 }
