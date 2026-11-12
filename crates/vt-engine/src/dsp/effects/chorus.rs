@@ -26,8 +26,10 @@
 //!
 //! The Juno's three types are this program's own, written from how the DSP parts review describes
 //! a Roland Juno's chorus (decision 198): a bucket-brigade delay on each side, a few ms long,
-//! swept by one triangle, the sides in antiphase; its filters as a low-pass; and a DC block. TAL-NoiseMaker's chorus is GPL 2 only, so
-//! none of its code is used. Each delay is read through a first-order all-pass, as Dattorro's
+//! swept by one triangle, the sides in antiphase but for I+II's, which move together; its filters
+//! as a low-pass; and a DC block. Its delays are a Juno-60's as measured in pendragon-andyh's
+//! Juno60 analysis and checked against Arturia's Chorus JUN-6 (decision 244). TAL-NoiseMaker's
+//! chorus is GPL 2 only, so none of its code is used. Each delay is read through a first-order all-pass, as Dattorro's
 //! "Effect Design" describes, so its top end doesn't dull and brighten as the sweep moves it
 //! between samples.
 
@@ -71,9 +73,13 @@ const SIXTHS: [(f32, f32); 6] = [
 /// How fast the Juno's triangle goes in I, II and I+II, in Hz, at `Rate` `80`.
 const JUNO_HERTZ: [f32; 3] = [0.5, 0.83, 8.0];
 /// Each Juno type's shortest delay, and how far above it the sweep reaches at `Depth` `80`, in
-/// ms: I and II from 0.7 to 4.9 ms, and I+II a narrow sweep around 3.4 ms.
-const JUNO_SHORTEST_MS: [f32; 3] = [0.7, 0.7, 3.2];
-const JUNO_SWEEP_MS: [f32; 3] = [4.2, 4.2, 0.35];
+/// ms, as a Juno-60 measures: I and II from 1.66 to 5.35 ms, and I+II a narrow sweep from 3.3 to
+/// 3.7 ms.
+const JUNO_SHORTEST_MS: [f32; 3] = [1.66, 1.66, 3.3];
+const JUNO_SWEEP_MS: [f32; 3] = [3.69, 3.69, 0.4];
+/// How far round the right side's sweep is from the left's, in turns: half in I and II, so one
+/// side is longest as the other is shortest, and none in I+II, whose sides move together.
+const JUNO_RIGHT_TURNS: [f32; 3] = [0.5, 0.5, 0.0];
 /// Where the Juno's low-pass, standing in for its bucket brigade's filters, starts to take the
 /// top off, and where its DC block is.
 const JUNO_TONE_HZ: f32 = 7_000.0;
@@ -87,6 +93,19 @@ const LEAST_FRACTION: f32 = 0.618;
 fn triangle(turns: f32) -> f32 {
     let turns = turns - turns.floor();
     4.0 * (turns - 0.5).abs() - 1.0
+}
+
+/// A Juno type's sweep at a place in its turn, from -1 to 1: the triangle, or for I+II the
+/// triangle rounded to within about 2% of a sine, as a Juno-60's fast sweep is. The rounding
+/// keeps its ends at -1 and 1, so its range stays the same.
+#[inline]
+fn juno_wave(mode: usize, turns: f32) -> f32 {
+    let wave = triangle(turns);
+    if mode == 2 {
+        wave * (3.0 - wave * wave) * 0.5
+    } else {
+        wave
+    }
 }
 
 /// A Juno type's place among its three.
@@ -266,8 +285,8 @@ impl Chorus {
     }
 
     /// One frame through a Juno's chorus: each side down its own line, read a few ms back where
-    /// the triangle puts it, the right where the left would be half a turn on, then darkened and
-    /// with no DC.
+    /// the sweep puts it, the right where the left would be half a turn on, or in I+II where the
+    /// left is, then darkened and with no DC.
     #[inline]
     fn juno(&mut self, input: [f32; 2], speed: f32, depth: f32) -> [f32; 2] {
         let mode = juno_mode(self.kind);
@@ -279,7 +298,7 @@ impl Chorus {
         let mut out = [0.0; 2];
         for (side, sample) in input.into_iter().enumerate() {
             self.lines[side][self.write] = sample;
-            let wave = triangle(self.juno_phase + side as f32 * 0.5);
+            let wave = juno_wave(mode, self.juno_phase + side as f32 * JUNO_RIGHT_TURNS[mode]);
             let read =
                 self.read_through(side, juno_delay_ms(mode, depth, wave) * self.frames_per_ms);
             self.juno_tone[side] += (read - self.juno_tone[side]) * self.tone_coefficient;
@@ -402,7 +421,11 @@ mod tests {
 
     #[test]
     fn the_two_sides_differ_so_it_spreads() {
-        for kind in ChorusType::ALL {
+        // But for I+II, whose sides move together, as a Juno-60's do.
+        for kind in ChorusType::ALL
+            .into_iter()
+            .filter(|kind| !matches!(kind, ChorusType::JunoBoth))
+        {
             let out = through(&mut chorus(kind, 0xFF), 24_000);
             let apart = out
                 .iter()
@@ -447,8 +470,8 @@ mod tests {
 
     #[test]
     fn the_junos_sweep_where_theirs_do_with_the_sides_in_antiphase() {
-        // I and II from 0.7 to 4.9 ms at the middle `Depth`, and I+II a narrow sweep.
-        for (mode, shortest, longest) in [(0, 0.7, 4.9), (1, 0.7, 4.9), (2, 3.2, 3.55)] {
+        // I and II from 1.66 to 5.35 ms at the middle `Depth`, and I+II a narrow sweep.
+        for (mode, shortest, longest) in [(0, 1.66, 5.35), (1, 1.66, 5.35), (2, 3.3, 3.7)] {
             assert!((juno_delay_ms(mode, 0.5, -1.0) - shortest).abs() < 1e-5);
             assert!((juno_delay_ms(mode, 0.5, 1.0) - longest).abs() < 1e-5);
             // With no depth it stays at its shortest.
@@ -476,6 +499,25 @@ mod tests {
     }
 
     #[test]
+    fn juno_i_plus_ii_moves_its_sides_together_near_a_sine() {
+        // The same sound in on both sides comes out the same on both.
+        let mut chorus = chorus(ChorusType::JunoBoth, 0xFF);
+        for frame in 0..RATE / 2 {
+            let sample = (frame as f32 / RATE as f32 * 440.0 * TAU).sin() * 0.5;
+            let [left, right] = chorus.process([sample; 2]);
+            assert_eq!(left, right);
+        }
+        // Its sweep is rounded to within about 2% of a sine; I's and II's stay triangles.
+        for at in 0..100 {
+            let turns = at as f32 / 100.0;
+            // The triangle is at its top at the turn's start, as a cosine is.
+            let sine = (TAU * turns).cos();
+            assert!((juno_wave(2, turns) - sine).abs() < 0.021, "{turns}");
+            assert_eq!(juno_wave(0, turns), triangle(turns));
+        }
+    }
+
+    #[test]
     fn a_juno_with_no_depth_holds_its_shortest_delay() {
         let mut chorus = chorus(ChorusType::JunoI, 0x00);
         let out: Vec<f32> = (0..200)
@@ -487,9 +529,9 @@ mod tests {
         let loudest = (0..out.len())
             .max_by(|a, b| out[*a].abs().total_cmp(&out[*b].abs()))
             .unwrap();
-        // 0.7 ms is 33.6 frames, and the low-pass smears it a little later.
-        assert!((33..=37).contains(&loudest), "{loudest}");
-        assert!(out[..32].iter().all(|sample| sample.abs() < 1e-6));
+        // 1.66 ms is 79.7 frames, and the low-pass smears it a little later.
+        assert!((79..=83).contains(&loudest), "{loudest}");
+        assert!(out[..78].iter().all(|sample| sample.abs() < 1e-6));
     }
 
     #[test]

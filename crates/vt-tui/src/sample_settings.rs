@@ -1,5 +1,5 @@
-//! The sample page's settings: whether points snap to zero crossings and how readily a sound counts
-//! as starting, for the whole entry, and how the slice under the cursor plays, its gain, pan, tune, direction and fades, or the entry's own with no slices. `K`
+//! The sample page's settings: whether points snap to zero crossings, how readily a sound counts
+//! as starting, how many steps it lasts and how it keeps to the tempo, for the whole entry, and how the slice under the cursor plays, its gain, pan, tune, direction and fades, or the entry's own with no slices. `K`
 //! on the waveform chooses one to change, which puts the page's focus on it in the settings rows;
 //! there `h` and `l` go along them, `=` `-` and `+` `_` change it by a small or a large step, `K`
 //! lists its values, `x` puts it back, and `Esc` goes back to the waveform. `j` and `k` still go
@@ -7,16 +7,18 @@
 //! reverses it from the waveform too. Each change is one undo step on the bank entry.
 
 use vt_model::action::Action;
-use vt_model::bank::{BankEntry, Hints, MOST_PAN};
+use vt_model::bank::{BankEntry, Hints, MOST_PAN, MOST_STEPS, Warp};
+use vt_model::constants::BAR_STEPS;
 use vt_model::kit::MAX_TUNE;
 use vt_model::onsets::MOST_SENS;
 
 use crate::app::App;
 use crate::input::command::MOST_SAMPLE_DB;
 use crate::input::picker::{Item, Pick, Picker};
-use crate::sample_page::Shown;
+use crate::sample_page::{Shown, beat_frames};
 use crate::slicing::pan_text;
 use crate::views::sample::time;
+use crate::views::status::format_bpm;
 
 /// A setting on the sample page's settings rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +28,11 @@ pub enum SampleSetting {
     /// How readily a rise counts as a sound starting, for `w`, `b` and slicing by transients, for
     /// the whole entry.
     Sens,
+    /// How many of the song's steps it lasts from its start to its end, for `Play`'s `Tempo` and
+    /// `:slice beat`, or 0 if it doesn't say.
+    Steps,
+    /// How it keeps to the tempo under `Tempo`: a place in [`Warp::ALL`].
+    Warp,
     /// The rest are the slice's own, or the entry's with no slices.
     Gain,
     Pan,
@@ -36,9 +43,11 @@ pub enum SampleSetting {
 }
 
 impl SampleSetting {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::Snap,
         Self::Sens,
+        Self::Steps,
+        Self::Warp,
         Self::Gain,
         Self::Pan,
         Self::Tune,
@@ -51,6 +60,8 @@ impl SampleSetting {
         match self {
             Self::Snap => "Snap",
             Self::Sens => "Sens",
+            Self::Steps => "Steps",
+            Self::Warp => "Warp",
             Self::Gain => "Gain",
             Self::Pan => "Pan",
             Self::Tune => "Tune",
@@ -65,6 +76,8 @@ impl SampleSetting {
         match self {
             Self::Snap => "Put points placed on the nearest zero crossing",
             Self::Sens => "How readily a sound counts as starting, for w, b and :slice transients",
+            Self::Steps => "How many steps it lasts, for Play's Tempo and :slice beat",
+            Self::Warp => "How it keeps to the tempo on Play's Tempo: its speed, or each sound",
             Self::Gain => "How loud the slice plays",
             Self::Pan => "Where the slice sits, left to right",
             Self::Tune => "How far the slice is tuned, in semitones",
@@ -81,7 +94,7 @@ impl SampleSetting {
 
     /// Whether it's the whole entry's, rather than the slice's under the cursor.
     pub fn is_entrys(self) -> bool {
-        matches!(self, Self::Snap | Self::Sens)
+        matches!(self, Self::Snap | Self::Sens | Self::Steps | Self::Warp)
     }
 
     /// The small and the large step `=` and `+` move it by, in its own units: hundredths of a dB,
@@ -92,7 +105,8 @@ impl SampleSetting {
             Self::Pan => (1, 10),
             Self::Tune => (1, 12),
             Self::Sens => (1, 10),
-            Self::Snap | Self::Reverse => (1, 1),
+            Self::Steps => (1, BAR_STEPS as i32),
+            Self::Snap | Self::Reverse | Self::Warp => (1, 1),
             Self::FadeIn | Self::FadeOut => {
                 let ms = (rate / 1000).max(1) as i32;
                 (ms, 10 * ms)
@@ -110,6 +124,8 @@ impl SampleSetting {
             Self::Pan => (-i32::from(MOST_PAN), i32::from(MOST_PAN)),
             Self::Tune => (-i32::from(MAX_TUNE), i32::from(MAX_TUNE)),
             Self::Sens => (0, i32::from(MOST_SENS)),
+            Self::Steps => (0, MOST_STEPS as i32),
+            Self::Warp => (0, Warp::ALL.len() as i32 - 1),
             Self::Snap | Self::Reverse => (0, 1),
             Self::FadeIn | Self::FadeOut => (0, length.min(i32::MAX as u64) as i32),
         }
@@ -120,6 +136,8 @@ impl SampleSetting {
         match self {
             Self::Snap => if value != 0 { "on" } else { "off" }.to_owned(),
             Self::Sens => format!("{value}%"),
+            Self::Steps => steps_text(value),
+            Self::Warp => warp_of(value).name().to_owned(),
             Self::Gain => format!("{:+.1} dB", value as f32 / 100.0),
             Self::Pan => pan_text(value as i8),
             Self::Tune => format!("{value:+} st"),
@@ -133,6 +151,8 @@ impl SampleSetting {
         match self {
             Self::Snap | Self::Reverse => vec![0, 1],
             Self::Sens => (0..=10).map(|at| at * 10).collect(),
+            Self::Steps => vec![0, 1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 128, 256],
+            Self::Warp => (0..Warp::ALL.len() as i32).collect(),
             Self::Gain => (-8..=4).map(|at| at * 300).collect(),
             Self::Pan => (-5..=5).map(|at| at * 10).collect(),
             Self::Tune => (-24..=24).collect(),
@@ -142,6 +162,42 @@ impl SampleSetting {
                 .collect(),
         }
     }
+}
+
+/// A length in steps as the row says it, with its bars where it's a whole number of them.
+fn steps_text(steps: i32) -> String {
+    let bar = BAR_STEPS as i32;
+    match steps {
+        0 => "off".to_owned(),
+        _ if steps == bar => format!("{steps}, a bar"),
+        _ if steps % bar == 0 => format!("{steps}, {} bars", steps / bar),
+        _ => steps.to_string(),
+    }
+}
+
+/// The warp at a place in the list, or the first.
+fn warp_of(value: i32) -> Warp {
+    usize::try_from(value)
+        .ok()
+        .and_then(|at| Warp::ALL.get(at).copied())
+        .unwrap_or_default()
+}
+
+impl Shown {
+    /// How much faster than it was recorded the entry plays under `Play`'s `Tempo`, lasting so
+    /// many steps at a tempo: its length over theirs.
+    pub fn tempo_speed(&self, steps: u32, millibpm: u32) -> f64 {
+        let rate = self.rate();
+        let start = self.entry.edit.points.start.min(self.end());
+        let own = (self.end() - start) as f64;
+        let lasts = beat_frames(rate, millibpm) * f64::from(steps) / 4.0;
+        own / lasts.max(1.0)
+    }
+}
+
+/// A speed as the status line says it, as a ratio.
+pub(crate) fn speed_text(speed: f64) -> String {
+    format!("{speed:.3}x")
 }
 
 /// A fade as the row says it: in milliseconds below a second, and as a time from there.
@@ -169,6 +225,8 @@ impl Shown {
         let entry = match setting {
             SampleSetting::Snap => i32::from(play.snap_zero),
             SampleSetting::Sens => i32::from(self.entry.edit.hints.sens),
+            SampleSetting::Steps => self.entry.edit.hints.length_steps().unwrap_or(0) as i32,
+            SampleSetting::Warp => play.warp as i32,
             SampleSetting::Gain => (play.gain_db * 100.0).round() as i32,
             SampleSetting::Pan => 0,
             SampleSetting::Tune => i32::from(play.tune),
@@ -181,7 +239,10 @@ impl Shown {
             .filter(|_| !setting.is_entrys())
             .map(|number| self.entry.edit.points.slices[number].over);
         let own = slice.and_then(|over| match setting {
-            SampleSetting::Snap | SampleSetting::Sens => None,
+            SampleSetting::Snap
+            | SampleSetting::Sens
+            | SampleSetting::Steps
+            | SampleSetting::Warp => None,
             SampleSetting::Gain => over.gain_db.map(|db| (db * 100.0).round() as i32),
             SampleSetting::Pan => over.pan.map(i32::from),
             SampleSetting::Tune => over.tune.map(i32::from),
@@ -208,10 +269,18 @@ impl Shown {
                 let sens = value.map_or(Hints::default().sens, |sens| sens as u8);
                 entry.edit.hints.sens = sens.min(MOST_SENS);
             }
+            (SampleSetting::Steps, _) => {
+                let steps = value.filter(|steps| *steps > 0).map(|steps| steps as u32);
+                entry.edit.hints.set_length_steps(steps);
+            }
+            (SampleSetting::Warp, _) => play.warp = value.map_or_else(Warp::default, warp_of),
             (_, Some(number)) => {
                 let over = &mut entry.edit.points.slices[number].over;
                 match setting {
-                    SampleSetting::Snap | SampleSetting::Sens => {}
+                    SampleSetting::Snap
+                    | SampleSetting::Sens
+                    | SampleSetting::Steps
+                    | SampleSetting::Warp => {}
                     SampleSetting::Gain => over.gain_db = value.map(|at| at as f32 / 100.0),
                     SampleSetting::Pan => over.pan = value.map(|pan| pan as i8),
                     SampleSetting::Tune => over.tune = value.map(|tune| tune as i8),
@@ -223,7 +292,11 @@ impl Shown {
             (_, None) => {
                 let value = value.unwrap_or(0);
                 match setting {
-                    SampleSetting::Snap | SampleSetting::Sens | SampleSetting::Pan => {}
+                    SampleSetting::Snap
+                    | SampleSetting::Sens
+                    | SampleSetting::Steps
+                    | SampleSetting::Warp
+                    | SampleSetting::Pan => {}
                     SampleSetting::Gain => play.gain_db = value as f32 / 100.0,
                     SampleSetting::Tune => play.tune = value as i8,
                     SampleSetting::Reverse => play.reverse = value != 0,
@@ -286,6 +359,15 @@ impl App {
                 let count = now.onsets().len();
                 let sounds = if count == 1 { "sound" } else { "sounds" };
                 format!(", finding {count} {sounds}")
+            }
+            SampleSetting::Steps if value > 0 => {
+                let millibpm = self.song().millibpm;
+                let speed = now.tempo_speed(value as u32, millibpm);
+                format!(
+                    ", playing at {} on Play's Tempo at {} BPM",
+                    speed_text(speed),
+                    format_bpm(millibpm)
+                )
             }
             _ => String::new(),
         };
@@ -388,9 +470,20 @@ impl App {
         }
         let first = items.len();
         let choices = setting.choices(rate);
+        let millibpm = self.song().millibpm;
         items.extend(choices.iter().map(|value| {
+            // Each length says how fast it would play at the song's tempo, so the one nearest its
+            // own speed can be seen.
+            let text = match setting {
+                SampleSetting::Steps if *value > 0 => format!(
+                    "{:<14}{}",
+                    setting.text(*value, rate),
+                    speed_text(shown.tempo_speed(*value as u32, millibpm))
+                ),
+                _ => setting.text(*value, rate),
+            };
             Item::new(
-                setting.text(*value, rate),
+                text,
                 Pick::SampleValue {
                     setting,
                     value: Some(*value),

@@ -121,6 +121,35 @@ pub struct PlayParams {
     /// starts without a click. It only changes where points go, never how anything plays.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub snap_zero: bool,
+    /// How it keeps to the song's tempo when a track's `Play` is `Tempo`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub warp: Warp,
+}
+
+/// How an entry keeps to the song's tempo under `Play`'s `Tempo`, as Ableton's warp modes say how
+/// a clip does. The live stretcher (#285) and the offline one (#284) come as modes of their own.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Warp {
+    /// Faster or slower, its pitch moving with its speed, as a record's does. Its note and tune
+    /// don't change its speed, which the tempo has, as Ableton's Re-Pitch takes no transpose.
+    #[default]
+    Repitch,
+    /// Each of its slices, or each sound its `Sens` finds if it has none, starts at its own time
+    /// at the tempo and plays at its own speed, its note and tune moving its pitch: cut short with
+    /// a fade if the next is due first, and leaving a gap if it ends before. After Ableton's
+    /// Beats, for drums.
+    Beats,
+}
+
+/// What each warp is called, in order, as the sample page lists them.
+pub const WARP_NAMES: [&str; 2] = ["Re-pitch", "Beats"];
+
+impl Warp {
+    pub const ALL: [Self; 2] = [Self::Repitch, Self::Beats];
+
+    pub fn name(self) -> &'static str {
+        WARP_NAMES[self as usize]
+    }
 }
 
 /// The most cents an entry's tune can be moved either way, short of a semitone, which is the
@@ -524,9 +553,13 @@ pub struct Hints {
     #[serde(default = "default_sens", skip_serializing_if = "is_default_sens")]
     pub sens: u8,
     /// How many bars long it is, from its start to its end, for `:slice beat` to cut it by rather
-    /// than the song's tempo. None to go by the tempo.
+    /// than the song's tempo, and for `Play`'s `Tempo` to fit to. None to go by the tempo.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bars: Option<u16>,
+    /// How many of the song's steps it lasts, where that isn't a whole number of bars, in place of
+    /// `bars`: one or the other says how long it is, never both.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps: Option<u16>,
     /// The note it sounds at as recorded, as a MIDI note, `60` being `C-3`, as a WAV's `smpl` or
     /// `inst` chunk says (#279).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -550,15 +583,44 @@ impl Default for Hints {
         Self {
             sens: default_sens(),
             bars: None,
+            steps: None,
             root: None,
             millibpm: None,
         }
     }
 }
 
+/// How many of the song's steps there are in a bar.
+const BAR_STEPS: u32 = crate::constants::BAR_STEPS as u32;
+
+/// The most steps an entry can be said to last: as many as the most bars `:sample bars` takes.
+pub const MOST_STEPS: u32 = 256 * BAR_STEPS;
+
 impl Hints {
     pub fn is_default(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// How many of the song's steps it lasts, from its start to its end, if it says.
+    pub fn length_steps(&self) -> Option<u32> {
+        match (self.steps, self.bars) {
+            (Some(steps), _) => Some(u32::from(steps)),
+            (None, Some(bars)) => Some(u32::from(bars) * BAR_STEPS),
+            (None, None) => None,
+        }
+    }
+
+    /// Say how many steps it lasts, or that it doesn't say: in bars if it's a whole number of
+    /// them, so `:sample bars` says the same.
+    pub fn set_length_steps(&mut self, steps: Option<u32>) {
+        let steps = steps.map(|steps| steps.clamp(1, MOST_STEPS));
+        (self.bars, self.steps) = match steps {
+            None => (None, None),
+            Some(steps) if steps.is_multiple_of(BAR_STEPS) => {
+                (Some((steps / BAR_STEPS) as u16), None)
+            }
+            Some(steps) => (None, Some(steps as u16)),
+        };
     }
 }
 

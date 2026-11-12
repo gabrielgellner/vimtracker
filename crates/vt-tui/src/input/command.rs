@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use vt_model::scale::{ScaleKind, parse_root};
 
 use thiserror::Error;
-use vt_model::bank::{MAX_CENTS, MAX_SLICES, MIN_NORMALIZE, MOST_PAN, is_mark};
+use vt_model::bank::{MAX_CENTS, MAX_SLICES, MIN_NORMALIZE, MOST_PAN, MOST_STEPS, is_mark};
 use vt_model::constants::{MAX_GROUPS, MAX_LABEL_CHARS};
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::kit::MAX_TUNE;
@@ -64,6 +64,9 @@ pub enum Line {
     /// Keep playing the section being edited, or go back to playing the song.
     Loop,
     Bpm(u32),
+    /// Set the tempo from the current track's sample, so it plays at its own speed for as many
+    /// steps as it lasts: grab tempo.
+    GrabTempo,
     /// A loop's length.
     Len(usize),
     /// Give the cursor's FX column a lane this long, or none to follow the notes again.
@@ -138,13 +141,16 @@ pub enum SampleChange {
     Gain(i32),
     /// Its tune, in semitones and cents.
     Tune(i8, i8),
-    /// How many bars long it is, for `:slice beat`, or none to go by the song's tempo.
+    /// How many bars long it is, for `:slice beat` and `Play`'s `Tempo`, or none to go by the
+    /// song's tempo.
     Bars(Option<u16>),
+    /// How many of the song's steps it lasts, as `Bars` says in bars.
+    Steps(Option<u32>),
 }
 
 /// The words `:sample` takes to change the track's sample, rather than a file to load.
-pub const SAMPLE_WORDS: [&str; 8] = [
-    "start", "end", "loop", "reverse", "fade", "gain", "tune", "bars",
+pub const SAMPLE_WORDS: [&str; 9] = [
+    "start", "end", "loop", "reverse", "fade", "gain", "tune", "bars", "steps",
 ];
 
 /// The most bars `:sample bars` takes.
@@ -312,6 +318,11 @@ fn sample(argument: &str) -> Result<Line, LineError> {
             .ok()
             .filter(|bars| (1..=MOST_BARS).contains(bars))
             .map(|bars| SampleChange::Bars(Some(bars))),
+        ("steps", ["off"]) => Some(SampleChange::Steps(None)),
+        ("steps", [count]) => steps(count)
+            .and_then(|steps| u32::try_from(steps).ok())
+            .filter(|steps| (1..=MOST_STEPS).contains(steps))
+            .map(|steps| SampleChange::Steps(Some(steps))),
         ("tune", [semitones] | [semitones, _]) => {
             let semitones = semitones.parse::<i8>().ok().filter(|s| s.abs() <= MAX_TUNE);
             let cents = match rest.get(1) {
@@ -430,7 +441,7 @@ pub enum LineError {
     Unknown(String),
     #[error(":name takes two characters, the first a letter, or nothing to clear it")]
     Name,
-    #[error(":bpm takes a number from 20 to 400")]
+    #[error(":bpm takes a number from 20 to 400, or sample for the track's sample's own tempo")]
     Bpm,
     #[error(":len takes a number of steps, 1 or more, with 0x for hex: 0x10")]
     Len,
@@ -445,7 +456,7 @@ pub enum LineError {
     #[error(":bank takes clean, or nothing to list the bank")]
     Bank,
     #[error(
-        ":sample takes a file, or start, end, loop from to [crossfade] or off, reverse, fade in out, gain dB, tune st [ct] or bars n or off, with times as 1.5 or 250ms"
+        ":sample takes a file, or start, end, loop from to [crossfade] or off, reverse, fade in out, gain dB, tune st [ct], bars n or steps n or off, with times as 1.5 or 250ms"
     )]
     SampleChange,
     #[error(
@@ -876,9 +887,12 @@ pub const COMMANDS: [Command; 41] = [
     },
     Command {
         name: "bpm",
-        meaning: "The tempo",
-        takes: Takes::Nothing,
-        parse: |argument| millibpm(argument).map(Line::Bpm).ok_or(LineError::Bpm),
+        meaning: "The tempo, or sample for the tempo the track's sample plays at its own speed at",
+        takes: Takes::Words(&["sample"]),
+        parse: |argument| match argument {
+            "sample" => Ok(Line::GrabTempo),
+            _ => millibpm(argument).map(Line::Bpm).ok_or(LineError::Bpm),
+        },
     },
     Command {
         name: "groove",
@@ -1143,6 +1157,7 @@ mod tests {
     fn tempos_are_exact_thousandths() {
         assert_eq!(parse("bpm 137.63"), Ok(Line::Bpm(137_630)));
         assert_eq!(parse("bpm 120"), Ok(Line::Bpm(120_000)));
+        assert_eq!(parse("bpm sample"), Ok(Line::GrabTempo));
         assert_eq!(parse("bpm 99.5"), Ok(Line::Bpm(99_500)));
         assert_eq!(parse("bpm 99.1234"), Err(LineError::Bpm));
         assert_eq!(parse("bpm fast"), Err(LineError::Bpm));
@@ -1522,6 +1537,16 @@ mod tests {
             change("sample bars 2"),
             Ok(Some(SampleChange::Bars(Some(2))))
         );
+        assert_eq!(
+            change("sample steps 8"),
+            Ok(Some(SampleChange::Steps(Some(8))))
+        );
+        assert_eq!(
+            change("sample steps 0x20"),
+            Ok(Some(SampleChange::Steps(Some(32))))
+        );
+        assert_eq!(change("sample steps 0"), Err(LineError::SampleChange));
+        assert_eq!(change("sample steps 4097"), Err(LineError::SampleChange));
         assert_eq!(
             change("sample bars off"),
             Ok(Some(SampleChange::Bars(None)))

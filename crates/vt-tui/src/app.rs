@@ -2887,6 +2887,7 @@ impl App {
                 name: name.unwrap_or_default(),
             }),
             Line::Bpm(millibpm) => self.apply(&Action::SetMilliBpm(millibpm)),
+            Line::GrabTempo => self.grab_tempo(),
             Line::TrackAdd(count) => {
                 let was = self.song().sound_tracks();
                 self.apply(&Action::AddTracks(count));

@@ -1984,7 +1984,7 @@ fn cmd_keys_nudge_as_their_keys_but_cmd_h_and_l_by_a_frame_and_on_a_setting_all_
     assert_eq!(slices(&app)[1].0, from + 1);
     keys(&mut app, "u");
     // On a setting, all four are the keys they stand for.
-    keys(&mut app, "K j j Enter l");
+    keys(&mut app, "K j j j j Enter l");
     assert_eq!(app.sample_page.setting, Some(SampleSetting::Pan));
     let start = Song::clone(app.song());
     for (plain, cmd) in [("=", "D-l"), ("-", "D-h"), ("+", "D-k"), ("_", "D-j")] {
@@ -2158,8 +2158,9 @@ fn the_settings_rows_change_a_slices_own_and_the_gain_and_reverse_keys_work_from
     );
     keys(&mut app, "~");
     assert_eq!(over(&app, 1).reverse, Some(true));
-    // K, and the third setting, after Snap and Sens, is Gain, which x puts back as the sample's.
-    keys(&mut app, "K j j Enter");
+    // K, and the fifth setting, after Snap, Sens, Steps and Warp, is Gain, which x puts back as
+    // the sample's.
+    keys(&mut app, "K j j j j Enter");
     assert_eq!(app.sample_page.setting, Some(SampleSetting::Gain));
     keys(&mut app, "x");
     assert_eq!(over(&app, 1).gain_db, None);

@@ -12,8 +12,8 @@ where you came from. `W` and `B` show the next or previous track's sample.
 
 The start is marked in teal, the end in red, the loop in blue, and each slice's
 start in peach, with its number in the ruler above. The rows under the waveform
-are the whole sample, its points and `Snap`, the slice under the cursor with its
-settings, and the cursor's time, frame and slice.
+are the whole sample, its points, `Snap`, `Sens`, `Steps` and `Warp`, the slice
+under the cursor with its settings, and the cursor's time, frame and slice.
 
 ## Moving and zooming
 
@@ -106,14 +106,20 @@ it.
 
 ## The settings rows
 
-`K` lists the settings: `Snap` and `Sens`, for the whole sample, and the
-slice's `Gain`, `Pan`, `Tune`, `Reverse`, `Fade in` and `Fade out`. Choosing
+`K` lists the settings: `Snap`, `Sens`, `Steps` and `Warp`, for the whole
+sample, and the slice's `Gain`, `Pan`, `Tune`, `Reverse`, `Fade in` and `Fade out`. Choosing
 one puts the focus on it. There `h` and `l` go along the settings, `0` and `$` to their ends, `=`
 `-` change it a small step and `+` `_` a large one, Cmd with `l` `h` `k` `j` as
 those four, `K` lists its values, and
 `x` puts a slice's own back to the sample's. `j` and `k` still go from slice to
 slice, so a setting can be set slice after slice. `Esc` goes back to the
 waveform.
+
+`Steps` says how many of the song's steps the sample lasts from its start to its
+end, for `Play`'s `Tempo` and `:slice beat`, and `Warp` how `Tempo` keeps it to
+the tempo: see **Loop to tempo** in the sounds guide. Each value `K` lists for
+`Steps` says how fast the sample would play at the song's tempo, so the length
+it was made at is the one nearest `1.000x`.
 
 ## Selecting
 

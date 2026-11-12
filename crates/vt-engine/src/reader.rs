@@ -5,6 +5,12 @@
 //! Places are counted in play order: frames from the file's first, or from its last when it plays
 //! reversed. So reversing changes only how a place becomes a frame, and a loop, a fade and an end
 //! work the same either way.
+//!
+//! Under `Play`'s `Tempo`, the song's tempo sets how fast it moves through its loop, so its entry
+//! lasts as many steps as it says: the engine tells it the tempo before every run it renders, so
+//! a tempo change is heard within a run and nothing adds up to drift. With the `Beats` warp, a
+//! clock moves through the loop at that speed instead, and each sound starts as the clock reaches
+//! it and plays at its own speed.
 
 use vt_model::constants::DECLICK_FRAMES;
 use vt_model::playable::Span;
@@ -103,6 +109,7 @@ impl Region {
         let looping = match cut.mode {
             // On through is once, over a span the entry has already carried on to its end.
             PlayMode::OneShot | PlayMode::Thru => None,
+            // Loop to tempo goes round as a loop does, at the tempo's speed.
             mode => {
                 let own = span.loop_.map(|found| {
                     let (start, end) = if span.reverse {
@@ -182,6 +189,44 @@ struct Crossing {
     length: f64,
 }
 
+/// How a note under `Tempo` keeps time.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Tempo {
+    /// How many places it moves each frame at the song's tempo, which the engine sets before each
+    /// run, or none until it first has.
+    rate: Option<f64>,
+    /// With the `Beats` warp, the clock its sounds start by.
+    clock: Option<Clock>,
+}
+
+/// Where the clock `Beats` starts sounds by is in the loop, in play order, and the sound it's in:
+/// the place that sound started, and the place the next one starts, where this one ends.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Clock {
+    place: f64,
+    from: f64,
+    until: f64,
+}
+
+impl Tempo {
+    /// How a note keeps time under a cut, if it does: under `Tempo`, round a loop, for an entry
+    /// that says how long it is.
+    fn of(span: Span, cut: Cut, region: &Region) -> Option<Self> {
+        let looping = region.looping?;
+        if cut.mode != PlayMode::Tempo || !span.keeps_tempo() {
+            return None;
+        }
+        Some(Self {
+            rate: None,
+            clock: span.beats.then_some(Clock {
+                place: region.start,
+                from: region.start,
+                until: looping.end,
+            }),
+        })
+    }
+}
+
 /// Where a voice is in its sample, and how it reads on.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Reader {
@@ -197,6 +242,8 @@ pub struct Reader {
     read: f64,
     /// What the fades multiply the sound by now, which never moves faster than a declick.
     edge: f32,
+    /// How it keeps time under `Tempo`, if it does.
+    tempo: Option<Tempo>,
 }
 
 impl Default for Reader {
@@ -218,6 +265,7 @@ impl Reader {
             crossing: None,
             read: 0.0,
             edge: 1.0,
+            tempo: span.and_then(|span| Tempo::of(span, cut, &region)),
         };
         reader.edge = reader.edge_target();
         reader
@@ -255,16 +303,122 @@ impl Reader {
         }
         self.span = Some(span);
         self.region = region;
+        // A new length or warp keeps time from here: a clock, if it now needs one, starts here.
+        let rate = self.tempo.and_then(|tempo| tempo.rate);
+        let clock = self.tempo.and_then(|tempo| tempo.clock);
+        self.tempo = Tempo::of(span, self.cut, &region).map(|tempo| Tempo {
+            rate,
+            clock: tempo.clock.map(|fresh| {
+                let place = clock.map_or(self.place, |clock| clock.place);
+                Clock {
+                    place,
+                    from: clock.map_or(self.place, |clock| clock.from),
+                    until: fresh.until,
+                }
+            }),
+        });
+    }
+
+    /// Whether it keeps to the song's tempo, so the engine tells it the tempo before each run.
+    pub fn keeps_time(&self) -> bool {
+        self.tempo.is_some()
+    }
+
+    /// Keep to the song's tempo for the next run, at this many frames a step at the program's
+    /// rate: it moves through its loop so its entry lasts as many steps as it says, or plays its
+    /// own tempo at the song's. With `Beats`, `around` says where the clock's sound starts and
+    /// where the next does, so this one ends.
+    pub fn keep_time(
+        &mut self,
+        step: f64,
+        rate: u32,
+        around: impl FnOnce(&Span, f64) -> (f64, f64),
+    ) {
+        let (Some(tempo), Some(span)) = (&mut self.tempo, self.span) else {
+            return;
+        };
+        let Some(step_frames) = span.step_frames_at(rate) else {
+            return;
+        };
+        tempo.rate = Some(step_frames / step.max(f64::MIN_POSITIVE));
+        let Some(clock) = &mut tempo.clock else {
+            return;
+        };
+        let Some(looping) = self.region.looping else {
+            return;
+        };
+        let (from, until) = around(&span, clock.place);
+        // A sound that started since, as one does when the sounds change under the note, starts
+        // now.
+        if from > clock.from && from <= clock.place {
+            let until = until.min(looping.end);
+            self.start_beat(from, until);
+            return;
+        }
+        if let Some(clock) = self.tempo.as_mut().and_then(|tempo| tempo.clock.as_mut()) {
+            clock.until = until.min(looping.end).max(clock.from);
+        }
+    }
+
+    /// Start the sound the clock has reached, from where the clock is: whatever's still sounding
+    /// fades into it, as a loop's turn does.
+    fn start_beat(&mut self, from: f64, until: f64) {
+        let Some(clock) = self.tempo.as_mut().and_then(|tempo| tempo.clock.as_mut()) else {
+            return;
+        };
+        let old = clock.until;
+        clock.from = from;
+        clock.until = until;
+        let place = clock.place;
+        if self.place < old && self.edge > 0.0 {
+            let length = DECLICK.min((until - from) / 2.0).max(1.0);
+            self.crossing = Some(Crossing {
+                place: self.place,
+                left: length,
+                length,
+            });
+        }
+        self.place = place;
+    }
+
+    /// Move the clock `Beats` keeps on to its next sound, round its loop.
+    fn follow_beats(&mut self, looping: Looping) {
+        let Some(clock) = self.tempo.and_then(|tempo| tempo.clock) else {
+            return;
+        };
+        if clock.place >= looping.end {
+            let mut place = clock.place - (looping.end - looping.start);
+            if place >= looping.end || place < looping.start {
+                place = looping.start;
+            }
+            if let Some(clock) = self.tempo.as_mut().and_then(|tempo| tempo.clock.as_mut()) {
+                clock.place = place;
+            }
+            // Round again, the loop's start starts a sound, until the engine says where it ends.
+            self.start_beat(looping.start, looping.end);
+        } else if clock.place >= clock.until {
+            self.start_beat(clock.until, looping.end);
+        }
     }
 
     /// The next frame, before it moves on, or none once it's past the sample. A loop's turn
     /// comes first, so the frame read is always in the loop.
     #[inline]
     pub fn next(&mut self, data: &SampleData) -> Option<[f32; 2]> {
+        let clock = self.tempo.and_then(|tempo| tempo.clock);
         if let Some(looping) = self.region.looping {
-            self.follow(looping);
+            match clock {
+                Some(_) => self.follow_beats(looping),
+                None => self.follow(looping),
+            }
         }
-        let mut frame = self.at(data, self.place)?;
+        // Between sounds, in the gap one leaves ending before the next is due, it's silent.
+        let clock = self.tempo.and_then(|tempo| tempo.clock);
+        let mut frame = match clock {
+            Some(clock) if self.place >= clock.until => [0.0; 2],
+            Some(_) => self.at(data, self.place).unwrap_or([0.0; 2]),
+            None => self.at(data, self.place)?,
+        };
         if let Some(crossing) = &mut self.crossing {
             let left = (crossing.left / crossing.length) as f32;
             let old = at(data, &self.region, crossing.place).unwrap_or([0.0; 2]);
@@ -283,9 +437,19 @@ impl Reader {
     }
 
     /// Move on by so many frames, and say whether there's more to read: a note with no loop ends
-    /// once it's past its end and faded out.
+    /// once it's past its end and faded out. Keeping to the tempo, it moves at the tempo's speed
+    /// instead, or with `Beats`, its clock does, and its sound at the speed it's given.
     #[inline]
     pub fn advance(&mut self, by: f64) -> bool {
+        let mut by = by;
+        if let Some(tempo) = &mut self.tempo
+            && let Some(rate) = tempo.rate
+        {
+            match &mut tempo.clock {
+                Some(clock) => clock.place += rate,
+                None => by = rate,
+            }
+        }
         if self.backwards {
             self.place -= by;
         } else {
@@ -356,6 +520,15 @@ impl Reader {
                 edge = 0.0;
             } else if left < region.fade_out {
                 edge *= left / region.fade_out;
+            }
+        }
+        // A sound `Beats` started fades out as it reaches the next one's start.
+        if let Some(clock) = self.tempo.and_then(|tempo| tempo.clock) {
+            let left = clock.until - self.place;
+            if left <= 0.0 {
+                edge = 0.0;
+            } else if left < DECLICK {
+                edge *= left / DECLICK;
             }
         }
         edge as f32
