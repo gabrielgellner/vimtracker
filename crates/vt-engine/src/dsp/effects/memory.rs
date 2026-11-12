@@ -17,6 +17,7 @@ use crate::dsp::effects::pitch_shifter::PitchShifter;
 use crate::dsp::effects::plate::Plate;
 use crate::dsp::effects::resonator::Resonator;
 use crate::dsp::effects::reverb::Reverb;
+use crate::dsp::effects::rotary::Rotary;
 use crate::dsp::effects::spring::Spring;
 use crate::dsp::effects::tape::Tape;
 use crate::dsp::effects::warps::Warps;
@@ -46,6 +47,7 @@ pub enum Memory {
     Comb(Box<Comb>),
     FreqShift(Box<FreqShifter>),
     Spring(Box<Spring>),
+    Rotary(Box<Rotary>),
 }
 
 impl Memory {
@@ -121,6 +123,11 @@ impl Memory {
         Self::Spring(Box::new(Spring::new(rate)))
     }
 
+    /// A rotary speaker's, with a line for the horn's furthest delay.
+    pub fn rotary(rate: u32) -> Self {
+        Self::Rotary(Box::new(Rotary::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -139,6 +146,7 @@ impl Memory {
             Self::Comb(comb) => comb.process_alone(input),
             Self::FreqShift(shifter) => shifter.process_alone(input),
             Self::Spring(spring) => spring.process(input),
+            Self::Rotary(rotary) => rotary.process_alone(input),
         }
     }
 
@@ -159,6 +167,7 @@ impl Memory {
             Self::Reso(resonator) => resonator.quiet_frames(),
             Self::Comb(comb) => comb.quiet_frames(),
             Self::FreqShift(shifter) => shifter.frames() as u32,
+            Self::Rotary(rotary) => rotary.frames() as u32,
         }
     }
 
@@ -184,6 +193,7 @@ impl Memory {
             (Self::Comb(comb), Insert::Comb(settings)) => comb.follow(settings),
             (Self::FreqShift(shifter), Insert::FreqShift(settings)) => shifter.follow(settings),
             (Self::Spring(spring), Insert::Spring(settings)) => spring.follow(settings),
+            (Self::Rotary(rotary), Insert::Rotary(settings)) => rotary.follow(settings),
             _ => {}
         }
     }
@@ -211,6 +221,7 @@ impl Memory {
             Self::Comb(comb) => comb.settle(),
             Self::FreqShift(shifter) => shifter.settle(),
             Self::Spring(spring) => spring.settle(),
+            Self::Rotary(rotary) => rotary.settle(),
         }
     }
 
@@ -230,6 +241,7 @@ impl Memory {
             Self::Comb(comb) => comb.clear(),
             Self::FreqShift(shifter) => shifter.clear(),
             Self::Spring(spring) => spring.clear(),
+            Self::Rotary(rotary) => rotary.clear(),
         }
     }
 }
@@ -251,6 +263,7 @@ pub struct MemoryCount {
     pub comb: u16,
     pub freq_shift: u16,
     pub spring: u16,
+    pub rotary: u16,
 }
 
 impl MemoryCount {
@@ -273,6 +286,7 @@ impl MemoryCount {
                 Insert::Comb(_) => count.comb += 1,
                 Insert::FreqShift(_) => count.freq_shift += 1,
                 Insert::Spring(_) => count.spring += 1,
+                Insert::Rotary(_) => count.rotary += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Eq(_)
@@ -303,6 +317,7 @@ pub struct MemoryPool {
     comb: Vec<Memory>,
     freq_shift: Vec<Memory>,
     springs: Vec<Memory>,
+    rotaries: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -328,6 +343,7 @@ impl MemoryPool {
             comb: Vec::with_capacity(POOL_CAPACITY),
             freq_shift: Vec::with_capacity(POOL_CAPACITY),
             springs: Vec::with_capacity(POOL_CAPACITY),
+            rotaries: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -373,6 +389,9 @@ impl MemoryPool {
         for _ in 0..needed.spring {
             pool.put(Memory::spring(rate));
         }
+        for _ in 0..needed.rotary {
+            pool.put(Memory::rotary(rate));
+        }
         pool
     }
 
@@ -393,6 +412,7 @@ impl MemoryPool {
             Memory::Comb(_) => &mut self.comb,
             Memory::FreqShift(_) => &mut self.freq_shift,
             Memory::Spring(_) => &mut self.springs,
+            Memory::Rotary(_) => &mut self.rotaries,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -420,6 +440,7 @@ impl MemoryPool {
             Insert::Comb(_) => &mut self.comb,
             Insert::FreqShift(_) => &mut self.freq_shift,
             Insert::Spring(_) => &mut self.springs,
+            Insert::Rotary(_) => &mut self.rotaries,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Eq(_)
@@ -451,6 +472,7 @@ impl MemoryPool {
         self.owed.comb += count.comb;
         self.owed.freq_shift += count.freq_shift;
         self.owed.spring += count.spring;
+        self.owed.rotary += count.rotary;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -539,6 +561,12 @@ impl MemoryPool {
             self.owed.spring -= 1;
             return Some(memory);
         }
+        if self.owed.rotary > 0
+            && let Some(memory) = self.rotaries.pop()
+        {
+            self.owed.rotary -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -558,6 +586,7 @@ impl MemoryPool {
             + self.comb.len()
             + self.freq_shift.len()
             + self.springs.len()
+            + self.rotaries.len()
     }
 }
 

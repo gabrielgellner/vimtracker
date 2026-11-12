@@ -14,7 +14,7 @@ use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Flanger,
     FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb,
-    Spring, Tape, Vowel, Warps,
+    Rotary, Spring, Tape, Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -163,7 +163,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Comb(_), Insert::Comb(_))
         | (Insert::Vowel(_), Insert::Vowel(_))
         | (Insert::FreqShift(_), Insert::FreqShift(_))
-        | (Insert::Spring(_), Insert::Spring(_)) => true,
+        | (Insert::Spring(_), Insert::Spring(_))
+        | (Insert::Rotary(_), Insert::Rotary(_)) => true,
         _ => false,
     }
 }
@@ -398,6 +399,7 @@ impl InsertState {
             | Insert::Tape(Tape { mix, gain, .. })
             | Insert::Plate(Plate { mix, gain, .. })
             | Insert::Spring(Spring { mix, gain, .. })
+            | Insert::Rotary(Rotary { mix, gain, .. })
             | Insert::Pitch(Pitch { mix, gain, .. })
             | Insert::Grains(Grains { mix, gain, .. })
             | Insert::Warps(Warps { mix, gain, .. })
@@ -660,7 +662,8 @@ impl InsertState {
             | Insert::Reso(_)
             | Insert::Comb(_)
             | Insert::FreqShift(_)
-            | Insert::Spring(_) => Mono::Stereo,
+            | Insert::Spring(_)
+            | Insert::Rotary(_) => Mono::Stereo,
         }
     }
 
@@ -816,7 +819,8 @@ impl InsertState {
             | Insert::Plate(_)
             | Insert::Spring(_)
             | Insert::Pitch(_)
-            | Insert::Grains(_) => (None, Distort::DEFAULT),
+            | Insert::Grains(_)
+            | Insert::Rotary(_) => (None, Distort::DEFAULT),
         };
         let amount = self.amount.next(smoothing);
         let mix = self.mix.next(smoothing);
@@ -1356,6 +1360,11 @@ mod tests {
             Insert::Warps(Warps::DEFAULT),
             Insert::Lpg(LowPassGate::DEFAULT),
             Insert::Vowel(Vowel::DEFAULT),
+            Insert::Rotary(Rotary {
+                fast: 1,
+                drive: 0xFF,
+                ..Rotary::DEFAULT
+            }),
             Insert::Distort(Distort {
                 kind: DistortType::Hard,
                 ..Distort::DEFAULT

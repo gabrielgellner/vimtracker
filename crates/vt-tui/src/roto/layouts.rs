@@ -1156,9 +1156,28 @@ const SPRING: DeviceLayout = stored(
         button(5, "knock"),
     )],
 );
+/// How long the rotors take to change, the horn's Doppler and swell, the drive and the width,
+/// with the fast and slow switch on the button under the inertia, as an organist's half-moon.
+const ROTARY: DeviceLayout = stored(
+    "fx/rotary",
+    &[page(
+        "Rotary",
+        [
+            s("inertia"),
+            s("doppler"),
+            s("tremolo"),
+            s("drive"),
+            s("width"),
+            GAP,
+            s("mix"),
+            s("gain"),
+        ],
+        button(0, "fast"),
+    )],
+);
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 72] = [
+pub const ALL: [&DeviceLayout; 73] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1231,6 +1250,7 @@ pub const ALL: [&DeviceLayout; 72] = [
     &VOWEL,
     &FREQ_SHIFT,
     &SPRING,
+    &ROTARY,
 ];
 
 /// A machine's layout.
@@ -1309,6 +1329,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::Vowel(_) => &VOWEL,
         Insert::FreqShift(_) => &FREQ_SHIFT,
         Insert::Spring(_) => &SPRING,
+        Insert::Rotary(_) => &ROTARY,
     }
 }
 
