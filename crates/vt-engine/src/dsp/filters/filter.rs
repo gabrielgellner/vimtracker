@@ -247,24 +247,22 @@ impl Coefficients {
         // Q runs from no peak to a strong but stable one.
         let q = BAND_LEAST_Q + tapered(&BAND_TAPER, resonance) * (CLEAN_MOST_Q - BAND_LEAST_Q);
         let k = 1.0 / q;
-        let a1 = 1.0 / (1.0 + g * (g + k));
         let clean_q =
             CLEAN_LEAST_Q + tapered(&CLEAN_TAPER, resonance) * (CLEAN_MOST_Q - CLEAN_LEAST_Q);
-        let clean_k = 1.0 / clean_q;
         let double_g = (std::f32::consts::PI * nyquist_safe / (2.0 * rate as f32)).tan();
         let ladder_k = tapered(&LADDER_TAPER, resonance) * LADDER_FEEDBACK;
         let diode_corner = (frequency * DIODE_FEEDBACK_SHARE).min(diode_filter::FEEDBACK_HIGH_PASS);
         let dirty_resonance = tapered(&DIRTY_TAPER, resonance);
         let dirty = dirty_filter::Tuning::new(double_g / (1.0 + double_g), dirty_resonance);
-        Self {
+        let mut c = Self {
             g,
             k,
-            a1,
-            clean_k,
-            clean_a1: 1.0 / (1.0 + g * (g + clean_k)),
+            a1: 0.0,
+            clean_k: 1.0 / clean_q,
+            clean_a1: 0.0,
             double_g,
-            double_a1: 1.0 / (1.0 + double_g * (double_g + k)),
-            double_clean_a1: 1.0 / (1.0 + double_g * (double_g + clean_k)),
+            double_a1: 0.0,
+            double_clean_a1: 0.0,
             ladder_k,
             diode_cutoff: {
                 let share = frequency / RESONANT_SHARE / (2.0 * rate as f32);
@@ -278,11 +276,46 @@ impl Coefficients {
             korg_feedback: tapered(&KORG_TAPER, resonance) * korg35::MOST_FEEDBACK,
             korg_high_feedback: tapered(&KORG_HIGH_TAPER, resonance) * korg35::MOST_FEEDBACK,
             dirty,
-            flat_a1: 1.0 / (1.0 + g * (g + FLAT_DAMPING)),
-            double_flat_a1: 1.0 / (1.0 + double_g * (double_g + FLAT_DAMPING)),
+            flat_a1: 0.0,
+            double_flat_a1: 0.0,
             mix: Mix::new(mode, ladder_k, &dirty),
             smoothing: smoother::coefficient(rate),
-        }
+        };
+        c.damp();
+        c
+    }
+
+    /// Work out the state-variable filters' `a1`s, `1 / (1 + g (g + k))`, from their `g`s and
+    /// dampings. A ramp works these out afresh each frame rather than moving them in a line with
+    /// `g`, which would leave them out of step with it, and unstable, partway along a big move.
+    #[inline]
+    fn damp(&mut self) {
+        let a1 = |g: f32, k: f32| 1.0 / (1.0 + g * (g + k));
+        let (g, double_g) = (self.g, self.double_g);
+        self.a1 = a1(g, self.k);
+        self.clean_a1 = a1(g, self.clean_k);
+        self.flat_a1 = a1(g, FLAT_DAMPING);
+        self.double_a1 = a1(double_g, self.k);
+        self.double_clean_a1 = a1(double_g, self.clean_k);
+        self.double_flat_a1 = a1(double_g, FLAT_DAMPING);
+    }
+
+    /// Visit each number a ramp moves alongside another set's. The `a1`s are worked out from the
+    /// rest, and each channel moves to a new mix itself.
+    #[inline]
+    fn each(&mut self, other: &Self, mut visit: impl FnMut(&mut f32, f32)) {
+        visit(&mut self.g, other.g);
+        visit(&mut self.k, other.k);
+        visit(&mut self.clean_k, other.clean_k);
+        visit(&mut self.double_g, other.double_g);
+        visit(&mut self.ladder_k, other.ladder_k);
+        visit(&mut self.diode_cutoff, other.diode_cutoff);
+        visit(&mut self.diode_feedback, other.diode_feedback);
+        visit(&mut self.diode_resonance, other.diode_resonance);
+        visit(&mut self.korg_coefficient, other.korg_coefficient);
+        visit(&mut self.korg_feedback, other.korg_feedback);
+        visit(&mut self.korg_high_feedback, other.korg_high_feedback);
+        self.dirty.each(&other.dirty, visit);
     }
 
     /// A clean type's damping and `a1`, at the rate or twice it: the band-pass's own, or the
@@ -305,6 +338,58 @@ impl Coefficients {
             (true, false) => (FLAT_DAMPING, self.flat_a1),
             (true, true) => (FLAT_DAMPING, self.double_flat_a1),
             (false, _) => self.first(kind, double),
+        }
+    }
+}
+
+/// A track's filter coefficients, moved a step each frame from where they were toward each new
+/// set, so a fast sweep glides rather than climbing a staircase of held sets. Held for 32 frames,
+/// a self-oscillating ladder swept across its range eight times a second had sidebands 1.5 kHz
+/// either side of its pitch 16 dB louder than with coefficients worked out every frame (#463).
+/// After Surge's `FilterCoefficientMaker`, which ramps every coefficient across its block.
+#[derive(Debug, Clone, Copy)]
+pub struct Ramp {
+    now: Coefficients,
+    step: Coefficients,
+    /// Frames left before it reaches the target, after which it holds.
+    left: u32,
+}
+
+impl Ramp {
+    /// Start at a set, holding it.
+    pub fn at(c: Coefficients) -> Self {
+        Self {
+            now: c,
+            step: c,
+            left: 0,
+        }
+    }
+
+    /// Head for a new set, reaching it in `frames` frames. Its mix is taken at once, as each
+    /// channel moves to it at its own pace.
+    pub fn toward(&mut self, target: &Coefficients, frames: u32) {
+        let over = 1.0 / frames.max(1) as f32;
+        self.step = *target;
+        self.step
+            .each(&self.now, |step, now| *step = (*step - now) * over);
+        self.now.mix = target.mix;
+        self.now.smoothing = target.smoothing;
+        self.left = frames.max(1);
+    }
+
+    /// The set to filter this frame with.
+    #[inline]
+    pub fn now(&self) -> &Coefficients {
+        &self.now
+    }
+
+    /// A frame's step on toward the target.
+    #[inline]
+    pub fn advance(&mut self) {
+        if self.left > 0 {
+            self.left -= 1;
+            self.now.each(&self.step, |value, step| *value += step);
+            self.now.damp();
         }
     }
 }
@@ -1167,6 +1252,35 @@ mod tests {
         }
     }
 
+    #[test]
+    fn every_type_stays_stable_ramping_between_far_apart_settings() {
+        // A ramp moves its coefficients in a line, so partway along a jump from one end of `Cut`
+        // and `Res` to the other, it's somewhere no single setting would put it.
+        let ends = [(0.0, 0.0), (1.0, 1.0), (0.0, 1.0), (1.0, 0.0), (0.5, 1.0)];
+        for (kind, mode) in every_type_and_mode() {
+            for drive in [0.0, 1.0] {
+                let mut channel = Channel::default();
+                let mut ramp = Ramp::at(Coefficients::with_mode(0.0, 0.0, mode, RATE));
+                let mut most = 0.0_f32;
+                for frame in 0..RATE as usize / 2 {
+                    if frame % 32 == 0 {
+                        let (cut, res) = ends[frame / 32 % ends.len()];
+                        ramp.toward(&Coefficients::with_mode(cut, res, mode, RATE), 32);
+                    }
+                    let input = if frame % 40 < 20 { 1.0 } else { -1.0 };
+                    let output = channel.process(input, kind, drive, ramp.now());
+                    ramp.advance();
+                    assert!(output.is_finite(), "{kind:?} {mode:?} {output}");
+                    most = most.max(output.abs());
+                }
+                assert!(
+                    most < 20.0,
+                    "{kind:?} {mode:?} at drive {drive} reached {most}"
+                );
+            }
+        }
+    }
+
     /// How loud a frequency is in a filter's output, from a sine at another.
     fn level_at(kind: FilterType, mode: FilterMode, drive: f32, tone: f32, listen: f32) -> f32 {
         let c = Coefficients::with_mode(1.0, 0.0, mode, RATE);
@@ -1402,10 +1516,91 @@ mod tests {
         }
     }
 
+    /// How loud the sidebands 1.5 kHz either side of a self-oscillating ladder's pitch are, in dB
+    /// against the pitch, as its cutoff sweeps from 300 Hz to 4 kHz and back eight times a second.
+    /// The sweep is worked out every 32 frames and smoothed, as a track's modulation is, and its
+    /// coefficients are worked out every frame, or every 32 and ramped to as a track does.
+    fn sweep_sidebands_db(every_frame: bool) -> f64 {
+        const WINDOW: usize = 512;
+        let fast = crate::dsp::blocks::smoother::fast_coefficient(RATE);
+        let mut moved = crate::dsp::blocks::smoother::Smoothed::at(cutoff(300.0));
+        let mut channel = Channel::default();
+        let mut ramp = Ramp::at(Coefficients::new(moved.value, 1.0, RATE));
+        let mut out = Vec::new();
+        for frame in 0..RATE as usize * 3 / 2 {
+            if frame % 32 == 0 {
+                let along = (frame as f32 / RATE as f32 * 8.0).fract();
+                let triangle = 1.0 - (2.0 * along - 1.0).abs();
+                moved.target = cutoff(300.0) + triangle * (cutoff(4000.0) - cutoff(300.0));
+            }
+            let cut = moved.next(fast);
+            if every_frame {
+                ramp = Ramp::at(Coefficients::new(cut, 1.0, RATE));
+            } else if frame % 32 == 0 {
+                ramp.toward(&Coefficients::new(cut, 1.0, RATE), 32);
+            }
+            let kick = if frame == 0 { 0.5 } else { 0.0 };
+            out.push(channel.process(kick, FilterType::Ladder, 0.0, ramp.now()));
+            ramp.advance();
+        }
+        // Short Hann-windowed spectra over the last half second, each with its own pitch.
+        let tau = std::f64::consts::TAU;
+        let hann: Vec<f64> = (0..WINDOW)
+            .map(|i| 0.5 - 0.5 * (tau * i as f64 / WINDOW as f64).cos())
+            .collect();
+        let turns: Vec<(f64, f64)> = (0..WINDOW)
+            .map(|i| {
+                (
+                    (tau * i as f64 / WINDOW as f64).cos(),
+                    (tau * i as f64 / WINDOW as f64).sin(),
+                )
+            })
+            .collect();
+        let hertz = f64::from(RATE) / WINDOW as f64;
+        let (mut pitch, mut sides) = (0.0, 0.0);
+        for window in out[RATE as usize..].as_chunks::<WINDOW>().0 {
+            let power: Vec<f64> = (0..WINDOW / 2)
+                .map(|bin| {
+                    let (mut real, mut imaginary) = (0.0, 0.0);
+                    for (i, sample) in window.iter().enumerate() {
+                        let (cos, sin) = turns[bin * i % WINDOW];
+                        real += f64::from(*sample) * hann[i] * cos;
+                        imaginary += f64::from(*sample) * hann[i] * sin;
+                    }
+                    real * real + imaginary * imaginary
+                })
+                .collect();
+            let peak = (1..WINDOW / 2)
+                .max_by(|a, b| power[*a].total_cmp(&power[*b]))
+                .unwrap_or(1);
+            for (bin, power) in power.iter().enumerate() {
+                let off = (bin as f64 - peak as f64).abs() * hertz;
+                if off < 200.0 {
+                    pitch += power;
+                } else if (1300.0..1700.0).contains(&off) {
+                    sides += power;
+                }
+            }
+        }
+        10.0 * (sides / pitch).log10()
+    }
+
+    #[test]
+    fn a_fast_sweep_ramps_its_coefficients_without_stepping_sidebands() {
+        // With its coefficients held for 32 frames, as they were, the sidebands were at -44 dB,
+        // 16 dB louder than with coefficients worked out every frame, at -60 (#463).
+        let ramped = sweep_sidebands_db(false);
+        let every_frame = sweep_sidebands_db(true);
+        assert!(
+            ramped < every_frame + 3.0,
+            "ramped {ramped} dB, every frame {every_frame} dB"
+        );
+    }
+
     #[test]
     fn moving_a_sallen_keys_settings_in_steps_glides_without_a_step() {
         // The biggest jump between frames from a tone through it, with the settings smoothed and its
-        // coefficients worked out every 32 frames, as a track does. They're held at one of two, or
+        // coefficients worked out every 32 frames and ramped to, as a track does. They're held at one of two, or
         // jump between them every 64 frames, as a knob or an LFO steps them block by block.
         let biggest_jump = |kind: FilterType, at: fn(usize) -> bool| {
             let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
@@ -1415,7 +1610,7 @@ mod tests {
                 crate::dsp::blocks::smoother::Smoothed::at(0.0),
             );
             let mut channel = Channel::default();
-            let mut c = Coefficients::new(cut.value, res.value, RATE);
+            let mut ramp = Ramp::at(Coefficients::new(cut.value, res.value, RATE));
             let (mut last, mut most) = (0.0_f32, 0.0_f32);
             for frame in 0..RATE as usize * 2 {
                 if at(frame) {
@@ -1429,10 +1624,11 @@ mod tests {
                     drive.next(smoothing),
                 );
                 if frame % 32 == 0 {
-                    c = Coefficients::new(cut, res, RATE);
+                    ramp.toward(&Coefficients::new(cut, res, RATE), 32);
                 }
                 let tone = (frame as f32 / RATE as f32 * 700.0 * std::f32::consts::TAU).sin();
-                let output = channel.process(tone * 0.5, kind, drive, &c);
+                let output = channel.process(tone * 0.5, kind, drive, ramp.now());
+                ramp.advance();
                 if frame > RATE as usize / 2 {
                     most = most.max((output - last).abs());
                 }
