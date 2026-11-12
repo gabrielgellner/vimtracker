@@ -46,10 +46,22 @@ const FINE_WIDTH: usize = 2;
 
 /// The gap and mark after a slot's value.
 const MARK_WIDTH: usize = 2;
+/// An empty value cell's mark in a step's text, which is worked on a byte to a character, so it's
+/// drawn as `EMPTY` once the text is laid out.
+const BLANK: char = '.';
+/// How an empty value cell is drawn: faint middle dots, as Renoise and OpenMPT draw theirs, as
+/// dashes line up with the beat and bar rules into one line and dots can't (#313). The note keeps
+/// `---`, the tracker's sign that nothing plays.
+const EMPTY: char = '\u{b7}';
+/// How an empty velocity cell shows, which plays at the track's velocity.
+const VELOCITY_EMPTY: &str = "..";
 /// How an empty gate cell shows, which plays as one pulse of `SGL`.
-const GATE_EMPTY: &str = "----";
+const GATE_EMPTY: &str = "....";
 /// How a gate cell shows with no length of its own, which plays at the track's `Gate`.
-const LENGTH_EMPTY: &str = "--";
+const LENGTH_EMPTY: &str = "..";
+/// How an empty FX slot shows its command and its value: no `00`, as it has none.
+const COMMAND_EMPTY: &str = "...";
+const VALUE_EMPTY: &str = "..";
 /// How a row on the grid shows its nudge: as nothing, so only a nudged row's catches the eye.
 const NUDGE_EMPTY: &str = "  ";
 /// Where the first FX slot starts: after the note, velocity, nudge and gate cell with its length.
@@ -96,7 +108,7 @@ impl Stress {
 fn step_text(step: &Step, track: Option<&Track>) -> String {
     let velocity = step
         .velocity
-        .map_or("--".to_owned(), |v| format!("{v:02X}"));
+        .map_or(VELOCITY_EMPTY.to_owned(), |v| format!("{v:02X}"));
     let gate = step.gate.map_or_else(
         || GATE_EMPTY.to_owned(),
         |gate| format!("{}{}", gate.kind.name(), gate.pulses),
@@ -115,7 +127,7 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
         let name = match (slot.command, track) {
             (Some(command), Some(_)) => command.name(),
             (Some(command), None) => command.name().to_owned(),
-            (None, _) => "---".to_owned(),
+            (None, _) => COMMAND_EMPTY.to_owned(),
         };
         let name: String = name.chars().take(COMMAND_WIDTH - 1).collect();
         let mark = if slot.is_value() {
@@ -132,6 +144,7 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
         };
         // An `SLI` by a letter shows the letter, as `'a`, in its two digits' place.
         let value = match slot.slice_mark() {
+            _ if slot.command.is_none() => VALUE_EMPTY.to_owned(),
             Some(letter) => format!("'{letter}"),
             None => format!("{:02X}", slot.coarse()),
         };
@@ -313,11 +326,38 @@ fn neighbours(app: &App, width: usize) -> Vec<usize> {
     tracks[start..start + shown].to_vec()
 }
 
-/// The headings over the grid's two parts, the note and its FX, at the columns they start at.
-fn section_headings(width: usize) -> String {
-    let mut text = format!("{:<FX_START$}FX", "Note");
-    text.truncate(width);
-    text
+/// The headings over the grid's parts, the note and each FX slot, numbered as the title's lanes
+/// and the FX page's devices are, at the columns they start at.
+fn section_headings() -> Vec<(usize, String)> {
+    let mut headings = vec![(0, "Note".to_owned())];
+    for slot in 0..FX_SLOTS {
+        headings.push((
+            field_range(Field::FxCommand(slot)).0,
+            format!("FX {}", slot + 1),
+        ));
+    }
+    headings
+}
+
+/// The headings in a line of a width, each at its column on a fill, with a space either side of
+/// it as a device's name is set into its frame, and cut where the line ends.
+fn headings_line(width: usize, fill: char) -> String {
+    let mut line = vec![fill; width];
+    for (start, heading) in section_headings() {
+        let end = start + heading.len();
+        if start > 0 && start <= width {
+            line[start - 1] = ' ';
+        }
+        if end < width {
+            line[end] = ' ';
+        }
+        for (at, character) in heading.chars().enumerate() {
+            if let Some(cell) = line.get_mut(start + at) {
+                *cell = character;
+            }
+        }
+    }
+    line.into_iter().collect()
 }
 
 /// What another track's column shows: the phrase it's on and, if it's moving, where in that phrase.
@@ -418,7 +458,14 @@ fn column_spans(
                     span.contains(*track) && (first..=last).contains(&(row as isize))
                 })
             });
-            let note = shown.map(|row| column.steps[row].note.to_string());
+            let written = shown.map(|row| column.steps[row].note);
+            let note = written.map(|note| note.to_string());
+            // Empty is faint, as on the grid, so where the other tracks play stands out.
+            let look = if written == Some(Note::Empty) {
+                theme::faint()
+            } else {
+                theme::dim()
+            };
             let mark = if more { MORE_STARTS } else { ' ' };
             match note {
                 Some(note) if playing => Span::styled(format!(">{note}"), theme::active()),
@@ -427,7 +474,7 @@ fn column_spans(
                 Some(note) if in_selection => {
                     Span::styled(format!("{mark}{note}"), theme::selected())
                 }
-                Some(note) => Span::styled(format!("{mark}{note}"), theme::dim()),
+                Some(note) => Span::styled(format!("{mark}{note}"), look),
                 None => Span::raw(" ".repeat(NEIGHBOUR_WIDTH)),
             }
         })
@@ -746,18 +793,16 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Line::raw("")
         }
     };
-    // The top edge names the grid's two parts, set into the box in Insert.
-    let headings = section_headings(body_width);
+    // The top edge names the grid's parts, set into the box in Insert.
     let top_rule = if boxed {
-        let inside: String = headings
-            .chars()
-            .chain(std::iter::repeat('─'))
-            .take(body_width)
-            .map(|c| if c == ' ' { '─' } else { c })
-            .collect();
-        Line::styled(format!("{}┌{inside}┐", " ".repeat(GUTTER - 1)), edge)
+        let inside = headings_line(body_width, '─');
+        Line::styled(format!("{}╭{inside}╮", " ".repeat(GUTTER - 1)), edge)
     } else {
-        Line::styled(format!("{}{headings}", " ".repeat(GUTTER)), theme::dim())
+        let headings = headings_line(body_width, ' ');
+        Line::styled(
+            format!("{}{}", " ".repeat(GUTTER), headings.trim_end()),
+            theme::dim(),
+        )
     };
     let side = if boxed { "│" } else { " " };
     let mut lines = vec![Line::from(title), top_rule];
@@ -772,7 +817,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let Some(step) = phrase.steps().get(index) else {
             // The box closes on the first line past the phrase, so rows don't move in Insert.
             let (left, fill, right) = if boxed && at_line == stored_lines {
-                ("└", "─", "┘")
+                ("╰", "─", "╯")
             } else {
                 (" ", " ", " ")
             };
@@ -919,7 +964,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 empty.push(slot_columns(slot));
             }
         }
-        for (start, end) in empty {
+        for &(start, end) in &empty {
             for style in &mut styles[start..end.min(text.len())] {
                 if style.fg.is_none() {
                     *style = style.patch(theme::faint());
@@ -1036,6 +1081,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 }
             }
         }
+        for &(start, end) in &empty {
+            for cell in shown.iter_mut().take(end).skip(start) {
+                if *cell == BLANK {
+                    *cell = EMPTY;
+                }
+            }
+        }
         let selected = selection.filter(|s| (s.range.first..=s.range.last).contains(&index));
         if let Some(selected) = selected {
             let (start, end) = selected_columns(step, selected.scope, text.len());
@@ -1070,7 +1122,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     if !(first_line..first_line + height).contains(&stored_lines)
         || stored_lines >= time_lines.len()
     {
-        lines.push(rule("└", "┘"));
+        lines.push(rule("╰", "╯"));
     }
     frame.render_widget(Paragraph::new(lines), area);
 }

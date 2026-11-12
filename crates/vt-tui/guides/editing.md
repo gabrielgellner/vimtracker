@@ -186,7 +186,7 @@ scale shows in the panel in the grid's colour for one.
 On Nudge, the ends run from `-B` to `+B`, in 24ths of a step, so `Random`
 between `-3` and `+3` is a humanise you can see, and a `Ramp` rushes or drags
 into a fill. On a gate's length, a `Wave` or `List` of lengths shapes the
-phrasing; a row with no length of its own, `--`, keeps it unless filled.
+phrasing; a row with no length of its own, `··`, keeps it unless filled.
 
 The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+` and Cmd with `h` `l` `j` `k` for them, `i` to type, `K`
 to choose from a list and `x` for the default. `Tab` still plays and pauses.
