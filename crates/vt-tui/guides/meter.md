@@ -143,7 +143,8 @@ keys edit an instrument on another track.
 
 In its PLUGIN mode the Roto shows one track's devices: the Sound page's (the machine,
 `Filter`, `Output` and `Play`), then the FX slots, then the Mod page's (the six mod
-slots, named by number and type as `M1 ADSR`, `M2 AHD` and `M4 LFO`, then `Accumulator` and
+slots, named by number and type as `M1 ADSR`, `M2 AHD`, `M3 Drum` and `M4 LFO`, then
+`Accumulator` and
 `Arpeggio`). Its buttons work as they do for Live and
 Bitwig:
 

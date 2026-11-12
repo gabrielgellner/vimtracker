@@ -355,12 +355,118 @@ impl Ahd {
     }
 }
 
-/// An envelope of either type, as a note's shape and a slot's run follow it: small and `Copy`, so
-/// a voice keeps the one it started with.
+/// The most times a drum envelope's peak strikes before its body.
+pub const MAX_RATCHET: u8 = 8;
+
+/// A drum envelope's own settings, the M8's Drum env: a fall from full to its `Body` over `Peak`,
+/// struck `Ratchet` times, then a decay from the body to nothing over `Decay`. It's a one-shot,
+/// for a kick's or a tom's pitch, the click's sweep then the note's drop, or with a few strikes, a
+/// clap's or a flam's. Where it goes and how far are its mod slot's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Drum {
+    pub peak_ms: u16,
+    /// Percent of full the peak falls to, where the decay starts.
+    pub body: u8,
+    pub decay_ms: u16,
+    /// How many times the peak strikes, each `Peak` long, before the body decays: 1 for a drum,
+    /// 3 or 4 for an 808's clap (#45, after the review's MSEG ratchet).
+    pub ratchet: u8,
+    /// How its body's decay bends, its mode. The peak's fall is always steep.
+    pub curve: Curve,
+}
+
+/// A kick's pitch: a 10 ms click falling to 40%, then a 300 ms drop.
+impl Default for Drum {
+    fn default() -> Self {
+        Self {
+            peak_ms: 10,
+            body: 40,
+            decay_ms: 300,
+            ratchet: 1,
+            curve: Curve::Exp,
+        }
+    }
+}
+
+impl Drum {
+    /// Whether these are settings that can be set.
+    pub fn in_range(&self) -> bool {
+        self.peak_ms <= MAX_ENVELOPE_MS
+            && self.decay_ms <= MAX_ENVELOPE_MS
+            && self.body <= 100
+            && (1..=MAX_RATCHET).contains(&self.ratchet)
+    }
+
+    /// Its body's level, from 0 to 1.
+    #[inline]
+    pub fn body_level(&self) -> f32 {
+        f32::from(self.body) / 100.0
+    }
+
+    /// Its level `share` of the way through one strike of its peak, from 0 to 1: a fall from full
+    /// to its body, always as steep as `Snap`'s, whatever its curve.
+    #[inline]
+    pub fn strike(&self, share: f32) -> f32 {
+        1.0 + (self.body_level() - 1.0) * bent(SNAP_RATE, share)
+    }
+
+    /// One strike's frames, and all of them.
+    #[inline]
+    fn strikes(&self, rate: u32) -> (u64, u64) {
+        let peak = frames_of(self.peak_ms, rate);
+        (peak, peak * u64::from(self.ratchet.max(1)))
+    }
+
+    /// The level some frames after a note. It always strikes from full, so where it was doesn't
+    /// matter, and it has no reset.
+    #[inline]
+    pub fn held(&self, frames: u64, rate: u32) -> f32 {
+        let (peak, struck) = self.strikes(rate);
+        let body = self.body_level();
+        if frames < struck {
+            return self.strike((frames % peak) as f32 / peak as f32);
+        }
+        let into_decay = frames - struck;
+        let decay = frames_of(self.decay_ms, rate);
+        if into_decay < decay {
+            body * (1.0 - self.curve.fall(into_decay as f32 / decay as f32))
+        } else {
+            0.0
+        }
+    }
+
+    /// The level some frames after a release, which a one-shot never has: a decay from where it
+    /// was, as an AHD's.
+    #[inline]
+    pub fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
+        let decay = frames_of(self.decay_ms, rate);
+        if frames < decay {
+            from * (1.0 - self.curve.fall(frames as f32 / decay as f32))
+        } else {
+            0.0
+        }
+    }
+
+    /// Whether a note has gone silent for good: once its body has decayed.
+    #[inline]
+    pub fn finished_holding(&self, frames: u64, rate: u32) -> bool {
+        frames >= self.strikes(rate).1 + frames_of(self.decay_ms, rate)
+    }
+
+    /// Whether a release has reached silence.
+    #[inline]
+    pub fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
+        frames >= frames_of(self.decay_ms, rate)
+    }
+}
+
+/// An envelope of any type, as a note's shape and a slot's run follow it: small and `Copy`, so a
+/// voice keeps the one it started with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Envelope {
     Adsr(Adsr),
     Ahd(Ahd),
+    Drum(Drum),
 }
 
 impl Envelope {
@@ -375,6 +481,7 @@ impl Envelope {
         match self {
             Self::Adsr(adsr) => adsr.reset,
             Self::Ahd(ahd) => ahd.reset,
+            Self::Drum(_) => true,
         }
     }
 
@@ -384,6 +491,7 @@ impl Envelope {
         match self {
             Self::Adsr(_) => false,
             Self::Ahd(ahd) => ahd.one_shot(),
+            Self::Drum(_) => true,
         }
     }
 
@@ -393,6 +501,7 @@ impl Envelope {
         match self {
             Self::Adsr(adsr) => adsr.held(frames, from, rate),
             Self::Ahd(ahd) => ahd.held(frames, from, rate),
+            Self::Drum(drum) => drum.held(frames, rate),
         }
     }
 
@@ -402,6 +511,7 @@ impl Envelope {
         match self {
             Self::Adsr(adsr) => adsr.released(frames, from, rate),
             Self::Ahd(ahd) => ahd.released(frames, from, rate),
+            Self::Drum(drum) => drum.released(frames, from, rate),
         }
     }
 
@@ -411,6 +521,7 @@ impl Envelope {
         match self {
             Self::Adsr(adsr) => adsr.finished_holding(frames, rate),
             Self::Ahd(ahd) => ahd.finished_holding(frames, rate),
+            Self::Drum(drum) => drum.finished_holding(frames, rate),
         }
     }
 
@@ -420,6 +531,7 @@ impl Envelope {
         match self {
             Self::Adsr(adsr) => adsr.finished_releasing(frames, rate),
             Self::Ahd(ahd) => ahd.finished_releasing(frames, rate),
+            Self::Drum(drum) => drum.finished_releasing(frames, rate),
         }
     }
 }
@@ -716,6 +828,69 @@ mod tests {
         assert!(ahd(0, Hold::Ms(MAX_HOLD_MS), MAX_ENVELOPE_MS).in_range());
         assert!(!ahd(0, Hold::Ms(MAX_HOLD_MS + 1), 0).in_range());
         assert!(!ahd(MAX_ENVELOPE_MS + 1, Hold::Note, 0).in_range());
+    }
+
+    fn drum(peak_ms: u16, body: u8, decay_ms: u16, ratchet: u8) -> Drum {
+        Drum {
+            peak_ms,
+            body,
+            decay_ms,
+            ratchet,
+            ..Drum::default()
+        }
+    }
+
+    #[test]
+    fn a_drum_falls_steeply_from_full_to_its_body_then_decays_whatever_the_note() {
+        let env = drum(10, 40, 100, 1);
+        close(env.held(0, RATE), 1.0);
+        // The peak's fall is steep: most of the way down by half its time.
+        let half = env.held(240, RATE);
+        assert!(half < 0.5 && half > 0.4, "{half}");
+        close(env.held(480, RATE), 0.4);
+        // Then the body decays on its curve, and lands.
+        let halfway = env.held(480 + 2400, RATE);
+        assert!(halfway > 0.0 && halfway < 0.2, "{halfway}");
+        close(env.held(480 + 4800, RATE), 0.0);
+        assert!(!env.finished_holding(480 + 4799, RATE));
+        assert!(env.finished_holding(480 + 4800, RATE));
+        let lin = Drum {
+            curve: Curve::Lin,
+            ..env
+        };
+        close(lin.held(480 + 2400, RATE), 0.2);
+        // It always strikes from full, as an envelope that resets.
+        let shaped = Envelope::Drum(env);
+        assert!(shaped.reset() && shaped.one_shot());
+        assert_eq!(shaped.held(100, 0.7, RATE), env.held(100, RATE));
+    }
+
+    #[test]
+    fn a_drums_ratchet_strikes_its_peak_again_before_the_body() {
+        let clap = drum(10, 10, 200, 3);
+        // Full at each strike, 10 ms apart, falling toward the body between them.
+        for strike in 0..3 {
+            close(clap.held(strike * 480, RATE), 1.0);
+            assert!(clap.held(strike * 480 + 470, RATE) < 0.2);
+        }
+        // The body decays from the end of the third.
+        close(clap.held(1440, RATE), 0.1);
+        close(clap.held(1440 + 9600, RATE), 0.0);
+        assert!(clap.finished_holding(1440 + 9600, RATE));
+        assert!(!clap.finished_holding(1440 + 9599, RATE));
+    }
+
+    #[test]
+    fn a_drum_with_no_times_is_safe_and_its_range_is_checked() {
+        let none = drum(0, 50, 0, 4);
+        close(none.held(0, RATE), 0.0);
+        assert!(none.finished_holding(0, RATE));
+        assert!(drum(MAX_ENVELOPE_MS, 100, MAX_ENVELOPE_MS, MAX_RATCHET).in_range());
+        assert!(!drum(0, 101, 0, 1).in_range());
+        assert!(!drum(0, 0, 0, 0).in_range());
+        assert!(!drum(0, 0, 0, MAX_RATCHET + 1).in_range());
+        let text = ron::to_string(&drum(8, 30, 120, 3)).unwrap();
+        assert_eq!(ron::from_str::<Drum>(&text).unwrap(), drum(8, 30, 120, 3));
     }
 
     #[test]
