@@ -13,6 +13,7 @@ use vt_model::modulation::{ModKind, depth_text, note_shape_slot};
 use vt_model::settings::{SettingId, gate_percent};
 use vt_model::song::{Song, SynthVoice, Track, TrackKind, reset_name};
 use vt_model::speed::Speed;
+use vt_model::steps::StepsMode;
 
 use crate::app::App;
 use crate::banking::sample_text;
@@ -22,7 +23,7 @@ use crate::theme;
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page};
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
-use crate::views::widgets::bar::ValueBar;
+use crate::views::widgets::bar::{ValueBar, moved_since};
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid, faded};
 use crate::views::widgets::group;
@@ -86,6 +87,7 @@ fn at_default(control: Control, track: &Track) -> bool {
         || control == Control::Reset && track.reset.is_none()
         || control == Control::Glide && track.glide == 0
         || control == Control::FilterMode && !track.filter.has_modes()
+        || control == Control::Base(TrackControl::Punch) && !track.filter.has_punch()
 }
 
 /// A setting's value as text.
@@ -102,6 +104,7 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
         Control::Base(TrackControl::SendA) => hex(track.send_a),
         Control::Base(TrackControl::SendB) => hex(track.send_b),
         Control::Base(TrackControl::Drive) => hex(track.drive),
+        Control::Base(TrackControl::Punch) => hex(track.punch),
         Control::Base(TrackControl::LowCut) => hex(track.low_cut),
         Control::Base(TrackControl::HighCut) => hex(track.high_cut),
         Control::Base(TrackControl::Pitch) => hex(track.pitch),
@@ -171,6 +174,9 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
     }
 }
 
+/// What a slot going to `Pitch` in scale shows as its destination.
+pub(crate) const IN_SCALE_PITCH: &str = "Pitch in scale";
+
 /// A mod slot's setting as the page shows it, under the slot's type.
 fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
     let modulator = &track.mods[slot];
@@ -181,6 +187,7 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         &modulator.lpg,
         &modulator.lfo,
     );
+    let steps = &modulator.steps;
     let ahd_kind = modulator.kind == ModKind::Ahd;
     let lpg_kind = modulator.kind == ModKind::Lpg;
     let ms = |value: u16| format!("{value} ms");
@@ -191,6 +198,7 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         // The note-shaping slot's level is the note's, one way only.
         ModField::Polarity if note_shape_slot(&track.mods) == Some(slot) => "--".to_owned(),
         ModField::Polarity => modulator.polarity().name().to_owned(),
+        ModField::Destination if modulator.goes_in_scale() => IN_SCALE_PITCH.to_owned(),
         ModField::Destination => modulator
             .destination
             .map_or_else(|| "---".to_owned(), |d| d.name_on(track)),
@@ -218,7 +226,18 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Reset if lpg_kind => on(lpg.reset),
         ModField::Reset => on(adsr.reset),
         ModField::Shape => lfo.shape.name().to_owned(),
+        // One a note, Steps have no rate.
+        ModField::Rate if modulator.kind == ModKind::Steps => match steps.mode {
+            StepsMode::Note => "--".to_owned(),
+            _ => steps.rate.to_string(),
+        },
         ModField::Rate => lfo.rate.to_string(),
+        ModField::Length => steps.length.to_string(),
+        ModField::Start => (steps.start + 1).to_string(),
+        ModField::Loop => steps.looping.to_string(),
+        ModField::Mutate => format!("{}%", steps.mutate),
+        ModField::Smooth => depth_text(steps.smooth),
+        ModField::Step(at) => depth_text(steps.values[usize::from(at)]),
         ModField::Phase => format!("{}°", lfo.phase),
         ModField::Deform => depth_text(lfo.deform),
         ModField::Fade => lfo.fade.to_string(),
@@ -291,6 +310,7 @@ pub(crate) fn filter_being_edited(app: &App) -> bool {
                 TrackControl::Cutoff
                     | TrackControl::Resonance
                     | TrackControl::Drive
+                    | TrackControl::Punch
                     | TrackControl::LowCut
                     | TrackControl::HighCut
             )
@@ -342,7 +362,18 @@ impl CellSource for SlotCells<'_> {
             return None;
         }
         let set = insert.value(param);
-        let live = self.app.live.map_or(set, |live| live.inserts[slot][param]);
+        // Only from a report of the same effect, as another's settings mean something else.
+        let then = self
+            .app
+            .reported_track()
+            .map(|track| track.inserts[slot])
+            .filter(|then| std::mem::discriminant(then) == std::mem::discriminant(&insert));
+        let live = match (self.app.live, then) {
+            (Some(live), Some(then)) => {
+                moved_since(live.inserts[slot][param], then.value(param), set)
+            }
+            _ => set,
+        };
         Some(ValueBar::new(set, BAR_CELLS).playing(live))
     }
 }

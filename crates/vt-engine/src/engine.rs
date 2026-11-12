@@ -885,6 +885,11 @@ impl Engine {
         self.memory.spare()
     }
 
+    /// The id of the version playing, [`Published::id`].
+    pub fn version(&self) -> u64 {
+        self.current.id
+    }
+
     /// Switch to a new version, returning the old one so it can be freed elsewhere.
     ///
     /// A track whose chain changed length stays on the row it was going to play next. An ID that
@@ -1196,6 +1201,7 @@ impl Engine {
         let ticks_per_frame = TICKS_PER_QUARTER as f64 * f64::from(self.millibpm)
             / (60.0 * f64::from(self.rate) * 1000.0);
         SongTime {
+            scale: self.current.song.scale,
             tick: self.origin_tick as f64 + self.frames_since_origin as f64 * ticks_per_frame,
             clock: self.clock,
             rate: self.rate,
@@ -2365,6 +2371,10 @@ impl Engine {
         let Some(owner) = song.tracks.get(index) else {
             return;
         };
+        // Which time round its chain the track is, for a Steps slot that moves on a pass.
+        if pending.leads {
+            self.tracks[index].chain_pass = place as i64 / owner.chain_steps(chain).max(1) as i64;
+        }
         let Some(position) = owner.chain_position(chain, place, self.dealer(index)) else {
             return;
         };

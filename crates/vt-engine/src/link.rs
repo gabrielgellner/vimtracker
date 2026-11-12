@@ -150,6 +150,9 @@ pub struct Telemetry {
     /// Each track's faders as they're heard: where the steps have them, and whether a hand has
     /// taken them over.
     pub faders: [Faders; MAX_TRACKS],
+    /// The version playing, by its [`Published::id`](crate::published::Published::id), which the
+    /// live values were worked out from.
+    pub version: u64,
     /// The track being watched, and what it's playing with.
     pub watched: usize,
     pub live: LiveValues,
@@ -309,6 +312,9 @@ impl Handle {
         for _ in self.held.stutter..needed.stutter {
             self.unsent.push(Memory::stutter(self.rate));
         }
+        for _ in self.held.space..needed.space {
+            self.unsent.push(Memory::space(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
@@ -325,6 +331,7 @@ impl Handle {
             freq_shift: self.held.freq_shift.saturating_sub(needed.freq_shift),
             spring: self.held.spring.saturating_sub(needed.spring),
             stutter: self.held.stutter.saturating_sub(needed.stutter),
+            space: self.held.space.saturating_sub(needed.space),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -519,6 +526,7 @@ impl Realtime {
             reading,
             tracks: self.engine.take_track_readings(reading.frames),
             faders: std::array::from_fn(|track| self.engine.faders(track)),
+            version: self.engine.version(),
             watched: self.watched,
             live,
             playheads: self.engine.playheads(self.watched),
@@ -596,6 +604,8 @@ mod tests {
         chaos: 0xFF,
         ..vt_model::insert::Spring::DEFAULT
     });
+    /// A space, which takes its tank's lines from the pool.
+    const SPACE: Insert = Insert::Space(vt_model::insert::Space::DEFAULT);
 
     const BLOCK: usize = 256;
 
@@ -766,8 +776,10 @@ mod tests {
                 next.tracks[round % 8].inserts = [LIMIT, Insert::ALL[2], LIMIT, Insert::ALL[2]];
             } else if round % 8 == 1 {
                 next.tracks[round % 8].inserts = [FLANGER, PHASER, FLANGER, PHASER];
-            } else if round % 16 == 5 {
+            } else if round % 32 == 5 {
                 next.tracks[round % 8].inserts = [SHIFT, COMB, STUTTER, COMB];
+            } else if round % 32 == 21 {
+                next.tracks[round % 8].inserts = [SPACE, SPRING, SPACE, SPRING];
             } else if round % 16 == 13 {
                 next.tracks[round % 8].inserts = [SPRING, SHIFT, SPRING, SHIFT];
             } else if round % 8 == 3 {
@@ -813,7 +825,7 @@ mod tests {
         ];
         more.tracks[1].inserts = [LIMIT, FLANGER, TAPE, Insert::Empty];
         more.tracks[2].inserts = [PLATE, Insert::Empty, Insert::Empty, Insert::Empty];
-        more.tracks[3].inserts = [Insert::Empty, PITCH, SPRING, Insert::Empty];
+        more.tracks[3].inserts = [Insert::Empty, PITCH, SPRING, SPACE];
         more.tracks[4].inserts = [Insert::Empty, Insert::Empty, STUTTER, GRAINS];
         more.tracks[5].inserts = [WARPS, COMB, RESO, SHIFT];
         handle.publish(published(more, &pool));
@@ -834,6 +846,7 @@ mod tests {
                 comb: needed.comb + 1,
                 freq_shift: needed.freq_shift + 1,
                 spring: needed.spring + 1,
+                space: needed.space + 1,
                 stutter: needed.stutter + 1,
             }
         );
@@ -849,7 +862,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 15);
+        assert_eq!(freed, 16);
     }
 
     #[test]
@@ -928,8 +941,11 @@ mod tests {
                     modulator.kind = if round % 2 == slot % 2 {
                         [ModKind::Adsr, ModKind::Ahd, ModKind::Drum, ModKind::Lpg][round / 2 % 4]
                     } else {
-                        ModKind::Lfo
+                        [ModKind::Lfo, ModKind::Steps][round / 2 % 2]
                     };
+                    modulator.steps.values =
+                        [0x20, -0x20, 0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+                    modulator.steps.rate = vt_model::steps::StepRate::Tick;
                     modulator.destination = Some(SettingId::CUT);
                     modulator.depth = 0x40;
                 }
@@ -1151,8 +1167,10 @@ mod tests {
         for (track, voice) in played.tracks.iter_mut().zip(voices) {
             track.machine = vt_model::song::Machine::Plaits(voice);
             let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
-            let key = |setting| {
-                vt_model::settings::SettingId::voice(voice, setting)
+            // A voice with only two settings locks its second where others lock their third.
+            let count = vt_model::settings::voice_entries(voice).len();
+            let key = |setting: usize| {
+                vt_model::settings::SettingId::voice(voice, setting.min(count - 1))
                     .unwrap()
                     .key()
             };

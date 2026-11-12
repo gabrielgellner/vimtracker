@@ -20,7 +20,7 @@ use crate::automating::{as_heard, fader_of};
 use crate::glyphs;
 use crate::theme;
 use crate::track_page::{Control, DEVICE_COLUMNS, DeviceSpec, Page};
-use crate::views::widgets::bar::ValueBar;
+use crate::views::widgets::bar::{ValueBar, moved_since};
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid};
 use crate::views::widgets::group;
@@ -90,6 +90,7 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
         Control::Base(TrackControl::SendA) => level(track.send_a),
         Control::Base(TrackControl::SendB) => level(track.send_b),
         Control::Base(TrackControl::Drive) => level(track.drive),
+        Control::Base(TrackControl::Punch) => level(track.punch),
         Control::Base(TrackControl::LowCut) => level(track.low_cut),
         Control::Base(TrackControl::HighCut) => level(track.high_cut),
         _ => None,
@@ -176,11 +177,17 @@ impl CellSource for SoundCells<'_> {
     /// (decision 174).
     fn bar(&self, control: Control) -> Option<ValueBar> {
         let (value, centred) = bar_value(control, self.track)?;
-        let live = self
+        let then = self
             .app
-            .live
-            .and_then(|live| live_value(control, &live))
-            .unwrap_or(value);
+            .reported_track()
+            .and_then(|track| bar_value(control, track));
+        let live = match (
+            self.app.live.and_then(|live| live_value(control, &live)),
+            then,
+        ) {
+            (Some(live), Some((then, _))) => moved_since(live, then, value),
+            _ => value,
+        };
         let bar = if fader_of(control).is_some() {
             ValueBar::new(live, BAR_CELLS).playing(value)
         } else {

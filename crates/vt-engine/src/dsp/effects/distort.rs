@@ -14,7 +14,7 @@ use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Flanger,
     FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb,
-    Spring, Stutter, Tape, Vowel, Warps,
+    Space, Spring, Stutter, Tape, Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -164,6 +164,7 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Vowel(_), Insert::Vowel(_))
         | (Insert::FreqShift(_), Insert::FreqShift(_))
         | (Insert::Spring(_), Insert::Spring(_))
+        | (Insert::Space(_), Insert::Space(_))
         | (Insert::Stutter(_), Insert::Stutter(_)) => true,
         _ => false,
     }
@@ -412,6 +413,7 @@ impl InsertState {
             | Insert::Plate(Plate { mix, gain, .. })
             | Insert::Spring(Spring { mix, gain, .. })
             | Insert::Stutter(Stutter { mix, gain, .. })
+            | Insert::Space(Space { mix, gain, .. })
             | Insert::Pitch(Pitch { mix, gain, .. })
             | Insert::Grains(Grains { mix, gain, .. })
             | Insert::Warps(Warps { mix, gain, .. })
@@ -675,6 +677,7 @@ impl InsertState {
             | Insert::Comb(_)
             | Insert::FreqShift(_)
             | Insert::Spring(_)
+            | Insert::Space(_)
             | Insert::Stutter(_) => Mono::Stereo,
         }
     }
@@ -830,6 +833,7 @@ impl InsertState {
             | Insert::Tape(_)
             | Insert::Plate(_)
             | Insert::Spring(_)
+            | Insert::Space(_)
             | Insert::Pitch(_)
             | Insert::Grains(_)
             | Insert::Stutter(_) => (None, Distort::DEFAULT),
@@ -1339,6 +1343,8 @@ mod tests {
                 decay: 0xFF,
                 ..Spring::DEFAULT
             }),
+            // Its longest tail takes over a minute to die away, so this one's its middle.
+            Insert::Space(Space::DEFAULT),
             Insert::Phaser(Phaser {
                 feedback: 0xFF,
                 ..Phaser::DEFAULT

@@ -34,6 +34,7 @@ pub enum Insert {
     Vowel(Vowel),
     FreqShift(FreqShift),
     Spring(Spring),
+    Space(Space),
     Stutter(Stutter),
 }
 
@@ -298,6 +299,9 @@ pub enum Setting {
     RepeatLength,
     Repeats,
     RepeatDecay,
+    /// A space's: how big its tank is. Its `Decay` and `Damp` are the reverb's and its `Mod` the
+    /// plate's.
+    SpaceSize,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -1855,6 +1859,35 @@ pub(crate) const SPRING_PARAMS: [Param; 9] = [
     GAIN_PARAM,
 ];
 
+/// A space's, in the order the page shows them: how long it rings, how big and how dark it is,
+/// then its wobble, then the mix and gain. Those it shares with the reverbs are named as theirs.
+pub(crate) const SPACE_PARAMS: [Param; 6] = [
+    hex_param(
+        "Decay",
+        "decay",
+        "DCAY",
+        Setting::Decay,
+        Space::DEFAULT.decay,
+    ),
+    hex_param(
+        "Size",
+        "size",
+        "SIZE",
+        Setting::SpaceSize,
+        Space::DEFAULT.size,
+    ),
+    hex_param("Damp", "damp", "DAMP", Setting::Damp, Space::DEFAULT.damp),
+    hex_param(
+        "Mod",
+        "mod",
+        "MOD",
+        Setting::Excursion,
+        Space::DEFAULT.excursion,
+    ),
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
 /// How many of the note divisions a stutter's `Length` goes through, shortest first: up to a
 /// beat, `1/4`, as a stutter is a roll or a glitch rather than a loop.
 pub const REPEAT_LENGTHS: usize = 13;
@@ -1936,7 +1969,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 23] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -1958,6 +1991,7 @@ impl Insert {
         Self::Vowel(Vowel::DEFAULT),
         Self::FreqShift(FreqShift::DEFAULT),
         Self::Spring(Spring::DEFAULT),
+        Self::Space(Space::DEFAULT),
         Self::Stutter(Stutter::DEFAULT),
     ];
 
@@ -1998,6 +2032,7 @@ impl Insert {
             Self::FreqShift(_) => "Freq Shift",
             Self::Spring(_) => "Spring",
             Self::Stutter(_) => "Stutter",
+            Self::Space(_) => "Space",
         }
     }
 
@@ -2028,6 +2063,7 @@ impl Insert {
                 "Puts the sound in a spring tank, as a guitar amp has: drips and boings"
             }
             Self::Stutter(_) => "Repeats a piece of the sound when a step says: rolls and glitches",
+            Self::Space(_) => "Washes the sound into a huge, nearly endless pad",
         }
     }
 
@@ -2064,6 +2100,7 @@ impl Insert {
             Self::Vowel(_) => &VOWEL_PARAMS,
             Self::FreqShift(_) => &FREQ_SHIFT_PARAMS,
             Self::Spring(_) => &SPRING_PARAMS,
+            Self::Space(_) => &SPACE_PARAMS,
             Self::Stutter(_) => &STUTTER_PARAMS,
         }
     }
@@ -2211,6 +2248,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| stutter.read(setting));
             }
+            Self::Space(space) => {
+                return SPACE_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| space.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -2256,6 +2299,7 @@ impl Insert {
             Self::FreqShift(shifter) => return Self::FreqShift(shifter.written(setting, whole)),
             Self::Spring(spring) => return Self::Spring(spring.written(setting, whole)),
             Self::Stutter(stutter) => return Self::Stutter(stutter.written(setting, whole)),
+            Self::Space(space) => return Self::Space(space.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -3885,6 +3929,72 @@ impl Spring {
             _ => {}
         }
         spring
+    }
+}
+
+/// A space's settings, after Airwindows' Galactic: a huge, bright wash that rings on and on. One a
+/// file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Space {
+    /// How long it rings: Galactic's `Replace` turned round, so `FF` keeps the most of what's in
+    /// its tank each time round, though never all of it.
+    pub decay: u8,
+    /// How big its tank is, from a tenth of Galactic's lengths to nearly twice them.
+    pub size: u8,
+    /// How dark it is, what goes in and what comes out both darkened.
+    pub damp: u8,
+    /// How fast and far what goes in wobbles in pitch, from not at all at `00`.
+    pub excursion: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Space {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Space {
+    /// As it starts: near Galactic's own, its tank at its biggest, and half wet.
+    pub const DEFAULT: Self = Self {
+        decay: 0x80,
+        size: 0xFF,
+        damp: 0x80,
+        excursion: 0x80,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Decay => self.decay,
+            Setting::SpaceSize => self.size,
+            Setting::Damp => self.damp,
+            Setting::Excursion => self.excursion,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut space = self;
+        match setting {
+            Setting::Decay => space.decay = value,
+            Setting::SpaceSize => space.size = value,
+            Setting::Damp => space.damp = value,
+            Setting::Excursion => space.excursion = value,
+            Setting::Mix => space.mix = value,
+            Setting::Gain => space.gain = value,
+            _ => {}
+        }
+        space
     }
 }
 

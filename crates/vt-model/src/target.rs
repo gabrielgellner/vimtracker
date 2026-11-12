@@ -71,9 +71,13 @@ impl SettingId {
                         .iter()
                         .any(|param| param.setting == effect.params()[at].setting)
             }),
-            // A slot's depth and polarity do nothing on the one shaping the notes, and only an LFO
-            // has a phase and a deform.
-            (Owner::Mod(slot), 1 | 3) => track.mods[slot].kind == ModKind::Lfo,
+            // A slot's depth and polarity do nothing on the one shaping the notes, only an LFO has
+            // a deform, an LFO's phase is Steps' start, and Steps have no polarity to choose.
+            (Owner::Mod(slot), 1) => {
+                matches!(track.mods[slot].kind, ModKind::Lfo | ModKind::Steps)
+            }
+            (Owner::Mod(slot), 3) => track.mods[slot].kind == ModKind::Lfo,
+            (Owner::Mod(slot), 2) if track.mods[slot].kind == ModKind::Steps => false,
             (Owner::Mod(slot), _) => note_shape_slot(&track.mods) != Some(slot),
             (Owner::Sampler, _) => track.is_sound() && track.machine == Machine::Sampler,
             (Owner::Bypass(slot), _) => track
@@ -100,6 +104,10 @@ impl SettingId {
                 format!("{} {}", slot + 1, self.name())
             }
             (Owner::Mod(slot), _) if !here => format!("M{} {} ---", slot + 1, self.name()),
+            // A Steps slot's phase is where each note starts it.
+            (Owner::Mod(slot), 1) if track.mods[slot].kind == ModKind::Steps => {
+                format!("M{} Start", slot + 1)
+            }
             (Owner::Mod(slot), _) => format!("M{} {}", slot + 1, self.name()),
             _ if here => self.name().to_owned(),
             _ => format!("{} ---", self.name()),
@@ -113,7 +121,7 @@ impl SettingId {
             (Owner::Voice(voice), _) => format!("A setting of {}", voice.name()),
             (Owner::Slot { slot, effect }, _) => format!("{} in slot {}", effect.name(), slot + 1),
             (Owner::Mod(slot), 0) => format!("How far Mod {} moves", slot + 1),
-            (Owner::Mod(slot), 1) => format!("Where Mod {} is in its cycle", slot + 1),
+            (Owner::Mod(slot), 1) => format!("Where Mod {} is in its cycle, or starts", slot + 1),
             (Owner::Mod(slot), 3) => format!("How far Mod {} bends its wave", slot + 1),
             (Owner::Mod(slot), _) => {
                 format!("Whether Mod {} moves one way or both", slot + 1)

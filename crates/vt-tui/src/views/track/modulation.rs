@@ -7,9 +7,11 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use vt_model::modulation::{MOD_SLOTS, ModKind};
 use vt_model::song::Track;
+use vt_model::steps::MAX_STEP;
 
 use crate::app::App;
 use crate::theme;
@@ -131,6 +133,65 @@ fn panel(image: Option<u32>) -> GraphicPanel {
     GraphicPanel::new().boxed(lines, MOD_PANEL_WIDTH as u16, None)
 }
 
+/// How many rows of dots the Steps panel's bars have either side of none, at braille's four a
+/// character.
+const BAR_DOTS: usize = MOD_PANEL_HEIGHT * 4 / 2;
+
+/// A Steps slot's panel: its values played as a row of thin bars up or down from none, one
+/// character each, in the middle of the box, spartan and in one colour, faint while the slot is
+/// switched out, with the step playing lit in the playhead's colour. Steps past its `Length` keep
+/// their values and aren't drawn. It gives back where the panel's first step is across it.
+fn steps_panel(
+    track: &Track,
+    slot: usize,
+    playing: Option<u8>,
+    faint: bool,
+) -> (GraphicPanel, usize) {
+    let steps = &track.mods[slot].steps;
+    let values = steps.played();
+    let first = (MOD_PANEL_WIDTH - values.len()) / 2;
+    let base = if faint { theme::faint() } else { theme::dim() };
+    let lines = (0..MOD_PANEL_HEIGHT)
+        .map(|row| {
+            let mut spans = vec![Span::raw(" ".repeat(first))];
+            for (at, value) in values.iter().enumerate() {
+                let style = if playing == Some(at as u8) && !faint {
+                    theme::active()
+                } else {
+                    base
+                };
+                spans.push(Span::styled(bar_cell(*value, row).to_string(), style));
+            }
+            spans.push(Span::raw(
+                " ".repeat(MOD_PANEL_WIDTH - first - values.len()),
+            ));
+            Line::from(spans)
+        })
+        .collect();
+    let panel = GraphicPanel::new().boxed(lines, MOD_PANEL_WIDTH as u16, None);
+    (panel, first)
+}
+
+/// One row of characters of a step's bar, in braille's left column of dots: up from the middle
+/// for a value above none, down for one below, and a short tick across the middle for none.
+fn bar_cell(value: i16, row: usize) -> char {
+    let middle = BAR_DOTS;
+    let reach =
+        (f32::from(value.unsigned_abs()) / f32::from(MAX_STEP) * BAR_DOTS as f32).round() as usize;
+    let reach = reach.clamp(1, BAR_DOTS);
+    let lit = |dot: usize| match value {
+        0 => dot == middle - 1 || dot == middle,
+        value if value > 0 => (middle - reach..middle).contains(&dot),
+        _ => (middle..middle + reach).contains(&dot),
+    };
+    // Braille's left column, top to bottom.
+    const LEFT: [u32; 4] = [0x01, 0x02, 0x04, 0x40];
+    let bits = (0..4)
+        .filter(|at| lit(row * 4 + at))
+        .fold(0, |bits, at| bits | LEFT[at]);
+    char::from_u32(0x2800 + bits).unwrap_or(' ')
+}
+
 /// One of the Mod page's devices: its frame and title, with a slot's switch, its
 /// settings in compact cells, and an envelope's shape or an LFO's cycle in its panel, with the
 /// settings stopping short of it. One switched out is faint, its title's destination too, but for
@@ -155,7 +216,19 @@ fn draw_device(
         widget = widget.switch(!bypassed);
     }
     frame.render_widget(widget.controls(controls).focused(focused), area);
+    // A Steps slot's cursor, if it's on one of its values, and its first step across the panel.
+    let mut marked = None;
     let (panel, lfo) = match device.title[0] {
+        Some(Control::Mod(slot, _)) if track.mods[slot].kind == ModKind::Steps => {
+            let playing = app.live.and_then(|live| live.steps[slot]);
+            let (panel, first) = steps_panel(track, slot, playing, bypassed);
+            if let Control::Mod(at, ModField::Step(step)) = app.track_control()
+                && at == slot
+            {
+                marked = Some(first + usize::from(step));
+            }
+            (panel, false)
+        }
         Some(Control::Mod(slot, _)) => (
             panel(app.mod_images.map(|ids| ids[slot])),
             track.mods[slot].kind == ModKind::Lfo,
@@ -173,13 +246,33 @@ fn draw_device(
         if lfo && whole {
             cycle_at = Some(panel.inside_at(at));
         }
+        let inside = panel.inside_at(at);
         frame.render_widget(panel, at);
+        // The step being edited, marked in the box's bottom border in the cursor's colour.
+        if let Some(column) = marked {
+            let place = (inside.0 + column as u16, inside.1 + MOD_PANEL_HEIGHT as u16);
+            if let Some(cell) = frame.buffer_mut().cell_mut(place) {
+                let colour = theme::cursor(app.mode).bg.unwrap_or(theme::ROSEWATER);
+                cell.set_char('▲').set_style(Style::new().fg(colour));
+            }
+        }
     }
     let widths = match device.grid[0][0] {
         Some(Control::Arpeggio(_)) => ARPEGGIO_CELLS,
         _ => CellWidths::COMPACT,
     };
-    let rows = device.grid.iter().copied().map(Vec::from).collect();
+    // Steps' values are drawn in the panel, not as a cell.
+    let rows = device
+        .grid
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|place| {
+                    place.filter(|control| !matches!(control, Control::Mod(_, ModField::Step(_))))
+                })
+                .collect()
+        })
+        .collect();
     let source = ModCells { app, track };
     let grid = SettingsGrid::new(&source, rows, widths).faded(fade);
     frame.render_widget(grid, settings);

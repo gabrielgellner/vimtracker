@@ -5,6 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use vt_model::song::{Song, Track};
+use vt_model::steps::STEPS;
 use vt_roto::layout::{Slot, row_ends_cleanly};
 use vt_roto::live::{Feel, MAX_PAGES};
 use vt_roto::sysex::CONTROLS;
@@ -12,7 +13,7 @@ use vt_tui::roto::devices::{
     FAMILY_COLOURS, Family, every_kind_of_device, knob, live_device, placement, stored_setups,
 };
 use vt_tui::roto::layouts::{ALL, DeviceLayout, Setting, app_only, key, layout_of, resolve};
-use vt_tui::track_page::{Control, DeviceSpec, Page};
+use vt_tui::track_page::{Control, DeviceSpec, ModField, Page};
 
 /// One of each kind of device, with its track, its song and its layout.
 fn kinds() -> Vec<(Song, usize, Page, usize)> {
@@ -63,12 +64,26 @@ fn every_setting_is_placed_exactly_once_by_a_key_its_device_has() {
         let spec = spec_of(&song, at, page, slot);
         let layout = layout_of(&spec, track);
         // Everything but what the app alone chooses: the machine, the effect and its type.
-        let controls: Vec<Control> = spec
+        // Steps' values are one stop on every row of the page, and each of them on the Roto.
+        let mut controls: Vec<Control> = Vec::new();
+        for control in spec
             .rows()
             .flatten()
             .flatten()
             .filter(|control| !app_only(*control, track))
-            .collect();
+        {
+            match control {
+                Control::Mod(slot, ModField::Step(_)) => {
+                    for at in 0..STEPS as u8 {
+                        let step = Control::Mod(slot, ModField::Step(at));
+                        if !controls.contains(&step) {
+                            controls.push(step);
+                        }
+                    }
+                }
+                control => controls.push(control),
+            }
+        }
         let keys: BTreeSet<&str> = controls.iter().map(|c| key(*c, track)).collect();
         assert_eq!(
             keys.len(),
@@ -331,9 +346,13 @@ fn a_device_keeps_to_one_page_with_its_buttons_on_the_first_unless_it_has_a_reas
         for (at, page) in pages.iter().enumerate().skip(1) {
             let knobs = page.knobs.iter().any(|slot| slot.setting().is_some());
             let buttons = page.buttons.iter().any(|slot| slot.setting().is_some());
-            // A page more only for knobs the first has no room for, or a modulator's `Dest`.
+            // A page more only for knobs the first has no room for, a modulator's `Dest`, or
+            // Steps' values, which come before it (the study's §12, question 3).
             assert!(
-                !knobs || full(&first.knobs) || page.name == "Dest",
+                !knobs
+                    || full(&first.knobs)
+                    || page.name == "Dest"
+                    || page.name.starts_with("Steps "),
                 "{}'s page {} has knobs the first had room for",
                 layout.kind,
                 at + 1
@@ -855,4 +874,45 @@ fn an_lpg_is_attack_decay_and_colour_then_depth_stored_with_an_envelopes_buttons
     let reset = Control::Mod(1, ModField::Reset);
     let next = edit(&song, &turned(reset, 0, &song, 0).unwrap()).unwrap();
     assert!(!next.tracks[0].mods[1].lpg.reset);
+}
+
+#[test]
+fn steps_are_a_live_step_sequencer_with_their_values_before_dest() {
+    use vt_model::action::edit;
+    use vt_model::modulation::ModKind;
+    use vt_roto::live::KNOB_TOP;
+    use vt_tui::roto::edits::{turned, value_text};
+    let steps = layout_named("steps");
+    assert!(!steps.stored, "nothing to switch, so it's live");
+    assert_eq!(
+        first_knobs(steps),
+        [
+            "rate", "length", "depth", "start", "loop", "mode", "mutate", "smooth"
+        ]
+    );
+    let pages: Vec<&str> = steps.layout.pages.iter().map(|page| page.name).collect();
+    assert_eq!(pages, ["Steps", "Steps 1-8", "Steps 9-16", "Dest"]);
+    assert_eq!(first_knobs_of(&steps.layout.pages[2])[0], "step9");
+    let mut song = Song::new(1);
+    song.tracks[0].mods[1].kind = ModKind::Steps;
+    let song = std::sync::Arc::new(song);
+    let track = &song.tracks[0];
+    let spec = &Page::Mod.devices(track)[2];
+    assert_eq!(layout_of(spec, track).kind, "steps");
+    // Each value's knob is that step's, with a centre notch, and turned it sets that one alone.
+    let ninth = resolve(
+        &steps.layout.pages[2].knobs[0].setting().copied().unwrap(),
+        spec,
+        track,
+    );
+    assert_eq!(ninth, Some(Control::Mod(1, ModField::Step(8))));
+    let step = Control::Mod(1, ModField::Step(8));
+    assert_eq!(knob(step, track, &song).unwrap().feel, Feel::CentreNotch);
+    let next = edit(&song, &turned(step, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].steps.values[8], 0xFF);
+    assert_eq!(next.tracks[0].mods[1].steps.values[0], 0);
+    assert_eq!(value_text(step, &next.tracks[0], &next), "+FF");
+    let length = Control::Mod(1, ModField::Length);
+    let next = edit(&song, &turned(length, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].steps.length, 16);
 }

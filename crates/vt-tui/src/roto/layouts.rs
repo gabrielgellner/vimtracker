@@ -44,6 +44,7 @@ use vt_roto::sysex::CONTROLS;
 
 use super::devices::Family;
 use vt_model::modulation::ModKind;
+use vt_model::steps::STEPS;
 
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField};
 
@@ -420,10 +421,101 @@ const HAT: DeviceLayout = live(
         ],
     )],
 );
+const CSAW: DeviceLayout = live(
+    "machine/csaw",
+    &[knobs(
+        "CSaw",
+        [s("notch"), s("depth"), __, __, __, __, __, __],
+    )],
+);
+const MORPH: DeviceLayout = live(
+    "machine/morph",
+    &[knobs(
+        "Morph",
+        [s("shape"), s("fuzz"), __, __, __, __, __, __],
+    )],
+);
+const SAW_SQUARE: DeviceLayout = live(
+    "machine/sawsquare",
+    &[knobs(
+        "Saw Sq",
+        [s("width"), s("mix"), __, __, __, __, __, __],
+    )],
+);
+const SYNC: DeviceLayout = live(
+    "machine/sync",
+    &[knobs(
+        "Sync",
+        [s("interval"), s("mix"), s("wave"), __, __, __, __, __],
+    )],
+);
+const TRIPLE: DeviceLayout = live(
+    "machine/triple",
+    &[knobs(
+        "Triple",
+        [s("second"), s("third"), s("wave"), __, __, __, __, __],
+    )],
+);
+const RING: DeviceLayout = live(
+    "machine/ring",
+    &[knobs(
+        "Ring",
+        [s("first"), s("second"), __, __, __, __, __, __],
+    )],
+);
+const SAW_COMB: DeviceLayout = live(
+    "machine/sawcomb",
+    &[knobs(
+        "Saw Comb",
+        [s("tune"), s("feedback"), __, __, __, __, __, __],
+    )],
+);
+const Z_FILTER: DeviceLayout = live(
+    "machine/zfilter",
+    &[knobs(
+        "Z Filter",
+        [s("cutoff"), s("shape"), s("type"), __, __, __, __, __],
+    )],
+);
+const FB_FM: DeviceLayout = live(
+    "machine/fbfm",
+    &[knobs(
+        "FB FM",
+        [s("amount"), s("ratio"), __, __, __, __, __, __],
+    )],
+);
+const CHAOS_FM: DeviceLayout = live(
+    "machine/chaosfm",
+    &[knobs(
+        "Chaos FM",
+        [s("amount"), s("ratio"), __, __, __, __, __, __],
+    )],
+);
+const VOSIM: DeviceLayout = live(
+    "machine/vosim",
+    &[knobs(
+        "VOSIM",
+        [s("formant"), s("second"), __, __, __, __, __, __],
+    )],
+);
+const FOF: DeviceLayout = live(
+    "machine/fof",
+    &[knobs(
+        "FOF",
+        [s("vowel"), s("voice"), __, __, __, __, __, __],
+    )],
+);
+const TOY: DeviceLayout = live(
+    "machine/toy",
+    &[knobs(
+        "Toy",
+        [s("clock"), s("bend"), __, __, __, __, __, __],
+    )],
+);
 
 // The track's own devices.
 
-/// The filter itself, its type and mode, then the utility filter's cuts.
+/// The filter itself and its punch, its type and mode, then the utility filter's cuts.
 const FILTER: DeviceLayout = live(
     "filter",
     &[knobs(
@@ -432,7 +524,7 @@ const FILTER: DeviceLayout = live(
             s("cutoff"),
             s("resonance"),
             s("drive"),
-            GAP,
+            s("punch"),
             s("type"),
             s("mode"),
             s("lowcut"),
@@ -632,6 +724,57 @@ const LFO: DeviceLayout = stored(
                 __,
             ],
             [GAP, GAP, s("polarity"), __, __, __, __, __],
+        ),
+        DEST_PAGE,
+    ],
+);
+
+/// A Steps slot's: how fast, how many and how far, then where each note starts it, what it does at
+/// its end and its mode, musical lists that leave the layout as it is, then how it drifts and how
+/// it goes from step to step; then its values, eight to a page, each with a centre notch, a small
+/// step sequencer under the hand; and where it goes last (decided in the study's §12, question 3).
+/// It has no off/on settings, so it's live.
+const STEPS_LAYOUT: DeviceLayout = live(
+    "steps",
+    &[
+        knobs(
+            "Steps",
+            [
+                s("rate"),
+                s("length"),
+                s("depth"),
+                s("start"),
+                s("loop"),
+                s("mode"),
+                s("mutate"),
+                s("smooth"),
+            ],
+        ),
+        knobs(
+            "Steps 1-8",
+            [
+                s("step1"),
+                s("step2"),
+                s("step3"),
+                s("step4"),
+                s("step5"),
+                s("step6"),
+                s("step7"),
+                s("step8"),
+            ],
+        ),
+        knobs(
+            "Steps 9-16",
+            [
+                s("step9"),
+                s("step10"),
+                s("step11"),
+                s("step12"),
+                s("step13"),
+                s("step14"),
+                s("step15"),
+                s("step16"),
+            ],
         ),
         DEST_PAGE,
     ],
@@ -1098,9 +1241,26 @@ const STUTTER: DeviceLayout = stored(
         button(0, "trig"),
     )],
 );
+/// How long it rings and how big and dark it is, then its wobble, as the reverbs have theirs.
+const SPACE: DeviceLayout = live(
+    "fx/space",
+    &[knobs(
+        "Space",
+        [
+            s("decay"),
+            s("size"),
+            s("damp"),
+            s("mod"),
+            GAP,
+            GAP,
+            s("mix"),
+            s("gain"),
+        ],
+    )],
+);
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 62] = [
+pub const ALL: [&DeviceLayout; 77] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1123,6 +1283,19 @@ pub const ALL: [&DeviceLayout; 62] = [
     &KICK,
     &SNARE,
     &HAT,
+    &CSAW,
+    &MORPH,
+    &SAW_SQUARE,
+    &SYNC,
+    &TRIPLE,
+    &RING,
+    &SAW_COMB,
+    &TOY,
+    &Z_FILTER,
+    &FB_FM,
+    &CHAOS_FM,
+    &VOSIM,
+    &FOF,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1134,6 +1307,7 @@ pub const ALL: [&DeviceLayout; 62] = [
     &DRUM,
     &LPG_ENVELOPE,
     &LFO,
+    &STEPS_LAYOUT,
     &ACCUMULATOR,
     &ARPEGGIO,
     &EMPTY,
@@ -1162,6 +1336,7 @@ pub const ALL: [&DeviceLayout; 62] = [
     &VOWEL,
     &FREQ_SHIFT,
     &SPRING,
+    &SPACE,
     &STUTTER,
 ];
 
@@ -1191,6 +1366,19 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::Kick => &KICK,
             SynthVoice::Snare => &SNARE,
             SynthVoice::Hat => &HAT,
+            SynthVoice::CSaw => &CSAW,
+            SynthVoice::Morph => &MORPH,
+            SynthVoice::SawSquare => &SAW_SQUARE,
+            SynthVoice::HardSync => &SYNC,
+            SynthVoice::Triple => &TRIPLE,
+            SynthVoice::Ring => &RING,
+            SynthVoice::SawComb => &SAW_COMB,
+            SynthVoice::Toy => &TOY,
+            SynthVoice::ZFilter => &Z_FILTER,
+            SynthVoice::FeedbackFm => &FB_FM,
+            SynthVoice::ChaoticFm => &CHAOS_FM,
+            SynthVoice::Vosim => &VOSIM,
+            SynthVoice::Fof => &FOF,
         },
     }
 }
@@ -1231,6 +1419,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::FreqShift(_) => &FREQ_SHIFT,
         Insert::Spring(_) => &SPRING,
         Insert::Stutter(_) => &STUTTER,
+        Insert::Space(_) => &SPACE,
     }
 }
 
@@ -1249,6 +1438,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
             ModKind::Drum => &DRUM,
             ModKind::Lpg => &LPG_ENVELOPE,
             ModKind::Lfo => &LFO,
+            ModKind::Steps => &STEPS_LAYOUT,
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
@@ -1272,13 +1462,26 @@ pub fn app_only(control: Control, track: &Track) -> bool {
     }
 }
 
-/// The control of a device a layout's setting names, if the device has it.
+/// The control of a device a layout's setting names, if the device has it. Steps' values are one
+/// cursor stop on the page, so each of their keys finds the slot's by its number.
 pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Control> {
-    spec.rows()
-        .flatten()
-        .flatten()
-        .find(|control| key(*control, track) == setting.key)
+    let controls = || spec.rows().flatten().flatten();
+    if let Some(at) = STEP_KEYS.iter().position(|step| *step == setting.key) {
+        return controls().find_map(|control| match control {
+            Control::Mod(slot, ModField::Step(_)) => {
+                Some(Control::Mod(slot, ModField::Step(at as u8)))
+            }
+            _ => None,
+        });
+    }
+    controls().find(|control| key(*control, track) == setting.key)
 }
+
+/// Steps' values' keys, by their place.
+const STEP_KEYS: [&str; STEPS] = [
+    "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8", "step9", "step10",
+    "step11", "step12", "step13", "step14", "step15", "step16",
+];
 
 /// The key a layout names a control by on this track: a machine's setting and an effect's by the
 /// key songs store them under, and the track's own settings by a name of their own.
@@ -1300,6 +1503,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::Cutoff => "cutoff",
             TrackControl::Resonance => "resonance",
             TrackControl::Drive => "drive",
+            TrackControl::Punch => "punch",
             TrackControl::LowCut => "lowcut",
             TrackControl::HighCut => "highcut",
             TrackControl::Pan => "pan",
@@ -1341,6 +1545,12 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Phase => "phase",
             ModField::Deform => "deform",
             ModField::Fade => "fade",
+            ModField::Length => "length",
+            ModField::Start => "start",
+            ModField::Loop => "loop",
+            ModField::Mutate => "mutate",
+            ModField::Smooth => "smooth",
+            ModField::Step(at) => STEP_KEYS[usize::from(at).min(STEPS - 1)],
         },
         Control::Accumulator(field) => match field {
             AccumulatorField::Up => "up",

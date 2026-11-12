@@ -178,9 +178,15 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     );
     let depth = app.history.undo_depth();
     press(&mut app, "K");
+    // Every machine, but Braids' models, folded under their heading.
+    let top = Machine::ALL
+        .iter()
+        .filter(|machine| machine.category().is_empty());
+    let top = top.count();
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), top);
     assert_eq!(
-        app.picker.as_ref().unwrap().shown().count(),
-        Machine::ALL.len()
+        app.picker.as_ref().unwrap().category(0),
+        ("Macro", Machine::ALL.len() - top, false)
     );
     press(&mut app, "VA");
     special(&mut app, KeyCode::Enter);
@@ -422,8 +428,37 @@ fn a_moving_bar_follows_what_plays_and_marks_what_is_set() {
     assert_eq!(style_at(&centred, 6).fg, Some(theme::MAUVE));
     // A small move that stays in the set value's cell keeps the bright mark.
     let near = bar_spans(0x80, 0x82, true);
-    assert_eq!(text(&near), "    │    ");
-    assert_eq!(style_at(&near, 4).fg, Some(theme::MAUVE));
+    assert_eq!((near.len(), text(&near).as_str()), (1, "    │    "));
+    assert_eq!(near[0].style.fg, Some(theme::MAUVE));
+    // Less than a cell from the setting, the bar is what's playing alone, either side of a cell's
+    // edge: a dim mark half a cell from the bright one couldn't be told from it.
+    for live in [0x86, 0x8C] {
+        let near = bar_spans(0x80, live, true);
+        assert_eq!(near.len(), 1, "{live:02X}: {}", text(&near));
+    }
+}
+
+/// A value moving about its setting, as an LFO of little depth moves it, draws as the setting
+/// does wherever the setting is, with no mark coming and going as a thin line at the edge (#421).
+#[test]
+fn a_bar_moving_about_its_setting_shows_no_mark() {
+    use vt_tui::views::widgets::bar::{ValueBar, centre_bar, level_bar};
+    for centred in [false, true] {
+        for set in 0..=u8::MAX {
+            for live in set.saturating_sub(3)..=set.saturating_add(3) {
+                let spans = ValueBar::new(set, 9).playing(live).centred(centred).spans();
+                let text: String = spans.iter().map(|span| span.content.as_ref()).collect();
+                let plain = if centred {
+                    centre_bar(live, 9)
+                } else {
+                    level_bar(live, 9)
+                };
+                let at = format!("set {set:02X}, live {live:02X}, centred {centred}");
+                assert_eq!(text, plain, "{at}");
+                assert_eq!(spans.len(), 1, "{at}");
+            }
+        }
+    }
 }
 
 #[test]
@@ -449,14 +484,20 @@ fn a_bar_moves_at_the_same_pace_through_the_mark_as_either_side_of_it() {
             }
         }
     }
-    // A slow rise across a mark at 80: the edge goes through its cell, with no mark to hide it.
-    let frames =
-        [0x70, 0x74, 0x78, 0x7B, 0x7E, 0x82, 0x85, 0x89, 0x8D, 0x92].map(|live| text(0x80, live));
+    // A slow rise across a mark at 80: the mark shows a cell or more from the edge, and nearer,
+    // the edge goes through its cell with no mark to hide it.
+    let frames = [
+        0x58, 0x5C, 0x60, 0x70, 0x74, 0x78, 0x7B, 0x7E, 0x82, 0x85, 0x89, 0x8D, 0x92, 0x9F, 0xA3,
+    ]
+    .map(|live| text(0x80, live));
     assert_eq!(
         frames,
         [
-            "███▉│    ",
-            "████│    ",
+            "███ │    ",
+            "███▏│    ",
+            "███▍│    ",
+            "███▉     ",
+            "████     ",
             "████▏    ",
             "████▎    ",
             "████▍    ",
@@ -464,7 +505,9 @@ fn a_bar_moves_at_the_same_pace_through_the_mark_as_either_side_of_it() {
             "████▋    ",
             "████▊    ",
             "████▉    ",
-            "████│▏   ",
+            "█████▏   ",
+            "████│▌   ",
+            "████│▊   ",
         ]
     );
 }
@@ -488,6 +531,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         bypassed: Default::default(),
         after_trim: Default::default(),
         mods: Default::default(),
+        steps: Default::default(),
     });
     assert!(cut(&app).contains("FF00 ▕██▎     │▏"), "{}", cut(&app));
 }
@@ -645,8 +689,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        18,
-        "what a sample track has, its Sample, Slice, Start and Length, none, and Mod 6's three"
+        19,
+        "what a sample track has, its Sample, Slice, Start and Length, Pitch in scale, none, and Mod 6's three"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
@@ -688,6 +732,18 @@ fn k_chooses_an_lfos_destination_from_a_list() {
 fn typed_rate_on_second_lfo(app: &mut App) {
     press(app, "0jj");
     typed(app, "7st");
+}
+
+#[test]
+fn the_track_page_sets_the_filters_punch_beside_cut() {
+    let (mut app, _realtime) = on_track_page();
+    // Between the filter's own and the utility filter's.
+    press(&mut app, "$h");
+    assert_eq!(app.track_control().label(), "Punch");
+    press(&mut app, "i60");
+    assert_eq!(app.song().tracks[0].punch, 0x60);
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[0].punch, 0);
 }
 
 #[test]
@@ -1432,11 +1488,11 @@ fn the_track_page_shows_its_settings_in_columns() {
         (11, "╭─ Filter  LP  12 dB ─"),
         (
             13,
-            "│  Cut       FF00 ▕█████████▏   Low cut   00   ▕         ▏   ",
+            "│  Cut       FF00 ▕█████████▏   Punch     00   ▕         ▏   Low cut   00   ▕         ▏   ",
         ),
         (
             15,
-            "│  Res       0000 ▕         ▏   High cut  FF   ▕█████████▏   ",
+            "│  Res       0000 ▕         ▏                                High cut  FF   ▕█████████▏   ",
         ),
         (17, "│  Drive     00   ▕         ▏   "),
         (20, "╭─ Output ─"),
@@ -1755,6 +1811,7 @@ fn the_filter_curve_moves_with_what_plays() {
         bypassed: Default::default(),
         after_trim: Default::default(),
         mods: Default::default(),
+        steps: Default::default(),
     };
 
     // Each new value draws it once, and it holds while the value does.
@@ -1803,12 +1860,12 @@ fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
     press(&mut app, " 4/");
     assert_eq!(app.mode, Mode::Jump);
     assert!(jump_labels(&app).is_empty(), "nothing until you type");
-    // Machine and Slice take `a` and `s` for the `c`, and go when the search narrows, leaving the
-    // rest as they were.
+    // Machine, Slice and Punch take `a`, `s` and `f` for the `c`, and go when the search narrows,
+    // leaving the rest as they were.
     press(&mut app, "cu");
-    assert_eq!(jump_labels(&app), ["d Cut", "f Low cut", "g High cut"]);
+    assert_eq!(jump_labels(&app), ["d Cut", "g Low cut", "j High cut"]);
 
-    press(&mut app, "f");
+    press(&mut app, "g");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.field_jump.is_none());
     assert_eq!(column_name(&app), "Low cut");
@@ -1955,8 +2012,8 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
     let line = from_name;
     // Over the letter after what's typed, in the same columns as without a label.
     assert!(line(&app, "Cud").starts_with("Cud       dF00 ▕"));
-    assert!(line(&app, "Low cuf").starts_with("Low cuf   f0   ▕"));
-    assert!(line(&app, "High cug").starts_with("High cug  gF   ▕"));
+    assert!(line(&app, "Low cug").starts_with("Low cug   g0   ▕"));
+    assert!(line(&app, "High cuj").starts_with("High cuj  jF   ▕"));
     assert!(line(&app, "Res").starts_with("Res       0000 ▕"));
     // It moves along as you type, and past the end of a name it sits just after it.
     press(&mut app, "t");
@@ -3185,6 +3242,35 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     let step = track.phrases[&0].steps()[0].to_string();
     assert!(step.contains(&format!("{INSERTS}.bypass:01")), "{step}");
     std::fs::remove_dir_all(&folder).unwrap();
+}
+
+/// A bar swept by hand, as held keys or a knob sweep it, with nothing else moving it: each frame
+/// is drawn as the program draws it, after the key and before the callback has heard the new
+/// version, so the report is a frame behind. The bar follows the setting at once and never shows
+/// a mark for where it's set, which would come and go as a thin line flickering at its edge (#421).
+#[test]
+fn a_bar_swept_by_hand_follows_it_with_no_mark_flickering() {
+    let (mut app, mut realtime) = app();
+    press(&mut app, " 4}j");
+    assert_eq!(vt_tui::views::status::column_name(&app), "Cut");
+    let mut out = vec![0.0; 1600 * 2];
+    realtime.process(&mut out);
+    app.tick();
+    let bar = |app: &App| {
+        let cut = from_name(app, "Cut");
+        cut[cut.find('▕').unwrap()..]
+            .chars()
+            .take(11)
+            .collect::<String>()
+    };
+    for frame in 0..40 {
+        press(&mut app, "6-");
+        app.tick();
+        let cutoff = app.song().tracks[0].cutoff;
+        let plain = format!("▕{}▏", vt_tui::views::widgets::bar::level_bar(cutoff, 9));
+        assert_eq!(bar(&app), plain, "frame {frame}, Cut {cutoff:02X}");
+        realtime.process(&mut out);
+    }
 }
 
 #[test]

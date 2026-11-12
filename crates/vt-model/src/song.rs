@@ -183,6 +183,11 @@ impl FilterType {
         }
     }
 
+    /// Whether `Punch` moves it: the clean types, whose state-variable filter it's made for.
+    pub fn has_punch(self) -> bool {
+        !self.saturates()
+    }
+
     /// Whether it has more than one mode, so `Mode` means something on it.
     pub fn has_modes(self) -> bool {
         !self.modes().is_empty()
@@ -433,6 +438,10 @@ pub struct Track {
     /// How hard the filter is driven.
     #[serde(default)]
     pub drive: u8,
+    /// How far a clean filter's cutoff and damping rise as its low-pass swings up, so a ringing
+    /// peak starts higher and falls in pitch as it dies away, after Braids' SVF. `00` is off.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub punch: u8,
     /// The utility filter after it: a high-pass, which `00` turns off.
     #[serde(default)]
     pub low_cut: u8,
@@ -773,6 +782,7 @@ impl Default for Track {
             filter: FilterType::default(),
             filter_mode: FilterMode::default(),
             drive: 0,
+            punch: 0,
             low_cut: 0,
             high_cut: open_cutoff(),
             inserts: Default::default(),
@@ -882,6 +892,15 @@ impl Machine {
         }
     }
 
+    /// The category a list shows it under, or none for the top of the list: Braids' models are
+    /// under `Macro`, as the M8's Macrosynth plays them (decision 212).
+    pub fn category(self) -> &'static str {
+        match self {
+            Self::Plaits(voice) if voice.is_macro() => "Macro",
+            _ => "",
+        }
+    }
+
     /// Its settings, by their places among them: the sampler's own, or a synth's.
     pub fn settings(self) -> impl Iterator<Item = SettingId> {
         let count = match self {
@@ -900,12 +919,14 @@ impl Machine {
     }
 
     /// The setting that gives it its character, which its device's title shows after it, as an
-    /// effect's type is: the sample the sampler plays, `Acid`'s wave, 6-op's patch, and the chord
-    /// of `Chord` and `Chiptune`. Other synths have none.
+    /// effect's type is: the sample the sampler plays, the wave of `Acid`, `Sync` and `Triple`,
+    /// `Z Filter`'s type, 6-op's patch, and the chord of `Chord` and `Chiptune`. Other synths have
+    /// none.
     pub fn type_param(self) -> Option<usize> {
         let key = match self {
             Self::Sampler => "sample",
-            Self::Plaits(SynthVoice::Acid) => "wave",
+            Self::Plaits(SynthVoice::Acid | SynthVoice::HardSync | SynthVoice::Triple) => "wave",
+            Self::Plaits(SynthVoice::ZFilter) => "type",
             Self::Plaits(SynthVoice::SixOp) => "patch",
             Self::Plaits(SynthVoice::Chord | SynthVoice::Chiptune) => "chord",
             Self::Plaits(_) => return None,
@@ -996,11 +1017,37 @@ pub enum SynthVoice {
     Snare,
     /// An 808-style hi-hat.
     Hat,
+    /// A saw that starts each cycle on a step, after the CS-80's.
+    CSaw,
+    /// A triangle morphing through a saw and a square to a pulse, through a fuzzy filter.
+    Morph,
+    /// A saw blended into a square.
+    SawSquare,
+    /// Two squares or saws in hard sync.
+    HardSync,
+    /// Three oscillators of one wave, as a chord.
+    Triple,
+    /// A sine ring modulated by two more.
+    Ring,
+    /// A saw through a tuned comb filter.
+    SawComb,
+    /// A low-resolution, circuit-bent tone.
+    Toy,
+    /// A resonant filter faked as Casio's CZ did, by a sine restarted each cycle.
+    ZFilter,
+    /// A sine bent by a second, which its own output bends.
+    FeedbackFm,
+    /// A sine bent by a second, whose speed its own output moves.
+    ChaoticFm,
+    /// Two sines at pitches of their own, windowed each cycle of the note.
+    Vosim,
+    /// A saw through five formant filters, from vowel to vowel.
+    Fof,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 34] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1022,6 +1069,19 @@ impl SynthVoice {
         Self::Kick,
         Self::Snare,
         Self::Hat,
+        Self::CSaw,
+        Self::Morph,
+        Self::SawSquare,
+        Self::HardSync,
+        Self::Triple,
+        Self::Ring,
+        Self::SawComb,
+        Self::Toy,
+        Self::ZFilter,
+        Self::FeedbackFm,
+        Self::ChaoticFm,
+        Self::Vosim,
+        Self::Fof,
     ];
 
     /// The name on screen.
@@ -1048,6 +1108,19 @@ impl SynthVoice {
             Self::Kick => "Kick",
             Self::Snare => "Snare",
             Self::Hat => "Hat",
+            Self::CSaw => "CSaw",
+            Self::Morph => "Morph",
+            Self::SawSquare => "Saw Sq",
+            Self::HardSync => "Sync",
+            Self::Triple => "Triple",
+            Self::Ring => "Ring",
+            Self::SawComb => "Saw Comb",
+            Self::Toy => "Toy",
+            Self::ZFilter => "Z Filter",
+            Self::FeedbackFm => "FB FM",
+            Self::ChaoticFm => "Chaos FM",
+            Self::Vosim => "VOSIM",
+            Self::Fof => "FOF",
         }
     }
 
@@ -1075,6 +1148,19 @@ impl SynthVoice {
             Self::Kick => "An 808-style bass drum, tuned by its note",
             Self::Snare => "An 808-style snare drum, tuned by its note",
             Self::Hat => "An 808-style hi-hat, tuned by its note",
+            Self::CSaw => "A saw with a notch, after the CS-80's, for brass",
+            Self::Morph => "Triangle to saw to pulse, with fuzz, for leads",
+            Self::SawSquare => "A saw blended into a square, for bass and leads",
+            Self::HardSync => "Two waves in hard sync, for tearing leads",
+            Self::Triple => "Three oscillators as a chord, for stabs and pads",
+            Self::Ring => "Three sines ring modulated, for bells and clangs",
+            Self::SawComb => "A saw through a tuned comb, for flanged leads",
+            Self::Toy => "A low-resolution, circuit-bent tone, for lo-fi",
+            Self::ZFilter => "A resonant filter faked by phase, for CZ sweeps",
+            Self::FeedbackFm => "FM with feedback, for growling bass and leads",
+            Self::ChaoticFm => "FM that never settles, for chaotic tones",
+            Self::Vosim => "Two windowed sines, for nasal and vocal leads",
+            Self::Fof => "A saw through vowel formants, for choirs and pads",
         }
     }
 
@@ -1098,6 +1184,39 @@ impl SynthVoice {
                 | Self::Swarm
                 | Self::Dust
                 | Self::Noise
+                | Self::CSaw
+                | Self::Morph
+                | Self::SawSquare
+                | Self::HardSync
+                | Self::Triple
+                | Self::Ring
+                | Self::SawComb
+                | Self::Toy
+                | Self::ZFilter
+                | Self::FeedbackFm
+                | Self::ChaoticFm
+                | Self::Vosim
+                | Self::Fof
+        )
+    }
+
+    /// Whether it's one of Braids' models, which the machine picker lists under `Macro`.
+    pub fn is_macro(self) -> bool {
+        matches!(
+            self,
+            Self::CSaw
+                | Self::Morph
+                | Self::SawSquare
+                | Self::HardSync
+                | Self::Triple
+                | Self::Ring
+                | Self::SawComb
+                | Self::Toy
+                | Self::ZFilter
+                | Self::FeedbackFm
+                | Self::ChaoticFm
+                | Self::Vosim
+                | Self::Fof
         )
     }
 }
@@ -2398,6 +2517,20 @@ mod tests {
         let track: Track = ron::from_str("(mute: false, solo: true)").unwrap();
         assert_eq!(track.level, UNITY_LEVEL);
         assert!(track.solo);
+    }
+
+    #[test]
+    fn a_tracks_punch_saves_and_loads_and_none_is_left_out() {
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        assert_eq!(track.punch, 0);
+        assert!(!ron::to_string(&track).unwrap().contains("punch"));
+        let track = Track {
+            punch: 0x60,
+            ..Track::default()
+        };
+        let text = ron::to_string(&track).unwrap();
+        assert!(text.contains("punch:96"), "{text}");
+        assert_eq!(ron::from_str::<Track>(&text).unwrap().punch, 0x60);
     }
 
     #[test]
