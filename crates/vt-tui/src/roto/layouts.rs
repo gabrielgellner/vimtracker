@@ -18,7 +18,7 @@
 //!     set (firmware 3.3.0), so a restart is under what it starts again, `Reset` under `Attack`,
 //!     an LFO's mode (`Trig` lit, `Free` dark) under its `Phase` and the arpeggio's `Retrig`
 //!     under its `Mode`.
-//! *   A mod slot's layout is its type's: an ADSR's or an LFO's, swapped when the app changes its
+//! *   A mod slot's layout is its type's: an ADSR's, an AHD's or an LFO's, swapped when the app changes its
 //!     type, which is never chosen on the Roto.
 //! *   **The Roto plays and tweaks; the app builds** (the author's rule, 2026-11-11). What a
 //!     device is, its machine, its effect or an effect's type or mode, is chosen in the app with
@@ -519,6 +519,29 @@ const ADSR: DeviceLayout = stored(
     ],
 );
 
+/// An AHD slot's: its attack, hold and decay, a gap, then how far it goes and its curve, as an
+/// ADSR's, with the same buttons: its reset under `Attack` and its polarity under `Depth`.
+const AHD: DeviceLayout = stored(
+    "ahd",
+    &[
+        page(
+            "AHD",
+            [
+                s("attack"),
+                s("hold"),
+                s("decay"),
+                GAP,
+                s("depth"),
+                s("mode"),
+                __,
+                __,
+            ],
+            [s("reset"), GAP, GAP, GAP, s("polarity"), __, __, __],
+        ),
+        DEST_PAGE,
+    ],
+);
+
 /// An LFO slot's: its rate and shape, how far it goes and where in its cycle it starts, with its
 /// polarity on the button under `Depth`, lit for `Bi`, and its mode under `Phase`, lit for `Trig`,
 /// as each note then starts it there; where it
@@ -943,7 +966,7 @@ const VOWEL: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 56] = [
+pub const ALL: [&DeviceLayout; 57] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -973,6 +996,7 @@ pub const ALL: [&DeviceLayout; 56] = [
     &MASTER_OUTPUT,
     &PLAY,
     &ADSR,
+    &AHD,
     &LFO,
     &ACCUMULATOR,
     &ARPEGGIO,
@@ -1079,6 +1103,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         Some(Control::Base(TrackControl::Pitch)) => &PLAY,
         Some(Control::Mod(slot, _)) => match track.mods[slot].kind {
             ModKind::Adsr => &ADSR,
+            ModKind::Ahd => &AHD,
             ModKind::Lfo => &LFO,
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
@@ -1162,6 +1187,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Sustain => "sustain",
             ModField::Release => "release",
             ModField::Reset => "reset",
+            ModField::Hold => "hold",
             ModField::Shape => "shape",
             ModField::Rate => "rate",
             ModField::Phase => "phase",

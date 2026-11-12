@@ -895,3 +895,10 @@ requests, curves then AHD:
 * **The name:** the status line and the Roto call an envelope's mode `Curve`, and an LFO's
   `Mode`.
 * **Not a lock,** as §6 keeps a type's own settings out of the registry.
+
+**As built for #85 (decision 177),** the second half:
+
+* **The hold** is `envelope::Hold`, `Note` or `Ms(u16)`, and `Note` is below `0 ms` for `=` and
+  `-`.
+* **The voice's shape** is `envelope::Envelope`, an `Adsr` or an `Ahd`, as §4 has it.
+* **The Roto** stores AHD as a setup of its own, so there are 10.

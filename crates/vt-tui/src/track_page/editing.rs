@@ -5,7 +5,7 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::Curve;
+use vt_model::envelope::{Curve, Hold, MAX_HOLD_MS};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
@@ -73,11 +73,13 @@ fn adjust_mod(
         }
     };
     let kind = modulator.kind;
-    let (adsr, lfo) = (&mut modulator.adsr, &mut modulator.lfo);
+    let (adsr, ahd, lfo) = (&mut modulator.adsr, &mut modulator.ahd, &mut modulator.lfo);
+    let ahd_kind = kind == ModKind::Ahd;
     match field {
         ModField::Type => {}
         ModField::Mode => match kind {
             ModKind::Adsr => adsr.curve = next_in(&Curve::ALL, adsr.curve, up),
+            ModKind::Ahd => ahd.curve = next_in(&Curve::ALL, ahd.curve, up),
             ModKind::Lfo => lfo.mode = next_in(&LfoMode::ALL, lfo.mode, up),
         },
         ModField::Polarity => modulator.polarity = Some(modulator.polarity().other()),
@@ -91,14 +93,25 @@ fn adjust_mod(
             let moved = modulator.depth + if up { size } else { -size };
             modulator.depth = moved.clamp(-MAX_DEPTH, MAX_DEPTH);
         }
+        ModField::Attack if ahd_kind => ahd.attack_ms = time(ahd.attack_ms),
         ModField::Attack => adsr.attack_ms = time(adsr.attack_ms),
+        ModField::Decay if ahd_kind => ahd.decay_ms = time(ahd.decay_ms),
         ModField::Decay => adsr.decay_ms = time(adsr.decay_ms),
+        // `Note` is below no time, so `-` from 0 ms holds for the note.
+        ModField::Hold => {
+            ahd.hold = match (ahd.hold, up) {
+                (Hold::Note, true) => Hold::Ms(0),
+                (Hold::Note, false) | (Hold::Ms(0), false) => Hold::Note,
+                (Hold::Ms(ms), _) => Hold::Ms(time(ms).min(MAX_HOLD_MS)),
+            };
+        }
         ModField::Release => adsr.release_ms = time(adsr.release_ms),
         ModField::Sustain => {
             let size = if large { SUSTAIN_JUMP } else { 1 };
             let by = if up { size } else { -size };
             adsr.sustain = (i16::from(adsr.sustain) + by).clamp(0, 100) as u8;
         }
+        ModField::Reset if ahd_kind => ahd.reset = !ahd.reset,
         ModField::Reset => adsr.reset = !adsr.reset,
         ModField::Shape => lfo.shape = next_in(&Shape::ALL, lfo.shape, up),
         ModField::Rate if large => lfo.rate = lfo.rate.jumped(up),
@@ -117,7 +130,8 @@ fn adjust_mod(
 /// switch, as choosing a type does.
 fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
     let fresh = default_mod(slot);
-    let (mut adsr, mut lfo) = (modulator.adsr, modulator.lfo);
+    let (mut adsr, mut ahd, mut lfo) = (modulator.adsr, modulator.ahd, modulator.lfo);
+    let ahd_kind = modulator.kind == ModKind::Ahd;
     match field {
         ModField::Type => {
             return ModSlot {
@@ -156,10 +170,15 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         }
         ModField::Mode => match modulator.kind {
             ModKind::Adsr => adsr.curve = fresh.adsr.curve,
+            ModKind::Ahd => ahd.curve = fresh.ahd.curve,
             ModKind::Lfo => lfo.mode = fresh.lfo.mode,
         },
+        ModField::Attack if ahd_kind => ahd.attack_ms = fresh.ahd.attack_ms,
         ModField::Attack => adsr.attack_ms = fresh.adsr.attack_ms,
+        ModField::Decay if ahd_kind => ahd.decay_ms = fresh.ahd.decay_ms,
         ModField::Decay => adsr.decay_ms = fresh.adsr.decay_ms,
+        ModField::Hold => ahd.hold = fresh.ahd.hold,
+        ModField::Reset if ahd_kind => ahd.reset = fresh.ahd.reset,
         ModField::Sustain => adsr.sustain = fresh.adsr.sustain,
         ModField::Release => adsr.release_ms = fresh.adsr.release_ms,
         ModField::Reset => adsr.reset = fresh.adsr.reset,
@@ -169,6 +188,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
     }
     ModSlot {
         adsr,
+        ahd,
         lfo,
         ..modulator
     }

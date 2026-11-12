@@ -1,8 +1,11 @@
-//! ADSR envelopes, one of a mod slot's types, and the curves every envelope's stages follow.
+//! The envelope types of mod slots, ADSR and AHD, and the curves every envelope's stages follow.
 
 use serde::{Deserialize, Serialize};
 
 use crate::constants::MAX_ENVELOPE_MS;
+
+/// The longest an AHD's hold can be timed, in milliseconds.
+pub const MAX_HOLD_MS: u16 = 2000;
 
 /// How far `Exp`'s decays and releases bend: the same as Mutable Instruments' Peaks.
 const FALL_RATE: f32 = 4.0;
@@ -181,6 +184,187 @@ impl Adsr {
     }
 }
 
+/// How long an AHD holds at full before it decays (#85).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Hold {
+    /// While the note lasts, then the decay from its end, as the Digitakt's `HOLD NOTE`.
+    Note,
+    /// So many milliseconds, whatever the note's length: a one-shot, as the M8's AHD and a drum's
+    /// punch.
+    Ms(u16),
+}
+
+/// An AHD envelope's own settings (#85): an attack to full, a hold there for a time or while the
+/// note lasts, and a decay to nothing, with the same reset and curve as an ADSR's. Where it goes
+/// and how far are its mod slot's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Ahd {
+    pub attack_ms: u16,
+    pub hold: Hold,
+    pub decay_ms: u16,
+    /// Whether each note starts it from zero. Otherwise it goes on from where it is.
+    pub reset: bool,
+    /// How its stages bend, its mode.
+    pub curve: Curve,
+}
+
+/// A punch: a click-free start, 30 ms at full, and a short decay.
+impl Default for Ahd {
+    fn default() -> Self {
+        Self {
+            attack_ms: 1,
+            hold: Hold::Ms(30),
+            decay_ms: 200,
+            reset: true,
+            curve: Curve::Exp,
+        }
+    }
+}
+
+impl Ahd {
+    /// Whether these are settings that can be set.
+    pub fn in_range(&self) -> bool {
+        self.attack_ms <= MAX_ENVELOPE_MS
+            && self.decay_ms <= MAX_ENVELOPE_MS
+            && match self.hold {
+                Hold::Note => true,
+                Hold::Ms(ms) => ms <= MAX_HOLD_MS,
+            }
+    }
+
+    /// Whether it plays through whatever the note's length, its hold being a time.
+    #[inline]
+    pub fn one_shot(&self) -> bool {
+        matches!(self.hold, Hold::Ms(_))
+    }
+
+    /// The level some frames after a note, starting from where it was: its attack, its hold,
+    /// then, for a timed hold, its decay.
+    #[inline]
+    pub fn held(&self, frames: u64, from: f32, rate: u32) -> f32 {
+        let attack = frames_of(self.attack_ms, rate);
+        if frames < attack {
+            return from + (1.0 - from) * self.curve.rise(frames as f32 / attack as f32);
+        }
+        let Hold::Ms(hold) = self.hold else {
+            return 1.0;
+        };
+        let into_decay = frames - attack;
+        let hold = frames_of(hold, rate);
+        if into_decay < hold {
+            return 1.0;
+        }
+        let into_decay = into_decay - hold;
+        let decay = frames_of(self.decay_ms, rate);
+        if into_decay < decay {
+            1.0 - self.curve.fall(into_decay as f32 / decay as f32)
+        } else {
+            0.0
+        }
+    }
+
+    /// The level some frames after the note ends, starting from where it was: a hold of `Note`
+    /// decays from there. A one-shot is never released, as it plays through.
+    #[inline]
+    pub fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
+        let decay = frames_of(self.decay_ms, rate);
+        if frames < decay {
+            from * (1.0 - self.curve.fall(frames as f32 / decay as f32))
+        } else {
+            0.0
+        }
+    }
+
+    /// Whether a held note has gone silent for good: a one-shot once its decay is done.
+    #[inline]
+    pub fn finished_holding(&self, frames: u64, rate: u32) -> bool {
+        match self.hold {
+            Hold::Note => false,
+            Hold::Ms(hold) => {
+                frames
+                    >= frames_of(self.attack_ms, rate)
+                        + frames_of(hold, rate)
+                        + frames_of(self.decay_ms, rate)
+            }
+        }
+    }
+
+    /// Whether the decay from a note's end has reached silence.
+    #[inline]
+    pub fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
+        frames >= frames_of(self.decay_ms, rate)
+    }
+}
+
+/// An envelope of either type, as a note's shape and a slot's run follow it: small and `Copy`, so
+/// a voice keeps the one it started with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Envelope {
+    Adsr(Adsr),
+    Ahd(Ahd),
+}
+
+impl Envelope {
+    /// The shape a note has with nothing else set.
+    pub const fn note_shape() -> Self {
+        Self::Adsr(Adsr::note_shape())
+    }
+
+    /// Whether each note starts it from zero.
+    #[inline]
+    pub fn reset(&self) -> bool {
+        match self {
+            Self::Adsr(adsr) => adsr.reset,
+            Self::Ahd(ahd) => ahd.reset,
+        }
+    }
+
+    /// Whether it plays through whatever the note's length, so a note's end doesn't release it.
+    #[inline]
+    pub fn one_shot(&self) -> bool {
+        match self {
+            Self::Adsr(_) => false,
+            Self::Ahd(ahd) => ahd.one_shot(),
+        }
+    }
+
+    /// The level some frames after a note, starting from where it was.
+    #[inline]
+    pub fn held(&self, frames: u64, from: f32, rate: u32) -> f32 {
+        match self {
+            Self::Adsr(adsr) => adsr.held(frames, from, rate),
+            Self::Ahd(ahd) => ahd.held(frames, from, rate),
+        }
+    }
+
+    /// The level some frames after a release, starting from where it was.
+    #[inline]
+    pub fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
+        match self {
+            Self::Adsr(adsr) => adsr.released(frames, from, rate),
+            Self::Ahd(ahd) => ahd.released(frames, from, rate),
+        }
+    }
+
+    /// Whether a held note has gone silent for good, with nothing to release.
+    #[inline]
+    pub fn finished_holding(&self, frames: u64, rate: u32) -> bool {
+        match self {
+            Self::Adsr(adsr) => adsr.finished_holding(frames, rate),
+            Self::Ahd(ahd) => ahd.finished_holding(frames, rate),
+        }
+    }
+
+    /// Whether a release has reached silence.
+    #[inline]
+    pub fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
+        match self {
+            Self::Adsr(adsr) => adsr.finished_releasing(frames, rate),
+            Self::Ahd(ahd) => ahd.finished_releasing(frames, rate),
+        }
+    }
+}
+
 #[inline]
 fn frames_of(ms: u16, rate: u32) -> u64 {
     u64::from(ms) * u64::from(rate) / 1000
@@ -332,5 +516,94 @@ mod tests {
         assert!(adsr(MAX_ENVELOPE_MS, MAX_ENVELOPE_MS, 100, MAX_ENVELOPE_MS).in_range());
         assert!(!adsr(MAX_ENVELOPE_MS + 1, 0, 100, 0).in_range());
         assert!(!adsr(0, 0, 101, 0).in_range());
+    }
+
+    fn ahd(attack_ms: u16, hold: Hold, decay_ms: u16) -> Ahd {
+        Ahd {
+            attack_ms,
+            hold,
+            decay_ms,
+            ..Ahd::default()
+        }
+    }
+
+    #[test]
+    fn an_ahd_with_a_timed_hold_rises_holds_and_decays_whatever_the_note() {
+        let env = ahd(10, Hold::Ms(20), 10);
+        assert!(env.one_shot());
+        close(env.held(0, 0.0, RATE), 0.0);
+        close(env.held(480, 0.0, RATE), 1.0);
+        close(env.held(480 + 959, 0.0, RATE), 1.0);
+        let halfway = env.held(480 + 960 + 240, 0.0, RATE);
+        assert!(halfway > 0.0 && halfway < 0.5, "{halfway}");
+        close(env.held(480 + 960 + 480, 0.0, RATE), 0.0);
+        assert!(!env.finished_holding(480 + 960 + 479, RATE));
+        assert!(env.finished_holding(480 + 960 + 480, RATE));
+        // Its curve bends its attack and decay as an ADSR's.
+        let lin = Ahd {
+            curve: Curve::Lin,
+            ..env
+        };
+        close(lin.held(240, 0.0, RATE), 0.5);
+        close(lin.held(480 + 960 + 240, 0.0, RATE), 0.5);
+    }
+
+    #[test]
+    fn an_ahd_holding_for_the_note_decays_from_its_end() {
+        let env = ahd(10, Hold::Note, 10);
+        assert!(!env.one_shot());
+        close(env.held(480, 0.0, RATE), 1.0);
+        close(env.held(10_000_000, 0.0, RATE), 1.0);
+        assert!(!env.finished_holding(10_000_000, RATE));
+        // The note's end starts its decay from wherever it is.
+        close(env.released(0, 0.7, RATE), 0.7);
+        assert!(env.released(240, 0.7, RATE) < 0.35);
+        close(env.released(480, 0.7, RATE), 0.0);
+        assert!(env.finished_releasing(480, RATE));
+        // Its attack can start from where it was.
+        close(env.held(0, 0.6, RATE), 0.6);
+    }
+
+    #[test]
+    fn an_ahd_with_no_times_is_safe() {
+        let env = ahd(0, Hold::Ms(0), 0);
+        close(env.held(0, 0.0, RATE), 0.0);
+        assert!(env.finished_holding(0, RATE));
+        let note = ahd(0, Hold::Note, 0);
+        close(note.held(0, 0.0, RATE), 1.0);
+        close(note.released(0, 1.0, RATE), 0.0);
+    }
+
+    #[test]
+    fn an_ahds_hold_is_saved_as_a_time_or_note_and_its_range_checked() {
+        for env in [Ahd::default(), ahd(5, Hold::Note, 300)] {
+            let text = ron::to_string(&env).unwrap();
+            assert_eq!(ron::from_str::<Ahd>(&text).unwrap(), env);
+        }
+        assert!(
+            ron::to_string(&Ahd::default())
+                .unwrap()
+                .contains("hold:Ms(30)")
+        );
+        assert!(ahd(0, Hold::Ms(MAX_HOLD_MS), MAX_ENVELOPE_MS).in_range());
+        assert!(!ahd(0, Hold::Ms(MAX_HOLD_MS + 1), 0).in_range());
+        assert!(!ahd(MAX_ENVELOPE_MS + 1, Hold::Note, 0).in_range());
+    }
+
+    #[test]
+    fn either_envelope_plays_as_its_own_type() {
+        let (four, three) = (adsr(10, 10, 50, 10), ahd(10, Hold::Ms(5), 10));
+        let (adsr, ahd) = (Envelope::Adsr(four), Envelope::Ahd(three));
+        for (frames, from) in [(0, 0.0), (300, 0.2), (700, 0.0), (5000, 0.0)] {
+            assert_eq!(adsr.held(frames, from, RATE), four.held(frames, from, RATE));
+            assert_eq!(ahd.held(frames, from, RATE), three.held(frames, from, RATE));
+            assert_eq!(
+                ahd.released(frames, 0.5, RATE),
+                three.released(frames, 0.5, RATE)
+            );
+        }
+        assert!(ahd.one_shot() && !adsr.one_shot());
+        assert!(ahd.reset() && adsr.reset());
+        assert_eq!(Envelope::note_shape(), Envelope::Adsr(Adsr::note_shape()));
     }
 }

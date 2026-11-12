@@ -6,10 +6,10 @@ use vt_model::accumulator::{Accumulation, MOST_DEGREES};
 use vt_model::action::Action;
 use vt_model::arpeggio::{Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::Adsr;
+use vt_model::envelope::{Adsr, Ahd, Hold, MAX_HOLD_MS};
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Lfo, Rate};
-use vt_model::modulation::{MAX_DEPTH, ModSlot};
+use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
 use vt_model::settings::{LONGEST_GLIDE_MS, gate_value, glide_value};
 use vt_model::song::reset_named;
 
@@ -173,27 +173,54 @@ impl App {
         }
     }
 
-    /// Set a mod slot's setting from what was typed: a depth in signed hex, an envelope's time or
-    /// sustain, or an LFO's rate or phase. The rest are lists, chosen with `K`.
+    /// Set a mod slot's setting from what was typed: a depth in signed hex, an envelope's time,
+    /// sustain or hold, or an LFO's rate or phase. The rest are lists, chosen with `K`.
     fn type_mod(&mut self, slot: usize, field: ModField, text: &str) {
         let current = self.page_track().mods[slot];
-        let (adsr, lfo) = (current.adsr, current.lfo);
+        let (adsr, ahd, lfo) = (current.adsr, current.ahd, current.lfo);
         let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
         let with_adsr = |adsr: Adsr| ModSlot { adsr, ..current };
+        let with_ahd = |ahd: Ahd| ModSlot { ahd, ..current };
         let with_lfo = |lfo: Lfo| ModSlot { lfo, ..current };
+        let ahd_kind = current.kind == ModKind::Ahd;
+        let times = format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}");
         let (changed, why) = match field {
             ModField::Depth => (
                 parse_depth(text).map(|depth| ModSlot { depth, ..current }),
                 "Depth is hex from -FF to +FF".to_owned(),
             ),
+            ModField::Attack if ahd_kind => (
+                ms.map(|attack_ms| with_ahd(Ahd { attack_ms, ..ahd })),
+                times,
+            ),
             ModField::Attack => (
                 ms.map(|attack_ms| with_adsr(Adsr { attack_ms, ..adsr })),
-                format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}"),
+                times,
             ),
+            ModField::Decay if ahd_kind => {
+                (ms.map(|decay_ms| with_ahd(Ahd { decay_ms, ..ahd })), times)
+            }
             ModField::Decay => (
                 ms.map(|decay_ms| with_adsr(Adsr { decay_ms, ..adsr })),
-                format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}"),
+                times,
             ),
+            ModField::Hold => {
+                let hold = if text.trim().eq_ignore_ascii_case("note") {
+                    Some(Hold::Note)
+                } else {
+                    let ms = text
+                        .trim()
+                        .trim_end_matches("ms")
+                        .trim()
+                        .parse::<u16>()
+                        .ok();
+                    ms.filter(|ms| *ms <= MAX_HOLD_MS).map(Hold::Ms)
+                };
+                (
+                    hold.map(|hold| with_ahd(Ahd { hold, ..ahd })),
+                    format!("Hold is milliseconds from 0 to {MAX_HOLD_MS}, or note"),
+                )
+            }
             ModField::Release => (
                 ms.map(|release_ms| with_adsr(Adsr { release_ms, ..adsr })),
                 format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}"),

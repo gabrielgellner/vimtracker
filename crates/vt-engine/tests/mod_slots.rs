@@ -288,3 +288,32 @@ fn a_step_locks_a_slots_polarity() {
         Some("POL2".to_owned())
     );
 }
+
+#[test]
+fn an_ahd_on_cut_holds_for_its_time_and_plays_through_a_notes_end() {
+    use vt_model::envelope::{Ahd, Hold};
+    // Slot 2 an AHD on `Cut` at `+40`, held 300 ms, with no attack or decay: `C0` while it holds,
+    // past the note's end at a step, and `80` once it's done, though the next note is a while off.
+    let mut song = song(&["C-3 -- --- --- ---", "OFF -- --- --- ---"]);
+    let punch = Ahd {
+        attack_ms: 0,
+        hold: Hold::Ms(300),
+        decay_ms: 0,
+        ..Ahd::default()
+    };
+    song.tracks[0].mods[1] = ModSlot::ahd(Some(SettingId::CUT), punch).with_depth(0x40);
+    let mut engine = Engine::new(RATE, version(&song));
+    engine.play_from(0);
+    let block = 50 * MS;
+    let found = cutoffs(&mut engine, 500 * MS, block);
+    assert_eq!(found[1], 0xC0, "{found:?}");
+    assert_eq!(found[4], 0xC0, "after the note's end at 125 ms: {found:?}");
+    assert_eq!(found[9], 0x80, "{found:?}");
+    // Held for the note instead, the note's end starts its decay.
+    song.tracks[0].mods[1].ahd.hold = Hold::Note;
+    let mut engine = Engine::new(RATE, version(&song));
+    engine.play_from(0);
+    let found = cutoffs(&mut engine, 500 * MS, block);
+    assert_eq!(found[1], 0xC0, "{found:?}");
+    assert_eq!(found[4], 0x80, "{found:?}");
+}

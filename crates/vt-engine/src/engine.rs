@@ -10,10 +10,10 @@ use vt_model::constants::{
     MAX_MILLIBPM, MAX_SOUND_TRACKS, MAX_TRACKS, MIN_MILLIBPM, NUDGE_TICKS, PREVIEW_MS,
     TICKS_PER_QUARTER, TICKS_PER_STEP,
 };
-use vt_model::envelope::Adsr;
+use vt_model::envelope::{Adsr, Envelope};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::insert::Insert;
-use vt_model::modulation::note_shape_slot;
+use vt_model::modulation::{ModSlot, note_shape_slot};
 use vt_model::order::Dealer;
 use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
@@ -1259,14 +1259,14 @@ impl Engine {
     /// The shape of a track's notes: its first envelope on `Vol`, whichever slot that is, if it's
     /// in. Switched out, or with none, its notes have the plain shape a new track's have, from
     /// the next one.
-    fn note_shape(&self, index: usize) -> Adsr {
+    fn note_shape(&self, index: usize) -> Envelope {
         self.current
             .song
             .tracks
             .get(index)
             .and_then(|track| track.mods.get(note_shape_slot(&track.mods)?))
             .filter(|slot| !slot.bypassed)
-            .map_or(Adsr::note_shape(), |slot| slot.adsr)
+            .map_or(Envelope::note_shape(), ModSlot::envelope)
     }
 
     /// Pause in place, or resume from the stored position.
@@ -1550,7 +1550,7 @@ impl Engine {
             file,
             span,
             velocity_gain(DEFAULT_NOTE_VELOCITY),
-            Adsr::note_shape(),
+            Envelope::note_shape(),
         )
     }
 
@@ -1563,7 +1563,7 @@ impl Engine {
             release_ms: 0,
             ..Adsr::note_shape()
         };
-        self.play_one_off(track, input, None, 1.0, unshaped)
+        self.play_one_off(track, input, None, 1.0, Envelope::Adsr(unshaped))
     }
 
     fn play_one_off(
@@ -1572,7 +1572,7 @@ impl Engine {
         file: Arc<SampleData>,
         span: Option<Span>,
         gain: f32,
-        shape: Adsr,
+        shape: Envelope,
     ) -> Option<Arc<SampleData>> {
         let plays = self
             .current
@@ -1679,7 +1679,7 @@ impl Engine {
     /// plays sounds the same, as does every accent (decision 121). A sampler plays the bank entry
     /// its `SMP` is on as the note starts, the slice of it its `SLI` is on, as its `STA`, `SLEN`
     /// and `PLY` cut it then, and has nothing to play with no entry.
-    fn note_on(&self, track: usize, note: u8, velocity: u8, shape: Adsr) -> Option<NoteOn> {
+    fn note_on(&self, track: usize, note: u8, velocity: u8, shape: Envelope) -> Option<NoteOn> {
         let owner = self.current.song.tracks.get(track)?;
         if !owner.is_sound() {
             return None;

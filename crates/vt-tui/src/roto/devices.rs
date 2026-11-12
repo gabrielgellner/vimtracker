@@ -22,7 +22,7 @@ use vt_model::arpeggio::{ArpMode, ArpRate, MOST_OCTAVES};
 use vt_model::constants::{
     BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET, TICKS_PER_STEP,
 };
-use vt_model::envelope::Curve;
+use vt_model::envelope::{Curve, Hold, MAX_HOLD_MS};
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{LfoMode, Rate, Shape};
@@ -231,7 +231,11 @@ pub fn family(control: Control, track: &Track) -> Family {
         | Control::Glide
         | Control::Mod(
             _,
-            ModField::Rate | ModField::Attack | ModField::Decay | ModField::Release,
+            ModField::Rate
+            | ModField::Attack
+            | ModField::Decay
+            | ModField::Release
+            | ModField::Hold,
         )
         | Control::Arpeggio(ArpField::Rate) => Family::Time,
         Control::Mod(_, ModField::Sustain) => Family::Level,
@@ -308,6 +312,32 @@ pub(crate) fn time_steps() -> Vec<u16> {
         .chain((10..100).step_by(5))
         .chain((100..=MAX_ENVELOPE_MS).step_by(25))
         .collect()
+}
+
+/// Every hold an AHD's knob goes through: `Note` at its bottom, below no time, then the times the
+/// steps `=` takes, up to the longest hold.
+pub(crate) fn hold_steps() -> Vec<Hold> {
+    std::iter::once(Hold::Note)
+        .chain(
+            time_steps()
+                .into_iter()
+                .take_while(|ms| *ms <= MAX_HOLD_MS)
+                .map(Hold::Ms),
+        )
+        .collect()
+}
+
+/// How far along an AHD's holds one is, as [`hold_steps`] has them.
+fn hold_position(hold: Hold) -> u16 {
+    let steps = hold_steps();
+    let at = match hold {
+        Hold::Note => 0,
+        Hold::Ms(ms) => steps
+            .iter()
+            .position(|step| matches!(step, Hold::Ms(at) if *at >= ms))
+            .unwrap_or(steps.len() - 1),
+    };
+    position_at(at as f64 / (steps.len() - 1) as f64)
 }
 
 /// How far along an envelope's times one is, by the steps `=` takes, so a short time is as easy
@@ -464,16 +494,20 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
         }
         Control::Mod(slot, field) => {
             let modulator = &track.mods[slot];
-            let (adsr, lfo) = (&modulator.adsr, &modulator.lfo);
+            let (adsr, ahd, lfo) = (&modulator.adsr, &modulator.ahd, &modulator.lfo);
+            let ahd_kind = modulator.kind == ModKind::Ahd;
             match field {
                 // An envelope's curve is a musical list, which leaves the layout as it is.
-                ModField::Mode if modulator.kind == ModKind::Adsr => list(
-                    Curve::ALL.iter().map(|curve| curve.name().to_owned()),
-                    Curve::ALL
-                        .iter()
-                        .position(|curve| *curve == adsr.curve)
-                        .unwrap_or(0),
-                ),
+                ModField::Mode if modulator.kind.is_envelope() => {
+                    let curve = if ahd_kind { ahd.curve } else { adsr.curve };
+                    list(
+                        Curve::ALL.iter().map(|curve| curve.name().to_owned()),
+                        Curve::ALL
+                            .iter()
+                            .position(|each| *each == curve)
+                            .unwrap_or(0),
+                    )
+                }
                 // What a slot is, the app's alone; an LFO's mode is a switch while it has two.
                 ModField::Type | ModField::Mode | ModField::Polarity | ModField::Reset => {
                     return None;
@@ -487,8 +521,12 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                     changing(at, choices.len() + 1)
                 }
                 ModField::Depth => depth(modulator.depth),
+                ModField::Attack if ahd_kind => (Feel::Smooth, time_position(ahd.attack_ms)),
                 ModField::Attack => (Feel::Smooth, time_position(adsr.attack_ms)),
+                ModField::Decay if ahd_kind => (Feel::Smooth, time_position(ahd.decay_ms)),
                 ModField::Decay => (Feel::Smooth, time_position(adsr.decay_ms)),
+                // Smooth, its value shown as it turns, with `Note` at the bottom.
+                ModField::Hold => (Feel::Smooth, hold_position(ahd.hold)),
                 ModField::Release => (Feel::Smooth, time_position(adsr.release_ms)),
                 ModField::Sustain => value(u16::from(adsr.sustain.min(100)), 100, false),
                 ModField::Shape => list(
@@ -856,6 +894,17 @@ pub fn every_kind_of_device() -> Vec<(Song, usize, Page, usize)> {
     }
     for slot in 0..Page::Mod.devices(&base.tracks[0]).len() {
         found.push((base.clone(), 0, Page::Mod, slot));
+    }
+    // Each type of mod slot a new track hasn't, in `Mod 3`.
+    let unused = ModKind::ALL
+        .into_iter()
+        .filter(|kind| base.tracks[0].mods.iter().all(|slot| slot.kind != *kind));
+    for kind in unused {
+        let mut song = base.clone();
+        song.tracks[0].mods[2].kind = kind;
+        let devices = Page::Mod.devices(&song.tracks[0]);
+        let at = devices.iter().position(|device| device.identity == "Mod 3");
+        found.push((song, 0, Page::Mod, at.unwrap_or_default()));
     }
     for insert in Insert::ALL {
         let types = insert

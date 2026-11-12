@@ -14,7 +14,7 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Adsr, Curve};
+use vt_model::envelope::{Adsr, Ahd, Curve};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
@@ -28,7 +28,7 @@ use vt_roto::live::{share_of, step_at};
 use crate::track_page::{AccumulatorField, ArpField, Control, ModField};
 use crate::views::track::{toggle_on, value};
 
-use super::devices::{knob, rate_position, time_steps};
+use super::devices::{hold_steps, knob, rate_position, time_steps};
 
 /// A value from 0 to a top, for a knob's position.
 fn whole(position: u16, top: u32) -> u32 {
@@ -282,12 +282,14 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
         Control::Mod(slot, field) => {
             let was = track.mods[slot];
             let mut modulator = was;
-            let (adsr, lfo) = (&mut modulator.adsr, &mut modulator.lfo);
+            let (adsr, ahd, lfo) = (&mut modulator.adsr, &mut modulator.ahd, &mut modulator.lfo);
+            let ahd_kind = was.kind == ModKind::Ahd;
             match field {
                 // What a slot is, the app's alone.
                 ModField::Type => return None,
                 ModField::Mode => match was.kind {
                     ModKind::Adsr => adsr.curve = pick(&Curve::ALL, position),
+                    ModKind::Ahd => ahd.curve = pick(&Curve::ALL, position),
                     ModKind::Lfo => lfo.mode = pick(&LfoMode::ALL, position),
                 },
                 ModField::Polarity => modulator.polarity = Some(pick(&Polarity::ALL, position)),
@@ -296,8 +298,15 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                         destination_at(SettingId::for_mod(track, slot), position);
                 }
                 ModField::Depth => modulator.depth = depth_at(position),
+                ModField::Attack if ahd_kind => ahd.attack_ms = time_at(position),
                 ModField::Attack => adsr.attack_ms = time_at(position),
+                ModField::Decay if ahd_kind => ahd.decay_ms = time_at(position),
                 ModField::Decay => adsr.decay_ms = time_at(position),
+                ModField::Hold => {
+                    let steps = hold_steps();
+                    let at = whole(position, steps.len() as u32 - 1) as usize;
+                    ahd.hold = steps[at.min(steps.len() - 1)];
+                }
                 ModField::Release => adsr.release_ms = time_at(position),
                 ModField::Sustain => adsr.sustain = whole(position, 100) as u8,
                 ModField::Reset => return None,
@@ -388,6 +397,19 @@ fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Acti
             slot,
             insert: track.inserts[slot].with_value(param, u8::from(on)),
         }),
+        Control::Mod(slot, ModField::Reset) if track.mods[slot].kind == ModKind::Ahd => {
+            Some(Action::SetMod {
+                track: at,
+                slot,
+                modulator: ModSlot {
+                    ahd: Ahd {
+                        reset: on,
+                        ..track.mods[slot].ahd
+                    },
+                    ..track.mods[slot]
+                },
+            })
+        }
         Control::Mod(slot, ModField::Reset) => Some(Action::SetMod {
             track: at,
             slot,

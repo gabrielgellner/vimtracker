@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::envelope::{Adsr, Curve};
+use vt_model::envelope::{Adsr, Ahd, Curve, Hold};
 use vt_model::modulation::ModSlot;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -471,4 +471,50 @@ fn turning_on_the_high_cut_while_playing_does_not_jump() {
         .map(|pair| (pair[1][0] - pair[0][0]).abs())
         .fold(0.0, f32::max);
     assert!(biggest < 0.01, "jumped {biggest}");
+}
+
+/// An AHD on `Vol`, which in the first slot shapes each note.
+fn ahd(attack_ms: u16, hold: Hold, decay_ms: u16) -> ModSlot {
+    let shape = Ahd {
+        attack_ms,
+        hold,
+        decay_ms,
+        ..Ahd::default()
+    };
+    ModSlot::ahd(Some(SettingId::VOL), shape)
+}
+
+#[test]
+fn an_ahd_with_a_timed_hold_plays_through_whatever_the_note() {
+    // A 150 ms hold and a 50 ms decay, with the note let go at 125 ms, half way through the hold.
+    let shape = ahd(0, Hold::Ms(150), 50);
+    let out = render(song(&[NOTE, OFF], shape), flat(), STEP * 2);
+    close(left(&out, 10 * MS), 1.0);
+    close(left(&out, STEP + 10 * MS), 1.0);
+    close(left(&out, 149 * MS), 1.0);
+    let during = left(&out, 175 * MS);
+    assert!(during > 0.0 && during < 0.5, "{during}");
+    assert_eq!(left(&out, 201 * MS), 0.0);
+    // Held on long past it, it ends all the same.
+    let out = render(song(&[NOTE], shape), flat(), STEP * 2);
+    assert_eq!(left(&out, 201 * MS), 0.0);
+    assert_eq!(left(&out, STEP * 2 - 1), 0.0);
+}
+
+#[test]
+fn an_ahd_holding_for_the_note_decays_from_its_end() {
+    let shape = ahd(10, Hold::Note, 40);
+    let out = render(song(&[NOTE, EMPTY, OFF], shape), flat(), STEP * 3);
+    assert!(left(&out, 5 * MS) < 0.2, "the attack starts slowly");
+    close(left(&out, 10 * MS), 1.0);
+    close(left(&out, STEP * 2 - 1), 1.0);
+    let during = left(&out, STEP * 2 + 20 * MS);
+    assert!(during > 0.0 && during < 0.2, "{during}");
+    assert_eq!(left(&out, STEP * 2 + 41 * MS), 0.0);
+    // Its curve bends it too: straight, it's half way down half way through.
+    let mut lin = shape;
+    lin.ahd.curve = Curve::Lin;
+    let out = render(song(&[NOTE, EMPTY, OFF], lin), flat(), STEP * 3);
+    close(left(&out, 5 * MS), 0.5);
+    close(left(&out, STEP * 2 + 20 * MS), 0.5);
 }

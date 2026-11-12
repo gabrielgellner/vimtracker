@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::envelope::Adsr;
+use crate::envelope::{Adsr, Ahd, Envelope};
 use crate::lfo::Lfo;
 use crate::settings::SettingId;
 
@@ -14,24 +14,26 @@ pub const MOD_SLOTS: usize = 6;
 /// The furthest either way a slot's depth goes, in the units of what it moves.
 pub const MAX_DEPTH: i16 = 0xFF;
 
-/// What a mod slot is. ADSR and LFO are the first; AHD, Drum, LPG, Steps and Track follow in M20.
+/// What a mod slot is. ADSR, AHD and LFO so far; Drum, LPG, Steps and Track follow in M20.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
 )]
 pub enum ModKind {
     #[default]
     Adsr,
+    Ahd,
     Lfo,
 }
 
 impl ModKind {
     /// Every type, in the order the type picker lists them.
-    pub const ALL: [Self; 2] = [Self::Adsr, Self::Lfo];
+    pub const ALL: [Self; 3] = [Self::Adsr, Self::Ahd, Self::Lfo];
 
     /// The name in the slot's title.
     pub fn name(self) -> &'static str {
         match self {
             Self::Adsr => "ADSR",
+            Self::Ahd => "AHD",
             Self::Lfo => "LFO",
         }
     }
@@ -40,25 +42,26 @@ impl ModKind {
     pub fn meaning(self) -> &'static str {
         match self {
             Self::Adsr => "held while the note is",
+            Self::Ahd => "a hold at full, for a time or the note",
             Self::Lfo => "a cycle, free or from each note",
         }
     }
 
     /// Whether it's an envelope, which each note starts and which can shape the notes themselves.
     pub fn is_envelope(self) -> bool {
-        matches!(self, Self::Adsr)
+        matches!(self, Self::Adsr | Self::Ahd)
     }
 
     /// Whether it has a mode, which its title shows after it. Every type has one so far: an
     /// envelope's curve and an LFO's mode.
     pub fn has_mode(self) -> bool {
-        matches!(self, Self::Adsr | Self::Lfo)
+        matches!(self, Self::Adsr | Self::Ahd | Self::Lfo)
     }
 
     /// What its mode is called, as the status line and the Roto name it.
     pub fn mode_label(self) -> &'static str {
         match self {
-            Self::Adsr => "Curve",
+            Self::Adsr | Self::Ahd => "Curve",
             Self::Lfo => "Mode",
         }
     }
@@ -67,7 +70,7 @@ impl ModKind {
     /// the setting, and an LFO swings around it, as before slots had a polarity.
     pub fn polarity(self) -> Polarity {
         match self {
-            Self::Adsr => Polarity::Uni,
+            Self::Adsr | Self::Ahd => Polarity::Uni,
             Self::Lfo => Polarity::Bi,
         }
     }
@@ -164,6 +167,8 @@ pub struct ModSlot {
     #[serde(default, skip_serializing_if = "is_default")]
     pub adsr: Adsr,
     #[serde(default, skip_serializing_if = "is_default")]
+    pub ahd: Ahd,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub lfo: Lfo,
 }
 
@@ -177,6 +182,7 @@ impl ModSlot {
             bypassed: false,
             polarity: None,
             adsr,
+            ahd: Ahd::default(),
             lfo: Lfo::default(),
         }
     }
@@ -190,7 +196,17 @@ impl ModSlot {
             bypassed: false,
             polarity: None,
             adsr: Adsr::default(),
+            ahd: Ahd::default(),
             lfo,
+        }
+    }
+
+    /// An AHD going somewhere, with no depth yet.
+    pub fn ahd(destination: Option<SettingId>, ahd: Ahd) -> Self {
+        Self {
+            kind: ModKind::Ahd,
+            ahd,
+            ..Self::adsr(destination, Adsr::default())
         }
     }
 
@@ -202,7 +218,10 @@ impl ModSlot {
 
     /// Whether these are settings that can be set.
     pub fn in_range(&self) -> bool {
-        self.depth.abs() <= MAX_DEPTH && self.adsr.in_range() && self.lfo.in_range()
+        self.depth.abs() <= MAX_DEPTH
+            && self.adsr.in_range()
+            && self.ahd.in_range()
+            && self.lfo.in_range()
     }
 
     /// Which way it moves what it reaches: its own if it's been chosen, else its type's.
@@ -214,7 +233,18 @@ impl ModSlot {
     pub fn mode_name(&self) -> Option<&'static str> {
         match self.kind {
             ModKind::Adsr => Some(self.adsr.curve.name()),
+            ModKind::Ahd => Some(self.ahd.curve.name()),
             ModKind::Lfo => Some(self.lfo.mode.name()),
+        }
+    }
+
+    /// The envelope it runs: its AHD's as an AHD, and otherwise its ADSR's, which every slot keeps
+    /// running underneath, so one that becomes an envelope picks it up where the note has it.
+    #[inline]
+    pub fn envelope(&self) -> Envelope {
+        match self.kind {
+            ModKind::Ahd => Envelope::Ahd(self.ahd),
+            ModKind::Adsr | ModKind::Lfo => Envelope::Adsr(self.adsr),
         }
     }
 }
@@ -376,6 +406,34 @@ mod tests {
                 .unwrap()
                 .contains("polarity")
         );
+    }
+
+    #[test]
+    fn an_ahd_slot_is_an_envelope_with_its_own_settings_saved_only_once_changed() {
+        use crate::envelope::{Curve, Hold};
+        let mut slot = default_mod(2);
+        assert!(!ron::to_string(&slot).unwrap().contains("ahd"));
+        slot.kind = ModKind::Ahd;
+        assert!(slot.kind.is_envelope());
+        assert_eq!(slot.polarity(), Polarity::Uni);
+        assert_eq!(slot.mode_name(), Some("Exp"));
+        assert_eq!(slot.envelope(), Envelope::Ahd(Ahd::default()));
+        slot.ahd.hold = Hold::Note;
+        slot.ahd.curve = Curve::Snap;
+        let text = ron::to_string(&slot).unwrap();
+        assert!(
+            text.contains("kind:Ahd") && text.contains("hold:Note"),
+            "{text}"
+        );
+        assert_eq!(ron::from_str::<ModSlot>(&text).unwrap(), slot);
+        // As an ADSR again, it runs its ADSR, and keeps its AHD for later.
+        slot.kind = ModKind::Adsr;
+        assert_eq!(slot.envelope(), Envelope::Adsr(Adsr::decay()));
+        assert_eq!(slot.ahd.hold, Hold::Note);
+        // It can shape the notes.
+        let mut mods = default_mods();
+        mods[0] = ModSlot::ahd(Some(SettingId::VOL), Ahd::default());
+        assert_eq!(note_shape_slot(&mods), Some(0));
     }
 
     #[test]
