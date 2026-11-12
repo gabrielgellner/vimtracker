@@ -17,6 +17,7 @@ use vt_model::settings::{
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark, slice_letter};
+use vt_model::steps::{MAX_STEP, StepsMode};
 
 use crate::dsp::blocks::sides::same_sides;
 use crate::dsp::distort::{BYPASS_FADE_MS, InsertState};
@@ -133,6 +134,14 @@ struct SlotRun {
     glide_left: f32,
     /// Where it was in its wave when the modulation was last worked out, if it ran as an LFO.
     now: Option<LfoNow>,
+    /// The track's notes since playing started, which a Steps slot in `Note` mode moves on by,
+    /// and in `Trig` waits for.
+    notes: i64,
+    /// The pass of the track's chain its last note was in, which a Steps slot at `Pass` in `Trig`
+    /// counts from.
+    pass_at: i64,
+    /// The step it played when the modulation was last worked out, if it ran as Steps.
+    playing: Option<u8>,
 }
 
 impl Default for SlotRun {
@@ -147,6 +156,9 @@ impl Default for SlotRun {
             glide: 0.0,
             glide_left: 0.0,
             now: None,
+            notes: 0,
+            pass_at: 0,
+            playing: None,
         }
     }
 }
@@ -187,8 +199,9 @@ impl SlotRun {
 }
 
 /// Start one slot's envelope for a note, from nothing or from where it is, and its cycles again if
-/// its LFO's mode follows the notes.
-fn trigger_slot(slot: &ModSlot, run: &mut SlotRun, now: SongTime) {
+/// its mode follows the notes: as Steps, its own mode's, and otherwise its LFO's, which every other
+/// type keeps running underneath. It counts the note, and the pass of the chain it's in.
+fn trigger_slot(slot: &ModSlot, run: &mut SlotRun, now: SongTime, pass: i64) {
     let envelope = slot.envelope();
     let from = if envelope.reset() {
         0.0
@@ -199,11 +212,40 @@ fn trigger_slot(slot: &ModSlot, run: &mut SlotRun, now: SongTime) {
         at: now.clock,
         from,
     };
-    if slot.lfo.mode == LfoMode::Trig {
+    run.notes += 1;
+    run.pass_at = pass;
+    let restarts = match slot.kind {
+        ModKind::Steps => slot.steps.mode == StepsMode::Trig,
+        _ => slot.lfo.mode == LfoMode::Trig,
+    };
+    if restarts {
         run.start = LfoStart {
             tick: now.tick,
             clock: now.clock,
         };
+    }
+}
+
+/// How many steps a Steps slot has moved on from its start now, or none before the note it waits
+/// for: one a note in `Note` mode, and otherwise by its rate, from its start, which each note moves
+/// in `Trig`, or by passes of the track's chain.
+#[inline]
+fn steps_count(
+    slot: &ModSlot,
+    run: &SlotRun,
+    now: SongTime,
+    step_ticks: u64,
+    pass: i64,
+) -> Option<i64> {
+    let steps = &slot.steps;
+    match steps.mode {
+        StepsMode::Note => (run.notes > 0).then(|| run.notes - 1),
+        StepsMode::Trig if run.notes == 0 => None,
+        mode => Some(match steps.rate.ticks(step_ticks) {
+            Some(ticks) => ((now.tick - run.start.tick) / ticks).floor() as i64,
+            None if mode == StepsMode::Trig => pass - run.pass_at,
+            None => pass,
+        }),
     }
 }
 
@@ -253,6 +295,9 @@ pub struct LiveValues {
     /// the song is stopped, or for one with nowhere to go, no depth, or switched out once it has
     /// faded.
     pub mods: [Option<LfoNow>; MOD_SLOTS],
+    /// Which step each mod slot that's Steps is playing now, counted from 0, for the Mod page to
+    /// light: none for one that isn't running, as an LFO's place is.
+    pub steps: [Option<u8>; MOD_SLOTS],
 }
 
 /// A track's faders as they're heard, `LEV`, `PAN`, `SNA` and `SNB` in [`FADERS`]' order, for the
@@ -789,6 +834,9 @@ pub struct TrackState {
     filter_countdown: u32,
     /// Each mod slot as it runs.
     slots: [SlotRun; MOD_SLOTS],
+    /// How many times round its chain the track is, as the step it last played counts, which a
+    /// Steps slot at `Pass` moves on by.
+    pub chain_pass: i64,
     /// What the LFOs add to each held value, by setting. Separate from the held values, so a
     /// step's FX moves the centre and the LFO carries on around it.
     offsets: [f32; SettingId::COUNT],
@@ -858,6 +906,7 @@ fn pan_position(value: f32) -> f32 {
 pub fn base_of(id: SettingId, track: &Track) -> u16 {
     let modulator = |slot: usize, at: usize| match at {
         0 => depth_value(track.mods[slot].depth),
+        1 if track.mods[slot].kind == ModKind::Steps => track.mods[slot].steps.start_value(),
         1 => phase_value(track.mods[slot].lfo.phase),
         2 => u16::from(track.mods[slot].polarity().index()) << 8,
         _ => depth_value(track.mods[slot].lfo.deform),
@@ -1006,6 +1055,7 @@ impl TrackState {
             coefficients: None,
             filter_countdown: 0,
             slots: [SlotRun::default(); MOD_SLOTS],
+            chain_pass: 0,
             offsets: [0.0; SettingId::COUNT],
             offset_marks: [None; MOVED],
             synth: {
@@ -1114,8 +1164,10 @@ impl TrackState {
         self.drift_rng = drift_rng(seed, index);
         self.arp = None;
         self.last_note = None;
+        self.chain_pass = 0;
         for run in &mut self.slots {
             run.start = LfoStart { tick: 0.0, clock };
+            run.notes = 0;
         }
     }
 
@@ -1124,6 +1176,7 @@ impl TrackState {
     pub fn count_cycles_from_the_top(&mut self) {
         for run in &mut self.slots {
             run.start.tick = 0.0;
+            run.notes = 0;
         }
     }
 
@@ -1188,8 +1241,10 @@ impl TrackState {
         let shaping = note_shape_slot(&track.mods);
         let has_cut = SettingId::CUT.exists_on(track);
         let offsets = &mut self.offsets;
+        let (step_ticks, pass) = (track.speed.ticks(), self.chain_pass);
         for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
             run.now = None;
+            run.playing = None;
             let Some(destination) = slot.destination else {
                 run.rest(slot.kind);
                 continue;
@@ -1211,7 +1266,7 @@ impl TrackState {
             let polarity = run.polarity(slot);
             // An envelope's depth is whole, as its page sets it, so it moves by exactly that.
             let held = match slot.kind {
-                ModKind::Adsr | ModKind::Ahd | ModKind::Drum | ModKind::Lpg => {
+                ModKind::Adsr | ModKind::Ahd | ModKind::Drum | ModKind::Lpg | ModKind::Steps => {
                     depth_of(depth).round()
                 }
                 ModKind::Lfo => depth_of(depth),
@@ -1257,6 +1312,21 @@ impl TrackState {
                         run.add(slot.kind, value * depth / 255.0 * share);
                     self.offset_marks[marks] = Some(destination.index());
                     marks += 1;
+                }
+                // A step's value, heard as written at a depth of `+FF`, through the fast
+                // smoothers as an envelope's is, as it moves in steps.
+                ModKind::Steps => {
+                    let steps = &slot.steps;
+                    let start = steps.start_of(phase + moved_by(1) * 256.0);
+                    let key = now.seed ^ ((index as u64) << 8 | wave_key(at));
+                    let level =
+                        steps_count(slot, run, now, step_ticks, pass).map_or(0.0, |count| {
+                            let step = steps.step_at(start, count, key);
+                            run.playing = Some(step as u8);
+                            f32::from(steps.values[step]) / f32::from(MAX_STEP)
+                        });
+                    let added = run.add(slot.kind, level * depth / 255.0 * share);
+                    moved.add(destination.index(), added);
                 }
             }
         }
@@ -1416,6 +1486,7 @@ impl TrackState {
             // report fills this in from.
             after_trim: [0.0; 2],
             mods: self.slots.map(|run| run.now),
+            steps: self.slots.map(|run| run.playing),
         }
     }
 
@@ -1436,7 +1507,7 @@ impl TrackState {
     /// it had always been it.
     pub fn trigger_mods(&mut self, track: &Track, now: SongTime) {
         for (slot, run) in track.mods.iter().zip(&mut self.slots) {
-            trigger_slot(slot, run, now);
+            trigger_slot(slot, run, now, self.chain_pass);
         }
     }
 

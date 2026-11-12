@@ -12,6 +12,7 @@ use vt_model::lfo::{Lfo, Rate};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
 use vt_model::settings::{LONGEST_GLIDE_MS, gate_value, glide_value};
 use vt_model::song::reset_named;
+use vt_model::steps::{STEPS, StepRate, Steps};
 
 use crate::app::{App, Entry};
 use crate::input::mode::Mode;
@@ -191,6 +192,8 @@ impl App {
         let with_lpg = |lpg: Lpg| ModSlot { lpg, ..current };
         let lpg_kind = current.kind == ModKind::Lpg;
         let with_lfo = |lfo: Lfo| ModSlot { lfo, ..current };
+        let steps = current.steps;
+        let with_steps = |steps: Steps| ModSlot { steps, ..current };
         let ahd_kind = current.kind == ModKind::Ahd;
         let times = format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}");
         let (changed, why) = match field {
@@ -276,10 +279,43 @@ impl App {
                     .map(|sustain| with_adsr(Adsr { sustain, ..adsr })),
                 "Sustain is a percent from 0 to 100".to_owned(),
             ),
+            ModField::Rate if current.kind == ModKind::Steps => match text.parse::<StepRate>() {
+                Ok(rate) => (Some(with_steps(Steps { rate, ..steps })), String::new()),
+                Err(error) => (None, error.to_string()),
+            },
             ModField::Rate => match text.parse::<Rate>() {
                 Ok(rate) => (Some(with_lfo(Lfo { rate, ..lfo })), String::new()),
                 Err(error) => (None, error.to_string()),
             },
+            ModField::Length => (
+                text.trim()
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|length| (1..=STEPS as u8).contains(length))
+                    .map(|length| with_steps(Steps { length, ..steps })),
+                format!("Length is how many steps, from 1 to {STEPS}"),
+            ),
+            ModField::Start => (
+                text.trim()
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|start| (1..=STEPS as u8).contains(start))
+                    .map(|start| {
+                        with_steps(Steps {
+                            start: start - 1,
+                            ..steps
+                        })
+                    }),
+                format!("Start is a step, from 1 to {STEPS}"),
+            ),
+            ModField::Step(at) => (
+                parse_depth(text).map(|value| {
+                    let mut values = steps.values;
+                    values[usize::from(at)] = value;
+                    with_steps(Steps { values, ..steps })
+                }),
+                "A step is hex from -FF to +FF".to_owned(),
+            ),
             ModField::Phase => (
                 text.parse::<u16>()
                     .ok()
@@ -296,6 +332,7 @@ impl App {
             | ModField::Polarity
             | ModField::Destination
             | ModField::Reset
+            | ModField::Loop
             | ModField::Shape => return,
         };
         match changed {

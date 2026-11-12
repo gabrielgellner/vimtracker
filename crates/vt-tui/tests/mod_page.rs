@@ -13,6 +13,7 @@ use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
 use vt_model::selection::Motion;
 use vt_model::settings::SettingId;
 use vt_model::song::{Track, TrackKind};
+use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
 use vt_tui::app::App;
 use vt_tui::input::bindings::Cmd;
 use vt_tui::input::mode::Mode;
@@ -1454,7 +1455,7 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
         .iter()
         .map(|item| item.label.as_str())
         .collect();
-    assert_eq!(listed, ["ADSR", "AHD", "Drum", "LPG", "LFO"]);
+    assert_eq!(listed, ["ADSR", "AHD", "Drum", "LPG", "LFO", "Steps"]);
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).kind, ModKind::Ahd);
@@ -1679,4 +1680,221 @@ fn an_ahd_on_vol_shapes_the_notes_with_no_depth() {
         "AHD  Exp  --  → Vol ─"
     )));
     assert_eq!(depth_shown(&mut app, 1), "--");
+}
+
+#[test]
+fn a_slot_made_steps_with_no_depth_is_given_ff_and_its_title_has_its_mode_and_loop() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    press(&mut app, &format!("{}K", to_lfo(0)));
+    press(&mut app, "/steps");
+    special(&mut app, KeyCode::Enter);
+    let slot = |app: &App| app.song().tracks[0].mods[3];
+    assert_eq!(slot(&app).kind, ModKind::Steps);
+    assert_eq!(slot(&app).depth, 0xFF, "heard as written");
+    assert!(app.status.contains("+FF"), "{}", app.status);
+    // One undo step takes back both.
+    press(&mut app, "u");
+    assert_eq!((slot(&app).kind, slot(&app).depth), (ModKind::Lfo, 0));
+    press(&mut app, "K/steps");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).kind, ModKind::Steps);
+    // Its title is its type, its mode and its loop, then where it goes: no polarity.
+    assert!(
+        device_title(&app, "Mod 4").starts_with(&modulator_title(
+            "Mod 4",
+            true,
+            "Steps  Trig  from 1  → --- ─"
+        )),
+        "{}",
+        device_title(&app, "Mod 4")
+    );
+    // `=` on the loop goes through them, and `K` lists them.
+    press(&mut app, "gg0ll");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Loop));
+    press(&mut app, "=");
+    assert_eq!(slot(&app).steps.looping, Loop::From(1));
+    press(&mut app, "K");
+    assert_eq!(app.picker.as_ref().unwrap().title, "Steps loop");
+    press(&mut app, "/bounce");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).steps.looping, Loop::Bounce);
+}
+
+/// The Mod page as the author's screen draws it, a line at a time.
+fn mod_page_text(app: &App) -> Vec<String> {
+    let (width, height) = (163, 40);
+    let backend = ratatui::backend::TestBackend::new(width, height);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..height)
+        .map(|y| (0..width).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect()
+}
+
+/// A track whose `Mod 4` is Steps on `Cut`, with the cursor on its type.
+fn with_steps() -> (App, vt_engine::link::Realtime) {
+    let (mut app, realtime) = app();
+    app.apply(&Action::SetMod {
+        track: 0,
+        slot: 3,
+        modulator: ModSlot::steps(Some(SettingId::CUT), Steps::default()),
+    });
+    press(&mut app, " 4L");
+    press(&mut app, &to_lfo(0));
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Type));
+    (app, realtime)
+}
+
+#[test]
+fn the_steps_panel_is_a_cursor_stop_that_h_and_l_go_across() {
+    let (mut app, _realtime) = with_steps();
+    // Its grid: Rate, Length and Depth down the left, Start down the right, then its values.
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Rate));
+    press(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Start));
+    press(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Step(0)));
+    press(&mut app, "3l");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Step(3)));
+    press(&mut app, "$");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Step(7)));
+    // Past its last value there's nothing on the right, so it stays.
+    press(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Step(7)));
+    press(&mut app, "0");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Step(0)));
+    // `0` again, and `h` from the first, leave it for the grid.
+    press(&mut app, "h");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Start));
+    // From the left column's lower rows, `l` goes over the holes into it too.
+    press(&mut app, "hjl");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Step(0)));
+    // From Mod 1 on its right, `h` comes in on the last value.
+    let (mut app, _realtime) = with_steps();
+    app.apply(&Action::SetMod {
+        track: 0,
+        slot: 0,
+        modulator: ModSlot::steps(Some(SettingId::CUT), Steps::default()),
+    });
+    press(&mut app, "jh");
+    assert_eq!(app.track_control(), Control::Mod(0, ModField::Step(7)));
+}
+
+#[test]
+fn a_steps_values_are_edited_in_its_panel_and_drawn_as_bars_with_the_cursor_under_one() {
+    let (mut app, _realtime) = with_steps();
+    let values = |app: &App| app.song().tracks[0].mods[3].steps.values;
+    press(&mut app, "jll");
+    press(&mut app, "=");
+    assert_eq!(values(&app)[0], 1);
+    // `+` and `_` move an octave.
+    press(&mut app, "l+");
+    assert_eq!(values(&app)[1], 0x0C);
+    press(&mut app, "__");
+    assert_eq!(values(&app)[1], -0x0C);
+    press(&mut app, "l");
+    typed(&mut app, "-7f");
+    assert_eq!(values(&app)[2], -0x7F);
+    press(&mut app, "l");
+    typed(&mut app, "ff");
+    assert_eq!(values(&app)[3], 0xFF);
+    press(&mut app, "hhhx");
+    assert_eq!(values(&app)[..4], [0, -0x0C, -0x7F, 0xFF]);
+    // The panel: a bar for each of the eight played, up for above none and down for below, and a
+    // tick across the middle for none, with the `▲` under the step being edited.
+    // The eight played are in the middle of the box's 24 columns, from its ninth.
+    let lines = mod_page_text(&app);
+    let (top, _) = device_at(&lines, "Mod 4");
+    let bottom = (top..top + 9)
+        .find(|row| lines[*row].contains('▲'))
+        .expect("the cursor's mark");
+    let border: Vec<char> = lines[bottom].chars().collect();
+    let marker = border.iter().position(|c| *c == '▲').unwrap();
+    let edge = border[..marker].iter().rposition(|c| *c == '└').unwrap();
+    let first = edge + 1 + 8;
+    let cell = |row: usize, step: usize| lines[bottom - 5 + row].chars().nth(first + step).unwrap();
+    let shown = lines[bottom - 5..=bottom].join("\n");
+    // Step 4 at `+FF` reaches the top row and step 3 at `-7F` halfway down; step 1 is a tick
+    // across the middle row, and step 2 at `-0C` a dot just under it.
+    assert_ne!(cell(0, 3), '⠀', "{shown}");
+    assert_eq!(cell(0, 2), '⠀', "{shown}");
+    assert_ne!(cell(3, 2), '⠀', "{shown}");
+    assert_eq!(cell(2, 0), '⠆', "{shown}");
+    assert_eq!(cell(3, 0), '⠀', "{shown}");
+    assert_eq!(cell(2, 1), '⠄', "{shown}");
+    // Nothing past the eighth, and the mark under the first, where the cursor is.
+    assert_eq!(cell(0, 8), ' ', "{shown}");
+    assert_eq!(marker, first, "{shown}");
+}
+
+#[test]
+fn a_steps_rate_length_and_start_step_and_type() {
+    let (mut app, _realtime) = with_steps();
+    let steps = |app: &App| app.song().tracks[0].mods[3].steps;
+    press(&mut app, "j=");
+    assert_eq!(steps(&app).rate, StepRate::Note(180), "= is faster");
+    press(&mut app, "x");
+    typed(&mut app, "tick");
+    assert_eq!(steps(&app).rate, StepRate::Tick);
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Length));
+    press(&mut app, "-----");
+    assert_eq!(steps(&app).length, 3);
+    typed(&mut app, "16");
+    assert_eq!(steps(&app).length, 16);
+    press(&mut app, "kl");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Start));
+    typed(&mut app, "5");
+    assert_eq!(steps(&app).start, 4);
+    typed(&mut app, "17");
+    assert_eq!(steps(&app).start, 4);
+    // In `Note` mode, a rate means nothing.
+    let mut slot = app.song().tracks[0].mods[3];
+    slot.steps.mode = StepsMode::Note;
+    app.apply(&Action::SetMod {
+        track: 0,
+        slot: 3,
+        modulator: slot,
+    });
+    let lines = mod_page_text(&app);
+    let (top, left) = device_at(&lines, "Mod 4");
+    assert!(
+        from_column(&lines[top + 2], left).starts_with("│  Rate      --"),
+        "{}",
+        lines[top + 2]
+    );
+}
+
+#[test]
+fn the_step_playing_is_lit_in_the_playheads_colour() {
+    use vt_tui::theme;
+    let (mut app, _realtime) = with_steps();
+    let mut live = LiveValues::default();
+    live.steps[3] = Some(2);
+    app.live = Some(live);
+    let backend = ratatui::backend::TestBackend::new(163, 40);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let lines = mod_page_text(&app);
+    let (top, left) = device_at(&lines, "Mod 4");
+    let (bottom, edge) = (top..top + 9)
+        .find_map(|row| {
+            let line: Vec<char> = lines[row].chars().collect();
+            let edge = line[left..].iter().position(|c| *c == '└')?;
+            Some((row, left + edge))
+        })
+        .unwrap();
+    // The middle row, where every value of `00` has its tick.
+    let at = |step: usize| &buffer[((edge + 9 + step) as u16, (bottom - 3) as u16)];
+    assert_eq!(at(2).fg, theme::GREEN);
+    assert_eq!(at(1).fg, theme::OVERLAY2);
+    assert_eq!(at(1).symbol(), "⠆");
 }

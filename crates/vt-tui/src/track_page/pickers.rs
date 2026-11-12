@@ -9,6 +9,7 @@ use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId};
 use vt_model::song::{FilterType, Machine};
 use vt_model::speed::Speed;
+use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
 
 use crate::app::App;
 use crate::glyphs;
@@ -390,6 +391,7 @@ impl App {
             modulator.lpg,
             modulator.lfo,
         );
+        let steps = modulator.steps;
         let (title, items): (&'static str, Vec<Item>) = match field {
             ModField::Type => {
                 let kinds = ModKind::ALL.map(|kind| {
@@ -421,6 +423,29 @@ impl App {
                         .meaning(curve.meaning())
                 });
                 (CURVE_TITLES[slot], curves.to_vec())
+            }
+            ModField::Mode if modulator.kind == ModKind::Steps => {
+                let modes = StepsMode::ALL.map(|mode| {
+                    let steps = Steps { mode, ..steps };
+                    Item::new(mode.name(), pick(ModSlot { steps, ..modulator }))
+                        .meaning(mode.meaning())
+                });
+                (MODE_TITLES[slot], modes.to_vec())
+            }
+            ModField::Rate if modulator.kind == ModKind::Steps => {
+                let rates = StepRate::ALL.map(|rate| {
+                    let steps = Steps { rate, ..steps };
+                    Item::new(rate.to_string(), pick(ModSlot { steps, ..modulator }))
+                });
+                ("Steps rate", rates.to_vec())
+            }
+            ModField::Loop => {
+                let loops = Loop::ALL.map(|looping| {
+                    let steps = Steps { looping, ..steps };
+                    Item::new(looping.to_string(), pick(ModSlot { steps, ..modulator }))
+                        .meaning(looping.meaning())
+                });
+                ("Steps loop", loops.to_vec())
             }
             ModField::Mode if modulator.kind == ModKind::Lfo => {
                 let modes = LfoMode::ALL.map(|mode| {
@@ -513,7 +538,7 @@ impl App {
             }
             _ => {
                 self.status =
-                    "K chooses from a list on Type, Mode, Polarity, Dest, Shape, Rate and Reset"
+                    "K chooses from a list on Type, Mode, Loop, Polarity, Dest, Shape, Rate and Reset"
                         .to_owned();
                 return;
             }

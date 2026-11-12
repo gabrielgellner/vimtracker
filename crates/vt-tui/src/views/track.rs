@@ -13,6 +13,7 @@ use vt_model::modulation::{ModKind, depth_text, note_shape_slot};
 use vt_model::settings::{SettingId, gate_percent};
 use vt_model::song::{Song, SynthVoice, Track, TrackKind, reset_name};
 use vt_model::speed::Speed;
+use vt_model::steps::StepsMode;
 
 use crate::app::App;
 use crate::banking::sample_text;
@@ -181,6 +182,7 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         &modulator.lpg,
         &modulator.lfo,
     );
+    let steps = &modulator.steps;
     let ahd_kind = modulator.kind == ModKind::Ahd;
     let lpg_kind = modulator.kind == ModKind::Lpg;
     let ms = |value: u16| format!("{value} ms");
@@ -218,7 +220,16 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Reset if lpg_kind => on(lpg.reset),
         ModField::Reset => on(adsr.reset),
         ModField::Shape => lfo.shape.name().to_owned(),
+        // One a note, Steps have no rate.
+        ModField::Rate if modulator.kind == ModKind::Steps => match steps.mode {
+            StepsMode::Note => "--".to_owned(),
+            _ => steps.rate.to_string(),
+        },
         ModField::Rate => lfo.rate.to_string(),
+        ModField::Length => steps.length.to_string(),
+        ModField::Start => (steps.start + 1).to_string(),
+        ModField::Loop => steps.looping.to_string(),
+        ModField::Step(at) => depth_text(steps.values[usize::from(at)]),
         ModField::Phase => format!("{}°", lfo.phase),
         ModField::Deform => depth_text(lfo.deform),
     }

@@ -2365,6 +2365,10 @@ impl Engine {
         let Some(owner) = song.tracks.get(index) else {
             return;
         };
+        // Which time round its chain the track is, for a Steps slot that moves on a pass.
+        if pending.leads {
+            self.tracks[index].chain_pass = place as i64 / owner.chain_steps(chain).max(1) as i64;
+        }
         let Some(position) = owner.chain_position(chain, place, self.dealer(index)) else {
             return;
         };
