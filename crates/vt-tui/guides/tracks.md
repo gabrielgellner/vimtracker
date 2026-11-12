@@ -229,7 +229,11 @@ Screamer's circuit, which clips the mids softly and adds them to the clean sound
 stays tight, and `Distortion` an op-amp distortion, as a RAT is, with high gain and a hard clip.
 Each mode has its own setting: `Amount` for how hard the four shaping modes and the pedals
 drive, `Bits` on `Crush`, whole numbers from `12` to `2`, where anything quieter than half a
-step drops out, and `Rate` on `Down`, how long each sample is held. The pedals have a `Tone`
+step drops out, and `Rate` on `Down`, how long each sample is held. A change of `Bits` eases
+over a few ms, so an LFO on it sweeps rather than steps. `Mu-law` on `Crush` squeezes the sound
+before it's rounded, as an 8-bit sampler did, so quiet sounds keep finer steps and loud ones
+grit. `Track` on `Down` holds at a whole number of times the note's pitch, from 256 times at
+`00` to once a cycle at `FF`, so what it folds back stays in tune with the note. The pedals have a `Tone`
 as well, dark at `00` and bright at `FF`. A mode keeps its own as you change to another and
 back. Few bits gate quiet sounds, so one press up brings them in, and `Mix` blends it with the
 sound going in, from `00` dry to `FF` wet. `Gain` turns down what comes out, as `Amount` can
