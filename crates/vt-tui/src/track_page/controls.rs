@@ -4,7 +4,7 @@
 use vt_model::action::TrackControl;
 use vt_model::lfo::phase_value;
 use vt_model::modulation::{ModKind, depth_value};
-use vt_model::settings::{Effect, Kind, SettingId};
+use vt_model::settings::{Effect, SettingId};
 use vt_model::song::{FilterType, Track, TrackKind};
 
 /// One setting of a mod slot: its type, its mode, where it goes and how far, which every type has
@@ -224,7 +224,7 @@ impl Control {
                 SettingId::modulator(slot, 2)?,
                 u16::from(track.mods[slot].polarity().index()) << 8,
             )),
-            Self::Level => base(SettingId::VOL, track.level),
+            Self::Level => base(SettingId::LEVEL, track.level),
             Self::Base(TrackControl::Cutoff) => base(SettingId::CUT, track.cutoff),
             Self::Base(TrackControl::Resonance) => base(SettingId::RES, track.resonance),
             Self::Base(TrackControl::Pan) => base(SettingId::PAN, track.pan),
@@ -257,16 +257,15 @@ impl Control {
     }
 
     /// The setting whose fine part this shows on the Sound page, if it has one: the track's own
-    /// that steps can set too, and its machine's that sweep. An effect's settings are whole, as
-    /// effects only hear those.
+    /// that steps can set too, and its machine's that sweep, but not those on the level scale. An
+    /// effect's settings are whole, as effects only hear those.
     pub fn fine_on(self, track: &Track) -> Option<SettingId> {
         let id = match self {
             Self::Base(which) => which.setting()?,
             Self::Setting(_) => self.setting_on(track)?,
             _ => return None,
         };
-        let sweeps = matches!(id.entry().kind, Kind::Continuous { .. });
-        (sweeps && self.exists_on(track)).then_some(id)
+        (id.entry().kind.has_fine() && self.exists_on(track)).then_some(id)
     }
 
     /// The setting of the track's machine this is, if it's one.

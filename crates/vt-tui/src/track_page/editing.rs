@@ -279,6 +279,14 @@ impl App {
             .unwrap_or_default()
     }
 
+    /// The cursor's track as it's heard, with its faders where the steps have them while they
+    /// drive them.
+    pub(super) fn page_track_as_heard(&self) -> Track {
+        self.track_as_heard(self.cursor.track)
+            .map(std::borrow::Cow::into_owned)
+            .unwrap_or_default()
+    }
+
     /// Put the track in a group, or take it out of any.
     pub(super) fn set_group_here(&mut self, group: Option<u8>) {
         self.apply(&Action::SetTrackGroup {
@@ -345,7 +353,8 @@ impl App {
 
     pub(super) fn adjust_control(&mut self, up: bool, count: usize, large: bool) {
         let control = self.track_control();
-        let track = self.page_track();
+        // A fader the steps drive moves from where it's heard, as a hand takes it over there.
+        let track = self.page_track_as_heard();
         // A machine's setting stops at its own top, as a list stops at its last choice.
         let top = control
             .setting_on(&track)
@@ -571,13 +580,15 @@ impl App {
     /// below `00`, as one undo step.
     pub(super) fn adjust_fine(&mut self, up: bool, count: usize, large: bool) {
         let control = self.track_control();
-        let track = self.page_track();
+        let track = self.page_track_as_heard();
         let Some(id) = control.fine_on(&track) else {
             return;
         };
         let Some(coarse) = track.coarse(id) else {
             return;
         };
+        // What's set, which a fader the steps drive may not be at.
+        let set = self.page_track().coarse(id).unwrap_or(coarse);
         let size = if large { HEX_JUMP } else { 1 } * count as i64;
         let value = i64::from(coarse) << 8 | i64::from(track.fine(id));
         let top = i64::from(id.entry().kind.top()) << 8;
@@ -585,7 +596,7 @@ impl App {
         let (coarse_now, fine) = ((moved >> 8) as u8, (moved & 0xFF) as u8);
         let index = self.cursor.track;
         let mut actions = Vec::new();
-        if coarse_now != coarse {
+        if coarse_now != set {
             actions.push(match control {
                 Control::Base(control) => Action::SetTrackBase {
                     track: index,

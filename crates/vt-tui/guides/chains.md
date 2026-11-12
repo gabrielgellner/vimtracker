@@ -95,6 +95,8 @@ an edit changes all of them.
 | `Space s`, `:solo` | Solo or unsolo this track |
 | `Space g m`, `Space g s` | The same, at the next line of the launch grid |
 | `Space M` | Clear all mutes and solos |
+| `Space e` | Give this track's faders back to its steps |
+| `Space E` | The same for every track |
 
 A tap of `m` or `s` switches the mute or solo and leaves it. Hold the key down
 for longer than about a third of a second and it switches back when you let go,
@@ -104,7 +106,9 @@ muted track shows `󰝟` after its name, and a soloed one `󰋋`.
 ## The level scale
 
 Levels work like Ableton's faders: even steps in dB, with room above 0. Track
-level, `VOL`, `SNA` and `SNB` all use this scale.
+level, `Trim`'s steps, the sends, `LEV`, `VOL`, `SNA` and `SNB` all use this scale,
+and all are two hex digits, as a quarter of a dB is the scale's step: there's no
+fine part, and a glide still sweeps smoothly between two values.
 
 | Value | Level |
 |---|---|
@@ -121,9 +125,11 @@ Every `10` in hex is 4 dB, so `+` is 4 dB louder, and `4=` is 1 dB.
 
 ## Velocity and level
 
-Velocity belongs to each note in a phrase. A track's level is separate and
-stays out of its patterns, so you can rebalance a track without touching a
-note. It also turns down what the track sends to the delay and reverb.
+Velocity belongs to each note in a phrase. A track's level is separate, so you
+can rebalance a track without touching a note. A phrase can still move it, as
+an Ableton clip can: `LEV` sets the fader and `VOL` moves the sound up and down
+from it; see **Fader automation and relative modulation** in **FX commands**.
+The level also turns down what the track sends to the delay and reverb.
 
 ## Songs
 

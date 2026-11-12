@@ -548,7 +548,7 @@ fn setting_of(
 
 /// The track's own settings a probe can set: its level, pan, filter, pitch and glide.
 const TRACK_SETTINGS: [SettingId; 7] = [
-    SettingId::VOL,
+    SettingId::LEVEL,
     SettingId::PAN,
     SettingId::CUT,
     SettingId::RES,
@@ -619,7 +619,7 @@ fn set_on(track: &mut Track, id: SettingId, value: u8) {
         }
         (Owner::Bypass(slot), _) => track.bypassed[slot] = value != 0,
         (Owner::Track, _) => match id {
-            SettingId::VOL => track.level = value,
+            SettingId::LEVEL => track.level = value,
             SettingId::PAN => track.pan = value,
             SettingId::CUT => track.cutoff = value,
             SettingId::RES => track.resonance = value,

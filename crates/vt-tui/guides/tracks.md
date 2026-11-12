@@ -39,11 +39,13 @@ ends only its note. `Acid` plays one note at a time, as a 303 does: a key
 pressed while another is down slides to its note, and letting go of it slides
 back to the one still down.
 
-Cut, Res, Pan, the sends and the machine's settings that sweep have a fine part,
-the dim pair of digits after the value, as FX values do in a phrase. `l` stops on
-it before the next setting, and there `=` `-` `+` `_`, `i` and `x` work on the
-fine part alone, carrying into the value past `FF` or below `00`. The value's own
-digits keep it, and at the top there's none. An effect's settings are whole.
+Cut, Res, Pan and the machine's settings that sweep have a fine part, the dim
+pair of digits after the value, as FX values do in a phrase. `l` stops on it
+before the next setting, and there `=` `-` `+` `_`, `i` and `x` work on the fine
+part alone, carrying into the value past `FF` or below `00`. The value's own
+digits keep it, and at the top there's none. What's on the level scale, `Trim`,
+`Level` and the sends, is two digits, as a quarter of a dB is its step, and so
+are an effect's settings.
 
 ## The Sound page
 
@@ -608,9 +610,13 @@ filter, so turning it up drives `Drive` and the slots harder. Steps and modulato
 don't move it, and a change glides as `Level`'s does. The status line reads it in dB;
 `=` and `-` move it a quarter of a dB, `+` and `_` 4 dB, and `x` goes back to 0 dB.
 
-`Pan`, `Send A` and `Send B` are where those values start when
-playback starts from the top. A step's `h` value changes them until the next start,
-and changing one here is heard straight away unless a lock or glide is on top. `Level` scales the whole track.
+`Level`, `Pan`, `Send A` and `Send B` are the track's faders, and where `LEV`,
+`PAN`, `SNA` and `SNB` start when playback starts from the top. `Level` scales the
+whole track. While a step drives one, it shows the step's value, in the playing
+colour, and its bar is filled to it, with what `VOL` and modulation make of it a
+thin mark. Changing one by hand then takes it over from the steps, marked `󰝁` after
+its name, until `Space e` gives it back; see **Fader automation and relative
+modulation** in **FX commands**.
 Dimmed `Groove` is the project's, which this track follows. Choosing one with `K`,
 or moving through them with `=` and `-`, gives the track its own, and `x` follows
 the project again.
@@ -961,6 +967,13 @@ tracks, `0` and `$` to the first or last, `j` and `k` up and down the strip, and
 `C-a` `C-x`, or Cmd with `l` `h` `k` `j`, and `x` puts one back to its default. On mute
 and solo, `=` switches on, `-` switches off, and `K` or `i` changes it. `/` jumps to a setting by its name, as
 it does on the track page, staying on the cursor's track.
+
+While a step's `LEV`, `PAN`, `SNA` or `SNB` drives a fader, the strip shows the
+step's value in the playing colour, and the fader beside the meters moves with it.
+What `VOL` and modulation make of the level is a thin line across the fader, which
+stays where it is. Moving the value by hand takes it over from the steps, marked
+`󰝁`, until `Space e` gives the track's faders back, or `Space E` every track's: see
+**Fader automation and relative modulation** in **FX commands**.
 
 The tracks come first, then the groups, then `A`, `B` and `M`, with a gap between each
 part, and a rule over each part's strips names it, `Tracks`, `Groups` or `Returns`, the

@@ -212,7 +212,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
             }
         }
         Control::Level => {
-            let top = SettingId::VOL.entry().kind.top();
+            let top = SettingId::LEVEL.entry().kind.top();
             changed(
                 whole(position, u32::from(top)) as u8,
                 track.level,
