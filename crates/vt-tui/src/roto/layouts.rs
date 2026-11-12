@@ -589,6 +589,30 @@ const DRUM: DeviceLayout = stored(
     ],
 );
 
+/// A low-pass gate slot's: its rise and fall and how far it closes the filter, a gap, then how
+/// far it goes, with its reset under `Attack` and its polarity under `Depth`, as the envelopes'.
+/// It has no curve.
+const LPG_ENVELOPE: DeviceLayout = stored(
+    "lpg",
+    &[
+        page(
+            "LPG",
+            [
+                s("attack"),
+                s("decay"),
+                s("colour"),
+                GAP,
+                s("depth"),
+                __,
+                __,
+                __,
+            ],
+            [s("reset"), GAP, GAP, GAP, s("polarity"), __, __, __],
+        ),
+        DEST_PAGE,
+    ],
+);
+
 /// An LFO slot's: its rate and shape, how far it goes, where in its cycle it starts and how its
 /// wave bends, with its polarity on the button under `Depth`, lit for `Bi`, and its mode under
 /// `Phase`, lit for `Trig`, as each note then starts it there; where it goes on the next page.
@@ -1086,6 +1110,7 @@ pub const ALL: [&DeviceLayout; 60] = [
     &ADSR,
     &AHD,
     &DRUM,
+    &LPG_ENVELOPE,
     &LFO,
     &ACCUMULATOR,
     &ARPEGGIO,
@@ -1198,6 +1223,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
             ModKind::Adsr => &ADSR,
             ModKind::Ahd => &AHD,
             ModKind::Drum => &DRUM,
+            ModKind::Lpg => &LPG_ENVELOPE,
             ModKind::Lfo => &LFO,
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
@@ -1285,6 +1311,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Peak => "peak",
             ModField::Body => "body",
             ModField::Ratchet => "ratchet",
+            ModField::Colour => "colour",
             ModField::Shape => "shape",
             ModField::Rate => "rate",
             ModField::Phase => "phase",

@@ -1454,7 +1454,7 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
         .iter()
         .map(|item| item.label.as_str())
         .collect();
-    assert_eq!(listed, ["ADSR", "AHD", "Drum", "LFO"]);
+    assert_eq!(listed, ["ADSR", "AHD", "Drum", "LPG", "LFO"]);
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).kind, ModKind::Ahd);
@@ -1590,6 +1590,66 @@ fn a_drum_slot_strikes_onto_a_body_with_its_own_settings_ratchet_and_picture() {
     assert_eq!(app.track_control(), Control::Mod(1, ModField::Mode));
     press(&mut app, "=");
     assert_eq!(slot(&app).drum.curve, Curve::Lin);
+    assert_eq!(slot(&app).adsr, adsr);
+}
+
+#[test]
+fn an_lpg_slot_has_no_mode_and_its_own_attack_decay_colour_and_reset() {
+    use vt_model::envelope::Lpg;
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let mut ids = |app: &mut App| {
+        graphics.sync(app, &mut Vec::new()).unwrap();
+        graphics.sync(app, &mut Vec::new()).unwrap();
+        app.mod_images.unwrap()
+    };
+    press(&mut app, " 4L");
+    let first = ids(&mut app);
+    let slot = |app: &App| app.song().tracks[0].mods[1];
+    // Mod 2 made a low-pass gate: no curve in its title, as its curve is the point of it.
+    press(&mut app, "}K/lpg");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).kind, ModKind::Lpg);
+    assert_eq!(slot(&app).lpg, Lpg::default());
+    assert!(device_title(&app, "Mod 2").starts_with(&modulator_title(
+        "Mod 2",
+        true,
+        "LPG  Uni  → Cut ─"
+    )));
+    let shown = screen_cells(&mut app).join("\n");
+    for cell in [
+        "Attack    1 ms",
+        "Decay     400 ms",
+        "Colour    C0",
+        "Depth     00",
+    ] {
+        assert!(shown.contains(cell), "{cell} in\n{shown}");
+    }
+    let now = ids(&mut app);
+    assert_ne!(now[1], first[1]);
+    assert_eq!(now[2..], first[2..]);
+    // Its settings are its own, not its ADSR's.
+    let adsr = slot(&app).adsr;
+    press(&mut app, "jj=");
+    assert_eq!(app.track_control(), Control::Mod(1, ModField::Decay));
+    assert_eq!(slot(&app).lpg.decay_ms, 425);
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::Mod(1, ModField::Colour));
+    press(&mut app, "+");
+    assert_eq!(slot(&app).lpg.colour, 0xD0);
+    typed(&mut app, "ff");
+    assert_eq!(slot(&app).lpg.colour, 0xFF);
+    press(&mut app, "=");
+    assert_eq!(slot(&app).lpg.colour, 0xFF, "it stops at the top");
+    typed(&mut app, "zz");
+    assert_eq!(slot(&app).lpg.colour, 0xFF, "not hex");
+    press(&mut app, "x");
+    assert_eq!(slot(&app).lpg.colour, 0xC0);
+    press(&mut app, "kl");
+    assert_eq!(app.track_control(), Control::Mod(1, ModField::Reset));
+    press(&mut app, "=");
+    assert!(!slot(&app).lpg.reset);
+    assert!(slot(&app).adsr.reset);
     assert_eq!(slot(&app).adsr, adsr);
 }
 
