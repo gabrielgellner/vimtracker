@@ -605,11 +605,11 @@ swirl. It starts 16 Hz up, all wet.
 
 | Setting | Does |
 |---|---|
-| `Shift` | How far it moves, from 1 kHz down at `00`, through none at `80`, to 1 kHz up at `FF` |
-| `Spread` | How far apart the sides are moved: the left further up and the right further down |
+| `Shift` | How far it moves: 1 kHz down at `00`, none at `80`, 1 kHz up at `FF` |
+| `Spread` | How far apart the sides are moved, the left up and the right down |
 | `Track` | How far the shift follows the note, from not at all at `00` |
 | `Time` | A delay in its loop, from none at `00` to a second at `FF` |
-| `Feedback` | How much of what comes out goes round again, shifted again each time |
+| `Feedback` | How much goes round again, to be shifted again |
 
 `Shift` is on a curve, so the slow shifts have room near the middle: `90`
 is about 2 Hz, `A0` 16 Hz, `C0` 128 Hz and `E0` 430 Hz. The status line
