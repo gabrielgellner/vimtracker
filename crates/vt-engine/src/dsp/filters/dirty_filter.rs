@@ -93,6 +93,16 @@ impl Tuning {
             pull: RINGING_PULL / (rest * rest * rest),
         }
     }
+
+    /// Visit each number alongside another tuning's, so a track can ramp from one to the next.
+    #[inline]
+    pub(crate) fn each(&mut self, other: &Self, mut visit: impl FnMut(&mut f32, f32)) {
+        visit(&mut self.coefficient, other.coefficient);
+        visit(&mut self.analog, other.analog);
+        visit(&mut self.resonance, other.resonance);
+        visit(&mut self.over_ringing, other.over_ringing);
+        visit(&mut self.pull, other.pull);
+    }
 }
 
 /// Where the loop starts to ring by itself, as a resonance, at a one-pole coefficient. Its poles'

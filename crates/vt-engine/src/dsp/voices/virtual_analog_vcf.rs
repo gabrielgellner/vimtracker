@@ -21,14 +21,18 @@
 
 use super::drums::soft_clip;
 use super::variable_shape::VariableShape;
-use super::virtual_analog::{BLOCK, Moving, Settings};
-use crate::dsp::blocks::plaits_parts::Svf;
+use super::virtual_analog::{BLOCK, DRIFT, Moving, Settings};
+use crate::dsp::blocks::drift::Drift;
+use crate::dsp::blocks::plaits_parts::{DcBlocker, Svf};
 
 /// How loud it is against the other machines. Its filter and clipping leave it near the virtual
 /// analog voice's level already: at 220 Hz with the filter half open, a saw is a decibel under it
 /// and a square two or three over, so this trims it a little. Resonance at either end of `Harm`
 /// adds up to 10 dB more, as it does in Plaits.
 const LEVEL: f32 = 0.9;
+/// The DC blocker's pole before the filter: a corner of 12 Hz at 48 kHz, so a pulse's offset
+/// doesn't push the filter off its centre (decision 191).
+const DC_POLE: f32 = 1.0 - std::f32::consts::TAU * 12.0 / 48_000.0;
 
 #[inline]
 fn semitones(interval: f32) -> f32 {
@@ -42,6 +46,9 @@ pub struct VirtualAnalogVcf {
     sub_oscillator: VariableShape,
     /// Two filters, the second making it four-pole when it's mixed in.
     filters: [Svf; 2],
+    dc_blocker: DcBlocker,
+    /// The note's drift, and the noise floor under the filter.
+    drift: Drift,
     sub_gain: f32,
     cutoff: f32,
     stage2_gain: f32,
@@ -64,6 +71,8 @@ impl VirtualAnalogVcf {
             oscillator: VariableShape::new(),
             sub_oscillator: VariableShape::new(),
             filters: [Svf::default(); 2],
+            dc_blocker: DcBlocker::new(DC_POLE),
+            drift: Drift::new(),
             sub_gain: 0.0,
             cutoff: 0.0,
             stage2_gain: 0.0,
@@ -73,6 +82,22 @@ impl VirtualAnalogVcf {
             at: BLOCK,
             fresh: true,
         }
+    }
+
+    /// Roll a note's drift and its noise floor from its seed, so each note differs but a render
+    /// repeats. With `Drift` up as the note starts, its oscillators start anywhere in their cycles
+    /// (decision 190).
+    pub fn seed(&mut self, seed: u32, settings: Settings) {
+        self.drift.seed(seed);
+        if settings.at(DRIFT) > 0.0 {
+            self.oscillator.start_at(self.drift.phase());
+            self.sub_oscillator.start_at(self.drift.phase());
+        }
+    }
+
+    /// What its note's envelope times are multiplied by.
+    pub fn time(&self, settings: Settings) -> f32 {
+        self.drift.time(settings.at(DRIFT))
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
@@ -103,20 +128,36 @@ impl VirtualAnalogVcf {
         let pw = pw.clamp(0.5, 0.98);
         let sub_gain = ((morph - 0.5).abs() - 0.3).max(0.0) * 5.0;
 
+        let drift = settings.at(DRIFT);
+        self.drift.step();
         let mut main = [0.0; BLOCK];
         let mut sub = [0.0; BLOCK];
-        self.oscillator
-            .render::<false, false>(0.0, f0, pw, shape, 0.0, &mut main);
-        self.sub_oscillator
-            .render::<false, false>(0.0, f0 * 0.501, 0.5, 1.0, 0.0, &mut sub);
+        self.oscillator.render::<false, false>(
+            0.0,
+            f0 * self.drift.ratio(0, drift),
+            pw,
+            shape,
+            0.0,
+            &mut main,
+        );
+        self.sub_oscillator.render::<false, false>(
+            0.0,
+            f0 * 0.501 * self.drift.ratio(1, drift),
+            0.5,
+            1.0,
+            0.0,
+            &mut sub,
+        );
 
-        let cutoff = f0 * semitones((timbre - 0.2) * 120.0);
+        let cutoff =
+            f0 * semitones((timbre - 0.2) * 120.0) * self.drift.cutoff_octaves(drift).exp2();
         // Four-pole to the left of the middle, two-pole to the right, resonant at either end.
         let stage2_gain = (1.0 - (harmonics - 0.4) * 4.0).clamp(0.0, 1.0);
         let resonance = 2.667 * ((harmonics - 0.5).abs() - 0.125).max(0.0);
         let resonance_sqr = resonance * resonance;
         let q = resonance_sqr * resonance_sqr * 48.0;
         let gain = ((harmonics - 0.7) + 0.85).clamp(0.7 - resonance_sqr * 0.3, 1.0);
+        let level = self.drift.level(drift);
 
         if self.fresh {
             self.sub_gain = sub_gain;
@@ -141,9 +182,11 @@ impl VirtualAnalogVcf {
             second.set_fast(cutoff, 0.5 + 0.025 * q);
 
             let gain = gain_moving.next();
-            let input = soft_clip((main + sub * sub_level.next()) * gain);
+            // Without its offset, and over a floor of noise the filter can ring from.
+            let mixed = self.dc_blocker.process(main + sub * sub_level.next());
+            let input = soft_clip(mixed * gain) + self.drift.noise();
             let lp = soft_clip(first.low_pass(input) * gain);
-            *out = lp + stage2_gain * (soft_clip(second.low_pass(lp)) - lp);
+            *out = (lp + stage2_gain * (soft_clip(second.low_pass(lp)) - lp)) * level;
         }
         self.sub_gain = sub_gain;
         self.cutoff = cutoff;
@@ -172,6 +215,8 @@ mod tests {
             harmonics: 0.5,
             timbre: 0.5,
             morph: 0.25,
+            // No `Drift`, in place 3, `accent`'s, which Plaits' defaults set.
+            accent: 0.0,
             ..Settings::default()
         }
     }
@@ -309,5 +354,42 @@ mod tests {
             let sample = voice.next((55.0 + sweep * 2_000.0) / RATE, settings);
             assert!(sample.is_finite() && sample.abs() <= 1.0, "{sample}");
         }
+    }
+
+    fn seeded(seed: u32, settings: Settings, frames: usize) -> Vec<f32> {
+        let mut voice = VirtualAnalogVcf::new();
+        voice.seed(seed, settings);
+        (0..frames)
+            .map(|_| voice.next(220.0 / RATE, settings))
+            .collect()
+    }
+
+    #[test]
+    fn its_noise_floor_differs_by_seed_and_is_far_under_the_note() {
+        // Full resonance, two-pole, with the cutoff well over the note.
+        let ringing = Settings {
+            harmonics: 1.0,
+            timbre: 0.8,
+            ..plain()
+        };
+        let (a, b) = (seeded(1, ringing, 48_000), seeded(2, ringing, 48_000));
+        assert_ne!(a, b, "the noise floor is the same for every seed");
+        let apart = differs(&a, &b);
+        assert!(apart < 1e-2 * rms(&a), "{apart} against {}", rms(&a));
+    }
+
+    #[test]
+    fn with_drift_each_note_differs_and_stays_in_range() {
+        // `Drift` is in place 3, `accent`'s.
+        let drifting = Settings {
+            accent: 1.0,
+            ..plain()
+        };
+        let (a, b) = (seeded(1, drifting, 48_000), seeded(2, drifting, 48_000));
+        assert!(differs(&a, &b) > 1e-2, "{}", differs(&a, &b));
+        assert!(
+            a.iter()
+                .all(|sample| sample.is_finite() && sample.abs() < 2.0)
+        );
     }
 }

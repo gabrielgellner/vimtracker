@@ -20,7 +20,7 @@ use vt_model::step::{FxSlot, Mark, slice_letter};
 
 use crate::dsp::blocks::sides::same_sides;
 use crate::dsp::distort::{BYPASS_FADE_MS, InsertState};
-use crate::dsp::filter::{Channel, Coefficients, Trim};
+use crate::dsp::filter::{Channel, Coefficients, Ramp, Trim};
 use crate::dsp::memory::MemoryPool;
 use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
@@ -65,7 +65,8 @@ impl Moved {
     }
 }
 
-/// How often filter coefficients are recalculated while the cutoff moves, in frames.
+/// How often filter coefficients are recalculated while the cutoff moves, in frames. The track's
+/// filter ramps to each new set over as many frames.
 const FILTER_UPDATE_FRAMES: u32 = 32;
 /// How close to wide open the utility filter counts as out of the way, on `0..=1`.
 const TRIM_OPEN: f32 = 0.001;
@@ -720,6 +721,9 @@ pub struct TrackState {
     pub arp: Option<Arpeggiating>,
     /// The rolls an arpeggio in `Random` takes, apart from `rng` so `CHA` rolls as it did.
     pub arp_rng: Pcg32,
+    /// The seeds of each note's drift, for a synth that drifts as an analog one does, apart from
+    /// `rng` so `CHA` rolls as it did.
+    drift_rng: Pcg32,
     /// Steps, or parts of them, waiting for where their groove and nudge land them, and when the
     /// soonest lands, so a track with none waiting isn't looked through.
     pub pending: [Option<PendingStep>; PENDING_PARTS],
@@ -776,7 +780,8 @@ pub struct TrackState {
     low_cut_coefficients: Option<(f32, Coefficients)>,
     high_cut_coefficients: Option<(f32, Coefficients)>,
     trim_countdown: u32,
-    coefficients: Option<Coefficients>,
+    /// The filter's coefficients, ramping toward the set last worked out.
+    coefficients: Option<Ramp>,
     filter_countdown: u32,
     /// Each mod slot as it runs.
     slots: [SlotRun; MOD_SLOTS],
@@ -899,6 +904,11 @@ fn arp_rng(seed: u64, index: usize) -> Pcg32 {
     Pcg32::new(seed, (2 * MAX_TRACKS + index) as u64)
 }
 
+/// The generator for a track's notes' drift, on streams after every track's arpeggios.
+fn drift_rng(seed: u64, index: usize) -> Pcg32 {
+    Pcg32::new(seed, (3 * MAX_TRACKS + index) as u64)
+}
+
 /// What's heard of a value: its lock over its base. A glide is moved along by the song.
 /// On the `00` to `FF` scale, with the fine part as the fraction.
 fn heard(layers: &ValueLayers) -> f32 {
@@ -946,6 +956,7 @@ impl TrackState {
             retrigger: None,
             arp: None,
             arp_rng: arp_rng(seed, index),
+            drift_rng: drift_rng(seed, index),
             values: {
                 let mut values = [ValueLayers::at(0); SettingId::COUNT];
                 for id in SettingId::all() {
@@ -1096,6 +1107,7 @@ impl TrackState {
         self.forget_accumulators();
         self.groove_rng = groove_rng(seed, index);
         self.arp_rng = arp_rng(seed, index);
+        self.drift_rng = drift_rng(seed, index);
         self.arp = None;
         self.last_note = None;
         for run in &mut self.slots {
@@ -1483,6 +1495,10 @@ impl TrackState {
                 &mut self.rng
             };
             self.voice.seed_noise(rng.next_u32());
+        }
+        // A note carrying on keeps the drift it has, and rolls its own offsets as it starts.
+        if !carries_on && self.voice.drifts() {
+            self.voice.seed_drift(self.drift_rng.next_u32());
         }
     }
 
@@ -2079,17 +2095,26 @@ impl TrackState {
         } else {
             if self.filter_countdown == 0 || self.coefficients.is_none() {
                 let mode = self.playing_mode();
-                self.coefficients = Some(Coefficients::with_mode(cutoff, resonance, mode, rate));
+                let c = Coefficients::with_mode(cutoff, resonance, mode, rate);
+                match &mut self.coefficients {
+                    Some(ramp) => ramp.toward(&c, FILTER_UPDATE_FRAMES),
+                    None => self.coefficients = Some(Ramp::at(c)),
+                }
                 self.filter_countdown = FILTER_UPDATE_FRAMES;
             }
             self.filter_countdown -= 1;
             // A drive this small takes the clean path rather than a very slight clip.
             let drive = if drive < 0.001 { 0.0 } else { drive };
-            match &self.coefficients {
-                Some(c) => [
-                    self.filter[0].process(input[0], self.filter_type, drive, c),
-                    self.filter[1].process(input[1], self.filter_type, drive, c),
-                ],
+            match &mut self.coefficients {
+                Some(ramp) => {
+                    let c = ramp.now();
+                    let filtered = [
+                        self.filter[0].process(input[0], self.filter_type, drive, c),
+                        self.filter[1].process(input[1], self.filter_type, drive, c),
+                    ];
+                    ramp.advance();
+                    filtered
+                }
                 None => input,
             }
         };
