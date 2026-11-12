@@ -113,6 +113,24 @@ fn a_bar_long_loop_lasts_sixteen_steps_at_any_tempo() {
 }
 
 #[test]
+fn one_that_says_its_tempo_and_not_its_length_plays_its_tempo_at_the_songs() {
+    // Seeded at 60 BPM, as an Octatrack file says: at 60 it plays as recorded, at 120 twice as
+    // fast, at 90 half as fast again.
+    for millibpm in [60_000, 120_000, 90_000] {
+        let mut engine = engine(song("ramp", 16, millibpm, |entry| {
+            entry.edit.hints.set_length_steps(None);
+            entry.edit.hints.millibpm = Some(60_000);
+        }));
+        let lasts = LENGTH as f64 * 60_000.0 / f64::from(millibpm);
+        let mut played = 0;
+        for at in [0.25, 0.999, 1.001, 1.5] {
+            let to = (lasts * at) as usize;
+            check(&mut engine, &mut played, to, LENGTH as f64, lasts);
+        }
+    }
+}
+
+#[test]
 fn half_a_bar_said_in_steps_lasts_eight() {
     let mut engine = engine(song("ramp", 8, 120_000, |_| {}));
     let mut played = 0;

@@ -570,7 +570,9 @@ sample last as many steps as it says, from its start to its end, so a one-bar
 loop stays a bar long at any tempo, as the Deluge's audio clips and the
 Octatrack's synced loops do. Say how long it is with `:sample bars 1`,
 `:sample steps 8`, or `Steps` on the sample page's settings row. One that doesn't
-say loops at its own speed. Moving its start or end changes its speed, as the
+say but brings its tempo, as an Octatrack file does, plays at the song's tempo
+against its own, twice as fast at twice its tempo; one that says neither loops at
+its own speed. Moving its start or end changes its speed, as the
 length in steps stays.
 
 | Command | Does |
@@ -579,8 +581,9 @@ length in steps stays.
 | `:bpm sample` | The tempo the track's sample plays at as recorded |
 
 `:bpm sample` grabs the tempo from the track's sample, as the Deluge's grab tempo
-does: the tempo at which it lasts its steps at the speed it was recorded. A
-sample that doesn't say how long it is is taken to be the power of two of steps,
+does: the tempo at which it lasts its steps at the speed it was recorded. One
+that doesn't say how long it is but brings its tempo sets the song to that. One
+that says neither is taken to be the power of two of steps,
 1, 2, 4 and on, whose tempo is nearest the song's now, and says so from then on.
 `u` takes back the tempo and the length together.
 
@@ -633,8 +636,8 @@ bank:
 - **An Octatrack file** beside it, as `break.ot` beside `break.wav`, gives its trim,
   loop, gain and slices in place of the WAV's. Slices with ends of their own play to
   the next one's start.
-- **The root note** of a WAV's sampler or instrument chunk, and an `.ot`'s tempo, are
-  kept for later.
+- **An `.ot`'s tempo** is kept for `Tempo` and `:bpm sample`: see **Loop to tempo**.
+- **The root note** of a WAV's sampler or instrument chunk is kept for later.
 
 They come in as an undo step of their own, and the status line names them, so `u`
 straight after leaves them out and keeps the file. They're read once: what you change

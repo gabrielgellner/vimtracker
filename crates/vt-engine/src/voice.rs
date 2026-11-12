@@ -661,7 +661,7 @@ impl Voice {
     /// Keep to the song's tempo for the next run, at this many frames a step. With `Beats`,
     /// `around` says where the sound its clock is in starts, and where the next does.
     pub fn keep_time(&mut self, step: f64, around: impl FnOnce(&Span, f64) -> (f64, f64)) {
-        self.reader.keep_time(step, around);
+        self.reader.keep_time(step, self.rate, around);
     }
 
     /// The frame of its sample it's at, for a playhead, while it's sounding a sample: not a

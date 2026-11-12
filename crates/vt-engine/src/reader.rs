@@ -213,7 +213,7 @@ impl Tempo {
     /// that says how long it is.
     fn of(span: Span, cut: Cut, region: &Region) -> Option<Self> {
         let looping = region.looping?;
-        if cut.mode != PlayMode::Tempo || span.step_frames.is_none() {
+        if cut.mode != PlayMode::Tempo || !span.keeps_tempo() {
             return None;
         }
         Some(Self {
@@ -324,14 +324,20 @@ impl Reader {
         self.tempo.is_some()
     }
 
-    /// Keep to the song's tempo for the next run, at this many frames a step: it moves through
-    /// its loop so its entry lasts as many steps as it says. With `Beats`, `around` says where the
-    /// clock's sound starts and where the next does, so this one ends.
-    pub fn keep_time(&mut self, step: f64, around: impl FnOnce(&Span, f64) -> (f64, f64)) {
+    /// Keep to the song's tempo for the next run, at this many frames a step at the program's
+    /// rate: it moves through its loop so its entry lasts as many steps as it says, or plays its
+    /// own tempo at the song's. With `Beats`, `around` says where the clock's sound starts and
+    /// where the next does, so this one ends.
+    pub fn keep_time(
+        &mut self,
+        step: f64,
+        rate: u32,
+        around: impl FnOnce(&Span, f64) -> (f64, f64),
+    ) {
         let (Some(tempo), Some(span)) = (&mut self.tempo, self.span) else {
             return;
         };
-        let Some(step_frames) = span.step_frames else {
+        let Some(step_frames) = span.step_frames_at(rate) else {
             return;
         };
         tempo.rate = Some(step_frames / step.max(f64::MIN_POSITIVE));

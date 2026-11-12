@@ -205,6 +205,19 @@ impl App {
         let start = points.start.min(end);
         let seconds = (end - start) as f64 / f64::from(rate.max(1));
         let said = entry.edit.hints.length_steps();
+        // One that says its own tempo, as an Octatrack file does, plays at its own speed at that.
+        if said.is_none()
+            && let Some(own) = entry.edit.hints.millibpm
+        {
+            let own = own.clamp(MIN_MILLIBPM, MAX_MILLIBPM);
+            self.apply(&Action::SetMilliBpm(own));
+            self.status = format!(
+                "Tempo {} BPM: {}'s own, at which it plays at its own speed: u to undo",
+                format_bpm(own),
+                sample_text(self.song(), number)
+            );
+            return;
+        }
         let now = self.song().millibpm;
         let Some((steps, millibpm)) = grabbed_tempo(seconds, said, now) else {
             self.status = format!(

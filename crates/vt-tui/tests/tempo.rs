@@ -23,6 +23,11 @@ const RATE: u32 = 48_000;
 
 /// A sampler playing a file of so many frames, on the sample page.
 fn app(frames: usize) -> (App, Realtime) {
+    app_with(frames, |_| {})
+}
+
+/// As `app`, its entry changed first.
+fn app_with(frames: usize, edit: impl FnOnce(&mut BankEntry)) -> (App, Realtime) {
     let mut song = Song::new(1);
     let mut pool = SamplePool::default();
     let decoded = Decoded {
@@ -37,10 +42,9 @@ fn app(frames: usize) -> (App, Realtime) {
         },
     );
     pool.insert_analysis(Arc::new(Analysis::of(ContentHash(0xA1), &decoded)));
-    let number = song
-        .bank
-        .add(BankEntry::of_file("loop.wav", ContentHash(0xA1)))
-        .unwrap();
+    let mut entry = BankEntry::of_file("loop.wav", ContentHash(0xA1));
+    edit(&mut entry);
+    let number = song.bank.add(entry).unwrap();
     song.tracks[0].machine = Machine::Sampler;
     song.tracks[0].set_setting(SettingId::SAMPLE, number);
     let samples = Arc::new(pool);
@@ -132,6 +136,23 @@ fn grab_tempo_on_an_unknown_loop_takes_the_nearest_power_of_two_and_u_takes_both
         "{}",
         short.status
     );
+}
+
+#[test]
+fn grab_tempo_on_one_that_says_its_tempo_takes_that_and_u_takes_it_back() {
+    // Seeded at 98.5 BPM, as an Octatrack file says, and no length: the song takes its tempo,
+    // and its length stays unsaid.
+    let (mut app, _realtime) = app_with(72_000, |entry| entry.edit.hints.millibpm = Some(98_500));
+    command(&mut app, "bpm sample");
+    assert_eq!(app.song().millibpm, 98_500, "{}", app.status);
+    assert!(app.status.contains("Tempo 98.5 BPM"), "{}", app.status);
+    assert_eq!(hints(&app).length_steps(), None);
+    keys(&mut app, "u");
+    assert_eq!(app.song().millibpm, 120_000);
+    // One that says its length too goes by that.
+    command(&mut app, "sample bars 1");
+    command(&mut app, "bpm sample");
+    assert_eq!(app.song().millibpm, 160_000);
 }
 
 #[test]

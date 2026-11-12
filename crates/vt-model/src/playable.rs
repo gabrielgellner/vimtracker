@@ -60,6 +60,9 @@ pub struct Span {
     /// How many of its frames each of the song's steps plays, for `Play`'s `Tempo`, so the entry
     /// lasts as many steps as it says from its start to its end: none if it doesn't say.
     pub step_frames: Option<f64>,
+    /// The tempo it was made at, in thousandths of a BPM, for `Tempo` to play it at the song's
+    /// against, when it says that rather than how many steps it lasts, as an Octatrack file does.
+    pub own_millibpm: Option<u32>,
     /// Whether `Tempo` starts each of its sounds at its own time, rather than changing its speed.
     pub beats: bool,
 }
@@ -87,8 +90,24 @@ impl Span {
             speed: 1.0,
             pan: [1.0, 1.0],
             step_frames: None,
+            own_millibpm: None,
             beats: false,
         }
+    }
+
+    /// Whether `Play`'s `Tempo` can keep it to the tempo: it says how long it is, or its tempo.
+    pub fn keeps_tempo(&self) -> bool {
+        self.step_frames.is_some() || self.own_millibpm.is_some()
+    }
+
+    /// How many of its frames each of the song's steps plays under `Tempo`, at the program's
+    /// rate: from how many steps it lasts, or else a step at its own tempo.
+    pub fn step_frames_at(&self, rate: u32) -> Option<f64> {
+        self.step_frames.or_else(|| {
+            let millibpm = f64::from(self.own_millibpm?.max(1));
+            // A step is a sixteenth, a quarter of a beat.
+            Some(f64::from(rate) * 60.0 * 1000.0 / millibpm / 4.0)
+        })
     }
 }
 
@@ -130,6 +149,11 @@ impl Playable {
             .length_steps()
             .filter(|_| end > start)
             .map(|steps| (end - start) as f64 / f64::from(steps.max(1)));
+        let own_millibpm = entry
+            .edit
+            .hints
+            .millibpm
+            .filter(|_| step_frames.is_none());
         let beats = play.warp == Warp::Beats;
         let span = |from: u64, to: u64, over: &SliceParams, sliced: bool| {
             let play: PlayParams = over.over(play);
@@ -147,6 +171,7 @@ impl Playable {
                 speed: play.speed(),
                 pan: over.pan_gains(),
                 step_frames,
+                own_millibpm,
                 beats,
             }
         };
