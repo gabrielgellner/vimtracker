@@ -2,12 +2,13 @@
 The Drop it's paired with (decision 120), and an Arturia filter modelled on the same circuit, with
 where the two agree as the target, as the Acid's nuance suite has it (decision 125, `consensus.py`).
 
-Usage: filter_refs.py [--circuit svf|ladder|ms20 ...] [--page PAGE] [--json DATA] [--binary PATH]
+Usage: filter_refs.py [--circuit svf|obx|ladder|ms20 ...] [--page PAGE] [--json DATA] [--binary PATH]
                      [--fresh] [--write-specs]
 
 | Ours | The Drop | Arturia |
 |---|---|---|
 | `LP`, `HP`, `BP`, `Notch` at 12 dB, the state-variable filter | OSR, two poles | Filter SEM, the Oberheim SEM's state-variable filter |
+| `OB-X` in `LP12`, `HP12`, `BP12`, `N12`, OB-Xd's two-pole | OSR, two poles | Filter SEM |
 | `Ladder`, `LP24` | PRD, four poles | Filter MINI, the Minimoog's transistor ladder |
 | `MS20 LP`, `MS20 HP`, the Korg 35 | MS1, two poles | Filter MS-20 |
 
@@ -479,6 +480,7 @@ def circuits(binary: Path, fresh: bool) -> dict:
         "Filter MINI", mini_source, mini, onset=float("nan"), open=lambda kind: {"cutoff": 1.0, "resonance": 0.0}, open_under=OPEN_UNDER, about=MINI_ABOUT
     )
     svf_types = {kind: {"filter": name, "mode": "12 dB"} for kind, name in (("lp", "LP"), ("hp", "HP"), ("bp", "BP"), ("notch", "Notch"))}
+    obx_types = {kind: {"filter": "OB-X", "mode": mode} for kind, mode in (("lp", "LP12"), ("hp", "HP12"), ("bp", "BP12"), ("notch", "N12"))}
     return {
         "svf": Circuit(
             key="svf",
@@ -505,6 +507,32 @@ def circuits(binary: Path, fresh: bool) -> dict:
                 "6 dB down, so a notch's width is read against its own passband."
             ),
             rings=["lp"],
+            driven=["lp", "hp"],
+        ),
+        "obx": Circuit(
+            key="obx",
+            title="OB-X against OSR and Filter SEM",
+            kinds={"lp": ("OB-X LP12", False, None), "hp": ("OB-X HP12", True, None), "bp": ("OB-X BP12", False, "band"), "notch": ("OB-X N12", False, "dip")},
+            sides=[
+                Side("ours", ours, our_setter({}, obx_types), about="Our `OB-X` in `LP12`, `HP12`, `BP12` and `N12`, no drive."),
+                drop_side("OSR", False, fresh),
+                Side(
+                    "Filter SEM",
+                    Reference("Filter SEM", "Filter SEM", SEM_BASE, preset="Default", fresh=fresh),
+                    sem,
+                    onset=1.0,
+                    open=lambda kind: {"cutoff_hz": 15_000.0, "resonance": 0.0, "multi_mode": 0.0, "bandpass_on_off": False},
+                    open_under=OPEN_UNDER,
+                    about=SEM_ABOUT,
+                ),
+            ],
+            about=(
+                "OB-Xd's two-pole is an SEM-style state-variable filter whose damping grows with its "
+                "level, so it's set against the clean types' pair. Unlike the clean types it rings "
+                "by itself, as OSR does over its 100%, so its ringing's pitch and level are measured "
+                "too. The SEM never rings."
+            ),
+            rings=["lp", "hp"],
             driven=["lp", "hp"],
         ),
         "ladder": Circuit(
@@ -989,7 +1017,7 @@ def write_spec(circuit: Circuit) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--circuit", action="append", choices=["svf", "ladder", "ms20"])
+    parser.add_argument("--circuit", action="append", choices=["svf", "obx", "ladder", "ms20"])
     parser.add_argument("--binary", type=Path, default=REPOSITORY / "target" / "release" / "vimtracker")
     parser.add_argument("--page", type=Path, default=OUT / "index.html")
     parser.add_argument("--json", type=Path, default=OUT / "consensus.json")

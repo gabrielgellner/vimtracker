@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::envelope::{Adsr, Ahd, Drum, Envelope};
+use crate::envelope::{Adsr, Ahd, Drum, Envelope, Lpg};
 use crate::lfo::Lfo;
 use crate::settings::SettingId;
 
@@ -14,7 +14,7 @@ pub const MOD_SLOTS: usize = 6;
 /// The furthest either way a slot's depth goes, in the units of what it moves.
 pub const MAX_DEPTH: i16 = 0xFF;
 
-/// What a mod slot is. ADSR, AHD, Drum and LFO so far; LPG, Steps and Track follow in M20.
+/// What a mod slot is. ADSR, AHD, Drum, LPG and LFO so far; Steps and Track follow in M20.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
 )]
@@ -23,12 +23,13 @@ pub enum ModKind {
     Adsr,
     Ahd,
     Drum,
+    Lpg,
     Lfo,
 }
 
 impl ModKind {
     /// Every type, in the order the type picker lists them.
-    pub const ALL: [Self; 4] = [Self::Adsr, Self::Ahd, Self::Drum, Self::Lfo];
+    pub const ALL: [Self; 5] = [Self::Adsr, Self::Ahd, Self::Drum, Self::Lpg, Self::Lfo];
 
     /// The name in the slot's title.
     pub fn name(self) -> &'static str {
@@ -36,6 +37,7 @@ impl ModKind {
             Self::Adsr => "ADSR",
             Self::Ahd => "AHD",
             Self::Drum => "Drum",
+            Self::Lpg => "LPG",
             Self::Lfo => "LFO",
         }
     }
@@ -46,17 +48,18 @@ impl ModKind {
             Self::Adsr => "held while the note is",
             Self::Ahd => "a hold at full, for a time or the note",
             Self::Drum => "a fast peak onto a body that decays",
+            Self::Lpg => "a vactrol's fall, closing the filter",
             Self::Lfo => "a cycle, free or from each note",
         }
     }
 
     /// Whether it's an envelope, which each note starts and which can shape the notes themselves.
     pub fn is_envelope(self) -> bool {
-        matches!(self, Self::Adsr | Self::Ahd | Self::Drum)
+        matches!(self, Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg)
     }
 
-    /// Whether it has a mode, which its title shows after it. Every type has one so far: an
-    /// envelope's curve and an LFO's mode.
+    /// Whether it has a mode, which its title shows after it: an envelope's curve and an LFO's
+    /// mode. A low-pass gate has none, as its curve is the point of it.
     pub fn has_mode(self) -> bool {
         matches!(self, Self::Adsr | Self::Ahd | Self::Drum | Self::Lfo)
     }
@@ -64,7 +67,7 @@ impl ModKind {
     /// What its mode is called, as the status line and the Roto name it.
     pub fn mode_label(self) -> &'static str {
         match self {
-            Self::Adsr | Self::Ahd | Self::Drum => "Curve",
+            Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg => "Curve",
             Self::Lfo => "Mode",
         }
     }
@@ -73,7 +76,7 @@ impl ModKind {
     /// the setting, and an LFO swings around it, as before slots had a polarity.
     pub fn polarity(self) -> Polarity {
         match self {
-            Self::Adsr | Self::Ahd | Self::Drum => Polarity::Uni,
+            Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg => Polarity::Uni,
             Self::Lfo => Polarity::Bi,
         }
     }
@@ -174,6 +177,8 @@ pub struct ModSlot {
     #[serde(default, skip_serializing_if = "is_default")]
     pub drum: Drum,
     #[serde(default, skip_serializing_if = "is_default")]
+    pub lpg: Lpg,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub lfo: Lfo,
 }
 
@@ -189,6 +194,7 @@ impl ModSlot {
             adsr,
             ahd: Ahd::default(),
             drum: Drum::default(),
+            lpg: Lpg::default(),
             lfo: Lfo::default(),
         }
     }
@@ -204,6 +210,7 @@ impl ModSlot {
             adsr: Adsr::default(),
             ahd: Ahd::default(),
             drum: Drum::default(),
+            lpg: Lpg::default(),
             lfo,
         }
     }
@@ -226,6 +233,15 @@ impl ModSlot {
         }
     }
 
+    /// A low-pass gate going somewhere, with no depth yet.
+    pub fn lpg(destination: Option<SettingId>, lpg: Lpg) -> Self {
+        Self {
+            kind: ModKind::Lpg,
+            lpg,
+            ..Self::adsr(destination, Adsr::default())
+        }
+    }
+
     /// The same, moving its destination this far.
     #[must_use]
     pub fn with_depth(self, depth: i16) -> Self {
@@ -238,6 +254,7 @@ impl ModSlot {
             && self.adsr.in_range()
             && self.ahd.in_range()
             && self.drum.in_range()
+            && self.lpg.in_range()
             && self.lfo.in_range()
     }
 
@@ -252,6 +269,7 @@ impl ModSlot {
             ModKind::Adsr => Some(self.adsr.curve.name()),
             ModKind::Ahd => Some(self.ahd.curve.name()),
             ModKind::Drum => Some(self.drum.curve.name()),
+            ModKind::Lpg => None,
             ModKind::Lfo => Some(self.lfo.mode.name()),
         }
     }
@@ -263,6 +281,7 @@ impl ModSlot {
         match self.kind {
             ModKind::Ahd => Envelope::Ahd(self.ahd),
             ModKind::Drum => Envelope::Drum(self.drum),
+            ModKind::Lpg => Envelope::Lpg(self.lpg),
             ModKind::Adsr | ModKind::Lfo => Envelope::Adsr(self.adsr),
         }
     }

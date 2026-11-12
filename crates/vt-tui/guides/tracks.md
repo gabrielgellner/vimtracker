@@ -102,7 +102,7 @@ shows what it plays.
 |---|---|
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
-| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` |
+| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` `OB-X` |
 | Mode | How the type responds: `--` where it has none |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
@@ -127,8 +127,12 @@ saturates. It thins the bass as `Res` rises, though less than `Ladder` does,
 and it sings by itself sooner, from about `DB`, at `Cut`. A loud sound comes
 out a little crunched even at `Drive 00`. `Drive` grits up what comes straight
 in, less so as `Res` rises so the peak isn't swamped, and adds a little
-resonance. These five cost more than the others, which matters only for tracks
-using them.
+resonance. `OB-X` is the Oberheim OB-X's 12 dB filter, after OB-Xd's: it
+sounds as the clean `LP` does when quiet, but its damping grows as it gets
+louder, so its resonance holds itself in with no clipper, and loud notes tame
+it, the OB's squelch. From about `D9` it sings by itself at `Cut`, in tune, so
+it plays as an oscillator. These six cost more than the others, which matters
+only for tracks using them.
 
 `Mode` gives a type its other responses, made from what it already has, and `K`
 on it lists the ones the type offers:
@@ -136,9 +140,10 @@ on it lists the ones the type offers:
 | Filter | Modes |
 |---|---|
 | `LP` `HP` `BP` `Notch` | `12 dB`, or `24 dB` with a second filter after the first |
-| `Ladder` | `LP24` `LP18` `LP12` `LP6` `BP24` `BP12` `HP6` `HP12` `HP18` `HP24` |
+| `Ladder` | `LP24` `Fat24` `LP18` `LP12` `LP6` `BP24` `BP12` `HP6` `HP12` `HP18` `HP24` |
 | | `N24` `N12` `PH18` `HP12+LP6` `HP18+LP6` `N12+LP6` `PH18+LP6` |
 | `Dirty` | `LP24` `LP12` `BP24` `HP12` `HP24` `N24` |
+| `OB-X` | `LP12` `BP12` `HP12` `N12` |
 | `Diode` | `Full`, or a low cut `-3 oct` `-2 oct` `-1 oct` under `Cut` |
 
 At `24 dB` a low-pass or high-pass is twice as steep with the same peak, a
@@ -150,9 +155,16 @@ narrower one. The ladder's extra modes are the Oberheim Xpander's: `PH18` is
 its phaser, three stages' shift against the input, which dips at about 1.7
 times `Cut` and thins the bass, and the four with `+LP6` add a gentle low-pass
 to a high-pass, notch or phaser, so `HP12+LP6` and `HP18+LP6` are lopsided
-bands. Each band peaks as loud as `LP24` is at its loudest. The ladder's notches
+bands. Each band peaks as loud as `LP24` is at its loudest. `Fat24` is the
+ladder's `LP24` with much of the bass its resonance takes given back, as
+Surge's compensated ladders do: about 10 dB more near full `Res`, so the peak
+rides on a full bass, and runs into its saturation sooner. The ladder's notches
 take out the very pitch it sings at, so they hardly sing at all, where
-`Dirty`'s still does. `Diode` at `Full` has all its
+`Dirty`'s still does. `OB-X`'s modes are the low-pass, band-pass and high-pass
+of its one filter, and its notch the low-pass and high-pass together, so its
+`BP12` and `HP12` sing as its `LP12` does and its `N12` hardly at all. Its
+`BP12` peaks at 0 dB with no resonance, and as loud as `LP12` is at `Cut` once
+it has some. `Diode` at `Full` has all its
 bass, as in `Acid`. The others cut the bass before the ladder, from that many
 octaves under `Cut`, moving with it, so `Drive` grits up only what's left. The
 MS-20's have no modes, and show `--`.
@@ -162,9 +174,9 @@ plays its own first, so going to another type and back finds it again. A step
 can lock `MODE` to any mode, by its place in this list, which the status line
 names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP24`, `05`
 `HP12`, `06` `HP24`, `07` `N24`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
-`0B` `-1 oct`, then the ladder's own: `0C` `LP18`, `0D` `LP6`, `0E` `BP12`, `0F`
+`0B` `-1 oct`, then the ladder's own, which `OB-X` shares two of: `0C` `LP18`, `0D` `LP6`, `0E` `BP12`, `0F`
 `HP6`, `10` `HP18`, `11` `N12`, `12` `PH18`, `13` `HP12+LP6`, `14` `HP18+LP6`,
-`15` `N12+LP6`, `16` `PH18+LP6`. Changing mode glides over about 10 ms, so a lock doesn't click.
+`15` `N12+LP6`, `16` `PH18+LP6`, `17` `Fat24`. Changing mode glides over about 10 ms, so a lock doesn't click.
 
 A curve in a box at the right of the Filter shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right, in the track's
@@ -292,16 +304,25 @@ from 10 ms to half a second, and a change that comes while it fades waits for it
 `Wow` bends the two sides' pitch opposite ways, by up to about 9 cents, going round once every
 two seconds.
 
-`Chorus` thickens a sound with copies of it that drift in time, after Mutable
-Instruments' Rings. It starts half wet, which is the classic sound. Its `Chorus` type
-has two slowly drifting copies, and `Ensemble` three on a slow and a fast wobble, as a
-string machine has.
+`Chorus` thickens a sound with copies of it that drift in time. It starts half wet,
+which is the classic sound. Its first two types are after Mutable Instruments' Rings:
+`Chorus` has two slowly drifting copies, and `Ensemble` three on a slow and a fast
+wobble, as a string machine has. The other three are a Roland Juno's, the short, bright
+shimmer of its two chorus buttons: each side a copy a few ms late, swept by a triangle,
+the left getting longer as the right gets shorter, so even a sound in the middle comes
+out wide.
 
 | Setting | Does |
 |---|---|
-| `Type` | `Chorus` or `Ensemble` |
-| `Rate` | How fast they move: as Rings has it at `80` |
+| `Type` | `Chorus`, `Ensemble`, `Juno I`, `Juno II` or `Juno I+II` |
+| `Rate` | How fast they move: as Rings or the Juno has it at `80` |
 | `Depth` | How far they move. `00` leaves fixed copies |
+
+`Juno I` sweeps each side from 0.7 to 4.9 ms and back once every two seconds, 0.5 Hz,
+and `Juno II` the same a little faster, 0.83 Hz. `Juno I+II`, both
+buttons down, is a fast, shallow wobble at 8 Hz, nearer a vibrato. `Depth` at `80` is the
+Juno's own sweep, `FF` twice as long, and `Rate` goes two octaves either way. Each copy
+loses a little of its top, as the Juno's bucket brigade does, but doesn't dull as it moves.
 
 `EQ3` shapes the tone with three bands: a shelf at the bottom, a bell in the middle and a
 shelf at the top. Each band's boost or cut is centred on `80`, where it leaves the sound
@@ -565,7 +586,8 @@ Like `Reso`, it follows the track's note and `Pitch`, glides to a new one,
 and to keep a sample loop at its own speed, play it at `C-3` and set `Tune`
 from steps. Below `80`, `Feedback` rings on the note's odd harmonics alone,
 hollower, like a clarinet, but at the same pitch. At `FF` with `Tone` up
-it rings for many seconds. As a `Comb`, `Feedback` `80` is only the sound;
+it rings for many seconds, and what goes round is rounded off as it nears full
+level rather than clipped flat, so a runaway softens instead of squaring. As a `Comb`, `Feedback` `80` is only the sound;
 as a `Flange`, it's a flanger standing still, its notches between the
 note's harmonics, and feedback sharpens it into a ring.
 
@@ -819,7 +841,7 @@ can't be muted or soloed.
 ## The Mod page
 
 Each track has six mod slots, `Mod 1` to `Mod 6`, and each slot is a type you choose:
-an `ADSR`, an `AHD` or a `Drum` envelope, or an `LFO`, in any mix. A new track has three ADSRs, then three
+an `ADSR`, an `AHD` or a `Drum` envelope, an `LPG`, or an `LFO`, in any mix. A new track has three ADSRs, then three
 LFOs. The slots work out in order, so a slot can move only those after it, and never
 round again.
 
@@ -846,7 +868,7 @@ box on its right. The device with the cursor has the brighter frame.
 | `x` | Put back the slot's first type, or on the polarity, the type's |
 | `b` | Switch this slot out, to hear without it, or back in |
 
-**Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum` and `LFO`, each with what it
+**Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum`, `LPG` and `LFO`, each with what it
 does. Choosing one is one undo step, and the slot keeps its `Dest`, its `Depth` and
 its switch. Each slot also keeps every type's own settings, so trying an LFO in
 `Mod 2` and going back finds its envelope as it was. What it moves glides from the
@@ -981,6 +1003,32 @@ and ratchet down the right. It has no `Reset`, as it always strikes from full.
 drum envelope has a 10 ms peak onto a body of 40% and a 300 ms decay, with one
 strike: on `Pitch` with a `Depth` of about `+18`, a kick's drop. The peak's fall is
 always steep, whatever the curve.
+
+## Low-pass gates
+
+An `LPG` slot is a low-pass gate's vactrol, after Mutable Instruments' Plaits: each
+note pings it, it rises over its `Attack`, then falls, fast at first and slower as
+it nears silence, over its `Decay`. As it falls it also closes the track's filter,
+by its `Colour`, so one slot both fades a note and dulls it as it dies, for plucks,
+drums and the bongo sounds a West Coast synth makes. It's a one-shot, and on `Vol`,
+shaping the notes, it ends each note when its fall lands. It has no curve, as the
+vactrol's fall is the point of it, so its title has no mode: `LPG  Uni  → Vol`.
+
+| Setting | Value |
+|---|---|
+| Attack | Milliseconds, a straight rise |
+| Decay | Milliseconds, the time to fall 60 dB |
+| Colour | How far it closes the filter at silence, in hex |
+| Depth | How far full moves it, in hex. Negative flips it |
+| Reset | On, it starts from zero each note; off, it goes on |
+
+**Colour** is in `Cut`'s own steps: with the track at `Cut 80`, `Colour 40` takes the
+filter down to `40` as the note dies, and `00` leaves the filter alone. The filter
+follows the vactrol's brightness, which falls much faster than its level, as
+Plaits' does, so even a long decay darkens early. It adds to the track's `Cut` and
+whatever else moves it, whatever the slot's `Dest` and `Depth`, and works only
+while the slot goes somewhere: one on `---` does nothing. A new gate has a 1 ms
+attack, a 400 ms decay and a `Colour` of `C0`.
 
 ## LFOs
 
