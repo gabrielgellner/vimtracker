@@ -229,7 +229,7 @@ sounds until the note ends, shaped by the first envelope.
 | Setting | Does |
 |---|---|
 | `Type` | The filter: low-pass at `00`, band-pass at `80`, high-pass at `FF` |
-| `Clock` | How fast the noise changes: grainy steps low, a hiss high |
+| `Clock` | How fast it's worked out: low and gritty at `00`, cleaner at `FF` |
 | `Ring` | How much the filter rings at the note |
 
 `Kick` is an 808-style bass drum. Its note tunes it, so try `C-1`, or lower.
@@ -256,6 +256,107 @@ hat, and raise `Decay` for an open one.
 | `Noise` | How much plain noise replaces the metal |
 | `Tone` | How bright it is |
 | `Decay` | How long it rings |
+
+### Macro
+
+The voices under `Macro` in the machine list come from Mutable Instruments' Braids, an older
+macro-oscillator than Plaits, and the one the M8's Macrosynth plays: the models Plaits left
+out, harsher and more digital. Each has Braids' two knobs, Timbre and Color, named for what
+they do on it, and a few have a third. Like Braids, they run at 96 kHz and come down to the
+program's rate, so their sharp edges alias little.
+
+`CSaw` is a saw that starts each cycle on a step, held a little while, as the CS-80's saw
+does, for brass and buzzy leads.
+
+| Setting | Does |
+|---|---|
+| `Notch` | How long each cycle holds its step: a plain saw at `00` |
+| `Depth` | How low the step sits: deep at `00`, up near the saw's middle at `FF` |
+
+`Morph` sweeps from a triangle to a saw, a square and a narrowing pulse, with a sine under the
+pulse, through a filter that closes and overdrives, for leads with some bite.
+
+| Setting | Does |
+|---|---|
+| `Shape` | Triangle at `00`, saw at `55`, square at `AA`, a thin pulse at `FF` |
+| `Fuzz` | Closes the filter towards the note and overdrives it. Clean at `00` |
+
+`Saw Sq` is a saw with a second saw behind it, blended into a square as wide, for bass and
+leads.
+
+| Setting | Does |
+|---|---|
+| `Width` | How far behind the second saw is, and how narrow the square |
+| `Mix` | All saw at `00`, all square at `FF` |
+
+`Sync` is two squares or two saws, the second hard synced to the first, so it tears as
+`Interval` sweeps, for sync leads.
+
+| Setting | Does |
+|---|---|
+| `Wave` | `Square` or `Saw`, for both. `K` lists them |
+| `Interval` | How far above the note the synced wave is, up to 64 semitones |
+| `Mix` | The first wave at `00`, the synced one at `FF` |
+
+`Triple` is three oscillators of one wave, the second and third tuned against the first, for
+chord stabs, organs and thick unisons. Each catches on a semitone for a while, then slides to
+the next, so a chord is easy to find. Up close to `80` they're slightly out of tune, for a
+chorus.
+
+| Setting | Does |
+|---|---|
+| `Wave` | `Saw`, `Square`, `Triangle` or `Sine`, for all three. `K` lists them |
+| `Second` | Two octaves either way of the note: in tune at `80`, a fifth at `A8` |
+| `Third` | The same for the third. An octave up at `C0` |
+
+`Ring` is a sine ring modulated by two more, then lightly overdriven, for bells, clangs and
+metal.
+
+| Setting | Does |
+|---|---|
+| `First` | The first modulator, up to 32 semitones either way of the note |
+| `Second` | The second, the same way |
+
+`Saw Comb` is a saw through a comb filter, tuned around the note, for flanged and hollow tones.
+
+| Setting | Does |
+|---|---|
+| `Tune` | The comb's pitch, five octaves either way of the note. At it at `80` |
+| `Feedback` | How much it rings: hollow below `80`, none at `80`, ringing above |
+
+`Toy` is a tone worked out at a low rate in a few bits, with its bits bent, as a cheap toy's
+chip would, for lo-fi leads and noise.
+
+| Setting | Does |
+|---|---|
+| `Clock` | How fast it's worked out: low and gritty at `00`, cleaner at `FF` |
+| `Bend` | Which bits are bent: plain at `00`, more and more broken going up |
+
+`Z Filter` is a resonant filter's sound faked as Casio's CZ synths did, with no filter at all:
+a sine at the cutoff, started again each cycle of the note and shaped by a window, blended
+with a square made the same way, for resonant sweeps and acid tones.
+
+| Setting | Does |
+|---|---|
+| `Type` | `LP`, `Peak`, `BP` or `HP`, the filter it sounds like. `K` lists them |
+| `Cutoff` | Where it rings, from just under the note to ten octaves over |
+| `Shape` | A saw's window at `00`, the square at `80`, a triangle's at `FF` |
+
+`FB FM` is a sine bent by a second, which its own last output bends in turn, for growling
+bass and harsh leads. It feeds back less on high notes, where it would turn to noise.
+
+| Setting | Does |
+|---|---|
+| `Amount` | How hard it bends: a pure sine at `00`, and harsher going up |
+| `Ratio` | The second sine's pitch, catching on ratios. 1:1 from `6C` to `6F` |
+
+`Chaos FM` is a sine bent by a second, whose speed its own output moves, for unstable,
+chaotic tones that never quite settle.
+
+| Setting | Does |
+|---|---|
+| `Amount` | How hard it bends: a pure sine at `00`, chaotic going up |
+| `Ratio` | The second sine's pitch, catching on ratios. 1:1 from `6C` to `6F` |
 
 A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
 `Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX

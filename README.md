@@ -22,9 +22,9 @@ program, on `Space ?`.
     resets; trig conditions, accumulators, arpeggios and play orders, after Elektron, the
     Metropolix, Renoise and the M8.
 *   **Sounds.** A sampler with a bank of samples, slices, marks and a sample page for editing them;
-    and synth voices ported from Mutable Instruments' Plaits, with an acid voice of its own fitted
-    to Arturia's Acid V and AudioRealism's ABL3. Kits, including one for each of Ableton Live's
-    drum racks.
+    and synth voices ported from Mutable Instruments' Plaits and Braids, with an acid voice of its
+    own fitted to Arturia's Acid V and AudioRealism's ABL3. Kits, including one for each of
+    Ableton Live's drum racks.
 *   **A track** has a machine, a trim, a filter of nine types, four effect slots, three LFOs, three
     envelopes and two sends. Effects include delays, reverbs, compressors, an EQ, a limiter,
     distortion and guitar pedals, chorus, phaser, flanger, tape, pitch, granular, resonator, comb
