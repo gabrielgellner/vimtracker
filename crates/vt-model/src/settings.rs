@@ -780,6 +780,15 @@ const SNARE: [Entry; 4] = [
     level("decay", "Decay", "DCAY", 0x80),
     ACCENT,
 ];
+/// Plaits' speech: its three knobs, then its prosody and speed, the attenuverters it takes them
+/// from, none at `80`. It starts on the first bank of words.
+const SPEECH: [Entry; 5] = [
+    level("model", "Model", "MODL", 0x80),
+    level("species", "Species", "SPCS", 0x80),
+    level("word", "Word", "WORD", 0x00),
+    centred("prosody", "Prosody", "PROS"),
+    centred("speed", "Speed", "SPED"),
+];
 const HAT: [Entry; 4] = [
     level("noise", "Noise", "NOIS", 0x80),
     level("tone", "Tone", "TONE", 0x00),
@@ -976,6 +985,7 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Clocked => &CLOCKED,
         SynthVoice::GrainCloud => &GRAIN_CLOUD,
         SynthVoice::Modem => &MODEM,
+        SynthVoice::Speech => &SPEECH,
     }
 }
 
@@ -1028,6 +1038,7 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::Clocked => "clocked",
         SynthVoice::GrainCloud => "graincloud",
         SynthVoice::Modem => "modem",
+        SynthVoice::Speech => "speech",
     }
 }
 

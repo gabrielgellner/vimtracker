@@ -25,6 +25,7 @@ pub mod noise;
 pub mod particle;
 pub mod phase_distortion;
 pub mod six_op;
+pub mod speech;
 pub mod string_model;
 pub mod swarm;
 mod variable_shape;

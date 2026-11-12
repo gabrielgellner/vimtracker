@@ -1057,11 +1057,13 @@ pub enum SynthVoice {
     GrainCloud,
     /// A carrier keyed through four phases, as a modem sends data.
     Modem,
+    /// Formants, vowels and the words of old speech chips.
+    Speech,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 46] = [
+    pub const ALL: [Self; 47] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1083,6 +1085,7 @@ impl SynthVoice {
         Self::Kick,
         Self::Snare,
         Self::Hat,
+        Self::Speech,
         Self::CSaw,
         Self::Morph,
         Self::SawSquare,
@@ -1159,6 +1162,7 @@ impl SynthVoice {
             Self::Clocked => "Clocked",
             Self::GrainCloud => "Grain Cloud",
             Self::Modem => "Modem",
+            Self::Speech => "Speech",
         }
     }
 
@@ -1211,6 +1215,7 @@ impl SynthVoice {
             Self::Clocked => "Looping 8-bit noise, for bleeps and glitches",
             Self::GrainCloud => "A cloud of sine grains, for shimmer and texture",
             Self::Modem => "A modem's data tone, for digital chatter",
+            Self::Speech => "Formants, vowels and words, for robots and chants",
         }
     }
 
@@ -1257,6 +1262,7 @@ impl SynthVoice {
                 | Self::Clocked
                 | Self::GrainCloud
                 | Self::Modem
+                | Self::Speech
         )
     }
 

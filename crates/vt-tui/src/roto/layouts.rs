@@ -589,6 +589,23 @@ const MODEM: DeviceLayout = live(
         [s("baud"), s("data"), __, __, __, __, __, __],
     )],
 );
+/// Plaits' speech, its prosody and speed after its three knobs.
+const SPEECH: DeviceLayout = live(
+    "machine/speech",
+    &[knobs(
+        "Speech",
+        [
+            s("model"),
+            s("species"),
+            s("word"),
+            s("prosody"),
+            s("speed"),
+            __,
+            __,
+            __,
+        ],
+    )],
+);
 const TOY: DeviceLayout = live(
     "machine/toy",
     &[knobs(
@@ -1324,7 +1341,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 88] = [
+pub const ALL: [&DeviceLayout; 89] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1372,6 +1389,7 @@ pub const ALL: [&DeviceLayout; 88] = [
     &CLOCKED,
     &GRAIN_CLOUD,
     &MODEM,
+    &SPEECH,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1466,6 +1484,7 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::Clocked => &CLOCKED,
             SynthVoice::GrainCloud => &GRAIN_CLOUD,
             SynthVoice::Modem => &MODEM,
+            SynthVoice::Speech => &SPEECH,
         },
     }
 }

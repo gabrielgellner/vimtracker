@@ -20,6 +20,7 @@ use crate::dsp::noise::Noise;
 use crate::dsp::particle::ParticleNoise;
 use crate::dsp::phase_distortion::PhaseDistortion;
 use crate::dsp::six_op::SixOp;
+use crate::dsp::speech::Speech;
 use crate::dsp::string_model::StringModel;
 use crate::dsp::swarm::Swarm;
 use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
@@ -123,6 +124,7 @@ enum Synth {
     Clocked(ClockedNoise),
     GrainCloud(GranularCloud),
     Modem(DigitalModulation),
+    Speech(Speech),
 }
 
 impl Synth {
@@ -175,6 +177,7 @@ impl Synth {
             SynthVoice::Clocked => Self::Clocked(ClockedNoise::new(rate)),
             SynthVoice::GrainCloud => Self::GrainCloud(GranularCloud::new(rate)),
             SynthVoice::Modem => Self::Modem(DigitalModulation::new(rate)),
+            SynthVoice::Speech => Self::Speech(Speech::new(rate)),
         }
     }
 
@@ -227,6 +230,7 @@ impl Synth {
             Self::Clocked(synth) => synth.next(frequency, settings),
             Self::GrainCloud(synth) => synth.next(frequency, settings),
             Self::Modem(synth) => synth.next(frequency, settings),
+            Self::Speech(synth) => synth.next(frequency, settings),
         }
     }
 
@@ -453,6 +457,7 @@ impl Voice {
             Some(Synth::TwinPeaks(synth)) => synth.seed(seed),
             Some(Synth::Clocked(synth)) => synth.seed(seed),
             Some(Synth::GrainCloud(synth)) => synth.seed(seed),
+            Some(Synth::Speech(synth)) => synth.seed(seed),
             _ => {}
         }
     }
@@ -491,6 +496,7 @@ impl Voice {
                     | Synth::TwinPeaks(_)
                     | Synth::Clocked(_)
                     | Synth::GrainCloud(_)
+                    | Synth::Speech(_)
             )
         )
     }

@@ -257,6 +257,20 @@ hat, and raise `Decay` for an open one.
 | `Tone` | How bright it is |
 | `Decay` | How long it rings |
 
+`Speech` is Plaits' speech synth: a voice's formants, then the vowels and words of Texas
+Instruments' speaking toys, for robots, chants and talking leads. `Model` goes from a bank of
+formant filters through a SAM-like synth to the speech chips' vowels, then through five banks
+of their words. On the words, each note says one word, chosen by `Word`, and then rests on its
+last sound, so a short `Release` ends it cleanly.
+
+| Setting | Does |
+|---|---|
+| `Model` | Formants at `00`, SAM, the chips' vowels, then words from `70` |
+| `Species` | The voice's size: deep and slow below `80`, small and quick above |
+| `Word` | Which vowel, or which word of the bank |
+| `Prosody` | How much of a word's own pitch it keeps: none at `80` |
+| `Speed` | How fast a word is said: as recorded at `80`, faster above |
+
 ### Macro
 
 The voices under `Macro` in the machine list come from Mutable Instruments' Braids, an older
