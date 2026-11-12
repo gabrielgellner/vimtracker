@@ -491,6 +491,20 @@ const CHAOS_FM: DeviceLayout = live(
         [s("amount"), s("ratio"), __, __, __, __, __, __],
     )],
 );
+const VOSIM: DeviceLayout = live(
+    "machine/vosim",
+    &[knobs(
+        "VOSIM",
+        [s("formant"), s("second"), __, __, __, __, __, __],
+    )],
+);
+const FOF: DeviceLayout = live(
+    "machine/fof",
+    &[knobs(
+        "FOF",
+        [s("vowel"), s("voice"), __, __, __, __, __, __],
+    )],
+);
 const TOY: DeviceLayout = live(
     "machine/toy",
     &[knobs(
@@ -1244,7 +1258,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 75] = [
+pub const ALL: [&DeviceLayout; 77] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1278,6 +1292,8 @@ pub const ALL: [&DeviceLayout; 75] = [
     &Z_FILTER,
     &FB_FM,
     &CHAOS_FM,
+    &VOSIM,
+    &FOF,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1359,6 +1375,8 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::ZFilter => &Z_FILTER,
             SynthVoice::FeedbackFm => &FB_FM,
             SynthVoice::ChaoticFm => &CHAOS_FM,
+            SynthVoice::Vosim => &VOSIM,
+            SynthVoice::Fof => &FOF,
         },
     }
 }

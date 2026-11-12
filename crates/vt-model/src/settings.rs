@@ -873,6 +873,15 @@ const FEEDBACK_FM: [Entry; 2] = [
     level("amount", "Amount", "AMNT", 0x60),
     level("ratio", "Ratio", "RAT", 0x6E),
 ];
+/// `VOSIM`'s sines sit at pitches of their own, as MIDI notes from `00` to `FF`.
+const VOSIM: [Entry; 2] = [
+    level("formant", "Formant", "FRMT", 0xA0),
+    level("second", "Second", "SCND", 0xC0),
+];
+const FOF: [Entry; 2] = [
+    level("vowel", "Vowel", "VOWL", 0x00),
+    level("voice", "Voice", "VOIC", 0x40),
+];
 const TOY: [Entry; 2] = [
     level("clock", "Clock", "CLCK", 0xC0),
     level("bend", "Bend", "BEND", 0x00),
@@ -911,6 +920,8 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Toy => &TOY,
         SynthVoice::ZFilter => &Z_FILTER,
         SynthVoice::FeedbackFm | SynthVoice::ChaoticFm => &FEEDBACK_FM,
+        SynthVoice::Vosim => &VOSIM,
+        SynthVoice::Fof => &FOF,
     }
 }
 
@@ -949,6 +960,8 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::ZFilter => "zfilter",
         SynthVoice::FeedbackFm => "fbfm",
         SynthVoice::ChaoticFm => "chaosfm",
+        SynthVoice::Vosim => "vosim",
+        SynthVoice::Fof => "fof",
     }
 }
 
