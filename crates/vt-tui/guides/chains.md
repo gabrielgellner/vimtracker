@@ -17,7 +17,8 @@ from the top lines everything up.
 In the phrase view, the notes beside your track are every track's own phrase,
 in order, each with its own `>`. Your track is among them, with its number
 marked in green. Row `00` is each track's loop start, and a
-column ends where its track ends.
+column ends where its track ends. A note is dim and an empty row's `---` faint,
+so where the other tracks play stands out.
 
 The view is laid out in time. A line is one of your track's steps, so a row
 lasting several pulses takes a line for each, the ones after its first dim, and
