@@ -618,6 +618,21 @@ const SAMPLE: &[(&str, Cmd, &str)] = &[
         "Previous beat, from the start, at the tempo",
     ),
     (
+        "w",
+        Cmd::Sample(SampleKey::NextSound),
+        "Next sound's start, as Sens finds them",
+    ),
+    (
+        "b",
+        Cmd::Sample(SampleKey::PreviousSound),
+        "Previous sound's start, as Sens finds them",
+    ),
+    (
+        "e",
+        Cmd::Sample(SampleKey::SoundEnd),
+        "Where the sound decays, or the next one",
+    ),
+    (
         "] ]",
         Cmd::Sample(SampleKey::NextPoint),
         "Next point: a slice, the start, end or loop",
@@ -785,6 +800,16 @@ const SAMPLE: &[(&str, Cmd, &str)] = &[
         Cmd::PickValue,
         "Choose a setting to change, or list its values",
     ),
+];
+
+/// The sample page's text objects, while it selects: a sound is a word, and a slice a paragraph.
+const SAMPLE_OBJECTS: &[(&str, Cmd, &str)] = &[
+    (
+        "i s",
+        Cmd::Sample(SampleKey::ThisSound),
+        "This sound, from its start to where it decays",
+    ),
+    ("i p", Cmd::Sample(SampleKey::ThisSlice), "This slice"),
 ];
 
 const AUDIO: &[(&str, Cmd, &str)] = &[
@@ -981,6 +1006,15 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Project, EVERY_VIEW);
     add(Mode::Sample, SAMPLE);
     add(Mode::Sample, EVERY_VIEW);
+    // While the sample page selects, `i` starts a text object rather than the pads.
+    let every_view_but_pads: Vec<_> = EVERY_VIEW
+        .iter()
+        .filter(|(keys, _, _)| *keys != "i")
+        .copied()
+        .collect();
+    add(Mode::SampleVisual, SAMPLE);
+    add(Mode::SampleVisual, SAMPLE_OBJECTS);
+    add(Mode::SampleVisual, &every_view_but_pads);
     add(Mode::OperatorPending, MOTIONS);
     add(Mode::OperatorPending, TARGETS);
     add(Mode::OperatorPending, WHOLE_STEP);
