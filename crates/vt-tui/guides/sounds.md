@@ -481,9 +481,9 @@ bank:
   is at the start, a slice starts there too, so the slices cover the sample.
 - **A WAV's sampler loop** becomes its loop. A loop at least as long as what follows
   it ends the sample there as well, as the Deluge reads one.
-- **An Octatrack `.ot`** beside the file, with the same name, gives its trim, loop,
-  gain and slices in place of the WAV's. Slices with ends of their own play to the
-  next one's start.
+- **An Octatrack file** beside it, as `break.ot` beside `break.wav`, gives its trim,
+  loop, gain and slices in place of the WAV's. Slices with ends of their own play to
+  the next one's start.
 - **The root note** of a WAV's sampler or instrument chunk, and an `.ot`'s tempo, are
   kept for later.
 
