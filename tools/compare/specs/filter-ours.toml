@@ -219,39 +219,39 @@ ours = { filter = "Ladder", mode = "LP12", cut = 0xCC, res = 0xE6 }
 
 [[cases]]
 name = "ladder-bp-55-res0"
-ours = { filter = "Ladder", mode = "BP", cut = 0x55, res = 0x00 }
+ours = { filter = "Ladder", mode = "BP24", cut = 0x55, res = 0x00 }
 
 [[cases]]
 name = "ladder-bp-55-res50"
-ours = { filter = "Ladder", mode = "BP", cut = 0x55, res = 0x80 }
+ours = { filter = "Ladder", mode = "BP24", cut = 0x55, res = 0x80 }
 
 [[cases]]
 name = "ladder-bp-55-res90"
-ours = { filter = "Ladder", mode = "BP", cut = 0x55, res = 0xE6 }
+ours = { filter = "Ladder", mode = "BP24", cut = 0x55, res = 0xE6 }
 
 [[cases]]
 name = "ladder-bp-90-res0"
-ours = { filter = "Ladder", mode = "BP", cut = 0x90, res = 0x00 }
+ours = { filter = "Ladder", mode = "BP24", cut = 0x90, res = 0x00 }
 
 [[cases]]
 name = "ladder-bp-90-res50"
-ours = { filter = "Ladder", mode = "BP", cut = 0x90, res = 0x80 }
+ours = { filter = "Ladder", mode = "BP24", cut = 0x90, res = 0x80 }
 
 [[cases]]
 name = "ladder-bp-90-res90"
-ours = { filter = "Ladder", mode = "BP", cut = 0x90, res = 0xE6 }
+ours = { filter = "Ladder", mode = "BP24", cut = 0x90, res = 0xE6 }
 
 [[cases]]
 name = "ladder-bp-CC-res0"
-ours = { filter = "Ladder", mode = "BP", cut = 0xCC, res = 0x00 }
+ours = { filter = "Ladder", mode = "BP24", cut = 0xCC, res = 0x00 }
 
 [[cases]]
 name = "ladder-bp-CC-res50"
-ours = { filter = "Ladder", mode = "BP", cut = 0xCC, res = 0x80 }
+ours = { filter = "Ladder", mode = "BP24", cut = 0xCC, res = 0x80 }
 
 [[cases]]
 name = "ladder-bp-CC-res90"
-ours = { filter = "Ladder", mode = "BP", cut = 0xCC, res = 0xE6 }
+ours = { filter = "Ladder", mode = "BP24", cut = 0xCC, res = 0xE6 }
 
 [[cases]]
 name = "ladder-hp12-55-res0"
@@ -327,39 +327,39 @@ ours = { filter = "Ladder", mode = "HP24", cut = 0xCC, res = 0xE6 }
 
 [[cases]]
 name = "ladder-notch-55-res0"
-ours = { filter = "Ladder", mode = "Notch", cut = 0x55, res = 0x00 }
+ours = { filter = "Ladder", mode = "N24", cut = 0x55, res = 0x00 }
 
 [[cases]]
 name = "ladder-notch-55-res50"
-ours = { filter = "Ladder", mode = "Notch", cut = 0x55, res = 0x80 }
+ours = { filter = "Ladder", mode = "N24", cut = 0x55, res = 0x80 }
 
 [[cases]]
 name = "ladder-notch-55-res90"
-ours = { filter = "Ladder", mode = "Notch", cut = 0x55, res = 0xE6 }
+ours = { filter = "Ladder", mode = "N24", cut = 0x55, res = 0xE6 }
 
 [[cases]]
 name = "ladder-notch-90-res0"
-ours = { filter = "Ladder", mode = "Notch", cut = 0x90, res = 0x00 }
+ours = { filter = "Ladder", mode = "N24", cut = 0x90, res = 0x00 }
 
 [[cases]]
 name = "ladder-notch-90-res50"
-ours = { filter = "Ladder", mode = "Notch", cut = 0x90, res = 0x80 }
+ours = { filter = "Ladder", mode = "N24", cut = 0x90, res = 0x80 }
 
 [[cases]]
 name = "ladder-notch-90-res90"
-ours = { filter = "Ladder", mode = "Notch", cut = 0x90, res = 0xE6 }
+ours = { filter = "Ladder", mode = "N24", cut = 0x90, res = 0xE6 }
 
 [[cases]]
 name = "ladder-notch-CC-res0"
-ours = { filter = "Ladder", mode = "Notch", cut = 0xCC, res = 0x00 }
+ours = { filter = "Ladder", mode = "N24", cut = 0xCC, res = 0x00 }
 
 [[cases]]
 name = "ladder-notch-CC-res50"
-ours = { filter = "Ladder", mode = "Notch", cut = 0xCC, res = 0x80 }
+ours = { filter = "Ladder", mode = "N24", cut = 0xCC, res = 0x80 }
 
 [[cases]]
 name = "ladder-notch-CC-res90"
-ours = { filter = "Ladder", mode = "Notch", cut = 0xCC, res = 0xE6 }
+ours = { filter = "Ladder", mode = "N24", cut = 0xCC, res = 0xE6 }
 
 [[cases]]
 name = "diode-full-55-res0"
@@ -651,39 +651,39 @@ ours = { filter = "Dirty", mode = "LP12", cut = 0xCC, res = 0xE6 }
 
 [[cases]]
 name = "dirty-bp-55-res0"
-ours = { filter = "Dirty", mode = "BP", cut = 0x55, res = 0x00 }
+ours = { filter = "Dirty", mode = "BP24", cut = 0x55, res = 0x00 }
 
 [[cases]]
 name = "dirty-bp-55-res50"
-ours = { filter = "Dirty", mode = "BP", cut = 0x55, res = 0x80 }
+ours = { filter = "Dirty", mode = "BP24", cut = 0x55, res = 0x80 }
 
 [[cases]]
 name = "dirty-bp-55-res90"
-ours = { filter = "Dirty", mode = "BP", cut = 0x55, res = 0xE6 }
+ours = { filter = "Dirty", mode = "BP24", cut = 0x55, res = 0xE6 }
 
 [[cases]]
 name = "dirty-bp-90-res0"
-ours = { filter = "Dirty", mode = "BP", cut = 0x90, res = 0x00 }
+ours = { filter = "Dirty", mode = "BP24", cut = 0x90, res = 0x00 }
 
 [[cases]]
 name = "dirty-bp-90-res50"
-ours = { filter = "Dirty", mode = "BP", cut = 0x90, res = 0x80 }
+ours = { filter = "Dirty", mode = "BP24", cut = 0x90, res = 0x80 }
 
 [[cases]]
 name = "dirty-bp-90-res90"
-ours = { filter = "Dirty", mode = "BP", cut = 0x90, res = 0xE6 }
+ours = { filter = "Dirty", mode = "BP24", cut = 0x90, res = 0xE6 }
 
 [[cases]]
 name = "dirty-bp-CC-res0"
-ours = { filter = "Dirty", mode = "BP", cut = 0xCC, res = 0x00 }
+ours = { filter = "Dirty", mode = "BP24", cut = 0xCC, res = 0x00 }
 
 [[cases]]
 name = "dirty-bp-CC-res50"
-ours = { filter = "Dirty", mode = "BP", cut = 0xCC, res = 0x80 }
+ours = { filter = "Dirty", mode = "BP24", cut = 0xCC, res = 0x80 }
 
 [[cases]]
 name = "dirty-bp-CC-res90"
-ours = { filter = "Dirty", mode = "BP", cut = 0xCC, res = 0xE6 }
+ours = { filter = "Dirty", mode = "BP24", cut = 0xCC, res = 0xE6 }
 
 [[cases]]
 name = "dirty-hp12-55-res0"
@@ -759,36 +759,36 @@ ours = { filter = "Dirty", mode = "HP24", cut = 0xCC, res = 0xE6 }
 
 [[cases]]
 name = "dirty-notch-55-res0"
-ours = { filter = "Dirty", mode = "Notch", cut = 0x55, res = 0x00 }
+ours = { filter = "Dirty", mode = "N24", cut = 0x55, res = 0x00 }
 
 [[cases]]
 name = "dirty-notch-55-res50"
-ours = { filter = "Dirty", mode = "Notch", cut = 0x55, res = 0x80 }
+ours = { filter = "Dirty", mode = "N24", cut = 0x55, res = 0x80 }
 
 [[cases]]
 name = "dirty-notch-55-res90"
-ours = { filter = "Dirty", mode = "Notch", cut = 0x55, res = 0xE6 }
+ours = { filter = "Dirty", mode = "N24", cut = 0x55, res = 0xE6 }
 
 [[cases]]
 name = "dirty-notch-90-res0"
-ours = { filter = "Dirty", mode = "Notch", cut = 0x90, res = 0x00 }
+ours = { filter = "Dirty", mode = "N24", cut = 0x90, res = 0x00 }
 
 [[cases]]
 name = "dirty-notch-90-res50"
-ours = { filter = "Dirty", mode = "Notch", cut = 0x90, res = 0x80 }
+ours = { filter = "Dirty", mode = "N24", cut = 0x90, res = 0x80 }
 
 [[cases]]
 name = "dirty-notch-90-res90"
-ours = { filter = "Dirty", mode = "Notch", cut = 0x90, res = 0xE6 }
+ours = { filter = "Dirty", mode = "N24", cut = 0x90, res = 0xE6 }
 
 [[cases]]
 name = "dirty-notch-CC-res0"
-ours = { filter = "Dirty", mode = "Notch", cut = 0xCC, res = 0x00 }
+ours = { filter = "Dirty", mode = "N24", cut = 0xCC, res = 0x00 }
 
 [[cases]]
 name = "dirty-notch-CC-res50"
-ours = { filter = "Dirty", mode = "Notch", cut = 0xCC, res = 0x80 }
+ours = { filter = "Dirty", mode = "N24", cut = 0xCC, res = 0x80 }
 
 [[cases]]
 name = "dirty-notch-CC-res90"
-ours = { filter = "Dirty", mode = "Notch", cut = 0xCC, res = 0xE6 }
+ours = { filter = "Dirty", mode = "N24", cut = 0xCC, res = 0xE6 }

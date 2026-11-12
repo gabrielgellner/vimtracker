@@ -136,15 +136,23 @@ on it lists the ones the type offers:
 | Filter | Modes |
 |---|---|
 | `LP` `HP` `BP` `Notch` | `12 dB`, or `24 dB` with a second filter after the first |
-| `Ladder` `Dirty` | `LP24` `LP12` `BP` `HP12` `HP24` `Notch` |
+| `Ladder` | `LP24` `LP18` `LP12` `LP6` `BP24` `BP12` `HP6` `HP12` `HP18` `HP24` |
+| | `N24` `N12` `PH18` `HP12+LP6` `HP18+LP6` `N12+LP6` `PH18+LP6` |
+| `Dirty` | `LP24` `LP12` `BP24` `HP12` `HP24` `N24` |
 | `Diode` | `Full`, or a low cut `-3 oct` `-2 oct` `-1 oct` under `Cut` |
 
 At `24 dB` a low-pass or high-pass is twice as steep with the same peak, a
-band-pass is narrower and a notch wider. `Ladder` and `Dirty` mix their stages
-as Vital does, so whichever mode they're in, their resonance still sings at
-`Cut` and they still saturate. Their `BP` peaks as loud as `LP24` is at its
-loudest. The ladder's `Notch` takes out the very pitch it sings at, so it
-hardly sings at all, where `Dirty`'s still does. `Diode` at `Full` has all its
+band-pass is narrower and a notch wider. `Ladder` and `Dirty` mix their stages,
+so whichever mode they're in, their resonance still sings at `Cut` and they
+still saturate. The number is the slope in dB an octave: `BP24` falls at 12 dB
+either side and `BP12`, wider, at 6. `N24` is Vital's notch and `N12` a
+narrower one. The ladder's extra modes are the Oberheim Xpander's: `PH18` is
+its phaser, three stages' shift against the input, which dips at about 1.7
+times `Cut` and thins the bass, and the four with `+LP6` add a gentle low-pass
+to a high-pass, notch or phaser, so `HP12+LP6` and `HP18+LP6` are lopsided
+bands. Each band peaks as loud as `LP24` is at its loudest. The ladder's notches
+take out the very pitch it sings at, so they hardly sing at all, where
+`Dirty`'s still does. `Diode` at `Full` has all its
 bass, as in `Acid`. The others cut the bass before the ladder, from that many
 octaves under `Cut`, moving with it, so `Drive` grits up only what's left. The
 MS-20's have no modes, and show `--`.
@@ -152,9 +160,11 @@ MS-20's have no modes, and show `--`.
 A track keeps its mode when its type changes, and a type that doesn't offer it
 plays its own first, so going to another type and back finds it again. A step
 can lock `MODE` to any mode, by its place in this list, which the status line
-names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP`, `05`
-`HP12`, `06` `HP24`, `07` `Notch`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
-`0B` `-1 oct`. Changing mode glides over about 10 ms, so a lock doesn't click.
+names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP24`, `05`
+`HP12`, `06` `HP24`, `07` `N24`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
+`0B` `-1 oct`, then the ladder's own: `0C` `LP18`, `0D` `LP6`, `0E` `BP12`, `0F`
+`HP6`, `10` `HP18`, `11` `N12`, `12` `PH18`, `13` `HP12+LP6`, `14` `HP18+LP6`,
+`15` `N12+LP6`, `16` `PH18+LP6`. Changing mode glides over about 10 ms, so a lock doesn't click.
 
 A curve in a box at the right of the Filter shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right, in the track's
