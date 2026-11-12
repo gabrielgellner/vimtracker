@@ -500,14 +500,16 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
         }
         Control::Mod(slot, field) => {
             let modulator = &track.mods[slot];
-            let (adsr, ahd, drum, lfo) = (
+            let (adsr, ahd, drum, lpg, lfo) = (
                 &modulator.adsr,
                 &modulator.ahd,
                 &modulator.drum,
+                &modulator.lpg,
                 &modulator.lfo,
             );
             let ahd_kind = modulator.kind == ModKind::Ahd;
             let drum_kind = modulator.kind == ModKind::Drum;
+            let lpg_kind = modulator.kind == ModKind::Lpg;
             match field {
                 // An envelope's curve is a musical list, which leaves the layout as it is.
                 ModField::Mode if modulator.kind.is_envelope() => {
@@ -538,6 +540,9 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 }
                 ModField::Depth => depth(modulator.depth),
                 ModField::Attack if ahd_kind => (Feel::Smooth, time_position(ahd.attack_ms)),
+                ModField::Attack if lpg_kind => (Feel::Smooth, time_position(lpg.attack_ms)),
+                ModField::Decay if lpg_kind => (Feel::Smooth, time_position(lpg.decay_ms)),
+                ModField::Colour => value(u16::from(lpg.colour), 0xFF, false),
                 ModField::Attack => (Feel::Smooth, time_position(adsr.attack_ms)),
                 ModField::Decay if ahd_kind => (Feel::Smooth, time_position(ahd.decay_ms)),
                 ModField::Decay if drum_kind => (Feel::Smooth, time_position(drum.decay_ms)),

@@ -31,6 +31,9 @@ pub enum ModField {
     Peak,
     Body,
     Ratchet,
+    /// A low-pass gate's: how far its fall closes the filter. Its `Attack`, `Decay` and `Reset`
+    /// are its own.
+    Colour,
     /// An LFO's.
     Shape,
     Rate,
@@ -46,8 +49,11 @@ impl ModField {
             Self::Mode => kind.has_mode(),
             Self::Decay => kind.is_envelope(),
             // A drum always strikes from full, so it has no attack to reset.
-            Self::Attack | Self::Reset => matches!(kind, ModKind::Adsr | ModKind::Ahd),
+            Self::Attack | Self::Reset => {
+                matches!(kind, ModKind::Adsr | ModKind::Ahd | ModKind::Lpg)
+            }
             Self::Peak | Self::Body | Self::Ratchet => kind == ModKind::Drum,
+            Self::Colour => kind == ModKind::Lpg,
             Self::Sustain | Self::Release => kind == ModKind::Adsr,
             Self::Hold => kind == ModKind::Ahd,
             Self::Shape | Self::Rate | Self::Phase | Self::Deform => kind == ModKind::Lfo,
@@ -169,6 +175,7 @@ impl Control {
                 ModField::Peak => "Peak",
                 ModField::Body => "Body",
                 ModField::Ratchet => "Ratchet",
+                ModField::Colour => "Colour",
                 ModField::Shape => "Shape",
                 ModField::Rate => "Rate",
                 ModField::Phase => "Phase",

@@ -819,7 +819,7 @@ can't be muted or soloed.
 ## The Mod page
 
 Each track has six mod slots, `Mod 1` to `Mod 6`, and each slot is a type you choose:
-an `ADSR`, an `AHD` or a `Drum` envelope, or an `LFO`, in any mix. A new track has three ADSRs, then three
+an `ADSR`, an `AHD` or a `Drum` envelope, an `LPG`, or an `LFO`, in any mix. A new track has three ADSRs, then three
 LFOs. The slots work out in order, so a slot can move only those after it, and never
 round again.
 
@@ -846,7 +846,7 @@ box on its right. The device with the cursor has the brighter frame.
 | `x` | Put back the slot's first type, or on the polarity, the type's |
 | `b` | Switch this slot out, to hear without it, or back in |
 
-**Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum` and `LFO`, each with what it
+**Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum`, `LPG` and `LFO`, each with what it
 does. Choosing one is one undo step, and the slot keeps its `Dest`, its `Depth` and
 its switch. Each slot also keeps every type's own settings, so trying an LFO in
 `Mod 2` and going back finds its envelope as it was. What it moves glides from the
@@ -981,6 +981,32 @@ and ratchet down the right. It has no `Reset`, as it always strikes from full.
 drum envelope has a 10 ms peak onto a body of 40% and a 300 ms decay, with one
 strike: on `Pitch` with a `Depth` of about `+18`, a kick's drop. The peak's fall is
 always steep, whatever the curve.
+
+## Low-pass gates
+
+An `LPG` slot is a low-pass gate's vactrol, after Mutable Instruments' Plaits: each
+note pings it, it rises over its `Attack`, then falls, fast at first and slower as
+it nears silence, over its `Decay`. As it falls it also closes the track's filter,
+by its `Colour`, so one slot both fades a note and dulls it as it dies, for plucks,
+drums and the bongo sounds a West Coast synth makes. It's a one-shot, and on `Vol`,
+shaping the notes, it ends each note when its fall lands. It has no curve, as the
+vactrol's fall is the point of it, so its title has no mode: `LPG  Uni  → Vol`.
+
+| Setting | Value |
+|---|---|
+| Attack | Milliseconds, a straight rise |
+| Decay | Milliseconds, the time to fall 60 dB |
+| Colour | How far it closes the filter at silence, in hex |
+| Depth | How far full moves it, in hex. Negative flips it |
+| Reset | On, it starts from zero each note; off, it goes on |
+
+**Colour** is in `Cut`'s own steps: with the track at `Cut 80`, `Colour 40` takes the
+filter down to `40` as the note dies, and `00` leaves the filter alone. The filter
+follows the vactrol's brightness, which falls much faster than its level, as
+Plaits' does, so even a long decay darkens early. It adds to the track's `Cut` and
+whatever else moves it, whatever the slot's `Dest` and `Depth`, and works only
+while the slot goes somewhere: one on `---` does nothing. A new gate has a 1 ms
+attack, a 400 ms decay and a `Colour` of `C0`.
 
 ## LFOs
 

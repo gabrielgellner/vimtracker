@@ -174,13 +174,15 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
 /// A mod slot's setting as the page shows it, under the slot's type.
 fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
     let modulator = &track.mods[slot];
-    let (adsr, ahd, drum, lfo) = (
+    let (adsr, ahd, drum, lpg, lfo) = (
         &modulator.adsr,
         &modulator.ahd,
         &modulator.drum,
+        &modulator.lpg,
         &modulator.lfo,
     );
     let ahd_kind = modulator.kind == ModKind::Ahd;
+    let lpg_kind = modulator.kind == ModKind::Lpg;
     let ms = |value: u16| format!("{value} ms");
     let on = |on: bool| if on { "on" } else { "off" }.to_owned();
     match field {
@@ -196,6 +198,9 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Depth if note_shape_slot(&track.mods) == Some(slot) => "--".to_owned(),
         ModField::Depth => depth_text(modulator.depth),
         ModField::Attack if ahd_kind => ms(ahd.attack_ms),
+        ModField::Attack if lpg_kind => ms(lpg.attack_ms),
+        ModField::Decay if lpg_kind => ms(lpg.decay_ms),
+        ModField::Colour => format!("{:02X}", lpg.colour),
         ModField::Attack => ms(adsr.attack_ms),
         ModField::Decay if ahd_kind => ms(ahd.decay_ms),
         ModField::Decay if modulator.kind == ModKind::Drum => ms(drum.decay_ms),
@@ -210,6 +215,7 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Sustain => format!("{}%", adsr.sustain),
         ModField::Release => ms(adsr.release_ms),
         ModField::Reset if ahd_kind => on(ahd.reset),
+        ModField::Reset if lpg_kind => on(lpg.reset),
         ModField::Reset => on(adsr.reset),
         ModField::Shape => lfo.shape.name().to_owned(),
         ModField::Rate => lfo.rate.to_string(),
