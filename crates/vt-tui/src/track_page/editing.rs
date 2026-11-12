@@ -9,7 +9,7 @@ use vt_model::envelope::{Curve, Hold, MAX_HOLD_MS, MAX_RATCHET};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{LfoMode, Shape};
+use vt_model::lfo::{LfoMode, MAX_DEFORM, Shape};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, default_mod};
 use vt_model::settings::{SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Track};
@@ -152,6 +152,11 @@ fn adjust_mod(
             let by = if up { size } else { -size };
             lfo.phase = (i32::from(lfo.phase) + by).rem_euclid(360) as u16;
         }
+        ModField::Deform => {
+            let size = if large { HEX_JUMP as i16 } else { 1 };
+            let moved = lfo.deform + if up { size } else { -size };
+            lfo.deform = moved.clamp(-MAX_DEFORM, MAX_DEFORM);
+        }
     }
 }
 
@@ -233,6 +238,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         ModField::Shape => lfo.shape = fresh.lfo.shape,
         ModField::Rate => lfo.rate = fresh.lfo.rate,
         ModField::Phase => lfo.phase = fresh.lfo.phase,
+        ModField::Deform => lfo.deform = fresh.lfo.deform,
     }
     ModSlot {
         adsr,

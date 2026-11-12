@@ -38,6 +38,7 @@ pub enum ModField {
     Shape,
     Rate,
     Phase,
+    Deform,
 }
 
 impl ModField {
@@ -55,7 +56,7 @@ impl ModField {
             Self::Colour => kind == ModKind::Lpg,
             Self::Sustain | Self::Release => kind == ModKind::Adsr,
             Self::Hold => kind == ModKind::Ahd,
-            Self::Shape | Self::Rate | Self::Phase => kind == ModKind::Lfo,
+            Self::Shape | Self::Rate | Self::Phase | Self::Deform => kind == ModKind::Lfo,
         }
     }
 }
@@ -178,6 +179,7 @@ impl Control {
                 ModField::Shape => "Shape",
                 ModField::Rate => "Rate",
                 ModField::Phase => "Phase",
+                ModField::Deform => "Deform",
             },
             Self::Accumulator(AccumulatorField::Up) => "Up",
             Self::Accumulator(AccumulatorField::Down) => "Down",
@@ -237,6 +239,10 @@ impl Control {
             Self::Mod(slot, ModField::Phase) => Some((
                 SettingId::modulator(slot, 1)?,
                 phase_value(track.mods[slot].lfo.phase),
+            )),
+            Self::Mod(slot, ModField::Deform) => Some((
+                SettingId::modulator(slot, 3)?,
+                depth_value(track.mods[slot].lfo.deform),
             )),
             Self::Mod(slot, ModField::Polarity) => Some((
                 SettingId::modulator(slot, 2)?,

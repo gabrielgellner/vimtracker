@@ -910,6 +910,13 @@ requests, curves then AHD:
 * **An attack from a level** (`Reset` off) starts where its curve reaches that level and takes only
   what's left of its time. It's how `Reset` off always works, not a setting.
 
+**As built for #468 (decision 193):**
+
+* **`Smooth`** is a Catmull-Rom curve through four of `Random`'s values, still stateless.
+* **The LFO's grid** is `Shape`, `Rate` and `Depth` down the left, and `Phase`, the hole for
+  `Fade`, then `Deform` down the right. `Deform` bends the wave between its peaks, or sets a
+  square's width, and is a lock, `DFM4`–`DFM6`, and a destination for earlier slots.
+
 **As built for #45's Drum (decision 194),** the first half of §11's PR 4, which went as two pull
 requests, Drum then LPG:
 

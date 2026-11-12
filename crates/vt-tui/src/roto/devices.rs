@@ -562,6 +562,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                 // at most 16 steps, and a note value has 24 (the author's choice, 2026-11-11).
                 ModField::Rate => (Feel::Smooth, rate_position(lfo.rate)),
                 ModField::Phase => value(lfo.phase.min(359), 359, false),
+                ModField::Deform => depth(lfo.deform),
             }
         }
         Control::Accumulator(field) => {

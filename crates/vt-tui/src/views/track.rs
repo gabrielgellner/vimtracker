@@ -220,6 +220,7 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Shape => lfo.shape.name().to_owned(),
         ModField::Rate => lfo.rate.to_string(),
         ModField::Phase => format!("{}°", lfo.phase),
+        ModField::Deform => depth_text(lfo.deform),
     }
 }
 

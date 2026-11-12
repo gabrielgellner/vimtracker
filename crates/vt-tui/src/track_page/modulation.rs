@@ -61,15 +61,17 @@ const LPG_SETTINGS: [ModField; 5] = [
 ];
 const LPG_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
 
-/// An LFO's settings: what it plays down the left, and where it starts down the right, with a hole
-/// under `Phase` for the `Fade` that #86 brings. Whether notes start it is its mode, in the title.
-const LFO_SETTINGS: [ModField; 4] = [
+/// An LFO's settings: what it plays down the left, and where it starts and how its wave bends down
+/// the right, with a hole under `Phase` for the `Fade` that #86 brings. Whether notes start it is
+/// its mode, in the title.
+const LFO_SETTINGS: [ModField; 5] = [
     ModField::Shape,
     ModField::Rate,
     ModField::Depth,
     ModField::Phase,
+    ModField::Deform,
 ];
-const LFO_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), None, None]];
+const LFO_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), None, Some(4)]];
 
 /// The accumulator's settings: how far it goes down the left, and what it does there and when
 /// down the right.

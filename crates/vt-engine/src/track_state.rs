@@ -6,7 +6,7 @@ use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
 use vt_model::envelope::Envelope;
 use vt_model::groove::Groove;
 use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS};
-use vt_model::lfo::{LfoMode, phase_of, phase_value, wave};
+use vt_model::lfo::{LfoMode, MAX_DEFORM, deformed_wave, phase_of, phase_value};
 use vt_model::modulation::{
     MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, depth_value, note_shape_slot,
 };
@@ -114,9 +114,9 @@ struct SlotRun {
     envelope: EnvelopeRun,
     /// Where its cycles count from.
     start: LfoStart,
-    /// Its held depth, phase and polarity, on the `00` to `FF` scale, as steps and the page set
-    /// them. The polarity is below zero until it's first set, which is the slot's own.
-    values: [f32; 3],
+    /// Its held depth, phase, polarity and deform, on the `00` to `FF` scale, as steps and the
+    /// page set them. The polarity is below zero until it's first set, which is the slot's own.
+    values: [f32; 4],
     /// How much of what it moves is heard, from 1 while it's in to 0 while it's switched out,
     /// gliding between them over [`BYPASS_FADE_MS`] as a slot's bypass does, so switching one
     /// doesn't jump.
@@ -137,7 +137,7 @@ impl Default for SlotRun {
             seen: None,
             envelope: EnvelopeRun::Idle,
             start: LfoStart::default(),
-            values: [128.0, 0.0, -1.0],
+            values: [128.0, 0.0, -1.0, 128.0],
             share: 1.0,
             out: 0.0,
             glide: 0.0,
@@ -855,7 +855,8 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
     let modulator = |slot: usize, at: usize| match at {
         0 => depth_value(track.mods[slot].depth),
         1 => phase_value(track.mods[slot].lfo.phase),
-        _ => u16::from(track.mods[slot].polarity().index()) << 8,
+        2 => u16::from(track.mods[slot].polarity().index()) << 8,
+        _ => depth_value(track.mods[slot].lfo.deform),
     };
     let whole = match id.owner() {
         (Owner::Mod(n), at) => return modulator(n, at),
@@ -1192,7 +1193,7 @@ impl TrackState {
                 SettingId::modulator(at, setting)
                     .map_or(0.0, |id| offsets[id.index()] + moved.at(id.index()))
             };
-            let [depth, phase, _] = run.values;
+            let [depth, phase, _, deform] = run.values;
             let polarity = run.polarity(slot);
             // An envelope's depth is whole, as its page sets it, so it moves by exactly that.
             let held = match slot.kind {
@@ -1231,7 +1232,9 @@ impl TrackState {
                     let cycles = slot.lfo.rate.cycles(now.tick - start.tick, seconds);
                     let key = now.seed ^ ((index as u64) << 8 | wave_key(at));
                     let phase = f64::from(phase_of(phase) + moved_by(1));
-                    let value = wave(slot.lfo.shape, cycles + phase, key);
+                    let deform = ((depth_of(deform) + moved_by(3) * 255.0) / f32::from(MAX_DEFORM))
+                        .clamp(-1.0, 1.0);
+                    let value = deformed_wave(slot.lfo.shape, cycles + phase, key, deform);
                     run.now = Some(LfoNow::of(cycles + phase, value));
                     let value = polarity.of(Polarity::Bi, value);
                     offsets[destination.index()] +=
