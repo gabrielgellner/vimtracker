@@ -77,9 +77,32 @@ const LADDER_HIGH_12: [f32; 5] = [1.0, -2.0, 1.0, 0.0, 0.0];
 const LADDER_HIGH_24: [f32; 5] = [1.0, -4.0, 6.0, -4.0, 1.0];
 /// `((1 - L)^2 + L^2)^2`, which is nothing at the cutoff: Vital's notch with its blend in the middle.
 const LADDER_NOTCH: [f32; 5] = [1.0, -4.0, 8.0, -8.0, 4.0];
+/// The rest of the Oberheim Xpander's mixes, as OB-Xf's `Filter.h` lists them (GPL-3.0-or-later):
+/// `L`, `L^3`, `1 - L`, `(1 - L)^3`, and `-L (1 - L)`, a band-pass from two poles, turned over as
+/// `BP` is. `(1 - L)^2 + L^2` is the notch `LADDER_NOTCH` is the square of, and the phaser's is
+/// `1 - 3L + 6L^2 - 4L^3`, which dips at 1.73 times the cutoff. The four blends are each of those
+/// times `-L`, a 6 dB low-pass turned over.
+const LADDER_LOW_6: [f32; 5] = [0.0, 1.0, 0.0, 0.0, 0.0];
+const LADDER_LOW_18: [f32; 5] = [0.0, 0.0, 0.0, 1.0, 0.0];
+const LADDER_BAND_12: [f32; 5] = [0.0, -1.0, 1.0, 0.0, 0.0];
+const LADDER_HIGH_6: [f32; 5] = [1.0, -1.0, 0.0, 0.0, 0.0];
+const LADDER_HIGH_18: [f32; 5] = [1.0, -3.0, 3.0, -1.0, 0.0];
+const LADDER_NOTCH_12: [f32; 5] = [1.0, -2.0, 2.0, 0.0, 0.0];
+const LADDER_PHASER: [f32; 5] = [1.0, -3.0, 6.0, -4.0, 0.0];
+const LADDER_HIGH_12_LOW_6: [f32; 5] = [0.0, -1.0, 2.0, -1.0, 0.0];
+const LADDER_HIGH_18_LOW_6: [f32; 5] = [0.0, -1.0, 3.0, -3.0, 1.0];
+const LADDER_NOTCH_12_LOW_6: [f32; 5] = [0.0, -1.0, 2.0, -2.0, 0.0];
+const LADDER_PHASER_LOW_6: [f32; 5] = [0.0, -1.0, 3.0, -6.0, 4.0];
 /// How far a band-pass from four poles is turned up at most: with no resonance, a quarter is all it
 /// passes at its peak, as each pole passes 0.71 there.
 const BAND_MAKEUP: f32 = 4.0;
+/// What each of the ladder's band-like mixes passes with no resonance, at its loudest and at the
+/// cutoff, which its level is made up from: its band-pass and the blends with a high-pass.
+const BAND_24_LEVELS: (f32, f32) = (0.25, 0.25);
+const BAND_12_LEVELS: (f32, f32) = (0.5, 0.5);
+const HIGH_12_LOW_6_LEVELS: (f32, f32) = (0.384_9, 0.353_6);
+const HIGH_18_LOW_6_LEVELS: (f32, f32) = (0.324_8, 0.25);
+const PHASER_LOW_6_LEVELS: (f32, f32) = (0.880_1, 0.5);
 
 /// How many points each family's `Res` taper is given at, a twentieth of the knob's turn apart.
 const TAPER_POINTS: usize = 21;
@@ -305,17 +328,21 @@ impl Mix {
     /// The mix for a mode, with the ladder's feedback and `Dirty`'s tuning, which their
     /// band-passes' levels follow.
     fn new(mode: FilterMode, ladder_k: f32, dirty: &dirty_filter::Tuning) -> Self {
+        // A band peaks as loud as the low-pass is at its loudest: its bass with little resonance,
+        // and its peak with more. The low-pass passes a quarter at the cutoff before its loop,
+        // which is `1 + k L^4` there, or `1 - k / 4`, so a band is turned up by the bass over
+        // that, from its own loudest, down to passing at the cutoff what the low-pass does.
+        let band = |weights: [f32; 5], (loudest, at_cut): (f32, f32)| {
+            let bass = (4.0 - ladder_k).abs() / (1.0 + ladder_k) / (4.0 * loudest);
+            let makeup = bass.max(1.0 / (4.0 * at_cut));
+            weights.map(|weight| weight * makeup)
+        };
         let (ladder, before, entry) = match mode {
             FilterMode::LowPass12 => (LADDER_LOW_12, DIRTY_THROUGH, DIRTY_LOW),
             FilterMode::BandPass => {
-                // A band-pass peaks as loud as the low-pass is at its loudest: its bass with
-                // little resonance, and its peak with more. At the cutoff they pass the same, so
-                // it's turned up by the bass over that, which resonance brings down to 1. The
-                // ladder's loop is `1 + k L^4` there, which is `1 - k / 4`.
-                let ladder = ((4.0 - ladder_k).abs() / (1.0 + ladder_k)).clamp(1.0, BAND_MAKEUP);
                 let dirty = dirty_filter::band_makeup(dirty).clamp(1.0, BAND_MAKEUP);
                 (
-                    LADDER_BAND.map(|weight| weight * ladder),
+                    band(LADDER_BAND, BAND_24_LEVELS),
                     DIRTY_BAND.map(|weight| weight * dirty),
                     DIRTY_BAND,
                 )
@@ -323,7 +350,37 @@ impl Mix {
             FilterMode::HighPass12 => (LADDER_HIGH_12, DIRTY_THROUGH, DIRTY_HIGH),
             FilterMode::HighPass24 => (LADDER_HIGH_24, DIRTY_HIGH, DIRTY_HIGH),
             FilterMode::Notch => (LADDER_NOTCH, DIRTY_NOTCH, DIRTY_NOTCH),
-            _ => (LADDER_LOW_24, DIRTY_LOW, DIRTY_LOW),
+            // Only the ladder has these, so `Dirty`'s are its first's.
+            FilterMode::LowPass18 => (LADDER_LOW_18, DIRTY_LOW, DIRTY_LOW),
+            FilterMode::LowPass6 => (LADDER_LOW_6, DIRTY_LOW, DIRTY_LOW),
+            FilterMode::BandPass12 => (band(LADDER_BAND_12, BAND_12_LEVELS), DIRTY_LOW, DIRTY_LOW),
+            FilterMode::HighPass6 => (LADDER_HIGH_6, DIRTY_LOW, DIRTY_LOW),
+            FilterMode::HighPass18 => (LADDER_HIGH_18, DIRTY_LOW, DIRTY_LOW),
+            FilterMode::Notch12 => (LADDER_NOTCH_12, DIRTY_LOW, DIRTY_LOW),
+            FilterMode::Phaser => (LADDER_PHASER, DIRTY_LOW, DIRTY_LOW),
+            FilterMode::HighPass12LowPass6 => (
+                band(LADDER_HIGH_12_LOW_6, HIGH_12_LOW_6_LEVELS),
+                DIRTY_LOW,
+                DIRTY_LOW,
+            ),
+            FilterMode::HighPass18LowPass6 => (
+                band(LADDER_HIGH_18_LOW_6, HIGH_18_LOW_6_LEVELS),
+                DIRTY_LOW,
+                DIRTY_LOW,
+            ),
+            FilterMode::Notch12LowPass6 => (LADDER_NOTCH_12_LOW_6, DIRTY_LOW, DIRTY_LOW),
+            FilterMode::PhaserLowPass6 => (
+                band(LADDER_PHASER_LOW_6, PHASER_LOW_6_LEVELS),
+                DIRTY_LOW,
+                DIRTY_LOW,
+            ),
+            FilterMode::Slope12
+            | FilterMode::Slope24
+            | FilterMode::LowPass24
+            | FilterMode::Full
+            | FilterMode::LowCut3
+            | FilterMode::LowCut2
+            | FilterMode::LowCut1 => (LADDER_LOW_24, DIRTY_LOW, DIRTY_LOW),
         };
         let low_cut = match mode {
             FilterMode::LowCut3 => RESONANT_SHARE / 8.0,
@@ -1574,6 +1631,72 @@ mod tests {
     }
 
     #[test]
+    fn the_ladders_xpander_modes_slope_and_pass_as_they_say() {
+        let db = |mode, res, hertz| {
+            mode_gain_db(FilterType::Ladder, mode, 1000.0, res, hertz, 0.0, 0.01)
+        };
+        let fall = |mode, low: f32, high: f32| (db(mode, 0.0, low) - db(mode, 0.0, high)).abs();
+        use FilterMode::*;
+        // Their slopes, over an octave well past `Cut`, and what they pass on the far side.
+        for (mode, slope) in [(LowPass6, 6.0), (LowPass18, 18.0)] {
+            near(fall(mode, 4000.0, 8000.0), slope, 1.5);
+            near(db(mode, 0.0, 30.0), 0.0, 0.3);
+        }
+        for (mode, slope) in [(HighPass6, 6.0), (HighPass18, 18.0)] {
+            near(fall(mode, 62.5, 125.0), slope, 1.5);
+            near(db(mode, 0.0, 16_000.0), 0.0, 0.5);
+        }
+        // A band from two poles falls at 6 dB either side, and the blends at their high-pass's
+        // under it and 6 above.
+        for (mode, under) in [
+            (BandPass12, 6.0),
+            (HighPass12LowPass6, 12.0),
+            (HighPass18LowPass6, 18.0),
+        ] {
+            near(fall(mode, 31.25, 62.5), under, 1.5);
+            near(fall(mode, 8000.0, 16_000.0), 6.0, 1.5);
+        }
+        // The two-pole notch takes out `Cut` and leaves either end, and so does its blend, with
+        // the top falling away.
+        for mode in [Notch12, Notch12LowPass6] {
+            assert!(db(mode, 0.0, 1000.0) < -50.0, "{mode:?}");
+            near(db(mode, 0.0, 30.0), 0.0, 0.3);
+        }
+        near(db(Notch12, 0.0, 16_000.0), 0.0, 0.5);
+        // The two-pole notch is narrower than Vital's four-pole one.
+        assert!(db(Notch12, 0.0, 500.0) > db(Notch, 0.0, 500.0) + 3.0);
+        // The phaser dips at 1.73 times `Cut`, thins the bass and passes the top.
+        assert!(db(Phaser, 0.0, 1730.0) < -40.0);
+        assert!(db(Phaser, 0.0, 30.0) < -20.0);
+        near(db(Phaser, 0.0, 16_000.0), 0.0, 0.5);
+        assert!(db(PhaserLowPass6, 0.0, 1730.0) < -40.0);
+    }
+
+    #[test]
+    fn the_ladders_bands_peak_as_loud_as_its_low_pass_is_at_its_loudest() {
+        // With no resonance at its bass's level, and with a lot as loud as its peak at `Cut`.
+        let db = |mode, res, hertz| {
+            mode_gain_db(FilterType::Ladder, mode, 1000.0, res, hertz, 0.0, 0.01)
+        };
+        let loudest = |mode, res| {
+            (0..=48)
+                .map(|step| db(mode, res, 250.0 * 2_f32.powf(step as f32 / 12.0)))
+                .fold(f32::MIN, f32::max)
+        };
+        use FilterMode::*;
+        for mode in [
+            BandPass,
+            BandPass12,
+            HighPass12LowPass6,
+            HighPass18LowPass6,
+            PhaserLowPass6,
+        ] {
+            near(loudest(mode, 0.0), 0.0, 0.6);
+            near(db(mode, 0.8, 1000.0), db(LowPass24, 0.8, 1000.0), 0.5);
+        }
+    }
+
+    #[test]
     fn a_band_pass_peaks_as_loud_as_the_low_pass_is_at_its_loudest() {
         for kind in [FilterType::Ladder, FilterType::Dirty] {
             let level = if kind == FilterType::Dirty {
@@ -1613,8 +1736,13 @@ mod tests {
                 };
                 let low = ringing(FilterMode::LowPass24);
                 for &mode in kind.modes() {
-                    // The ladder's notch takes out the very pitch it rings at.
-                    if kind == FilterType::Ladder && mode == FilterMode::Notch {
+                    // The ladder's notches take out the very pitch it rings at.
+                    let notches = [
+                        FilterMode::Notch,
+                        FilterMode::Notch12,
+                        FilterMode::Notch12LowPass6,
+                    ];
+                    if kind == FilterType::Ladder && notches.contains(&mode) {
                         continue;
                     }
                     let found = ringing(mode);
