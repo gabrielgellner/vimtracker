@@ -13,7 +13,7 @@ use vt_model::constants::{
 use vt_model::envelope::{Adsr, Envelope};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::insert::Insert;
-use vt_model::modulation::{ModSlot, note_shape_slot};
+use vt_model::modulation::{ModKind, ModSlot, note_shape_slot};
 use vt_model::order::Dealer;
 use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
@@ -1201,12 +1201,35 @@ impl Engine {
         let ticks_per_frame = TICKS_PER_QUARTER as f64 * f64::from(self.millibpm)
             / (60.0 * f64::from(self.rate) * 1000.0);
         SongTime {
+            scale: self.current.song.scale,
             tick: self.origin_tick as f64 + self.frames_since_origin as f64 * ticks_per_frame,
             clock: self.clock,
             rate: self.rate,
             seed: self.current.song.seed,
             frames_per_tick: 1.0 / ticks_per_frame,
             rendered: self.rendered,
+        }
+    }
+
+    /// Work out again the modulation of each track a note has just started on, if one of its mod
+    /// slots is Track, which follows the note: its modulation was worked out as the note's step
+    /// began, before the note's pitch and velocity were, so this has it right from the note's
+    /// first frame rather than the next block's.
+    fn track_new_notes(&mut self) {
+        if !self.tracks.iter().any(|state| state.new_note) {
+            return;
+        }
+        let now = self.song_time();
+        let stopped = self.transport == Transport::Stopped;
+        for (index, state) in self.tracks.iter_mut().enumerate() {
+            if !std::mem::take(&mut state.new_note) {
+                continue;
+            }
+            if let Some(track) = self.current.song.tracks.get(index)
+                && track.mods.iter().any(|slot| slot.kind == ModKind::Track)
+            {
+                state.modulate(track, index, now, stopped, &mut self.memory);
+            }
         }
     }
 
@@ -1635,6 +1658,7 @@ impl Engine {
             sample: FILE_SAMPLES[place],
             synth: None,
             note: 60,
+            velocity: MAX_VELOCITY,
             gain,
             entry: None,
             slice: 0,
@@ -1748,6 +1772,7 @@ impl Engine {
             sample,
             synth,
             note,
+            velocity,
             gain: velocity_gain(heard),
             entry,
             slice,
@@ -1818,6 +1843,7 @@ impl Engine {
             if playing {
                 self.fire_due_events();
             }
+            self.track_new_notes();
             if self.lfo_countdown == 0 {
                 self.update_lfos();
                 self.lfo_countdown = LFO_UPDATE_FRAMES;

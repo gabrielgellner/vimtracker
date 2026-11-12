@@ -5,6 +5,10 @@ use crate::dsp::additive::Additive;
 use crate::dsp::braids_analog::{CSaw, HardSync, Morph, SawSquare, Triple};
 use crate::dsp::braids_digital::{Ring, SawComb, Toy};
 use crate::dsp::braids_filter_fm::{ChaoticFm, DigitalFilter, FeedbackFm};
+use crate::dsp::braids_noise::{ClockedNoise, DigitalModulation, GranularCloud, TwinPeaks};
+use crate::dsp::braids_physical::{Blown, Bowed, Fluted, StruckBell, StruckDrum};
+use crate::dsp::braids_vocal::{Fof, Vosim};
+use crate::dsp::braids_waves::{Paraphonic, WaveLine, WaveMap};
 use crate::dsp::chiptune::Chiptune;
 use crate::dsp::chord::Chord;
 use crate::dsp::drums::{Hat, Snare};
@@ -16,6 +20,7 @@ use crate::dsp::noise::Noise;
 use crate::dsp::particle::ParticleNoise;
 use crate::dsp::phase_distortion::PhaseDistortion;
 use crate::dsp::six_op::SixOp;
+use crate::dsp::speech::Speech;
 use crate::dsp::string_model::StringModel;
 use crate::dsp::swarm::Swarm;
 use crate::dsp::virtual_analog::{Settings, VirtualAnalog};
@@ -105,6 +110,21 @@ enum Synth {
     ZFilter(DigitalFilter),
     FeedbackFm(FeedbackFm),
     ChaoticFm(ChaoticFm),
+    Vosim(Vosim),
+    Fof(Fof),
+    Bowed(Bowed),
+    Blown(Blown),
+    Fluted(Fluted),
+    Bell(StruckBell),
+    Drum(StruckDrum),
+    WaveMap(WaveMap),
+    WaveLine(WaveLine),
+    Paraphonic(Paraphonic),
+    TwinPeaks(TwinPeaks),
+    Clocked(ClockedNoise),
+    GrainCloud(GranularCloud),
+    Modem(DigitalModulation),
+    Speech(Speech),
 }
 
 impl Synth {
@@ -143,6 +163,21 @@ impl Synth {
             SynthVoice::ZFilter => Self::ZFilter(DigitalFilter::new(rate)),
             SynthVoice::FeedbackFm => Self::FeedbackFm(FeedbackFm::new(rate)),
             SynthVoice::ChaoticFm => Self::ChaoticFm(ChaoticFm::new(rate)),
+            SynthVoice::Vosim => Self::Vosim(Vosim::new(rate)),
+            SynthVoice::Fof => Self::Fof(Fof::new(rate)),
+            SynthVoice::Bowed => Self::Bowed(Bowed::new(rate)),
+            SynthVoice::Blown => Self::Blown(Blown::new(rate)),
+            SynthVoice::Fluted => Self::Fluted(Fluted::new(rate)),
+            SynthVoice::Bell => Self::Bell(StruckBell::new(rate)),
+            SynthVoice::Drum => Self::Drum(StruckDrum::new(rate)),
+            SynthVoice::WaveMap => Self::WaveMap(WaveMap::new(rate)),
+            SynthVoice::WaveLine => Self::WaveLine(WaveLine::new(rate)),
+            SynthVoice::Paraphonic => Self::Paraphonic(Paraphonic::new(rate)),
+            SynthVoice::TwinPeaks => Self::TwinPeaks(TwinPeaks::new(rate)),
+            SynthVoice::Clocked => Self::Clocked(ClockedNoise::new(rate)),
+            SynthVoice::GrainCloud => Self::GrainCloud(GranularCloud::new(rate)),
+            SynthVoice::Modem => Self::Modem(DigitalModulation::new(rate)),
+            SynthVoice::Speech => Self::Speech(Speech::new(rate)),
         }
     }
 
@@ -181,6 +216,21 @@ impl Synth {
             Self::ZFilter(synth) => synth.next(frequency, settings),
             Self::FeedbackFm(synth) => synth.next(frequency, settings),
             Self::ChaoticFm(synth) => synth.next(frequency, settings),
+            Self::Vosim(synth) => synth.next(frequency, settings),
+            Self::Fof(synth) => synth.next(frequency, settings),
+            Self::Bowed(synth) => synth.next(frequency, settings),
+            Self::Blown(synth) => synth.next(frequency, settings),
+            Self::Fluted(synth) => synth.next(frequency, settings),
+            Self::Bell(synth) => synth.next(frequency, settings),
+            Self::Drum(synth) => synth.next(frequency, settings),
+            Self::WaveMap(synth) => synth.next(frequency, settings),
+            Self::WaveLine(synth) => synth.next(frequency, settings),
+            Self::Paraphonic(synth) => synth.next(frequency, settings),
+            Self::TwinPeaks(synth) => synth.next(frequency, settings),
+            Self::Clocked(synth) => synth.next(frequency, settings),
+            Self::GrainCloud(synth) => synth.next(frequency, settings),
+            Self::Modem(synth) => synth.next(frequency, settings),
+            Self::Speech(synth) => synth.next(frequency, settings),
         }
     }
 
@@ -323,6 +373,8 @@ pub struct NoteOn {
     pub synth: Option<SynthVoice>,
     /// MIDI note. `C-3` plays at original pitch.
     pub note: u8,
+    /// How hard it's played, as its gain comes from, for a Track mod slot to follow.
+    pub velocity: u8,
     pub gain: f32,
     /// The bank entry it plays, if it's a sampler's, and which of its slices.
     pub entry: Option<u8>,
@@ -400,6 +452,14 @@ impl Voice {
             Some(Synth::Dust(synth)) => synth.seed(seed),
             Some(Synth::Noise(synth)) => synth.seed(seed),
             Some(Synth::Swarm(synth)) => synth.seed(seed),
+            Some(Synth::Blown(synth)) => synth.seed(seed),
+            Some(Synth::Fluted(synth)) => synth.seed(seed),
+            Some(Synth::Drum(synth)) => synth.seed(seed),
+            Some(Synth::Paraphonic(synth)) => synth.seed(seed),
+            Some(Synth::TwinPeaks(synth)) => synth.seed(seed),
+            Some(Synth::Clocked(synth)) => synth.seed(seed),
+            Some(Synth::GrainCloud(synth)) => synth.seed(seed),
+            Some(Synth::Speech(synth)) => synth.seed(seed),
             _ => {}
         }
     }
@@ -431,6 +491,14 @@ impl Voice {
                     | Synth::Dust(_)
                     | Synth::Noise(_)
                     | Synth::Swarm(_)
+                    | Synth::Blown(_)
+                    | Synth::Fluted(_)
+                    | Synth::Drum(_)
+                    | Synth::Paraphonic(_)
+                    | Synth::TwinPeaks(_)
+                    | Synth::Clocked(_)
+                    | Synth::GrainCloud(_)
+                    | Synth::Speech(_)
             )
         )
     }

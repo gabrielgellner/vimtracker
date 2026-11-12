@@ -780,6 +780,15 @@ const SNARE: [Entry; 4] = [
     level("decay", "Decay", "DCAY", 0x80),
     ACCENT,
 ];
+/// Plaits' speech: its three knobs, then its prosody and speed, the attenuverters it takes them
+/// from, none at `80`. It starts on the first bank of words.
+const SPEECH: [Entry; 5] = [
+    level("model", "Model", "MODL", 0x80),
+    level("species", "Species", "SPCS", 0x80),
+    level("word", "Word", "WORD", 0x00),
+    centred("prosody", "Prosody", "PROS"),
+    centred("speed", "Speed", "SPED"),
+];
 const HAT: [Entry; 4] = [
     level("noise", "Noise", "NOIS", 0x80),
     level("tone", "Tone", "TONE", 0x00),
@@ -865,6 +874,65 @@ const FEEDBACK_FM: [Entry; 2] = [
     level("amount", "Amount", "AMNT", 0x60),
     level("ratio", "Ratio", "RAT", 0x6E),
 ];
+/// `VOSIM`'s sines sit at pitches of their own, as MIDI notes from `00` to `FF`.
+const VOSIM: [Entry; 2] = [
+    level("formant", "Formant", "FRMT", 0xA0),
+    level("second", "Second", "SCND", 0xC0),
+];
+const FOF: [Entry; 2] = [
+    level("vowel", "Vowel", "VOWL", 0x00),
+    level("voice", "Voice", "VOIC", 0x40),
+];
+const BOWED: [Entry; 2] = [
+    level("pressure", "Pressure", "PRES", 0x80),
+    level("position", "Position", "POSN", 0x40),
+];
+/// A reed speaks most readily with little noise in its breath.
+const BLOWN: [Entry; 2] = [
+    level("breath", "Breath", "BRTH", 0xC0),
+    level("tone", "Tone", "TONE", 0x40),
+];
+const FLUTED: [Entry; 2] = [
+    level("breath", "Breath", "BRTH", 0x80),
+    level("jet", "Jet", "JET", 0x80),
+];
+/// The struck ones ring on without dying away from `FA` up.
+const STRUCK_BELL: [Entry; 2] = [
+    level("decay", "Decay", "DCAY", 0xA0),
+    level("detune", "Detune", "DTUN", 0x20),
+];
+const STRUCK_DRUM: [Entry; 2] = [
+    level("decay", "Decay", "DCAY", 0x80),
+    level("tone", "Tone", "TONE", 0x40),
+];
+const WAVE_MAP: [Entry; 2] = [
+    level("across", "Across", "ACRS", 0x40),
+    level("down", "Down", "DOWN", 0x40),
+];
+const WAVE_LINE: [Entry; 2] = [
+    level("scan", "Scan", "SCAN", 0x40),
+    level("steps", "Steps", "STEP", 0x60),
+];
+const PARAPHONIC: [Entry; 2] = [
+    level("wave", "Wave", "WAVE", 0x40),
+    level("chord", "Chord", "CHRD", 0x88),
+];
+const TWIN_PEAKS: [Entry; 2] = [
+    level("sharpness", "Sharpness", "SHRP", 0xA0),
+    level("spacing", "Spacing", "SPAC", 0xA0),
+];
+const CLOCKED: [Entry; 2] = [
+    level("loop", "Loop", "LOOP", 0x00),
+    level("steps", "Steps", "STEP", 0xFF),
+];
+const GRAIN_CLOUD: [Entry; 2] = [
+    level("length", "Length", "LENG", 0x80),
+    level("spread", "Spread", "SPRD", 0x40),
+];
+const MODEM: [Entry; 2] = [
+    level("baud", "Baud", "BAUD", 0xC0),
+    level("data", "Data", "DATA", 0x80),
+];
 const TOY: [Entry; 2] = [
     level("clock", "Clock", "CLCK", 0xC0),
     level("bend", "Bend", "BEND", 0x00),
@@ -903,6 +971,21 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Toy => &TOY,
         SynthVoice::ZFilter => &Z_FILTER,
         SynthVoice::FeedbackFm | SynthVoice::ChaoticFm => &FEEDBACK_FM,
+        SynthVoice::Vosim => &VOSIM,
+        SynthVoice::Fof => &FOF,
+        SynthVoice::Bowed => &BOWED,
+        SynthVoice::Blown => &BLOWN,
+        SynthVoice::Fluted => &FLUTED,
+        SynthVoice::Bell => &STRUCK_BELL,
+        SynthVoice::Drum => &STRUCK_DRUM,
+        SynthVoice::WaveMap => &WAVE_MAP,
+        SynthVoice::WaveLine => &WAVE_LINE,
+        SynthVoice::Paraphonic => &PARAPHONIC,
+        SynthVoice::TwinPeaks => &TWIN_PEAKS,
+        SynthVoice::Clocked => &CLOCKED,
+        SynthVoice::GrainCloud => &GRAIN_CLOUD,
+        SynthVoice::Modem => &MODEM,
+        SynthVoice::Speech => &SPEECH,
     }
 }
 
@@ -941,6 +1024,21 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::ZFilter => "zfilter",
         SynthVoice::FeedbackFm => "fbfm",
         SynthVoice::ChaoticFm => "chaosfm",
+        SynthVoice::Vosim => "vosim",
+        SynthVoice::Fof => "fof",
+        SynthVoice::Bowed => "bowed",
+        SynthVoice::Blown => "blown",
+        SynthVoice::Fluted => "fluted",
+        SynthVoice::Bell => "bell",
+        SynthVoice::Drum => "drum",
+        SynthVoice::WaveMap => "wavemap",
+        SynthVoice::WaveLine => "waveline",
+        SynthVoice::Paraphonic => "paraphonic",
+        SynthVoice::TwinPeaks => "twinpeaks",
+        SynthVoice::Clocked => "clocked",
+        SynthVoice::GrainCloud => "graincloud",
+        SynthVoice::Modem => "modem",
+        SynthVoice::Speech => "speech",
     }
 }
 

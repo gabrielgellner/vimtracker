@@ -23,7 +23,8 @@ use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Song, Track, trim_text};
 use vt_model::speed::Speed;
-use vt_model::steps::{Loop, STEPS, StepRate, StepsMode};
+use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
+use vt_model::tracking::Source;
 use vt_roto::live::{share_of, step_at};
 
 use crate::track_page::{AccumulatorField, ArpField, Control, ModField};
@@ -186,6 +187,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 TrackControl::SendA => track.send_a,
                 TrackControl::SendB => track.send_b,
                 TrackControl::Drive => track.drive,
+                TrackControl::Punch => track.punch,
                 TrackControl::LowCut => track.low_cut,
                 TrackControl::HighCut => track.high_cut,
                 TrackControl::Pitch => track.pitch,
@@ -304,9 +306,23 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 ModField::Length => steps.length = pick(&numbers, position) + 1,
                 ModField::Start => steps.start = pick(&numbers, position),
                 ModField::Loop => steps.looping = pick(&Loop::ALL, position),
+                ModField::Mutate => steps.mutate = whole(position, u32::from(MAX_MUTATE)) as u8,
+                ModField::Smooth => steps.smooth = depth_at(position),
                 ModField::Step(at) => steps.values[usize::from(at)] = depth_at(position),
+                ModField::Low | ModField::High => {
+                    let tracking = &mut modulator.track;
+                    let (lowest, highest) = tracking.source.span();
+                    let at = lowest + whole(position, u32::from(highest - lowest)) as u8;
+                    let bounds = tracking.bounds_mut();
+                    if field == ModField::Low {
+                        bounds.low = at;
+                    } else {
+                        bounds.high = at;
+                    }
+                }
                 ModField::Mode => match was.kind {
                     ModKind::Steps => steps.mode = pick(&StepsMode::ALL, position),
+                    ModKind::Track => modulator.track.source = pick(&Source::ALL, position),
                     ModKind::Adsr => adsr.curve = pick(&Curve::ALL, position),
                     ModKind::Ahd => ahd.curve = pick(&Curve::ALL, position),
                     ModKind::Drum => drum.curve = pick(&Curve::ALL, position),

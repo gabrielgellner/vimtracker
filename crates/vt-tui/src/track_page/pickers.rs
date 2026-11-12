@@ -10,10 +10,12 @@ use vt_model::settings::{Kind, SettingId};
 use vt_model::song::{FilterType, Machine};
 use vt_model::speed::Speed;
 use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
+use vt_model::tracking::{Source, Tracking};
 
 use crate::app::App;
 use crate::glyphs;
 use crate::input::picker::{Item, Pick, Picker};
+use crate::views::track::IN_SCALE_PITCH;
 
 use super::controls::no_modes;
 
@@ -33,6 +35,14 @@ const MODE_TITLES: [&str; MOD_SLOTS] = [
     "Mod 4 mode",
     "Mod 5 mode",
     "Mod 6 mode",
+];
+const SOURCE_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 source",
+    "Mod 2 source",
+    "Mod 3 source",
+    "Mod 4 source",
+    "Mod 5 source",
+    "Mod 6 source",
 ];
 const CURVE_TITLES: [&str; MOD_SLOTS] = [
     "Mod 1 curve",
@@ -434,6 +444,17 @@ impl App {
                 });
                 (MODE_TITLES[slot], modes.to_vec())
             }
+            ModField::Mode if modulator.kind == ModKind::Track => {
+                let sources = Source::ALL.map(|source| {
+                    let track = Tracking {
+                        source,
+                        ..modulator.track
+                    };
+                    Item::new(source.name(), pick(ModSlot { track, ..modulator }))
+                        .meaning(source.meaning())
+                });
+                (SOURCE_TITLES[slot], sources.to_vec())
+            }
             ModField::Rate if modulator.kind == ModKind::Steps => {
                 let rates = StepRate::ALL.map(|rate| {
                     let steps = Steps { rate, ..steps };
@@ -472,21 +493,39 @@ impl App {
                     "---",
                     pick(ModSlot {
                         destination: None,
+                        in_scale: false,
                         ..modulator
                     }),
                 )
                 .meaning("Off");
+                // `Pitch` twice: as it is, and moving the note along the song's scale.
                 let on = SettingId::for_mod(&page, slot)
                     .into_iter()
-                    .map(|destination| {
+                    .flat_map(|destination| {
+                        let scaled = (destination == SettingId::PITCH).then_some(true);
+                        [Some(false), scaled]
+                            .into_iter()
+                            .flatten()
+                            .map(move |in_scale| (destination, in_scale))
+                    })
+                    .map(|(destination, in_scale)| {
+                        let (name, meaning) = if in_scale {
+                            (
+                                IN_SCALE_PITCH.to_owned(),
+                                "Moves the note along the song's scale".to_owned(),
+                            )
+                        } else {
+                            (destination.name_on(&page), destination.meaning())
+                        };
                         Item::new(
-                            destination.name_on(&page),
+                            name,
                             pick(ModSlot {
                                 destination: Some(destination),
+                                in_scale,
                                 ..modulator
                             }),
                         )
-                        .meaning(destination.meaning())
+                        .meaning(meaning)
                         .category(destination.group())
                     });
                 (

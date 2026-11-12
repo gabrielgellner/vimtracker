@@ -74,22 +74,29 @@ const LFO_SETTINGS: [ModField; 6] = [
 const LFO_GRID: [[Option<usize>; 3]; 2] =
     [[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]];
 
-/// Steps' settings: how fast, how many and how far down the left, and where each note starts it
-/// down the right, with two holes; then its values, a cursor stop of its own in the panel beside
-/// them, on every row, so `l` from any of the grid goes in. What it does at its end is in its
-/// title, with its mode.
-const STEPS_SETTINGS: [ModField; 5] = [
+/// Steps' settings: how fast, how many and how far down the left, and where each note starts it,
+/// how it drifts and how it goes from step to step down the right; then its values, a cursor stop
+/// of its own in the panel beside them, on every row, so `l` from any of the grid goes in. What it
+/// does at its end is in its title, with its mode.
+const STEPS_SETTINGS: [ModField; 7] = [
     ModField::Rate,
     ModField::Length,
     ModField::Depth,
     ModField::Start,
+    ModField::Mutate,
+    ModField::Smooth,
     ModField::Step(0),
 ];
 const STEPS_GRID: [[Option<usize>; 3]; 3] = [
     [Some(0), Some(1), Some(2)],
-    [Some(3), None, None],
-    [Some(4), Some(4), Some(4)],
+    [Some(3), Some(4), Some(5)],
+    [Some(6), Some(6), Some(6)],
 ];
+
+/// Track's settings: where its map starts and ends, and how far it goes, down the left, with the
+/// right left empty. What it follows is its mode, in the title, and its map is drawn beside them.
+const TRACK_SETTINGS: [ModField; 3] = [ModField::Low, ModField::High, ModField::Depth];
+const TRACK_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [None, None, None]];
 
 /// The accumulator's settings: how far it goes down the left, and what it does there and when
 /// down the right.
@@ -123,6 +130,7 @@ fn type_grid(kind: ModKind) -> (&'static [ModField], Grid) {
         ModKind::Lpg => (&LPG_SETTINGS, Grid::from_columns(&LPG_GRID)),
         ModKind::Lfo => (&LFO_SETTINGS, Grid::from_columns(&LFO_GRID)),
         ModKind::Steps => (&STEPS_SETTINGS, Grid::from_columns(&STEPS_GRID)),
+        ModKind::Track => (&TRACK_SETTINGS, Grid::from_columns(&TRACK_GRID)),
     }
 }
 

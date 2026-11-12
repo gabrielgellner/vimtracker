@@ -689,8 +689,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        18,
-        "what a sample track has, its Sample, Slice, Start and Length, none, and Mod 6's three"
+        19,
+        "what a sample track has, its Sample, Slice, Start and Length, Pitch in scale, none, and Mod 6's three"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
@@ -732,6 +732,18 @@ fn k_chooses_an_lfos_destination_from_a_list() {
 fn typed_rate_on_second_lfo(app: &mut App) {
     press(app, "0jj");
     typed(app, "7st");
+}
+
+#[test]
+fn the_track_page_sets_the_filters_punch_beside_cut() {
+    let (mut app, _realtime) = on_track_page();
+    // Between the filter's own and the utility filter's.
+    press(&mut app, "$h");
+    assert_eq!(app.track_control().label(), "Punch");
+    press(&mut app, "i60");
+    assert_eq!(app.song().tracks[0].punch, 0x60);
+    press(&mut app, "x");
+    assert_eq!(app.song().tracks[0].punch, 0);
 }
 
 #[test]
@@ -1476,11 +1488,11 @@ fn the_track_page_shows_its_settings_in_columns() {
         (11, "╭─ Filter  LP  12 dB ─"),
         (
             13,
-            "│  Cut       FF00 ▕█████████▏   Low cut   00   ▕         ▏   ",
+            "│  Cut       FF00 ▕█████████▏   Punch     00   ▕         ▏   Low cut   00   ▕         ▏   ",
         ),
         (
             15,
-            "│  Res       0000 ▕         ▏   High cut  FF   ▕█████████▏   ",
+            "│  Res       0000 ▕         ▏                                High cut  FF   ▕█████████▏   ",
         ),
         (17, "│  Drive     00   ▕         ▏   "),
         (20, "╭─ Output ─"),
@@ -1848,12 +1860,12 @@ fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
     press(&mut app, " 4/");
     assert_eq!(app.mode, Mode::Jump);
     assert!(jump_labels(&app).is_empty(), "nothing until you type");
-    // Machine and Slice take `a` and `s` for the `c`, and go when the search narrows, leaving the
-    // rest as they were.
+    // Machine, Slice and Punch take `a`, `s` and `f` for the `c`, and go when the search narrows,
+    // leaving the rest as they were.
     press(&mut app, "cu");
-    assert_eq!(jump_labels(&app), ["d Cut", "f Low cut", "g High cut"]);
+    assert_eq!(jump_labels(&app), ["d Cut", "g Low cut", "j High cut"]);
 
-    press(&mut app, "f");
+    press(&mut app, "g");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.field_jump.is_none());
     assert_eq!(column_name(&app), "Low cut");
@@ -2000,8 +2012,8 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
     let line = from_name;
     // Over the letter after what's typed, in the same columns as without a label.
     assert!(line(&app, "Cud").starts_with("Cud       dF00 ▕"));
-    assert!(line(&app, "Low cuf").starts_with("Low cuf   f0   ▕"));
-    assert!(line(&app, "High cug").starts_with("High cug  gF   ▕"));
+    assert!(line(&app, "Low cug").starts_with("Low cug   g0   ▕"));
+    assert!(line(&app, "High cuj").starts_with("High cuj  jF   ▕"));
     assert!(line(&app, "Res").starts_with("Res       0000 ▕"));
     // It moves along as you type, and past the end of a name it sits just after it.
     press(&mut app, "t");

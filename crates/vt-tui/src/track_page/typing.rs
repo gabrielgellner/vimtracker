@@ -12,7 +12,9 @@ use vt_model::lfo::{Fade, Lfo, Rate};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
 use vt_model::settings::{LONGEST_GLIDE_MS, gate_value, glide_value};
 use vt_model::song::reset_named;
-use vt_model::steps::{STEPS, StepRate, Steps};
+use vt_model::step::Note;
+use vt_model::steps::{MAX_MUTATE, STEPS, StepRate, Steps};
+use vt_model::tracking::Source;
 
 use crate::app::{App, Entry};
 use crate::input::mode::Mode;
@@ -175,7 +177,8 @@ impl App {
     }
 
     /// Set a mod slot's setting from what was typed: a depth in signed hex, an envelope's time,
-    /// sustain or hold, or an LFO's rate or phase. The rest are lists, chosen with `K`.
+    /// sustain or hold, an LFO's rate or phase, Steps' own, or where Track's map starts and ends, a
+    /// note's name or hex as its source has them. The rest are lists, chosen with `K`.
     fn type_mod(&mut self, slot: usize, field: ModField, text: &str) {
         let current = self.page_track().mods[slot];
         let (adsr, ahd, drum, lpg, lfo) = (
@@ -308,6 +311,19 @@ impl App {
                     }),
                 format!("Start is a step, from 1 to {STEPS}"),
             ),
+            ModField::Mutate => (
+                text.trim()
+                    .trim_end_matches('%')
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|mutate| *mutate <= MAX_MUTATE)
+                    .map(|mutate| with_steps(Steps { mutate, ..steps })),
+                format!("Mutate is a percent from 0 to {MAX_MUTATE}"),
+            ),
+            ModField::Smooth => (
+                parse_depth(text).map(|smooth| with_steps(Steps { smooth, ..steps })),
+                "Smooth is hex from -FF to +FF".to_owned(),
+            ),
             ModField::Step(at) => (
                 parse_depth(text).map(|value| {
                     let mut values = steps.values;
@@ -331,6 +347,40 @@ impl App {
                 Ok(fade) => (Some(with_lfo(Lfo { fade, ..lfo })), String::new()),
                 Err(error) => (None, error.to_string()),
             },
+            ModField::Low | ModField::High => {
+                let source = current.track.source;
+                let (lowest, highest) = source.span();
+                let value = match source {
+                    Source::Note => text
+                        .trim()
+                        .parse::<Note>()
+                        .ok()
+                        .and_then(|note| match note {
+                            Note::On(midi) => Some(midi),
+                            _ => None,
+                        }),
+                    Source::Velocity | Source::Random => u8::from_str_radix(text.trim(), 16).ok(),
+                };
+                let changed = value
+                    .filter(|value| (lowest..=highest).contains(value))
+                    .map(|value| {
+                        let mut track = current.track;
+                        let bounds = track.bounds_mut();
+                        if field == ModField::Low {
+                            bounds.low = value;
+                        } else {
+                            bounds.high = value;
+                        }
+                        ModSlot { track, ..current }
+                    });
+                let what = Control::Mod(slot, field).label();
+                let (lowest, highest) = (source.text(lowest), source.text(highest));
+                let why = match source {
+                    Source::Note => format!("{what} is a note from {lowest} to {highest}"),
+                    _ => format!("{what} is hex from {lowest} to {highest}"),
+                };
+                (changed, why)
+            }
             ModField::Type
             | ModField::Mode
             | ModField::Polarity

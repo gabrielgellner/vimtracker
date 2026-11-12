@@ -958,3 +958,29 @@ requests, Drum then LPG:
 * **The panel** is a row of braille bars drawn as text, not a picture, with the step playing lit
   and a `▲` under the cursor's.
 * **The Roto** shows Steps live, as it has nothing to switch.
+
+**As built for #235's second half (decision 204):**
+
+* **`Mutate`,** 0% to 100%, and **`Smooth`,** `-FF` to `+FF`, fill the holes under `Start`.
+  `Mutate` keeps what it drew in the engine's run, from a seeded stream of the slot's own, and
+  forgets it at 0%; keeping a drifted loop is left for later.
+* **`In scale`** is every slot's, shown as the destination `Pitch in scale`, after `Pitch`, rather
+  than a cell or a title place, as neither has room. It moves the note from the one playing to
+  the scale's nearest; scale degrees are still for later.
+
+**As built for #428's Track (decision 223),** the last of §11's PRs, which completes M20:
+
+* **Each source keeps its own `Low` and `High`,** rather than one pair: a note and a hex value
+  aren't in the same units, so trying another source and coming back finds the first's as it was.
+  A new slot maps the notes `C-1` to `C-5`, velocity `00` to `7F` and rolls `00` to `FF`.
+* **The notes' range** is a step's, `c_1` to `G-8`; §2's `C-1` to `G-9` was in another octave
+  numbering.
+* **It has a polarity,** as every type since #434 but Steps: `Uni`, its own, rises from the
+  setting, and `Bi` centres the map, which is key tracking around a note.
+* **The Roto stores it,** for the polarity's button under `Depth`, as it does the LFO, where §8
+  had it live: `Low`, `High`, `Depth` and `Source` on page 1, `Dest` on page 2.
+* **The note it follows** is the one playing, after `ACU`, `ARP` and the transpose, and its
+  velocity as heard. As a step's modulation is worked out before its note is, the engine works a
+  track with a Track slot out again as each note starts, so it follows from the note's first frame.
+* **`Random`** rolls at every note in every slot, whatever its type, from a stream of the slot's
+  own after `Mutate`'s.
