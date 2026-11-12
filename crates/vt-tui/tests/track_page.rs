@@ -584,8 +584,8 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "-");
     assert_eq!(
         lfo(&app).destination,
-        Some(SettingId::modulator(MOD_SLOTS - 1, 1).unwrap()),
-        "the last for Mod 4 on a sample track: the last slot's phase"
+        Some(SettingId::modulator(MOD_SLOTS - 1, 3).unwrap()),
+        "the last for Mod 4 on a sample track: the last slot's deform"
     );
 
     press(&mut app, "0j=");
@@ -645,8 +645,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        17,
-        "what a sample track has, its Sample, Slice, Start and Length, none, and Mod 6's two"
+        18,
+        "what a sample track has, its Sample, Slice, Start and Length, none, and Mod 6's three"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
@@ -1387,8 +1387,8 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(row(2).starts_with("│  Attack    1 ms       Sustain   100%"));
     assert!(row(4).starts_with("│  Decay     0 ms       Depth     --"));
     assert!(row(6).starts_with(&format!("│  Release   50 ms      Reset     {on}")));
-    // An LFO's shape, rate and depth down its left, and its phase down its right, with holes
-    // under it, as its mode is in its title.
+    // An LFO's shape, rate and depth down its left, and its phase and deform down its right, with
+    // a hole between them, as its mode is in its title.
     let (top, left) = device_at(&lines, "Mod 4");
     let row = |at: usize| from_column(&lines[top + at], left);
     assert!(
@@ -1399,7 +1399,7 @@ fn the_track_page_shows_its_settings_in_columns() {
     let inside: String = row(4).chars().take(44).collect();
     assert_eq!(inside.trim_end(), "│  Rate      1/8d");
     let inside: String = row(6).chars().take(73).collect();
-    assert_eq!(inside.trim_end(), "│  Depth     +40");
+    assert_eq!(inside.trim_end(), "│  Depth     +40        Deform    00");
     press(&mut app, "H");
     let lines = track_text(&app);
     // Four devices, each with its settings down columns and its title on its frame's top.

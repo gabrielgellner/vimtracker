@@ -105,6 +105,42 @@ fn a_synced_lfo_moves_around_the_held_value_in_time() {
 }
 
 #[test]
+fn deform_widens_a_square_and_a_step_locks_it() {
+    // A square a quarter long, four steps: high for two and low for two, or with `Deform +80`
+    // high for three.
+    let square = Lfo {
+        shape: Shape::Square,
+        rate: Rate::Note(QUARTER),
+        ..Lfo::default()
+    };
+    let middle = |step: usize| STEP * step + STEP / 2;
+    let (high, low) = (level_gain(HELD + SWING), level_gain(HELD - SWING));
+    let plain = render(moving(square), flat(), STEP * 4);
+    close(left(&plain, middle(2)), low);
+    let wide = Lfo {
+        deform: 0x80,
+        ..square
+    };
+    let out = render(moving(wide), flat(), STEP * 4);
+    close(left(&out, middle(1)), high);
+    close(left(&out, middle(2)), high);
+    close(left(&out, middle(3)), low);
+    // `DFM4 C0` from the second cycle is the same width: `80` is none.
+    let mut locked = song(&[
+        "C-3 -- vol:80 --- ---",
+        "--- -- --- --- ---",
+        "--- -- --- --- ---",
+        "--- -- --- --- ---",
+        "--- -- mod4.deform:C0 --- ---",
+    ]);
+    locked.tracks[0].mods[3] = ModSlot::lfo(Some(SettingId::VOL), square).with_depth(0x40);
+    let out = render(locked, flat(), STEP * 8);
+    close(left(&out, middle(2)), low);
+    close(left(&out, middle(6)), high);
+    close(left(&out, middle(7)), low);
+}
+
+#[test]
 fn a_held_vol_of_e0_is_exactly_unity_and_the_top_is_6_db() {
     let out = render(song(&["C-3 -- --- --- ---"]), flat(), STEP);
     assert!((left(&out, STEP - 1) - 1.0).abs() < 1e-6);
@@ -592,6 +628,7 @@ fn moved_by_lfo(
         rate: Rate::Steps(4),
         phase: 0,
         mode: LfoMode::Free,
+        deform: 0,
     };
     moved.tracks[0].mods[3] = ModSlot::lfo(Some(target), lfo).with_depth(depth);
     slot_live(moved, steps)

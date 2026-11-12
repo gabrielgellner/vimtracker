@@ -935,11 +935,20 @@ their values aren't known ahead.
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
 | Phase | Where in the cycle it starts, in degrees |
+| Deform | How its wave bends, in hex from `-FF` to `+FF` |
 
 With `Cut 80` and `Depth +40`, the filter moves between `40` and `C0`. `Saw`
-falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` eases
-from one to the next, which suits a slow drift on `Cut`. An LFO's `Shape`, `Rate`
-and `Depth` are down its left, and its `Phase` down its right.
+falls and `Ramp` rises. `Random` picks a new value each cycle, and `Smooth` glides
+through one after another, never stopping at any, which suits a slow drift on
+`Cut`. An LFO's `Shape`, `Rate` and `Depth` are down its left, and its `Phase` and
+`Deform` down its right, with a space between them.
+
+**Deform** bends `Sine`, `Tri`, `Saw` and `Ramp` between their peaks, which stay
+where they are: raised, the wave bulges up and spends longer high, as a log curve
+does; lowered, it sags and spends longer low, as an exp curve. On `Square` it's the
+width: `+80` is high for three quarters of the cycle, `-80` for a quarter. The
+random shapes have nothing to bend. The picture draws the bent wave. A step locks
+it with `DFM`, as `DFM4 C0`, where `80` is none.
 
 | Type this as a rate | For |
 |---|---|
@@ -954,8 +963,8 @@ dotted and triplet divisions, moves 4 steps, or doubles or halves the hertz.
 `i` on the mode, Dest or Shape opens the list too. `K` on Rate lists the note
 divisions and bars, and `i` is for anything else, like `7st` or `2.5hz`.
 
-**Reaching other slots.** A slot's `Dest` lists the depth and phase of every slot
-after it, as `M5 Depth` and `M5 Phase`, so `Mod 4` can bring in `Mod 5`'s depth,
+**Reaching other slots.** A slot's `Dest` lists the depth, phase and deform of
+every slot after it, as `M5 Depth`, `M5 Phase` and `M5 Deform`, so `Mod 4` can bring in `Mod 5`'s depth,
 and an envelope in `Mod 2` can bring in an LFO's depth, or a later envelope's, with
 each note. It only goes one way, so `Mod 6` can't reach any other. `Rate` can't be
 moved, as LFOs work out where they are from the song's position.
