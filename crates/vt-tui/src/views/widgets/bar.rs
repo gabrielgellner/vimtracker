@@ -16,6 +16,9 @@ const BAR_START: &str = "▕";
 const BAR_END: &str = "▏";
 /// How many cells the ends take.
 pub const BAR_ENDS: u16 = 2;
+/// A centred bar's middle, faint like its ends, so a mark off it shows which way and how far.
+/// Dashed, so it can't be taken for the dim mark of a setting.
+const CENTRE_TICK: &str = "┊";
 /// The characters for a cell partly full, from one eighth to seven.
 const EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 
@@ -78,20 +81,25 @@ impl ValueBar {
     /// of the fill. Nearer, the bar is drawn as what's playing alone, as the mark couldn't be told
     /// from the edge, and a value moving about its setting would have it come and go each frame
     /// as a thin line flickering at the edge (#421).
+    /// A centred bar keeps a faint tick at its middle under the mark, so a value off centre reads
+    /// at a glance; the bright mark covers it at the centre.
     pub fn spans(&self) -> Vec<Span<'static>> {
         let bright = Style::new().fg(theme::MAUVE);
         let bar = self.text(self.live);
-        if self.eighths(self.set).abs_diff(self.eighths(self.live)) < 8 {
+        let apart = self.eighths(self.set).abs_diff(self.eighths(self.live)) >= 8;
+        if !apart && !self.centred {
             return vec![Span::styled(bar, bright)];
         }
-        let mark = bar_cell(self.set, self.cells);
+        let mark = apart.then(|| bar_cell(self.set, self.cells));
+        let centre = self.centred.then(|| bar_cell(0x80, self.cells));
         bar.chars()
             .enumerate()
             .map(|(cell, shown)| match shown {
-                '█' if cell == mark => {
+                '█' if Some(cell) == mark => {
                     Span::styled("│", Style::new().fg(theme::BASE).bg(theme::MAUVE))
                 }
-                ' ' if cell == mark => Span::styled("│", theme::faint()),
+                ' ' if Some(cell) == mark => Span::styled("│", theme::faint()),
+                ' ' if Some(cell) == centre => Span::styled(CENTRE_TICK, theme::faint()),
                 _ => Span::styled(shown.to_string(), bright),
             })
             .collect()
@@ -165,6 +173,22 @@ mod tests {
         assert_eq!(text, "▕████▌    ▏ ");
         assert_eq!(buf[(0, 0)].fg, theme::OVERLAY0);
         assert_eq!(buf[(1, 0)].fg, theme::MAUVE);
+    }
+
+    #[test]
+    fn a_centred_bar_keeps_a_faint_tick_at_its_middle() {
+        let area = Rect::new(0, 0, 11, 1);
+        let mut buf = Buffer::empty(area);
+        ValueBar::new(0xC0, 9).centred(true).render(area, &mut buf);
+        let text: String = (0..11).map(|x| buf[(x, 0)].symbol()).collect();
+        assert_eq!(text, "▕    ┊ │  ▏");
+        assert_eq!(buf[(5, 0)].fg, theme::OVERLAY0);
+        assert_eq!(buf[(7, 0)].fg, theme::MAUVE);
+        // At the centre the bright mark covers the tick.
+        let mut buf = Buffer::empty(area);
+        ValueBar::new(0x80, 9).centred(true).render(area, &mut buf);
+        assert_eq!(buf[(5, 0)].symbol(), "│");
+        assert_eq!(buf[(5, 0)].fg, theme::MAUVE);
     }
 
     #[test]
