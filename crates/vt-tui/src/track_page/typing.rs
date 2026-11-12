@@ -12,7 +12,7 @@ use vt_model::lfo::{Fade, Lfo, Rate};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
 use vt_model::settings::{LONGEST_GLIDE_MS, gate_value, glide_value};
 use vt_model::song::reset_named;
-use vt_model::steps::{STEPS, StepRate, Steps};
+use vt_model::steps::{MAX_MUTATE, STEPS, StepRate, Steps};
 
 use crate::app::{App, Entry};
 use crate::input::mode::Mode;
@@ -307,6 +307,19 @@ impl App {
                         })
                     }),
                 format!("Start is a step, from 1 to {STEPS}"),
+            ),
+            ModField::Mutate => (
+                text.trim()
+                    .trim_end_matches('%')
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|mutate| *mutate <= MAX_MUTATE)
+                    .map(|mutate| with_steps(Steps { mutate, ..steps })),
+                format!("Mutate is a percent from 0 to {MAX_MUTATE}"),
+            ),
+            ModField::Smooth => (
+                parse_depth(text).map(|smooth| with_steps(Steps { smooth, ..steps })),
+                "Smooth is hex from -FF to +FF".to_owned(),
             ),
             ModField::Step(at) => (
                 parse_depth(text).map(|value| {

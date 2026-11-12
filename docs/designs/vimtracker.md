@@ -477,7 +477,11 @@ Song                               song.ron, refused unless format_version is FO
     up to 16 signed values played in turn, from each note, from the song's position or one a note,
     at a division, a sixth of the track's step or a pass of its chain (`TrackState::chain_pass`, which
     `fire_track` sets as a step lands), each way its `Loop` says; which step plays is worked out from
-    the time or count, as an LFO's place is, and its start is the slot's phase. The first
+    the time or count, as an LFO's place is, and its start is the slot's phase. Its `Mutate`
+    (decision 204) is the one part kept as it plays: the values drawn again, in the slot's run, from
+    a seeded stream of its own, reset when playing starts from the top. Any slot can go to `Pitch`
+    in scale (`ModSlot::in_scale`), which `modulate` snaps from the note playing along the song's
+    scale, which `SongTime` carries. The first
     envelope-type slot on `Vol` shapes the notes (`note_shape_slot`): its `ModSlot::envelope`, an
     `envelope::Envelope` of any of these types, is what each voice keeps as its `shape`, and a
     one-shot (an AHD with a timed hold, a drum or a gate) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
@@ -589,7 +593,7 @@ module per file, each keeping its port's licence notice:
 
 | Folder | Holds | Modules |
 |---|---|---|
-| `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
+| `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `braids_vocal`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
 | `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `space`, `spring`, `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |

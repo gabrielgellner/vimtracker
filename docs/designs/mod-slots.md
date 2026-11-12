@@ -958,3 +958,12 @@ requests, Drum then LPG:
 * **The panel** is a row of braille bars drawn as text, not a picture, with the step playing lit
   and a `▲` under the cursor's.
 * **The Roto** shows Steps live, as it has nothing to switch.
+
+**As built for #235's second half (decision 204):**
+
+* **`Mutate`,** 0% to 100%, and **`Smooth`,** `-FF` to `+FF`, fill the holes under `Start`.
+  `Mutate` keeps what it drew in the engine's run, from a seeded stream of the slot's own, and
+  forgets it at 0%; keeping a drifted loop is left for later.
+* **`In scale`** is every slot's, shown as the destination `Pitch in scale`, after `Pitch`, rather
+  than a cell or a title place, as neither has room. It moves the note from the one playing to
+  the scale's nearest; scale degrees are still for later.

@@ -1029,11 +1029,15 @@ pub enum SynthVoice {
     FeedbackFm,
     /// A sine bent by a second, whose speed its own output moves.
     ChaoticFm,
+    /// Two sines at pitches of their own, windowed each cycle of the note.
+    Vosim,
+    /// A saw through five formant filters, from vowel to vowel.
+    Fof,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 32] = [
+    pub const ALL: [Self; 34] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1066,6 +1070,8 @@ impl SynthVoice {
         Self::ZFilter,
         Self::FeedbackFm,
         Self::ChaoticFm,
+        Self::Vosim,
+        Self::Fof,
     ];
 
     /// The name on screen.
@@ -1103,6 +1109,8 @@ impl SynthVoice {
             Self::ZFilter => "Z Filter",
             Self::FeedbackFm => "FB FM",
             Self::ChaoticFm => "Chaos FM",
+            Self::Vosim => "VOSIM",
+            Self::Fof => "FOF",
         }
     }
 
@@ -1141,6 +1149,8 @@ impl SynthVoice {
             Self::ZFilter => "A resonant filter faked by phase, for CZ sweeps",
             Self::FeedbackFm => "FM with feedback, for growling bass and leads",
             Self::ChaoticFm => "FM that never settles, for chaotic tones",
+            Self::Vosim => "Two windowed sines, for nasal and vocal leads",
+            Self::Fof => "A saw through vowel formants, for choirs and pads",
         }
     }
 
@@ -1175,6 +1185,8 @@ impl SynthVoice {
                 | Self::ZFilter
                 | Self::FeedbackFm
                 | Self::ChaoticFm
+                | Self::Vosim
+                | Self::Fof
         )
     }
 
@@ -1193,6 +1205,8 @@ impl SynthVoice {
                 | Self::ZFilter
                 | Self::FeedbackFm
                 | Self::ChaoticFm
+                | Self::Vosim
+                | Self::Fof
         )
     }
 }

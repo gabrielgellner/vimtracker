@@ -886,7 +886,9 @@ fn steps_are_a_live_step_sequencer_with_their_values_before_dest() {
     assert!(!steps.stored, "nothing to switch, so it's live");
     assert_eq!(
         first_knobs(steps),
-        ["rate", "length", "depth", "start", "loop", "mode", "-", "-"]
+        [
+            "rate", "length", "depth", "start", "loop", "mode", "mutate", "smooth"
+        ]
     );
     let pages: Vec<&str> = steps.layout.pages.iter().map(|page| page.name).collect();
     assert_eq!(pages, ["Steps", "Steps 1-8", "Steps 9-16", "Dest"]);

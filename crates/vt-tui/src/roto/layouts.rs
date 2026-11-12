@@ -491,6 +491,20 @@ const CHAOS_FM: DeviceLayout = live(
         [s("amount"), s("ratio"), __, __, __, __, __, __],
     )],
 );
+const VOSIM: DeviceLayout = live(
+    "machine/vosim",
+    &[knobs(
+        "VOSIM",
+        [s("formant"), s("second"), __, __, __, __, __, __],
+    )],
+);
+const FOF: DeviceLayout = live(
+    "machine/fof",
+    &[knobs(
+        "FOF",
+        [s("vowel"), s("voice"), __, __, __, __, __, __],
+    )],
+);
 const TOY: DeviceLayout = live(
     "machine/toy",
     &[knobs(
@@ -716,9 +730,10 @@ const LFO: DeviceLayout = stored(
 );
 
 /// A Steps slot's: how fast, how many and how far, then where each note starts it, what it does at
-/// its end and its mode, musical lists that leave the layout as it is; then its values, eight to a
-/// page, each with a centre notch, a small step sequencer under the hand; and where it goes last
-/// (decided in the study's §12, question 3). It has no off/on settings, so it's live.
+/// its end and its mode, musical lists that leave the layout as it is, then how it drifts and how
+/// it goes from step to step; then its values, eight to a page, each with a centre notch, a small
+/// step sequencer under the hand; and where it goes last (decided in the study's §12, question 3).
+/// It has no off/on settings, so it's live.
 const STEPS_LAYOUT: DeviceLayout = live(
     "steps",
     &[
@@ -731,8 +746,8 @@ const STEPS_LAYOUT: DeviceLayout = live(
                 s("start"),
                 s("loop"),
                 s("mode"),
-                __,
-                __,
+                s("mutate"),
+                s("smooth"),
             ],
         ),
         knobs(
@@ -1226,7 +1241,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 74] = [
+pub const ALL: [&DeviceLayout; 76] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1260,6 +1275,8 @@ pub const ALL: [&DeviceLayout; 74] = [
     &Z_FILTER,
     &FB_FM,
     &CHAOS_FM,
+    &VOSIM,
+    &FOF,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1340,6 +1357,8 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::ZFilter => &Z_FILTER,
             SynthVoice::FeedbackFm => &FB_FM,
             SynthVoice::ChaoticFm => &CHAOS_FM,
+            SynthVoice::Vosim => &VOSIM,
+            SynthVoice::Fof => &FOF,
         },
     }
 }
@@ -1507,6 +1526,8 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Length => "length",
             ModField::Start => "start",
             ModField::Loop => "loop",
+            ModField::Mutate => "mutate",
+            ModField::Smooth => "smooth",
             ModField::Step(at) => STEP_KEYS[usize::from(at).min(STEPS - 1)],
         },
         Control::Accumulator(field) => match field {
