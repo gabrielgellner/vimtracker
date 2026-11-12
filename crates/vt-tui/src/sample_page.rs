@@ -295,6 +295,19 @@ impl Shown {
             .unwrap_or(0)
     }
 
+    /// The first frame of a stretch louder than a level in any channel, as the pool holds the
+    /// file's frames, if any is.
+    pub fn first_above(&self, frames: std::ops::Range<u64>, level: f32) -> Option<u64> {
+        let (data, rates) = self.frames.as_ref()?;
+        let channels = self.analysis.channels().min(2);
+        frames.into_iter().find(|frame| {
+            let at = rates.loaded_frame(*frame) as usize;
+            data.frames
+                .get(at)
+                .is_some_and(|both| both[..channels].iter().any(|s| s.abs() > level))
+        })
+    }
+
     /// The first or last frame of a stretch whose sound is above [`SILENCE_DB`], in any channel.
     /// The pyramid finds the first bucket with sound in it, and the frames find where in it.
     pub fn sound_edge(&self, frames: std::ops::Range<u64>, last: bool) -> Option<u64> {
@@ -563,6 +576,11 @@ impl App {
                 track + 1
             ));
         };
+        self.shown_of(number, entry)
+    }
+
+    /// A bank entry by its number, with its analysis, as the page would show it, or why it can't.
+    pub fn shown_of(&self, number: u8, entry: &BankEntry) -> Result<Shown, String> {
         let Some(source) = entry.source() else {
             return Err(format!("Sample {number:02X} has no file"));
         };
