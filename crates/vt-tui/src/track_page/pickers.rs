@@ -74,7 +74,10 @@ impl App {
     pub(super) fn open_control_picker(&mut self) {
         let control = self.track_control();
         // Something that's only on or off switches, as there's nothing to choose between.
-        if matches!(control, Control::Mute | Control::Solo | Control::Limiter) {
+        if matches!(
+            control,
+            Control::Mute | Control::Solo | Control::Limiter | Control::Safe
+        ) {
             self.toggle_control(control);
             return;
         }

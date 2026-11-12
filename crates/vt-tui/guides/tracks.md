@@ -56,7 +56,7 @@ and its settings in up to four columns of three.
 | Device | Title | Settings, column by column |
 |---|---|---|
 | Machine | Machine, type | The machine's own |
-| Filter | Type, mode | `Cut` `Res` `Drive`; `Punch`; `Low cut` `High cut` |
+| Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` `Velocity` |
 
@@ -105,6 +105,7 @@ shows what it plays.
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
 | Punch | How high a loud ring starts over `Cut`, from `00` for none |
+| Safe | On, `Res` stops short of ringing by itself |
 | Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` `OB-X` |
 | Mode | How the type responds: `--` where it has none |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
@@ -119,6 +120,17 @@ sound hears the filter as it is, so the curve doesn't show it. Only `LP`, `HP`,
 `BP` and `Notch` have it; on the other types it's dim and does nothing, and it
 does less with `Drive`, whose clipping holds the ring down. Steps and modulators
 don't move it.
+
+`Safe`, beside `Res`, is the switch of that name on Cytomic's The Drop. On, the
+whole of `Res`'s turn reaches only as far as the loudest peak that still dies
+away, a few steps short of where the type starts to sing by itself, so `FF`
+rings on after a strike and fades, and never keeps going alone, at any `Cut`,
+`Mode` or `Drive`. Its steps are closer together for it: `FF` is about where
+`D7` was, and `80` where `6C` was. The curve shows the peak it leaves. `K`
+switches it, `=` puts it on and `-` takes it off. Steps and modulators don't
+move it, as with `Drive`, but a `RES` lock or an LFO on `Res` stops short too.
+The clean types never ring by themselves, so on `LP`, `HP`, `BP` and `Notch`
+it's dim and does nothing.
 
 `Low cut` and `High cut` are a second, simple
 filter after the main one, for thinning out a sound without giving up the main

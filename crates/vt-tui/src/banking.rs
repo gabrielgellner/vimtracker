@@ -1,6 +1,7 @@
 //! The project's bank of samples: adding files to it from the explorer, `:sample` and kits,
 //! listing it for a track's `Sample` and a step's `SMP`, and removing what nothing plays.
 
+use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -9,6 +10,7 @@ use vt_model::bank::{Bank, BankEntry, ContentHash, PlayParams, Source};
 use vt_model::kit::load_kit;
 use vt_model::project;
 use vt_model::samples::SamplePool;
+use vt_model::seeding;
 use vt_model::settings::SettingId;
 use vt_model::song::Song;
 use vt_model::step::{FxCommand, FxSlot, Mark};
@@ -27,6 +29,14 @@ pub struct Seed {
 
 /// What's said when the bank has no room.
 const FULL: &str = "The bank is full, at 255 samples: :bank clean removes those nothing plays";
+
+/// Words with their first letter a capital, to start a sentence.
+fn capitalised(words: &str) -> String {
+    let mut letters = words.chars();
+    letters.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(letters).collect()
+    })
+}
 
 /// A bank entry's number and name as a list or a row shows it: `03 BD Bass Drum`, or `Off`.
 pub fn sample_text(song: &Song, number: u8) -> String {
@@ -51,22 +61,34 @@ pub fn sample_shown(song: &Song, number: u8) -> String {
     }
 }
 
+/// A file put in the bank: its number, whether it's new, and, for a new one whose file says how it
+/// plays, the entry seeded from what it says, with that in words, and what in the file couldn't
+/// be read.
+struct Banked {
+    number: u8,
+    new: bool,
+    seeded: Option<(BankEntry, String)>,
+    problems: Vec<String>,
+}
+
 impl App {
-    /// Put a file in a bank, loading it into a pool, unless the bank already plays it, and give
-    /// its number and whether it's new. A kit's sound comes with what the kit says of it, and is
-    /// the same entry only if it plays the same file the same way, as a kit can tune one file
-    /// twice for two toms.
+    /// Put a file in a bank, loading it into a pool, unless the bank already plays it. A kit's
+    /// sound comes with what the kit says of it, and is the same entry only if it plays the same
+    /// file the same way, as a kit can tune one file twice for two toms. The new entry plays the
+    /// file as it is; what the file's markers or an `.ot` beside it say comes back separately, so
+    /// it can be taken as an undo step of its own.
     fn bank_file(
         &self,
         file: &Path,
         seed: Option<&Seed>,
         bank: &mut Bank,
         pool: &mut SamplePool,
-    ) -> Result<(u8, bool), String> {
+    ) -> Result<Banked, String> {
         let stored = self.store_sample(file).map_err(|error| error.to_string())?;
         let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
-        let hash = ContentHash::of_file(&resolved)
-            .map_err(|error| format!("{}: {error}", resolved.display()))?;
+        let bytes =
+            fs::read(&resolved).map_err(|error| format!("{}: {error}", resolved.display()))?;
+        let hash = ContentHash::of(&bytes);
         let source = Source {
             path: stored.clone(),
             hash,
@@ -79,10 +101,18 @@ impl App {
             None => bank.find(&source),
         };
         if let Some(number) = found {
-            return Ok((number, false));
+            return Ok(Banked {
+                number,
+                new: false,
+                seeded: None,
+                problems: Vec::new(),
+            });
         }
-        pool.load(&stored, &resolved, self.rate)
+        let id = pool
+            .load(&stored, &resolved, self.rate)
             .map_err(|error| error.to_string())?;
+        let loaded = pool.get(id).map_or(0, |sample| sample.frames.len() as u64);
+        let mut from_file = seeding::seed(&resolved, &bytes, pool.rates(id).file_frame(loaded));
         let mut entry = BankEntry::of_file(stored, hash);
         if let Some(seed) = seed {
             entry.label = seed.label.clone();
@@ -90,14 +120,28 @@ impl App {
                 entry.name = seed.name.clone();
             }
             entry.edit.play = seed.play;
+            // The kit's gain is the sound's.
+            from_file.gain_db = None;
         }
         let number = bank.free().ok_or_else(|| FULL.to_owned())?;
+        let seeded = (!from_file.is_empty()).then(|| {
+            let mut seeded = entry.clone();
+            from_file.apply(&mut seeded.edit);
+            (seeded, from_file.describe())
+        });
         bank.set(number, Some(entry));
-        Ok((number, true))
+        Ok(Banked {
+            number,
+            new: true,
+            seeded,
+            problems: from_file.problems,
+        })
     }
 
     /// Put a file in the bank and have the current track play it, with other changes to the
-    /// track, as one undo step. A folder opens in the explorer instead.
+    /// track, as one undo step. A folder opens in the explorer instead. What the file says of how
+    /// it plays, its slices, loop and the like, follows as a second undo step, so `u` leaves them
+    /// out and keeps the file.
     pub(crate) fn sample_with(&mut self, file: &Path, seed: Option<&Seed>, more: Vec<Action>) {
         if file.is_dir() {
             self.open_sample_folder(file);
@@ -105,13 +149,19 @@ impl App {
         }
         let mut bank = self.song().bank.clone();
         let mut pool = SamplePool::clone(&self.samples);
-        let (number, new) = match self.bank_file(file, seed, &mut bank, &mut pool) {
+        let banked = match self.bank_file(file, seed, &mut bank, &mut pool) {
             Ok(found) => found,
             Err(error) => {
                 self.status = error;
                 return;
             }
         };
+        let Banked {
+            number,
+            new,
+            seeded,
+            problems,
+        } = banked;
         self.samples = Arc::new(pool);
         let track = self.cursor.track;
         let mut actions = Vec::new();
@@ -127,18 +177,34 @@ impl App {
         });
         actions.extend(more);
         self.apply(&Action::Batch(actions));
-        if self.status.is_empty() {
-            let added = if new {
-                "loaded into the bank"
-            } else {
-                "from the bank"
-            };
-            self.status = format!(
-                "Track {:02} plays {}, {added}",
-                track + 1,
-                sample_text(self.song(), number)
-            );
+        let banked = self.song().bank.get(number).is_some();
+        let seeded = seeded.filter(|_| banked);
+        if let Some((entry, _)) = &seeded {
+            self.apply(&Action::SetBankEntry {
+                number,
+                entry: Some(entry.clone()),
+            });
         }
+        if !self.status.is_empty() {
+            return;
+        }
+        let added = if new {
+            "loaded into the bank"
+        } else {
+            "from the bank"
+        };
+        let mut said = format!(
+            "Track {:02} plays {}, {added}",
+            track + 1,
+            sample_text(self.song(), number)
+        );
+        if let Some((_, what)) = seeded {
+            said = format!("{said} with {what}: u leaves them out");
+        }
+        for problem in problems {
+            said = format!("{said}. {}", capitalised(&problem));
+        }
+        self.status = said;
     }
 
     /// Put a kit's sounds in the bank and on tracks from the first, keeping the tracks' other
@@ -160,6 +226,8 @@ impl App {
         let mut pool = SamplePool::clone(&self.samples);
         let mut actions = Vec::new();
         let mut sounds = Vec::with_capacity(kit.sounds.len());
+        let mut seeds = Vec::new();
+        let mut problems = Vec::new();
         for sound in &kit.sounds {
             let seed = Seed {
                 label: sound.label.clone(),
@@ -170,14 +238,27 @@ impl App {
                     ..PlayParams::default()
                 },
             };
-            let (number, new) = match self.bank_file(&sound.path, Some(&seed), &mut bank, &mut pool)
-            {
+            let banked = match self.bank_file(&sound.path, Some(&seed), &mut bank, &mut pool) {
                 Ok(found) => found,
                 Err(error) => {
                     self.status = format!("{}: {error}", sound.path.display());
                     return;
                 }
             };
+            let Banked {
+                number,
+                new,
+                seeded,
+                problems: unread,
+            } = banked;
+            if let Some((entry, _)) = seeded {
+                seeds.push(Action::SetBankEntry {
+                    number,
+                    entry: Some(entry),
+                });
+            }
+            let file = sound.path.file_name().unwrap_or_default().to_string_lossy();
+            problems.extend(unread.iter().map(|problem| format!("{file}: {problem}")));
             if new {
                 actions.push(Action::SetBankEntry {
                     number,
@@ -205,15 +286,31 @@ impl App {
         self.samples = Arc::new(pool);
         actions.push(Action::LoadKit(sounds));
         self.apply(&Action::Batch(actions));
+        let seeded = seeds.len();
+        if seeded > 0 {
+            self.apply(&Action::Batch(seeds));
+        }
         self.fit_levels();
         self.kit_file = Some(path.to_path_buf());
         self.status = format!("Kit {}: {count} tracks", kit.name);
+        if seeded > 0 {
+            let which = if seeded == 1 {
+                "1 sound with points from its file".to_owned()
+            } else {
+                format!("{seeded} sounds with points from their files")
+            };
+            self.status = format!("{}, {which}: u leaves them out", self.status);
+        }
         if !replaced.is_empty() {
+            let undo = if seeded > 0 { "u again" } else { "u" };
             self.status = format!(
-                "{}. Replaced {}: u to undo",
+                "{}. Replaced {}: {undo} to undo",
                 self.status,
                 replaced.join(" ")
             );
+        }
+        for problem in problems {
+            self.status = format!("{}. {problem}", self.status);
         }
     }
 

@@ -637,10 +637,11 @@ const TOY: DeviceLayout = live(
 
 // The track's own devices.
 
-/// The filter itself and its punch, its type and mode, then the utility filter's cuts.
-const FILTER: DeviceLayout = live(
+/// The filter itself and its punch, its type and mode, then the utility filter's cuts, with
+/// `Safe` on the button under `Res`, as it tames it.
+const FILTER: DeviceLayout = stored(
     "filter",
-    &[knobs(
+    &[page(
         "Filter",
         [
             s("cutoff"),
@@ -652,6 +653,7 @@ const FILTER: DeviceLayout = live(
             s("lowcut"),
             s("highcut"),
         ],
+        button(1, "safe"),
     )],
 );
 
@@ -1730,6 +1732,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
         Control::Reset => "reset",
         Control::Glide => "glide",
         Control::Limiter => "limiter",
+        Control::Safe => "safe",
         Control::FilterType => "type",
         Control::FilterMode => "mode",
         Control::Mod(_, field) => match field {
