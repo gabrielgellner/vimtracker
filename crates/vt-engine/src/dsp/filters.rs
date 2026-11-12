@@ -7,4 +7,5 @@ pub mod dirty_filter;
 pub mod filter;
 pub mod korg35;
 pub mod lpg;
+pub mod obx;
 pub mod vowel;

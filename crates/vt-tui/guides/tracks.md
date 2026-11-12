@@ -102,7 +102,7 @@ shows what it plays.
 |---|---|
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
-| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` |
+| Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` `OB-X` |
 | Mode | How the type responds: `--` where it has none |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
@@ -127,8 +127,12 @@ saturates. It thins the bass as `Res` rises, though less than `Ladder` does,
 and it sings by itself sooner, from about `DB`, at `Cut`. A loud sound comes
 out a little crunched even at `Drive 00`. `Drive` grits up what comes straight
 in, less so as `Res` rises so the peak isn't swamped, and adds a little
-resonance. These five cost more than the others, which matters only for tracks
-using them.
+resonance. `OB-X` is the Oberheim OB-X's 12 dB filter, after OB-Xd's: it
+sounds as the clean `LP` does when quiet, but its damping grows as it gets
+louder, so its resonance holds itself in with no clipper, and loud notes tame
+it, the OB's squelch. From about `D9` it sings by itself at `Cut`, in tune, so
+it plays as an oscillator. These six cost more than the others, which matters
+only for tracks using them.
 
 `Mode` gives a type its other responses, made from what it already has, and `K`
 on it lists the ones the type offers:
@@ -139,6 +143,7 @@ on it lists the ones the type offers:
 | `Ladder` | `LP24` `Fat24` `LP18` `LP12` `LP6` `BP24` `BP12` `HP6` `HP12` `HP18` `HP24` |
 | | `N24` `N12` `PH18` `HP12+LP6` `HP18+LP6` `N12+LP6` `PH18+LP6` |
 | `Dirty` | `LP24` `LP12` `BP24` `HP12` `HP24` `N24` |
+| `OB-X` | `LP12` `BP12` `HP12` `N12` |
 | `Diode` | `Full`, or a low cut `-3 oct` `-2 oct` `-1 oct` under `Cut` |
 
 At `24 dB` a low-pass or high-pass is twice as steep with the same peak, a
@@ -155,7 +160,11 @@ ladder's `LP24` with much of the bass its resonance takes given back, as
 Surge's compensated ladders do: about 10 dB more near full `Res`, so the peak
 rides on a full bass, and runs into its saturation sooner. The ladder's notches
 take out the very pitch it sings at, so they hardly sing at all, where
-`Dirty`'s still does. `Diode` at `Full` has all its
+`Dirty`'s still does. `OB-X`'s modes are the low-pass, band-pass and high-pass
+of its one filter, and its notch the low-pass and high-pass together, so its
+`BP12` and `HP12` sing as its `LP12` does and its `N12` hardly at all. Its
+`BP12` peaks at 0 dB with no resonance, and as loud as `LP12` is at `Cut` once
+it has some. `Diode` at `Full` has all its
 bass, as in `Acid`. The others cut the bass before the ladder, from that many
 octaves under `Cut`, moving with it, so `Drive` grits up only what's left. The
 MS-20's have no modes, and show `--`.
@@ -165,7 +174,7 @@ plays its own first, so going to another type and back finds it again. A step
 can lock `MODE` to any mode, by its place in this list, which the status line
 names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP24`, `05`
 `HP12`, `06` `HP24`, `07` `N24`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
-`0B` `-1 oct`, then the ladder's own: `0C` `LP18`, `0D` `LP6`, `0E` `BP12`, `0F`
+`0B` `-1 oct`, then the ladder's own, which `OB-X` shares two of: `0C` `LP18`, `0D` `LP6`, `0E` `BP12`, `0F`
 `HP6`, `10` `HP18`, `11` `N12`, `12` `PH18`, `13` `HP12+LP6`, `14` `HP18+LP6`,
 `15` `N12+LP6`, `16` `PH18+LP6`, `17` `Fat24`. Changing mode glides over about 10 ms, so a lock doesn't click.
 
