@@ -2869,8 +2869,10 @@ fn the_sound_page_sets_a_samplers_start_length_and_play() {
     press(&mut app, "h=");
     assert_eq!(setting(&app, SettingId::PLAY), 1);
     assert!(from_name(&app, "Play").contains(PLAY_CHOICES[1]));
-    press(&mut app, "===");
-    assert_eq!(setting(&app, SettingId::PLAY), 3, "Thru is the last");
+    press(&mut app, "====");
+    assert_eq!(setting(&app, SettingId::PLAY), 4, "Tempo is the last");
+    assert!(from_name(&app, "Play").starts_with("Play      Tempo "));
+    press(&mut app, "-");
     assert!(from_name(&app, "Play").starts_with("Play      Thru "));
     // Above Play, the slice, which plays the sample whole until it's sliced.
     press(&mut app, "k");

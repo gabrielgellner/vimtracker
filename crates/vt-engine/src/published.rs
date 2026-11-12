@@ -5,8 +5,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use vt_model::constants::{NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::GrooveId;
-use vt_model::playable::normalize_peak;
 pub use vt_model::playable::{LoopSpan, Playable, Span};
+use vt_model::playable::{normalize_peak, onset_analysis};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::Song;
@@ -88,8 +88,8 @@ impl Published {
 }
 
 /// Work out the bank's entries, keeping the last version's for each one that's the same, plays the
-/// same sound and normalises from the same peak, so one whose analysis has come in since is worked
-/// out again at its new gain.
+/// same sound, normalises from the same peak and starts its beats from the same sounds, so one
+/// whose analysis has come in since is worked out again at its new gain and with its sounds.
 fn bank(song: &Song, samples: &SamplePool, last: Option<&Published>) -> Bank {
     let mut bank = vec![None; 256];
     for (number, entry) in song.bank.iter() {
@@ -97,6 +97,10 @@ fn bank(song: &Song, samples: &SamplePool, last: Option<&Published>) -> Bank {
         let kept = last
             .filter(|last| last.song.bank.get(number) == Some(entry))
             .filter(|last| normalize_peak(entry, &last.samples) == normalize_peak(entry, samples))
+            .filter(|last| {
+                let was = onset_analysis(entry, &last.samples).map(Arc::as_ptr);
+                was == onset_analysis(entry, samples).map(Arc::as_ptr)
+            })
             .and_then(|last| last.bank[at].as_ref())
             .filter(|playable| {
                 samples

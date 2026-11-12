@@ -675,6 +675,18 @@ impl Voice {
         self.reader.respan(span);
     }
 
+    /// Whether it's playing a sample in time with the song's tempo, under `Play`'s `Tempo`, and so
+    /// wants [`Voice::keep_time`] before each run.
+    pub fn keeps_time(&self) -> bool {
+        self.active() && self.synth.is_none() && self.reader.keeps_time()
+    }
+
+    /// Keep to the song's tempo for the next run, at this many frames a step. With `Beats`,
+    /// `around` says where the sound its clock is in starts, and where the next does.
+    pub fn keep_time(&mut self, step: f64, around: impl FnOnce(&Span, f64) -> (f64, f64)) {
+        self.reader.keep_time(step, self.rate, around);
+    }
+
     /// The frame of its sample it's at, for a playhead, while it's sounding a sample: not a
     /// synth's note, and not one fading out after something cut it or took its place.
     pub fn frame(&self) -> Option<u64> {

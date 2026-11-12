@@ -548,7 +548,7 @@ mod tests {
             ["1/4", "1/2", "1bar"]
         );
         assert_eq!(tab("launch 1", nowhere()), "launch 1");
-        assert!(complete("bpm ", nowhere()).candidates.is_empty());
+        assert_eq!(texts(&complete("bpm ", nowhere())), ["sample"]);
         assert!(complete("nope ", nowhere()).candidates.is_empty());
     }
 

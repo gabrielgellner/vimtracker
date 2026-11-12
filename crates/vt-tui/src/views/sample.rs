@@ -553,7 +553,8 @@ fn setting_span(state: &SamplePage, shown: &Shown, setting: SampleSetting) -> Sp
 }
 
 /// The entry's points, each named in its colour, so the row is the waveform's key too, whether
-/// points placed snap to zero crossings, and how readily a sound counts as starting.
+/// points placed snap to zero crossings, how readily a sound counts as starting, how many steps it
+/// lasts and how it keeps to the tempo.
 fn settings(state: &SamplePage, shown: &Shown) -> Line<'static> {
     let rate = shown.rate();
     let points = &shown.entry.edit.points;
@@ -601,6 +602,10 @@ fn settings(state: &SamplePage, shown: &Shown) -> Line<'static> {
     spans.push(setting_span(state, shown, SampleSetting::Snap));
     spans.push(Span::raw("   Sens "));
     spans.push(setting_span(state, shown, SampleSetting::Sens));
+    spans.push(Span::raw("   Steps "));
+    spans.push(setting_span(state, shown, SampleSetting::Steps));
+    spans.push(Span::raw("   Warp "));
+    spans.push(setting_span(state, shown, SampleSetting::Warp));
     Line::from(spans)
 }
 
