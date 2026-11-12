@@ -15,9 +15,8 @@
 //!     an LFO's rate, shape, depth and phase. Where it goes, a long list that changes with the
 //!     track, is on a page of its own, one arrow away.
 //! *   A button is always under a knob: the Roto draws a button's label only under a knob that's
-//!     set (firmware 3.3.0), so a restart is under what it starts again, `Reset` under `Attack`,
-//!     an LFO's mode (`Trig` lit, `Free` dark) under its `Phase` and the arpeggio's `Retrig`
-//!     under its `Mode`.
+//!     set (firmware 3.3.0), so a restart is under what it starts again, `Reset` under `Attack`
+//!     and the arpeggio's `Retrig` under its `Mode`.
 //! *   A mod slot's layout is its type's: an ADSR's, an AHD's or an LFO's, swapped when the app changes its
 //!     type, which is never chosen on the Roto.
 //! *   **The Roto plays and tweaks; the app builds** (the author's rule, 2026-11-11). What a
@@ -613,10 +612,10 @@ const LPG_ENVELOPE: DeviceLayout = stored(
     ],
 );
 
-/// An LFO slot's: its rate and shape, how far it goes, where in its cycle it starts and how its
-/// wave bends, with its polarity on the button under `Depth`, lit for `Bi`, and its mode under
-/// `Phase`, lit for `Trig`, as each note then starts it there; where it goes on the next page.
-/// #86's five modes make the button a knob, and the device live.
+/// An LFO slot's: its rate and shape, how far it goes, where in its cycle it starts, how its wave
+/// bends, how it fades after each note, then its mode, a musical list of five that leaves the
+/// layout as it is (#86), with its polarity on the button under `Depth`, lit for `Bi`; where it
+/// goes on the next page.
 const LFO: DeviceLayout = stored(
     "lfo",
     &[
@@ -628,11 +627,11 @@ const LFO: DeviceLayout = stored(
                 s("depth"),
                 s("phase"),
                 s("deform"),
-                __,
-                __,
+                s("fade"),
+                s("mode"),
                 __,
             ],
-            [GAP, GAP, s("polarity"), s("mode"), __, __, __, __],
+            [GAP, GAP, s("polarity"), __, __, __, __, __],
         ),
         DEST_PAGE,
     ],
@@ -1320,6 +1319,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Rate => "rate",
             ModField::Phase => "phase",
             ModField::Deform => "deform",
+            ModField::Fade => "fade",
         },
         Control::Accumulator(field) => match field {
             AccumulatorField::Up => "up",

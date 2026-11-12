@@ -112,6 +112,7 @@ fn each_kind_of_setting_has_its_feel() {
     // A list of up to 16, each named.
     assert_eq!(steps(Control::FilterType, &track), FilterType::ALL.len());
     assert_eq!(steps(Control::Mod(3, ModField::Shape), &track), 7);
+    assert_eq!(steps(Control::Mod(3, ModField::Mode), &track), 5);
     assert_eq!(steps(Control::Arpeggio(ArpField::Mode), &track), 5);
     // Of 17 to 24, stepped all the same, with names for the first 16 as the Roto shows them.
     assert_eq!(steps(Control::Choke, &track), 17);
@@ -122,6 +123,7 @@ fn each_kind_of_setting_has_its_feel() {
         feel(Control::Accumulator(AccumulatorField::Up), &track),
         Feel::Smooth
     );
+    assert_eq!(feel(Control::Mod(3, ModField::Fade), &track), Feel::Smooth);
     assert_eq!(
         feel(Control::Mod(3, ModField::Destination), &track),
         Feel::Smooth
@@ -132,7 +134,10 @@ fn each_kind_of_setting_has_its_feel() {
     );
     assert_eq!(feel(Control::Sample, &track), Feel::Smooth);
     // Off and on is a switch.
-    assert_eq!(feel(Control::Mod(3, ModField::Mode), &track), Feel::Switch);
+    assert_eq!(
+        feel(Control::Mod(3, ModField::Polarity), &track),
+        Feel::Switch
+    );
     assert_eq!(feel(Control::Mod(0, ModField::Reset), &track), Feel::Switch);
     assert_eq!(feel(Control::Limiter, &master), Feel::Switch);
     let ping_pong = Insert::ALL[2]

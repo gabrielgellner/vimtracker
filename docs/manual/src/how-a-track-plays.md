@@ -420,8 +420,10 @@ holds while the note lasts and releases when it ends, so it moves with everythin
 moves the note. An **LFO** keeps the song's time: its `Rate` is a note division, bars or
 steps of the song, never of the track's `Speed`, or hertz, and it runs on through rows,
 lanes, orders and resets. Playing starts every LFO again, and a `:reset` doesn't, as
-that's about patterns. With `Retrig` on, it starts again on each of its track's notes
-instead.
+that's about patterns. Its mode can tie it to the notes instead: `Trig` starts it again
+at each of its track's notes, `Hold` holds the value each note finds, and `One` and
+`Half` play one cycle or half of one from each note and stay there. Its `Fade` brings
+it in or takes it out over a length after each note, whatever the mode.
 
 ```text
 notes:      C-3 ─────────   E-3 ───   OFF
