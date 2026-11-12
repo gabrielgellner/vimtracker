@@ -14,7 +14,7 @@ use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Flanger,
     FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb,
-    Space, Tape, Vowel, Warps,
+    Space, Spring, Tape, Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -163,6 +163,7 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Comb(_), Insert::Comb(_))
         | (Insert::Vowel(_), Insert::Vowel(_))
         | (Insert::FreqShift(_), Insert::FreqShift(_))
+        | (Insert::Spring(_), Insert::Spring(_))
         | (Insert::Space(_), Insert::Space(_)) => true,
         _ => false,
     }
@@ -358,6 +359,10 @@ impl InsertState {
             if started {
                 memory.settle();
             }
+            // A knock rings the tank with nothing going in, so it mustn't stay asleep.
+            if memory.waking() {
+                self.quiet = 0;
+            }
         }
     }
 
@@ -393,6 +398,7 @@ impl InsertState {
             | Insert::Flanger(Flanger { mix, gain, .. })
             | Insert::Tape(Tape { mix, gain, .. })
             | Insert::Plate(Plate { mix, gain, .. })
+            | Insert::Spring(Spring { mix, gain, .. })
             | Insert::Space(Space { mix, gain, .. })
             | Insert::Pitch(Pitch { mix, gain, .. })
             | Insert::Grains(Grains { mix, gain, .. })
@@ -656,6 +662,7 @@ impl InsertState {
             | Insert::Reso(_)
             | Insert::Comb(_)
             | Insert::FreqShift(_)
+            | Insert::Spring(_)
             | Insert::Space(_) => Mono::Stereo,
         }
     }
@@ -810,6 +817,7 @@ impl InsertState {
             | Insert::Flanger(_)
             | Insert::Tape(_)
             | Insert::Plate(_)
+            | Insert::Spring(_)
             | Insert::Space(_)
             | Insert::Pitch(_)
             | Insert::Grains(_) => (None, Distort::DEFAULT),
@@ -1314,6 +1322,10 @@ mod tests {
             Insert::Plate(Plate {
                 decay: 0xE0,
                 ..Plate::DEFAULT
+            }),
+            Insert::Spring(Spring {
+                decay: 0xFF,
+                ..Spring::DEFAULT
             }),
             // Its longest tail takes over a minute to die away, so this one's its middle.
             Insert::Space(Space::DEFAULT),

@@ -4,7 +4,7 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meaning};
 use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Lpg};
 use vt_model::insert::Insert;
-use vt_model::lfo::{Lfo, LfoMode, Shape, note_rates};
+use vt_model::lfo::{Fade, Lfo, LfoMode, Shape, note_rates};
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId};
 use vt_model::song::{FilterType, Machine};
@@ -511,9 +511,21 @@ impl App {
                     .collect();
                 ("LFO rate. i types any other", rates)
             }
+            ModField::Fade => {
+                let fades = Fade::ALL.map(|fade| {
+                    let lfo = Lfo { fade, ..lfo };
+                    let meaning = match fade {
+                        Fade::Off => "the whole wave from each note",
+                        Fade::In(_) => "in from nothing after each note",
+                        Fade::Out(_) => "out to nothing after each note",
+                    };
+                    Item::new(fade.to_string(), pick(ModSlot { lfo, ..modulator })).meaning(meaning)
+                });
+                ("LFO fade", fades.to_vec())
+            }
             _ => {
                 self.status =
-                    "K chooses from a list on Type, Mode, Polarity, Dest, Shape, Rate and Reset"
+                    "K chooses from a list on Type, Mode, Polarity, Dest, Shape, Rate, Fade and Reset"
                         .to_owned();
                 return;
             }
