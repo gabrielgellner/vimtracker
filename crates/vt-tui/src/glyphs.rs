@@ -11,6 +11,7 @@
 use std::time::Duration;
 
 use vt_model::song::{Machine, SynthVoice, Track, TrackKind};
+use vt_model::step::Mark;
 
 /// A switch that's on: `nf-fa-toggle_on`, U+F205. It's wide, so `widgets::toggle` follows it with
 /// a plain space the terminal draws it over, as it's barely readable squeezed into one cell.
@@ -91,6 +92,22 @@ pub fn track(track: &Track) -> char {
 /// A value's `Lock` mark in the phrase grid, which holds it until the next note:
 /// `nf-md-lock`, U+F033E.
 pub const LOCK: char = '\u{f033e}';
+/// A value's `Hold` mark, which keeps it until playback next starts from the top, pinned in
+/// place: `nf-md-pin`, U+F0403.
+pub const HOLD: char = '\u{f0403}';
+/// A value's `Glide` mark, which slides it to the next value in its slot: `nf-md-slope_uphill`,
+/// U+F0E00.
+pub const GLIDE: char = '\u{f0e00}';
+
+/// A value's mark as the grid draws it. The step's text and the command line keep the letters,
+/// `.`, `h` and `g`, which can be typed.
+pub fn mark(mark: Mark) -> char {
+    match mark {
+        Mark::Lock => LOCK,
+        Mark::Hold => HOLD,
+        Mark::Glide => GLIDE,
+    }
+}
 /// A live generator, in the phrase's title before the columns it keeps live, as it makes their
 /// values: a wand, `nf-md-auto_fix`, U+F0068 (decision 182).
 pub const LIVE: char = '\u{f0068}';

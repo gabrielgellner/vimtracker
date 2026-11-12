@@ -1097,18 +1097,25 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 *style = style.bg(theme::FX_BAND);
             }
         }
-        // A value's `Lock` mark is a lock, dim, as it's what a value does unless marked otherwise.
-        // The text is worked on a character to a cell, so the glyph goes in last.
+        // A value's mark is a glyph beside it: a lock, dim, as it's what a value does unless
+        // marked otherwise; a pin for a hold and a rising slope for a glide in the value's fine
+        // colour, as they change what the value does and belong to it. The text keeps the
+        // letters, worked on a character to a cell, so the glyphs go in last.
         let mut shown: Vec<char> = text.chars().collect();
         for (slot, fx) in step.fx.iter().enumerate() {
-            if fx.is_value() && fx.mark == Mark::Lock {
-                let at = field_range(Field::FxValue(slot)).1 + FINE_WIDTH + MARK_WIDTH - 1;
-                if styles[at].fg.is_none() {
-                    styles[at] = styles[at].patch(theme::dim());
-                }
-                if shown.get(at) == Some(&Mark::Lock.glyph()) {
-                    shown[at] = glyphs::LOCK;
-                }
+            if !fx.is_value() {
+                continue;
+            }
+            let at = field_range(Field::FxValue(slot)).1 + FINE_WIDTH + MARK_WIDTH - 1;
+            let look = match fx.mark {
+                Mark::Lock => theme::dim(),
+                Mark::Hold | Mark::Glide => Style::new().fg(theme::fine(theme::MAUVE)),
+            };
+            if styles[at].fg.is_none() {
+                styles[at] = styles[at].patch(look);
+            }
+            if shown.get(at) == Some(&fx.mark.glyph()) {
+                shown[at] = glyphs::mark(fx.mark);
             }
         }
         for &(start, end) in &empty {

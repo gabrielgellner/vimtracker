@@ -3723,12 +3723,23 @@ fn a_value_shows_its_mark_and_events_and_empty_slots_show_none() {
     let row = |y: u16| -> String { (0..80).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
         row(2).contains(&format!(
-            "CUT   4000 {} SNA   20   h RES   1000 g",
-            vt_tui::glyphs::LOCK
+            "CUT   4000 {} SNA   20   {} RES   1000 {}",
+            vt_tui::glyphs::LOCK,
+            vt_tui::glyphs::HOLD,
+            vt_tui::glyphs::GLIDE
         )),
         "{}",
         row(2)
     );
+    // The lock is dim, and a hold and a glide are in the value's fine colour.
+    let at = |glyph: char| row(2).chars().position(|c| c == glyph).unwrap() as u16;
+    let fine = vt_tui::theme::fine(vt_tui::theme::MAUVE);
+    assert_eq!(
+        buffer[(at(vt_tui::glyphs::LOCK), 2)].fg,
+        vt_tui::theme::OVERLAY2
+    );
+    assert_eq!(buffer[(at(vt_tui::glyphs::HOLD), 2)].fg, fine);
+    assert_eq!(buffer[(at(vt_tui::glyphs::GLIDE), 2)].fg, fine);
     assert!(
         row(3).contains("DEL   10     ···   ··     ···   ··"),
         "{}",
