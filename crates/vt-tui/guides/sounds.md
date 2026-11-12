@@ -229,7 +229,7 @@ sounds until the note ends, shaped by the first envelope.
 | Setting | Does |
 |---|---|
 | `Type` | The filter: low-pass at `00`, band-pass at `80`, high-pass at `FF` |
-| `Clock` | How fast it's worked out: low and gritty at `00`, cleaner at `FF` |
+| `Clock` | How fast the noise changes: grainy steps low, a hiss high |
 | `Ring` | How much the filter rings at the note |
 
 `Kick` is an 808-style bass drum. Its note tunes it, so try `C-1`, or lower.
