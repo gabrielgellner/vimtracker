@@ -5,7 +5,7 @@ use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
 use vt_model::envelope::{Envelope, Lpg};
 use vt_model::groove::Groove;
-use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS};
+use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS, Setting};
 use vt_model::lfo::{LfoMode, MAX_DEFORM, deformed_wave, phase_of, phase_value};
 use vt_model::modulation::{
     MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, depth_value, note_shape_slot,
@@ -941,6 +941,9 @@ pub struct TrackState {
     resolved: [Insert; INSERTS],
     /// Whether modulation is moving each slot.
     slot_moving: [bool; INSERTS],
+    /// Whether a step has switched each slot's trigger on since the slots were last given their
+    /// settings, which starts a stutter again even if it was on already.
+    struck: [bool; INSERTS],
     high_cut: Smoothed,
     /// The coefficients in use, and the value each was worked out for.
     low_cut_coefficients: Option<(f32, Coefficients)>,
@@ -1186,6 +1189,7 @@ impl TrackState {
             slot_values: [[0.0; MAX_KEPT_PARAMS]; INSERTS],
             resolved: [Insert::Empty; INSERTS],
             slot_moving: [false; INSERTS],
+            struck: [false; INSERTS],
             high_cut: Smoothed::at(1.0),
             low_cut_coefficients: None,
             high_cut_coefficients: None,
@@ -1578,6 +1582,9 @@ impl TrackState {
             }
             self.resolved[slot] = resolved;
             self.inserts[slot].hold(resolved, memory, now.frames_per_tick, now.rendered);
+            if std::mem::take(&mut self.struck[slot]) {
+                self.inserts[slot].strike();
+            }
             self.inserts[slot].bypass(self.bypassed[slot]);
         }
         let semitones = self.held_pitch - 128.0 + offsets[SettingId::PITCH.index()] * 255.0;
@@ -2029,6 +2036,18 @@ impl TrackState {
             layers.lock = None;
         } else {
             layers.lock = Some(value);
+        }
+        // A step switching a trigger on strikes it, even where it's on already, so two steps in a
+        // row each start a stutter.
+        if let (Owner::Slot { slot, effect }, at) = id.owner()
+            && scaled(value) >= 0.5
+            && self.loaded_effects[slot] == Some(effect)
+            && effect
+                .params()
+                .get(at)
+                .is_some_and(|param| param.setting == Setting::Trig)
+        {
+            self.struck[slot] = true;
         }
         self.hear(id, scaled(value));
     }

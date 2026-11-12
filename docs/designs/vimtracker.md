@@ -269,7 +269,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 
 | Crate | Owns | May depend on |
 |---|---|---|
-| `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, and sample analysis | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
+| `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
 | `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs and `wide` for `Supersaw`'s four lanes |
 | `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
 | `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), the faders as the steps automate them and a hand takes them over (`automating.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
@@ -402,9 +402,10 @@ Song                               song.ron, refused unless format_version is FO
  |- name, millibpm, seed, scale, limiter, launch, auto_jump, skip
  |- groove, grooves[]              the project's groove, and up to 8 of its own
  |- bank                           01..FF -> BankEntry: label, name, edit
- |   '- SampleEdit                 timeline (one whole file for now), points, play
+ |   '- SampleEdit                 timeline (one whole file for now), points, play, hints
  |       |- Points                 start, end, loop, slices[], next_id, marks{a..z}
- |       '- PlayParams             gain, tune, cents, reverse, fades, normalize, snap_zero
+ |       |- PlayParams             gain, tune, cents, reverse, fades, normalize, snap_zero
+ |       '- Hints                  sens, bars, root note, tempo: what the sound is like
  |- tracks[]                       sound tracks, then the groups G1 to G4, Return A, Return B
  |   |                             and Master
  |   |- kind, name, mute, solo     kind: Sound, Group(n), ReturnA, ReturnB or Master
@@ -452,7 +453,11 @@ Song                               song.ron, refused unless format_version is FO
     path and content hash, and holds its `Points` and `PlayParams`, in frames at the file's own
     rate. Slices are numbered by where they start, as Vim numbers lines, each with an id that's never
     used again and settings of its own where they differ from the entry's. The letters `a` to `z`
-    mark slices by id, so `SLI 'a` follows its slice as others come and go.
+    mark slices by id, so `SLI 'a` follows its slice as others come and go. A file joining the
+    bank is seeded once from what other tools left in and beside it (`seeding.rs`, decisions 230
+    and 231): an Octatrack `.ot` beside it (`octatrack.rs`), or else its WAV `cue ` and `smpl`
+    chunks (`riff.rs`), which `hound` passes over. Both readers take bytes and their writers give
+    bytes, so nothing is written beside a source.
 *   **Sections, chains and phrases.** A section is a row of the song view, with one chain per track,
     a length, how many times it repeats, what it does when it starts, and a reset. Each track owns
     its chains and phrases, numbered within it and shared only within it. A chain is a list of
@@ -559,6 +564,11 @@ is due. `Engine::render` then plays the run's frames.
     the trim, after which the Output device's meter reads its peak (`after_trim`); the filter and
     its drive; the low and high cuts; the slots in order (`through_slots`); then the level and
     pan, and the sends, which follow the level.
+*   **Slot settings.** `TrackState::modulate` gives each slot its finished values, a step's locks
+    and what modulation adds, through `InsertState::hold`, every `LFO_UPDATE_FRAMES` and as a note
+    starts. A slot sees values, not steps, so a step that locks a `Trig` on also marks its slot
+    `struck`, and the slot is told with `InsertState::strike` as it's next given its values: a
+    stutter starts again even where `Trig` was on already (decision 219).
 *   **Groups, returns and the master.** A grouped track's frame goes to its group, which plays the
     sum through its own trim, slots, level and pan and sends from there (`process_group`); each
     return plays what's sent to it (`process_return`); and the master plays the sum through its
@@ -602,7 +612,7 @@ module per file, each keeping its port's licence notice:
 |---|---|---|
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_noise`, `braids_physical`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `braids_vocal`, `braids_waves`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `speech`, `string_model`, `supersaw` (its saws four at a time in `wide`'s `f32x4` lanes, the one voice built so), `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves, DX7 patches and words and Braids' waves |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `space`, `spring`, `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `space`, `spring`, `stutter`, `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
 | `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler` (also its `Decimator`, for a sound made at twice the rate), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 
@@ -929,7 +939,7 @@ macOS, the one platform the golden hashes hold on.
 
 | Kind | Where | What it checks |
 |---|---|---|
-| Model | `crates/vt-model/tests/`, and unit tests in its modules | Actions on songs, undo, saving and loading, kits, decoding the sample files in `tests/samples/`, slices and marks, analysis |
+| Model | `crates/vt-model/tests/`, and unit tests in its modules | Actions on songs, undo, saving and loading, kits, decoding the sample files in `tests/samples/`, slices and marks, analysis, seeds from WAV markers and `.ot` files |
 | Engine | `crates/vt-engine/tests/`, a file for each feature, such as `groove.rs`, `returns.rs` and `slices.rs` | What plays when, from songs built in code and played offline |
 | Golden renders | `crates/vt-engine/tests/golden/`, through `tests/support/` | An FNV-1a hash of a render's exact samples. `VT_BLESS=1` updates one after a change to the sound on purpose, and `VT_DUMP` writes the samples, to compare two builds |
 | DSP | Unit tests beside each module in `dsp/` | Each voice, filter and effect on its own |

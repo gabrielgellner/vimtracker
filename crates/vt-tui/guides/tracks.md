@@ -789,6 +789,37 @@ time round, what goes round loses a little over 5 kHz and is softly
 limited, and what's under 15 Hz is taken out, so a spiral stays bounded and
 dies away even at `FF`.
 
+`Stutter` repeats a piece of the sound when a step says, for rolls, glitches
+and fills, after Surge's Microgate. It does nothing until `Trig` goes on:
+then it takes the next piece of what comes in, `Length` long, lets it play
+as it comes, and plays it again `Repeats` times, each a `Length` after the
+last, so the repeats fall on the grid. Then the sound comes back where it's
+got to. It starts all wet, so the repeats take the place of the sound, with
+a sixteenth played three times more: a beat in all.
+
+| Setting | Does |
+|---|---|
+| `Trig` | Switched on, it takes the next piece and repeats it |
+| `Length` | How long the piece is, a note division from `1/64` to `1/4` |
+| `Repeats` | How many times it plays it again, 1 to 16, or `Hold` |
+| `Decay` | How much quieter each repeat is, from none to 12 dB |
+
+`Trig` is for a step to lock: a `1TRIG 01` on a step, for a stutter in slot
+1, repeats what plays from there. Every step that locks it starts it again,
+even the very next one, so a lock on each of four steps cuts four pieces,
+and a lock beside a `1LEN` or `1RPTS` changes the roll for that step alone.
+Switched on by hand, it repeats once each time it goes on.
+
+`Hold` keeps repeating the piece for as long as `Trig` is on: until the next
+note ends a lock, or until it's switched off. `Decay` at `80` halves each
+repeat, so a roll fades out like an echo; the status line reads it in dB.
+
+The piece starts where the sound crosses zero, and each repeat starts where
+what's playing crosses zero the same way, so a splice doesn't click. A
+repeat waits at most about 13 ms for that, and never adds up, so the roll
+keeps to the grid; a low bass with no crossing in that time is spliced
+where it is, with a short fade.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.
