@@ -1,10 +1,10 @@
 //! Each track's filter. The clean types share a TPT state-variable filter, which stays stable near
-//! the top of the range. The ladder, diode, Korg 35 and Vital's `Dirty` are the character filters,
-//! and cost more.
+//! the top of the range. The ladder, diode, Korg 35, Vital's `Dirty` and OB-Xd's two-pole are the
+//! character filters, and cost more.
 //!
 //! A filter's mode is a mix of what it already has: a second state-variable filter after the
-//! first, the ladder's and `Dirty`'s stages weighted as Vital weights them, or where the diode's
-//! input high-pass sits. Each channel moves its mix toward the mode's over the smoothing time, so
+//! first, the ladder's and `Dirty`'s stages weighted as Vital weights them, the OB-X's low-pass,
+//! band-pass and high-pass, or where the diode's input high-pass sits. Each channel moves its mix toward the mode's over the smoothing time, so
 //! changing mode doesn't click.
 
 use vt_model::song::{FilterMode, FilterType, Track};
@@ -18,6 +18,7 @@ use crate::dsp::filters::diode_filter::{
 };
 use crate::dsp::filters::dirty_filter::{self, DirtyFilter};
 use crate::dsp::filters::korg35::{self, Korg35};
+use crate::dsp::filters::obx::{self, ObX};
 
 /// How far `Drive` turns up what goes into the filter, at full.
 const DRIVE_GAIN: f32 = 7.0;
@@ -26,6 +27,14 @@ const DRIVE_GAIN: f32 = 7.0;
 /// where The Drop's MS1 and Arturia's Filter MS-20 agree, from 640 Hz to 3.6 kHz, where its
 /// high-pass already rang with them (decision 137). A quiet sound comes through the same.
 const KORG_LOW_HEADROOM: f32 = 1.3;
+/// How much louder `OB-X` takes its input into OB-Xd's filter, and quieter its output. OB-Xd's
+/// voice gives it an oscillator at 3 times full level, and two at up to 6. At 6, a sine at `Cut`
+/// 988 Hz with no resonance comes out with about the distortion of OSR's and Filter SEM's, within
+/// 3 dB of their mean where they agree and between them where they don't, from -18 to 0 dBFS, and
+/// its level falls by about as much at 0 dBFS, 0.46 dB, as theirs do, 0.37 and 0.59 (decision
+/// 200). Its ringing, which settles at about 5.85, comes out just under full
+/// level. A quiet sound comes through the same.
+const OBX_HEADROOM: f32 = 6.0;
 /// Where the ladder's feedback starts to self-oscillate, just past 4.
 const LADDER_FEEDBACK: f32 = 4.3;
 /// A stage's slope can't fall below this, or a loud signal would stop it responding.
@@ -157,6 +166,14 @@ const DIRTY_TAPER: [f32; TAPER_POINTS] = [
     0.0, 0.128, 0.379, 0.463, 0.512, 0.556, 0.594, 0.628, 0.657, 0.682, 0.703, 0.72, 0.734, 0.746,
     0.756, 0.763, 0.77, 0.847, 0.909, 0.955, 1.0,
 ];
+/// `OB-X`'s, against OSR too: quietly it's the clean low-pass with `1 / Q = 2 (1 - r)` for its
+/// resonance `r`, so up to `CC` each point is the clean taper's Q as `r`, as a share of
+/// [`obx::MOST_RESONANCE`]. Then `r` reaches 1, no damping, at `D9`, where it starts to ring by
+/// itself, and OB-Xd's push over the last 15% (decision 200).
+const OBX_TAPER: [f32; TAPER_POINTS] = [
+    0.0, 0.191, 0.336, 0.445, 0.53, 0.602, 0.657, 0.705, 0.743, 0.773, 0.797, 0.815, 0.829, 0.841,
+    0.849, 0.857, 0.863, 0.9662, 0.9775, 0.9887, 1.0,
+];
 
 /// A family's resonance, as a share of its most, for `Res` from 0 to 1, read between its taper's
 /// points.
@@ -176,6 +193,12 @@ const DIRTY_LOW: [f32; 3] = [0.0, 0.0, 1.0];
 const DIRTY_BAND: [f32; 3] = [0.0, 1.0, -1.0];
 const DIRTY_HIGH: [f32; 3] = [1.0, -2.0, 1.0];
 const DIRTY_NOTCH: [f32; 3] = [1.0, -2.0, 2.0];
+/// How `OB-X`'s modes weigh its low-pass, band-pass and high-pass. Its notch is the low-pass and
+/// high-pass together, where OB-Xd's mode knob, half way, has half of each.
+const OBX_LOW: [f32; 3] = [1.0, 0.0, 0.0];
+const OBX_BAND: [f32; 3] = [0.0, 1.0, 0.0];
+const OBX_HIGH: [f32; 3] = [0.0, 0.0, 1.0];
+const OBX_NOTCH: [f32; 3] = [1.0, 0.0, 1.0];
 
 /// `tanh(x) / x`, as a rational function, for `x` from -4 to 4.
 #[inline]
@@ -222,6 +245,8 @@ pub struct Coefficients {
     korg_high_feedback: f32,
     /// The `Dirty` filter's tuning at twice the rate.
     dirty: dirty_filter::Tuning,
+    /// `OB-X`'s resonance, from 0 to [`obx::MOST_RESONANCE`].
+    obx_resonance: f32,
     /// The second clean filter's `a1` for a low-pass or high-pass at 24 dB, at the rate and twice
     /// it, with no resonance of its own, so the peak stays as it is. A band-pass or notch has the
     /// first's, as their peak and dip don't grow with resonance.
@@ -276,6 +301,7 @@ impl Coefficients {
             korg_feedback: tapered(&KORG_TAPER, resonance) * korg35::MOST_FEEDBACK,
             korg_high_feedback: tapered(&KORG_HIGH_TAPER, resonance) * korg35::MOST_FEEDBACK,
             dirty,
+            obx_resonance: tapered(&OBX_TAPER, resonance) * obx::MOST_RESONANCE,
             flat_a1: 0.0,
             double_flat_a1: 0.0,
             mix: Mix::new(mode, ladder_k, &dirty),
@@ -315,6 +341,7 @@ impl Coefficients {
         visit(&mut self.korg_coefficient, other.korg_coefficient);
         visit(&mut self.korg_feedback, other.korg_feedback);
         visit(&mut self.korg_high_feedback, other.korg_high_feedback);
+        visit(&mut self.obx_resonance, other.obx_resonance);
         self.dirty.each(&other.dirty, visit);
     }
 
@@ -407,6 +434,8 @@ pub struct Mix {
     series: f32,
     /// Where the diode's input high-pass sits, as a share of its cutoff.
     low_cut: f32,
+    /// `OB-X`'s low-pass's, band-pass's and high-pass's.
+    obx: [f32; 3],
 }
 
 impl Mix {
@@ -467,6 +496,12 @@ impl Mix {
             | FilterMode::LowCut2
             | FilterMode::LowCut1 => (LADDER_LOW_24, DIRTY_LOW, DIRTY_LOW),
         };
+        let obx = match mode {
+            FilterMode::BandPass12 => OBX_BAND,
+            FilterMode::HighPass12 => OBX_HIGH,
+            FilterMode::Notch12 => OBX_NOTCH,
+            _ => OBX_LOW,
+        };
         let low_cut = match mode {
             FilterMode::LowCut3 => RESONANT_SHARE / 8.0,
             FilterMode::LowCut2 => RESONANT_SHARE / 4.0,
@@ -483,6 +518,7 @@ impl Mix {
                 0.0
             },
             low_cut,
+            obx,
         }
     }
 
@@ -505,6 +541,9 @@ impl Mix {
         }
         step(&mut self.series, target.series);
         step(&mut self.low_cut, target.low_cut);
+        for (value, to) in self.obx.iter_mut().zip(target.obx) {
+            step(value, to);
+        }
         if furthest < 1e-6 {
             *self = *target;
         }
@@ -621,6 +660,7 @@ pub struct Channel {
     diode: DiodeFilter,
     korg: Korg35,
     dirty: DirtyFilter,
+    obx: ObX,
     oversampler: Oversampler,
     /// The mode's mix it's playing, and whether it's moving toward the coefficients' yet, which a
     /// new channel doesn't, as it starts on theirs.
@@ -694,6 +734,18 @@ impl Channel {
             self.oversampler.process(input * gain, |x| {
                 korg.high_pass(x, c.korg_coefficient, c.korg_high_feedback)
             })
+        } else if kind == FilterType::ObX {
+            let filter = &mut self.obx;
+            let resonance = c.obx_resonance;
+            let band = mix.obx[1] * obx::band_makeup(resonance);
+            let mixed = self.oversampler.process(input * gain, |x| {
+                let [low, passed, high] = filter.next(x * OBX_HEADROOM, c.double_g, resonance);
+                (mix.obx[0] * low + band * passed + mix.obx[2] * high) / OBX_HEADROOM
+            });
+            // Its passband doesn't saturate, so it's soft-clipped to 2, as the ladder is, which
+            // leaves its ringing nearly alone. A saw at full `Res` rings up to about 2.8. It's
+            // clipped at the rate, after the oversampler, whose ringing would take it past 2.
+            2.0 * soft_clip(mixed * 0.5)
         } else {
             let (svf, second) = (&mut self.svf, &mut self.second);
             let (first_k, first_a1) = c.first(kind, true);
@@ -750,6 +802,9 @@ pub fn response_db(
             c.korg_feedback
         };
         korg35::response(high, feedback, along)
+    } else if kind == FilterType::ObX {
+        let along = (std::f32::consts::PI * hertz / (2.0 * rate as f32)).tan() / c.double_g;
+        obx::response(mix.obx, c.obx_resonance, along)
     } else if kind == FilterType::Ladder {
         // Four one-poles in a loop, `L = 1 / (1 + jw)`, each stage `L^i / (1 + k L^4)`, which is
         // `(1 + jw)^(4 - i) / ((1 + jw)^4 + k)`.
@@ -775,7 +830,8 @@ pub fn response_db(
                 | FilterType::Diode
                 | FilterType::Ms20LowPass
                 | FilterType::Ms20HighPass
-                | FilterType::Dirty => 1.0,
+                | FilterType::Dirty
+                | FilterType::ObX => 1.0,
             };
             top / (rest + k2 * w2)
         };
@@ -870,7 +926,8 @@ fn svf_output(kind: FilterType, input: f32, band: f32, low: f32, k: f32) -> f32 
         | FilterType::Diode
         | FilterType::Ms20LowPass
         | FilterType::Ms20HighPass
-        | FilterType::Dirty => low,
+        | FilterType::Dirty
+        | FilterType::ObX => low,
     }
 }
 
@@ -1995,6 +2052,223 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// How loud `OB-X` rings at full `Res`, in dBFS.
+    const OBX_RINGING_DB: f32 = -0.8;
+
+    /// Where a filter rings at full `Res` after a quiet click, at a rate, found between frames from
+    /// where it crosses zero rising over its last second, and its peak there.
+    fn ringing_pitch(kind: FilterType, mode: FilterMode, hertz: f32, rate: u32) -> (f32, f32) {
+        let c = Coefficients::with_mode((hertz / 20.0).log10() / 3.0, 1.0, mode, rate);
+        let mut channel = Channel::default();
+        channel.process(0.01, kind, 0.0, &c);
+        let frames = rate as usize * 3;
+        let out: Vec<f32> = (0..frames)
+            .map(|_| channel.process(0.0, kind, 0.0, &c))
+            .collect();
+        let last = &out[rate as usize * 2..];
+        let peak = last
+            .iter()
+            .fold(0.0_f32, |high, sample| high.max(sample.abs()));
+        let rising: Vec<f32> = last
+            .windows(2)
+            .enumerate()
+            .filter(|(_, pair)| pair[0] <= 0.0 && pair[1] > 0.0)
+            .map(|(frame, pair)| frame as f32 + pair[0] / (pair[0] - pair[1]))
+            .collect();
+        if rising.len() < 3 {
+            return (0.0, peak);
+        }
+        let span = rising[rising.len() - 1] - rising[0];
+        ((rising.len() - 1) as f32 * rate as f32 / span, peak)
+    }
+
+    #[test]
+    fn the_obx_sings_in_tune_by_itself_at_full_resonance() {
+        // OB-Xd's own, simulated at 96 kHz in the DSP parts review: -1.3 cents at 100 Hz, 0 at
+        // 1 kHz, +5.3 at 5 kHz, +11.4 at 10 kHz and +17.3 at 16 kHz. Ours runs at twice the rate,
+        // so at 44.1 kHz it's a little sharper near the top.
+        for rate in [44_100, 48_000] {
+            for (hertz, most) in [
+                (50.0, 3.0),
+                (100.0, 3.0),
+                (1_000.0, 3.0),
+                (5_000.0, 8.0),
+                (10_000.0, 15.0),
+                (16_000.0, 25.0),
+            ] {
+                for mode in [
+                    FilterMode::LowPass12,
+                    FilterMode::BandPass12,
+                    FilterMode::HighPass12,
+                ] {
+                    let (pitch, peak) = ringing_pitch(FilterType::ObX, mode, hertz, rate);
+                    let cents = 1200.0 * (pitch / hertz).log2();
+                    assert!(
+                        cents.abs() < most,
+                        "{mode:?} at {hertz} Hz, {rate}: rang at {pitch}, {cents} cents"
+                    );
+                    near(20.0 * peak.log10(), OBX_RINGING_DB, 1.5);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_obx_rings_by_itself_only_from_about_d9() {
+        for (res, rings) in [(0xC0, false), (0xD4, false), (0xE0, true), (0xFF, true)] {
+            for hertz in [200.0, 1_000.0, 5_000.0] {
+                let c = Coefficients::new(cutoff(hertz), res as f32 / 255.0, RATE);
+                let mut channel = Channel::default();
+                channel.process(0.1, FilterType::ObX, 0.0, &c);
+                let mut peak = 0.0_f32;
+                for frame in 0..RATE as usize * 2 {
+                    let output = channel.process(0.0, FilterType::ObX, 0.0, &c);
+                    if frame > RATE as usize {
+                        peak = peak.max(output.abs());
+                    }
+                }
+                assert_eq!(peak > 0.001, rings, "Res {res:02X} at {hertz}: {peak}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_obxs_resonance_is_tamed_by_a_loud_sound() {
+        // OB's squelch: the peak gives way as what goes in grows, where a clean filter's doesn't.
+        let at = |level| {
+            mode_gain_db(
+                FilterType::ObX,
+                FilterMode::LowPass12,
+                1000.0,
+                0.8,
+                1000.0,
+                0.0,
+                level,
+            )
+        };
+        let (quiet, loud) = (at(0.01), at(1.0));
+        assert!(loud < quiet - 3.0, "{quiet} quiet and {loud} loud");
+        // And the bass comes through as it went in, loud or quiet.
+        let bass = |level| {
+            mode_gain_db(
+                FilterType::ObX,
+                FilterMode::LowPass12,
+                4000.0,
+                0.8,
+                100.0,
+                0.0,
+                level,
+            )
+        };
+        near(bass(0.01), 0.0, 0.2);
+        near(bass(1.0), 0.0, 0.6);
+    }
+
+    #[test]
+    fn the_obxs_band_pass_peaks_at_0_db_and_then_as_its_low_pass_does_at_cut() {
+        let db = |mode, res| mode_gain_db(FilterType::ObX, mode, 1000.0, res, 1000.0, 0.0, 0.01);
+        near(db(FilterMode::BandPass12, 0.0), 0.0, 0.2);
+        for res in [0.5, 0.8] {
+            near(
+                db(FilterMode::BandPass12, res),
+                db(FilterMode::LowPass12, res),
+                0.3,
+            );
+        }
+        // Its notch takes out `Cut`, and its high-pass passes the top as it went in.
+        assert!(db(FilterMode::Notch12, 0.5) < -30.0);
+        let top = mode_gain_db(
+            FilterType::ObX,
+            FilterMode::HighPass12,
+            200.0,
+            0.5,
+            8000.0,
+            0.0,
+            0.01,
+        );
+        near(top, 0.0, 0.2);
+    }
+
+    #[test]
+    fn the_obx_stays_in_bounds_with_a_hot_input_and_after_a_nan() {
+        // A saw three and twenty times full level, at no drive and full drive and `Res`, swept up
+        // and down the range eight times a second, with a NaN in it once: what comes out stays
+        // finite and in bounds, and it sings on afterwards.
+        for &mode in FilterType::ObX.modes() {
+            for level in [1.0, 3.0, 20.0] {
+                for drive in [0.0, 1.0] {
+                    let mut channel = Channel::default();
+                    let mut most = 0.0_f32;
+                    for frame in 0..RATE as usize {
+                        let along = frame as f32 / RATE as f32;
+                        let sweep = (along * 8.0 * std::f32::consts::TAU).sin() * 0.5 + 0.5;
+                        let c = Coefficients::with_mode(sweep, 1.0, mode, RATE);
+                        let saw = ((along * 55.0).fract() * 2.0 - 1.0) * level;
+                        let input = if frame == RATE as usize / 2 {
+                            f32::NAN
+                        } else {
+                            saw
+                        };
+                        let output = channel.process(input, FilterType::ObX, drive, &c);
+                        assert!(output.is_finite(), "{mode:?} at {level}: {output}");
+                        most = most.max(output.abs());
+                    }
+                    assert!(
+                        most < 2.2,
+                        "{mode:?} at {level} and drive {drive} reached {most}"
+                    );
+                    if mode != FilterMode::Notch12 {
+                        let c = Coefficients::with_mode(cutoff(1000.0), 1.0, mode, RATE);
+                        let mut peak = 0.0_f32;
+                        for frame in 0..RATE as usize {
+                            let output = channel.process(0.0, FilterType::ObX, drive, &c);
+                            if frame > RATE as usize / 2 {
+                                peak = peak.max(output.abs());
+                            }
+                        }
+                        assert!(peak > 0.1, "{mode:?} at {level} sings on: {peak}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_obx_ramping_and_changing_mode_never_allocates() {
+        let mut channel = Channel::default();
+        let mut ramp = Ramp::at(Coefficients::with_mode(
+            0.0,
+            0.0,
+            FilterMode::LowPass12,
+            RATE,
+        ));
+        let modes = FilterType::ObX.modes();
+        let targets: Vec<Coefficients> = (0..16)
+            .map(|index| {
+                let mode = modes[index % modes.len()];
+                Coefficients::with_mode(index as f32 / 15.0, 1.0, mode, RATE)
+            })
+            .collect();
+        let (most, count) = crate::rt_guard::forbidden(|| {
+            let mut most = 0.0_f32;
+            for frame in 0..RATE as usize / 4 {
+                if frame % 32 == 0 {
+                    ramp.toward(&targets[frame / 32 % targets.len()], 32);
+                }
+                let input = if frame % 40 < 20 { 0.5 } else { -0.5 };
+                most = most.max(
+                    channel
+                        .process(input, FilterType::ObX, 0.5, ramp.now())
+                        .abs(),
+                );
+                ramp.advance();
+            }
+            most
+        });
+        assert_eq!(count, 0, "it allocated");
+        assert!(most.is_finite() && most < 2.2, "{most}");
     }
 
     #[test]
