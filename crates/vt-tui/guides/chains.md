@@ -15,8 +15,9 @@ hat against a 4-step kick drifts, and lines up again every 12 steps. Playing
 from the top lines everything up.
 
 In the phrase view, the notes beside your track are every track's own phrase,
-in order, each with its own `>`. Your track is among them, with its number
-marked in green. Row `00` is each track's loop start, and a
+in order, each named over its column on the row of headings, and each with its
+own `>` in a cell of its own. Your track is among them, with its number marked
+in green. Row `00` is each track's loop start, and a
 column ends where its track ends. A note is dim and an empty row's `---` faint,
 so where the other tracks play stands out.
 
@@ -73,8 +74,9 @@ in semitones, up to 48 either way.
 
 ## Sharing and copying
 
-A `*` means a phrase or chain plays in more than one place on this track, so
-an edit changes all of them.
+A link, `󰌷`, after a phrase's or chain's number means it plays in more than
+one place on this track, so an edit changes all of them. A `*` at the end of the
+status line means only that there are unsaved changes.
 
 | Keys | Does |
 |---|---|
