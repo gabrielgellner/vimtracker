@@ -61,6 +61,9 @@ pub const MASTER: char = '\u{f04c3}';
 pub const MUTE: char = '\u{f075f}';
 /// A soloed track: `nf-md-headphones`, U+F02CB.
 pub const SOLO: char = '\u{f02cb}';
+/// A fader a hand has taken over from the steps' automation, until `Space e` gives it back
+/// (decision 174): `nf-md-gesture_tap`, U+F0741.
+pub const TAKEN: char = '\u{f0741}';
 
 /// A machine's icon: a sampler, a drum voice or any other synth voice.
 pub fn machine(machine: Machine) -> char {

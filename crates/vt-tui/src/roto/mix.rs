@@ -6,7 +6,6 @@
 
 use vt_model::action::{Action, TrackControl};
 use vt_model::constants::{MAX_GROUPS, MAX_LEVEL, UNITY_LEVEL};
-use vt_model::settings::SettingId;
 use vt_model::song::{Song, Track, TrackKind};
 use vt_roto::Label;
 use vt_roto::live::KNOB_TOP;
@@ -15,8 +14,10 @@ use vt_roto::sysex::AllTracks;
 
 use super::{devices, edits};
 use crate::app::TrackLive;
+use crate::automating::as_heard;
 use crate::meter::{Meter, height_of};
 use crate::track_page::Control;
+use vt_engine::track_state::Faders;
 
 /// The sends, in order: what each send's knob moves.
 pub const SENDS: [TrackControl; 2] = [TrackControl::SendA, TrackControl::SendB];
@@ -63,9 +64,10 @@ pub fn level_at(position: u16) -> u8 {
     level.round().clamp(0.0, top) as u8
 }
 
-/// A track's level as MIX mode's Level knob has it.
+/// A track's level as MIX mode's Level knob has it: whole steps, as the level scale has no fine
+/// part (decision 175).
 fn track_level(track: &Track) -> f64 {
-    f64::from(track.level) + f64::from(track.fine(SettingId::VOL)) / 256.0
+    f64::from(track.level)
 }
 
 /// The edit a MIX knob turned to a position makes, as [`edits::turned`] does, with the Level
@@ -139,8 +141,9 @@ fn position(control: Control, track: &Track, song: &Song) -> Option<u16> {
 }
 
 /// Every track as MIX mode shows it, in its two lists, with the mutes and solos the keys and the
-/// Roto set while playing.
-pub fn strips(song: &Song, levels: &[TrackLive]) -> [Vec<Strip>; 2] {
+/// Roto set while playing, and each fader where the steps have it while they drive it, so its
+/// motor follows them (decision 174).
+pub fn strips(song: &Song, levels: &[TrackLive], faders: &[Faders]) -> [Vec<Strip>; 2] {
     let live = |at: usize| levels.get(at).copied().unwrap_or_default();
     let silenced = |at: usize| (live(at).mute, live(at).solo);
     let mut lists = [Vec::new(), Vec::new()];
@@ -151,6 +154,8 @@ pub fn strips(song: &Song, levels: &[TrackLive]) -> [Vec<Strip>; 2] {
         .zip(devices::live_tracks(song))
     {
         let can_silence = Control::Mute.exists_on(track);
+        let track = as_heard(track, &faders.get(at).copied().unwrap_or_default());
+        let track = track.as_ref();
         let strip = Strip {
             name: shown.name,
             colour: shown.colour,

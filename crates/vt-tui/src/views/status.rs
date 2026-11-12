@@ -187,7 +187,17 @@ pub fn value_shown(app: &App) -> Option<String> {
             }
             _ => return None,
         },
-        View::Track | View::Mixer => app.track_control().value_on(track)?,
+        View::Track | View::Mixer => {
+            // A fader the steps drive reads where they have it, and says so, as one a hand has
+            // taken over from them does (decision 174).
+            let control = app.track_control();
+            let heard = app.track_as_heard(app.cursor.track)?;
+            let (id, value) = control.value_on(&heard)?;
+            let note = app.fader_note(app.cursor.track, control).unwrap_or("");
+            return id
+                .exists_on(track)
+                .then(|| format!("{}{note}", shown(id, value)));
+        }
         _ => return None,
     };
     id.exists_on(track).then(|| shown(id, value))

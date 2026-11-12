@@ -13,7 +13,10 @@ use ratatui::widgets::{Paragraph, Row};
 use vt_model::constants::MAX_GROUPS;
 use vt_model::song::{Song, level_gain};
 
+use vt_engine::engine::Transport;
+
 use crate::app::App;
+use crate::automating::fader_of;
 use crate::glyphs;
 use crate::meter::{height_of, to_db};
 use crate::theme;
@@ -50,11 +53,30 @@ fn first_shown(cursor: usize, tracks: usize, strips: usize) -> usize {
         .min(tracks.saturating_sub(strips))
 }
 
-/// A fader for one row, counting rows up from the bottom, showing where a track's level is set.
-fn fader_cell(row: usize, rows: usize, level: u8) -> Span<'static> {
+/// How many eighths of a row a fader at a level fills, of so many rows.
+fn fader_eighths(level: u8, rows: usize) -> usize {
     let db = to_db(level_gain(f32::from(level)));
-    let eighths = (height_of(db) * (rows * 8) as f32).round() as usize;
+    (height_of(db) * (rows * 8) as f32).round() as usize
+}
+
+/// A fader for one row, counting rows up from the bottom, showing where a track's level is: where
+/// the steps have it while they drive it. What's heard with `VOL` and modulation on top, where it's
+/// half a row or more away, is a thin line across the column on its row in the playing colour, and
+/// the fader stays where it is (decision 174).
+fn fader_cell(row: usize, rows: usize, level: u8, heard: Option<u8>) -> Span<'static> {
+    let eighths = fader_eighths(level, rows);
     let filled = eighths.saturating_sub(row * 8).min(8);
+    if let Some(heard) = heard {
+        let at = fader_eighths(heard, rows);
+        if at.abs_diff(eighths) >= 4 && at.saturating_sub(1) / 8 == row {
+            let under = if filled == 8 {
+                theme::OVERLAY0
+            } else {
+                theme::MANTLE
+            };
+            return Span::styled("─", Style::new().fg(theme::MAUVE).bg(under));
+        }
+    }
     Span::styled(
         EIGHTHS[filled].to_string(),
         Style::new().fg(theme::OVERLAY0).bg(theme::MANTLE),
@@ -225,8 +247,15 @@ fn meter_row(
     cells
         .cell(Line::styled(mark, theme::dim()).right_aligned())
         .skip(1);
+    let playing = app.transport == Transport::Playing;
     strips.fill(&mut cells, |index| {
         let meter = app.track_meters.get(index).copied().unwrap_or_default();
+        let faders = app.faders(index);
+        let level = if faders.follows_steps(0) {
+            (faders.at[0] >> 8) as u8
+        } else {
+            app.song().tracks[index].level
+        };
         let channel = |side: usize| {
             let channel = meter.channels[side];
             level_cell(
@@ -242,7 +271,7 @@ fn meter_row(
             channel(0),
             channel(1),
             Span::raw(" "),
-            fader_cell(row, rows, app.song().tracks[index].level),
+            fader_cell(row, rows, level, playing.then_some(faders.moved[0])),
         ]
     });
     cells.done()
@@ -293,8 +322,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let labels = jump_label(app, control);
         cells.span(name_line(app, control.label(), &labels, LABEL_WIDTH), 2);
         strips.fill(&mut cells, |index| {
-            let track = &song.tracks[index];
+            // A fader the steps drive shows where they have it.
+            let heard = app.track_as_heard(index);
+            let track = heard.as_deref().unwrap_or(&song.tracks[index]);
             let muted = group::muted(app, index);
+            let automated = app.follows_steps(index, control);
+            let taken = app.taken_over(index, control);
             let here = index == app.cursor.track;
             let selected = here && control == current;
             // A mute or solo that's on is its glyph: in the active colour for the track's own, and
@@ -324,14 +357,21 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 Some((why, _)) if why.is_on() => why.style(),
                 _ if muted.is_on() => theme::dim(),
                 _ if group::is_empty(song, index) => theme::faint(),
+                _ if automated => theme::automated(),
                 _ => Style::new(),
             };
             // A jump's labels go on the cursor's track, which it stays on.
-            if here {
+            let mut line = if here {
                 Line::from(value_spans(app, control, text, style))
             } else {
                 Line::styled(text, style)
+            };
+            // A fader a hand has taken over from the steps is marked after its value.
+            if taken && fader_of(control).is_some() {
+                line.push_span(Span::raw(" "));
+                line.push_span(Span::styled(glyphs::TAKEN.to_string(), theme::taken()));
             }
+            line
         });
         rows.push(cells.done());
     }

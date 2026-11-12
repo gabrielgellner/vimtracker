@@ -1421,11 +1421,11 @@ fn the_track_page_shows_its_settings_in_columns() {
         // The trim is at the top of the output, at 0 dB in the middle of its bar.
         (
             22,
-            "│  Trim      80   ▕    │    ▏   Send A    0000 ▕         ▏   ",
+            "│  Trim      80   ▕    │    ▏   Send A    00   ▕         ▏   ",
         ),
         (
             24,
-            "│  Level     E0   ▕███████▉ ▏   Send B    0000 ▕         ▏   ",
+            "│  Level     E0   ▕███████▉ ▏   Send B    00   ▕         ▏   ",
         ),
         (
             26,
