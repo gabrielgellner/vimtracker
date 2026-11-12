@@ -811,3 +811,47 @@ fn a_drum_is_peak_body_decay_and_ratchet_then_depth_and_curve_stored_for_its_pol
     assert_eq!(next.tracks[0].mods[1].drum.decay_ms, 8000);
     assert_eq!(next.tracks[0].mods[1].adsr, song.tracks[0].mods[1].adsr);
 }
+
+#[test]
+fn an_lpg_is_attack_decay_and_colour_then_depth_stored_with_an_envelopes_buttons() {
+    use vt_model::action::edit;
+    use vt_model::modulation::ModKind;
+    use vt_roto::live::KNOB_TOP;
+    use vt_tui::roto::edits::{turned, value_text};
+    use vt_tui::track_page::ModField;
+    let lpg = layout_named("lpg");
+    assert!(lpg.stored);
+    assert_eq!(
+        first_knobs(lpg)[..5],
+        ["attack", "decay", "colour", "-", "depth"]
+    );
+    assert_eq!(button_key(lpg, 0, 0), Some("reset"), "under Attack");
+    assert_eq!(button_key(lpg, 0, 4), Some("polarity"), "under Depth");
+    assert_eq!(first_knobs_of(&lpg.layout.pages[1])[0], "dest");
+    let mut song = Song::new(1);
+    song.tracks[0].mods[1].kind = ModKind::Lpg;
+    let song = std::sync::Arc::new(song);
+    let track = &song.tracks[0];
+    let spec = &Page::Mod.devices(track)[2];
+    assert_eq!(layout_of(spec, track).kind, "lpg");
+    let device = live_device(Page::Mod, 2, spec, track, &song, true);
+    assert_eq!(device.name.as_str(), "M2 LPG");
+    assert_eq!(device.key, "vimtracker:lpg");
+    let names: Vec<&str> = device.controls[..5]
+        .iter()
+        .map(|knob| knob.as_ref().map_or("-", |knob| knob.name.as_str()))
+        .collect();
+    assert_eq!(names, ["Attack", "Decay", "Colour", "-", "Depth"]);
+    // Turned, each sets the gate's own, and leaves its ADSR as it was.
+    let colour = Control::Mod(1, ModField::Colour);
+    let next = edit(&song, &turned(colour, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].lpg.colour, 0xFF);
+    assert_eq!(value_text(colour, &next.tracks[0], &next), "FF");
+    let decay = Control::Mod(1, ModField::Decay);
+    let next = edit(&song, &turned(decay, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].lpg.decay_ms, 8000);
+    assert_eq!(next.tracks[0].mods[1].adsr, song.tracks[0].mods[1].adsr);
+    let reset = Control::Mod(1, ModField::Reset);
+    let next = edit(&song, &turned(reset, 0, &song, 0).unwrap()).unwrap();
+    assert!(!next.tracks[0].mods[1].lpg.reset);
+}

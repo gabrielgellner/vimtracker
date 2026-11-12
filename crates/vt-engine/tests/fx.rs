@@ -1329,3 +1329,30 @@ fn a_bypass_lock_on_an_empty_slot_does_nothing() {
         render(plain, flat(0.25), STEP)
     );
 }
+
+#[test]
+fn a_frequency_shifter_moves_a_tone_by_its_hertz_and_follows_the_note() {
+    use vt_model::insert::{FreqShift, shift_hertz};
+    // A 500 Hz tone, shifted up about 128 Hz, and then with the shift following the note.
+    let tone: Vec<[f32; 2]> = (0..RATE as usize * 4)
+        .map(|frame| [(frame as f32 / RATE as f32 * 500.0 * std::f32::consts::TAU).sin() * 0.5; 2])
+        .collect();
+    let by = shift_hertz(f32::from(0xC0_u8));
+    let played = |note: &str, track: u8| {
+        let mut song = song(&[&(note.to_owned() + " -- --- --- ---")]);
+        song.tracks[0].inserts[0] = Insert::FreqShift(FreqShift {
+            shift: 0xC0,
+            track,
+            ..FreqShift::DEFAULT
+        });
+        let out = render(song, pool(tone.clone()), STEP * 4);
+        assert!(out.iter().flatten().all(|s| s.is_finite()));
+        out[STEP..].to_vec()
+    };
+    let out = played("C-3", 0x00);
+    assert!(strength(&out, 500.0 + by) > strength(&out, 500.0) * 10.0);
+    assert!(strength(&out, 500.0 + by) > strength(&out, 500.0 - by) * 10.0);
+    // An octave up plays the tone at 1 kHz, and at full `Track` shifts it twice as far.
+    let out = played("C-4", 0xFF);
+    assert!(strength(&out, 1_000.0 + by * 2.0) > strength(&out, 1_000.0 + by) * 10.0);
+}

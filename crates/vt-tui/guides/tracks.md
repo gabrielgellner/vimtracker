@@ -136,7 +136,7 @@ on it lists the ones the type offers:
 | Filter | Modes |
 |---|---|
 | `LP` `HP` `BP` `Notch` | `12 dB`, or `24 dB` with a second filter after the first |
-| `Ladder` | `LP24` `LP18` `LP12` `LP6` `BP24` `BP12` `HP6` `HP12` `HP18` `HP24` |
+| `Ladder` | `LP24` `Fat24` `LP18` `LP12` `LP6` `BP24` `BP12` `HP6` `HP12` `HP18` `HP24` |
 | | `N24` `N12` `PH18` `HP12+LP6` `HP18+LP6` `N12+LP6` `PH18+LP6` |
 | `Dirty` | `LP24` `LP12` `BP24` `HP12` `HP24` `N24` |
 | `Diode` | `Full`, or a low cut `-3 oct` `-2 oct` `-1 oct` under `Cut` |
@@ -150,7 +150,10 @@ narrower one. The ladder's extra modes are the Oberheim Xpander's: `PH18` is
 its phaser, three stages' shift against the input, which dips at about 1.7
 times `Cut` and thins the bass, and the four with `+LP6` add a gentle low-pass
 to a high-pass, notch or phaser, so `HP12+LP6` and `HP18+LP6` are lopsided
-bands. Each band peaks as loud as `LP24` is at its loudest. The ladder's notches
+bands. Each band peaks as loud as `LP24` is at its loudest. `Fat24` is the
+ladder's `LP24` with much of the bass its resonance takes given back, as
+Surge's compensated ladders do: about 10 dB more near full `Res`, so the peak
+rides on a full bass, and runs into its saturation sooner. The ladder's notches
 take out the very pitch it sings at, so they hardly sing at all, where
 `Dirty`'s still does. `Diode` at `Full` has all its
 bass, as in `Acid`. The others cut the bass before the ladder, from that many
@@ -164,7 +167,7 @@ names: `00` `12 dB`, `01` `24 dB`, `02` `LP24`, `03` `LP12`, `04` `BP24`, `05`
 `HP12`, `06` `HP24`, `07` `N24`, `08` `Full`, `09` `-3 oct`, `0A` `-2 oct`,
 `0B` `-1 oct`, then the ladder's own: `0C` `LP18`, `0D` `LP6`, `0E` `BP12`, `0F`
 `HP6`, `10` `HP18`, `11` `N12`, `12` `PH18`, `13` `HP12+LP6`, `14` `HP18+LP6`,
-`15` `N12+LP6`, `16` `PH18+LP6`. Changing mode glides over about 10 ms, so a lock doesn't click.
+`15` `N12+LP6`, `16` `PH18+LP6`, `17` `Fat24`. Changing mode glides over about 10 ms, so a lock doesn't click.
 
 A curve in a box at the right of the Filter shows what the filter and utility filter
 let through, from 20 Hz on the left to 20 kHz on the right, in the track's
@@ -272,12 +275,21 @@ note ends. `Reverb` has these:
 
 | Setting | Does |
 |---|---|
-| `Time` | A note division, up to `1 bar`. A change glides |
+| `Time` | A note division, up to `1 bar` |
 | `Feedback` | How much comes round again. `FF` keeps going |
 | `Ping-pong` | On, it goes side to side; off, it stays put |
 | `Width` | From `00`, sides together, to `FF`, fully apart |
 | `Low cut`, `High cut` | Take more from each repeat |
 | `Drive` | Saturates louder repeats each time round |
+| `Retime` | How a new `Time` comes in: `Glide` or `Jump` |
+| `Wow` | A slow wobble in the repeats' pitch, as worn tape has |
+
+`Glide` eases to a new time, which bends the repeats' pitch on the way, as a tape delay does.
+`Jump` fades from the old time to the new instead, so the repeats keep their pitch: it's for a
+time that a step locks, changing the rhythm without a swoop. Its fade lasts half the new time,
+from 10 ms to half a second, and a change that comes while it fades waits for it to finish.
+`Wow` bends the two sides' pitch opposite ways, by up to about 9 cents, going round once every
+two seconds.
 
 `Chorus` thickens a sound with copies of it that drift in time. It starts half wet,
 which is the classic sound. Its first two types are after Mutable Instruments' Rings:
@@ -561,7 +573,8 @@ Like `Reso`, it follows the track's note and `Pitch`, glides to a new one,
 and to keep a sample loop at its own speed, play it at `C-3` and set `Tune`
 from steps. Below `80`, `Feedback` rings on the note's odd harmonics alone,
 hollower, like a clarinet, but at the same pitch. At `FF` with `Tone` up
-it rings for many seconds. As a `Comb`, `Feedback` `80` is only the sound;
+it rings for many seconds, and what goes round is rounded off as it nears full
+level rather than clipped flat, so a runaway softens instead of squaring. As a `Comb`, `Feedback` `80` is only the sound;
 as a `Flange`, it's a flanger standing still, its notches between the
 note's harmonics, and feedback sharpens it into a ring.
 
@@ -614,6 +627,46 @@ above its formants, its hats and the top of its snare, so it comes out
 quieter; `Gain` can make that up. A tone held on a formant at full `Res`
 can ring loud, so Rings' limiter, as `Reso` has, holds what comes out
 under full scale.
+
+`Freq Shift` is a frequency shifter, after Surge's: it moves every
+frequency in the sound up or down by the same number of Hz. That's not
+what `Pitch` does, which keeps a note's harmonics in step. Shifted by the
+same Hz, they stop being whole multiples of the note, so a saw or a voice
+turns to a bell or a robot, and a few Hz up or down makes it beat and
+swirl. It starts 16 Hz up, all wet.
+
+| Setting | Does |
+|---|---|
+| `Shift` | How far it moves: 1 kHz down at `00`, none at `80`, 1 kHz up at `FF` |
+| `Spread` | How far apart the sides are moved, the left up and the right down |
+| `Track` | How far the shift follows the note, from not at all at `00` |
+| `Time` | A delay in its loop, from none at `00` to a second at `FF` |
+| `Feedback` | How much goes round again, to be shifted again |
+
+`Shift` is on a curve, so the slow shifts have room near the middle: `90`
+is about 2 Hz, `A0` 16 Hz, `C0` 128 Hz and `E0` 430 Hz. The status line
+reads it in Hz, and its fine digits go between. Shifted down past nothing,
+a low frequency folds back up, mirrored, so a big shift down turns the bass
+inside out.
+`Mix` at `80` puts the shifted sound beside the sound itself, which beats
+at the shift: a few Hz is a slow phaser-like swirl, and a few tenths of a
+Hz a slow sweep.
+
+`Spread` takes the sides apart by up to 1 kHz, half each way, so a sound in
+the middle beats differently in each ear and comes out wide.
+
+`Track` at `00` shifts by the same Hz whatever note plays. At `FF` the
+shift follows the track's note from middle C, twice as far an octave up,
+so a shift set to the note's own pitch at middle C, about 262 Hz, keeps a
+shifted saw in the same inharmonic shape up and down the keyboard.
+
+With `Feedback`, what comes out goes round again to be shifted again, so a
+note climbs or falls in a spiral. `Time` spaces the trips round: at `00`
+they run together into a ringing smear, and at a few tens of ms each
+repeat is heard a step further up or down, the barber-pole effect. Each
+time round, what goes round loses a little over 5 kHz and is softly
+limited, and what's under 15 Hz is taken out, so a spiral stays bounded and
+dies away even at `FF`.
 
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
@@ -775,7 +828,7 @@ can't be muted or soloed.
 ## The Mod page
 
 Each track has six mod slots, `Mod 1` to `Mod 6`, and each slot is a type you choose:
-an `ADSR`, an `AHD` or a `Drum` envelope, or an `LFO`, in any mix. A new track has three ADSRs, then three
+an `ADSR`, an `AHD` or a `Drum` envelope, an `LPG`, or an `LFO`, in any mix. A new track has three ADSRs, then three
 LFOs. The slots work out in order, so a slot can move only those after it, and never
 round again.
 
@@ -802,7 +855,7 @@ box on its right. The device with the cursor has the brighter frame.
 | `x` | Put back the slot's first type, or on the polarity, the type's |
 | `b` | Switch this slot out, to hear without it, or back in |
 
-**Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum` and `LFO`, each with what it
+**Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum`, `LPG` and `LFO`, each with what it
 does. Choosing one is one undo step, and the slot keeps its `Dest`, its `Depth` and
 its switch. Each slot also keeps every type's own settings, so trying an LFO in
 `Mod 2` and going back finds its envelope as it was. What it moves glides from the
@@ -937,6 +990,32 @@ and ratchet down the right. It has no `Reset`, as it always strikes from full.
 drum envelope has a 10 ms peak onto a body of 40% and a 300 ms decay, with one
 strike: on `Pitch` with a `Depth` of about `+18`, a kick's drop. The peak's fall is
 always steep, whatever the curve.
+
+## Low-pass gates
+
+An `LPG` slot is a low-pass gate's vactrol, after Mutable Instruments' Plaits: each
+note pings it, it rises over its `Attack`, then falls, fast at first and slower as
+it nears silence, over its `Decay`. As it falls it also closes the track's filter,
+by its `Colour`, so one slot both fades a note and dulls it as it dies, for plucks,
+drums and the bongo sounds a West Coast synth makes. It's a one-shot, and on `Vol`,
+shaping the notes, it ends each note when its fall lands. It has no curve, as the
+vactrol's fall is the point of it, so its title has no mode: `LPG  Uni  → Vol`.
+
+| Setting | Value |
+|---|---|
+| Attack | Milliseconds, a straight rise |
+| Decay | Milliseconds, the time to fall 60 dB |
+| Colour | How far it closes the filter at silence, in hex |
+| Depth | How far full moves it, in hex. Negative flips it |
+| Reset | On, it starts from zero each note; off, it goes on |
+
+**Colour** is in `Cut`'s own steps: with the track at `Cut 80`, `Colour 40` takes the
+filter down to `40` as the note dies, and `00` leaves the filter alone. The filter
+follows the vactrol's brightness, which falls much faster than its level, as
+Plaits' does, so even a long decay darkens early. It adds to the track's `Cut` and
+whatever else moves it, whatever the slot's `Dest` and `Depth`, and works only
+while the slot goes somewhere: one on `---` does nothing. A new gate has a 1 ms
+attack, a 400 ms decay and a `Colour` of `C0`.
 
 ## LFOs
 

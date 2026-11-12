@@ -589,6 +589,30 @@ const DRUM: DeviceLayout = stored(
     ],
 );
 
+/// A low-pass gate slot's: its rise and fall and how far it closes the filter, a gap, then how
+/// far it goes, with its reset under `Attack` and its polarity under `Depth`, as the envelopes'.
+/// It has no curve.
+const LPG_ENVELOPE: DeviceLayout = stored(
+    "lpg",
+    &[
+        page(
+            "LPG",
+            [
+                s("attack"),
+                s("decay"),
+                s("colour"),
+                GAP,
+                s("depth"),
+                __,
+                __,
+                __,
+            ],
+            [s("reset"), GAP, GAP, GAP, s("polarity"), __, __, __],
+        ),
+        DEST_PAGE,
+    ],
+);
+
 /// An LFO slot's: its rate and shape, how far it goes, where in its cycle it starts and how its
 /// wave bends, with its polarity on the button under `Depth`, lit for `Bi`, and its mode under
 /// `Phase`, lit for `Trig`, as each note then starts it there; where it goes on the next page.
@@ -688,23 +712,27 @@ const PEDAL: DeviceLayout = live(
         ],
     )],
 );
-/// The repeats, their stereo and their tone, with ping-pong on the button under `Width`.
+/// The repeats, their stereo and their tone, with ping-pong on the button under `Width`. How its
+/// time moves, `Retime` and `Wow`, past eight knobs, is on a second page.
 const DELAY: DeviceLayout = stored(
     "fx/delay",
-    &[page(
-        "Delay",
-        [
-            s("time"),
-            s("feedback"),
-            s("width"),
-            s("drive"),
-            s("lowcut"),
-            s("highcut"),
-            s("mix"),
-            s("gain"),
-        ],
-        button(2, "pingpong"),
-    )],
+    &[
+        page(
+            "Delay",
+            [
+                s("time"),
+                s("feedback"),
+                s("width"),
+                s("drive"),
+                s("lowcut"),
+                s("highcut"),
+                s("mix"),
+                s("gain"),
+            ],
+            button(2, "pingpong"),
+        ),
+        knobs("Time", [s("retime"), s("wow"), __, __, __, __, __, __]),
+    ],
 );
 const REVERB: DeviceLayout = live(
     "fx/reverb",
@@ -1011,9 +1039,27 @@ const VOWEL: DeviceLayout = live(
         ],
     )],
 );
+/// The shift and how it's spread and follows the note, then the loop's delay and feedback, as the
+/// page has its columns.
+const FREQ_SHIFT: DeviceLayout = live(
+    "fx/freqshift",
+    &[knobs(
+        "Freq Shift",
+        [
+            s("shift"),
+            s("spread"),
+            s("track"),
+            GAP,
+            s("time"),
+            s("feedback"),
+            s("mix"),
+            s("gain"),
+        ],
+    )],
+);
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 58] = [
+pub const ALL: [&DeviceLayout; 60] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1045,6 +1091,7 @@ pub const ALL: [&DeviceLayout; 58] = [
     &ADSR,
     &AHD,
     &DRUM,
+    &LPG_ENVELOPE,
     &LFO,
     &ACCUMULATOR,
     &ARPEGGIO,
@@ -1072,6 +1119,7 @@ pub const ALL: [&DeviceLayout; 58] = [
     &RESO,
     &COMB,
     &VOWEL,
+    &FREQ_SHIFT,
 ];
 
 /// A machine's layout.
@@ -1137,6 +1185,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::Reso(_) => &RESO,
         Insert::Comb(_) => &COMB,
         Insert::Vowel(_) => &VOWEL,
+        Insert::FreqShift(_) => &FREQ_SHIFT,
     }
 }
 
@@ -1153,6 +1202,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
             ModKind::Adsr => &ADSR,
             ModKind::Ahd => &AHD,
             ModKind::Drum => &DRUM,
+            ModKind::Lpg => &LPG_ENVELOPE,
             ModKind::Lfo => &LFO,
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
@@ -1240,6 +1290,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Peak => "peak",
             ModField::Body => "body",
             ModField::Ratchet => "ratchet",
+            ModField::Colour => "colour",
             ModField::Shape => "shape",
             ModField::Rate => "rate",
             ModField::Phase => "phase",

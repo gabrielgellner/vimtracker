@@ -463,17 +463,18 @@ Song                               song.ron, refused unless format_version is FO
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
 *   **Mod slots** (`modulation.rs`, decision 165). Each track has `MOD_SLOTS` (6) slots on its
-    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum` or `Lfo`, with a destination
+    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum`, `Lpg` or `Lfo`, with a destination
     setting, a depth, a switch and a polarity (`Uni` or `Bi`, its type's until one is chosen),
     which every type shares, and each type's own settings, which a
     slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
     rate is a note division or bars, a count of steps, or hertz, and its mode `Free` or `Trig`. An
     ADSR is in milliseconds, with a reset and a curve (`Exp`, `Lin` or `Snap`, its mode), and an
     AHD the same with a hold of a time or `Note` in place of a sustain and release, and a drum
-    envelope a steep peak from full onto a body, struck one to eight times, then a decay. The first
+    envelope a steep peak from full onto a body, struck one to eight times, then a decay, and a low-pass gate Plaits' vactrol solved in closed
+    form, which also closes the track's `Cut` by its `Colour`. The first
     envelope-type slot on `Vol` shapes the notes (`note_shape_slot`): its `ModSlot::envelope`, an
     `envelope::Envelope` of any of these types, is what each voice keeps as its `shape`, and a
-    one-shot (an AHD with a timed hold, or a drum) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
+    one-shot (an AHD with a timed hold, a drum or a gate) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
     of a slot after it (`SettingId::for_mod`), never one before.
 *   **Accumulators and arpeggios.** A step's `ACU` and `ARP` say how far, and the track's
     `accumulation` and `arpeggio` say how they move and when they start again.
@@ -584,7 +585,7 @@ module per file, each keeping its port's licence notice:
 |---|---|---|
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `flanger`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
 | `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler`, `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 

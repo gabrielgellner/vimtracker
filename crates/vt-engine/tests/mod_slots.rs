@@ -317,3 +317,76 @@ fn an_ahd_on_cut_holds_for_its_time_and_plays_through_a_notes_end() {
     assert_eq!(found[1], 0xC0, "{found:?}");
     assert_eq!(found[4], 0x80, "{found:?}");
 }
+
+#[test]
+fn a_low_pass_gate_closes_the_filter_by_its_colour_as_it_falls_even_shaping_the_notes() {
+    use vt_model::envelope::Lpg;
+    // The notes' own shape, on `Vol`, with the track held at `CUT 80`: its fall takes the cutoff
+    // down by `Colour` at silence, `60`, so to `20`.
+    let gate = Lpg {
+        decay_ms: 400,
+        colour: 0x60,
+        ..Lpg::default()
+    };
+    let with = |lpg: Lpg, destination| {
+        let mut song = song(&[]);
+        song.tracks[0].mods[0] = ModSlot::lpg(destination, lpg);
+        let mut engine = Engine::new(RATE, version(&song));
+        engine.play_from(0);
+        cutoffs(&mut engine, 600 * MS, 10 * MS)
+    };
+    let falling = with(gate, Some(SettingId::VOL));
+    // It follows Plaits' brightness for the gate's level, which falls fast at first as the
+    // vactrol does, a little behind for the smoothing, and shuts at silence.
+    for (block, cut) in falling.iter().enumerate().skip(2) {
+        let level = gate.held(((block + 1) * 10 * MS) as u64, 0.0, RATE);
+        let expected = 128.0 - 96.0 * Lpg::closing(level);
+        assert!(
+            (f32::from(*cut) - expected).abs() <= 8.0,
+            "{block}: {cut} against {expected} in {falling:?}"
+        );
+    }
+    assert!(
+        falling[0] > falling[2] && falling[2] > falling[10],
+        "{falling:?}"
+    );
+    assert_eq!(
+        *falling.last().unwrap(),
+        0x20,
+        "closed by its colour at silence: {falling:?}"
+    );
+    for pair in falling.windows(2) {
+        assert!(pair[0] >= pair[1], "it turned back: {falling:?}");
+    }
+    // No colour moves only what it reaches, and one going nowhere moves nothing.
+    let plain = Lpg { colour: 0, ..gate };
+    assert!(
+        with(plain, Some(SettingId::VOL))
+            .iter()
+            .all(|cut| *cut == 0x80)
+    );
+    assert!(with(gate, None).iter().all(|cut| *cut == 0x80));
+}
+
+#[test]
+fn every_slot_on_its_own_setting_and_a_gate_on_the_filter_besides_fit() {
+    use vt_model::envelope::Lpg;
+    // Six envelopes on six settings, one of them a gate, which closes `Cut` as well: seven moved.
+    let mut song = song(&[]);
+    let destinations = [
+        SettingId::VOL,
+        SettingId::PAN,
+        SettingId::RES,
+        SettingId::SEND_A,
+        SettingId::SEND_B,
+        SettingId::PITCH,
+    ];
+    for (slot, destination) in destinations.into_iter().enumerate() {
+        song.tracks[0].mods[slot] = ModSlot::adsr(Some(destination), held()).with_depth(0x10);
+    }
+    song.tracks[0].mods[1] = ModSlot::lpg(Some(SettingId::PAN), Lpg::default()).with_depth(0x10);
+    let mut engine = Engine::new(RATE, version(&song));
+    engine.play_from(0);
+    let cuts = cutoffs(&mut engine, 600 * MS, 10 * MS);
+    assert!(*cuts.last().unwrap() < 0x80, "{cuts:?}");
+}
