@@ -539,8 +539,8 @@ background, so the list doesn't wait for it, and the last few are kept.
 | `:sample fade 10ms 0.2` | Fade in and out over these. `off` for none |
 | `:sample gain -3` | Its gain in dB, up to 24 either way |
 | `:sample tune 12 -20` | Its tune, in semitones and cents |
-| `:sample bars 2` | Two bars long, for `:slice beat` and `Tempo`; `off` for none |
-| `:sample steps 8` | Eight steps long, as `bars` says in bars |
+| `:sample bars 2` | Two bars long, for `Tempo` and `:slice beat` |
+| `:sample steps 8` | Eight steps long; `off` for no length |
 
 Wherever a start or an end cuts into the sound, it fades over a millisecond or so, so
 it never clicks. A loop with no crossfade of its own gets one as short. The track's own
@@ -576,7 +576,7 @@ length in steps stays.
 | Command | Does |
 |---|---|
 | `:sample steps 16` | It lasts 16 steps, a bar |
-| `:bpm sample` | Set the tempo so the track's sample plays at its own speed |
+| `:bpm sample` | The tempo the track's sample plays at as recorded |
 
 `:bpm sample` grabs the tempo from the track's sample, as the Deluge's grab tempo
 does: the tempo at which it lasts its steps at the speed it was recorded. A
@@ -588,7 +588,7 @@ sample that doesn't say how long it is is taken to be the power of two of steps,
 
 | Warp | Does |
 |---|---|
-| `Re-pitch` | Faster or slower, its pitch moving with its speed, as a record's does |
+| `Re-pitch` | Faster or slower, its pitch moving with it, as a record |
 | `Beats` | Each slice starts at its own time and plays at its own speed |
 
 With `Re-pitch`, the note and the sample's tune don't change its speed, which
