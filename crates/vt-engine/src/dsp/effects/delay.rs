@@ -121,14 +121,23 @@ impl Delay {
         self.frames
     }
 
+    /// Where in the buffer is this many frames back, less than its length. Wrapping round by
+    /// taking the length away once is cheaper than `%`, and the buffer isn't a power of two
+    /// long, as that would nearly double the memory of the longest time and the clearing of it.
+    #[inline]
+    fn back(&self, frames: usize) -> usize {
+        let length = self.buffer.len();
+        let at = self.write + length - frames;
+        if at >= length { at - length } else { at }
+    }
+
     /// What's in the line this far back, reading between samples through four of them, so a whole
     /// number of frames gives exactly what went in.
     #[inline]
     fn read(&self, frames: f64) -> [f32; 2] {
-        let length = self.buffer.len();
         let whole = frames as usize;
         let between = (frames - whole as f64) as f32;
-        let at = |back: usize| self.buffer[(self.write + length - back) % length];
+        let at = |back: usize| self.buffer[self.back(back)];
         let current = at(whole);
         if between == 0.0 {
             return current;
@@ -171,7 +180,11 @@ impl Delay {
         } else {
             [input[0] + left, input[1] + right]
         };
-        self.write = (self.write + 1) % self.buffer.len();
+        self.write = if self.write + 1 == self.buffer.len() {
+            0
+        } else {
+            self.write + 1
+        };
         self.used = true;
         let middle = (out[0] + out[1]) * 0.5;
         let side = (out[0] - out[1]) * 0.5 * width;

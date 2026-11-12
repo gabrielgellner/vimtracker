@@ -1,6 +1,20 @@
 //! The sine table of Mutable Instruments' Plaits, `lut_sine` from its generated `resources.cc`,
 //! under the licence in `voices/six_op.rs`: a turn in 512 steps, with a quarter more so a cosine
-//! can read it too.
+//! can read it too. Read between its steps, it's within about 2e-5 of a sine.
+
+/// A sine at a phase moved by a number of turns, up to 32 either way, as Plaits' `SinePM` reads
+/// it.
+#[inline]
+pub(crate) fn sine_pm(phase: u32, pm: f32) -> f32 {
+    const SCALE: f32 = 4_294_967_296.0 / 64.0;
+    let offset = ((pm + 32.0) * SCALE) as u32;
+    let phase = phase.wrapping_add(offset.wrapping_mul(64));
+    let index = (phase >> 23) as usize;
+    let fraction = (phase << 9) as f32 / 4_294_967_296.0;
+    let a = SINE[index];
+    let b = SINE[index + 1];
+    a + (b - a) * fraction
+}
 
 #[allow(clippy::excessive_precision, clippy::approx_constant)]
 pub const SINE: [f32; 641] = [

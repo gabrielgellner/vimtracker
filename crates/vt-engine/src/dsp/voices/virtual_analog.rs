@@ -19,6 +19,9 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use crate::dsp::blocks::drift::Drift;
+use vt_model::settings::MAX_MACHINE_SETTINGS;
+
 /// How many frames are worked out at once, with settings moving in a line across them.
 pub(super) const BLOCK: usize = 16;
 /// The highest frequency an oscillator runs at, as a fraction of the sample rate.
@@ -26,8 +29,10 @@ const MAX_FREQUENCY: f32 = 0.25;
 const NOTCH_DEPTH: f32 = 0.2;
 /// The intervals `Harm` moves between, in semitones.
 const INTERVALS: [f32; 5] = [0.0, 7.01, 12.01, 19.01, 24.01];
+/// `Drift`'s place among the settings, after the three it shares with Plaits.
+pub(super) const DRIFT: usize = 3;
 
-/// The three settings, each on `0..=1`.
+/// The settings, each on `0..=1`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Settings {
     /// Detunes the saw from the square, with the middle in tune.
@@ -39,7 +44,7 @@ pub struct Settings {
     /// How hard a note is struck, for the voices that use it. Plaits' default is 0.8.
     pub accent: f32,
     /// The settings after the first four, for a voice with more.
-    pub further: [f32; 4],
+    pub further: [f32; MAX_MACHINE_SETTINGS - 4],
 }
 
 impl Default for Settings {
@@ -49,7 +54,7 @@ impl Default for Settings {
             timbre: 0.0,
             morph: 0.5,
             accent: 0.8,
-            further: [0.0; 4],
+            further: [0.0; MAX_MACHINE_SETTINGS - 4],
         }
     }
 }
@@ -68,14 +73,14 @@ impl Settings {
     }
 
     /// The settings in their places, as the track holds them.
-    pub fn from_places(places: [f32; 8]) -> Self {
-        let [harmonics, timbre, morph, accent, a, b, c, d] = places;
+    pub fn from_places(places: [f32; MAX_MACHINE_SETTINGS]) -> Self {
+        let [harmonics, timbre, morph, accent, further @ ..] = places;
         Self {
             harmonics,
             timbre,
             morph,
             accent,
-            further: [a, b, c, d],
+            further,
         }
     }
 }
@@ -198,6 +203,11 @@ impl SyncedSquare {
         if phase < pw { 0.0 } else { 1.0 }
     }
 
+    /// Start somewhere other than the top of its cycle, before it first plays.
+    pub(super) fn start_at(&mut self, phase: f32) {
+        self.master_phase = phase;
+    }
+
     pub(super) fn render(&mut self, master: f32, slave: f32, pw: f32, out: &mut [f32; BLOCK]) {
         let master = master.min(MAX_FREQUENCY);
         let slave = slave.min(MAX_FREQUENCY);
@@ -208,6 +218,13 @@ impl SyncedSquare {
         };
         if self.fresh {
             (self.master_frequency, self.slave_frequency, self.pw) = (master, slave, pw);
+            // Started elsewhere, the square is where the master's phase puts it, as though it had
+            // always run.
+            if self.master_phase > 0.0 && master > 0.0 {
+                self.slave_phase = (self.master_phase * slave / master).fract();
+                self.high = self.slave_phase >= pw;
+                self.next_sample = Self::naive(self.slave_phase, pw);
+            }
             self.fresh = false;
         }
         let mut master_fm = Moving::towards(self.master_frequency, master);
@@ -319,6 +336,11 @@ impl VariableSaw {
         notch_saw * notch + slope * triangle
     }
 
+    /// Start somewhere other than the top of its cycle, before it first plays.
+    fn start_at(&mut self, phase: f32) {
+        self.phase = phase;
+    }
+
     fn render(&mut self, frequency: f32, pw: f32, waveshape: f32, out: &mut [f32; BLOCK]) {
         let frequency = frequency.min(MAX_FREQUENCY);
         let pw = if frequency >= 0.25 {
@@ -328,6 +350,12 @@ impl VariableSaw {
         };
         if self.fresh {
             (self.frequency, self.pw, self.waveshape) = (frequency, pw, waveshape);
+            if self.phase > 0.0 {
+                let (up, down) = (1.0 / pw, 1.0 / (1.0 - pw));
+                self.high = self.phase >= pw;
+                self.next_sample =
+                    Self::naive(self.phase, pw, up, down, waveshape, 1.0 - waveshape);
+            }
             self.fresh = false;
         }
         let mut fm = Moving::towards(self.frequency, frequency);
@@ -379,6 +407,7 @@ impl VariableSaw {
 pub struct VirtualAnalog {
     square: SyncedSquare,
     saw: VariableSaw,
+    drift: Drift,
     square_gain: f32,
     saw_gain: f32,
     output: [f32; BLOCK],
@@ -391,12 +420,29 @@ impl VirtualAnalog {
         Self {
             square: SyncedSquare::new(),
             saw: VariableSaw::new(),
+            drift: Drift::new(),
             square_gain: 0.0,
             saw_gain: 0.0,
             output: [0.0; BLOCK],
             at: BLOCK,
             fresh: true,
         }
+    }
+
+    /// Roll a note's drift from its seed, so each note differs but a render repeats. With `Drift`
+    /// up as the note starts, its oscillators start anywhere in their cycles, as free-running ones
+    /// would; at `00` they start at the top, for the same attack every time (decision 190).
+    pub fn seed(&mut self, seed: u32, settings: Settings) {
+        self.drift.seed(seed);
+        if settings.at(DRIFT) > 0.0 {
+            self.square.start_at(self.drift.phase());
+            self.saw.start_at(self.drift.phase());
+        }
+    }
+
+    /// What its note's envelope times are multiplied by.
+    pub fn time(&self, settings: Settings) -> f32 {
+        self.drift.time(settings.at(DRIFT))
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
@@ -418,7 +464,10 @@ impl VirtualAnalog {
             morph,
             ..
         } = settings;
-        let saw_frequency = frequency * semitones(detuning(harmonics));
+        let drift = settings.at(DRIFT);
+        self.drift.step();
+        let saw_frequency = frequency * semitones(detuning(harmonics)) * self.drift.ratio(1, drift);
+        let frequency = frequency * self.drift.ratio(0, drift);
 
         let square_pw = (1.3 * timbre - 0.15).clamp(0.005, 0.5);
         let sync_ratio = if timbre < 0.5 {
@@ -444,7 +493,7 @@ impl VirtualAnalog {
         self.saw
             .render(saw_frequency, saw_pw, saw_shape, &mut self.output);
 
-        let norm = 1.0 / square_gain.max(saw_gain);
+        let norm = self.drift.level(drift) / square_gain.max(saw_gain);
         let (square_target, saw_target) = (square_gain * 0.3 * norm, saw_gain * 0.5 * norm);
         if self.fresh {
             (self.square_gain, self.saw_gain) = (square_target, saw_target);
@@ -598,5 +647,48 @@ mod tests {
         };
         assert_ne!(base, run(110.0, square, 4_800));
         assert!(roughness(&run(110.0, triangle, 4_800)) < roughness(&base));
+    }
+
+    fn seeded(seed: u32, settings: Settings, frames: usize) -> Vec<f32> {
+        let mut voice = VirtualAnalog::new();
+        voice.seed(seed, settings);
+        (0..frames)
+            .map(|_| voice.next(110.0 / RATE, settings))
+            .collect()
+    }
+
+    fn drifting(drift: f32, timbre: f32) -> Settings {
+        Settings {
+            timbre,
+            // `Drift` is in place 3, `accent`'s.
+            accent: drift,
+            ..Settings::default()
+        }
+    }
+
+    #[test]
+    fn without_drift_a_seeded_note_is_as_it_was() {
+        for timbre in [0.0, 0.3, 0.8] {
+            let settings = drifting(0.0, timbre);
+            assert_eq!(seeded(5, settings, 4_800), run(110.0, settings, 4_800));
+        }
+    }
+
+    #[test]
+    fn with_drift_each_note_starts_elsewhere_and_stays_in_tune_and_in_range() {
+        for timbre in [0.0, 0.3, 0.8] {
+            let settings = drifting(1.0, timbre);
+            let (a, b) = (seeded(1, settings, 48_000), seeded(2, settings, 48_000));
+            assert_ne!(a[..16], b[..16], "{timbre}");
+            for sample in a.iter().chain(&b) {
+                assert!(
+                    sample.is_finite() && sample.abs() < 2.0,
+                    "{sample} at {timbre}"
+                );
+            }
+        }
+        // Ten cents is about 0.6 Hz at 110 Hz, and the wander adds a little.
+        let pitch = measured_pitch(&seeded(3, drifting(1.0, 0.0), 48_000));
+        assert!((pitch - 110.0).abs() < 1.5, "{pitch}");
     }
 }
