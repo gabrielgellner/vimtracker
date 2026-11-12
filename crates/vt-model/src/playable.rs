@@ -149,11 +149,7 @@ impl Playable {
             .length_steps()
             .filter(|_| end > start)
             .map(|steps| (end - start) as f64 / f64::from(steps.max(1)));
-        let own_millibpm = entry
-            .edit
-            .hints
-            .millibpm
-            .filter(|_| step_frames.is_none());
+        let own_millibpm = entry.edit.hints.millibpm.filter(|_| step_frames.is_none());
         let beats = play.warp == Warp::Beats;
         let span = |from: u64, to: u64, over: &SliceParams, sliced: bool| {
             let play: PlayParams = over.over(play);

@@ -663,7 +663,7 @@ bank:
 - **An Octatrack file** beside it, as `break.ot` beside `break.wav`, gives its trim,
   loop, gain and slices in place of the WAV's. Slices with ends of their own play to
   the next one's start.
-- **An `.ot`'s tempo** is kept for `Tempo` and `:bpm sample`: see **Loop to tempo**.
+- **The tempo** an `.ot` gives is kept for `Tempo` and `:bpm sample`: see **Loop to tempo**.
 - **The root note** of a WAV's sampler or instrument chunk is kept for later.
 
 They come in as an undo step of their own, and the status line names them, so `u`
