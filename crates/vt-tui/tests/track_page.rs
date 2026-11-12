@@ -428,20 +428,30 @@ fn a_moving_bar_follows_what_plays_and_marks_what_is_set() {
     assert_eq!(style_at(&centred, 6).fg, Some(theme::MAUVE));
     // A small move that stays in the set value's cell keeps the bright mark.
     let near = bar_spans(0x80, 0x82, true);
-    assert_eq!((near.len(), text(&near).as_str()), (1, "    │    "));
-    assert_eq!(near[0].style.fg, Some(theme::MAUVE));
+    assert_eq!(text(&near), "    │    ");
+    assert_eq!(style_at(&near, 4).fg, Some(theme::MAUVE));
     // Less than a cell from the setting, the bar is what's playing alone, either side of a cell's
-    // edge: a dim mark half a cell from the bright one couldn't be told from it.
+    // edge: a dim mark half a cell from the bright one couldn't be told from it. Only the faint
+    // centre tick is drawn beside the bright mark.
     for live in [0x86, 0x8C] {
         let near = bar_spans(0x80, live, true);
-        assert_eq!(near.len(), 1, "{live:02X}: {}", text(&near));
+        let dim_marks = near
+            .iter()
+            .filter(|span| span.content == "│" && span.style == theme::faint())
+            .count();
+        assert_eq!(dim_marks, 0, "{live:02X}: {}", text(&near));
     }
+    // Off centre, a faint tick marks the middle.
+    let off = bar_spans(0xC0, 0xC0, true);
+    assert_eq!(text(&off), "    ┊ │  ");
+    assert_eq!(style_at(&off, 4), theme::faint());
 }
 
 /// A value moving about its setting, as an LFO of little depth moves it, draws as the setting
 /// does wherever the setting is, with no mark coming and going as a thin line at the edge (#421).
 #[test]
 fn a_bar_moving_about_its_setting_shows_no_mark() {
+    use vt_tui::theme;
     use vt_tui::views::widgets::bar::{ValueBar, centre_bar, level_bar};
     for centred in [false, true] {
         for set in 0..=u8::MAX {
@@ -449,13 +459,26 @@ fn a_bar_moving_about_its_setting_shows_no_mark() {
                 let spans = ValueBar::new(set, 9).playing(live).centred(centred).spans();
                 let text: String = spans.iter().map(|span| span.content.as_ref()).collect();
                 let plain = if centred {
+                    // The faint tick at the middle, where the mark isn't.
                     centre_bar(live, 9)
+                        .chars()
+                        .enumerate()
+                        .map(|(cell, c)| if cell == 4 && c == ' ' { '┊' } else { c })
+                        .collect()
                 } else {
                     level_bar(live, 9)
                 };
                 let at = format!("set {set:02X}, live {live:02X}, centred {centred}");
                 assert_eq!(text, plain, "{at}");
-                assert_eq!(spans.len(), 1, "{at}");
+                if centred {
+                    let dim_marks = spans
+                        .iter()
+                        .filter(|span| span.content == "│" && span.style.fg != Some(theme::MAUVE))
+                        .count();
+                    assert_eq!(dim_marks, 0, "{at}");
+                } else {
+                    assert_eq!(spans.len(), 1, "{at}");
+                }
             }
         }
     }
