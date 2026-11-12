@@ -19,8 +19,7 @@ use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
 use vt_model::settings::{PlayMode, SettingId};
 use vt_model::song::{
-    ChainPosition, Launch, Machine, Section, SectionStart, Song, SynthVoice, Track, level_gain,
-    trim_gain,
+    ChainPosition, Launch, Machine, Section, SectionStart, Song, SynthVoice, Track, trim_gain,
 };
 use vt_model::speed::Speed;
 use vt_model::step::{
@@ -35,7 +34,7 @@ use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::{Bank, Published, Span};
 use crate::timing::{Part as TimedPart, PartTimes, SlotTimes, Stopwatch};
 use crate::track_state::{
-    Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Epoch, Keys, LiveValues, Part,
+    Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Epoch, Faders, Keys, LiveValues, Part,
     PendingStep, Retrigger, RowKey, SongTime, TrackState, Worked, base_of,
 };
 use crate::voice::{Cut, NoteOn, Voice};
@@ -294,10 +293,10 @@ impl Engine {
         engine
     }
 
-    /// Move each track's level and trim toward the current version's.
+    /// Move each track's trim toward the current version's. Its level is `LEV`'s base, which
+    /// follows the version as every setting does.
     fn follow_levels(&mut self) {
         for (state, track) in self.tracks.iter_mut().zip(&self.current.song.tracks) {
-            state.level.target = level_gain(f32::from(track.level));
             state.input_trim.target = trim_gain(track.trim);
         }
     }
@@ -907,6 +906,7 @@ impl Engine {
             track.solo = false;
             track.mute_waiting = false;
             track.solo_waiting = false;
+            track.give_back_all();
             track.give_back_memory(&mut self.memory);
         }
         self.follow_levels();
@@ -1238,7 +1238,7 @@ impl Engine {
     pub fn live(&self, index: usize) -> LiveValues {
         match (self.tracks.get(index), self.current.song.tracks.get(index)) {
             (Some(state), Some(track)) => {
-                let mut live = state.live(track.level);
+                let mut live = state.live();
                 let run = !track.is_sound()
                     || state.sounding()
                     || state.ringing(self.rate)
@@ -1354,6 +1354,38 @@ impl Engine {
     /// Set the scale an `ACU` moves notes through, from the next note it moves.
     pub fn set_scale(&mut self, scale: Scale) {
         self.scale = scale;
+    }
+
+    /// A track's faders as they're heard, for the mixer, the Output device and the Roto.
+    pub fn faders(&self, index: usize) -> Faders {
+        self.tracks
+            .get(index)
+            .map(TrackState::faders)
+            .unwrap_or_default()
+    }
+
+    /// A hand moved one of a track's faders that the steps drive: it's the hand's from now, until
+    /// it's given back (decision 174).
+    pub fn take_over(&mut self, track: usize, fader: usize) {
+        if let Some(state) = self.tracks.get_mut(track) {
+            state.take_over(fader);
+        }
+    }
+
+    /// Give a track's faders back to the steps, or every track's, as `Space e` and `Space E` do.
+    pub fn give_back(&mut self, track: Option<usize>) {
+        match track {
+            Some(track) => {
+                if let Some(state) = self.tracks.get_mut(track) {
+                    state.give_back_all();
+                }
+            }
+            None => {
+                for state in &mut self.tracks {
+                    state.give_back_all();
+                }
+            }
+        }
     }
 
     /// Set whether a track is muted, taking back a switch of its mute waiting for the grid. A

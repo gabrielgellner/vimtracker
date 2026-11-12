@@ -122,7 +122,7 @@ fn a_track_saves_its_six_mod_slots_with_only_what_differs_from_each_types_defaul
 }
 
 #[test]
-fn a_format_8_song_is_refused_by_name() {
+fn a_format_9_song_is_refused_by_name() {
     let dir = folder();
     let song = Song::new(1);
     save_song(&dir, &song).unwrap();
@@ -130,12 +130,12 @@ fn a_format_8_song_is_refused_by_name() {
     let text = fs::read_to_string(&path).unwrap();
     fs::write(
         &path,
-        text.replace("format_version: 9", "format_version: 8"),
+        text.replace("format_version: 10", "format_version: 9"),
     )
     .unwrap();
     let message = load_song(&dir).unwrap_err().to_string();
     assert!(
-        message.contains("format 8") && message.contains("format 9"),
+        message.contains("format 9") && message.contains("format 10"),
         "{message}"
     );
 }

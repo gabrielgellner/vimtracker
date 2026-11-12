@@ -543,7 +543,8 @@ fn a_velocity_above_the_top_writes_the_top() {
     check(&[FULL], "lrff", &["C-3 7F vol:10 pan:20 cut:30"]);
     // Other FX values have their own tops: the level scale's, or their whole range.
     check(&[FULL], "llllllrff", &["C-3 70 vol:F8 pan:20 cut:30"]);
-    check(&[FULL], "lllllllllrff", &["C-3 70 vol:10 pan:FF cut:30"]);
+    // `VOL` has no fine digits to pass, so `PAN` is a field nearer.
+    check(&[FULL], "llllllllrff", &["C-3 70 vol:10 pan:FF cut:30"]);
 }
 
 #[test]
@@ -1295,8 +1296,8 @@ fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(
         app.picker.as_ref().unwrap().items().len(),
-        41,
-        "on a sample track with nothing in its slots: empty, its own 14, SMP, SLI, STA, SLEN and PLY, the mod slots' 13 and 8 events"
+        42,
+        "on a sample track with nothing in its slots: empty, its own 15, SMP, SLI, STA, SLEN and PLY, the mod slots' 13 and 8 events"
     );
     keys(&mut app, "cut<Enter>");
     assert_eq!(app.mode, Mode::Replace);

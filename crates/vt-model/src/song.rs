@@ -543,9 +543,13 @@ impl Track {
         self.fine.get(&id).copied().unwrap_or(0)
     }
 
-    /// Set a setting's fine part. `00` isn't kept, and there's none at the setting's top.
+    /// Set a setting's fine part. `00` isn't kept, and there's none at the setting's top, nor on
+    /// one with no fine part, as the level scale's sends have none (decision 175).
     pub fn set_fine(&mut self, id: SettingId, fine: u8) {
-        if fine == 0 || self.coarse(id) == Some(id.entry().kind.top()) {
+        if fine == 0
+            || !id.entry().kind.has_fine()
+            || self.coarse(id) == Some(id.entry().kind.top())
+        {
             self.fine.remove(&id);
         } else {
             self.fine.insert(id, fine);

@@ -327,6 +327,21 @@ mod tests {
     }
 
     #[test]
+    fn a_value_on_the_level_scale_has_no_fine_part_and_still_glides() {
+        for text in ["sna:2080", "vol:E001", "level:8040h"] {
+            assert!(text.parse::<FxSlot>().is_err(), "{text} should be refused");
+        }
+        let slot: FxSlot = "level:80g".parse().unwrap();
+        assert_eq!(slot.command, Some(FxCommand::Set(SettingId::LEVEL)));
+        assert_eq!((slot.value, slot.mark), (0x8000, Mark::Glide));
+        assert_eq!(slot.to_string(), "level:80g");
+        assert!(
+            "pan:8040".parse::<FxSlot>().is_ok(),
+            "a position keeps its fine part"
+        );
+    }
+
+    #[test]
     fn only_values_can_have_a_mark() {
         for text in ["del:10h", "ret:14g", "---h", "CUT40x", "cut:40."] {
             assert!(text.parse::<FxSlot>().is_err(), "{text} should be refused");

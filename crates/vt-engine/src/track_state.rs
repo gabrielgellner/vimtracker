@@ -12,8 +12,8 @@ use vt_model::modulation::{
 };
 use vt_model::playable::Playable;
 use vt_model::settings::{
-    Effect, MAX_MACHINE_SETTINGS, Owner, PlayMode, SAMPLER_SETTINGS, SettingId, gate_delta,
-    gate_share, glide_ms, moved_velocity,
+    Effect, FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, Owner, PlayMode, SAMPLER_SETTINGS,
+    SettingId, gate_delta, gate_share, glide_ms, moved_velocity,
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark, slice_letter};
@@ -247,6 +247,58 @@ pub struct LiveValues {
     /// the song is stopped, or for one with nowhere to go, no depth, or switched out once it has
     /// faded.
     pub mods: [Option<LfoNow>; MOD_SLOTS],
+}
+
+/// A track's faders as they're heard, `LEV`, `PAN`, `SNA` and `SNB` in [`FADERS`]' order, for the
+/// mixer, the Output device and the Roto to show (decision 174).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Faders {
+    /// Where each is: a step's value while the steps drive it, or the track page's, with a coarse
+    /// byte and a fine one.
+    pub at: [u16; FADER_COUNT],
+    /// What's heard with `VOL` and modulation on top, on the `00` to `FF` scale, for the thin
+    /// mark beside a fader.
+    pub moved: [u8; FADER_COUNT],
+    /// Whether a step has set each since playing last started from the top, so the steps drive it.
+    pub automated: [bool; FADER_COUNT],
+    /// Whether a hand has taken each over from the steps, until it's given back.
+    pub taken: [bool; FADER_COUNT],
+}
+
+impl Faders {
+    /// Whether a fader follows the steps now: they drive it, and no hand has taken it over.
+    pub fn follows_steps(&self, fader: usize) -> bool {
+        self.automated[fader] && !self.taken[fader]
+    }
+}
+
+/// One of a track's faders as the steps and a hand move it.
+#[derive(Debug, Clone, Copy)]
+struct FaderRun {
+    /// The track page's value, which a hand sets.
+    song: u16,
+    /// Where it's heard, on the `00` to `FF` scale with any fine part as the fraction.
+    at: f32,
+    /// Whether a step has set it since playing last started from the top.
+    automated: bool,
+    /// The last value a step held it at since then, if one has: what's under a lock when it's
+    /// given back, whatever the track page's value did meanwhile, as an edit replaces a hold.
+    hold: Option<u16>,
+    /// Whether a hand has taken it over: the steps' values are kept underneath, unheard.
+    taken: bool,
+}
+
+impl FaderRun {
+    fn at(id: SettingId) -> Self {
+        let value = u16::from(id.entry().default) << 8;
+        Self {
+            song: value,
+            at: scaled(value),
+            automated: false,
+            hold: None,
+            taken: false,
+        }
+    }
 }
 
 /// Where an LFO is in its wave and what the wave gives there, before its depth, for the Mod page's
@@ -692,8 +744,10 @@ pub struct TrackState {
     send_a: f32,
     send_b: f32,
     gain: Smoothed,
-    /// The track's level from the song, which playback going back to the top leaves alone.
+    /// The gain of held `LEV`, the fader, whose base is the track's level.
     pub level: Smoothed,
+    /// Its faders, as the steps automate them and a hand takes them over.
+    faders: [FaderRun; FADER_COUNT],
     /// The track's trim from the song, the gain at its input, which playback leaves alone too.
     pub input_trim: Smoothed,
     pan: Smoothed,
@@ -801,6 +855,7 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
         (Owner::Mod(n), at) => return modulator(n, at),
         (Owner::Track, _) => match id {
             SettingId::VOL => UNITY_LEVEL,
+            SettingId::LEVEL => track.level,
             SettingId::PAN => track.pan,
             SettingId::CUT => track.cutoff,
             SettingId::RES => track.resonance,
@@ -908,6 +963,7 @@ impl TrackState {
             send_b: 0.0,
             gain: Smoothed::at(1.0),
             level: Smoothed::at(1.0),
+            faders: FADERS.map(FaderRun::at),
             input_trim: Smoothed::at(1.0),
             after_trim: [0.0; 2],
             pan: Smoothed::at(0.5),
@@ -1015,6 +1071,11 @@ impl TrackState {
         self.reset_all_but_settings(seed, index, clock);
         self.load(track);
         self.settle_shares(track);
+        for (run, id) in self.faders.iter_mut().zip(FADERS) {
+            run.song = base_of(id, track);
+            run.automated = false;
+            run.hold = None;
+        }
         for id in SettingId::all() {
             let base = base_of(id, track);
             self.values[id.index()] = ValueLayers::at(base);
@@ -1259,29 +1320,51 @@ impl TrackState {
         self.panned.1
     }
 
-    /// What this track is playing with right now. `VOL` and its modulation are shown on the track's
-    /// `level`, as they both set how loud it is. The first envelope on `Vol` shapes notes, and isn't
-    /// a movement of the level.
-    pub fn live(&self, level: u8) -> LiveValues {
+    /// Its faders as they're heard: where each is, and what's heard with `VOL` and modulation on
+    /// top, which is shown against the fader's `Level`, as they both set how loud it is. The first
+    /// envelope on `Vol` shapes notes, and isn't a movement of the level.
+    pub fn faders(&self) -> Faders {
         let offset = |destination: SettingId| self.offsets[destination.index()];
-        let moved = |held: f32, destination| {
-            ((held + offset(destination)).clamp(0.0, 1.0) * 255.0).round() as u8
-        };
         let on_level = |held: f32, destination| {
             (held + offset(destination) * 255.0)
                 .clamp(0.0, 255.0)
                 .round() as u8
         };
+        let vol = self.vol + offset(SettingId::VOL) * 255.0 - f32::from(UNITY_LEVEL);
+        let level = self.faders[0].at;
+        Faders {
+            at: std::array::from_fn(|fader| {
+                let top = f32::from(FADERS[fader].entry().kind.top());
+                (self.faders[fader].at.clamp(0.0, top) * 256.0).round() as u16
+            }),
+            moved: [
+                (level + vol).clamp(0.0, 255.0).round() as u8,
+                ((self.pan.target + offset(SettingId::PAN)).clamp(0.0, 1.0) * 255.0).round() as u8,
+                on_level(self.send_a, SettingId::SEND_A),
+                on_level(self.send_b, SettingId::SEND_B),
+            ],
+            automated: self.faders.map(|run| run.automated),
+            taken: self.faders.map(|run| run.taken),
+        }
+    }
+
+    /// What this track is playing with right now, its faders as [`TrackState::faders`] hears
+    /// them.
+    pub fn live(&self) -> LiveValues {
+        let offset = |destination: SettingId| self.offsets[destination.index()];
+        let moved = |held: f32, destination| {
+            ((held + offset(destination)).clamp(0.0, 1.0) * 255.0).round() as u8
+        };
         let synth = self.synth_settings();
         let shown = |value: f32| (value * 255.0).round() as u8;
-        let vol = self.vol + offset(SettingId::VOL) * 255.0 - f32::from(UNITY_LEVEL);
+        let [level, pan, send_a, send_b] = self.faders().moved;
         LiveValues {
-            level: (f32::from(level) + vol).clamp(0.0, 255.0).round() as u8,
-            pan: moved(self.pan.target, SettingId::PAN),
+            level,
+            pan,
             cutoff: moved(self.cutoff.target, SettingId::CUT),
             resonance: moved(self.resonance.target, SettingId::RES),
-            send_a: on_level(self.send_a, SettingId::SEND_A),
-            send_b: on_level(self.send_b, SettingId::SEND_B),
+            send_a,
+            send_b,
             machine: match self.loaded_voice {
                 Some(_) => std::array::from_fn(|place| shown(synth.at(place))),
                 None => std::array::from_fn(|place| {
@@ -1610,8 +1693,16 @@ impl TrackState {
         }
     }
 
-    /// Run a lock or hold value from a step. Anything else on that value gives way to it.
+    /// Run a lock or hold value from a step. Anything else on that value gives way to it. A fader
+    /// a hand has taken over keeps it underneath, unheard, for when it's given back.
     pub fn set_value(&mut self, id: SettingId, value: u16, mark: Mark) {
+        if let Some(fader) = id.fader() {
+            let run = &mut self.faders[fader];
+            run.automated = true;
+            if mark == Mark::Hold {
+                run.hold = Some(value);
+            }
+        }
         let layers = &mut self.values[id.index()];
         if layers.glide.take().is_some() {
             self.gliding -= 1;
@@ -1622,7 +1713,52 @@ impl TrackState {
         } else {
             layers.lock = Some(value);
         }
-        self.write_value(id, scaled(value));
+        self.hear(id, scaled(value));
+    }
+
+    /// Hear a value the steps give, unless it's for a fader a hand has taken over.
+    fn hear(&mut self, id: SettingId, value: f32) {
+        if !id.fader().is_some_and(|fader| self.faders[fader].taken) {
+            self.write_value(id, value);
+        }
+    }
+
+    /// A hand moved a fader the steps drive: from now its track page's value is heard, and the
+    /// steps' values for it are kept underneath, unheard, until it's given back.
+    pub fn take_over(&mut self, fader: usize) {
+        let Some(run) = self.faders.get_mut(fader) else {
+            return;
+        };
+        run.taken = true;
+        let song = run.song;
+        self.write_value(FADERS[fader], scaled(song));
+    }
+
+    /// Give a fader back to the steps, as Live's Re-Enable Automation does: it's heard where they
+    /// have it now, a lock's or a hold's value or, at the next update, a glide's place.
+    pub fn give_back(&mut self, fader: usize) {
+        let Some(run) = self.faders.get_mut(fader) else {
+            return;
+        };
+        if !std::mem::take(&mut run.taken) {
+            return;
+        }
+        let base = run.hold.unwrap_or(run.song);
+        let id = FADERS[fader];
+        let layers = &mut self.values[id.index()];
+        // Under a lock is the steps' last hold, or the track page's value, which the hand set.
+        layers.base = base;
+        if layers.glide.is_none() {
+            let value = heard(layers);
+            self.write_value(id, value);
+        }
+    }
+
+    /// Give every fader back to the steps.
+    pub fn give_back_all(&mut self) {
+        for fader in 0..FADER_COUNT {
+            self.give_back(fader);
+        }
     }
 
     /// Run a glide value from a step, toward the next value of its parameter if there is one.
@@ -1654,13 +1790,23 @@ impl TrackState {
             let layers = &mut self.values[id.index()];
             if layers.lock.take().is_some() && layers.glide.is_none() {
                 let base = layers.base;
-                self.write_value(id, scaled(base));
+                self.hear(id, scaled(base));
             }
         }
     }
 
-    /// The track page changed a value. A lock or glide on top stays until it ends.
+    /// The track page changed a value. A lock or glide on top stays until it ends, and a hold
+    /// gives way to it. On a fader a hand has taken over it's heard at once, whatever the steps do,
+    /// which keep their hold for when it's given back.
     pub fn set_base(&mut self, id: SettingId, value: u16) {
+        if let Some(fader) = id.fader() {
+            let run = &mut self.faders[fader];
+            run.song = value;
+            if run.taken {
+                self.write_value(id, scaled(value));
+                return;
+            }
+        }
         let layers = &mut self.values[id.index()];
         layers.base = value;
         if layers.lock.is_none() && layers.glide.is_none() {
@@ -1688,7 +1834,7 @@ impl TrackState {
             let progress = (now.tick - glide.start_tick) / glide.ticks;
             if progress < 1.0 {
                 let (from, to) = (scaled(glide.from), scaled(glide.to.value));
-                self.write_value(id, from + (to - from) * progress.max(0.0) as f32);
+                self.hear(id, from + (to - from) * progress.max(0.0) as f32);
             } else {
                 // Its row hasn't run, as a chain moved on, so this takes that row's place.
                 let mark = match glide.to.mark {
@@ -1715,12 +1861,26 @@ impl TrackState {
                     self.held_pitch = value;
                     return;
                 }
+                SettingId::LEVEL => {
+                    self.level.target = level_gain(value);
+                    self.faders[0].at = value;
+                    return;
+                }
                 SettingId::VOL => self.vol = value,
-                SettingId::PAN => self.pan.target = pan_position(value),
+                SettingId::PAN => {
+                    self.pan.target = pan_position(value);
+                    self.faders[1].at = value;
+                }
                 SettingId::CUT => self.cutoff.target = value / 255.0,
                 SettingId::RES => self.resonance.target = value / 255.0,
-                SettingId::SEND_A => self.send_a = value,
-                SettingId::SEND_B => self.send_b = value,
+                SettingId::SEND_A => {
+                    self.send_a = value;
+                    self.faders[2].at = value;
+                }
+                SettingId::SEND_B => {
+                    self.send_b = value;
+                    self.faders[3].at = value;
+                }
                 SettingId::FILTER_MODE => {
                     self.filter_mode = value;
                     return;
@@ -2194,6 +2354,113 @@ mod tests {
         track.inserts[1] = Insert::ALL[2];
         state.load(&track);
         assert_eq!(state.slot_values[1][1], 0x30 as f32);
+    }
+
+    /// A track's state with its values from a track, as playing from the top leaves them.
+    fn from_the_top(track: &Track) -> TrackState {
+        let mut state = TrackState::new(0, 0);
+        state.reset_held(0, 0, track, 0);
+        state
+    }
+
+    #[test]
+    fn a_lev_lock_sets_the_fader_and_a_note_puts_it_back() {
+        let track = Track {
+            level: 0xC0,
+            ..Track::default()
+        };
+        let mut state = from_the_top(&track);
+        assert_eq!(state.level.target, level_gain(f32::from(0xC0_u8)));
+        assert_eq!(state.faders().at[0], 0xC000);
+        assert!(!state.faders().automated[0]);
+        state.set_value(SettingId::LEVEL, 0xE000, Mark::Lock);
+        assert_eq!(state.level.target, 1.0, "E0 is 0 dB");
+        assert_eq!(state.faders().at[0], 0xE000);
+        assert!(state.faders().follows_steps(0));
+        state.end_locks();
+        assert_eq!(state.level.target, level_gain(f32::from(0xC0_u8)));
+        assert!(
+            state.faders().automated[0],
+            "still the steps' until playing from the top"
+        );
+        state.reset_held(0, 0, &track, 0);
+        assert!(!state.faders().automated[0]);
+    }
+
+    #[test]
+    fn a_lev_hold_lasts_through_a_note_until_playing_from_the_top() {
+        let mut state = from_the_top(&Track::default());
+        state.set_value(SettingId::LEVEL, 0x8000, Mark::Hold);
+        state.end_locks();
+        assert_eq!(state.faders().at[0], 0x8000, "the hold stays");
+        state.reset_held(0, 0, &Track::default(), 0);
+        assert_eq!(state.faders().at[0], 0xE000, "back to the set value");
+    }
+
+    #[test]
+    fn a_takeover_keeps_the_steps_hold_whichever_comes_first_of_it_and_the_hands_edit() {
+        for edit_first in [false, true] {
+            let mut state = from_the_top(&Track::default());
+            state.set_value(SettingId::LEVEL, 0x8000, Mark::Hold);
+            if edit_first {
+                state.set_base(SettingId::LEVEL, 0xD000);
+                state.take_over(0);
+            } else {
+                state.take_over(0);
+                state.set_base(SettingId::LEVEL, 0xD000);
+            }
+            assert_eq!(state.faders().at[0], 0xD000, "the hand's");
+            state.give_back(0);
+            assert_eq!(state.faders().at[0], 0x8000, "the steps' hold");
+        }
+    }
+
+    #[test]
+    fn vol_moves_what_is_heard_around_the_fader_and_not_the_fader() {
+        let mut state = from_the_top(&Track::default());
+        state.set_value(SettingId::LEVEL, 0xC000, Mark::Hold);
+        state.set_value(SettingId::VOL, 0xD000, Mark::Hold);
+        let faders = state.faders();
+        assert_eq!(faders.at[0], 0xC000);
+        assert_eq!(faders.moved[0], 0xB0, "16 steps under the fader");
+        assert_eq!(state.live().level, 0xB0);
+    }
+
+    #[test]
+    fn a_hand_takes_a_fader_over_until_it_is_given_back() {
+        let mut state = from_the_top(&Track::default());
+        state.set_value(SettingId::PAN, 0x2000, Mark::Hold);
+        assert_eq!(state.faders().at[1], 0x2000);
+        state.take_over(1);
+        assert_eq!(state.faders().at[1], 0x8000, "the track page's value");
+        assert!(state.faders().taken[1] && !state.faders().follows_steps(1));
+        state.set_base(SettingId::PAN, 0x9000);
+        assert_eq!(state.faders().at[1], 0x9000, "the hand's move is heard");
+        state.set_value(SettingId::PAN, 0x3000, Mark::Lock);
+        assert_eq!(state.faders().at[1], 0x9000, "the steps' aren't");
+        state.set_value(SettingId::SEND_A, 0x4000, Mark::Lock);
+        assert_eq!(
+            state.faders().at[2],
+            0x4000,
+            "the other faders still follow"
+        );
+        state.end_locks();
+        state.give_back(1);
+        assert_eq!(state.faders().at[1], 0x2000, "back to the hold underneath");
+        assert!(state.faders().follows_steps(1));
+    }
+
+    #[test]
+    fn a_fader_given_back_after_a_lock_ends_hears_the_hands_value() {
+        let mut state = from_the_top(&Track::default());
+        state.set_value(SettingId::LEVEL, 0x8000, Mark::Lock);
+        state.take_over(0);
+        state.set_base(SettingId::LEVEL, 0xD000);
+        state.end_locks();
+        state.give_back(0);
+        assert_eq!(state.faders().at[0], 0xD000);
+        state.set_value(SettingId::LEVEL, 0x9000, Mark::Lock);
+        assert_eq!(state.faders().at[0], 0x9000, "the steps drive it again");
     }
 
     #[test]
