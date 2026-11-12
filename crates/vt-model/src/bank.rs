@@ -606,7 +606,9 @@ impl Hints {
         let steps = steps.map(|steps| steps.clamp(1, MOST_STEPS));
         (self.bars, self.steps) = match steps {
             None => (None, None),
-            Some(steps) if steps % BAR_STEPS == 0 => (Some((steps / BAR_STEPS) as u16), None),
+            Some(steps) if steps.is_multiple_of(BAR_STEPS) => {
+                (Some((steps / BAR_STEPS) as u16), None)
+            }
             Some(steps) => (None, Some(steps as u16)),
         };
     }

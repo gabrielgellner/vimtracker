@@ -63,7 +63,7 @@ pub(crate) fn steps_text(steps: u32) -> String {
     match steps {
         1 => "a step".to_owned(),
         _ if steps == bar => "a bar".to_owned(),
-        _ if steps % bar == 0 => format!("{} bars", steps / bar),
+        _ if steps.is_multiple_of(bar) => format!("{} bars", steps / bar),
         _ => format!("{steps} steps"),
     }
 }

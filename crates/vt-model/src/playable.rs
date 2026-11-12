@@ -448,8 +448,8 @@ mod tests {
         };
         let playable = Playable::of(&entry, &pool(rates)).unwrap();
         // From 0.1 s to 0.9 s of the second, at the program's rate.
-        let step = Some((43_200.0 * 48.0 / 44.1 - 4800.0 * 48.0 / 44.1) / 16.0);
-        let close = |found: Option<f64>| (found.unwrap() - step.unwrap()).abs() < 1.0;
+        let step = (43_200.0 * 48.0 / 44.1 - 4800.0 * 48.0 / 44.1) / 16.0;
+        let close = |found: Option<f64>| found.is_some_and(|found| (found - step).abs() < 1.0);
         assert!(close(playable.whole.step_frames));
         assert!(
             close(playable.span(2, false).step_frames),
