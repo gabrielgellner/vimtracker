@@ -119,7 +119,7 @@ impl Widget for ValueBar {
 pub fn level_bar(value: u8, cells: usize) -> String {
     let eighths = level_eighths(value, cells);
     let mut bar = "█".repeat(eighths / 8);
-    if eighths % 8 > 0 {
+    if !eighths.is_multiple_of(8) {
         bar.push(EIGHTHS[eighths % 8 - 1]);
     }
     format!("{bar:<cells$}")
