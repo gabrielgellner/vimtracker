@@ -1663,7 +1663,7 @@ impl Graphics {
             let shade = Shade::of(edited == Some(slot), modulator.bypassed);
             let key = (PanelKey::Mod(slot), shade);
             ids[slot] = match modulator.kind {
-                ModKind::Adsr | ModKind::Ahd | ModKind::Drum => {
+                ModKind::Adsr | ModKind::Ahd | ModKind::Drum | ModKind::Lpg => {
                     let (envelope, polarity) = (modulator.envelope(), modulator.polarity());
                     self.panel(
                         out,

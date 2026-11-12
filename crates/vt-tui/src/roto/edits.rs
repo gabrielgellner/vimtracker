@@ -14,7 +14,7 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Adsr, Ahd, Curve, MAX_RATCHET};
+use vt_model::envelope::{Adsr, Ahd, Curve, Lpg, MAX_RATCHET};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
@@ -282,14 +282,16 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
         Control::Mod(slot, field) => {
             let was = track.mods[slot];
             let mut modulator = was;
-            let (adsr, ahd, drum, lfo) = (
+            let (adsr, ahd, drum, lpg, lfo) = (
                 &mut modulator.adsr,
                 &mut modulator.ahd,
                 &mut modulator.drum,
+                &mut modulator.lpg,
                 &mut modulator.lfo,
             );
             let ahd_kind = was.kind == ModKind::Ahd;
             let drum_kind = was.kind == ModKind::Drum;
+            let lpg_kind = was.kind == ModKind::Lpg;
             match field {
                 // What a slot is, the app's alone.
                 ModField::Type => return None,
@@ -297,6 +299,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                     ModKind::Adsr => adsr.curve = pick(&Curve::ALL, position),
                     ModKind::Ahd => ahd.curve = pick(&Curve::ALL, position),
                     ModKind::Drum => drum.curve = pick(&Curve::ALL, position),
+                    ModKind::Lpg => return None,
                     ModKind::Lfo => lfo.mode = pick(&LfoMode::ALL, position),
                 },
                 ModField::Polarity => modulator.polarity = Some(pick(&Polarity::ALL, position)),
@@ -306,6 +309,9 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 }
                 ModField::Depth => modulator.depth = depth_at(position),
                 ModField::Attack if ahd_kind => ahd.attack_ms = time_at(position),
+                ModField::Attack if lpg_kind => lpg.attack_ms = time_at(position),
+                ModField::Decay if lpg_kind => lpg.decay_ms = time_at(position),
+                ModField::Colour => lpg.colour = whole(position, 0xFF) as u8,
                 ModField::Attack => adsr.attack_ms = time_at(position),
                 ModField::Decay if ahd_kind => ahd.decay_ms = time_at(position),
                 ModField::Decay if drum_kind => drum.decay_ms = time_at(position),
@@ -420,6 +426,19 @@ fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Acti
                     ahd: Ahd {
                         reset: on,
                         ..track.mods[slot].ahd
+                    },
+                    ..track.mods[slot]
+                },
+            })
+        }
+        Control::Mod(slot, ModField::Reset) if track.mods[slot].kind == ModKind::Lpg => {
+            Some(Action::SetMod {
+                track: at,
+                slot,
+                modulator: ModSlot {
+                    lpg: Lpg {
+                        reset: on,
+                        ..track.mods[slot].lpg
                     },
                     ..track.mods[slot]
                 },

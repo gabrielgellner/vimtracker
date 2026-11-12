@@ -460,6 +460,109 @@ impl Drum {
     }
 }
 
+/// How much faster a low-pass gate's vactrol falls near full than near silence: Plaits' ratio
+/// with its decay knob at the middle, `10 · 2^(-2 · 0.5)`.
+const VACTROL_RATIO: f32 = 5.0;
+/// How far down a low-pass gate's `Decay` is timed to, 60 dB, below which it's scaled to land.
+const VACTROL_FLOOR: f32 = 0.001;
+/// Plaits' brightness for a vactrol's level `v`, `0.003 + 0.3 v⁴` of the rate, at silence and at
+/// full.
+const DARKEST: f32 = 0.003;
+const BRIGHTEST: f32 = 0.303;
+
+/// A low-pass gate's own settings (#45): a vactrol pinged by each note, after Mutable
+/// Instruments' Plaits (`LPGEnvelope`, MIT): a quick rise, then a fall that slows as it nears
+/// silence, which also closes the track's filter by `Colour`, so one slot dulls a note as it dies.
+/// Where it goes and how far are its mod slot's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Lpg {
+    pub attack_ms: u16,
+    /// How long it takes to fall 60 dB, where it's scaled to land.
+    pub decay_ms: u16,
+    /// How far its fall also closes the track's filter, in `Cut`'s units at silence: `00` moves
+    /// only what it reaches, `FF` closes the filter all the way.
+    pub colour: u8,
+    /// Whether each note starts it from zero. Otherwise it goes on from where it is.
+    pub reset: bool,
+}
+
+/// A pluck: a click-free start, a 400 ms fall, and most of the filter closing with it.
+impl Default for Lpg {
+    fn default() -> Self {
+        Self {
+            attack_ms: 1,
+            decay_ms: 400,
+            colour: 0xC0,
+            reset: true,
+        }
+    }
+}
+
+impl Lpg {
+    /// Whether these are settings that can be set.
+    pub fn in_range(&self) -> bool {
+        self.attack_ms <= MAX_ENVELOPE_MS && self.decay_ms <= MAX_ENVELOPE_MS
+    }
+
+    /// Its level some seconds into its fall from full. Plaits' vactrol falls by
+    /// `dv/dt = -(c - (c - a) v⁴) v`, at the rate `a` near full and `c` near silence, stepped once
+    /// a block at its one sample rate; here it's that equation solved, `v⁴ = E / (R + (1 - R) E)`
+    /// with `E = e^(-4 c t)` and `R = a / c`, so it's the same at any rate and costs an `exp` and
+    /// two square roots. `c` is chosen so it's 60 dB down at its `Decay`, and it's scaled to land
+    /// there, as every fall is.
+    #[inline]
+    pub fn fall(&self, seconds: f32) -> f32 {
+        let decay = f32::from(self.decay_ms) / 1000.0;
+        if seconds >= decay {
+            return 0.0;
+        }
+        let near_silence = (-VACTROL_FLOOR.ln() - 0.25 * VACTROL_RATIO.ln()) / decay;
+        let e = (-4.0 * near_silence * seconds).exp();
+        let level = (e / (VACTROL_RATIO + (1.0 - VACTROL_RATIO) * e))
+            .sqrt()
+            .sqrt();
+        ((level - VACTROL_FLOOR) / (1.0 - VACTROL_FLOOR)).max(0.0)
+    }
+
+    /// How far its level `v` has closed the filter, from 0 at full to 1 at silence: Plaits'
+    /// brightness, `0.003 + 0.3 v⁴`, in pitch, as the track's `Cut` is.
+    #[inline]
+    pub fn closing(level: f32) -> f32 {
+        let v2 = level * level;
+        let bright = DARKEST + (BRIGHTEST - DARKEST) * v2 * v2;
+        ((BRIGHTEST / bright).ln() / (BRIGHTEST / DARKEST).ln()).clamp(0.0, 1.0)
+    }
+
+    /// The level some frames after a note, starting from where it was: a straight rise, from
+    /// where it reaches that level, as Plaits' ramp is, then its fall.
+    #[inline]
+    pub fn held(&self, frames: u64, from: f32, rate: u32) -> f32 {
+        match attack_at(Curve::Lin, frames_of(self.attack_ms, rate), frames, from) {
+            Attack::Rising(at) => at,
+            Attack::Done(after) => self.fall(after as f32 / rate as f32),
+        }
+    }
+
+    /// The level some frames after a release, which a one-shot never has: its fall from where it
+    /// was.
+    #[inline]
+    pub fn released(&self, frames: u64, from: f32, rate: u32) -> f32 {
+        from * self.fall(frames as f32 / rate as f32)
+    }
+
+    /// Whether a note has gone silent for good: once its fall has landed.
+    #[inline]
+    pub fn finished_holding(&self, frames: u64, rate: u32) -> bool {
+        frames >= frames_of(self.attack_ms, rate) + frames_of(self.decay_ms, rate)
+    }
+
+    /// Whether a release has reached silence.
+    #[inline]
+    pub fn finished_releasing(&self, frames: u64, rate: u32) -> bool {
+        frames >= frames_of(self.decay_ms, rate)
+    }
+}
+
 /// An envelope of any type, as a note's shape and a slot's run follow it: small and `Copy`, so a
 /// voice keeps the one it started with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -467,6 +570,7 @@ pub enum Envelope {
     Adsr(Adsr),
     Ahd(Ahd),
     Drum(Drum),
+    Lpg(Lpg),
 }
 
 impl Envelope {
@@ -482,6 +586,7 @@ impl Envelope {
             Self::Adsr(adsr) => adsr.reset,
             Self::Ahd(ahd) => ahd.reset,
             Self::Drum(_) => true,
+            Self::Lpg(lpg) => lpg.reset,
         }
     }
 
@@ -491,7 +596,7 @@ impl Envelope {
         match self {
             Self::Adsr(_) => false,
             Self::Ahd(ahd) => ahd.one_shot(),
-            Self::Drum(_) => true,
+            Self::Drum(_) | Self::Lpg(_) => true,
         }
     }
 
@@ -502,6 +607,7 @@ impl Envelope {
             Self::Adsr(adsr) => adsr.held(frames, from, rate),
             Self::Ahd(ahd) => ahd.held(frames, from, rate),
             Self::Drum(drum) => drum.held(frames, rate),
+            Self::Lpg(lpg) => lpg.held(frames, from, rate),
         }
     }
 
@@ -512,6 +618,7 @@ impl Envelope {
             Self::Adsr(adsr) => adsr.released(frames, from, rate),
             Self::Ahd(ahd) => ahd.released(frames, from, rate),
             Self::Drum(drum) => drum.released(frames, from, rate),
+            Self::Lpg(lpg) => lpg.released(frames, from, rate),
         }
     }
 
@@ -522,6 +629,7 @@ impl Envelope {
             Self::Adsr(adsr) => adsr.finished_holding(frames, rate),
             Self::Ahd(ahd) => ahd.finished_holding(frames, rate),
             Self::Drum(drum) => drum.finished_holding(frames, rate),
+            Self::Lpg(lpg) => lpg.finished_holding(frames, rate),
         }
     }
 
@@ -532,6 +640,7 @@ impl Envelope {
             Self::Adsr(adsr) => adsr.finished_releasing(frames, rate),
             Self::Ahd(ahd) => ahd.finished_releasing(frames, rate),
             Self::Drum(drum) => drum.finished_releasing(frames, rate),
+            Self::Lpg(lpg) => lpg.finished_releasing(frames, rate),
         }
     }
 }
@@ -891,6 +1000,102 @@ mod tests {
         assert!(!drum(0, 0, 0, MAX_RATCHET + 1).in_range());
         let text = ron::to_string(&drum(8, 30, 120, 3)).unwrap();
         assert_eq!(ron::from_str::<Drum>(&text).unwrap(), drum(8, 30, 120, 3));
+    }
+
+    /// Plaits' own vactrol, stepped a block at a time at its rate with its own coefficients, for
+    /// a ping: `short_decay` and `decay_tail` as `voice.cc` works them out, with no colour.
+    fn plaits_ping(decay: f32, seconds: f32) -> Vec<(f32, f32)> {
+        const BLOCK: f32 = 12.0;
+        const PLAITS_RATE: f32 = 48_000.0;
+        let short = 200.0 * BLOCK / PLAITS_RATE * 2_f32.powf(-96.0 * decay / 12.0);
+        let tail = 20.0 * BLOCK / PLAITS_RATE * 2_f32.powf(-72.0 * decay / 12.0) - short;
+        let mut state = 1.0_f32;
+        let mut out = Vec::new();
+        let blocks = (seconds * PLAITS_RATE / BLOCK) as usize;
+        for block in 0..blocks {
+            let v4 = state.powi(4);
+            state += (short + (1.0 - v4) * tail) * -state;
+            out.push(((block + 1) as f32 * BLOCK / PLAITS_RATE, state));
+        }
+        out
+    }
+
+    #[test]
+    fn an_lpgs_fall_is_plaits_vactrol_solved_and_slows_as_it_nears_silence() {
+        // With its knob at the middle, Plaits' ratio is ours, so its fall timed as ours matches
+        // the vactrol stepped as Plaits steps it, to within a couple of dB down to -40 dB.
+        let plaits = plaits_ping(0.5, 3.0);
+        let silent = plaits.iter().find(|(_, v)| *v < VACTROL_FLOOR).unwrap().0;
+        let lpg = Lpg {
+            decay_ms: (silent * 1000.0).round() as u16,
+            ..Lpg::default()
+        };
+        for (seconds, v) in plaits.iter().step_by(40) {
+            if *v < 0.01 {
+                break;
+            }
+            let db = |level: f32| 20.0 * level.log10();
+            let ours = lpg.fall(*seconds);
+            assert!((db(ours) - db(*v)).abs() < 2.0, "{seconds}: {ours} {v}");
+        }
+        // Its fall is fast at first and slows near silence: the time to fall the first 20 dB is
+        // less than to fall the next 20.
+        let lpg = Lpg::default();
+        let reach = |level: f32| {
+            (0..40_000)
+                .map(|ms| ms as f32 / 100_000.0)
+                .find(|s| lpg.fall(*s) < level)
+                .unwrap()
+        };
+        assert!(
+            reach(0.1) < reach(0.01) - reach(0.1),
+            "{} {}",
+            reach(0.1),
+            reach(0.01)
+        );
+        // It lands at its decay.
+        assert_eq!(lpg.fall(0.4), 0.0);
+        assert!(lpg.fall(0.399) < 1e-4);
+    }
+
+    #[test]
+    fn an_lpg_rises_then_falls_whatever_the_note_and_closes_the_filter_as_it_falls() {
+        let lpg = Lpg {
+            attack_ms: 10,
+            decay_ms: 100,
+            ..Lpg::default()
+        };
+        close(lpg.held(0, 0.0, RATE), 0.0);
+        close(lpg.held(240, 0.0, RATE), 0.5);
+        close(lpg.held(480, 0.0, RATE), 1.0);
+        close(lpg.held(480 + 4800, 0.0, RATE), 0.0);
+        assert!(lpg.finished_holding(480 + 4800, RATE));
+        assert!(!lpg.finished_holding(480 + 4799, RATE));
+        // With no reset, it rises from where it was.
+        let carried = Lpg {
+            reset: false,
+            ..lpg
+        };
+        close(carried.held(0, 0.5, RATE), 0.5);
+        close(carried.held(240, 0.5, RATE), 1.0);
+        let shaped = Envelope::Lpg(lpg);
+        assert!(shaped.one_shot() && shaped.reset() && !Envelope::Lpg(carried).reset());
+        // The filter is open at full and shut at silence, and mostly shut by the time it's quiet.
+        close(Lpg::closing(1.0), 0.0);
+        close(Lpg::closing(0.0), 1.0);
+        assert!(Lpg::closing(0.5) > 0.4, "{}", Lpg::closing(0.5));
+        for i in 0..10 {
+            assert!(Lpg::closing(i as f32 / 10.0) >= Lpg::closing((i + 1) as f32 / 10.0));
+        }
+        let text = ron::to_string(&Lpg::default()).unwrap();
+        assert_eq!(ron::from_str::<Lpg>(&text).unwrap(), Lpg::default());
+        assert!(
+            !Lpg {
+                decay_ms: MAX_ENVELOPE_MS + 1,
+                ..lpg
+            }
+            .in_range()
+        );
     }
 
     #[test]
