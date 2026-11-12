@@ -615,6 +615,46 @@ quieter; `Gain` can make that up. A tone held on a formant at full `Res`
 can ring loud, so Rings' limiter, as `Reso` has, holds what comes out
 under full scale.
 
+`Freq Shift` is a frequency shifter, after Surge's: it moves every
+frequency in the sound up or down by the same number of Hz. That's not
+what `Pitch` does, which keeps a note's harmonics in step. Shifted by the
+same Hz, they stop being whole multiples of the note, so a saw or a voice
+turns to a bell or a robot, and a few Hz up or down makes it beat and
+swirl. It starts 16 Hz up, all wet.
+
+| Setting | Does |
+|---|---|
+| `Shift` | How far it moves: 1 kHz down at `00`, none at `80`, 1 kHz up at `FF` |
+| `Spread` | How far apart the sides are moved, the left up and the right down |
+| `Track` | How far the shift follows the note, from not at all at `00` |
+| `Time` | A delay in its loop, from none at `00` to a second at `FF` |
+| `Feedback` | How much goes round again, to be shifted again |
+
+`Shift` is on a curve, so the slow shifts have room near the middle: `90`
+is about 2 Hz, `A0` 16 Hz, `C0` 128 Hz and `E0` 430 Hz. The status line
+reads it in Hz, and its fine digits go between. Shifted down past nothing,
+a low frequency folds back up, mirrored, so a big shift down turns the bass
+inside out.
+`Mix` at `80` puts the shifted sound beside the sound itself, which beats
+at the shift: a few Hz is a slow phaser-like swirl, and a few tenths of a
+Hz a slow sweep.
+
+`Spread` takes the sides apart by up to 1 kHz, half each way, so a sound in
+the middle beats differently in each ear and comes out wide.
+
+`Track` at `00` shifts by the same Hz whatever note plays. At `FF` the
+shift follows the track's note from middle C, twice as far an octave up,
+so a shift set to the note's own pitch at middle C, about 262 Hz, keeps a
+shifted saw in the same inharmonic shape up and down the keyboard.
+
+With `Feedback`, what comes out goes round again to be shifted again, so a
+note climbs or falls in a spiral. `Time` spaces the trips round: at `00`
+they run together into a ringing smear, and at a few tens of ms each
+repeat is heard a step further up or down, the barber-pole effect. Each
+time round, what goes round loses a little over 5 kHz and is softly
+limited, and what's under 15 Hz is taken out, so a spiral stays bounded and
+dies away even at `FF`.
+
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
 follow what's playing. A setting that's whole values, like `Bits`, just steps.

@@ -32,6 +32,7 @@ pub enum Insert {
     Reso(Resonator),
     Comb(Comb),
     Vowel(Vowel),
+    FreqShift(FreqShift),
 }
 
 /// What a distortion does to the sound. The waveshapers come first; the guitar pedals after them
@@ -255,6 +256,11 @@ pub enum Setting {
     Vowel,
     VoiceSize,
     KeyTrack,
+    /// A frequency shifter's: how far it shifts, in Hz, how far apart its sides are shifted, and
+    /// the delay in its loop. Its `Feedback` is the delay's and its `Track` the vowel filter's.
+    ShiftHertz,
+    ShiftSpread,
+    LoopTime,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -1647,6 +1653,77 @@ pub(crate) const VOWEL_PARAMS: [Param; 6] = [
     GAIN_PARAM,
 ];
 
+/// How far a frequency shifter's `Shift` goes either way, and its `Spread` at most, in Hz, as far
+/// as sst's and Surge's shifters go.
+pub const MOST_SHIFT_HERTZ: f32 = 1000.0;
+/// The longest delay a frequency shifter has in its loop, in ms.
+pub const LONGEST_SHIFT_DELAY_MS: f32 = 1000.0;
+
+/// A frequency shifter's shift in Hz, for a value on the `00` to `FF` scale: none at `80`, and
+/// from there out to 1 kHz either way on a cube, so the slow shifts of a few Hz that beat and
+/// spiral have room near the middle: `90` is about 2 Hz, `A0` 16 Hz and `C0` 128 Hz.
+pub fn shift_hertz(value: f32) -> f32 {
+    from_middle(value).powi(3) * MOST_SHIFT_HERTZ
+}
+
+/// How far apart a frequency shifter's two sides are shifted, in Hz, for a value on the `00` to
+/// `FF` scale: none at `00`, and on a cube to 1 kHz at `FF`, so `40` is about 16 Hz.
+pub fn spread_hertz(value: f32) -> f32 {
+    (value / 255.0).clamp(0.0, 1.0).powi(3) * MOST_SHIFT_HERTZ
+}
+
+/// The delay in a frequency shifter's loop in ms, for a value on the `00` to `FF` scale: none at
+/// `00`, and on a cube to a second at `FF`, so `40` is about 16 ms and `80` 125 ms.
+pub fn shift_delay_ms(value: f32) -> f32 {
+    (value / 255.0).clamp(0.0, 1.0).powi(3) * LONGEST_SHIFT_DELAY_MS
+}
+
+/// A frequency shifter's, in the order the page shows them, as columns: the shift, how far its
+/// sides are apart and how far it follows the note; then the loop's delay and feedback; then the
+/// mix and gain.
+pub(crate) const FREQ_SHIFT_PARAMS: [Param; 7] = [
+    hex_param(
+        "Shift",
+        "shift",
+        "SHFT",
+        Setting::ShiftHertz,
+        FreqShift::DEFAULT.shift,
+    ),
+    hex_param(
+        "Spread",
+        "spread",
+        "SPRD",
+        Setting::ShiftSpread,
+        FreqShift::DEFAULT.spread,
+    ),
+    hex_param(
+        "Track",
+        "track",
+        "TRK",
+        Setting::KeyTrack,
+        FreqShift::DEFAULT.track,
+    ),
+    hex_param(
+        "Time",
+        "time",
+        "TIME",
+        Setting::LoopTime,
+        FreqShift::DEFAULT.time,
+    ),
+    hex_param(
+        "Feedback",
+        "feedback",
+        "FDBK",
+        Setting::Feedback,
+        FreqShift::DEFAULT.feedback,
+    ),
+    Param {
+        default: 0xFF,
+        ..MIX_PARAM
+    },
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -1655,7 +1732,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -1675,6 +1752,7 @@ impl Insert {
         Self::Reso(Resonator::DEFAULT),
         Self::Comb(Comb::DEFAULT),
         Self::Vowel(Vowel::DEFAULT),
+        Self::FreqShift(FreqShift::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -1711,6 +1789,7 @@ impl Insert {
             Self::Reso(_) => "Reso",
             Self::Comb(_) => "Comb",
             Self::Vowel(_) => "Vowel",
+            Self::FreqShift(_) => "Freq Shift",
         }
     }
 
@@ -1736,6 +1815,7 @@ impl Insert {
             Self::Reso(_) => "Rings it like a bell or bar tuned to the note",
             Self::Comb(_) => "Rings it through a comb or flanger tuned to the note",
             Self::Vowel(_) => "Makes it say a vowel, morphing from A to U",
+            Self::FreqShift(_) => "Moves every frequency by the same Hz: bells and spirals",
         }
     }
 
@@ -1770,6 +1850,7 @@ impl Insert {
             Self::Reso(_) => &RESO_PARAMS,
             Self::Comb(_) => &COMB_PARAMS,
             Self::Vowel(_) => &VOWEL_PARAMS,
+            Self::FreqShift(_) => &FREQ_SHIFT_PARAMS,
         }
     }
 
@@ -1898,6 +1979,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| vowel.read(setting));
             }
+            Self::FreqShift(shifter) => {
+                return FREQ_SHIFT_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| shifter.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -1938,6 +2025,7 @@ impl Insert {
             Self::Reso(resonator) => return Self::Reso(resonator.written(setting, whole)),
             Self::Comb(comb) => return Self::Comb(comb.written(setting, whole)),
             Self::Vowel(vowel) => return Self::Vowel(vowel.written(setting, whole)),
+            Self::FreqShift(shifter) => return Self::FreqShift(shifter.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -3382,6 +3470,79 @@ impl Vowel {
             _ => {}
         }
         vowel
+    }
+}
+
+/// A frequency shifter's settings: every frequency in the sound moved up or down by the same Hz,
+/// with a delay and feedback in its loop for spirals, after sst's and Surge's. One a file doesn't
+/// have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct FreqShift {
+    /// How far it shifts, from 1 kHz down at `00`, through none at `80`, to 1 kHz up at `FF`.
+    pub shift: u8,
+    /// How far apart the sides are shifted, the left further up and the right further down by
+    /// half of it each, from none at `00`.
+    pub spread: u8,
+    /// How far the shift follows the track's note from middle C, from not at all at `00` to in
+    /// proportion at `FF`, where an octave up shifts twice as far.
+    pub track: u8,
+    /// The delay in its loop, from none at `00` to a second at `FF`.
+    pub time: u8,
+    /// How much of what comes out goes round again, shifted again each time.
+    pub feedback: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for FreqShift {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl FreqShift {
+    /// As it starts: 16 Hz up, the sides together, no loop, and all wet.
+    pub const DEFAULT: Self = Self {
+        shift: 0xA0,
+        spread: 0x00,
+        track: 0x00,
+        time: 0x00,
+        feedback: 0x00,
+        mix: 0xFF,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::ShiftHertz => self.shift,
+            Setting::ShiftSpread => self.spread,
+            Setting::KeyTrack => self.track,
+            Setting::LoopTime => self.time,
+            Setting::Feedback => self.feedback,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut shifter = self;
+        match setting {
+            Setting::ShiftHertz => shifter.shift = value,
+            Setting::ShiftSpread => shifter.spread = value,
+            Setting::KeyTrack => shifter.track = value,
+            Setting::LoopTime => shifter.time = value,
+            Setting::Feedback => shifter.feedback = value,
+            Setting::Mix => shifter.mix = value,
+            Setting::Gain => shifter.gain = value,
+            _ => {}
+        }
+        shifter
     }
 }
 

@@ -162,8 +162,13 @@ impl Family {
             | Units::Input
             | Units::Ceiling
             | Units::VelocityDelta => Self::Level,
-            Units::Hertz | Units::Boost | Units::Q | Units::AcidCutoff | Units::Vowel => Self::Tone,
-            Units::Pan => Self::Space,
+            Units::Hertz
+            | Units::Boost
+            | Units::Q
+            | Units::AcidCutoff
+            | Units::Vowel
+            | Units::ShiftHertz => Self::Tone,
+            Units::Pan | Units::SpreadHertz => Self::Space,
             Units::Semitones
             | Units::Cents
             | Units::Attack
@@ -178,7 +183,8 @@ impl Family {
             | Units::Slide
             | Units::GateLength
             | Units::GateDelta
-            | Units::Glide => Self::Time,
+            | Units::Glide
+            | Units::LoopTime => Self::Time,
             Units::Depth | Units::Degrees => Self::Modulation,
             _ => Self::Character,
         }
