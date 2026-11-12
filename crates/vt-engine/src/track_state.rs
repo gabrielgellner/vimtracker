@@ -20,7 +20,7 @@ use vt_model::step::{FxSlot, Mark, slice_letter};
 
 use crate::dsp::blocks::sides::same_sides;
 use crate::dsp::distort::{BYPASS_FADE_MS, InsertState};
-use crate::dsp::filter::{Channel, Coefficients, Trim};
+use crate::dsp::filter::{Channel, Coefficients, Ramp, Trim};
 use crate::dsp::memory::MemoryPool;
 use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
@@ -65,7 +65,8 @@ impl Moved {
     }
 }
 
-/// How often filter coefficients are recalculated while the cutoff moves, in frames.
+/// How often filter coefficients are recalculated while the cutoff moves, in frames. The track's
+/// filter ramps to each new set over as many frames.
 const FILTER_UPDATE_FRAMES: u32 = 32;
 /// How close to wide open the utility filter counts as out of the way, on `0..=1`.
 const TRIM_OPEN: f32 = 0.001;
@@ -779,7 +780,8 @@ pub struct TrackState {
     low_cut_coefficients: Option<(f32, Coefficients)>,
     high_cut_coefficients: Option<(f32, Coefficients)>,
     trim_countdown: u32,
-    coefficients: Option<Coefficients>,
+    /// The filter's coefficients, ramping toward the set last worked out.
+    coefficients: Option<Ramp>,
     filter_countdown: u32,
     /// Each mod slot as it runs.
     slots: [SlotRun; MOD_SLOTS],
@@ -2090,17 +2092,26 @@ impl TrackState {
         } else {
             if self.filter_countdown == 0 || self.coefficients.is_none() {
                 let mode = self.playing_mode();
-                self.coefficients = Some(Coefficients::with_mode(cutoff, resonance, mode, rate));
+                let c = Coefficients::with_mode(cutoff, resonance, mode, rate);
+                match &mut self.coefficients {
+                    Some(ramp) => ramp.toward(&c, FILTER_UPDATE_FRAMES),
+                    None => self.coefficients = Some(Ramp::at(c)),
+                }
                 self.filter_countdown = FILTER_UPDATE_FRAMES;
             }
             self.filter_countdown -= 1;
             // A drive this small takes the clean path rather than a very slight clip.
             let drive = if drive < 0.001 { 0.0 } else { drive };
-            match &self.coefficients {
-                Some(c) => [
-                    self.filter[0].process(input[0], self.filter_type, drive, c),
-                    self.filter[1].process(input[1], self.filter_type, drive, c),
-                ],
+            match &mut self.coefficients {
+                Some(ramp) => {
+                    let c = ramp.now();
+                    let filtered = [
+                        self.filter[0].process(input[0], self.filter_type, drive, c),
+                        self.filter[1].process(input[1], self.filter_type, drive, c),
+                    ];
+                    ramp.advance();
+                    filtered
+                }
                 None => input,
             }
         };

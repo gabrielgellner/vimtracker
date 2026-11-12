@@ -35,6 +35,16 @@ fn buzz() -> Arc<SamplePool> {
     pool((0..RATE as usize * 4).map(wave).collect())
 }
 
+/// A square at 12 kHz, for a low-pass filter opening. One alternating every frame sits at the
+/// filter's zero at the top of the range, which passes nothing at any cutoff once settled.
+fn whine() -> Arc<SamplePool> {
+    let wave = |frame: usize| {
+        let value = if frame % 4 < 2 { 0.5 } else { -0.5 };
+        [value, value]
+    };
+    pool((0..RATE as usize * 4).map(wave).collect())
+}
+
 /// A rising line, so where playback is reading from shows in the output.
 fn ramp() -> Arc<SamplePool> {
     let frames = (0..RATE as usize * 4)
@@ -240,7 +250,7 @@ fn an_envelope_moves_the_filter_with_its_depth() {
                 depth,
                 ..adsr(0, 40, 0, 0)
             };
-            render(with, buzz(), STEP)
+            render(with, whine(), STEP)
         };
         let still = plain(0);
         let moved = plain(0xBF);
