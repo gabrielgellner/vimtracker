@@ -26,6 +26,7 @@ use std::f32::consts::{FRAC_1_SQRT_2, TAU};
 use vt_model::insert::{FAST_SPEED, Rotary as Settings};
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::sine_table::SINE;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 
 /// The horn's and the drum's speeds, slow and fast, in turns a second, about a Leslie 122's.
@@ -86,11 +87,23 @@ impl LowPass {
     }
 }
 
+/// A place on the circle's sine and cosine, in turns, read from Plaits' table between its steps.
+/// A sine and cosine of the same angle can be worked out together in a release build and come
+/// out a bit apart from a debug build's, which a table can't.
+#[inline]
+fn sine_cosine(turns: f32) -> (f32, f32) {
+    let at = turns.rem_euclid(1.0) * 512.0;
+    let whole = (at as usize).min(511);
+    let between = at - whole as f32;
+    let read = |index: usize| SINE[index] + (SINE[index + 1] - SINE[index]) * between;
+    (read(whole), read(whole + 128))
+}
+
 /// How each microphone hears a rotor at a place on its circle, in turns: how far its sound goes
 /// to each, and how much it points at each, from -1 away to 1 straight at it.
 #[inline]
 fn heard(turns: f32) -> [[f32; 2]; 2] {
-    let (i, r) = (turns * TAU).sin_cos();
+    let (i, r) = sine_cosine(turns);
     [-1.0_f32, 1.0].map(|x| {
         let (to_r, to_i) = (x - r, -2.0 - i);
         let distance = (to_r * to_r + to_i * to_i).sqrt();
