@@ -13,3 +13,5 @@ Reports from the EGM review of `docs/designs/vimtracker.md`, finished on 2026-11
 | 9: Re-audit of the rewritten plan | `implementation_readiness_reaudit_report.md` |
 
 Line numbers and links refer to the design as it was when each report was written, so they don't match the current file. Unresolved findings are listed in the design's Known Gaps From Review section.
+
+`dsp-parts/` holds four evaluations of other open source synths for DSP parts and tricks, written on 2026-11-11; its README describes them.
