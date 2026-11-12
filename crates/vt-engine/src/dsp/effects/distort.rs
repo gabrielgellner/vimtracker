@@ -6,8 +6,8 @@
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Flanger,
-    FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb, Tape,
-    Vowel, Warps,
+    FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb,
+    Spring, Tape, Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -141,7 +141,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Reso(_), Insert::Reso(_))
         | (Insert::Comb(_), Insert::Comb(_))
         | (Insert::Vowel(_), Insert::Vowel(_))
-        | (Insert::FreqShift(_), Insert::FreqShift(_)) => true,
+        | (Insert::FreqShift(_), Insert::FreqShift(_))
+        | (Insert::Spring(_), Insert::Spring(_)) => true,
         _ => false,
     }
 }
@@ -233,6 +234,10 @@ impl InsertState {
             if started {
                 memory.settle();
             }
+            // A knock rings the tank with nothing going in, so it mustn't stay asleep.
+            if memory.waking() {
+                self.quiet = 0;
+            }
         }
     }
 
@@ -268,6 +273,7 @@ impl InsertState {
             | Insert::Flanger(Flanger { mix, gain, .. })
             | Insert::Tape(Tape { mix, gain, .. })
             | Insert::Plate(Plate { mix, gain, .. })
+            | Insert::Spring(Spring { mix, gain, .. })
             | Insert::Pitch(Pitch { mix, gain, .. })
             | Insert::Grains(Grains { mix, gain, .. })
             | Insert::Warps(Warps { mix, gain, .. })
@@ -522,7 +528,8 @@ impl InsertState {
             | Insert::Warps(_)
             | Insert::Reso(_)
             | Insert::Comb(_)
-            | Insert::FreqShift(_) => Mono::Stereo,
+            | Insert::FreqShift(_)
+            | Insert::Spring(_) => Mono::Stereo,
         }
     }
 
@@ -676,6 +683,7 @@ impl InsertState {
             | Insert::Flanger(_)
             | Insert::Tape(_)
             | Insert::Plate(_)
+            | Insert::Spring(_)
             | Insert::Pitch(_)
             | Insert::Grains(_) => (None, 0),
         };
@@ -1070,6 +1078,10 @@ mod tests {
             Insert::Plate(Plate {
                 decay: 0xE0,
                 ..Plate::DEFAULT
+            }),
+            Insert::Spring(Spring {
+                decay: 0xFF,
+                ..Spring::DEFAULT
             }),
             Insert::Phaser(Phaser {
                 feedback: 0xFF,

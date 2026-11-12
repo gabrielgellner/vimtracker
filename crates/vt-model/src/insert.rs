@@ -33,6 +33,7 @@ pub enum Insert {
     Comb(Comb),
     Vowel(Vowel),
     FreqShift(FreqShift),
+    Spring(Spring),
 }
 
 /// What a distortion does to the sound. The waveshapers come first; the guitar pedals after them
@@ -261,6 +262,14 @@ pub enum Setting {
     ShiftHertz,
     ShiftSpread,
     LoopTime,
+    /// A spring reverb's: how long its springs are, how much its early reflections come back,
+    /// how much its all-passes smear a sound into a chirp, how much its loop's delay wanders, and
+    /// whether it's knocked. Its `Decay` and `Damp` are the reverb's.
+    SpringSize,
+    Reflections,
+    Spin,
+    Chaos,
+    Knock,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -298,7 +307,7 @@ impl Setting {
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
             Self::SweepRate => SWEEP_NAMES.len() as u8 - 1,
             Self::Stages => STAGE_NAMES.len() as u8 - 1,
-            Self::PingPong | Self::Freeze => 1,
+            Self::PingPong | Self::Freeze | Self::Knock => 1,
             Self::Retime => RETIMES.len() as u8 - 1,
             Self::Shift => SHIFT_NAMES.len() as u8 - 1,
             Self::Wave => WAVE_NAMES.len() as u8 - 1,
@@ -326,7 +335,7 @@ impl Setting {
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
             Self::Stages => (STAGE_NAMES.len() - 1) as f32,
-            Self::PingPong | Self::Freeze => 1.0,
+            Self::PingPong | Self::Freeze | Self::Knock => 1.0,
             Self::Retime => (RETIMES.len() - 1) as f32,
             Self::Shift => (SHIFT_NAMES.len() - 1) as f32,
             Self::Wave => (WAVE_NAMES.len() - 1) as f32,
@@ -1741,6 +1750,53 @@ pub(crate) const FREQ_SHIFT_PARAMS: [Param; 7] = [
     GAIN_PARAM,
 ];
 
+/// A spring reverb's, in the order the page shows them, as columns: how long it rings, how big
+/// its springs are and how dark; then its chirp and its reflections; then its wander and its
+/// knock; then the mix and gain. Those it shares with the reverb are named as its.
+pub(crate) const SPRING_PARAMS: [Param; 9] = [
+    hex_param(
+        "Decay",
+        "decay",
+        "DCAY",
+        Setting::Decay,
+        Spring::DEFAULT.decay,
+    ),
+    hex_param(
+        "Size",
+        "size",
+        "SIZE",
+        Setting::SpringSize,
+        Spring::DEFAULT.size,
+    ),
+    hex_param("Damp", "damp", "DAMP", Setting::Damp, Spring::DEFAULT.damp),
+    hex_param("Spin", "spin", "SPIN", Setting::Spin, Spring::DEFAULT.spin),
+    hex_param(
+        "Reflect",
+        "reflect",
+        "REFL",
+        Setting::Reflections,
+        Spring::DEFAULT.reflect,
+    ),
+    hex_param(
+        "Chaos",
+        "chaos",
+        "CHAO",
+        Setting::Chaos,
+        Spring::DEFAULT.chaos,
+    ),
+    Param {
+        name: "Knock",
+        key: "knock",
+        label: Some("KNCK"),
+        setting: Setting::Knock,
+        choices: &OFF_ON,
+        wraps: true,
+        default: Spring::DEFAULT.knock,
+    },
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -1749,7 +1805,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 21] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -1770,6 +1826,7 @@ impl Insert {
         Self::Comb(Comb::DEFAULT),
         Self::Vowel(Vowel::DEFAULT),
         Self::FreqShift(FreqShift::DEFAULT),
+        Self::Spring(Spring::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -1807,6 +1864,7 @@ impl Insert {
             Self::Comb(_) => "Comb",
             Self::Vowel(_) => "Vowel",
             Self::FreqShift(_) => "Freq Shift",
+            Self::Spring(_) => "Spring",
         }
     }
 
@@ -1833,6 +1891,9 @@ impl Insert {
             Self::Comb(_) => "Rings it through a comb or flanger tuned to the note",
             Self::Vowel(_) => "Makes it say a vowel, morphing from A to U",
             Self::FreqShift(_) => "Moves every frequency by the same Hz: bells and spirals",
+            Self::Spring(_) => {
+                "Puts the sound in a spring tank, as a guitar amp has: drips and boings"
+            }
         }
     }
 
@@ -1868,6 +1929,7 @@ impl Insert {
             Self::Comb(_) => &COMB_PARAMS,
             Self::Vowel(_) => &VOWEL_PARAMS,
             Self::FreqShift(_) => &FREQ_SHIFT_PARAMS,
+            Self::Spring(_) => &SPRING_PARAMS,
         }
     }
 
@@ -2002,6 +2064,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| shifter.read(setting));
             }
+            Self::Spring(spring) => {
+                return SPRING_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| spring.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -2043,6 +2111,7 @@ impl Insert {
             Self::Comb(comb) => return Self::Comb(comb.written(setting, whole)),
             Self::Vowel(vowel) => return Self::Vowel(vowel.written(setting, whole)),
             Self::FreqShift(shifter) => return Self::FreqShift(shifter.written(setting, whole)),
+            Self::Spring(spring) => return Self::Spring(spring.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -2114,6 +2183,12 @@ impl Insert {
                 &[S::LowCut, S::HighCut, S::Drive],
                 &[S::Retime, S::Wow],
                 &[S::Width, S::Mix, S::Gain],
+            ],
+            Self::Spring(_) => &[
+                &[S::Decay, S::SpringSize, S::Damp],
+                &[S::Spin, S::Reflections],
+                &[S::Chaos, S::Knock],
+                &[S::Mix, S::Gain],
             ],
             _ => return self.default_grid(),
         };
@@ -3576,6 +3651,86 @@ impl FreqShift {
     }
 }
 
+/// A spring reverb's settings: ChowDSP's model of a spring tank, as Surge ships it. One a file
+/// doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Spring {
+    /// How long it rings, from about a tenth of a second to about four.
+    pub decay: u8,
+    /// How long its springs are: their loop's delay, their all-passes' and their reflections'.
+    pub size: u8,
+    /// How dark it is, its highs taken from what comes out and from what's reflected.
+    pub damp: u8,
+    /// How much its all-passes smear a sound out, from a long chirp at `00` to a short one.
+    pub spin: u8,
+    /// How much comes back from the ends of the springs.
+    pub reflect: u8,
+    /// How much its loop's delay wanders, at random.
+    pub chaos: u8,
+    /// Switched on, the tank is knocked once, as a spring tank is when it's kicked.
+    pub knock: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Spring {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Spring {
+    /// As it starts: Surge's, half way on everything but full reflections, no chaos, and half wet.
+    pub const DEFAULT: Self = Self {
+        decay: 0x80,
+        size: 0x80,
+        damp: 0x80,
+        spin: 0x80,
+        reflect: 0xFF,
+        chaos: 0x00,
+        knock: 0,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Decay => self.decay,
+            Setting::SpringSize => self.size,
+            Setting::Damp => self.damp,
+            Setting::Spin => self.spin,
+            Setting::Reflections => self.reflect,
+            Setting::Chaos => self.chaos,
+            Setting::Knock => self.knock,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut spring = self;
+        match setting {
+            Setting::Decay => spring.decay = value,
+            Setting::SpringSize => spring.size = value,
+            Setting::Damp => spring.damp = value,
+            Setting::Spin => spring.spin = value,
+            Setting::Reflections => spring.reflect = value,
+            Setting::Chaos => spring.chaos = value,
+            Setting::Knock => spring.knock = value,
+            Setting::Mix => spring.mix = value,
+            Setting::Gain => spring.gain = value,
+            _ => {}
+        }
+        spring
+    }
+}
+
 fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
@@ -3658,7 +3813,10 @@ mod tests {
             .collect();
         toggles.sort_unstable();
         toggles.dedup();
-        assert_eq!(toggles, ["Auto", "Freeze", "Peak Clip", "Ping-pong"]);
+        assert_eq!(
+            toggles,
+            ["Auto", "Freeze", "Knock", "Peak Clip", "Ping-pong"]
+        );
         // A two-way list of anything else isn't one.
         let chorus = Insert::ALL
             .into_iter()
