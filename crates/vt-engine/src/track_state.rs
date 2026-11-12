@@ -2086,7 +2086,11 @@ impl TrackState {
         // The trim comes first, as a console's input gain does, so it sets how hard the filter,
         // its drive and the slots are hit. At 0 dB it's exactly 1, which leaves the voice as it is.
         let trim = self.input_trim.next(smoothing);
-        let input = [input[0] * trim, input[1] * trim];
+        // A NaN or an infinity from a voice would stay in the filter, and the utility filter
+        // after it, for good, so it's heard as a frame of silence instead, as the slots do (#461).
+        // Level, pan and the sends only scale the frame and keep nothing of it.
+        let input = [input[0] * trim, input[1] * trim]
+            .map(|sample| if sample.is_finite() { sample } else { 0.0 });
         self.take_in_after_trim(input);
         let cutoff = (self.cutoff.next(smoothing)
             + self.cut_offset.next(fast)
@@ -2519,5 +2523,50 @@ mod tests {
         assert!((l - 1.0).abs() < 1e-5 && (r - 1.0).abs() < 1e-5);
         let (l, r) = pan_gains(0.2);
         assert!((l * l + r * r - 2.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn a_broken_sample_from_a_voice_is_a_frame_of_silence_to_the_filter() {
+        use crate::dsp::blocks::smoother;
+        let rate = 48_000;
+        let (smoothing, fast) = (
+            smoother::coefficient(rate),
+            smoother::fast_coefficient(rate),
+        );
+        let keys = Keys::default();
+        for filter in FilterType::ALL {
+            for broken in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+                // Resonant and driven, with the utility filter cutting both ends, so every stage
+                // with state hears it.
+                let track = Track {
+                    filter,
+                    cutoff: 0x60,
+                    resonance: 0xC0,
+                    drive: 0x40,
+                    low_cut: 0x20,
+                    high_cut: 0xE0,
+                    ..Track::default()
+                };
+                let (mut hit, mut silent) = (from_the_top(&track), from_the_top(&track));
+                for frame in 0..4_000 {
+                    let sound = (frame as f32 * 0.05).sin() * 0.5;
+                    let (to_hit, to_silent) = if frame == 1_000 {
+                        ([broken, sound], [0.0, sound])
+                    } else {
+                        ([sound; 2], [sound; 2])
+                    };
+                    let out = hit.shape(to_hit, smoothing, fast, rate, &keys);
+                    let heard = silent.shape(to_silent, smoothing, fast, rate, &keys);
+                    // Within the same frame it's as if the voice had gone silent for one.
+                    assert_eq!(out.dry, heard.dry, "{filter:?} {broken} at {frame}");
+                    assert_eq!(out.send_a, heard.send_a);
+                    assert!(out.dry.iter().all(|s| s.is_finite()));
+                }
+                assert!(
+                    hit.after_trim.iter().all(|s| s.is_finite()),
+                    "the meter too"
+                );
+            }
+        }
     }
 }
