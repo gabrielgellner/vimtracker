@@ -34,6 +34,7 @@ pub enum Insert {
     Vowel(Vowel),
     FreqShift(FreqShift),
     Spring(Spring),
+    Exciter(Exciter),
 }
 
 /// What a distortion does to the sound. The waveshapers come first; the guitar pedals after them
@@ -291,6 +292,11 @@ pub enum Setting {
     Spin,
     Chaos,
     Knock,
+    /// An exciter's: where the highs it excites start, and how fast its level detector rises and
+    /// falls. Its `Drive` is the delay's.
+    ExciterTone,
+    ExciterAttack,
+    ExciterRelease,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -1844,6 +1850,70 @@ pub(crate) const SPRING_PARAMS: [Param; 9] = [
     GAIN_PARAM,
 ];
 
+/// Where an exciter's high-pass is at the bottom and top of `Tone`, in Hz, as Surge's.
+pub const EXCITER_TONE_HZ: (f32, f32) = (500.0, 10_000.0);
+/// How fast its level detector rises and falls at the ends of `Attack` and `Release`, in ms, as
+/// Surge's knobs go.
+pub const EXCITER_ATTACK_MS: (f32, f32) = (5.0, 20.0);
+pub const EXCITER_RELEASE_MS: (f32, f32) = (50.0, 200.0);
+
+/// Between two ends on a log scale, for a value on the `00` to `FF` scale.
+fn exciter_scale(value: f32, (low, high): (f32, f32)) -> f32 {
+    low * (high / low).powf((value / 255.0).clamp(0.0, 1.0))
+}
+
+/// Where an exciter's high-pass is, in Hz: 500 Hz at `00` to 10 kHz at `FF`, evenly in pitch, so
+/// `80` is about 2.2 kHz.
+pub fn exciter_tone_hz(value: f32) -> f32 {
+    exciter_scale(value, EXCITER_TONE_HZ)
+}
+
+/// How fast an exciter's level detector rises, in ms: 5 at `00` to 20 at `FF`, 10 at `80`.
+pub fn exciter_attack_ms(value: f32) -> f32 {
+    exciter_scale(value, EXCITER_ATTACK_MS)
+}
+
+/// How fast it falls, in ms: 50 at `00` to 200 at `FF`, 100 at `80`.
+pub fn exciter_release_ms(value: f32) -> f32 {
+    exciter_scale(value, EXCITER_RELEASE_MS)
+}
+
+/// An exciter's, in the order the page shows them, as columns: how hard it drives and where the
+/// highs it drives start; then how its detector rises and falls; then how much is added, and the
+/// gain.
+pub(crate) const EXCITER_PARAMS: [Param; 6] = [
+    hex_param(
+        "Drive",
+        "drive",
+        "DRV",
+        Setting::Drive,
+        Exciter::DEFAULT.drive,
+    ),
+    hex_param(
+        "Tone",
+        "tone",
+        "TONE",
+        Setting::ExciterTone,
+        Exciter::DEFAULT.tone,
+    ),
+    hex_param(
+        "Attack",
+        "attack",
+        "ATK",
+        Setting::ExciterAttack,
+        Exciter::DEFAULT.attack,
+    ),
+    hex_param(
+        "Release",
+        "release",
+        "REL",
+        Setting::ExciterRelease,
+        Exciter::DEFAULT.release,
+    ),
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
 /// The bit depths `Crush` chooses between. Above these it can't be heard.
 const LEAST_BITS: u8 = 2;
 const MOST_BITS: u8 = 12;
@@ -1852,7 +1922,7 @@ const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 22] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -1874,6 +1944,7 @@ impl Insert {
         Self::Vowel(Vowel::DEFAULT),
         Self::FreqShift(FreqShift::DEFAULT),
         Self::Spring(Spring::DEFAULT),
+        Self::Exciter(Exciter::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -1912,6 +1983,7 @@ impl Insert {
             Self::Vowel(_) => "Vowel",
             Self::FreqShift(_) => "Freq Shift",
             Self::Spring(_) => "Spring",
+            Self::Exciter(_) => "Exciter",
         }
     }
 
@@ -1941,6 +2013,7 @@ impl Insert {
             Self::Spring(_) => {
                 "Puts the sound in a spring tank, as a guitar amp has: drips and boings"
             }
+            Self::Exciter(_) => "Adds air: harmonics made from the highs, more as they get louder",
         }
     }
 
@@ -1977,6 +2050,7 @@ impl Insert {
             Self::Vowel(_) => &VOWEL_PARAMS,
             Self::FreqShift(_) => &FREQ_SHIFT_PARAMS,
             Self::Spring(_) => &SPRING_PARAMS,
+            Self::Exciter(_) => &EXCITER_PARAMS,
         }
     }
 
@@ -2117,6 +2191,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| spring.read(setting));
             }
+            Self::Exciter(exciter) => {
+                return EXCITER_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| exciter.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -2161,6 +2241,7 @@ impl Insert {
             Self::Vowel(vowel) => return Self::Vowel(vowel.written(setting, whole)),
             Self::FreqShift(shifter) => return Self::FreqShift(shifter.written(setting, whole)),
             Self::Spring(spring) => return Self::Spring(spring.written(setting, whole)),
+            Self::Exciter(exciter) => return Self::Exciter(exciter.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -2239,6 +2320,11 @@ impl Insert {
                 &[S::Decay, S::SpringSize, S::Damp],
                 &[S::Spin, S::Reflections],
                 &[S::Chaos, S::Knock],
+                &[S::Mix, S::Gain],
+            ],
+            Self::Exciter(_) => &[
+                &[S::Drive, S::ExciterTone],
+                &[S::ExciterAttack, S::ExciterRelease],
                 &[S::Mix, S::Gain],
             ],
             _ => return self.default_grid(),
@@ -3785,6 +3871,70 @@ impl Spring {
             _ => {}
         }
         spring
+    }
+}
+
+/// An exciter's settings: Chowdhury's model of the Aphex Aural Exciter, as Surge ships it. One a
+/// file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Exciter {
+    /// How hard the highs are driven into its shaper.
+    pub drive: u8,
+    /// Where the highs it excites start, from 500 Hz to 10 kHz.
+    pub tone: u8,
+    /// How fast its level detector rises and falls, from 5 to 20 ms and 50 to 200 ms.
+    pub attack: u8,
+    pub release: u8,
+    /// How much of what it makes is added to the sound, from none at `00`.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Exciter {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Exciter {
+    /// As it starts: Surge's, half way on everything.
+    pub const DEFAULT: Self = Self {
+        drive: 0x80,
+        tone: 0x80,
+        attack: 0x80,
+        release: 0x80,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Drive => self.drive,
+            Setting::ExciterTone => self.tone,
+            Setting::ExciterAttack => self.attack,
+            Setting::ExciterRelease => self.release,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut exciter = self;
+        match setting {
+            Setting::Drive => exciter.drive = value,
+            Setting::ExciterTone => exciter.tone = value,
+            Setting::ExciterAttack => exciter.attack = value,
+            Setting::ExciterRelease => exciter.release = value,
+            Setting::Mix => exciter.mix = value,
+            Setting::Gain => exciter.gain = value,
+            _ => {}
+        }
+        exciter
     }
 }
 

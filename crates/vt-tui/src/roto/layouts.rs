@@ -1079,9 +1079,26 @@ const SPRING: DeviceLayout = stored(
         button(5, "knock"),
     )],
 );
+/// How hard it drives and where the highs start, then how its detector rises and falls.
+const EXCITER: DeviceLayout = live(
+    "fx/exciter",
+    &[knobs(
+        "Exciter",
+        [
+            s("drive"),
+            s("tone"),
+            GAP,
+            s("attack"),
+            s("release"),
+            GAP,
+            s("mix"),
+            s("gain"),
+        ],
+    )],
+);
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 61] = [
+pub const ALL: [&DeviceLayout; 62] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1143,6 +1160,7 @@ pub const ALL: [&DeviceLayout; 61] = [
     &VOWEL,
     &FREQ_SHIFT,
     &SPRING,
+    &EXCITER,
 ];
 
 /// A machine's layout.
@@ -1210,6 +1228,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::Vowel(_) => &VOWEL,
         Insert::FreqShift(_) => &FREQ_SHIFT,
         Insert::Spring(_) => &SPRING,
+        Insert::Exciter(_) => &EXCITER,
     }
 }
 

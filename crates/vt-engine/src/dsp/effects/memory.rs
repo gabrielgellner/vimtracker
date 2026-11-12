@@ -275,6 +275,7 @@ impl MemoryCount {
                 Insert::Spring(_) => count.spring += 1,
                 Insert::Empty
                 | Insert::Distort(_)
+                | Insert::Exciter(_)
                 | Insert::Eq(_)
                 | Insert::Compressor(_)
                 | Insert::Lpg(_)
@@ -422,6 +423,7 @@ impl MemoryPool {
             Insert::Spring(_) => &mut self.springs,
             Insert::Empty
             | Insert::Distort(_)
+            | Insert::Exciter(_)
             | Insert::Eq(_)
             | Insert::Compressor(_)
             | Insert::Lpg(_)

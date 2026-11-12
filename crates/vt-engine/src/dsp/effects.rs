@@ -5,6 +5,7 @@
 pub mod chorus;
 pub mod delay;
 pub mod distort;
+pub mod exciter;
 pub mod flanger;
 pub mod freq_shifter;
 pub mod granular;
