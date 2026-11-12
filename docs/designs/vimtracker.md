@@ -365,7 +365,7 @@ against its own state, so two quick presses can't act on an out-of-date view of 
 comes back each block: where playback is, each track's place and levels, each track's faders as
 they're heard (`Faders`: where `LEV`, `PAN`, `SNA` and `SNB` put them, what `VOL` and modulation make
 of them, and which the steps drive and a hand has taken over, from `TrackState::faders`), the watched
-track's live values, and up to four sample playheads. The live values carry the watched track's peak right after its trim
+track's live values, and up to four sample playheads. Each report says which version it's of (`Telemetry::version`, the `Published::id` playing), and the app keeps the songs it has sent until a report is of a later one, so a bar draws what's playing against the setting it was worked out from (`App::reported_track`, decision 210). The live values carry the watched track's peak right after its trim
 (`LiveValues::after_trim`), which `TrackState` keeps as it trims each frame and
 `Engine::take_after_trim` takes, for the Output device's meter, and where each mod slot running as
 an LFO is in its wave (`LiveValues::mods`, a phase and a value each, which `TrackState::modulate`
@@ -584,11 +584,11 @@ module per file, each keeping its port's licence notice:
 
 | Folder | Holds | Modules |
 |---|---|---|
-| `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
+| `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `string_model`, `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves and DX7 patches |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `spring`, `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `chorus`, `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `space`, `spring`, `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
-| `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler`, `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
+| `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler` (also its `Decimator`, for a sound made at twice the rate), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 
 A new voice, filter, effect or dynamics tool goes in its folder. A part that two folders would
 share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of #260,

@@ -47,6 +47,22 @@ impl Oversampler {
     }
 }
 
+/// Coming down from twice the rate, for a sound made there, as the second half of [`Oversampler`].
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Decimator {
+    down: [Allpass; 2],
+}
+
+impl Decimator {
+    /// One sample at the normal rate, from two at twice it, in order.
+    #[inline]
+    pub(crate) fn process(&mut self, first: f32, second: f32) -> f32 {
+        let a = self.down[0].process(second, &HALFBAND_A);
+        let b = self.down[1].process(first, &HALFBAND_B);
+        0.5 * (a + b)
+    }
+}
+
 /// Going to four times the rate and back, as two of the halfbands in a row, for a clip so hard or
 /// driven so far that twice the rate still aliases.
 #[derive(Debug, Clone, Copy, Default)]

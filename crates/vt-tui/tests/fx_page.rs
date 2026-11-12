@@ -463,8 +463,9 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
 
 #[test]
 fn the_fx_pages_bars_follow_what_plays() {
-    let (mut app, _realtime) = on_fx_page();
+    let (mut app, mut realtime) = on_fx_page();
     press(&mut app, "=");
+    catch_up(&mut app, &mut realtime);
     let mut live = vt_engine::track_state::LiveValues {
         level: 0xE0,
         pan: 0x80,

@@ -117,8 +117,9 @@ fn each_kind_of_setting_has_its_feel() {
     // Of 17 to 24, stepped all the same, with names for the first 16 as the Roto shows them.
     assert_eq!(steps(Control::Choke, &track), 17);
     assert_eq!(steps(Control::Insert(0), &track), Insert::ALL.len());
-    assert_eq!(steps(Control::Machine, &track), Machine::ALL.len());
-    // A longer list, or one that changes with the track, turns smoothly.
+    // A longer list, such as the machines, or one that changes with the track, turns smoothly.
+    assert!(Machine::ALL.len() > 24);
+    assert_eq!(feel(Control::Machine, &track), Feel::Smooth);
     assert_eq!(
         feel(Control::Accumulator(AccumulatorField::Up), &track),
         Feel::Smooth
