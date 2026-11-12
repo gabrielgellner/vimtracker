@@ -2,7 +2,7 @@
 
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meaning};
-use vt_model::envelope::Adsr;
+use vt_model::envelope::{Adsr, Curve};
 use vt_model::insert::Insert;
 use vt_model::lfo::{Lfo, LfoMode, Shape, note_rates};
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
@@ -32,6 +32,14 @@ const MODE_TITLES: [&str; MOD_SLOTS] = [
     "Mod 4 mode",
     "Mod 5 mode",
     "Mod 6 mode",
+];
+const CURVE_TITLES: [&str; MOD_SLOTS] = [
+    "Mod 1 curve",
+    "Mod 2 curve",
+    "Mod 3 curve",
+    "Mod 4 curve",
+    "Mod 5 curve",
+    "Mod 6 curve",
 ];
 const POLARITY_TITLES: [&str; MOD_SLOTS] = [
     "Mod 1 polarity",
@@ -383,6 +391,14 @@ impl App {
                         .meaning(kind.meaning())
                 });
                 (TYPE_TITLES[slot], kinds.to_vec())
+            }
+            ModField::Mode if modulator.kind == ModKind::Adsr => {
+                let curves = Curve::ALL.map(|curve| {
+                    let adsr = Adsr { curve, ..adsr };
+                    Item::new(curve.name(), pick(ModSlot { adsr, ..modulator }))
+                        .meaning(curve.meaning())
+                });
+                (CURVE_TITLES[slot], curves.to_vec())
             }
             ModField::Mode if modulator.kind == ModKind::Lfo => {
                 let modes = LfoMode::ALL.map(|mode| {

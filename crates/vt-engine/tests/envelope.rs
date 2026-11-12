@@ -3,7 +3,7 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::envelope::Adsr;
+use vt_model::envelope::{Adsr, Curve};
 use vt_model::modulation::ModSlot;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
@@ -104,6 +104,39 @@ fn a_note_follows_attack_decay_and_sustain() {
     assert!(during > 0.5 && during < 0.75, "{during}");
     close(left(&out, 30 * MS), 0.5);
     close(left(&out, 100 * MS), 0.5);
+}
+
+#[test]
+fn a_curve_bends_a_notes_attack_decay_and_release() {
+    let curved = |curve, sustain, release_ms| {
+        let mut slot = adsr(10, 40, sustain, release_ms);
+        slot.adsr.curve = curve;
+        render(song(&[NOTE, OFF], slot), flat(), STEP * 2)
+    };
+    // Halfway through its attack and its decay, `Lin` is halfway; `Exp` starts slowly and falls
+    // fast, and `Snap` falls faster still.
+    let lin = curved(Curve::Lin, 0, 0);
+    close(left(&lin, 5 * MS), 0.5);
+    close(left(&lin, 30 * MS), 0.5);
+    let exp = curved(Curve::Exp, 0, 0);
+    let snap = curved(Curve::Snap, 0, 0);
+    assert!(left(&exp, 5 * MS) < 0.2);
+    assert_eq!(left(&snap, 5 * MS), left(&exp, 5 * MS), "the same attack");
+    let (exp_half, snap_half) = (left(&exp, 30 * MS), left(&snap, 30 * MS));
+    assert!(
+        snap_half < exp_half && exp_half < 0.2,
+        "{snap_half} {exp_half}"
+    );
+    // Each lands on time all the same.
+    for out in [&lin, &exp, &snap] {
+        close(left(out, 50 * MS), 0.0);
+    }
+    // A release bends too.
+    let lin = curved(Curve::Lin, 100, 40);
+    close(left(&lin, STEP + 20 * MS), 0.5);
+    let snap = curved(Curve::Snap, 100, 40);
+    assert!(left(&snap, STEP + 20 * MS) < 0.05);
+    assert_eq!(left(&snap, STEP + 41 * MS), 0.0);
 }
 
 #[test]

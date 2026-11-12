@@ -22,6 +22,7 @@ use vt_model::arpeggio::{ArpMode, ArpRate, MOST_OCTAVES};
 use vt_model::constants::{
     BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET, TICKS_PER_STEP,
 };
+use vt_model::envelope::Curve;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{LfoMode, Rate, Shape};
@@ -465,6 +466,14 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             let modulator = &track.mods[slot];
             let (adsr, lfo) = (&modulator.adsr, &modulator.lfo);
             match field {
+                // An envelope's curve is a musical list, which leaves the layout as it is.
+                ModField::Mode if modulator.kind == ModKind::Adsr => list(
+                    Curve::ALL.iter().map(|curve| curve.name().to_owned()),
+                    Curve::ALL
+                        .iter()
+                        .position(|curve| *curve == adsr.curve)
+                        .unwrap_or(0),
+                ),
                 // What a slot is, the app's alone; an LFO's mode is a switch while it has two.
                 ModField::Type | ModField::Mode | ModField::Polarity | ModField::Reset => {
                     return None;

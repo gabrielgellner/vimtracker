@@ -14,12 +14,12 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::Adsr;
+use vt_model::envelope::{Adsr, Curve};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Lfo, LfoMode, Rate, Shape, note_rates};
-use vt_model::modulation::{MAX_DEPTH, ModSlot, Polarity};
+use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Song, Track, trim_text};
 use vt_model::speed::Speed;
@@ -286,7 +286,10 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
             match field {
                 // What a slot is, the app's alone.
                 ModField::Type => return None,
-                ModField::Mode => lfo.mode = pick(&LfoMode::ALL, position),
+                ModField::Mode => match was.kind {
+                    ModKind::Adsr => adsr.curve = pick(&Curve::ALL, position),
+                    ModKind::Lfo => lfo.mode = pick(&LfoMode::ALL, position),
+                },
                 ModField::Polarity => modulator.polarity = Some(pick(&Polarity::ALL, position)),
                 ModField::Destination => {
                     modulator.destination =

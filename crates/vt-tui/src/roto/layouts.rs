@@ -494,9 +494,10 @@ const PLAY: DeviceLayout = live(
 /// turned by mistake, one arrow away.
 const DEST_PAGE: Page<Setting> = knobs("Dest", [s("dest"), __, __, __, __, __, __, __]);
 
-/// An ADSR slot's: attack, decay, sustain and release, then how far it goes, with its reset on the
-/// button under `Attack`, as it starts the envelope again from nothing, and its polarity under
-/// `Depth`, lit for `Bi`; where it goes on the next page.
+/// An ADSR slot's: attack, decay, sustain and release, then how far it goes and its curve, a
+/// musical list that leaves the layout as it is, with its reset on the button under `Attack`, as
+/// it starts the envelope again from nothing, and its polarity under `Depth`, lit for `Bi`; where
+/// it goes on the next page.
 const ADSR: DeviceLayout = stored(
     "adsr",
     &[
@@ -508,7 +509,7 @@ const ADSR: DeviceLayout = stored(
                 s("sustain"),
                 s("release"),
                 s("depth"),
-                __,
+                s("mode"),
                 __,
                 __,
             ],

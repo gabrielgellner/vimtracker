@@ -5,6 +5,7 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET};
+use vt_model::envelope::Curve;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
@@ -71,10 +72,14 @@ fn adjust_mod(
             value.saturating_sub(time_step(value.saturating_sub(1)) * size)
         }
     };
+    let kind = modulator.kind;
     let (adsr, lfo) = (&mut modulator.adsr, &mut modulator.lfo);
     match field {
         ModField::Type => {}
-        ModField::Mode => lfo.mode = next_in(&LfoMode::ALL, lfo.mode, up),
+        ModField::Mode => match kind {
+            ModKind::Adsr => adsr.curve = next_in(&Curve::ALL, adsr.curve, up),
+            ModKind::Lfo => lfo.mode = next_in(&LfoMode::ALL, lfo.mode, up),
+        },
         ModField::Polarity => modulator.polarity = Some(modulator.polarity().other()),
         ModField::Destination => {
             let mut choices = vec![None];
@@ -149,7 +154,10 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
                 ..modulator
             };
         }
-        ModField::Mode => lfo.mode = fresh.lfo.mode,
+        ModField::Mode => match modulator.kind {
+            ModKind::Adsr => adsr.curve = fresh.adsr.curve,
+            ModKind::Lfo => lfo.mode = fresh.lfo.mode,
+        },
         ModField::Attack => adsr.attack_ms = fresh.adsr.attack_ms,
         ModField::Decay => adsr.decay_ms = fresh.adsr.decay_ms,
         ModField::Sustain => adsr.sustain = fresh.adsr.sustain,

@@ -384,14 +384,15 @@ fn a_live_device_has_its_buttons_on_two_step_knobs_above_them() {
     let device = live_device(Page::Mod, 0, envelope, track, &song, false);
     assert!(!device.stored);
     assert!(device.switches.is_empty());
-    // Button 1's reset, under `Attack`, on the nearest free knob of the page, the sixth.
-    let reset = device.controls[5].as_ref().unwrap();
+    // Button 1's reset, under `Attack`, on the nearest free knob of the page, the seventh, as
+    // the sixth is its curve.
+    let reset = device.controls[6].as_ref().unwrap();
     assert_eq!(reset.feel, Feel::Switch);
     assert_eq!(reset.name.as_str(), "Reset");
-    // Stored, it's on button 1, and knob 6 is free.
+    // Stored, it's on button 1, and knob 7 is free.
     let stored = live_device(Page::Mod, 0, envelope, track, &song, true);
     assert!(stored.stored);
-    assert!(stored.controls[5].is_none());
+    assert!(stored.controls[6].is_none());
     assert_eq!(stored.switches[0].as_ref().unwrap().name.as_str(), "Reset");
     assert_eq!(stored.key, "vimtracker:adsr");
 }
@@ -631,4 +632,38 @@ fn a_modulators_polarity_button_is_lit_for_both_ways_and_a_press_flips_it() {
         // Pressed where it already is, nothing happens.
         assert!(turned(polarity, 0, &next, if lit { 0 } else { KNOB_TOP }).is_none());
     }
+}
+
+#[test]
+fn an_envelopes_curve_is_a_knob_of_three_after_its_depth() {
+    use vt_model::action::edit;
+    use vt_model::envelope::Curve;
+    use vt_roto::live::{KNOB_TOP, position_of};
+    use vt_tui::roto::edits::{turned, value_text};
+    use vt_tui::track_page::ModField;
+    assert_eq!(first_knobs(layout_named("adsr"))[5], "mode");
+    let song = std::sync::Arc::new(Song::new(1));
+    let track = &song.tracks[0];
+    // `Mod 2`, read third, after `Mod 1` and `Mod 4`.
+    let spec = &Page::Mod.devices(track)[2];
+    for stored in [false, true] {
+        let device = live_device(Page::Mod, 2, spec, track, &song, stored);
+        let knob = device.controls[5].as_ref().unwrap();
+        assert_eq!(knob.name.as_str(), "Curve");
+        let steps: Vec<String> = knob
+            .feel
+            .step_names()
+            .iter()
+            .map(|name| name.as_str().to_owned())
+            .collect();
+        assert_eq!(steps, ["Exp", "Lin", "Snap"]);
+        assert_eq!(knob.position, 0);
+    }
+    // Turned, it chooses the curve, which its screen names.
+    let curve = Control::Mod(1, ModField::Mode);
+    let next = edit(&song, &turned(curve, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].adsr.curve, Curve::Snap);
+    assert_eq!(value_text(curve, &next.tracks[0], &next), "Snap");
+    let next = edit(&song, &turned(curve, 0, &song, position_of(1, 3)).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].adsr.curve, Curve::Lin);
 }

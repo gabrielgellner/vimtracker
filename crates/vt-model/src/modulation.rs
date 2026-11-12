@@ -49,9 +49,18 @@ impl ModKind {
         matches!(self, Self::Adsr)
     }
 
-    /// Whether it has a mode, which its title shows after it.
+    /// Whether it has a mode, which its title shows after it. Every type has one so far: an
+    /// envelope's curve and an LFO's mode.
     pub fn has_mode(self) -> bool {
-        matches!(self, Self::Lfo)
+        matches!(self, Self::Adsr | Self::Lfo)
+    }
+
+    /// What its mode is called, as the status line and the Roto name it.
+    pub fn mode_label(self) -> &'static str {
+        match self {
+            Self::Adsr => "Curve",
+            Self::Lfo => "Mode",
+        }
     }
 
     /// Which way it moves what it reaches unless its slot says otherwise: an envelope rises from
@@ -204,7 +213,7 @@ impl ModSlot {
     /// The name of its mode, for a type that has one.
     pub fn mode_name(&self) -> Option<&'static str> {
         match self.kind {
-            ModKind::Adsr => None,
+            ModKind::Adsr => Some(self.adsr.curve.name()),
             ModKind::Lfo => Some(self.lfo.mode.name()),
         }
     }

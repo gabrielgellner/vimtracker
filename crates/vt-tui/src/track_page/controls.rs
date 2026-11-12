@@ -303,6 +303,9 @@ impl Control {
 
     /// The setting's name on screen, on this track, as each machine names its own.
     pub fn label_on(self, track: &Track) -> &'static str {
+        if let Self::Mod(slot, ModField::Mode) = self {
+            return track.mods[slot].kind.mode_label();
+        }
         self.setting_on(track)
             .map_or_else(|| self.label(), SettingId::name)
     }

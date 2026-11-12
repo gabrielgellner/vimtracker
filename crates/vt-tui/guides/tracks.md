@@ -760,7 +760,8 @@ accumulator beside the arpeggio under them. A return, a group and the master hav
 no notes to move, so their page ends with the slots.
 
 A slot's title says what it is and where it goes: `Mod 4`, its switch, green while
-it's in, its type, its mode if the type has one, its polarity, and `→` its `Dest`,
+it's in, its type, its mode (an envelope's curve, or how notes start an LFO), its
+polarity, and `→` its `Dest`,
 so `Mod 4  LFO  Trig  Bi  → Cut` reads as what it's for. `---` there is dim, as it goes
 nowhere. Its settings are in two columns of three, and its shape or cycle is in a
 box on its right. The device with the cursor has the brighter frame.
@@ -814,6 +815,7 @@ and `Reset` down the right.
 
 | Setting | Value |
 |---|---|
+| Curve | In the title: `Exp`, `Lin` or `Snap`, how its stages bend |
 | Dest | In the title: what it moves, such as `Cut`, or `---` |
 | Attack, Decay | Milliseconds, up to 8000 |
 | Sustain | The percent it holds at while the note lasts |
@@ -838,8 +840,19 @@ a drum is often a Decay with Sustain at `0%`, and at `Gate` 100% Release only ru
 on an `OFF`. To make notes shorter, lower `Gate` in the Play device, give a row a
 length of its own, or put `OFF` on a step.
 
-Decays and releases fall fast and then slow, as an analog envelope does, and an
-attack starts slowly.
+**The curve** is the envelope's mode, after its type in the title, and bends
+every stage at once:
+
+| Curve | Attack | Decay and release |
+|---|---|---|
+| `Exp` | Starts slowly | Fast, then slow, as analog. The default |
+| `Lin` | Straight | Straight |
+| `Snap` | Starts slowly | Twice as fast at first, then a long tail |
+
+Halfway through a decay to nothing, `Lin` is 6 dB down, `Exp` 18 and `Snap` 35, so
+`Snap` gives a drum or a pluck a sharper snap for the same time. The picture draws
+the curve it plays. `=` and `-` on it go through the three, `K` lists them, and `x`
+puts back `Exp`. A step can't lock it.
 
 ## LFOs
 

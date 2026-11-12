@@ -503,6 +503,7 @@ pub fn dot(diameter: usize, color: [u8; 3]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vt_model::envelope::Curve;
 
     /// Where the line's middle is down a column of pixels, weighting each by how much of it the
     /// line covers, if the line is in it.
@@ -827,14 +828,17 @@ mod tests {
     #[test]
     fn an_envelopes_shape_is_its_adsr_within_a_pixel_over_its_baseline_and_stages() {
         let size = (360, 195);
-        for (attack_ms, decay_ms, sustain, release_ms) in
-            [(1, 200, 0x40, 50), (300, 80, 0xC0, 2000), (20, 20, 0, 400)]
+        let times = [(1, 200, 0x40, 50), (300, 80, 0xC0, 2000), (20, 20, 0, 400)];
+        for ((attack_ms, decay_ms, sustain, release_ms), curve) in times
+            .into_iter()
+            .flat_map(|times| Curve::ALL.map(|curve| (times, curve)))
         {
             let shape = Adsr {
                 attack_ms,
                 decay_ms,
                 sustain,
                 release_ms,
+                curve,
                 ..Adsr::default()
             };
             let plot = envelope(&shape, size);
