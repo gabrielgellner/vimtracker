@@ -165,13 +165,10 @@ impl FxCommand {
         }
     }
 
-    /// Whether its value has a fine part: a continuous setting's does, and an event's or a list's
-    /// doesn't.
+    /// Whether its value has a fine part: a continuous position's does, and one on the level scale,
+    /// an event's or a list's doesn't (decision 175).
     pub fn has_fine(self) -> bool {
-        matches!(
-            self,
-            Self::Set(id) if matches!(id.entry().kind, Kind::Continuous { .. })
-        )
+        matches!(self, Self::Set(id) if id.entry().kind.has_fine())
     }
 
     /// The highest value this takes with its fine part, which is `00` at the top.
@@ -179,9 +176,13 @@ impl FxCommand {
         u16::from(self.highest()) << 8
     }
 
-    /// Whether its value can glide to the next: a continuous setting's can, and a list's jumps.
+    /// Whether its value can glide to the next: a continuous setting's can, the level scale's
+    /// with no fine part too, and a list's jumps.
     pub fn glides(self) -> bool {
-        self.has_fine()
+        matches!(
+            self,
+            Self::Set(id) if matches!(id.entry().kind, Kind::Continuous { .. })
+        )
     }
 
     /// Whether the value stays in force after this step: a setting's does, an event's doesn't.

@@ -67,6 +67,17 @@ pub fn dim() -> Style {
     Style::new().fg(OVERLAY2)
 }
 
+/// A fader's value while the steps drive it, in the colour of what's playing, as a bar's fill is.
+pub fn automated() -> Style {
+    Style::new().fg(MAUVE)
+}
+
+/// The mark of a fader a hand has taken over from the steps, in the colour of a button lit to
+/// give it back, as Live's Re-Enable Automation is lit.
+pub fn taken() -> Style {
+    Style::new().fg(PEACH)
+}
+
 /// Text that helps without asking to be read.
 pub fn faint() -> Style {
     Style::new().fg(OVERLAY0)
