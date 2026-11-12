@@ -1015,9 +1015,27 @@ const VOWEL: DeviceLayout = live(
         ],
     )],
 );
+/// The shift and how it's spread and follows the note, then the loop's delay and feedback, as the
+/// page has its columns.
+const FREQ_SHIFT: DeviceLayout = live(
+    "fx/freqshift",
+    &[knobs(
+        "Freq Shift",
+        [
+            s("shift"),
+            s("spread"),
+            s("track"),
+            GAP,
+            s("time"),
+            s("feedback"),
+            s("mix"),
+            s("gain"),
+        ],
+    )],
+);
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 58] = [
+pub const ALL: [&DeviceLayout; 59] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1076,6 +1094,7 @@ pub const ALL: [&DeviceLayout; 58] = [
     &RESO,
     &COMB,
     &VOWEL,
+    &FREQ_SHIFT,
 ];
 
 /// A machine's layout.
@@ -1141,6 +1160,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::Reso(_) => &RESO,
         Insert::Comb(_) => &COMB,
         Insert::Vowel(_) => &VOWEL,
+        Insert::FreqShift(_) => &FREQ_SHIFT,
     }
 }
 
