@@ -7,13 +7,14 @@ use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::groove::GROOVE_CHOICES;
 use crate::insert::{
     ALGORITHM_NAMES, CHORUS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS,
-    EQ_PARAMS, FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS,
-    LPG_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS,
-    ROTARY_PARAMS, SPACE_PARAMS, SPRING_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES,
-    VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db, fine_cents,
-    flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, input_db,
-    limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms, shift_delay_ms,
-    shift_hertz, spread_hertz, tape_drive_db, threshold_db, vowel_blend,
+    EQ_PARAMS, EXCITER_PARAMS, FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert,
+    LIMIT_PARAMS, LPG_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS,
+    REVERB_PARAMS, ROTARY_PARAMS, SPACE_PARAMS, SPRING_PARAMS, Setting, TAPE_PARAMS, Triggering,
+    VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db,
+    exciter_attack_ms, exciter_release_ms, exciter_tone_hz, fine_cents, flanger_delay_ms,
+    grain_density, grain_length, grain_ms, grain_time_seconds, input_db, limit_release_ms,
+    makeup_db, plate_size, range_db, ratio, release_ms, shift_delay_ms, shift_hertz, spread_hertz,
+    tape_drive_db, threshold_db, vowel_blend,
 };
 use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
@@ -94,6 +95,10 @@ pub enum Units {
     ShiftHertz,
     SpreadHertz,
     LoopTime,
+    /// Where an exciter's highs start, and how fast its detector rises and falls.
+    ExciterTone,
+    ExciterAttack,
+    ExciterRelease,
     /// The acid voice's cutoff, its filter envelope's decay, how long it slides and how hard it
     /// drives its filter.
     AcidCutoff,
@@ -327,6 +332,9 @@ impl Kind {
                     ms if ms < 0.005 => "0 ms".to_owned(),
                     ms => milliseconds(ms),
                 },
+                Units::ExciterTone => hertz(f64::from(exciter_tone_hz(coarse as f32))),
+                Units::ExciterAttack => milliseconds(exciter_attack_ms(coarse as f32)),
+                Units::ExciterRelease => milliseconds(exciter_release_ms(coarse as f32)),
                 Units::AcidCutoff => hertz(f64::from(acid_cutoff_hz(coarse as f32))),
                 Units::AcidDecay => milliseconds(acid_decay_ms(coarse as f32)),
                 Units::Slide => milliseconds(slide_ms(coarse as f32)),
@@ -1067,10 +1075,11 @@ pub enum Effect {
     Spring,
     Space,
     Rotary,
+    Exciter,
 }
 
 impl Effect {
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 23] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -1093,6 +1102,7 @@ impl Effect {
         Self::Spring,
         Self::Space,
         Self::Rotary,
+        Self::Exciter,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -1119,6 +1129,7 @@ impl Effect {
             Self::Vowel => &VOWEL_PARAMS,
             Self::FreqShift => &FREQ_SHIFT_PARAMS,
             Self::Spring => &SPRING_PARAMS,
+            Self::Exciter => &EXCITER_PARAMS,
             Self::Rotary => &ROTARY_PARAMS,
             Self::Space => &SPACE_PARAMS,
         }
@@ -1146,6 +1157,7 @@ impl Effect {
             Self::Vowel => "vowel",
             Self::FreqShift => "freqshift",
             Self::Spring => "spring",
+            Self::Exciter => "exciter",
             Self::Rotary => "rotary",
             Self::Space => "space",
         }
@@ -1173,6 +1185,7 @@ impl Effect {
             Self::Vowel => "Vowel",
             Self::FreqShift => "Freq Shift",
             Self::Spring => "Spring",
+            Self::Exciter => "Exciter",
             Self::Rotary => "Rotary",
             Self::Space => "Space",
         }
@@ -1202,6 +1215,7 @@ impl Effect {
             Insert::Vowel(_) => Some(Self::Vowel),
             Insert::FreqShift(_) => Some(Self::FreqShift),
             Insert::Spring(_) => Some(Self::Spring),
+            Insert::Exciter(_) => Some(Self::Exciter),
             Insert::Rotary(_) => Some(Self::Rotary),
             Insert::Space(_) => Some(Self::Space),
         }
@@ -1246,6 +1260,9 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::ShiftHertz => (true, Units::ShiftHertz),
                 Setting::ShiftSpread => (false, Units::SpreadHertz),
                 Setting::LoopTime => (false, Units::LoopTime),
+                Setting::ExciterTone => (false, Units::ExciterTone),
+                Setting::ExciterAttack => (false, Units::ExciterAttack),
+                Setting::ExciterRelease => (false, Units::ExciterRelease),
                 _ => (false, Units::Percent),
             };
             Kind::Continuous {
@@ -1703,6 +1720,30 @@ const fn effect_start(effect: Effect) -> usize {
                 + VOWEL_PARAMS.len()
                 + FREQ_SHIFT_PARAMS.len()
         }
+        Effect::Exciter => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+                + PITCH_PARAMS.len()
+                + GRAINS_PARAMS.len()
+                + WARPS_PARAMS.len()
+                + LPG_PARAMS.len()
+                + RESO_PARAMS.len()
+                + COMB_PARAMS.len()
+                + VOWEL_PARAMS.len()
+                + FREQ_SHIFT_PARAMS.len()
+                + SPRING_PARAMS.len()
+                + SPACE_PARAMS.len()
+                + ROTARY_PARAMS.len()
+        }
         Effect::Rotary => {
             DISTORT_PARAMS.len()
                 + DELAY_PARAMS.len()
@@ -1775,7 +1816,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + FREQ_SHIFT_PARAMS.len()
     + SPRING_PARAMS.len()
     + SPACE_PARAMS.len()
-    + ROTARY_PARAMS.len();
+    + ROTARY_PARAMS.len()
+    + EXCITER_PARAMS.len();
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
