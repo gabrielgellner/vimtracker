@@ -756,7 +756,7 @@ can't be muted or soloed.
 ## The Mod page
 
 Each track has six mod slots, `Mod 1` to `Mod 6`, and each slot is a type you choose:
-an `ADSR` envelope or an `LFO`, in any mix. A new track has three ADSRs, then three
+an `ADSR` or an `AHD` envelope, or an `LFO`, in any mix. A new track has three ADSRs, then three
 LFOs. The slots work out in order, so a slot can move only those after it, and never
 round again.
 
@@ -766,7 +766,8 @@ accumulator beside the arpeggio under them. A return, a group and the master hav
 no notes to move, so their page ends with the slots.
 
 A slot's title says what it is and where it goes: `Mod 4`, its switch, green while
-it's in, its type, its mode if the type has one, its polarity, and `→` its `Dest`,
+it's in, its type, its mode (an envelope's curve, or how notes start an LFO), its
+polarity, and `→` its `Dest`,
 so `Mod 4  LFO  Trig  Bi  → Cut` reads as what it's for. `---` there is dim, as it goes
 nowhere. Its settings are in two columns of three, and its shape or cycle is in a
 box on its right. The device with the cursor has the brighter frame.
@@ -782,7 +783,7 @@ box on its right. The device with the cursor has the brighter frame.
 | `x` | Put back the slot's first type, or on the polarity, the type's |
 | `b` | Switch this slot out, to hear without it, or back in |
 
-**Changing a type.** `K` on the type lists `ADSR` and `LFO`, each with what it
+**Changing a type.** `K` on the type lists `ADSR`, `AHD` and `LFO`, each with what it
 does. Choosing one is one undo step, and the slot keeps its `Dest`, its `Depth` and
 its switch. Each slot also keeps every type's own settings, so trying an LFO in
 `Mod 2` and going back finds its envelope as it was. What it moves glides from the
@@ -820,6 +821,7 @@ and `Reset` down the right.
 
 | Setting | Value |
 |---|---|
+| Curve | In the title: `Exp`, `Lin` or `Snap`, how its stages bend |
 | Dest | In the title: what it moves, such as `Cut`, or `---` |
 | Attack, Decay | Milliseconds, up to 8000 |
 | Sustain | The percent it holds at while the note lasts |
@@ -844,8 +846,44 @@ a drum is often a Decay with Sustain at `0%`, and at `Gate` 100% Release only ru
 on an `OFF`. To make notes shorter, lower `Gate` in the Play device, give a row a
 length of its own, or put `OFF` on a step.
 
-Decays and releases fall fast and then slow, as an analog envelope does, and an
-attack starts slowly.
+**The curve** is the envelope's mode, after its type in the title, and bends
+every stage at once:
+
+| Curve | Attack | Decay and release |
+|---|---|---|
+| `Exp` | Starts slowly | Fast, then slow, as analog. The default |
+| `Lin` | Straight | Straight |
+| `Snap` | Starts slowly | Twice as fast at first, then a long tail |
+
+Halfway through a decay to nothing, `Lin` is 6 dB down, `Exp` 18 and `Snap` 35, so
+`Snap` gives a drum or a pluck a sharper snap for the same time. The picture draws
+the curve it plays. `=` and `-` on it go through the three, `K` lists them, and `x`
+puts back `Exp`. A step can't lock it.
+
+## AHD envelopes
+
+An `AHD` slot rises to full over its `Attack`, holds there, then falls to nothing
+over its `Decay`, for a drum's punch or a pluck that doesn't care how long the note
+is. It has the same curve, `Reset` and `Depth` as an ADSR, and its shape is drawn
+the same way, with the hold a stage of its own between two dotted lines. Its times
+are down the left, and its depth and reset down the right.
+
+| Setting | Value |
+|---|---|
+| Curve | In the title: `Exp`, `Lin` or `Snap` |
+| Attack, Decay | Milliseconds, up to 8000 |
+| Hold | Milliseconds, up to 2000, or `Note` |
+| Depth | How far full moves it, in hex. Negative flips it |
+| Reset | On, it starts from zero each note; off, it goes on |
+
+**A timed hold** plays through whatever the note's length: it holds for its time,
+then decays, even if the note ended first or goes on long after, as the M8's AHD
+does. On `Vol`, shaping the notes, it ends each note when its decay ends.
+
+**Holding for the note,** `Note` lasts as long as the note does, then decays from its end, as
+the Digitakt's `HOLD NOTE` does. It's below `0 ms`: `-` from `0 ms` goes to it, and
+`=` comes back. Typing `note` sets it too, and a number sets a time. A new AHD holds
+for 30 ms, with a 1 ms attack and a 200 ms decay.
 
 ## LFOs
 

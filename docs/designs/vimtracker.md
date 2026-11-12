@@ -461,13 +461,16 @@ Song                               song.ron, refused unless format_version is FO
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
 *   **Mod slots** (`modulation.rs`, decision 165). Each track has `MOD_SLOTS` (6) slots on its
-    Mod page, each a `ModSlot` of a type, `ModKind::Adsr` or `ModKind::Lfo`, with a destination
+    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd` or `Lfo`, with a destination
     setting, a depth, a switch and a polarity (`Uni` or `Bi`, its type's until one is chosen),
     which every type shares, and each type's own settings, which a
     slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
     rate is a note division or bars, a count of steps, or hertz, and its mode `Free` or `Trig`. An
-    ADSR is in milliseconds, with a reset. The first envelope-type slot on `Vol` shapes the notes
-    (`note_shape_slot`). Slots work out in order, so a slot's destination can be the depth or phase
+    ADSR is in milliseconds, with a reset and a curve (`Exp`, `Lin` or `Snap`, its mode), and an
+    AHD the same with a hold of a time or `Note` in place of a sustain and release. The first
+    envelope-type slot on `Vol` shapes the notes (`note_shape_slot`): its `ModSlot::envelope`, an
+    `envelope::Envelope` of either type, is what each voice keeps as its `shape`, and a one-shot
+    (an AHD with a timed hold) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
     of a slot after it (`SettingId::for_mod`), never one before.
 *   **Accumulators and arpeggios.** A step's `ACU` and `ARP` say how far, and the track's
     `accumulation` and `arpeggio` say how they move and when they start again.
@@ -1026,7 +1029,7 @@ sample plays. Elektron's per-track idea is kept, and its `SPD` and `MULT` are no
 whose depth is in semitones. A second envelope on `Vol` moves the level by its depth on the level scale. The shape of `Env 1`, if it's not on `Vol`, is a plain 1 ms attack and 50 ms release.
 
 *   **Curves:** taken from Mutable Instruments' Peaks rather than Polyend's straight segments, which on level hang on and then drop. An attack follows `t^3.32`, and decay and release
-    `(1 - e^-4t) / (1 - e^-4)`, so times are exact and stages land exactly on their levels.
+    `(1 - e^-4t) / (1 - e^-4)`, so times are exact and stages land exactly on their levels. Decision 176 makes these one of three, the envelope's mode `Curve`: `Exp` is these, `Lin` is straight, and `Snap` falls with `e^-8t`.
 *   **Reset:** on by default, as on Elektron, starting each note's envelope from zero. Off goes on from the current level, as Peaks does without its hard reset. Release starts from the current level either way.
 *   **Notes:** a note holds until the next note or an `OFF`. The next note fades the last with the usual short fade rather than running its release, so `Sustain 0%` suits a drum. `OFF` and `KIL` start the release of mod envelopes.
 *   **Speed:** position is worked out from frames played, like LFOs. What envelopes add to `Cut`, `Res` and `Pan` passes through a `FAST_SMOOTHING_MS` smoother rather than `SMOOTHING_MS`, and `Pitch` slews per frame, so a fast snap survives.

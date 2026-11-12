@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use vt_model::envelope::Adsr;
+use vt_model::envelope::Envelope;
 use vt_model::modulation::Polarity;
 
 use super::plot::{LfoDrawing, Shade};
@@ -30,7 +30,7 @@ pub enum Shape {
     /// changes or the file's frames come in.
     Waveform(Thumbnail),
     /// An envelope's settings and its polarity.
-    Envelope(Adsr, Polarity),
+    Envelope(Envelope, Polarity),
     /// An LFO's wave, where its cycle starts and its depth's sign, drawn again only when one of
     /// those changes, never for its rate or the size of its depth.
     Lfo(LfoDrawing),
@@ -138,11 +138,12 @@ impl PanelImages {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vt_model::envelope::Adsr;
 
     #[test]
     fn an_image_is_found_until_its_shape_changes_and_waits_while_it_just_changed() {
         let mut images = PanelImages::default();
-        let shape = Shape::Envelope(Adsr::default(), Polarity::Uni);
+        let shape = Shape::Envelope(Envelope::Adsr(Adsr::default()), Polarity::Uni);
         let key = PanelKey::Mod(0);
         assert_eq!(images.find(key, Shade::Dim, &shape, 0, 2), Found::Missing);
         assert_eq!(images.hold(key, Shade::Dim, shape.clone(), 5, 0), None);
@@ -153,10 +154,10 @@ mod tests {
         // Each shade is its own.
         assert_eq!(images.find(key, Shade::Faint, &shape, 1, 2), Found::Missing);
         let changed = Shape::Envelope(
-            Adsr {
+            Envelope::Adsr(Adsr {
                 attack_ms: 9,
                 ..Adsr::default()
-            },
+            }),
             Polarity::Uni,
         );
         // The first change is drawn at once.
@@ -164,10 +165,10 @@ mod tests {
         assert_eq!(images.hold(key, Shade::Dim, changed, 6, 1), Some(5));
         // Another the next frame waits for the one after.
         let again = Shape::Envelope(
-            Adsr {
+            Envelope::Adsr(Adsr {
                 attack_ms: 10,
                 ..Adsr::default()
-            },
+            }),
             Polarity::Uni,
         );
         assert_eq!(

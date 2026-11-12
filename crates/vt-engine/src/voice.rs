@@ -21,7 +21,7 @@ use crate::dsp::wave_terrain::WaveTerrain;
 use crate::dsp::waveshaping::Waveshaping;
 use crate::dsp::wavetable::Wavetable;
 use vt_model::constants::DECLICK_FRAMES;
-use vt_model::envelope::Adsr;
+use vt_model::envelope::Envelope;
 use vt_model::playable::Span;
 use vt_model::sample::SampleData;
 use vt_model::samples::SampleId;
@@ -202,7 +202,7 @@ pub struct Voice {
     pan: [f32; 2],
     pan_target: [f32; 2],
     level: f32,
-    shape: Adsr,
+    shape: Envelope,
     rate: u32,
     /// Frames since the stage began.
     elapsed: u64,
@@ -233,7 +233,7 @@ impl Default for Voice {
             pan: [1.0, 1.0],
             pan_target: [1.0, 1.0],
             level: 0.0,
-            shape: Adsr::note_shape(),
+            shape: Envelope::note_shape(),
             rate: 48_000,
             elapsed: 0,
             release_after: None,
@@ -264,7 +264,7 @@ pub struct NoteOn {
     /// Whether its velocity accents it, for a voice with an accent of its own.
     pub accent: bool,
     /// The shape of its level.
-    pub shape: Adsr,
+    pub shape: Envelope,
     pub release_after: Option<u32>,
 }
 
@@ -441,11 +441,14 @@ impl Voice {
         self.pitch_target = pitch;
     }
 
-    /// Start the envelope's release.
+    /// Start the envelope's release. A one-shot shape plays on through, though a synth's own
+    /// gate still closes.
     pub fn release(&mut self) {
         if matches!(self.stage, Stage::Held { .. }) {
-            self.stage = Stage::Released { from: self.level };
-            self.elapsed = 0;
+            if !self.shape.one_shot() {
+                self.stage = Stage::Released { from: self.level };
+                self.elapsed = 0;
+            }
             if let Some(synth) = &mut self.synth {
                 synth.release();
             }
