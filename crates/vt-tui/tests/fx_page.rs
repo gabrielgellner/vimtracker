@@ -596,7 +596,7 @@ fn zero_and_dollar_go_to_the_ends_of_a_slots_row() {
     press(&mut app, "K");
     press(&mut app, "delay");
     special(&mut app, KeyCode::Enter);
-    // Delay's first row is Time, Low cut and Width.
+    // Delay's first row is Time, Low cut, Retime and Width.
     press(&mut app, "j");
     assert_eq!(app.track_control(), Control::InsertParam(0, 0));
     press(&mut app, "$");
@@ -605,7 +605,7 @@ fn zero_and_dollar_go_to_the_ends_of_a_slots_row() {
     assert_eq!(app.track_control(), Control::InsertParam(0, 0));
     // Its last is Ping-pong, Drive and Gain.
     press(&mut app, "jj$");
-    assert_eq!(app.track_control(), Control::InsertParam(0, 8));
+    assert_eq!(app.track_control(), Control::InsertParam(0, 10));
     press(&mut app, "0");
     assert_eq!(app.track_control(), Control::InsertParam(0, 2));
     press(&mut app, "h");

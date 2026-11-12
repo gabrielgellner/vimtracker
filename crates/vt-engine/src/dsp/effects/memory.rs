@@ -129,7 +129,7 @@ impl Memory {
     /// How many quiet frames in a row mean nothing's left in it.
     pub fn quiet_frames(&self, rate: u32) -> u32 {
         match self {
-            Self::Delay(delay) => delay.frames() as u32,
+            Self::Delay(delay) => delay.reach() as u32,
             Self::Reverb(_) | Self::Plate(_) => (REVERB_QUIET_SECONDS * rate as f32) as u32,
             Self::Chorus(chorus) => chorus.frames() as u32,
             Self::Limit(limiter) => limiter.frames() as u32,

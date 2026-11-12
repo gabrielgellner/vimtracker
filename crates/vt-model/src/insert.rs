@@ -261,6 +261,8 @@ pub enum Setting {
     Time,
     Feedback,
     PingPong,
+    /// Whether a delay glides to a new time or crossfades to it.
+    Retime,
     Width,
     LowCut,
     HighCut,
@@ -291,6 +293,7 @@ impl Setting {
             Self::SweepRate => SWEEP_NAMES.len() as u8 - 1,
             Self::Stages => STAGE_NAMES.len() as u8 - 1,
             Self::PingPong | Self::Freeze => 1,
+            Self::Retime => RETIMES.len() as u8 - 1,
             Self::Shift => SHIFT_NAMES.len() as u8 - 1,
             Self::Wave => WAVE_NAMES.len() as u8 - 1,
             Self::GateMode => GateMode::ALL.len() as u8 - 1,
@@ -318,6 +321,7 @@ impl Setting {
             Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
             Self::Stages => (STAGE_NAMES.len() - 1) as f32,
             Self::PingPong | Self::Freeze => 1.0,
+            Self::Retime => (RETIMES.len() - 1) as f32,
             Self::Shift => (SHIFT_NAMES.len() - 1) as f32,
             Self::Wave => (WAVE_NAMES.len() - 1) as f32,
             Self::GateMode => (GateMode::ALL.len() - 1) as f32,
@@ -349,6 +353,9 @@ pub struct Param {
 
 /// The choices of a setting that's off or on, such as a delay's `Ping-pong`.
 pub const OFF_ON: [&str; 2] = ["Off", "On"];
+/// How a delay goes to a new time: gliding there, which bends the repeats' pitch as tape does, or
+/// jumping, crossfading from where it read to where it reads now, so they keep their pitch.
+pub const RETIMES: [&str; 2] = ["Glide", "Jump"];
 
 impl Param {
     /// Whether it's off or on and nothing else, which the pages show as a toggle.
@@ -518,7 +525,7 @@ pub(crate) const REVERB_PARAMS: [Param; 7] = [
     GAIN_PARAM,
 ];
 /// A delay's, in the order the page shows them.
-pub(crate) const DELAY_PARAMS: [Param; 9] = [
+pub(crate) const DELAY_PARAMS: [Param; 11] = [
     Param {
         name: "Time",
         key: "time",
@@ -572,6 +579,16 @@ pub(crate) const DELAY_PARAMS: [Param; 9] = [
         Setting::Drive,
         Delay::DEFAULT.drive,
     ),
+    Param {
+        name: "Retime",
+        key: "retime",
+        label: Some("RTIM"),
+        setting: Setting::Retime,
+        choices: &RETIMES,
+        wraps: true,
+        default: Delay::DEFAULT.retime,
+    },
+    hex_param("Wow", "wow", "WOW", Setting::Wow, Delay::DEFAULT.wow),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -2007,6 +2024,7 @@ impl Insert {
             Self::Delay(_) => &[
                 &[S::Time, S::Feedback, S::PingPong],
                 &[S::LowCut, S::HighCut, S::Drive],
+                &[S::Retime, S::Wow],
                 &[S::Width, S::Mix, S::Gain],
             ],
             _ => return self.default_grid(),
@@ -2091,6 +2109,12 @@ pub struct Delay {
     pub high_cut: u8,
     /// How hard what comes round again is pushed into a soft clip.
     pub drive: u8,
+    /// How it goes to a new time: `0` glides there, and `1` jumps, crossfading.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub retime: u8,
+    /// How far a slow wobble bends the repeats' pitch, the sides opposite ways, as tape's wow does.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub wow: u8,
     /// From `00`, all dry, to `FF`, all wet.
     pub mix: u8,
     pub gain: u8,
@@ -2112,6 +2136,8 @@ impl Delay {
         low_cut: 0,
         high_cut: 0xFF,
         drive: 0,
+        retime: 0,
+        wow: 0,
         mix: 0x80,
         gain: UNITY_LEVEL,
     };
@@ -2126,6 +2152,8 @@ impl Delay {
             Setting::LowCut => self.low_cut,
             Setting::HighCut => self.high_cut,
             Setting::Drive => self.drive,
+            Setting::Retime => self.retime,
+            Setting::Wow => self.wow,
             Setting::Mix => self.mix,
             Setting::Gain => self.gain,
             _ => 0,
@@ -2144,6 +2172,8 @@ impl Delay {
             Setting::LowCut => delay.low_cut = value,
             Setting::HighCut => delay.high_cut = value,
             Setting::Drive => delay.drive = value,
+            Setting::Retime => delay.retime = value,
+            Setting::Wow => delay.wow = value,
             Setting::Mix => delay.mix = value,
             Setting::Gain => delay.gain = value,
             _ => {}
@@ -3389,6 +3419,11 @@ fn unity_gain() -> u8 {
     UNITY_LEVEL
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero(value: &u8) -> bool {
+    *value == 0
+}
+
 fn default_bits() -> u8 {
     BITS_PARAM.default + LEAST_BITS
 }
@@ -3531,7 +3566,7 @@ mod tests {
         assert_eq!(names(eq, 2), ["", "Mid Q", "", ""]);
         assert_eq!(eq.type_param(), None);
         let delay = Insert::Delay(Delay::DEFAULT);
-        assert_eq!(names(delay, 2), ["Ping-pong", "Drive", "Gain", ""]);
+        assert_eq!(names(delay, 2), ["Ping-pong", "Drive", "", "Gain"]);
         // The rest go in order, with what comes out after.
         let chorus = Insert::Chorus(Chorus::DEFAULT);
         assert_eq!(names(chorus, 0), ["Rate", "Mix", "", ""]);
