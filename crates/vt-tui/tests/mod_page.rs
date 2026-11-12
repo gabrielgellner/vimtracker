@@ -1404,7 +1404,7 @@ fn an_envelopes_curve_is_its_mode_in_the_title_and_its_picture_follows_it() {
             .iter()
             .map(|item| item.label.as_str())
             .collect::<Vec<_>>(),
-        ["Exp", "Lin", "Snap"]
+        ["Exp", "Lin", "Snap", "Analog"]
     );
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
@@ -1418,15 +1418,17 @@ fn an_envelopes_curve_is_its_mode_in_the_title_and_its_picture_follows_it() {
     let now = ids(&mut app);
     assert_ne!(now[0], first[0]);
     assert_eq!(now[1..], first[1..]);
-    // `=` and `-` go through the three, round, `x` puts back `Exp`, and each is one undo step.
+    // `=` and `-` go through the four, round, `x` puts back `Exp`, and each is one undo step.
     press(&mut app, "=");
     assert_eq!(curve(&app), Curve::Snap);
+    press(&mut app, "=");
+    assert_eq!(curve(&app), Curve::Analog);
     press(&mut app, "=");
     assert_eq!(curve(&app), Curve::Exp);
     press(&mut app, "-x");
     assert_eq!(curve(&app), Curve::Exp);
     press(&mut app, "u");
-    assert_eq!(curve(&app), Curve::Snap);
+    assert_eq!(curve(&app), Curve::Analog);
     // An LFO's mode is still its own.
     assert_eq!(app.song().tracks[0].mods[3].lfo.mode, LfoMode::Free);
 }

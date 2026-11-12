@@ -680,15 +680,15 @@ fn an_envelopes_curve_is_a_knob_of_three_after_its_depth() {
             .iter()
             .map(|name| name.as_str().to_owned())
             .collect();
-        assert_eq!(steps, ["Exp", "Lin", "Snap"]);
+        assert_eq!(steps, ["Exp", "Lin", "Snap", "Analog"]);
         assert_eq!(knob.position, 0);
     }
     // Turned, it chooses the curve, which its screen names.
     let curve = Control::Mod(1, ModField::Mode);
     let next = edit(&song, &turned(curve, 0, &song, KNOB_TOP).unwrap()).unwrap();
-    assert_eq!(next.tracks[0].mods[1].adsr.curve, Curve::Snap);
-    assert_eq!(value_text(curve, &next.tracks[0], &next), "Snap");
-    let next = edit(&song, &turned(curve, 0, &song, position_of(1, 3)).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].adsr.curve, Curve::Analog);
+    assert_eq!(value_text(curve, &next.tracks[0], &next), "Analog");
+    let next = edit(&song, &turned(curve, 0, &song, position_of(1, 4)).unwrap()).unwrap();
     assert_eq!(next.tracks[0].mods[1].adsr.curve, Curve::Lin);
 }
 
@@ -740,7 +740,7 @@ fn an_ahd_is_attack_hold_decay_then_depth_and_curve_stored_with_an_adsrs_buttons
     assert_eq!(next.tracks[0].mods[1].adsr, song.tracks[0].mods[1].adsr);
     let curve = Control::Mod(1, ModField::Mode);
     let next = edit(&song, &turned(curve, 0, &song, KNOB_TOP).unwrap()).unwrap();
-    assert_eq!(next.tracks[0].mods[1].ahd.curve, Curve::Snap);
+    assert_eq!(next.tracks[0].mods[1].ahd.curve, Curve::Analog);
     // Its reset's button switches its own.
     let reset = Control::Mod(1, ModField::Reset);
     let next = edit(&song, &turned(reset, 0, &song, 0).unwrap()).unwrap();
