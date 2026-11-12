@@ -14,7 +14,7 @@ use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Re
 use vt_model::action::{Action, TrackControl};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES};
 use vt_model::constants::{MAX_GROUPS, MAX_TRACK_RESET};
-use vt_model::envelope::{Adsr, Ahd, Curve};
+use vt_model::envelope::{Adsr, Ahd, Curve, MAX_RATCHET};
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
@@ -282,14 +282,21 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
         Control::Mod(slot, field) => {
             let was = track.mods[slot];
             let mut modulator = was;
-            let (adsr, ahd, lfo) = (&mut modulator.adsr, &mut modulator.ahd, &mut modulator.lfo);
+            let (adsr, ahd, drum, lfo) = (
+                &mut modulator.adsr,
+                &mut modulator.ahd,
+                &mut modulator.drum,
+                &mut modulator.lfo,
+            );
             let ahd_kind = was.kind == ModKind::Ahd;
+            let drum_kind = was.kind == ModKind::Drum;
             match field {
                 // What a slot is, the app's alone.
                 ModField::Type => return None,
                 ModField::Mode => match was.kind {
                     ModKind::Adsr => adsr.curve = pick(&Curve::ALL, position),
                     ModKind::Ahd => ahd.curve = pick(&Curve::ALL, position),
+                    ModKind::Drum => drum.curve = pick(&Curve::ALL, position),
                     ModKind::Lfo => lfo.mode = pick(&LfoMode::ALL, position),
                 },
                 ModField::Polarity => modulator.polarity = Some(pick(&Polarity::ALL, position)),
@@ -301,6 +308,13 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 ModField::Attack if ahd_kind => ahd.attack_ms = time_at(position),
                 ModField::Attack => adsr.attack_ms = time_at(position),
                 ModField::Decay if ahd_kind => ahd.decay_ms = time_at(position),
+                ModField::Decay if drum_kind => drum.decay_ms = time_at(position),
+                ModField::Peak => drum.peak_ms = time_at(position),
+                ModField::Body => drum.body = whole(position, 100) as u8,
+                ModField::Ratchet => {
+                    let strikes: Vec<u8> = (1..=MAX_RATCHET).collect();
+                    drum.ratchet = pick(&strikes, position);
+                }
                 ModField::Decay => adsr.decay_ms = time_at(position),
                 ModField::Hold => {
                     let steps = hold_steps();

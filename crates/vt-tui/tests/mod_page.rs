@@ -702,7 +702,7 @@ fn k_on_a_slots_type_changes_it_keeping_where_it_goes_and_each_types_settings() 
     let picker = app.picker.as_ref().expect("the type picker");
     assert_eq!(picker.title, "Mod 2 type");
     let depth = app.history.undo_depth();
-    press(&mut app, "jj");
+    press(&mut app, "/lfo");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).kind, ModKind::Lfo);
     assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
@@ -731,14 +731,14 @@ fn k_on_a_slots_type_changes_it_keeping_where_it_goes_and_each_types_settings() 
     assert_eq!(app.track_control(), Control::Mod(1, ModField::Type));
     let depth = app.history.undo_depth();
     press(&mut app, "K");
-    press(&mut app, "kk");
+    press(&mut app, "/adsr");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.history.undo_depth(), depth + 1);
     assert_eq!(slot(&app).kind, ModKind::Adsr);
     assert_eq!(slot(&app).adsr, adsr);
     assert_eq!(slot(&app).depth, 0x40);
     // And again an LFO, finding its phase.
-    press(&mut app, "Kjj");
+    press(&mut app, "K/lfo");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).kind, ModKind::Lfo);
     assert_eq!(slot(&app).lfo.phase, phase);
@@ -768,7 +768,7 @@ fn equals_on_a_type_refuses_and_x_puts_back_the_slots_own() {
     press(&mut app, &format!("{}$K/cut", to_lfo(0)));
     special(&mut app, KeyCode::Enter);
     press(&mut app, "0K");
-    press(&mut app, "kk");
+    press(&mut app, "/adsr");
     special(&mut app, KeyCode::Enter);
     let slot = |app: &App| app.song().tracks[0].mods[3];
     assert_eq!(slot(&app).kind, ModKind::Adsr);
@@ -855,7 +855,7 @@ fn a_slots_picture_follows_its_type() {
     let shown = app.mod_images.unwrap();
     // Mod 3, made an LFO, has a cycle where its envelope's shape was, and its cycle is placed.
     press(&mut app, "}}K");
-    press(&mut app, "jj");
+    press(&mut app, "/lfo");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].mods[2].kind, ModKind::Lfo);
     graphics.sync(&mut app, &mut Vec::new()).unwrap();
@@ -1307,7 +1307,7 @@ fn a_type_change_keeps_a_chosen_polarity_and_otherwise_follows_the_type() {
     let slot = |app: &App| app.song().tracks[0].mods[2];
     let pick = |app: &mut App, up: bool| {
         press(app, "0K");
-        press(app, if up { "kk" } else { "jj" });
+        press(app, if up { "/adsr" } else { "/lfo" });
         special(app, KeyCode::Enter);
     };
     // Mod 3, an ADSR going one way, made an LFO, swings both ways, as an LFO does.
@@ -1446,7 +1446,7 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
     press(&mut app, " 4L");
     let first = ids(&mut app);
     let slot = |app: &App| app.song().tracks[0].mods[1];
-    // Mod 2, the filter's envelope, made an AHD: the second type listed, between ADSR and LFO.
+    // Mod 2, the filter's envelope, made an AHD: the second type listed, after ADSR.
     press(&mut app, "}K");
     let picker = app.picker.as_ref().unwrap();
     let listed: Vec<&str> = picker
@@ -1454,7 +1454,7 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
         .iter()
         .map(|item| item.label.as_str())
         .collect();
-    assert_eq!(listed, ["ADSR", "AHD", "LFO"]);
+    assert_eq!(listed, ["ADSR", "AHD", "Drum", "LFO"]);
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).kind, ModKind::Ahd);
@@ -1517,6 +1517,93 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
     press(&mut app, "Kj");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).ahd, ahd);
+}
+
+#[test]
+fn a_drum_slot_strikes_onto_a_body_with_its_own_settings_ratchet_and_picture() {
+    use vt_model::envelope::{Curve, Drum, MAX_RATCHET};
+    let (mut app, _realtime) = app();
+    let mut graphics = Graphics::new();
+    let mut ids = |app: &mut App| {
+        graphics.sync(app, &mut Vec::new()).unwrap();
+        graphics.sync(app, &mut Vec::new()).unwrap();
+        app.mod_images.unwrap()
+    };
+    press(&mut app, " 4L");
+    let first = ids(&mut app);
+    let slot = |app: &App| app.song().tracks[0].mods[1];
+    // Mod 2 made a drum envelope, the third type listed.
+    press(&mut app, "}K/drum");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).kind, ModKind::Drum);
+    assert_eq!(slot(&app).drum, Drum::default());
+    assert!(device_title(&app, "Mod 2").starts_with(&modulator_title(
+        "Mod 2",
+        true,
+        "Drum  Exp  Uni  → Cut ─"
+    )));
+    // Its grid: its peak, body and decay down the left, its depth and ratchet down the right,
+    // and no reset, as it always strikes from full.
+    let shown = screen_cells(&mut app).join("\n");
+    for cell in [
+        "Peak      10 ms",
+        "Body      40%",
+        "Decay     300 ms",
+        "Depth     00",
+        "Ratchet   1",
+    ] {
+        assert!(shown.contains(cell), "{cell} in\n{shown}");
+    }
+    assert!(!ModField::Reset.on(ModKind::Drum) && !ModField::Attack.on(ModKind::Drum));
+    // Its own shape is drawn, and the others' stay.
+    let now = ids(&mut app);
+    assert_ne!(now[1], first[1]);
+    assert_eq!(now[2..], first[2..]);
+    // Each of its settings is its own, and moves as its kind does.
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::Mod(1, ModField::Peak));
+    press(&mut app, "=");
+    assert_eq!(slot(&app).drum.peak_ms, 15);
+    press(&mut app, "j+");
+    assert_eq!(slot(&app).drum.body, 50);
+    typed(&mut app, "101");
+    assert_eq!(slot(&app).drum.body, 50, "past full");
+    let adsr = slot(&app).adsr;
+    press(&mut app, "j=");
+    assert_eq!(slot(&app).drum.decay_ms, 325);
+    assert_eq!(slot(&app).adsr, adsr, "its ADSR's decay is left");
+    // `Ratchet`, under `Depth`, strikes 1 to 8 times.
+    press(&mut app, "kl");
+    assert_eq!(app.track_control(), Control::Mod(1, ModField::Ratchet));
+    press(&mut app, "-");
+    assert_eq!(slot(&app).drum.ratchet, 1, "it stops at one");
+    press(&mut app, "===");
+    assert_eq!(slot(&app).drum.ratchet, 4);
+    typed(&mut app, "9");
+    assert_eq!(slot(&app).drum.ratchet, 4, "too many");
+    typed(&mut app, &MAX_RATCHET.to_string());
+    assert_eq!(slot(&app).drum.ratchet, MAX_RATCHET);
+    press(&mut app, "x");
+    assert_eq!(slot(&app).drum.ratchet, 1);
+    // Its curve is its own too.
+    press(&mut app, "hkkl");
+    assert_eq!(app.track_control(), Control::Mod(1, ModField::Mode));
+    press(&mut app, "=");
+    assert_eq!(slot(&app).drum.curve, Curve::Lin);
+    assert_eq!(slot(&app).adsr, adsr);
+}
+
+#[test]
+fn a_drum_on_vol_shapes_the_notes_with_no_depth() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4LK/drum");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().tracks[0].mods[0].kind, ModKind::Drum);
+    assert!(device_title(&app, "Mod 1").starts_with(&modulator_title(
+        "Mod 1",
+        true,
+        "Drum  Exp  --  → Vol ─"
+    )));
 }
 
 #[test]

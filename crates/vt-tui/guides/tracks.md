@@ -766,7 +766,7 @@ can't be muted or soloed.
 ## The Mod page
 
 Each track has six mod slots, `Mod 1` to `Mod 6`, and each slot is a type you choose:
-an `ADSR` or an `AHD` envelope, or an `LFO`, in any mix. A new track has three ADSRs, then three
+an `ADSR`, an `AHD` or a `Drum` envelope, or an `LFO`, in any mix. A new track has three ADSRs, then three
 LFOs. The slots work out in order, so a slot can move only those after it, and never
 round again.
 
@@ -793,7 +793,7 @@ box on its right. The device with the cursor has the brighter frame.
 | `x` | Put back the slot's first type, or on the polarity, the type's |
 | `b` | Switch this slot out, to hear without it, or back in |
 
-**Changing a type.** `K` on the type lists `ADSR`, `AHD` and `LFO`, each with what it
+**Changing a type.** `K` on the type lists `ADSR`, `AHD`, `Drum` and `LFO`, each with what it
 does. Choosing one is one undo step, and the slot keeps its `Dest`, its `Depth` and
 its switch. Each slot also keeps every type's own settings, so trying an LFO in
 `Mod 2` and going back finds its envelope as it was. What it moves glides from the
@@ -903,6 +903,31 @@ does. On `Vol`, shaping the notes, it ends each note when its decay ends.
 the Digitakt's `HOLD NOTE` does. It's below `0 ms`: `-` from `0 ms` goes to it, and
 `=` comes back. Typing `note` sets it too, and a number sets a time. A new AHD holds
 for 30 ms, with a 1 ms attack and a 200 ms decay.
+
+## Drum envelopes
+
+A `Drum` slot is the M8's drum envelope, for a kick's or a tom's pitch: each note
+strikes it at full, it falls steeply to its `Body` over its `Peak`, the click's
+sweep, then decays from there to nothing over its `Decay`, the note's drop. It's a
+one-shot, whatever the note's length, and on `Vol`, shaping the notes, it ends each
+note when its decay ends. Its peak, body and decay are down the left, and its depth
+and ratchet down the right. It has no `Reset`, as it always strikes from full.
+
+| Setting | Value |
+|---|---|
+| Curve | In the title: how its body's decay bends |
+| Peak | Milliseconds, the strike's fall from full to the body |
+| Body | The percent the peak falls to, where the decay starts |
+| Decay | Milliseconds, the body's fall to nothing |
+| Depth | How far full moves it, in hex. Negative flips it |
+| Ratchet | How many times the peak strikes before the body, 1 to 8 |
+
+**Ratchet** strikes the peak again: with `3`, it falls three times from full, a
+`Peak` apart, then the body decays from the third. A low `Body`, a `Peak` of about
+10 ms and a long `Decay` make an 808's clap from noise; `2` makes a flam. A new
+drum envelope has a 10 ms peak onto a body of 40% and a 300 ms decay, with one
+strike: on `Pitch` with a `Depth` of about `+18`, a kick's drop. The peak's fall is
+always steep, whatever the curve.
 
 ## LFOs
 
