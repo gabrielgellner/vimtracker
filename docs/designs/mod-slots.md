@@ -946,3 +946,24 @@ requests, Drum then LPG:
   down the right.
 * **The Roto** keeps the LFO stored, for the polarity's button: `Fade` and the five-step `Mode`
   are knobs 6 and 7.
+
+**As built for #235's Steps (decision 203),** the first of two pull requests, the type then
+`Mutate`, `Smooth` and `In scale`:
+
+* **The loop is in the title,** after the mode, in the place a polarity takes, as Steps have
+  none: their values are signed. The grid is `Rate`, `Length` and `Depth` down the left, and
+  `Start` and two holes, for `Mutate` and `Smooth`, down the right.
+* **`Rate`** adds `Pass`, one step each time round the chain, and **`Loop`** adds `Shuffle`, a
+  dealt order each time round (#235's comments).
+* **The panel** is a row of braille bars drawn as text, not a picture, with the step playing lit
+  and a `▲` under the cursor's.
+* **The Roto** shows Steps live, as it has nothing to switch.
+
+**As built for #235's second half (decision 204):**
+
+* **`Mutate`,** 0% to 100%, and **`Smooth`,** `-FF` to `+FF`, fill the holes under `Start`.
+  `Mutate` keeps what it drew in the engine's run, from a seeded stream of the slot's own, and
+  forgets it at 0%; keeping a drifted loop is left for later.
+* **`In scale`** is every slot's, shown as the destination `Pitch in scale`, after `Pitch`, rather
+  than a cell or a title place, as neither has room. It moves the note from the one playing to
+  the scale's nearest; scale degrees are still for later.

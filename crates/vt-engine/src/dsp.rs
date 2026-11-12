@@ -20,7 +20,7 @@ pub use dynamics::{compressor, eq};
 pub use effects::{distort, memory};
 pub use filters::filter;
 pub use voices::{
-    acid, additive, braids_analog, braids_digital, braids_filter_fm, chiptune, chord, drums, fm,
-    grain, kick, modal, noise, particle, phase_distortion, six_op, string_model, swarm,
+    acid, additive, braids_analog, braids_digital, braids_filter_fm, braids_vocal, chiptune, chord,
+    drums, fm, grain, kick, modal, noise, particle, phase_distortion, six_op, string_model, swarm,
     virtual_analog, virtual_analog_vcf, wave_terrain, waveshaping, wavetable,
 };
