@@ -340,6 +340,22 @@ fn section_headings() -> Vec<(usize, String)> {
     headings
 }
 
+/// A frame's edge with names set into it: the line in the frame's style and the names in theirs.
+fn frame_edge(text: &str, edge: Style, named: Style) -> Vec<Span<'static>> {
+    let chars: Vec<char> = text.chars().collect();
+    let styles: Vec<Style> = chars
+        .iter()
+        .map(|c| {
+            if "─╭╮".contains(*c) {
+                edge
+            } else {
+                named
+            }
+        })
+        .collect();
+    spans_of(&chars, &styles)
+}
+
 /// The headings in a line of a width, each at its column on a fill, with a space either side of
 /// it as a device's name is set into its frame, and cut where the line ends.
 fn headings_line(width: usize, fill: char) -> String {
@@ -868,32 +884,31 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     title.extend(chain_strip(app, room));
     title.extend(after);
     let cursor_style = theme::cursor(app.mode);
-    let boxed = app.mode == Mode::Insert;
-    let edge = Style::new().fg(theme::GREEN);
-    let rule = |left: &str, right: &str| {
-        if boxed {
-            let inside = "─".repeat(body_width);
-            let indent = " ".repeat(GUTTER - 1);
-            Line::styled(format!("{indent}{left}{inside}{right}"), edge)
-        } else {
-            Line::raw("")
-        }
-    };
-    // The headings row: the grid's parts, set into the box's top edge in Insert, and each other
-    // track's label over its column's note, as `Note` is over the notes.
-    let mut top_rule = if boxed {
-        let inside = headings_line(body_width, '─');
-        vec![Span::styled(
-            format!("{}╭{inside}╮ ", " ".repeat(GUTTER - 1)),
-            edge,
-        )]
+    // The grid is a device, framed as the track page's are, its parts named in its top edge: dim
+    // while it's looked at, as a device without the cursor is, and green in Insert, so Insert
+    // lights the frame rather than drawing a box that wasn't there. It's always there, so nothing
+    // moves when Insert starts.
+    let insert = app.mode == Mode::Insert;
+    let edge = Style::new().fg(if insert {
+        theme::GREEN
     } else {
-        let headings = headings_line(body_width, ' ');
-        vec![Span::styled(
-            format!("{}{headings}  ", " ".repeat(GUTTER)),
-            theme::dim(),
-        )]
+        theme::SURFACE1
+    });
+    let named = if insert { edge } else { theme::dim() };
+    let rule = |left: &str, right: &str| {
+        let inside = "─".repeat(body_width);
+        let indent = " ".repeat(GUTTER - 1);
+        Line::styled(format!("{indent}{left}{inside}{right}"), edge)
     };
+    // The headings row: the frame's top edge with the grid's parts in it, and each other track's
+    // label over its column's note, as `Note` is over the notes.
+    let mut top_rule = vec![Span::raw(" ".repeat(GUTTER - 1))];
+    top_rule.extend(frame_edge(
+        &format!("╭{}╮", headings_line(body_width, '─')),
+        edge,
+        named,
+    ));
+    top_rule.push(Span::raw(" "));
     for track in &others {
         // The track being edited is marked out, so the overview shows every track in its place,
         // and a group and its tracks are in its colour.
@@ -911,7 +926,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         };
         top_rule.push(Span::raw(gap.to_string()));
     }
-    let side = if boxed { "│" } else { " " };
+    let side = "│";
     let mut lines = vec![Line::from(title), Line::from(top_rule)];
     for (at_line, line) in time_lines.iter().enumerate().skip(first_line).take(height) {
         let index = line.index;
@@ -922,8 +937,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             " "
         };
         let Some(step) = phrase.steps().get(index) else {
-            // The box closes on the first line past the phrase, so rows don't move in Insert.
-            let (left, fill, right) = if boxed && at_line == stored_lines {
+            // The frame closes on the first line past the phrase.
+            let (left, fill, right) = if at_line == stored_lines {
                 ("╰", "─", "╯")
             } else {
                 (" ", " ", " ")

@@ -1,7 +1,8 @@
 # Note entry
 
 Put the cursor on the Note column, as the status line shows, and press `i`.
-The keyboard is now a piano, laid out as in Ableton:
+The grid's frame and the cursor turn green, and the keyboard is now a piano,
+laid out as in Ableton:
 
 ```
  w e   t y u   o        black keys

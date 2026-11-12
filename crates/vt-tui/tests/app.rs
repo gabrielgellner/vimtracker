@@ -1544,13 +1544,14 @@ fn each_row_shows_how_far_it_is_from_the_cursor() {
     let (mut app, _realtime) = app();
     press(&mut app, "5j");
     let buffer = screen(&app);
-    let row = |step: u16| -> String { (0..9).map(|x| buffer[(x, step + 2)].symbol()).collect() };
-    assert_eq!(row(0), " 5  00   ");
-    assert_eq!(row(4), " 1  04   ");
-    assert_eq!(row(5), "    05   ", "the cursor's row is blank");
-    assert_eq!(row(6), " 1  06   ");
+    // The gutter, up to the grid's frame.
+    let row = |step: u16| -> String { (0..8).map(|x| buffer[(x, step + 2)].symbol()).collect() };
+    assert_eq!(row(0), " 5  00  ");
+    assert_eq!(row(4), " 1  04  ");
+    assert_eq!(row(5), "    05  ", "the cursor's row is blank");
+    assert_eq!(row(6), " 1  06  ");
     // Decimal, to match the count typed, beside a step number in hex.
-    assert_eq!(row(15), "10  0F   ");
+    assert_eq!(row(15), "10  0F  ");
     assert_eq!(buffer[(1, 2)].fg, vt_tui::theme::OVERLAY0);
     assert_eq!(buffer[(4, 2)].fg, vt_tui::theme::YELLOW, "the beat marker");
     assert_eq!(buffer[(4, 3)].fg, vt_tui::theme::SUBTEXT1, "other steps");
@@ -1574,7 +1575,7 @@ fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
     );
     assert_ne!(buffer[(68, 1)].bg, vt_tui::theme::GREEN);
     let headings: String = (0..30).map(|x| buffer[(x, 1)].symbol()).collect();
-    assert_eq!(headings.trim_end(), "         Note              FX");
+    assert_eq!(headings.trim_end(), "        ╭Note ──────────── FX");
     assert_eq!(
         buffer[(27, 2)].bg,
         vt_tui::theme::FX_BAND,
@@ -1715,18 +1716,26 @@ fn shift_arrows_snap_to_the_grid() {
 }
 
 #[test]
-fn insert_turns_the_cursor_green_and_boxes_the_track_without_moving_anything() {
+fn insert_turns_the_cursor_and_the_grids_frame_green_without_moving_anything() {
     let (mut app, _realtime) = app();
     let row = |buffer: &ratatui::buffer::Buffer, y: u16| -> String {
         (0..40).map(|x| buffer[(x, y)].symbol()).collect()
     };
 
+    // The grid is framed as a device is, dim, with its parts named in the top edge.
     let normal = screen(&app);
     assert_eq!(normal[(9, 2)].bg, vt_tui::theme::ROSEWATER);
-    assert_eq!(normal[(8, 1)].symbol(), " ");
-    assert_eq!(normal[(8, 2)].symbol(), " ");
-    let headings: String = (9..57).map(|x| normal[(x, 1)].symbol()).collect();
-    assert_eq!(headings, "Note              FX 1         FX 2         FX 3");
+    assert_eq!(normal[(8, 1)].symbol(), "╭");
+    assert_eq!(normal[(8, 2)].symbol(), "│");
+    assert_eq!(normal[(8, 18)].symbol(), "╰");
+    assert_eq!(normal[(8, 2)].fg, vt_tui::theme::SURFACE1);
+    assert_eq!(normal[(15, 1)].fg, vt_tui::theme::SURFACE1, "the edge");
+    let headings: String = (8..66).map(|x| normal[(x, 1)].symbol()).collect();
+    assert_eq!(
+        headings,
+        "╭Note ──────────── FX 1 ─────── FX 2 ─────── FX 3 ───────╮"
+    );
+    assert_eq!(normal[(9, 1)].fg, vt_tui::theme::OVERLAY2, "a heading");
 
     press(&mut app, "i");
     let insert = screen(&app);
@@ -1744,17 +1753,14 @@ fn insert_turns_the_cursor_green_and_boxes_the_track_without_moving_anything() {
     );
     assert_eq!(insert[(65, 18)].symbol(), "╯");
 
-    // Take away the box, and the steps are where they were.
-    assert_eq!(
-        row(&normal, 2).replace(' ', ""),
-        row(&insert, 2).replace(['│', ' '], "")
-    );
+    // Only the frame's colour changes, and the steps are where they were.
+    assert_eq!(row(&normal, 2), row(&insert, 2));
     let step_text_start = |b: &ratatui::buffer::Buffer| b[(12, 2)].symbol().to_owned();
     assert_eq!(step_text_start(&normal), step_text_start(&insert));
 
     special(&mut app, KeyCode::Esc);
     let back = screen(&app);
-    assert_eq!(back[(8, 1)].symbol(), " ");
+    assert_eq!(back[(8, 1)].fg, vt_tui::theme::SURFACE1);
     assert_eq!(back[(9, 2)].bg, vt_tui::theme::ROSEWATER);
 }
 
@@ -2792,13 +2798,17 @@ fn labelled_kit() -> PathBuf {
 }
 
 #[test]
-fn replace_shows_its_mode_and_a_red_cursor_with_no_box() {
+fn replace_shows_its_mode_and_a_red_cursor_with_the_frame_dim() {
     let (mut app, _realtime) = app();
     press(&mut app, "r");
     assert_eq!(app.mode, Mode::Replace);
     let buffer = screen(&app);
     assert_eq!(buffer[(9, 2)].bg, vt_tui::theme::RED);
-    assert_eq!(buffer[(8, 2)].symbol(), " ");
+    assert_eq!(
+        buffer[(8, 2)].fg,
+        vt_tui::theme::SURFACE1,
+        "not lit, as in Insert"
+    );
     press(&mut app, "a");
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(screen(&app)[(9, 2)].bg, vt_tui::theme::ROSEWATER);
@@ -3971,7 +3981,7 @@ fn each_kind_of_cell_has_its_own_colours() {
     );
     // An event's value is in its own colour, with no fine digits.
     assert_eq!(style_at("DEL   10", 6).fg, Some(theme::PEACH));
-    assert!(row.contains("DEL   10     "), "{row}");
+    assert!(row.contains("DEL   10    │"), "{row}");
     // A lock the track doesn't have is grey all over, brighter than an empty cell.
     assert_eq!(style_at("DCAY", 0).fg, theme::dim().fg);
     assert_eq!(style_at("DCAY  2000", 6).fg, theme::dim().fg);
