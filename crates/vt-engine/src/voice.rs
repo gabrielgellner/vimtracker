@@ -5,6 +5,7 @@ use crate::dsp::additive::Additive;
 use crate::dsp::braids_analog::{CSaw, HardSync, Morph, SawSquare, Triple};
 use crate::dsp::braids_digital::{Ring, SawComb, Toy};
 use crate::dsp::braids_filter_fm::{ChaoticFm, DigitalFilter, FeedbackFm};
+use crate::dsp::braids_vocal::{Fof, Vosim};
 use crate::dsp::chiptune::Chiptune;
 use crate::dsp::chord::Chord;
 use crate::dsp::drums::{Hat, Snare};
@@ -105,6 +106,8 @@ enum Synth {
     ZFilter(DigitalFilter),
     FeedbackFm(FeedbackFm),
     ChaoticFm(ChaoticFm),
+    Vosim(Vosim),
+    Fof(Fof),
 }
 
 impl Synth {
@@ -143,6 +146,8 @@ impl Synth {
             SynthVoice::ZFilter => Self::ZFilter(DigitalFilter::new(rate)),
             SynthVoice::FeedbackFm => Self::FeedbackFm(FeedbackFm::new(rate)),
             SynthVoice::ChaoticFm => Self::ChaoticFm(ChaoticFm::new(rate)),
+            SynthVoice::Vosim => Self::Vosim(Vosim::new(rate)),
+            SynthVoice::Fof => Self::Fof(Fof::new(rate)),
         }
     }
 
@@ -181,6 +186,8 @@ impl Synth {
             Self::ZFilter(synth) => synth.next(frequency, settings),
             Self::FeedbackFm(synth) => synth.next(frequency, settings),
             Self::ChaoticFm(synth) => synth.next(frequency, settings),
+            Self::Vosim(synth) => synth.next(frequency, settings),
+            Self::Fof(synth) => synth.next(frequency, settings),
         }
     }
 
