@@ -160,6 +160,7 @@ impl Control {
             Self::Base(TrackControl::SendA) => "Send A",
             Self::Base(TrackControl::SendB) => "Send B",
             Self::Base(TrackControl::Drive) => "Drive",
+            Self::Base(TrackControl::Punch) => "Punch",
             Self::Base(TrackControl::LowCut) => "Low cut",
             Self::Base(TrackControl::HighCut) => "High cut",
             Self::Base(TrackControl::Pitch) => "Pitch",

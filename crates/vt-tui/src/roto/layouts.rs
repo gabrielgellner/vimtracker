@@ -491,6 +491,20 @@ const CHAOS_FM: DeviceLayout = live(
         [s("amount"), s("ratio"), __, __, __, __, __, __],
     )],
 );
+const VOSIM: DeviceLayout = live(
+    "machine/vosim",
+    &[knobs(
+        "VOSIM",
+        [s("formant"), s("second"), __, __, __, __, __, __],
+    )],
+);
+const FOF: DeviceLayout = live(
+    "machine/fof",
+    &[knobs(
+        "FOF",
+        [s("vowel"), s("voice"), __, __, __, __, __, __],
+    )],
+);
 const TOY: DeviceLayout = live(
     "machine/toy",
     &[knobs(
@@ -501,7 +515,7 @@ const TOY: DeviceLayout = live(
 
 // The track's own devices.
 
-/// The filter itself, its type and mode, then the utility filter's cuts.
+/// The filter itself and its punch, its type and mode, then the utility filter's cuts.
 const FILTER: DeviceLayout = live(
     "filter",
     &[knobs(
@@ -510,7 +524,7 @@ const FILTER: DeviceLayout = live(
             s("cutoff"),
             s("resonance"),
             s("drive"),
-            GAP,
+            s("punch"),
             s("type"),
             s("mode"),
             s("lowcut"),
@@ -1227,7 +1241,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 74] = [
+pub const ALL: [&DeviceLayout; 76] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1261,6 +1275,8 @@ pub const ALL: [&DeviceLayout; 74] = [
     &Z_FILTER,
     &FB_FM,
     &CHAOS_FM,
+    &VOSIM,
+    &FOF,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1341,6 +1357,8 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::ZFilter => &Z_FILTER,
             SynthVoice::FeedbackFm => &FB_FM,
             SynthVoice::ChaoticFm => &CHAOS_FM,
+            SynthVoice::Vosim => &VOSIM,
+            SynthVoice::Fof => &FOF,
         },
     }
 }
@@ -1464,6 +1482,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::Cutoff => "cutoff",
             TrackControl::Resonance => "resonance",
             TrackControl::Drive => "drive",
+            TrackControl::Punch => "punch",
             TrackControl::LowCut => "lowcut",
             TrackControl::HighCut => "highcut",
             TrackControl::Pan => "pan",

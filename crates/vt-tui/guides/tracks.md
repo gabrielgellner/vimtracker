@@ -56,7 +56,7 @@ and its settings in up to four columns of three.
 | Device | Title | Settings, column by column |
 |---|---|---|
 | Machine | Machine, type | The machine's own |
-| Filter | Type, mode | `Cut` `Res` `Drive`; `Low cut` `High cut` |
+| Filter | Type, mode | `Cut` `Res` `Drive`; `Punch`; `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` `Velocity` |
 
@@ -102,11 +102,23 @@ shows what it plays.
 |---|---|
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
+| Punch | How high a loud ring starts over `Cut`, from `00` for none |
 | Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` `OB-X` |
 | Mode | How the type responds: `--` where it has none |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
 
-Drive keeps the level about even. `Low cut` and `High cut` are a second, simple
+Drive keeps the level about even. `Punch` is Mutable Instruments' Braids' trick
+for an 808 kick: as the filter's low-pass swings, its cutoff rises with it, so a
+loud ring starts higher and falls in pitch to `Cut` as it dies away, and a loud
+peak is reined in a little. Strike `LP` or `BP` with something short at a low
+`Cut` and high `Res` to hear it: at `FF` a ring at 50 Hz starts at about 200 Hz.
+It's added in Hz, so it moves a low cutoff much more than a high one, and a quiet
+sound hears the filter as it is, so the curve doesn't show it. Only `LP`, `HP`,
+`BP` and `Notch` have it; on the other types it's dim and does nothing, and it
+does less with `Drive`, whose clipping holds the ring down. Steps and modulators
+don't move it.
+
+`Low cut` and `High cut` are a second, simple
 filter after the main one, for thinning out a sound without giving up the main
 filter's character. They run from 20 Hz at `00` to 20 kHz at `FF`, at 12 dB with
 no resonance. `Low cut 00` and `High cut FF` are off, and off costs nothing.
