@@ -340,6 +340,22 @@ fn section_headings() -> Vec<(usize, String)> {
     headings
 }
 
+/// A frame's edge with names set into it: the line in the frame's style and the names in theirs.
+fn frame_edge(text: &str, edge: Style, named: Style) -> Vec<Span<'static>> {
+    let chars: Vec<char> = text.chars().collect();
+    let styles: Vec<Style> = chars
+        .iter()
+        .map(|c| {
+            if "─╭╮".contains(*c) {
+                edge
+            } else {
+                named
+            }
+        })
+        .collect();
+    spans_of(&chars, &styles)
+}
+
 /// The headings in a line of a width, each at its column on a fill, with a space either side of
 /// it as a device's name is set into its frame, and cut where the line ends.
 fn headings_line(width: usize, fill: char) -> String {
@@ -494,6 +510,84 @@ fn column_spans(
             [marker, note, Span::raw(" ")]
         })
         .collect()
+}
+
+/// Which of a chain's phrases fit in the title's room, around the one being edited: as many as fit
+/// either side of it, with two cells for `…` and its gap where the strip is cut. Each is its
+/// width, with the gap after it.
+fn strip_window(widths: &[usize], here: usize, room: usize) -> Range<usize> {
+    let cut = |range: &Range<usize>| {
+        let ends = usize::from(range.start > 0) + usize::from(range.end < widths.len());
+        widths[range.clone()].iter().sum::<usize>() + 2 * ends
+    };
+    let here = here.min(widths.len().saturating_sub(1));
+    // Out from it a phrase at a time, one side and then the other, so it stays in the middle
+    // until an end of the chain is reached.
+    let mut shown = here..(here + 1).min(widths.len());
+    let mut grew = true;
+    while grew {
+        grew = false;
+        let right = shown.start..shown.end + 1;
+        if shown.end < widths.len() && cut(&right) <= room {
+            shown = right;
+            grew = true;
+        }
+        let left = shown.start.saturating_sub(1)..shown.end;
+        if shown.start > 0 && cut(&left) <= room {
+            shown = left;
+            grew = true;
+        }
+    }
+    shown
+}
+
+/// The chain in the title, in place of a count: its phrases in order, the one being edited in the
+/// cursor's colour and the rest dim, a phrase played in more than one place with its link, and
+/// `…` where it's cut to its room, so `]p` and `[p` are seen moving along it (B3 of the study).
+fn chain_strip(app: &App, room: usize) -> Vec<Span<'static>> {
+    let entries = app.chain_entries();
+    let items: Vec<(String, bool)> = entries
+        .iter()
+        .map(|entry| {
+            let linked = app.phrase_uses(entry.phrase).len() > 1;
+            let mark = if linked {
+                glyphs::LINK.to_string()
+            } else {
+                String::new()
+            };
+            (format!("{:02X}{mark}", entry.phrase), linked)
+        })
+        .collect();
+    let widths: Vec<usize> = items
+        .iter()
+        .map(|(text, _)| text.chars().count() + 1)
+        .collect();
+    let shown = strip_window(&widths, app.cursor.slot, room);
+    let here = Style::new()
+        .fg(theme::ROSEWATER)
+        .add_modifier(Modifier::BOLD);
+    let mut spans = vec![];
+    if shown.start > 0 {
+        spans.push(Span::styled("\u{2026} ", theme::dim()));
+    }
+    for at in shown.clone() {
+        let (text, linked) = &items[at];
+        let look = if at == app.cursor.slot {
+            here
+        } else {
+            theme::dim()
+        };
+        spans.push(Span::styled(text.clone(), look));
+        // The space after a link is one it isn't drawn over.
+        let gap = if *linked { glyphs::ICON_SPACE } else { ' ' };
+        if at + 1 < shown.end || shown.end < items.len() {
+            spans.push(Span::raw(gap.to_string()));
+        }
+    }
+    if shown.end < items.len() {
+        spans.push(Span::styled("\u{2026}", theme::dim()));
+    }
+    spans
 }
 
 /// An empty cell on the row playing: the playhead's green pushed toward the screen, as the part of
@@ -715,16 +809,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             At::Row(extent.row(line.index))
         }
     };
-    let id = app.phrase_id().unwrap_or(0);
-    let shared = app.phrase_uses(id).len() > 1;
-    // What's said about the phrase after its number, each a group of its own, dim as a device
-    // title's second words are: where it is in the chain, an order other than forward, and its
-    // lanes' lengths.
-    let mut details = vec![format!(
-        "{}/{}",
-        app.cursor.slot + 1,
-        app.chain_entries().len()
-    )];
+    // What's said about the phrase after the chain, each a group of its own, dim as a device
+    // title's second words are: an order other than forward, and its lanes' lengths.
+    let mut details = vec![];
     if !phrase.order().is_forward() {
         details.push(phrase.order().to_string());
     }
@@ -748,8 +835,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
     let bold = Style::new().add_modifier(Modifier::BOLD);
     // The title in groups two spaces apart, as the track page's is: the track, with its machine
-    // or kind as a glyph before it and whether it's muted or soloed after; the phrase, with a link
-    // if it plays in more than one place; then what's said about it.
+    // or kind as a glyph before it and whether it's muted or soloed after; its chain, with the
+    // phrases along it; then what's said about this one.
     let mut title = vec![];
     if let Some(track) = app.track_here() {
         title.push(Span::styled(
@@ -768,51 +855,60 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     if let Some((glyph, style)) = level_glyph(app, app.cursor.track) {
         title.push(Span::styled(format!(" {glyph}"), style));
     }
-    title.push(Span::styled(format!("  Phrase {id:02X}"), bold));
-    // The space after a glyph is one it isn't drawn over, so it keeps to its cell.
-    let gap = if shared {
-        title.push(Span::styled(format!(" {}", glyphs::LINK), theme::dim()));
-        format!("{} ", glyphs::ICON_SPACE)
-    } else {
-        "  ".to_owned()
-    };
-    title.push(Span::styled(
-        format!("{gap}{}", details.join("  ")),
-        theme::dim(),
-    ));
+    let chain = app.chain_id().unwrap_or(0);
+    title.push(Span::styled(format!("  Chain {chain:02X}  "), bold));
+    let mut after = vec![];
+    if !details.is_empty() {
+        after.push(Span::styled(
+            format!("  {}", details.join("  ")),
+            theme::dim(),
+        ));
+    }
     if !live_names.is_empty() {
-        title.push(Span::styled(
+        after.push(Span::styled(
             format!("  {} {}", glyphs::LIVE, live_names.join(",")),
             bold.fg(theme::TEAL),
         ));
     }
+    // The strip has what's left of the row once the rest of the title and the CPU figure at its
+    // right are in.
+    let cells = |spans: &[Span]| {
+        spans
+            .iter()
+            .map(|span| span.content.chars().count())
+            .sum::<usize>()
+    };
+    let (system, _) = crate::views::system::text(0, 0, 0);
+    let room = usize::from(area.width)
+        .saturating_sub(cells(&title) + cells(&after) + system.chars().count() + 2);
+    title.extend(chain_strip(app, room));
+    title.extend(after);
     let cursor_style = theme::cursor(app.mode);
-    let boxed = app.mode == Mode::Insert;
-    let edge = Style::new().fg(theme::GREEN);
-    let rule = |left: &str, right: &str| {
-        if boxed {
-            let inside = "─".repeat(body_width);
-            let indent = " ".repeat(GUTTER - 1);
-            Line::styled(format!("{indent}{left}{inside}{right}"), edge)
-        } else {
-            Line::raw("")
-        }
-    };
-    // The headings row: the grid's parts, set into the box's top edge in Insert, and each other
-    // track's label over its column's note, as `Note` is over the notes.
-    let mut top_rule = if boxed {
-        let inside = headings_line(body_width, '─');
-        vec![Span::styled(
-            format!("{}╭{inside}╮ ", " ".repeat(GUTTER - 1)),
-            edge,
-        )]
+    // The grid is a device, framed as the track page's are, its parts named in its top edge: dim
+    // while it's looked at, as a device without the cursor is, and green in Insert, so Insert
+    // lights the frame rather than drawing a box that wasn't there. It's always there, so nothing
+    // moves when Insert starts.
+    let insert = app.mode == Mode::Insert;
+    let edge = Style::new().fg(if insert {
+        theme::GREEN
     } else {
-        let headings = headings_line(body_width, ' ');
-        vec![Span::styled(
-            format!("{}{headings}  ", " ".repeat(GUTTER)),
-            theme::dim(),
-        )]
+        theme::SURFACE1
+    });
+    let named = if insert { edge } else { theme::dim() };
+    let rule = |left: &str, right: &str| {
+        let inside = "─".repeat(body_width);
+        let indent = " ".repeat(GUTTER - 1);
+        Line::styled(format!("{indent}{left}{inside}{right}"), edge)
     };
+    // The headings row: the frame's top edge with the grid's parts in it, and each other track's
+    // label over its column's note, as `Note` is over the notes.
+    let mut top_rule = vec![Span::raw(" ".repeat(GUTTER - 1))];
+    top_rule.extend(frame_edge(
+        &format!("╭{}╮", headings_line(body_width, '─')),
+        edge,
+        named,
+    ));
+    top_rule.push(Span::raw(" "));
     for track in &others {
         // The track being edited is marked out, so the overview shows every track in its place,
         // and a group and its tracks are in its colour.
@@ -830,7 +926,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         };
         top_rule.push(Span::raw(gap.to_string()));
     }
-    let side = if boxed { "│" } else { " " };
+    let side = "│";
     let mut lines = vec![Line::from(title), Line::from(top_rule)];
     for (at_line, line) in time_lines.iter().enumerate().skip(first_line).take(height) {
         let index = line.index;
@@ -841,8 +937,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             " "
         };
         let Some(step) = phrase.steps().get(index) else {
-            // The box closes on the first line past the phrase, so rows don't move in Insert.
-            let (left, fill, right) = if boxed && at_line == stored_lines {
+            // The frame closes on the first line past the phrase.
+            let (left, fill, right) = if at_line == stored_lines {
                 ("╰", "─", "╯")
             } else {
                 (" ", " ", " ")

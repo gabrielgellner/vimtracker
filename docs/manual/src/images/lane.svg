@@ -2,16 +2,26 @@
 <defs><path id="sf0403" d="M1433 614V1436H1538V1638H510V1436H616V614L409 407V205H942V-410H1106V205H1639V407Z"/><path id="sf040a" d="M220 1638V-410L1828 614Z"/><path id="sf067d" d="M1846 1638H202Q120 1638 60.0 1578.0Q0 1518 0 1436V-208Q0 -290 60.0 -350.0Q120 -410 202 -410H1846Q1928 -410 1988.0 -350.0Q2048 -290 2048 -208V1436Q2048 1518 1988.0 1578.0Q1928 1638 1846 1638ZM1302 407H1332V-208H716V407H750Q788 407 820 439Q850 470 850 513V1436H1202V513Q1202 470 1232 439Q1264 407 1302 407ZM202 1436H490V513Q490 471 519.0 439.0Q548 407 592 407H616V-208H202ZM1846 -208H1432V407H1460Q1504 407 1533.0 439.0Q1562 471 1562 513V1436H1846Z"/></defs>
 <rect width="100%" height="100%" fill="#303446"/>
 <use href="#sf067d" transform="matrix(0.0043945313 0 0 -0.0043945313 0 12.198242)" fill="#949cbb"/>
-<text x="18" y="14" fill="#c6d0f5" font-weight="bold" textLength="171" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Track 01  Phrase 00</text>
-<text x="189" y="14" fill="#949cbb" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  1/1  FX1:3</text>
+<text x="18" y="14" fill="#c6d0f5" font-weight="bold" textLength="180" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Track 01  Chain 00  </text>
+<text x="198" y="14" fill="#f2d5cf" font-weight="bold" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>
+<text x="216" y="14" fill="#949cbb" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  FX1:3</text>
 <text x="738" y="14" fill="#949cbb" textLength="225" lengthAdjust="spacingAndGlyphs" xml:space="preserve">CPU  0%  late 0  xruns 0 </text>
-<text x="0" y="33" fill="#949cbb" textLength="603" lengthAdjust="spacingAndGlyphs" xml:space="preserve">         Note              FX 1         FX 2         FX 3          </text>
+<text x="72" y="33" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭</text>
+<text x="81" y="33" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Note </text>
+<text x="126" y="33" fill="#51576d" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">────────────</text>
+<text x="234" y="33" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> FX 1 </text>
+<text x="288" y="33" fill="#51576d" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────</text>
+<text x="351" y="33" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> FX 2 </text>
+<text x="405" y="33" fill="#51576d" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────</text>
+<text x="468" y="33" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> FX 3 </text>
+<text x="522" y="33" fill="#51576d" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────╮</text>
 <rect x="612" y="19" width="27" height="19" fill="#a6d189"/>
 <text x="612" y="33" fill="#303446" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">01 </text>
 <text x="657" y="33" fill="#c6d0f5" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">02 </text>
 <text x="702" y="33" fill="#c6d0f5" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">03 </text>
 <text x="747" y="33" fill="#c6d0f5" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">04 </text>
 <text x="27" y="52" fill="#e5c890" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 00</text>
+<text x="72" y="52" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="52" fill="#c6d0f5" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">C-2 64    </text>
 <text x="171" y="52" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
 <text x="216" y="52" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
@@ -29,12 +39,14 @@
 <rect x="468" y="38" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="38" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="52" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="52" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="52" fill="#949cbb" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> C-2</text>
 <text x="648" y="52" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="52" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="52" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="0" y="71" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 1 </text>
 <text x="27" y="71" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 01</text>
+<text x="72" y="71" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="71" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="117" y="71" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <text x="171" y="71" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
@@ -53,12 +65,14 @@
 <rect x="468" y="57" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="57" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="71" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="71" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="71" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="71" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="71" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="71" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="0" y="90" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 2 </text>
 <text x="27" y="90" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 02</text>
+<text x="72" y="90" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="90" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="117" y="90" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <text x="171" y="90" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
@@ -73,6 +87,7 @@
 <rect x="468" y="76" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="76" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="90" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="90" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="90" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="90" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="90" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -80,6 +95,7 @@
 <text x="963" y="90" fill="#c6d0f5" font-weight="bold" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">     Main</text>
 <text x="0" y="109" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 3 </text>
 <text x="27" y="109" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 03</text>
+<text x="72" y="109" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="81" y="111" width="27" height="1" fill="#51576d"/>
 <text x="81" y="109" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <rect x="108" y="111" width="9" height="1" fill="#51576d"/>
@@ -104,6 +120,7 @@
 <rect x="477" y="95" width="108" height="19" fill="#292c3c"/>
 <rect x="477" y="111" width="108" height="1" fill="#51576d"/>
 <text x="477" y="109" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="109" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="109" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="109" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="109" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -112,7 +129,9 @@
 <text x="1062" y="109" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0</text>
 <text x="0" y="128" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 4 </text>
 <text x="27" y="128" fill="#e5c890" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 04</text>
-<text x="54" y="128" fill="#a6d189" textLength="117" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> &gt; C-2 64    </text>
+<text x="54" y="128" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> &gt;</text>
+<text x="72" y="128" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="81" y="128" fill="#a6d189" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">C-2 64    </text>
 <text x="171" y="128" fill="#657a64" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
 <text x="216" y="128" fill="#657a64" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <rect x="243" y="114" width="108" height="19" fill="#292c3c"/>
@@ -123,6 +142,7 @@
 <rect x="468" y="114" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="114" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="128" fill="#657a64" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="128" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="128" fill="#a6d189" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt;C-2</text>
 <text x="648" y="128" fill="#a6d189" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">&gt;</text>
 <text x="657" y="128" fill="#657a64" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
@@ -136,6 +156,7 @@
 <rect x="1062" y="114" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="147" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 5 </text>
 <text x="27" y="147" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 05</text>
+<text x="72" y="147" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="147" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="117" y="147" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <text x="171" y="147" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
@@ -148,6 +169,7 @@
 <rect x="468" y="133" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="133" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="147" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="147" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="147" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="147" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="147" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -158,6 +180,7 @@
 <rect x="1062" y="133" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="166" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 6 </text>
 <text x="27" y="166" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 06</text>
+<text x="72" y="166" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="166" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="117" y="166" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <text x="171" y="166" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
@@ -170,6 +193,7 @@
 <rect x="468" y="152" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="152" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="166" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="166" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="166" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="166" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="166" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -179,6 +203,7 @@
 <rect x="1062" y="152" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="185" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 7 </text>
 <text x="27" y="185" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 07</text>
+<text x="72" y="185" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="81" y="187" width="27" height="1" fill="#51576d"/>
 <text x="81" y="185" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <rect x="108" y="187" width="9" height="1" fill="#51576d"/>
@@ -203,6 +228,7 @@
 <rect x="477" y="171" width="108" height="19" fill="#292c3c"/>
 <rect x="477" y="187" width="108" height="1" fill="#51576d"/>
 <text x="477" y="185" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="185" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="185" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="185" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="185" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -214,6 +240,7 @@
 <rect x="1062" y="171" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="204" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 8 </text>
 <text x="27" y="204" fill="#e5c890" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 08</text>
+<text x="72" y="204" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="204" fill="#c6d0f5" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">G-2 64    </text>
 <text x="171" y="204" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
 <text x="216" y="204" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">·· </text>
@@ -225,6 +252,7 @@
 <rect x="468" y="190" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="190" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="204" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="204" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="204" fill="#949cbb" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> G-2</text>
 <text x="648" y="204" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="204" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -236,6 +264,7 @@
 <rect x="1062" y="190" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="223" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 9 </text>
 <text x="27" y="223" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 09</text>
+<text x="72" y="223" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="223" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="117" y="223" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <text x="171" y="223" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
@@ -248,6 +277,7 @@
 <rect x="468" y="209" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="209" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="223" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="223" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="223" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="223" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="223" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -260,6 +290,7 @@
 <rect x="1062" y="209" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="242" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">10 </text>
 <text x="27" y="242" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0A</text>
+<text x="72" y="242" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="242" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="117" y="242" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <text x="171" y="242" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
@@ -272,6 +303,7 @@
 <rect x="468" y="228" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="228" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="242" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="242" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="242" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="242" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="242" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -283,6 +315,7 @@
 <rect x="1062" y="228" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="261" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">11 </text>
 <text x="27" y="261" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0B</text>
+<text x="72" y="261" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="81" y="263" width="27" height="1" fill="#51576d"/>
 <text x="81" y="261" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <rect x="108" y="263" width="9" height="1" fill="#51576d"/>
@@ -307,6 +340,7 @@
 <rect x="477" y="247" width="108" height="19" fill="#292c3c"/>
 <rect x="477" y="263" width="108" height="1" fill="#51576d"/>
 <text x="477" y="261" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="261" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="261" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="261" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="261" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -319,6 +353,7 @@
 <rect x="1062" y="247" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="280" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">12 </text>
 <text x="27" y="280" fill="#e5c890" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0C</text>
+<text x="72" y="280" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="280" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="117" y="280" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <text x="171" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
@@ -331,6 +366,7 @@
 <rect x="468" y="266" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="266" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="280" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="280" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -342,6 +378,7 @@
 <rect x="1062" y="266" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="299" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">13 </text>
 <text x="27" y="299" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0D</text>
+<text x="72" y="299" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="299" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="117" y="299" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <text x="171" y="299" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
@@ -354,6 +391,7 @@
 <rect x="468" y="285" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="285" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="299" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="299" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="299" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="299" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="299" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -366,6 +404,7 @@
 <rect x="1062" y="285" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="318" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">14 </text>
 <text x="27" y="318" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0E</text>
+<text x="72" y="318" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="318" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="117" y="318" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <text x="171" y="318" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
@@ -378,6 +417,7 @@
 <rect x="468" y="304" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="304" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="318" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="318" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="318" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="318" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="318" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -389,6 +429,7 @@
 <rect x="1062" y="304" width="18" height="19" fill="#292c3c"/>
 <text x="0" y="337" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">15 </text>
 <text x="27" y="337" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0F</text>
+<text x="72" y="337" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="337" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">---</text>
 <text x="117" y="337" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">··</text>
 <text x="171" y="337" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">····</text>
@@ -401,6 +442,7 @@
 <rect x="468" y="323" width="9" height="19" fill="#292c3c"/>
 <rect x="477" y="323" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="337" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
+<text x="585" y="337" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="337" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="648" y="337" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="337" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
@@ -410,6 +452,7 @@
 <rect x="1035" y="323" width="18" height="19" fill="#292c3c"/>
 <text x="1035" y="337" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██</text>
 <rect x="1062" y="323" width="18" height="19" fill="#292c3c"/>
+<text x="0" y="356" fill="#51576d" textLength="594" lengthAdjust="spacingAndGlyphs" xml:space="preserve">        ╰────────────────────────────────────────────────────────╯</text>
 <text x="963" y="356" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> -36 </text>
 <rect x="1008" y="342" width="18" height="19" fill="#292c3c"/>
 <text x="1008" y="356" fill="#a6d189" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██</text>

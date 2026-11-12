@@ -1544,13 +1544,14 @@ fn each_row_shows_how_far_it_is_from_the_cursor() {
     let (mut app, _realtime) = app();
     press(&mut app, "5j");
     let buffer = screen(&app);
-    let row = |step: u16| -> String { (0..9).map(|x| buffer[(x, step + 2)].symbol()).collect() };
-    assert_eq!(row(0), " 5  00   ");
-    assert_eq!(row(4), " 1  04   ");
-    assert_eq!(row(5), "    05   ", "the cursor's row is blank");
-    assert_eq!(row(6), " 1  06   ");
+    // The gutter, up to the grid's frame.
+    let row = |step: u16| -> String { (0..8).map(|x| buffer[(x, step + 2)].symbol()).collect() };
+    assert_eq!(row(0), " 5  00  ");
+    assert_eq!(row(4), " 1  04  ");
+    assert_eq!(row(5), "    05  ", "the cursor's row is blank");
+    assert_eq!(row(6), " 1  06  ");
     // Decimal, to match the count typed, beside a step number in hex.
-    assert_eq!(row(15), "10  0F   ");
+    assert_eq!(row(15), "10  0F  ");
     assert_eq!(buffer[(1, 2)].fg, vt_tui::theme::OVERLAY0);
     assert_eq!(buffer[(4, 2)].fg, vt_tui::theme::YELLOW, "the beat marker");
     assert_eq!(buffer[(4, 3)].fg, vt_tui::theme::SUBTEXT1, "other steps");
@@ -1574,7 +1575,7 @@ fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
     );
     assert_ne!(buffer[(68, 1)].bg, vt_tui::theme::GREEN);
     let headings: String = (0..30).map(|x| buffer[(x, 1)].symbol()).collect();
-    assert_eq!(headings.trim_end(), "         Note              FX");
+    assert_eq!(headings.trim_end(), "        ╭Note ──────────── FX");
     assert_eq!(
         buffer[(27, 2)].bg,
         vt_tui::theme::FX_BAND,
@@ -1715,18 +1716,26 @@ fn shift_arrows_snap_to_the_grid() {
 }
 
 #[test]
-fn insert_turns_the_cursor_green_and_boxes_the_track_without_moving_anything() {
+fn insert_turns_the_cursor_and_the_grids_frame_green_without_moving_anything() {
     let (mut app, _realtime) = app();
     let row = |buffer: &ratatui::buffer::Buffer, y: u16| -> String {
         (0..40).map(|x| buffer[(x, y)].symbol()).collect()
     };
 
+    // The grid is framed as a device is, dim, with its parts named in the top edge.
     let normal = screen(&app);
     assert_eq!(normal[(9, 2)].bg, vt_tui::theme::ROSEWATER);
-    assert_eq!(normal[(8, 1)].symbol(), " ");
-    assert_eq!(normal[(8, 2)].symbol(), " ");
-    let headings: String = (9..57).map(|x| normal[(x, 1)].symbol()).collect();
-    assert_eq!(headings, "Note              FX 1         FX 2         FX 3");
+    assert_eq!(normal[(8, 1)].symbol(), "╭");
+    assert_eq!(normal[(8, 2)].symbol(), "│");
+    assert_eq!(normal[(8, 18)].symbol(), "╰");
+    assert_eq!(normal[(8, 2)].fg, vt_tui::theme::SURFACE1);
+    assert_eq!(normal[(15, 1)].fg, vt_tui::theme::SURFACE1, "the edge");
+    let headings: String = (8..66).map(|x| normal[(x, 1)].symbol()).collect();
+    assert_eq!(
+        headings,
+        "╭Note ──────────── FX 1 ─────── FX 2 ─────── FX 3 ───────╮"
+    );
+    assert_eq!(normal[(9, 1)].fg, vt_tui::theme::OVERLAY2, "a heading");
 
     press(&mut app, "i");
     let insert = screen(&app);
@@ -1744,17 +1753,14 @@ fn insert_turns_the_cursor_green_and_boxes_the_track_without_moving_anything() {
     );
     assert_eq!(insert[(65, 18)].symbol(), "╯");
 
-    // Take away the box, and the steps are where they were.
-    assert_eq!(
-        row(&normal, 2).replace(' ', ""),
-        row(&insert, 2).replace(['│', ' '], "")
-    );
+    // Only the frame's colour changes, and the steps are where they were.
+    assert_eq!(row(&normal, 2), row(&insert, 2));
     let step_text_start = |b: &ratatui::buffer::Buffer| b[(12, 2)].symbol().to_owned();
     assert_eq!(step_text_start(&normal), step_text_start(&insert));
 
     special(&mut app, KeyCode::Esc);
     let back = screen(&app);
-    assert_eq!(back[(8, 1)].symbol(), " ");
+    assert_eq!(back[(8, 1)].fg, vt_tui::theme::SURFACE1);
     assert_eq!(back[(9, 2)].bg, vt_tui::theme::ROSEWATER);
 }
 
@@ -2792,13 +2798,17 @@ fn labelled_kit() -> PathBuf {
 }
 
 #[test]
-fn replace_shows_its_mode_and_a_red_cursor_with_no_box() {
+fn replace_shows_its_mode_and_a_red_cursor_with_the_frame_dim() {
     let (mut app, _realtime) = app();
     press(&mut app, "r");
     assert_eq!(app.mode, Mode::Replace);
     let buffer = screen(&app);
     assert_eq!(buffer[(9, 2)].bg, vt_tui::theme::RED);
-    assert_eq!(buffer[(8, 2)].symbol(), " ");
+    assert_eq!(
+        buffer[(8, 2)].fg,
+        vt_tui::theme::SURFACE1,
+        "not lit, as in Insert"
+    );
     press(&mut app, "a");
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(screen(&app)[(9, 2)].bg, vt_tui::theme::ROSEWATER);
@@ -3050,11 +3060,7 @@ fn the_phrase_title_is_in_groups_and_the_track_labels_head_their_columns() {
     let (mut app, _realtime) = tracks_of_different_lengths();
     let buffer = screen(&app);
     let lines = drawn_lines(&buffer);
-    assert!(
-        lines[0].contains("Track 01  Phrase 00  1/1"),
-        "{}",
-        lines[0]
-    );
+    assert!(lines[0].contains("Track 01  Chain 00  00"), "{}", lines[0]);
     assert!(!lines[0].contains("01  02"), "the labels left the title");
     // Each label over its column's note, past the marker's cell.
     let headings: String = lines[1].chars().skip(67).collect();
@@ -3083,9 +3089,80 @@ fn a_shared_phrase_and_chain_are_linked_rather_than_starred() {
     press(&mut app, " 3");
     let title = drawn_lines(&screen(&app))[0].clone();
     assert!(
-        title.contains(&format!("Phrase 00 {LINK}{ICON_SPACE} 2/2")),
+        title.contains(&format!("Chain 00  00{LINK}{ICON_SPACE}00{LINK}")),
         "{title}"
     );
+}
+
+#[test]
+fn the_title_shows_the_chain_with_this_phrase_in_the_cursors_colour_cut_to_its_room() {
+    // A chain of 40 phrases, more than the title has room for.
+    let mut song = Song::new(1);
+    for id in 1..40 {
+        song.tracks[0].phrases.insert(id, Arc::new(Phrase::new(4)));
+    }
+    let entries = (0..40)
+        .map(|phrase| ChainEntry {
+            phrase,
+            transpose: 0,
+        })
+        .collect();
+    let chain = song.sections[0].chains[0].unwrap();
+    song.tracks[0].chains.insert(
+        chain,
+        Arc::new(Chain {
+            entries,
+            label: String::new(),
+        }),
+    );
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, "]p");
+    assert_eq!(app.cursor.slot, 1);
+    let buffer = screen_wide(&app);
+    let title = drawn_lines(&buffer)[0].clone();
+    assert!(title.contains("Chain 00  00 01 02 03"), "{title}");
+    assert!(
+        title.trim_end().ends_with('\u{2026}'),
+        "cut, with a sign: {title}"
+    );
+    assert!(
+        !title.trim_end().contains("\u{2026} "),
+        "not cut before the start: {title}"
+    );
+    let at = title.find("Chain 00  ").unwrap();
+    let first = (title[..at].chars().count() + "Chain 00  ".len()) as u16;
+    assert_eq!(buffer[(first, 0)].fg, vt_tui::theme::OVERLAY2);
+    assert_eq!(
+        buffer[(first + 3, 0)].fg,
+        vt_tui::theme::ROSEWATER,
+        "{title}"
+    );
+    // `]p` moves along it.
+    press(&mut app, "]p");
+    assert_eq!(app.cursor.slot, 2);
+    let buffer = screen_wide(&app);
+    assert_eq!(buffer[(first + 3, 0)].fg, vt_tui::theme::OVERLAY2);
+    assert_eq!(buffer[(first + 6, 0)].fg, vt_tui::theme::ROSEWATER);
+    // At the end, it's cut before the start instead, and the last phrase is still shown.
+    for _ in 0..40 {
+        press(&mut app, "]p");
+    }
+    let title = drawn_lines(&screen_wide(&app))[0].clone();
+    assert!(title.contains("Chain 00  \u{2026} "), "{title}");
+    assert!(title.trim_end().ends_with("27"), "{title}");
+}
+
+/// The phrase view at the author's 163 columns, less the meter beside it.
+fn screen_wide(app: &App) -> ratatui::buffer::Buffer {
+    let backend = ratatui::backend::TestBackend::new(148, 24);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
+        .unwrap();
+    terminal.backend().buffer().clone()
 }
 
 #[test]
@@ -3904,7 +3981,7 @@ fn each_kind_of_cell_has_its_own_colours() {
     );
     // An event's value is in its own colour, with no fine digits.
     assert_eq!(style_at("DEL   10", 6).fg, Some(theme::PEACH));
-    assert!(row.contains("DEL   10     "), "{row}");
+    assert!(row.contains("DEL   10    │"), "{row}");
     // A lock the track doesn't have is grey all over, brighter than an empty cell.
     assert_eq!(style_at("DCAY", 0).fg, theme::dim().fg);
     assert_eq!(style_at("DCAY  2000", 6).fg, theme::dim().fg);
@@ -6899,14 +6976,14 @@ fn a_tracks_heading_has_its_machine_and_mute_or_solo_glyphs() {
     };
     let machine = app.song().tracks[0].machine;
     let glyph = vt_tui::glyphs::machine(machine);
-    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01  Phrase")));
+    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01  Chain")));
     tap(&mut app, " m");
-    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01 {MUTE}  Phrase")));
+    assert!(heading(&app, 0).starts_with(&format!("{glyph} Track 01 {MUTE}  Chain")));
     // Over its column in the overview too, in place of the number's last cell.
     assert!(heading(&app, 1).contains(&format!(" 01{MUTE}")));
     tap(&mut app, " m");
     app.levels[0].solo = true;
-    assert!(heading(&app, 0).contains(&format!("Track 01 {SOLO}  Phrase")));
+    assert!(heading(&app, 0).contains(&format!("Track 01 {SOLO}  Chain")));
     assert_eq!(vt_tui::glyphs::machine(Machine::Sampler), SAMPLER);
     assert_eq!(
         vt_tui::glyphs::machine(Machine::Plaits(SynthVoice::Kick)),
