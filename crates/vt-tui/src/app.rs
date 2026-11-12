@@ -1435,6 +1435,8 @@ impl App {
             Cmd::Guides => self.open_guide_picker(),
             Cmd::PickValue => self.open_field_picker(),
             Cmd::Shape => self.open_shape(),
+            Cmd::ReopenGenerator => self.reopen_generator(),
+            Cmd::ApplyGenerator => self.apply_generator_here(),
             Cmd::PickSample => self.open_default_sample_picker(),
             Cmd::PickKit => self.open_kit_picker(),
             Cmd::Replace => self.begin_replace(),
@@ -2736,6 +2738,7 @@ impl App {
     pub fn apply(&mut self, action: &Action) {
         match edit(self.song(), action) {
             Ok(next) => {
+                self.say_applied(&next);
                 self.history.commit(next);
                 self.dirty = true;
                 self.publish();
@@ -2883,6 +2886,7 @@ impl App {
                 ..
             } => self.render(&path, rows, tail),
             Line::Double => self.double(),
+            Line::GenApply => self.apply_generator_here(),
             Line::SetSkip(size) => self.apply(&Action::SetSkipSize(size)),
             Line::SetScale(kind) => self.set_scale(Scale {
                 on: true,

@@ -113,6 +113,10 @@ pub enum Cmd {
     PickValue,
     /// Fill the selected column with a ramp or random values.
     Shape,
+    /// Open the shape panel again on the live generator under the cursor.
+    ReopenGenerator,
+    /// Apply the live generator under the cursor, leaving plain values.
+    ApplyGenerator,
     /// Choose this track's sample from a list.
     PickSample,
     /// Choose a kit from a list.
@@ -357,6 +361,16 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
         "Collapse the timeline to a line a row, or open it again",
     ),
     ("Space p d", Cmd::Double, "Double this phrase"),
+    (
+        "g l",
+        Cmd::ReopenGenerator,
+        "Open the shape panel again on the live column here",
+    ),
+    (
+        "Space g a",
+        Cmd::ApplyGenerator,
+        "Apply the live column here, leaving plain values",
+    ),
     (
         "Space r",
         Cmd::ToggleRecord,

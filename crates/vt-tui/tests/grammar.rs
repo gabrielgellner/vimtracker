@@ -2710,3 +2710,165 @@ fn cmd_with_the_movement_keys_changes_the_shape_panels_values_as_its_keys_do() {
     with_cmd(&mut app, "D-l");
     assert_eq!(app.shape.as_ref().unwrap().typing.as_deref(), Some(""));
 }
+
+/// The live generators on a track's phrase 00.
+fn generators(app: &App, track: usize) -> Vec<vt_model::generator::Generator> {
+    app.song().tracks[track].phrases[&0].generators().to_vec()
+}
+
+/// A tresillo of `7F` among 8 notes at `40`, kept live with `L`.
+fn live_tresillo() -> (App, Realtime) {
+    let (mut app, rt) = app_with(&["C-3 40 --- --- ---"; 8]);
+    keys(&mut app, "lvGSKalt<Enter>ji7Fji7FjjKeuc<Enter>");
+    assert_eq!(vel(&app), ["7F", "40", "40", "7F", "40", "40", "7F", "40"]);
+    keys(&mut app, "L");
+    (app, rt)
+}
+
+#[test]
+fn l_keeps_a_shape_live_as_one_undo_and_gl_turns_its_rotate() {
+    use vt_model::shape::Where;
+    let (mut app, _rt) = live_tresillo();
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(generators(&app, 0).len(), 1);
+    assert!(app.status.contains("live"), "{}", app.status);
+    let depth = app.history.undo_depth();
+    // `gl` from another row of the column opens the panel on its saved shape.
+    keys(&mut app, "jjjgl");
+    assert_eq!(app.mode, Mode::Shape);
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.live, Some(0));
+    assert_eq!(panel.shape.place, Where::Euclid { hits: 3, rotate: 0 });
+    // Down to Rotate, and round by one, heard as it's turned.
+    keys(&mut app, "jjjjjj=");
+    assert_eq!(vel(&app), ["40", "7F", "40", "40", "7F", "40", "40", "7F"]);
+    assert_eq!(app.history.undo_depth(), depth);
+    keys(&mut app, "L");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(generators(&app, 0).len(), 1);
+    assert_eq!(
+        generators(&app, 0)[0].shape.place,
+        Where::Euclid { hits: 3, rotate: 1 }
+    );
+    // `Esc` leaves it as it was.
+    keys(&mut app, "gljjjjjj=<Esc>");
+    assert_eq!(vel(&app), ["40", "7F", "40", "40", "7F", "40", "40", "7F"]);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    keys(&mut app, "u");
+    assert_eq!(vel(&app), ["7F", "40", "40", "7F", "40", "40", "7F", "40"]);
+    assert_eq!(generators(&app, 0).len(), 1);
+    // `Enter` there applies it with the new settings.
+    keys(&mut app, "gljjjjjj==<Enter>");
+    assert!(generators(&app, 0).is_empty());
+    assert_eq!(vel(&app), ["7F", "40", "7F", "40", "40", "7F", "40", "40"]);
+    assert!(app.status.contains("applied"), "{}", app.status);
+    keys(&mut app, "gl");
+    assert_eq!(app.mode, Mode::Normal);
+    assert!(app.status.contains("No live column"), "{}", app.status);
+}
+
+#[test]
+fn a_hand_edit_to_a_live_column_applies_it_says_so_and_u_brings_it_back() {
+    let (mut app, _rt) = live_tresillo();
+    keys(&mut app, "jr10");
+    assert!(generators(&app, 0).is_empty());
+    assert_eq!(vel(&app), ["7F", "10", "40", "7F", "40", "40", "7F", "40"]);
+    assert!(app.status.contains("plain values"), "{}", app.status);
+    keys(&mut app, "u");
+    assert_eq!(generators(&app, 0).len(), 1);
+    assert_eq!(vel(&app), ["7F", "40", "40", "7F", "40", "40", "7F", "40"]);
+    // A note's pitch is only read, so it leaves it live.
+    keys(&mut app, "h=");
+    assert_eq!(generators(&app, 0).len(), 1);
+}
+
+#[test]
+fn a_note_added_under_a_live_velocity_column_gets_a_generated_velocity() {
+    let (mut app, _rt) = app_with(&["C-3 40 --- --- ---", E, "C-3 40 --- --- ---", E]);
+    keys(&mut app, "lvGSji00ji40L");
+    assert_eq!(vel(&app), ["00", "--", "40", "--"]);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "hjia<Esc>");
+    assert_eq!(generators(&app, 0).len(), 1);
+    assert_eq!(vel(&app), ["00", "20", "40", "--"]);
+    assert_eq!(
+        app.history.undo_depth(),
+        depth + 1,
+        "the note and its velocity"
+    );
+    keys(&mut app, "u");
+    assert_eq!(vel(&app), ["00", "--", "40", "--"]);
+    assert_eq!(generators(&app, 0).len(), 1);
+}
+
+#[test]
+fn space_g_a_and_gen_apply_apply_the_live_column_here() {
+    let (mut app, _rt) = live_tresillo();
+    let depth = app.history.undo_depth();
+    keys(&mut app, " ga");
+    assert!(generators(&app, 0).is_empty());
+    assert_eq!(vel(&app), ["7F", "40", "40", "7F", "40", "40", "7F", "40"]);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    keys(&mut app, "u:gen apply<Enter>");
+    assert!(generators(&app, 0).is_empty());
+    keys(&mut app, ":gen<Enter>");
+    assert!(app.status.contains("apply"), "{}", app.status);
+    // On another column there's nothing to apply.
+    keys(&mut app, "uh ga");
+    assert_eq!(generators(&app, 0).len(), 1);
+    assert!(app.status.contains("No live column"), "{}", app.status);
+}
+
+#[test]
+fn across_tracks_l_keeps_one_generator_per_track_each_with_its_own_seed() {
+    let rows = [N; 8];
+    let (mut app, _rt) = tracks_with(&[&rows, &rows]);
+    keys(&mut app, "lvGWSKrandom<Enter>L");
+    let (one, two) = (generators(&app, 0), generators(&app, 1));
+    assert_eq!((one.len(), two.len()), (1, 1));
+    assert_ne!(one[0].shape.seed, two[0].shape.seed);
+    assert!(app.status.contains("2 tracks"), "{}", app.status);
+    // Each is reopened and applied on its own.
+    let first = track_steps(&app, 0);
+    keys(&mut app, "Wglr");
+    assert_eq!(app.shape.as_ref().unwrap().parts.len(), 1);
+    keys(&mut app, "L");
+    assert_eq!(track_steps(&app, 0), first);
+    keys(&mut app, " ga");
+    assert!(generators(&app, 1).is_empty());
+    assert_eq!(generators(&app, 0).len(), 1);
+}
+
+#[test]
+fn l_on_an_fx_column_with_a_lane_keeps_it_live_on_the_lane() {
+    let (mut app, _rt) = app_with(&["C-3 40 cut:00 --- ---", N, N, N, N, N]);
+    keys(&mut app, "lllll:lane 3<Enter>vjjSjji40jjjjKall<Enter>L");
+    let live = generators(&app, 0);
+    assert_eq!(live[0].span, vt_model::generator::Span::Lane);
+    assert!(app.status.contains("lane"), "{}", app.status);
+    keys(&mut app, ":lane 5<Enter>");
+    assert_eq!(
+        generators(&app, 0)[0].rows(),
+        Some(vt_model::selection::StepRange::between(0, 4))
+    );
+}
+
+#[test]
+fn a_live_column_is_drawn_in_the_shape_panels_colour_and_named_over_the_grid() {
+    let (app, _rt) = live_tresillo();
+    let backend = ratatui::backend::TestBackend::new(120, 16);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let title: String = (0..120).map(|x| buffer[(x, 0)].symbol()).collect();
+    assert!(title.contains("Live:Vel"), "{title}");
+    // The velocity on the second step, clear of the cursor; the note isn't marked.
+    let row = 3;
+    let at = (0..120)
+        .find(|&x| buffer[(x, row)].symbol() == "C")
+        .unwrap();
+    assert_eq!(buffer[(at + 4, row)].fg, vt_tui::theme::TEAL);
+    assert_ne!(buffer[(at, row)].fg, vt_tui::theme::TEAL);
+}

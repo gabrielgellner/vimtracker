@@ -15,14 +15,16 @@ use crate::constants::{
     FIXED_TRACKS, FORMAT_VERSION, FX_SLOTS, MAX_GROUPS, MAX_LEVEL, MAX_PHRASE_STEPS,
     MAX_TRACK_RESET, UNITY_LEVEL, UNITY_TRIM,
 };
+use crate::generator::{Generator, GeneratorFile, Span};
 use crate::grid::{GRID_ROWS, Grid};
 use crate::groove::{Groove, GrooveId};
 use crate::insert::{INSERTS, Insert};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mods};
 use crate::order::{Deal, Dealer, Order, Round};
 use crate::scale::Scale;
-use crate::selection::Extent;
+use crate::selection::{Extent, StepRange};
 use crate::settings::{Owner, SAMPLER_SETTINGS, SettingId, voice_entries};
+use crate::shape::{Shape, ShapeColumn};
 use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Step};
 
@@ -1227,6 +1229,7 @@ pub struct Phrase {
     length: usize,
     lanes: [Option<Lane>; FX_SLOTS],
     order: Order,
+    generators: Vec<Generator>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1240,6 +1243,8 @@ struct PhraseFile {
     lanes: [Option<Lane>; FX_SLOTS],
     #[serde(default, skip_serializing_if = "Order::is_forward")]
     order: Order,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    generators: Vec<GeneratorFile>,
 }
 
 /// A lane that fits in this many stored steps, or none if it can't.
@@ -1259,12 +1264,18 @@ impl From<PhraseFile> for Phrase {
             .length
             .unwrap_or(stored)
             .min(stored - start.min(stored));
+        let generators = file
+            .generators
+            .into_iter()
+            .filter_map(|generator| generator.generator(&file.steps))
+            .collect();
         Self {
             lanes: file.lanes.map(|lane| fitted(lane, stored)),
             steps: file.steps,
             start,
             length,
             order: file.order,
+            generators,
         }
     }
 }
@@ -1277,6 +1288,7 @@ impl From<Phrase> for PhraseFile {
             length: Some(phrase.length),
             lanes: phrase.lanes,
             order: phrase.order,
+            generators: phrase.generators.iter().map(GeneratorFile::of).collect(),
         }
     }
 }
@@ -1291,6 +1303,7 @@ impl Phrase {
             length,
             lanes: [None; FX_SLOTS],
             order: Order::Forward,
+            generators: Vec::new(),
         }
     }
 
@@ -1303,6 +1316,7 @@ impl Phrase {
             length,
             lanes: [None; FX_SLOTS],
             order: Order::Forward,
+            generators: Vec::new(),
         }
     }
 
@@ -1360,6 +1374,75 @@ impl Phrase {
             time += steps[row].pulses();
         }
         None
+    }
+
+    /// Its live generators, each on a column of its own rows or of a lane.
+    pub fn generators(&self) -> &[Generator] {
+        &self.generators
+    }
+
+    /// The rows a generator would cover now: its own, as many as are stored, or its FX column's
+    /// lane, or none if that column has no lane.
+    pub fn span_rows(&self, generator: &Generator) -> Option<StepRange> {
+        let stored = self.steps.len();
+        match generator.span {
+            Span::Rows { first, last } => {
+                (first < stored).then(|| StepRange::between(first, last.min(stored - 1)))
+            }
+            Span::Lane => match generator.column {
+                ShapeColumn::Fx { slot, .. } => self.lane(slot).map(|lane| {
+                    StepRange::between(lane.start, lane.start + lane.length.max(1) - 1)
+                }),
+                _ => None,
+            },
+        }
+    }
+
+    /// Make a generator live, from the values on its rows now. One on the same column whose rows
+    /// overlap is applied first, so this one starts from the values it left. Returns false if it
+    /// has no rows here.
+    pub fn add_generator(&mut self, mut generator: Generator) -> bool {
+        let Some(range) = self.span_rows(&generator) else {
+            return false;
+        };
+        self.generators.retain(|other| {
+            !other.shares(generator.column)
+                || other
+                    .rows()
+                    .is_none_or(|rows| rows.last < range.first || rows.first > range.last)
+        });
+        generator.start(&mut self.steps, range);
+        self.generators.push(generator);
+        true
+    }
+
+    /// Give a live generator a new shape, and write it. Returns false if there's no such one.
+    pub fn reshape_generator(&mut self, index: usize, shape: Shape) -> bool {
+        let Some(generator) = self.generators.get_mut(index) else {
+            return false;
+        };
+        generator.shape = shape;
+        generator.render(&mut self.steps);
+        true
+    }
+
+    /// Apply a live generator: its values stay, as plain ones.
+    pub fn apply_generator(&mut self, index: usize) -> Option<Generator> {
+        (index < self.generators.len()).then(|| self.generators.remove(index))
+    }
+
+    /// Follow an edit to the phrase: a live generator whose cells the edit changed by hand is
+    /// applied, and the rest rerender where the edit changed what they read or moved their lane.
+    pub fn follow_generators(&mut self) {
+        let ranges: Vec<Option<StepRange>> = self
+            .generators
+            .iter()
+            .map(|generator| self.span_rows(generator))
+            .collect();
+        let steps = &mut self.steps;
+        let mut ranges = ranges.into_iter();
+        self.generators
+            .retain_mut(|generator| generator.follow(steps, ranges.next().flatten()));
     }
 
     /// An FX column's own lane, if it has one. One without follows the phrase's loop.
@@ -1548,6 +1631,9 @@ impl Phrase {
             for lane in self.lanes.iter_mut().flatten() {
                 lane.start += added;
             }
+            for generator in &mut self.generators {
+                generator.shift(added);
+            }
         } else {
             let highest = MAX_PHRASE_STEPS
                 .max(self.steps.len())
@@ -1571,6 +1657,13 @@ impl Phrase {
     /// outside the loop stay where they are.
     pub fn rotate(&mut self, by: isize) {
         let (start, length) = (self.start, self.length);
+        // A live generator on the rows it moves is applied, as its values move with them.
+        let end = start + length;
+        self.generators.retain(|generator| {
+            generator
+                .rows()
+                .is_none_or(|rows| rows.last < start || rows.first >= end)
+        });
         if length > 0 {
             let by = by.rem_euclid(length as isize) as usize;
             self.steps[start..start + length].rotate_right(by);
@@ -1579,6 +1672,8 @@ impl Phrase {
 
     /// Double the loop by repeating it. Steps after it move down rather than being overwritten.
     pub fn double(&mut self) {
+        // Its live generators are applied, as the rows after the loop move.
+        self.generators.clear();
         let copy = self.loop_steps().to_vec();
         let end = self.start + self.length;
         let added = copy.len();
@@ -2136,6 +2231,7 @@ mod tests {
             start: 0,
             length: Some(2),
             order: Order::Forward,
+            generators: Vec::new(),
             lanes: [
                 Some(Lane {
                     start: 1,
@@ -2717,6 +2813,7 @@ mod tests {
             lanes: [None; FX_SLOTS],
             length: None,
             order: Order::Forward,
+            generators: Vec::new(),
         };
         let phrase = Phrase::from(file);
         assert_eq!((phrase.start(), phrase.len()), (0, 3));
@@ -2730,6 +2827,7 @@ mod tests {
             lanes: [None; FX_SLOTS],
             length: Some(9),
             order: Order::Forward,
+            generators: Vec::new(),
         };
         let phrase = Phrase::from(file);
         assert_eq!((phrase.start(), phrase.len()), (2, 1));

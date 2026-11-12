@@ -123,8 +123,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         1 => String::new(),
         count => format!(" on {count} tracks"),
     };
+    let live = if panel.live.is_some() { ", live" } else { "" };
     let mut lines = vec![Line::styled(
-        format!("{name}{tracks}: {filled} of {rows_shaped} rows"),
+        format!("{name}{tracks}{live}: {filled} of {rows_shaped} rows"),
         theme::dim(),
     )];
     for row in rows {
@@ -165,7 +166,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
             widgets::window_border()
                 .style(theme::window())
                 .title(" Shape ")
-                .title_bottom(" Enter keep  Esc cancel ")
+                .title_bottom(if panel.live.is_some() {
+                    " Enter apply  L keep live  Esc cancel "
+                } else {
+                    " Enter keep  L keep live  Esc cancel "
+                })
                 .title_style(Style::new().add_modifier(Modifier::BOLD)),
         ),
         window,

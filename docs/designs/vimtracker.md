@@ -414,9 +414,11 @@ Song                               song.ron, refused unless format_version is FO
  |   |- mods[6]                    ModSlot: kind, destination, depth, switch, polarity, each type's
  |   |                             own settings (adsr, lfo), kept while another type plays
  |   |- chains{id}                 Chain: entries[(phrase, transpose)], label
- |   '- phrases{id}                Phrase: steps[], start, length, lanes[3], order
- |       '- Step                   note, velocity, nudge, gate, fx[]
- |           '- FxSlot             command, value (coarse and fine), mark
+ |   '- phrases{id}                Phrase: steps[], start, length, lanes[3], order, generators[]
+ |       |- Step                   note, velocity, nudge, gate, fx[]
+ |       |   '- FxSlot             command, value (coarse and fine), mark
+ |       '- Generator              a live shape: column, span (rows or the lane), Shape, and the
+ |                                 column's cells from under it, saved as steps
  '- sections[]                     Section: chains[one per track], length, repeat, start, reset
 ```
 
@@ -1157,6 +1159,11 @@ FX column whose `Where` is Notes or No notes.
     the same column applies the old one, then starts from the values it left.
 *   Undo restores the live state, because it is part of the phrase. Cloning copies it, and each clone renders on its own.
 *   Live cells are marked in the grid, and the phrase's heading names its live columns.
+
+**Built** as above (decisions 180 and 181). `generator.rs` holds a `Generator`, kept in the phrase's `generators`; after
+every edit, `edit` lets each live generator of each phrase the edit changed follow it, comparing its rows with how it last
+left them, so no edit path needs to know about generators. A song saved with them reads in an older build as plain
+values, so the format is unchanged.
 
 ### Saving and loading
 
