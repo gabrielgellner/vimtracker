@@ -662,6 +662,42 @@ const SWARM: [Entry; 3] = [
     level("density", "Density", "DENS", 0x80),
     level("overlap", "Overlap", "OVLP", 0x99),
 ];
+/// How many saws `Supersaw` stacks.
+const SAW_COUNTS: [&str; 8] = ["1", "2", "3", "4", "5", "6", "7", "8"];
+/// What `Supersaw`'s stack is: every saw on its own pitch, or every other one a fifth up or an
+/// octave down.
+const SUPERSAW_MODES: [&str; 3] = ["Unison", "Fifths", "Sub"];
+/// `Supersaw`'s: seven saws a little apart, as Roland's has, all as loud, half wide, each starting
+/// anywhere in its cycle.
+const SUPERSAW: [Entry; 9] = [
+    Entry {
+        key: "stack",
+        name: "Stack",
+        label: Some("STCK"),
+        kind: Kind::Stepped {
+            choices: &SUPERSAW_MODES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    level("detune", "Detune", "DTUN", 0x60),
+    centred("warp", "Warp", "WARP"),
+    level("mix", "Mix", "MIX", 0xFF),
+    Entry {
+        key: "saws",
+        name: "Saws",
+        label: Some("SAWS"),
+        kind: Kind::Stepped {
+            choices: &SAW_COUNTS,
+            wraps: false,
+        },
+        default: 6,
+    },
+    level("shape", "Shape", "SHPE", 0x00),
+    level("width", "Width", "WDTH", 0x80),
+    level("phase", "Phase", "PHAS", 0xFF),
+    DRIFT,
+];
 /// A continuous setting from `00` to `FF` that reads in these units.
 const fn in_units(
     key: &'static str,
@@ -958,6 +994,7 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Formant => &FORMANT,
         SynthVoice::Additive => &ADDITIVE,
         SynthVoice::Swarm => &SWARM,
+        SynthVoice::Supersaw => &SUPERSAW,
         SynthVoice::WaveTerrain => &TERRAIN,
         SynthVoice::Chord => &CHORD,
         SynthVoice::Chiptune => &CHIPTUNE,
@@ -1009,6 +1046,7 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::Formant => "formant",
         SynthVoice::Additive => "additive",
         SynthVoice::Swarm => "swarm",
+        SynthVoice::Supersaw => "supersaw",
         SynthVoice::WaveTerrain => "terrain",
         SynthVoice::Chord => "chord",
         SynthVoice::Chiptune => "chiptune",

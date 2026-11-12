@@ -98,6 +98,19 @@ impl Drift {
         self.rng.next_u32() as f32 / 4_294_967_296.0
     }
 
+    /// The tuning offset of one more oscillator, on `-1..1`, for a voice with more than
+    /// [`OSCILLATORS`]: `Supersaw` rolls one for each saw of its stack after the note's own.
+    pub(crate) fn tuning(&mut self) -> f32 {
+        self.bipolar()
+    }
+
+    /// How far an oscillator with its own `tuning` is off, in semitones, at `Drift` `amount`: its
+    /// offset and the wander, as [`Drift::ratio`] has them.
+    #[inline]
+    pub(crate) fn semitones(&self, tuning: f32, amount: f32) -> f32 {
+        amount * (TUNE_SEMITONES * tuning + self.wander * WANDER_GAIN)
+    }
+
     /// Move the wander on, once a block.
     #[inline]
     pub(crate) fn step(&mut self) {
