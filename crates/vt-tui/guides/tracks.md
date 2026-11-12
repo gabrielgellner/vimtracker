@@ -272,12 +272,21 @@ note ends. `Reverb` has these:
 
 | Setting | Does |
 |---|---|
-| `Time` | A note division, up to `1 bar`. A change glides |
+| `Time` | A note division, up to `1 bar` |
 | `Feedback` | How much comes round again. `FF` keeps going |
 | `Ping-pong` | On, it goes side to side; off, it stays put |
 | `Width` | From `00`, sides together, to `FF`, fully apart |
 | `Low cut`, `High cut` | Take more from each repeat |
 | `Drive` | Saturates louder repeats each time round |
+| `Retime` | How a new `Time` comes in: `Glide` or `Jump` |
+| `Wow` | A slow wobble in the repeats' pitch, as worn tape has |
+
+`Glide` eases to a new time, which bends the repeats' pitch on the way, as a tape delay does.
+`Jump` fades from the old time to the new instead, so the repeats keep their pitch: it's for a
+time that a step locks, changing the rhythm without a swoop. Its fade lasts half the new time,
+from 10 ms to half a second, and a change that comes while it fades waits for it to finish.
+`Wow` bends the two sides' pitch opposite ways, by up to about 9 cents, going round once every
+two seconds.
 
 `Chorus` thickens a sound with copies of it that drift in time, after Mutable
 Instruments' Rings. It starts half wet, which is the classic sound. Its `Chorus` type
