@@ -680,18 +680,22 @@ const SHAPING: DeviceLayout = live(
         [s("amount"), GAP, GAP, GAP, GAP, GAP, s("mix"), s("gain")],
     )],
 );
-const CRUSH: DeviceLayout = live(
+/// Its bits, with mu-law on the button under them.
+const CRUSH: DeviceLayout = stored(
     "fx/distort-crush",
-    &[knobs(
+    &[page(
         "Crush",
         [s("bits"), GAP, GAP, GAP, GAP, GAP, s("mix"), s("gain")],
+        button(0, "mulaw"),
     )],
 );
-const DOWN: DeviceLayout = live(
+/// Its rate, with following the note on the button under it.
+const DOWN: DeviceLayout = stored(
     "fx/distort-down",
-    &[knobs(
+    &[page(
         "Down",
         [s("rate"), GAP, GAP, GAP, GAP, GAP, s("mix"), s("gain")],
+        button(0, "track"),
     )],
 );
 /// A pedal's: its gain and tone knobs, then its mode.

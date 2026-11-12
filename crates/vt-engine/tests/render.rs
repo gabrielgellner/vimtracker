@@ -75,6 +75,24 @@ fn golden_renders_stay_the_same() {
 }
 
 #[test]
+fn golden_choruses_stay_the_same() {
+    use vt_model::insert::{Chorus, ChorusType, Insert};
+    // Rings' two, which the Juno's types were added beside without changing a bit of them.
+    for (name, kind) in [
+        ("chorus-chorus", ChorusType::Chorus),
+        ("chorus-ensemble", ChorusType::Ensemble),
+    ] {
+        let mut song = song(&FX_LOOP);
+        song.tracks[0].inserts[0] = Insert::Chorus(Chorus {
+            kind,
+            depth: 0xC0,
+            ..Chorus::DEFAULT
+        });
+        golden(name, &render(song, RenderOptions::default()));
+    }
+}
+
+#[test]
 fn a_render_is_exactly_the_loops_length() {
     let out = render(song(&FX_LOOP), RenderOptions::default());
     assert_eq!(out.len(), LOOP * 2);
