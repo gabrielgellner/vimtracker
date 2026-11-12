@@ -14,7 +14,7 @@ use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, default_mod};
 use vt_model::settings::{SettingId, gate_percent, gate_value};
 use vt_model::song::{FilterType, Machine, Track};
 use vt_model::speed::Speed;
-use vt_model::steps::{Loop, MAX_STEP, STEPS, Steps, StepsMode};
+use vt_model::steps::{Loop, MAX_MUTATE, MAX_STEP, STEPS, Steps, StepsMode};
 
 use crate::app::App;
 use crate::input::command::Line;
@@ -95,10 +95,17 @@ fn adjust_mod(
             ModKind::Lpg => {}
         },
         ModField::Polarity => modulator.polarity = Some(modulator.polarity().other()),
+        // `Pitch` comes twice, as it is and in scale.
         ModField::Destination => {
-            let mut choices = vec![None];
-            choices.extend(SettingId::for_mod(track, slot).into_iter().map(Some));
-            modulator.destination = next_in(&choices, modulator.destination, up);
+            let mut choices = vec![(None, false)];
+            for destination in SettingId::for_mod(track, slot) {
+                choices.push((Some(destination), false));
+                if destination == SettingId::PITCH {
+                    choices.push((Some(destination), true));
+                }
+            }
+            let here = (modulator.destination, modulator.goes_in_scale());
+            (modulator.destination, modulator.in_scale) = next_in(&choices, here, up);
         }
         ModField::Depth => {
             let size = if large { HEX_JUMP as i16 } else { 1 };
@@ -171,6 +178,16 @@ fn adjust_mod(
             steps.start = (i16::from(steps.start) + by).clamp(0, STEPS as i16 - 1) as u8;
         }
         ModField::Loop => steps.looping = next_in(&Loop::ALL, steps.looping, up),
+        ModField::Mutate => {
+            let size = if large { MUTATE_JUMP } else { 1 };
+            let by = if up { size } else { -size };
+            steps.mutate = (i16::from(steps.mutate) + by).clamp(0, i16::from(MAX_MUTATE)) as u8;
+        }
+        ModField::Smooth => {
+            let size = if large { HEX_JUMP as i16 } else { 1 };
+            let moved = steps.smooth + if up { size } else { -size };
+            steps.smooth = moved.clamp(-MAX_STEP, MAX_STEP);
+        }
         // A large step is an octave, as a step's value on `Pitch` is semitones.
         ModField::Step(at) => {
             let size = if large { OCTAVE } else { 1 };
@@ -182,6 +199,9 @@ fn adjust_mod(
 
 /// How far a large step moves one of Steps' values: an octave, `0C`.
 const OCTAVE: i16 = 12;
+
+/// How far a large step moves `Mutate`, in percent.
+const MUTATE_JUMP: i16 = 10;
 
 /// A mod slot with one setting back at its default: the slot's own for what every type shares,
 /// and for a type's own the default that type has in this slot. `Type` goes back to the slot's
@@ -220,6 +240,7 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         ModField::Destination => {
             return ModSlot {
                 destination: fresh.destination,
+                in_scale: false,
                 ..modulator
             };
         }
@@ -270,6 +291,8 @@ fn mod_at_default(modulator: ModSlot, slot: usize, field: ModField) -> ModSlot {
         ModField::Length => steps.length = new.length,
         ModField::Start => steps.start = new.start,
         ModField::Loop => steps.looping = new.looping,
+        ModField::Mutate => steps.mutate = new.mutate,
+        ModField::Smooth => steps.smooth = new.smooth,
         ModField::Step(at) => steps.values[usize::from(at)] = 0,
     }
     ModSlot {

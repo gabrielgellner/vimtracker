@@ -1816,8 +1816,10 @@ fn the_steps_panel_is_a_cursor_stop_that_h_and_l_go_across() {
     // `0` again, and `h` from the first, leave it for the grid.
     press(&mut app, "h");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Start));
-    // From the left column's lower rows, `l` goes over the holes into it too.
+    // From the right column's lower rows, `l` goes into it too.
     press(&mut app, "hjl");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Mutate));
+    press(&mut app, "l");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Step(0)));
     // From Mod 1 on its right, `h` comes in on the last value.
     let (mut app, _realtime) = with_steps();
@@ -1942,4 +1944,71 @@ fn the_step_playing_is_lit_in_the_playheads_colour() {
     assert_eq!(at(2).fg, theme::GREEN);
     assert_eq!(at(1).fg, theme::OVERLAY2);
     assert_eq!(at(1).symbol(), "⠆");
+}
+
+#[test]
+fn a_steps_mutate_and_smooth_are_under_its_start() {
+    let (mut app, _realtime) = with_steps();
+    let steps = |app: &App| app.song().tracks[0].mods[3].steps;
+    press(&mut app, "jlj");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Mutate));
+    press(&mut app, "=+");
+    assert_eq!(steps(&app).mutate, 11);
+    typed(&mut app, "50%");
+    assert_eq!(steps(&app).mutate, 50);
+    typed(&mut app, "101");
+    assert_eq!(steps(&app).mutate, 50);
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Smooth));
+    typed(&mut app, "-40");
+    assert_eq!(steps(&app).smooth, -0x40);
+    press(&mut app, "x");
+    assert_eq!(steps(&app).smooth, 0);
+    let lines = mod_page_text(&app);
+    let (top, left) = device_at(&lines, "Mod 4");
+    let row = |at: usize| from_column(&lines[top + at], left);
+    assert!(
+        row(4).starts_with("│  Length    8          Mutate    50%"),
+        "{}",
+        row(4)
+    );
+    assert!(
+        row(6).starts_with("│  Depth     +FF        Smooth    00"),
+        "{}",
+        row(6)
+    );
+}
+
+#[test]
+fn pitch_in_scale_is_a_destination_of_its_own_for_every_type() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    // Mod 4, an LFO: its destination's list has `Pitch` and then `Pitch in scale`.
+    press(&mut app, &format!("{}$K", to_lfo(0)));
+    let picker = app.picker.as_ref().unwrap();
+    let labels: Vec<&str> = picker
+        .items()
+        .iter()
+        .map(|item| item.label.as_str())
+        .collect();
+    let pitch = labels.iter().position(|label| *label == "Pitch").unwrap();
+    assert_eq!(labels[pitch + 1], "Pitch in scale");
+    press(&mut app, "/in scale");
+    special(&mut app, KeyCode::Enter);
+    let slot = |app: &App| app.song().tracks[0].mods[3];
+    assert_eq!(slot(&app).destination, Some(SettingId::PITCH));
+    assert!(slot(&app).in_scale && slot(&app).goes_in_scale());
+    assert!(
+        device_title(&app, "Mod 4").contains("→ Pitch in scale"),
+        "{}",
+        device_title(&app, "Mod 4")
+    );
+    // `-` goes back to it as it is, and `=` on again.
+    press(&mut app, "-");
+    assert_eq!(slot(&app).destination, Some(SettingId::PITCH));
+    assert!(!slot(&app).in_scale);
+    press(&mut app, "=");
+    assert!(slot(&app).goes_in_scale());
+    press(&mut app, "x");
+    assert!(!slot(&app).in_scale);
 }

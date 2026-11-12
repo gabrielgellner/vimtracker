@@ -30,7 +30,7 @@ use vt_model::modulation::{MAX_DEPTH, ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
 use vt_model::speed::Speed;
-use vt_model::steps::{Loop, STEPS, StepRate, StepsMode};
+use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
 use vt_roto::Label;
 use vt_roto::bytes::Rgb;
 use vt_roto::colour;
@@ -539,6 +539,8 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                         .position(|each| *each == steps.looping)
                         .unwrap_or(0),
                 ),
+                ModField::Mutate => value(u16::from(steps.mutate.min(MAX_MUTATE)), 100, false),
+                ModField::Smooth => depth(steps.smooth),
                 // Each value either way of none, with the depth's centre notch.
                 ModField::Step(at) => depth(steps.values[usize::from(at)]),
                 // An envelope's curve is a musical list, which leaves the layout as it is.

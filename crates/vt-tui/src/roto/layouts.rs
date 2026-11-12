@@ -716,9 +716,10 @@ const LFO: DeviceLayout = stored(
 );
 
 /// A Steps slot's: how fast, how many and how far, then where each note starts it, what it does at
-/// its end and its mode, musical lists that leave the layout as it is; then its values, eight to a
-/// page, each with a centre notch, a small step sequencer under the hand; and where it goes last
-/// (decided in the study's §12, question 3). It has no off/on settings, so it's live.
+/// its end and its mode, musical lists that leave the layout as it is, then how it drifts and how
+/// it goes from step to step; then its values, eight to a page, each with a centre notch, a small
+/// step sequencer under the hand; and where it goes last (decided in the study's §12, question 3).
+/// It has no off/on settings, so it's live.
 const STEPS_LAYOUT: DeviceLayout = live(
     "steps",
     &[
@@ -731,8 +732,8 @@ const STEPS_LAYOUT: DeviceLayout = live(
                 s("start"),
                 s("loop"),
                 s("mode"),
-                __,
-                __,
+                s("mutate"),
+                s("smooth"),
             ],
         ),
         knobs(
@@ -1507,6 +1508,8 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Length => "length",
             ModField::Start => "start",
             ModField::Loop => "loop",
+            ModField::Mutate => "mutate",
+            ModField::Smooth => "smooth",
             ModField::Step(at) => STEP_KEYS[usize::from(at).min(STEPS - 1)],
         },
         Control::Accumulator(field) => match field {

@@ -15,6 +15,8 @@ use crate::lfo::{DIVISION_NAMES, DIVISION_TICKS};
 pub const STEPS: usize = 16;
 /// The furthest either way a value goes, in its destination's units at a depth of `+FF`.
 pub const MAX_STEP: i16 = 0xFF;
+/// The most `Mutate` goes, in percent.
+pub const MAX_MUTATE: u8 = 100;
 /// How many of a track's steps a `Tick` is a sixth of, as `DEL` counts.
 pub const TICKS_PER_STEP_SHARE: u64 = 6;
 
@@ -243,6 +245,18 @@ pub struct Steps {
     pub rate: StepRate,
     #[serde(rename = "loop", skip_serializing_if = "is_default")]
     pub looping: Loop,
+    /// The chance each step's value is drawn again as it comes round, in percent: `0` plays the
+    /// values as written, `100` a new one each time, and between them a loop that drifts, as the
+    /// Turing Machine's knob does (#235's comment). Drawn from the project's seed, so a render
+    /// repeats.
+    #[serde(skip_serializing_if = "is_default")]
+    pub mutate: u8,
+    /// How it goes from step to step, `-FF` to `+FF`, after Surge's step sequencer's deform: none
+    /// steps; up to `+80` glides from the step before over the first part of each step, then on
+    /// to a curve through the steps by `+FF`; down to `-80` falls to nothing over the last part of
+    /// each, a pluck a step, sharper toward `-FF`.
+    #[serde(skip_serializing_if = "is_default")]
+    pub smooth: i16,
 }
 
 fn is_eighth(length: &u8) -> bool {
@@ -261,6 +275,8 @@ impl Default for Steps {
             start: 0,
             rate: StepRate::default(),
             looping: Loop::default(),
+            mutate: 0,
+            smooth: 0,
         }
     }
 }
@@ -272,6 +288,8 @@ impl Steps {
             && (1..=STEPS as u8).contains(&self.length)
             && usize::from(self.start) < STEPS
             && self.rate.in_range()
+            && self.mutate <= MAX_MUTATE
+            && self.smooth.abs() <= MAX_STEP
             && match self.looping {
                 Loop::From(step) => usize::from(step) < STEPS,
                 _ => true,
@@ -316,6 +334,29 @@ impl Steps {
                 dealt(length as usize, at / length, key)[(at % length) as usize] as usize
             }
         }
+    }
+}
+
+/// What a step sounds as, `at` from 0 to 1 of the way through it, under a `Smooth` from -1 to 1,
+/// from the values of the two steps before it, its own and the one after (Surge's step sequencer
+/// deform, `LFOModulationSource.cpp`, GPL-3.0-or-later, adapted): its own at none; a glide from the
+/// one before over the first `2 smooth` of it up to a half, so it arrives as the step ends there;
+/// beyond, that straight line blended into a Catmull-Rom curve through all four by full; and below
+/// none, its own value falling to nothing over the last `-2 smooth` of it, a pluck, which past
+/// half falls on a sharper curve.
+#[inline]
+pub fn smoothed([earlier, before, own, after]: [f32; 4], at: f32, smooth: f32) -> f32 {
+    let at = at.clamp(0.0, 1.0);
+    match smooth.clamp(-1.0, 1.0) {
+        0.0 => own,
+        smooth if smooth > 0.5 => {
+            let line = before + (own - before) * at;
+            let curve = crate::lfo::catmull_rom([earlier, before, own, after], at);
+            (2.0 - 2.0 * smooth) * line + (2.0 * smooth - 1.0) * curve
+        }
+        smooth if smooth > 0.0 => before + (own - before) * (at / (2.0 * smooth)).min(1.0),
+        smooth if smooth >= -0.5 => own * ((1.0 - at) / (-2.0 * smooth)).min(1.0),
+        smooth => own * (1.0 - at).powf(1.0 + 6.0 * (-0.5 - smooth)),
     }
 }
 
@@ -469,5 +510,54 @@ mod tests {
         assert!(steps.in_range());
         steps.values[3] = 0x100;
         assert!(!steps.in_range());
+        let drifting = Steps {
+            mutate: 30,
+            smooth: -0x40,
+            ..Steps::default()
+        };
+        let text = ron::to_string(&drifting).unwrap();
+        assert_eq!(text, "(mutate:30,smooth:-64)");
+        assert_eq!(ron::from_str::<Steps>(&text).unwrap(), drifting);
+        assert!(
+            !Steps {
+                mutate: 101,
+                ..drifting
+            }
+            .in_range()
+        );
+    }
+
+    #[test]
+    fn smooth_steps_glides_curves_and_plucks() {
+        let four = [0.2, -0.4, 0.8, 0.0];
+        let at = |through: f32, smooth: f32| smoothed(four, through, smooth);
+        let close = |a: f32, b: f32| assert!((a - b).abs() < 1e-5, "{a} {b}");
+        // None is the step's own, all through it.
+        for through in [0.0, 0.3, 0.99] {
+            close(at(through, 0.0), 0.8);
+        }
+        // A quarter glides in from the one before over the first half of the step.
+        close(at(0.0, 0.25), -0.4);
+        close(at(0.25, 0.25), 0.2);
+        close(at(0.5, 0.25), 0.8);
+        close(at(0.9, 0.25), 0.8);
+        // A half glides across the whole step, and full is the curve through all four, which
+        // passes each value as a Catmull-Rom does.
+        close(at(0.5, 0.5), 0.2);
+        close(at(0.0, 1.0), -0.4);
+        close(at(1.0, 1.0), 0.8);
+        assert!(
+            (at(0.5, 1.0) - at(0.5, 0.5)).abs() > 0.01,
+            "a curve, not the line"
+        );
+        // Below none, a pluck: its own value, falling to nothing over the last share of the step.
+        close(at(0.0, -0.25), 0.8);
+        close(at(0.5, -0.25), 0.8);
+        close(at(0.75, -0.25), 0.4);
+        close(at(1.0, -0.25), 0.0);
+        close(at(0.5, -0.5), 0.4);
+        // Past half, sharper.
+        assert!(at(0.5, -1.0) < at(0.5, -0.5));
+        assert!(at(0.5, -1.0) > 0.0);
     }
 }

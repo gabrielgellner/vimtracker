@@ -477,7 +477,11 @@ Song                               song.ron, refused unless format_version is FO
     up to 16 signed values played in turn, from each note, from the song's position or one a note,
     at a division, a sixth of the track's step or a pass of its chain (`TrackState::chain_pass`, which
     `fire_track` sets as a step lands), each way its `Loop` says; which step plays is worked out from
-    the time or count, as an LFO's place is, and its start is the slot's phase. The first
+    the time or count, as an LFO's place is, and its start is the slot's phase. Its `Mutate`
+    (decision 204) is the one part kept as it plays: the values drawn again, in the slot's run, from
+    a seeded stream of its own, reset when playing starts from the top. Any slot can go to `Pitch`
+    in scale (`ModSlot::in_scale`), which `modulate` snaps from the note playing along the song's
+    scale, which `SongTime` carries. The first
     envelope-type slot on `Vol` shapes the notes (`note_shape_slot`): its `ModSlot::envelope`, an
     `envelope::Envelope` of any of these types, is what each voice keeps as its `shape`, and a
     one-shot (an AHD with a timed hold, a drum or a gate) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
