@@ -816,6 +816,38 @@ const SYNC: [Entry; 3] = [
     level("interval", "Interval", "INTV", 0x40),
     level("mix", "Mix", "MIX", 0xC0),
 ];
+/// The waves `Triple` plays all three of its oscillators with.
+const TRIPLE_WAVES: [&str; 4] = ["Saw", "Square", "Triangle", "Sine"];
+/// Its second and third oscillators start a fifth and an octave up.
+const TRIPLE: [Entry; 3] = [
+    Entry {
+        key: "wave",
+        name: "Wave",
+        label: Some("WAVE"),
+        kind: Kind::Stepped {
+            choices: &TRIPLE_WAVES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    level("second", "Second", "SCND", 0xA8),
+    level("third", "Third", "THRD", 0xC0),
+];
+const RING: [Entry; 2] = [
+    level("first", "First", "FRST", 0xA0),
+    level("second", "Second", "SCND", 0xB0),
+];
+const SAW_COMB: [Entry; 2] = [
+    level("tune", "Tune", "TUNE", 0xA0),
+    Entry {
+        default: 0xC0,
+        ..centred("feedback", "Feedback", "FDBK")
+    },
+];
+const TOY: [Entry; 2] = [
+    level("clock", "Clock", "CLCK", 0xC0),
+    level("bend", "Bend", "BEND", 0x00),
+];
 
 /// A voice's settings, in the order it takes them.
 pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
@@ -844,6 +876,10 @@ pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
         SynthVoice::Morph => &MORPH,
         SynthVoice::SawSquare => &SAW_SQUARE,
         SynthVoice::HardSync => &SYNC,
+        SynthVoice::Triple => &TRIPLE,
+        SynthVoice::Ring => &RING,
+        SynthVoice::SawComb => &SAW_COMB,
+        SynthVoice::Toy => &TOY,
     }
 }
 
@@ -875,6 +911,10 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
         SynthVoice::Morph => "morph",
         SynthVoice::SawSquare => "sawsquare",
         SynthVoice::HardSync => "sync",
+        SynthVoice::Triple => "triple",
+        SynthVoice::Ring => "ring",
+        SynthVoice::SawComb => "sawcomb",
+        SynthVoice::Toy => "toy",
     }
 }
 

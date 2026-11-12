@@ -1,7 +1,7 @@
 //! Analog-style models from Mutable Instruments' Braids: the CS-80-like saw, the morph from
-//! triangle to square through a fuzzy filter, the saw blended into a square, and two waves in
-//! hard sync. Ported to Rust from `macro_oscillator.cc`, at twice the program's rate as Braids
-//! runs at 96 kHz, on the oscillator in [`super::braids_parts`].
+//! triangle to square through a fuzzy filter, the saw blended into a square, two waves in hard
+//! sync, and three oscillators as a chord. Ported to Rust from `macro_oscillator.cc`, at twice
+//! the program's rate as Braids runs at 96 kHz, on the oscillator in [`super::braids_parts`].
 //!
 //! Copyright 2012 Emilie Gillet.
 //!
@@ -215,6 +215,84 @@ impl Model for SyncModel {
     }
 }
 
+/// Three oscillators of one wave, the second and third detuned by intervals that catch on
+/// chords.
+pub type Triple = Macro<TripleModel>;
+
+/// The intervals `Triple`'s second and third oscillators catch on, in Braids' 128ths of a
+/// semitone: unisons a little apart, then every semitone over two octaves either way, with the
+/// fifths and octaves a little wide.
+const SEMI: i32 = 128;
+#[rustfmt::skip]
+const INTERVALS: [i32; 65] = [
+    -24 * SEMI, -24 * SEMI, -24 * SEMI + 4,
+    -23 * SEMI, -22 * SEMI, -21 * SEMI, -20 * SEMI, -19 * SEMI, -18 * SEMI,
+    -17 * SEMI - 4, -17 * SEMI,
+    -16 * SEMI, -15 * SEMI, -14 * SEMI, -13 * SEMI,
+    -12 * SEMI - 4, -12 * SEMI,
+    -11 * SEMI, -10 * SEMI, -9 * SEMI, -8 * SEMI,
+    -7 * SEMI - 4, -7 * SEMI,
+    -6 * SEMI, -5 * SEMI, -4 * SEMI, -3 * SEMI, -2 * SEMI, -SEMI,
+    -24, -8, -4, 0, 4, 8, 24,
+    SEMI, 2 * SEMI, 3 * SEMI, 4 * SEMI, 5 * SEMI, 6 * SEMI,
+    7 * SEMI, 7 * SEMI + 4,
+    8 * SEMI, 9 * SEMI, 10 * SEMI, 11 * SEMI,
+    12 * SEMI, 12 * SEMI + 4,
+    13 * SEMI, 14 * SEMI, 15 * SEMI, 16 * SEMI,
+    17 * SEMI, 17 * SEMI + 4,
+    18 * SEMI, 19 * SEMI, 20 * SEMI, 21 * SEMI, 22 * SEMI, 23 * SEMI,
+    24 * SEMI - 4, 24 * SEMI, 24 * SEMI,
+];
+
+/// How far a setting detunes an oscillator, in semitones: it holds on each interval for the first
+/// half of its stretch, then slides to the next, as Braids works it out in its whole numbers.
+fn interval(value: f32) -> f32 {
+    let value = (value.clamp(0.0, 1.0) * 32_767.0) as i32;
+    let first = INTERVALS[(value >> 9) as usize];
+    let second = INTERVALS[(((value >> 8) + 1) >> 1) as usize];
+    let fade = (value << 8) & 0xFFFF;
+    (first + (((second - first) * fade) >> 16)) as f32 / SEMI as f32
+}
+
+/// The waves `Triple` plays, and how much each is turned down to about as loud as the saw.
+const TRIPLE_WAVES: [(Shape, f32); 4] = [
+    (Shape::Saw, 1.0),
+    (Shape::Square, 0.58),
+    (Shape::Triangle, 1.0),
+    (Shape::Sine, 0.82),
+];
+
+#[derive(Debug, Clone, Copy)]
+pub struct TripleModel {
+    oscillators: [AnalogOscillator; 3],
+}
+
+impl Model for TripleModel {
+    const LEVEL: f32 = 0.5;
+
+    fn new() -> Self {
+        Self {
+            oscillators: [AnalogOscillator::new(); 3],
+        }
+    }
+
+    fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
+        let wave = ((settings.at(0) * 255.0).round() as usize).min(TRIPLE_WAVES.len() - 1);
+        let (shape, gain) = TRIPLE_WAVES[wave];
+        let detunes = [0.0, interval(settings.at(1)), interval(settings.at(2))];
+        out.fill(0.0);
+        let mut one = [0.0; INNER];
+        for (oscillator, detune) in self.oscillators.iter_mut().zip(detunes) {
+            let increment = pitch.increment(detune);
+            oscillator.render(shape, increment, 0.0, 0.0, &NO_SYNC, &mut one, None);
+            for (out, one) in out.iter_mut().zip(one) {
+                // Braids takes each at about a third.
+                *out += one * 21.0 / 64.0 * gain;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,6 +338,12 @@ mod tests {
             let [first, second, third] = values;
             let wave = if first < 0.5 { 0.0 } else { 1.0 / 255.0 };
             run::<SyncModel>(hertz, settings([wave, second, third]), frames)
+        });
+        check("Triple", &|hertz, values, frames| {
+            // Its first setting is a list of four waves.
+            let [first, second, third] = values;
+            let wave = (first * 3.0).round() / 255.0;
+            run::<TripleModel>(hertz, settings([wave, second, third]), frames)
         });
     }
 
@@ -345,5 +429,22 @@ mod tests {
         let late = &out[period * 30..];
         let shifted = &out[period * 31..];
         assert!(differs(&late[..period * 8], &shifted[..period * 8]) < 0.02);
+    }
+
+    #[test]
+    fn triple_intervals_catch_on_the_notes_of_a_chord() {
+        // The defaults, a fifth and an octave, and the middle, in tune with the note.
+        assert_eq!(interval(f32::from(0xA8_u8) / 255.0), 7.0);
+        assert_eq!(interval(f32::from(0xC0_u8) / 255.0), 12.0);
+        assert!(interval(0.5).abs() < 0.05, "{}", interval(0.5));
+        assert_eq!(interval(0.0), -24.0);
+        assert_eq!(interval(1.0), 24.0);
+        // Going up, it never goes down.
+        let mut last = -24.0;
+        for at in 0..=1000 {
+            let next = interval(at as f32 / 1000.0);
+            assert!(next >= last, "{at}");
+            last = next;
+        }
     }
 }

@@ -909,12 +909,12 @@ impl Machine {
     }
 
     /// The setting that gives it its character, which its device's title shows after it, as an
-    /// effect's type is: the sample the sampler plays, `Acid`'s and `Sync`'s wave, 6-op's patch,
-    /// and the chord of `Chord` and `Chiptune`. Other synths have none.
+    /// effect's type is: the sample the sampler plays, the wave of `Acid`, `Sync` and `Triple`,
+    /// 6-op's patch, and the chord of `Chord` and `Chiptune`. Other synths have none.
     pub fn type_param(self) -> Option<usize> {
         let key = match self {
             Self::Sampler => "sample",
-            Self::Plaits(SynthVoice::Acid | SynthVoice::HardSync) => "wave",
+            Self::Plaits(SynthVoice::Acid | SynthVoice::HardSync | SynthVoice::Triple) => "wave",
             Self::Plaits(SynthVoice::SixOp) => "patch",
             Self::Plaits(SynthVoice::Chord | SynthVoice::Chiptune) => "chord",
             Self::Plaits(_) => return None,
@@ -1013,11 +1013,19 @@ pub enum SynthVoice {
     SawSquare,
     /// Two squares or saws in hard sync.
     HardSync,
+    /// Three oscillators of one wave, as a chord.
+    Triple,
+    /// A sine ring modulated by two more.
+    Ring,
+    /// A saw through a tuned comb filter.
+    SawComb,
+    /// A low-resolution, circuit-bent tone.
+    Toy,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 29] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1043,6 +1051,10 @@ impl SynthVoice {
         Self::Morph,
         Self::SawSquare,
         Self::HardSync,
+        Self::Triple,
+        Self::Ring,
+        Self::SawComb,
+        Self::Toy,
     ];
 
     /// The name on screen.
@@ -1073,6 +1085,10 @@ impl SynthVoice {
             Self::Morph => "Morph",
             Self::SawSquare => "Saw Sq",
             Self::HardSync => "Sync",
+            Self::Triple => "Triple",
+            Self::Ring => "Ring",
+            Self::SawComb => "Saw Comb",
+            Self::Toy => "Toy",
         }
     }
 
@@ -1104,6 +1120,10 @@ impl SynthVoice {
             Self::Morph => "Triangle to saw to pulse, with fuzz, for leads",
             Self::SawSquare => "A saw blended into a square, for bass and leads",
             Self::HardSync => "Two waves in hard sync, for tearing leads",
+            Self::Triple => "Three oscillators as a chord, for stabs and pads",
+            Self::Ring => "Three sines ring modulated, for bells and clangs",
+            Self::SawComb => "A saw through a tuned comb, for flanged leads",
+            Self::Toy => "A low-resolution, circuit-bent tone, for lo-fi",
         }
     }
 
@@ -1131,6 +1151,10 @@ impl SynthVoice {
                 | Self::Morph
                 | Self::SawSquare
                 | Self::HardSync
+                | Self::Triple
+                | Self::Ring
+                | Self::SawComb
+                | Self::Toy
         )
     }
 
@@ -1138,7 +1162,14 @@ impl SynthVoice {
     pub fn is_macro(self) -> bool {
         matches!(
             self,
-            Self::CSaw | Self::Morph | Self::SawSquare | Self::HardSync
+            Self::CSaw
+                | Self::Morph
+                | Self::SawSquare
+                | Self::HardSync
+                | Self::Triple
+                | Self::Ring
+                | Self::SawComb
+                | Self::Toy
         )
     }
 }

@@ -6,6 +6,7 @@
 pub mod acid;
 pub mod additive;
 pub mod braids_analog;
+pub mod braids_digital;
 mod braids_parts;
 pub mod chiptune;
 pub mod chord;

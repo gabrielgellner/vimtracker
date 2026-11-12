@@ -449,6 +449,34 @@ const SYNC: DeviceLayout = live(
         [s("interval"), s("mix"), s("wave"), __, __, __, __, __],
     )],
 );
+const TRIPLE: DeviceLayout = live(
+    "machine/triple",
+    &[knobs(
+        "Triple",
+        [s("second"), s("third"), s("wave"), __, __, __, __, __],
+    )],
+);
+const RING: DeviceLayout = live(
+    "machine/ring",
+    &[knobs(
+        "Ring",
+        [s("first"), s("second"), __, __, __, __, __, __],
+    )],
+);
+const SAW_COMB: DeviceLayout = live(
+    "machine/sawcomb",
+    &[knobs(
+        "Saw Comb",
+        [s("tune"), s("feedback"), __, __, __, __, __, __],
+    )],
+);
+const TOY: DeviceLayout = live(
+    "machine/toy",
+    &[knobs(
+        "Toy",
+        [s("clock"), s("bend"), __, __, __, __, __, __],
+    )],
+);
 
 // The track's own devices.
 
@@ -1091,7 +1119,7 @@ const FREQ_SHIFT: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 64] = [
+pub const ALL: [&DeviceLayout; 68] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1118,6 +1146,10 @@ pub const ALL: [&DeviceLayout; 64] = [
     &MORPH,
     &SAW_SQUARE,
     &SYNC,
+    &TRIPLE,
+    &RING,
+    &SAW_COMB,
+    &TOY,
     &FILTER,
     &OUTPUT,
     &GROUP_OUTPUT,
@@ -1188,6 +1220,10 @@ pub fn machine_layout(machine: Machine) -> &'static DeviceLayout {
             SynthVoice::Morph => &MORPH,
             SynthVoice::SawSquare => &SAW_SQUARE,
             SynthVoice::HardSync => &SYNC,
+            SynthVoice::Triple => &TRIPLE,
+            SynthVoice::Ring => &RING,
+            SynthVoice::SawComb => &SAW_COMB,
+            SynthVoice::Toy => &TOY,
         },
     }
 }
