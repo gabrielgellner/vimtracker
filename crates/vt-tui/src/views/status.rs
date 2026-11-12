@@ -117,15 +117,8 @@ pub fn column_name(app: &App) -> String {
 /// track has: a lock in the grid, or a row of the track page.
 pub fn value_shown(app: &App) -> Option<String> {
     let track = app.track_here()?;
-    if app.view == View::Phrase && app.cursor.field == Field::Nudge {
-        return Some(nudge_shown(app.current_nudge()));
-    }
-    // While an accumulator moves the row playing, the Note column says what it's heard as, as the
-    // grid shows notes as written.
-    if app.view == View::Phrase && app.cursor.field == Field::Note {
-        playhead_step(app)?;
-        let heard = heard_note(app)?;
-        return Some(format!("the row playing is heard as {}", Note::On(heard)));
+    if app.view == View::Phrase {
+        return phrase_value(app, app.cursor.field);
     }
     if app.view == View::Track
         && let Control::Accumulator(field) = app.track_control()
@@ -156,52 +149,64 @@ pub fn value_shown(app: &App) -> Option<String> {
     if matches!(app.view, View::Track | View::Mixer) && app.track_control() == Control::Trim {
         return Some(trim_text(track.trim));
     }
-    let (id, value) = match app.view {
-        View::Phrase => match app.cursor.field {
-            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
-                let cell = app.current_slot(slot)?;
-                if cell.command == Some(FxCommand::Cnd) {
-                    return Some(condition_shown(cell.coarse()));
-                }
-                if cell.command == Some(FxCommand::Arp) {
-                    return Some(arp_shown(cell.coarse(), track.arpeggio, app.scale.on));
-                }
-                if cell.command == Some(FxCommand::Acu) {
-                    return Some(amount_shown(
-                        cell.coarse(),
-                        track.accumulation,
-                        app.scale.on,
-                    ));
-                }
-                if cell.command == Some(FxCommand::Set(SettingId::SAMPLE)) && track.is_sound() {
-                    return Some(sample_shown(app.song(), cell.coarse()));
-                }
-                if cell.command == Some(FxCommand::Set(SettingId::SLICE)) && track.is_sound() {
-                    return Some(app.slice_shown(cell));
-                }
-                let id = cell.command?.setting()?;
-                (id, cell.value)
-            }
-            // With none of its own, the length is the track's `Gate`.
-            Field::GateLength => {
-                let length = app.current_gate().and_then(|gate| gate.length);
-                let length = length.unwrap_or_else(|| track.gate_length());
-                (SettingId::GATE_LENGTH, u16::from(length) << 8)
-            }
-            _ => return None,
-        },
-        View::Track | View::Mixer => {
-            // A fader the steps drive reads where they have it, and says so, as one a hand has
-            // taken over from them does (decision 174).
-            let control = app.track_control();
-            let heard = app.track_as_heard(app.cursor.track)?;
-            let (id, value) = control.value_on(&heard)?;
-            let note = app.fader_note(app.cursor.track, control).unwrap_or("");
-            return id
-                .exists_on(track)
-                .then(|| format!("{}{note}", shown(id, value)));
+    if !matches!(app.view, View::Track | View::Mixer) {
+        return None;
+    }
+    // A fader the steps drive reads where they have it, and says so, as one a hand has taken over
+    // from them does (decision 174).
+    let control = app.track_control();
+    let heard = app.track_as_heard(app.cursor.track)?;
+    let (id, value) = control.value_on(&heard)?;
+    let note = app.fader_note(app.cursor.track, control).unwrap_or("");
+    id.exists_on(track)
+        .then(|| format!("{}{note}", shown(id, value)))
+}
+
+/// A field of the row under the cursor in its setting's units, where it has them: the nudge, the
+/// note heard where an accumulator moved the row playing, an FX value, or the gate's length. The
+/// status line says it for the cursor's field and the row inspector for each of the row's.
+pub(crate) fn phrase_value(app: &App, field: Field) -> Option<String> {
+    let track = app.track_here()?;
+    let (id, value) = match field {
+        Field::Nudge => return Some(nudge_shown(app.current_nudge())),
+        // While an accumulator moves the row playing, the Note column says what it's heard as, as
+        // the grid shows notes as written.
+        Field::Note => {
+            playhead_step(app)?;
+            let heard = heard_note(app)?;
+            return Some(format!("the row playing is heard as {}", Note::On(heard)));
         }
-        _ => return None,
+        Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
+            let cell = app.current_slot(slot)?;
+            if cell.command == Some(FxCommand::Cnd) {
+                return Some(condition_shown(cell.coarse()));
+            }
+            if cell.command == Some(FxCommand::Arp) {
+                return Some(arp_shown(cell.coarse(), track.arpeggio, app.scale.on));
+            }
+            if cell.command == Some(FxCommand::Acu) {
+                return Some(amount_shown(
+                    cell.coarse(),
+                    track.accumulation,
+                    app.scale.on,
+                ));
+            }
+            if cell.command == Some(FxCommand::Set(SettingId::SAMPLE)) && track.is_sound() {
+                return Some(sample_shown(app.song(), cell.coarse()));
+            }
+            if cell.command == Some(FxCommand::Set(SettingId::SLICE)) && track.is_sound() {
+                return Some(app.slice_shown(cell));
+            }
+            let id = cell.command?.setting()?;
+            (id, cell.value)
+        }
+        // With none of its own, the length is the track's `Gate`.
+        Field::GateLength => {
+            let length = app.current_gate().and_then(|gate| gate.length);
+            let length = length.unwrap_or_else(|| track.gate_length());
+            (SettingId::GATE_LENGTH, u16::from(length) << 8)
+        }
+        Field::Velocity | Field::Gate => return None,
     };
     id.exists_on(track).then(|| shown(id, value))
 }

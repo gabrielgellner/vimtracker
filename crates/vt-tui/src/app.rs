@@ -391,6 +391,9 @@ pub struct App {
     pub view_height: usize,
     /// The phrase view is collapsed to a line a row, rather than laid out in time (decision 122).
     pub rows_collapsed: bool,
+    /// The phrase view shows the row inspector right of the overview, for this session
+    /// (decision 255).
+    pub inspector: bool,
     /// Which groups are folded in the song view, the mixer and the phrase view's overview, for
     /// this song and this session (decision 128).
     pub folds: Folds,
@@ -583,6 +586,7 @@ impl App {
             top: 0,
             view_height: 16,
             rows_collapsed: false,
+            inspector: false,
             folds: Folds::default(),
             help_scroll: 0,
             guide: None,
@@ -1545,6 +1549,7 @@ impl App {
             Cmd::Quit => self.quit(false),
             Cmd::ToggleScale => self.toggle_scale(),
             Cmd::ToggleTimeline => self.toggle_timeline(),
+            Cmd::ToggleInspector => self.toggle_inspector(),
             Cmd::ToggleFold => self.toggle_fold(),
             Cmd::FoldAll(closed) => self.fold_all(closed),
             Cmd::NarrowGrid => self.change_grid(false),

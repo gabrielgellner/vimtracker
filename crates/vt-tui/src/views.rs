@@ -5,6 +5,7 @@ pub mod chain;
 pub mod curve;
 pub mod guide;
 pub mod help;
+pub mod inspector;
 pub mod meter;
 pub mod mixer;
 pub mod phrase;

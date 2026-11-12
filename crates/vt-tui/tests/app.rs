@@ -3155,6 +3155,65 @@ fn the_title_shows_the_chain_with_this_phrase_in_the_cursors_colour_cut_to_its_r
     assert!(title.trim_end().ends_with("27"), "{title}");
 }
 
+/// A song of some tracks whose first plays a row with a note, a gate and a cutoff held.
+fn inspected(tracks: usize) -> App {
+    let mut song = Song::new(tracks);
+    let steps: Vec<Step> = ["G-2 7F HLD1 cut:20h --- ---", "--- -- --- --- ---"]
+        .iter()
+        .map(|text| text.parse().unwrap())
+        .collect();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    App::new(song, None, samples, handle, 48_000)
+}
+
+#[test]
+fn space_i_shows_the_rows_inspector_beside_the_overview_and_hides_it() {
+    let mut app = inspected(8);
+    let text = |app: &App| drawn_lines(&screen_wide(app)).join("\n");
+    assert!(!text(&app).contains("Row 00"), "hidden at first");
+    press(&mut app, " i");
+    assert!(app.inspector);
+    let lines = drawn_lines(&screen_wide(&app));
+    // Its frame level with the grid's, past the eight tracks' columns.
+    let top = &lines[1];
+    let at = top.find("Row 00").expect("its title");
+    assert!(top[..at].contains("08"), "{top}");
+    let shown = lines.join("\n");
+    for part in [
+        "Note     G-2      MIDI 55",
+        "Velocity 7F       \u{2595}",
+        "Gate     HLD1     tied on, 1 pulse",
+        "Length   \u{b7}\u{b7}       100 %, the track's",
+        "FX 1     Cut      48 Hz  hold",
+        "FX 2     \u{b7}\u{b7}\u{b7}      empty",
+    ] {
+        assert!(shown.contains(part), "no {part}:\n{shown}");
+    }
+    // It follows the cursor's row.
+    press(&mut app, "j");
+    let shown = text(&app);
+    assert!(shown.contains("Row 01"), "{shown}");
+    assert!(shown.contains("Note     ---      nothing plays"), "{shown}");
+    press(&mut app, " i");
+    assert!(!text(&app).contains("Row 01"));
+}
+
+#[test]
+fn the_rows_inspector_gives_way_when_the_overview_needs_the_room() {
+    let mut app = inspected(16);
+    press(&mut app, " i");
+    let lines = drawn_lines(&screen_wide(&app));
+    assert!(!lines.join("\n").contains("Row 00"), "it gives way");
+    // And every track keeps its column.
+    assert!(lines[1].contains("16"), "{}", lines[1]);
+    assert!(app.inspector, "it comes back when there's room");
+}
+
 /// The phrase view at the author's 163 columns, less the meter beside it.
 fn screen_wide(app: &App) -> ratatui::buffer::Buffer {
     let backend = ratatui::backend::TestBackend::new(148, 24);
