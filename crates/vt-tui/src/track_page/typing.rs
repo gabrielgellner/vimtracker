@@ -177,11 +177,19 @@ impl App {
     /// sustain or hold, or an LFO's rate or phase. The rest are lists, chosen with `K`.
     fn type_mod(&mut self, slot: usize, field: ModField, text: &str) {
         let current = self.page_track().mods[slot];
-        let (adsr, ahd, drum, lfo) = (current.adsr, current.ahd, current.drum, current.lfo);
+        let (adsr, ahd, drum, lpg, lfo) = (
+            current.adsr,
+            current.ahd,
+            current.drum,
+            current.lpg,
+            current.lfo,
+        );
         let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
         let with_adsr = |adsr: Adsr| ModSlot { adsr, ..current };
         let with_ahd = |ahd: Ahd| ModSlot { ahd, ..current };
         let with_drum = |drum: Drum| ModSlot { drum, ..current };
+        let with_lpg = |lpg: Lpg| ModSlot { lpg, ..current };
+        let lpg_kind = current.kind == ModKind::Lpg;
         let with_lfo = |lfo: Lfo| ModSlot { lfo, ..current };
         let ahd_kind = current.kind == ModKind::Ahd;
         let times = format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}");
@@ -189,6 +197,20 @@ impl App {
             ModField::Depth => (
                 parse_depth(text).map(|depth| ModSlot { depth, ..current }),
                 "Depth is hex from -FF to +FF".to_owned(),
+            ),
+            ModField::Attack if lpg_kind => (
+                ms.map(|attack_ms| with_lpg(Lpg { attack_ms, ..lpg })),
+                times,
+            ),
+            ModField::Decay if lpg_kind => (
+                ms.map(|decay_ms| with_lpg(Lpg { decay_ms, ..lpg })),
+                times,
+            ),
+            ModField::Colour => (
+                u8::from_str_radix(text.trim(), 16)
+                    .ok()
+                    .map(|colour| with_lpg(Lpg { colour, ..lpg })),
+                "Colour is hex from 00 to FF".to_owned(),
             ),
             ModField::Attack if ahd_kind => (
                 ms.map(|attack_ms| with_ahd(Ahd { attack_ms, ..ahd })),

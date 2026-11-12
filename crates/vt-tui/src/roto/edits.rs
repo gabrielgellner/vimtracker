@@ -282,14 +282,16 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
         Control::Mod(slot, field) => {
             let was = track.mods[slot];
             let mut modulator = was;
-            let (adsr, ahd, drum, lfo) = (
+            let (adsr, ahd, drum, lpg, lfo) = (
                 &mut modulator.adsr,
                 &mut modulator.ahd,
                 &mut modulator.drum,
+                &mut modulator.lpg,
                 &mut modulator.lfo,
             );
             let ahd_kind = was.kind == ModKind::Ahd;
             let drum_kind = was.kind == ModKind::Drum;
+            let lpg_kind = was.kind == ModKind::Lpg;
             match field {
                 // What a slot is, the app's alone.
                 ModField::Type => return None,
@@ -297,6 +299,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                     ModKind::Adsr => adsr.curve = pick(&Curve::ALL, position),
                     ModKind::Ahd => ahd.curve = pick(&Curve::ALL, position),
                     ModKind::Drum => drum.curve = pick(&Curve::ALL, position),
+                    ModKind::Lpg => return None,
                     ModKind::Lfo => lfo.mode = pick(&LfoMode::ALL, position),
                 },
                 ModField::Polarity => modulator.polarity = Some(pick(&Polarity::ALL, position)),
@@ -306,6 +309,9 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 }
                 ModField::Depth => modulator.depth = depth_at(position),
                 ModField::Attack if ahd_kind => ahd.attack_ms = time_at(position),
+                ModField::Attack if lpg_kind => lpg.attack_ms = time_at(position),
+                ModField::Decay if lpg_kind => lpg.decay_ms = time_at(position),
+                ModField::Colour => lpg.colour = whole(position, 0xFF) as u8,
                 ModField::Attack => adsr.attack_ms = time_at(position),
                 ModField::Decay if ahd_kind => ahd.decay_ms = time_at(position),
                 ModField::Decay if drum_kind => drum.decay_ms = time_at(position),
