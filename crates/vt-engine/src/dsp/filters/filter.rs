@@ -84,6 +84,21 @@ const CLEAN_LEAST_Q: f32 = 0.5;
 const BAND_LEAST_Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
 /// The clean types' Q at full `Res`, a strong but stable peak.
 const CLEAN_MOST_Q: f32 = 10.0;
+/// `Punch`, after Braids' and Peaks' SVF (`braids/svf.h`): over [`PUNCH_REST`], the first clean
+/// filter's low-pass raises its cutoff by up to this many Hz for each unit it swings past it, at
+/// full `Punch`, and its damping by [`PUNCH_DAMPING`] a unit. Peaks' bass drum at full raises its
+/// `f` by `lp * 255 / 8192` at 48 kHz, which is 238 Hz at full level. The knob is squared, as
+/// Braids squares its punch.
+const PUNCH_HERTZ: f32 = 238.0;
+/// Where the low-pass starts to punch, Braids' 2048 of 32768, so a quiet ring is left alone, and
+/// where it stops rising, full level, as Braids' state is clipped there.
+const PUNCH_REST: f32 = 1.0 / 16.0;
+const PUNCH_TOP: f32 = 1.0;
+/// How far the damping rises a unit, Braids' `>> 3`. Braids raises it the same at any punch; here
+/// it comes in over the knob's first quarter, so `01` doesn't jump, and Braids' kick and Peaks'
+/// bass drum, at about 37%, have all of it.
+const PUNCH_DAMPING: f32 = 1.0 / 8.0;
+const PUNCH_DAMPING_FROM: f32 = 0.25;
 
 /// How the ladder's mixes weigh what goes into its first stage and what comes out of each of its
 /// four, after Vital's `LadderFilter`. Each stage is a one-pole low-pass `L`, so `HP24` is
@@ -265,6 +280,12 @@ pub struct Coefficients {
     /// first's, as their peak and dip don't grow with resonance.
     flat_a1: f32,
     double_flat_a1: f32,
+    /// `Punch`: how far the first clean filter's `g` rises, at the rate and twice it, for each unit
+    /// its low-pass swings past [`PUNCH_REST`], as a share of `1 + g^2`, the slope of `tan` there;
+    /// and how far its damping does. All 0 with no punch, which leaves the filter as it was.
+    punch_g: f32,
+    double_punch_g: f32,
+    punch_k: f32,
     /// The mix for the mode, which each channel moves toward, and how fast.
     mix: Mix,
     smoothing: f32,
@@ -317,11 +338,24 @@ impl Coefficients {
             obx_resonance: tapered(&OBX_TAPER, resonance) * obx::MOST_RESONANCE,
             flat_a1: 0.0,
             double_flat_a1: 0.0,
+            punch_g: 0.0,
+            double_punch_g: 0.0,
+            punch_k: 0.0,
             mix: Mix::new(mode, ladder_k, &dirty),
             smoothing: smoother::coefficient(rate),
         };
         c.damp();
         c
+    }
+
+    /// The same with `Punch`, from 0 to 1, for the clean types; the others don't hear it. Its
+    /// cutoff is worked out each sample from what the low-pass is doing, so there's nothing for
+    /// the curve to show: at rest it's the filter without it.
+    pub fn punched(mut self, punch: f32, rate: u32) -> Self {
+        self.punch_g = std::f32::consts::PI * punch * punch * PUNCH_HERTZ / rate as f32;
+        self.double_punch_g = self.punch_g * 0.5;
+        self.punch_k = (punch / PUNCH_DAMPING_FROM).min(1.0) * PUNCH_DAMPING;
+        self
     }
 
     /// Work out the state-variable filters' `a1`s, `1 / (1 + g (g + k))`, from their `g`s and
@@ -355,6 +389,9 @@ impl Coefficients {
         visit(&mut self.korg_feedback, other.korg_feedback);
         visit(&mut self.korg_high_feedback, other.korg_high_feedback);
         visit(&mut self.obx_resonance, other.obx_resonance);
+        visit(&mut self.punch_g, other.punch_g);
+        visit(&mut self.double_punch_g, other.double_punch_g);
+        visit(&mut self.punch_k, other.punch_k);
         self.dirty.each(&other.dirty, visit);
     }
 
@@ -610,12 +647,35 @@ impl Svf {
     /// of growing, with the `a1` of the type's damping at that rate.
     #[inline]
     fn tick_driven(&mut self, input: f32, c: &Coefficients, a1: f32) -> (f32, f32) {
+        self.tick_driven_tuned(input, c.double_g, a1)
+    }
+
+    /// The same, tuned by `g` at twice the rate.
+    #[inline]
+    fn tick_driven_tuned(&mut self, input: f32, g: f32, a1: f32) -> (f32, f32) {
         let v3 = input - self.ic2;
-        let v1 = a1 * self.ic1 + a1 * c.double_g * v3;
-        let v2 = self.ic2 + c.double_g * v1;
+        let v1 = a1 * self.ic1 + a1 * g * v3;
+        let v2 = self.ic2 + g * v1;
         self.ic1 = 2.0 * soft_clip(v1) - self.ic1;
         self.ic2 = 2.0 * v2 - self.ic2;
         (v1, v2)
+    }
+
+    /// Its `g`, damping and `a1` this sample with `Punch`, after Braids' SVF: as its low-pass
+    /// swings out past [`PUNCH_REST`], its cutoff and damping rise with it, so a ringing peak starts
+    /// higher and falls in pitch as it dies away, and a loud one is reined in. Braids reads its
+    /// low-pass state, as this does, held within `[PUNCH_REST, PUNCH_TOP]` as Braids clips it, which
+    /// holds a NaN to the rest. Braids punches only as it swings up, which through its band-pass
+    /// is heard as a lopsided ring; here it's either way, as the low-pass and notch pass the bass,
+    /// and one way put the mean of a 0.9 square at about -1.0 through the low-pass at full. Braids'
+    /// cutoff stays a little raised under it too, which is left out, so a quiet sound hears the
+    /// filter as it is.
+    #[inline]
+    fn punched(&self, g: f32, k: f32, punch_g: f32, punch_k: f32) -> (f32, f32, f32) {
+        let over = within(self.ic2.abs(), PUNCH_REST, PUNCH_TOP) - PUNCH_REST;
+        let g = g + punch_g * (1.0 + g * g) * over;
+        let k = k + punch_k * over;
+        (g, k, 1.0 / (1.0 + g * (g + k)))
     }
 }
 
@@ -716,8 +776,14 @@ impl Channel {
         }
         if drive <= 0.0 && !kind.saturates() {
             let (k, a1) = c.first(kind, false);
-            let (band, low) = self.svf.tick_tuned(input, c.g, a1);
-            let first = svf_output(kind, input, band, low, k);
+            let first = if c.punch_k > 0.0 {
+                let (g, k, a1) = self.svf.punched(c.g, k, c.punch_g, c.punch_k);
+                let (band, low) = self.svf.tick_tuned(input, g, a1);
+                svf_output(kind, input, band, low, k)
+            } else {
+                let (band, low) = self.svf.tick_tuned(input, c.g, a1);
+                svf_output(kind, input, band, low, k)
+            };
             let (k, a1) = c.second(kind, false);
             let (band, low) = self.second.tick_tuned(first, c.g, a1);
             let second = svf_output(kind, first, band, low, k);
@@ -789,8 +855,15 @@ impl Channel {
             let (first_k, first_a1) = c.first(kind, true);
             let (k, a1) = c.second(kind, true);
             self.oversampler.process(input * gain, |x| {
-                let (band, low) = svf.tick_driven(x, c, first_a1);
-                let first = svf_output(kind, x, band, low, first_k);
+                let first = if c.punch_k > 0.0 {
+                    let punched = svf.punched(c.double_g, first_k, c.double_punch_g, c.punch_k);
+                    let (g, first_k, first_a1) = punched;
+                    let (band, low) = svf.tick_driven_tuned(x, g, first_a1);
+                    svf_output(kind, x, band, low, first_k)
+                } else {
+                    let (band, low) = svf.tick_driven(x, c, first_a1);
+                    svf_output(kind, x, band, low, first_k)
+                };
                 let (band, low) = second.tick_tuned(first, c.double_g, a1);
                 let after = svf_output(kind, first, band, low, k);
                 soft_clip(first + mix.series * (after - first))
@@ -2395,6 +2468,147 @@ mod tests {
                     most < bound,
                     "{kind:?} {mode:?} at drive {drive} reached {most}"
                 );
+            }
+        }
+    }
+
+    /// The clean types with each of their modes.
+    fn clean_types_and_modes() -> Vec<(FilterType, FilterMode)> {
+        every_type_and_mode()
+            .into_iter()
+            .filter(|(kind, _)| kind.has_punch())
+            .collect()
+    }
+
+    /// The pitch of each cycle of a clean filter at `Cut` 50 Hz and full `Res`, struck by a
+    /// millisecond's pulse as Braids' kick strikes its SVF, from its low-pass: when each starts, in
+    /// ms, and its pitch in Hz.
+    fn struck_cycles(kind: FilterType, punch: f32) -> Vec<(f32, f32)> {
+        let c = Coefficients::with_mode(cutoff(50.0), 1.0, FilterMode::default(), RATE)
+            .punched(punch, RATE);
+        let mut channel = Channel::default();
+        let out: Vec<f32> = (0..RATE as usize / 2)
+            .map(|frame| {
+                let input = if frame < 48 { 10.0 } else { 0.0 };
+                channel.process(input, kind, 0.0, &c)
+            })
+            .collect();
+        let rising: Vec<f32> = out
+            .windows(2)
+            .enumerate()
+            .filter(|(_, pair)| pair[0] <= 0.0 && pair[1] > 0.0)
+            .map(|(frame, pair)| frame as f32 + pair[0] / (pair[0] - pair[1]))
+            .collect();
+        rising
+            .windows(2)
+            .map(|pair| {
+                (
+                    pair[0] * 1000.0 / RATE as f32,
+                    RATE as f32 / (pair[1] - pair[0]),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn punch_starts_a_struck_ring_higher_and_lets_it_fall_to_cut() {
+        let plain = struck_cycles(FilterType::LowPass, 0.0);
+        assert!(
+            plain.iter().all(|(_, hertz)| (hertz - 50.0).abs() < 1.5),
+            "{plain:?}"
+        );
+        for (punch, lowest_start) in [(0.37, 55.0), (1.0, 75.0)] {
+            let cycles = struck_cycles(FilterType::LowPass, punch);
+            let (_, first) = cycles[0];
+            assert!(first > lowest_start, "{punch}: {cycles:?}");
+            // It falls cycle by cycle, back to where it rings without punch.
+            assert!(
+                cycles.windows(2).all(|pair| pair[1].1 <= pair[0].1 + 0.5),
+                "{punch}: {cycles:?}"
+            );
+            let (_, last) = cycles[cycles.len() - 1];
+            assert!((last - 50.0).abs() < 1.5, "{punch}: {cycles:?}");
+        }
+        // The band-pass Braids' kick takes rings the same, as it's the same filter.
+        let band = struck_cycles(FilterType::BandPass, 1.0);
+        assert!(band[0].1 > 75.0, "{band:?}");
+    }
+
+    #[test]
+    fn no_punch_and_a_quiet_sound_hear_the_filter_as_it_was() {
+        for (kind, mode) in clean_types_and_modes() {
+            for drive in [0.0, 1.0] {
+                let c = Coefficients::with_mode(cutoff(400.0), 0.8, mode, RATE);
+                let punched = c.punched(1.0, RATE);
+                let mut ramp = Ramp::at(c);
+                ramp.toward(&c.punched(0.0, RATE), 32);
+                let (mut plain, mut none, mut quiet, mut quiet_plain) = (
+                    Channel::default(),
+                    Channel::default(),
+                    Channel::default(),
+                    Channel::default(),
+                );
+                for frame in 0..RATE as usize / 4 {
+                    let t = frame as f32 / RATE as f32;
+                    let input = (t * 300.0 * std::f32::consts::TAU).sin();
+                    // `Punch 00` is the filter as it was, bit for bit.
+                    let heard = plain.process(input, kind, drive, &c);
+                    let without = none.process(input, kind, drive, ramp.now());
+                    ramp.advance();
+                    assert_eq!(heard.to_bits(), without.to_bits(), "{kind:?} {mode:?}");
+                    // So is a sound whose low-pass stays under where punch starts, which is why
+                    // the curve doesn't show it.
+                    let input = input * 0.0005;
+                    let heard = quiet_plain.process(input, kind, drive, &c);
+                    let punchy = quiet.process(input, kind, drive, &punched);
+                    assert_eq!(heard.to_bits(), punchy.to_bits(), "{kind:?} {mode:?} quiet");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_character_types_dont_hear_punch() {
+        for (kind, mode) in every_type_and_mode() {
+            if kind.has_punch() {
+                continue;
+            }
+            let c = Coefficients::with_mode(cutoff(200.0), 0.9, mode, RATE);
+            let punched = c.punched(1.0, RATE);
+            let (mut plain, mut other) = (Channel::default(), Channel::default());
+            for frame in 0..RATE as usize / 8 {
+                let input = if frame % 120 < 60 { 0.8 } else { -0.8 };
+                let heard = plain.process(input, kind, 0.3, &c);
+                let punchy = other.process(input, kind, 0.3, &punched);
+                assert_eq!(heard.to_bits(), punchy.to_bits(), "{kind:?} {mode:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn punch_stays_in_bounds_with_a_hot_input_and_fast_sweeps() {
+        let ends = [(0.0, 1.0), (1.0, 1.0), (0.1, 0.0), (0.6, 1.0)];
+        for (kind, mode) in clean_types_and_modes() {
+            for drive in [0.0, 1.0] {
+                for level in [1.0, 20.0] {
+                    let mut channel = Channel::default();
+                    let mut ramp =
+                        Ramp::at(Coefficients::with_mode(0.0, 1.0, mode, RATE).punched(1.0, RATE));
+                    let mut most = 0.0_f32;
+                    for frame in 0..RATE as usize / 2 {
+                        if frame % 32 == 0 {
+                            let (cut, punch) = ends[frame / 32 % ends.len()];
+                            let c = Coefficients::with_mode(cut, 1.0, mode, RATE);
+                            ramp.toward(&c.punched(punch, RATE), 32);
+                        }
+                        let input = if frame % 200 < 100 { level } else { -level };
+                        let output = channel.process(input, kind, drive, ramp.now());
+                        ramp.advance();
+                        assert!(output.is_finite(), "{kind:?} {mode:?} {output}");
+                        most = most.max(output.abs() / level);
+                    }
+                    assert!(most < 20.0, "{kind:?} {mode:?} {drive} {level}: {most}");
+                }
             }
         }
     }

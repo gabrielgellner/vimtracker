@@ -153,6 +153,11 @@ struct SlotRun {
     /// What `Mutate` rolls, a stream of the slot's own from the project's seed, after every
     /// track's others, so a render repeats and `CHA`'s rolls are as they were.
     dice: Pcg32,
+    /// What a Track slot following `Random` rolled for the last note, and the stream of the slot's
+    /// own it rolls from, after every slot's `Mutate`. It rolls at every note, whatever the slot's
+    /// type, so one that becomes Track has a roll for the note sounding.
+    roll: u8,
+    rolls: Pcg32,
 }
 
 impl Default for SlotRun {
@@ -174,6 +179,8 @@ impl Default for SlotRun {
             drawn: 0,
             counted: None,
             dice: Pcg32::new(0, 0),
+            roll: 0,
+            rolls: Pcg32::new(0, 0),
         }
     }
 }
@@ -259,6 +266,7 @@ fn trigger_slot(slot: &ModSlot, run: &mut SlotRun, now: SongTime, pass: i64) {
     };
     run.notes += 1;
     run.pass_at = pass;
+    run.roll = (run.rolls.next_u32() >> 24) as u8;
     let restarts = match slot.kind {
         ModKind::Steps => slot.steps.mode == StepsMode::Trig,
         _ => slot.lfo.mode.restarts(),
@@ -387,9 +395,9 @@ pub struct LiveValues {
     /// filter, as a gain: what the Output device's meter shows, so the trim can be set by eye.
     /// The report fills it in from `Engine::take_after_trim`.
     pub after_trim: [f32; 2],
-    /// Where each mod slot that's an LFO is in its wave now, for one that's running: none while
-    /// the song is stopped, or for one with nowhere to go, no depth, or switched out once it has
-    /// faded.
+    /// Where each mod slot that's an LFO is in its wave now, or a Track slot's last note on its
+    /// map, for one that's running: none while the song is stopped, before a Track slot's first
+    /// note, or for one with nowhere to go, no depth, or switched out once it has faded.
     pub mods: [Option<LfoNow>; MOD_SLOTS],
     /// Which step each mod slot that's Steps is playing now, counted from 0, for the Mod page to
     /// light: none for one that isn't running, as an LFO's place is.
@@ -449,7 +457,7 @@ impl FaderRun {
 }
 
 /// Where an LFO is in its wave and what the wave gives there, before its depth, for the Mod page's
-/// moving dot.
+/// moving dot, or where a Track slot's last note is on its map.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct LfoNow {
     /// How far round its wave it is, its `Phase` included, from `0` to a whole turn at
@@ -466,6 +474,15 @@ impl LfoNow {
         Self {
             phase: (cycles.rem_euclid(1.0) * turn) as u32 as u16,
             value: (value.clamp(-1.0, 1.0) * f32::from(i16::MAX)).round() as i16,
+        }
+    }
+
+    /// Where a Track slot's last note is on its map: `along` its source's span, from 0 to 1, as
+    /// the phase, and the map's level there, from 0 to 1, as the value.
+    pub fn along(along: f32, level: f32) -> Self {
+        Self {
+            phase: (along.clamp(0.0, 1.0) * f32::from(u16::MAX)).round() as u16,
+            value: (level.clamp(0.0, 1.0) * f32::from(i16::MAX)).round() as i16,
         }
     }
 }
@@ -910,6 +927,8 @@ pub struct TrackState {
     /// Held `MODE`, a place in the list of modes, which the filter's type may not offer.
     filter_mode: f32,
     drive: Smoothed,
+    /// Held `Punch`, which only the clean types hear.
+    punch: Smoothed,
     trim: [Trim; 2],
     low_cut: Smoothed,
     /// What each of its effects keeps.
@@ -936,6 +955,9 @@ pub struct TrackState {
     /// Where the track's last note started its modulation, for an LFO's fade and its hold, or
     /// none since playing started.
     noted: Option<LfoStart>,
+    /// Whether a note has started or been tied into since the modulation was last worked out,
+    /// which a Track slot follows, so the engine works it out again before the note is heard.
+    pub new_note: bool,
     /// What the LFOs add to each held value, by setting. Separate from the held values, so a
     /// step's FX moves the centre and the LFO carries on around it.
     offsets: [f32; SettingId::COUNT],
@@ -1061,6 +1083,14 @@ fn mutate_rng(seed: u64, index: usize, slot: usize) -> Pcg32 {
     Pcg32::new(seed, (4 * MAX_TRACKS + index * MOD_SLOTS + slot) as u64)
 }
 
+/// The generator for a Track mod slot's `Random`, on streams after every slot's `Mutate`.
+fn roll_rng(seed: u64, index: usize, slot: usize) -> Pcg32 {
+    Pcg32::new(
+        seed,
+        (4 * MAX_TRACKS + (MAX_TRACKS + index) * MOD_SLOTS + slot) as u64,
+    )
+}
+
 /// The generator for a track's notes' drift, on streams after every track's arpeggios.
 fn drift_rng(seed: u64, index: usize) -> Pcg32 {
     Pcg32::new(seed, (3 * MAX_TRACKS + index) as u64)
@@ -1145,6 +1175,7 @@ impl TrackState {
             filter_type: FilterType::LowPass,
             filter_mode: 0.0,
             drive: Smoothed::at(0.0),
+            punch: Smoothed::at(0.0),
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
             inserts: std::array::from_fn(|_| InsertState::default()),
@@ -1161,6 +1192,7 @@ impl TrackState {
             slots: [SlotRun::default(); MOD_SLOTS],
             chain_pass: 0,
             noted: None,
+            new_note: false,
             offsets: [0.0; SettingId::COUNT],
             offset_marks: [None; MOVED],
             synth: {
@@ -1223,6 +1255,7 @@ impl TrackState {
     /// `GLD` says as it's heard now.
     pub fn tie(&mut self, note: NoteOn) {
         self.last_note = Some(note);
+        self.new_note = true;
         self.voice.tie(note, glide_ms(self.held_glide));
         self.tell_slots_the_note();
     }
@@ -1274,6 +1307,8 @@ impl TrackState {
             run.start = LfoStart { tick: 0.0, clock };
             run.notes = 0;
             run.dice = mutate_rng(seed, index, at);
+            run.rolls = roll_rng(seed, index, at);
+            run.roll = 0;
             run.drawn = 0;
             run.counted = None;
         }
@@ -1354,6 +1389,7 @@ impl TrackState {
         let offsets = &mut self.offsets;
         let (step_ticks, pass) = (track.speed.ticks(), self.chain_pass);
         let noted = self.noted;
+        let last_note = self.last_note;
         // The note as it's heard before modulation, for slots in scale to move from.
         let note = self
             .last_note
@@ -1382,9 +1418,12 @@ impl TrackState {
             let polarity = run.polarity(slot);
             // An envelope's depth is whole, as its page sets it, so it moves by exactly that.
             let held = match slot.kind {
-                ModKind::Adsr | ModKind::Ahd | ModKind::Drum | ModKind::Lpg | ModKind::Steps => {
-                    depth_of(depth).round()
-                }
+                ModKind::Adsr
+                | ModKind::Ahd
+                | ModKind::Drum
+                | ModKind::Lpg
+                | ModKind::Steps
+                | ModKind::Track => depth_of(depth).round(),
                 ModKind::Lfo => depth_of(depth),
             };
             let depth = held + moved_by(0) * 255.0;
@@ -1469,6 +1508,24 @@ impl TrackState {
                     let added = run.add(slot.kind, tuned(level * depth / 255.0) * share);
                     moved.add(destination.index(), added);
                 }
+                // The last note's value on the map, held to the next note, through the fast
+                // smoothers as a step's value is. Before any note it moves nothing.
+                ModKind::Track => {
+                    let Some(played) = last_note else {
+                        run.rest(slot.kind);
+                        continue;
+                    };
+                    let tracking = &slot.track;
+                    let value = tracking.value(played.note, played.velocity, run.roll);
+                    let level = tracking.bounds().level(f32::from(value));
+                    run.now = Some(LfoNow::along(
+                        tracking.source.along(f32::from(value)),
+                        level,
+                    ));
+                    let level = polarity.of(Polarity::Uni, level);
+                    let added = run.add(slot.kind, tuned(level * depth / 255.0) * share);
+                    moved.add(destination.index(), added);
+                }
             }
         }
         self.filter_moving = filter_moving;
@@ -1479,6 +1536,7 @@ impl TrackState {
             self.coefficients = None;
         }
         self.drive.target = f32::from(track.drive) / 255.0;
+        self.punch.target = f32::from(track.punch) / 255.0;
         self.low_cut.target = f32::from(track.low_cut) / 255.0;
         self.high_cut.target = f32::from(track.high_cut) / 255.0;
         self.cut_offset.target = offsets[SettingId::CUT.index()];
@@ -1713,6 +1771,7 @@ impl TrackState {
         self.off_at = None;
         self.gate_at = None;
         self.last_note = Some(note);
+        self.new_note = true;
         self.tell_slots_the_note();
         if carries_on {
             self.voice.retrigger(note);
@@ -2221,6 +2280,7 @@ impl TrackState {
         self.pan_envelope.settle();
         self.inserts.iter_mut().for_each(InsertState::settle);
         self.drive.settle();
+        self.punch.settle();
         self.low_cut.settle();
         self.high_cut.settle();
         self.filter.iter_mut().for_each(Channel::settle);
@@ -2320,6 +2380,7 @@ impl TrackState {
             (self.pan.next(smoothing) + self.pan_offset.next(fast) + self.pan_envelope.next(fast))
                 .clamp(0.0, 1.0);
         let drive = self.drive.next(smoothing);
+        let punch = self.punch.next(smoothing);
         let open = self.filter_type == FilterType::LowPass
             && cutoff > 0.999
             && resonance < 0.001
@@ -2331,7 +2392,11 @@ impl TrackState {
         } else {
             if self.filter_countdown == 0 || self.coefficients.is_none() {
                 let mode = self.playing_mode();
-                let c = Coefficients::with_mode(cutoff, resonance, mode, rate);
+                let mut c = Coefficients::with_mode(cutoff, resonance, mode, rate);
+                // A punch this small is none, so the filter is as it was without it.
+                if punch >= 0.001 && self.filter_type.has_punch() {
+                    c = c.punched(punch, rate);
+                }
                 match &mut self.coefficients {
                     Some(ramp) => ramp.toward(&c, FILTER_UPDATE_FRAMES),
                     None => self.coefficients = Some(Ramp::at(c)),
@@ -2741,6 +2806,25 @@ mod tests {
         assert!((l * l + r * r - 2.0).abs() < 1e-5);
     }
 
+    /// A track's state as it plays it: its values from the top, then its filter, drive, punch
+    /// and utility filter, which modulating takes from the track, all settled.
+    fn playing(track: &Track, rate: u32) -> TrackState {
+        let mut state = from_the_top(track);
+        let mut memory = MemoryPool::for_song(&vt_model::song::Song::new(1), rate);
+        let now = SongTime {
+            tick: 0.0,
+            clock: 0,
+            rate,
+            seed: 0,
+            frames_per_tick: 100.0,
+            rendered: 0,
+            scale: Default::default(),
+        };
+        state.modulate(track, 0, now, true, &mut memory);
+        state.settle();
+        state
+    }
+
     #[test]
     fn a_slot_in_scale_moves_the_note_to_the_scales_nearest() {
         use vt_model::scale::{Scale, ScaleKind};
@@ -2786,7 +2870,7 @@ mod tests {
                     high_cut: 0xE0,
                     ..Track::default()
                 };
-                let (mut hit, mut silent) = (from_the_top(&track), from_the_top(&track));
+                let (mut hit, mut silent) = (playing(&track, rate), playing(&track, rate));
                 for frame in 0..4_000 {
                     let sound = (frame as f32 * 0.05).sin() * 0.5;
                     let (to_hit, to_silent) = if frame == 1_000 {
@@ -2806,6 +2890,37 @@ mod tests {
                     "the meter too"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn punch_is_heard_only_on_the_clean_filter_types() {
+        use crate::dsp::blocks::smoother;
+        let rate = 48_000;
+        let (smoothing, fast) = (
+            smoother::coefficient(rate),
+            smoother::fast_coefficient(rate),
+        );
+        let keys = Keys::default();
+        let render = |filter, punch| {
+            let track = Track {
+                filter,
+                cutoff: 0x20,
+                resonance: 0xFF,
+                punch,
+                ..Track::default()
+            };
+            let mut state = playing(&track, rate);
+            (0..4_800)
+                .map(|frame| {
+                    let strike = if frame < 48 { 1.0 } else { 0.0 };
+                    state.shape([strike; 2], smoothing, fast, rate, &keys).dry[0]
+                })
+                .collect::<Vec<f32>>()
+        };
+        for filter in FilterType::ALL {
+            let (plain, punched) = (render(filter, 0), render(filter, 0xFF));
+            assert_eq!(plain != punched, filter.has_punch(), "{filter:?}");
         }
     }
 }

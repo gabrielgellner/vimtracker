@@ -616,7 +616,7 @@ const TOY: DeviceLayout = live(
 
 // The track's own devices.
 
-/// The filter itself, its type and mode, then the utility filter's cuts.
+/// The filter itself and its punch, its type and mode, then the utility filter's cuts.
 const FILTER: DeviceLayout = live(
     "filter",
     &[knobs(
@@ -625,7 +625,7 @@ const FILTER: DeviceLayout = live(
             s("cutoff"),
             s("resonance"),
             s("drive"),
-            GAP,
+            s("punch"),
             s("type"),
             s("mode"),
             s("lowcut"),
@@ -876,6 +876,22 @@ const STEPS_LAYOUT: DeviceLayout = live(
                 s("step15"),
                 s("step16"),
             ],
+        ),
+        DEST_PAGE,
+    ],
+);
+
+/// A Track slot's: where its map starts and ends and how far it goes, then what it follows, a
+/// musical list of three that leaves the layout as it is, with its polarity on the button under
+/// `Depth`, lit for `Bi`, as an LFO's; where it goes on the next page. The study had it live, as
+/// slots had no polarity then; the button stores it, as it does the LFO.
+const TRACK: DeviceLayout = stored(
+    "track",
+    &[
+        page(
+            "Track",
+            [s("low"), s("high"), s("depth"), s("mode"), __, __, __, __],
+            [GAP, GAP, s("polarity"), __, __, __, __, __],
         ),
         DEST_PAGE,
     ],
@@ -1403,6 +1419,7 @@ pub const ALL: [&DeviceLayout; 89] = [
     &LPG_ENVELOPE,
     &LFO,
     &STEPS_LAYOUT,
+    &TRACK,
     &ACCUMULATOR,
     &ARPEGGIO,
     &EMPTY,
@@ -1545,6 +1562,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
             ModKind::Lpg => &LPG_ENVELOPE,
             ModKind::Lfo => &LFO,
             ModKind::Steps => &STEPS_LAYOUT,
+            ModKind::Track => &TRACK,
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
@@ -1609,6 +1627,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::Cutoff => "cutoff",
             TrackControl::Resonance => "resonance",
             TrackControl::Drive => "drive",
+            TrackControl::Punch => "punch",
             TrackControl::LowCut => "lowcut",
             TrackControl::HighCut => "highcut",
             TrackControl::Pan => "pan",
@@ -1656,6 +1675,8 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             ModField::Mutate => "mutate",
             ModField::Smooth => "smooth",
             ModField::Step(at) => STEP_KEYS[usize::from(at).min(STEPS - 1)],
+            ModField::Low => "low",
+            ModField::High => "high",
         },
         Control::Accumulator(field) => match field {
             AccumulatorField::Up => "up",

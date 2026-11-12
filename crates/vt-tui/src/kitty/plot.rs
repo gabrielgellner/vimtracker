@@ -13,8 +13,9 @@ use vt_engine::dsp::filter::track_response_db;
 use vt_model::envelope::{Adsr, Envelope};
 use vt_model::insert::{Compressor, Equaliser, threshold_db};
 use vt_model::lfo::{self, Lfo, LfoMode, deformed_wave};
-use vt_model::modulation::Polarity;
+use vt_model::modulation::{ModSlot, Polarity};
 use vt_model::song::{FilterType, Track};
+use vt_model::tracking::{Bounds, Source};
 
 use super::{indexed_png, rgb};
 use crate::theme;
@@ -529,6 +530,69 @@ pub fn lfo_cycle(drawing: LfoDrawing, (width, height): (usize, usize)) -> Plot {
         let level = |x: f32| drawing.level_at(x);
         plot.curve(level, level(0.0), &drawing.corners());
     }
+    plot
+}
+
+/// What a Track slot's map is drawn from: its source, where its map starts and ends, whether a
+/// negative depth turns it upside down, and whether it's one way, which puts its dotted line where
+/// it's at rest rather than half way. The size of its depth isn't in it, as the depth's number is
+/// beside it, and the source's whole span is across the picture, so the map's place shows where in
+/// the notes, the velocities or the rolls it rises.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrackDrawing {
+    pub source: Source,
+    pub bounds: Bounds,
+    pub flipped: bool,
+    pub unipolar: bool,
+}
+
+impl TrackDrawing {
+    /// What a Track slot's settings draw.
+    pub fn of(slot: &ModSlot) -> Self {
+        Self {
+            source: slot.track.source,
+            bounds: slot.track.bounds(),
+            flipped: slot.depth < 0,
+            unipolar: slot.polarity() == Polarity::Uni,
+        }
+    }
+
+    /// Where a value of its source is across the picture, from 0 to 1.
+    pub fn x_of(self, value: f32) -> f32 {
+        self.source.along(value)
+    }
+
+    /// Where a level of the map, from 0 to 1, is up the picture, upside down for a negative depth.
+    pub fn level_of(self, level: f32) -> f32 {
+        if self.flipped { 1.0 - level } else { level }
+    }
+
+    /// The map's level at `x` from 0 to 1 across the source's span.
+    fn level_at(self, x: f32) -> f32 {
+        let (lowest, highest) = self.source.span();
+        let value = f32::from(lowest) + x * f32::from(highest - lowest);
+        self.level_of(self.bounds.level(value))
+    }
+}
+
+/// A Track slot's map across its source's span: flat to `Low`, rising to `High` and flat after,
+/// with a faint line down at each and a dotted line where it's at rest, as an envelope's has.
+pub fn track_map(drawing: TrackDrawing, (width, height): (usize, usize)) -> Plot {
+    let mut plot = Plot::new(width, height);
+    let rest = if drawing.unipolar {
+        drawing.level_of(0.0)
+    } else {
+        0.5
+    };
+    plot.across(rest, Mark::Grid);
+    let low = drawing.x_of(f32::from(drawing.bounds.low));
+    let high = drawing.x_of(f32::from(drawing.bounds.high));
+    for x in [low, high] {
+        plot.down(x, Mark::Fainter);
+    }
+    // The same twice is a switch, which goes straight up there.
+    let level = |x: f32| drawing.level_at(x);
+    plot.curve(level, level(0.0), &[low - JUMP, low, high - JUMP, high]);
     plot
 }
 

@@ -8,12 +8,13 @@ use std::collections::BTreeMap;
 use vt_model::envelope::Envelope;
 use vt_model::modulation::Polarity;
 
-use super::plot::{LfoDrawing, Shade};
+use super::plot::{LfoDrawing, Shade, TrackDrawing};
 use super::{FilterSettings, SlotDrawing};
 use crate::sample_wave::Thumbnail;
 
 /// A panel that draws an image: the Sound page's filter curve and sampler's thumbnail, a mod
-/// slot's picture on the Mod page, an envelope's shape or an LFO's cycle, or an FX slot's curve.
+/// slot's picture on the Mod page, an envelope's shape, an LFO's cycle or a Track slot's map, or an
+/// FX slot's curve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PanelKey {
     Filter,
@@ -34,6 +35,9 @@ pub enum Shape {
     /// An LFO's wave, where its cycle starts and its depth's sign, drawn again only when one of
     /// those changes, never for its rate or the size of its depth.
     Lfo(LfoDrawing),
+    /// A Track slot's map, drawn again only when its source, its map or its depth's sign or
+    /// polarity changes.
+    Track(TrackDrawing),
     Slot(SlotDrawing),
 }
 
@@ -44,6 +48,7 @@ impl PartialEq for Shape {
             (Self::Waveform(a), Self::Waveform(b)) => a == b,
             (Self::Envelope(a, one), Self::Envelope(b, other)) => a == b && one == other,
             (Self::Lfo(a), Self::Lfo(b)) => a == b,
+            (Self::Track(a), Self::Track(b)) => a == b,
             (Self::Slot(a), Self::Slot(b)) => a == b,
             _ => false,
         }

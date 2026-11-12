@@ -9,13 +9,14 @@ use crate::envelope::{Adsr, Ahd, Drum, Envelope, Lpg};
 use crate::lfo::Lfo;
 use crate::settings::SettingId;
 use crate::steps::Steps;
+use crate::tracking::Tracking;
 
 /// How many mod slots a track has.
 pub const MOD_SLOTS: usize = 6;
 /// The furthest either way a slot's depth goes, in the units of what it moves.
 pub const MAX_DEPTH: i16 = 0xFF;
 
-/// What a mod slot is. ADSR, AHD, Drum, LPG, LFO and Steps so far; Track follows in M20.
+/// What a mod slot is: ADSR, AHD, Drum, LPG, LFO, Steps or Track.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
 )]
@@ -27,17 +28,19 @@ pub enum ModKind {
     Lpg,
     Lfo,
     Steps,
+    Track,
 }
 
 impl ModKind {
     /// Every type, in the order the type picker lists them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Adsr,
         Self::Ahd,
         Self::Drum,
         Self::Lpg,
         Self::Lfo,
         Self::Steps,
+        Self::Track,
     ];
 
     /// The name in the slot's title.
@@ -49,6 +52,7 @@ impl ModKind {
             Self::Lpg => "LPG",
             Self::Lfo => "LFO",
             Self::Steps => "Steps",
+            Self::Track => "Track",
         }
     }
 
@@ -61,6 +65,7 @@ impl ModKind {
             Self::Lpg => "a vactrol's fall, closing the filter",
             Self::Lfo => "a cycle, free or from each note",
             Self::Steps => "up to 16 values, in time or a note each",
+            Self::Track => "the note, its velocity or a roll, each note",
         }
     }
 
@@ -69,8 +74,8 @@ impl ModKind {
         matches!(self, Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg)
     }
 
-    /// Whether it has a mode, which its title shows after it: an envelope's curve, and an LFO's
-    /// and Steps' mode. A low-pass gate has none, as its curve is the point of it.
+    /// Whether it has a mode, which its title shows after it: an envelope's curve, an LFO's and
+    /// Steps' mode, and Track's source. A low-pass gate has none, as its curve is the point of it.
     pub fn has_mode(self) -> bool {
         !matches!(self, Self::Lpg)
     }
@@ -86,14 +91,16 @@ impl ModKind {
         match self {
             Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg => "Curve",
             Self::Lfo | Self::Steps => "Mode",
+            Self::Track => "Source",
         }
     }
 
     /// Which way it moves what it reaches unless its slot says otherwise: an envelope rises from
-    /// the setting, and an LFO swings around it, as before slots had a polarity.
+    /// the setting, and an LFO swings around it, as before slots had a polarity. Track rises from
+    /// it, as a velocity of none moves nothing.
     pub fn polarity(self) -> Polarity {
         match self {
-            Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg => Polarity::Uni,
+            Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg | Self::Track => Polarity::Uni,
             Self::Lfo | Self::Steps => Polarity::Bi,
         }
     }
@@ -204,6 +211,8 @@ pub struct ModSlot {
     pub lfo: Lfo,
     #[serde(default, skip_serializing_if = "is_default")]
     pub steps: Steps,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub track: Tracking,
 }
 
 impl ModSlot {
@@ -222,6 +231,7 @@ impl ModSlot {
             lpg: Lpg::default(),
             lfo: Lfo::default(),
             steps: Steps::default(),
+            track: Tracking::default(),
         }
     }
 
@@ -240,6 +250,7 @@ impl ModSlot {
             lpg: Lpg::default(),
             lfo,
             steps: Steps::default(),
+            track: Tracking::default(),
         }
     }
 
@@ -280,6 +291,15 @@ impl ModSlot {
         }
     }
 
+    /// A Track slot going somewhere, with no depth yet.
+    pub fn tracking(destination: Option<SettingId>, track: Tracking) -> Self {
+        Self {
+            kind: ModKind::Track,
+            track,
+            ..Self::adsr(destination, Adsr::default())
+        }
+    }
+
     /// The same, moving its destination this far.
     #[must_use]
     pub fn with_depth(self, depth: i16) -> Self {
@@ -295,6 +315,7 @@ impl ModSlot {
             && self.lpg.in_range()
             && self.lfo.in_range()
             && self.steps.in_range()
+            && self.track.in_range()
     }
 
     /// Whether it moves the note along the song's scale: it's in scale and goes to `Pitch`.
@@ -320,6 +341,7 @@ impl ModSlot {
             ModKind::Lpg => None,
             ModKind::Lfo => Some(self.lfo.mode.name()),
             ModKind::Steps => Some(self.steps.mode.name()),
+            ModKind::Track => Some(self.track.source.name()),
         }
     }
 
@@ -331,7 +353,9 @@ impl ModSlot {
             ModKind::Ahd => Envelope::Ahd(self.ahd),
             ModKind::Drum => Envelope::Drum(self.drum),
             ModKind::Lpg => Envelope::Lpg(self.lpg),
-            ModKind::Adsr | ModKind::Lfo | ModKind::Steps => Envelope::Adsr(self.adsr),
+            ModKind::Adsr | ModKind::Lfo | ModKind::Steps | ModKind::Track => {
+                Envelope::Adsr(self.adsr)
+            }
         }
     }
 }
@@ -521,6 +545,35 @@ mod tests {
         let mut mods = default_mods();
         mods[0] = ModSlot::ahd(Some(SettingId::VOL), Ahd::default());
         assert_eq!(note_shape_slot(&mods), Some(0));
+    }
+
+    #[test]
+    fn a_track_slot_follows_velocity_one_way_and_saves_its_map_only_once_changed() {
+        use crate::tracking::{Source, Tracking};
+        let mut slot = default_mod(4);
+        slot.kind = ModKind::Track;
+        assert!(!slot.kind.is_envelope());
+        assert_eq!(slot.mode_name(), Some("Velocity"));
+        assert_eq!(slot.kind.mode_label(), "Source");
+        assert_eq!(slot.polarity(), Polarity::Uni);
+        assert!(!ron::to_string(&slot).unwrap().contains("track"));
+        slot.track.source = Source::Note;
+        slot.track.note.high = 96;
+        let text = ron::to_string(&slot).unwrap();
+        assert!(
+            text.contains("kind:Track")
+                && text.contains("track:(source:Note,note:(low:36,high:96))"),
+            "{text}"
+        );
+        assert_eq!(ron::from_str::<ModSlot>(&text).unwrap(), slot);
+        assert!(slot.in_range());
+        // As an LFO again, it keeps its map for later.
+        slot.kind = ModKind::Lfo;
+        assert_eq!(slot.track.note.high, 96);
+        assert_eq!(
+            ModSlot::tracking(None, Tracking::default()).kind,
+            ModKind::Track
+        );
     }
 
     #[test]
