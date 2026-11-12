@@ -34,6 +34,11 @@ docs-serve:
 symbols-font:
     scripts/symbols-font.sh
 
+# What each machine, filter, slot effect and mod slot costs to play, one track at a time, and a
+# worst-case song: just costs, just costs effects worst, or just costs save folder for that song
+costs *args:
+    cargo run --release -q -p vt-engine --example costs -- {{args}}
+
 # Run every test
 test:
     cargo test --workspace
