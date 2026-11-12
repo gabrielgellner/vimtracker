@@ -525,6 +525,164 @@ fn a_sample_can_be_loaded_and_played() {
     assert_eq!(notes(&app)[0], Note::On(60));
 }
 
+/// A second of a quiet tone, at 48 kHz.
+fn second_of_wav(path: &std::path::Path) {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 48_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(path, spec).unwrap();
+    for at in 0..48_000 {
+        writer.write_sample((at % 96) as i16 * 100).unwrap();
+    }
+    writer.finalize().unwrap();
+}
+
+/// The current track's bank entry.
+fn entry_of(app: &App) -> vt_model::bank::BankEntry {
+    let number = app.song().tracks[app.cursor.track].sample();
+    app.song().bank.get(number).unwrap().clone()
+}
+
+#[test]
+fn a_sliced_wav_comes_in_with_its_slices_and_u_leaves_them_out() {
+    use vt_model::riff::{Cue, Markers, with_markers};
+    let dir = folder();
+    std::fs::create_dir_all(&dir).unwrap();
+    let plain = dir.join("plain.wav");
+    second_of_wav(&plain);
+    let markers = Markers {
+        cues: [0, 12_000, 24_000, 36_000]
+            .into_iter()
+            .zip(1..)
+            .map(|(frame, id)| Cue {
+                id,
+                frame,
+                label: None,
+            })
+            .collect(),
+        root: Some(60),
+        ..Markers::default()
+    };
+    let chain = dir.join("chain.wav");
+    let bytes = with_markers(&std::fs::read(&plain).unwrap(), &markers).unwrap();
+    std::fs::write(&chain, &bytes).unwrap();
+
+    let (mut app, _rt) = app();
+    command(&mut app, &format!("sample {}", chain.display()));
+    assert_eq!(
+        app.status,
+        "Track 01 plays 01 chain, loaded into the bank with 4 slices and its root C-3, from its \
+         markers: u leaves them out"
+    );
+    let seeded = entry_of(&app);
+    assert_eq!(seeded.edit.points.slices.len(), 4);
+    assert_eq!(seeded.edit.hints.root, Some(60));
+    assert_eq!(
+        std::fs::read(&chain).unwrap(),
+        bytes,
+        "the file is as it was"
+    );
+
+    press(&mut app, "u");
+    let plain_entry = entry_of(&app);
+    assert!(plain_entry.edit.points.is_whole(), "the file stays, plain");
+    assert!(plain_entry.edit.hints.is_empty());
+    press(&mut app, "u");
+    assert_eq!(sample_of(&app, 0), None);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_sample_with_an_ot_beside_it_comes_in_with_its_trim_loop_and_slices() {
+    use vt_model::octatrack::{OtFile, OtLoop, OtSlice};
+    let dir = folder();
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("break.wav");
+    second_of_wav(&file);
+    let ot = OtFile {
+        loop_mode: OtLoop::On,
+        trim_start: 480,
+        trim_end: 40_000,
+        loop_start: 20_000,
+        slices: [480, 10_000, 30_000]
+            .into_iter()
+            .map(|start| OtSlice {
+                start,
+                end: start + 5000,
+                loop_start: None,
+            })
+            .collect(),
+        ..OtFile::new(48_000, 120)
+    };
+    std::fs::write(dir.join("break.ot"), ot.to_bytes()).unwrap();
+    std::fs::write(dir.join("broken.ot"), "not an ot").unwrap();
+    let broken = dir.join("broken.wav");
+    wav(&broken);
+
+    let (mut app, _rt) = app();
+    command(&mut app, &format!("sample {}", file.display()));
+    assert!(app.status.contains("from break.ot"), "{}", app.status);
+    let points = entry_of(&app).edit.points;
+    assert_eq!(points.start, 480);
+    assert_eq!(points.end, Some(40_000));
+    assert_eq!(
+        points.loop_.map(|l| (l.start, l.end)),
+        Some((20_000, 40_000))
+    );
+    let starts: Vec<u64> = points.slices.iter().map(|slice| slice.start).collect();
+    assert_eq!(starts, [480, 10_000, 30_000]);
+
+    press(&mut app, "W");
+    command(&mut app, &format!("sample {}", broken.display()));
+    assert_eq!(
+        app.status,
+        "Track 02 plays 02 broken, loaded into the bank. The broken.ot beside it is skipped: \
+         it's 9 bytes, not the 832 of an .ot file"
+    );
+    assert!(entry_of(&app).edit.points.is_whole());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn a_kits_sound_comes_with_its_files_loop_but_keeps_the_kits_gain() {
+    use vt_model::octatrack::{OtFile, OtLoop};
+    let kit = kit_file();
+    let drums = kit.parent().unwrap().join("drums");
+    second_of_wav(&drums.join("snare.wav"));
+    let ot = OtFile {
+        loop_mode: OtLoop::On,
+        gain: 60,
+        loop_start: 1000,
+        ..OtFile::new(48_000, 120)
+    };
+    std::fs::write(drums.join("snare.ot"), ot.to_bytes()).unwrap();
+    std::fs::write(
+        &kit,
+        r#"(sounds: [(path: "drums/snare.wav", gain: -2.0), (path: "drums/kick.wav")])"#,
+    )
+    .unwrap();
+    let (mut app, _rt) = app();
+    command(&mut app, &format!("kit {} all", kit.display()));
+    assert_eq!(
+        app.status,
+        "Kit 909: 2 tracks, 1 sound with points from its file: u leaves them out"
+    );
+    let snare = entry_of(&app);
+    assert_eq!(snare.edit.points.loop_.map(|l| l.start), Some(1000));
+    assert_eq!(snare.edit.play.gain_db, -2.0);
+    press(&mut app, "u");
+    assert!(entry_of(&app).edit.points.is_whole());
+    assert_eq!(
+        sample_of(&app, 1)
+            .as_deref()
+            .map(|p| p.ends_with("kick.wav")),
+        Some(true)
+    );
+}
+
 #[test]
 fn opening_refuses_unsaved_changes() {
     let (mut app, _rt) = app();

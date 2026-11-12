@@ -484,6 +484,27 @@ pub struct SampleEdit {
     pub points: Points,
     #[serde(default, skip_serializing_if = "is_default_play")]
     pub play: PlayParams,
+    #[serde(default, skip_serializing_if = "Hints::is_empty")]
+    pub hints: Hints,
+}
+
+/// What's known of what a sample is, beside how it plays, as a file's markers tell it (#279): for
+/// slicing by beat and playing a loop to tempo later.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hints {
+    /// The note it sounds at as recorded, as a MIDI note, `60` being `C-3`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root: Option<u8>,
+    /// Its tempo, in thousandths of a BPM, as a song keeps its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub millibpm: Option<u32>,
+}
+
+impl Hints {
+    /// Whether nothing's known.
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 fn is_default_play(play: &PlayParams) -> bool {
@@ -517,6 +538,7 @@ impl BankEntry {
                 },
                 points: Points::default(),
                 play: PlayParams::default(),
+                hints: Hints::default(),
             },
         }
     }
