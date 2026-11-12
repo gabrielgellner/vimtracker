@@ -163,13 +163,14 @@ where they agree as the target, as the nuance suite does for the Acid (decision 
 
 ```sh
 uv run filter_refs.py                    # every circuit, about 2 minutes once the references are kept
-uv run filter_refs.py --circuit ms20     # one: svf, ladder or ms20
+uv run filter_refs.py --circuit ms20     # one: svf, obx, ladder or ms20
 uv run filter_refs.py --write-specs      # and write specs/filter-refs-*.toml from the same settings
 ```
 
 | Ours | The Drop | Arturia |
 |---|---|---|
 | `LP`, `HP`, `BP`, `Notch` at 12 dB | OSR, two poles | Filter SEM |
+| `OB-X` in `LP12`, `HP12`, `BP12`, `N12` | OSR, two poles | Filter SEM |
 | `Ladder`, `LP24` | PRD, four poles | Filter MINI |
 | `MS20 LP`, `MS20 HP` | MS1, two poles | Filter MS-20 |
 
