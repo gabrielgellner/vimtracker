@@ -1498,7 +1498,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 99] = [
+pub const ALL: [&DeviceLayout; 95] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
