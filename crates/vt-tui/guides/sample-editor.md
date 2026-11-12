@@ -54,8 +54,10 @@ word.
 
 ## Slices and marks
 
-`:slice 16` cuts the sample into 16 of the same length, and `:slice clear`
-plays it whole again. `j` and `k` go from slice to slice, `3G` goes to slice
+`:slice 16` cuts the sample into 16 of the same length, `:slice transients`
+at each sound's start, as `w` stops, `:slice beat 1/16` each sixteenth, and
+`:slice silence` at each sound after silence. `:slice clear` plays it whole
+again. `j` and `k` go from slice to slice, `3G` goes to slice
 `03`, and `]]` stops at every point on the way. The **Sounds, samples and kits**
 guide has the rest of `:slice`.
 
@@ -118,7 +120,9 @@ waveform.
 `v` starts selecting frames from the cursor, and `;` plays them. `o` goes to the
 other end, and `v` or `Esc` ends it. While selecting, `is` selects the sound
 the cursor is in, from its start to where it decays, and `ip` the slice, as
-Vim's `iw` and `ip` select a word and a paragraph; with a count, so many. `gv` selects it again, and `'<` and `'>`
+Vim's `iw` and `ip` select a word and a paragraph; with a count, so many.
+`:` while selecting starts the line with `'<,'>`, so `:'<,'>slice transients`
+slices only what's selected. `gv` selects it again, and `'<` and `'>`
 go to its first and last frame. `''` goes back to where the last jump left.
 
 ## Which mode you're in

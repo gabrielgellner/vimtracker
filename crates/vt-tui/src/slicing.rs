@@ -5,16 +5,19 @@
 //! and `g d` on a step's `SLI` to see it on the sample page.
 
 use vt_model::action::{Action, FieldValue};
-use vt_model::bank::BankEntry;
+use vt_model::analysis::{Analysis, Pyramid};
+use vt_model::bank::{BankEntry, MAX_SLICES, SliceParams};
+use vt_model::onsets::{MIN_GAP_SECONDS, MIN_SILENCE_SECONDS, after_silence, quiet_level};
 use vt_model::settings::SettingId;
 use vt_model::song::Machine;
 use vt_model::step::{FxCommand, FxSlot, Mark, Step};
 
 use crate::app::{App, Field};
 use crate::banking::sample_text;
-use crate::input::command::SliceChange;
+use crate::input::command::{Address, SliceChange, SliceRange};
 use crate::input::mode::View;
 use crate::input::picker::{Item, Pick, Picker};
+use crate::sample_page::beat_frames;
 use crate::views::sample::time;
 
 /// A time in microseconds as frames at a rate, to the nearest.
@@ -42,6 +45,98 @@ pub fn entry_of_step(step: Option<&Step>, own: u8) -> u8 {
     .map_or(own, |slot| slot.coarse())
 }
 
+/// A slice's own setting changed as `:slice` says, and what it plays now, as the status line says
+/// it.
+fn set_own(over: &mut SliceParams, change: SliceChange, rate: u32, length: u64) -> String {
+    let as_entry = "as the sample".to_owned();
+    match change {
+        SliceChange::Gain(hundredths) => {
+            over.gain_db = hundredths.map(|hundredths| hundredths as f32 / 100.0);
+            over.gain_db
+                .map_or(as_entry, |db| format!("at {db:+.1} dB"))
+        }
+        SliceChange::Pan(pan) => {
+            over.pan = pan;
+            pan.map_or(as_entry, |pan| format!("panned {}", pan_text(pan)))
+        }
+        SliceChange::Tune(semitones) => {
+            over.tune = semitones;
+            semitones.map_or(as_entry, |semitones| format!("tuned {semitones:+} st"))
+        }
+        SliceChange::Reverse(reverse) => {
+            over.reverse = reverse;
+            match reverse {
+                None => as_entry,
+                Some(true) => "reversed".to_owned(),
+                Some(false) => "forward".to_owned(),
+            }
+        }
+        SliceChange::Fade(fades) => {
+            let fade = |micros| frames(micros, rate).min(length) as u32;
+            over.fade_in = fades.map(|(fade_in, _)| fade(fade_in));
+            over.fade_out = fades.map(|(_, fade_out)| fade(fade_out));
+            match (over.fade_in, over.fade_out) {
+                (Some(fade_in), Some(fade_out)) => format!(
+                    "fading in over {} and out over {}",
+                    time(u64::from(fade_in), rate),
+                    time(u64::from(fade_out), rate)
+                ),
+                _ => as_entry,
+            }
+        }
+        SliceChange::Even(_)
+        | SliceChange::Clear
+        | SliceChange::Transients
+        | SliceChange::Beat(_)
+        | SliceChange::Silence => String::new(),
+    }
+}
+
+/// Where slices a step of frames apart start in a stretch, from its start. A last one shorter than
+/// half a step joins the one before, so a loop a few frames longer than a bar still cuts in 16.
+fn beat_starts(within: &std::ops::Range<u64>, step: f64) -> Vec<u64> {
+    let step = step.max(1.0);
+    let mut starts = Vec::new();
+    for at in 0_u64.. {
+        let start = within.start + (at as f64 * step).round() as u64;
+        let short = ((within.end.saturating_sub(start)) as f64) < step / 2.0;
+        if start >= within.end || (at > 0 && short) || starts.len() > MAX_SLICES {
+            break;
+        }
+        starts.push(start);
+    }
+    starts
+}
+
+/// Where the sounds a `Sens` finds start in a stretch, to slice it at, none too near its end. The
+/// stretch's own start starts a slice if there's sound before the first, or the first is next to
+/// it, so silence before the first hit isn't a slice of its own.
+fn transient_starts(analysis: &Analysis, within: &std::ops::Range<u64>, sens: u8) -> Vec<u64> {
+    let gap = (MIN_GAP_SECONDS * f64::from(analysis.rate)).round() as u64;
+    let onsets: Vec<u64> = analysis
+        .onsets(sens)
+        .into_iter()
+        .filter(|onset| within.contains(onset) && within.end - onset >= gap)
+        .collect();
+    let Some(&first) = onsets.first() else {
+        return Vec::new();
+    };
+    let mut starts = Vec::with_capacity(onsets.len() + 1);
+    if first < within.start + gap {
+        starts.push(within.start);
+        starts.extend(&onsets[1..]);
+        return starts;
+    }
+    // The whole buckets before the first sound, as it's in the bucket it starts in.
+    let size = Pyramid::bucket_frames(0);
+    let before = within.start..first / size * size;
+    if before.start < before.end && analysis.pyramid.peak(before) > quiet_level(analysis.peak) {
+        starts.push(within.start);
+    }
+    starts.extend(onsets);
+    starts
+}
+
 impl App {
     /// The bank entry the current track's sampler plays, before any step chooses another.
     pub(crate) fn track_sample_number(&self) -> u8 {
@@ -67,11 +162,12 @@ impl App {
         slice.min(points.slices.len().saturating_sub(1))
     }
 
-    /// Slice the current track's sample, or change how one of its slices plays, as one undo step,
-    /// and say what it is now.
-    pub(crate) fn change_slices(&mut self, change: SliceChange) {
+    /// Slice the current track's sample, or change how its slices play, as one undo step, and say
+    /// what it is now. A range re-slices only the slices inside it, or changes those starting in
+    /// it, and with none it's the whole sample, or the slice here for a slice's own setting.
+    pub(crate) fn change_slices(&mut self, change: SliceChange, range: Option<SliceRange>) {
         let number = self.track_sample_number();
-        let Some(mut entry) = self.song().bank.get(number).cloned() else {
+        let Some(entry) = self.song().bank.get(number).cloned() else {
             self.status = format!(
                 "Track {:02} plays no sample to slice: K on Sample chooses one",
                 self.cursor.track + 1
@@ -83,89 +179,246 @@ impl App {
             return;
         };
         let name = sample_text(self.song(), number);
-        match change {
-            SliceChange::Even(count) => {
-                let points = &entry.edit.points;
-                let starts = points.even_starts(count, length);
-                let had = points.slices.len();
-                let made = starts.len();
-                let end = points.end_in(length);
-                let long = (end - points.start.min(end)) / made.max(1) as u64;
-                self.apply(&Action::SetSlices { number, starts });
-                let followed = if had > 0 {
-                    ", and SLI locks follow their sound"
+        let points = &entry.edit.points;
+        let end = points.end_in(length);
+        let whole = points.start.min(end)..end;
+        let within = match range {
+            None => whole.clone(),
+            Some(range) => match self.range_frames(&entry, range, length) {
+                Ok(within) => within,
+                Err(why) => {
+                    self.status = why;
+                    return;
+                }
+            },
+        };
+        let had = points.slices.len();
+        // The status line's words for the range, if it's less than the whole.
+        let place = if within == whole {
+            String::new()
+        } else {
+            format!(
+                " from {} to {}",
+                time(within.start, rate),
+                time(within.end, rate)
+            )
+        };
+        let (inside, said) = match change {
+            SliceChange::Clear if range.is_none() => {
+                if had == 0 {
+                    self.status = format!("{name} has no slices");
                 } else {
-                    ""
+                    self.apply(&Action::SetSlices {
+                        number,
+                        starts: Vec::new(),
+                    });
+                    self.status = format!("{name} plays as one again: u to undo");
+                }
+                return;
+            }
+            SliceChange::Clear => (vec![within.start], "one slice".to_owned()),
+            SliceChange::Even(count) => {
+                let count = count.clamp(1, MAX_SLICES) as u128;
+                let span = u128::from(within.end - within.start);
+                let mut starts: Vec<u64> = (0..count)
+                    .map(|at| within.start + (span * at / count) as u64)
+                    .collect();
+                starts.dedup();
+                let long = (within.end - within.start) / starts.len().max(1) as u64;
+                let said = format!("{} slices of {}", starts.len(), time(long, rate));
+                (starts, said)
+            }
+            SliceChange::Beat(note) => {
+                let bar = match entry.edit.hints.bars {
+                    Some(bars) => (whole.end - whole.start) as f64 / f64::from(bars.max(1)),
+                    None => 4.0 * beat_frames(rate, self.song().millibpm),
                 };
-                self.status = format!(
-                    "{name} in {made} slices of {}{followed}: u to undo",
-                    time(long, rate)
-                );
+                let starts = beat_starts(&within, bar / f64::from(note.max(1)));
+                let by = match entry.edit.hints.bars {
+                    Some(1) => "as it's a bar long".to_owned(),
+                    Some(bars) => format!("as it's {bars} bars long"),
+                    None => "at the song's tempo".to_owned(),
+                };
+                let said = format!("{} slices of 1/{note}, {by}", starts.len());
+                (starts, said)
+            }
+            SliceChange::Transients | SliceChange::Silence => {
+                let Some(analysis) = self.entry_analysis(&entry) else {
+                    self.status =
+                        format!("{name} can't be analysed: its file is missing or has changed");
+                    return;
+                };
+                let sens = entry.edit.hints.sens;
+                let transients = change == SliceChange::Transients;
+                let starts = if transients {
+                    transient_starts(&analysis, &within, sens)
+                } else {
+                    self.silence_starts(&entry, &analysis, &within)
+                };
+                if starts.is_empty() {
+                    self.status = if transients {
+                        format!(
+                            "No sound found in {name}{place} at Sens {sens}%: a higher Sens, \
+                             from K on the sample page, finds more"
+                        )
+                    } else {
+                        format!("{name}{place} is all silence")
+                    };
+                    return;
+                }
+                let count = starts.len();
+                let said = if transients {
+                    format!("{count} slices, at its sounds at Sens {sens}%")
+                } else {
+                    format!("{count} slices, at its sounds after silence")
+                };
+                (starts, said)
+            }
+            _ => {
+                self.change_slice_settings(change, range.map(|_| within), entry, rate, length);
                 return;
             }
-            SliceChange::Clear if entry.edit.points.slices.is_empty() => {
-                self.status = format!("{name} has no slices");
-                return;
-            }
-            SliceChange::Clear => {
-                self.apply(&Action::SetSlices {
-                    number,
-                    starts: Vec::new(),
-                });
-                self.status = format!("{name} plays as one again: u to undo");
-                return;
-            }
-            _ => {}
+        };
+        let starts = entry.edit.points.restarted(within, &inside, length);
+        if starts.len() > MAX_SLICES {
+            self.status = format!(
+                "That's {} slices, more than {MAX_SLICES}: a range, or a lower Sens, makes fewer",
+                starts.len()
+            );
+            return;
         }
+        let now: Vec<u64> = entry
+            .edit
+            .points
+            .slices
+            .iter()
+            .map(|slice| slice.start)
+            .collect();
+        if now == starts {
+            self.status = format!("{name} is sliced so already");
+            return;
+        }
+        let total = starts.len();
+        self.apply(&Action::SetSlices { number, starts });
+        let followed = if had > 0 {
+            ", and SLI locks follow their sound"
+        } else {
+            ""
+        };
+        let all = if place.is_empty() {
+            String::new()
+        } else {
+            format!(", {total} in all")
+        };
+        self.status = format!("{name}{place} in {said}{all}{followed}: u to undo");
+    }
+
+    /// A slice's own setting, for the slice here, or for every slice starting in a stretch of
+    /// frames, as one undo step.
+    fn change_slice_settings(
+        &mut self,
+        change: SliceChange,
+        within: Option<std::ops::Range<u64>>,
+        mut entry: BankEntry,
+        rate: u32,
+        length: u64,
+    ) {
+        let number = self.track_sample_number();
+        let name = sample_text(self.song(), number);
         if entry.edit.points.slices.is_empty() {
             self.status = format!("{name} has no slices: :slice 16 cuts it into 16");
             return;
         }
-        let at = self.slice_here(number, &entry);
-        let over = &mut entry.edit.points.slices[at].over;
-        let as_entry = "as the sample".to_owned();
-        let said = match change {
-            SliceChange::Gain(hundredths) => {
-                over.gain_db = hundredths.map(|hundredths| hundredths as f32 / 100.0);
-                over.gain_db
-                    .map_or(as_entry, |db| format!("at {db:+.1} dB"))
-            }
-            SliceChange::Pan(pan) => {
-                over.pan = pan;
-                pan.map_or(as_entry, |pan| format!("panned {}", pan_text(pan)))
-            }
-            SliceChange::Tune(semitones) => {
-                over.tune = semitones;
-                semitones.map_or(as_entry, |semitones| format!("tuned {semitones:+} st"))
-            }
-            SliceChange::Reverse(reverse) => {
-                over.reverse = reverse;
-                match reverse {
-                    None => as_entry,
-                    Some(true) => "reversed".to_owned(),
-                    Some(false) => "forward".to_owned(),
-                }
-            }
-            SliceChange::Fade(fades) => {
-                let fade = |micros| frames(micros, rate).min(length) as u32;
-                over.fade_in = fades.map(|(fade_in, _)| fade(fade_in));
-                over.fade_out = fades.map(|(_, fade_out)| fade(fade_out));
-                match (over.fade_in, over.fade_out) {
-                    (Some(fade_in), Some(fade_out)) => format!(
-                        "fading in over {} and out over {}",
-                        time(u64::from(fade_in), rate),
-                        time(u64::from(fade_out), rate)
-                    ),
-                    _ => as_entry,
-                }
-            }
-            SliceChange::Even(_) | SliceChange::Clear => return,
+        let slices = &entry.edit.points.slices;
+        let targets: Vec<usize> = match &within {
+            Some(within) => (0..slices.len())
+                .filter(|at| within.contains(&slices[*at].start))
+                .collect(),
+            None => vec![self.slice_here(number, &entry)],
         };
+        let (Some(first), Some(last)) = (targets.first().copied(), targets.last().copied()) else {
+            self.status = format!("No slice of {name} starts in that range");
+            return;
+        };
+        let mut said = String::new();
+        for at in targets {
+            said = set_own(&mut entry.edit.points.slices[at].over, change, rate, length);
+        }
         self.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
-        self.status = format!("{name}: slice {at:02X} plays {said}");
+        self.status = if first == last {
+            format!("{name}: slice {first:02X} plays {said}")
+        } else {
+            format!("{name}: slices {first:02X} to {last:02X} play {said}")
+        };
+    }
+
+    /// The frames a range covers of an entry: from the start of the first address's to the end
+    /// of the last's, either way round, inside the entry's start and end, or why it covers none.
+    fn range_frames(
+        &self,
+        entry: &BankEntry,
+        range: SliceRange,
+        length: u64,
+    ) -> Result<std::ops::Range<u64>, String> {
+        let points = &entry.edit.points;
+        let end = points.end_in(length);
+        let start = points.start.min(end);
+        let (first, last) = match range {
+            SliceRange::Whole => return Ok(start..end),
+            SliceRange::Between(first, last) => (first, last),
+        };
+        let frames = |address: Address| match address {
+            Address::Mark(letter) => points
+                .marked(letter)
+                .map(|slice| points.slice_frames(slice, length))
+                .ok_or_else(|| format!("'{letter} names no slice: m{letter} names the slice here")),
+            Address::SelectionStart | Address::SelectionEnd => {
+                let (first, last) = self
+                    .sample_page
+                    .last_selection
+                    .ok_or_else(|| "No selection yet: v starts one".to_owned())?;
+                let frame = if address == Address::SelectionStart {
+                    first
+                } else {
+                    last
+                };
+                Ok(frame..frame + 1)
+            }
+        };
+        let (first, last) = (frames(first)?, frames(last)?);
+        let from = first.start.min(last.start).clamp(start, end);
+        let to = first.end.max(last.end).clamp(start, end);
+        if from >= to {
+            return Err("That range is outside the sample's start and end".to_owned());
+        }
+        Ok(from..to)
+    }
+
+    /// Where sounds start after silence in a stretch of an entry, each to the frame it rises
+    /// above the silence between them.
+    fn silence_starts(
+        &self,
+        entry: &BankEntry,
+        analysis: &Analysis,
+        within: &std::ops::Range<u64>,
+    ) -> Vec<u64> {
+        let quiet = quiet_level(analysis.peak);
+        let gap = (MIN_SILENCE_SECONDS * f64::from(analysis.rate)).round() as u64;
+        let shown = self.shown_of(self.track_sample_number(), entry).ok();
+        let size = Pyramid::bucket_frames(0);
+        after_silence(&analysis.pyramid, within.clone(), quiet, gap)
+            .into_iter()
+            .map(|from| {
+                let to = ((from / size + 1) * size).min(within.end);
+                shown
+                    .as_ref()
+                    .and_then(|shown| shown.first_above(from..to, quiet))
+                    .unwrap_or(from)
+            })
+            .collect()
     }
 
     /// An entry's slices as a list, each with its number, the letters naming it and where it

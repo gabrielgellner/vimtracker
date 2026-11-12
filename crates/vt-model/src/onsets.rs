@@ -266,6 +266,42 @@ pub fn decay(pyramid: &Pyramid, start: u64, until: u64) -> u64 {
         .map_or(until, |at| bucket(at).start.max(start + 1))
 }
 
+/// How far under a file's peak counts as the silence between sounds, for `:slice silence`, unless
+/// that's under [`SILENCE_DB`], so a hiss under the hits is silence too.
+pub const QUIET_UNDER_PEAK_DB: f32 = 48.0;
+
+/// The shortest silence that parts two sounds, so a dip inside one doesn't.
+pub const MIN_SILENCE_SECONDS: f64 = 0.05;
+
+/// The level under which a file with this peak is silent between its sounds.
+pub fn quiet_level(peak: f32) -> f32 {
+    (peak * 10_f32.powf(-QUIET_UNDER_PEAK_DB / 20.0)).max(10_f32.powf(SILENCE_DB / 20.0))
+}
+
+/// Where sounds start inside a stretch after silence, to the pyramid's finest bucket: its first
+/// bucket louder than `quiet`, and each after at least `gap` frames of buckets that aren't, as
+/// each bucket's first frame, or the stretch's for the bucket it starts in.
+pub fn after_silence(pyramid: &Pyramid, frames: Range<u64>, quiet: f32, gap: u64) -> Vec<u64> {
+    let end = frames.end.min(pyramid.frames());
+    let size = Pyramid::bucket_frames(0);
+    let mut starts = Vec::new();
+    // The quiet frames since the last loud bucket, which the stretch starts with plenty of.
+    let mut silent = gap;
+    for bucket in frames.start / size..end.div_ceil(size) {
+        let from = (bucket * size).max(frames.start);
+        let to = ((bucket + 1) * size).min(end);
+        if pyramid.peak(bucket * size..(bucket + 1) * size) > quiet {
+            if silent >= gap {
+                starts.push(from);
+            }
+            silent = 0;
+        } else {
+            silent += to - from;
+        }
+    }
+    starts
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,6 +385,33 @@ mod tests {
         // A sound that doesn't decay before the next lasts until it.
         assert_eq!(decay(&pyramid, 10_000, 12_000), 12_000);
         assert_eq!(decay(&pyramid, 40_000, 50_000), 40_000);
+    }
+
+    #[test]
+    fn sounds_after_silence_start_at_their_bucket_and_a_short_dip_parts_nothing() {
+        let mut samples = vec![0.0_f32; 30_000];
+        // A hit, a dip of 1000 frames inside it, then silence, then two more.
+        for (from, to) in [
+            (1000, 3000),
+            (4000, 6000),
+            (12_000, 14_000),
+            (20_100, 22_000),
+        ] {
+            samples[from..to].fill(0.5);
+        }
+        let pyramid = Pyramid::build(&samples, 1);
+        let quiet = quiet_level(0.5);
+        let gap = 2400;
+        assert_eq!(
+            after_silence(&pyramid, 0..30_000, quiet, gap),
+            [768, 11_776, 19_968]
+        );
+        // A stretch starting in sound starts a sound.
+        assert_eq!(
+            after_silence(&pyramid, 5000..30_000, quiet, gap),
+            [5000, 11_776, 19_968]
+        );
+        assert!(after_silence(&pyramid, 7000..11_000, quiet, gap).is_empty());
     }
 
     #[test]

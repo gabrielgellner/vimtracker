@@ -1498,6 +1498,12 @@ impl App {
             }
             Cmd::EnterCommand => {
                 self.command_line.clear();
+                // From a selection on the sample page, the line starts with its range, as Vim's
+                // does from Visual, and the selection ends.
+                if self.view == View::Sample && self.sample_page.anchor.is_some() {
+                    self.sample_page.end_selection();
+                    self.command_line.push_str("'<,'>");
+                }
                 self.mode = Mode::Command;
             }
             Cmd::PlayFromCursor => {
@@ -2856,7 +2862,7 @@ impl App {
             Line::Sample(Some(path)) => self.sample(&path),
             Line::Sample(None) => self.open_default_sample_picker(),
             Line::SampleChange(change) => self.change_sample(change),
-            Line::Slice(change) => self.change_slices(change),
+            Line::Slice(change, range) => self.change_slices(change, range),
             Line::Mark { letter, slice } => self.set_mark(letter, slice),
             Line::Marks => self.open_marks_picker(),
             Line::DelMarks(letters) => self.delete_marks(letters.as_deref()),
