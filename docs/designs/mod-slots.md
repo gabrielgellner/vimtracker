@@ -927,6 +927,14 @@ requests, Drum then LPG:
 * **The peak's fall** is `Snap`'s, whatever the curve, which bends the body's decay.
 * **The Roto** stores Drum as a setup of its own, `Ratchet` on knob 4, so there are 11.
 
+**As built for #45's LPG (decision 195),** the second half:
+
+* **The vactrol is solved,** not stepped: Plaits' equation in closed form, `v⁴ = E / (R + (1 - R) E)`,
+  the same at any rate, with Plaits' middle ratio and a `Decay` timed to 60 dB.
+* **`Colour`** closes `Cut` by Plaits' brightness in pitch, wherever the slot goes, but not from
+  `---`.
+* **The Roto** stores LPG as a setup of its own, so there are 12.
+
 **As built for #86 (decision 202):**
 
 * **Stateless:** `Hold` works its wave out at the time of the track's last note rather than

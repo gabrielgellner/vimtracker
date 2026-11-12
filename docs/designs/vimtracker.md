@@ -463,7 +463,7 @@ Song                               song.ron, refused unless format_version is FO
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
 *   **Mod slots** (`modulation.rs`, decision 165). Each track has `MOD_SLOTS` (6) slots on its
-    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum` or `Lfo`, with a destination
+    Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum`, `Lpg` or `Lfo`, with a destination
     setting, a depth, a switch and a polarity (`Uni` or `Bi`, its type's until one is chosen),
     which every type shares, and each type's own settings, which a
     slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
@@ -471,10 +471,11 @@ Song                               song.ron, refused unless format_version is FO
     `One` or `Half`, and its fade `Off` or in or out over a sweep's length after each note. An
     ADSR is in milliseconds, with a reset and a curve (`Exp`, `Lin` or `Snap`, its mode), and an
     AHD the same with a hold of a time or `Note` in place of a sustain and release, and a drum
-    envelope a steep peak from full onto a body, struck one to eight times, then a decay. The first
+    envelope a steep peak from full onto a body, struck one to eight times, then a decay, and a low-pass gate Plaits' vactrol solved in closed
+    form, which also closes the track's `Cut` by its `Colour`. The first
     envelope-type slot on `Vol` shapes the notes (`note_shape_slot`): its `ModSlot::envelope`, an
     `envelope::Envelope` of any of these types, is what each voice keeps as its `shape`, and a
-    one-shot (an AHD with a timed hold, or a drum) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
+    one-shot (an AHD with a timed hold, a drum or a gate) isn't released when its note ends. Slots work out in order, so a slot's destination can be the depth or phase
     of a slot after it (`SettingId::for_mod`), never one before.
 *   **Accumulators and arpeggios.** A step's `ACU` and `ARP` say how far, and the track's
     `accumulation` and `arpeggio` say how they move and when they start again.

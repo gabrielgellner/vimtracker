@@ -49,6 +49,18 @@ const DRUM_SETTINGS: [ModField; 5] = [
 ];
 const DRUM_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
 
+/// A low-pass gate's settings: its rise and fall and how far it closes the filter down the left,
+/// and how far it goes and its reset down the right, with a hole. It has no mode, as its curve is
+/// the point of it.
+const LPG_SETTINGS: [ModField; 5] = [
+    ModField::Attack,
+    ModField::Decay,
+    ModField::Colour,
+    ModField::Depth,
+    ModField::Reset,
+];
+const LPG_GRID: [[Option<usize>; 3]; 2] = [[Some(0), Some(1), Some(2)], [Some(3), Some(4), None]];
+
 /// An LFO's settings: what it plays down the left, and where it starts, how it fades after each
 /// note and how its wave bends down the right. How notes start it is its mode, in the title.
 const LFO_SETTINGS: [ModField; 6] = [
@@ -91,6 +103,7 @@ fn type_grid(kind: ModKind) -> (&'static [ModField], Grid) {
         ModKind::Adsr => (&ADSR_SETTINGS, Grid::from_columns(&ADSR_GRID)),
         ModKind::Ahd => (&AHD_SETTINGS, Grid::from_columns(&AHD_GRID)),
         ModKind::Drum => (&DRUM_SETTINGS, Grid::from_columns(&DRUM_GRID)),
+        ModKind::Lpg => (&LPG_SETTINGS, Grid::from_columns(&LPG_GRID)),
         ModKind::Lfo => (&LFO_SETTINGS, Grid::from_columns(&LFO_GRID)),
     }
 }

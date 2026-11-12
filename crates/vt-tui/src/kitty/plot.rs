@@ -19,7 +19,8 @@ use vt_model::song::{FilterType, Track};
 use super::{indexed_png, rgb};
 use crate::theme;
 use crate::views::curve::{
-    ahd_level_at, ahd_stage_ends, drum_level_at, drum_stage_ends, level_at, stage_ends,
+    ahd_level_at, ahd_stage_ends, drum_level_at, drum_stage_ends, level_at, lpg_level_at,
+    lpg_stage_ends, stage_ends,
 };
 
 /// How wide the line is, in pixels.
@@ -372,6 +373,7 @@ pub fn envelope_in(
         Envelope::Adsr(adsr) => stage_ends(adsr).to_vec(),
         Envelope::Ahd(ahd) => ahd_stage_ends(ahd).to_vec(),
         Envelope::Drum(drum) => drum_stage_ends(drum),
+        Envelope::Lpg(lpg) => lpg_stage_ends(lpg).to_vec(),
     };
     // Between each stage and the next: attack and decay, decay and sustain, and sustain and
     // release, or attack and hold, and hold and decay.
@@ -383,6 +385,7 @@ pub fn envelope_in(
         Envelope::Ahd(ahd) => plot.curve(|x| ahd_level_at(ahd, x), 0.0, &ends),
         // It strikes from nothing to full at once, so its line goes straight up at the start.
         Envelope::Drum(drum) => plot.curve(|x| drum_level_at(drum, x), 0.0, &ends),
+        Envelope::Lpg(lpg) => plot.curve(|x| lpg_level_at(lpg, x), 0.0, &ends),
     }
     plot
 }

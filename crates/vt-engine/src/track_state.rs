@@ -3,7 +3,7 @@
 use vt_model::accumulator::{Accumulation, Moves, Walk};
 use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
-use vt_model::envelope::Envelope;
+use vt_model::envelope::{Envelope, Lpg};
 use vt_model::groove::Groove;
 use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS};
 use vt_model::lfo::{LfoMode, MAX_DEFORM, deformed_wave, phase_of, phase_value};
@@ -29,10 +29,14 @@ use crate::rng::Pcg32;
 use crate::timing::SlotTimes;
 use crate::voice::{Cut, NoteOn, Voice};
 
+/// The most settings a track's envelopes can move at once: one for each slot, and `Cut` besides,
+/// which a low-pass gate's `Colour` closes whatever its destination.
+const MOVED: usize = MOD_SLOTS + 1;
+
 /// What a track's envelopes move, by setting, kept as a short list as there are only a few.
 #[derive(Debug, Clone, Copy, Default)]
 struct Moved {
-    entries: [(usize, f32); MOD_SLOTS],
+    entries: [(usize, f32); MOVED],
     count: usize,
 }
 
@@ -821,7 +825,7 @@ pub struct TrackState {
     offsets: [f32; SettingId::COUNT],
     /// The settings `offsets` has anything on, at most one for each envelope and LFO, so only those
     /// are cleared next time rather than every setting.
-    offset_marks: [Option<usize>; MOD_SLOTS],
+    offset_marks: [Option<usize>; MOVED],
     cut_offset: Smoothed,
     res_offset: Smoothed,
     pan_offset: Smoothed,
@@ -1035,7 +1039,7 @@ impl TrackState {
             slots: [SlotRun::default(); MOD_SLOTS],
             noted: None,
             offsets: [0.0; SettingId::COUNT],
-            offset_marks: [None; MOD_SLOTS],
+            offset_marks: [None; MOVED],
             synth: {
                 let mut synth = [0.0; MAX_MACHINE_SETTINGS];
                 synth[..4].copy_from_slice(&[0.5, 0.0, 0.5, f32::from(DEFAULT_ACCENT) / 255.0]);
@@ -1216,6 +1220,7 @@ impl TrackState {
         let mut marks = 0;
         let mut filter_moving = false;
         let shaping = note_shape_slot(&track.mods);
+        let has_cut = SettingId::CUT.exists_on(track);
         let offsets = &mut self.offsets;
         let noted = self.noted;
         for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
@@ -1224,6 +1229,15 @@ impl TrackState {
                 run.rest(slot.kind);
                 continue;
             };
+            // A low-pass gate's fall closes the track's filter too, by its `Colour`, wherever it
+            // goes and whatever its depth, the notes' shape included, through the fast smoothers
+            // as an envelope's moves are (#45). One going nowhere does nothing, as any slot.
+            if slot.kind == ModKind::Lpg && slot.lpg.colour > 0 && has_cut && !stopped {
+                let level = run.envelope.level(&slot.envelope(), now.clock, now.rate);
+                let closed = f32::from(slot.lpg.colour) / 255.0 * Lpg::closing(level);
+                moved.add(SettingId::CUT.index(), -closed * run.share);
+                filter_moving = true;
+            }
             let moved_by = |setting: usize| {
                 SettingId::modulator(at, setting)
                     .map_or(0.0, |id| offsets[id.index()] + moved.at(id.index()))
@@ -1232,7 +1246,9 @@ impl TrackState {
             let polarity = run.polarity(slot);
             // An envelope's depth is whole, as its page sets it, so it moves by exactly that.
             let held = match slot.kind {
-                ModKind::Adsr | ModKind::Ahd | ModKind::Drum => depth_of(depth).round(),
+                ModKind::Adsr | ModKind::Ahd | ModKind::Drum | ModKind::Lpg => {
+                    depth_of(depth).round()
+                }
                 ModKind::Lfo => depth_of(depth),
             };
             let depth = held + moved_by(0) * 255.0;
@@ -1255,7 +1271,7 @@ impl TrackState {
             }
             let depth = depth.clamp(-f32::from(MAX_DEPTH), f32::from(MAX_DEPTH));
             match slot.kind {
-                ModKind::Adsr | ModKind::Ahd | ModKind::Drum => {
+                ModKind::Adsr | ModKind::Ahd | ModKind::Drum | ModKind::Lpg => {
                     let level = run.envelope.level(&slot.envelope(), now.clock, now.rate);
                     let level = polarity.of(Polarity::Uni, level);
                     let added = run.add(slot.kind, level * depth / 255.0 * share);

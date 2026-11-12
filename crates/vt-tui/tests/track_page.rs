@@ -759,7 +759,7 @@ fn the_track_page_sets_the_filters_mode_for_its_type() {
         "round the two"
     );
 
-    // The ladder lists its seventeen, and starts on its own first.
+    // The ladder lists its eighteen, and starts on its own first.
     press(&mut app, "hK");
     press(&mut app, "/ladder");
     special(&mut app, KeyCode::Enter);
@@ -767,7 +767,7 @@ fn the_track_page_sets_the_filters_mode_for_its_type() {
     assert!(title_line(&app, "Filter").contains("LP24"));
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 17);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 18);
     press(&mut app, "/hp24");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app).filter_mode, FilterMode::HighPass24);
