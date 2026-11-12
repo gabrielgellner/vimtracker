@@ -303,6 +303,15 @@ pub fn four_devices(app: &mut App) {
     press(app, "gg");
 }
 
+/// Run a block of audio and the frame after it, so the callback has the song as it is and the
+/// latest report is of it, as it is a frame after an edit. A test can then put its own live values
+/// in, which the bars draw against the song as it is.
+pub fn catch_up(app: &mut App, realtime: &mut vt_engine::link::Realtime) {
+    let mut out = vec![0.0; 256 * 2];
+    realtime.process(&mut out);
+    app.tick();
+}
+
 pub fn on_fx_page() -> (App, vt_engine::link::Realtime) {
     let (mut app, realtime) = app();
     press(&mut app, " 4LL");

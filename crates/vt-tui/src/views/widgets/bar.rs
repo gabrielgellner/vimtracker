@@ -64,13 +64,24 @@ impl ValueBar {
         }
     }
 
+    /// Where a value's edge or mark is along the bar, in eighths of a cell.
+    fn eighths(&self, value: u8) -> usize {
+        if self.centred {
+            usize::from(value) * self.cells * 8 / 256
+        } else {
+            level_eighths(value, self.cells)
+        }
+    }
+
     /// The cells between the ends. The fill or bright mark follows what's playing, with a dim mark
-    /// for what's set. Over a filled cell, that mark is cut out of the fill, and the moving edge
-    /// takes its place while passing through its cell, as a cell can only show one of them.
+    /// for what's set once they're a cell or more apart. Over a filled cell, that mark is cut out
+    /// of the fill. Nearer, the bar is drawn as what's playing alone, as the mark couldn't be told
+    /// from the edge, and a value moving about its setting would have it come and go each frame
+    /// as a thin line flickering at the edge (#421).
     pub fn spans(&self) -> Vec<Span<'static>> {
         let bright = Style::new().fg(theme::MAUVE);
         let bar = self.text(self.live);
-        if self.set == self.live {
+        if self.eighths(self.set).abs_diff(self.eighths(self.live)) < 8 {
             return vec![Span::styled(bar, bright)];
         }
         let mark = bar_cell(self.set, self.cells);
@@ -106,12 +117,17 @@ impl Widget for ValueBar {
 
 /// A bar for a value, full at `FF`, filling all of its cells. Only `00` leaves them empty.
 pub fn level_bar(value: u8, cells: usize) -> String {
-    let eighths = (usize::from(value) * cells * 8 / 255).max(usize::from(value > 0));
+    let eighths = level_eighths(value, cells);
     let mut bar = "█".repeat(eighths / 8);
     if eighths % 8 > 0 {
         bar.push(EIGHTHS[eighths % 8 - 1]);
     }
     format!("{bar:<cells$}")
+}
+
+/// How far a level bar is filled, in eighths of a cell.
+fn level_eighths(value: u8, cells: usize) -> usize {
+    (usize::from(value) * cells * 8 / 255).max(usize::from(value > 0))
 }
 
 /// A mark for a value either side of a centre, like pan, filling all of the bar's cells.
@@ -120,6 +136,15 @@ pub fn centre_bar(value: u8, cells: usize) -> String {
         "{:<cells$}",
         format!("{}│", " ".repeat(bar_cell(value, cells)))
     )
+}
+
+/// What a value is playing with, as a report says, moved by as much as its setting has moved
+/// since the version the report was of: what the setting was then, and is now. A report is a
+/// frame or so behind a setting being changed, so the fill would trail the hand and a mark for
+/// the setting would flicker at its edge; this way it follows the hand at once, and what
+/// modulation adds keeps moving it (#421).
+pub fn moved_since(live: u8, then: u8, now: u8) -> u8 {
+    (i16::from(live) + i16::from(now) - i16::from(then)).clamp(0, 255) as u8
 }
 
 /// The cell of a bar a value's mark goes in.

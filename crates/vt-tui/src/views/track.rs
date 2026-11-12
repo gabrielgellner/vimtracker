@@ -22,7 +22,7 @@ use crate::theme;
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page};
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
-use crate::views::widgets::bar::ValueBar;
+use crate::views::widgets::bar::{ValueBar, moved_since};
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid, faded};
 use crate::views::widgets::group;
@@ -341,7 +341,18 @@ impl CellSource for SlotCells<'_> {
             return None;
         }
         let set = insert.value(param);
-        let live = self.app.live.map_or(set, |live| live.inserts[slot][param]);
+        // Only from a report of the same effect, as another's settings mean something else.
+        let then = self
+            .app
+            .reported_track()
+            .map(|track| track.inserts[slot])
+            .filter(|then| std::mem::discriminant(then) == std::mem::discriminant(&insert));
+        let live = match (self.app.live, then) {
+            (Some(live), Some(then)) => {
+                moved_since(live.inserts[slot][param], then.value(param), set)
+            }
+            _ => set,
+        };
         Some(ValueBar::new(set, BAR_CELLS).playing(live))
     }
 }

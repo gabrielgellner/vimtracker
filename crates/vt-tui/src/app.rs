@@ -1,6 +1,6 @@
 //! Application state, and what each key does. It runs without a terminal, so tests can drive it.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -136,6 +136,10 @@ pub const HOLD_TIME: Duration = Duration::from_millis(300);
 /// stopped and nothing is playing.
 const PLAYHEADS_KEPT: Duration = Duration::from_millis(250);
 
+/// How many versions sent are kept for a report to be of. The callback takes each within a block,
+/// so only a few are ever waiting; these are for when it has stopped.
+const SENT_KEPT: usize = 64;
+
 /// Why `:e` and `:new` refused, and the ways on.
 pub(crate) const UNSAVED_OPEN: &str = "Unsaved changes: :w to save, or :e! to discard them";
 const UNSAVED_NEW: &str = "Unsaved changes: :w to save, or :new! to discard them";
@@ -218,6 +222,12 @@ pub struct App {
     /// The version last sent to the audio thread, whose bank entries the next keeps where they're
     /// the same.
     published: Option<Arc<Published>>,
+    /// The songs of the versions sent that a report could still be of, by their ids, oldest
+    /// first, and the song the live values were worked out from, so a bar draws what's playing
+    /// against the setting it was reported with (#421). The engine starts on the song the app
+    /// starts with, before any version is sent.
+    sent: VecDeque<(u64, Arc<Song>)>,
+    live_song: Option<Arc<Song>>,
     pub rate: u32,
     /// The audio output as it plays, and what the audio page chooses from.
     pub audio: AudioState,
@@ -475,6 +485,8 @@ impl App {
             samples,
             handle,
             published: None,
+            sent: VecDeque::new(),
+            live_song: None,
             rate,
             mode: Mode::Normal,
             view: View::Phrase,
@@ -610,6 +622,7 @@ impl App {
             last_selection: None,
             last_change: None,
         };
+        app.live_song = Some(Arc::clone(app.song()));
         app.send_live();
         app
     }
@@ -630,6 +643,9 @@ impl App {
         self.playhead = 0;
         self.places = [TrackPlace::default(); MAX_TRACKS];
         self.live = None;
+        // The new engine starts on the song as it is.
+        self.sent.clear();
+        self.live_song = Some(Arc::clone(self.song()));
         self.jam = vec![JamState::default(); MAX_TRACKS];
         // Sent again when the next frame finds it differs.
         self.watched = usize::MAX;
@@ -859,8 +875,32 @@ impl App {
             self.published.as_deref(),
         ));
         self.published = Some(Arc::clone(&version));
+        self.sent.push_back((version.id, Arc::clone(&version.song)));
+        if self.sent.len() > SENT_KEPT {
+            self.sent.pop_front();
+        }
         self.handle.publish(version);
         self.analyse_bank();
+    }
+
+    /// Note which version a report is of: the versions before it are done with, as the callback
+    /// never goes back to one, and its song is what the live values were worked out from. A
+    /// report of a version before any still kept, such as the one the engine started on, keeps
+    /// the song it was last of.
+    fn follow_version(&mut self, version: u64) {
+        while self.sent.front().is_some_and(|(id, _)| *id < version) {
+            self.sent.pop_front();
+        }
+        if let Some((_, song)) = self.sent.front().filter(|(id, _)| *id == version) {
+            self.live_song = Some(Arc::clone(song));
+        }
+    }
+
+    /// The cursor's track as the latest report's live values were worked out from, which is a
+    /// frame or so behind the song while it's being changed.
+    pub fn reported_track(&self) -> Option<&Track> {
+        let song = self.live_song.as_ref().unwrap_or_else(|| self.song());
+        song.tracks.get(self.cursor.track)
     }
 
     /// Do the work due each frame: send waiting versions and read the callback's report.
@@ -897,6 +937,7 @@ impl App {
             self.loop_waiting = report.loop_waiting;
             self.realigning_tracks = report.realigning_tracks;
             self.live = (report.watched == track).then_some(report.live);
+            self.follow_version(report.version);
             self.follow_faders(&report.faders, now);
             self.playheads = if report.watched == track {
                 report.playheads
