@@ -14,6 +14,13 @@ const FALL_RATE: f32 = 4.0;
 const SNAP_RATE: f32 = 8.0;
 /// How steeply a bent attack starts slowly, also from Peaks.
 const RISE_POWER: f32 = 3.32;
+/// How far `Analog`'s attack bends: a capacitor charging toward 1.5 and switched to its decay at
+/// 1, as Surge's analog envelope is, which is `1.5 (1 - 3^-t)`, exact at 1.
+const ANALOG_RISE_RATE: f32 = 1.098_612_3; // ln 3
+/// How far `Analog`'s decays and releases bend: a capacitor discharging, which would take its time
+/// to fall 60 dB, as a reverb's time is given; scaled to land, as every fall is, it's 60 dB down
+/// nine tenths of the way.
+const ANALOG_FALL_RATE: f32 = 6.907_755; // ln 1000
 
 /// How an envelope's stages bend, its mode (#46): one curve for the whole envelope rather than one
 /// for each stage, as #46 suggested trying first. A decay or release is Vital's `powerScale`,
@@ -32,11 +39,14 @@ pub enum Curve {
     /// `Exp`'s attack, and falls about twice as fast at first, with a longer tail: a snappier
     /// drum or pluck.
     Snap,
+    /// A capacitor charging and discharging, as an analog envelope does: an attack that starts
+    /// fast and slows into full, and falls that are true RC curves, 30 dB down halfway.
+    Analog,
 }
 
 impl Curve {
     /// Every curve, in the order `=` goes through them.
-    pub const ALL: [Self; 3] = [Self::Exp, Self::Lin, Self::Snap];
+    pub const ALL: [Self; 4] = [Self::Exp, Self::Lin, Self::Snap, Self::Analog];
 
     /// The name in the slot's title.
     pub fn name(self) -> &'static str {
@@ -44,24 +54,40 @@ impl Curve {
             Self::Exp => "Exp",
             Self::Lin => "Lin",
             Self::Snap => "Snap",
+            Self::Analog => "Analog",
         }
     }
 
     /// What it does, for a list to choose from.
     pub fn meaning(self) -> &'static str {
         match self {
-            Self::Exp => "falls fast then slow, as an analog envelope",
+            Self::Exp => "rises slowly, falls fast then slow",
             Self::Lin => "straight lines",
             Self::Snap => "falls twice as fast, then a long tail",
+            Self::Analog => "rises fast and slows, as a capacitor charges",
         }
     }
 
-    /// Where an attack is at `t` from 0 to 1. Bent, it starts slowly, so a long one sounds even.
+    /// Where an attack is at `t` from 0 to 1. Bent, it starts slowly, so a long one sounds even;
+    /// `Analog`'s starts fast and slows into full.
     #[inline]
     pub fn rise(self, t: f32) -> f32 {
         match self {
             Self::Lin => t,
             Self::Exp | Self::Snap => t.powf(RISE_POWER),
+            Self::Analog => bent(ANALOG_RISE_RATE, t),
+        }
+    }
+
+    /// How far through an attack it reaches `level`, from 0 to 1: [`Curve::rise`] turned round,
+    /// so an attack started from a level can start where its curve has it (#467).
+    #[inline]
+    pub fn rise_time(self, level: f32) -> f32 {
+        let level = level.clamp(0.0, 1.0);
+        match self {
+            Self::Lin => level,
+            Self::Exp | Self::Snap => level.powf(RISE_POWER.recip()),
+            Self::Analog => unbent(ANALOG_RISE_RATE, level),
         }
     }
 
@@ -73,6 +99,7 @@ impl Curve {
             Self::Exp => bent(FALL_RATE, t),
             Self::Lin => t,
             Self::Snap => bent(SNAP_RATE, t),
+            Self::Analog => bent(ANALOG_FALL_RATE, t),
         }
     }
 }
@@ -81,6 +108,39 @@ impl Curve {
 #[inline]
 fn bent(rate: f32, t: f32) -> f32 {
     (1.0 - (-rate * t).exp()) / (1.0 - (-rate).exp())
+}
+
+/// Where [`bent`] reaches `level`.
+#[inline]
+fn unbent(rate: f32, level: f32) -> f32 {
+    (-(1.0 - level * (1.0 - (-rate).exp())).ln() / rate).min(1.0)
+}
+
+/// Where an attack is some frames after a note: rising, this share of the way through it, or done
+/// so many frames ago.
+enum Attack {
+    Rising(f32),
+    Done(u64),
+}
+
+/// Where an attack started from `from` rather than from nothing is: from where its curve reaches
+/// that level (#467), so it keeps its shape and is only as long as what's left of it, as an analog
+/// envelope's capacitor charges on from where it is, and the stages after it come as much sooner.
+/// From nothing, it's worked out exactly as it always was.
+#[inline]
+fn attack_at(curve: Curve, attack: u64, frames: u64, from: f32) -> Attack {
+    if from <= 0.0 || attack == 0 {
+        return match frames.checked_sub(attack) {
+            None => Attack::Rising(frames as f32 / attack as f32),
+            Some(after) => Attack::Done(after),
+        };
+    }
+    let start = curve.rise_time(from);
+    let left = ((1.0 - start) * attack as f32).round() as u64;
+    match frames.checked_sub(left) {
+        None => Attack::Rising(start + frames as f32 / attack as f32),
+        Some(after) => Attack::Done(after),
+    }
 }
 
 /// An ADSR envelope's own settings: its times, its sustain and whether each note starts it from
@@ -143,15 +203,16 @@ impl Adsr {
         f32::from(self.sustain) / 100.0
     }
 
-    /// The level some frames after a note, starting from where it was.
+    /// The level some frames after a note, starting from where it was: an attack from a level
+    /// starts where its curve reaches it.
     #[inline]
     pub fn held(&self, frames: u64, from: f32, rate: u32) -> f32 {
-        let attack = frames_of(self.attack_ms, rate);
-        if frames < attack {
-            return from + (1.0 - from) * self.curve.rise(frames as f32 / attack as f32);
-        }
+        let into_decay = match attack_at(self.curve, frames_of(self.attack_ms, rate), frames, from)
+        {
+            Attack::Rising(at) => return self.curve.rise(at),
+            Attack::Done(after) => after,
+        };
         let decay = frames_of(self.decay_ms, rate);
-        let into_decay = frames - attack;
         let sustain = self.sustain_level();
         if into_decay < decay {
             return 1.0 + (sustain - 1.0) * self.curve.fall(into_decay as f32 / decay as f32);
@@ -238,23 +299,21 @@ impl Ahd {
         matches!(self.hold, Hold::Ms(_))
     }
 
-    /// The level some frames after a note, starting from where it was: its attack, its hold,
-    /// then, for a timed hold, its decay.
+    /// The level some frames after a note, starting from where it was: its attack, from where its
+    /// curve reaches that level, its hold, then, for a timed hold, its decay.
     #[inline]
     pub fn held(&self, frames: u64, from: f32, rate: u32) -> f32 {
-        let attack = frames_of(self.attack_ms, rate);
-        if frames < attack {
-            return from + (1.0 - from) * self.curve.rise(frames as f32 / attack as f32);
-        }
+        let into_hold = match attack_at(self.curve, frames_of(self.attack_ms, rate), frames, from) {
+            Attack::Rising(at) => return self.curve.rise(at),
+            Attack::Done(after) => after,
+        };
         let Hold::Ms(hold) = self.hold else {
             return 1.0;
         };
-        let into_decay = frames - attack;
         let hold = frames_of(hold, rate);
-        if into_decay < hold {
+        let Some(into_decay) = into_hold.checked_sub(hold) else {
             return 1.0;
-        }
-        let into_decay = into_decay - hold;
+        };
         let decay = frames_of(self.decay_ms, rate);
         if into_decay < decay {
             1.0 - self.curve.fall(into_decay as f32 / decay as f32)
@@ -501,6 +560,75 @@ mod tests {
         close(env.held(0, 0.6, RATE), 0.6);
         close(env.held(480, 0.6, RATE), 1.0);
         assert!(env.held(240, 0.6, RATE) > 0.6);
+    }
+
+    #[test]
+    fn analog_charges_toward_one_and_a_half_and_discharges_60_db_in_its_time() {
+        for i in 0..=20 {
+            let t = i as f32 / 20.0;
+            close(Curve::Analog.rise(t), 1.5 * (1.0 - 3.0_f32.powf(-t)));
+        }
+        // It starts fast, where Exp starts slowly: a quarter of the way, it's most of the way up.
+        assert!(Curve::Analog.rise(0.25) > 0.35 && Curve::Exp.rise(0.25) < 0.02);
+        // A true RC fall: halfway, 30 dB down, and 60 dB nine tenths of the way, as it lands.
+        let db = |t: f32| 20.0 * (1.0 - Curve::Analog.fall(t)).log10();
+        assert!((db(0.5) + 30.0).abs() < 0.5, "{}", db(0.5));
+        assert!((db(0.9) + 60.0).abs() < 0.5, "{}", db(0.9));
+    }
+
+    #[test]
+    fn every_curves_rise_time_turns_its_rise_round() {
+        for curve in Curve::ALL {
+            for i in 0..=20 {
+                let t = i as f32 / 20.0;
+                close(curve.rise_time(curve.rise(t)), t);
+            }
+            close(curve.rise_time(0.0), 0.0);
+            close(curve.rise_time(1.0), 1.0);
+        }
+    }
+
+    #[test]
+    fn an_attack_from_a_level_keeps_its_shape_and_only_what_is_left_of_its_time() {
+        for curve in Curve::ALL {
+            let env = Adsr {
+                curve,
+                ..adsr(100, 100, 0, 50)
+            };
+            let from = 0.6;
+            // It starts where it was, and is as far on as a fresh attack is where it reaches that.
+            close(env.held(0, from, RATE), from);
+            let skipped = (curve.rise_time(from) * 4800.0).round() as u64;
+            for frames in [100, 700, 1500, 4000, 6000, 9000] {
+                close(
+                    env.held(frames, from, RATE),
+                    env.held(frames + skipped, 0.0, RATE),
+                );
+            }
+            // So it reaches full that much sooner, and its decay starts then.
+            close(env.held(4800 - skipped, from, RATE), 1.0);
+            assert!(env.held(4800, from, RATE) < 1.0 - 1e-3, "{curve:?}");
+        }
+        // At full already, it goes straight into its decay.
+        let env = adsr(100, 100, 0, 50);
+        assert!(env.held(10, 1.0, RATE) < 1.0);
+        // An AHD's does the same.
+        let ahd = ahd(100, Hold::Ms(10), 100);
+        let skipped = (Curve::Exp.rise_time(0.5) * 4800.0).round() as u64;
+        close(ahd.held(0, 0.5, RATE), 0.5);
+        close(
+            ahd.held(5000, 0.5, RATE),
+            ahd.held(5000 + skipped, 0.0, RATE),
+        );
+    }
+
+    #[test]
+    fn an_attack_from_nothing_is_worked_out_as_it_always_was() {
+        let env = adsr(10, 0, 100, 0);
+        for frames in 0..480 {
+            let before = Curve::Exp.rise(frames as f32 / 480.0);
+            assert_eq!(env.held(frames, 0.0, RATE).to_bits(), before.to_bits());
+        }
     }
 
     #[test]
