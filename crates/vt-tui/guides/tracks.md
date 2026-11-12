@@ -15,7 +15,7 @@ each machine.
 
 | Keys | Does |
 |---|---|
-| `H` `L` | The previous or next page: Sound, Mod or FX, back where you left it |
+| `H` `L` | The previous or next page, back where you left it |
 | `W` `B`, `]b` `[b` | Next or previous track |
 | `j` `k` | Next or previous row, back in the column they left |
 | `gg` `G` | The top or bottom of this column of devices |
