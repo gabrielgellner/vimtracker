@@ -77,7 +77,7 @@ impl DistortType {
     }
 }
 
-/// How a chorus moves its copies, after Mutable Instruments' Rings.
+/// How a chorus moves its copies: Mutable Instruments' Rings' two, then a Roland Juno's three.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ChorusType {
     /// Two copies, slowly drifting apart from each other.
@@ -85,13 +85,31 @@ pub enum ChorusType {
     Chorus,
     /// Three copies on a slow and a fast wobble, a third of a turn apart, as a string machine has.
     Ensemble,
+    /// A Juno's chorus I: a short delay on each side swept by a slow triangle, the two sides in
+    /// antiphase.
+    JunoI,
+    /// Its chorus II: the same, a little faster.
+    JunoII,
+    /// Both buttons down: a fast, shallow wobble, nearer a vibrato.
+    JunoBoth,
 }
 
 impl ChorusType {
-    pub const ALL: [Self; 2] = [Self::Chorus, Self::Ensemble];
+    pub const ALL: [Self; 5] = [
+        Self::Chorus,
+        Self::Ensemble,
+        Self::JunoI,
+        Self::JunoII,
+        Self::JunoBoth,
+    ];
+
+    /// Whether it's one of the Juno's.
+    pub fn is_juno(self) -> bool {
+        matches!(self, Self::JunoI | Self::JunoII | Self::JunoBoth)
+    }
 }
 
-const CHORUS_TYPE_NAMES: [&str; 2] = ["Chorus", "Ensemble"];
+const CHORUS_TYPE_NAMES: [&str; 5] = ["Chorus", "Ensemble", "Juno I", "Juno II", "Juno I+II"];
 
 /// A compressor's character, each modelled on its own reference and tuned against it (#338).
 /// `VCA`, `FET` and `Diode` come after these, in this order, so a song's types keep their places.
@@ -1721,7 +1739,7 @@ impl Insert {
             Self::Distort(_) => "Clips, folds or crushes the sound, or drives it as a pedal",
             Self::Delay(_) => "Repeats the sound, bouncing side to side",
             Self::Reverb(_) => "Puts the sound in a room",
-            Self::Chorus(_) => "Thickens it with drifting copies, or an ensemble",
+            Self::Chorus(_) => "Thickens it with drifting copies, an ensemble or a Juno's",
             Self::Eq(_) => "Shapes its tone: a low and a high shelf, and a middle band",
             Self::Compressor(_) => "Evens out its level, or ducks it under another track",
             Self::Limit(_) => "Keeps its peaks under a ceiling, looking 2 ms ahead",
