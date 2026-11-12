@@ -187,6 +187,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 TrackControl::SendA => track.send_a,
                 TrackControl::SendB => track.send_b,
                 TrackControl::Drive => track.drive,
+                TrackControl::Punch => track.punch,
                 TrackControl::LowCut => track.low_cut,
                 TrackControl::HighCut => track.high_cut,
                 TrackControl::Pitch => track.pitch,

@@ -358,6 +358,23 @@ chaotic tones that never quite settle.
 | `Amount` | How hard it bends: a pure sine at `00`, chaotic going up |
 | `Ratio` | The second sine's pitch, catching on ratios. 1:1 from `6C` to `6F` |
 
+`VOSIM` is two sines at pitches of their own, in a bell-shaped window that starts again each
+cycle of the note, for nasal, vocal and buzzy leads. The note sets how often it repeats; the
+sines stay where they're set, as a voice's formants do.
+
+| Setting | Does |
+|---|---|
+| `Formant` | The first sine's pitch, MIDI's lowest note at `00`, its highest at `FF` |
+| `Second` | The second, quieter sine's, the same way |
+
+`FOF` is a saw through five formant filters, from Braids' table of a singer's vowels, for
+choirs, chants and singing pads.
+
+| Setting | Does |
+|---|---|
+| `Vowel` | a at `00`, then e, i and o, to u at `FF`, blending between |
+| `Voice` | A bass at `00`, tenor, countertenor and alto, a soprano at `FF` |
+
 A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
 `Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX
 slot lists them under the voice's name, and an LFO's or envelope's `Dest` lists them by

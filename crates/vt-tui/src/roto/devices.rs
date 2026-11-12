@@ -231,7 +231,7 @@ pub fn family(control: Control, track: &Track) -> Family {
         Control::Base(TrackControl::LowCut | TrackControl::HighCut)
         | Control::FilterType
         | Control::FilterMode => Family::Tone,
-        Control::Base(TrackControl::Drive) => Family::Character,
+        Control::Base(TrackControl::Drive | TrackControl::Punch) => Family::Character,
         Control::GateLength
         | Control::Speed
         | Control::Groove
@@ -437,6 +437,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             None => {
                 let coarse = match which {
                     TrackControl::Drive => track.drive,
+                    TrackControl::Punch => track.punch,
                     TrackControl::LowCut => track.low_cut,
                     _ => track.high_cut,
                 };

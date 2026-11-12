@@ -927,6 +927,8 @@ pub struct TrackState {
     /// Held `MODE`, a place in the list of modes, which the filter's type may not offer.
     filter_mode: f32,
     drive: Smoothed,
+    /// Held `Punch`, which only the clean types hear.
+    punch: Smoothed,
     trim: [Trim; 2],
     low_cut: Smoothed,
     /// What each of its effects keeps.
@@ -1173,6 +1175,7 @@ impl TrackState {
             filter_type: FilterType::LowPass,
             filter_mode: 0.0,
             drive: Smoothed::at(0.0),
+            punch: Smoothed::at(0.0),
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
             inserts: std::array::from_fn(|_| InsertState::default()),
@@ -1533,6 +1536,7 @@ impl TrackState {
             self.coefficients = None;
         }
         self.drive.target = f32::from(track.drive) / 255.0;
+        self.punch.target = f32::from(track.punch) / 255.0;
         self.low_cut.target = f32::from(track.low_cut) / 255.0;
         self.high_cut.target = f32::from(track.high_cut) / 255.0;
         self.cut_offset.target = offsets[SettingId::CUT.index()];
@@ -2276,6 +2280,7 @@ impl TrackState {
         self.pan_envelope.settle();
         self.inserts.iter_mut().for_each(InsertState::settle);
         self.drive.settle();
+        self.punch.settle();
         self.low_cut.settle();
         self.high_cut.settle();
         self.filter.iter_mut().for_each(Channel::settle);
@@ -2375,6 +2380,7 @@ impl TrackState {
             (self.pan.next(smoothing) + self.pan_offset.next(fast) + self.pan_envelope.next(fast))
                 .clamp(0.0, 1.0);
         let drive = self.drive.next(smoothing);
+        let punch = self.punch.next(smoothing);
         let open = self.filter_type == FilterType::LowPass
             && cutoff > 0.999
             && resonance < 0.001
@@ -2386,7 +2392,11 @@ impl TrackState {
         } else {
             if self.filter_countdown == 0 || self.coefficients.is_none() {
                 let mode = self.playing_mode();
-                let c = Coefficients::with_mode(cutoff, resonance, mode, rate);
+                let mut c = Coefficients::with_mode(cutoff, resonance, mode, rate);
+                // A punch this small is none, so the filter is as it was without it.
+                if punch >= 0.001 && self.filter_type.has_punch() {
+                    c = c.punched(punch, rate);
+                }
                 match &mut self.coefficients {
                     Some(ramp) => ramp.toward(&c, FILTER_UPDATE_FRAMES),
                     None => self.coefficients = Some(Ramp::at(c)),
@@ -2796,6 +2806,25 @@ mod tests {
         assert!((l * l + r * r - 2.0).abs() < 1e-5);
     }
 
+    /// A track's state as it plays it: its values from the top, then its filter, drive, punch
+    /// and utility filter, which modulating takes from the track, all settled.
+    fn playing(track: &Track, rate: u32) -> TrackState {
+        let mut state = from_the_top(track);
+        let mut memory = MemoryPool::for_song(&vt_model::song::Song::new(1), rate);
+        let now = SongTime {
+            tick: 0.0,
+            clock: 0,
+            rate,
+            seed: 0,
+            frames_per_tick: 100.0,
+            rendered: 0,
+            scale: Default::default(),
+        };
+        state.modulate(track, 0, now, true, &mut memory);
+        state.settle();
+        state
+    }
+
     #[test]
     fn a_slot_in_scale_moves_the_note_to_the_scales_nearest() {
         use vt_model::scale::{Scale, ScaleKind};
@@ -2841,7 +2870,7 @@ mod tests {
                     high_cut: 0xE0,
                     ..Track::default()
                 };
-                let (mut hit, mut silent) = (from_the_top(&track), from_the_top(&track));
+                let (mut hit, mut silent) = (playing(&track, rate), playing(&track, rate));
                 for frame in 0..4_000 {
                     let sound = (frame as f32 * 0.05).sin() * 0.5;
                     let (to_hit, to_silent) = if frame == 1_000 {
@@ -2861,6 +2890,37 @@ mod tests {
                     "the meter too"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn punch_is_heard_only_on_the_clean_filter_types() {
+        use crate::dsp::blocks::smoother;
+        let rate = 48_000;
+        let (smoothing, fast) = (
+            smoother::coefficient(rate),
+            smoother::fast_coefficient(rate),
+        );
+        let keys = Keys::default();
+        let render = |filter, punch| {
+            let track = Track {
+                filter,
+                cutoff: 0x20,
+                resonance: 0xFF,
+                punch,
+                ..Track::default()
+            };
+            let mut state = playing(&track, rate);
+            (0..4_800)
+                .map(|frame| {
+                    let strike = if frame < 48 { 1.0 } else { 0.0 };
+                    state.shape([strike; 2], smoothing, fast, rate, &keys).dry[0]
+                })
+                .collect::<Vec<f32>>()
+        };
+        for filter in FilterType::ALL {
+            let (plain, punched) = (render(filter, 0), render(filter, 0xFF));
+            assert_eq!(plain != punched, filter.has_punch(), "{filter:?}");
         }
     }
 }

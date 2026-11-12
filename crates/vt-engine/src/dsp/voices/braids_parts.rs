@@ -53,6 +53,12 @@ pub struct Pitch {
 }
 
 impl Pitch {
+    /// Another note at the same rate.
+    #[inline]
+    pub(super) fn at(self, note: f32) -> Self {
+        Self { note, ..self }
+    }
+
     /// The phase a cycle moves each frame, at a note so many semitones from this one, no higher
     /// than Braids' highest.
     #[inline]

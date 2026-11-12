@@ -183,6 +183,11 @@ impl FilterType {
         }
     }
 
+    /// Whether `Punch` moves it: the clean types, whose state-variable filter it's made for.
+    pub fn has_punch(self) -> bool {
+        !self.saturates()
+    }
+
     /// Whether it has more than one mode, so `Mode` means something on it.
     pub fn has_modes(self) -> bool {
         !self.modes().is_empty()
@@ -433,6 +438,10 @@ pub struct Track {
     /// How hard the filter is driven.
     #[serde(default)]
     pub drive: u8,
+    /// How far a clean filter's cutoff and damping rise as its low-pass swings up, so a ringing
+    /// peak starts higher and falls in pitch as it dies away, after Braids' SVF. `00` is off.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub punch: u8,
     /// The utility filter after it: a high-pass, which `00` turns off.
     #[serde(default)]
     pub low_cut: u8,
@@ -773,6 +782,7 @@ impl Default for Track {
             filter: FilterType::default(),
             filter_mode: FilterMode::default(),
             drive: 0,
+            punch: 0,
             low_cut: 0,
             high_cut: open_cutoff(),
             inserts: Default::default(),
@@ -1029,11 +1039,15 @@ pub enum SynthVoice {
     FeedbackFm,
     /// A sine bent by a second, whose speed its own output moves.
     ChaoticFm,
+    /// Two sines at pitches of their own, windowed each cycle of the note.
+    Vosim,
+    /// A saw through five formant filters, from vowel to vowel.
+    Fof,
 }
 
 impl SynthVoice {
     /// Every voice, in the order a list shows them.
-    pub const ALL: [Self; 32] = [
+    pub const ALL: [Self; 34] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
         Self::Acid,
@@ -1066,6 +1080,8 @@ impl SynthVoice {
         Self::ZFilter,
         Self::FeedbackFm,
         Self::ChaoticFm,
+        Self::Vosim,
+        Self::Fof,
     ];
 
     /// The name on screen.
@@ -1103,6 +1119,8 @@ impl SynthVoice {
             Self::ZFilter => "Z Filter",
             Self::FeedbackFm => "FB FM",
             Self::ChaoticFm => "Chaos FM",
+            Self::Vosim => "VOSIM",
+            Self::Fof => "FOF",
         }
     }
 
@@ -1141,6 +1159,8 @@ impl SynthVoice {
             Self::ZFilter => "A resonant filter faked by phase, for CZ sweeps",
             Self::FeedbackFm => "FM with feedback, for growling bass and leads",
             Self::ChaoticFm => "FM that never settles, for chaotic tones",
+            Self::Vosim => "Two windowed sines, for nasal and vocal leads",
+            Self::Fof => "A saw through vowel formants, for choirs and pads",
         }
     }
 
@@ -1175,6 +1195,8 @@ impl SynthVoice {
                 | Self::ZFilter
                 | Self::FeedbackFm
                 | Self::ChaoticFm
+                | Self::Vosim
+                | Self::Fof
         )
     }
 
@@ -1193,6 +1215,8 @@ impl SynthVoice {
                 | Self::ZFilter
                 | Self::FeedbackFm
                 | Self::ChaoticFm
+                | Self::Vosim
+                | Self::Fof
         )
     }
 }
@@ -2493,6 +2517,20 @@ mod tests {
         let track: Track = ron::from_str("(mute: false, solo: true)").unwrap();
         assert_eq!(track.level, UNITY_LEVEL);
         assert!(track.solo);
+    }
+
+    #[test]
+    fn a_tracks_punch_saves_and_loads_and_none_is_left_out() {
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        assert_eq!(track.punch, 0);
+        assert!(!ron::to_string(&track).unwrap().contains("punch"));
+        let track = Track {
+            punch: 0x60,
+            ..Track::default()
+        };
+        let text = ron::to_string(&track).unwrap();
+        assert!(text.contains("punch:96"), "{text}");
+        assert_eq!(ron::from_str::<Track>(&text).unwrap().punch, 0x60);
     }
 
     #[test]
