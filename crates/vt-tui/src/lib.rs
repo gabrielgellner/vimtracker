@@ -7,6 +7,7 @@ pub mod app;
 pub mod audio;
 pub mod audio_page;
 pub mod auditioning;
+pub mod automating;
 pub mod autosave;
 pub mod banking;
 pub mod bench;

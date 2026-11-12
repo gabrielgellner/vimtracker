@@ -23,7 +23,7 @@ use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport}
 use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, write_wav};
-use vt_engine::track_state::LiveValues;
+use vt_engine::track_state::{Faders, LiveValues};
 use vt_model::accumulator::{MOST_DEGREES, amount};
 use vt_model::action::{Action, FieldValue, edit};
 use vt_model::condition::Condition;
@@ -267,6 +267,10 @@ pub struct App {
     pub sample_images: Option<(u32, u32)>,
     /// What the cursor's track is playing with right now, and the track the engine reports.
     pub live: Option<LiveValues>,
+    /// Every track's faders as they're heard: where the steps have them, and which a hand has
+    /// taken over, as the engine last said, with what's been asked of it since (decision 174).
+    pub(crate) faders: [Faders; MAX_TRACKS],
+    pub(crate) fader_wishes: Vec<crate::automating::Wish>,
     /// Where each voice playing a sample through the cursor's track is in it, for the sample
     /// page's playheads.
     pub playheads: [Option<Playhead>; PLAYHEADS],
@@ -490,6 +494,8 @@ impl App {
             sample_page: crate::sample_page::SamplePage::default(),
             sample_images: None,
             live: None,
+            faders: [Faders::default(); MAX_TRACKS],
+            fader_wishes: Vec::new(),
             playheads: [None; PLAYHEADS],
             watched: 0,
             project_row: 0,
@@ -891,6 +897,7 @@ impl App {
             self.loop_waiting = report.loop_waiting;
             self.realigning_tracks = report.realigning_tracks;
             self.live = (report.watched == track).then_some(report.live);
+            self.follow_faders(&report.faders, now);
             self.playheads = if report.watched == track {
                 report.playheads
             } else {
@@ -1525,6 +1532,8 @@ impl App {
                 self.realign_track();
                 self.repeats_ignored = true;
             }
+            Cmd::GiveBack => self.give_back_faders(false),
+            Cmd::GiveBackAll => self.give_back_faders(true),
             Cmd::ClearMutes => {
                 // A held mute or solo stays cleared when it's let go.
                 if self.momentary.is_some_and(|held| {
@@ -2734,11 +2743,13 @@ impl App {
         });
     }
 
-    /// Run an action and make the result current.
+    /// Run an action and make the result current. A fader it moves that the steps drive is
+    /// taken over by the hand that moved it.
     pub fn apply(&mut self, action: &Action) {
         match edit(self.song(), action) {
             Ok(next) => {
                 self.say_applied(&next);
+                self.take_over_moved(action);
                 self.history.commit(next);
                 self.dirty = true;
                 self.publish();
@@ -3053,6 +3064,7 @@ impl App {
             Ok(song) => {
                 self.discard_changes();
                 self.handle.send(Command::Return);
+                self.give_back_on_opening();
                 self.samples = Arc::new(SamplePool::default());
                 self.replace_song(song, Some(path.to_path_buf()));
                 self.dirty = false;
@@ -3079,6 +3091,7 @@ impl App {
             Ok(()) => {
                 self.discard_changes();
                 self.handle.send(Command::Return);
+                self.give_back_on_opening();
                 self.samples = Arc::new(SamplePool::default());
                 self.replace_song(song, Some(path.to_path_buf()));
                 self.dirty = false;

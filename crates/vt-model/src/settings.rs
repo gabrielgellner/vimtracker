@@ -235,6 +235,13 @@ impl Kind {
         }
     }
 
+    /// Whether its value has a fine part, two more digits set back: a continuous position's does,
+    /// as a step between two of its values can be heard, and one on the level scale doesn't, as a
+    /// quarter of a dB is its natural step, nor does a list's (decision 175).
+    pub fn has_fine(self) -> bool {
+        matches!(self, Self::Continuous { units, .. } if units != Units::Decibels)
+    }
+
     /// Whether it goes round past either end, as a phase does.
     pub fn wraps(self) -> bool {
         matches!(
@@ -449,7 +456,7 @@ const ON_LEVEL_SCALE: Kind = Kind::Continuous {
 };
 
 /// The track's own, in the order the table keeps them.
-const TRACK: [Entry; 14] = [
+const TRACK: [Entry; 15] = [
     on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
     Entry {
         kind: Kind::Continuous {
@@ -564,11 +571,15 @@ const TRACK: [Entry; 14] = [
         },
         default: 0x80,
     },
+    // The fader, which a step can set as it sets `PAN`, with `VOL` a stage on top of it (decision
+    // 174). Its base is the track's `level`, and modulation can't reach it, as `VOL` is where
+    // modulation moves the volume.
+    on_level_scale("level", "Level", "LEV", UNITY_LEVEL),
 ];
 /// What each of the track's is listed with.
-const TRACK_GROUPS: [&str; 14] = [
+const TRACK_GROUPS: [&str; 15] = [
     "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine", "Filter", "Machine",
-    "Machine", "Machine", "Machine", "Machine", "Machine",
+    "Machine", "Machine", "Machine", "Machine", "Machine", "Output",
 ];
 
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
@@ -1426,6 +1437,19 @@ pub enum Owner {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SettingId(u16);
 
+/// How many faders a track has.
+pub const FADER_COUNT: usize = 4;
+
+/// A track's faders, in the mixer's order: the settings a step's `LEV`, `PAN`, `SNA` and `SNB` set
+/// absolutely, which the mixer, the Output device and the Roto show as the steps move them, and
+/// which a hand takes over from the steps (decision 174).
+pub const FADERS: [SettingId; FADER_COUNT] = [
+    SettingId::LEVEL,
+    SettingId::PAN,
+    SettingId::SEND_A,
+    SettingId::SEND_B,
+];
+
 impl SettingId {
     pub const VOL: Self = Self(0);
     pub const PAN: Self = Self(1);
@@ -1450,6 +1474,8 @@ impl SettingId {
     pub const GLIDE: Self = Self(12);
     /// How far a note's velocity is moved up or down from its own, as [`velocity_delta`] gives it.
     pub const VELOCITY_DELTA: Self = Self(13);
+    /// The track's fader, its `Level`, on the level scale.
+    pub const LEVEL: Self = Self(14);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.
@@ -1472,6 +1498,11 @@ impl SettingId {
     /// Its place, for an array of every setting.
     pub const fn index(self) -> usize {
         self.0 as usize
+    }
+
+    /// Its place among the track's faders, [`FADERS`], if it's one.
+    pub fn fader(self) -> Option<usize> {
+        FADERS.iter().position(|fader| *fader == self)
     }
 
     /// One of the track's own, by its place among them.
@@ -1697,6 +1728,39 @@ mod tests {
         assert_eq!(
             SettingId::from_key("string.decay"),
             SettingId::voice(SynthVoice::String, 2)
+        );
+    }
+
+    #[test]
+    fn the_level_scale_is_two_digits_and_positions_are_four() {
+        for id in [
+            SettingId::VOL,
+            SettingId::LEVEL,
+            SettingId::SEND_A,
+            SettingId::SEND_B,
+        ] {
+            assert!(!id.entry().kind.has_fine(), "{}", id.name());
+            assert!(FxCommand::Set(id).glides(), "{} still glides", id.name());
+        }
+        for id in [
+            SettingId::PAN,
+            SettingId::CUT,
+            SettingId::RES,
+            SettingId::PITCH,
+        ] {
+            assert!(id.entry().kind.has_fine(), "{}", id.name());
+        }
+        assert!(!SettingId::SPEED.entry().kind.has_fine(), "a list");
+        assert_eq!(SettingId::LEVEL.label().as_deref(), Some("LEV"));
+        assert_eq!(SettingId::LEVEL.group(), "Output");
+        assert_eq!(
+            FADERS.map(|id| id.fader()),
+            [Some(0), Some(1), Some(2), Some(3)]
+        );
+        assert_eq!(
+            SettingId::VOL.fader(),
+            None,
+            "VOL is a stage on top, not a fader"
         );
     }
 

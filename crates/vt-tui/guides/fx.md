@@ -3,8 +3,9 @@
 Each step has three FX slots, to the right of its gate. A slot is a
 command and a hex value. A setting that sweeps, like `CUT`, shows four digits,
 `CUT   4080`: the bold pair is the value you type, and the dim pair after it is a
-fine part, for dialling in between two values. A list's value, like `1BITS`,
-and an event's, like `DEL`, are only two digits. Events are in their own colour,
+fine part, for dialling in between two values. One on the level scale, like
+`VOL`, `LEV`, `SNA` and `SNB`, is two digits, as a quarter of a dB is its step,
+and so are a list's value, like `1BITS`, and an event's, like `DEL`. Events are in their own colour,
 a lock the track doesn't have is grey, and empty cells are faint.
 
 `K` on a slot lists the commands this track has, in categories as an LFO's `Dest`
@@ -31,7 +32,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 
 | Command | Sets |
 |---|---|
-| `VOL` | Track gain from the pattern. `E0` is 0 dB, and starts there |
+| `LEV` | The fader, the track's `Level`, on the level scale |
+| `VOL` | Gain on top of the fader. `E0` is 0 dB, and starts there |
 | `PAN` | Pan: `00` is left, `80` centre, `FF` right |
 | `CUT` | Filter cutoff, from 20 Hz to 20 kHz |
 | `RES` | Filter resonance |
@@ -95,8 +97,8 @@ a slot's title, the `Type` of a `Distort`, `Chorus` or `Comp` and the `Mode` of 
 `Source`.
 
 `ACC`, `SMP`, `SLI`, `STA`, `SLEN` and `PLY` are in **Sounds, samples and kits**.
-`VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**. The
-others start from the values on the track page, `Space 4`, each time playback
+`LEV`, `VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**.
+The others start from the values on the track page, `Space 4`, each time playback
 starts from the top. An LFO on that page keeps moving a value around wherever
 a step has put it. See **The track page, envelopes and LFOs**.
 
@@ -119,6 +121,36 @@ still sounding. A note doesn't stop a glide, so a sweep can cross notes, and a g
 uses its own mark, so ending on a lock jumps back at the next note. With no other value to
 slide to, a glide stays where it is, as a lock would. An edit on the track page changes what's
 underneath, so you hear it straight away unless a lock or glide is on top.
+
+## Fader automation and relative modulation
+
+A phrase can move the mixer two ways, as an Ableton clip's envelopes can.
+
+**Fader automation** sets the faders themselves: `LEV` the track's `Level`, `PAN`
+its `Pan`, and `SNA` and `SNB` its sends. While a step drives one, the fader
+shows the step's value, on the mixer, on the Sound page's Output device and on the
+Roto, whose motor follows it, gliding as a glide does. To keep a value after the
+phrase stops, give it `h`: a hold lasts until playback starts from the top again,
+through the transport stopping, the chain moving on to a phrase with nothing for
+it, and the track being muted, as its steps still run underneath. A lock lasts
+until the next note.
+
+**Relative modulation** moves what's heard up and down from the fader, wherever
+the fader is: `VOL`, a stage on top of the fader, and a mod slot's `Dest` on `Vol`,
+`Pan`, `Send A` or `Send B`. The fader stays where it is, and what's heard is a thin
+mark beside it: a line across the mixer's fader, and the mark in the Output
+device's bars. A mod slot can't move `LEV`, as `Vol` is where it moves the volume.
+
+**Taking a fader over.** Moving a fader by hand while the steps drive it, with
+`=` `-` `+` `_`, the wheel, `i`, `x` or a Roto knob, takes it over: from then that
+fader of that track is yours, and the steps' values for it aren't heard. It moves
+from where it was heard, so it doesn't jump. The others carry on following their
+steps. A taken fader has `󰝁` after its value on the mixer and after its name on the
+Sound page, and the status line says `taken over from the steps`. `Space e` gives
+the cursor's track's faders back to the steps, which are heard at once where they
+have them now, and `Space E` gives back every track's, as Live's Re-Enable
+Automation does. A takeover isn't an edit, so `u` doesn't give it back, it isn't
+saved, and opening a song gives every fader back. Playing from the top leaves it.
 
 ## Things that happen once
 
