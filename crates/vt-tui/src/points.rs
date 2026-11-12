@@ -108,6 +108,14 @@ impl App {
                 (play.tune, play.cents) = (semitones, cents);
                 format!("is tuned {semitones:+} st {cents:+} ct")
             }
+            SampleChange::Bars(bars) => {
+                entry.edit.hints.bars = bars;
+                match bars {
+                    Some(1) => "is a bar long, for :slice beat".to_owned(),
+                    Some(bars) => format!("is {bars} bars long, for :slice beat"),
+                    None => "goes by the song's tempo for :slice beat".to_owned(),
+                }
+            }
         };
         self.apply(&Action::SetBankEntry {
             number,

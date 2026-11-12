@@ -469,6 +469,29 @@ time `Knock` goes on: to knock again, it has to go off first, which the next
 note does to a lock. A loud sound driven into it clips softly on the way
 round, as a real tank's driver does.
 
+`Rotary` is a rotary speaker, a Leslie, after the one in Surge: a horn
+spinning over a crossover at 800 Hz and a drum spinning under it, heard
+through two microphones. The horn's pitch wavers as it comes and goes, and
+it swells at whichever side it points to; the drum's low middle swells too,
+and the deep bass under 200 Hz hardly moves. It's for organs first, and
+for guitars, electric pianos and pads. It starts slow, all wet.
+
+| Setting | Does |
+|---|---|
+| `Fast` | Switched on, the rotors spin fast; off, slow |
+| `Inertia` | How long they take to change speed, a Leslie's at `80` |
+| `Doppler` | How far the horn's pitch wavers |
+| `Tremolo` | How far the loudness swells as the rotors turn |
+| `Drive` | How hard its amplifier is driven, from clean at `00` |
+| `Width` | How far apart the microphones are heard, from mono at `00` |
+
+`Fast` is for a step to lock, as an organist flicks the switch: a `1FAST 01`
+on a step speeds a rotary in slot 1 up, and the next note slows it again,
+or a hold mark keeps it fast. The horn is light and gets there in about a
+second; the drum is heavy and takes about five, so for a while the two turn
+at different speeds, the sound of a Leslie changing over. `Inertia` at
+`00` changes at once, and `FF` takes twice as long.
+
 `Space` is a huge, bright wash that rings on and on, after Airwindows'
 Galactic: for pads, drones and ambient tails that hang under a whole
 section. It starts half wet with its tank at its biggest, near Galactic's

@@ -539,6 +539,7 @@ background, so the list doesn't wait for it, and the last few are kept.
 | `:sample fade 10ms 0.2` | Fade in and out over these. `off` for none |
 | `:sample gain -3` | Its gain in dB, up to 24 either way |
 | `:sample tune 12 -20` | Its tune, in semitones and cents |
+| `:sample bars 2` | Two bars long, for `:slice beat`; `off` for the tempo |
 
 Wherever a start or an end cuts into the sound, it fades over a millisecond or so, so
 it never clicks. A loop with no crossfade of its own gets one as short. The track's own
@@ -614,6 +615,9 @@ step of depth.
 | Command | Does |
 |---|---|
 | `:slice 16` | Cut it into 16 of the same length |
+| `:slice transients` | A slice at each hit, as its `Sens` finds them |
+| `:slice beat 1/16` | A slice each sixteenth, at the tempo or its bars |
+| `:slice silence` | A slice at each sound after silence |
 | `:slice clear` | Play it whole again |
 | `:slice gain -3` | This slice's own gain, in dB |
 | `:slice pan -25` | Its own pan, from -50 at the left to 50 at the right |
@@ -628,6 +632,22 @@ on. Slicing again moves each step's `SLI` to the new slice holding the sound it
 played, so a pattern keeps its chops, and `u` takes back the slices and the
 steps together. `Play`'s `Thru` plays from the slice on past its end to the
 sample's, as tracker-ce's Play Thru does.
+
+`:slice transients` starts a slice where each sound does, as the sample page's
+`w` stops; silence before the first hit isn't a slice of its own. `Sens`, on
+the sample page's settings row, says how many it finds. `:slice beat` cuts by
+note lengths, from `1/1`, a bar, to `1/128`, at the song's tempo, or by the sample's own
+length if `:sample bars` says how many bars it is; with no length it cuts
+sixteenths. `:slice silence` starts a slice at each sound after 50 ms of
+silence, 48 dB under the sample's peak or quieter, for one-shots recorded one
+after another.
+
+A range before `:slice`, as Vim's ranges of lines, re-slices only the slices
+inside it, and leaves the rest as they were: `:'a,'b slice 8` cuts the slices
+from the one `a` names to the one `b` names into 8, and `:'<,'>slice
+transients` slices the last selection on the sample page, which `:` there
+starts the line with. `%` is the whole sample. A slice's own setting with a
+range changes every slice starting in it, as `:'a,'b slice gain -3`.
 
 `K` on `Slice`, or on a step's `SLI`, lists the slices with where each starts,
 and `g d` on a step's `SLI` shows that slice on the sample page; `C-o` comes

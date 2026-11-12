@@ -168,7 +168,12 @@ fn words<'a>(
 
 /// What can finish a command line, without its leading `:`, as the cursor stands at its end.
 pub fn complete(line: &str, places: Places) -> Completions {
-    let leading = line.len() - line.trim_start().len();
+    // A range before the command, as `'<,'>`, is passed over.
+    let after_range = match command::split_range(line) {
+        Ok((_, rest)) => rest,
+        Err(_) => line.trim_start(),
+    };
+    let leading = line.len() - after_range.len();
     let rest = &line[leading..];
     let Some(space) = rest.find(char::is_whitespace) else {
         return Completions {
@@ -494,6 +499,13 @@ mod tests {
         assert_eq!(texts(&complete("ne", nowhere())), ["new", "new!"]);
         assert!(texts(&complete("e", nowhere())).starts_with(&["e", "e!"]));
         assert!(complete("zz", nowhere()).candidates.is_empty());
+    }
+
+    #[test]
+    fn a_range_before_a_command_is_passed_over() {
+        assert_eq!(tab("'<,'>sli", nowhere()), "'<,'>slice");
+        assert_eq!(tab("'a,'b slice tr", nowhere()), "'a,'b slice transients");
+        assert_eq!(tab("%slice si", nowhere()), "%slice silence");
     }
 
     #[test]

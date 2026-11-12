@@ -407,6 +407,28 @@ impl Points {
         )
     }
 
+    /// Where the slices would start with those starting inside a stretch of frames, from its first
+    /// to before its end, put in place of these, as a range re-slices only the slices inside it.
+    /// Those outside stay, and the stretch's end starts one if it's inside the entry, so what
+    /// comes after plays as it did. An entry with no slices is one from its start.
+    pub fn restarted(&self, within: Range<u64>, inside: &[u64], length: u64) -> Vec<u64> {
+        let end = self.end_in(length);
+        let start = self.start.min(end);
+        let mut starts: Vec<u64> = match self.slices.is_empty() {
+            true => vec![start],
+            false => self.slices.iter().map(|slice| slice.start).collect(),
+        };
+        starts.retain(|at| !within.contains(at));
+        starts.extend(inside.iter().filter(|at| within.contains(at)));
+        if within.end < end {
+            starts.push(within.end);
+        }
+        starts.retain(|at| (start..end).contains(at));
+        starts.sort_unstable();
+        starts.dedup();
+        starts
+    }
+
     /// Where the slices would start with one more starting at this frame, splitting the slice it's
     /// in: none if a slice already starts there or it's outside the entry. An entry with no slices
     /// is one from its start, which the split cuts in two.
@@ -484,10 +506,50 @@ pub struct SampleEdit {
     pub points: Points,
     #[serde(default, skip_serializing_if = "is_default_play")]
     pub play: PlayParams,
+    #[serde(default, skip_serializing_if = "Hints::is_default")]
+    pub hints: Hints,
 }
 
 fn is_default_play(play: &PlayParams) -> bool {
     *play == PlayParams::default()
+}
+
+/// What an entry's sound is like, for finding its sounds and slicing it, which never changes how
+/// it plays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hints {
+    /// How readily a rise counts as a sound starting, from 0, the strongest only, to
+    /// [`MOST_SENS`](crate::onsets::MOST_SENS), nearly every one, as Simpler's and Renoise's
+    /// slicing sensitivity. `w` and `b` on the sample page and `:slice transients` go by it.
+    #[serde(default = "default_sens", skip_serializing_if = "is_default_sens")]
+    pub sens: u8,
+    /// How many bars long it is, from its start to its end, for `:slice beat` to cut it by rather
+    /// than the song's tempo. None to go by the tempo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bars: Option<u16>,
+}
+
+fn default_sens() -> u8 {
+    crate::onsets::DEFAULT_SENS
+}
+
+fn is_default_sens(sens: &u8) -> bool {
+    *sens == default_sens()
+}
+
+impl Default for Hints {
+    fn default() -> Self {
+        Self {
+            sens: default_sens(),
+            bars: None,
+        }
+    }
+}
+
+impl Hints {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
 }
 
 /// One sample in the bank.
@@ -517,6 +579,7 @@ impl BankEntry {
                 },
                 points: Points::default(),
                 play: PlayParams::default(),
+                hints: Hints::default(),
             },
         }
     }

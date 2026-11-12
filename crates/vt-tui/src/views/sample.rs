@@ -552,8 +552,8 @@ fn setting_span(state: &SamplePage, shown: &Shown, setting: SampleSetting) -> Sp
     Span::styled(text, style)
 }
 
-/// The entry's points, each named in its colour, so the row is the waveform's key too, and
-/// whether points placed snap to zero crossings.
+/// The entry's points, each named in its colour, so the row is the waveform's key too, whether
+/// points placed snap to zero crossings, and how readily a sound counts as starting.
 fn settings(state: &SamplePage, shown: &Shown) -> Line<'static> {
     let rate = shown.rate();
     let points = &shown.entry.edit.points;
@@ -599,6 +599,8 @@ fn settings(state: &SamplePage, shown: &Shown) -> Line<'static> {
     spans.push(Span::raw("   "));
     spans.push(Span::raw("Snap "));
     spans.push(setting_span(state, shown, SampleSetting::Snap));
+    spans.push(Span::raw("   Sens "));
+    spans.push(setting_span(state, shown, SampleSetting::Sens));
     Line::from(spans)
 }
 
@@ -630,7 +632,7 @@ fn slice_settings(state: &SamplePage, shown: &Shown) -> Line<'static> {
         None => vec![Span::styled("Whole sample", Style::new().fg(SLICE_COLOR))],
     };
     for setting in shown.settings() {
-        if setting == SampleSetting::Snap {
+        if setting.is_entrys() {
             continue;
         }
         spans.push(Span::raw(format!("   {} ", setting.name())));

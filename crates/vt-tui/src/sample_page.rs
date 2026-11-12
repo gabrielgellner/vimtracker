@@ -1,7 +1,8 @@
 //! The sample page, `Space 0`: the sample the cursor's track plays, as a big waveform to move over
 //! with Vim's motions. A sample is a buffer and a cell column is a character, but the cursor is a
 //! line placed to the pixel, so `h` and `l` move a pixel at the zoom shown, speeding up to a column
-//! as they're held, `0` and `$` go to the slice's ends, and `zi` and `zo` zoom on the cursor.
+//! as they're held, `0` and `$` go to the slice's ends, `w` `b` and `e` go by sound as Vim's go by
+//! word, and `zi` and `zo` zoom on the cursor.
 //! `placing.rs` edits the entry's points from here, `sample_settings.rs` its settings, and `v`
 //! selects frames to hear.
 //!
@@ -13,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use vt_model::analysis::{Analysis, Pyramid, SILENCE_DB};
 use vt_model::bank::{BankEntry, ContentHash, Points};
+use vt_model::onsets::decay;
 use vt_model::sample::SampleData;
 use vt_model::samples::Rates;
 use vt_model::selection::Motion;
@@ -51,6 +53,16 @@ pub enum SampleKey {
     /// `]]` and `[[`: the next or previous point of any kind.
     NextPoint,
     PreviousPoint,
+    /// `w` and `b`: the next or previous sound's start, its onset, as `Sens` finds them, as Vim's
+    /// go by word.
+    NextSound,
+    PreviousSound,
+    /// `e`: where the sound decays, or the next one's, as Vim's goes to a word's end.
+    SoundEnd,
+    /// `is` and `ip` while selecting: this sound, from its onset to where it decays, and this
+    /// slice, as Vim's text objects are a word and a paragraph.
+    ThisSound,
+    ThisSlice,
     /// `'` and a letter: the slice the letter names, as a jump.
     Mark,
     /// `]'` and `['`: the next or previous slice a letter names, as a jump.
@@ -259,6 +271,41 @@ impl Shown {
         points.sort_unstable();
         points.dedup();
         points
+    }
+
+    /// Where the sounds start that the entry's `Sens` finds, in order.
+    pub fn onsets(&self) -> Vec<u64> {
+        self.analysis.onsets(self.entry.edit.hints.sens)
+    }
+
+    /// The frames of the sound starting at one of these onsets, by its place among them: from it
+    /// to where it decays, before the next one starts.
+    pub fn sound(&self, onsets: &[u64], at: usize) -> std::ops::Range<u64> {
+        let start = onsets[at];
+        let next = onsets.get(at + 1).copied().unwrap_or(self.length());
+        start..decay(&self.analysis.pyramid, start, next).max(start + 1)
+    }
+
+    /// The place among these onsets of the sound a frame is in: the last to start at or before
+    /// it, or the first if none has.
+    pub fn sound_at(onsets: &[u64], frame: u64) -> usize {
+        onsets
+            .iter()
+            .rposition(|onset| *onset <= frame)
+            .unwrap_or(0)
+    }
+
+    /// The first frame of a stretch louder than a level in any channel, as the pool holds the
+    /// file's frames, if any is.
+    pub fn first_above(&self, frames: std::ops::Range<u64>, level: f32) -> Option<u64> {
+        let (data, rates) = self.frames.as_ref()?;
+        let channels = self.analysis.channels().min(2);
+        frames.into_iter().find(|frame| {
+            let at = rates.loaded_frame(*frame) as usize;
+            data.frames
+                .get(at)
+                .is_some_and(|both| both[..channels].iter().any(|s| s.abs() > level))
+        })
     }
 
     /// The first or last frame of a stretch whose sound is above [`SILENCE_DB`], in any channel.
@@ -529,6 +576,11 @@ impl App {
                 track + 1
             ));
         };
+        self.shown_of(number, entry)
+    }
+
+    /// A bank entry by its number, with its analysis, as the page would show it, or why it can't.
+    pub fn shown_of(&self, number: u8, entry: &BankEntry) -> Result<Shown, String> {
         let Some(source) = entry.source() else {
             return Err(format!("Sample {number:02X} has no file"));
         };
@@ -830,6 +882,79 @@ impl App {
                     None => self.status = "No point further that way".to_owned(),
                 }
             }
+            SampleKey::NextSound | SampleKey::PreviousSound => {
+                let later = key == SampleKey::NextSound;
+                let onsets = shown.onsets();
+                let cursor = page.cursor;
+                // As far as there are sounds, as a count past the last stops on it.
+                let found = if later {
+                    let first = onsets.partition_point(|onset| *onset <= cursor);
+                    let last = onsets.len().saturating_sub(1);
+                    onsets.get((first + times as usize - 1).min(last).max(first))
+                } else {
+                    let past = onsets.partition_point(|onset| *onset < cursor);
+                    past.checked_sub(1)
+                        .map(|last| &onsets[last.saturating_sub(times as usize - 1)])
+                };
+                match found {
+                    Some(frame) => page.go(*frame, length),
+                    None if onsets.is_empty() => self.status = no_sounds(shown),
+                    None => {
+                        self.status =
+                            "No sound further that way: a higher Sens finds more".to_owned()
+                    }
+                }
+            }
+            SampleKey::SoundEnd => {
+                let onsets = shown.onsets();
+                if onsets.is_empty() {
+                    self.status = no_sounds(shown);
+                    return;
+                }
+                let mut at = Shown::sound_at(&onsets, page.cursor);
+                let mut to = page.cursor;
+                for _ in 0..times {
+                    // Its last frame, as Vim's `e` lands on a word's last character, or the next
+                    // sound's from there.
+                    let mut end = shown.sound(&onsets, at).end - 1;
+                    if end <= to && at + 1 < onsets.len() {
+                        at += 1;
+                        end = shown.sound(&onsets, at).end - 1;
+                    }
+                    if end <= to {
+                        break;
+                    }
+                    to = end;
+                }
+                if to == page.cursor {
+                    self.status = "No sound ends further that way".to_owned();
+                } else {
+                    page.go(to, length);
+                }
+            }
+            SampleKey::ThisSound | SampleKey::ThisSlice => {
+                if page.anchor.is_none() {
+                    self.status = "is and ip select while selecting: v starts it".to_owned();
+                    return;
+                }
+                let cursor = page.cursor;
+                let selected = if key == SampleKey::ThisSlice {
+                    let (number, here) = shown.slice_at(cursor);
+                    let last = number + times as usize - 1;
+                    here.start..shown.slice(last).end.max(here.start + 1)
+                } else {
+                    let onsets = shown.onsets();
+                    if onsets.is_empty() {
+                        self.status = no_sounds(shown);
+                        return;
+                    }
+                    let first = Shown::sound_at(&onsets, cursor);
+                    let last = (first + times as usize - 1).min(onsets.len() - 1);
+                    shown.sound(&onsets, first).start..shown.sound(&onsets, last).end
+                };
+                page.anchor = Some(selected.start);
+                page.go(selected.end - 1, length);
+            }
             SampleKey::Mark => self.awaiting_mark = Some(MarkWait::Jump),
             SampleKey::NameSlice => self.awaiting_mark = Some(MarkWait::Name),
             SampleKey::Split => self.split_here(shown),
@@ -901,6 +1026,14 @@ impl App {
             }
         }
     }
+}
+
+/// What the status line says when the entry's `Sens` finds no sound in it.
+fn no_sounds(shown: &Shown) -> String {
+    format!(
+        "No sound found at Sens {}%: a higher Sens, from K, finds more",
+        shown.entry.edit.hints.sens
+    )
 }
 
 /// Zoom in or out by a factor of two this many times.
