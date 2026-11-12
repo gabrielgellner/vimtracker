@@ -457,6 +457,24 @@ time `Knock` goes on: to knock again, it has to go off first, which the next
 note does to a lock. A loud sound driven into it clips softly on the way
 round, as a real tank's driver does.
 
+`Space` is a huge, bright wash that rings on and on, after Airwindows'
+Galactic: for pads, drones and ambient tails that hang under a whole
+section. It starts half wet with its tank at its biggest, near Galactic's
+own settings. `Decay` and `Damp` work as `Reverb`'s do, but its tail doesn't
+darken as it rings, as theirs do: `Damp` darkens what goes in and what comes
+out.
+
+| Setting | Does |
+|---|---|
+| `Size` | How big its tank is: small and metallic at `00`, biggest at `FF` |
+| `Mod` | How fast and far what goes in wobbles in pitch, none at `00` |
+
+With its tank at its biggest, its tail takes about four seconds to fall away
+at `00`, eight at `80`, fifteen at `C0` and well over a minute at `FF`,
+though it always does. The longer it rings, the less of each new sound goes in, so a long
+`Decay` builds slowly as notes pile up. Hold a chord through it with `Mix` at
+`FF` on a return for an endless pad.
+
 `Pitch` shifts the sound up or down without changing its length, after the
 pitch shifter in Mutable Instruments' Clouds. Two grains read the sound back
 faster or slower than it plays, each fading in as the other fades out. It

@@ -1156,9 +1156,26 @@ const SPRING: DeviceLayout = stored(
         button(5, "knock"),
     )],
 );
+/// How long it rings and how big and dark it is, then its wobble, as the reverbs have theirs.
+const SPACE: DeviceLayout = live(
+    "fx/space",
+    &[knobs(
+        "Space",
+        [
+            s("decay"),
+            s("size"),
+            s("damp"),
+            s("mod"),
+            GAP,
+            GAP,
+            s("mix"),
+            s("gain"),
+        ],
+    )],
+);
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 72] = [
+pub const ALL: [&DeviceLayout; 73] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1231,6 +1248,7 @@ pub const ALL: [&DeviceLayout; 72] = [
     &VOWEL,
     &FREQ_SHIFT,
     &SPRING,
+    &SPACE,
 ];
 
 /// A machine's layout.
@@ -1309,6 +1327,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::Vowel(_) => &VOWEL,
         Insert::FreqShift(_) => &FREQ_SHIFT,
         Insert::Spring(_) => &SPRING,
+        Insert::Space(_) => &SPACE,
     }
 }
 
