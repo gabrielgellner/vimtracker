@@ -719,7 +719,7 @@ fn the_track_page_sets_the_filters_type_and_drive() {
     assert_eq!(track(&app).filter, FilterType::LowPass);
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Picker);
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 9);
+    assert_eq!(app.picker.as_ref().unwrap().shown().count(), 10);
     press(&mut app, "/ladder");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app).filter, FilterType::Ladder);
@@ -744,6 +744,11 @@ fn the_track_page_sets_the_filters_type_and_drive() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app).filter, FilterType::Dirty);
     assert!(title_line(&app, "Filter").contains("Dirty"));
+    press(&mut app, "K");
+    press(&mut app, "ob-x");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(track(&app).filter, FilterType::ObX);
+    assert!(title_line(&app, "Filter").contains("OB-X"));
 }
 
 #[test]
@@ -783,7 +788,11 @@ fn the_track_page_sets_the_filters_mode_for_its_type() {
     press(&mut app, "dirty");
     special(&mut app, KeyCode::Enter);
     assert!(title_line(&app, "Filter").contains("HP24"));
-    // Round from the last type to `LP`.
+    // On to `OB-X`, which doesn't offer it and plays its first, then round from the last type to
+    // `LP`.
+    press(&mut app, "=");
+    assert_eq!(track(&app).filter, FilterType::ObX);
+    assert!(title_line(&app, "Filter").contains("LP12"));
     press(&mut app, "=");
     assert_eq!(track(&app).filter, FilterType::LowPass);
     assert!(title_line(&app, "Filter").contains("12 dB"));

@@ -2,6 +2,13 @@
 //! or later: Copyright 2013-2019 Matt Tytel. `Soft` comes from Plaits' `dsp/fx/overdrive.h`, by Emilie
 //! Gillet, MIT: Copyright 2014 Emilie Gillet. The other types' scaling, the mix and state are this
 //! program's own. The guitar pedals, `Overdrive` and `Distortion`, are in [`super::pedal`].
+//!
+//! At the higher rate, `Hard`, `Fold` and `Sine` are anti-aliased with their antiderivatives, as
+//! sst-waveshapers' `ADAA.h` and `Wavefolders.h` do (GPL 3 or later, Copyright the Surge Synth
+//! Team). Surge's one-pole before its shapers (`QuadFilterChain.cpp:63`) is left out: here it took
+//! 3 dB from 10 kHz and 6 dB from 20 kHz at any drive, for less aliasing only on low notes, where
+//! there's little left (decision 187). `Crush` can compand as mu-law does, and `Down` can hold at a whole multiple
+//! of the note, after sst-effects' `BitCrusher.h`.
 
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
@@ -13,7 +20,7 @@ use vt_model::song::level_gain;
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::oversampler::Oversampler;
-use crate::dsp::blocks::sides::{Sides, same_sides};
+use crate::dsp::blocks::sides::{SameBits, Sides, same_sides};
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::dynamics::compressor::Compressor as Dynamics;
 use crate::dsp::dynamics::eq::ThreeBands;
@@ -32,6 +39,14 @@ const MOST_DRIVE_DB: f32 = 30.0;
 const LONGEST_HOLD: f32 = 0.01;
 /// The note a slot's oscillator plays before the track has played one: middle C.
 const DEFAULT_NOTE: f32 = 60.0;
+/// How many octaves over the note `Down` holds at with `Track` on, at `00`. At `FF` it holds once
+/// a cycle of the note.
+const TRACKED_OCTAVES: f32 = 8.0;
+/// Mu-law's `μ`, as 8-bit telephone and sampler audio has it.
+const MU: f32 = 255.0;
+/// How close two samples at the higher rate can be before the antiderivatives' difference is
+/// taken as no better than the shape itself, halfway between them.
+const ADAA_CLOSEST: f64 = 1e-4;
 /// How long switching a slot out or back in takes, in ms: long enough not to click, and short
 /// enough that a step's lock of its bypass lands with the step.
 pub const BYPASS_FADE_MS: f32 = 5.0;
@@ -67,10 +82,14 @@ pub struct InsertState {
     amount: Smoothed,
     mix: Smoothed,
     gain: Smoothed,
-    /// Each side's oversampling for the shapes that need it, once for both while a sound is the
-    /// same on both sides.
-    oversampler: Sides<Oversampler>,
+    /// Each side's oversampling for the shapes that need it, and what its shaping keeps, once for
+    /// both while a sound is the same on both sides.
+    oversampler: Sides<Shaper>,
+    /// `Crush`'s bit depth, eased so moving it doesn't step.
+    bits: Smoothed,
     held: [f32; 2],
+    /// What came in the frame before, for `Down` to hold from between frames.
+    before: [f32; 2],
     /// How many frames since `Down` last took a sample.
     since: f32,
     /// An EQ's bands, which are small enough to keep in every slot.
@@ -104,7 +123,9 @@ impl Default for InsertState {
             mix: Smoothed::at(0.0),
             gain: Smoothed::at(1.0),
             oversampler: Sides::default(),
+            bits: Smoothed::at(0.0),
             held: [0.0; 2],
+            before: [0.0; 2],
             since: 0.0,
             eq: ThreeBands::default(),
             dynamics: Dynamics::default(),
@@ -174,10 +195,113 @@ pub(crate) fn saturating_gains(drive: f32) -> (f32, f32) {
     (pre, 1.0 / soft_clip(0.33 + squashed * (pre - 0.33)))
 }
 
-/// The distance between the steps `Crush` rounds to, for some whole bits.
+/// The distance between the steps `Crush` rounds to, for some bits, which needn't be whole.
 #[inline]
-fn crush_step(bits: u8) -> f32 {
-    2.0_f32.powi(1 - i32::from(bits))
+fn crush_step(bits: f32) -> f32 {
+    (1.0 - bits).exp2()
+}
+
+/// A sample crushed to steps this far apart, through mu-law if it's on: squeezed by its log, so
+/// quiet sounds get finer steps than loud ones, rounded, and opened out again.
+#[inline]
+fn crushed(sample: f32, step: f32, mu_law: bool) -> f32 {
+    if !mu_law {
+        return (sample / step).round() * step;
+    }
+    let squeezed = (MU * sample.abs()).ln_1p() / MU.ln_1p();
+    let rounded = (squeezed / step).round() * step;
+    ((rounded * MU.ln_1p()).exp_m1() / MU).copysign(sample)
+}
+
+/// What a shape that's anti-aliased integrates to, at a driven sample: the antiderivative of
+/// `Hard`'s clip, of `Fold`'s triangle, which repeats every 4, so its antiderivative, whose mean is
+/// nothing, does too, and of `Sine`, which is `sin(πx/2)`. Each is nothing at nothing, as a
+/// [`Shaper`] starts there.
+#[inline]
+fn integral(kind: DistortType, x: f64) -> f64 {
+    match kind {
+        DistortType::Sine => {
+            std::f64::consts::FRAC_2_PI * (1.0 - (std::f64::consts::FRAC_PI_2 * x).cos())
+        }
+        DistortType::Hard => {
+            if x.abs() <= 1.0 {
+                0.5 * x * x
+            } else {
+                x.abs() - 0.5
+            }
+        }
+        _ => {
+            // `Fold` is `|2 - 4t| - 1` at `t`, the place in its turn: `1 - 4t` to half way,
+            // then `4t - 3`.
+            let turn = x * 0.25 + 0.75;
+            let t = turn - turn.floor();
+            let within_turn = if t < 0.5 {
+                t - 2.0 * t * t
+            } else {
+                2.0 * t * t - 3.0 * t + 1.0
+            };
+            4.0 * within_turn + 0.5
+        }
+    }
+}
+
+/// What one side's shaping keeps at the higher rate: the oversampler, and the last sample shaped
+/// and its antiderivative.
+#[derive(Debug, Clone, Copy, Default)]
+struct Shaper {
+    oversampler: Oversampler,
+    last: f64,
+    last_integral: f64,
+}
+
+impl SameBits for Shaper {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.oversampler.same_bits(&other.oversampler)
+            && self.last.to_bits() == other.last.to_bits()
+            && self.last_integral.to_bits() == other.last_integral.to_bits()
+    }
+}
+
+impl Shaper {
+    /// One sample through `shape` at twice the rate, driven by `drive`. `Hard`, `Fold` and `Sine`
+    /// are anti-aliased.
+    #[inline]
+    fn process(
+        &mut self,
+        input: f32,
+        kind: DistortType,
+        drive: f32,
+        shape: impl Fn(f32) -> f32,
+    ) -> f32 {
+        let Self {
+            oversampler,
+            last,
+            last_integral,
+        } = self;
+        oversampler.process(input, |x| {
+            let driven = x * drive;
+            if !matches!(
+                kind,
+                DistortType::Hard | DistortType::Fold | DistortType::Sine
+            ) {
+                return shape(driven);
+            }
+            // The mean of the shape between this sample and the last: the difference of its
+            // antiderivative over the distance between them, or the shape halfway once they're
+            // too close for that to be any better.
+            let x = f64::from(driven);
+            let now = integral(kind, x);
+            let apart = x - *last;
+            let out = if apart.abs() < ADAA_CLOSEST {
+                shape((0.5 * (x + *last)) as f32)
+            } else {
+                ((now - *last_integral) / apart) as f32
+            };
+            (*last, *last_integral) = (x, now);
+            out
+        })
+    }
 }
 
 /// A shape that needs a higher rate, given what's already been driven.
@@ -294,6 +418,12 @@ impl InsertState {
             self.amount = Smoothed::at(amount);
             self.mix = Smoothed::at(mix);
             self.gain = Smoothed::at(gain);
+            if let Insert::Distort(settings) = insert {
+                self.bits = Smoothed::at(f32::from(settings.bits));
+            }
+        }
+        if let Insert::Distort(settings) = insert {
+            self.bits.target = f32::from(settings.bits);
         }
         if let Insert::Eq(settings) = insert {
             let fresh = !same_effect(self.insert, insert);
@@ -486,6 +616,7 @@ impl InsertState {
     pub fn settle(&mut self) {
         self.on.settle();
         self.amount.settle();
+        self.bits.settle();
         self.mix.settle();
         self.gain.settle();
         self.phaser.settle();
@@ -583,7 +714,7 @@ impl InsertState {
         rate: u32,
         keys: &Keys,
     ) -> [f32; 2] {
-        let (kind, set) = match self.insert {
+        let (kind, settings) = match self.insert {
             Insert::Empty => return input,
             Insert::Compressor(settings) => {
                 // It hears its own input, or another track's as it was after its slots.
@@ -669,7 +800,7 @@ impl InsertState {
                     .process(input, same, smoothing, rate)
                     .map(|sample| sample * gain);
             }
-            Insert::Distort(Distort { kind, bits, .. }) => (Some(kind), bits),
+            Insert::Distort(settings) => (Some(settings.kind), settings),
             Insert::Delay(_)
             | Insert::Reverb(_)
             | Insert::Chorus(_)
@@ -677,7 +808,7 @@ impl InsertState {
             | Insert::Tape(_)
             | Insert::Plate(_)
             | Insert::Pitch(_)
-            | Insert::Grains(_) => (None, 0),
+            | Insert::Grains(_) => (None, Distort::DEFAULT),
         };
         let amount = self.amount.next(smoothing);
         let mix = self.mix.next(smoothing);
@@ -691,18 +822,32 @@ impl InsertState {
         };
         let wet = match kind {
             DistortType::Crush => {
-                // Whole bits change at once, so this isn't smoothed.
-                let step = crush_step(set);
-                input.map(|sample| (sample / step).round() * step)
+                let step = crush_step(self.bits.next(smoothing));
+                input.map(|sample| crushed(sample, step, settings.mu_law != 0))
             }
             DistortType::Down => {
+                // Following the note, it holds at a whole number of times the note's frequency, so
+                // what it folds back lands on the note's harmonics.
+                let period = if settings.track != 0 {
+                    let hertz = 440.0 * ((self.note - 69.0) / 12.0).exp2();
+                    let times = (TRACKED_OCTAVES * (1.0 - amount)).exp2().round();
+                    rate as f32 / (hertz * times)
+                } else {
+                    amount * amount * LONGEST_HOLD * rate as f32
+                };
                 // A hold of one frame or less is every sample, which leaves the sound as it is.
-                let period = (amount * amount * LONGEST_HOLD * rate as f32).max(1.0);
+                let period = period.max(1.0);
                 self.since += 1.0;
                 if self.since >= period {
                     self.since -= period;
-                    self.held = input;
+                    // Its time came `since` frames ago, so it holds what the sound was then,
+                    // between this frame and the last, as Airwindows' DeRez2 does: a hold that
+                    // isn't a whole number of frames then keeps to its time rather than jittering.
+                    let ago = self.since.min(1.0);
+                    let before = self.before;
+                    self.held = [0, 1].map(|side| input[side] + (before[side] - input[side]) * ago);
                 }
+                self.before = input;
                 self.held
             }
             DistortType::Overdrive | DistortType::Distortion => self
@@ -711,13 +856,13 @@ impl InsertState {
             DistortType::Soft => {
                 let (pre, post) = overdrive_gains(amount);
                 self.oversampler.process(input, same, |side, input| {
-                    side.process(input, |x| soft_clip(x * pre)) * post
+                    side.process(input, kind, pre, soft_clip) * post
                 })
             }
             _ => {
                 let drive = drive_of(amount);
                 self.oversampler.process(input, same, |side, input| {
-                    side.process(input, |x| shaped(kind, x * drive))
+                    side.process(input, kind, drive, |x| shaped(kind, x))
                 })
             }
         };
@@ -866,7 +1011,9 @@ mod tests {
     fn folds_turn_back_inside_the_range() {
         for kind in [DistortType::Fold, DistortType::Sine] {
             let folded = played(kind, 0xFF, 0xFF, 1.0);
-            assert!(peak(&folded) <= 1.02, "{kind:?}: {}", peak(&folded));
+            // The halfband filters overshoot what's folded hardest a little, the anti-aliased sine's
+            // most.
+            assert!(peak(&folded) <= 1.07, "{kind:?}: {}", peak(&folded));
             // Hard driven, it crosses zero far more than the 220 Hz going in.
             let crossings = folded.windows(2).filter(|p| p[0] * p[1] < 0.0).count();
             assert!(crossings > 44 * 5, "{kind:?}: {crossings}");
@@ -895,7 +1042,7 @@ mod tests {
     }
 
     #[test]
-    fn crush_changes_bits_at_once() {
+    fn crush_eases_between_bit_depths_so_moving_it_doesnt_step() {
         let mut state = state(DistortType::Crush, 0x00, 0xFF);
         let settings = Insert::Distort(Distort {
             kind: DistortType::Crush,
@@ -904,9 +1051,78 @@ mod tests {
             ..Distort::default()
         });
         state.set(settings);
-        // The steps are already a half, with nothing to smooth.
+        // From 12 bits, a frame on it's still fine; settled, its steps are a half.
+        let out = state.process([0.3; 2], 0.0001, RATE, &Keys::default())[0];
+        assert!((out - 0.3).abs() < 0.01, "{out}");
+        state.settle();
         let out = state.process([0.3; 2], 0.0001, RATE, &Keys::default())[0];
         assert_eq!(out, 0.5);
+        // Between whole bits, the steps are between theirs.
+        assert!(crush_step(8.5) < crush_step(8.0) && crush_step(8.5) > crush_step(9.0));
+    }
+
+    #[test]
+    fn mu_law_keeps_finer_steps_for_quiet_sounds() {
+        let quiet = |mu_law: u8| {
+            let mut state = InsertState::default();
+            state.set(Insert::Distort(Distort {
+                kind: DistortType::Crush,
+                bits: 4,
+                mix: 0xFF,
+                mu_law,
+                ..Distort::default()
+            }));
+            sine(220.0, 0.02, RATE as usize / 10)
+                .map(|x| state.process([x; 2], NO_SMOOTHING, RATE, &Keys::default())[0])
+                .collect::<Vec<f32>>()
+        };
+        // Linear steps of an eighth gate a sound this quiet; mu-law's are fine enough near nothing.
+        assert_eq!(peak(&quiet(0)), 0.0);
+        assert!(distinct(&quiet(1)) >= 3, "{}", distinct(&quiet(1)));
+        // A loud one comes back about as loud, its steps coarser at the top.
+        assert_eq!(crushed(1.0, crush_step(4.0), true), 1.0);
+        assert!((crushed(-0.5, crush_step(4.0), true) + 0.5).abs() < 0.1);
+    }
+
+    #[test]
+    fn down_following_the_note_folds_back_onto_its_harmonics() {
+        // A 440 Hz sine held at a whole number of times 440 Hz: what it folds back lands on 440's
+        // multiples and nowhere between.
+        let level = |track: u8, probe: f32| {
+            let mut state = InsertState::default();
+            state.set(Insert::Distort(Distort {
+                kind: DistortType::Down,
+                rate: 0x90,
+                mix: 0xFF,
+                track,
+                ..Distort::default()
+            }));
+            state.follow_note(69.0);
+            state.settle();
+            let frames = RATE as usize;
+            let (mut real, mut imaginary) = (0.0_f64, 0.0_f64);
+            for (frame, sample) in sine(440.0, 0.5, frames).enumerate() {
+                let out = state.process([sample; 2], NO_SMOOTHING, RATE, &Keys::default())[0];
+                let phase =
+                    frame as f64 / f64::from(RATE) * f64::from(probe) * std::f64::consts::TAU;
+                real += f64::from(out) * phase.cos();
+                imaginary += f64::from(out) * phase.sin();
+            }
+            (real * real + imaginary * imaginary).sqrt() / frames as f64
+        };
+        let between = [2_970.0, 5_830.0, 9_130.0];
+        let worst_between = |track| between.iter().map(|&f| level(track, f)).fold(0.0, f64::max);
+        let fundamental = level(1, 440.0);
+        assert!(
+            worst_between(1) < fundamental * 1e-3,
+            "{}",
+            worst_between(1) / fundamental
+        );
+        // Left free, it holds at about 313 Hz, which folds 440 back to about 127 Hz, between them.
+        let amount = f32::from(0x90_u8) / 255.0;
+        let hold = 1.0 / (amount * amount * LONGEST_HOLD);
+        let folded = level(0, 440.0 - hold);
+        assert!(folded > fundamental * 1e-2, "{}", folded / fundamental);
     }
 
     #[test]
@@ -1012,6 +1228,30 @@ mod tests {
             }
         }
         ((real * real + imaginary * imaginary).sqrt() / (frames as f64 / 2.0)) as f32
+    }
+
+    /// The worst of what a loud 2.5 kHz sine's odd harmonics fold back to, under its fundamental, in
+    /// dB, driven as hard as it goes.
+    fn worst_folded(kind: DistortType) -> f32 {
+        let fundamental = level_at(kind, 2500.0, 2500.0);
+        // The 11th to the 19th harmonics, which fold back past 24 kHz to between the harmonics.
+        [20_500.0, 15_500.0, 10_500.0, 5_500.0, 500.0]
+            .into_iter()
+            .map(|alias| 20.0 * (level_at(kind, 2500.0, alias) / fundamental).log10())
+            .fold(f32::MIN, f32::max)
+    }
+
+    #[test]
+    fn hard_fold_and_sine_are_anti_aliased_too() {
+        // Before their antiderivatives, at 2x alone, these were -49, -23 and -52 dB.
+        for (kind, most) in [
+            (DistortType::Hard, -70.0),
+            (DistortType::Fold, -45.0),
+            (DistortType::Sine, -58.0),
+        ] {
+            let db = worst_folded(kind);
+            assert!(db < most, "{kind:?}: {db} dB");
+        }
     }
 
     #[test]
@@ -1143,6 +1383,34 @@ mod tests {
             assert!(clip(f32::NAN).is_finite());
             assert!(clip(f32::INFINITY).is_finite());
             assert!(clip(f32::NEG_INFINITY).is_finite());
+        }
+    }
+
+    #[test]
+    fn each_antiderivative_is_its_shapes_and_nothing_at_nothing() {
+        for kind in [DistortType::Hard, DistortType::Fold, DistortType::Sine] {
+            assert_eq!(integral(kind, 0.0), 0.0, "{kind:?}");
+            for at in -400..400 {
+                let x = f64::from(at) * 0.037;
+                let slope = (integral(kind, x + 1e-6) - integral(kind, x - 1e-6)) / 2e-6;
+                let shape = f64::from(shaped(kind, x as f32));
+                assert!(
+                    (slope - shape).abs() < 1e-4,
+                    "{kind:?} at {x}: {slope} {shape}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_fresh_shaper_starts_without_a_jump() {
+        // A step from nothing, driven hard, rings the halfband filters a little, and no more.
+        for kind in [DistortType::Hard, DistortType::Fold, DistortType::Sine] {
+            let mut state = state(kind, 0xFF, 0xFF);
+            let out: Vec<f32> = (0..100)
+                .map(|_| state.process([0.5; 2], NO_SMOOTHING, RATE, &Keys::default())[0])
+                .collect();
+            assert!(peak(&out) <= 1.2, "{kind:?}: {}", peak(&out));
         }
     }
 }
