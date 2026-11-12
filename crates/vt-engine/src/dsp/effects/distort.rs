@@ -14,7 +14,7 @@ use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Flanger,
     FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator, Reverb,
-    Stutter, Tape, Vowel, Warps,
+    Spring, Stutter, Tape, Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -163,6 +163,7 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Comb(_), Insert::Comb(_))
         | (Insert::Vowel(_), Insert::Vowel(_))
         | (Insert::FreqShift(_), Insert::FreqShift(_))
+        | (Insert::Spring(_), Insert::Spring(_))
         | (Insert::Stutter(_), Insert::Stutter(_)) => true,
         _ => false,
     }
@@ -358,7 +359,8 @@ impl InsertState {
             if started {
                 memory.settle();
             }
-            // A stutter just triggered has a piece to take, even with nothing going in yet.
+            // A knock rings the tank with nothing going in, and a stutter just triggered has a
+            // piece to take, so neither may stay asleep.
             if memory.waking() {
                 self.quiet = 0;
             }
@@ -408,9 +410,10 @@ impl InsertState {
             | Insert::Flanger(Flanger { mix, gain, .. })
             | Insert::Tape(Tape { mix, gain, .. })
             | Insert::Plate(Plate { mix, gain, .. })
+            | Insert::Spring(Spring { mix, gain, .. })
+            | Insert::Stutter(Stutter { mix, gain, .. })
             | Insert::Pitch(Pitch { mix, gain, .. })
             | Insert::Grains(Grains { mix, gain, .. })
-            | Insert::Stutter(Stutter { mix, gain, .. })
             | Insert::Warps(Warps { mix, gain, .. })
             | Insert::Lpg(LowPassGate { mix, gain, .. })
             | Insert::Reso(Resonator { mix, gain, .. })
@@ -671,6 +674,7 @@ impl InsertState {
             | Insert::Reso(_)
             | Insert::Comb(_)
             | Insert::FreqShift(_)
+            | Insert::Spring(_)
             | Insert::Stutter(_) => Mono::Stereo,
         }
     }
@@ -825,6 +829,7 @@ impl InsertState {
             | Insert::Flanger(_)
             | Insert::Tape(_)
             | Insert::Plate(_)
+            | Insert::Spring(_)
             | Insert::Pitch(_)
             | Insert::Grains(_)
             | Insert::Stutter(_) => (None, Distort::DEFAULT),
@@ -1329,6 +1334,10 @@ mod tests {
             Insert::Plate(Plate {
                 decay: 0xE0,
                 ..Plate::DEFAULT
+            }),
+            Insert::Spring(Spring {
+                decay: 0xFF,
+                ..Spring::DEFAULT
             }),
             Insert::Phaser(Phaser {
                 feedback: 0xFF,

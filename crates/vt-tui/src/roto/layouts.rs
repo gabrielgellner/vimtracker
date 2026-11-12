@@ -1060,6 +1060,25 @@ const FREQ_SHIFT: DeviceLayout = live(
         ],
     )],
 );
+/// How long it rings and how big and dark it is, then its chirp, reflections and wander, with the
+/// knock under the wander, as both shake the springs.
+const SPRING: DeviceLayout = stored(
+    "fx/spring",
+    &[page(
+        "Spring",
+        [
+            s("decay"),
+            s("size"),
+            s("damp"),
+            s("spin"),
+            s("reflect"),
+            s("chaos"),
+            s("mix"),
+            s("gain"),
+        ],
+        button(5, "knock"),
+    )],
+);
 /// How long a piece it repeats, how many times and how it fades, with the trigger on the button
 /// under the length, so a press repeats what's playing.
 const STUTTER: DeviceLayout = stored(
@@ -1081,7 +1100,7 @@ const STUTTER: DeviceLayout = stored(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 61] = [
+pub const ALL: [&DeviceLayout; 62] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1142,6 +1161,7 @@ pub const ALL: [&DeviceLayout; 61] = [
     &COMB,
     &VOWEL,
     &FREQ_SHIFT,
+    &SPRING,
     &STUTTER,
 ];
 
@@ -1209,6 +1229,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::Comb(_) => &COMB,
         Insert::Vowel(_) => &VOWEL,
         Insert::FreqShift(_) => &FREQ_SHIFT,
+        Insert::Spring(_) => &SPRING,
         Insert::Stutter(_) => &STUTTER,
     }
 }

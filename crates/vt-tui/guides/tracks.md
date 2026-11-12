@@ -436,6 +436,27 @@ carries on after a note ends. `Pre`, `Decay`, `Damp` and `High cut` work as
 A change to `Size` bends the pitch of the tail a little as it glides, taking
 about a second end to end.
 
+`Spring` is a spring tank, as a guitar amp or an Octatrack has, after
+ChowDSP's model in Surge: a sound goes in, drips and boings down the springs
+and comes back round. It suits dub chords, snares and techno stabs. It starts
+half wet, and its tail carries on after a note ends. `Decay` and `Damp` work
+as `Reverb`'s do; `Decay` goes from a tenth of a second to about four, and a
+small spring rings shorter.
+
+| Setting | Does |
+|---|---|
+| `Size` | How long the springs are: how far apart the drips come round |
+| `Spin` | How much each drip is smeared into a chirp: most at `00` |
+| `Reflect` | How much comes back from the ends of the springs, which thickens it |
+| `Chaos` | How much the springs' length wanders, as a tank that's moving |
+| `Knock` | Switched on, the tank is knocked once, as when it's kicked |
+
+A knock rings the springs whether or not anything's playing, so a `1KNCK`
+lock on an empty step, for a spring in slot 1, is a hit of its own. It knocks once each
+time `Knock` goes on: to knock again, it has to go off first, which the next
+note does to a lock. A loud sound driven into it clips softly on the way
+round, as a real tank's driver does.
+
 `Pitch` shifts the sound up or down without changing its length, after the
 pitch shifter in Mutable Instruments' Clouds. Two grains read the sound back
 faster or slower than it plays, each fading in as the other fades out. It

@@ -17,6 +17,7 @@ use crate::dsp::effects::pitch_shifter::PitchShifter;
 use crate::dsp::effects::plate::Plate;
 use crate::dsp::effects::resonator::Resonator;
 use crate::dsp::effects::reverb::Reverb;
+use crate::dsp::effects::spring::Spring;
 use crate::dsp::effects::stutter::Stutter;
 use crate::dsp::effects::tape::Tape;
 use crate::dsp::effects::warps::Warps;
@@ -45,6 +46,7 @@ pub enum Memory {
     Reso(Box<Resonator>),
     Comb(Box<Comb>),
     FreqShift(Box<FreqShifter>),
+    Spring(Box<Spring>),
     Stutter(Box<Stutter>),
 }
 
@@ -116,6 +118,11 @@ impl Memory {
         Self::FreqShift(Box::new(FreqShifter::new(rate)))
     }
 
+    /// A spring reverb's, long enough for the biggest.
+    pub fn spring(rate: u32) -> Self {
+        Self::Spring(Box::new(Spring::new(rate)))
+    }
+
     /// A stutter's, which holds a beat at the slowest tempo.
     pub fn stutter(rate: u32) -> Self {
         Self::Stutter(Box::new(Stutter::new(rate)))
@@ -138,6 +145,7 @@ impl Memory {
             Self::Reso(resonator) => resonator.process_alone(input),
             Self::Comb(comb) => comb.process_alone(input),
             Self::FreqShift(shifter) => shifter.process_alone(input),
+            Self::Spring(spring) => spring.process(input),
             Self::Stutter(stutter) => stutter.process(input),
         }
     }
@@ -146,7 +154,9 @@ impl Memory {
     pub fn quiet_frames(&self, rate: u32) -> u32 {
         match self {
             Self::Delay(delay) => delay.reach() as u32,
-            Self::Reverb(_) | Self::Plate(_) => (REVERB_QUIET_SECONDS * rate as f32) as u32,
+            Self::Reverb(_) | Self::Plate(_) | Self::Spring(_) => {
+                (REVERB_QUIET_SECONDS * rate as f32) as u32
+            }
             Self::Chorus(chorus) => chorus.frames() as u32,
             Self::Limit(limiter) => limiter.frames() as u32,
             Self::Flanger(flanger) => flanger.frames() as u32,
@@ -182,6 +192,7 @@ impl Memory {
             (Self::Reso(resonator), Insert::Reso(settings)) => resonator.follow(settings),
             (Self::Comb(comb), Insert::Comb(settings)) => comb.follow(settings),
             (Self::FreqShift(shifter), Insert::FreqShift(settings)) => shifter.follow(settings),
+            (Self::Spring(spring), Insert::Spring(settings)) => spring.follow(settings),
             (Self::Stutter(stutter), Insert::Stutter(settings)) => {
                 stutter.follow(settings, frames_per_tick);
             }
@@ -189,10 +200,14 @@ impl Memory {
         }
     }
 
-    /// Whether it's about to play something of its own with nothing going in, as a stutter
-    /// that's just been triggered is, so it has to be woken.
+    /// Whether it's about to play something of its own with nothing going in, as a spring that's
+    /// just been knocked does, or a stutter that's just been triggered, so it has to be woken.
     pub fn waking(&self) -> bool {
-        matches!(self, Self::Stutter(stutter) if stutter.waking())
+        match self {
+            Self::Spring(spring) => spring.knocking(),
+            Self::Stutter(stutter) => stutter.waking(),
+            _ => false,
+        }
     }
 
     /// A step has switched its trigger on, so a stutter starts again, whether or not it was on.
@@ -218,6 +233,7 @@ impl Memory {
             Self::Reso(resonator) => resonator.settle(),
             Self::Comb(comb) => comb.settle(),
             Self::FreqShift(shifter) => shifter.settle(),
+            Self::Spring(spring) => spring.settle(),
             Self::Stutter(_) => {}
         }
     }
@@ -237,6 +253,7 @@ impl Memory {
             Self::Reso(resonator) => resonator.clear(),
             Self::Comb(comb) => comb.clear(),
             Self::FreqShift(shifter) => shifter.clear(),
+            Self::Spring(spring) => spring.clear(),
             Self::Stutter(stutter) => stutter.clear(),
         }
     }
@@ -258,6 +275,7 @@ pub struct MemoryCount {
     pub reso: u16,
     pub comb: u16,
     pub freq_shift: u16,
+    pub spring: u16,
     pub stutter: u16,
 }
 
@@ -280,6 +298,7 @@ impl MemoryCount {
                 Insert::Reso(_) => count.reso += 1,
                 Insert::Comb(_) => count.comb += 1,
                 Insert::FreqShift(_) => count.freq_shift += 1,
+                Insert::Spring(_) => count.spring += 1,
                 Insert::Stutter(_) => count.stutter += 1,
                 Insert::Empty
                 | Insert::Distort(_)
@@ -310,7 +329,8 @@ pub struct MemoryPool {
     reso: Vec<Memory>,
     comb: Vec<Memory>,
     freq_shift: Vec<Memory>,
-    stutter: Vec<Memory>,
+    springs: Vec<Memory>,
+    stutters: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -335,7 +355,8 @@ impl MemoryPool {
             reso: Vec::with_capacity(POOL_CAPACITY),
             comb: Vec::with_capacity(POOL_CAPACITY),
             freq_shift: Vec::with_capacity(POOL_CAPACITY),
-            stutter: Vec::with_capacity(POOL_CAPACITY),
+            springs: Vec::with_capacity(POOL_CAPACITY),
+            stutters: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -378,6 +399,9 @@ impl MemoryPool {
         for _ in 0..needed.freq_shift {
             pool.put(Memory::freq_shift(rate));
         }
+        for _ in 0..needed.spring {
+            pool.put(Memory::spring(rate));
+        }
         for _ in 0..needed.stutter {
             pool.put(Memory::stutter(rate));
         }
@@ -400,7 +424,8 @@ impl MemoryPool {
             Memory::Reso(_) => &mut self.reso,
             Memory::Comb(_) => &mut self.comb,
             Memory::FreqShift(_) => &mut self.freq_shift,
-            Memory::Stutter(_) => &mut self.stutter,
+            Memory::Spring(_) => &mut self.springs,
+            Memory::Stutter(_) => &mut self.stutters,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -427,7 +452,8 @@ impl MemoryPool {
             Insert::Reso(_) => &mut self.reso,
             Insert::Comb(_) => &mut self.comb,
             Insert::FreqShift(_) => &mut self.freq_shift,
-            Insert::Stutter(_) => &mut self.stutter,
+            Insert::Spring(_) => &mut self.springs,
+            Insert::Stutter(_) => &mut self.stutters,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Eq(_)
@@ -458,6 +484,7 @@ impl MemoryPool {
         self.owed.reso += count.reso;
         self.owed.comb += count.comb;
         self.owed.freq_shift += count.freq_shift;
+        self.owed.spring += count.spring;
         self.owed.stutter += count.stutter;
     }
 
@@ -541,8 +568,14 @@ impl MemoryPool {
             self.owed.freq_shift -= 1;
             return Some(memory);
         }
+        if self.owed.spring > 0
+            && let Some(memory) = self.springs.pop()
+        {
+            self.owed.spring -= 1;
+            return Some(memory);
+        }
         if self.owed.stutter > 0
-            && let Some(memory) = self.stutter.pop()
+            && let Some(memory) = self.stutters.pop()
         {
             self.owed.stutter -= 1;
             return Some(memory);
@@ -565,7 +598,8 @@ impl MemoryPool {
             + self.reso.len()
             + self.comb.len()
             + self.freq_shift.len()
-            + self.stutter.len()
+            + self.springs.len()
+            + self.stutters.len()
     }
 }
 
