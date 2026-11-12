@@ -14,7 +14,7 @@ use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
     Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Exciter,
     Flanger, FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator,
-    Reverb, Rotary, Space, Spring, Tape, Vowel, Warps,
+    Reverb, Rotary, Space, Spring, Stutter, Tape, Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -170,7 +170,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Spring(_), Insert::Spring(_))
         | (Insert::Space(_), Insert::Space(_))
         | (Insert::Rotary(_), Insert::Rotary(_))
-        | (Insert::Exciter(_), Insert::Exciter(_)) => true,
+        | (Insert::Exciter(_), Insert::Exciter(_))
+        | (Insert::Stutter(_), Insert::Stutter(_)) => true,
         _ => false,
     }
 }
@@ -365,7 +366,19 @@ impl InsertState {
             if started {
                 memory.settle();
             }
-            // A knock rings the tank with nothing going in, so it mustn't stay asleep.
+            // A knock rings the tank with nothing going in, and a stutter just triggered has a
+            // piece to take, so neither may stay asleep.
+            if memory.waking() {
+                self.quiet = 0;
+            }
+        }
+    }
+
+    /// A step has switched the slot's trigger on: a stutter in it starts again from what comes in
+    /// next, even if it's on already. Nothing else has one.
+    pub fn strike(&mut self) {
+        if let Some(memory) = &mut self.memory {
+            memory.strike();
             if memory.waking() {
                 self.quiet = 0;
             }
@@ -405,6 +418,7 @@ impl InsertState {
             | Insert::Tape(Tape { mix, gain, .. })
             | Insert::Plate(Plate { mix, gain, .. })
             | Insert::Spring(Spring { mix, gain, .. })
+            | Insert::Stutter(Stutter { mix, gain, .. })
             | Insert::Exciter(Exciter { mix, gain, .. })
             | Insert::Rotary(Rotary { mix, gain, .. })
             | Insert::Space(Space { mix, gain, .. })
@@ -683,7 +697,8 @@ impl InsertState {
             | Insert::FreqShift(_)
             | Insert::Spring(_)
             | Insert::Space(_)
-            | Insert::Rotary(_) => Mono::Stereo,
+            | Insert::Rotary(_)
+            | Insert::Stutter(_) => Mono::Stereo,
         }
     }
 
@@ -852,7 +867,8 @@ impl InsertState {
             | Insert::Space(_)
             | Insert::Pitch(_)
             | Insert::Grains(_)
-            | Insert::Rotary(_) => (None, Distort::DEFAULT),
+            | Insert::Rotary(_)
+            | Insert::Stutter(_) => (None, Distort::DEFAULT),
         };
         let amount = self.amount.next(smoothing);
         let mix = self.mix.next(smoothing);
@@ -1403,6 +1419,10 @@ mod tests {
                 drive: 0xFF,
                 tone: 0x00,
                 ..Exciter::DEFAULT
+            }),
+            Insert::Stutter(Stutter {
+                trig: 1,
+                ..Stutter::DEFAULT
             }),
             Insert::Distort(Distort {
                 kind: DistortType::Hard,

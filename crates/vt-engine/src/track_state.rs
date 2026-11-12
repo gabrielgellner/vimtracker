@@ -5,7 +5,7 @@ use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
 use vt_model::envelope::{Envelope, Lpg};
 use vt_model::groove::Groove;
-use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS};
+use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS, Setting};
 use vt_model::lfo::{LfoMode, MAX_DEFORM, deformed_wave, phase_of, phase_value};
 use vt_model::modulation::{
     MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, depth_value, note_shape_slot,
@@ -22,7 +22,7 @@ use vt_model::steps::{MAX_STEP, STEPS, Steps, StepsMode, smoothed};
 
 use crate::dsp::blocks::sides::same_sides;
 use crate::dsp::distort::{BYPASS_FADE_MS, InsertState};
-use crate::dsp::filter::{Channel, Coefficients, Ramp, Trim};
+use crate::dsp::filter::{Channel, Coefficients, Ramp, Trim, safe_resonance};
 use crate::dsp::memory::MemoryPool;
 use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
@@ -929,6 +929,8 @@ pub struct TrackState {
     drive: Smoothed,
     /// Held `Punch`, which only the clean types hear.
     punch: Smoothed,
+    /// Held `Safe`, 1 for on, which glides so switching it doesn't jump `Res`.
+    safe: Smoothed,
     trim: [Trim; 2],
     low_cut: Smoothed,
     /// What each of its effects keeps.
@@ -939,6 +941,9 @@ pub struct TrackState {
     resolved: [Insert; INSERTS],
     /// Whether modulation is moving each slot.
     slot_moving: [bool; INSERTS],
+    /// Whether a step has switched each slot's trigger on since the slots were last given their
+    /// settings, which starts a stutter again even if it was on already.
+    struck: [bool; INSERTS],
     high_cut: Smoothed,
     /// The coefficients in use, and the value each was worked out for.
     low_cut_coefficients: Option<(f32, Coefficients)>,
@@ -1176,6 +1181,7 @@ impl TrackState {
             filter_mode: 0.0,
             drive: Smoothed::at(0.0),
             punch: Smoothed::at(0.0),
+            safe: Smoothed::at(0.0),
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
             inserts: std::array::from_fn(|_| InsertState::default()),
@@ -1183,6 +1189,7 @@ impl TrackState {
             slot_values: [[0.0; MAX_KEPT_PARAMS]; INSERTS],
             resolved: [Insert::Empty; INSERTS],
             slot_moving: [false; INSERTS],
+            struck: [false; INSERTS],
             high_cut: Smoothed::at(1.0),
             low_cut_coefficients: None,
             high_cut_coefficients: None,
@@ -1537,6 +1544,7 @@ impl TrackState {
         }
         self.drive.target = f32::from(track.drive) / 255.0;
         self.punch.target = f32::from(track.punch) / 255.0;
+        self.safe.target = f32::from(u8::from(track.safe));
         self.low_cut.target = f32::from(track.low_cut) / 255.0;
         self.high_cut.target = f32::from(track.high_cut) / 255.0;
         self.cut_offset.target = offsets[SettingId::CUT.index()];
@@ -1574,6 +1582,9 @@ impl TrackState {
             }
             self.resolved[slot] = resolved;
             self.inserts[slot].hold(resolved, memory, now.frames_per_tick, now.rendered);
+            if std::mem::take(&mut self.struck[slot]) {
+                self.inserts[slot].strike();
+            }
             self.inserts[slot].bypass(self.bypassed[slot]);
         }
         let semitones = self.held_pitch - 128.0 + offsets[SettingId::PITCH.index()] * 255.0;
@@ -2026,6 +2037,18 @@ impl TrackState {
         } else {
             layers.lock = Some(value);
         }
+        // A step switching a trigger on strikes it, even where it's on already, so two steps in a
+        // row each start a stutter.
+        if let (Owner::Slot { slot, effect }, at) = id.owner()
+            && scaled(value) >= 0.5
+            && self.loaded_effects[slot] == Some(effect)
+            && effect
+                .params()
+                .get(at)
+                .is_some_and(|param| param.setting == Setting::Trig)
+        {
+            self.struck[slot] = true;
+        }
         self.hear(id, scaled(value));
     }
 
@@ -2281,6 +2304,7 @@ impl TrackState {
         self.inserts.iter_mut().for_each(InsertState::settle);
         self.drive.settle();
         self.punch.settle();
+        self.safe.settle();
         self.low_cut.settle();
         self.high_cut.settle();
         self.filter.iter_mut().for_each(Channel::settle);
@@ -2381,6 +2405,7 @@ impl TrackState {
                 .clamp(0.0, 1.0);
         let drive = self.drive.next(smoothing);
         let punch = self.punch.next(smoothing);
+        let safe = self.safe.next(smoothing);
         let open = self.filter_type == FilterType::LowPass
             && cutoff > 0.999
             && resonance < 0.001
@@ -2392,6 +2417,12 @@ impl TrackState {
         } else {
             if self.filter_countdown == 0 || self.coefficients.is_none() {
                 let mode = self.playing_mode();
+                // So little `Safe` is none, so the filter is as it was without it.
+                let resonance = if safe >= 0.001 {
+                    safe_resonance(self.filter_type, resonance, cutoff, drive, safe)
+                } else {
+                    resonance
+                };
                 let mut c = Coefficients::with_mode(cutoff, resonance, mode, rate);
                 // A punch this small is none, so the filter is as it was without it.
                 if punch >= 0.001 && self.filter_type.has_punch() {
@@ -2921,6 +2952,37 @@ mod tests {
         for filter in FilterType::ALL {
             let (plain, punched) = (render(filter, 0), render(filter, 0xFF));
             assert_eq!(plain != punched, filter.has_punch(), "{filter:?}");
+        }
+    }
+
+    #[test]
+    fn safe_is_heard_only_on_the_types_that_ring_by_themselves() {
+        use crate::dsp::blocks::smoother;
+        let rate = 48_000;
+        let (smoothing, fast) = (
+            smoother::coefficient(rate),
+            smoother::fast_coefficient(rate),
+        );
+        let keys = Keys::default();
+        let render = |filter, safe| {
+            let track = Track {
+                filter,
+                cutoff: 0x80,
+                resonance: 0xFF,
+                safe,
+                ..Track::default()
+            };
+            let mut state = playing(&track, rate);
+            (0..4_800)
+                .map(|frame| {
+                    let strike = if frame < 48 { 1.0 } else { 0.0 };
+                    state.shape([strike; 2], smoothing, fast, rate, &keys).dry[0]
+                })
+                .collect::<Vec<f32>>()
+        };
+        for filter in FilterType::ALL {
+            let (plain, safe) = (render(filter, false), render(filter, true));
+            assert_eq!(plain != safe, filter.has_safe(), "{filter:?}");
         }
     }
 }

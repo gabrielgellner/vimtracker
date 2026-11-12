@@ -56,7 +56,7 @@ and its settings in up to four columns of three.
 | Device | Title | Settings, column by column |
 |---|---|---|
 | Machine | Machine, type | The machine's own |
-| Filter | Type, mode | `Cut` `Res` `Drive`; `Punch`; `Low cut` `High cut` |
+| Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` `Velocity` |
 
@@ -105,6 +105,7 @@ shows what it plays.
 | Cut, Res | Where `CUT` and `RES` start |
 | Drive | How hard it's driven, from `00` for clean |
 | Punch | How high a loud ring starts over `Cut`, from `00` for none |
+| Safe | On, `Res` stops short of ringing by itself |
 | Filter | `LP` `HP` `BP` `Notch` `Ladder` `Diode` `MS20 LP` `MS20 HP` `Dirty` `OB-X` |
 | Mode | How the type responds: `--` where it has none |
 | Low cut, High cut | The utility filter: `00` and `FF` are off |
@@ -119,6 +120,17 @@ sound hears the filter as it is, so the curve doesn't show it. Only `LP`, `HP`,
 `BP` and `Notch` have it; on the other types it's dim and does nothing, and it
 does less with `Drive`, whose clipping holds the ring down. Steps and modulators
 don't move it.
+
+`Safe`, beside `Res`, is the switch of that name on Cytomic's The Drop. On, the
+whole of `Res`'s turn reaches only as far as the loudest peak that still dies
+away, a few steps short of where the type starts to sing by itself, so `FF`
+rings on after a strike and fades, and never keeps going alone, at any `Cut`,
+`Mode` or `Drive`. Its steps are closer together for it: `FF` is about where
+`D7` was, and `80` where `6C` was. The curve shows the peak it leaves. `K`
+switches it, `=` puts it on and `-` takes it off. Steps and modulators don't
+move it, as with `Drive`, but a `RES` lock or an LFO on `Res` stops short too.
+The clean types never ring by themselves, so on `LP`, `HP`, `BP` and `Notch`
+it's dim and does nothing.
 
 `Low cut` and `High cut` are a second, simple
 filter after the main one, for thinning out a sound without giving up the main
@@ -332,9 +344,11 @@ out wide.
 | `Rate` | How fast they move: as Rings or the Juno has it at `80` |
 | `Depth` | How far they move. `00` leaves fixed copies |
 
-`Juno I` sweeps each side from 0.7 to 4.9 ms and back once every two seconds, 0.5 Hz,
-and `Juno II` the same a little faster, 0.83 Hz. `Juno I+II`, both
-buttons down, is a fast, shallow wobble at 8 Hz, nearer a vibrato. `Depth` at `80` is the
+`Juno I` sweeps each side from 1.66 to 5.35 ms and back once every two seconds, 0.5 Hz,
+and `Juno II` the same a little faster, 0.83 Hz, as a Juno-60 measures. `Juno I+II`, both
+buttons down, is a fast, shallow wobble from 3.3 to 3.7 ms at 8 Hz, nearer a vibrato, its
+sweep rounded to a sine and both sides moving together, so it doesn't widen the sound as
+the other two do. `Depth` at `80` is the
 Juno's own sweep, `FF` twice as long, and `Rate` goes two octaves either way. Each copy
 loses a little of its top, as the Juno's bucket brigade does, but doesn't dull as it moves.
 
@@ -774,6 +788,37 @@ repeat is heard a step further up or down, the barber-pole effect. Each
 time round, what goes round loses a little over 5 kHz and is softly
 limited, and what's under 15 Hz is taken out, so a spiral stays bounded and
 dies away even at `FF`.
+
+`Stutter` repeats a piece of the sound when a step says, for rolls, glitches
+and fills, after Surge's Microgate. It does nothing until `Trig` goes on:
+then it takes the next piece of what comes in, `Length` long, lets it play
+as it comes, and plays it again `Repeats` times, each a `Length` after the
+last, so the repeats fall on the grid. Then the sound comes back where it's
+got to. It starts all wet, so the repeats take the place of the sound, with
+a sixteenth played three times more: a beat in all.
+
+| Setting | Does |
+|---|---|
+| `Trig` | Switched on, it takes the next piece and repeats it |
+| `Length` | How long the piece is, a note division from `1/64` to `1/4` |
+| `Repeats` | How many times it plays it again, 1 to 16, or `Hold` |
+| `Decay` | How much quieter each repeat is, from none to 12 dB |
+
+`Trig` is for a step to lock: a `1TRIG 01` on a step, for a stutter in slot
+1, repeats what plays from there. Every step that locks it starts it again,
+even the very next one, so a lock on each of four steps cuts four pieces,
+and a lock beside a `1LEN` or `1RPTS` changes the roll for that step alone.
+Switched on by hand, it repeats once each time it goes on.
+
+`Hold` keeps repeating the piece for as long as `Trig` is on: until the next
+note ends a lock, or until it's switched off. `Decay` at `80` halves each
+repeat, so a roll fades out like an echo; the status line reads it in dB.
+
+The piece starts where the sound crosses zero, and each repeat starts where
+what's playing crosses zero the same way, so a splice doesn't click. A
+repeat waits at most about 13 ms for that, and never adds up, so the roll
+keeps to the grid; a low bass with no crossing in that time is spliced
+where it is, with a short fade.
 
 Every setting in a slot can be moved: an LFO's or envelope's `Dest` lists them while the
 slot holds something, like `1 Amount`, and a step's FX slot can set them too. The bars
