@@ -916,3 +916,45 @@ fn steps_are_a_live_step_sequencer_with_their_values_before_dest() {
     let next = edit(&song, &turned(length, 0, &song, KNOB_TOP).unwrap()).unwrap();
     assert_eq!(next.tracks[0].mods[1].steps.length, 16);
 }
+
+#[test]
+fn a_track_slot_is_low_high_depth_and_source_stored_with_its_polarity_under_depth() {
+    use vt_model::action::edit;
+    use vt_model::modulation::ModKind;
+    use vt_model::tracking::Source;
+    use vt_roto::live::KNOB_TOP;
+    use vt_tui::roto::edits::{turned, value_text};
+    use vt_tui::track_page::ModField;
+    let tracking = layout_named("track");
+    assert!(tracking.stored, "its polarity is a button");
+    assert_eq!(first_knobs(tracking)[..4], ["low", "high", "depth", "mode"]);
+    assert_eq!(button_key(tracking, 0, 2), Some("polarity"), "under Depth");
+    assert_eq!(first_knobs_of(&tracking.layout.pages[1])[0], "dest");
+    let mut song = Song::new(1);
+    song.tracks[0].mods[1].kind = ModKind::Track;
+    let song = std::sync::Arc::new(song);
+    let track = &song.tracks[0];
+    let spec = &Page::Mod.devices(track)[2];
+    assert_eq!(layout_of(spec, track).kind, "track");
+    let device = live_device(Page::Mod, 2, spec, track, &song, true);
+    assert_eq!(device.name.as_str(), "M2 Track");
+    assert_eq!(device.key, "vimtracker:track");
+    let names: Vec<&str> = device.controls[..4]
+        .iter()
+        .map(|knob| knob.as_ref().map_or("-", |knob| knob.name.as_str()))
+        .collect();
+    assert_eq!(names, ["Low", "High", "Depth", "Source"]);
+    // Turned, `Low` goes across its source's values, and the source is a list of three.
+    let low = Control::Mod(1, ModField::Low);
+    let next = edit(&song, &turned(low, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].track.velocity.low, 0x7F);
+    assert_eq!(value_text(low, &next.tracks[0], &next), "7F");
+    let source = Control::Mod(1, ModField::Mode);
+    let next = edit(&song, &turned(source, 0, &song, 0).unwrap()).unwrap();
+    assert_eq!(next.tracks[0].mods[1].track.source, Source::Note);
+    let next = std::sync::Arc::new(next);
+    let low_note = edit(&next, &turned(low, 0, &next, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(low_note.tracks[0].mods[1].track.note.low, 127);
+    assert_eq!(value_text(low, &low_note.tracks[0], &low_note), "G-8");
+    assert_eq!(low_note.tracks[0].mods[1].track.velocity.low, 0);
+}

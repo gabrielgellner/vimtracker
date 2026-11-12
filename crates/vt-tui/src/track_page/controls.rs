@@ -52,6 +52,9 @@ pub enum ModField {
     Smooth,
     /// One of Steps' values, by its place, counted from 0: what the cursor is on in its panel.
     Step(u8),
+    /// Track's: where its map starts and ends, in its source's values, a note or hex.
+    Low,
+    High,
 }
 
 impl ModField {
@@ -78,6 +81,7 @@ impl ModField {
             | Self::Mutate
             | Self::Smooth
             | Self::Step(_) => kind == ModKind::Steps,
+            Self::Low | Self::High => kind == ModKind::Track,
         }
     }
 }
@@ -160,6 +164,7 @@ impl Control {
             Self::Base(TrackControl::SendA) => "Send A",
             Self::Base(TrackControl::SendB) => "Send B",
             Self::Base(TrackControl::Drive) => "Drive",
+            Self::Base(TrackControl::Punch) => "Punch",
             Self::Base(TrackControl::LowCut) => "Low cut",
             Self::Base(TrackControl::HighCut) => "High cut",
             Self::Base(TrackControl::Pitch) => "Pitch",
@@ -208,6 +213,8 @@ impl Control {
                 ModField::Mutate => "Mutate",
                 ModField::Smooth => "Smooth",
                 ModField::Step(_) => "Step",
+                ModField::Low => "Low",
+                ModField::High => "High",
             },
             Self::Accumulator(AccumulatorField::Up) => "Up",
             Self::Accumulator(AccumulatorField::Down) => "Down",

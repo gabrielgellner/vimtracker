@@ -229,7 +229,7 @@ sounds until the note ends, shaped by the first envelope.
 | Setting | Does |
 |---|---|
 | `Type` | The filter: low-pass at `00`, band-pass at `80`, high-pass at `FF` |
-| `Clock` | How fast it's worked out: low and gritty at `00`, cleaner at `FF` |
+| `Clock` | How fast the noise changes: grainy steps low, a hiss high |
 | `Ring` | How much the filter rings at the note |
 
 `Kick` is an 808-style bass drum. Its note tunes it, so try `C-1`, or lower.
@@ -256,6 +256,20 @@ hat, and raise `Decay` for an open one.
 | `Noise` | How much plain noise replaces the metal |
 | `Tone` | How bright it is |
 | `Decay` | How long it rings |
+
+`Speech` is Plaits' speech synth: a voice's formants, then the vowels and words of Texas
+Instruments' speaking toys, for robots, chants and talking leads. `Model` goes from a bank of
+formant filters through a SAM-like synth to the speech chips' vowels, then through five banks
+of their words. On the words, each note says one word, chosen by `Word`, and then rests on its
+last sound, so a short `Release` ends it cleanly.
+
+| Setting | Does |
+|---|---|
+| `Model` | Formants at `00`, SAM, the chips' vowels, then words from `70` |
+| `Species` | The voice's size: deep and slow below `80`, small and quick above |
+| `Word` | Which vowel, or which word of the bank |
+| `Prosody` | How much of a word's own pitch it keeps: none at `80` |
+| `Speed` | How fast a word is said: as recorded at `80`, faster above |
 
 ### Macro
 
@@ -375,15 +389,108 @@ choirs, chants and singing pads.
 | `Vowel` | a at `00`, then e, i and o, to u at `FF`, blending between |
 | `Voice` | A bass at `00`, tenor, countertenor and alto, a soprano at `FF` |
 
+`Bowed` is a bowed string: a bow's friction against a string between a bridge and a nut, for
+cellos, fiddles and drones. It's bowed for as long as the note is held.
+
+| Setting | Does |
+|---|---|
+| `Pressure` | How hard the bow grips: airy at `00`, scratchy going up |
+| `Position` | Where the bow sits, from near the bridge at `00` towards the middle |
+
+`Blown` is a reed blown into a bore, as a clarinet's is, for woodwinds.
+
+| Setting | Does |
+|---|---|
+| `Breath` | The breath's noise: breathy at `00`, pure at `FF` |
+| `Tone` | The bore's tone: dark at `00`, and brighter going up |
+
+`Fluted` is a jet of air across a flute's bore, for flutes and pipes.
+
+| Setting | Does |
+|---|---|
+| `Breath` | The breath's noise: breathy at `00`, pure at `FF` |
+| `Jet` | How long the jet is against the bore, which overblows it |
+
+`Bell` is a bell of eleven partials, struck as the note starts, which dies away by itself.
+
+| Setting | Does |
+|---|---|
+| `Decay` | How long it rings. Near `FF` it rings on without dying away |
+| `Detune` | How far its pairs of partials are pulled apart, for a beating bell |
+
+`Drum` is a drum of six partials and filtered noise, struck as the note starts, which dies
+away by itself.
+
+| Setting | Does |
+|---|---|
+| `Decay` | How long it rings. Near `FF` it rings on without dying away |
+| `Tone` | From a dull thud at `00` through brighter partials to a noisy skin |
+
+`Wave Map` wanders over a 16 by 16 map of Braids' waves, blending the four nearest, for
+evolving digital tones.
+
+| Setting | Does |
+|---|---|
+| `Across` | Where on the map, across it |
+| `Down` | Where on the map, down it |
+
+`Wave Line` scans along a line of 64 of Braids' waves, with rough or smooth steps between
+them, for sweeps that stutter or glide.
+
+| Setting | Does |
+|---|---|
+| `Scan` | Where along the line |
+| `Steps` | Stepped jumps low, smooth sweeps in the middle, coarse steps at `FF` |
+
+`Paraphonic` is a chord of four voices on a line of Braids' waves, for pads and stabs.
+
+| Setting | Does |
+|---|---|
+| `Wave` | Which wave along the line, blending between them |
+| `Chord` | A detuned unison at `00`, then fifths, minor, major and octaves |
+
+`Twin Peaks` is noise through two resonant peaks, one at the note and one up to five octaves
+either way, for whistles, wind and breathy tones.
+
+| Setting | Does |
+|---|---|
+| `Sharpness` | How narrow the peaks are: wide at `00`, whistling at `FF` |
+| `Spacing` | The second peak: five octaves under at `00`, at the note at `80` |
+
+`Clocked` is noise held for each tick of a clock above the note, in a few steps, that loops
+after a while, for 8-bit noise, bleeps and glitches.
+
+| Setting | Does |
+|---|---|
+| `Loop` | How soon it repeats: hardly ever at `00`, every few ticks at `FF` |
+| `Steps` | How many levels it takes: two at `00`, up to 32 at `FF` |
+
+`Grain Cloud` is a cloud of sine grains around the note, each starting at random, for shimmer
+and texture.
+
+| Setting | Does |
+|---|---|
+| `Length` | How long each grain is: long at `00`, short and dense at `FF` |
+| `Spread` | How far each grain strays from the note |
+
+`Modem` is a carrier at the note keyed through four phases, as a modem sends data, for
+data bursts and digital chatter. Each note starts with a preamble, then sends its byte over
+and over.
+
+| Setting | Does |
+|---|---|
+| `Baud` | How fast the symbols go: slow at `00`, an octave under the note |
+| `Data` | The byte it sends |
+
 A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
 `Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX
 slot lists them under the voice's name, and an LFO's or envelope's `Dest` lists them by
 their names, like `Punch`. Each belongs to its voice, so a lock does nothing while the
 track plays another.
 
-A note on any synth but the drums, `String` and `Modal` holds until the next note, `OFF`
-or `KIL`, shaped by the first envelope, so shorten its Sustain for plucks; those five die
-away by themselves. A track plays one note at a time.
+A note on any synth but the drums, `String`, `Modal`, `Bell` and `Drum` holds until the next
+note, `OFF` or `KIL`, shaped by the first envelope, so shorten its Sustain for plucks; those
+seven die away by themselves. A track plays one note at a time.
 
 ## Accent
 

@@ -309,6 +309,9 @@ impl Handle {
         for _ in self.held.spring..needed.spring {
             self.unsent.push(Memory::spring(self.rate));
         }
+        for _ in self.held.rotary..needed.rotary {
+            self.unsent.push(Memory::rotary(self.rate));
+        }
         for _ in self.held.space..needed.space {
             self.unsent.push(Memory::space(self.rate));
         }
@@ -327,6 +330,7 @@ impl Handle {
             comb: self.held.comb.saturating_sub(needed.comb),
             freq_shift: self.held.freq_shift.saturating_sub(needed.freq_shift),
             spring: self.held.spring.saturating_sub(needed.spring),
+            rotary: self.held.rotary.saturating_sub(needed.rotary),
             space: self.held.space.saturating_sub(needed.space),
         };
         if spare != MemoryCount::default() {
@@ -589,6 +593,12 @@ mod tests {
     /// A frequency shifter, which takes the lines of its loop from the pool.
     const SHIFT: Insert = Insert::FreqShift(vt_model::insert::FreqShift::DEFAULT);
     /// A spring reverb, knocked, which takes its springs' lines from the pool.
+    /// A rotary speaker, fast, which takes its horn's line from the pool.
+    const ROTARY: Insert = Insert::Rotary(vt_model::insert::Rotary {
+        fast: 1,
+        ..vt_model::insert::Rotary::DEFAULT
+    });
+    /// A spring reverb, knocked, which takes its springs' lines from the pool.
     const SPRING: Insert = Insert::Spring(vt_model::insert::Spring {
         knock: 1,
         chaos: 0xFF,
@@ -771,7 +781,7 @@ mod tests {
             } else if round % 32 == 21 {
                 next.tracks[round % 8].inserts = [SPACE, SPRING, SPACE, SPRING];
             } else if round % 16 == 13 {
-                next.tracks[round % 8].inserts = [SPRING, SHIFT, SPRING, SHIFT];
+                next.tracks[round % 8].inserts = [SPRING, SHIFT, ROTARY, SHIFT];
             } else if round % 8 == 3 {
                 next.tracks[round % 8].inserts = [TAPE, LIMIT, TAPE, LIMIT];
             } else if round % 16 == 7 {
@@ -814,7 +824,7 @@ mod tests {
             Insert::Empty,
         ];
         more.tracks[1].inserts = [LIMIT, FLANGER, TAPE, Insert::Empty];
-        more.tracks[2].inserts = [PLATE, Insert::Empty, Insert::Empty, Insert::Empty];
+        more.tracks[2].inserts = [PLATE, ROTARY, Insert::Empty, Insert::Empty];
         more.tracks[3].inserts = [Insert::Empty, PITCH, SPRING, SPACE];
         more.tracks[4].inserts = [Insert::Empty, Insert::Empty, Insert::Empty, GRAINS];
         more.tracks[5].inserts = [WARPS, COMB, RESO, SHIFT];
@@ -837,6 +847,7 @@ mod tests {
                 freq_shift: needed.freq_shift + 1,
                 spring: needed.spring + 1,
                 space: needed.space + 1,
+                rotary: needed.rotary + 1,
             }
         );
         blocks(&mut rt, 1);
@@ -851,7 +862,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 15);
+        assert_eq!(freed, 16);
     }
 
     #[test]
@@ -930,7 +941,7 @@ mod tests {
                     modulator.kind = if round % 2 == slot % 2 {
                         [ModKind::Adsr, ModKind::Ahd, ModKind::Drum, ModKind::Lpg][round / 2 % 4]
                     } else {
-                        [ModKind::Lfo, ModKind::Steps][round / 2 % 2]
+                        [ModKind::Lfo, ModKind::Steps, ModKind::Track][round / 2 % 3]
                     };
                     modulator.steps.values =
                         [0x20, -0x20, 0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
