@@ -1403,8 +1403,8 @@ fn the_track_page_shows_its_settings_in_columns() {
     assert!(row(2).starts_with("│  Attack    1 ms       Sustain   100%"));
     assert!(row(4).starts_with("│  Decay     0 ms       Depth     --"));
     assert!(row(6).starts_with(&format!("│  Release   50 ms      Reset     {on}")));
-    // An LFO's shape, rate and depth down its left, and its phase and deform down its right, with
-    // a hole between them, as its mode is in its title.
+    // An LFO's shape, rate and depth down its left, and its phase, fade and deform down its right,
+    // as its mode is in its title.
     let (top, left) = device_at(&lines, "Mod 4");
     let row = |at: usize| from_column(&lines[top + at], left);
     assert!(
@@ -1413,7 +1413,7 @@ fn the_track_page_shows_its_settings_in_columns() {
         row(2)
     );
     let inside: String = row(4).chars().take(44).collect();
-    assert_eq!(inside.trim_end(), "│  Rate      1/8d");
+    assert_eq!(inside.trim_end(), "│  Rate      1/8d       Fade      Off");
     let inside: String = row(6).chars().take(73).collect();
     assert_eq!(inside.trim_end(), "│  Depth     +40        Deform    00");
     press(&mut app, "H");
@@ -2693,7 +2693,7 @@ fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
     // On the Mod page, an envelope's Reset and the arpeggio's Retrig, after their names in the
     // second column of their devices: each band is a device tall, the left device's second
     // column 24 in and the right device's 76 further, and a value 10 after its name. An LFO's
-    // mode is in its title, as a word, so its grid has no toggle.
+    // mode is in its title, as a word, so its grid has no toggle: under its phase is its fade.
     press(&mut app, "H");
     let buffer = track_page_buffer(&app);
     let top = |band: u16| 2 + 9 * band;
@@ -2701,7 +2701,7 @@ fn two_state_settings_are_toggles_on_the_fx_and_mod_pages_and_nothing_moves() {
         let reset = (34, top(band) + 6);
         assert_eq!(glyph_at(&buffer, reset).0, SWITCH_ON, "Mod {}", band + 1);
         let under_phase = (76 + 34, top(band) + 4);
-        assert_eq!(glyph_at(&buffer, under_phase).0, ' ', "Mod {}", band + 4);
+        assert_eq!(glyph_at(&buffer, under_phase).0, 'O', "Mod {}", band + 4);
     }
     // The arpeggio's values have room for its longest mode, so its second column is further in.
     assert_eq!(buffer[(76 + 27, top(3) + 4)].symbol(), "R");
