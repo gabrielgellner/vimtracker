@@ -10,7 +10,8 @@ use crate::song::Song;
 use crate::scale::Scale;
 use crate::selection::StepRange;
 use crate::shape::{
-    Context, FillKind, Shape, ShapeColumn, Source, copy_fx, is_empty, open_rows, written_from,
+    Context, FillKind, GenCell, Shape, ShapeColumn, Source, copy_fx, is_empty, open_rows,
+    render_into,
 };
 use crate::step::{FxCommand, FxSlot, Note, Step};
 
@@ -235,8 +236,9 @@ impl Generator {
         self.render(steps, source);
     }
 
-    /// Write its values over what's under it, changing its own cells only. A `Follow` with
-    /// nothing to read, as its source has gone, leaves what it last wrote, for the edit to apply.
+    /// Write its values over what's under it, changing its own cells only: the cells
+    /// [`render_into`] leaves, laid over the steps. A `Follow` with nothing to read, as its source
+    /// has gone, leaves what it last wrote, for the edit to apply.
     pub(crate) fn render(&mut self, steps: &mut [Step], source: Option<&[Step]>) {
         if self.shape.kind == FillKind::Follow && source.is_none() {
             return;
@@ -245,10 +247,10 @@ impl Generator {
         let Some(range) = self.rows() else {
             return;
         };
-        for (row, step) in written_from(steps, range, self.column, &self.shape, source) {
-            if let Some(target) = steps.get_mut(row) {
-                *target = step;
-            }
+        let mut cells = vec![GenCell::Under; range.len()];
+        render_into(steps, range, self.column, &self.shape, source, &mut cells);
+        for (step, cell) in steps.iter_mut().skip(range.first).zip(cells) {
+            cell.apply(self.column, step);
         }
         self.seen = steps[range.first..=range.last.min(steps.len() - 1)].to_vec();
     }
