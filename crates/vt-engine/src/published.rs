@@ -12,8 +12,7 @@ use vt_model::settings::SettingId;
 use vt_model::shape::ShapeColumn;
 use vt_model::song::Song;
 use vt_model::speed::Speed;
-use vt_model::step::FxCommand;
-use vt_model::step::MAX_NUDGE;
+use vt_model::step::{FxCommand, MAX_NUDGE};
 
 use crate::gens::{GenScratch, ScratchSlot, Unders};
 
