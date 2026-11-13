@@ -15,8 +15,8 @@ use vt_model::lfo::Rate;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, Edge, FillKind, Follow, GenCell, MAX_DEPTH, MAX_VALUES, Pink, RowView, Shape,
-    ShapeColumn, Values, WAVES, Walk, WaveRate, Where, render_into, written_from,
+    Acid, Bits, Edge, FillKind, Follow, GenCell, MAX_DEPTH, MAX_FACTOR, MAX_VALUES, Pink, RowView,
+    Shape, ShapeColumn, Values, WAVES, Walk, WaveRate, Where, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -309,6 +309,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         },
         walk: Walk::default(),
         pink: Pink::default(),
+        bits: Bits::default(),
     };
     // Settings added since are drawn from the seed, so the other draws, and the other fills'
     // hashes, stay as they were.
@@ -319,6 +320,10 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
     };
     shape.pink = Pink {
         depth: more.below(u64::from(MAX_DEPTH) + 3) as u8,
+    };
+    shape.bits = Bits {
+        factor: more.below(u64::from(MAX_FACTOR) + 2) as u8,
+        masks: more.chance(40),
     };
     shape
 }

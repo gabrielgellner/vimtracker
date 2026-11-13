@@ -10,7 +10,7 @@ use vt_model::project::{load_song, save_song};
 use vt_model::scale::Scale;
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, DEFAULT_RATE, Edge, FillKind, Follow, Pink, Shape, ShapeColumn, Values, Walk, Where,
+    Acid, Bits, DEFAULT_RATE, Edge, FillKind, Follow, Pink, Shape, ShapeColumn, Values, Walk, Where,
 };
 use vt_model::song::{Lane, Phrase, Song};
 use vt_model::step::{FxCommand, Note, Step};
@@ -78,6 +78,7 @@ fn ramp(from: u8, to: u8, place: Where) -> Shape {
         follow: Follow::default(),
         walk: Walk::default(),
         pink: Pink::default(),
+        bits: Bits::default(),
     }
 }
 
@@ -689,6 +690,7 @@ fn a_shape_left_as_it_starts_saves_no_acid_settings() {
     let text = ron::ser::to_string(&*live).unwrap();
     assert!(!text.contains("acid") && !text.contains("follow"), "{text}");
     assert!(!text.contains("walk") && !text.contains("pink"), "{text}");
+    assert!(!text.contains("bits"), "{text}");
 }
 
 #[test]
@@ -741,4 +743,86 @@ fn a_live_walk_and_1_f_rerender_on_new_notes_and_save_their_settings() {
         assert_eq!(phrase(&loaded), phrase(&added));
         assert_eq!(phrase(&loaded).generators()[0].shape, shape);
     }
+}
+
+/// Each row as `x` for a note and `.` for none.
+fn rhythm(song: &Song) -> String {
+    phrase(song)
+        .steps()
+        .iter()
+        .map(|step| {
+            if matches!(step.note, Note::On(_)) {
+                'x'
+            } else {
+                '.'
+            }
+        })
+        .collect()
+}
+
+fn multiply(factor: u8, place: Where) -> Shape {
+    Shape {
+        kind: FillKind::Multiply,
+        bits: Bits {
+            factor,
+            masks: false,
+        },
+        ..ramp(0, 0, place)
+    }
+}
+
+#[test]
+fn a_live_multiply_rerenders_from_the_rhythm_under_it_and_saves_its_factor() {
+    // Rows 1, 4 and 7, each its own note and velocity, over 16 rows.
+    let mut rows = vec![EMPTY; 16];
+    rows[0] = "C-3 40 --- --- ---";
+    rows[3] = "D#3 50 --- --- ---";
+    rows[6] = "G-3 60 --- --- ---";
+    let start = song_with(&rows);
+    let note = ShapeColumn::Note {
+        scale: Scale::default(),
+        writes: None,
+    };
+    let live = generate(&start, note, all(16), multiply(3, Where::Notes));
+    assert_eq!(rhythm(&live), "xx.xx.xx........");
+    assert_eq!(texts(&live)[1], "C-3 40 --- --- ---");
+    assert_eq!(texts(&live)[7], "G-3 60 --- --- ---");
+    // A new factor works from the rhythm under it, not the one it wrote.
+    let five = reshape(&live, 0, multiply(5, Where::Notes));
+    assert_eq!(rhythm(&five), "x.xx.xx.x.......");
+    assert_eq!(phrase(&five).generators().len(), 1);
+    // Doubling clears the first note, velocity and all; 1 gives it all back.
+    let two = reshape(&five, 0, multiply(2, Where::Notes));
+    assert_eq!(rhythm(&two), ".x..x..x........");
+    assert_eq!(texts(&two)[0], EMPTY);
+    let one = reshape(&two, 0, multiply(1, Where::Notes));
+    assert_eq!(texts(&one), texts(&start));
+    // Saved and opened again, it keeps its factor.
+    let folder = std::env::temp_dir().join(format!("vt-multiply-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&folder);
+    save_song(&folder, &five).unwrap();
+    let text = fs::read_to_string(folder.join("song.ron")).unwrap();
+    let loaded = load_song(&folder).unwrap();
+    let _ = fs::remove_dir_all(&folder);
+    assert!(text.contains("factor"), "{text}");
+    assert_eq!(phrase(&loaded), phrase(&five));
+    assert_eq!(
+        phrase(&loaded).generators()[0].shape,
+        multiply(5, Where::Notes)
+    );
+}
+
+#[test]
+fn a_live_multiply_on_an_fx_column_moves_the_commands() {
+    let mut rows = vec![EMPTY; 16];
+    rows[0] = "--- -- cut:10 --- ---";
+    rows[4] = "--- -- cut:50 --- ---";
+    let start = song_with(&rows);
+    let before = slots(&start);
+    let live = generate(&start, CUT, all(16), multiply(2, Where::Commands));
+    let after = slots(&live);
+    assert_eq!(after[0], before[2], "row 1's command is gone");
+    assert_eq!(after[1], before[0], "and row 2 has it");
+    assert_eq!(after[4], before[2]);
+    assert_eq!(after[5], before[4]);
 }

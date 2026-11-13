@@ -14,9 +14,9 @@ use crate::lfo::{Shape as Wave, note_rates};
 use crate::step::Step;
 
 use super::{
-    Acid, DEFAULT_RATE, EUCLID_HITS, Edge, FillKind, MAX_ACID_NOTES, MAX_BEND, MAX_DEPTH,
-    MAX_TRANSPOSE, MIN_DEPTH, Pink, Shape, ShapeColumn, Source, Values, WAVES, WaveRate, Where,
-    default_step, first_note,
+    Acid, Bits, DEFAULT_RATE, EUCLID_HITS, Edge, FillKind, MAX_ACID_NOTES, MAX_BEND, MAX_DEPTH,
+    MAX_FACTOR, MAX_TRANSPOSE, MIN_DEPTH, Pink, Shape, ShapeColumn, Source, Values, WAVES,
+    WaveRate, Where, default_step, first_note,
 };
 
 /// How far a small and a large step move a curve.
@@ -41,6 +41,8 @@ const EUCLID_JUMP: i32 = 4;
 const LISTED_CYCLES: [u16; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 /// The longest `Step` a walk of notes takes: two octaves of semitones, or of degrees.
 const MAX_NOTE_STEP: u8 = 24;
+/// How far a large step moves `Multiply`'s factor.
+const FACTOR_JUMP: i32 = 4;
 
 /// How many columns and rows a generator's settings take on the Gen page.
 pub const GEN_COLUMNS: usize = 3;
@@ -235,6 +237,9 @@ pub enum GenParam {
     Step,
     Edge,
     Depth,
+    /// What `Multiply` multiplies the rhythm by, and whether factors 2 and 3 mask it first.
+    Factor,
+    Masks,
     /// How a ramp bends, early or late, and how it eases at both ends.
     Curve,
     S,
@@ -257,7 +262,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 31] = [
+    pub const ALL: [Self; 33] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -277,6 +282,8 @@ impl GenParam {
         Self::Step,
         Self::Edge,
         Self::Depth,
+        Self::Factor,
+        Self::Masks,
         Self::Curve,
         Self::S,
         Self::Wave,
@@ -313,6 +320,8 @@ impl GenParam {
             Self::Step => "step",
             Self::Edge => "edge",
             Self::Depth => "depth",
+            Self::Factor => "factor",
+            Self::Masks => "masks",
             Self::Curve => "curve",
             Self::S => "s",
             Self::Wave => "wave",
@@ -356,6 +365,8 @@ impl GenParam {
             Self::Step => "Step",
             Self::Edge => "Edge",
             Self::Depth => "Depth",
+            Self::Factor => "Factor",
+            Self::Masks => "Masks",
             Self::Curve => "Curve",
             Self::S => "S",
             Self::Wave => "Shape",
@@ -377,7 +388,7 @@ impl GenParam {
             Self::Curve | Self::S => Units::Bend,
             Self::Transpose => Units::Interval,
             Self::Phase => Units::Degrees,
-            Self::Notes | Self::Run | Self::Rotate | Self::Depth => Units::Count,
+            Self::Notes | Self::Run | Self::Rotate | Self::Depth | Self::Factor => Units::Count,
             Self::Step => Units::Step,
             Self::Every | Self::Late => Units::Rows,
             Self::Hits => Units::OfRows,
@@ -393,7 +404,8 @@ impl GenParam {
             | Self::Invert
             | Self::Reverse
             | Self::CopyFx
-            | Self::Edge => Units::Named,
+            | Self::Edge
+            | Self::Masks => Units::Named,
         }
     }
 
@@ -404,12 +416,14 @@ impl GenParam {
     /// `generates` notes of its own, and keeping the pitches there leaves it no ends or notes to
     /// choose. A `Follow` writes every row from its source, so it has no `Where`, and turns
     /// about a note only while it inverts. `Walk` has its `Step` and `Edge`, and `1/f` its
-    /// `Depth`.
+    /// `Depth`. `Multiply` reads the rhythm itself, so it has its `Factor` and `Masks` and no
+    /// `Where`.
     pub fn exists_for(self, shape: &Shape, generates: bool) -> bool {
         let kind = shape.kind;
         let acid = kind == FillKind::Acid;
         let riff = acid && (generates || !shape.acid.keep);
-        let rows = kind != FillKind::Follow;
+        let rows = kind.has_where();
+        let follow = kind == FillKind::Follow;
         match self {
             Self::Fill => true,
             Self::Where => rows,
@@ -418,8 +432,8 @@ impl GenParam {
             | Self::Invert
             | Self::Reverse
             | Self::Late
-            | Self::CopyFx => !rows,
-            Self::Axis => !rows && shape.follow.invert,
+            | Self::CopyFx => follow,
+            Self::Axis => follow && shape.follow.invert,
             Self::From | Self::To => {
                 riff || matches!(
                     kind,
@@ -437,6 +451,7 @@ impl GenParam {
             Self::Density => acid && generates,
             Self::Step | Self::Edge => kind == FillKind::Walk,
             Self::Depth => kind == FillKind::Pink,
+            Self::Factor | Self::Masks => kind == FillKind::Multiply,
             Self::Curve | Self::S => {
                 matches!(kind, FillKind::Ramp | FillKind::Random | FillKind::Scale)
             }
@@ -460,10 +475,11 @@ impl GenParam {
 
     /// The settings in a generator's title on the Gen page, the ones that change what it is: its
     /// fill, then its `Where`, or for a `Follow`, the phrase it follows, and for `Acid`, its
-    /// `Pitches`, as the second die is a mode of the riff's.
+    /// `Pitches`, as the second die is a mode of the riff's. `Multiply` has its fill alone.
     pub fn title(shape: &Shape) -> [Option<Self>; GEN_COLUMNS] {
         match shape.kind {
             FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None],
+            FillKind::Multiply => [Some(Self::Fill), None, None],
             FillKind::Acid => [Some(Self::Fill), Some(Self::Where), Some(Self::Pitches)],
             _ => [Some(Self::Fill), Some(Self::Where), None],
         }
@@ -501,6 +517,7 @@ impl GenParam {
                 [Some(Reverse), Some(Late), Some(CopyFx)],
             ],
             FillKind::Scale => [[Some(From), Some(To), Some(Curve)], [Some(S), None, None]],
+            FillKind::Multiply => [[Some(Factor), Some(Masks), None], none],
             FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => {
                 [none, none]
             }
@@ -610,6 +627,8 @@ impl GenParam {
             }
             Self::Edge => shape.walk.edge.name().to_owned(),
             Self::Depth => shape.pink.depth.to_string(),
+            Self::Factor => shape.bits.factor.to_string(),
+            Self::Masks => on_off(shape.bits.masks),
         }
     }
 
@@ -640,9 +659,12 @@ impl GenParam {
         let hex = typed_in_hex(column);
         match self {
             Self::Fill | Self::Wave | Self::Where | Self::Source => Typing::Listed,
-            Self::Pitches | Self::Invert | Self::Reverse | Self::CopyFx | Self::Edge => {
-                Typing::Toggled
-            }
+            Self::Pitches
+            | Self::Invert
+            | Self::Reverse
+            | Self::CopyFx
+            | Self::Edge
+            | Self::Masks => Typing::Toggled,
             Self::Axis => Typing::Named { list: false },
             Self::From | Self::To | Self::Step if hex => Typing::Hex,
             Self::From | Self::To => Typing::Named { list: false },
@@ -814,6 +836,12 @@ impl GenParam {
                 let (low, high) = (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH));
                 shape.pink.depth = moved(i32::from(shape.pink.depth), by(1, 2), low, high) as u8;
             }
+            Self::Factor => {
+                let most = i32::from(MAX_FACTOR);
+                let by = by(1, FACTOR_JUMP);
+                shape.bits.factor = moved(i32::from(shape.bits.factor), by, 1, most) as u8;
+            }
+            Self::Masks => shape.bits.masks = !shape.bits.masks,
         }
         Ok(())
     }
@@ -865,6 +893,8 @@ impl GenParam {
             Self::Step => shape.walk.step = default_step(context.column),
             Self::Edge => shape.walk.edge = Edge::default(),
             Self::Depth => shape.pink.depth = Pink::default().depth,
+            Self::Factor => shape.bits.factor = Bits::default().factor,
+            Self::Masks => shape.bits.masks = Bits::default().masks,
             Self::Hits => {
                 if let Where::Euclid { rotate, .. } = shape.place {
                     shape.place = Where::Euclid {
@@ -1004,6 +1034,10 @@ impl GenParam {
                 Ok(depth) if (MIN_DEPTH..=MAX_DEPTH).contains(&depth) => shape.pink.depth = depth,
                 _ => return Err("Depth runs from 2 to 8"),
             },
+            Self::Factor => match text.parse::<u8>() {
+                Ok(factor) if (1..=MAX_FACTOR).contains(&factor) => shape.bits.factor = factor,
+                _ => return Err("Factor runs from 1 to 16"),
+            },
             Self::Fill
             | Self::Wave
             | Self::Where
@@ -1012,7 +1046,8 @@ impl GenParam {
             | Self::Invert
             | Self::Reverse
             | Self::CopyFx
-            | Self::Edge => {}
+            | Self::Edge
+            | Self::Masks => {}
         }
         Ok(())
     }
@@ -1033,7 +1068,8 @@ impl GenParam {
             Self::Axis => (i32::from(column.lowest()), i32::from(column.highest())),
             Self::Transpose => (-i32::from(MAX_TRANSPOSE), i32::from(MAX_TRANSPOSE)),
             Self::Late => (0, context.source_rows() as i32 - 1),
-            Self::Invert | Self::Reverse | Self::CopyFx | Self::Edge => (0, 1),
+            Self::Invert | Self::Reverse | Self::CopyFx | Self::Edge | Self::Masks => (0, 1),
+            Self::Factor => (1, i32::from(MAX_FACTOR)),
             Self::Step => (1, i32::from(longest_step(column))),
             Self::Depth => (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH)),
             Self::Phase => (0, 359),
@@ -1068,6 +1104,8 @@ impl GenParam {
             Self::Step => i32::from(shape.walk.step),
             Self::Edge => i32::from(shape.walk.edge == Edge::Wrap),
             Self::Depth => i32::from(shape.pink.depth),
+            Self::Factor => i32::from(shape.bits.factor),
+            Self::Masks => i32::from(shape.bits.masks),
             Self::Phase => i32::from(shape.phase),
             Self::Values => return None,
             Self::Run => i32::from(shape.run),
@@ -1167,6 +1205,8 @@ impl GenParam {
                 };
             }
             Self::Depth => shape.pink.depth = number as u8,
+            Self::Factor => shape.bits.factor = number as u8,
+            Self::Masks => shape.bits.masks = number != 0,
         }
     }
 }
@@ -1280,6 +1320,7 @@ mod tests {
             follow: Follow::default(),
             walk: crate::shape::Walk::default(),
             pink: Pink::default(),
+            bits: Bits::default(),
         }
     }
 
@@ -1336,6 +1377,11 @@ mod tests {
             [Fill, From, To, Curve, S, Where]
         );
         assert_eq!(of(FillKind::Invert, false), [Fill, Where]);
+        assert_eq!(
+            of(FillKind::Multiply, false),
+            [Fill, Factor, Masks],
+            "Multiply reads the rhythm itself, so it has no Where"
+        );
         assert_eq!(
             of(FillKind::Acid, true),
             [
