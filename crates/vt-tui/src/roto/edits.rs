@@ -21,12 +21,15 @@ use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Fade, LfoMode, Rate, Shape, note_rates};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId, gate_percent, gate_value};
+use vt_model::shape::GenParam;
+use vt_model::shape::params::Units as GenUnits;
 use vt_model::song::{FilterType, Machine, Song, Track, trim_text};
 use vt_model::speed::Speed;
 use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
 use vt_model::tracking::Source;
 use vt_roto::live::{share_of, step_at};
 
+use crate::shaping::with_live;
 use crate::track_page::tuning::{tuning, tuning_most};
 use crate::track_page::{AccumulatorField, ArpField, Control, ModField};
 use crate::views::track::{toggle_on, value};
@@ -150,8 +153,12 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
         return switched(control, at, track, now);
     }
     match control {
-        // Generators reach the Roto by their own layouts (#613).
-        Control::Gen { .. } | Control::NewGenerator(_) => None,
+        Control::Gen {
+            phrase,
+            generator,
+            param,
+        } => gen_turned(song, at, phrase, generator, param, position),
+        Control::NewGenerator(_) => None,
         Control::Machine => changed(pick(&Machine::ALL, position), track.machine, |machine| {
             Action::SetTrackMachine { track: at, machine }
         }),
@@ -528,6 +535,37 @@ fn switched(control: Control, at: usize, track: &Track, on: bool) -> Option<Acti
         Control::Safe => Some(Action::SetTrackSafe { track: at, on }),
         _ => None,
     }
+}
+
+/// A generator's setting at a knob's position, as the edit the page's would be: a list's or a
+/// switch's choice by its step, a number by its share of the way from its lowest to its
+/// highest, its column written again through `Reshape`.
+fn gen_turned(
+    song: &Song,
+    at: usize,
+    phrase: u32,
+    generator: usize,
+    param: GenParam,
+    position: u16,
+) -> Option<Action> {
+    let track = song.tracks.get(at)?;
+    let shape = with_live(song, track, phrase, generator, |found, context| {
+        let (low, high) = param.bounds(context)?;
+        let number = if param.units() == GenUnits::Named {
+            low + step_at(position, (high - low + 1) as usize) as i32
+        } else {
+            low + whole(position, (high - low) as u32) as i32
+        };
+        let mut shape = found.shape;
+        param.set_number(&mut shape, context, number);
+        (shape != found.shape).then_some(shape)
+    })??;
+    Some(Action::Reshape {
+        track: at,
+        phrase,
+        generator,
+        shape,
+    })
 }
 
 /// A setting's value as the app writes it, for the Roto to show as its knob turns: in its units

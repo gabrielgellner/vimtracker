@@ -786,7 +786,9 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     `Control::Gen`, then `Empty`. Each generator's preview is `kitty/generators.rs`'s
     `GenDrawing`, its column's values across its span from the phrase's steps, sent again only as
     they change, and the row playing is a dot placed on it as an LFO's is, in the same placements
-    (decision 280). A `DeviceSpec` is its
+    (decision 280). The Roto shows those of the phrase level with the cursor on its track after
+    the Mod page's, laid out by `roto/layouts.rs`'s `GENERATORS`, a layout a fill (decision 281).
+    A `DeviceSpec` is its
     identity, its title controls over the grid's first columns, its grid of `Control`s and its
     width, full or half, built by `DeviceSpec::new` from a model's `Grid` (`vt-model`'s
     `grid.rs`), as `Insert::grid` is. `rack_places` lays a page's devices out in the order they're

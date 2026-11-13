@@ -28,6 +28,8 @@ use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Fade, LfoMode, Rate, Shape};
 use vt_model::modulation::{MAX_DEPTH, ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
+use vt_model::shape::GenParam;
+use vt_model::shape::params::Units as GenUnits;
 use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
 use vt_model::speed::Speed;
 use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
@@ -42,6 +44,7 @@ use vt_roto::sysex::{CONTROLS, MAX_STEPS};
 use ratatui::style::Color;
 
 use super::layouts::{self, Setting, Turn};
+use crate::shaping::{column_label, with_live};
 use crate::theme;
 use crate::track_page::tuning::{tuning, tuning_most};
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page};
@@ -208,8 +211,50 @@ fn registry_setting(control: Control, track: &Track) -> Option<SettingId> {
     }
 }
 
+/// A generator's setting as a knob: a list or a switch stepped through its choices, named as the
+/// page names them, and a number smooth from its lowest to its highest, a bend or an interval
+/// with a notch at its middle. A `List`'s values have none.
+fn gen_feel(
+    song: &Song,
+    track: &Track,
+    phrase: u32,
+    index: usize,
+    param: GenParam,
+) -> Option<(Feel, u16)> {
+    with_live(song, track, phrase, index, |generator, context| {
+        let shape = &generator.shape;
+        let (low, high) = param.bounds(context)?;
+        let number = param.number(shape, context)?;
+        if param.units() == GenUnits::Named {
+            let names = (low..=high).map(|at| {
+                let mut named = *shape;
+                param.set_number(&mut named, context, at);
+                param.shown(&named, context)
+            });
+            return Some(list(names, (number - low) as usize));
+        }
+        let centred = matches!(param.units(), GenUnits::Bend | GenUnits::Interval);
+        Some(value((number - low) as u16, (high - low) as u16, centred))
+    })
+    .flatten()
+}
+
+/// A generator's setting's family: its chances, bends and phase are how it moves, as a
+/// modulator's are; its ends, steps, rows and counts are pitches and times; and its lists and
+/// switches are choices.
+fn gen_family(param: GenParam) -> Family {
+    match param.units() {
+        GenUnits::Percent | GenUnits::Bend | GenUnits::Degrees => Family::Modulation,
+        GenUnits::Named => Family::Choice,
+        _ => Family::Time,
+    }
+}
+
 /// A control's family.
 pub fn family(control: Control, track: &Track) -> Family {
+    if let Control::Gen { param, .. } = control {
+        return gen_family(param);
+    }
     if let Some(id) = registry_setting(control, track) {
         let entry = id.entry();
         // A resonance and an effect's cuts are the filter's kind, though each is a share like
@@ -409,8 +454,12 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             .collect::<Vec<_>>()
     };
     let found = match control {
-        // Generators reach the Roto by their own layouts (#613).
-        Control::Gen { .. } | Control::NewGenerator(_) => return None,
+        Control::Gen {
+            phrase,
+            generator,
+            param,
+        } => return gen_feel(song, track, phrase, generator, param),
+        Control::NewGenerator(_) => return None,
         Control::Machine => list(
             Machine::ALL.iter().map(|machine| machine.name().to_owned()),
             Machine::ALL
@@ -864,6 +913,25 @@ fn identity(
             track.machine.name().to_owned(),
             format!("vimtracker/machine/{}", lower(track.machine.name())),
         ),
+        // A generator by its column and its fill, as `Note Ramp`.
+        Page::Gen => {
+            let Some(Control::Gen {
+                phrase, generator, ..
+            }) = spec.title[0]
+            else {
+                unreachable!("a generator's title starts with its fill")
+            };
+            let found = track
+                .phrases
+                .get(&phrase)
+                .and_then(|found| found.generators().get(generator));
+            let column = found.map_or_else(String::new, |found| column_label(found.column));
+            let fill = found.map_or("", |found| found.shape.kind.name());
+            (
+                format!("{column} {fill}"),
+                format!("vimtracker/gen/{}/{}", lower(&column), lower(fill)),
+            )
+        }
         // A mod slot by its number and its type, as an FX slot is by its digit and its effect.
         _ if matches!(spec.title[0], Some(Control::Mod(..))) => {
             let Some(Control::Mod(at, _)) = spec.title[0] else {
@@ -935,8 +1003,13 @@ pub fn live_device(
 
 /// A track's devices as the Roto's plugin list shows them, in the order the design note's §3 has:
 /// the Sound page's, then the FX page's slots, then the Mod page's.
-pub fn live_devices(track: &Track, song: &Song, stored_on_roto: bool) -> Vec<LiveDevice> {
-    track_devices(track)
+pub fn live_devices(
+    track: &Track,
+    phrase: Option<u32>,
+    song: &Song,
+    stored_on_roto: bool,
+) -> Vec<LiveDevice> {
+    track_devices(track, phrase)
         .into_iter()
         .map(|(page, slot, spec)| live_device(page, slot, &spec, track, song, stored_on_roto))
         .collect()
@@ -944,12 +1017,14 @@ pub fn live_devices(track: &Track, song: &Song, stored_on_roto: bool) -> Vec<Liv
 
 /// A track's devices in the order the Roto's list has them, each with its page and its place
 /// on that page.
-pub fn track_devices(track: &Track) -> Vec<(Page, usize, DeviceSpec)> {
-    [Page::Sound, Page::Fx, Page::Mod]
+pub fn track_devices(track: &Track, phrase: Option<u32>) -> Vec<(Page, usize, DeviceSpec)> {
+    [Page::Sound, Page::Fx, Page::Mod, Page::Gen]
         .into_iter()
         .flat_map(|page| {
-            page.devices(track)
+            page.devices_on(track, phrase)
                 .into_iter()
+                // The Gen page's `Empty` makes a column live, which only the app does.
+                .filter(|spec| !matches!(spec.title[0], Some(Control::NewGenerator(_))))
                 .enumerate()
                 .map(move |(slot, spec)| (page, slot, spec))
                 .collect::<Vec<_>>()
@@ -961,11 +1036,12 @@ pub fn track_devices(track: &Track) -> Vec<(Page, usize, DeviceSpec)> {
 /// `device`th device, if there's one there.
 pub fn control_at(
     track: &Track,
+    phrase: Option<u32>,
     device: usize,
     index: u16,
     stored_on_roto: bool,
 ) -> Option<Control> {
-    let (_, _, spec) = track_devices(track).into_iter().nth(device)?;
+    let (_, _, spec) = track_devices(track, phrase).into_iter().nth(device)?;
     let at = usize::from(index.checked_sub(1)?);
     let placement = placement(&spec, track, stored_on_roto);
     placement
@@ -980,11 +1056,12 @@ pub fn control_at(
 /// `device`th device, if it's stored and has one there.
 pub fn button_at(
     track: &Track,
+    phrase: Option<u32>,
     device: usize,
     index: u16,
     stored_on_roto: bool,
 ) -> Option<Control> {
-    let (_, _, spec) = track_devices(track).into_iter().nth(device)?;
+    let (_, _, spec) = track_devices(track, phrase).into_iter().nth(device)?;
     let at = usize::from(index.checked_sub(1)?);
     let placement = placement(&spec, track, stored_on_roto);
     placement
@@ -1073,9 +1150,10 @@ pub fn stored_setups() -> Vec<OwnSetup> {
 }
 
 /// What switches a track's `device`th device in and out, as its enabled state on the Roto: an
-/// FX slot's bypass, or a mod slot's own switch. Other devices are always in.
+/// FX slot's bypass, or a mod slot's own switch. Other devices are always in, generators among
+/// them, which come last, so they're left out here.
 pub fn device_switch(track: &Track, device: usize) -> Option<Control> {
-    let (_, _, spec) = track_devices(track).into_iter().nth(device)?;
+    let (_, _, spec) = track_devices(track, None).into_iter().nth(device)?;
     match spec.title[0]? {
         control @ Control::Insert(_) => Some(control),
         control => crate::track_page::modulator_bypassed(control, track).map(|_| control),
