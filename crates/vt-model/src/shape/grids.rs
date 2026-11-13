@@ -319,6 +319,7 @@ mod tests {
             bits: Bits::default(),
             grids,
             vary: 0,
+            variation: crate::shape::Variation::default(),
         }
     }
 

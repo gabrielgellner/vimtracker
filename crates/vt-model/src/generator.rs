@@ -87,6 +87,8 @@ fn owns(shape: &Shape) -> Owns {
         FillKind::Multiply => Owns::Note,
         // Its accents are velocities, and a note it adds or clears takes or leaves its gate.
         FillKind::Grids => Owns::Note,
+        // Each row is a note learned with its accent and slide, or a rest, so it writes all three.
+        FillKind::Variation => Owns::Note,
         _ => Owns::Cell,
     }
 }

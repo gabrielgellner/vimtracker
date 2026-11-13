@@ -81,6 +81,7 @@ fn ramp(from: u8, to: u8, place: Where) -> Shape {
         bits: Bits::default(),
         grids: vt_model::shape::Grids::default(),
         vary: 0,
+        variation: vt_model::shape::Variation::default(),
     }
 }
 
@@ -864,4 +865,89 @@ fn a_live_bit_transform_rerenders_on_new_notes_and_saves_its_bits() {
     assert!(text.contains("keep"), "{text}");
     assert_eq!(phrase(&loaded), phrase(&added));
     assert_eq!(phrase(&loaded).generators()[0].shape, mask(0x0F));
+}
+
+/// A line of my own, every run of three rows of it followed by one row only.
+const LINE: [&str; 16] = [
+    "C-2 7F --- --- ---",
+    "--- -- --- --- ---",
+    "C-2 50 --- --- ---",
+    "D#2 50 HLD1 --- --- ---",
+    "G-2 50 --- --- ---",
+    "--- -- --- --- ---",
+    "C-2 7F --- --- ---",
+    "C-3 50 --- --- ---",
+    "--- -- --- --- ---",
+    "A#2 50 HLD1 --- --- ---",
+    "C-2 50 --- --- ---",
+    "OFF -- --- --- ---",
+    "C-2 7F --- --- ---",
+    "--- -- --- --- ---",
+    "G-2 50 --- --- ---",
+    "D#2 7F --- --- ---",
+];
+
+fn variation(seed: u64, order: u8, temperature: u8) -> Shape {
+    Shape {
+        kind: FillKind::Variation,
+        seed,
+        variation: vt_model::shape::Variation { order, temperature },
+        ..ramp(0, 0, Where::AllRows)
+    }
+}
+
+/// A live `Variation` learns from what's under it, never from what it wrote: reshaped to order 3
+/// at temperature 0 it writes the line back, and the same seed and settings write the same.
+#[test]
+fn a_live_variation_learns_from_the_notes_under_it_and_saves() {
+    let start = song_with(&LINE);
+    let notes = ShapeColumn::Note {
+        scale: Scale::default(),
+        writes: None,
+    };
+    let live = generate(&start, notes, all(16), variation(3, 1, 50));
+    assert_eq!(phrase(&live).generators().len(), 1);
+    assert_ne!(texts(&live), texts(&start), "order 1 strays from the line");
+    let close = reshape(&live, 0, variation(3, 3, 0));
+    assert_eq!(texts(&close), texts(&start));
+    let again = reshape(&close, 0, variation(3, 1, 50));
+    assert_eq!(texts(&again), texts(&live));
+    // Applied, it leaves the variation as plain notes.
+    let applied = edit(
+        &live,
+        &Action::ApplyGenerator {
+            track: 0,
+            phrase: 0,
+            generator: 0,
+        },
+    )
+    .unwrap();
+    assert!(phrase(&applied).generators().is_empty());
+    assert_eq!(texts(&applied), texts(&live));
+    // Saved with its settings, and opened again still live.
+    let folder = std::env::temp_dir().join(format!("vt-variation-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&folder);
+    save_song(&folder, &live).unwrap();
+    let text = fs::read_to_string(folder.join("song.ron")).unwrap();
+    assert!(text.contains("variation"), "{text}");
+    let loaded = Arc::new(load_song(&folder).unwrap());
+    let _ = fs::remove_dir_all(&folder);
+    assert_eq!(phrase(&loaded), phrase(&live));
+    assert_eq!(phrase(&loaded).generators()[0].shape.variation.order, 1);
+}
+
+/// Three notes are too few to learn from, so the rows stay as they are.
+#[test]
+fn a_variation_of_too_few_notes_leaves_the_rows_alone() {
+    let mut rows = vec![EMPTY; 16];
+    rows[0] = "C-3 40 --- --- ---";
+    rows[4] = "E-3 40 --- --- ---";
+    rows[8] = "G-3 40 --- --- ---";
+    let start = song_with(&rows);
+    let notes = ShapeColumn::Note {
+        scale: Scale::default(),
+        writes: None,
+    };
+    let live = generate(&start, notes, all(16), variation(3, 1, 100));
+    assert_eq!(texts(&live), texts(&start));
 }

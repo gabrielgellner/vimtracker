@@ -180,6 +180,10 @@ impl App {
         let mut shape = live.generator.shape;
         change(self, param, &mut shape, &live.context());
         live.settle(&mut shape);
+        if let Some(why) = live.refusal(&shape) {
+            self.status = why;
+            return;
+        }
         if shape != live.generator.shape {
             self.apply(&Action::Reshape {
                 track,
@@ -276,6 +280,10 @@ impl App {
         let mut shape = live.generator.shape;
         choice.apply(&mut shape);
         live.settle(&mut shape);
+        if let Some(why) = live.refusal(&shape) {
+            self.status = why;
+            return;
+        }
         if shape != live.generator.shape {
             self.apply(&Action::Reshape {
                 track,

@@ -16,7 +16,7 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
     Acid, Bits, DrumPart, Edge, FillKind, Follow, GenCell, Grids, MAX_DEPTH, MAX_FACTOR,
-    MAX_VALUES, Pink, RowView, Shape, ShapeColumn, Values, WAVES, Walk, WaveRate, Where,
+    MAX_VALUES, Pink, RowView, Shape, ShapeColumn, Values, Variation, WAVES, Walk, WaveRate, Where,
     render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
@@ -313,6 +313,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         bits: Bits::default(),
         grids: Grids::default(),
         vary: 0,
+        variation: Variation::default(),
     };
     // Settings added since are drawn from the seed, so the other draws, and the other fills'
     // hashes, stay as they were.
@@ -338,6 +339,14 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         chaos: if more.chance(40) { 0 } else { more.byte() },
         part: more.chance(90).then(|| more.pick(&DrumPart::ALL)),
         fine: more.chance(30),
+    };
+    shape.variation = Variation {
+        order: more.below(5) as u8,
+        temperature: if more.chance(30) {
+            0
+        } else {
+            more.below(120) as u8
+        },
     };
     shape
 }

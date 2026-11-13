@@ -50,6 +50,7 @@ fn tresillo() -> Shape {
         bits: Bits::default(),
         grids: vt_model::shape::Grids::default(),
         vary: 0,
+        variation: vt_model::shape::Variation::default(),
     }
 }
 

@@ -15,8 +15,9 @@ use crate::step::Step;
 
 use super::{
     Acid, Bits, DEFAULT_RATE, DrumPart, EUCLID_HITS, Edge, FillKind, Grids, MAX_ACID_NOTES,
-    MAX_BEND, MAX_DEPTH, MAX_FACTOR, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Pink, Shape, ShapeColumn,
-    Source, VARIES, Values, WAVES, WaveRate, Where, default_step, first_note,
+    MAX_BEND, MAX_DEPTH, MAX_FACTOR, MAX_ORDER, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Pink, Shape,
+    ShapeColumn, Source, VARIES, Values, Variation, WAVES, WaveRate, Where, default_step,
+    first_note,
 };
 
 /// How far a small and a large step move a curve.
@@ -266,6 +267,10 @@ pub enum GenParam {
     HatDensity,
     Chaos,
     Rows,
+    /// A `Variation`'s own: how many rows before each row its next hangs on, and how far from
+    /// the likeliest it may stray.
+    Order,
+    Temperature,
     /// The bits `Invert bits` flips and `Mask bits` keeps, and how far `Rotate bits` turns them.
     Flip,
     Keep,
@@ -295,7 +300,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 46] = [
+    pub const ALL: [Self; 48] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -326,6 +331,8 @@ impl GenParam {
         Self::HatDensity,
         Self::Chaos,
         Self::Rows,
+        Self::Order,
+        Self::Temperature,
         Self::Flip,
         Self::Keep,
         Self::Turn,
@@ -377,6 +384,8 @@ impl GenParam {
             Self::HatDensity => "hh",
             Self::Chaos => "chaos",
             Self::Rows => "rows",
+            Self::Order => "order",
+            Self::Temperature => "temperature",
             Self::Flip => "flip",
             Self::Keep => "keep",
             Self::Turn => "turn",
@@ -435,6 +444,8 @@ impl GenParam {
             Self::HatDensity => "HH fill",
             Self::Chaos => "Chaos",
             Self::Rows => "Rows",
+            Self::Order => "Order",
+            Self::Temperature => "Temp",
             Self::Flip => "Flip",
             Self::Keep => "Keep",
             Self::Turn => "Turn",
@@ -460,16 +471,23 @@ impl GenParam {
             Self::Curve | Self::S => Units::Bend,
             Self::Transpose => Units::Interval,
             Self::Phase => Units::Degrees,
-            Self::Notes | Self::Run | Self::Rotate | Self::Depth | Self::Factor | Self::Turn => {
-                Units::Count
-            }
+            Self::Notes
+            | Self::Run
+            | Self::Rotate
+            | Self::Depth
+            | Self::Factor
+            | Self::Turn
+            | Self::Order => Units::Count,
             Self::Flip | Self::Keep => Units::Bits,
             Self::Step => Units::Step,
             Self::Every | Self::Late => Units::Rows,
             Self::Hits => Units::OfRows,
-            Self::Octave | Self::Density | Self::Accent | Self::Slide | Self::Chance => {
-                Units::Percent
-            }
+            Self::Octave
+            | Self::Density
+            | Self::Accent
+            | Self::Slide
+            | Self::Chance
+            | Self::Temperature => Units::Percent,
             Self::MapX
             | Self::MapY
             | Self::KickDensity
@@ -515,8 +533,9 @@ impl GenParam {
     /// `Where`; each bit transform has its one setting. `Grids` makes its own rhythm, so it has
     /// no `Where` either; it has the density of its own part alone, or while the panel shapes
     /// several tracks, each taking its own part, every part's and no `Part`; and its `Note` only
-    /// where it `generates`, as a hit takes the note there or the first one. Only a shape that
-    /// draws from its seed has `Vary`.
+    /// where it `generates`, as a hit takes the note there or the first one. A `Variation` learns
+    /// its rows with its notes, so it has its `Order` and `Temperature` and no `Where`. Only a
+    /// shape that draws from its seed has `Vary`.
     pub fn exists_for(self, shape: &Shape, generates: bool) -> bool {
         let kind = shape.kind;
         let grids = kind == FillKind::Grids;
@@ -559,6 +578,7 @@ impl GenParam {
             Self::KickDensity => density(DrumPart::Kick),
             Self::SnareDensity => density(DrumPart::Snare),
             Self::HatDensity => density(DrumPart::Hats),
+            Self::Order | Self::Temperature => kind == FillKind::Variation,
             Self::Flip => kind == FillKind::InvertBits,
             Self::Keep => kind == FillKind::MaskBits,
             Self::Turn => kind == FillKind::RotateBits,
@@ -587,12 +607,12 @@ impl GenParam {
     /// The settings in a generator's title on the Gen page, the ones that change what it is: its
     /// fill, then its `Where`, or for a `Follow`, the phrase it follows, and for `Acid`, its
     /// `Pitches`, as the second die is a mode of the riff's, `Multiply` its fill alone and `Grids`
-    /// its part, which drum it is; and last, for a shape that draws from its seed, `Vary`, what
+    /// its part, which drum it is, and a `Variation` its fill alone; and last, for a shape that draws from its seed, `Vary`, what
     /// it is from pass to pass.
     pub fn title(shape: &Shape) -> [Option<Self>; GEN_TITLE] {
         let mut title = match shape.kind {
             FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None, None],
-            FillKind::Multiply => [Some(Self::Fill), None, None, None],
+            FillKind::Multiply | FillKind::Variation => [Some(Self::Fill), None, None, None],
             FillKind::Grids => [Some(Self::Fill), Some(Self::Part), None, None],
             FillKind::Acid => [
                 Some(Self::Fill),
@@ -660,6 +680,7 @@ impl GenParam {
             ],
             FillKind::Scale => [[Some(From), Some(To), Some(Curve)], [Some(S), None, None]],
             FillKind::Multiply => [[Some(Factor), Some(Masks), None], none],
+            FillKind::Variation => [[Some(Order), Some(Temperature), None], none],
             FillKind::Grids => unreachable!("laid out above"),
             FillKind::InvertBits => [[Some(Flip), None, None], none],
             FillKind::MaskBits => [[Some(Keep), None, None], none],
@@ -816,6 +837,8 @@ impl GenParam {
             | Self::Chaos => format!("{:02X}", self.grids_value(shape.grids).unwrap_or(0)),
             Self::Rows if shape.grids.fine => "1/32".to_owned(),
             Self::Rows => "1/16".to_owned(),
+            Self::Order => shape.variation.order.to_string(),
+            Self::Temperature => format!("{}%", shape.variation.temperature),
             Self::Flip => format!("{:02X}", shape.bits.flip),
             Self::Keep => format!("{:02X}", shape.bits.keep),
             Self::Turn => match shape.bits.turn {
@@ -1062,6 +1085,15 @@ impl GenParam {
                 }
             }
             Self::Rows => shape.grids.fine = !shape.grids.fine,
+            Self::Order => {
+                let most = i32::from(MAX_ORDER);
+                let order = moved(i32::from(shape.variation.order), by(1, 1), 1, most);
+                shape.variation.order = order as u8;
+            }
+            Self::Temperature => {
+                let temperature = i32::from(shape.variation.temperature);
+                shape.variation.temperature = moved(temperature, by(1, CHANCE_JUMP), 0, 100) as u8;
+            }
             Self::Flip => shape.bits.flip = moved_byte(shape.bits.flip, by(1, HEX_JUMP)),
             Self::Keep => shape.bits.keep = moved_byte(shape.bits.keep, by(1, HEX_JUMP)),
             Self::Turn => {
@@ -1135,6 +1167,8 @@ impl GenParam {
                 }
             }
             Self::Rows => shape.grids.fine = Grids::default().fine,
+            Self::Order => shape.variation.order = Variation::default().order,
+            Self::Temperature => shape.variation.temperature = Variation::default().temperature,
             Self::Flip => shape.bits.flip = Bits::default().flip,
             Self::Keep => shape.bits.keep = Bits::default().keep,
             Self::Turn => shape.bits.turn = Bits::default().turn,
@@ -1294,6 +1328,14 @@ impl GenParam {
                 Ok(turn) if turn <= MAX_TURN => shape.bits.turn = turn,
                 _ => return Err("Turn runs from 0 to 7"),
             },
+            Self::Order => match text.parse::<u8>() {
+                Ok(order) if (1..=MAX_ORDER).contains(&order) => shape.variation.order = order,
+                _ => return Err("Order runs from 1 to 3"),
+            },
+            Self::Temperature => match text.parse::<u16>() {
+                Ok(typed) => shape.variation.temperature = typed.min(100) as u8,
+                Err(_) => return Err("Temp runs from 0 to 100"),
+            },
             Self::Fill
             | Self::Wave
             | Self::Where
@@ -1354,6 +1396,8 @@ impl GenParam {
             Self::Factor => (1, i32::from(MAX_FACTOR)),
             Self::Flip | Self::Keep => (0, i32::from(u8::MAX)),
             Self::Turn => (0, i32::from(MAX_TURN)),
+            Self::Order => (1, i32::from(MAX_ORDER)),
+            Self::Temperature => (0, 100),
             Self::Step => (1, i32::from(longest_step(column))),
             Self::Depth => (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH)),
             Self::Phase => (0, 359),
@@ -1404,6 +1448,8 @@ impl GenParam {
             Self::Flip => i32::from(shape.bits.flip),
             Self::Keep => i32::from(shape.bits.keep),
             Self::Turn => i32::from(shape.bits.turn),
+            Self::Order => i32::from(shape.variation.order),
+            Self::Temperature => i32::from(shape.variation.temperature),
             Self::Phase => i32::from(shape.phase),
             Self::Values => return None,
             Self::Run => i32::from(shape.run),
@@ -1522,6 +1568,8 @@ impl GenParam {
             Self::Flip => shape.bits.flip = number as u8,
             Self::Keep => shape.bits.keep = number as u8,
             Self::Turn => shape.bits.turn = number as u8,
+            Self::Order => shape.variation.order = number as u8,
+            Self::Temperature => shape.variation.temperature = number as u8,
             Self::Vary => shape.vary = VARIES[number as usize],
         }
     }
@@ -1654,6 +1702,7 @@ mod tests {
             bits: Bits::default(),
             grids: Grids::default(),
             vary: 0,
+            variation: crate::shape::Variation::default(),
         }
     }
 
@@ -1714,6 +1763,11 @@ mod tests {
             of(FillKind::Multiply, false),
             [Fill, Factor, Masks],
             "Multiply reads the rhythm itself, so it has no Where"
+        );
+        assert_eq!(
+            of(FillKind::Variation, false),
+            [Fill, Order, Temperature, Vary],
+            "a Variation learns its rows with its notes, so it has no Where"
         );
         assert_eq!(of(FillKind::InvertBits, false), [Fill, Flip, Where]);
         assert_eq!(of(FillKind::MaskBits, false), [Fill, Keep, Where]);
@@ -1808,6 +1862,54 @@ mod tests {
         );
         let acid = shape(FillKind::Acid);
         assert_eq!(GenParam::title(&acid)[3], Some(GenParam::Vary));
+    }
+
+    /// `Order` goes from 1 to 3 and `Temperature` from 0 to 100%, each put back to where it starts.
+    #[test]
+    fn a_variations_order_and_temperature_stay_within_their_ranges() {
+        let notes = context(note());
+        let mut variation = shape(FillKind::Variation);
+        assert_eq!(GenParam::Order.shown(&variation, &notes), "1");
+        assert_eq!(GenParam::Temperature.shown(&variation, &notes), "50%");
+        for _ in 0..4 {
+            GenParam::Order
+                .step(&mut variation, &notes, 1, true)
+                .unwrap();
+        }
+        assert_eq!(variation.variation.order, 3);
+        GenParam::Temperature
+            .step(&mut variation, &notes, -1, true)
+            .unwrap();
+        assert_eq!(variation.variation.temperature, 40);
+        assert!(GenParam::Order.typed(&mut variation, &notes, "4").is_err());
+        GenParam::Temperature
+            .typed(&mut variation, &notes, "250")
+            .unwrap();
+        assert_eq!(variation.variation.temperature, 100);
+        assert_eq!(GenParam::Order.bounds(&notes), Some((1, 3)));
+        GenParam::Order.reset(&mut variation, &notes, Starts::default());
+        GenParam::Temperature.reset(&mut variation, &notes, Starts::default());
+        assert!(variation.variation.is_default());
+        assert_eq!(
+            GenParam::grid(&variation, false)[0],
+            [Some(GenParam::Order), Some(GenParam::Temperature), None]
+        );
+        assert_eq!(
+            GenParam::title(&variation),
+            [Some(GenParam::Fill), Some(GenParam::Vary), None, None]
+        );
+        // It learns from the notes there, so a column with none doesn't offer it.
+        let generated = Context {
+            generates: true,
+            ..notes
+        };
+        assert!(notes.fills().contains(&FillKind::Variation));
+        assert!(!generated.fills().contains(&FillKind::Variation));
+        assert!(
+            !context(ShapeColumn::Velocity)
+                .fills()
+                .contains(&FillKind::Variation)
+        );
     }
 
     #[test]

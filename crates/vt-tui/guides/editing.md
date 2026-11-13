@@ -86,7 +86,7 @@ nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Walk`, `1/f`, `Wave`, `List`, `Acid`, `Grids`, `Follow` and more |
+| Fill | `Ramp`, `Random`, `Walk`, `1/f`, `Wave`, `List`, `Acid`, `Grids`, `Follow`, `Variation` and more |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
@@ -407,6 +407,39 @@ follow it, like `Followed by 3`. A phrase can follow one that follows another,
 but never one that follows it back, directly or through others: those aren't
 offered, and `L` refuses one. Deleting the source's track with `:track del`
 leaves its followers as plain notes, and says so.
+
+### Variations of a line
+
+`Variation`, on the Note column only, writes something like the line already
+there: give me another one of these. It learns which row follows which from
+the rows selected and nothing else, a Markov chain, and writes a new line of
+the same length from what it learned. Each row is learned as its note, in the
+scale's degrees while the scale is on, whether it's accented (`70` and up, or
+no velocity) and whether it slides (`HLD`), or as a rest or an `OFF`, so the
+rhythm comes with the notes. A row it writes copies a note's velocity and gate
+from a row of the line that played it there.
+
+| Row | Does |
+|---|---|
+| Order | How many rows before each row it looks at, from 1 to 3 |
+| Temp | The temperature: how far from the likeliest row it strays, `0%` to `100%` |
+
+At Order 1 a row follows any row the line has after the one before it, so the
+line comes apart and is put back another way: loose. At Order 3 it follows only
+what came after the same three rows: close. A short line, where few runs of rows
+come twice, comes back as it was at Order 2 or 3, so those are for longer lines,
+two bars or more of a tune that returns to its figures. At `0%` it always writes the likeliest row, at `50%`, where it
+starts, each as often as the line has it, and at `100%` any of them alike; it
+never writes a row after one that the line never had there. The line goes round
+as a loop does, so its last rows lead into its first, and the variation starts
+where the loop would.
+
+`r` rolls another. It learns from the first 256 rows selected, and needs four
+notes there: with fewer, the panel says so and `Enter` and `L` refuse it. Kept
+live with `L`, it learns from the notes under it, never from what it wrote, so
+`gl` and another Order or `r` give a new variation of the same line, `Space g a`
+keeps the one you like, and on the Gen page `Vary` plays a new one every pass or
+every few.
 
 ### Keeping it live
 

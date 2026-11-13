@@ -1481,7 +1481,8 @@ track's eight macros (see **Macros**), then the live columns.
 Each live column is a device, under the macros, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
 them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
-`Where`, then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
+`Where`, and a `Variation`'s fill alone, as it learns its rows with its notes;
+then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
 Note 00–0F`, or `FX1 CUT lane 0C` for a lane. A `Where` that's its column's own is
 dim too, and so is a `Vary` of `Once`. Its settings are the
 shape panel's, laid out by what they do: the fill's down the first two columns,
@@ -1509,7 +1510,7 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
 
 **A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,
-`1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), a `Wave` of `Random` or `Smooth`,
+`1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), `Variation`, a `Wave` of `Random` or `Smooth`,
 or any fill on rows chosen by `Chance`, has `Vary`: `Once`, as it's always been, the
 same every time round; `Each pass`, a new roll each time the phrase comes round; or
 `Every 2 passes`, 4 or 8, so each variation plays that many times before the next,
