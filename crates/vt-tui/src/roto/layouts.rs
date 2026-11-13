@@ -1017,6 +1017,25 @@ const ARPEGGIO: DeviceLayout = stored(
     )],
 );
 
+/// The track's eight macros, knob 1 to 8 as they're numbered, each named by its macro (decision
+/// 286).
+const MACROS: DeviceLayout = live(
+    "macros",
+    &[knobs(
+        "Macros",
+        [
+            s("macro1"),
+            s("macro2"),
+            s("macro3"),
+            s("macro4"),
+            s("macro5"),
+            s("macro6"),
+            s("macro7"),
+            s("macro8"),
+        ],
+    )],
+);
+
 // The effects: their own settings, with `Mix` and `Gain` on knobs 7 and 8. The effect and its type
 // or mode are chosen in the app.
 
@@ -1733,7 +1752,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
 }
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 99] = [
+pub const ALL: [&DeviceLayout; 100] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1803,6 +1822,7 @@ pub const ALL: [&DeviceLayout; 99] = [
     &TRACK,
     &ACCUMULATOR,
     &ARPEGGIO,
+    &MACROS,
     &EMPTY,
     &SHAPING,
     &CRUSH,
@@ -1959,6 +1979,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
+        Some(Control::Macro(_)) => &MACROS,
         Some(Control::Gen {
             phrase, generator, ..
         }) => generator_layout(
