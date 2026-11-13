@@ -513,13 +513,17 @@ pub fn draw_screen(
     } else {
         views::meter::split(body)
     };
-    // Only the Mod page has LFO cycles for the terminal to place dots on.
+    // Only the Mod page's LFO cycles and the Gen page's previews have dots for the terminal to
+    // place.
     app.lfo_cycles_at = Default::default();
+    app.gen_panels_at = Vec::new();
     match app.view {
         View::Chain => views::chain::draw(frame, view, app),
         View::Phrase => views::phrase::draw(frame, view, app),
         View::Track => {
-            app.lfo_cycles_at = views::track::draw_finding_cycles(frame, view, app);
+            let drawn = views::track::draw_finding_cycles(frame, view, app);
+            app.lfo_cycles_at = drawn.cycles;
+            app.gen_panels_at = drawn.previews;
         }
         View::Mixer => views::mixer::draw(frame, view, app),
         View::Audio => views::audio::draw(frame, view, app),
