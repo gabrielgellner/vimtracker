@@ -18,6 +18,7 @@ use crate::places::RecentPlaces;
 use crate::views::picker::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
+use vt_engine::gens::GenPass;
 use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::track_state::{Faders, LiveValues};
@@ -280,6 +281,10 @@ pub struct App {
     /// What each mod slot moved each row's note by on `Pitch` the last time it was heard, by
     /// track, phrase and row, in semitones, as the engine reports them, for `Space g A` (#569).
     pub(crate) heard_pitches: HashMap<(usize, u32, usize), [f32; MOD_SLOTS]>,
+    /// The pass each live generator that varies was last heard on and the seeds it played, by
+    /// track, phrase and its place in the phrase's list, as the engine reports them, for
+    /// `Space g a` on the Gen page to keep (decision 293).
+    pub(crate) heard_passes: HashMap<(usize, u32, usize), GenPass>,
     /// Every track's faders as they're heard: where the steps have them, and which a hand has
     /// taken over, as the engine last said, with what's been asked of it since (decision 174).
     pub(crate) faders: [Faders; MAX_TRACKS],
@@ -522,6 +527,7 @@ impl App {
             sample_images: None,
             live: None,
             heard_pitches: HashMap::new(),
+            heard_passes: HashMap::new(),
             faders: [Faders::default(); MAX_TRACKS],
             fader_wishes: Vec::new(),
             playheads: [None; PLAYHEADS],
@@ -981,6 +987,10 @@ impl App {
         while let Some((track, pitch)) = self.handle.note_pitch() {
             let row = (track, pitch.row.phrase, pitch.row.row);
             self.heard_pitches.insert(row, pitch.moves);
+        }
+        while let Some((track, pass)) = self.handle.gen_pass() {
+            let generator = (track, pass.phrase, pass.generator);
+            self.heard_passes.insert(generator, pass);
         }
         while let Some((track, state)) = self.handle.jam_change() {
             // A mute or solo waiting for the grid has landed, so the live controls follow it.

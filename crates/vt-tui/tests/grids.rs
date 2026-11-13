@@ -110,7 +110,8 @@ fn grids_across_a_kits_tracks_writes_one_beat_each_its_own_part() {
             SnareDensity,
             HatDensity,
             Chaos,
-            Rows
+            Rows,
+            Vary
         ]
     );
     assert_eq!(rhythm(&app, 0), BEAT[2]);
@@ -160,7 +161,17 @@ fn kept_live_each_track_has_a_generator_of_its_part_reopened_on_its_own() {
     use GenParam::*;
     assert_eq!(
         panel.rows(),
-        [Fill, Part, Pitch, MapX, MapY, SnareDensity, Chaos, Rows]
+        [
+            Fill,
+            Part,
+            Pitch,
+            MapX,
+            MapY,
+            SnareDensity,
+            Chaos,
+            Rows,
+            Vary
+        ]
     );
     let screen = drawn(&app);
     assert!(screen.contains("Part    SD"), "{screen}");
@@ -206,7 +217,7 @@ fn a_live_grids_on_the_gen_page_is_named_by_its_part() {
     keys(&mut app, " 8");
     assert_eq!(app.track_page.page, Page::Gen);
     let text = fx_page_text(&app).join("\n");
-    assert!(text.contains("Grids  SD · Note 00–0F"), "{text}");
+    assert!(text.contains("Grids  SD  Once · Note 00–0F"), "{text}");
     for setting in ["X", "Y", "Chaos", "SD fill", "Note", "Rows"] {
         assert!(text.contains(setting), "{setting} in\n{text}");
     }

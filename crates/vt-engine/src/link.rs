@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 use vt_model::constants::{
-    COMMAND_QUEUE, FILE_QUEUE, FX_SLOTS, MAX_TRACKS, MEMORY_QUEUE, NOTE_PITCH_QUEUE, PUBLISH_QUEUE,
-    RETURN_QUEUE, SCOPE_QUEUE, TELEMETRY_QUEUE,
+    COMMAND_QUEUE, FILE_QUEUE, FX_SLOTS, GEN_PASS_QUEUE, MAX_TRACKS, MEMORY_QUEUE,
+    NOTE_PITCH_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, SCOPE_QUEUE, TELEMETRY_QUEUE,
 };
 
 use vt_model::sample::SampleData;
@@ -17,6 +17,7 @@ use vt_model::scale::Scale;
 
 use crate::dsp::memory::{Memory, MemoryCount};
 use crate::engine::{Engine, PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
+use crate::gens::GenPass;
 use crate::mixer::Reading;
 use crate::published::{Published, Span};
 #[cfg(test)]
@@ -173,6 +174,8 @@ pub struct Handle {
     jam: Consumer<(usize, JamState)>,
     /// What the mod slots moved each note's pitch by, by track, as each note is heard.
     note_pitches: Consumer<(usize, NotePitch)>,
+    /// Which pass each generator that varies was heard on, by track.
+    gen_passes: Consumer<(usize, GenPass)>,
     pending: Option<Arc<Published>>,
     memories: Producer<Memory>,
     freed: Consumer<Memory>,
@@ -197,6 +200,7 @@ pub struct Realtime {
     scope: Producer<f32>,
     jam: Producer<(usize, JamState)>,
     note_pitches: Producer<(usize, NotePitch)>,
+    gen_passes: Producer<(usize, GenPass)>,
     memories: Consumer<Memory>,
     freed: Producer<Memory>,
     files: Consumer<(Arc<SampleData>, Option<Span>)>,
@@ -219,6 +223,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
     let (scope_tx, scope_rx) = RingBuffer::new(SCOPE_QUEUE);
     let (jam_tx, jam_rx) = RingBuffer::new(MAX_TRACKS * 2);
     let (pitch_tx, pitch_rx) = RingBuffer::new(NOTE_PITCH_QUEUE);
+    let (pass_tx, pass_rx) = RingBuffer::new(GEN_PASS_QUEUE);
     let (memory_tx, memory_rx) = RingBuffer::new(MEMORY_QUEUE);
     let (freed_tx, freed_rx) = RingBuffer::new(MEMORY_QUEUE);
     let (file_tx, file_rx) = RingBuffer::new(FILE_QUEUE);
@@ -235,6 +240,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             scope: scope_rx,
             jam: jam_rx,
             note_pitches: pitch_rx,
+            gen_passes: pass_rx,
             pending: None,
             memories: memory_tx,
             freed: freed_rx,
@@ -253,6 +259,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             scope: scope_tx,
             jam: jam_tx,
             note_pitches: pitch_tx,
+            gen_passes: pass_tx,
             memories: memory_rx,
             freed: freed_tx,
             files: file_rx,
@@ -429,6 +436,11 @@ impl Handle {
         self.note_pitches.pop().ok()
     }
 
+    /// The next pass heard of a generator that varies, on any track, and the seeds it played.
+    pub fn gen_pass(&mut self) -> Option<(usize, GenPass)> {
+        self.gen_passes.pop().ok()
+    }
+
     /// Whether a version is still waiting to be sent.
     pub fn has_pending(&self) -> bool {
         self.pending.is_some()
@@ -555,6 +567,10 @@ impl Realtime {
             if let Some(pitch) = self.engine.take_note_pitch(track) {
                 let _ = self.note_pitches.push((track, pitch));
             }
+            let passes = &mut self.gen_passes;
+            self.engine.take_gen_passes(track, |pass| {
+                let _ = passes.push((track, pass));
+            });
         }
         // A change that doesn't fit stays different, so it goes in a later block.
         for (track, reported) in self.reported.iter_mut().enumerate() {

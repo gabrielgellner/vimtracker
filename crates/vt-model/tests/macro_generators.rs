@@ -69,6 +69,7 @@ fn tresillo() -> Shape {
         pink: Pink::default(),
         bits: Bits::default(),
         grids: vt_model::shape::Grids::default(),
+        vary: 0,
     }
 }
 

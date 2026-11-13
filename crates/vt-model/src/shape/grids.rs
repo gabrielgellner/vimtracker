@@ -318,6 +318,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids,
+            vary: 0,
         }
     }
 
@@ -488,6 +489,25 @@ mod tests {
         }
         // Each bar of the span draws anew, as a pass of the module does.
         assert_ne!(wild[..16], wild[16..32]);
+    }
+
+    /// Its chaos is drawn from its seed, so `Vary` gives each pass chaos of its own (decision
+    /// 293): the first pass is the one written, and the next draws again.
+    #[test]
+    fn vary_draws_its_chaos_again_each_pass() {
+        let steps = vec![Step::default(); 32];
+        let mut grids = at(0x80, 0x80, DrumPart::Hats, 0x60);
+        grids.chaos = 0xFF;
+        let varying = Shape {
+            vary: 1,
+            ..shape(grids, 1)
+        };
+        assert!(varying.draws() && varying.varies());
+        assert!(crate::shape::GenParam::Vary.exists_for(&varying, false));
+        let pass = |pass| drawn(&steps, writing(), &varying.on_pass(pass));
+        assert_eq!(pass(0), drawn(&steps, writing(), &shape(grids, 1)));
+        assert_ne!(pass(1), pass(0));
+        assert_eq!(pass(1), pass(1), "and the same again");
     }
 
     #[test]

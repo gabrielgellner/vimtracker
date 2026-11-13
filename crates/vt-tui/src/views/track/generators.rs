@@ -218,8 +218,8 @@ fn acts_on(live: &LiveGen) -> String {
     }
 }
 
-/// A generator's title: its fill and its `Where` or its source, and `Acid`'s `Pitches`, each in
-/// its own style, a `Where` that's its column's own dim.
+/// A generator's title: its fill and its `Where` or its source, `Acid`'s `Pitches`, and `Vary`,
+/// each in its own style, a `Where` that's its column's own and a `Vary` of `Once` dim.
 fn title_controls(app: &App, cells: &GenCells, device: &DeviceSpec) -> Vec<Line<'static>> {
     let current = app.track_control();
     device
@@ -233,8 +233,11 @@ fn title_controls(app: &App, cells: &GenCells, device: &DeviceSpec) -> Vec<Line<
             let text = setting::text(app, here, || {
                 param.map_or_else(String::new, |param| param.shown(shape, &cells.context))
             });
-            let default =
-                param == Some(GenParam::Where) && shape.place == cells.context.default_where();
+            let default = match param {
+                Some(GenParam::Where) => shape.place == cells.context.default_where(),
+                Some(GenParam::Vary) => shape.vary == 0,
+                _ => false,
+            };
             let style = setting::style(app, here, default);
             Line::from(value_spans(app, *control, text, style))
         })

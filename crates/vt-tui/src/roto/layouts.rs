@@ -1527,7 +1527,9 @@ const SPACE: DeviceLayout = live(
 // `where2` Euclid's `Rotate`. The fill and the `Where`, and a `Follow`'s source, are what the
 // device is, so they're chosen in the app (the generators study, `generators-page.md` §6). A
 // generator has no off/on settings of its own, so it's live, and `Acid`'s `Pitches` is a
-// two-step knob. A setting the shape hasn't now, as `Hits` without Euclid, leaves its knob dark.
+// two-step knob. `Vary` is knob 6, beside the `Where`, on every fill but `Follow`, which draws
+// nothing; `Wave` and `Acid` have it on a second page. A setting the shape hasn't now, as `Hits`
+// without Euclid or `Vary` on a ramp, leaves its knob dark.
 
 /// Knob 7 and 8's keys: what the `Where` has, whichever it is.
 pub const WHERE_FIRST: &str = "where1";
@@ -1545,7 +1547,7 @@ const GEN_RAMP: DeviceLayout = live(
             s("curve"),
             s("s"),
             s("run"),
-            GAP,
+            s("vary"),
             s(WHERE_FIRST),
             s(WHERE_SECOND),
         ],
@@ -1561,27 +1563,31 @@ const GEN_RANDOM: DeviceLayout = live(
             s("run"),
             GAP,
             GAP,
-            GAP,
+            s("vary"),
             s(WHERE_FIRST),
             s(WHERE_SECOND),
         ],
     )],
 );
+/// A wave fills its first page, so a random one's `Vary` is on a second.
 const GEN_WAVE: DeviceLayout = live(
     "gen/wave",
-    &[knobs(
-        "Wave",
-        [
-            s("from"),
-            s("to"),
-            s("wave"),
-            s("rate"),
-            s("phase"),
-            s("run"),
-            s(WHERE_FIRST),
-            s(WHERE_SECOND),
-        ],
-    )],
+    &[
+        knobs(
+            "Wave",
+            [
+                s("from"),
+                s("to"),
+                s("wave"),
+                s("rate"),
+                s("phase"),
+                s("run"),
+                s(WHERE_FIRST),
+                s(WHERE_SECOND),
+            ],
+        ),
+        knobs("Vary", [__, __, __, __, __, s("vary"), __, __]),
+    ],
 );
 const GEN_ALTERNATE: DeviceLayout = live(
     "gen/alternate",
@@ -1593,7 +1599,7 @@ const GEN_ALTERNATE: DeviceLayout = live(
             s("run"),
             GAP,
             GAP,
-            GAP,
+            s("vary"),
             s(WHERE_FIRST),
             s(WHERE_SECOND),
         ],
@@ -1610,14 +1616,14 @@ const GEN_LIST: DeviceLayout = live(
             GAP,
             GAP,
             GAP,
-            GAP,
+            s("vary"),
             s(WHERE_FIRST),
             s(WHERE_SECOND),
         ],
     )],
 );
-/// `Acid`'s riff first, as a 303's randomiser has it, then its range on a page of its own, as
-/// it has more than eight.
+/// `Acid`'s riff first, as a 303's randomiser has it, then its range and `Vary` on a page of
+/// their own, as it has more than eight.
 const GEN_ACID: DeviceLayout = live(
     "gen/acid",
     &[
@@ -1634,7 +1640,7 @@ const GEN_ACID: DeviceLayout = live(
                 s(WHERE_SECOND),
             ],
         ),
-        knobs("Range", [s("from"), s("to"), __, __, __, __, __, __]),
+        knobs("Range", [s("from"), s("to"), __, __, __, s("vary"), __, __]),
     ],
 );
 /// A canon's moves; it writes every row, so it has no `Where`.
@@ -1664,7 +1670,7 @@ const GEN_SCALE: DeviceLayout = live(
             s("curve"),
             s("s"),
             GAP,
-            GAP,
+            s("vary"),
             s(WHERE_FIRST),
             s(WHERE_SECOND),
         ],
@@ -1680,7 +1686,7 @@ const GEN_WALK: DeviceLayout = live(
             s("step"),
             s("edge"),
             s("run"),
-            GAP,
+            s("vary"),
             s(WHERE_FIRST),
             s(WHERE_SECOND),
         ],
@@ -1696,7 +1702,7 @@ const GEN_PINK: DeviceLayout = live(
             s("depth"),
             s("run"),
             GAP,
-            GAP,
+            s("vary"),
             s(WHERE_FIRST),
             s(WHERE_SECOND),
         ],
@@ -1722,7 +1728,7 @@ const GEN_GRIDS: DeviceLayout = live(
             s(PART_DENSITY),
             s("chaos"),
             GAP,
-            GAP,
+            s("vary"),
             s("note"),
             s("rows"),
         ],
@@ -1740,7 +1746,7 @@ const GEN_BITS: DeviceLayout = live(
             s("turn"),
             GAP,
             GAP,
-            GAP,
+            s("vary"),
             s(WHERE_FIRST),
             s(WHERE_SECOND),
         ],
@@ -1757,7 +1763,7 @@ const GEN_REWORK: DeviceLayout = live(
             GAP,
             GAP,
             GAP,
-            GAP,
+            s("vary"),
             s(WHERE_FIRST),
             s(WHERE_SECOND),
         ],
