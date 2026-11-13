@@ -1,0 +1,112 @@
+# Distort's `Overdrive` against Ableton Live's Pedal in its Overdrive mode, given a sweep too quiet
+# to clip, so what's heard is the gain and EQ around the clip (#564): Drive and `Amount` at five
+# places with the tone controls neutral, then Pedal's Treble against our `Tone`, and its Bass and
+# Mid at their ends, which ours has no knob for.
+#
+#   uv run run.py specs/live-pedal-overdrive-response.toml --report out/live-pedal-overdrive-response.html
+
+rate = 48000
+
+[input]
+signal = "sweep"
+from = 20.0
+to = 20000.0
+level = -70.0
+seconds = 4.0
+
+[ours]
+effects = ["distort"]
+
+[ours.settings]
+1.distort.type = "Overdrive"
+1.distort.amount = 0x80
+1.distort.tone = 0x80
+1.distort.mix = 0xFF
+
+[reference]
+live = "Pedal"
+
+[reference.parameters]
+Type = "Overdrive"
+Drive = "50 %"
+Output = "0 dB"
+Bass = "0 %"
+Mid = "0 %"
+Treble = "0 %"
+"Dry/Wet" = "100 %"
+
+[report]
+kind = "response"
+title = "Overdrive's EQ against Live's Pedal"
+figure = ["1.distort.type"]
+row = "1.distort.amount"
+column = "1.distort.tone"
+about = """
+Our `Overdrive` against Live's Pedal in its Overdrive mode, fully wet, its output at 0 dB, given a \
+sweep at -70 dBFS, which neither clips, so the curves are the gain and EQ around the clip. \
+`Amount` `00`, `40`, `80`, `C0` and `FF` are set against Drive 0, 25, 50, 75 and 100% with \
+`Tone` `80` against Treble 0%; then at `Amount` `80`, `Tone` `00`, `40`, `C0` and `FF` against \
+Treble -100, -50, 50 and 100%. The last four cases turn Pedal's Bass and Mid to their ends, \
+which ours has no knob for, to show what they do.
+"""
+
+[[cases]]
+name = "amount-00"
+ours = { 1.distort.amount = 0x00 }
+reference = { Drive = "0 %" }
+
+[[cases]]
+name = "amount-40"
+ours = { 1.distort.amount = 0x40 }
+reference = { Drive = "25 %" }
+
+[[cases]]
+name = "amount-80"
+ours = { 1.distort.amount = 0x80 }
+reference = { Drive = "50 %" }
+
+[[cases]]
+name = "amount-C0"
+ours = { 1.distort.amount = 0xC0 }
+reference = { Drive = "75 %" }
+
+[[cases]]
+name = "amount-FF"
+ours = { 1.distort.amount = 0xFF }
+reference = { Drive = "100 %" }
+
+[[cases]]
+name = "tone-00"
+ours = { 1.distort.tone = 0x00 }
+reference = { Treble = "-100 %" }
+
+[[cases]]
+name = "tone-40"
+ours = { 1.distort.tone = 0x40 }
+reference = { Treble = "-50 %" }
+
+[[cases]]
+name = "tone-C0"
+ours = { 1.distort.tone = 0xC0 }
+reference = { Treble = "50 %" }
+
+[[cases]]
+name = "tone-FF"
+ours = { 1.distort.tone = 0xFF }
+reference = { Treble = "100 %" }
+
+[[cases]]
+name = "bass-down"
+reference = { Bass = "-100 %" }
+
+[[cases]]
+name = "bass-up"
+reference = { Bass = "100 %" }
+
+[[cases]]
+name = "mid-down"
+reference = { Mid = "-100 %" }
+
+[[cases]]
+name = "mid-up"
+reference = { Mid = "100 %" }
