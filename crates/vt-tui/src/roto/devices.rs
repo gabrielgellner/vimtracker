@@ -1023,8 +1023,10 @@ pub fn track_devices(track: &Track, phrase: Option<u32>) -> Vec<(Page, usize, De
         .flat_map(|page| {
             page.devices_on(track, phrase)
                 .into_iter()
-                // The Gen page's `Empty` makes a column live, which only the app does.
+                // The Gen page's `Empty` makes a column live, which only the app does. Its macros'
+                // band waits for its own layout, first on the list (#618).
                 .filter(|spec| !matches!(spec.title[0], Some(Control::NewGenerator(_))))
+                .filter(|spec| !matches!(spec.grid[0][0], Some(Control::Macro(_))))
                 .enumerate()
                 .map(move |(slot, spec)| (page, slot, spec))
                 .collect::<Vec<_>>()
