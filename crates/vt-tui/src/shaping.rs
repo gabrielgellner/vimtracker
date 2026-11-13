@@ -13,8 +13,8 @@ use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
     Acid, Bits, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids, MAX_VALUES,
-    Pink, Shape, ShapeColumn, Source, Starts, Values, Walk, Where, default_ends, default_step,
-    drum_parts, is_empty, open_rows, track_seed,
+    Pink, Random, Shape, ShapeColumn, Source, Starts, Values, WEIGHTS, Walk, Where, default_ends,
+    default_step, drum_parts, is_empty, open_rows, track_seed,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -85,7 +85,8 @@ impl ShapePanel {
     /// The rows on show: the settings its shape has, `Fill` first as it decides the rest
     /// ([`GenParam::exists_for`]). `Acid`'s `Density` shows where any track generates.
     pub fn rows(&self) -> Vec<GenParam> {
-        GenParam::of(&self.shape, self.parts.iter().any(|part| part.generate))
+        let generates = self.parts.iter().any(|part| part.generate);
+        GenParam::of(&self.shape, self.column, generates)
     }
 
     /// What its settings act on: its column, the rows it could change, whether every part is
@@ -635,6 +636,7 @@ impl App {
                     part: alone.then_some(first.drum),
                     ..Grids::default()
                 },
+                random: Random::default(),
                 vary: 0,
             },
             row: GenParam::Fill,
@@ -1278,6 +1280,12 @@ impl App {
                 }
             }
             (KeyCode::Char(c), Typing::HexList) => type_list(text, c),
+            // A hex digit a degree, at most one for each semitone.
+            (KeyCode::Char(c), Typing::Weights)
+                if c.is_ascii_hexdigit() && text.len() < WEIGHTS =>
+            {
+                text.push(c.to_ascii_uppercase());
+            }
             (KeyCode::Char(c), Typing::Hex) if c.is_ascii_hexdigit() => {
                 text.push(c.to_ascii_uppercase());
                 if text.len() == 2 {
