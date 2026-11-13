@@ -509,6 +509,7 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
         mods: Default::default(),
         steps: Default::default(),
         drawn: Default::default(),
+        macros: Default::default(),
     };
     assert_eq!(live_after(song, 3), expected);
 }

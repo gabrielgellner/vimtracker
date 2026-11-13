@@ -586,6 +586,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         mods: Default::default(),
         steps: Default::default(),
         drawn: Default::default(),
+        macros: Default::default(),
     });
     assert!(cut(&app).contains("FF00 ▕██▎     │▏"), "{}", cut(&app));
 }
@@ -682,8 +683,8 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "-");
     assert_eq!(
         lfo(&app).destination,
-        Some(SettingId::modulator(MOD_SLOTS - 1, 3).unwrap()),
-        "the last for Mod 4 on a sample track: the last slot's deform"
+        SettingId::macro_at(7),
+        "the last for Mod 4 on a sample track: the last macro"
     );
 
     press(&mut app, "0j=");
@@ -743,8 +744,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        20,
-        "what a sample track has, its Sample, Slice, Start and Length, Pitch in scale, none, and Mod 6's three"
+        32,
+        "what a sample track has, its Sample, Slice, Start and Length, Pitch in scale, none, Mod 6's three, the accumulator's and arpeggio's four, and the eight macros"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
@@ -1928,6 +1929,7 @@ fn the_filter_curve_moves_with_what_plays() {
         mods: Default::default(),
         steps: Default::default(),
         drawn: Default::default(),
+        macros: Default::default(),
     };
 
     // Each new value draws it once, and it holds while the value does.

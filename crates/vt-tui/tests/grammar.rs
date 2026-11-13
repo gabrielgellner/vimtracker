@@ -1296,8 +1296,8 @@ fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(
         app.picker.as_ref().unwrap().items().len(),
-        46,
-        "on a sample track with nothing in its slots: empty, its own 16, SMP, SLI, STA, SLEN and PLY, the mod slots' 16 and 8 events"
+        54,
+        "on a sample track with nothing in its slots: empty, its own 16, SMP, SLI, STA, SLEN and PLY, the mod slots' 16, the 8 macros and 8 events"
     );
     keys(&mut app, "cut<Enter>");
     assert_eq!(app.mode, Mode::Replace);
@@ -1665,9 +1665,9 @@ fn the_panel_fills_with_a_wave_and_shows_only_its_settings() {
     keys(&mut app, "lvGS");
     let panel = |app: &App| app.shape.clone().unwrap();
     assert!(panel(&app).rows().contains(&GenParam::Curve));
-    // It opens on Fill, and `=` goes on past Random.
+    // It opens on Fill, and `=` goes on past Random, Walk and 1/f.
     assert_eq!(panel(&app).row, GenParam::Fill);
-    keys(&mut app, "==");
+    keys(&mut app, "====");
     assert_eq!(panel(&app).shape.kind, FillKind::Wave);
     let rows = panel(&app).rows();
     assert!(!rows.contains(&GenParam::Curve));

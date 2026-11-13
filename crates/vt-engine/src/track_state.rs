@@ -1,20 +1,23 @@
 //! Fixed-size per-track playback state, made ahead of time so the callback never allocates.
 
 use vt_model::accumulator::{Accumulation, Moves, Walk};
+use vt_model::arpeggio::Arpeggio;
 use vt_model::arpeggio::{ArpMode, Cycle};
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
 use vt_model::envelope::{Envelope, Lpg};
 use vt_model::groove::Groove;
 use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS, Setting};
 use vt_model::lfo::{LfoMode, MAX_DEFORM, deformed_wave, phase_of, phase_value};
+use vt_model::macros::MACROS;
 use vt_model::modulation::{
     MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, depth_value, note_shape_slot,
 };
 use vt_model::playable::Playable;
 use vt_model::scale::Scale;
 use vt_model::settings::{
-    Effect, FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, Owner, PlayMode, SAMPLER_SETTINGS,
-    SettingId, gate_delta, gate_share, glide_ms, moved_velocity, quantised_nudge,
+    Effect, FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, MOD_OWN_SETTINGS, Owner, PLAYED_SETTINGS,
+    PlayMode, SAMPLER_SETTINGS, SettingId, gate_delta, gate_share, glide_ms, moved_velocity,
+    quantised_nudge,
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark, slice_letter};
@@ -405,6 +408,8 @@ pub struct LiveValues {
     /// What each mod slot that's Steps has drawn with `Mutate` in place of its written values, as
     /// it's heard, for `Space g a` to keep (#530): nothing while `Mutate` is at none.
     pub drawn: [Drawn; MOD_SLOTS],
+    /// Where each macro is as it's heard, with a lock or modulation, from `0000` to `FF00`.
+    pub macros: [u16; MACROS],
 }
 
 /// The values a Steps slot's `Mutate` has drawn in place of the written ones, and which steps they
@@ -440,6 +445,7 @@ impl Default for LiveValues {
             mods: Default::default(),
             steps: Default::default(),
             drawn: Default::default(),
+            macros: Default::default(),
         }
     }
 }
@@ -1065,6 +1071,17 @@ pub struct TrackState {
     pub key: [f32; 2],
     /// How long each slot has taken, while `vimtracker bench --tracks` times the engine.
     pub slot_times: SlotTimes,
+    /// Each macro's held value, from its turn, a step's lock or a glide, before modulation, on
+    /// the `00` to `FF` scale.
+    macro_held: [f32; MACROS],
+    /// Where each macro last put the settings it holds, with modulation, or none to put them
+    /// there again, as after a new version, whose maps may differ.
+    macro_heard: [Option<f32>; MACROS],
+    /// The held values of each mod slot's type's own settings, and of the accumulator's and the
+    /// arpeggio's, which a macro sets as a hand does. What's heard is read through a copy with
+    /// them put in, [`heard_slot`], wherever they differ from the song's.
+    own_held: [[f32; MOD_OWN_SETTINGS]; MOD_SLOTS],
+    played_held: [f32; PLAYED_SETTINGS],
 }
 
 /// What a track's modulation was worked out with when it left nothing moving: whether the song
@@ -1107,6 +1124,15 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
     };
     let whole = match id.owner() {
         (Owner::Mod(n), at) => return modulator(n, at),
+        (Owner::Macro(at), _) => return track.macros[at].value,
+        // One its type hasn't is at its default, and does nothing until its type has it.
+        (Owner::ModOwn(n), at) => {
+            return track.mods[n]
+                .own_value(at)
+                .unwrap_or(u16::from(id.entry().default) << 8);
+        }
+        (Owner::Accumulation, at) => return track.accumulation.own_value(at),
+        (Owner::Arpeggio, at) => return track.arpeggio.own_value(at),
         (Owner::Track, _) => match id {
             SettingId::VOL => UNITY_LEVEL,
             SettingId::LEVEL => track.level,
@@ -1140,6 +1166,50 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
         }
     };
     u16::from(whole) << 8 | u16::from(track.fine(id))
+}
+
+/// How many of the played settings are the accumulator's, before the arpeggio's.
+const ACCUMULATION_SETTINGS: usize = 2;
+
+/// The accumulator's or arpeggio's setting at a place among both.
+fn played_id(place: usize) -> Option<SettingId> {
+    match place.checked_sub(ACCUMULATION_SETTINGS) {
+        None => SettingId::accumulation(place),
+        Some(at) => SettingId::arpeggio(at),
+    }
+}
+
+/// Whether a track's mod slots' own settings may be heard other than as the song has them: a
+/// macro holds something, or a slot goes to one of them. Otherwise the slots are read as they
+/// are, with no copy.
+fn reshapes(track: &Track) -> bool {
+    track.has_macro_maps()
+        || track.mods.iter().any(|slot| {
+            slot.destination
+                .is_some_and(|id| matches!(id.owner().0, Owner::ModOwn(_)))
+        })
+}
+
+/// A mod slot as it's heard: a copy with each of its type's own settings put in where it isn't
+/// the song's, from its held value, `held`, and what modulation adds, `moved` of a setting's
+/// place, so the slot's own code reads it as it reads the song's and allocates nothing.
+fn heard_slot(
+    slot: &ModSlot,
+    at: usize,
+    held: &[f32; MOD_OWN_SETTINGS],
+    moved: impl Fn(usize) -> f32,
+) -> ModSlot {
+    let mut heard = *slot;
+    for (own, held) in held.iter().enumerate() {
+        let (Some(written), Some(id)) = (slot.own_value(own), SettingId::mod_own(at, own)) else {
+            continue;
+        };
+        let by = moved(id.index());
+        if by != 0.0 || (held * 256.0).round() as u16 != written {
+            heard.set_own(own, held + by * 255.0);
+        }
+    }
+    heard
 }
 
 /// The generator for a track's humanise, on streams after every track's own for `CHA`.
@@ -1301,6 +1371,16 @@ impl TrackState {
             filter_moving: false,
             key: [0.0; 2],
             slot_times: SlotTimes::default(),
+            macro_held: [0.0; MACROS],
+            macro_heard: [None; MACROS],
+            own_held: std::array::from_fn(|slot| {
+                std::array::from_fn(|at| {
+                    SettingId::mod_own(slot, at).map_or(0.0, |id| f32::from(id.entry().default))
+                })
+            }),
+            played_held: std::array::from_fn(|at| {
+                played_id(at).map_or(0.0, |id| f32::from(id.entry().default))
+            }),
         }
     }
 
@@ -1373,6 +1453,83 @@ impl TrackState {
             self.write_value(id, scaled(base));
         }
         self.gliding = 0;
+        self.put_macros_again(track);
+    }
+
+    /// Have each macro put the settings it holds where it has them, now, with what modulation
+    /// last added to it, as a new version's maps may differ or the settings have just been set
+    /// from the song's.
+    pub fn put_macros_again(&mut self, track: &Track) {
+        self.wake();
+        self.macro_heard = [None; MACROS];
+        let moves = std::array::from_fn(|at| {
+            SettingId::macro_at(at).map_or(0.0, |id| self.offsets[id.index()])
+        });
+        self.put_macros(track, &moves);
+    }
+
+    /// Put each macro's settings where it has them now, its held value and what modulation adds
+    /// to it, `moves` on the `00` to `FF` scale over 255, as a hand's turn of each would: a step's
+    /// lock of one still wins on its row, and modulation of one goes on top. A macro that hasn't
+    /// moved since does nothing, so one at rest costs a comparison.
+    fn put_macros(&mut self, track: &Track, moves: &[f32; MACROS]) {
+        for (at, held) in track.macros.iter().enumerate() {
+            if held.maps.is_empty() {
+                self.macro_heard[at] = None;
+                continue;
+            }
+            let value = (self.macro_held[at] + moves[at] * 255.0).clamp(0.0, 255.0);
+            if self.macro_heard[at] == Some(value) {
+                continue;
+            }
+            self.macro_heard[at] = Some(value);
+            for map in &held.maps {
+                self.set_base(map.target.setting(), map.at(value));
+            }
+        }
+    }
+
+    /// A mod slot as it's heard: the song's, with its own settings as macros and modulation have
+    /// them, for what reads a slot outside its working out, a note's start and end and its shape.
+    pub fn heard_mod(&self, track: &Track, at: usize) -> ModSlot {
+        let slot = &track.mods[at];
+        if !reshapes(track) {
+            return *slot;
+        }
+        heard_slot(slot, at, &self.own_held[at], |index| self.offsets[index])
+    }
+
+    /// The accumulator's settings as they're heard, its `Up` and `Down` as macros and modulation
+    /// have them.
+    pub fn heard_accumulation(&self, track: &Track) -> Accumulation {
+        let mut heard = track.accumulation;
+        for at in 0..ACCUMULATION_SETTINGS {
+            if let Some(value) = self.played(at, track.accumulation.own_value(at)) {
+                heard.set_own(at, value);
+            }
+        }
+        heard
+    }
+
+    /// The arpeggio's settings as they're heard, its `Rate` and `Octaves` as macros and
+    /// modulation have them.
+    pub fn heard_arpeggio(&self, track: &Track) -> Arpeggio {
+        let mut heard = track.arpeggio;
+        for at in 0..PLAYED_SETTINGS - ACCUMULATION_SETTINGS {
+            let place = ACCUMULATION_SETTINGS + at;
+            if let Some(value) = self.played(place, track.arpeggio.own_value(at)) {
+                heard.set_own(at, value);
+            }
+        }
+        heard
+    }
+
+    /// One of the accumulator's or arpeggio's settings as it's heard, by its place among both, if
+    /// it isn't what the song has written.
+    fn played(&self, place: usize, written: u16) -> Option<f32> {
+        let held = self.played_held[place];
+        let by = played_id(place).map_or(0.0, |id| self.offsets[id.index()]);
+        (by != 0.0 || (held * 256.0).round() as u16 != written).then_some(held + by * 255.0)
     }
 
     /// Reset what playing from the top does apart from the settings: the random generators,
@@ -1484,7 +1641,20 @@ impl TrackState {
         let note = self
             .last_note
             .map(|played| f32::from(played.note) + self.held_pitch - 128.0);
+        // Whether any slot's own settings may be moved from the song's, so each is read through
+        // a copy with them put in, from what the slots before it have added this time.
+        let reshaped = reshapes(track);
+        let own_held = &self.own_held;
         for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
+            let heard;
+            let slot = if reshaped {
+                heard = heard_slot(slot, at, &own_held[at], |index| {
+                    offsets[index] + moved.at(index)
+                });
+                &heard
+            } else {
+                slot
+            };
             run.now = None;
             run.playing = None;
             let Some(destination) = slot.destination else {
@@ -1658,6 +1828,12 @@ impl TrackState {
             self.offset_marks[marks] = Some(index);
             marks += 1;
         }
+        // Each macro puts what it holds where it has it now, before the voice and the slots' effects
+        // are given their settings, so they hear it this time; a mod slot's, the next.
+        let moves =
+            std::array::from_fn(|at| SettingId::macro_at(at).map_or(0.0, |id| offsets[id.index()]));
+        self.put_macros(track, &moves);
+        let offsets = &mut self.offsets;
         // Each slot's effect gets finished values, and doesn't know where they came from.
         for (slot, insert) in track.inserts.into_iter().enumerate() {
             let mut resolved = insert;
@@ -1843,6 +2019,10 @@ impl TrackState {
                 which: run.drawn,
                 values: run.drift,
             }),
+            macros: std::array::from_fn(|at| {
+                let value = self.macro_heard[at].unwrap_or(self.macro_held[at]);
+                (value * 256.0).round().clamp(0.0, f32::from(0xFF00_u16)) as u16
+            }),
         }
     }
 
@@ -1863,8 +2043,15 @@ impl TrackState {
     /// it had always been it.
     pub fn trigger_mods(&mut self, track: &Track, now: SongTime) {
         self.wake();
-        for (slot, run) in track.mods.iter().zip(&mut self.slots) {
-            trigger_slot(slot, run, now, self.chain_pass);
+        let reshaped = reshapes(track);
+        let (own_held, offsets) = (&self.own_held, &self.offsets);
+        for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
+            let slot = if reshaped {
+                heard_slot(slot, at, &own_held[at], |index| offsets[index])
+            } else {
+                *slot
+            };
+            trigger_slot(&slot, run, now, self.chain_pass);
         }
         self.noted = Some(LfoStart {
             tick: now.tick,
@@ -1876,7 +2063,14 @@ impl TrackState {
     /// through whatever the note's length.
     pub fn release_mods(&mut self, track: &Track, now: SongTime) {
         self.wake();
-        for (slot, run) in track.mods.iter().zip(&mut self.slots) {
+        let reshaped = reshapes(track);
+        let (own_held, offsets) = (&self.own_held, &self.offsets);
+        for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
+            let slot = if reshaped {
+                heard_slot(slot, at, &own_held[at], |index| offsets[index])
+            } else {
+                *slot
+            };
             let envelope = slot.envelope();
             if matches!(run.envelope, EnvelopeRun::Held { .. }) && !envelope.one_shot() {
                 let from = run.envelope.level(&envelope, now.clock, now.rate);
@@ -2421,6 +2615,24 @@ impl TrackState {
                 if self.loaded_effects[slot] == Some(effect) {
                     self.slot_values[slot][at] = value;
                 }
+                return;
+            }
+            // Put onto what it holds as the modulation is next worked out.
+            (Owner::Macro(at), _) => {
+                self.macro_held[at] = value;
+                return;
+            }
+            // Read through a copy of the slot, or of the track's settings, as they're next used.
+            (Owner::ModOwn(slot), at) => {
+                self.own_held[slot][at] = value;
+                return;
+            }
+            (Owner::Accumulation, at) => {
+                self.played_held[at] = value;
+                return;
+            }
+            (Owner::Arpeggio, at) => {
+                self.played_held[ACCUMULATION_SETTINGS + at] = value;
                 return;
             }
             _ => return,
@@ -2982,6 +3194,44 @@ mod tests {
         let mut state = TrackState::new(0, 0);
         state.reset_held(0, 0, track, 0);
         state
+    }
+
+    #[test]
+    fn a_macro_reaches_a_slots_own_settings_the_accumulators_and_the_arpeggios_through_a_copy() {
+        use vt_model::macros::{MacroMap, MacroTarget};
+        let mut track = Track::default();
+        track.mods[4].kind = ModKind::Steps;
+        track.mods[4].steps.mutate = 10;
+        let whole = |id| MacroMap::whole(MacroTarget::Setting(id));
+        track.macros[0].maps = vec![
+            whole(SettingId::mod_own(1, 1).unwrap()),
+            whole(SettingId::mod_own(4, 7).unwrap()),
+            whole(SettingId::accumulation(1).unwrap()),
+            whole(SettingId::arpeggio(1).unwrap()),
+        ];
+        let written = track.clone();
+        let state = from_the_top(&track);
+        assert_eq!(state.heard_mod(&track, 1).adsr.decay_ms, 0, "at 00, none");
+        assert_eq!(state.heard_mod(&track, 4).steps.mutate, 0);
+        assert_eq!(state.heard_accumulation(&track).down, 1);
+        assert_eq!(state.heard_arpeggio(&track).octaves, 1);
+        track.macros[0].value = 0xFF00;
+        let state = from_the_top(&track);
+        assert_eq!(
+            state.heard_mod(&track, 1).adsr.decay_ms,
+            vt_model::constants::MAX_ENVELOPE_MS
+        );
+        assert_eq!(state.heard_mod(&track, 4).steps.mutate, 100);
+        assert_eq!(state.heard_accumulation(&track).down, 28);
+        assert_eq!(state.heard_arpeggio(&track).octaves, 4);
+        assert_eq!(track.mods[4].steps.mutate, 10, "the song keeps its own");
+        // With nothing on them, they're the song's, and a slot is read as it is.
+        let mut free = written.clone();
+        free.macros[0].maps.clear();
+        let state = from_the_top(&free);
+        assert_eq!(state.heard_mod(&free, 4), free.mods[4]);
+        assert_eq!(state.heard_accumulation(&free), free.accumulation);
+        assert_eq!(state.heard_arpeggio(&free), free.arpeggio);
     }
 
     #[test]

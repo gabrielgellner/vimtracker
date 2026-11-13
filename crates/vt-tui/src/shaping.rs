@@ -1,6 +1,6 @@
-//! The shape panel: fill a selected column with a ramp, random values, a wave, two values in turn
-//! or a short list of them, or rework the values there, heard while it's adjusted. On the Note
-//! column it can also follow another track's phrase.
+//! The shape panel: fill a selected column with a ramp, random values, a walk, a wave, two values
+//! in turn or a short list of them, or rework the values there, heard while it's adjusted. On the
+//! Note column it can also follow another track's phrase.
 
 use std::sync::Arc;
 
@@ -12,8 +12,9 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Acid, Context, DEFAULT_RATE, FillKind, Follow, GenParam, MAX_VALUES, Shape, ShapeColumn,
-    Source, Starts, Values, Where, default_ends, is_empty, open_rows, track_seed,
+    Acid, Context, DEFAULT_RATE, FillKind, Follow, GenParam, MAX_VALUES, Pink, Shape, ShapeColumn,
+    Source, Starts, Values, Walk, Where, default_ends, default_step, is_empty, open_rows,
+    track_seed,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -584,6 +585,11 @@ impl App {
                 seed: base.seed.wrapping_add(self.shape_seed),
                 acid: Acid::default(),
                 follow: Follow::default(),
+                walk: Walk {
+                    step: default_step(column),
+                    ..Walk::default()
+                },
+                pink: Pink::default(),
             },
             row: GenParam::Fill,
             typing: None,
@@ -883,8 +889,8 @@ impl App {
         }
     }
 
-    /// Apply a shape to a range, on each of these tracks. A ramp's or random fill's ends are
-    /// chosen again from what's there on the first, a wave or `Alternate` keeps the two values it
+    /// Apply a shape to a range, on each of these tracks. A ramp's, random fill's, walk's or 1/f
+    /// fill's ends are chosen again from what's there on the first, a wave or `Alternate` keeps the two values it
     /// moves between, a `List` keeps its list, and `Scale` the two it scales onto. Each track has
     /// a seed of its own. Each track's column is judged as `S` judges it: an empty one is
     /// generated on, notes of its own or the same command.
@@ -920,12 +926,16 @@ impl App {
         let Some(&(track, phrase, first, column, generate)) = places.first() else {
             return;
         };
-        let (from, to) = match shape.kind {
-            FillKind::Ramp | FillKind::Random if generate => self.generated_ends(column),
-            FillKind::Ramp | FillKind::Random => {
-                default_ends(steps_on(track, phrase), first, column)
-            }
-            _ => (shape.from, shape.to),
+        let fresh = matches!(
+            shape.kind,
+            FillKind::Ramp | FillKind::Random | FillKind::Walk | FillKind::Pink
+        );
+        let (from, to) = if !fresh {
+            (shape.from, shape.to)
+        } else if generate {
+            self.generated_ends(column)
+        } else {
+            default_ends(steps_on(track, phrase), first, column)
         };
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = song.seed.wrapping_add(self.shape_seed);

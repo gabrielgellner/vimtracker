@@ -422,6 +422,8 @@ Song                               song.ron, refused unless format_version is FO
  |   |- accumulation, arpeggio     how ACU and ARP play on it
  |   |- mods[6]                    ModSlot: kind, destination, depth, switch, polarity, each type's
  |   |                             own settings (adsr, lfo), kept while another type plays
+ |   |- macros[8]                  Macro: name, value, maps[(setting, min, max)], saved only once
+ |   |                             one isn't empty
  |   |- chains{id}                 Chain: entries[(phrase, transpose)], label
  |   '- phrases{id}                Phrase: steps[], start, length, lanes[3], order, generators[]
  |       |- Step                   note, velocity, nudge, gate, fx[]
@@ -503,6 +505,15 @@ Song                               song.ron, refused unless format_version is FO
     of a slot after it (`SettingId::for_mod`), never one before.
 *   **Accumulators and arpeggios.** A step's `ACU` and `ARP` say how far, and the track's
     `accumulation` and `arpeggio` say how they move and when they start again.
+*   **Macros** (`macros.rs`, decision 282, the [Gen page study](generators-page.md) §4). Each
+    track has `MACROS` (8), after Ableton Live's Rack macros: a `Macro` has a name, a value from
+    `0000` to `FF00` and any number of `MacroMap`s, each a `MacroTarget` with the `min` and `max`
+    it's put at with the macro at `00` and `FF`, in its own values. A setting is on one macro at
+    most. A macro is itself a setting of the registry, `Owner::Macro`, keyed `macro1` to `macro8`
+    and labelled `MAC1` to `MAC8`, so a step locks it and a mod slot moves it. The registry also
+    holds, unlabelled, the settings only macros and modulation reach (decision 283): each mod
+    slot's type's own (`Owner::ModOwn`, read and written by `ModSlot::own_value` and `set_own` on
+    the registry's scale), and the accumulator's and the arpeggio's.
 *   **Grooves and time.** Tempo is in thousandths of a BPM. The project has a groove, a track can have
     its own, and a step's `GRV` can choose one. A groove is up to 16 pushes, each step's velocity and
     a humanise, and swing is a groove of two steps. A track's `speed` is a note division, its
@@ -577,6 +588,15 @@ the same clock (decision 239).
     starts. A slot sees values, not steps, so a step that locks a `Trig` on also marks its slot
     `struck`, and the slot is told with `InsertState::strike` as it's next given its values: a
     stutter starts again even where `Trig` was on already (decision 219).
+*   **Macros** (decision 284). After the mod slots and before the slots' effects and the voice
+    are given their values, `modulate` works each macro out, its held value (`macro_held`, which
+    a turn, a `MAC` lock or a glide sets as for any setting) plus what modulation adds, and
+    `put_macros` sets each setting it holds as that setting's base through `MacroMap::at`, where a
+    hand's turn sits: only when the macro has moved, and at once after a swap or a reset
+    (`put_macros_again`). A mod slot's own settings, the accumulator's and the arpeggio's have held
+    values too (`own_held`, `played_held`), and what plays them reads a copy with those put in
+    (`heard_slot`, `heard_mod`, `heard_accumulation`, `heard_arpeggio`) wherever they differ from
+    the song's, so a slot at rest is read as written and the code that plays it is unchanged.
 *   **Groups, returns and the master.** A grouped track's frame goes to its group, which plays the
     sum through its own trim, slots, level and pan and sends from there (`process_group`); each
     return plays what's sent to it (`process_return`); and the master plays the sum through its
@@ -1207,7 +1227,7 @@ selection. A selection across tracks shapes each track's column with the same se
 **Sweep.** A sweep covers one column, Note, Velocity, Nudge, gate length or FX, across at least two rows (decision 171 for the note's columns). A multi-column, gate-pulses or instrument-column
 selection is refused with a message. `From` and `To` default to the first and last values selected, or if those match the lowest and
 highest, or if those match the column's range, so a fade doesn't need swapping and a selection needn't end on a value. An FX column uses the
-first command selected, and rows holding another command keep it. A `Fill` of `Random` picks from the range instead, `Wave` follows an LFO's shape (`Smooth` too), rate and phase by where each row falls in time, or makes a whole number of cycles across the selection, and `Alternate` gives the rows it changes each value in turn, for `Run` rows at a time, as `List` does with up to eight values in place of `From` and `To` (decision 96); `Ramp`, `Random` and `Wave` hold each value for `Run` rows too (decision 170). Four transforms rework the values already in the rows instead: `Scale` maps them from their own lowest and highest onto `From` and `To` along the curve, `Invert` flips them within that range, `Shuffle` deals them out again from the seed, and `Reverse` turns their order round (decision 169). On the Note column, `Acid` writes a 303 line, its notes, accents and slides together: a small set of notes from `From`, an octave's chance, and on an empty column a rhythm weighted toward the strong beats, with a second seed so a roll can keep the pitches (decision 273), and `Follow` mirrors another track's phrase, transposed, inverted, reversed or rotated on the way, for a canon (decision 276). `Where` chooses the
+first command selected, and rows holding another command keep it. A `Fill` of `Random` picks from the range instead, `Walk` steps from `From` by at most `Step` a row, reflecting or wrapping at the ends, `1/f` sums `Depth` random values changing at halving rates, Voss's pink noise (decision 277), `Wave` follows an LFO's shape (`Smooth` too), rate and phase by where each row falls in time, or makes a whole number of cycles across the selection, and `Alternate` gives the rows it changes each value in turn, for `Run` rows at a time, as `List` does with up to eight values in place of `From` and `To` (decision 96); `Ramp`, `Random` and `Wave` hold each value for `Run` rows too (decision 170). Four transforms rework the values already in the rows instead: `Scale` maps them from their own lowest and highest onto `From` and `To` along the curve, `Invert` flips them within that range, `Shuffle` deals them out again from the seed, and `Reverse` turns their order round (decision 169). On the Note column, `Acid` writes a 303 line, its notes, accents and slides together: a small set of notes from `From`, an octave's chance, and on an empty column a rhythm weighted toward the strong beats, with a second seed so a roll can keep the pitches (decision 273), and `Follow` mirrors another track's phrase, transposed, inverted, reversed or rotated on the way, for a canon (decision 276). `Where` chooses the
 rows, as in Polyend's Fill tool: notes, no notes, those with the command, all, every n, a percent chance, or a Euclidean spread of `Hits` among the rows it can change, turned by `Rotate` (decision 168). A velocity only ever goes on a note.
 
 **Curve.** `f(t)` applies bias then gain, where `t` runs by row position from 0 at the first row filled to 1 at the last, and the
