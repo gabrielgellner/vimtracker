@@ -469,7 +469,8 @@ Song                               song.ron, refused unless format_version is FO
     phrases, each with a transpose. A phrase stores more steps than it plays, like a clip: a loop of
     `length` steps from `start`, a lane for any FX column that loops on its own, and the order its
     rows play in.
-*   **Steps and FX slots.** A step has a note or `OFF`, a velocity, a nudge in 24ths of a step, a
+*   **Steps and FX slots.** A step has a note or `OFF`, a velocity, a nudge in 24ths of a
+    sixteenth whatever the track's speed, up to just under half the track's step (decision 299), a
     gate of pulses and a length, and `FX_SLOTS` (3) FX slots, and is saved as one line of text. A
     slot holds an event (`DEL`, `KIL`, `OFF`, `RET`, `CHA`), `CND`, `ACU`, `ARP`, or a lock of any
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or

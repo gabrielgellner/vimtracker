@@ -572,7 +572,7 @@ pub fn row_number_at(buffer: &ratatui::buffer::Buffer, y: u16) -> String {
 /// Another track's column on one row of steps: its marker and note, and its colour.
 /// A column of the overview past the track being edited, which is the overview's first here.
 pub fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
-    let x = 72 + column * 5;
+    let x = 73 + column * 5;
     let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
     (text, buffer[(x + 1, row + 2)].fg)
 }

@@ -35,7 +35,7 @@ fn column_place(column: ShapeColumn) -> usize {
     match column {
         ShapeColumn::Note { .. } => 0,
         ShapeColumn::Velocity => 1,
-        ShapeColumn::Nudge => 2,
+        ShapeColumn::Nudge { .. } => 2,
         ShapeColumn::Length => 3,
         ShapeColumn::Fx { slot, .. } => 4 + slot.min(FX_SLOTS - 1),
     }

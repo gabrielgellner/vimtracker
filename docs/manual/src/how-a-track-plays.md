@@ -36,7 +36,7 @@ loop:                  [03 ............. 08]     only these play
 ```
 
 - **Note and velocity** are what sounds. The dim pair after the velocity is the row's
-  **nudge**, how far early or late its note plays, in 24ths of a step, and it's blank
+  **nudge**, how far early or late its note plays, in 24ths of a sixteenth, and it's blank
   on a row on the grid.
 - **Gate** is how long the row lasts, in **pulses**, which are steps, from `0` to `8`,
   and what the note does over that time. An empty cell, `····`, is one pulse of `SGL`,
@@ -285,9 +285,11 @@ step as the groove makes it. A step's `GRV` chooses its groove before it lands.
 
 ## A nudge moves a row's note, not its lanes
 
-A row's nudge moves its note part off where the groove lands its step, up to `B`
-24ths, just under half a step, either way. The order is grid, then groove, then
-nudge:
+A row's nudge moves its note part off where the groove lands its step, in 24ths of
+a sixteenth, 96 to a quarter note as on the MPC, up to just under half the track's
+step either way: `B` at `1/16`, `5` at `1/32` and `2F` at `1/4`. A 24th is the same
+time on every track, so the same nudge pushes a slow part as much as a fast one. The
+order is grid, then groove, then nudge:
 
 ```text
 steps:     0    1    2    3          Swing 66, with step 3's row nudged -B
@@ -323,8 +325,10 @@ sixteenths:  0   1   2   3   4   5   6   7   8
 ```
 
 What's a share of a step is a share of the track's: each pulse of a gate, a lane's
-step, `DEL`'s sixths, a nudge's 24ths, a groove's pushes and a note's `Gate`. The
-LFOs keep to the song's time.
+step, `DEL`'s sixths, a groove's pushes and a note's `Gate`. A nudge isn't: its 24ths
+are of a sixteenth on every track, though a slower track's go further, and a step
+`RATE` makes faster plays its nudge no further than its own range. The LFOs keep to
+the song's time.
 
 The song itself counts sixteenths. A section lasts its longest chain at that chain's
 speed, so 16 rows at `1/8` take 32 sixteenths, and a triplet chain that doesn't end on

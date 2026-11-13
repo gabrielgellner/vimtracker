@@ -7,6 +7,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::TICKS_PER_STEP;
+use crate::step::most_nudge;
 
 /// How long each of a track's steps is.
 #[derive(
@@ -50,6 +51,12 @@ impl Speed {
             Self::QuarterTriplet => TICKS_PER_STEP * 8 / 3,
             Self::Quarter => TICKS_PER_STEP * 4,
         }
+    }
+
+    /// The furthest a row's nudge goes either way at this speed, just under half its step: from
+    /// `5` at `1/32` to `2F` at `1/4`.
+    pub const fn most_nudge(self) -> i8 {
+        most_nudge(self.ticks())
     }
 
     /// Its place in the list, which is its value on a step.
@@ -110,6 +117,8 @@ mod tests {
     fn speeds_are_note_divisions() {
         let ticks: Vec<u64> = Speed::ALL.iter().map(|speed| speed.ticks()).collect();
         assert_eq!(ticks, [120, 160, 240, 320, 480, 640, 960]);
+        let most: Vec<i8> = Speed::ALL.iter().map(|speed| speed.most_nudge()).collect();
+        assert_eq!(most, [5, 7, 11, 15, 23, 31, 47]);
         assert_eq!(Speed::default(), Speed::Sixteenth);
         assert_eq!(Speed::from_index(4), Speed::Eighth);
         assert_eq!(Speed::from_index(99), Speed::Quarter);

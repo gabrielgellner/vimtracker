@@ -92,11 +92,12 @@ impl Pink {
 }
 
 /// A walk's `Step` when the panel opens on a column: two degrees or semitones on the Note column,
-/// two 24ths on Nudge, and an eighth of the column's range on the others, such as `10` on
-/// Velocity, so a step can be heard.
+/// and an eighth of the column's range on the others, such as `10` on Velocity, so a step can be
+/// heard; on Nudge that's two 24ths at a sixteenth, and more on a slower track, whose range is
+/// wider.
 pub fn default_step(column: ShapeColumn) -> u8 {
     match column {
-        ShapeColumn::Note { .. } | ShapeColumn::Nudge => Walk::default().step,
+        ShapeColumn::Note { .. } => Walk::default().step,
         column => ((u16::from(column.highest()) + 1) / 8).max(1) as u8,
     }
 }
@@ -483,7 +484,17 @@ mod tests {
             }),
             2
         );
-        assert_eq!(default_step(ShapeColumn::Nudge), 2);
+        assert_eq!(default_step(ShapeColumn::Nudge { most: 11 }), 2);
+        // A slower track's range is wider, and so is its first step.
+        let steps: Vec<u8> = crate::speed::Speed::ALL
+            .iter()
+            .map(|speed| {
+                default_step(ShapeColumn::Nudge {
+                    most: speed.most_nudge(),
+                })
+            })
+            .collect();
+        assert_eq!(steps, [1, 1, 2, 3, 5, 7, 11]);
         assert_eq!(default_step(ShapeColumn::Velocity), 0x10);
         assert_eq!(default_step(ShapeColumn::Length), 0x20);
     }

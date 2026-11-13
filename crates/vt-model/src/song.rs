@@ -1876,6 +1876,11 @@ impl Phrase {
         &self.generators
     }
 
+    /// Its live generators, to convert a song's nudges (`crate::convert`).
+    pub(crate) fn generators_mut(&mut self) -> &mut [Generator] {
+        &mut self.generators
+    }
+
     /// The rows a generator would cover now: its own, as many as are stored, or its FX column's
     /// lane, or none if that column has no lane.
     pub fn span_rows(&self, generator: &Generator) -> Option<StepRange> {

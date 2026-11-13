@@ -6,8 +6,7 @@ use crate::condition::Condition;
 use crate::constants::BEAT_STEPS;
 use crate::scale::Scale;
 use crate::step::{
-    FxCommand, FxSlot, Gate, MAX_NOTE, MAX_NUDGE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note,
-    Step,
+    FxCommand, FxSlot, Gate, MAX_NOTE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step,
 };
 
 /// One editable part of a step.
@@ -373,14 +372,15 @@ pub enum Shift {
     Length,
     /// `+` and `_` on a gate's length, by 16.
     LengthLarge,
-    /// `=` and `-` on a nudge, by a 24th of a step. Only nudges move, and a row without one gets
-    /// one only if it has a note.
+    /// `=` and `-` on a nudge, by a 24th of a sixteenth. Only nudges move, and a row without one
+    /// gets one only if it has a note.
     Nudge,
-    /// `+` and `_` on a nudge, by a sixth of a step, `DEL`'s unit.
+    /// `+` and `_` on a nudge, by a sixth of a sixteenth, `DEL`'s unit on a track at a sixteenth.
     NudgeLarge,
 }
 
-/// How many 24ths of a step one large step of a nudge is: a sixth, as `DEL` counts.
+/// How many 24ths of a sixteenth one large step of a nudge is: a sixth of one, as `DEL` counts at
+/// a sixteenth.
 pub const LARGE_NUDGE: i32 = 4;
 
 /// How much one large step is for a value in hex.
@@ -440,7 +440,7 @@ fn shift_fx(command: FxCommand, slot: FxSlot, by: i32, kind: Shift) -> u16 {
 
 /// Move the covered values of a step, clamping to each field's range. With a scale, a note moves
 /// through it, except by a large step, as an octave stays in key, or a chromatic one. `gate` is the
-/// track's `Gate`, where a length that's empty starts.
+/// track's `Gate`, where a length that's empty starts, and `most` the furthest its nudges go.
 pub fn shift_step(
     step: &mut Step,
     scope: Scope,
@@ -448,6 +448,7 @@ pub fn shift_step(
     kind: Shift,
     scale: Option<Scale>,
     gate: u8,
+    most: i8,
 ) {
     let by = by.clamp(-0xFFFF, 0xFFFF);
     if matches!(kind, Shift::Nudge | Shift::NudgeLarge) {
@@ -458,7 +459,7 @@ pub fn shift_step(
         };
         let has_note = matches!(step.note, Note::On(_));
         if scope.covers(VELOCITY_GROUP) && (step.nudge != 0 || has_note) {
-            let most = i32::from(MAX_NUDGE);
+            let most = i32::from(most);
             step.nudge = (i32::from(step.nudge) + by).clamp(-most, most) as i8;
         }
         return;
@@ -649,6 +650,7 @@ fn column_to(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::speed::Speed;
 
     #[test]
     fn beat_motions_land_on_beats_and_stop_at_edges() {
@@ -720,20 +722,18 @@ mod tests {
 
     fn shifted(text: &str, by: i32, kind: Shift) -> String {
         let mut step: Step = text.parse().unwrap();
-        shift_step(&mut step, Scope::column(FX_GROUP), by, kind, None, 0xFF);
+        shift_step(&mut step, Scope::column(FX_GROUP), by, kind, None, 0xFF, 11);
         step.to_string()
     }
 
     fn nudged(text: &str, by: i32, kind: Shift) -> String {
+        nudged_at(text, by, kind, Speed::Sixteenth)
+    }
+
+    fn nudged_at(text: &str, by: i32, kind: Shift, speed: Speed) -> String {
         let mut step: Step = text.parse().unwrap();
-        shift_step(
-            &mut step,
-            Scope::column(VELOCITY_GROUP),
-            by,
-            kind,
-            None,
-            0xFF,
-        );
+        let scope = Scope::column(VELOCITY_GROUP);
+        shift_step(&mut step, scope, by, kind, None, 0xFF, speed.most_nudge());
         step.to_string()
     }
 
@@ -764,6 +764,21 @@ mod tests {
     }
 
     #[test]
+    fn a_nudge_moves_as_far_as_its_tracks_speed_lets_it() {
+        let quarter = |text, by, kind| nudged_at(text, by, kind, Speed::Quarter);
+        assert_eq!(quarter("C-3 64 +B", 1, Shift::Nudge), "C-3 64 +C");
+        assert_eq!(quarter("C-3 64", 20, Shift::NudgeLarge), "C-3 64 +2F");
+        assert_eq!(quarter("C-3 64", -20, Shift::NudgeLarge), "C-3 64 -2F");
+        let fast = |text, by, kind| nudged_at(text, by, kind, Speed::ThirtySecond);
+        assert_eq!(fast("C-3 64", 9, Shift::Nudge), "C-3 64 +5");
+        assert_eq!(
+            fast("C-3 64 -B", 1, Shift::Nudge),
+            "C-3 64 -5",
+            "kept to its range"
+        );
+    }
+
+    #[test]
     fn the_velocity_group_copies_and_clears_the_nudge_with_it() {
         let mut step: Step = "C-3 60 -3 SGL2".parse().unwrap();
         let source: Step = "D-3 70 +5".parse().unwrap();
@@ -782,7 +797,15 @@ mod tests {
 
     fn lengthened(text: &str, by: i32, kind: Shift, gate: u8) -> String {
         let mut step: Step = text.parse().unwrap();
-        shift_step(&mut step, Scope::column(GATE_GROUP), by, kind, None, gate);
+        shift_step(
+            &mut step,
+            Scope::column(GATE_GROUP),
+            by,
+            kind,
+            None,
+            gate,
+            11,
+        );
         step.to_string()
     }
 

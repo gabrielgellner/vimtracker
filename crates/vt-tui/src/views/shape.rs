@@ -66,7 +66,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     let name = match panel.column {
         ShapeColumn::Note { .. } => "Note".to_owned(),
         ShapeColumn::Velocity => "Velocity".to_owned(),
-        ShapeColumn::Nudge => "Nudge".to_owned(),
+        ShapeColumn::Nudge { .. } => "Nudge".to_owned(),
         ShapeColumn::Length => "Length".to_owned(),
         ShapeColumn::Fx { command, .. } => app
             .song()

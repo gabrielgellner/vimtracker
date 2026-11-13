@@ -57,16 +57,27 @@ impl Engine {
     /// step this many ticks long. Each part is worked out from the tempo's origin, so a step on
     /// the grid lands where it always did, and swing's delay is what it always was.
     pub(super) fn landing(&self, grid: u64, push: i64, step: u64) -> u64 {
+        self.landed(grid, push * step as i64)
+    }
+
+    /// Where on the clock a step lands, moved from its place on the grid by so many ticks of a
+    /// sixteenth taken as shares of a step, times that step's ticks: a push times its step's
+    /// length, and a nudge, which is the same time on every track, times a sixteenth's. Adding
+    /// them before they're frames lands a sixteenth's nudged step where it always did.
+    pub(super) fn landed(&self, grid: u64, moved: i64) -> u64 {
         let on_grid = sample_of_tick(
             grid.saturating_sub(self.origin_tick),
             self.rate,
             self.millibpm,
         );
-        let moved = self.frames_of(push.unsigned_abs(), step);
-        let lands = if push >= 0 {
-            on_grid + moved
+        let numerator = u128::from(moved.unsigned_abs()) * 60 * u128::from(self.rate) * 1000;
+        let denominator =
+            u128::from(TICKS_PER_STEP) * u128::from(TICKS_PER_QUARTER) * u128::from(self.millibpm);
+        let frames = (numerator / denominator) as u64;
+        let lands = if moved >= 0 {
+            on_grid + frames
         } else {
-            on_grid.saturating_sub(moved)
+            on_grid.saturating_sub(frames)
         };
         (self.clock + lands).saturating_sub(self.frames_since_origin)
     }

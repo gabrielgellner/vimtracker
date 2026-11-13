@@ -74,7 +74,7 @@ fn the_timeline_gives_a_row_a_line_for_each_pulse() {
     assert_eq!(text(3).trim_end(), " │");
     assert_eq!(Some(buffer[(10, 3)].fg), vt_tui::theme::faint().fg);
     // The FX band carries on through it.
-    assert_eq!(buffer[(27, 3)].bg, vt_tui::theme::FX_BAND);
+    assert_eq!(buffer[(28, 3)].bg, vt_tui::theme::FX_BAND);
     // Beats are lines that start on a beat. Row 02 lasts steps 3 to 5, so the rule before the
     // beat at step 4 is under its own line, and row 03's second line is before step 8's.
     let beat = Some(vt_tui::theme::SURFACE1);

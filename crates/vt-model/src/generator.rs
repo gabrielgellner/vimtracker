@@ -61,7 +61,7 @@ pub struct Generator {
 fn on_notes(column: ShapeColumn) -> bool {
     matches!(
         column,
-        ShapeColumn::Velocity | ShapeColumn::Nudge | ShapeColumn::Length
+        ShapeColumn::Velocity | ShapeColumn::Nudge { .. } | ShapeColumn::Length
     )
 }
 
@@ -110,7 +110,7 @@ fn copy(column: ShapeColumn, owns: Owns, from: &Step, to: &mut Step) {
             }
         }
         ShapeColumn::Velocity => to.velocity = from.velocity,
-        ShapeColumn::Nudge => to.nudge = from.nudge,
+        ShapeColumn::Nudge { .. } => to.nudge = from.nudge,
         ShapeColumn::Length => to.gate = from.gate,
         ShapeColumn::Fx { slot, .. } => {
             if let Some(cell) = to.fx.get_mut(slot) {
@@ -146,7 +146,7 @@ pub fn lay_under(generator: &Generator, under: &Step, view: &mut RowView) {
             }
         }
         ShapeColumn::Velocity => view.velocity = under.velocity,
-        ShapeColumn::Nudge => view.nudge = under.nudge,
+        ShapeColumn::Nudge { .. } => view.nudge = under.nudge,
         ShapeColumn::Length => view.gate = under.gate,
         ShapeColumn::Fx { slot, .. } => view.set_fx(slot, fx(slot)),
     }
@@ -176,7 +176,7 @@ fn same(column: ShapeColumn, owns: Owns, a: &Step, b: &Step) -> bool {
                 && (owns != Owns::NoteFx || a.fx == b.fx)
         }
         ShapeColumn::Velocity => a.velocity == b.velocity,
-        ShapeColumn::Nudge => a.nudge == b.nudge,
+        ShapeColumn::Nudge { .. } => a.nudge == b.nudge,
         ShapeColumn::Length => a.gate == b.gate,
         ShapeColumn::Fx { slot, .. } => a.fx.get(slot) == b.fx.get(slot),
     }
@@ -209,6 +209,7 @@ impl Generator {
         match (self.column, column) {
             (ShapeColumn::Fx { slot, .. }, ShapeColumn::Fx { slot: other, .. }) => slot == other,
             (ShapeColumn::Note { .. }, ShapeColumn::Note { .. }) => true,
+            (ShapeColumn::Nudge { .. }, ShapeColumn::Nudge { .. }) => true,
             (mine, other) => mine == other,
         }
     }
@@ -413,6 +414,12 @@ impl Generator {
         self.first = range.first;
     }
 
+    /// The steps it keeps of its rows, what's under them and as it last left them, to convert a
+    /// song's nudges (`crate::convert`).
+    pub(crate) fn kept_steps_mut(&mut self) -> impl Iterator<Item = &mut Step> {
+        self.under.iter_mut().chain(self.seen.iter_mut())
+    }
+
     /// Move its rows along, for steps added in front of them.
     pub(crate) fn shift(&mut self, by: usize) {
         self.first += by;
@@ -486,7 +493,10 @@ enum ColumnFile {
         writes: Option<u8>,
     },
     Velocity,
-    Nudge,
+    Nudge {
+        /// The furthest its track's nudges went when it was made, in 24ths of a sixteenth.
+        most: i8,
+    },
     Length,
     Fx {
         slot: usize,
@@ -499,7 +509,7 @@ impl From<ShapeColumn> for ColumnFile {
         match column {
             ShapeColumn::Note { scale, writes } => Self::Note { scale, writes },
             ShapeColumn::Velocity => Self::Velocity,
-            ShapeColumn::Nudge => Self::Nudge,
+            ShapeColumn::Nudge { most } => Self::Nudge { most },
             ShapeColumn::Length => Self::Length,
             ShapeColumn::Fx { slot, command } => Self::Fx {
                 slot,
@@ -514,7 +524,7 @@ impl From<ColumnFile> for ShapeColumn {
         match column {
             ColumnFile::Note { scale, writes } => Self::Note { scale, writes },
             ColumnFile::Velocity => Self::Velocity,
-            ColumnFile::Nudge => Self::Nudge,
+            ColumnFile::Nudge { most } => Self::Nudge { most },
             ColumnFile::Length => Self::Length,
             // Checked when it's read.
             ColumnFile::Fx { slot, command } => Self::Fx {

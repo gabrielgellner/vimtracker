@@ -315,7 +315,7 @@ fn a_recorded_note_goes_on_the_row_of_its_tracks_own_speed() {
     app.key_released(a, time_at(at));
     let rows = rows_of(&app, 1);
     assert_eq!(rows[1].note, Note::On(60), "{rows:?}");
-    assert_eq!(rows[1].nudge, -6);
+    assert_eq!(rows[1].nudge, -12, "half a sixteenth, in 24ths of one");
     let (pulses, length) = length_of(&rows[1]).unwrap();
     assert_eq!(pulses, 1);
     assert_eq!(length, Some(0x80));
