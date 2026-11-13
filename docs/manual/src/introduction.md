@@ -36,8 +36,9 @@ start a project in the folder `my-song`.
 ## What's in it
 
 **Views.** `Space` and a digit go to each view: `1` the song, `2` the chain, `3` the
-phrase, `4` the track pages, `5` the sample explorer, `6` the mixer, `7` the audio
-device, `8` the kits, `9` the project and `0` the sample page. [Navigation](guides/navigation.md) lists them
+phrase, `4` the mixer, `5` to `8` the track's Sound, Mod, FX and Gen pages, `9` the
+project, with its song settings and the audio device, and `0` the sample page. `:sample`
+and `:kit` choose a sample or a kit. [Navigation](guides/navigation.md) lists them
 all.
 
 **Notes** are named as Ableton Live names them, so `C-3` is middle C, MIDI note 60, and
