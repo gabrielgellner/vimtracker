@@ -56,6 +56,8 @@ pub enum Pick {
     },
     /// Put this gate type in the gate cell, or empty it.
     Gate(Option<GateKind>),
+    /// Give the gate cell this length, on the `00` to `FF` scale, or leave it to the track's `Gate`.
+    Length(Option<u8>),
     /// Put a `CND` with this condition, by its value, in an FX slot.
     Condition {
         slot: usize,

@@ -253,6 +253,21 @@ and `_` by 16, and `x` takes it away. It's copied and pasted with the gate. An
 empty one, `··`, is the track's `Gate`, in the Sound page's Play device under
 `Glide`, and `=` or `-` on it start from there.
 
+`K` on it chooses a length from a list, as `K` on the gate chooses a gate:
+
+| Length | Of the last pulse |
+|---|---|
+| `--` | The track's `Gate` |
+| `08` | 3%, a click, for ticks and plucks |
+| `20` | 13%, very short, a stab |
+| `40` | 25%, short, staccato |
+| `80` | 50%, half, as a 303's gate closes |
+| `C0` | 75%, long, with a gap before the next |
+| `E6` | 90%, nearly legato, a breath before the next |
+| `FF` | 100%, the whole pulse, held until something ends it |
+
+Typing filters the list, so `K 8 0 Enter` gives a row a 303's length.
+
 | Gate | At `Gate` 50% |
 |---|---|
 | `SGL` | Held to halfway through its last pulse, so `SGL3` is 2.5 steps |

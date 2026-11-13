@@ -9168,6 +9168,74 @@ fn space_k_lists_the_accent_and_slide_keys() {
 }
 
 #[test]
+fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
+    use vt_model::step::GateKind;
+    let (mut app, _realtime) = app();
+    let gate = |app: &App| app.phrase_here().unwrap().steps()[0].gate;
+    // On the gate, the gate types.
+    press(&mut app, "lllK");
+    assert_eq!(app.cursor.field, vt_tui::app::Field::Gate);
+    assert_eq!(app.picker.as_ref().unwrap().title, "Gates");
+    special(&mut app, KeyCode::Esc);
+    assert!(app.picker.is_none());
+
+    // On its length, some lengths, with the track's first and marked on an empty cell.
+    press(&mut app, "lK");
+    assert_eq!(app.cursor.field, vt_tui::app::Field::GateLength);
+    let picker = app.picker.as_ref().expect("the lengths are listed");
+    assert_eq!(picker.title, "Lengths");
+    let labels: Vec<&str> = picker
+        .items()
+        .iter()
+        .map(|item| item.label.as_str())
+        .collect();
+    assert_eq!(labels, ["--", "08", "20", "40", "80", "C0", "E6", "FF"]);
+    assert_eq!(picker.items()[0].meaning, "The track's Gate, now 100%");
+    assert_eq!(
+        picker.items()[4].meaning,
+        "50%, half, as a 303's gate closes"
+    );
+    assert_eq!(picker.current().unwrap().label, "--");
+    // `Esc` leaves it as it was.
+    special(&mut app, KeyCode::Esc);
+    assert!(app.picker.is_none());
+    assert_eq!(gate(&app), None);
+
+    // Choosing one sets it, in one change, on one pulse of `SGL` for an empty cell.
+    let depth = app.history.undo_depth();
+    press(&mut app, "K80");
+    special(&mut app, KeyCode::Enter);
+    let set = gate(&app).expect("a gate to hold the length");
+    assert_eq!(
+        (set.kind, set.pulses, set.length),
+        (GateKind::Single, 1, Some(0x80))
+    );
+    assert_eq!(app.history.undo_depth(), depth + 1, "one change");
+
+    // Typing filters, and the gate keeps its type and pulses.
+    press(&mut app, "hKHLD");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "==lK");
+    assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "80");
+    press(&mut app, "C0");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(picker.shown().next().unwrap().label, "C0");
+    assert!(picker.shown().count() < picker.items().len());
+    special(&mut app, KeyCode::Enter);
+    let set = gate(&app).unwrap();
+    assert_eq!(
+        (set.kind, set.pulses, set.length),
+        (GateKind::Hold, 3, Some(0xC0))
+    );
+
+    // `--` gives it back to the track's `Gate`.
+    press(&mut app, "Kgg");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(gate(&app).unwrap().length, None);
+    assert_eq!(gate(&app).unwrap().kind, GateKind::Hold);
+}
+
+#[test]
 fn k_chooses_cnd_then_its_condition_from_a_list() {
     use vt_model::step::FxCommand;
     use vt_tui::views::status::{column_name, value_shown};
