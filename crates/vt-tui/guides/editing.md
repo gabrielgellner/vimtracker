@@ -86,14 +86,14 @@ nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Wave`, `Alternate`, `List` or a transform. `r` picks anew |
+| Fill | `Ramp`, `Random`, `Wave`, `Alternate`, `List`, `Acid` or a transform |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
 | Run | How many rows each value holds for |
 | Where | Which rows change, with `Amount` below it for some |
 
-`Run` makes stairs: a ramp from `00` to `30` over 8 rows with `Run 2` gives
+`r` picks a random fill's values anew. `Run` makes stairs: a ramp from `00` to `30` over 8 rows with `Run 2` gives
 `00 00 10 10 20 20 30 30`, and a random fill holds each pick for that many rows.
 It counts the rows it changes, so on Velocity it's that many notes.
 
@@ -214,6 +214,37 @@ commands, as `K` does, and the one you choose is written on the rows `Where`
 picks, every row to begin with, from its lowest value to its highest. `Esc` in
 the list leaves the column as it was. A transform has nothing to rework on an
 empty column, so it isn't offered. Velocity, Nudge and length still need notes.
+
+### Acid lines
+
+`Acid`, on the Note column only, writes a 303 line: notes, accents and slides
+together, as Roland's and Arturia's 303s roll them. It works on any machine,
+not only the `Acid`. On an empty column it writes a riff of its own; on notes
+already there it keeps their rhythm.
+
+| Row | Does |
+|---|---|
+| From, To | The riff's notes come from between them, and From is its root |
+| Notes | How many notes the riff has, from 1 to 8, its root among them |
+| Octave | The chance a note goes an octave up or down |
+| Density | On an empty column, the share of rows that play |
+| Accent | The chance a note is accented, written as `7F` |
+| Slide | The chance a note slides into the next, written as `HLD` |
+| Pitches | `Roll` gives new pitches on each `r`, `Keep` keeps them |
+
+The riff's notes come from the scale while it's on, so a set of four in C minor
+might be `C-3 D#3 G-3 A#3`, and the root plays more often than the others.
+Density counts where each row falls in the bar, counting from the first row
+selected: beats play most, then every third row, then the other even rows, and
+the rest least, so at `50%` half the rows play, most of them on the beat. A
+plain note takes the velocity notes are typed with, and an accent `7F`, as `'`
+writes it; a slide is `HLD` on the gate, as `/` writes it.
+
+`r` rolls a new riff, rhythm and all. With Pitches on `Keep`, `r` rolls only
+the accents, slides and octaves, and the notes and rhythm stay: Roland's second
+die. On notes already there, `Keep` keeps their own pitches, so a line you wrote
+gets new accents and slides and nothing else. Keep it live with `L` to come back
+with `gl` and roll again while it loops, until one sticks.
 
 ### Keeping it live
 

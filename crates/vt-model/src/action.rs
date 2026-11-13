@@ -24,7 +24,7 @@ use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
 };
 use crate::settings::SettingId;
-use crate::shape::{Shape, ShapeColumn, exact_values};
+use crate::shape::{Shape, ShapeColumn, written};
 use crate::song::{
     Chain, ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section,
     SectionStart, Song, Track, lowest_unused,
@@ -692,8 +692,8 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get(phrase)
                 .cloned()
                 .ok_or(EditError::NoPhrase(*phrase))?;
-            for (row, value) in exact_values(found.steps(), *range, *column, shape) {
-                column.write_exact(step_mut(&mut next, *track, *phrase, row)?, value);
+            for (row, step) in written(found.steps(), *range, *column, shape) {
+                *step_mut(&mut next, *track, *phrase, row)? = step;
             }
         }
         Action::Generate {

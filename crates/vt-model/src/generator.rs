@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::scale::Scale;
 use crate::selection::StepRange;
-use crate::shape::{Shape, ShapeColumn, exact_values};
+use crate::shape::{FillKind, Shape, ShapeColumn, written};
 use crate::step::{FxCommand, FxSlot, Note, Step};
 
 /// Where a live generator writes.
@@ -53,14 +53,24 @@ fn on_notes(column: ShapeColumn) -> bool {
     )
 }
 
+/// Whether a shape owns a note's velocity and gate as well as its pitch, as `Acid` writes its
+/// accents and slides there.
+fn whole_notes(shape: &Shape) -> bool {
+    shape.kind == FillKind::Acid
+}
+
 /// Copy a column's cell from one step to another: a note, with its velocity for notes of its own,
-/// a velocity, a nudge, a whole gate cell, or an FX slot.
-fn copy(column: ShapeColumn, from: &Step, to: &mut Step) {
+/// and its velocity and gate for whole notes; a velocity, a nudge, a whole gate cell, or an FX
+/// slot.
+fn copy(column: ShapeColumn, whole: bool, from: &Step, to: &mut Step) {
     match column {
         ShapeColumn::Note { writes, .. } => {
             to.note = from.note;
-            if writes.is_some() {
+            if writes.is_some() || whole {
                 to.velocity = from.velocity;
+            }
+            if whole {
+                to.gate = from.gate;
             }
         }
         ShapeColumn::Velocity => to.velocity = from.velocity,
@@ -75,20 +85,22 @@ fn copy(column: ShapeColumn, from: &Step, to: &mut Step) {
 }
 
 /// A column's cell on a step, alone on a step of its own.
-fn cell(column: ShapeColumn, step: &Step) -> Step {
+fn cell(column: ShapeColumn, whole: bool, step: &Step) -> Step {
     let mut cell = Step::default();
     if let ShapeColumn::Fx { slot, .. } = column {
         cell.fx = vec![FxSlot::default(); slot + 1];
     }
-    copy(column, step, &mut cell);
+    copy(column, whole, step, &mut cell);
     cell
 }
 
 /// Whether two steps hold the same cell in a column.
-fn same(column: ShapeColumn, a: &Step, b: &Step) -> bool {
+fn same(column: ShapeColumn, whole: bool, a: &Step, b: &Step) -> bool {
     match column {
         ShapeColumn::Note { writes, .. } => {
-            a.note == b.note && (writes.is_none() || a.velocity == b.velocity)
+            a.note == b.note
+                && ((writes.is_none() && !whole) || a.velocity == b.velocity)
+                && (!whole || a.gate == b.gate)
         }
         ShapeColumn::Velocity => a.velocity == b.velocity,
         ShapeColumn::Nudge => a.nudge == b.nudge,
@@ -138,7 +150,7 @@ impl Generator {
     fn restore(&self, steps: &mut [Step]) {
         for (offset, cell) in self.under.iter().enumerate() {
             if let Some(step) = steps.get_mut(self.first + offset) {
-                copy(self.column, cell, step);
+                copy(self.column, whole_notes(&self.shape), cell, step);
             }
         }
     }
@@ -148,8 +160,23 @@ impl Generator {
         self.first = range.first;
         self.under = (range.first..=range.last)
             .filter_map(|row| steps.get(row))
-            .map(|step| cell(self.column, step))
+            .map(|step| cell(self.column, whole_notes(&self.shape), step))
             .collect();
+        self.render(steps);
+    }
+
+    /// Take a new shape and write it. One that owns more of each note, as `Acid` owns its velocity
+    /// and gate, takes what's there now as what's under those, and one that owns less puts back
+    /// what was under them first.
+    pub(crate) fn reshape(&mut self, steps: &mut [Step], shape: Shape) {
+        self.restore(steps);
+        self.shape = shape;
+        let whole = whole_notes(&self.shape);
+        for (offset, under) in self.under.iter_mut().enumerate() {
+            if let Some(step) = steps.get(self.first + offset) {
+                *under = cell(self.column, whole, step);
+            }
+        }
         self.render(steps);
     }
 
@@ -159,9 +186,9 @@ impl Generator {
         let Some(range) = self.rows() else {
             return;
         };
-        for (row, value) in exact_values(steps, range, self.column, &self.shape) {
-            if let Some(step) = steps.get_mut(row) {
-                self.column.write_exact(step, value);
+        for (row, step) in written(steps, range, self.column, &self.shape) {
+            if let Some(target) = steps.get_mut(row) {
+                *target = step;
             }
         }
         self.seen = steps[range.first..=range.last.min(steps.len() - 1)].to_vec();
@@ -176,17 +203,18 @@ impl Generator {
         let Some(range) = range else {
             return false;
         };
+        let whole = whole_notes(&self.shape);
         let mut changed = false;
         for (offset, seen) in self.seen.iter().enumerate() {
             let Some(now) = steps.get(self.first + offset) else {
                 return false;
             };
             let came_or_went = matches!(seen.note, Note::On(_)) != matches!(now.note, Note::On(_));
-            if !same(self.column, seen, now) {
+            if !same(self.column, whole, seen, now) {
                 if !(on_notes(self.column) && came_or_went) {
                     return false;
                 }
-                self.under[offset] = cell(self.column, now);
+                self.under[offset] = cell(self.column, whole, now);
                 changed = true;
             } else if seen.note != now.note {
                 changed = true;
@@ -205,6 +233,7 @@ impl Generator {
     /// Move onto other rows, as a lane does: the rows it leaves get back what was under them, and
     /// the rows it takes keep what's there as what's under them.
     fn retarget(&mut self, steps: &mut [Step], range: StepRange) {
+        let whole = whole_notes(&self.shape);
         let (old_first, old_under) = (self.first, std::mem::take(&mut self.under));
         let inside = |row: usize| (range.first..=range.last).contains(&row);
         for (offset, cell) in old_under.iter().enumerate() {
@@ -212,7 +241,7 @@ impl Generator {
             if !inside(row)
                 && let Some(step) = steps.get_mut(row)
             {
-                copy(self.column, cell, step);
+                copy(self.column, whole, cell, step);
             }
         }
         self.under = (range.first..=range.last)
@@ -222,7 +251,7 @@ impl Generator {
                     .and_then(|offset| old_under.get(offset));
                 Some(match kept {
                     Some(cell) => cell.clone(),
-                    None => cell(self.column, steps.get(row)?),
+                    None => cell(self.column, whole, steps.get(row)?),
                 })
             })
             .collect();
