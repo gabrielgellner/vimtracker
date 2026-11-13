@@ -123,7 +123,7 @@ impl App {
         let frames = std::sync::Arc::clone(&playable.frames);
         if !self.handle.play_file(track, frames, Some(span)) {
             self.status =
-                "Audio has stopped, so nothing plays. Space 7 chooses a device".to_owned();
+                "Audio has stopped, so nothing plays. Space 9 L chooses a device".to_owned();
             return false;
         }
         let page = &mut self.sample_page;

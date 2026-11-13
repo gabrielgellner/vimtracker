@@ -42,7 +42,7 @@ fn playing(machine: Machine) -> (App, Realtime) {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     (app, realtime)
 }
 
@@ -469,7 +469,7 @@ fn the_output_meter_reads_the_cursors_track_after_its_trim_as_it_plays() {
         let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
         let (handle, mut realtime) = connect(Engine::new(48_000, version));
         let mut app = App::new(song, None, samples, handle, 48_000);
-        press(&mut app, " 4");
+        press(&mut app, " 5");
         app.handle
             .send(vt_engine::link::Command::PlayFrom { step: 0 });
         let mut out = vec![0.0; 2048 * 2];
@@ -515,7 +515,7 @@ fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     app.handle
         .send(vt_engine::link::Command::PlayFrom { step: 0 });
     let mut graphics = Graphics::new();
@@ -597,7 +597,7 @@ fn on_fixed(kind: TrackKind) -> (App, Realtime) {
     let (handle, realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     app.cursor.track = at;
-    press(&mut app, " 4gg0j");
+    press(&mut app, " 5gg0j");
     (app, realtime)
 }
 
@@ -754,7 +754,7 @@ fn on_sound_page(song: Song, samples: Arc<SamplePool>) -> (App, Realtime) {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     (app, realtime)
 }
 

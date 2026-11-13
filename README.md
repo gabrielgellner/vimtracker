@@ -93,7 +93,7 @@ vimtracker my-song        # opens my-song, or creates it on the first :w
 just run my-song          # the same, built from this checkout
 ```
 
-1.  `Space 5` lists WAV, AIFF and FLAC files under the project, your kits and sample folders and
+1.  `:sample` lists WAV, AIFF and FLAC files under the project, your kits and sample folders and
     the folder you ran from, for the current track, with each kit opening like a folder to its
     sounds. `:sample path` takes a file, or a folder to browse.
 2.  `Space 3` opens the phrase view. `i` starts Insert, and the keyboard plays as in Ableton:
@@ -104,7 +104,8 @@ just run my-song          # the same, built from this checkout
 4.  `l` moves to the next field. `K` lists the FX commands, or type a label, `Enter`, then two hex
     digits, such as `CUT` `Enter` `40`.
 5.  `Space 2` opens the chain view, where `gd` opens a phrase, or adds one on the empty row.
-6.  `Space 4` opens the track page: its Sound, Mod and FX pages, on `H` and `L`.
+6.  `Space 5` to `Space 8` open the track page's Sound, Mod, FX and Gen pages, and `H` and `L`
+    go between them. `Space 4` is the mixer, and `Space 9` the project.
 7.  `:w` saves. `:render loop.wav` writes the loop, ready to drop into Ableton.
 
 `Space Space` jumps between views. `Space ?` opens the guides, short tutorials on each topic,

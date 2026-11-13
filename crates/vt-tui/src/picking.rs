@@ -24,12 +24,14 @@ use crate::app::{App, Entry, Field};
 use crate::banking::Seed;
 use crate::explorer::Purpose;
 use crate::guides::GUIDES;
+use crate::input::bindings::Cmd;
 use crate::input::command::Line;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Outcome, Pick, Picker, Preview, PreviewLine, Shown};
 use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
+use crate::track_page::Page;
 use crate::views::picker::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
 use crate::views::widgets::group;
 
@@ -145,14 +147,42 @@ impl App {
             .unwrap_or_else(|| name.with_extension("ron"))
     }
 
-    /// Open the view picker, with the view before this one highlighted so `Enter` flips back.
+    /// Open the view picker, with the view before this one highlighted so `Enter` flips back. The
+    /// track page is listed by the page it shows, where it's in the order, and then its other
+    /// pages after every view; each item has the key that shows it beside it, from the table.
     pub(crate) fn open_view_picker(&mut self) {
         self.count = None;
-        let items: Vec<Item> = self
+        let key = |cmd: Cmd| {
+            self.table
+                .rows()
+                .find(|binding| binding.mode == Mode::Normal && binding.cmd == cmd)
+                .map_or("", |binding| binding.keys)
+        };
+        let shown = self.track_page.page;
+        let page_item = |page: Page| {
+            Item::new(page.name().to_lowercase(), Pick::TrackPage(page))
+                .meaning(key(Cmd::ShowTrackPage(page)))
+        };
+        let mut items: Vec<Item> = self
             .recent_views
             .iter()
-            .map(|view| Item::new(view.name(), Pick::View(*view)))
+            .map(|view| match view {
+                View::Track => page_item(shown),
+                // The project's sub-pages are `Space 9`, then `H` or `L`.
+                View::Project | View::Audio => {
+                    let side = if *view == View::Audio { "L" } else { "H" };
+                    Item::new(view.name(), Pick::View(*view))
+                        .meaning(format!("{}, {side}", key(Cmd::ShowProject)))
+                }
+                _ => Item::new(view.name(), Pick::View(*view)).meaning(key(Cmd::ShowView(*view))),
+            })
             .collect();
+        items.extend(
+            Page::ALL
+                .into_iter()
+                .filter(|page| *page != shown)
+                .map(page_item),
+        );
         let mut picker = Picker::new("Views", items).opened_on(Some(0));
         picker.move_highlight(1);
         self.show_picker(picker);
@@ -344,7 +374,7 @@ impl App {
     }
 
     /// Choose a kit in the explorer, from the kit folders, with each kit's sounds beside the list.
-    /// `Enter` makes it the kit `Space 5` lists first, and `L` puts its sounds on tracks.
+    /// `Enter` makes it the kit `:sample` lists first, and `L` puts its sounds on tracks.
     pub(crate) fn open_kit_picker(&mut self) {
         self.open_kit_explorer();
     }
@@ -357,7 +387,7 @@ impl App {
             }
             Ok(kit) => {
                 self.status = format!(
-                    "Kit {}: {} sounds. Space 5 chooses one for this track",
+                    "Kit {}: {} sounds. :sample chooses one for this track",
                     kit.name,
                     kit.sounds.len()
                 );
@@ -755,6 +785,7 @@ impl App {
     fn choose(&mut self, pick: Pick) {
         match pick {
             Pick::View(view) => self.jump_to_view(view),
+            Pick::TrackPage(page) => self.show_track_page(page),
             Pick::Macro(at) => self.map_to_macro(at),
             Pick::Use {
                 section,
