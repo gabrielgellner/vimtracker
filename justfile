@@ -18,6 +18,12 @@ live-bridge-install:
 live-bridge-uninstall:
     tools/compare/live/install.sh uninstall
 
+# A riff played on Acid V in Live against ours: just take export riff, render-live riff, compare riff
+[positional-arguments]
+take *args:
+    cargo build --release -q -p vt-tui --bin vimtracker --example take_song
+    cd tools/compare && uv run take.py "$@"
+
 # Make the manual's screenshots of the interface, as SVGs in docs/manual/src/images
 screenshots:
     cargo run --release -q -p vt-tui --example screenshots
