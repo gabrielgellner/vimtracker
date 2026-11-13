@@ -6,23 +6,22 @@
 mod acid;
 mod follow;
 pub mod params;
+mod render;
 mod walk;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use params::{Context, GEN_COLUMNS, GEN_ROWS, GenParam, Starts};
+pub use render::{GenCell, render_into};
 use serde::{Deserialize, Serialize};
 pub use walk::{Edge, MAX_DEPTH, MIN_DEPTH, Pink, Walk, default_step};
 
-use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
-use crate::lfo::{Rate, Shape as Wave, wave};
+use crate::constants::{MAX_PHRASE_STEPS, TICKS_PER_QUARTER};
+use crate::lfo::{Rate, Shape as Wave};
 use crate::scale::Scale;
 use crate::selection::StepRange;
-use crate::step::{
-    FxCommand, FxSlot, Gate, MAX_NOTE, MAX_NUDGE, MAX_VELOCITY, MIDDLE_C, MIN_NOTE, Mark, Note,
-    Step,
-};
+use crate::step::{FxCommand, MAX_NOTE, MAX_NUDGE, MAX_VELOCITY, MIDDLE_C, MIN_NOTE, Note, Step};
 
 /// The furthest `curve` and `s` go either way.
 pub const MAX_BEND: i8 = 100;
@@ -255,30 +254,13 @@ impl Where {
 }
 
 /// `hits` spread as evenly as they go over `rows`, by Bjorklund's algorithm, so 3 in 8 is the
-/// tresillo `x..x..x.` and 5 in 8 the cinquillo `x.xx.xx.`, as Toussaint gives them.
+/// tresillo `x..x..x.` and 5 in 8 the cinquillo `x.xx.xx.`, as Toussaint gives them. A render
+/// works it out in place, over at most `MAX_PHRASE_STEPS` rows.
 pub fn euclid(hits: usize, rows: usize) -> Vec<bool> {
-    if hits >= rows {
-        return vec![true; rows];
-    }
-    if hits == 0 {
-        return vec![false; rows];
-    }
-    // Pair the hits with the rests, then the pairs with what's left over, until one is left over.
-    let mut groups: Vec<Vec<bool>> = vec![vec![true]; hits];
-    let mut rest: Vec<Vec<bool>> = vec![vec![false]; rows - hits];
-    while rest.len() > 1 {
-        let pairs = groups.len().min(rest.len());
-        let left = if groups.len() > pairs {
-            groups.split_off(pairs)
-        } else {
-            rest.split_off(pairs)
-        };
-        for (group, tail) in groups.iter_mut().zip(rest) {
-            group.extend(tail);
-        }
-        rest = left;
-    }
-    groups.into_iter().chain(rest).flatten().collect()
+    let pattern = render::euclid(hits, rows);
+    (0..rows.min(MAX_PHRASE_STEPS))
+        .map(|row| pattern.has(row))
+        .collect()
 }
 
 /// The column being filled.
@@ -477,35 +459,10 @@ impl ShapeColumn {
         self.write_exact(step, u16::from(value) << 8);
     }
 
-    /// Write a value with a fine part to a step. A velocity takes the whole value.
+    /// Write a value with a fine part to a step, as its [`cell`](Self::cell). A velocity takes the
+    /// whole value.
     pub fn write_exact(self, step: &mut Step, value: u16) {
-        let whole = (value >> 8) as u8;
-        match self {
-            Self::Note { writes, .. } => {
-                step.note = Note::On(whole.clamp(MIN_NOTE, MAX_NOTE));
-                if writes.is_some() {
-                    step.velocity = writes;
-                }
-            }
-            Self::Velocity => step.velocity = Some(whole),
-            Self::Nudge => step.nudge = whole.min(NUDGES) as i8 - MAX_NUDGE,
-            Self::Length => {
-                step.gate = Some(Gate {
-                    length: Some(whole),
-                    ..step.gate.unwrap_or_default()
-                });
-            }
-            Self::Fx { slot, command } => {
-                if let Some(fx) = step.fx.get_mut(slot) {
-                    *fx = FxSlot {
-                        command: Some(command),
-                        value,
-                        mark: if fx.is_value() { fx.mark } else { Mark::Lock },
-                    }
-                    .with_valid_mark();
-                }
-            }
-        }
+        self.cell(step, value).apply(self, step);
     }
 }
 
@@ -532,23 +489,36 @@ fn parse_note(text: &str) -> Option<u8> {
 }
 
 /// The notes a Note column steps through: every one in range, or only those in the scale while
-/// it's on, so a step along it is a degree.
+/// it's on, so a step along it is a degree. Held in place, so a render makes one without
+/// allocating.
 struct Ladder {
     scale: Scale,
-    notes: Vec<u8>,
+    held: [u8; MAX_NOTE as usize + 1],
+    len: usize,
 }
 
 impl Ladder {
     fn new(scale: Scale) -> Self {
-        let notes = (MIN_NOTE..=MAX_NOTE)
-            .filter(|note| !scale.on || scale.contains(*note))
-            .collect();
-        Self { scale, notes }
+        let mut ladder = Self {
+            scale,
+            held: [0; MAX_NOTE as usize + 1],
+            len: 0,
+        };
+        for note in (MIN_NOTE..=MAX_NOTE).filter(|note| !scale.on || scale.contains(*note)) {
+            ladder.held[ladder.len] = note;
+            ladder.len += 1;
+        }
+        ladder
+    }
+
+    /// Its notes, from the lowest.
+    fn notes(&self) -> &[u8] {
+        &self.held[..self.len]
     }
 
     /// Its last step.
     fn top(&self) -> f64 {
-        (self.notes.len() - 1) as f64
+        (self.len - 1) as f64
     }
 
     /// The step a note given as an end is on: the nearest note in the scale's, the lower if two
@@ -565,12 +535,12 @@ impl Ladder {
     /// Where a note falls along it: on a step, or between two for a note outside the scale, so
     /// moving it and back finds the same note.
     fn position(&self, note: u8) -> f64 {
-        match self.notes.binary_search(&note) {
+        match self.notes().binary_search(&note) {
             Ok(step) => step as f64,
             Err(0) => 0.0,
-            Err(above) if above == self.notes.len() => self.top(),
+            Err(above) if above == self.len => self.top(),
             Err(above) => {
-                let (below, over) = (self.notes[above - 1], self.notes[above]);
+                let (below, over) = (self.held[above - 1], self.held[above]);
                 (above - 1) as f64 + f64::from(note - below) / f64::from(over - below)
             }
         }
@@ -581,12 +551,12 @@ impl Ladder {
         let position = position.clamp(0.0, self.top());
         let step = position.floor() as usize;
         let between = position - step as f64;
-        match self.notes.get(step + 1) {
+        match self.notes().get(step + 1) {
             Some(over) if between > 1e-9 => {
-                let below = self.notes[step];
+                let below = self.held[step];
                 below + (f64::from(over - below) * between).round() as u8
             }
-            _ => self.notes[step],
+            _ => self.held[step],
         }
     }
 }
@@ -739,35 +709,10 @@ pub fn targets(
     place: Where,
     seed: u64,
 ) -> Vec<usize> {
-    let open: Vec<usize> = (range.first..=range.last)
-        .filter(|row| steps.get(*row).is_some_and(|step| column.can_take(step)))
-        .collect();
-    if let Where::Euclid { hits, rotate } = place {
-        // Counted among the rows it can change, as `Alternate` counts, so on Velocity it's among
-        // the notes however they're spaced.
-        let pattern = euclid(usize::from(hits), open.len());
-        let later = usize::from(rotate) % open.len().max(1);
-        return open
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| pattern[(index + open.len() - later) % open.len()])
-            .map(|(_, row)| *row)
-            .collect();
-    }
-    open.into_iter()
-        .filter(|row| {
-            let step = &steps[*row];
-            let has_note = matches!(step.note, Note::On(_));
-            let offset = row - range.first;
-            match place {
-                Where::Notes => has_note,
-                Where::NoNotes => !has_note,
-                Where::Commands => column.value(step).is_some(),
-                Where::AllRows | Where::Euclid { .. } => true,
-                Where::Every(every) => offset.is_multiple_of(usize::from(every.max(1))),
-                Where::Chance(percent) => mix(seed ^ 0x5555, offset) % 100 < u64::from(percent),
-            }
-        })
+    let len = range.len().min(MAX_PHRASE_STEPS);
+    render::chosen(steps, range, column, place, seed, len)
+        .ones()
+        .map(|offset| range.first + offset)
         .collect()
 }
 
@@ -805,7 +750,8 @@ pub fn written(
     written_from(steps, range, column, shape, None)
 }
 
-/// The same, given the loop's steps of the phrase a `Follow` reads, if it has one.
+/// The same, given the loop's steps of the phrase a `Follow` reads, if it has one: the cells
+/// [`render_into`] leaves, laid over copies of their steps.
 pub fn written_from(
     steps: &[Step],
     range: StepRange,
@@ -813,19 +759,16 @@ pub fn written_from(
     shape: &Shape,
     source: Option<&[Step]>,
 ) -> Vec<(usize, Step)> {
-    if shape.kind == FillKind::Follow {
-        return source.map_or_else(Vec::new, |source| {
-            follow::written(steps, range, column, &shape.follow, source)
-        });
-    }
-    if shape.kind == FillKind::Acid {
-        return acid::written(steps, range, column, shape);
-    }
-    exact_values(steps, range, column, shape)
+    let mut cells = vec![GenCell::Under; range.len().min(MAX_PHRASE_STEPS)];
+    render_into(steps, range, column, shape, source, &mut cells);
+    cells
         .into_iter()
-        .filter_map(|(row, value)| {
+        .enumerate()
+        .filter(|(_, cell)| *cell != GenCell::Under)
+        .filter_map(|(offset, cell)| {
+            let row = range.first + offset;
             let mut step = steps.get(row)?.clone();
-            column.write_exact(&mut step, value);
+            cell.apply(column, &mut step);
             Some((row, step))
         })
         .collect()
@@ -853,285 +796,34 @@ pub fn exact_values(
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, u16)> {
-    let fine = matches!(column, ShapeColumn::Fx { command, .. } if command.has_fine());
-    let top = f64::from(column.highest()) * 256.0;
     shaped(steps, range, column, shape)
         .into_iter()
-        .map(|(row, value)| {
-            let value = if fine {
-                (value.exact * 256.0).round().clamp(0.0, top) as u16
-            } else {
-                u16::from(value.whole) << 8
-            };
-            (row, value)
-        })
+        .map(|(row, value)| (row, render::exact(column, value)))
         .collect()
 }
 
-/// A shape's value on a row: where it falls exactly, and the whole value written without a fine
-/// part.
-struct Shaped {
-    exact: f64,
-    whole: u8,
-}
-
+/// Each row's value as the render writes it, from the first row.
 fn shaped(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
-) -> Vec<(usize, Shaped)> {
-    // What it writes comes from what it follows, which a shape alone hasn't.
-    if shape.kind == FillKind::Follow {
-        return Vec::new();
-    }
-    if shape.kind == FillKind::Acid {
-        // Its notes, without the accents and slides that go with them.
-        return acid::written(steps, range, column, shape)
-            .into_iter()
-            .filter_map(|(row, step)| match step.note {
-                Note::On(note) => Some((
-                    row,
-                    Shaped {
-                        exact: f64::from(note),
-                        whole: note,
-                    },
-                )),
-                _ => None,
-            })
-            .collect();
-    }
-    let rows = targets(steps, range, column, shape.place, shape.seed);
-    let ShapeColumn::Note { scale, .. } = column else {
-        let top = f64::from(column.highest());
-        return filled(steps, &rows, range, shape, top, |step| {
-            column.exact(step).map(|value| f64::from(value) / 256.0)
-        });
-    };
-    noted(steps, &rows, range, scale, shape)
-}
-
-/// A Note column's values. A ramp, a random fill, a wave and the transforms work along the
-/// `Ladder`, so they land on the scale's degrees while it's on; `Alternate` and `List` write their
-/// notes as they're given, and `Snap` moves each note to the nearest in the scale.
-fn noted(
-    steps: &[Step],
-    rows: &[usize],
-    range: StepRange,
-    scale: Scale,
-    shape: &Shape,
-) -> Vec<(usize, Shaped)> {
-    let note = |step: &Step| match step.note {
-        Note::On(note) => Some(note),
-        _ => None,
-    };
-    let as_note = |note: u8| Shaped {
-        exact: f64::from(note),
-        whole: note,
-    };
-    match shape.kind {
-        FillKind::Alternate | FillKind::List => {
-            filled(steps, rows, range, shape, f64::from(MAX_NOTE), |step| {
-                note(step).map(f64::from)
-            })
-        }
-        FillKind::Snap => rows
-            .iter()
-            .filter_map(|&row| {
-                let note = note(steps.get(row)?)?;
-                Some((
-                    row,
-                    as_note(if scale.on { scale.fitted(note) } else { note }),
-                ))
-            })
-            .collect(),
-        kind => {
-            let ladder = Ladder::new(scale);
-            let along = Shape {
-                from: ladder.step(shape.from),
-                to: ladder.step(shape.to),
-                ..*shape
-            };
-            // A transform that moves notes about keeps each as it was, in the scale or not.
-            let moved = kind.reworks() && kind != FillKind::Scale;
-            filled(steps, rows, range, &along, ladder.top(), |step| {
-                note(step).map(|note| ladder.position(note))
-            })
-            .into_iter()
-            .map(|(row, at)| {
-                let position = if moved { at.exact } else { f64::from(at.whole) };
-                (row, as_note(ladder.note(position)))
-            })
-            .collect()
-        }
-    }
-}
-
-/// The values on the rows chosen, for a column whose values run from 0 to `top` and are read off
-/// a step by `read`.
-fn filled(
-    steps: &[Step],
-    rows: &[usize],
-    range: StepRange,
-    shape: &Shape,
-    top: f64,
-    read: impl Fn(&Step) -> Option<f64>,
-) -> Vec<(usize, Shaped)> {
-    if shape.kind.reworks() {
-        return reworked(steps, rows, shape, top, read);
-    }
-    let Some(&first) = rows.first() else {
-        return Vec::new();
-    };
-    let (from, to) = (f64::from(shape.from).min(top), f64::from(shape.to).min(top));
-    let (low, high) = (from.min(to) as u64, from.max(to) as u64);
-    let run = usize::from(shape.run.max(1));
-    // A ramp, a wave or a random fill holds for a run: each row takes the value of the first row
-    // of its run, and a ramp's ends are the first and last runs, so it climbs in even stairs.
-    let held = |index: usize| rows[index / run * run];
-    let across = (held(rows.len() - 1) - first).max(1) as f64;
-    let whole = |value: f64| Shaped {
-        exact: value,
-        whole: value as u8,
-    };
-    // A walk and a 1/f fill count turns among the rows they fill, a turn a run.
-    let mut walker =
-        walk::Walker::new(shape.walk, shape.seed, from as i32, low as i32, high as i32);
-    rows.iter()
-        .enumerate()
-        .map(|(index, &row)| {
-            let value = match shape.kind {
-                FillKind::Ramp => {
-                    let t = (held(index) - first) as f64 / across;
-                    along_line(from, to, curved(t, shape.curve, shape.s), top)
-                }
-                FillKind::Random => {
-                    let span = high - low + 1;
-                    whole((low + mix(shape.seed, held(index) - range.first) % span) as f64)
-                }
-                FillKind::Walk => whole(f64::from(walker.at(index / run))),
-                FillKind::Pink => {
-                    let t = walk::pink(shape.pink, shape.seed, index / run);
-                    let along = ((t * (high - low + 1) as f64) as u64).min(high - low);
-                    // From the first value, so `~` turns it upside down.
-                    whole(if from <= to {
-                        low + along
-                    } else {
-                        high - along
-                    } as f64)
-                }
-                FillKind::Wave => {
-                    let offset = held(index) - range.first;
-                    let cycles = match shape.rate {
-                        WaveRate::Time(rate) => {
-                            rate.cycles((offset as u64 * TICKS_PER_STEP) as f64, 0.0)
-                        }
-                        // A cycle is the whole selection, so the next row after it starts again.
-                        WaveRate::Cycles(cycles) => {
-                            offset as f64 * f64::from(cycles) / range.len() as f64
-                        }
-                    } + f64::from(shape.phase) / 360.0;
-                    let t = (f64::from(wave(shape.wave, cycles, shape.seed)) + 1.0) / 2.0;
-                    let exact = from + (to - from) * t;
-                    Shaped {
-                        exact,
-                        whole: exact.round().clamp(0.0, top) as u8,
-                    }
-                }
-                FillKind::Alternate => {
-                    let turn = index / usize::from(shape.run.max(1));
-                    whole(if turn.is_multiple_of(2) { from } else { to })
-                }
-                FillKind::List => {
-                    let list = shape.values.as_slice();
-                    let turn = index / usize::from(shape.run.max(1));
-                    // An empty list never comes from the panel, but leaves the rows at nothing
-                    // rather than failing.
-                    let value = list.get(turn % list.len().max(1)).copied().unwrap_or(0);
-                    whole(f64::from(value).min(top))
-                }
-                FillKind::Scale
-                | FillKind::Invert
-                | FillKind::Shuffle
-                | FillKind::Reverse
-                | FillKind::Snap => unreachable!("reworked above"),
-                FillKind::Acid => unreachable!("written by `acid::written`"),
-                FillKind::Follow => unreachable!("read from what it follows"),
-            };
-            (row, value)
-        })
-        .collect()
-}
-
-/// Where a line from one value to the other is, `along` of the way. Rounding the distance
-/// travelled means falling mirrors rising exactly.
-fn along_line(from: f64, to: f64, along: f64, top: f64) -> Shaped {
-    let moved = ((to - from).abs() * along + 0.5).floor();
-    Shaped {
-        exact: from + (to - from) * along,
-        whole: (from + moved.copysign(to - from)).clamp(0.0, top) as u8,
-    }
-}
-
-/// A transform's values: the ones already on the rows chosen, reworked. A row chosen with no value
-/// of this column's is left as it is.
-fn reworked(
-    steps: &[Step],
-    rows: &[usize],
-    shape: &Shape,
-    top: f64,
-    read: impl Fn(&Step) -> Option<f64>,
-) -> Vec<(usize, Shaped)> {
-    let present: Vec<(usize, f64)> = rows
-        .iter()
-        .filter_map(|&row| Some((row, read(steps.get(row)?)?)))
-        .collect();
-    let lowest = present
-        .iter()
-        .map(|(_, value)| *value)
-        .fold(f64::MAX, f64::min);
-    let highest = present
-        .iter()
-        .map(|(_, value)| *value)
-        .fold(f64::MIN, f64::max);
-    let (from, to) = (f64::from(shape.from).min(top), f64::from(shape.to).min(top));
-    // A value moved whole keeps its fine part.
-    let kept = |value: f64| Shaped {
-        exact: value,
-        whole: value.floor().clamp(0.0, top) as u8,
-    };
-    let mut values: Vec<f64> = present.iter().map(|(_, value)| *value).collect();
-    match shape.kind {
-        FillKind::Reverse => values.reverse(),
-        FillKind::Shuffle => {
-            // Fisher and Yates, from the seed, so the same seed deals the same.
-            for index in (1..values.len()).rev() {
-                let other = (mix(shape.seed ^ 0xA5A5, index) % (index as u64 + 1)) as usize;
-                values.swap(index, other);
-            }
-        }
-        _ => {}
-    }
-    present
-        .iter()
-        .zip(values)
-        .map(|(&(row, _), value)| {
-            let shaped = match shape.kind {
-                FillKind::Scale => {
-                    // All one value has no range to scale, so it goes to `from`.
-                    let t = if highest > lowest {
-                        (value - lowest) / (highest - lowest)
-                    } else {
-                        0.0
-                    };
-                    along_line(from, to, curved(t, shape.curve, shape.s), top)
-                }
-                FillKind::Invert => kept(lowest + highest - value),
-                _ => kept(value),
-            };
-            (row, shaped)
-        })
-        .collect()
+) -> Vec<(usize, render::Shaped)> {
+    let mut cells = vec![GenCell::Under; range.len().min(MAX_PHRASE_STEPS)];
+    let mut found = Vec::new();
+    render::render(
+        steps,
+        range,
+        column,
+        shape,
+        None,
+        &mut cells,
+        |row, value| {
+            found.push((row, *value));
+        },
+    );
+    found.sort_by_key(|(row, _)| *row);
+    found
 }
 
 /// Where a shape starts and ends unless told otherwise: the first and last values in the selection,

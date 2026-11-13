@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{Ladder, ShapeColumn};
+use super::{GenCell, Ladder, ShapeColumn};
 use crate::selection::StepRange;
 use crate::step::{FxSlot, Note, Step};
 
@@ -73,21 +73,22 @@ pub(crate) fn copy_fx(from: &Step, to: &mut Step) {
     }
 }
 
-/// The rows a `Follow` fill writes, every row of the range, each with its step as it leaves it:
-/// the source's note, velocity and gate on that row once the source is turned round and rotated,
-/// with its pitch inverted and transposed. A source with no rows writes nothing.
-pub(super) fn written(
+/// The cells of the rows a `Follow` fill writes, every row of the range: the source's note,
+/// velocity and gate on that row once the source is turned round and rotated, with its pitch
+/// inverted and transposed, and with `fx` its FX. A source with no rows writes nothing.
+pub(super) fn render(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     follow: &Follow,
     source: &[Step],
-) -> Vec<(usize, Step)> {
+    cells: &mut [GenCell],
+) {
     let ShapeColumn::Note { scale, .. } = column else {
-        return Vec::new();
+        return;
     };
     if source.is_empty() {
-        return Vec::new();
+        return;
     }
     let ladder = Ladder::new(scale);
     let axis = follow
@@ -105,24 +106,35 @@ pub(super) fn written(
     };
     let length = source.len();
     let late = usize::from(follow.rotate) % length;
-    (range.first..=range.last)
-        .filter_map(|row| {
-            let mut step = steps.get(row)?.clone();
-            // Late by `rotate`, so the row reads the source's from that many before it.
-            let at = (row - range.first + length - late) % length;
-            let from = &source[if follow.reverse { length - 1 - at } else { at }];
-            step.note = match from.note {
-                Note::On(note) => Note::On(pitch(note)),
-                other => other,
-            };
-            step.velocity = from.velocity;
-            step.gate = from.gate;
-            if follow.fx {
-                copy_fx(from, &mut step);
+    for (offset, cell) in cells.iter_mut().enumerate() {
+        if steps.get(range.first + offset).is_none() {
+            continue;
+        }
+        // Late by `rotate`, so the row reads the source's from that many before it.
+        let at = (offset + length - late) % length;
+        let from = &source[if follow.reverse { length - 1 - at } else { at }];
+        let note = match from.note {
+            Note::On(note) => Note::On(pitch(note)),
+            other => other,
+        };
+        let (velocity, gate) = (from.velocity, from.gate);
+        *cell = if follow.fx {
+            // A step holds at most `FX_SLOTS`, and the source's slots past its own are empty.
+            let fx = std::array::from_fn(|slot| from.fx.get(slot).copied().unwrap_or_default());
+            GenCell::NoteFx {
+                note,
+                velocity,
+                gate,
+                fx,
             }
-            Some((row, step))
-        })
-        .collect()
+        } else {
+            GenCell::Note {
+                note,
+                velocity,
+                gate,
+            }
+        };
+    }
 }
 
 #[cfg(test)]
@@ -170,9 +182,17 @@ mod tests {
 
     fn follow(steps: &[Step], scale: Scale, follow: Follow, source: &[Step]) -> Vec<String> {
         let range = StepRange::between(0, steps.len() - 1);
-        written(steps, range, column(scale), &follow, source)
-            .into_iter()
-            .map(|(_, step)| step.to_string())
+        let mut cells = vec![GenCell::Under; range.len()];
+        render(steps, range, column(scale), &follow, source, &mut cells);
+        steps
+            .iter()
+            .zip(cells)
+            .filter(|(_, cell)| *cell != GenCell::Under)
+            .map(|(step, cell)| {
+                let mut step = step.clone();
+                cell.apply(column(scale), &mut step);
+                step.to_string()
+            })
             .collect()
     }
 
