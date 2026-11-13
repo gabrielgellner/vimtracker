@@ -157,6 +157,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         },
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse => "From the values there",
         FillKind::Multiply => "16 rows a number, row 1 its lowest bit",
+        FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => match panel.column {
+            ShapeColumn::Note { scale, .. } if scale.on => "Bits of each degree, kept in the scale",
+            _ => "The values there, as bits",
+        },
         _ => "~ swap the ends",
     };
     lines.push(Line::styled(hint, theme::dim()));
