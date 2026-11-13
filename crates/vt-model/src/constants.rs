@@ -73,6 +73,9 @@ pub const COMMAND_QUEUE: usize = 64;
 pub const FILE_QUEUE: usize = 4;
 /// Playhead and load messages. New ones are dropped when it is full.
 pub const TELEMETRY_QUEUE: usize = 64;
+/// The pitch each mod slot moved a row's note by, on their way to the app for `Space g A`. New
+/// ones are dropped when it is full.
+pub const NOTE_PITCH_QUEUE: usize = 256;
 /// Samples of the main output on their way to the scope, about a third of a second at 48 kHz. New
 /// ones are dropped when it is full.
 pub const SCOPE_QUEUE: usize = 16_384;
