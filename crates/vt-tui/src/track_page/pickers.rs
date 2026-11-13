@@ -356,7 +356,7 @@ impl App {
     }
 
     /// List the machines, each with its glyph, a sampler, a synth or a drum, and what it does,
-    /// Braids' models under their category, and the current one highlighted.
+    /// the sampler at the top and each voice under its kind, and the current one highlighted.
     fn open_machine_picker(&mut self) {
         let track = self.cursor.track;
         let current = self.page_track().machine;
