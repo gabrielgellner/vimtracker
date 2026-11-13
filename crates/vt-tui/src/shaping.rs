@@ -13,8 +13,9 @@ use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
     Acid, Bits, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids, MAX_VALUES,
-    Pink, Random, Shape, ShapeColumn, Source, Starts, Values, WEIGHTS, Walk, Where, default_ends,
-    default_step, drum_parts, is_empty, open_rows, track_seed,
+    Pink, Random, Shape, ShapeColumn, Source, Starts, VARIATION_NOTES, Values, WEIGHTS, Walk,
+    Where, default_ends, default_step, drum_parts, is_empty, open_rows, track_seed,
+    variation_notes,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -153,6 +154,16 @@ impl ShapePanel {
         }
     }
 
+    /// Why a `Variation` has nothing to learn from, if every part has too few notes.
+    pub fn too_few_notes(&self) -> Option<String> {
+        let most = self
+            .parts
+            .iter()
+            .map(|part| variation_notes(self.base_steps(part), part.range))
+            .max()?;
+        too_few(&self.shape, most)
+    }
+
     /// Whether every part is generated, on a column that was empty.
     pub fn generates(&self) -> bool {
         self.parts.iter().all(|part| part.generate)
@@ -273,6 +284,25 @@ impl LiveGen {
     /// a `Follow` reads a phrase it can.
     pub fn settle(&self, shape: &mut Shape) {
         settle(shape, &self.sources, self.starts.source);
+    }
+}
+
+/// Why a `Variation` with so many notes to learn from is refused, if it is.
+fn too_few(shape: &Shape, notes: usize) -> Option<String> {
+    (shape.kind == FillKind::Variation && notes < VARIATION_NOTES).then(|| match notes {
+        0 => format!("Variation learns from the notes there: it needs {VARIATION_NOTES}"),
+        1 => format!("Variation needs {VARIATION_NOTES} notes to learn from, and there's 1"),
+        notes => {
+            format!("Variation needs {VARIATION_NOTES} notes to learn from, and there are {notes}")
+        }
+    })
+}
+
+impl LiveGen {
+    /// Why a shape it's given would be refused: a `Variation` with too few notes under it.
+    pub fn refusal(&self, shape: &Shape) -> Option<String> {
+        let rows = self.generator.rows()?;
+        too_few(shape, variation_notes(&self.under, rows))
     }
 }
 
@@ -638,6 +668,7 @@ impl App {
                 },
                 random: Random::default(),
                 vary: 0,
+                variation: vt_model::shape::Variation::default(),
             },
             row: GenParam::Fill,
             typing: None,
@@ -754,6 +785,10 @@ impl App {
     /// Keep what's showing, as one undo step: as plain values, or live. A live generator reopened
     /// and kept as plain values is applied.
     fn keep_shape(&mut self, live: bool) {
+        if let Some(why) = self.shape.as_ref().and_then(ShapePanel::too_few_notes) {
+            self.status = why;
+            return;
+        }
         let Some(panel) = self.shape.take() else {
             return;
         };

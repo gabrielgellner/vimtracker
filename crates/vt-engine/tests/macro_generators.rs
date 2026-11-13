@@ -51,6 +51,7 @@ fn tresillo() -> Shape {
         grids: vt_model::shape::Grids::default(),
         random: Random::default(),
         vary: 0,
+        variation: vt_model::shape::Variation::default(),
     }
 }
 
