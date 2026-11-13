@@ -25,8 +25,8 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, DrumPart, Edge, FillKind, Follow, Grids, Pink, Shape, ShapeColumn,
-    Source, Values, Walk, WaveRate, Where, track_seed,
+    Acid, Bits, DEFAULT_RATE, DrumPart, Edge, FillKind, Follow, Grids, Pink, Random, Shape,
+    ShapeColumn, Source, Values, Walk, WaveRate, Where, track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
@@ -53,6 +53,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("acid-lines", acid_lines()),
         ("walks", walks()),
         ("grids", grids()),
+        ("marbles", marbles()),
     ]
 }
 
@@ -164,6 +165,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         pink: Pink::default(),
         bits: Bits::default(),
         grids: Grids::default(),
+        random: Random::default(),
         vary: 0,
     }
 }
@@ -871,6 +873,72 @@ fn grids() -> Song {
         };
         song = generate(song, track, column, 32, shape);
     }
+    song
+}
+
+/// Shaped random values, after Mutable Instruments' Marbles' X section, each a live `Random`: a
+/// tune its `Steps` keeps to a chord's four notes, its `Spread` a bell round the middle of two
+/// octaves; a bass at its range's two ends alone, an octave apart, the low one more often; and
+/// hats whose velocities gather toward the top.
+fn marbles() -> Song {
+    let mut song = song("marbles", 112, 2, ScaleKind::Dorian, 4);
+    song.seed = 0x3B;
+    voice(&mut song, 0, "X1", SynthVoice::String, &[REST; 32]);
+    set(&mut song, 0, "string.decay", 0x90);
+    set(&mut song, 0, "string.bright", 0x58);
+    song.tracks[0].level = 0xC0;
+    song.tracks[0].send_a = 0xA0;
+    song.tracks[0].send_b = 0xA0;
+    voice(&mut song, 1, "X2", SynthVoice::VirtualAnalog, &[REST; 16]);
+    song.tracks[1].cutoff = 0x50;
+    song.tracks[1].resonance = 0x38;
+    song.tracks[1].level = 0xC8;
+    voice(
+        &mut song,
+        2,
+        "HH",
+        SynthVoice::Hat,
+        &texts(&hits(&"x".repeat(16), "C-4")),
+    );
+    set(&mut song, 2, "hat.decay", 0x2C);
+    song.tracks[2].level = 0xC8;
+    four_on_the_floor(&mut song, 3);
+    // The tune: D, A, F and C, the four most important degrees of D dorian, a Dm7, on every other
+    // row of two bars, gathered round the middle of D-3 to D-5.
+    let mut tune = shape(FillKind::Random, note("D-3"), note("D-5"), Where::Every(2));
+    tune.random = Random {
+        spread: 40,
+        steps: 4,
+        ..Random::default()
+    };
+    tune.seed = 3;
+    let notes = empty_notes(&song);
+    let mut song = generate(song, 0, notes, 32, tune);
+    // The bass: the two ends alone, D-1 seven notes in ten and D-2 the rest, on a Euclidean 7 of
+    // 16.
+    let mut bass = shape(
+        FillKind::Random,
+        note("D-1"),
+        note("D-2"),
+        Where::Euclid { hits: 7, rotate: 0 },
+    );
+    bass.random = Random {
+        spread: 100,
+        bias: -40,
+        ..Random::default()
+    };
+    bass.seed = 2;
+    let notes = empty_notes(&song);
+    song = generate(song, 1, notes, 16, bass);
+    // The hats' velocity, a bell leaning toward the top of `30` to `7F`.
+    let mut hats = shape(FillKind::Random, 0x30, 0x7F, Where::Notes);
+    hats.random = Random {
+        spread: 25,
+        bias: 50,
+        ..Random::default()
+    };
+    hats.seed = 6;
+    song = generate(song, 2, ShapeColumn::Velocity, 16, hats);
     song
 }
 

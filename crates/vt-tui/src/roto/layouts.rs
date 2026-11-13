@@ -1553,21 +1553,26 @@ const GEN_RAMP: DeviceLayout = live(
         ],
     )],
 );
+/// `Random`'s ends, then its spread and bias, as Marbles' X section has them, and on the Note
+/// column its `Steps` on a second page, as the first is full; its `Weights` are typed.
 const GEN_RANDOM: DeviceLayout = live(
     "gen/random",
-    &[knobs(
-        "Random",
-        [
-            s("from"),
-            s("to"),
-            s("run"),
-            GAP,
-            GAP,
-            s("vary"),
-            s(WHERE_FIRST),
-            s(WHERE_SECOND),
-        ],
-    )],
+    &[
+        knobs(
+            "Random",
+            [
+                s("from"),
+                s("to"),
+                s("spread"),
+                s("bias"),
+                s("run"),
+                s("vary"),
+                s(WHERE_FIRST),
+                s(WHERE_SECOND),
+            ],
+        ),
+        knobs("Steps", [__, __, s("steps"), __, __, __, __, __]),
+    ],
 );
 /// A wave fills its first page, so a random one's `Vary` is on a second.
 const GEN_WAVE: DeviceLayout = live(
@@ -2063,10 +2068,15 @@ pub fn app_only(control: Control, track: &Track) -> bool {
     match control {
         Control::Machine | Control::Insert(_) | Control::Mod(_, ModField::Type) => true,
         // A generator's fill and rows, what a `Follow` follows and which part a `Grids` plays are
-        // what it is, and a `List`'s values are typed.
+        // what it is, and a `List`'s values and a `Random`'s weights are typed.
         Control::Gen { param, .. } => matches!(
             param,
-            GenParam::Fill | GenParam::Where | GenParam::Source | GenParam::Values | GenParam::Part
+            GenParam::Fill
+                | GenParam::Where
+                | GenParam::Source
+                | GenParam::Values
+                | GenParam::Part
+                | GenParam::Weights
         ),
         Control::InsertParam(slot, param) => track.inserts[slot].type_param() == Some(param),
         _ => false,

@@ -318,6 +318,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids,
+            random: crate::shape::Random::default(),
             vary: 0,
         }
     }
@@ -503,7 +504,7 @@ mod tests {
             ..shape(grids, 1)
         };
         assert!(varying.draws() && varying.varies());
-        assert!(crate::shape::GenParam::Vary.exists_for(&varying, false));
+        assert!(crate::shape::GenParam::Vary.exists_for(&varying, writing(), false));
         let pass = |pass| drawn(&steps, writing(), &varying.on_pass(pass));
         assert_eq!(pass(0), drawn(&steps, writing(), &shape(grids, 1)));
         assert_ne!(pass(1), pass(0));

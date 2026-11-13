@@ -306,6 +306,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids: crate::shape::Grids::default(),
+            random: crate::shape::Random::default(),
             vary: 0,
         }
     }
