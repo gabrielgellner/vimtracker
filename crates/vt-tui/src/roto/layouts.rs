@@ -1739,6 +1739,24 @@ const GEN_GRIDS: DeviceLayout = live(
         ],
     )],
 );
+/// A Markov chain learned from the notes there: how closely it copies them and how far it strays;
+/// it learns its rows with its notes, so it has no `Where`.
+const GEN_VARIATION: DeviceLayout = live(
+    "gen/variation",
+    &[knobs(
+        "Variation",
+        [
+            s("order"),
+            s("temperature"),
+            GAP,
+            GAP,
+            GAP,
+            s("vary"),
+            __,
+            __,
+        ],
+    )],
+);
 /// The values there as bits: each bit transform has one of the three, and the others' knobs are
 /// dark.
 const GEN_BITS: DeviceLayout = live(
@@ -1777,7 +1795,7 @@ const GEN_REWORK: DeviceLayout = live(
 
 /// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
 /// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 14] = [
+pub const GENERATORS: [&DeviceLayout; 15] = [
     &GEN_RAMP,
     &GEN_RANDOM,
     &GEN_WAVE,
@@ -1790,6 +1808,7 @@ pub const GENERATORS: [&DeviceLayout; 14] = [
     &GEN_PINK,
     &GEN_MULTIPLY,
     &GEN_GRIDS,
+    &GEN_VARIATION,
     &GEN_BITS,
     &GEN_REWORK,
 ];
@@ -1809,6 +1828,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
         FillKind::Pink => &GEN_PINK,
         FillKind::Multiply => &GEN_MULTIPLY,
         FillKind::Grids => &GEN_GRIDS,
+        FillKind::Variation => &GEN_VARIATION,
         FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => &GEN_BITS,
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,
     }

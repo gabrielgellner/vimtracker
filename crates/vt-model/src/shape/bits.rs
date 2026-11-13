@@ -225,6 +225,7 @@ mod tests {
             grids: crate::shape::Grids::default(),
             random: crate::shape::Random::default(),
             vary: 0,
+            variation: crate::shape::Variation::default(),
         }
     }
 

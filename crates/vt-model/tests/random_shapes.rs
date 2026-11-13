@@ -36,6 +36,7 @@ fn shape(from: u8, to: u8, random: Random) -> Shape {
         grids: Grids::default(),
         random,
         vary: 0,
+        variation: vt_model::shape::Variation::default(),
     }
 }
 
