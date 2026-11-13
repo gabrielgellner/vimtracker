@@ -61,6 +61,8 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `DFM4` | An LFO's deform: `80` is none. `DFM5` `DFM6` too |
 | `POL4` | Mod 4's polarity: `00` one way, `01` both. `POL5` `POL6` too |
 | `POL2` | An envelope's polarity. `POL3` too, but not the notes' shape |
+| `MAC1` | Macro 1, and every setting it turns, each along its range |
+| `MAC2` | Macro 2. `MAC3` `MAC4` `MAC5` `MAC6` `MAC7` `MAC8` the others |
 
 Each voice has its own settings, and the track keeps every voice's values, so
 changing voice and back loses nothing. A lock for a voice the track isn't

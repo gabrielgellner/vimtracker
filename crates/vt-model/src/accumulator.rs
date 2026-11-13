@@ -94,6 +94,25 @@ impl Default for Accumulation {
 }
 
 impl Accumulation {
+    /// `Up` at 0 or `Down` at 1, as the registry has them ([`SettingId::accumulation`]): a place in
+    /// a list from 1, with a coarse byte and a fine one.
+    ///
+    /// [`SettingId::accumulation`]: crate::settings::SettingId::accumulation
+    pub fn own_value(self, at: usize) -> u16 {
+        let limit = if at == 0 { self.up } else { self.down };
+        u16::from(limit.saturating_sub(1)) << 8
+    }
+
+    /// Set `Up` or `Down` from a value on the `00` to `FF` scale, kept from 1 to [`MOST_DEGREES`].
+    pub fn set_own(&mut self, at: usize, value: f32) {
+        let limit = value.round().clamp(0.0, f32::from(MOST_DEGREES - 1)) as u8 + 1;
+        if at == 0 {
+            self.up = limit;
+        } else {
+            self.down = limit;
+        }
+    }
+
     /// Whether its settings can be played: both limits from 1 to 28, and from 1 to 16 loops.
     pub fn in_range(self) -> bool {
         let limit = 1..=MOST_DEGREES;
