@@ -19,6 +19,7 @@
 //! All source in sst-filters available at <https://github.com/surge-synthesizer/sst-filters>
 
 use super::filter::soft_clip;
+use crate::dsp::blocks::flush::tiny_by_fields;
 
 /// The feedback at full resonance. It self-oscillates from 2, and this goes as far past that as
 /// Vital's Sallen-Key filter does, so it sings by itself near the top of `Res`, as the ladder does.
@@ -29,6 +30,8 @@ pub const MOST_FEEDBACK: f32 = 2.15;
 struct OnePole {
     state: f32,
 }
+
+tiny_by_fields!(OnePole { state });
 
 impl OnePole {
     #[inline]
@@ -53,6 +56,12 @@ pub struct Korg35 {
     forward: OnePole,
     back: OnePole,
 }
+
+tiny_by_fields!(Korg35 {
+    input,
+    forward,
+    back
+});
 
 impl Korg35 {
     /// What comes out of the saturating sum, given what's known of what reaches it and how much of
