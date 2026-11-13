@@ -266,7 +266,7 @@ mod tests {
     use super::*;
     use crate::lfo::Shape as Wave;
     use crate::scale::{Scale, ScaleKind};
-    use crate::shape::{DEFAULT_RATE, FillKind, Pink, Values, Walk, Where};
+    use crate::shape::{Bits, DEFAULT_RATE, FillKind, Pink, Values, Walk, Where};
 
     const C_MINOR: Scale = Scale {
         on: true,
@@ -304,6 +304,7 @@ mod tests {
             follow: crate::shape::Follow::default(),
             walk: Walk::default(),
             pink: Pink::default(),
+            bits: Bits::default(),
         }
     }
 
