@@ -166,6 +166,31 @@ fn machine_value(app: &App, setting: usize) -> u8 {
 }
 
 #[test]
+fn typing_in_the_machine_list_finds_a_voice_under_any_kind() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4");
+    for (typed, voice) in [
+        ("Twin Peaks", SynthVoice::TwinPeaks),
+        ("Kick", SynthVoice::Kick),
+        ("6-op", SynthVoice::SixOp),
+    ] {
+        press(&mut app, "K");
+        press(&mut app, typed);
+        special(&mut app, KeyCode::Enter);
+        assert_eq!(app.song().tracks[0].machine, Machine::Plaits(voice));
+        // It opens on the chosen voice, with its kind open.
+        press(&mut app, "K");
+        let picker = app.picker.as_ref().unwrap();
+        let at = SynthVoice::KINDS
+            .iter()
+            .position(|(_, voices)| voices.contains(&voice))
+            .unwrap();
+        assert!(picker.category(at).2, "{typed}");
+        special(&mut app, KeyCode::Esc);
+    }
+}
+
+#[test]
 fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
@@ -178,16 +203,17 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     );
     let depth = app.history.undo_depth();
     press(&mut app, "K");
-    // Every machine, but Braids' models, folded under their heading.
-    let top = Machine::ALL
-        .iter()
-        .filter(|machine| machine.category().is_empty());
-    let top = top.count();
-    assert_eq!(app.picker.as_ref().unwrap().shown().count(), top);
-    assert_eq!(
-        app.picker.as_ref().unwrap().category(0),
-        ("Macro", Machine::ALL.len() - top, false)
-    );
+    // The sampler at the top, on its own, and every voice folded under its kind.
+    let picker = app.picker.as_ref().unwrap();
+    let top: Vec<_> = picker.shown().map(|item| item.pick.clone()).collect();
+    let sampler = vt_tui::input::picker::Pick::Machine {
+        track: 0,
+        machine: Machine::Sampler,
+    };
+    assert_eq!(top, [sampler]);
+    for (at, (kind, voices)) in SynthVoice::KINDS.iter().enumerate() {
+        assert_eq!(picker.category(at), (*kind, voices.len(), false));
+    }
     press(&mut app, "VA");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
@@ -262,19 +288,19 @@ fn each_voice_keeps_its_own_settings() {
             .map(|row| text[row].split_whitespace().nth(1).unwrap().to_owned())
             .to_vec()
     };
-    choose_machine(&mut app, "FM");
+    choose_machine(&mut app, "PD");
     assert_eq!(
         app.song().tracks[0].machine,
-        Machine::Plaits(SynthVoice::Fm)
+        Machine::Plaits(SynthVoice::PhaseDistortion)
     );
-    assert_eq!(names(&app), ["Ratio", "Index", "Feedback"]);
+    assert_eq!(names(&app), ["Ratio", "Amount", "Skew"]);
     press(&mut app, "jj");
-    assert_eq!(column_name(&app), "Index");
+    assert_eq!(column_name(&app), "Amount");
     press(&mut app, "i40");
     assert_eq!(machine_value(&app, 1), 0x40);
 
-    // Another voice starts from its own defaults. Fold is two along, past PD.
-    press(&mut app, "gg==");
+    // Another voice starts from its own defaults. Fold is the next, under `Digital`.
+    press(&mut app, "gg=");
     assert_eq!(
         app.song().tracks[0].machine,
         Machine::Plaits(SynthVoice::Waveshaping),
@@ -285,8 +311,8 @@ fn each_voice_keeps_its_own_settings() {
     press(&mut app, "jji20");
     assert_eq!(machine_value(&app, 1), 0x20);
 
-    // Back to FM finds it as it was, and the same through samples.
-    press(&mut app, "gg--");
+    // Back to PD finds it as it was, and the same through samples.
+    press(&mut app, "gg-");
     assert_eq!(machine_value(&app, 1), 0x40);
     choose_machine(&mut app, "Sample");
     assert_eq!(app.song().tracks[0].machine, Machine::Sampler);
@@ -1948,12 +1974,12 @@ fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
     press(&mut app, " 4/");
     assert_eq!(app.mode, Mode::Jump);
     assert!(jump_labels(&app).is_empty(), "nothing until you type");
-    // Machine, Slice and Punch take `a`, `s` and `f` for the `c`, and go when the search narrows,
-    // leaving the rest as they were.
+    // Machine, Slice, the sampler's Cents and Punch take the first labels for the `c`, and go
+    // when the search narrows, leaving the rest as they were.
     press(&mut app, "cu");
-    assert_eq!(jump_labels(&app), ["d Cut", "g Low cut", "j High cut"]);
+    assert_eq!(jump_labels(&app), ["f Cut", "j Low cut", "k High cut"]);
 
-    press(&mut app, "g");
+    press(&mut app, "j");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.field_jump.is_none());
     assert_eq!(column_name(&app), "Low cut");
@@ -2099,13 +2125,13 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
     press(&mut app, " 4/cu");
     let line = from_name;
     // Over the letter after what's typed, in the same columns as without a label.
-    assert!(line(&app, "Cud").starts_with("Cud       dF00 ▕"));
-    assert!(line(&app, "Low cug").starts_with("Low cug   g0   ▕"));
-    assert!(line(&app, "High cuj").starts_with("High cuj  jF   ▕"));
+    assert!(line(&app, "Cuf").starts_with("Cuf       fF00 ▕"));
+    assert!(line(&app, "Low cuj").starts_with("Low cuj   j0   ▕"));
+    assert!(line(&app, "High cuk").starts_with("High cuk  kF   ▕"));
     assert!(line(&app, "Res").starts_with("Res       0000 ▕"));
     // It moves along as you type, and past the end of a name it sits just after it.
     press(&mut app, "t");
-    assert!(line(&app, "Cutd").starts_with("Cutd      dF00 ▕"));
+    assert!(line(&app, "Cutf").starts_with("Cutf      fF00 ▕"));
     special(&mut app, KeyCode::Esc);
 
     // A name in every device has a label in each, and the columns stay put.

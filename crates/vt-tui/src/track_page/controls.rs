@@ -5,7 +5,7 @@ use vt_model::action::TrackControl;
 use vt_model::lfo::phase_value;
 use vt_model::modulation::{ModKind, depth_value};
 use vt_model::settings::{Effect, SettingId};
-use vt_model::song::{FilterType, Track, TrackKind};
+use vt_model::song::{FilterType, Machine, Track, TrackKind};
 
 /// One setting of a mod slot: its type, its mode, where it goes and how far, which every type has
 /// in its own way, then each type's own, which mean what they do under the slot's type.
@@ -115,6 +115,11 @@ pub enum Control {
     Setting(usize),
     /// The file it plays.
     Sample,
+    /// The sample's own tune, in semitones, or the slice's it plays where that has its own, as
+    /// the sample page sets them (see [`super::tuning`]).
+    Tune,
+    /// The sample's own cents, on top of its tune and any slice's.
+    Cents,
     Mute,
     Solo,
     Base(TrackControl),
@@ -182,6 +187,8 @@ impl Control {
             Self::Machine => "Machine",
             Self::Setting(_) => "Setting",
             Self::Sample => "Sample",
+            Self::Tune => "Tune",
+            Self::Cents => "Cents",
             Self::Mute => "Mute",
             Self::Solo => "Solo",
             Self::FilterType => "Filter",
@@ -257,6 +264,9 @@ impl Control {
                 .params()
                 .get(param)
                 .map_or_else(|| self.label(), |found| found.name),
+            // The sample's, which the status line says, as the track's `Pitch` is another.
+            Self::Tune => "Sample tune",
+            Self::Cents => "Sample cents",
             _ => self.label_on(track),
         }
     }
@@ -365,6 +375,7 @@ impl Control {
                 track.kind != TrackKind::Master
             }
             Self::Setting(_) => self.setting_on(track).is_some(),
+            Self::Tune | Self::Cents => track.is_sound() && track.machine == Machine::Sampler,
             _ => true,
         }
     }

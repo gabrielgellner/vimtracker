@@ -85,6 +85,10 @@ impl App {
             self.open_bank_picker();
             return;
         }
+        if matches!(control, Control::Tune | Control::Cents) {
+            self.open_tuning_picker(control);
+            return;
+        }
         if self.track_control().setting_on(&self.page_track()) == Some(SettingId::SLICE) {
             self.open_slice_picker();
             return;
@@ -352,7 +356,7 @@ impl App {
     }
 
     /// List the machines, each with its glyph, a sampler, a synth or a drum, and what it does,
-    /// Braids' models under their category, and the current one highlighted.
+    /// the sampler at the top and each voice under its kind, and the current one highlighted.
     fn open_machine_picker(&mut self) {
         let track = self.cursor.track;
         let current = self.page_track().machine;

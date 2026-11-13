@@ -120,6 +120,19 @@ fn each_kind_of_setting_has_its_feel() {
     // track, turns smoothly.
     assert!(Machine::ALL.len() > 24);
     assert_eq!(feel(Control::Machine, &track), Feel::Smooth);
+    // The machines go round in the machine list's order, the sampler first, all the way down.
+    assert_eq!(track.machine, Machine::Sampler);
+    assert_eq!(knob(Control::Machine, &track, &song).unwrap().position, 0);
+    let mut acid = song.clone();
+    acid.tracks[0].machine = Machine::ALL[3];
+    let action = vt_tui::roto::edits::turned(Control::Machine, 0, &acid, 0);
+    assert_eq!(
+        action,
+        Some(vt_model::action::Action::SetTrackMachine {
+            track: 0,
+            machine: Machine::Sampler
+        })
+    );
     assert!(Insert::ALL.len() > 24);
     assert_eq!(feel(Control::Insert(0), &track), Feel::Smooth);
     assert_eq!(

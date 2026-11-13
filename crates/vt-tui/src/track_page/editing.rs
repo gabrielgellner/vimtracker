@@ -547,6 +547,7 @@ impl App {
                     sample,
                 });
             }
+            Control::Tune | Control::Cents => self.adjust_tuning(control, up, count, large),
             Control::Base(which) => {
                 let value = match which {
                     TrackControl::Cutoff => track.cutoff,
@@ -840,6 +841,7 @@ impl App {
                 });
             }
             Control::Sample => {}
+            Control::Tune | Control::Cents => self.set_tuning(control, None),
             Control::Insert(slot) => {
                 if track.inserts[slot] != Insert::Empty {
                     self.set_insert(slot, Insert::Empty);

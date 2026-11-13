@@ -24,6 +24,7 @@
 <text x="423" y="90" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="432" y="90" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">███▍     </text>
 <text x="513" y="90" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="549" y="90" fill="#949cbb" textLength="135" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Tune      +0 st</text>
 <text x="864" y="90" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="90" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="90" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -43,6 +44,7 @@
 <text x="423" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="432" y="128" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█████    </text>
 <text x="513" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="549" y="128" fill="#949cbb" textLength="135" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Cents     +0 ct</text>
 <text x="864" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="128" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│   6 </text>

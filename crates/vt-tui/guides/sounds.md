@@ -7,10 +7,39 @@ and LFOs**.
 ## The synths
 
 `K` on the machine, in the title of the Sound page's Machine device, chooses `Sampler` or
-one of the synths, by typing its name. Most come from Mutable Instruments' Plaits, and each
-has its own settings, in the Machine device under it. A track keeps each synth's settings, so
-trying another and coming back finds the first as you left it. One you haven't played on
-the track starts from its own defaults.
+one of the synths, by typing its name. `Sampler` is first, on its own at the top of the
+list, and the synths follow by kind, each kind under a heading that opens and closes:
+`Analog`, `FM`, `Digital`, `Wavetable`, `Physical`, `Voice`, `Noise` and `Drums`, as
+below. Typing finds a synth under any of them. `-` and `=` on the machine, and the Roto's
+machine knob, go through them in the same order.
+
+Most come from Mutable Instruments' Plaits, and each has its own settings, in the Machine
+device under it. A track keeps each synth's settings, so trying another and coming back
+finds the first as you left it. One you haven't played on the track starts from its own
+defaults.
+
+**From Braids.** Others come from Mutable Instruments' Braids, an older macro-oscillator
+than Plaits, and the one the M8's Macrosynth plays: the models Plaits left out, harsher and
+more digital. They're `CSaw`, `Morph`, `Saw Sq`, `Sync` and `Triple` under `Analog`,
+`FB FM` and `Chaos FM` under `FM`, `Ring`, `Saw Comb`, `Toy` and `Z Filter` under
+`Digital`, `Wave Map`, `Wave Line` and `Paraphonic` under `Wavetable`, `Bowed`, `Blown`,
+`Fluted`, `Bell` and `Drum` under `Physical`, `VOSIM` and `FOF` under `Voice`, and
+`Twin Peaks`, `Clocked`, `Grain Cloud` and `Modem` under `Noise`, each after the others
+of its kind. Each has Braids' two knobs, Timbre and Color, named for what they do on
+it, and a few have a third. Like Braids, they run at 96 kHz and come down to the program's
+rate, so their sharp edges alias little.
+
+A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
+`Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX
+slot lists them under the voice's name, and an LFO's or envelope's `Dest` lists them by
+their names, like `Punch`. Each belongs to its voice, so a lock does nothing while the
+track plays another.
+
+A note on any synth but the drums, `String`, `Modal`, `Bell` and `Drum` holds until the next
+note, `OFF` or `KIL`, shaped by the first envelope, so shorten its Sustain for plucks; those
+seven die away by themselves. A track plays one note at a time.
+
+### Analog
 
 `VA` is a square and a saw, for bass and leads. Try a note around `C-1`, and bring
 `Cut` down.
@@ -117,6 +146,62 @@ plays fades them in or out over about a millisecond, so it doesn't click.
 
 On the Roto, `Drift` is on the `Supersaw` device's second page, one arrow on, as `Acid`'s is.
 
+`Chip` is a chord of square waves, as on old game consoles. It plays the chord's notes
+together, as the rows do the arpeggio.
+
+| Setting | Does |
+|---|---|
+| `Chord` | The same chords as `Chord` |
+| `Inversion` | Moves the lowest note up an octave at a time. At pitch at `66` |
+| `Shape` | A thin pulse below `80`, a square at `80`, and hard sync above |
+| `Drift` | How far each note strays, each square on its own. None at `00` |
+
+`CSaw` is a saw that starts each cycle on a step, held a little while, as the CS-80's saw
+does, for brass and buzzy leads.
+
+| Setting | Does |
+|---|---|
+| `Notch` | How long each cycle holds its step: a plain saw at `00` |
+| `Depth` | How low the step sits: deep at `00`, up near the saw's middle at `FF` |
+
+`Morph` sweeps from a triangle to a saw, a square and a narrowing pulse, with a sine under the
+pulse, through a filter that closes and overdrives, for leads with some bite.
+
+| Setting | Does |
+|---|---|
+| `Shape` | Triangle at `00`, saw at `55`, square at `AA`, a thin pulse at `FF` |
+| `Fuzz` | Closes the filter towards the note and overdrives it. Clean at `00` |
+
+`Saw Sq` is a saw with a second saw behind it, blended into a square as wide, for bass and
+leads.
+
+| Setting | Does |
+|---|---|
+| `Width` | How far behind the second saw is, and how narrow the square |
+| `Mix` | All saw at `00`, all square at `FF` |
+
+`Sync` is two squares or two saws, the second hard synced to the first, so it tears as
+`Interval` sweeps, for sync leads.
+
+| Setting | Does |
+|---|---|
+| `Wave` | `Square` or `Saw`, for both. `K` lists them |
+| `Interval` | How far above the note the synced wave is, up to 64 semitones |
+| `Mix` | The first wave at `00`, the synced one at `FF` |
+
+`Triple` is three oscillators of one wave, the second and third tuned against the first, for
+chord stabs, organs and thick unisons. Each catches on a semitone for a while, then slides to
+the next, so a chord is easy to find. Up close to `80` they're slightly out of tune, for a
+chorus.
+
+| Setting | Does |
+|---|---|
+| `Wave` | `Saw`, `Square`, `Triangle` or `Sine`, for all three. `K` lists them |
+| `Second` | Two octaves either way of the note: in tune at `80`, a fifth at `A8` |
+| `Third` | The same for the third. An octave up at `C0` |
+
+### FM
+
 `FM` is two sine waves, one bending the other, for bass, bells and keys.
 
 | Setting | Does |
@@ -124,63 +209,6 @@ On the Roto, `Drift` is on the `Supersaw` device's second page, one arrow on, as
 | `Ratio` | The second wave's pitch, in steps that catch: from 1/2 to 8 times |
 | `Index` | How hard it bends: a pure sine at `00`, and brighter going up |
 | `Feedback` | None at `80`, gritty above, and unstable pitch below |
-
-`PD` is phase distortion, as on Casio's CZ synths: a sine whose phase is bent by a second
-wave, for bass, keys and resonant sweeps.
-
-| Setting | Does |
-|---|---|
-| `Ratio` | The bending wave's pitch, catching on ratios. An octave at `80` |
-| `Amount` | How far it's bent: a pure sine at `00`, and brighter going up |
-| `Skew` | Which way it's bent, for an edge like a saw or a pulse |
-
-`Fold` is a wave folded back on itself into harmonics, for bass and leads with a
-west-coast edge. Try a note around `C-1`.
-
-| Setting | Does |
-|---|---|
-| `Shape` | The waveshaper before the fold, plain at `80` |
-| `Fold` | How far it's folded: smooth at `00`, and rich going up |
-| `Slope` | The wave's tilt, from a triangle at `00` to a ramp |
-
-`Formant` is two formants made of grains, like a voice's, for vowels and nasal leads.
-Move `Formant` slowly for a talking sweep. Below `80`, `Interval` also brings in a bare
-pulse.
-
-| Setting | Does |
-|---|---|
-| `Interval` | The second formant, up to two octaves from the first |
-| `Formant` | Where the formants sit, from low and muffled to bright |
-| `Width` | How wide and soft the formants are |
-
-`Additive` is 24 harmonics, set in bumps along the spectrum, for organs and glassy, bright
-tones.
-
-| Setting | Does |
-|---|---|
-| `Bumps` | How many bumps: one at `00`, and more going up |
-| `Peak` | Which harmonic is loudest, from the fundamental up |
-| `Shape` | The bumps' shape, from wide and flat to narrow and peaked |
-
-`Waves` sweeps through a grid of 8 by 8 waves, in four banks: soft and organ-like, then
-vocal, then the harsher waves of older digital synths, then all of them shuffled. Below
-`80`, `Bank` blends between banks and waves; above it, it steps from one to the next.
-
-| Setting | Does |
-|---|---|
-| `Bank` | Up through the banks, then down. Above `80`, it steps |
-| `Wave` | Which wave along a row of the grid |
-| `Row` | Which row of the grid |
-
-`Terrain` traces a circle over a surface and plays the height it passes, for tones that
-shift and evolve. The first five surfaces are worked out from formulas, and the last
-three are made of the waves `Waves` uses.
-
-| Setting | Does |
-|---|---|
-| `Terrain` | Which surface, blending from one to the next |
-| `Size` | How wide the circle is: small and pure at `00`, rich at `FF` |
-| `Offset` | Where the circle sits on the surface |
 
 `6-op` is six-operator FM playing 96 DX7 patches, from basses and electric pianos to
 bells, organs, pads and brass. Each patch has envelopes of its own, which the track's
@@ -239,161 +267,50 @@ squared, `Twice` a sine at twice the pitch in the first half, `Twice²` that squ
 `Bumps` and `Bumps²` those with their second halves turned up. `Formant` restarts the
 cycle faster, under a window at the note's pitch, for a vocal formant.
 
-`Chord` plays a chord from one note, on an organ or a string machine below `80` on
-`Wave`, and on waves above it. `Chord` is a list: `=` steps through it, and `K` lists
-them by name.
+`FB FM` is a sine bent by a second, which its own last output bends in turn, for growling
+bass and harsh leads. It feeds back less on high notes, where it would turn to noise.
 
 | Setting | Does |
 |---|---|
-| `Chord` | Octave, 5, sus4, m, m7, m9, m11, 6/9, M9, M7, then M at `0A` |
-| `Inversion` | Moves the lowest note up an octave at a time. At pitch at `66` |
-| `Wave` | Organ and string registrations below `80`, then waves above it |
+| `Amount` | How hard it bends: a pure sine at `00`, and harsher going up |
+| `Ratio` | The second sine's pitch, catching on ratios. 1:1 from `6C` to `6F` |
 
-`Chip` is a chord of square waves, as on old game consoles. It plays the chord's notes
-together, as the rows do the arpeggio.
-
-| Setting | Does |
-|---|---|
-| `Chord` | The same chords as `Chord` |
-| `Inversion` | Moves the lowest note up an octave at a time. At pitch at `66` |
-| `Shape` | A thin pulse below `80`, a square at `80`, and hard sync above |
-| `Drift` | How far each note strays, each square on its own. None at `00` |
-
-`Swarm` is eight saws, each in grains that start and stop, for pads, drones and clouds.
-Each note starts a fresh burst of grains.
+`Chaos FM` is a sine bent by a second, whose speed its own output moves, for unstable,
+chaotic tones that never quite settle.
 
 | Setting | Does |
 |---|---|
-| `Spread` | How far the saws' pitches spread, up to four octaves |
-| `Density` | How often grains start: sparse at `00`, a cloud at `FF` |
-| `Overlap` | How long grains are. Near `FF`, held tones that glide |
+| `Amount` | How hard it bends: a pure sine at `00`, chaotic going up |
+| `Ratio` | The second sine's pitch, catching on ratios. 1:1 from `6C` to `6F` |
 
-`String` is a plucked string: a burst of noise ringing in a modelled string, which dies
-away by itself. Try a note around `C-2`.
+### Digital
 
-| Setting | Does |
-|---|---|
-| `Material` | A sitar's buzz at `00`, plain at `40`, more metal going up |
-| `Bright` | How bright the pluck is |
-| `Decay` | How long it rings. Near `FF` it rings until the next note |
-
-`Modal` is a struck resonator, for bells, bars, plates and woodblocks. It dies away by
-itself.
+`PD` is phase distortion, as on Casio's CZ synths: a sine whose phase is bent by a second
+wave, for bass, keys and resonant sweeps.
 
 | Setting | Does |
 |---|---|
-| `Material` | Partials bunched low, in tune at `40`, spread like a bell high |
-| `Bright` | How bright the strike is, and how long the high partials last |
-| `Decay` | How long it rings |
+| `Ratio` | The bending wave's pitch, catching on ratios. An octave at `80` |
+| `Amount` | How far it's bent: a pure sine at `00`, and brighter going up |
+| `Skew` | Which way it's bent, for an edge like a saw or a pulse |
 
-`Dust` is random clicks through filters tuned around the note, for crackle, rain and
-droplets. It sounds until the note ends, shaped by the first envelope.
-
-| Setting | Does |
-|---|---|
-| `Spread` | How far each click's pitch strays from the note |
-| `Density` | How many clicks: a few at `00`, a hiss at `FF` |
-| `Filter` | Below `80`, more and more echoing; above, more and more ringing |
-
-`Noise` is noise, held for a clock's cycle, through a resonant filter at the note. It
-sounds until the note ends, shaped by the first envelope.
+`Fold` is a wave folded back on itself into harmonics, for bass and leads with a
+west-coast edge. Try a note around `C-1`.
 
 | Setting | Does |
 |---|---|
-| `Type` | The filter: low-pass at `00`, band-pass at `80`, high-pass at `FF` |
-| `Clock` | How fast the noise changes: grainy steps low, a hiss high |
-| `Ring` | How much the filter rings at the note |
+| `Shape` | The waveshaper before the fold, plain at `80` |
+| `Fold` | How far it's folded: smooth at `00`, and rich going up |
+| `Slope` | The wave's tilt, from a triangle at `00` to a ramp |
 
-`Kick` is an 808-style bass drum. Its note tunes it, so try `C-1`, or lower.
-
-| Setting | Does |
-|---|---|
-| `Punch` | The attack's pitch sweep, then its self-modulation and drive |
-| `Tone` | How bright it is |
-| `Decay` | How long it rings |
-
-`Snare` is an 808-style snare drum. Try `G-2`, or wherever it sits best.
+`Additive` is 24 harmonics, set in bumps along the spectrum, for organs and glassy, bright
+tones.
 
 | Setting | Does |
 |---|---|
-| `Snappy` | The mix of drum and noise: all drum at `00` |
-| `Tone` | The drum's overtones, with more of them near the top |
-| `Decay` | How long it rings |
-
-`Hat` is an 808-style hi-hat, of six square waves and noise. Try `C-4` for a closed
-hat, and raise `Decay` for an open one.
-
-| Setting | Does |
-|---|---|
-| `Noise` | How much plain noise replaces the metal |
-| `Tone` | How bright it is |
-| `Decay` | How long it rings |
-
-`Speech` is Plaits' speech synth: a voice's formants, then the vowels and words of Texas
-Instruments' speaking toys, for robots, chants and talking leads. `Model` goes from a bank of
-formant filters through a SAM-like synth to the speech chips' vowels, then through five banks
-of their words. On the words, each note says one word, chosen by `Word`, and then rests on its
-last sound, so a short `Release` ends it cleanly.
-
-| Setting | Does |
-|---|---|
-| `Model` | Formants at `00`, SAM, the chips' vowels, then words from `70` |
-| `Species` | The voice's size: deep and slow below `80`, small and quick above |
-| `Word` | Which vowel, or which word of the bank |
-| `Prosody` | How much of a word's own pitch it keeps: none at `80` |
-| `Speed` | How fast a word is said: as recorded at `80`, faster above |
-
-### Macro
-
-The voices under `Macro` in the machine list come from Mutable Instruments' Braids, an older
-macro-oscillator than Plaits, and the one the M8's Macrosynth plays: the models Plaits left
-out, harsher and more digital. Each has Braids' two knobs, Timbre and Color, named for what
-they do on it, and a few have a third. Like Braids, they run at 96 kHz and come down to the
-program's rate, so their sharp edges alias little.
-
-`CSaw` is a saw that starts each cycle on a step, held a little while, as the CS-80's saw
-does, for brass and buzzy leads.
-
-| Setting | Does |
-|---|---|
-| `Notch` | How long each cycle holds its step: a plain saw at `00` |
-| `Depth` | How low the step sits: deep at `00`, up near the saw's middle at `FF` |
-
-`Morph` sweeps from a triangle to a saw, a square and a narrowing pulse, with a sine under the
-pulse, through a filter that closes and overdrives, for leads with some bite.
-
-| Setting | Does |
-|---|---|
-| `Shape` | Triangle at `00`, saw at `55`, square at `AA`, a thin pulse at `FF` |
-| `Fuzz` | Closes the filter towards the note and overdrives it. Clean at `00` |
-
-`Saw Sq` is a saw with a second saw behind it, blended into a square as wide, for bass and
-leads.
-
-| Setting | Does |
-|---|---|
-| `Width` | How far behind the second saw is, and how narrow the square |
-| `Mix` | All saw at `00`, all square at `FF` |
-
-`Sync` is two squares or two saws, the second hard synced to the first, so it tears as
-`Interval` sweeps, for sync leads.
-
-| Setting | Does |
-|---|---|
-| `Wave` | `Square` or `Saw`, for both. `K` lists them |
-| `Interval` | How far above the note the synced wave is, up to 64 semitones |
-| `Mix` | The first wave at `00`, the synced one at `FF` |
-
-`Triple` is three oscillators of one wave, the second and third tuned against the first, for
-chord stabs, organs and thick unisons. Each catches on a semitone for a while, then slides to
-the next, so a chord is easy to find. Up close to `80` they're slightly out of tune, for a
-chorus.
-
-| Setting | Does |
-|---|---|
-| `Wave` | `Saw`, `Square`, `Triangle` or `Sine`, for all three. `K` lists them |
-| `Second` | Two octaves either way of the note: in tune at `80`, a fifth at `A8` |
-| `Third` | The same for the third. An octave up at `C0` |
+| `Bumps` | How many bumps: one at `00`, and more going up |
+| `Peak` | Which harmonic is loudest, from the fundamental up |
+| `Shape` | The bumps' shape, from wide and flat to narrow and peaked |
 
 `Ring` is a sine ring modulated by two more, then lightly overdriven, for bells, clangs and
 metal.
@@ -428,38 +345,70 @@ with a square made the same way, for resonant sweeps and acid tones.
 | `Cutoff` | Where it rings, from just under the note to ten octaves over |
 | `Shape` | A saw's window at `00`, the square at `80`, a triangle's at `FF` |
 
-`FB FM` is a sine bent by a second, which its own last output bends in turn, for growling
-bass and harsh leads. It feeds back less on high notes, where it would turn to noise.
+### Wavetable
+
+`Waves` sweeps through a grid of 8 by 8 waves, in four banks: soft and organ-like, then
+vocal, then the harsher waves of older digital synths, then all of them shuffled. Below
+`80`, `Bank` blends between banks and waves; above it, it steps from one to the next.
 
 | Setting | Does |
 |---|---|
-| `Amount` | How hard it bends: a pure sine at `00`, and harsher going up |
-| `Ratio` | The second sine's pitch, catching on ratios. 1:1 from `6C` to `6F` |
+| `Bank` | Up through the banks, then down. Above `80`, it steps |
+| `Wave` | Which wave along a row of the grid |
+| `Row` | Which row of the grid |
 
-`Chaos FM` is a sine bent by a second, whose speed its own output moves, for unstable,
-chaotic tones that never quite settle.
-
-| Setting | Does |
-|---|---|
-| `Amount` | How hard it bends: a pure sine at `00`, chaotic going up |
-| `Ratio` | The second sine's pitch, catching on ratios. 1:1 from `6C` to `6F` |
-
-`VOSIM` is two sines at pitches of their own, in a bell-shaped window that starts again each
-cycle of the note, for nasal, vocal and buzzy leads. The note sets how often it repeats; the
-sines stay where they're set, as a voice's formants do.
+`Terrain` traces a circle over a surface and plays the height it passes, for tones that
+shift and evolve. The first five surfaces are worked out from formulas, and the last
+three are made of the waves `Waves` uses.
 
 | Setting | Does |
 |---|---|
-| `Formant` | The first sine's pitch, MIDI's lowest note at `00`, its highest at `FF` |
-| `Second` | The second, quieter sine's, the same way |
+| `Terrain` | Which surface, blending from one to the next |
+| `Size` | How wide the circle is: small and pure at `00`, rich at `FF` |
+| `Offset` | Where the circle sits on the surface |
 
-`FOF` is a saw through five formant filters, from Braids' table of a singer's vowels, for
-choirs, chants and singing pads.
+`Wave Map` wanders over a 16 by 16 map of Braids' waves, blending the four nearest, for
+evolving digital tones.
 
 | Setting | Does |
 |---|---|
-| `Vowel` | a at `00`, then e, i and o, to u at `FF`, blending between |
-| `Voice` | A bass at `00`, tenor, countertenor and alto, a soprano at `FF` |
+| `Across` | Where on the map, across it |
+| `Down` | Where on the map, down it |
+
+`Wave Line` scans along a line of 64 of Braids' waves, with rough or smooth steps between
+them, for sweeps that stutter or glide.
+
+| Setting | Does |
+|---|---|
+| `Scan` | Where along the line |
+| `Steps` | Stepped jumps low, smooth sweeps in the middle, coarse steps at `FF` |
+
+`Paraphonic` is a chord of four voices on a line of Braids' waves, for pads and stabs.
+
+| Setting | Does |
+|---|---|
+| `Wave` | Which wave along the line, blending between them |
+| `Chord` | A detuned unison at `00`, then fifths, minor, major and octaves |
+
+### Physical
+
+`String` is a plucked string: a burst of noise ringing in a modelled string, which dies
+away by itself. Try a note around `C-2`.
+
+| Setting | Does |
+|---|---|
+| `Material` | A sitar's buzz at `00`, plain at `40`, more metal going up |
+| `Bright` | How bright the pluck is |
+| `Decay` | How long it rings. Near `FF` it rings until the next note |
+
+`Modal` is a struck resonator, for bells, bars, plates and woodblocks. It dies away by
+itself.
+
+| Setting | Does |
+|---|---|
+| `Material` | Partials bunched low, in tune at `40`, spread like a bell high |
+| `Bright` | How bright the strike is, and how long the high partials last |
+| `Decay` | How long it rings |
 
 `Bowed` is a bowed string: a bow's friction against a string between a bridge and a nut, for
 cellos, fiddles and drones. It's bowed for as long as the note is held.
@@ -498,28 +447,87 @@ away by itself.
 | `Decay` | How long it rings. Near `FF` it rings on without dying away |
 | `Tone` | From a dull thud at `00` through brighter partials to a noisy skin |
 
-`Wave Map` wanders over a 16 by 16 map of Braids' waves, blending the four nearest, for
-evolving digital tones.
+### Voice
+
+`Formant` is two formants made of grains, like a voice's, for vowels and nasal leads.
+Move `Formant` slowly for a talking sweep. Below `80`, `Interval` also brings in a bare
+pulse.
 
 | Setting | Does |
 |---|---|
-| `Across` | Where on the map, across it |
-| `Down` | Where on the map, down it |
+| `Interval` | The second formant, up to two octaves from the first |
+| `Formant` | Where the formants sit, from low and muffled to bright |
+| `Width` | How wide and soft the formants are |
 
-`Wave Line` scans along a line of 64 of Braids' waves, with rough or smooth steps between
-them, for sweeps that stutter or glide.
-
-| Setting | Does |
-|---|---|
-| `Scan` | Where along the line |
-| `Steps` | Stepped jumps low, smooth sweeps in the middle, coarse steps at `FF` |
-
-`Paraphonic` is a chord of four voices on a line of Braids' waves, for pads and stabs.
+`Speech` is Plaits' speech synth: a voice's formants, then the vowels and words of Texas
+Instruments' speaking toys, for robots, chants and talking leads. `Model` goes from a bank of
+formant filters through a SAM-like synth to the speech chips' vowels, then through five banks
+of their words. On the words, each note says one word, chosen by `Word`, and then rests on its
+last sound, so a short `Release` ends it cleanly.
 
 | Setting | Does |
 |---|---|
-| `Wave` | Which wave along the line, blending between them |
-| `Chord` | A detuned unison at `00`, then fifths, minor, major and octaves |
+| `Model` | Formants at `00`, SAM, the chips' vowels, then words from `70` |
+| `Species` | The voice's size: deep and slow below `80`, small and quick above |
+| `Word` | Which vowel, or which word of the bank |
+| `Prosody` | How much of a word's own pitch it keeps: none at `80` |
+| `Speed` | How fast a word is said: as recorded at `80`, faster above |
+
+`Chord` plays a chord from one note, on an organ or a string machine below `80` on
+`Wave`, and on waves above it. `Chord` is a list: `=` steps through it, and `K` lists
+them by name.
+
+| Setting | Does |
+|---|---|
+| `Chord` | Octave, 5, sus4, m, m7, m9, m11, 6/9, M9, M7, then M at `0A` |
+| `Inversion` | Moves the lowest note up an octave at a time. At pitch at `66` |
+| `Wave` | Organ and string registrations below `80`, then waves above it |
+
+`VOSIM` is two sines at pitches of their own, in a bell-shaped window that starts again each
+cycle of the note, for nasal, vocal and buzzy leads. The note sets how often it repeats; the
+sines stay where they're set, as a voice's formants do.
+
+| Setting | Does |
+|---|---|
+| `Formant` | The first sine's pitch, MIDI's lowest note at `00`, its highest at `FF` |
+| `Second` | The second, quieter sine's, the same way |
+
+`FOF` is a saw through five formant filters, from Braids' table of a singer's vowels, for
+choirs, chants and singing pads.
+
+| Setting | Does |
+|---|---|
+| `Vowel` | a at `00`, then e, i and o, to u at `FF`, blending between |
+| `Voice` | A bass at `00`, tenor, countertenor and alto, a soprano at `FF` |
+
+### Noise
+
+`Dust` is random clicks through filters tuned around the note, for crackle, rain and
+droplets. It sounds until the note ends, shaped by the first envelope.
+
+| Setting | Does |
+|---|---|
+| `Spread` | How far each click's pitch strays from the note |
+| `Density` | How many clicks: a few at `00`, a hiss at `FF` |
+| `Filter` | Below `80`, more and more echoing; above, more and more ringing |
+
+`Noise` is noise, held for a clock's cycle, through a resonant filter at the note. It
+sounds until the note ends, shaped by the first envelope.
+
+| Setting | Does |
+|---|---|
+| `Type` | The filter: low-pass at `00`, band-pass at `80`, high-pass at `FF` |
+| `Clock` | How fast the noise changes: grainy steps low, a hiss high |
+| `Ring` | How much the filter rings at the note |
+
+`Swarm` is eight saws, each in grains that start and stop, for pads, drones and clouds.
+Each note starts a fresh burst of grains.
+
+| Setting | Does |
+|---|---|
+| `Spread` | How far the saws' pitches spread, up to four octaves |
+| `Density` | How often grains start: sparse at `00`, a cloud at `FF` |
+| `Overlap` | How long grains are. Near `FF`, held tones that glide |
 
 `Twin Peaks` is noise through two resonant peaks, one at the note and one up to five octaves
 either way, for whistles, wind and breathy tones.
@@ -554,15 +562,32 @@ and over.
 | `Baud` | How fast the symbols go: slow at `00`, an octave under the note |
 | `Data` | The byte it sends |
 
-A step sets a synth's setting by its own short label, as the grid shows it: `PNCH` for
-`Kick`'s `Punch`, `DTUN` for `VA`'s `Detune`, `PAT` for `6-op`'s `Patch`. `K` on an FX
-slot lists them under the voice's name, and an LFO's or envelope's `Dest` lists them by
-their names, like `Punch`. Each belongs to its voice, so a lock does nothing while the
-track plays another.
+### Drums
 
-A note on any synth but the drums, `String`, `Modal`, `Bell` and `Drum` holds until the next
-note, `OFF` or `KIL`, shaped by the first envelope, so shorten its Sustain for plucks; those
-seven die away by themselves. A track plays one note at a time.
+`Kick` is an 808-style bass drum. Its note tunes it, so try `C-1`, or lower.
+
+| Setting | Does |
+|---|---|
+| `Punch` | The attack's pitch sweep, then its self-modulation and drive |
+| `Tone` | How bright it is |
+| `Decay` | How long it rings |
+
+`Snare` is an 808-style snare drum. Try `G-2`, or wherever it sits best.
+
+| Setting | Does |
+|---|---|
+| `Snappy` | The mix of drum and noise: all drum at `00` |
+| `Tone` | The drum's overtones, with more of them near the top |
+| `Decay` | How long it rings |
+
+`Hat` is an 808-style hi-hat, of six square waves and noise. Try `C-4` for a closed
+hat, and raise `Decay` for an open one.
+
+| Setting | Does |
+|---|---|
+| `Noise` | How much plain noise replaces the metal |
+| `Tone` | How bright it is |
+| `Decay` | How long it rings |
 
 ## Accent
 
@@ -634,6 +659,42 @@ from where the sample starts playing, so on a reversed sample they count back fr
 its end. An LFO or an envelope can move them, read as each note starts, as an
 Elektron's sample start is. A sample's fade out is for a one-shot, as a looping note
 never reaches its end. `Tempo` loops in time with the song: see **Loop to tempo**.
+The Machine's last column, `Tune` and `Cents`, is the sample's own: see **Tuning a
+sample**.
+
+## Tuning a sample
+
+A sample's pitch comes in three layers, each for its own job, as an MPC's pads,
+the Digitakt's and the Octatrack's samples and Ableton's Simpler have them:
+
+| Layer | Where | For |
+|---|---|---|
+| Its `Tune`, `Cents` | The Machine, the sample page | Tuning it once |
+| The note | Each row | Playing it up and down |
+| The track's `Pitch` | Play, `PTCH`, a mod slot | Transposing, moving it |
+
+Tune a sample once, so `C-3` is in tune with the song: a kick tuned to the key, or
+a vocal chop a few cents flat brought up. The tune is kept with the sample in the
+bank, so it's in tune on whatever track plays it, and every note plays relative to
+it, as an MPC plays a tuned pad up and down: at `Tune -2 st`, `C-3` plays two
+semitones under the recording, and `D-3` as recorded. The track's `Pitch` then
+moves everything the track plays together, and a step's `PTCH` or an LFO moves it
+from there.
+
+`Tune` and `Cents` on the sampler's Machine, after `Start` and `Length`, are the
+same values as the sample page's `Tune` and `:sample tune 12 -20`. `=` and `-` move
+`Tune` a semitone and `+` and `_` an octave, up to 48 semitones either way; `Cents`
+a cent and ten, up to 99 either way. `i` types either, as `-5` or `+20`, `K` lists
+them, and `x` puts one back to none. Each change is one `u`. They're dim at none,
+and dim `--` on a track with no sample.
+
+On a sliced sample, `Tune` is the slice's own where the slice the track's `Slice` is
+on has one, from `:slice tune` or the sample page, and says `slice 03` after its
+value, in the slices' colour. Otherwise it's the sample's, which every slice
+without its own plays with, and says `sample`. `x` on a slice's own gives the slice
+the sample's tune again. A slice has no cents of its own, so `Cents` is always the
+sample's. Neither is the track's, so a step can't lock them: `PTCH` is the transpose
+a step locks.
 
 ## Loop to tempo
 
