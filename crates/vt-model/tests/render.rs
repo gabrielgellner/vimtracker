@@ -15,8 +15,8 @@ use vt_model::lfo::Rate;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, FillKind, Follow, GenCell, MAX_VALUES, Shape, ShapeColumn, Values, WAVES, WaveRate,
-    Where, render_into, written_from,
+    Acid, Edge, FillKind, Follow, GenCell, MAX_DEPTH, MAX_VALUES, Pink, Shape, ShapeColumn, Values,
+    WAVES, Walk, WaveRate, Where, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -266,7 +266,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
     let list: Vec<u8> = (0..dice.below(MAX_VALUES as u64 + 2))
         .map(|_| end(dice))
         .collect();
-    Shape {
+    let mut shape = Shape {
         from: end(dice),
         to: end(dice),
         curve: bend(dice),
@@ -307,7 +307,20 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
             rotate: dice.below(40) as u16,
             fx: dice.chance(50),
         },
-    }
+        walk: Walk::default(),
+        pink: Pink::default(),
+    };
+    // Settings added since are drawn from the seed, so the other draws, and the other fills'
+    // hashes, stay as they were.
+    let mut more = Dice(shape.seed ^ 0x3A1C);
+    shape.walk = Walk {
+        step: more.below(40) as u8,
+        edge: more.pick(&[Edge::Reflect, Edge::Wrap]),
+    };
+    shape.pink = Pink {
+        depth: more.below(u64::from(MAX_DEPTH) + 3) as u8,
+    };
+    shape
 }
 
 /// One case: the phrase's steps, the rows, and what a `Follow` reads.

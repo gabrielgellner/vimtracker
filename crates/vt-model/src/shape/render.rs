@@ -8,7 +8,9 @@
 //! themselves before it writes them, so it needs nothing more.
 
 use super::mix;
-use super::{FillKind, Ladder, NUDGES, Shape, ShapeColumn, WaveRate, Where, acid, curved, follow};
+use super::{
+    FillKind, Ladder, NUDGES, Shape, ShapeColumn, WaveRate, Where, acid, curved, follow, walk,
+};
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
 use crate::scale::Scale;
@@ -522,6 +524,9 @@ fn filled<F: FnMut(usize, &Shaped)>(
         exact: value,
         whole: value as u8,
     };
+    // A walk and a 1/f fill count turns among the rows they fill, a turn a run.
+    let mut walker =
+        walk::Walker::new(shape.walk, shape.seed, from as i32, low as i32, high as i32);
     let mut held = first;
     for (index, offset) in rows.ones().enumerate() {
         if index.is_multiple_of(run) {
@@ -535,6 +540,17 @@ fn filled<F: FnMut(usize, &Shaped)>(
             FillKind::Random => {
                 let span = high - low + 1;
                 whole((low + mix(shape.seed, held) % span) as f64)
+            }
+            FillKind::Walk => whole(f64::from(walker.at(index / run))),
+            FillKind::Pink => {
+                let t = walk::pink(shape.pink, shape.seed, index / run);
+                let along = ((t * (high - low + 1) as f64) as u64).min(high - low);
+                // From the first value, so `~` turns it upside down.
+                whole(if from <= to {
+                    low + along
+                } else {
+                    high - along
+                } as f64)
             }
             FillKind::Wave => {
                 let cycles = match shape.rate {

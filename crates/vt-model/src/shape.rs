@@ -1,12 +1,13 @@
-//! Filling a column across a selection with a shaped ramp, random values, a wave, two values in
-//! turn, or a short list of them in turn, or reworking the values already there. On the Note
-//! column, the steps are the scale's degrees while it's on, `Acid` writes a 303 line, its notes,
-//! accents and slides together, and `Follow` mirrors another track's phrase.
+//! Filling a column across a selection with a shaped ramp, random values, a walk, pink noise, a
+//! wave, two values in turn, or a short list of them in turn, or reworking the values already
+//! there. On the Note column, the steps are the scale's degrees while it's on, `Acid` writes a 303
+//! line, its notes, accents and slides together, and `Follow` mirrors another track's phrase.
 
 mod acid;
 mod follow;
 pub mod params;
 mod render;
+mod walk;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
 pub(crate) use follow::copy_fx;
@@ -14,6 +15,7 @@ pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use params::{Context, GenParam, Starts};
 pub use render::{GenCell, render_into};
 use serde::{Deserialize, Serialize};
+pub use walk::{Edge, MAX_DEPTH, MIN_DEPTH, Pink, Walk, default_step};
 
 use crate::constants::{MAX_PHRASE_STEPS, TICKS_PER_QUARTER};
 use crate::lfo::{Rate, Shape as Wave};
@@ -120,6 +122,10 @@ pub enum FillKind {
     Ramp,
     /// Anywhere between the two values, new on each row.
     Random,
+    /// From the first value, each a small step from the last, between the two: Brownian.
+    Walk,
+    /// Between the two values, wandering more than `Random` and less than `Walk`: pink, or 1/f.
+    Pink,
     /// Swinging between the two values, by where each row falls in the wave's cycle.
     Wave,
     /// One value then the other, on the rows it fills, however they're spaced.
@@ -146,9 +152,11 @@ pub enum FillKind {
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 14] = [
         Self::Ramp,
         Self::Random,
+        Self::Walk,
+        Self::Pink,
         Self::Wave,
         Self::Alternate,
         Self::List,
@@ -166,6 +174,8 @@ impl FillKind {
         match self {
             Self::Ramp => "Ramp",
             Self::Random => "Random",
+            Self::Walk => "Walk",
+            Self::Pink => "1/f",
             Self::Wave => "Wave",
             Self::Alternate => "Alternate",
             Self::List => "List",
@@ -184,6 +194,8 @@ impl FillKind {
         match self {
             Self::Ramp => "From one value to the other",
             Self::Random => "Anywhere between the two",
+            Self::Walk => "A small step at a time",
+            Self::Pink => "Pink, between random and a walk",
             Self::Wave => "Swinging between the two",
             Self::Alternate => "One value, then the other",
             Self::List => "A few values in turn",
@@ -638,6 +650,12 @@ pub struct Shape {
     /// What a `Follow` fill reads and how it turns it. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Follow::is_default")]
     pub follow: Follow,
+    /// How far a `Walk` moves and what it does at the ends. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Walk::is_default")]
+    pub walk: Walk,
+    /// How many values a `1/f` fill sums. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Pink::is_default")]
+    pub pink: Pink,
 }
 
 /// Bias: bends `t` toward 1 for `a` above 0.5.
@@ -906,6 +924,8 @@ mod tests {
             seed: 1,
             acid: Acid::default(),
             follow: Follow::default(),
+            walk: Walk::default(),
+            pink: Pink::default(),
         }
     }
 

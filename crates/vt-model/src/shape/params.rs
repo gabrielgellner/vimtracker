@@ -14,8 +14,9 @@ use crate::lfo::{Shape as Wave, note_rates};
 use crate::step::Step;
 
 use super::{
-    Acid, DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_ACID_NOTES, MAX_BEND, MAX_TRANSPOSE, Shape,
-    ShapeColumn, Source, Values, WAVES, WaveRate, Where, first_note,
+    Acid, DEFAULT_RATE, EUCLID_HITS, Edge, FillKind, MAX_ACID_NOTES, MAX_BEND, MAX_DEPTH,
+    MAX_TRANSPOSE, MIN_DEPTH, Pink, Shape, ShapeColumn, Source, Values, WAVES, WaveRate, Where,
+    default_step, first_note,
 };
 
 /// How far a small and a large step move a curve.
@@ -38,6 +39,8 @@ pub const MAX_EVERY: u16 = 256;
 const EUCLID_JUMP: i32 = 4;
 /// The counts of cycles across the rows that `Rate`'s list offers after the times.
 const LISTED_CYCLES: [u16; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+/// The longest `Step` a walk of notes takes: two octaves of semitones, or of degrees.
+const MAX_NOTE_STEP: u8 = 24;
 
 /// What a generator's settings act on, which what some of them mean hangs on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -188,6 +191,9 @@ pub enum Units {
     Rows,
     /// So many of the rows the column could change, as Euclid's hits are: `9 of 16`.
     OfRows,
+    /// A walk's largest move: on notes in semitones, or the scale's degrees while it's on, and
+    /// elsewhere in the column's own values, without a sign.
+    Step,
     /// A chance or share, in percent.
     Percent,
     /// One of a list, by name.
@@ -221,6 +227,10 @@ pub enum GenParam {
     Reverse,
     Late,
     CopyFx,
+    /// A `Walk`'s largest move and what it does at the ends, and how many values a `1/f` sums.
+    Step,
+    Edge,
+    Depth,
     /// How a ramp bends, early or late, and how it eases at both ends.
     Curve,
     S,
@@ -243,7 +253,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 28] = [
+    pub const ALL: [Self; 31] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -260,6 +270,9 @@ impl GenParam {
         Self::Reverse,
         Self::Late,
         Self::CopyFx,
+        Self::Step,
+        Self::Edge,
+        Self::Depth,
         Self::Curve,
         Self::S,
         Self::Wave,
@@ -293,6 +306,9 @@ impl GenParam {
             Self::Reverse => "reverse",
             Self::Late => "late",
             Self::CopyFx => "fx",
+            Self::Step => "step",
+            Self::Edge => "edge",
+            Self::Depth => "depth",
             Self::Curve => "curve",
             Self::S => "s",
             Self::Wave => "wave",
@@ -333,6 +349,9 @@ impl GenParam {
             Self::Reverse => "Reverse",
             Self::Late => "Rotate",
             Self::CopyFx => "FX",
+            Self::Step => "Step",
+            Self::Edge => "Edge",
+            Self::Depth => "Depth",
             Self::Curve => "Curve",
             Self::S => "S",
             Self::Wave => "Shape",
@@ -354,7 +373,8 @@ impl GenParam {
             Self::Curve | Self::S => Units::Bend,
             Self::Transpose => Units::Interval,
             Self::Phase => Units::Degrees,
-            Self::Notes | Self::Run | Self::Rotate => Units::Count,
+            Self::Notes | Self::Run | Self::Rotate | Self::Depth => Units::Count,
+            Self::Step => Units::Step,
             Self::Every | Self::Late => Units::Rows,
             Self::Hits => Units::OfRows,
             Self::Octave | Self::Density | Self::Accent | Self::Slide | Self::Chance => {
@@ -368,7 +388,8 @@ impl GenParam {
             | Self::Source
             | Self::Invert
             | Self::Reverse
-            | Self::CopyFx => Units::Named,
+            | Self::CopyFx
+            | Self::Edge => Units::Named,
         }
     }
 
@@ -378,7 +399,8 @@ impl GenParam {
     /// choices that have one. `Acid` has its riff's settings, its `Density` only where it
     /// `generates` notes of its own, and keeping the pitches there leaves it no ends or notes to
     /// choose. A `Follow` writes every row from its source, so it has no `Where`, and turns
-    /// about a note only while it inverts.
+    /// about a note only while it inverts. `Walk` has its `Step` and `Edge`, and `1/f` its
+    /// `Depth`.
     pub fn exists_for(self, shape: &Shape, generates: bool) -> bool {
         let kind = shape.kind;
         let acid = kind == FillKind::Acid;
@@ -399,6 +421,8 @@ impl GenParam {
                     kind,
                     FillKind::Ramp
                         | FillKind::Random
+                        | FillKind::Walk
+                        | FillKind::Pink
                         | FillKind::Wave
                         | FillKind::Alternate
                         | FillKind::Scale
@@ -407,6 +431,8 @@ impl GenParam {
             Self::Notes => riff,
             Self::Octave | Self::Accent | Self::Slide | Self::Pitches => acid,
             Self::Density => acid && generates,
+            Self::Step | Self::Edge => kind == FillKind::Walk,
+            Self::Depth => kind == FillKind::Pink,
             Self::Curve | Self::S => {
                 matches!(kind, FillKind::Ramp | FillKind::Random | FillKind::Scale)
             }
@@ -416,6 +442,8 @@ impl GenParam {
                 kind,
                 FillKind::Ramp
                     | FillKind::Random
+                    | FillKind::Walk
+                    | FillKind::Pink
                     | FillKind::Wave
                     | FillKind::Alternate
                     | FillKind::List
@@ -504,6 +532,20 @@ impl GenParam {
                 rows => format!("{rows} rows late"),
             },
             Self::CopyFx => on_off(shape.follow.fx),
+            Self::Step => {
+                let step = shape.walk.step;
+                match column {
+                    ShapeColumn::Note { scale, .. } => {
+                        let unit = if scale.on { "degree" } else { "semitone" };
+                        let plural = if step == 1 { "" } else { "s" };
+                        format!("{step} {unit}{plural}")
+                    }
+                    ShapeColumn::Nudge => step.to_string(),
+                    _ => format!("{step:02X}"),
+                }
+            }
+            Self::Edge => shape.walk.edge.name().to_owned(),
+            Self::Depth => shape.pink.depth.to_string(),
         }
     }
 
@@ -512,9 +554,11 @@ impl GenParam {
         let hex = typed_in_hex(column);
         match self {
             Self::Fill | Self::Wave | Self::Where | Self::Source => Typing::Listed,
-            Self::Pitches | Self::Invert | Self::Reverse | Self::CopyFx => Typing::Toggled,
+            Self::Pitches | Self::Invert | Self::Reverse | Self::CopyFx | Self::Edge => {
+                Typing::Toggled
+            }
             Self::Axis => Typing::Named { list: false },
-            Self::From | Self::To if hex => Typing::Hex,
+            Self::From | Self::To | Self::Step if hex => Typing::Hex,
             Self::From | Self::To => Typing::Named { list: false },
             Self::Values if hex => Typing::HexList,
             Self::Values => Typing::Named { list: true },
@@ -665,6 +709,25 @@ impl GenParam {
                     (i32::from(shape.follow.rotate) + by(1, EUCLID_JUMP)).rem_euclid(rows) as u16;
             }
             Self::CopyFx => shape.follow.fx = !shape.follow.fx,
+            // On notes by one or an octave, of degrees while the scale is on; on a nudge by one
+            // or four 24ths; anything else by one or `10` in hex.
+            Self::Step => {
+                let jump = match column {
+                    ShapeColumn::Note { scale, .. } if scale.on => {
+                        scale.kind.intervals().len() as i32
+                    }
+                    ShapeColumn::Note { .. } => 12,
+                    ShapeColumn::Nudge => 4,
+                    _ => HEX_JUMP,
+                };
+                let most = i32::from(longest_step(column));
+                shape.walk.step = moved(i32::from(shape.walk.step), by(1, jump), 1, most) as u8;
+            }
+            Self::Edge => shape.walk.edge = shape.walk.edge.other(),
+            Self::Depth => {
+                let (low, high) = (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH));
+                shape.pink.depth = moved(i32::from(shape.pink.depth), by(1, 2), low, high) as u8;
+            }
         }
         Ok(())
     }
@@ -713,6 +776,9 @@ impl GenParam {
             Self::Reverse => shape.follow.reverse = false,
             Self::Late => shape.follow.rotate = 0,
             Self::CopyFx => shape.follow.fx = false,
+            Self::Step => shape.walk.step = default_step(context.column),
+            Self::Edge => shape.walk.edge = Edge::default(),
+            Self::Depth => shape.pink.depth = Pink::default().depth,
             Self::Hits => {
                 if let Where::Euclid { rotate, .. } = shape.place {
                     shape.place = Where::Euclid {
@@ -834,6 +900,24 @@ impl GenParam {
                 Ok(rows) => shape.follow.rotate = rows % context.source_rows() as u16,
                 Err(_) => return Err("Rotate is a whole number of rows"),
             },
+            // In hex on a column whose values are, and as a number on notes and nudges.
+            Self::Step => {
+                let hex = typed_in_hex(column);
+                let typed = if hex {
+                    u8::from_str_radix(text, 16)
+                } else {
+                    text.parse::<u8>()
+                };
+                match typed {
+                    Ok(step) if step > 0 => shape.walk.step = step.min(longest_step(column)),
+                    _ if hex => return Err("Step is a hex value above 00"),
+                    _ => return Err("Step is a whole number above 0"),
+                }
+            }
+            Self::Depth => match text.parse::<u8>() {
+                Ok(depth) if (MIN_DEPTH..=MAX_DEPTH).contains(&depth) => shape.pink.depth = depth,
+                _ => return Err("Depth runs from 2 to 8"),
+            },
             Self::Fill
             | Self::Wave
             | Self::Where
@@ -841,7 +925,8 @@ impl GenParam {
             | Self::Source
             | Self::Invert
             | Self::Reverse
-            | Self::CopyFx => {}
+            | Self::CopyFx
+            | Self::Edge => {}
         }
         Ok(())
     }
@@ -862,7 +947,9 @@ impl GenParam {
             Self::Axis => (i32::from(column.lowest()), i32::from(column.highest())),
             Self::Transpose => (-i32::from(MAX_TRANSPOSE), i32::from(MAX_TRANSPOSE)),
             Self::Late => (0, context.source_rows() as i32 - 1),
-            Self::Invert | Self::Reverse | Self::CopyFx => (0, 1),
+            Self::Invert | Self::Reverse | Self::CopyFx | Self::Edge => (0, 1),
+            Self::Step => (1, i32::from(longest_step(column))),
+            Self::Depth => (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH)),
             Self::Phase => (0, 359),
             Self::Values => return None,
             Self::Run => (1, i32::from(MAX_RUN)),
@@ -892,6 +979,9 @@ impl GenParam {
             Self::Invert => i32::from(shape.follow.invert),
             Self::Reverse => i32::from(shape.follow.reverse),
             Self::CopyFx => i32::from(shape.follow.fx),
+            Self::Step => i32::from(shape.walk.step),
+            Self::Edge => i32::from(shape.walk.edge == Edge::Wrap),
+            Self::Depth => i32::from(shape.pink.depth),
             Self::Phase => i32::from(shape.phase),
             Self::Values => return None,
             Self::Run => i32::from(shape.run),
@@ -982,6 +1072,15 @@ impl GenParam {
             Self::Invert => shape.follow.invert = number != 0,
             Self::Reverse => shape.follow.reverse = number != 0,
             Self::CopyFx => shape.follow.fx = number != 0,
+            Self::Step => shape.walk.step = number as u8,
+            Self::Edge => {
+                shape.walk.edge = if number != 0 {
+                    Edge::Wrap
+                } else {
+                    Edge::Reflect
+                };
+            }
+            Self::Depth => shape.pink.depth = number as u8,
         }
     }
 }
@@ -1037,6 +1136,14 @@ fn stepped(column: ShapeColumn, value: u8, sign: i32, large: bool) -> u8 {
     ) as u8
 }
 
+/// The longest `Step` a walk takes on a column: two octaves of notes, or its whole range.
+fn longest_step(column: ShapeColumn) -> u8 {
+    match column {
+        ShapeColumn::Note { .. } => MAX_NOTE_STEP,
+        column => column.highest() - column.lowest(),
+    }
+}
+
 /// Whether a column's values are typed as two hex digits, rather than as notes or nudges.
 fn typed_in_hex(column: ShapeColumn) -> bool {
     !matches!(column, ShapeColumn::Note { .. } | ShapeColumn::Nudge)
@@ -1085,6 +1192,8 @@ mod tests {
             seed: 1,
             acid: Acid::default(),
             follow: Follow::default(),
+            walk: crate::shape::Walk::default(),
+            pink: Pink::default(),
         }
     }
 
@@ -1128,6 +1237,14 @@ mod tests {
             [Fill, From, To, Wave, Rate, Phase, Run, Where]
         );
         assert_eq!(of(FillKind::List, false), [Fill, Values, Run, Where]);
+        assert_eq!(
+            of(FillKind::Walk, false),
+            [Fill, From, To, Step, Edge, Run, Where]
+        );
+        assert_eq!(
+            of(FillKind::Pink, false),
+            [Fill, From, To, Depth, Run, Where]
+        );
         assert_eq!(
             of(FillKind::Scale, false),
             [Fill, From, To, Curve, S, Where]

@@ -1,3 +1,13 @@
+82fa3bc0d4e492a9 1/f on FX, event
+efd5bc711681391d 1/f on FX, fine
+798ce446befefddb 1/f on FX, last slot
+8515f8f240b35dd3 1/f on Length
+a3b4eac62b31d4a8 1/f on Note of its own, chromatic
+de468b35ebdb2e8f 1/f on Note of its own, in key
+cbed9e871d7ed48c 1/f on Note, chromatic
+e2515f2634cf6fe7 1/f on Note, in key
+3c8322ac9d6f3753 1/f on Nudge
+932b7bbf15b8c54c 1/f on Velocity
 87e59c5569117b25 Acid on FX, event
 87e59c5569117b25 Acid on FX, fine
 87e59c5569117b25 Acid on FX, last slot
@@ -108,6 +118,16 @@ f482f2082077303b Snap on Length
 4b8c9d807a062de2 Snap on Note, in key
 57e990fdecb3718e Snap on Nudge
 f189bcb9422a1bf4 Snap on Velocity
+4cdf96e06f4db9a6 Walk on FX, event
+ddbe2cd67e0c43d1 Walk on FX, fine
+15559d5d6ddfba5a Walk on FX, last slot
+107d11ea59f45dab Walk on Length
+94c6800381aab30f Walk on Note of its own, chromatic
+04988ecf35489afa Walk on Note of its own, in key
+2d48c10ac231007d Walk on Note, chromatic
+1b85399645b71fcb Walk on Note, in key
+50ee8ce4bc4c3ec7 Walk on Nudge
+34de09cec2816a19 Walk on Velocity
 6bfa59fb3ef6c598 Wave on FX, event
 b66fdcade023adcc Wave on FX, fine
 448d1d86e1f89891 Wave on FX, last slot
