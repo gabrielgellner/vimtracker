@@ -905,12 +905,12 @@ fn a_live_variation_learns_from_the_notes_under_it_and_saves() {
         scale: Scale::default(),
         writes: None,
     };
-    let live = generate(&start, notes, all(16), variation(3, 1, 50));
+    let live = generate(&start, notes, all(16), variation(3, 1, 60));
     assert_eq!(phrase(&live).generators().len(), 1);
     assert_ne!(texts(&live), texts(&start), "order 1 strays from the line");
     let close = reshape(&live, 0, variation(3, 3, 0));
     assert_eq!(texts(&close), texts(&start));
-    let again = reshape(&close, 0, variation(3, 1, 50));
+    let again = reshape(&close, 0, variation(3, 1, 60));
     assert_eq!(texts(&again), texts(&live));
     // Applied, it leaves the variation as plain notes.
     let applied = edit(
@@ -933,7 +933,10 @@ fn a_live_variation_learns_from_the_notes_under_it_and_saves() {
     let loaded = Arc::new(load_song(&folder).unwrap());
     let _ = fs::remove_dir_all(&folder);
     assert_eq!(phrase(&loaded), phrase(&live));
-    assert_eq!(phrase(&loaded).generators()[0].shape.variation.order, 1);
+    assert_eq!(
+        phrase(&loaded).generators()[0].shape.variation.temperature,
+        60
+    );
 }
 
 /// Three notes are too few to learn from, so the rows stay as they are.
