@@ -15,6 +15,11 @@ use crate::kitty;
 /// How many files read are kept. A long file can be large, so it's only a few.
 pub const KEPT: usize = 4;
 
+/// The longest the tests and the screenshots wait for a file to be read. One is read in well under
+/// a second, but a heavily loaded machine has taken over ten, and a wait ends as soon as the file
+/// is in, so a long limit costs nothing.
+pub const WAIT: Duration = Duration::from_secs(60);
+
 /// A file read: its sound at the program's rate, what the file held, and its waveform folded for
 /// the preview.
 #[derive(Debug)]
@@ -190,7 +195,7 @@ mod tests {
         assert!(loader.want(&files[0]).is_none(), "not read yet");
         assert!(loader.is_waiting());
         assert!(loader.want(&files[0]).is_none(), "and not asked for twice");
-        assert_eq!(loader.wait(Duration::from_secs(5)), [files[0].clone()]);
+        assert_eq!(loader.wait(WAIT), [files[0].clone()]);
         let read = loader.want(&files[0]).unwrap().unwrap();
         assert_eq!(
             read.info,
@@ -208,7 +213,7 @@ mod tests {
         // Only a few are kept.
         for file in &files[1..] {
             loader.want(file);
-            loader.wait(Duration::from_secs(5));
+            assert_eq!(loader.wait(WAIT), std::slice::from_ref(file));
         }
         assert!(loader.get(&files[0]).is_none(), "the oldest has gone");
         assert!(loader.get(&files[KEPT]).is_some());
@@ -222,7 +227,7 @@ mod tests {
         std::fs::write(&path, "not audio").unwrap();
         let mut loader = Loader::new(48_000, (8, 1));
         loader.want(&path);
-        loader.wait(Duration::from_secs(5));
+        assert_eq!(loader.wait(WAIT), std::slice::from_ref(&path));
         let error = loader.want(&path).unwrap().unwrap_err();
         assert!(error.contains("bad.wav"), "{error}");
         std::fs::remove_dir_all(&folder).unwrap();

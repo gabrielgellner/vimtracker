@@ -354,14 +354,14 @@ mod tests {
             analyst.want(path, *hash);
         }
         assert!(analyst.is_waiting());
-        let done = analyst.wait(Duration::from_secs(10));
+        let done = analyst.wait(WAIT);
         assert_eq!(done.len(), 3, "each once, none passed over");
         assert_eq!((analyst.built, analyst.cached), (3, 0));
         let mut again = Analyst::new(Some(cache));
         for (path, hash) in &files {
             again.want(path, *hash);
         }
-        let done = again.wait(Duration::from_secs(10));
+        let done = again.wait(WAIT);
         assert_eq!((again.built, again.cached), (0, 3));
         let (analysis, _) = done[2].result.as_ref().unwrap();
         assert_eq!(analysis.hash, files[2].1);
