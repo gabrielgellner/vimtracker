@@ -422,6 +422,8 @@ Song                               song.ron, refused unless format_version is FO
  |   |- accumulation, arpeggio     how ACU and ARP play on it
  |   |- mods[6]                    ModSlot: kind, destination, depth, switch, polarity, each type's
  |   |                             own settings (adsr, lfo), kept while another type plays
+ |   |- macros[8]                  Macro: name, value, maps[(setting, min, max)], saved only once
+ |   |                             one isn't empty
  |   |- chains{id}                 Chain: entries[(phrase, transpose)], label
  |   '- phrases{id}                Phrase: steps[], start, length, lanes[3], order, generators[]
  |       |- Step                   note, velocity, nudge, gate, fx[]
@@ -503,6 +505,15 @@ Song                               song.ron, refused unless format_version is FO
     of a slot after it (`SettingId::for_mod`), never one before.
 *   **Accumulators and arpeggios.** A step's `ACU` and `ARP` say how far, and the track's
     `accumulation` and `arpeggio` say how they move and when they start again.
+*   **Macros** (`macros.rs`, decision 282, the [Gen page study](generators-page.md) §4). Each
+    track has `MACROS` (8), after Ableton Live's Rack macros: a `Macro` has a name, a value from
+    `0000` to `FF00` and any number of `MacroMap`s, each a `MacroTarget` with the `min` and `max`
+    it's put at with the macro at `00` and `FF`, in its own values. A setting is on one macro at
+    most. A macro is itself a setting of the registry, `Owner::Macro`, keyed `macro1` to `macro8`
+    and labelled `MAC1` to `MAC8`, so a step locks it and a mod slot moves it. The registry also
+    holds, unlabelled, the settings only macros and modulation reach (decision 283): each mod
+    slot's type's own (`Owner::ModOwn`, read and written by `ModSlot::own_value` and `set_own` on
+    the registry's scale), and the accumulator's and the arpeggio's.
 *   **Grooves and time.** Tempo is in thousandths of a BPM. The project has a groove, a track can have
     its own, and a step's `GRV` can choose one. A groove is up to 16 pushes, each step's velocity and
     a humanise, and swing is a groove of two steps. A track's `speed` is a note division, its

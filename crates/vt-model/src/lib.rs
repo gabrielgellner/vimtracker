@@ -16,6 +16,7 @@ pub mod insert;
 pub mod kit;
 pub mod label;
 pub mod lfo;
+pub mod macros;
 pub mod modulation;
 pub mod names;
 pub mod octatrack;

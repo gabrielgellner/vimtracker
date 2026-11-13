@@ -3,6 +3,7 @@
 //! chosen, and does nothing until its owner is back.
 
 use crate::insert::{INSERTS, Insert};
+use crate::macros::MACROS;
 use crate::modulation::{MOD_SLOTS, ModKind, note_shape_slot};
 use crate::settings::{Effect, Owner, SettingId, voice_entries};
 use crate::song::{Machine, Track, TrackKind};
@@ -86,6 +87,9 @@ impl SettingId {
                 .inserts
                 .get(slot)
                 .is_some_and(|insert| *insert != Insert::Empty),
+            (Owner::Macro(_), _) => true,
+            (Owner::ModOwn(slot), at) => track.mods[slot].own_value(at).is_some(),
+            (Owner::Accumulation | Owner::Arpeggio, _) => track.is_sound(),
         }
     }
 
@@ -111,6 +115,15 @@ impl SettingId {
                 format!("M{} Start", slot + 1)
             }
             (Owner::Mod(slot), _) => format!("M{} {}", slot + 1, self.name()),
+            (Owner::ModOwn(slot), _) if !here => format!("M{} {} ---", slot + 1, self.name()),
+            (Owner::ModOwn(slot), _) => format!("M{} {}", slot + 1, self.name()),
+            // A macro with a name, or holding something, says so after its number.
+            (Owner::Macro(at), _) => match track.macros[at].shown_name() {
+                Some(name) => format!("{} {name}", self.name()),
+                None => self.name().to_owned(),
+            },
+            (Owner::Accumulation, _) => format!("ACU {}", self.name()),
+            (Owner::Arpeggio, _) => format!("ARP {}", self.name()),
             _ if here => self.name().to_owned(),
             _ => format!("{} ---", self.name()),
         }
@@ -129,6 +142,22 @@ impl SettingId {
                 format!("Whether Mod {} moves one way or both", slot + 1)
             }
             (Owner::Bypass(slot), _) => format!("Switch slot {} out, or back in", slot + 1),
+            (Owner::Macro(at), _) => format!("Macro {}, and every setting it turns", at + 1),
+            (Owner::ModOwn(slot), at) => {
+                format!("{} of Mod {}", self.name(), slot + 1)
+                    + match at {
+                        0..=3 => ", an envelope's",
+                        4 => ", a drum's level after its peak",
+                        5 => ", how far a low-pass gate closes the filter",
+                        6 => ", how many Steps play",
+                        7 => ", the chance a Steps value is drawn again",
+                        _ => ", how Steps go from one to the next",
+                    }
+            }
+            (Owner::Accumulation, 0) => "How far above its note an accumulator goes".to_owned(),
+            (Owner::Accumulation, _) => "How far below its note an accumulator goes".to_owned(),
+            (Owner::Arpeggio, 0) => "How fast an arpeggio plays its notes".to_owned(),
+            (Owner::Arpeggio, _) => "How many octaves an arpeggio climbs".to_owned(),
             (Owner::Sampler, 0) => "Which of the bank's samples plays".to_owned(),
             (Owner::Sampler, 1) => "Which of the sample's slices plays".to_owned(),
             (Owner::Sampler, 2) => "Where in the slice a note starts".to_owned(),
@@ -188,6 +217,39 @@ impl SettingId {
             matches!(id.owner(), (Owner::Mod(other), 0 | 1 | 3) if other > slot)
                 && id.exists_on(track)
         }));
+        settings.extend(
+            (slot + 1..MOD_SLOTS)
+                .flat_map(|other| (0..).map_while(move |at| Self::mod_own(other, at)))
+                .chain(Self::played())
+                .filter(|id| id.exists_on(track)),
+        );
+        settings.extend(Self::macros());
+        settings
+    }
+
+    /// The accumulator's and the arpeggio's, which only macros and modulation move.
+    fn played() -> impl Iterator<Item = Self> {
+        (0..)
+            .map_while(Self::accumulation)
+            .chain((0..).map_while(Self::arpeggio))
+    }
+
+    /// The track's eight macros, in order.
+    pub fn macros() -> impl Iterator<Item = Self> {
+        (0..MACROS).filter_map(Self::macro_at)
+    }
+
+    /// What a macro can reach on this track (decision 282): everything a step or a mod slot
+    /// can, every slot's own settings and the accumulator's and arpeggio's, but never a macro.
+    pub fn for_macro(track: &Track) -> Vec<Self> {
+        let mut settings = Self::on_track(track);
+        settings.extend(mod_settings().filter(|id| id.exists_on(track)));
+        settings.extend(
+            (0..MOD_SLOTS)
+                .flat_map(|slot| (0..).map_while(move |at| Self::mod_own(slot, at)))
+                .chain(Self::played())
+                .filter(|id| id.exists_on(track)),
+        );
         settings
     }
 
@@ -195,7 +257,7 @@ impl SettingId {
     /// comes after it. A slot pointing back, as after slots move, does nothing.
     pub fn reached_from(self, slot: usize, track: &Track) -> bool {
         match self.owner().0 {
-            Owner::Mod(other) if other <= slot => false,
+            Owner::Mod(other) | Owner::ModOwn(other) if other <= slot => false,
             _ => self.exists_on(track),
         }
     }
@@ -238,6 +300,7 @@ impl FxCommand {
         SettingId::on_track(track)
             .into_iter()
             .chain(mod_settings().filter(|id| id.exists_on(track)))
+            .chain(SettingId::macros())
             .filter(|id| id.lockable())
             .map(Self::Set)
             .chain(events)
