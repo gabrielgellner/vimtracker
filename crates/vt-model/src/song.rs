@@ -19,6 +19,7 @@ use crate::generator::{Generator, GeneratorFile, Span};
 use crate::grid::{GRID_ROWS, Grid};
 use crate::groove::{Groove, GrooveId};
 use crate::insert::{INSERTS, Insert};
+use crate::macros::{MACROS, Macro, MacroMap, MacroTarget};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mods};
 use crate::order::{Deal, Dealer, Order, Round};
 use crate::scale::Scale;
@@ -523,6 +524,10 @@ pub struct Track {
     /// Its mod slots, worked out in order, each able to move only those after it.
     #[serde(default = "default_mods")]
     pub mods: [ModSlot; MOD_SLOTS],
+    /// Its eight macros, each turning any of its settings at once (decision 282). Saved only
+    /// while any isn't as a new track's.
+    #[serde(default, skip_serializing_if = "no_macros")]
+    pub macros: [Macro; MACROS],
     /// The chains this track can play, numbered within it.
     #[serde(default)]
     pub chains: BTreeMap<u32, Arc<Chain>>,
@@ -553,6 +558,10 @@ fn is_default_accumulation(accumulation: &Accumulation) -> bool {
 
 fn is_default_arpeggio(arpeggio: &Arpeggio) -> bool {
     *arpeggio == Arpeggio::default()
+}
+
+fn no_macros(macros: &[Macro; MACROS]) -> bool {
+    macros.iter().all(Macro::is_empty)
 }
 
 fn none_bypassed(bypassed: &[bool; INSERTS]) -> bool {
@@ -667,6 +676,22 @@ impl Track {
         }
     }
 
+    /// Which macro holds a setting, and its mapping there, if one does: a setting is on one
+    /// macro at most.
+    pub fn macro_holding(&self, target: MacroTarget) -> Option<(usize, &MacroMap)> {
+        self.macros.iter().enumerate().find_map(|(at, held)| {
+            held.maps
+                .iter()
+                .find(|map| map.target == target)
+                .map(|map| (at, map))
+        })
+    }
+
+    /// Whether any of its macros holds anything.
+    pub fn has_macro_maps(&self) -> bool {
+        self.macros.iter().any(|held| !held.maps.is_empty())
+    }
+
     /// The coarse value of one of its own settings or its machines', which a fine part goes with.
     pub fn coarse(&self, id: SettingId) -> Option<u8> {
         match id.owner().0 {
@@ -679,7 +704,13 @@ impl Track {
                 SettingId::SEND_B => Some(self.send_b),
                 _ => None,
             },
-            Owner::Slot { .. } | Owner::Mod(_) | Owner::Bypass(_) => None,
+            Owner::Slot { .. }
+            | Owner::Mod(_)
+            | Owner::Bypass(_)
+            | Owner::Macro(_)
+            | Owner::ModOwn(_)
+            | Owner::Accumulation
+            | Owner::Arpeggio => None,
         }
     }
 
@@ -824,6 +855,7 @@ impl Default for Track {
             accumulation: Accumulation::default(),
             arpeggio: Arpeggio::default(),
             mods: default_mods(),
+            macros: Default::default(),
             chains: BTreeMap::new(),
             phrases: BTreeMap::new(),
         }

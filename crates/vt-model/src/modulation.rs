@@ -5,10 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::envelope::{Adsr, Ahd, Drum, Envelope, Lpg};
+use crate::envelope::{Adsr, Ahd, Drum, Envelope, Lpg, time_at, time_value};
 use crate::lfo::Lfo;
 use crate::settings::SettingId;
-use crate::steps::Steps;
+use crate::steps::{MAX_MUTATE, MAX_STEP, STEPS, Steps};
 use crate::tracking::Tracking;
 
 /// How many mod slots a track has.
@@ -358,7 +358,67 @@ impl ModSlot {
             }
         }
     }
+
+    /// One of its type's own settings that macros and modulation move, by its place among the
+    /// registry's ([`SettingId::mod_own`]), as a value on the `00` to `FF` scale with a coarse byte
+    /// and a fine one, or none if its type hasn't that setting.
+    pub fn own_value(&self, at: usize) -> Option<u16> {
+        let whole = |value: u8| u16::from(value) << 8;
+        let kind = self.kind;
+        Some(match at {
+            0 => time_value(match kind {
+                ModKind::Adsr => self.adsr.attack_ms,
+                ModKind::Ahd => self.ahd.attack_ms,
+                ModKind::Lpg => self.lpg.attack_ms,
+                _ => return None,
+            }),
+            1 => time_value(match kind {
+                ModKind::Adsr => self.adsr.decay_ms,
+                ModKind::Ahd => self.ahd.decay_ms,
+                ModKind::Drum => self.drum.decay_ms,
+                ModKind::Lpg => self.lpg.decay_ms,
+                _ => return None,
+            }),
+            2 if kind == ModKind::Adsr => whole(self.adsr.sustain),
+            3 if kind == ModKind::Adsr => time_value(self.adsr.release_ms),
+            4 if kind == ModKind::Drum => whole(self.drum.body),
+            5 if kind == ModKind::Lpg => whole(self.lpg.colour),
+            6 if kind == ModKind::Steps => whole(self.steps.length.saturating_sub(1)),
+            7 if kind == ModKind::Steps => whole(self.steps.mutate),
+            8 if kind == ModKind::Steps => depth_value(self.steps.smooth),
+            _ => return None,
+        })
+    }
+
+    /// Set one of its type's own settings from a value on the `00` to `FF` scale, with any fine
+    /// part as the fraction, kept to what the setting takes. One its type hasn't is left alone.
+    pub fn set_own(&mut self, at: usize, value: f32) {
+        let whole = |top: u8| value.round().clamp(0.0, f32::from(top)) as u8;
+        let kind = self.kind;
+        match (at, kind) {
+            (0, ModKind::Adsr) => self.adsr.attack_ms = time_at(value),
+            (0, ModKind::Ahd) => self.ahd.attack_ms = time_at(value),
+            (0, ModKind::Lpg) => self.lpg.attack_ms = time_at(value),
+            (1, ModKind::Adsr) => self.adsr.decay_ms = time_at(value),
+            (1, ModKind::Ahd) => self.ahd.decay_ms = time_at(value),
+            (1, ModKind::Drum) => self.drum.decay_ms = time_at(value),
+            (1, ModKind::Lpg) => self.lpg.decay_ms = time_at(value),
+            (2, ModKind::Adsr) => self.adsr.sustain = whole(100),
+            (3, ModKind::Adsr) => self.adsr.release_ms = time_at(value),
+            (4, ModKind::Drum) => self.drum.body = whole(100),
+            (5, ModKind::Lpg) => self.lpg.colour = whole(0xFF),
+            (6, ModKind::Steps) => self.steps.length = whole(STEPS as u8 - 1) + 1,
+            (7, ModKind::Steps) => self.steps.mutate = whole(MAX_MUTATE),
+            (8, ModKind::Steps) => {
+                self.steps.smooth = depth_of(value).round().clamp(-MAX_STEP_F, MAX_STEP_F) as i16;
+            }
+            _ => {}
+        }
+    }
 }
+
+/// The furthest a Steps value or its smoothing goes, as a float.
+const MAX_STEP_F: f32 = MAX_STEP as f32;
 
 /// What a new track's slots start as, today's three envelopes and three LFOs: the first envelope
 /// shapes each note and the second waits on the filter, and the rest start with nowhere to go.

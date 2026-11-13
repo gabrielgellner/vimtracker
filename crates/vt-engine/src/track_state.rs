@@ -1107,6 +1107,15 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
     };
     let whole = match id.owner() {
         (Owner::Mod(n), at) => return modulator(n, at),
+        (Owner::Macro(at), _) => return track.macros[at].value,
+        // One its type hasn't is at its default, and does nothing until its type has it.
+        (Owner::ModOwn(n), at) => {
+            return track.mods[n]
+                .own_value(at)
+                .unwrap_or(u16::from(id.entry().default) << 8);
+        }
+        (Owner::Accumulation, at) => return track.accumulation.own_value(at),
+        (Owner::Arpeggio, at) => return track.arpeggio.own_value(at),
         (Owner::Track, _) => match id {
             SettingId::VOL => UNITY_LEVEL,
             SettingId::LEVEL => track.level,
