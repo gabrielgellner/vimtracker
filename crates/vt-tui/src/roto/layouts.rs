@@ -771,22 +771,26 @@ const MASTER_OUTPUT: DeviceLayout = stored(
 );
 
 /// A note's pitch and how it joins and ends, what cuts it off, then the steps' timing, and last
-/// how much louder or softer than written its notes play, a live dynamics knob.
+/// how much louder or softer than written its notes play, a live dynamics knob. How near the grid
+/// its rows' nudges play, `Quantise`, past eight knobs, is on a second page, a live timing knob.
 const PLAY: DeviceLayout = live(
     "play",
-    &[knobs(
-        "Play",
-        [
-            s("pitch"),
-            s("glide"),
-            s("gate"),
-            s("choke"),
-            s("speed"),
-            s("groove"),
-            s("reset"),
-            s("velocity"),
-        ],
-    )],
+    &[
+        knobs(
+            "Play",
+            [
+                s("pitch"),
+                s("glide"),
+                s("gate"),
+                s("choke"),
+                s("speed"),
+                s("groove"),
+                s("reset"),
+                s("velocity"),
+            ],
+        ),
+        knobs("Timing", [s("quantise"), __, __, __, __, __, __, __]),
+    ],
 );
 
 /// Where a modulator goes, on a page of its own: a long list that changes with the track, easily
@@ -1793,6 +1797,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             TrackControl::SendB => "sendb",
             TrackControl::Pitch => "pitch",
             TrackControl::VelocityDelta => "velocity",
+            TrackControl::Quantise => "quantise",
         },
         Control::Level => "level",
         Control::Trim => "trim",

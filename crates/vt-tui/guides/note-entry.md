@@ -239,6 +239,11 @@ It's in the velocity's column group, so a selection of velocities copies, pastes
 and clears their nudges too, while `x` on either clears only that one. `=` and
 `-` on a selection give a nudge only to rows with a note.
 
+The track's `Quantise`, on the Sound page's Play device, brings every nudge toward
+the grid as it plays, from none to all, without changing what's written, so a
+recorded take can be tightened live, or loosened again. `QNT` on a step does it for
+that row. `d` on a selection of nudges puts them on the grid for good.
+
 ## How long a note lasts
 
 A note lasts so much of its row's last pulse before its gate closes, from `1%` to

@@ -83,7 +83,8 @@ const RETURN_OUTPUT: [&[Control]; 1] = [&[Control::Trim, Control::Level, base(Tr
 const MASTER_OUTPUT: [&[Control]; 2] = [&[Control::Trim, Control::Level], &[Control::Limiter]];
 
 /// How it plays its notes: their pitch and how they join and end, then the steps' timing, then
-/// what cuts them off and how much louder or softer than written they play.
+/// what cuts them off, and how much louder or softer and how much nearer the grid than written
+/// they play.
 const PLAY: [&[Control]; 3] = [
     &[
         base(TrackControl::Pitch),
@@ -91,7 +92,11 @@ const PLAY: [&[Control]; 3] = [
         Control::GateLength,
     ],
     &[Control::Speed, Control::Groove, Control::Reset],
-    &[Control::Choke, base(TrackControl::VelocityDelta)],
+    &[
+        Control::Choke,
+        base(TrackControl::VelocityDelta),
+        base(TrackControl::Quantise),
+    ],
 ];
 
 /// The machine's device: the machine in its title, and its type after it, the sample a sampler

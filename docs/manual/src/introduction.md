@@ -60,7 +60,8 @@ TB-303.
 frame with its name and what gives it its character in its title:
 
 - **Sound** has four: the Machine with the voice's own settings, the Filter, the Output,
-  and Play, with the track's pitch, glide, gate, speed, groove, reset, choke and velocity. A
+  and Play, with the track's pitch, glide, gate, speed, groove, reset, choke, velocity and
+  quantise. A
   group's, a return's and the master's Sound page is the Output alone, with under it
   the tracks a group sums or what sends to a return; the master's Output ends with the
   song's limiter.
