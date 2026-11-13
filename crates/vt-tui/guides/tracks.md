@@ -1505,16 +1505,16 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
 
 **A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,
-`1/f`, `Acid`, `Shuffle`, a `Wave` of `Random` or `Smooth`, or any fill on rows
-chosen by `Chance`, has `Vary`: `Once`, as it's always been, the same every time
-round; `Each pass`, a new roll each time the phrase comes round; or `Every 2
-passes`, 4 or 8, so each variation plays that many times before the next, the way
-an Elektron's `1:4` condition keeps to the bars. Each pass's seed comes from the
-generator's own and which pass it is, so the first pass plays what's written, a
-render plays the same again, and playing from bar 33 hears what playing to it
-would. With `Acid`'s `Pitches` on `Keep`, it varies only the accents, slides and
-octaves, as `r` would. The phrase shows what's written, the first pass; what plays
-after it is the engine's.
+`1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), a `Wave` of `Random` or `Smooth`,
+or any fill on rows chosen by `Chance`, has `Vary`: `Once`, as it's always been, the
+same every time round; `Each pass`, a new roll each time the phrase comes round; or
+`Every 2 passes`, 4 or 8, so each variation plays that many times before the next,
+the way an Elektron's `1:4` condition keeps to the bars. Each pass's seed comes from
+the generator's own and which pass it is, so the first pass plays what's written, a
+render plays the same again, and playing from bar 33 hears what playing to it would.
+With `Acid`'s `Pitches` on `Keep`, it varies only the accents, slides and octaves,
+as `r` would. The phrase shows what's written, the first pass; what plays after it
+is the engine's.
 
 When you hear one you like, `Space g a` keeps it: the pass just heard becomes the
 generator's seed and `Vary` goes back to `Once`, so that variation plays every pass

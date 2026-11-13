@@ -82,6 +82,7 @@ fn following(source: Source, follow: Follow) -> Shape {
         walk: Walk::default(),
         pink: Pink::default(),
         bits: Bits::default(),
+        grids: vt_model::shape::Grids::default(),
         vary: 0,
     }
 }

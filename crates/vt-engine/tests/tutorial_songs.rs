@@ -25,8 +25,8 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, Edge, FillKind, Follow, Pink, Shape, ShapeColumn, Source, Values,
-    Walk, WaveRate, Where,
+    Acid, Bits, DEFAULT_RATE, DrumPart, Edge, FillKind, Follow, Grids, Pink, Shape, ShapeColumn,
+    Source, Values, Walk, WaveRate, Where, track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
@@ -52,6 +52,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("live-generators", live_generators()),
         ("acid-lines", acid_lines()),
         ("walks", walks()),
+        ("grids", grids()),
     ]
 }
 
@@ -162,6 +163,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         walk: Walk::default(),
         pink: Pink::default(),
         bits: Bits::default(),
+        grids: Grids::default(),
         vary: 0,
     }
 }
@@ -809,6 +811,66 @@ fn walks() -> Song {
     };
     hats.seed = 6;
     song = generate(song, 2, ShapeColumn::Velocity, 16, hats);
+    song
+}
+
+/// A beat from Grids' map, after Mutable Instruments' Grids: `S` across a kick's, a snare's and a
+/// hat's tracks, each with one note typed on its first row for its pitch, kept live, each track
+/// its own part of the same place on the map, with chaos so its two bars differ; and an `Acid`
+/// bass.
+fn grids() -> Song {
+    let mut song = song("grids", 118, 9, ScaleKind::Minor, 4);
+    song.seed = 0x6D;
+    let first = |note: &str| {
+        let mut rows = vec![format!("{note} 64 --- --- ---")];
+        rows.extend((1..32).map(|_| REST.to_owned()));
+        rows
+    };
+    voice(&mut song, 0, "BD", SynthVoice::Kick, &texts(&first("C-1")));
+    set(&mut song, 0, "kick.decay", 0x70);
+    song.tracks[0].level = 0xF0;
+    voice(&mut song, 1, "SD", SynthVoice::Snare, &texts(&first("G-2")));
+    song.tracks[1].level = 0xC8;
+    song.tracks[1].send_b = 0x90;
+    voice(&mut song, 2, "HH", SynthVoice::Hat, &texts(&first("C-4")));
+    set(&mut song, 2, "hat.decay", 0x30);
+    song.tracks[2].level = 0xC0;
+    voice(
+        &mut song,
+        3,
+        "BS",
+        SynthVoice::Acid,
+        &texts(&hits("x..x..x...x.x...", "A-1")),
+    );
+    set(&mut song, 3, "acid.cutoff", 0x48);
+    set(&mut song, 3, "acid.resonance", 0x90);
+    song.tracks[3].level = 0xB8;
+    // The beat: X 40, Y 40, the hats busier than the others, and chaos so the bars differ.
+    let mut beat = shape(FillKind::Grids, note("C-3"), note("C-4"), Where::AllRows);
+    beat.grids = Grids {
+        x: 0x40,
+        y: 0x40,
+        density: [0x80, 0x80, 0xA0],
+        chaos: 0xC0,
+        part: None,
+        ..Grids::default()
+    };
+    let column = ShapeColumn::Note {
+        scale: song.scale,
+        writes: None,
+    };
+    let parts = [DrumPart::Kick, DrumPart::Snare, DrumPart::Hats];
+    for (track, part) in parts.into_iter().enumerate() {
+        let shape = Shape {
+            seed: track_seed(beat.seed, track),
+            grids: Grids {
+                part: Some(part),
+                ..beat.grids
+            },
+            ..beat
+        };
+        song = generate(song, track, column, 32, shape);
+    }
     song
 }
 

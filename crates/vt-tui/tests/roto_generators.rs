@@ -38,6 +38,7 @@ fn shape(kind: FillKind, place: Where) -> Shape {
         walk: Walk::default(),
         pink: Pink::default(),
         bits: Bits::default(),
+        grids: vt_model::shape::Grids::default(),
         vary: 0,
     }
 }
