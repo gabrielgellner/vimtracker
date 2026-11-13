@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 use vt_model::constants::{
-    COMMAND_QUEUE, FILE_QUEUE, FX_SLOTS, MAX_TRACKS, MEMORY_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE,
-    SCOPE_QUEUE, TELEMETRY_QUEUE,
+    COMMAND_QUEUE, FILE_QUEUE, FX_SLOTS, MAX_TRACKS, MEMORY_QUEUE, NOTE_PITCH_QUEUE, PUBLISH_QUEUE,
+    RETURN_QUEUE, SCOPE_QUEUE, TELEMETRY_QUEUE,
 };
 
 use vt_model::sample::SampleData;
@@ -21,7 +21,7 @@ use crate::mixer::Reading;
 use crate::published::{Published, Span};
 #[cfg(test)]
 use crate::track_state::Drawn;
-use crate::track_state::{Faders, LiveValues};
+use crate::track_state::{Faders, LiveValues, NotePitch};
 
 /// A transport or preview message. The engine resolves it against its own state, so two quick
 /// presses can't act on an out-of-date view of whether it is playing.
@@ -171,6 +171,8 @@ pub struct Handle {
     /// The main output, mixed to one channel, for the scope.
     scope: Consumer<f32>,
     jam: Consumer<(usize, JamState)>,
+    /// What the mod slots moved each note's pitch by, by track, as each note is heard.
+    note_pitches: Consumer<(usize, NotePitch)>,
     pending: Option<Arc<Published>>,
     memories: Producer<Memory>,
     freed: Consumer<Memory>,
@@ -194,6 +196,7 @@ pub struct Realtime {
     telemetry: Producer<Telemetry>,
     scope: Producer<f32>,
     jam: Producer<(usize, JamState)>,
+    note_pitches: Producer<(usize, NotePitch)>,
     memories: Consumer<Memory>,
     freed: Producer<Memory>,
     files: Consumer<(Arc<SampleData>, Option<Span>)>,
@@ -215,6 +218,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
     let (telemetry_tx, telemetry_rx) = RingBuffer::new(TELEMETRY_QUEUE);
     let (scope_tx, scope_rx) = RingBuffer::new(SCOPE_QUEUE);
     let (jam_tx, jam_rx) = RingBuffer::new(MAX_TRACKS * 2);
+    let (pitch_tx, pitch_rx) = RingBuffer::new(NOTE_PITCH_QUEUE);
     let (memory_tx, memory_rx) = RingBuffer::new(MEMORY_QUEUE);
     let (freed_tx, freed_rx) = RingBuffer::new(MEMORY_QUEUE);
     let (file_tx, file_rx) = RingBuffer::new(FILE_QUEUE);
@@ -230,6 +234,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             telemetry: telemetry_rx,
             scope: scope_rx,
             jam: jam_rx,
+            note_pitches: pitch_rx,
             pending: None,
             memories: memory_tx,
             freed: freed_rx,
@@ -247,6 +252,7 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             telemetry: telemetry_tx,
             scope: scope_tx,
             jam: jam_tx,
+            note_pitches: pitch_tx,
             memories: memory_rx,
             freed: freed_tx,
             files: file_rx,
@@ -417,6 +423,12 @@ impl Handle {
         self.jam.pop().ok()
     }
 
+    /// The next note heard on any track whose pitch a mod slot could move, and what each slot moved
+    /// it by.
+    pub fn note_pitch(&mut self) -> Option<(usize, NotePitch)> {
+        self.note_pitches.pop().ok()
+    }
+
     /// Whether a version is still waiting to be sent.
     pub fn has_pending(&self) -> bool {
         self.pending.is_some()
@@ -537,6 +549,13 @@ impl Realtime {
             live,
             playheads: self.engine.playheads(self.watched),
         });
+        // What doesn't fit is dropped, as the app reads them every frame. A track reports the last
+        // of its notes in a block, which is only ever one at any speed a row can play.
+        for track in 0..MAX_TRACKS {
+            if let Some(pitch) = self.engine.take_note_pitch(track) {
+                let _ = self.note_pitches.push((track, pitch));
+            }
+        }
         // A change that doesn't fit stays different, so it goes in a later block.
         for (track, reported) in self.reported.iter_mut().enumerate() {
             let state = self.engine.jam(track);
@@ -1500,6 +1519,38 @@ mod tests {
         assert_eq!(drawn[3].which, 0b11, "{drawn:?}");
         assert!(drawn[3].value(0).is_some() && drawn[3].value(2).is_none());
         assert_eq!(drawn[4], Drawn::default());
+    }
+
+    #[test]
+    fn what_the_slots_move_each_notes_pitch_by_is_reported_without_allocating() {
+        use vt_model::modulation::ModSlot;
+        use vt_model::steps::{Steps, StepsMode};
+        let pool = samples();
+        // Every track a note a step, the first with Steps on `Pitch`, up 2 then 5, one a note.
+        let mut song = song(2, 16);
+        let up = Steps {
+            values: std::array::from_fn(|step| [2, 5][step % 2]),
+            length: 2,
+            mode: StepsMode::Note,
+            ..Steps::default()
+        };
+        song.tracks[0].mods[3] = ModSlot::steps(Some(SettingId::PITCH), up);
+        let engine = Engine::new(48_000, published(song, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        handle.send(Command::PlayFrom { step: 0 });
+        // Three 16ths, at 6000 frames each.
+        assert_eq!(blocks(&mut rt, 70), 0, "reporting never allocates");
+        let mut heard = Vec::new();
+        while let Some((track, pitch)) = handle.note_pitch() {
+            heard.push((track, pitch.row.row, pitch.moves[3]));
+            assert_eq!(
+                pitch.moves[..3],
+                [0.0; 3],
+                "only the slot on Pitch moves it"
+            );
+        }
+        // The other track has nothing on `Pitch`, so it reports nothing.
+        assert_eq!(heard, [(0, 0, 2.0), (0, 1, 5.0), (0, 2, 2.0)]);
     }
 
     #[test]

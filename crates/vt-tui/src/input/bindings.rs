@@ -121,6 +121,9 @@ pub enum Cmd {
     /// Apply the live generator under the cursor, leaving plain values; on the Mod page, keep what
     /// a Steps slot's `Mutate` drew as its values.
     ApplyGenerator,
+    /// Write what the track's Steps and LFO slots on `Pitch` moved the notes to into them, and
+    /// switch those slots out.
+    BakeMods,
     /// Choose this track's sample from a list.
     PickSample,
     /// Choose a kit from a list.
@@ -391,6 +394,11 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
         "Space g a",
         Cmd::ApplyGenerator,
         "Apply the live column here, leaving plain values",
+    ),
+    (
+        "Space g A",
+        Cmd::BakeMods,
+        "Write the pitch the mod slots played into the notes",
     ),
     (
         "Space r",
@@ -952,6 +960,11 @@ const VISUAL: &[(&str, Cmd, &str)] = &[
         "Decrease the selection's values, by a semitone in a scale",
     ),
     ("~", Cmd::CycleMark, "Cycle the selected values' marks"),
+    (
+        "Space g A",
+        Cmd::BakeMods,
+        "Write the pitch the mod slots played into the selected notes",
+    ),
     (".", Cmd::Repeat, "Repeat the last change on the selection"),
     (
         "u",

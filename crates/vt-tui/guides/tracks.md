@@ -1429,6 +1429,23 @@ two as near: `+03` from `C-3` in C major plays `D-3`. So a random LFO, or Steps 
 what the slot adds moves: the notes as written never do, and with the scale off
 it's plain `Pitch`.
 
+## Writing a slot into the notes
+
+When a Steps or LFO slot on `Pitch` or `Pitch in scale` plays a melody you like,
+`Space g A` in the phrase view writes it into the Note column: each note becomes
+the one it was moved to the last time it was heard, and the slot is switched out,
+so the phrase sounds the same and its notes can be edited. With the scale on,
+they land on the scale's notes, as you heard them; off, they move by semitones.
+It's one undo step, so `u` brings back the notes and the slot.
+
+It writes the phrase's notes, or only the selected rows' with `V` first. A note
+not heard yet stays as written, and the status line says how many. The Note
+column has whole notes only, so a move of part of a semitone goes to the nearest,
+and a slot that never moved a note half a semitone, such as a gentle vibrato, is
+left playing. Envelopes and Track slots on `Pitch` stay too, as they shape each
+note rather than choose it. With `Mutate` up, it's the time round just heard that's written, so
+play, listen, and press `Space g A` on a pass you like.
+
 ## The accumulator
 
 The `Accumulator` device, under the envelopes, says how the track's `ACU`s move its

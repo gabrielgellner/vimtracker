@@ -625,6 +625,11 @@ impl Voice {
         self.pitch_target = pitch;
     }
 
+    /// Go to the pitch it's been given at once, for a voice that hasn't played yet.
+    pub fn snap_pitch(&mut self) {
+        self.pitch = self.pitch_target;
+    }
+
     /// Start the envelope's release. A one-shot shape plays on through, though a synth's own
     /// gate still closes.
     pub fn release(&mut self) {
