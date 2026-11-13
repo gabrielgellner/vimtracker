@@ -645,7 +645,7 @@ impl GenParam {
                         let plural = if step == 1 { "" } else { "s" };
                         format!("{step} {unit}{plural}")
                     }
-                    ShapeColumn::Nudge => step.to_string(),
+                    ShapeColumn::Nudge { .. } => step.to_string(),
                     _ => format!("{step:02X}"),
                 }
             }
@@ -777,7 +777,7 @@ impl GenParam {
             Self::Values => {
                 return Err(match column {
                     ShapeColumn::Note { .. } => "Type the notes with i, like C-3 E-3 G-3",
-                    ShapeColumn::Nudge => "Type the nudges with i, like -3 0 +3",
+                    ShapeColumn::Nudge { .. } => "Type the nudges with i, like -3 0 +3",
                     _ => "Type the values with i, as hex values like 70 40 55",
                 });
             }
@@ -849,14 +849,14 @@ impl GenParam {
             }
             Self::CopyFx => shape.follow.fx = !shape.follow.fx,
             // On notes by one or an octave, of degrees while the scale is on; on a nudge by one
-            // or four 24ths; anything else by one or `10` in hex.
+            // or four 24ths of a sixteenth; anything else by one or `10` in hex.
             Self::Step => {
                 let jump = match column {
                     ShapeColumn::Note { scale, .. } if scale.on => {
                         scale.kind.intervals().len() as i32
                     }
                     ShapeColumn::Note { .. } => 12,
-                    ShapeColumn::Nudge => 4,
+                    ShapeColumn::Nudge { .. } => 4,
                     _ => HEX_JUMP,
                 };
                 let most = i32::from(longest_step(column));
@@ -963,7 +963,7 @@ impl GenParam {
         let open = context.open as u16;
         let unknown = match column {
             ShapeColumn::Note { .. } => "A note is like C-3, C#3 or c3",
-            ShapeColumn::Nudge => "A nudge is like -3, 0 or +B, up to B either way",
+            ShapeColumn::Nudge { .. } => "A nudge is a sign and hex, like -3, 0 or +B",
             _ => "A value is two hex digits",
         };
         match self {
@@ -1315,7 +1315,7 @@ fn stepped(column: ShapeColumn, value: u8, sign: i32, large: bool) -> u8 {
             return scale.moved(value, degrees as i32 * sign);
         }
         ShapeColumn::Note { .. } => 12,
-        ShapeColumn::Nudge => 4,
+        ShapeColumn::Nudge { .. } => 4,
         _ => HEX_JUMP,
     };
     let (low, top) = (i32::from(column.lowest()), i32::from(column.highest()));
@@ -1337,7 +1337,7 @@ fn longest_step(column: ShapeColumn) -> u8 {
 
 /// Whether a column's values are typed as two hex digits, rather than as notes or nudges.
 fn typed_in_hex(column: ShapeColumn) -> bool {
-    !matches!(column, ShapeColumn::Note { .. } | ShapeColumn::Nudge)
+    !matches!(column, ShapeColumn::Note { .. } | ShapeColumn::Nudge { .. })
 }
 
 /// The chance in percent an `Acid` setting is: of an octave, a row playing, an accent or a slide.

@@ -10,9 +10,9 @@ use vt_model::playable::{normalize_peak, onset_analysis};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::shape::ShapeColumn;
-use vt_model::song::Song;
+use vt_model::song::{Song, Track};
 use vt_model::speed::Speed;
-use vt_model::step::{FxCommand, MAX_NUDGE};
+use vt_model::step::{FxCommand, most_nudge};
 
 use crate::gens::{GenScratch, ScratchSlot, Unders};
 
@@ -31,11 +31,12 @@ pub struct Published {
     /// Each bank number's entry, `00` to `FF`: always 256 places.
     pub bank: Bank,
     /// How far ahead of its place on the grid a step is worked out, in ticks, so a groove or a
-    /// nudge can play it early: as early as any groove the song can play lands a step, and further
-    /// by the earliest nudge in the song, as shares of the longest step any track can play. A live
-    /// Nudge generator counts as early as its range allows, as the engine can move it. With
-    /// neither, it's 0, and steps are worked out on the grid as they always were. Every track
-    /// works its steps out this far ahead, so they're all worked out in the order they fall.
+    /// nudge can play it early: as early as any groove the song can play lands a step, as shares
+    /// of the longest step any track can play, and further by the earliest nudge in the song,
+    /// which is the same time on every track. A live Nudge generator counts as early as its
+    /// track's range allows, as the engine can move it. With neither, it's 0, and steps are worked
+    /// out on the grid as they always were. Every track works its steps out this far ahead, so
+    /// they're all worked out in the order they fall.
     pub lead: u64,
     /// How early any groove the song can play lands a step, in ticks of a sixteenth, which a step's
     /// push is kept within.
@@ -75,12 +76,12 @@ impl Published {
         let (groove_lead, groove_steps) = lead(&song);
         let earliest = earliest_nudge(&song);
         let (longest, speed_steps) = longest_step(&song);
-        let early = groove_lead + earliest.map_or(0, |early| early.unsigned_abs());
+        let early = earliest.map_or(0, |early| early.unsigned_abs());
         static NEXT: AtomicU64 = AtomicU64::new(0);
         Self {
             id: NEXT.fetch_add(1, Ordering::Relaxed),
             bank,
-            lead: early * longest / TICKS_PER_STEP,
+            lead: groove_lead * longest / TICKS_PER_STEP + early,
             groove_lead,
             nudges: earliest.is_some(),
             groove_steps,
@@ -132,38 +133,56 @@ fn longest_step(song: &Song) -> (u64, bool) {
     let mut longest = TICKS_PER_STEP;
     let mut speed_steps = false;
     for track in &song.tracks {
-        longest = longest.max(track.speed.ticks());
-        let slots = track
-            .phrases
-            .values()
-            .flat_map(|phrase| phrase.steps())
-            .flat_map(|step| step.fx.iter());
-        for slot in slots {
-            if slot.command == Some(FxCommand::Set(SettingId::SPEED)) {
-                speed_steps = true;
-                let speed = Speed::from_index(usize::from(slot.coarse()));
-                longest = longest.max(speed.ticks());
-            }
+        let (own, rates) = track_longest(track);
+        longest = longest.max(own);
+        speed_steps |= rates;
+    }
+    (longest, speed_steps)
+}
+
+/// The longest step a track can play, in ticks, its own speed's or one a `RATE` on its rows
+/// chooses, and whether any of its rows has one.
+fn track_longest(track: &Track) -> (u64, bool) {
+    let mut longest = track.speed.ticks();
+    let mut speed_steps = false;
+    let slots = track
+        .phrases
+        .values()
+        .flat_map(|phrase| phrase.steps())
+        .flat_map(|step| step.fx.iter());
+    for slot in slots {
+        if slot.command == Some(FxCommand::Set(SettingId::SPEED)) {
+            speed_steps = true;
+            let speed = Speed::from_index(usize::from(slot.coarse()));
+            longest = longest.max(speed.ticks());
         }
     }
     (longest, speed_steps)
 }
 
 /// How far the earliest nudge in the song moves its row, in ticks, if any row has one: 0 when every
-/// nudge is late. A live Nudge generator can be moved to any nudge its column takes, so it counts
-/// as the earliest there is.
+/// nudge is late. A nudge plays no further than its step's range, so a track's own are as early
+/// as the longest step it can play lets them be, and a live Nudge generator, which the engine can
+/// move to any nudge its column takes, counts as the earliest of those.
 fn earliest_nudge(song: &Song) -> Option<i64> {
-    let phrases = song.tracks.iter().flat_map(|track| track.phrases.values());
-    let generated = phrases
-        .clone()
-        .flat_map(|phrase| phrase.generators())
-        .any(|generator| generator.column == ShapeColumn::Nudge)
-        .then_some(-MAX_NUDGE);
-    phrases
-        .flat_map(|phrase| phrase.steps())
-        .filter(|step| step.nudge != 0)
-        .map(|step| step.nudge.min(0))
-        .chain(generated)
+    song.tracks
+        .iter()
+        .flat_map(|track| {
+            let most = most_nudge(track_longest(track).0);
+            let phrases = track.phrases.values();
+            let generated = phrases
+                .clone()
+                .flat_map(|phrase| phrase.generators())
+                .filter_map(move |generator| match generator.column {
+                    ShapeColumn::Nudge { most: own } => Some(-own.clamp(0, most)),
+                    _ => None,
+                });
+            phrases
+                .flat_map(|phrase| phrase.steps())
+                .filter(|step| step.nudge != 0)
+                .map(move |step| step.nudge.clamp(-most, 0))
+                .chain(generated)
+        })
         .min()
         .map(|nudge| i64::from(nudge) * NUDGE_TICKS as i64)
 }

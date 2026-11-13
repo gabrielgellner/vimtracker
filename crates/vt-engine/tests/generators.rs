@@ -21,6 +21,7 @@ use vt_model::shape::{
     Values, Walk, Where,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
+use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Step};
 
 use support::golden;
@@ -139,7 +140,7 @@ pub fn moving_song() -> Song {
     let song = generate(
         song,
         1,
-        ShapeColumn::Nudge,
+        ShapeColumn::Nudge { most: 11 },
         rows(15),
         shape(FillKind::Ramp, 0, 22, Where::AllRows),
     );
@@ -186,7 +187,7 @@ pub fn late_song() -> Song {
     generate(
         song,
         0,
-        ShapeColumn::Nudge,
+        ShapeColumn::Nudge { most: 11 },
         rows(15),
         shape(FillKind::Ramp, 11, 22, Where::AllRows),
     )
@@ -196,6 +197,26 @@ pub fn late_song() -> Song {
 fn a_nudge_generator_at_rest_renders_as_before_however_early_it_could_go() {
     let out = render_loop(version(&late_song()), RATE, RenderOptions::default());
     golden("generators-late-at-rest", &out);
+}
+
+#[test]
+fn a_nudge_generator_works_the_engine_ahead_as_far_as_its_tracks_nudges_go() {
+    assert_eq!(version(&late_song()).lead, 110, "B 24ths of a sixteenth");
+    // On a track at a quarter, a column opened there goes to 2F.
+    let at = |speed: Speed, most: i8| {
+        let mut song = Song::new(1);
+        let hit: Step = "C-3 64 --- --- ---".parse().unwrap();
+        song.tracks[0].speed = speed;
+        song.tracks[0]
+            .phrases
+            .insert(0, Arc::new(Phrase::from_steps(vec![hit; 4])));
+        let column = ShapeColumn::Nudge { most };
+        let shape = shape(FillKind::Ramp, most as u8, 2 * most as u8, Where::AllRows);
+        version(&generate(song, 0, column, rows(3), shape)).lead
+    };
+    assert_eq!(at(Speed::Quarter, 47), 470);
+    // A column opened at a quarter on a track since made a 32nd goes no further than a 32nd's.
+    assert_eq!(at(Speed::ThirtySecond, 47), 50);
 }
 
 /// 5625 frames a step at 128 BPM.
@@ -307,7 +328,7 @@ fn a_held_setting_plays_what_writing_it_would_on_every_column() {
         (0, acid, GenParam::Notes),
         (0, cut(), GenParam::To),
         (1, ShapeColumn::Velocity, GenParam::Hits),
-        (1, ShapeColumn::Nudge, GenParam::From),
+        (1, ShapeColumn::Nudge { most: 11 }, GenParam::From),
         (1, ShapeColumn::Length, GenParam::To),
         (1, res(), GenParam::From),
     ];

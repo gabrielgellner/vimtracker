@@ -1,7 +1,7 @@
 //! Design constants and tuning values. Tuning values can change by ear with no document update.
 
 /// Current `song.ron` format.
-pub const FORMAT_VERSION: u32 = 10;
+pub const FORMAT_VERSION: u32 = 11;
 /// The level value that leaves a sound as it is, at 0 dB. Above it is headroom.
 pub const UNITY_LEVEL: u8 = 0xE0;
 /// The highest level value, at +6 dB as on Ableton Live's faders. Anything above it snaps to it.
@@ -31,7 +31,8 @@ pub const TICKS_PER_STEP: u64 = 240;
 pub const TICKS_PER_QUARTER: u64 = 960;
 /// One unit for `DEL`, `KIL`, `OFF` and `RET`, 6 per step. A groove's pushes are in ticks.
 pub const GROOVE_UNIT_TICKS: u64 = 40;
-/// One unit of a row's nudge, a 24th of a step, finer than `DEL`'s sixths.
+/// One unit of a row's nudge, a 24th of a sixteenth on every track whatever its speed, 96 to a
+/// quarter as the MPC's sequencer counts (decision 299).
 pub const NUDGE_TICKS: u64 = TICKS_PER_STEP / 24;
 /// Steps in a new phrase.
 pub const DEFAULT_PHRASE_STEPS: usize = 16;

@@ -13,7 +13,7 @@ use vt_model::shape::RowView;
 use vt_model::song::{ChainPosition, Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{
-    FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step,
+    FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step, most_nudge,
 };
 
 use crate::gens::{Passes, RowAt};
@@ -55,11 +55,13 @@ impl Engine {
             start: self.tracks[index].chain_starts,
         };
         // Grid, then groove, then nudge. A track's notes play in order, so a row's note part
-        // never lands before the last row's.
+        // never lands before the last row's. The push is a share of the step and the nudge the
+        // same time on every track, so they're added as ticks times a sixteenth's.
         let row_at = if nudges {
-            let nudge = self.row_nudge(index, running);
-            let earliest = (lead * TICKS_PER_STEP / ticks) as i64;
-            let at = self.landing(grid, (push + nudge).max(-earliest), ticks);
+            let nudge = self.row_nudge(index, running, ticks);
+            let sixteenth = TICKS_PER_STEP as i64;
+            let moved = push * ticks as i64 + nudge * sixteenth;
+            let at = self.landed(grid, moved.max(-(lead as i64) * sixteenth));
             self.tracks[index]
                 .last_row_at()
                 .map_or(at, |last| at.max(last))
@@ -100,16 +102,19 @@ impl Engine {
         }
     }
 
-    /// How far a row's nudge moves its note part, in ticks: as far as it's written, brought
-    /// toward the grid by the track's `QNT`, which is read before the row plays, as `GRV` is.
-    fn row_nudge(&mut self, index: usize, running: i64) -> i64 {
+    /// How far a row's nudge moves its note part, in ticks: as far as it's written, kept to just
+    /// under half the step it plays at, so a `RATE` to a faster step keeps its time unless that's
+    /// too far, and brought toward the grid by the track's `QNT`, which is read before the row
+    /// plays, as `GRV` is.
+    fn row_nudge(&mut self, index: usize, running: i64, ticks: u64) -> i64 {
         let Some(row @ (_, view)) = self.row_ahead(index, running) else {
             return 0;
         };
         if view.nudge == 0 {
             return 0;
         }
-        let written = i64::from(view.nudge) * NUDGE_TICKS as i64;
+        let most = most_nudge(ticks);
+        let written = i64::from(view.nudge.clamp(-most, most)) * NUDGE_TICKS as i64;
         let chosen = self.chosen_ahead(index, running, Some(row), SettingId::QUANTISE);
         self.tracks[index].quantised(written, chosen)
     }

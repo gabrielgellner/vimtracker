@@ -25,7 +25,9 @@ use crate::constants::{MAX_PHRASE_STEPS, TICKS_PER_QUARTER};
 use crate::lfo::{Rate, Shape as Wave};
 use crate::scale::Scale;
 use crate::selection::StepRange;
-use crate::step::{FxCommand, MAX_NOTE, MAX_NUDGE, MAX_VELOCITY, MIDDLE_C, MIN_NOTE, Note, Step};
+use crate::step::{
+    FxCommand, MAX_NOTE, MAX_VELOCITY, MIDDLE_C, MIN_NOTE, Note, Step, nudge_text,
+};
 
 /// The furthest `curve` and `s` go either way.
 pub const MAX_BEND: i8 = 100;
@@ -318,8 +320,10 @@ pub enum ShapeColumn {
         writes: Option<u8>,
     },
     Velocity,
-    /// A note's nudge, held as `0` for the earliest to `22` for the latest, so it's a plain range.
-    Nudge,
+    /// A note's nudge, held as `0` for the earliest to twice `most` for the latest, so it's a plain
+    /// range. `most` is the furthest its track's nudges went when the panel opened, `B` at a
+    /// sixteenth, which is kept with a live generator as a Note column's scale is.
+    Nudge { most: i8 },
     /// A note's length, the gate cell's last two digits.
     Length,
     Fx {
@@ -334,7 +338,7 @@ impl ShapeColumn {
         match self {
             Self::Note { .. } => MAX_NOTE,
             Self::Velocity => MAX_VELOCITY,
-            Self::Nudge => NUDGES,
+            Self::Nudge { most } => 2 * most.max(0) as u8,
             Self::Length => u8::MAX,
             Self::Fx { command, .. } => command.highest(),
         }
@@ -388,15 +392,22 @@ impl ShapeColumn {
         )
     }
 
+    /// The nudge a value held on the Nudge column is, kept to the column's range, or 0 elsewhere.
+    pub fn nudge_of(self, value: u8) -> i8 {
+        match self {
+            Self::Nudge { most } => (i16::from(value).min(2 * i16::from(most)) - i16::from(most)) as i8,
+            _ => 0,
+        }
+    }
+
     /// A value as the panel shows it: a note's name, a nudge with its sign as the grid shows it,
     /// and anything else in hex.
     pub fn show(self, value: u8) -> String {
         match self {
             Self::Note { .. } => Note::On(value.clamp(MIN_NOTE, MAX_NOTE)).to_string(),
-            Self::Nudge => match value as i8 - MAX_NUDGE {
+            Self::Nudge { most } => match self.nudge_of(value) {
                 0 => "0".to_owned(),
-                late if late > 0 => format!("+{late:X}"),
-                early => format!("-{:X}", early.unsigned_abs()),
+                nudge => nudge_text(nudge, most),
             },
             _ => format!("{value:02X}"),
         }
@@ -408,20 +419,20 @@ impl ShapeColumn {
         shown.join(" ")
     }
 
-    /// A value typed for this column, kept in its range: a note's name, a nudge as a sign and a
-    /// hex digit, or anything else in hex.
+    /// A value typed for this column, kept in its range: a note's name, a nudge as a sign and one
+    /// or two hex digits, or anything else in hex.
     pub fn parse(self, text: &str) -> Option<u8> {
         let text = text.trim();
         match self {
             Self::Note { .. } => parse_note(text),
-            Self::Nudge => {
-                let (sign, digit) = match text.as_bytes().first()? {
+            Self::Nudge { most } => {
+                let (sign, digits) = match text.as_bytes().first()? {
                     b'-' => (-1, &text[1..]),
                     b'+' => (1, &text[1..]),
                     _ => (1, text),
                 };
-                let size = i8::from_str_radix(digit, 16).ok()?;
-                Some(((sign * size).clamp(-MAX_NUDGE, MAX_NUDGE) + MAX_NUDGE) as u8)
+                let size = u8::from_str_radix(digits, 16).ok()?.min(most.max(0) as u8) as i8;
+                Some((sign * size + most) as u8)
             }
             _ => u8::from_str_radix(text, 16)
                 .ok()
@@ -437,7 +448,7 @@ impl ShapeColumn {
             Self::Note {
                 writes: Some(_), ..
             } => vec![Where::AllRows, Where::Every(4), Where::Chance(50), EUCLID],
-            Self::Note { .. } | Self::Velocity | Self::Nudge | Self::Length => {
+            Self::Note { .. } | Self::Velocity | Self::Nudge { .. } | Self::Length => {
                 vec![Where::Notes, Where::Every(4), Where::Chance(50), EUCLID]
             }
             Self::Fx { .. } => vec![
@@ -462,7 +473,7 @@ impl ShapeColumn {
                 _ => None,
             },
             Self::Velocity => note.then(|| step.velocity.unwrap_or(MAX_VELOCITY)),
-            Self::Nudge => note.then(|| (step.nudge + MAX_NUDGE) as u8),
+            Self::Nudge { most } => note.then(|| (step.nudge.clamp(-most, most) + most) as u8),
             Self::Length => step.length().filter(|_| note),
             Self::Fx { slot, command } => step
                 .fx
@@ -491,7 +502,7 @@ impl ShapeColumn {
             Self::Note {
                 writes: Some(_), ..
             } => step.note == Note::Empty,
-            Self::Note { .. } | Self::Velocity | Self::Nudge | Self::Length => {
+            Self::Note { .. } | Self::Velocity | Self::Nudge { .. } | Self::Length => {
                 matches!(step.note, Note::On(_))
             }
             Self::Fx { slot, command } => step
@@ -513,8 +524,6 @@ impl ShapeColumn {
     }
 }
 
-/// The values a nudge takes, held from 0: as many 24ths early as late, and on the grid.
-const NUDGES: u8 = 2 * MAX_NUDGE as u8;
 
 /// A note's name as the grid shows it, like `C-3` or `C#3`, or more loosely, like `c3`, `c-3` or
 /// `c#3`.
@@ -1832,7 +1841,7 @@ mod tests {
         };
         assert!(CHROMATIC.fills().contains(&FillKind::Multiply));
         assert!(fx.fills().contains(&FillKind::Multiply));
-        for column in [VEL, ShapeColumn::Nudge, ShapeColumn::Length] {
+        for column in [VEL, ShapeColumn::Nudge { most: 11 }, ShapeColumn::Length] {
             assert!(!column.fills().contains(&FillKind::Multiply));
         }
     }
@@ -1845,7 +1854,7 @@ mod tests {
             "C-3 -- +2 --- --- ---",
             "C-3 -- SGL1 40 --- --- ---",
         ]);
-        let nudge = ShapeColumn::Nudge;
+        let nudge = ShapeColumn::Nudge { most: 11 };
         let out = values(&steps, all(&steps), nudge, &ramp(8, 14, 0, 0));
         assert_eq!(out, [(0, 8), (2, 12), (3, 14)]);
         assert_eq!(nudge.show(8), "-3");
@@ -1859,6 +1868,20 @@ mod tests {
         nudge.write(&mut step, 8);
         assert_eq!(step.nudge, -3);
         assert_eq!(default_ends(&steps, all(&steps), nudge), (11, 13));
+
+        // On a track at a quarter, a nudge goes to `2F` either way, shown with two digits.
+        let slow = ShapeColumn::Nudge { most: 47 };
+        assert_eq!(slow.highest(), 94);
+        assert_eq!(slow.show(47 - 11), "-0B");
+        assert_eq!(slow.show(94), "+2F");
+        assert_eq!(slow.parse("-2f"), Some(0));
+        assert_eq!(slow.parse("+30"), Some(94), "kept at 2F");
+        assert_eq!(slow.parse("+B"), Some(58));
+        let mut step = steps[2].clone();
+        assert_eq!(slow.value(&step), Some(49), "+2 is the same time on every track");
+        slow.write(&mut step, 0);
+        assert_eq!(step.nudge, -47);
+        assert_eq!(nudge.value(&step), Some(0), "kept to a sixteenth's range");
 
         // A length fills every note, and a transform leaves `--` as it is.
         let length = ShapeColumn::Length;

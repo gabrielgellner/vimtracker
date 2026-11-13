@@ -9,13 +9,13 @@
 
 use super::mix;
 use super::{
-    FillKind, Ladder, NUDGES, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, follow, walk,
+    FillKind, Ladder, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, follow, walk,
 };
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
 use crate::scale::Scale;
 use crate::selection::StepRange;
-use crate::step::{FxSlot, Gate, GateKind, MAX_NOTE, MAX_NUDGE, MIN_NOTE, Mark, Note, Step};
+use crate::step::{FxSlot, Gate, GateKind, MAX_NOTE, MIN_NOTE, Mark, Note, Step};
 
 /// What a shape leaves in its column on a row: a small value of its own, never a `Step`, whose FX
 /// are a `Vec`, so a buffer of them can be made ahead and filled on the audio thread.
@@ -40,7 +40,7 @@ pub enum GenCell {
         fx: [FxSlot; FX_SLOTS],
     },
     Velocity(u8),
-    /// A nudge, in 24ths of a step either way.
+    /// A nudge, in 24ths of a sixteenth either way.
     Nudge(i8),
     /// A whole gate cell, with the length written into it.
     Gate(Gate),
@@ -193,7 +193,7 @@ impl ShapeColumn {
                 gate: step.gate,
             },
             Self::Velocity => GenCell::Velocity(whole),
-            Self::Nudge => GenCell::Nudge(whole.min(NUDGES) as i8 - MAX_NUDGE),
+            Self::Nudge { .. } => GenCell::Nudge(self.nudge_of(whole)),
             Self::Length => GenCell::Gate(Gate {
                 length: Some(whole),
                 ..step.gate.unwrap_or_default()
