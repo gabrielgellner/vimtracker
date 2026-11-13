@@ -320,6 +320,7 @@ mod tests {
             grids,
             random: crate::shape::Random::default(),
             vary: 0,
+            variation: crate::shape::Variation::default(),
         }
     }
 

@@ -80,9 +80,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         let steps = panel.base_steps(part);
         let shape = panel.shape_of(nth);
         let written = written_from(steps, part.range, part.column, &shape, source);
-        // A `Follow` and `Grids` write every row, rests and all, so their count is of the notes,
-        // and `Multiply`'s of the rhythm it leaves.
-        filled += if matches!(shape.kind, FillKind::Follow | FillKind::Grids) {
+        // A `Follow`, `Grids` and a `Variation` write every row, rests and all, so their count is
+        // of the notes, and `Multiply`'s of the rhythm it leaves.
+        filled += if matches!(
+            shape.kind,
+            FillKind::Follow | FillKind::Grids | FillKind::Variation
+        ) {
             written
                 .iter()
                 .filter(|(_, step)| matches!(step.note, Note::On(_)))
@@ -139,6 +142,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         }
         lines.push(Line::from(line));
     }
+    let too_few = panel.too_few_notes();
     let hint = match panel.shape.kind {
         FillKind::Random | FillKind::Walk | FillKind::Pink if app.mode == Mode::Shape => {
             "~ swap  r reroll"
@@ -160,6 +164,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         FillKind::Grids if panel.shape.grids.part.is_none() => "Each track plays its own part",
         FillKind::Grids if panel.shape.grids.chaos > 0 => "r rolls the chaos",
         FillKind::Grids => "A density adds the strongest hits first",
+        FillKind::Variation => match &too_few {
+            Some(why) => why.as_str(),
+            None if app.mode == Mode::Shape => "r another  Order 3 copies closely",
+            None => "Learned from the notes there",
+        },
         FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => match panel.column {
             ShapeColumn::Note { scale, .. } if scale.on => "Bits of each degree, kept in the scale",
             _ => "The values there, as bits",
