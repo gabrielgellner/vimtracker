@@ -767,6 +767,7 @@ fn multiply(factor: u8, place: Where) -> Shape {
         bits: Bits {
             factor,
             masks: false,
+            ..Bits::default()
         },
         ..ramp(0, 0, place)
     }
@@ -826,4 +827,40 @@ fn a_live_multiply_on_an_fx_column_moves_the_commands() {
     assert_eq!(after[1], before[0], "and row 2 has it");
     assert_eq!(after[4], before[2]);
     assert_eq!(after[5], before[4]);
+}
+
+#[test]
+fn a_live_bit_transform_rerenders_on_new_notes_and_saves_its_bits() {
+    let start = song_with(&[
+        "C-3 35 --- --- ---",
+        EMPTY,
+        "C-3 41 --- --- ---",
+        "C-3 7F --- --- ---",
+    ]);
+    let mask = |keep| Shape {
+        kind: FillKind::MaskBits,
+        bits: Bits {
+            keep,
+            ..Bits::default()
+        },
+        ..ramp(0, 0, Where::Notes)
+    };
+    let live = generate(&start, ShapeColumn::Velocity, all(4), mask(0xF0));
+    assert_eq!(velocities(&live), ["30", "--", "40", "70"]);
+    // Kept to other bits, it works from the velocities under it.
+    let odd = reshape(&live, 0, mask(0x0F));
+    assert_eq!(velocities(&odd), ["05", "--", "01", "0F"]);
+    // A note added under it is masked too, from the velocity it was given.
+    let added = set_note(&odd, 1, Note::On(60));
+    assert_eq!(phrase(&added).generators().len(), 1);
+    assert_ne!(velocities(&added)[1], "--");
+    let folder = std::env::temp_dir().join(format!("vt-bits-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&folder);
+    save_song(&folder, &added).unwrap();
+    let text = fs::read_to_string(folder.join("song.ron")).unwrap();
+    let loaded = load_song(&folder).unwrap();
+    let _ = fs::remove_dir_all(&folder);
+    assert!(text.contains("keep"), "{text}");
+    assert_eq!(phrase(&loaded), phrase(&added));
+    assert_eq!(phrase(&loaded).generators()[0].shape, mask(0x0F));
 }
