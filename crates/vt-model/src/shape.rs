@@ -730,6 +730,75 @@ pub struct Shape {
     /// Where a `Grids` fill reads its map, and the part it plays. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Grids::is_default")]
     pub grids: Grids,
+    /// How many passes each of its variations lasts, a new seed each time: `0` for none, the
+    /// seed every pass, as written. Only a shape that [draws](Shape::draws) varies. Saved only
+    /// once it's set.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub vary: u8,
+}
+
+fn is_zero(value: &u8) -> bool {
+    *value == 0
+}
+
+/// The choices of `Vary`, as passes each variation lasts: none, then a new one each pass, every
+/// two, four or eight.
+pub const VARIES: [u8; 5] = [0, 1, 2, 4, 8];
+
+/// Mixed into a pass's seed, so it isn't any track's (`track_seed`).
+const PASS_KEY: u64 = 0x7A55_0000;
+
+impl Shape {
+    /// Whether anything it writes is drawn from its seed, so another seed would write something
+    /// else: a random fill, a walk, `1/f`, `Acid`, `Shuffle`, `Grids`' chaos or a random wave, or
+    /// rows chosen by chance.
+    pub fn draws(&self) -> bool {
+        let random_wave =
+            self.kind == FillKind::Wave && matches!(self.wave, Wave::Random | Wave::Smooth);
+        random_wave
+            || matches!(self.place, Where::Chance(_)) && self.kind.has_where()
+            || matches!(
+                self.kind,
+                FillKind::Random
+                    | FillKind::Walk
+                    | FillKind::Pink
+                    | FillKind::Acid
+                    | FillKind::Shuffle
+                    | FillKind::Grids
+            )
+    }
+
+    /// Whether it plays a variation of its own on some passes, so the engine renders it.
+    pub fn varies(&self) -> bool {
+        self.vary > 0 && self.draws()
+    }
+
+    /// The shape a pass of its phrase plays, counted from 0: itself unless it [varies], and
+    /// then with each `vary` passes a seed of their own, mixed from its seed and which of them
+    /// it is, as `r` would roll it (with `Acid`'s pitches kept, only the second die). The first
+    /// is the seed as written, so what's written is what the first pass plays, and since it's
+    /// worked out from the pass alone, a render repeats and playing from anywhere hears what
+    /// playing to there would.
+    ///
+    /// [varies]: Shape::varies
+    pub fn on_pass(&self, pass: i64) -> Shape {
+        if !self.varies() {
+            return *self;
+        }
+        let which = pass.div_euclid(i64::from(self.vary));
+        if which == 0 {
+            return *self;
+        }
+        // Mixed rather than added, as `track_seed` is, so the next pass isn't the rows moved on.
+        let new = |seed: u64| seed ^ mix(PASS_KEY, which as usize);
+        let mut shape = *self;
+        if shape.kind == FillKind::Acid && shape.acid.keep {
+            shape.acid.roll = new(shape.acid.roll);
+        } else {
+            shape.seed = new(shape.seed);
+        }
+        shape
+    }
 }
 
 /// Bias: bends `t` toward 1 for `a` above 0.5.
@@ -1016,6 +1085,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids: Grids::default(),
+            vary: 0,
         }
     }
 
@@ -1983,5 +2053,62 @@ mod tests {
             "--- -- cut:30 --- ---",
         ]);
         assert_eq!(default_ends(&steps, all(&steps), CUT), (0x10, 0x30));
+    }
+
+    /// Each `vary` passes play a seed of their own, the first the one written, worked out from the
+    /// pass alone; a shape that draws nothing from its seed, or has `Vary` off, plays as written.
+    #[test]
+    fn a_varying_shape_has_a_seed_for_each_group_of_passes_the_first_its_own() {
+        let random = Shape {
+            kind: FillKind::Random,
+            vary: 1,
+            ..ramp(0x10, 0x70, 0, 0)
+        };
+        assert_eq!(random.on_pass(0), random);
+        let seeds: Vec<u64> = (0..8).map(|pass| random.on_pass(pass).seed).collect();
+        for (pass, seed) in seeds.iter().enumerate() {
+            let others = seeds.iter().filter(|other| *other == seed).count();
+            assert_eq!(others, 1, "pass {pass}'s seed is its own");
+            assert_eq!(
+                random.on_pass(pass as i64).seed,
+                *seed,
+                "and the same again"
+            );
+        }
+        let fours = Shape { vary: 4, ..random };
+        let groups: Vec<u64> = (0..12).map(|pass| fours.on_pass(pass).seed).collect();
+        assert!(groups[..4].iter().all(|seed| *seed == random.seed));
+        assert!(groups[4..8].iter().all(|seed| *seed == groups[4]));
+        assert_ne!(groups[4], random.seed);
+        assert_ne!(groups[8], groups[4]);
+        assert_eq!(
+            Shape { vary: 0, ..random }.on_pass(5),
+            Shape { vary: 0, ..random }
+        );
+        // Another written seed varies elsewhere.
+        assert_ne!(
+            Shape { seed: 9, ..random }.on_pass(3).seed,
+            random.on_pass(3).seed
+        );
+        let ramp = Shape {
+            vary: 1,
+            ..ramp(0x10, 0x70, 0, 0)
+        };
+        assert!(!ramp.draws());
+        assert_eq!(ramp.on_pass(3), ramp, "a ramp has nothing to vary");
+        let chance = Shape {
+            place: Where::Chance(50),
+            ..ramp
+        };
+        assert_ne!(chance.on_pass(3), chance, "rows chosen by chance vary");
+        // With its pitches kept, `Acid` varies only its second die, as `r` rolls only that.
+        let mut acid = Shape {
+            kind: FillKind::Acid,
+            ..random
+        };
+        acid.acid.keep = true;
+        let varied = acid.on_pass(2);
+        assert_eq!(varied.seed, acid.seed);
+        assert_ne!(varied.acid.roll, acid.acid.roll);
     }
 }

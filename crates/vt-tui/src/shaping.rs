@@ -635,6 +635,7 @@ impl App {
                     part: alone.then_some(first.drum),
                     ..Grids::default()
                 },
+                vary: 0,
             },
             row: GenParam::Fill,
             typing: None,

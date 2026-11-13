@@ -176,6 +176,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids: vt_model::shape::Grids::default(),
+            vary: 0,
         };
         let column = ShapeColumn::Note {
             scale: vt_model::scale::Scale::default(),

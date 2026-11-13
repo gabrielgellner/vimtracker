@@ -765,6 +765,10 @@ the scratch has room for a whole phrase of cells for each track.)
   one. A new setting, `Vary`, would give each pass a seed of its own, `mix(seed, pass)`, the way
   `track_seed` mixes rather than adds (question 9).
 
+(Built in #624 as decision 293 says: `Vary` is `Once`, `Each pass` or every 2, 4 or 8 passes, the
+first group of passes playing the written seed, and the engine reports each pass of one that
+varies as it's first heard, with the seeds it played, for `Space g a` to keep.)
+
 ### 7.4 What's sampled when
 
 A generator's settings, as heard, are the `Shape`'s with its macros' maps put in, then any

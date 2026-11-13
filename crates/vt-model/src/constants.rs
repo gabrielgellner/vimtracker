@@ -77,6 +77,9 @@ pub const TELEMETRY_QUEUE: usize = 64;
 /// The pitch each mod slot moved a row's note by, on their way to the app for `Space g A`. New
 /// ones are dropped when it is full.
 pub const NOTE_PITCH_QUEUE: usize = 256;
+/// Which pass each generator that varies was heard on, on their way to the app for `Space g a` on
+/// the Gen page. New ones are dropped when it is full.
+pub const GEN_PASS_QUEUE: usize = 256;
 /// Samples of the main output on their way to the scope, about a third of a second at 48 kHz. New
 /// ones are dropped when it is full.
 pub const SCOPE_QUEUE: usize = 16_384;

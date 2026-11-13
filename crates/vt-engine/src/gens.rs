@@ -1,11 +1,12 @@
-//! Live generators as the engine plays them (decision 288).
+//! Live generators as the engine plays them (decisions 288 and 293).
 //!
 //! At rest, what's heard is what's written: a phrase holds what each of its generators renders, so
 //! the engine reads it as it reads any other. A generator whose settings the engine holds at other
-//! numbers than its `Shape`'s is moving, and the engine renders its span again from the shape as
-//! heard, with the edit thread's own [`render_into`], and lays its cells over each row it reads
-//! through a [`RowView`]. What it renders is kept beside the inputs it rendered from, so a row read
-//! with the same ones takes its cell from what's kept, and only a change renders the span again.
+//! numbers than its `Shape`'s is moving, and so is one whose `Vary` gives a pass a seed of its own
+//! ([`Shape::on_pass`]): the engine renders its span again from the shape as heard, with the edit
+//! thread's own [`render_into`], and lays its cells over each row it reads through a [`RowView`].
+//! What it renders is kept beside the inputs it rendered from, so a row read with the same ones
+//! takes its cell from what's kept, and only a change renders the span again.
 //!
 //! Nothing here allocates on the audio thread: each version brings a [`GenScratch`] made ahead on
 //! the edit thread with room for every track's runs and cells, which the engine takes as it takes
@@ -165,6 +166,27 @@ struct GenRun {
     pass: i64,
     /// How many times it has rendered since the version came.
     renders: u32,
+    /// The pass it was last heard on while it varies, and what it played then, if that's waiting
+    /// to be reported.
+    told: Option<i64>,
+    report: Option<GenPass>,
+}
+
+/// Which pass a generator that varies was heard on, and the seeds it played it with, as its row
+/// first played on that pass: what `Space g a` on the Gen page keeps (decision 293). It's reported
+/// for each live generator whose `Vary` is on, whether that pass is the written one or not, on a
+/// queue of its own (`GEN_PASS_QUEUE`), as `NotePitch` is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GenPass {
+    pub phrase: u32,
+    /// Its place in its phrase's list.
+    pub generator: usize,
+    pub column: ShapeColumn,
+    /// Which pass of its phrase, or of its lane's loop, counted from 0.
+    pub pass: i64,
+    /// The seed it played the pass with, and `Acid`'s second die.
+    pub seed: u64,
+    pub roll: u64,
 }
 
 /// A track's share of the scratch: room for the most runs and cells any one of its phrases needs,
@@ -172,6 +194,8 @@ struct GenRun {
 #[derive(Debug, Clone, Copy, Default)]
 struct Room {
     phrase: Option<u32>,
+    /// Whether a generator of one of its phrases varies, so it's heard moving with nothing held.
+    varies: bool,
     runs: usize,
     most_runs: usize,
     cells: usize,
@@ -228,6 +252,10 @@ impl GenScratch {
         let mut rooms = Vec::with_capacity(song.tracks.len());
         let (mut runs, mut cells) = (0, 0);
         for track in &song.tracks {
+            let varies = track
+                .phrases
+                .values()
+                .any(|phrase| phrase.generators().iter().any(|g| g.heard().varies()));
             let (most_runs, most_cells) = track
                 .phrases
                 .values()
@@ -239,6 +267,7 @@ impl GenScratch {
                 .fold((0, 0), |(runs, cells), (r, c)| (runs.max(r), cells.max(c)));
             rooms.push(Room {
                 phrase: None,
+                varies,
                 runs,
                 most_runs,
                 cells,
@@ -283,14 +312,24 @@ impl GenScratch {
                 rendered: None,
                 pass: 0,
                 renders: 0,
+                told: None,
+                report: None,
             });
             cells += length;
         }
         Some(room)
     }
 
+    /// Whether a track has a generator that varies, so its rows want looking at with nothing held.
+    fn varies(&self, track: usize) -> bool {
+        self.rooms.get(track).is_some_and(|room| room.varies)
+    }
+
     /// A row as it's heard: its step as written, with the cells of each moving generator on it
-    /// laid over, each rendered first if what it's heard with has changed since it last was.
+    /// laid over, each rendered first if what it's heard with has changed since it last was. A
+    /// row `played`, not only looked at ahead, reports the pass of each generator on it that
+    /// varies, the first time it's heard on that pass.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn view(
         &mut self,
         song: &Song,
@@ -299,9 +338,10 @@ impl GenScratch {
         at: RowAt,
         step: &Step,
         passes: impl FnOnce() -> Passes,
+        played: bool,
     ) -> RowView {
         let mut view = RowView::of(step);
-        if !holds.any() {
+        if !holds.any() && !self.varies(at.track) {
             return view;
         }
         let Some(phrase) = song
@@ -344,13 +384,25 @@ impl GenScratch {
                 sources: &[],
                 source,
             };
-            let heard = holds.heard(written, &context);
             run.pass = match run.column {
                 ShapeColumn::Fx { slot, .. } if generator.span == Span::Lane => {
                     passes.lanes.get(slot).copied().unwrap_or(0)
                 }
                 _ => passes.rows,
             };
+            let held = holds.heard(written, &context);
+            let heard = held.on_pass(run.pass);
+            if played && held.varies() && run.told != Some(run.pass) {
+                run.told = Some(run.pass);
+                run.report = Some(GenPass {
+                    phrase: at.phrase,
+                    generator: run.generator,
+                    column: run.column,
+                    pass: run.pass,
+                    seed: heard.seed,
+                    roll: heard.acid.roll,
+                });
+            }
             if heard == *written {
                 run.rendered = None;
                 continue;
@@ -385,6 +437,22 @@ impl GenScratch {
             .flatten()
         {
             run.rendered = None;
+        }
+    }
+
+    /// Hand each of a track's generators' passes heard since the last call to `report`, for the
+    /// phrase it last read one of.
+    pub(crate) fn take_passes(&mut self, track: usize, mut report: impl FnMut(GenPass)) {
+        let Some(room) = self.rooms.get(track).copied() else {
+            return;
+        };
+        for run in self.runs[room.runs..room.runs + room.most_runs]
+            .iter_mut()
+            .flatten()
+        {
+            if let Some(pass) = run.report.take() {
+                report(pass);
+            }
         }
     }
 
@@ -466,6 +534,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids: vt_model::shape::Grids::default(),
+            vary: 0,
         }
     }
 
@@ -563,6 +632,46 @@ mod tests {
             .map(|heard| heard.renders)
             .sum();
         assert!(renders > 0, "the generators rendered");
+    }
+
+    /// The song with its `Acid` line given a new seed each pass, over a phrase of `rows`.
+    fn varying(rows: usize) -> Song {
+        let song = song(rows);
+        let mut shape = song.tracks[0].phrases[&0].generators()[0].shape;
+        shape.vary = 1;
+        let action = Action::Reshape {
+            track: 0,
+            phrase: 0,
+            generator: 0,
+            shape,
+        };
+        Arc::unwrap_or_clone(edit(&Arc::new(song), &action).expect("the edit applies"))
+    }
+
+    /// With `Vary` on and nothing held, rendering a pass, laying its cells, reporting the passes
+    /// and swapping versions allocate and free nothing.
+    #[test]
+    fn a_generator_that_varies_never_allocates_in_the_callback() {
+        let mut engine = Engine::new(RATE, version(&varying(16)));
+        engine.play_from(0);
+        let mut out = vec![0.0; BLOCK * 2];
+        let (mut violations, mut reported) = (0, 0);
+        let mut old = Vec::with_capacity(64);
+        for round in 0..600 {
+            let next = (round % 100 == 50).then(|| version(&varying(16 + round % 3)));
+            let ((), count) = forbidden(|| {
+                if let Some(next) = next {
+                    old.push(engine.swap(next));
+                }
+                engine.process(&mut out);
+                engine.take_gen_passes(0, |_| reported += 1);
+            });
+            violations += count;
+        }
+        assert_eq!(violations, 0);
+        assert!(reported > 2, "{reported} passes reported");
+        let acid = engine.generators_heard(0).find(|heard| heard.moving);
+        assert!(acid.is_some_and(|heard| heard.renders > 0));
     }
 
     /// Play a song's first `rows` rows a step at a time, holding the `Acid`'s density at another

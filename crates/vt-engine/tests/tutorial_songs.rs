@@ -164,6 +164,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         pink: Pink::default(),
         bits: Bits::default(),
         grids: Grids::default(),
+        vary: 0,
     }
 }
 

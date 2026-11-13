@@ -1,10 +1,10 @@
 //! The Gen page: the live generators of the phrase under the cursor, the one `gl` reopens, a
 //! full-width device each in the phrase view's column order, then an `Empty` device that makes
 //! another column live (the generators study, `docs/designs/generators-page.md`, §3). A device's
-//! title is its fill and its `Where`, or `Acid`'s `Pitches` and `Follow`'s `Source`, and its grid
-//! the fill's settings, both from the declared table, [`GenParam`]. Every turn goes through the
-//! `Reshape` the shape panel's does, so the column is written again as it turns, one undo step a
-//! press.
+//! title is its fill and its `Where`, or `Acid`'s `Pitches` and `Follow`'s `Source`, then `Vary`
+//! where it draws, and its grid the fill's settings, both from the declared table, [`GenParam`].
+//! Every turn goes through the `Reshape` the shape panel's does, so the column is written again as
+//! it turns, one undo step a press.
 
 use vt_model::action::Action;
 use vt_model::constants::FX_SLOTS;
@@ -322,19 +322,64 @@ impl App {
             .map_or_else(String::new, generator_label)
     }
 
-    /// `Space g a`: apply the generator, leaving its values as plain ones.
+    /// `Space g a`: apply the generator, leaving its values as plain ones; or, for one that varies,
+    /// keep the variation last heard, as its seed, with `Vary` back to `Once`, so it stays live.
     pub(super) fn apply_gen(&mut self) {
         let Some((phrase, generator, _)) = self.gen_here() else {
             self.status = "Space g a applies a generator: go to one first".to_owned();
             return;
         };
         let name = self.gen_name(phrase, generator);
+        if let Some(live) = self.live_generator(self.cursor.track, phrase, generator)
+            && live.generator.heard().varies()
+        {
+            self.keep_variation(phrase, generator, &name);
+            return;
+        }
         self.apply(&Action::ApplyGenerator {
             track: self.cursor.track,
             phrase,
             generator,
         });
         self.status = format!("{name} is applied, as plain values");
+    }
+
+    /// Keep the variation of a generator that varies last heard: the seeds it played that pass
+    /// become its own, and `Vary` goes back to `Once`, so the pass heard plays every pass and the
+    /// phrase holds it, as the Turing Machine's lock keeps the loop it has drifted to (decision
+    /// 293). The engine reports each pass as it's first heard; one reported from another
+    /// generator, on another column, isn't kept.
+    fn keep_variation(&mut self, phrase: u32, generator: usize, name: &str) {
+        let track = self.cursor.track;
+        let Some(live) = self.live_generator(track, phrase, generator) else {
+            return;
+        };
+        let heard = self
+            .heard_passes
+            .get(&(track, phrase, generator))
+            .filter(|heard| heard.column == live.generator.column)
+            .copied();
+        let Some(heard) = heard else {
+            self.status = format!(
+                "{name} hasn't been heard varying yet: play it, then Space g a keeps the pass heard"
+            );
+            return;
+        };
+        let mut shape = live.generator.shape;
+        shape.seed = heard.seed;
+        shape.acid.roll = heard.roll;
+        shape.vary = 0;
+        live.settle(&mut shape);
+        self.apply(&Action::Reshape {
+            track,
+            phrase,
+            generator,
+            shape,
+        });
+        self.status = format!(
+            "Kept {name} as pass {} played it: Vary is Once now",
+            heard.pass + 1
+        );
     }
 
     /// `dd`: take the generator away, putting back what was under it.

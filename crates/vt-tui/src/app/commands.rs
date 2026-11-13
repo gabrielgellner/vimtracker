@@ -359,8 +359,9 @@ impl App {
         self.auto_jump = song.auto_jump;
         self.send_live();
         self.history = History::new(Arc::new(song));
-        // Another song's rows aren't these.
+        // Another song's rows and generators aren't these.
         self.heard_pitches.clear();
+        self.heard_passes.clear();
         self.folder = folder;
         self.folds = Folds::default();
         self.cursor = Cursor {

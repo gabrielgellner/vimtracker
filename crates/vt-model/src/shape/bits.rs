@@ -223,6 +223,7 @@ mod tests {
                 ..Bits::default()
             },
             grids: crate::shape::Grids::default(),
+            vary: 0,
         }
     }
 

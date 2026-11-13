@@ -2194,6 +2194,7 @@ fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() 
             GenParam::Slide,
             GenParam::Pitches,
             GenParam::Where,
+            GenParam::Vary,
         ]
     );
     // A riff over the octave from C-3, an octave either way at most, plain notes at the typed
@@ -2315,6 +2316,7 @@ fn acid_on_notes_keeps_their_rhythm_and_with_keep_their_pitches() {
             GenParam::Slide,
             GenParam::Pitches,
             GenParam::Where,
+            GenParam::Vary,
         ]
     );
     keys(&mut app, "kkki0<Enter>");

@@ -16,7 +16,7 @@ use crate::step::Step;
 use super::{
     Acid, Bits, DEFAULT_RATE, DrumPart, EUCLID_HITS, Edge, FillKind, Grids, MAX_ACID_NOTES,
     MAX_BEND, MAX_DEPTH, MAX_FACTOR, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Pink, Shape, ShapeColumn,
-    Source, Values, WAVES, WaveRate, Where, default_step, first_note,
+    Source, VARIES, Values, WAVES, WaveRate, Where, default_step, first_note,
 };
 
 /// How far a small and a large step move a curve.
@@ -47,6 +47,8 @@ const FACTOR_JUMP: i32 = 4;
 /// How many columns and rows a generator's settings take on the Gen page.
 pub const GEN_COLUMNS: usize = 3;
 pub const GEN_ROWS: usize = 3;
+/// How many settings a generator's title on the Gen page has room for.
+pub const GEN_TITLE: usize = 4;
 
 /// What a generator's settings act on, which what some of them mean hangs on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,6 +131,7 @@ pub enum Choice {
     Where(Where),
     Source(Source),
     Part(DrumPart),
+    Vary(u8),
 }
 
 impl Choice {
@@ -141,6 +144,7 @@ impl Choice {
             Self::Where(place) => place.name().to_owned(),
             Self::Source(source) => source.to_string(),
             Self::Part(part) => part.name().to_owned(),
+            Self::Vary(passes) => vary_name(passes),
         }
     }
 
@@ -162,6 +166,7 @@ impl Choice {
             Self::Where(place) => shape.place = place,
             Self::Source(source) => shape.follow.source = source,
             Self::Part(part) => shape.grids.part = Some(part),
+            Self::Vary(passes) => shape.vary = passes,
         }
     }
 }
@@ -283,11 +288,14 @@ pub enum GenParam {
     Chance,
     Hits,
     Rotate,
+    /// How many passes each of its variations lasts, a new seed each time, for a shape that
+    /// draws from its seed: none, each pass, or every two, four or eight.
+    Vary,
 }
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 45] = [
+    pub const ALL: [Self; 46] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -333,6 +341,7 @@ impl GenParam {
         Self::Chance,
         Self::Hits,
         Self::Rotate,
+        Self::Vary,
     ];
 
     /// The name a song or a mapping stores it by, which never changes.
@@ -383,6 +392,7 @@ impl GenParam {
             Self::Chance => "chance",
             Self::Hits => "hits",
             Self::Rotate => "rotate",
+            Self::Vary => "vary",
         }
     }
 
@@ -439,6 +449,7 @@ impl GenParam {
             Self::Every | Self::Chance => "Amount",
             Self::Hits => "Hits",
             Self::Rotate => "Rotate",
+            Self::Vary => "Vary",
         }
     }
 
@@ -477,7 +488,8 @@ impl GenParam {
             | Self::Edge
             | Self::Masks
             | Self::Part
-            | Self::Rows => Units::Named,
+            | Self::Rows
+            | Self::Vary => Units::Named,
         }
     }
 
@@ -489,10 +501,11 @@ impl GenParam {
     /// choose. A `Follow` writes every row from its source, so it has no `Where`, and turns
     /// about a note only while it inverts. `Walk` has its `Step` and `Edge`, and `1/f` its
     /// `Depth`. `Multiply` reads the rhythm itself, so it has its `Factor` and `Masks` and no
-    /// `Where`; each bit transform has its one setting. `Grids` makes its own rhythm, so it has no `Where` either; it has the density of
-    /// its own part alone, or while the panel shapes several tracks, each taking its own part,
-    /// every part's and no `Part`; and its `Note` only where it `generates`, as a hit takes the
-    /// note there or the first one.
+    /// `Where`; each bit transform has its one setting. `Grids` makes its own rhythm, so it has
+    /// no `Where` either; it has the density of its own part alone, or while the panel shapes
+    /// several tracks, each taking its own part, every part's and no `Part`; and its `Note` only
+    /// where it `generates`, as a hit takes the note there or the first one. Only a shape that
+    /// draws from its seed has `Vary`.
     pub fn exists_for(self, shape: &Shape, generates: bool) -> bool {
         let kind = shape.kind;
         let grids = kind == FillKind::Grids;
@@ -556,21 +569,34 @@ impl GenParam {
             Self::Every => rows && matches!(shape.place, Where::Every(_)),
             Self::Chance => rows && matches!(shape.place, Where::Chance(_)),
             Self::Hits | Self::Rotate => rows && matches!(shape.place, Where::Euclid { .. }),
+            Self::Vary => shape.draws(),
         }
     }
 
     /// The settings in a generator's title on the Gen page, the ones that change what it is: its
     /// fill, then its `Where`, or for a `Follow`, the phrase it follows, and for `Acid`, its
-    /// `Pitches`, as the second die is a mode of the riff's. `Multiply` has its fill alone, and
-    /// `Grids` its part, which drum it is.
-    pub fn title(shape: &Shape) -> [Option<Self>; GEN_COLUMNS] {
-        match shape.kind {
-            FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None],
-            FillKind::Multiply => [Some(Self::Fill), None, None],
-            FillKind::Grids => [Some(Self::Fill), Some(Self::Part), None],
-            FillKind::Acid => [Some(Self::Fill), Some(Self::Where), Some(Self::Pitches)],
-            _ => [Some(Self::Fill), Some(Self::Where), None],
+    /// `Pitches`, as the second die is a mode of the riff's, `Multiply` its fill alone and `Grids`
+    /// its part, which drum it is; and last, for a shape that draws from its seed, `Vary`, what
+    /// it is from pass to pass.
+    pub fn title(shape: &Shape) -> [Option<Self>; GEN_TITLE] {
+        let mut title = match shape.kind {
+            FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None, None],
+            FillKind::Multiply => [Some(Self::Fill), None, None, None],
+            FillKind::Grids => [Some(Self::Fill), Some(Self::Part), None, None],
+            FillKind::Acid => [
+                Some(Self::Fill),
+                Some(Self::Where),
+                Some(Self::Pitches),
+                None,
+            ],
+            _ => [Some(Self::Fill), Some(Self::Where), None, None],
+        };
+        if let Some(free) = title.iter_mut().find(|place| place.is_none())
+            && Self::Vary.exists_for(shape, false)
+        {
+            *free = Some(Self::Vary);
         }
+        title
     }
 
     /// Where a shape's other settings sit on the Gen page, in columns of rows, top to bottom (the
@@ -785,6 +811,7 @@ impl GenParam {
                 1 => "1 bit".to_owned(),
                 turn => format!("{turn} bits"),
             },
+            Self::Vary => vary_name(shape.vary),
         }
     }
 
@@ -814,7 +841,7 @@ impl GenParam {
     pub fn typing(self, column: ShapeColumn) -> Typing {
         let hex = typed_in_hex(column);
         match self {
-            Self::Fill | Self::Wave | Self::Where | Self::Source => Typing::Listed,
+            Self::Fill | Self::Wave | Self::Where | Self::Source | Self::Vary => Typing::Listed,
             Self::Pitches
             | Self::Invert
             | Self::Reverse
@@ -856,6 +883,7 @@ impl GenParam {
                 .map(Choice::Source)
                 .collect(),
             Self::Part => DrumPart::ALL.into_iter().map(Choice::Part).collect(),
+            Self::Vary => VARIES.into_iter().map(Choice::Vary).collect(),
             _ => return None,
         })
     }
@@ -874,6 +902,7 @@ impl GenParam {
                 }
                 Choice::Source(source) => source == shape.follow.source,
                 Choice::Part(part) => Some(part) == shape.grids.part,
+                Choice::Vary(passes) => passes == shape.vary,
             })
     }
 
@@ -897,7 +926,7 @@ impl GenParam {
             Self::To => shape.to = stepped(column, shape.to, sign, large),
             Self::Curve => shape.curve = bent(shape.curve, by(BEND_NUDGE, BEND_JUMP)),
             Self::S => shape.s = bent(shape.s, by(BEND_NUDGE, BEND_JUMP)),
-            Self::Fill | Self::Wave | Self::Where | Self::Source | Self::Part => {
+            Self::Fill | Self::Wave | Self::Where | Self::Source | Self::Part | Self::Vary => {
                 let choices = self.choices(context).unwrap_or_default();
                 if !choices.is_empty() {
                     let at = self.chosen(shape, context).unwrap_or(0);
@@ -1098,6 +1127,7 @@ impl GenParam {
             Self::Flip => shape.bits.flip = Bits::default().flip,
             Self::Keep => shape.bits.keep = Bits::default().keep,
             Self::Turn => shape.bits.turn = Bits::default().turn,
+            Self::Vary => shape.vary = 0,
             Self::Hits => {
                 if let Where::Euclid { rotate, .. } = shape.place {
                     shape.place = Where::Euclid {
@@ -1264,7 +1294,8 @@ impl GenParam {
             | Self::Edge
             | Self::Masks
             | Self::Part
-            | Self::Rows => {}
+            | Self::Rows
+            | Self::Vary => {}
             Self::MapX
             | Self::MapY
             | Self::KickDensity
@@ -1323,6 +1354,8 @@ impl GenParam {
             Self::Rotate => (0, (open - 1).max(0)),
             Self::Notes => (1, i32::from(MAX_ACID_NOTES)),
             Self::Pitches => (0, 1),
+            // Its choices' places, worked out without listing them, so the engine can hold it.
+            Self::Vary => (0, VARIES.len() as i32 - 1),
         })
     }
 
@@ -1384,6 +1417,7 @@ impl GenParam {
                 i32::from(acid_chance(shape.acid, self)?)
             }
             Self::Pitches => i32::from(shape.acid.keep),
+            Self::Vary => VARIES.iter().position(|passes| *passes == shape.vary)? as i32,
         })
     }
 
@@ -1477,7 +1511,18 @@ impl GenParam {
             Self::Flip => shape.bits.flip = number as u8,
             Self::Keep => shape.bits.keep = number as u8,
             Self::Turn => shape.bits.turn = number as u8,
+            Self::Vary => shape.vary = VARIES[number as usize],
         }
+    }
+}
+
+/// How long each of a generator's variations lasts, as `Vary` reads: `Once` for none, as the seed
+/// written plays every pass.
+fn vary_name(passes: u8) -> String {
+    match passes {
+        0 => "Once".to_owned(),
+        1 => "Each pass".to_owned(),
+        passes => format!("Every {passes} passes"),
     }
 }
 
@@ -1597,6 +1642,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids: Grids::default(),
+            vary: 0,
         }
     }
 
@@ -1642,11 +1688,11 @@ mod tests {
         assert_eq!(of(FillKind::List, false), [Fill, Values, Run, Where]);
         assert_eq!(
             of(FillKind::Walk, false),
-            [Fill, From, To, Step, Edge, Run, Where]
+            [Fill, From, To, Step, Edge, Run, Where, Vary]
         );
         assert_eq!(
             of(FillKind::Pink, false),
-            [Fill, From, To, Depth, Run, Where]
+            [Fill, From, To, Depth, Run, Where, Vary]
         );
         assert_eq!(
             of(FillKind::Scale, false),
@@ -1664,14 +1710,14 @@ mod tests {
         assert_eq!(
             of(FillKind::Acid, true),
             [
-                Fill, From, To, Notes, Octave, Density, Accent, Slide, Pitches, Where
+                Fill, From, To, Notes, Octave, Density, Accent, Slide, Pitches, Where, Vary
             ]
         );
         let mut kept = shape(FillKind::Acid);
         kept.acid.keep = true;
         assert_eq!(
             GenParam::of(&kept, false),
-            [Fill, Octave, Accent, Slide, Pitches, Where]
+            [Fill, Octave, Accent, Slide, Pitches, Where, Vary]
         );
         let mut euclid = shape(FillKind::Alternate);
         euclid.place = crate::shape::Where::Euclid { hits: 3, rotate: 0 };
@@ -1680,7 +1726,13 @@ mod tests {
             [Fill, From, To, Run, Where, Hits, Rotate]
         );
         euclid.place = crate::shape::Where::Chance(50);
-        assert!(GenParam::of(&euclid, false).ends_with(&[Where, Chance]));
+        assert!(
+            GenParam::of(&euclid, false).ends_with(&[Where, Chance, Vary]),
+            "rows chosen by chance are drawn, so they vary"
+        );
+        let mut random = shape(FillKind::Wave);
+        random.wave = crate::lfo::Shape::Smooth;
+        assert!(GenParam::of(&random, false).ends_with(&[Where, Vary]));
         let mut follow = shape(FillKind::Follow);
         assert_eq!(
             GenParam::of(&follow, false),
@@ -1689,6 +1741,62 @@ mod tests {
         );
         follow.follow.invert = true;
         assert!(GenParam::of(&follow, false).contains(&Axis));
+    }
+
+    /// `Vary` lists its choices, goes round them, and as a number is their place, set and read
+    /// without listing them, so the engine can hold it.
+    #[test]
+    fn vary_is_a_list_of_how_many_passes_each_variation_lasts() {
+        let mut random = shape(FillKind::Random);
+        let velocity = context(ShapeColumn::Velocity);
+        let names: Vec<String> = GenParam::Vary
+            .choices(&velocity)
+            .unwrap()
+            .into_iter()
+            .map(Choice::name)
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "Once",
+                "Each pass",
+                "Every 2 passes",
+                "Every 4 passes",
+                "Every 8 passes"
+            ]
+        );
+        assert_eq!(GenParam::Vary.shown(&random, &velocity), "Once");
+        GenParam::Vary
+            .step(&mut random, &velocity, 1, false)
+            .unwrap();
+        assert_eq!(random.vary, 1);
+        GenParam::Vary
+            .step(&mut random, &velocity, -1, false)
+            .unwrap();
+        GenParam::Vary
+            .step(&mut random, &velocity, -1, false)
+            .unwrap();
+        assert_eq!(random.vary, 8, "it goes round");
+        assert_eq!(GenParam::Vary.bounds(&velocity), Some((0, 4)));
+        assert_eq!(GenParam::Vary.number(&random, &velocity), Some(4));
+        GenParam::Vary.set_number(&mut random, &velocity, 2);
+        assert_eq!(random.vary, 2);
+        assert_eq!(GenParam::Vary.typing(ShapeColumn::Velocity), Typing::Listed);
+        GenParam::Vary.reset(&mut random, &velocity, Starts::default());
+        assert_eq!(random.vary, 0);
+        // A ramp writes the same whatever its seed, so it has nothing to vary.
+        assert!(!GenParam::Vary.exists_for(&shape(FillKind::Ramp), false));
+        assert_eq!(
+            GenParam::title(&random),
+            [
+                Some(GenParam::Fill),
+                Some(GenParam::Where),
+                Some(GenParam::Vary),
+                None
+            ]
+        );
+        let acid = shape(FillKind::Acid);
+        assert_eq!(GenParam::title(&acid)[3], Some(GenParam::Vary));
     }
 
     #[test]

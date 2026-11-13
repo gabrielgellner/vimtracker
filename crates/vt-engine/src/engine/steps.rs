@@ -135,17 +135,19 @@ impl Engine {
             count,
             position,
         };
-        Some((position, self.view_row(index, read, row, step)))
+        Some((position, self.view_row(index, read, row, step, false)))
     }
 
     /// A stored row of the phrase a track is reading as it's heard: as written, with the cells of
-    /// any of its generators the engine is moving laid over, the row of a step or of a lane's.
+    /// any of its generators the engine is moving laid over, the row of a step or of a lane's. A
+    /// row `played`, rather than looked at before it plays, reports the passes heard on it.
     pub(super) fn view_row(
         &mut self,
         index: usize,
         read: Read,
         row: usize,
         step: &Step,
+        played: bool,
     ) -> RowView {
         let at = RowAt {
             track: index,
@@ -161,6 +163,7 @@ impl Engine {
             at,
             step,
             passes,
+            played,
         )
     }
 
@@ -199,10 +202,11 @@ impl Engine {
             let slot = match phrase.and_then(|phrase| Some((phrase, phrase.lane(number)?))) {
                 Some((phrase, lane)) => {
                     let at = lane.step_at(count + self.tracks[index].lane_offsets[number]);
-                    phrase
-                        .steps()
-                        .get(at)
-                        .and_then(|step| self.view_row(index, read, at, step).fx(number).copied())
+                    phrase.steps().get(at).and_then(|step| {
+                        self.view_row(index, read, at, step, false)
+                            .fx(number)
+                            .copied()
+                    })
                 }
                 None if first => view.fx(number).copied(),
                 None => None,
@@ -273,7 +277,7 @@ impl Engine {
             position,
         };
         let row_at = phrase.map_or(0, |phrase| phrase.start()) + position.step;
-        let step = self.view_row(index, read, row_at, step);
+        let step = self.view_row(index, read, row_at, step, true);
         // A row's later pulses repeat its note only on a `Multi`, and run only the note's own timing.
         let first = position.pulse == 0;
         let gate = step.gate_kind();
@@ -301,10 +305,11 @@ impl Engine {
                 Some((phrase, lane)) => {
                     let at = lane.step_at(count + self.tracks[index].lane_offsets[number]);
                     lane_steps[number] = Some(at);
-                    phrase
-                        .steps()
-                        .get(at)
-                        .and_then(|step| self.view_row(index, read, at, step).fx(number).copied())
+                    phrase.steps().get(at).and_then(|step| {
+                        self.view_row(index, read, at, step, true)
+                            .fx(number)
+                            .copied()
+                    })
                 }
                 None => step.fx(number).copied().filter(|slot| row_fx(slot)),
             };
