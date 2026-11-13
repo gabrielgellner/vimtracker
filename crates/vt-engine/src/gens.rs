@@ -331,7 +331,8 @@ impl GenScratch {
             let under = unders
                 .get(at.track, at.phrase, run.generator)
                 .unwrap_or_default();
-            let written = &generator.shape;
+            // What the phrase holds: the shape as its macros hold it by hand, if they do (decision 294).
+            let written = &generator.heard();
             let source = (written.kind == FillKind::Follow)
                 .then(|| song.source_phrase(written.follow.source))
                 .flatten()
