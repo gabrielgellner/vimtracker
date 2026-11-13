@@ -433,6 +433,14 @@ at each of its track's notes, `Hold` holds the value each note finds, and `One` 
 `Half` play one cycle or half of one from each note and stay there. Its `Fade` brings
 it in or takes it out over a length after each note, whatever the mode.
 
+A macro or an earlier slot can move an LFO's `Rate`, or a Steps slot's, and it speeds up
+or slows down from where it is rather than jumping, as Vital's and Surge's LFOs do. It
+counts on from where it was at each change of rate, by the song's ticks, so a render
+repeats and a synced rate never drifts against the bar. Playing, and each note that
+starts it, set it again from the song's position at the rate it has then: an LFO whose
+rate never moves is exactly where the song puts it, from anywhere, and one whose rate
+has moved is close to, not exactly, where playing up to there would put it.
+
 ```text
 notes:      C-3 ─────────   E-3 ───   OFF
 Env 2:      ╱╲___________   ╱╲____    ╲__          starts with each note

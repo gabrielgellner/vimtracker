@@ -8,7 +8,7 @@ use vt_model::action::Action;
 use vt_model::macros::{
     GEN_ZERO, GenColumn, MACROS, Macro, MacroMap, MacroTarget, top_value, valid_name,
 };
-use vt_model::settings::Kind;
+use vt_model::settings::{Kind, Owner};
 use vt_model::song::Track;
 
 use crate::app::App;
@@ -51,12 +51,17 @@ pub fn end_text(target: MacroTarget, value: u16) -> String {
     }
 }
 
-/// An end of a mapping in its setting's units, for the status line.
-fn end_shown(target: MacroTarget, value: u16) -> String {
-    match target.setting() {
-        Some(id) => id.entry().kind.shown(value),
-        None => (i32::from(value) - GEN_ZERO).to_string(),
+/// An end of a mapping in its setting's units, for the status line: a mod slot's `Rate` as the
+/// kind of rate the slot has.
+fn end_shown(track: &Track, target: MacroTarget, value: u16) -> String {
+    let Some(id) = target.setting() else {
+        return (i32::from(value) - GEN_ZERO).to_string();
+    };
+    match id.owner() {
+        (Owner::ModOwn(slot), at) => track.mods[slot].own_shown(at, value),
+        _ => None,
     }
+    .unwrap_or_else(|| id.entry().kind.shown(value))
 }
 
 /// A macro's name as the band and the lists show it: its own or its first mapping's, or
@@ -88,8 +93,8 @@ pub fn held_text(track: &Track, target: MacroTarget) -> Option<String> {
         "on macro {} {}, {} to {}{by_hand}",
         at + 1,
         macro_name(&track.macros[at], at),
-        end_shown(target, map.min),
-        end_shown(target, map.max)
+        end_shown(track, target, map.min),
+        end_shown(track, target, map.max)
     ))
 }
 
@@ -328,11 +333,11 @@ impl App {
         self.status = format!(
             "At 00 the macro sets {} to {}, at FF to {}; it's at {:02X}, so {} is {}{by_hand}",
             target.name_on(&track),
-            end_shown(target, map.min),
-            end_shown(target, map.max),
+            end_shown(&track, target, map.min),
+            end_shown(&track, target, map.max),
             held.value >> 8,
             target.name(),
-            end_shown(target, now)
+            end_shown(&track, target, now)
         );
     }
 

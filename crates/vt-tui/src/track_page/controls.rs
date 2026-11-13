@@ -183,6 +183,7 @@ fn own_place(field: ModField) -> Option<usize> {
         ModField::Length => 6,
         ModField::Mutate => 7,
         ModField::Smooth => 8,
+        ModField::Rate => 9,
         _ => return None,
     })
 }
