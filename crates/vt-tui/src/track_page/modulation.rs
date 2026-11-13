@@ -4,10 +4,14 @@
 //! its type, its type's mode if it has one, and its destination, and a switch, which `b` flips to
 //! hear the track without it. Each type states its grid here, by what its settings mean.
 
+use std::sync::Arc;
+
 use vt_model::action::Action;
 use vt_model::grid::Grid;
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
+use vt_model::settings::SettingId;
 use vt_model::song::Track;
+use vt_model::step::{MAX_NOTE, MIN_NOTE, Note};
 
 use crate::app::App;
 
@@ -230,5 +234,106 @@ impl App {
         } else {
             format!("{name} is back in")
         };
+    }
+
+    /// `Space g A`: write into the notes of the phrase here, or of the selection, the pitch the
+    /// track's Steps and LFO slots on `Pitch` moved each to the last time it was heard, and switch
+    /// those slots out, so it sounds the same, as one undo step (#569). The engine reports each
+    /// slot's move as each note starts (`NotePitch`), and this makes the edit. A move of part of a
+    /// semitone goes to the nearest note, as the Note column has no finer step.
+    pub(crate) fn bake_pitch_mods(&mut self) {
+        let selected = self.mode.is_visual().then(|| {
+            let selection = self.current_selection();
+            self.leave_selection(selection);
+            selection.range
+        });
+        let track = self.cursor.track;
+        let Some(phrase) = self.phrase_id() else {
+            self.status = "No phrase here to write the pitch into".to_owned();
+            return;
+        };
+        let song = Arc::clone(self.song());
+        let owner = &song.tracks[track];
+        let Some(steps) = owner.phrases.get(&phrase).map(|phrase| phrase.steps()) else {
+            return;
+        };
+        // Envelopes and Track slots on `Pitch` shape each note rather than choose it, so they
+        // stay; a slot switched out moves nothing.
+        let baked = |slot: &ModSlot| {
+            matches!(slot.kind, ModKind::Steps | ModKind::Lfo)
+                && slot.destination == Some(SettingId::PITCH)
+                && !slot.bypassed
+        };
+        if !owner.mods.iter().any(baked) {
+            self.status = "No Steps or LFO slot on Pitch to write into the notes".to_owned();
+            return;
+        }
+        let (first, last) = selected.map_or((0, steps.len().saturating_sub(1)), |range| {
+            (range.first, range.last.min(steps.len().saturating_sub(1)))
+        });
+        let mut actions = Vec::new();
+        let mut moved = [false; MOD_SLOTS];
+        let (mut heard, mut unheard) = (0, 0);
+        for (step, row) in steps.iter().enumerate().take(last + 1).skip(first) {
+            let Note::On(midi) = row.note else {
+                continue;
+            };
+            let Some(moves) = self.heard_pitches.get(&(track, phrase, step)) else {
+                unheard += 1;
+                continue;
+            };
+            heard += 1;
+            let mut by = 0.0;
+            for (at, slot) in owner.mods.iter().enumerate() {
+                if baked(slot) {
+                    by += moves[at];
+                    moved[at] |= moves[at].abs() >= 0.5;
+                }
+            }
+            let note = (f32::from(midi) + by)
+                .round()
+                .clamp(f32::from(MIN_NOTE), f32::from(MAX_NOTE)) as u8;
+            if note != midi {
+                actions.push(Action::SetNote {
+                    track,
+                    phrase,
+                    step,
+                    note: Note::On(note),
+                });
+            }
+        }
+        if heard == 0 {
+            self.status = "None of these notes has been heard yet: play them first".to_owned();
+            return;
+        }
+        let slots: Vec<usize> = (0..MOD_SLOTS).filter(|at| moved[*at]).collect();
+        if slots.is_empty() {
+            self.status = "No Steps or LFO slot on Pitch moved these notes".to_owned();
+            return;
+        }
+        for &slot in &slots {
+            actions.push(Action::SetMod {
+                track,
+                slot,
+                modulator: ModSlot {
+                    bypassed: true,
+                    ..owner.mods[slot]
+                },
+            });
+        }
+        self.apply(&Action::Batch(actions));
+        let names: Vec<String> = slots.iter().map(|at| format!("Mod {}", at + 1)).collect();
+        let (names, them) = match names.as_slice() {
+            [one] => (one.clone(), "it"),
+            [rest @ .., last] => (format!("{} and {last}", rest.join(", ")), "them"),
+            [] => unreachable!(),
+        };
+        let notes = if heard == 1 { "note" } else { "notes" };
+        let mut status =
+            format!("Wrote what {names} played into {heard} {notes}, and switched {them} out");
+        if unheard > 0 {
+            status.push_str(&format!("; {unheard} not heard yet stay as written"));
+        }
+        self.status = status;
     }
 }

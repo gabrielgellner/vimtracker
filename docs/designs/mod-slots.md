@@ -984,3 +984,12 @@ requests, Drum then LPG:
   track with a Track slot out again as each note starts, so it follows from the note's first frame.
 * **`Random`** rolls at every note in every slot, whatever its type, from a stream of the slot's
   own after `Mutate`'s.
+
+**As built for #569 (decision 270):**
+
+* **Writing a slot into the notes:** `Space g A` in the phrase view writes what the track's Steps
+  and LFO slots on `Pitch` moved each note to, the last time it was heard, into the Note column,
+  and switches those slots out, as one undo step. The engine reports each note's moves
+  (`NotePitch`) on a queue of its own.
+* **In scale from the first frame:** a track with a slot in scale on `Pitch` is worked out again
+  as each note starts, as one with a Track slot is, and a fresh voice takes that pitch at once.

@@ -749,6 +749,15 @@ pub struct RowKey {
     pub row: usize,
 }
 
+/// How far each mod slot moved a row's note on `Pitch` as it started, in semitones, as it was
+/// heard, `Pitch in scale`'s snap and a slot's switch included: what `Space g A` writes into the
+/// notes (#569). The row is counted from the phrase's first step, not its loop's.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NotePitch {
+    pub row: RowKey,
+    pub moves: [f32; MOD_SLOTS],
+}
+
 /// Which start of a track's chain, and which group of loops round it, a track's accumulators are
 /// counting in. They start again from the notes as written once it moves on.
 pub type Epoch = (u64, i64);
@@ -984,6 +993,14 @@ pub struct TrackState {
     /// Whether a note has started or been tied into since the modulation was last worked out,
     /// which a Track slot follows, so the engine works it out again before the note is heard.
     pub new_note: bool,
+    /// Whether the voice was started afresh since the modulation was last worked out, so one that
+    /// follows the note can give it its pitch from its first frame rather than slew to it.
+    pub fresh_voice: bool,
+    /// The row of a note just started, on a track with a slot on `Pitch`, whose moves the next
+    /// working out of the modulation reports, as that's the first to hear the note.
+    pub pitch_row: Option<RowKey>,
+    /// What each slot moved that note's pitch by, until the report takes it.
+    pitched: Option<NotePitch>,
     /// What the LFOs add to each held value, by setting. Separate from the held values, so a
     /// step's FX moves the centre and the LFO carries on around it.
     offsets: [f32; SettingId::COUNT],
@@ -1233,6 +1250,9 @@ impl TrackState {
             chain_pass: 0,
             noted: None,
             new_note: false,
+            fresh_voice: false,
+            pitch_row: None,
+            pitched: None,
             offsets: [0.0; SettingId::COUNT],
             offset_marks: [None; MOVED],
             synth: {
@@ -1300,6 +1320,11 @@ impl TrackState {
         self.new_note = true;
         self.voice.tie(note, glide_ms(self.held_glide));
         self.tell_slots_the_note();
+    }
+
+    /// What each slot moved the pitch of the last note started by, once, for the report.
+    pub fn take_note_pitch(&mut self) -> Option<NotePitch> {
+        self.pitched.take()
     }
 
     /// Tell the slots what note is playing, with the track's `Pitch` and its modulation, for an
@@ -1577,6 +1602,21 @@ impl TrackState {
             }
         }
         self.filter_moving = filter_moving;
+        // The note just started is heard from here, so what each slot moves its pitch by is
+        // reported, every path above having left what it added in `out`.
+        if let Some(row) = self.pitch_row.take() {
+            let on_pitch = |at: usize| track.mods[at].destination == Some(SettingId::PITCH);
+            self.pitched = Some(NotePitch {
+                row,
+                moves: std::array::from_fn(|at| {
+                    if on_pitch(at) {
+                        self.slots[at].out * 255.0
+                    } else {
+                        0.0
+                    }
+                }),
+            });
+        }
         // A different filter starts from silence rather than from another's state.
         if self.filter_type != track.filter {
             self.filter_type = track.filter;
@@ -1874,6 +1914,7 @@ impl TrackState {
             self.voice.retrigger(note);
         } else {
             self.voice = Voice::start(note, rate, from, self.pitch);
+            self.fresh_voice = true;
         }
         self.voice.set_synth(self.synth_settings());
         if self.voice.uses_noise() {

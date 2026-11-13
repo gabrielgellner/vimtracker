@@ -279,6 +279,9 @@ pub struct App {
     pub sample_images: Option<(u32, u32)>,
     /// What the cursor's track is playing with right now, and the track the engine reports.
     pub live: Option<LiveValues>,
+    /// What each mod slot moved each row's note by on `Pitch` the last time it was heard, by
+    /// track, phrase and row, in semitones, as the engine reports them, for `Space g A` (#569).
+    pub(crate) heard_pitches: HashMap<(usize, u32, usize), [f32; MOD_SLOTS]>,
     /// Every track's faders as they're heard: where the steps have them, and which a hand has
     /// taken over, as the engine last said, with what's been asked of it since (decision 174).
     pub(crate) faders: [Faders; MAX_TRACKS],
@@ -513,6 +516,7 @@ impl App {
             sample_page: crate::sample_page::SamplePage::default(),
             sample_images: None,
             live: None,
+            heard_pitches: HashMap::new(),
             faders: [Faders::default(); MAX_TRACKS],
             fader_wishes: Vec::new(),
             playheads: [None; PLAYHEADS],
@@ -966,6 +970,10 @@ impl App {
             .map_or([0.0; 2], |report| report.live.after_trim);
         for (held, level) in self.after_trim.iter_mut().zip(trimmed) {
             held.update(crate::meter::to_db(level), seconds);
+        }
+        while let Some((track, pitch)) = self.handle.note_pitch() {
+            let row = (track, pitch.row.phrase, pitch.row.row);
+            self.heard_pitches.insert(row, pitch.moves);
         }
         while let Some((track, state)) = self.handle.jam_change() {
             // A mute or solo waiting for the grid has landed, so the live controls follow it.
@@ -1503,6 +1511,7 @@ impl App {
             Cmd::Shape => self.open_shape(),
             Cmd::ReopenGenerator => self.reopen_generator(),
             Cmd::ApplyGenerator => self.apply_generator_here(),
+            Cmd::BakeMods => self.bake_pitch_mods(),
             Cmd::PickSample => self.open_default_sample_picker(),
             Cmd::PickKit => self.open_kit_picker(),
             Cmd::Replace => self.begin_replace(),
@@ -3188,6 +3197,8 @@ impl App {
         self.auto_jump = song.auto_jump;
         self.send_live();
         self.history = History::new(Arc::new(song));
+        // Another song's rows aren't these.
+        self.heard_pitches.clear();
         self.folder = folder;
         self.folds = Folds::default();
         self.cursor = Cursor {

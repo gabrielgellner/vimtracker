@@ -2145,3 +2145,219 @@ fn a_track_slots_map_is_sent_with_a_dot_at_the_last_note() {
     let (synced, _) = frame(&mut app, &mut graphics);
     assert!(synced.contains("a=T"));
 }
+
+/// Frames in a time round the 16-step phrase at 120 BPM.
+const LAP: usize = 16 * 6000;
+
+/// A short sine, so each note ends long before the next row.
+fn sine_pool() -> std::sync::Arc<vt_model::samples::SamplePool> {
+    let mut pool = vt_model::samples::SamplePool::default();
+    let frames = (0..2400)
+        .map(|frame| {
+            let value = (frame as f32 * 440.0 * std::f32::consts::TAU / 48_000.0).sin() * 0.5;
+            [value, value]
+        })
+        .collect();
+    pool.insert("sine", vt_model::sample::SampleData { frames });
+    std::sync::Arc::new(pool)
+}
+
+/// One track playing `C-3`, `E-3` and `G-3` on rows 0, 4 and 8 of 16, with `Mod 4` a Steps slot
+/// on `Pitch`, or `Pitch in scale` in C major, as the app hears it.
+fn melody(steps: Steps, depth: i16, in_scale: bool) -> (App, Realtime) {
+    use vt_engine::engine::Engine;
+    use vt_engine::link::connect;
+    use vt_engine::published::Published;
+    let mut song = vt_model::song::Song::new(1);
+    song.sample_on(0, "sine");
+    let phrase = std::sync::Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+    for (row, text) in [(0, "C-3"), (4, "E-3"), (8, "G-3")] {
+        *phrase.step_mut(row).unwrap() = format!("{text} -- --- --- ---").parse().unwrap();
+    }
+    song.scale = vt_model::scale::Scale {
+        on: in_scale,
+        root: 0,
+        kind: vt_model::scale::ScaleKind::Major,
+    };
+    song.tracks[0].mods[3] = ModSlot {
+        in_scale,
+        ..ModSlot::steps(Some(SettingId::PITCH), steps).with_depth(depth)
+    };
+    let samples = sine_pool();
+    let version = std::sync::Arc::new(Published::new(
+        std::sync::Arc::new(song.clone()),
+        std::sync::Arc::clone(&samples),
+    ));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    (App::new(song, None, samples, handle, 48_000), realtime)
+}
+
+/// Play from the top for this many frames, the app reading each report.
+fn hear(app: &mut App, realtime: &mut Realtime, frames: usize) {
+    app.handle
+        .send(vt_engine::link::Command::PlayFrom { step: 0 });
+    let mut out = vec![0.0; 1000 * 2];
+    for _ in 0..frames / 1000 {
+        realtime.process(&mut out);
+        app.tick();
+    }
+}
+
+/// A song rendered from the top, as many frames as asked.
+fn rendered(song: &vt_model::song::Song, frames: usize) -> Vec<f32> {
+    let version = std::sync::Arc::new(vt_engine::published::Published::new(
+        std::sync::Arc::new(song.clone()),
+        sine_pool(),
+    ));
+    let mut engine = vt_engine::engine::Engine::new(48_000, version);
+    engine.play_from(0);
+    let mut out = vec![0.0; frames * 2];
+    engine.process(&mut out);
+    out
+}
+
+/// The most two renders differ by, sample for sample.
+fn most_apart(a: &[f32], b: &[f32]) -> f32 {
+    a.iter()
+        .zip(b)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0, f32::max)
+}
+
+/// The notes on rows 0, 4 and 8.
+fn melody_notes(song: &vt_model::song::Song) -> Vec<Option<u8>> {
+    [0, 4, 8]
+        .map(|row| match song.tracks[0].phrases[&0].steps()[row].note {
+            vt_model::step::Note::On(note) => Some(note),
+            _ => None,
+        })
+        .to_vec()
+}
+
+#[test]
+fn space_g_capital_a_writes_what_a_steps_slot_played_on_pitch_into_the_notes() {
+    // Up 3, down 2 and up 5, one a note: in semitones with the scale off, and to the nearest of
+    // C major's notes with it on, `D-3` for `D#3` being the lower of two as near.
+    let moves = Steps {
+        values: std::array::from_fn(|step| [3, -2, 5][step % 3]),
+        length: 3,
+        mode: StepsMode::Note,
+        ..Steps::default()
+    };
+    for (in_scale, want) in [(false, [63, 62, 72]), (true, [62, 62, 72])] {
+        let (mut app, mut realtime) = melody(moves, 0xFF, in_scale);
+        let before = app.song().as_ref().clone();
+        press(&mut app, " gA");
+        assert_eq!(
+            app.status,
+            "None of these notes has been heard yet: play them first"
+        );
+        hear(&mut app, &mut realtime, LAP);
+        press(&mut app, " gA");
+        assert_eq!(
+            melody_notes(app.song()),
+            want.map(Some),
+            "in scale: {in_scale}"
+        );
+        let slot = app.song().tracks[0].mods[3];
+        assert!(slot.bypassed, "switched out");
+        assert_eq!(slot.steps, moves, "its settings are kept");
+        assert_eq!(
+            app.status,
+            "Wrote what Mod 4 played into 3 notes, and switched it out"
+        );
+        // It sounds as it did.
+        let (was, now) = (rendered(&before, 2 * LAP), rendered(app.song(), 2 * LAP));
+        assert!(was.iter().any(|sample| *sample != 0.0));
+        let apart = most_apart(&was, &now);
+        let at: Vec<usize> = was
+            .iter()
+            .zip(&now)
+            .enumerate()
+            .filter(|(_, (a, b))| (*a - *b).abs() > 1e-3)
+            .map(|(i, _)| i / 2)
+            .collect();
+        eprintln!("{:?} {}", &at[..at.len().min(5)], at.len());
+        assert!(apart < 1e-3, "in scale: {in_scale}, {apart}");
+        // One undo puts back the notes and the slot.
+        press(&mut app, "u");
+        assert_eq!(app.song().as_ref(), &before);
+    }
+}
+
+#[test]
+fn space_g_capital_a_writes_the_pass_just_heard_of_a_drift_and_only_the_selection() {
+    // Drawn again each time round, in scale, within an octave.
+    let drifting = Steps {
+        length: 3,
+        mode: StepsMode::Note,
+        mutate: 100,
+        ..Steps::default()
+    };
+    let (mut app, mut realtime) = melody(drifting, 0x0C, true);
+    let before = app.song().as_ref().clone();
+    hear(&mut app, &mut realtime, 2 * LAP);
+    press(&mut app, " gA");
+    let baked = app.song().as_ref().clone();
+    assert_ne!(melody_notes(&baked), [Some(60), Some(64), Some(67)]);
+    // The second time round, as it was heard, is what the notes now play every time round.
+    let (was, now) = (rendered(&before, 2 * LAP), rendered(&baked, 2 * LAP));
+    let apart = most_apart(&was[2 * LAP..], &now[2 * LAP..]);
+    assert!(apart < 1e-3, "{apart}");
+    assert!(
+        most_apart(&was[..2 * LAP], &now[..2 * LAP]) > 0.01,
+        "the first time round drifted elsewhere"
+    );
+
+    // A selection of the first two rows writes only theirs.
+    press(&mut app, "u");
+    press(&mut app, "ggV4j gA");
+    let written = melody_notes(app.song());
+    assert_eq!(written[..2], melody_notes(&baked)[..2]);
+    assert_eq!(written[2], Some(67), "outside it, as written");
+    assert!(app.song().tracks[0].mods[3].bypassed);
+}
+
+#[test]
+fn space_g_capital_a_leaves_envelopes_on_pitch_alone() {
+    let (mut app, _realtime) = app();
+    app.apply(&Action::SetMod {
+        track: 0,
+        slot: 0,
+        modulator: ModSlot::adsr(Some(SettingId::PITCH), vt_model::envelope::Adsr::default()),
+    });
+    press(&mut app, " gA");
+    assert_eq!(
+        app.status,
+        "No Steps or LFO slot on Pitch to write into the notes"
+    );
+}
+
+#[test]
+fn space_g_capital_a_writes_what_a_random_lfo_held_at_each_note_played_in_scale() {
+    // A new value at each note, held, within an octave, in scale.
+    let random = Lfo {
+        shape: Shape::Random,
+        rate: Rate::Note(240),
+        mode: LfoMode::Hold,
+        ..Lfo::default()
+    };
+    let (mut app, mut realtime) = melody(Steps::default(), 0, true);
+    let slot = ModSlot {
+        in_scale: true,
+        ..ModSlot::lfo(Some(SettingId::PITCH), random).with_depth(0x0C)
+    };
+    app.apply(&Action::SetMod {
+        track: 0,
+        slot: 3,
+        modulator: slot,
+    });
+    let before = app.song().as_ref().clone();
+    hear(&mut app, &mut realtime, 2 * LAP);
+    press(&mut app, " gA");
+    assert!(app.song().tracks[0].mods[3].bypassed);
+    assert_ne!(melody_notes(app.song()), [Some(60), Some(64), Some(67)]);
+    let (was, now) = (rendered(&before, 2 * LAP), rendered(app.song(), 2 * LAP));
+    let apart = most_apart(&was[2 * LAP..], &now[2 * LAP..]);
+    assert!(apart < 1e-3, "{apart}");
+}

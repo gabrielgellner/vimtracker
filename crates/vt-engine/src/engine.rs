@@ -36,8 +36,8 @@ use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::{Bank, Published, Span};
 use crate::timing::{Part as TimedPart, PartTimes, SlotTimes, Stopwatch};
 use crate::track_state::{
-    Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Epoch, Faders, Keys, LiveValues, Part,
-    PendingStep, Retrigger, RowKey, SongTime, TrackState, Worked, base_of,
+    Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Epoch, Faders, Keys, LiveValues,
+    NotePitch, Part, PendingStep, Retrigger, RowKey, SongTime, TrackState, Worked, base_of,
 };
 use crate::voice::{Cut, NoteOn, Voice};
 use vt_model::samples::SampleId;
@@ -1221,9 +1221,11 @@ impl Engine {
     }
 
     /// Work out again the modulation of each track a note has just started on, if one of its mod
-    /// slots is Track, which follows the note: its modulation was worked out as the note's step
-    /// began, before the note's pitch and velocity were, so this has it right from the note's
-    /// first frame rather than the next block's.
+    /// slots follows the note: a Track slot, or one in scale on `Pitch`, which moves from it. Its
+    /// modulation was worked out as the note's step began, before the note's pitch and velocity
+    /// were, so this has it right from the note's first frame rather than the next block's. A
+    /// voice started afresh takes the pitch at once, as it has played nothing to slew from, so a
+    /// note moved in scale is in tune from its start, as a note written there is.
     fn track_new_notes(&mut self) {
         if !self.tracks.iter().any(|state| state.new_note) {
             return;
@@ -1231,13 +1233,20 @@ impl Engine {
         let now = self.song_time();
         let stopped = self.transport == Transport::Stopped;
         for (index, state) in self.tracks.iter_mut().enumerate() {
+            let fresh = std::mem::take(&mut state.fresh_voice);
             if !std::mem::take(&mut state.new_note) {
                 continue;
             }
             if let Some(track) = self.current.song.tracks.get(index)
-                && track.mods.iter().any(|slot| slot.kind == ModKind::Track)
+                && track
+                    .mods
+                    .iter()
+                    .any(|slot| slot.kind == ModKind::Track || slot.goes_in_scale())
             {
                 state.modulate(track, index, now, stopped, &mut self.memory);
+                if fresh {
+                    state.voice.snap_pitch();
+                }
             }
         }
     }
@@ -1305,6 +1314,11 @@ impl Engine {
         if let Some(track) = self.current.song.tracks.get(index) {
             self.tracks[index].release_mods(track, now);
         }
+    }
+
+    /// What each mod slot moved the pitch of a track's last note started by, once, for the report.
+    pub fn take_note_pitch(&mut self, index: usize) -> Option<NotePitch> {
+        self.tracks.get_mut(index)?.take_note_pitch()
     }
 
     /// What a track is playing with right now. A sound track with nothing going through it isn't
@@ -2681,6 +2695,21 @@ impl Engine {
                 };
                 let velocity = velocity.min(u32::from(MAX_VELOCITY)) as u8;
                 let on = self.note_on(index, note, velocity, self.note_shape(index));
+                // A row's note on a track with a slot on `Pitch` has what the slots move it by
+                // reported, from the phrase's first step, for `Space g A` to write in.
+                if first
+                    && on.is_some()
+                    && owner
+                        .mods
+                        .iter()
+                        .any(|slot| slot.destination == Some(SettingId::PITCH))
+                {
+                    let start = phrase.map_or(0, |phrase| phrase.start());
+                    self.tracks[index].pitch_row = Some(RowKey {
+                        row: start + key.row,
+                        ..key
+                    });
+                }
                 match on {
                     // A `Hold` before it ties into this note, with no new attack.
                     Some(on) if tie => self.tracks[index].tie(on),
