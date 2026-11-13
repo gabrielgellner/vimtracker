@@ -8,6 +8,11 @@ It keeps two audio tracks in the open set, which it makes if they aren't there:
 - `vt bridge sink`, armed, recording the source track's output after its devices (`Post FX`, so
   before its fader and pan), which Live writes to a file.
 
+The source track's fader is kept at its bottom, so the test signals aren't heard through Live's
+master, and the sink's monitoring is off; as the sink takes the source before its fader, neither
+changes what's recorded, nor does the master's fader. The set's launch quantization is set to none
+while the bridge works, and what it was is kept for `remove` to put back.
+
 A request is one line of JSON over TCP on 127.0.0.1, and its answer is one line back,
 `{"ok": true, ...}` or `{"ok": false, "error": "..."}`:
 
@@ -19,6 +24,8 @@ A request is one line of JSON over TCP on 127.0.0.1, and its answer is one line 
   `"Overdrive"`, `true`): sets each and answers with what each shows now, and every other one's.
 - `render`, with `path` and `seconds`: plays the file through the source track, records the sink
   for that long, and answers with the recording's path once Live has written it.
+- `remove`: delete the two tracks, and put the set's launch quantization back as it was before the
+  bridge first changed it, so the set is as it was. The next request makes them again.
 
 Nothing here waits: Live calls `poll` about ten times a second from its main thread, and a
 request that takes time, such as a render, is a generator that yields until it's done. Everything
@@ -35,7 +42,7 @@ import time
 
 from . import values
 
-VERSION = 1
+VERSION = 2
 HOST = "127.0.0.1"
 PORT = 47364
 SOURCE = "vt bridge source"
@@ -81,6 +88,8 @@ class Bridge:
         self.listener = None
         self.connections = []
         self.rendering = False
+        # The set's launch quantization before the bridge first changed it, for `remove`.
+        self.saved_quantization = None
 
     # The server.
 
@@ -204,7 +213,11 @@ class Bridge:
                 raise Refused("a render is already running")
             self.rendering = True
             return self.render(request["path"], float(request["seconds"]))
-        raise Refused(f"no command called {command}; there are ping, load, parameters, set, render and reload")
+        if command == "remove":
+            return self.remove()
+        raise Refused(
+            f"no command called {command}; there are ping, load, parameters, set, render, reload and remove"
+        )
 
     def reload(self):
         """Read this module and `values` again from disk, so a change to the bridge takes without
@@ -235,6 +248,7 @@ class Bridge:
         source.current_monitoring_state = self.monitor_off
         if source.arm:
             source.arm = False
+        silence(source)
         kinds = list(sink.available_input_routing_types)
         kind = pick(kinds, SOURCE)
         if kind is None:
@@ -253,8 +267,29 @@ class Bridge:
         clear(sink)
         if not sink.arm:
             sink.arm = True
-        song.clip_trigger_quantization = self.no_quantization
+        if song.clip_trigger_quantization != self.no_quantization:
+            # Kept the first time only, so it's the set's own; `reload` keeps it.
+            if getattr(self, "saved_quantization", None) is None:
+                self.saved_quantization = song.clip_trigger_quantization
+            song.clip_trigger_quantization = self.no_quantization
         return source, sink
+
+    def remove(self):
+        """Delete the source and sink tracks and put back the launch quantization the bridge found,
+        leaving the set as it was before the bridge first worked in it."""
+        if self.rendering:
+            raise Refused("a render is running; remove the tracks once it's done")
+        song = self.song()
+        removed = []
+        for index in reversed(range(len(song.tracks))):
+            if song.tracks[index].name in (SOURCE, SINK):
+                removed.append(song.tracks[index].name)
+                song.delete_track(index)
+        saved = getattr(self, "saved_quantization", None)
+        if saved is not None:
+            song.clip_trigger_quantization = saved
+            self.saved_quantization = None
+        return {"removed": removed[::-1], "quantization": saved}
 
     def track(self, name):
         song = self.song()
@@ -430,6 +465,13 @@ def recording_state(track, slot):
         "playing": getattr(getattr(track, "canonical_parent", None), "is_playing", None),
     }
     return ", ".join(f"{name} {value}" for name, value in fields.items())
+
+
+def silence(track):
+    """Put a track's fader at its bottom, so it isn't heard, if it isn't there already."""
+    volume = getattr(getattr(track, "mixer_device", None), "volume", None)
+    if volume is not None and volume.value != volume.min:
+        volume.value = volume.min
 
 
 def chain(track):

@@ -119,10 +119,10 @@ fn the_overdrive_clips_evenly_and_its_mids_far_sooner_than_its_bass() {
         let rest = found[1..].iter().map(|h| h * h).sum::<f32>().sqrt();
         (db(rest / found[0]), db(found[1] / found[0]))
     };
-    let (mids, even) = thd(1000.0, 0.1);
-    let (bass, _) = thd(110.0, 0.1);
+    let (mids, even) = thd(1000.0, 0.2);
+    let (bass, _) = thd(110.0, 0.2);
     assert!(even < -60.0, "no 2nd harmonic, as its diodes match: {even}");
-    assert!(mids > -25.0, "a 1 kHz sine at -20 dBFS clips: {mids}");
+    assert!(mids > -25.0, "a 1 kHz sine at -14 dBFS clips: {mids}");
     assert!(
         bass < mids - 6.0,
         "110 Hz, under its gain branch, clips less: {bass} against {mids}"
@@ -140,6 +140,56 @@ fn more_amount_clips_the_overdrive_harder() {
         db(found[2] / found[0])
     };
     assert!(thd(0xFF) > thd(0x00) + 3.0, "{} {}", thd(0xFF), thd(0x00));
+}
+
+/// A quiet sine's gain through a pedal, in dB, too quiet to clip.
+fn small_signal_gain(state: &mut InsertState, hertz: f32) -> f32 {
+    let found = harmonics(&play(state, &sine(hertz, 0.0005, 0.5)), hertz);
+    db(found[0] / 0.0005)
+}
+
+#[test]
+fn the_overdrives_highs_fall_past_its_mids_as_live_pedals_do() {
+    // At `Amount` 00 and `Tone` 80 against Pedal's Overdrive at Drive 0% and Treble 0% (decision
+    // 266): its mids 7.3 dB up at 1 kHz, and 4 kHz 7.7 dB and 8 kHz 13.6 dB under them.
+    let gain =
+        |hertz| small_signal_gain(&mut pedal(DistortType::Overdrive, 0x00, 0x80, 0xFF), hertz);
+    let mids = gain(1000.0);
+    assert!((mids - 7.3).abs() < 1.5, "1 kHz: {mids}");
+    for (hertz, under) in [(4000.0, 7.7), (8000.0, 13.6)] {
+        let fall = mids - gain(hertz);
+        assert!(
+            (fall - under).abs() < 2.0,
+            "{hertz} Hz: {fall} under 1 kHz against {under}"
+        );
+    }
+}
+
+#[test]
+fn the_overdrives_tone_cuts_and_lifts_its_highs_about_as_far_either_way() {
+    // The tone stage's 220R and 1k: up to 15 dB either way at the top, as Pedal's Treble's 14 dB at
+    // 8 kHz, and nothing under its mids.
+    let gain = |tone: u8, hertz: f32| {
+        small_signal_gain(&mut pedal(DistortType::Overdrive, 0x80, tone, 0xFF), hertz)
+    };
+    let (dark, middle, bright) = (gain(0x00, 8000.0), gain(0x80, 8000.0), gain(0xFF, 8000.0));
+    assert!(
+        (10.0..16.0).contains(&(middle - dark)),
+        "cut: {}",
+        middle - dark
+    );
+    assert!(
+        (10.0..16.0).contains(&(bright - middle)),
+        "lift: {}",
+        bright - middle
+    );
+    let bass = |tone: u8| gain(tone, 100.0);
+    assert!(
+        (bass(0x00) - bass(0xFF)).abs() < 0.5,
+        "the bass: {} and {}",
+        bass(0x00),
+        bass(0xFF)
+    );
 }
 
 #[test]

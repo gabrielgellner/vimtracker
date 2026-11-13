@@ -1,0 +1,135 @@
+# Distort's `Overdrive` against Ableton Live's Pedal in its Overdrive mode, with Pedal's tone
+# controls neutral (#564): the harmonics each adds to a sine held at -60 to 0 dBFS, 6 dB apart, at
+# 110 Hz, under the 720 Hz where a Tube Screamer's gain branch starts, at 300 Hz and at 1 kHz, over
+# it, with `Amount` `00`, `40`, `80`, `C0` and `FF` against Drive 0, 25, 50, 75 and 100%.
+#
+#   uv run run.py specs/live-pedal-overdrive-drive.toml --report out/live-pedal-overdrive-drive.html
+
+rate = 48000
+
+[input]
+signal = "steps"
+frequency = 1000.0
+from = -60.0
+to = 0.0
+step = 6.0
+hold = 0.4
+
+[ours]
+effects = ["distort"]
+
+[ours.settings]
+1.distort.type = "Overdrive"
+1.distort.tone = 0x80
+1.distort.mix = 0xFF
+
+[reference]
+live = "Pedal"
+
+[reference.parameters]
+Type = "Overdrive"
+Output = "0 dB"
+Bass = "0 %"
+Mid = "0 %"
+Treble = "0 %"
+"Dry/Wet" = "100 %"
+
+[report]
+kind = "distortion"
+title = "Overdrive's drive against Live's Pedal"
+about = """
+Our `Overdrive` against Live's Pedal in its Overdrive mode, fully wet, its output at 0 dB and its \
+Bass, Mid and Treble at 0%: the level and harmonics each puts out for a sine held at -60 to \
+0 dBFS, 6 dB apart, at 110 Hz, 300 Hz and 1 kHz, with `Amount` `00`, `40`, `80`, `C0` and `FF` \
+against Drive 0, 25, 50, 75 and 100%.
+"""
+
+[[cases]]
+name = "amount-00-110Hz"
+ours = { 1.distort.amount = 0x00 }
+reference = { Drive = "0 %" }
+input = { frequency = 110.0 }
+
+[[cases]]
+name = "amount-40-110Hz"
+ours = { 1.distort.amount = 0x40 }
+reference = { Drive = "25 %" }
+input = { frequency = 110.0 }
+
+[[cases]]
+name = "amount-80-110Hz"
+ours = { 1.distort.amount = 0x80 }
+reference = { Drive = "50 %" }
+input = { frequency = 110.0 }
+
+[[cases]]
+name = "amount-C0-110Hz"
+ours = { 1.distort.amount = 0xC0 }
+reference = { Drive = "75 %" }
+input = { frequency = 110.0 }
+
+[[cases]]
+name = "amount-FF-110Hz"
+ours = { 1.distort.amount = 0xFF }
+reference = { Drive = "100 %" }
+input = { frequency = 110.0 }
+
+[[cases]]
+name = "amount-00-300Hz"
+ours = { 1.distort.amount = 0x00 }
+reference = { Drive = "0 %" }
+input = { frequency = 300.0 }
+
+[[cases]]
+name = "amount-40-300Hz"
+ours = { 1.distort.amount = 0x40 }
+reference = { Drive = "25 %" }
+input = { frequency = 300.0 }
+
+[[cases]]
+name = "amount-80-300Hz"
+ours = { 1.distort.amount = 0x80 }
+reference = { Drive = "50 %" }
+input = { frequency = 300.0 }
+
+[[cases]]
+name = "amount-C0-300Hz"
+ours = { 1.distort.amount = 0xC0 }
+reference = { Drive = "75 %" }
+input = { frequency = 300.0 }
+
+[[cases]]
+name = "amount-FF-300Hz"
+ours = { 1.distort.amount = 0xFF }
+reference = { Drive = "100 %" }
+input = { frequency = 300.0 }
+
+[[cases]]
+name = "amount-00-1kHz"
+ours = { 1.distort.amount = 0x00 }
+reference = { Drive = "0 %" }
+input = { frequency = 1000.0 }
+
+[[cases]]
+name = "amount-40-1kHz"
+ours = { 1.distort.amount = 0x40 }
+reference = { Drive = "25 %" }
+input = { frequency = 1000.0 }
+
+[[cases]]
+name = "amount-80-1kHz"
+ours = { 1.distort.amount = 0x80 }
+reference = { Drive = "50 %" }
+input = { frequency = 1000.0 }
+
+[[cases]]
+name = "amount-C0-1kHz"
+ours = { 1.distort.amount = 0xC0 }
+reference = { Drive = "75 %" }
+input = { frequency = 1000.0 }
+
+[[cases]]
+name = "amount-FF-1kHz"
+ours = { 1.distort.amount = 0xFF }
+reference = { Drive = "100 %" }
+input = { frequency = 1000.0 }

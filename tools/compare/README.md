@@ -146,6 +146,8 @@ edited.
 | `live-glue-detector` | `Glue` at 4:1 from a 100 Hz tone | Glue Compressor | static curve, unfitted |
 | `live-glue-clip` | `Glue`'s `Peak Clip` on and off, a 1 kHz sine stepped from -12 to +12 dBFS, with the output 12 dB up and at half dry, and a 2311 Hz sine for its aliases (#338) | Glue Compressor's `Peak Clip In` | THD and the 2nd and 3rd harmonics (`distortion`), which `Peak Clip` is fitted to |
 | `live-pedal-overdrive` | Distort's `Overdrive`, stepped levels at 110 Hz and 1 kHz | Live's Pedal, Overdrive | THD and the 2nd and 3rd harmonics (`distortion`) |
+| `live-pedal-overdrive-response` | `Overdrive` given a sweep too quiet to clip, at five `Amount`s and five `Tone`s | Pedal, Overdrive, at five Drives and Trebles, and its Bass and Mid at their ends | the EQ around the clip (`response`), which its tone stage is fitted to (decision 266) |
+| `live-pedal-overdrive-drive` | `Overdrive` at five `Amount`s, stepped levels from -60 dBFS at 110 Hz, 300 Hz and 1 kHz | Pedal, Overdrive, at five Drives | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `live-pedal-distortion` | Distort's `Distortion`, the same | Pedal, Distortion, and Dist OPAMP-21 | the same |
 | `live-pedal-riff` | the same song line through `Overdrive` and `Distortion` | Pedal in both modes | the long-term spectrum and dynamics (`spectrum`) |
 
@@ -379,7 +381,10 @@ input; Live's instruments aren't bridged.
 The bridge keeps two audio tracks in the open set, and makes them if they aren't there:
 `vt bridge source`, which plays the test file as an unwarped clip through the device under test,
 its only device, and `vt bridge sink`, armed, monitoring off, recording `vt bridge source` at
-`Post FX`, after its devices and before its fader and pan. For each case `live_bridge.py`:
+`Post FX`, after its devices and before its fader and pan. The source's fader is kept at its
+bottom, so the test signals aren't heard through Live's master; as the sink takes the source
+before that fader, neither it nor the master's fader changes what's recorded. For each case
+`live_bridge.py`:
 
 1. writes what Live plays into `out/live-cache/`: a quarter second of silence, a marker of one
    sample at -30 dBFS, a second of silence, the input, and a second more of silence;
@@ -406,15 +411,19 @@ samples long for a device that filters; ours isn't moved.
 
 `uv run live_bridge.py null` checks the path: a sweep at -6 dBFS through the probe with no device,
 which should come back at the same level, within 0.01 dB, and the same to under -90 dBFS once
-lined up. The other commands are `ping` and `params <device>`, which lists a device's parameters,
-their ranges and items, for writing a spec.
+lined up. The other commands are `ping`, `params <device>`, which lists a device's parameters,
+their ranges and items, for writing a spec, and `remove`, which deletes the two tracks and puts
+back the launch quantization the bridge set to none, leaving the set as it was: run it when
+you're done. The next request makes the tracks again.
 
 The specs: `live-glue-static`, `live-glue-attack`, `live-glue-release`, `live-glue-range` and
 `live-glue-detector` set our `Glue` against Glue Compressor, which it's modelled on and fitted to;
 `Console`, fitted to Bus FORCE, is measured in the `comp-bus-*` specs. `live-pedal-overdrive`,
 `live-pedal-distortion` and `live-pedal-riff` set Distort's `Overdrive` and `Distortion` against
-Pedal's two modes, its Drive at the same place as our `Amount`, unfitted, with Dist OPAMP-21
-beside `Distortion`. `uv run run.py --suite live` runs them all, about 6 minutes of Live's time.
+Pedal's two modes, its Drive at the same place as our `Amount`, with Dist OPAMP-21 beside
+`Distortion`. `live-pedal-overdrive-response` and `live-pedal-overdrive-drive` measure `Overdrive`
+against Pedal's Overdrive more widely, its tone stage being fitted to it where the Tube Screamer's
+circuit agrees and its Drive left unfitted, as the two differ (decision 266). `uv run run.py --suite live` runs them all, about 6 minutes of Live's time.
 
 ### Setting it up
 

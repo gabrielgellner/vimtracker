@@ -172,10 +172,24 @@ class ClipSlot:
         self.track.song.is_playing = True
 
 
+class Volume:
+    """A fader, at 0 dB as a new track's is, from silence at its bottom."""
+
+    def __init__(self):
+        self.min, self.max, self.value = 0.0, 1.0, 0.85
+
+
+class Mixer:
+    def __init__(self):
+        self.volume = Volume()
+
+
 class Track:
     def __init__(self, song, name):
         self.song = song
         self.name = name
+        # Only the fader's place is kept: the sink takes the source before it, at `Post FX`.
+        self.mixer_device = Mixer()
         self.devices = []
         self.clip_slots = [ClipSlot(self) for _ in range(8)]
         self.arm = False
@@ -219,6 +233,9 @@ class Song:
 
     def create_audio_track(self, index):
         self.tracks.insert(index, Track(self, f"{index + 1}-Audio"))
+
+    def delete_track(self, index):
+        del self.tracks[index]
 
     def stop_playing(self):
         self.is_playing = False
@@ -391,9 +408,24 @@ class Protocol(unittest.TestCase):
         self.assertFalse(source.arm)
         self.assertEqual(sink.current_monitoring_state, bridge.MONITOR_OFF)
         self.assertEqual(self.song.clip_trigger_quantization, bridge.NO_QUANTIZATION)
+        # The source is silent at the master, its fader at its bottom; the set's own track isn't.
+        self.assertEqual(source.mixer_device.volume.value, source.mixer_device.volume.min)
+        self.assertEqual(self.song.tracks[0].mixer_device.volume.value, 0.85)
         # Loading again starts a fresh device, alone, on the same tracks.
         live_bridge.request("load", device="Pedal")
         self.assertEqual([d.name for d in source.devices], ["Pedal"])
+        self.assertEqual(len(self.song.tracks), 3)
+
+    def test_remove_leaves_the_set_as_it_was(self):
+        live_bridge.request("load", device="Pedal")
+        live_bridge.request("load", device="Glue Compressor")
+        answer = live_bridge.request("remove")
+        self.assertEqual(answer["removed"], [bridge.SOURCE, bridge.SINK])
+        self.assertEqual([track.name for track in self.song.tracks], ["1-Audio"])
+        self.assertEqual(self.song.clip_trigger_quantization, 4)
+        # Nothing more to remove, and the next request makes the tracks again.
+        self.assertEqual(live_bridge.request("remove")["removed"], [])
+        live_bridge.request("load", device="Pedal")
         self.assertEqual(len(self.song.tracks), 3)
 
     def test_an_unknown_device_is_refused(self):

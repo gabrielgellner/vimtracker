@@ -291,7 +291,9 @@ over a few ms, so an LFO on it sweeps rather than steps. `Mu-law` on `Crush` squ
 before it's rounded, as an 8-bit sampler did, so quiet sounds keep finer steps and loud ones
 grit. `Track` on `Down` holds at a whole number of times the note's pitch, from 256 times at
 `00` to once a cycle at `FF`, so what it folds back stays in tune with the note. The pedals have a `Tone`
-as well, dark at `00` and bright at `FF`. A mode keeps its own as you change to another and
+as well, dark at `00` and bright at `FF`. On `Overdrive`, `80` is the pedal's knob at noon, its
+highs falling away under its mids, and `FF` lifts them and `00` cuts them by about 15 dB at the
+top. A mode keeps its own as you change to another and
 back. Few bits gate quiet sounds, so one press up brings them in, and `Mix` blends it with the
 sound going in, from `00` dry to `FF` wet. `Gain` turns down what comes out, as `Amount` can
 make it much louder, on the level scale, where `E0` leaves it as it is and every `10` is 4 dB.
