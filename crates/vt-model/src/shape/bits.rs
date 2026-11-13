@@ -223,6 +223,7 @@ mod tests {
                 ..Bits::default()
             },
             grids: crate::shape::Grids::default(),
+            random: crate::shape::Random::default(),
             vary: 0,
         }
     }

@@ -118,6 +118,16 @@ eca88f2939af50ec Random on Note, chromatic
 06781fe63f70e44a Random on Note, in key
 19a32dbe4b550625 Random on Nudge
 be8fda7cc1220b2f Random on Velocity
+d29c6fa5ed187365 Random shaped on FX, event
+676a2fcebb1e3dfe Random shaped on FX, fine
+09cca6d5be3a5898 Random shaped on FX, last slot
+34b90e9a9a50ed45 Random shaped on Length
+cd4141b4cc796107 Random shaped on Note of its own, chromatic
+b40aeb5f8161937b Random shaped on Note of its own, in key
+64b9f018b8403bad Random shaped on Note, chromatic
+f82d6cb86cf632b2 Random shaped on Note, in key
+f40da9d4067352c2 Random shaped on Nudge
+eb5adcfc79eb9fa0 Random shaped on Velocity
 2ca67f2fbdfc6dfc Reverse on FX, event
 305ea3c7e0767856 Reverse on FX, fine
 11dc386aa55b9156 Reverse on FX, last slot

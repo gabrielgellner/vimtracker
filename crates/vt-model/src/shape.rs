@@ -11,6 +11,7 @@ mod bits;
 mod follow;
 mod grids;
 pub mod params;
+mod random;
 mod render;
 mod walk;
 
@@ -20,6 +21,10 @@ pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
 pub use params::{Context, GEN_COLUMNS, GEN_ROWS, GenParam, Starts};
+pub use random::{
+    Degrees, EVEN_SPREAD, MAX_BIAS, MAX_SPREAD, MAX_WEIGHT, Random, WEIGHTS, degree_count,
+    degree_name,
+};
 pub use render::{GenCell, RowView, render_into};
 use serde::{Deserialize, Serialize};
 pub use walk::{Edge, MAX_DEPTH, MIN_DEPTH, Pink, Walk, default_step};
@@ -730,6 +735,10 @@ pub struct Shape {
     /// Where a `Grids` fill reads its map, and the part it plays. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Grids::is_default")]
     pub grids: Grids,
+    /// How a `Random` fill spreads and leans its values, and on notes which degrees it lets
+    /// through and how often each comes. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Random::is_default")]
+    pub random: Random,
     /// How many passes each of its variations lasts, a new seed each time: `0` for none, the
     /// seed every pass, as written. Only a shape that [draws](Shape::draws) varies. Saved only
     /// once it's set.
@@ -1085,6 +1094,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids: Grids::default(),
+            random: crate::shape::Random::default(),
             vary: 0,
         }
     }

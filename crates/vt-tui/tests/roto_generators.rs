@@ -8,8 +8,8 @@ use vt_model::action::{Action, edit};
 use vt_model::generator::{Generator, Span};
 use vt_model::scale::Scale;
 use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Shape, ShapeColumn, Values, Walk,
-    Where,
+    Acid, Bits, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Random, Shape, ShapeColumn, Values,
+    Walk, Where,
 };
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
@@ -39,7 +39,16 @@ fn shape(kind: FillKind, place: Where) -> Shape {
         pink: Pink::default(),
         bits: Bits::default(),
         grids: vt_model::shape::Grids::default(),
+        random: Random::default(),
         vary: 0,
+    }
+}
+
+/// The Note column, re-pitching the notes there.
+fn note() -> ShapeColumn {
+    ShapeColumn::Note {
+        scale: Scale::default(),
+        writes: None,
     }
 }
 
@@ -50,11 +59,7 @@ fn song_with(shape: Shape) -> Song {
         .map(|_| "C-3 40 --- --- ---".parse().unwrap())
         .collect();
     let mut phrase = Phrase::from_steps(steps);
-    let column = ShapeColumn::Note {
-        scale: Scale::default(),
-        writes: None,
-    };
-    let generator = Generator::new(column, Span::Rows { first: 0, last: 15 }, shape);
+    let generator = Generator::new(note(), Span::Rows { first: 0, last: 15 }, shape);
     assert!(phrase.add_generator(generator, None));
     song.tracks[0].phrases.insert(0, Arc::new(phrase));
     song
@@ -102,7 +107,7 @@ fn every_generator_puts_each_setting_on_one_knob_and_the_app_keeps_what_it_is() 
             for setting in layout.layout.settings() {
                 if resolve(setting, spec, track).is_none() {
                     let absent = GenParam::by_key(setting.key)
-                        .is_some_and(|param| !param.exists_for(&shape, false));
+                        .is_some_and(|param| !param.exists_for(&shape, note(), false));
                     assert!(
                         absent || [WHERE_FIRST, WHERE_SECOND].contains(&setting.key),
                         "{} has no {}",
