@@ -36,8 +36,9 @@ use crate::preview::{FILE_SAMPLES, Files, LetGo, Previews};
 use crate::published::{Bank, Published, Span};
 use crate::timing::{Part as TimedPart, PartTimes, SlotTimes, Stopwatch};
 use crate::track_state::{
-    Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Epoch, Faders, Keys, LiveValues,
-    NotePitch, Part, PendingStep, Retrigger, RowKey, SongTime, TrackState, Worked, base_of,
+    Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Drawn, Epoch, Faders, Keys,
+    LiveValues, NotePitch, Part, PendingStep, Retrigger, RowKey, SongTime, TrackState, Worked,
+    base_of,
 };
 use crate::voice::{Cut, NoteOn, Voice};
 use vt_model::samples::SampleId;
@@ -1337,6 +1338,13 @@ impl Engine {
                 // A note heard while stopped works the LFOs out once, but they aren't moving.
                 if self.transport == Transport::Stopped {
                     live.mods = Default::default();
+                }
+                // What `Mutate` drew is heard only from a Steps slot with it up, so only that's
+                // reported, and kept.
+                for (drawn, slot) in live.drawn.iter_mut().zip(&track.mods) {
+                    if slot.kind != ModKind::Steps || slot.steps.mutate == 0 {
+                        *drawn = Drawn::default();
+                    }
                 }
                 live
             }

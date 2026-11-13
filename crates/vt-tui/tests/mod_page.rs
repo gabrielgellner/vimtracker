@@ -2146,6 +2146,153 @@ fn a_track_slots_map_is_sent_with_a_dot_at_the_last_note() {
     assert!(synced.contains("a=T"));
 }
 
+/// Run the audio side for this many frames, then the frame after it.
+fn run_for(realtime: &mut Realtime, app: &mut App, frames: usize) {
+    let mut out = vec![0.0; frames * 2];
+    realtime.process(&mut out);
+    app.tick();
+}
+
+/// The cutoff a track is heard with in the middle of each of its next steps, playing on from the
+/// middle of one, a 16th of 6000 frames at 120 BPM.
+fn cutoffs_heard(realtime: &mut Realtime, app: &mut App, steps: usize) -> Vec<u8> {
+    (0..steps)
+        .map(|_| {
+            run_for(realtime, app, 6000);
+            realtime.engine().live(0).cutoff
+        })
+        .collect()
+}
+
+#[test]
+fn space_g_a_keeps_what_mutate_drew_as_the_values_heard_in_one_undo_step() {
+    use vt_engine::link::Command;
+    use vt_model::step::Note;
+    let (mut app, mut realtime) = app();
+    with_a_sound(&mut app);
+    app.apply(&Action::SetTrackBase {
+        track: 0,
+        control: vt_model::action::TrackControl::Cutoff,
+        value: 0x80,
+    });
+    let written = Steps {
+        values: std::array::from_fn(|step| [0x10, 0x20, 0x30, 0x40, 0x50][step.min(4)]),
+        length: 4,
+        mutate: 100,
+        ..Steps::default()
+    };
+    app.apply(&Action::SetMod {
+        track: 0,
+        slot: 3,
+        modulator: ModSlot::steps(Some(SettingId::CUT), written),
+    });
+    app.apply(&Action::SetNote {
+        track: 0,
+        phrase: 0,
+        step: 0,
+        note: Note::On(60),
+    });
+    press(&mut app, " 4L");
+    press(&mut app, &to_lfo(0));
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Type));
+    // Nothing has played, so nothing's drawn.
+    press(&mut app, " ga");
+    assert_eq!(app.song().tracks[0].mods[3].steps, written);
+    assert_eq!(
+        app.status,
+        "Mod 4 has drawn nothing to keep: Mutate draws as it plays"
+    );
+
+    // Two times round its four steps at 100%, each drawn again as it comes round, and the
+    // second time round heard step by step, once the callback has the song as it is.
+    for _ in 0..4 {
+        block(&mut realtime, &mut app);
+    }
+    app.handle.send(Command::PlayFrom { step: 0 });
+    run_for(&mut realtime, &mut app, 3000);
+    cutoffs_heard(&mut realtime, &mut app, 3);
+    let heard = cutoffs_heard(&mut realtime, &mut app, 4);
+    let drawn = realtime.engine().live(0).drawn[3];
+    assert_eq!(
+        app.live.unwrap().drawn[3],
+        drawn,
+        "the report has the draws"
+    );
+    press(&mut app, " ga");
+    let kept = app.song().tracks[0].mods[3].steps;
+    assert_eq!(
+        kept.values[..4],
+        drawn.values[..4],
+        "kept as the engine drew them"
+    );
+    assert_ne!(kept.values[..4], written.values[..4]);
+    assert_eq!(
+        kept.values[4..],
+        written.values[4..],
+        "past Length, as written"
+    );
+    assert_eq!(kept.mutate, 100, "Mutate is the hand's to turn down");
+    let as_heard: Vec<u8> = kept.values[..4]
+        .iter()
+        .map(|value| (0x80 + value).clamp(0, 0xFF) as u8)
+        .collect();
+    assert_eq!(as_heard, heard, "what was heard");
+    assert_eq!(
+        app.status,
+        "Kept the 4 values Mod 4 drew: Mutate 0% now plays them"
+    );
+
+    // One undo takes them back, and redo keeps them again.
+    press(&mut app, "u");
+    assert_eq!(app.song().tracks[0].mods[3].steps, written);
+    let redo = vt_tui::input::keys::parse_sequence("C-r").unwrap()[0];
+    app.key(redo, std::time::Instant::now());
+    assert_eq!(app.song().tracks[0].mods[3].steps, kept);
+
+    // With Mutate turned down, a render from the top plays the loop kept, every time round.
+    let mut song = std::sync::Arc::clone(app.song());
+    std::sync::Arc::make_mut(&mut song).tracks[0].mods[3]
+        .steps
+        .mutate = 0;
+    let samples = std::sync::Arc::new(vt_model::samples::SamplePool::default());
+    let version = std::sync::Arc::new(vt_engine::published::Published::new(song, samples));
+    let (mut handle, mut render) =
+        vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
+    handle.send(Command::PlayFrom { step: 0 });
+    let mut out = vec![0.0; 3000 * 2];
+    render.process(&mut out);
+    let mut out = vec![0.0; 6000 * 2];
+    let laps: Vec<u8> = (0..8)
+        .map(|_| {
+            render.process(&mut out);
+            render.engine().live(0).cutoff
+        })
+        .collect();
+    assert_eq!(
+        laps[..3],
+        heard[1..],
+        "the first time round, after its first step"
+    );
+    assert_eq!(laps[3..7], heard[..], "and the next");
+}
+
+#[test]
+fn space_g_a_on_another_type_or_page_says_what_it_keeps() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    press(&mut app, " ga");
+    assert_eq!(
+        app.status,
+        "Space g a keeps a Steps slot's drift: Mod 1 is ADSR"
+    );
+    press(&mut app, "H");
+    press(&mut app, " ga");
+    assert_eq!(
+        app.status,
+        "Space g a keeps a Steps slot's drift, on the Mod page"
+    );
+}
+
 /// Frames in a time round the 16-step phrase at 120 BPM.
 const LAP: usize = 16 * 6000;
 

@@ -985,6 +985,12 @@ requests, Drum then LPG:
 * **`Random`** rolls at every note in every slot, whatever its type, from a stream of the slot's
   own after `Mutate`'s.
 
+**As built for #530 (decision 269):**
+
+* **Keeping a drift:** `Space g a` on a Steps slot writes what `Mutate` drew into its values, as
+  one undo step. The engine reports the draws for the track watched (`LiveValues::drawn`), and
+  the app makes the edit, so what was left open in decision 204 is now the Turing Machine's lock.
+
 **As built for #569 (decision 270):**
 
 * **Writing a slot into the notes:** `Space g A` in the phrase view writes what the track's Steps

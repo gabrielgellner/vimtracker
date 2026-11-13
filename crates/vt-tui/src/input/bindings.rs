@@ -118,7 +118,8 @@ pub enum Cmd {
     Shape,
     /// Open the shape panel again on the live generator under the cursor.
     ReopenGenerator,
-    /// Apply the live generator under the cursor, leaving plain values.
+    /// Apply the live generator under the cursor, leaving plain values; on the Mod page, keep what
+    /// a Steps slot's `Mutate` drew as its values.
     ApplyGenerator,
     /// Write what the track's Steps and LFO slots on `Pitch` moved the notes to into them, and
     /// switch those slots out.
@@ -502,6 +503,11 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
         "g d",
         Cmd::OpenItem,
         "On Sample, open the sample page on it",
+    ),
+    (
+        "Space g a",
+        Cmd::ApplyGenerator,
+        "On a Steps slot, keep what Mutate drew as its values",
     ),
     (
         "}",

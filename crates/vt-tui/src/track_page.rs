@@ -515,6 +515,10 @@ impl App {
                         "b switches an effect or a modulator, on the FX and Mod pages".to_owned();
                 }
             },
+            Cmd::ApplyGenerator if self.track_page.page == Page::Mod => self.keep_drift(),
+            Cmd::ApplyGenerator => {
+                self.status = "Space g a keeps a Steps slot's drift, on the Mod page".to_owned();
+            }
             Cmd::RemoveRow => self.take_insert(),
             Cmd::Paste => self.put_insert(),
             Cmd::Increase if fine => self.adjust_fine(true, times, false),

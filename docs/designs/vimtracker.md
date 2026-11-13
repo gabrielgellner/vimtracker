@@ -371,7 +371,8 @@ track's live values, and up to four sample playheads. Each report says which ver
 an LFO is in its wave, or where a Track slot's last note is on its map (`LiveValues::mods`, a phase
 and a value each, which `TrackState::modulate` keeps as it works the slots out, and none while
 stopped), for the Mod page's dots, and which step each
-running as Steps plays (`LiveValues::steps`), which its panel lights. `Handle::latest` merges every
+running as Steps plays (`LiveValues::steps`), which its panel lights, and what each one's `Mutate`
+has drawn (`LiveValues::drawn`), which `Space g a` keeps as its values (decision 269). `Handle::latest` merges every
 report since the last frame, so a meter doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
 fit, and jam changes through another. What each mod slot moved each row's note by on `Pitch`, as it was heard (`NotePitch`, from
 `TrackState::modulate` once the note has started), comes through a third, `NOTE_PITCH_QUEUE` long, which the app keeps by row for

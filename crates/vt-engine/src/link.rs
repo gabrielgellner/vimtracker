@@ -19,6 +19,8 @@ use crate::dsp::memory::{Memory, MemoryCount};
 use crate::engine::{Engine, PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
 use crate::mixer::Reading;
 use crate::published::{Published, Span};
+#[cfg(test)]
+use crate::track_state::Drawn;
 use crate::track_state::{Faders, LiveValues, NotePitch};
 
 /// A transport or preview message. The engine resolves it against its own state, so two quick
@@ -1483,6 +1485,40 @@ mod tests {
         handle.send(Command::Return);
         assert_eq!(blocks(&mut rt, 2), 0);
         assert_eq!(handle.latest().unwrap().live.mods, [None; 6]);
+    }
+
+    #[test]
+    fn what_mutate_drew_is_reported_for_the_track_watched_without_allocating() {
+        use vt_model::modulation::ModSlot;
+        use vt_model::steps::{Steps, StepsMode};
+        let pool = samples();
+        let mut one = song(1, 16);
+        let drifting = Steps {
+            values: [0x10; 16],
+            length: 4,
+            mutate: 100,
+            mode: StepsMode::Free,
+            ..Steps::default()
+        };
+        one.tracks[0].mods[3] = ModSlot::steps(Some(SettingId::CUT), drifting);
+        // The same, at no `Mutate`, has nothing drawn to report.
+        one.tracks[0].mods[4] = ModSlot::steps(
+            Some(SettingId::PAN),
+            Steps {
+                mutate: 0,
+                ..drifting
+            },
+        );
+        let engine = Engine::new(48_000, published(one, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        handle.send(Command::PlayFrom { step: 0 });
+        // Into its second 16th, each step drawn again as it comes round.
+        assert_eq!(blocks(&mut rt, 40), 0, "the report never allocates");
+        let drawn = handle.latest().unwrap().live.drawn;
+        assert_eq!(drawn[3], rt.engine().live(0).drawn[3]);
+        assert_eq!(drawn[3].which, 0b11, "{drawn:?}");
+        assert!(drawn[3].value(0).is_some() && drawn[3].value(2).is_none());
+        assert_eq!(drawn[4], Drawn::default());
     }
 
     #[test]
