@@ -560,22 +560,19 @@ impl InsertState {
         rate: u32,
         keys: &Keys,
     ) -> Option<([f32; 2], bool)> {
-        if !self.on.value.same_bits(&self.on.target) {
-            return None;
-        }
-        match self.insert {
+        let moves_by_itself = matches!(
+            self.insert,
             Insert::Phaser(_)
-            | Insert::Vowel(_)
-            | Insert::Distort(Distort {
-                kind: DistortType::Down,
-                ..
-            }) => return None,
-            insert if Memory::kept_by(insert) => {
-                if input != [0.0, 0.0] || self.ringing(rate) {
-                    return None;
-                }
-            }
-            _ => {}
+                | Insert::Vowel(_)
+                | Insert::Distort(Distort {
+                    kind: DistortType::Down,
+                    ..
+                })
+        );
+        let buffer_working =
+            Memory::kept_by(self.insert) && (input != [0.0, 0.0] || self.ringing(rate));
+        if !self.on.value.same_bits(&self.on.target) || moves_by_itself || buffer_working {
+            return None;
         }
         let mut tried = self.without_memory();
         let out = tried.process_sides(input, same, smoothing, rate, keys);
