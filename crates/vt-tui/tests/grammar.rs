@@ -2317,6 +2317,133 @@ fn acid_on_notes_keeps_their_rhythm_and_with_keep_their_pitches() {
     }
 }
 
+/// A theme of four notes on the first track, for `Follow`.
+const THEME: [&str; 4] = [
+    "C-3 50 --- --- ---",
+    "D#3 7F --- --- ---",
+    "G-3 50 --- --- ---",
+    "F-3 40 --- --- ---",
+];
+
+#[test]
+fn follow_keeps_a_track_in_step_with_another_as_one_undo() {
+    use vt_model::shape::Source;
+    use vt_tui::shaping::ShapeRow;
+    let (mut app, _rt) = tracks_with(&[&THEME, &[E; 4], &[E; 4]]);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "WvjjjSKfollow<Enter>");
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.shape.kind, FillKind::Follow);
+    assert_eq!(
+        panel.rows(),
+        [
+            ShapeRow::Fill,
+            ShapeRow::Source,
+            ShapeRow::Transpose,
+            ShapeRow::Invert,
+            ShapeRow::Reverse,
+            ShapeRow::Late,
+            ShapeRow::CopyFx,
+        ]
+    );
+    // It starts on the phrase beside it on the track before, and can follow the third's too.
+    assert_eq!(panel.shape.follow.source, Source::default());
+    assert_eq!(
+        panel.sources,
+        [
+            Source::default(),
+            Source {
+                track: 2,
+                phrase: 0
+            }
+        ]
+    );
+    assert_eq!(track_steps(&app, 1), THEME);
+    // A fifth up, in semitones with the scale off, and a row late.
+    keys(&mut app, "jji7<Enter>jjj=");
+    assert_eq!(app.shape.as_ref().unwrap().shape.follow.transpose, 7);
+    assert_eq!(
+        track_steps(&app, 1),
+        [
+            "C-4 40 --- --- ---",
+            "G-3 50 --- --- ---",
+            "A#3 7F --- --- ---",
+            "D-4 50 --- --- ---",
+        ]
+    );
+    keys(&mut app, "L");
+    assert_eq!(generators(&app, 1).len(), 1);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert!(app.status.contains("Note←T01:00 is live"), "{}", app.status);
+    // Raising the theme's first note raises the answer's in the same undo step.
+    keys(&mut app, "B=");
+    assert_eq!(track_steps(&app, 0)[0], "C#3 50 --- --- ---");
+    assert_eq!(track_steps(&app, 1)[1], "G#3 50 --- --- ---");
+    assert_eq!(app.history.undo_depth(), depth + 2);
+    keys(&mut app, "u");
+    assert_eq!(track_steps(&app, 0), THEME);
+    assert_eq!(track_steps(&app, 1)[1], "G-3 50 --- --- ---");
+    // `gl` on the answer opens it again on its settings.
+    keys(&mut app, "Wgl");
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.live, Some(0));
+    assert_eq!(panel.shape.follow.rotate, 1);
+    keys(&mut app, "<Esc>");
+}
+
+#[test]
+fn follow_isnt_offered_where_it_would_go_round_a_cycle() {
+    let (mut app, _rt) = tracks_with(&[&THEME, &[E; 4]]);
+    keys(&mut app, "WvjjjSKfollow<Enter>L");
+    assert_eq!(generators(&app, 1).len(), 1);
+    // The theme's own track has only the answer to follow, which follows it.
+    keys(&mut app, "BvjjjS");
+    let panel = app.shape.clone().unwrap();
+    assert!(panel.sources.is_empty());
+    assert!(!panel.fills().contains(&FillKind::Follow));
+    keys(&mut app, "<Esc>");
+}
+
+#[test]
+fn a_follower_and_its_source_say_so_in_their_titles() {
+    let (mut app, _rt) = tracks_with(&[&THEME, &[E; 4]]);
+    keys(&mut app, "WvjjjSKfollow<Enter>L");
+    let title = |app: &App| -> String {
+        let backend = ratatui::backend::TestBackend::new(160, 8);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..160).map(|x| buffer[(x, 0)].symbol()).collect()
+    };
+    assert!(
+        title(&app).contains("\u{f0068} Note←T01:00"),
+        "{}",
+        title(&app)
+    );
+    keys(&mut app, "B");
+    assert!(title(&app).contains("Followed by 1"), "{}", title(&app));
+}
+
+#[test]
+fn removing_the_track_a_follower_reads_applies_it_and_says_so() {
+    let (mut app, _rt) = tracks_with(&[&[E; 4], &THEME]);
+    keys(&mut app, "vjjjSKfollow<Enter>");
+    assert_eq!(
+        app.shape.as_ref().unwrap().shape.follow.source.track,
+        1,
+        "with none before, the track after"
+    );
+    keys(&mut app, "L:track del<Enter>");
+    assert_eq!(app.song().sound_tracks(), 1);
+    assert!(generators(&app, 0).is_empty());
+    assert_eq!(track_steps(&app, 0), THEME);
+    assert!(app.status.contains("T02:00 is gone"), "{}", app.status);
+    keys(&mut app, "u");
+    assert_eq!(generators(&app, 0).len(), 1);
+}
+
 #[test]
 fn dot_applies_the_same_shape_with_ends_from_what_is_there() {
     let (mut app, _rt) = app_with(&[

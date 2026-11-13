@@ -6,7 +6,8 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use vt_model::lfo::Shape as Wave;
-use vt_model::shape::{FillKind, ShapeColumn, Where, written};
+use vt_model::shape::{FillKind, ShapeColumn, Where, first_note, written_from};
+use vt_model::step::Note;
 
 use crate::app::App;
 use crate::input::mode::Mode;
@@ -20,6 +21,8 @@ const WIDTH: u16 = 42;
 const AROUND_ROWS: u16 = 4;
 /// Clear of the CPU figure at the top of the screen.
 const FROM_TOP: u16 = 2;
+/// The room a row's label takes unless one is longer.
+const LABEL: usize = 8;
 
 /// A bend, with its sign.
 fn bend(value: i8) -> String {
@@ -69,7 +72,39 @@ fn value(panel: &ShapePanel, row: ShapeRow) -> String {
         ShapeRow::Slide => format!("{}%", shape.acid.slide),
         ShapeRow::Pitches if shape.acid.keep => "Keep".to_owned(),
         ShapeRow::Pitches => "Roll".to_owned(),
+        ShapeRow::Source => shape.follow.source.to_string(),
+        ShapeRow::Transpose => {
+            let by = shape.follow.transpose;
+            let unit = match panel.column {
+                ShapeColumn::Note { scale, .. } if scale.on => "degree",
+                _ => "semitone",
+            };
+            match by {
+                0 => "0".to_owned(),
+                1 | -1 => format!("{by:+} {unit}"),
+                _ => format!("{by:+} {unit}s"),
+            }
+        }
+        ShapeRow::Invert => on_off(shape.follow.invert),
+        ShapeRow::Axis => match shape.follow.axis {
+            Some(note) => panel.column.show(note),
+            None => match panel.source_steps().and_then(first_note) {
+                Some(note) => format!("First, {}", panel.column.show(note)),
+                None => "First".to_owned(),
+            },
+        },
+        ShapeRow::Reverse => on_off(shape.follow.reverse),
+        ShapeRow::Late => match shape.follow.rotate {
+            0 => "0".to_owned(),
+            1 => "1 row late".to_owned(),
+            rows => format!("{rows} rows late"),
+        },
+        ShapeRow::CopyFx => on_off(shape.follow.fx),
     }
+}
+
+fn on_off(on: bool) -> String {
+    if on { "On" } else { "Off" }.to_owned()
 }
 
 /// A row's value in spans, with a note outside the scale coloured as the grid colours it.
@@ -121,9 +156,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
             .map_or_else(|| command.name().to_owned(), |track| command.name_on(track)),
     };
     let (mut filled, mut rows_shaped) = (0, 0);
+    let source = panel.source_steps();
     for (nth, part) in panel.parts.iter().enumerate() {
         let steps = panel.base_steps(part);
-        filled += written(steps, part.range, part.column, &panel.shape_of(nth)).len();
+        let shape = panel.shape_of(nth);
+        let written = written_from(steps, part.range, part.column, &shape, source);
+        // A `Follow` writes every row, rests and all, so its count is of the notes.
+        filled += if shape.kind == FillKind::Follow {
+            written
+                .iter()
+                .filter(|(_, step)| matches!(step.note, Note::On(_)))
+                .count()
+        } else {
+            written.len()
+        };
         rows_shaped += part.range.len();
     }
     let tracks = match panel.parts.len() {
@@ -135,10 +181,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         format!("{name}{tracks}{live}: {filled} of {rows_shaped} rows"),
         theme::dim(),
     )];
+    // Room for the longest label, as `Transpose` is longer than the rest.
+    let labels = rows
+        .iter()
+        .map(|row| row.label().len() + 1)
+        .max()
+        .unwrap_or(0)
+        .max(LABEL);
     for row in rows {
         let current = row == panel.row;
         let typing = current.then_some(panel.typing.as_ref()).flatten();
-        let mut line = vec![Span::raw(format!("{:<8}", row.label()))];
+        let mut line = vec![Span::raw(format!("{:<labels$}", row.label()))];
         if current {
             let text = typing.map_or_else(|| value(panel, row), |text| format!("{text}_"));
             let style = theme::cursor(if panel.typing.is_some() {
@@ -160,6 +213,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         FillKind::Shuffle if app.mode == Mode::Shape => "r deals again",
         FillKind::Acid if panel.shape.acid.keep => "r rolls the accents, slides and octaves",
         FillKind::Acid => "r rolls a new riff  ~ swap the ends",
+        FillKind::Follow => "L keeps it in step with its source",
         FillKind::List => "~ reverse the list",
         FillKind::Snap => match panel.column {
             ShapeColumn::Note { scale, .. } if scale.on => "To the nearest note in the scale",
