@@ -1884,8 +1884,7 @@ impl Phrase {
         let Some(generator) = self.generators.get_mut(index) else {
             return false;
         };
-        generator.shape = shape;
-        generator.render(&mut self.steps);
+        generator.reshape(&mut self.steps, shape);
         true
     }
 
