@@ -21,7 +21,7 @@
 - [Selecting and editing](guides/editing.md)
 - [Phrases and chains](guides/chains.md)
 - [FX commands](guides/fx.md)
-- [The track pages: Sound, Mod and FX](guides/tracks.md)
+- [The track pages: Sound, Mod, FX and Gen](guides/tracks.md)
 - [Sounds, samples and kits](guides/sounds.md)
 - [The sample editor](guides/sample-editor.md)
 - [The meter and the audio page](guides/meter.md)

@@ -655,7 +655,7 @@ fields, and 33 files besides `app.rs` add an `impl App` block each, such as `tra
 `project_page.rs`, `audio_page.rs` and `sample_page.rs`.
 
 **Pages and modes** (`input/mode.rs`). A `View` is a page: the song view (`Space 1`), the chain view
-(`Space 2`), the phrase view (`Space 3`), the track page (`Space 4`) with its Sound, Mod and FX pages
+(`Space 2`), the phrase view (`Space 3`), the track page (`Space 4`) with its Sound, Mod, FX and Gen pages
 on `H` and `L`, the mixer (`Space 6`), the audio page (`Space 7`), the project page (`Space 9`) and the
 sample page (`Space 0`). `Space 5` and `Space 8` choose a sample and a kit in the picker. A `Mode` is
 Normal, operator-pending, the two Visual modes, Insert, Replace, the command line, the shape panel,
@@ -753,7 +753,11 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     page a slot each (`DeviceSpec::slot`), and the Mod page each mod slot of the left column, then
     the one three after it beside it, `Mod 1`, `Mod 4`, `Mod 2` and so on, each with its type's
     grid and a title of its type, its mode and its destination, then the accumulator and the
-    arpeggio (decisions 151 and 165). A `DeviceSpec` is its
+    arpeggio (decisions 151 and 165). The Gen page's (`generators.rs`, decision 279) hang on a
+    phrase as well as the track, so `Page::devices_on` takes the phrase under the cursor, which
+    the app gives `TrackPage::phrase` as each key comes: a device each for its live generators,
+    their title and grid from `vt-model`'s `GenParam::title` and `GenParam::grid`, as
+    `Control::Gen`, then `Empty`. A `DeviceSpec` is its
     identity, its title controls over the grid's first columns, its grid of `Control`s and its
     width, full or half, built by `DeviceSpec::new` from a model's `Grid` (`vt-model`'s
     `grid.rs`), as `Insert::grid` is. `rack_places` lays a page's devices out in the order they're

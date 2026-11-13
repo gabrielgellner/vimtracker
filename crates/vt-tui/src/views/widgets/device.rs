@@ -41,6 +41,8 @@ pub struct Device {
     identity: String,
     switch: Option<Switch>,
     controls: Vec<Line<'static>>,
+    /// What comes after the controls, a space on, as a generator's `· Note 00–0F`.
+    after: Option<Line<'static>>,
     focused: bool,
 }
 
@@ -51,6 +53,7 @@ impl Device {
             identity: identity.into(),
             switch: None,
             controls: Vec::new(),
+            after: None,
             focused: false,
         }
     }
@@ -78,6 +81,16 @@ impl Device {
     #[must_use]
     pub fn controls(self, controls: Vec<Line<'static>>) -> Self {
         Self { controls, ..self }
+    }
+
+    /// The same with this after its controls, a space on, in its own style: where a generator
+    /// acts, which isn't one of its controls.
+    #[must_use]
+    pub fn after(self, after: Line<'static>) -> Self {
+        Self {
+            after: Some(after),
+            ..self
+        }
     }
 
     /// The same with the cursor in it, or not.
@@ -149,7 +162,10 @@ impl Widget for Device {
         widgets::window_border()
             .border_style(Style::new().fg(frame))
             .render(area, buf);
+        // A device with nothing to name it, as a generator, starts with its controls.
+        let named = !self.identity.is_empty();
         let mut title = vec![Span::raw(" "), Span::styled(self.identity, theme::dim())];
+        let mut gap = if named { TITLE_GAP } else { "" };
         // A switch is three cells, its glyph and the two spaces its picture covers, the last of
         // which is the first column of the gap after it, and the room for one is as wide.
         let switch = match self.switch {
@@ -157,7 +173,6 @@ impl Widget for Device {
             Some(Switch::Room) => Some(Span::raw(" ".repeat(toggle::WIDTH))),
             None => None,
         };
-        let mut gap = TITLE_GAP;
         if let Some(switch) = switch {
             title.push(Span::raw(TITLE_GAP));
             title.push(switch);
@@ -172,6 +187,10 @@ impl Widget for Device {
                     span
                 }
             }));
+        }
+        if let Some(after) = self.after {
+            title.push(Span::raw(" "));
+            title.extend(after.spans);
         }
         title.push(Span::raw(" "));
         let left = area.x + TITLE_INDENT;

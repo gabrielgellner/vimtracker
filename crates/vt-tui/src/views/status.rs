@@ -13,6 +13,7 @@ use vt_model::constants::{BAR_STEPS, TICKS_PER_STEP};
 use vt_model::lfo::{Rate, note_rates};
 
 use vt_model::settings::{SettingId, glide_ms};
+use vt_model::shape::{GenParam, Where};
 use vt_model::song::{SynthVoice, Track, trim_text};
 use vt_model::step::{FxCommand, Note};
 
@@ -130,6 +131,15 @@ pub fn value_shown(app: &App) -> Option<String> {
         && let Control::Arpeggio(field) = app.track_control()
     {
         return Some(arpeggio_shown(field, track.arpeggio));
+    }
+    if app.view == View::Track
+        && let Control::Gen {
+            phrase,
+            generator,
+            param,
+        } = app.track_control()
+    {
+        return Some(gen_shown(app, phrase, generator, param));
     }
     if app.view == View::Track && app.track_control() == Control::Glide {
         return Some(glide_shown(track));
@@ -576,6 +586,22 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     if width > 0 {
         let at = Rect::new(area.right() - width, area.y, width, 1);
         frame.render_widget(Paragraph::new(right), at);
+    }
+}
+
+/// A generator's setting in its units, as `9 of the 16 rows` for Euclid's hits.
+fn gen_shown(app: &App, phrase: u32, generator: usize, param: GenParam) -> String {
+    let Some(live) = app.live_generator(app.cursor.track, phrase, generator) else {
+        return String::new();
+    };
+    let context = live.context();
+    let shape = &live.generator.shape;
+    match (param, shape.place) {
+        (GenParam::Hits, Where::Euclid { hits, .. }) => {
+            let open = context.open;
+            format!("{} of the {open} rows", usize::from(hits).min(open))
+        }
+        _ => param.shown(shape, &context),
     }
 }
 

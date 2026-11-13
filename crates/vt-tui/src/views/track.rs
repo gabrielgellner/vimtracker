@@ -19,6 +19,7 @@ use crate::app::App;
 use crate::banking::sample_text;
 use crate::glyphs;
 use crate::input::mode::Mode;
+use crate::shaping::live_shown;
 use crate::theme;
 use crate::track_page::tuning::{tuning, tuning_text};
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page};
@@ -35,6 +36,7 @@ use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
 use crate::views::widgets::table::take_top;
 use crate::views::widgets::toggle;
 
+mod generators;
 mod modulation;
 mod sound;
 
@@ -96,6 +98,12 @@ fn at_default(control: Control, track: &Track) -> bool {
 pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
     let hex = |value: u8| format!("{value:02X}");
     match control {
+        Control::Gen {
+            phrase,
+            generator,
+            param,
+        } => live_shown(song, track, phrase, generator, param),
+        Control::NewGenerator(_) => "Empty".to_owned(),
         Control::Machine => track.machine.name().to_owned(),
         Control::Setting(_) => control
             .setting_on(track)
@@ -632,12 +640,21 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> CyclesAt
         title.push(Span::styled(format!("{glyph} "), style));
     }
     title.extend(tabs);
+    if app.track_page.page == Page::Gen
+        && let Some(phrase) = app.track_page.phrase
+    {
+        title.push(Span::styled(format!("  Phrase {phrase:02X}"), bold));
+        if let Some(playing) = generators::playing_phrase(app).filter(|id| *id != phrase) {
+            title.push(Span::styled(format!("  ▶ {playing:02X}"), theme::dim()));
+        }
+    }
     let mut rest = area;
     frame.render_widget(Paragraph::new(Line::from(title)), take_top(&mut rest, 2));
     match app.track_page.page {
         Page::Sound => sound::draw(frame, rest, app, track),
         Page::Fx => draw_fx(frame, rest, app, track),
         Page::Mod => return modulation::draw(frame, rest, app, track),
+        Page::Gen => generators::draw(frame, rest, app, track),
     }
     CyclesAt::default()
 }

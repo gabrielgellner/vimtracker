@@ -292,6 +292,7 @@ Euclidean velocity accent is the one to try: keep it live, then turn its
 |---|---|
 | `L` | In the panel, keep it live, as one undo |
 | `gl` | Open the panel again on the live column here |
+| `Space 4`, then `L` to Gen | Every live column of the phrase, as devices |
 | `Space g a`, `:gen apply` | Apply it: keep its values as plain ones |
 
 `gl` works from any row of the column, and after the song is saved and opened

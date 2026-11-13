@@ -1,11 +1,12 @@
 # The track page, envelopes and LFOs
 
-Press `Space 4` for what a track holds apart from its steps, on three pages: Sound
+Press `Space 4` for what a track holds apart from its steps, on four pages: Sound
 has its machine, filter, output and how it plays, with a bar beside each value showing where
 it sits between the lines at each end of its range (a centred one, like Pan or Trim, with a faint
 `┊` at its middle), and moving with whatever
 plays it, with a dim mark left where it's set once it's a cell or more away, Mod its six mod slots,
-envelopes and LFOs, its accumulator and arpeggio, and FX its effects. `H` and `L` go to the previous or next page, each with the cursor where you left it, or on its first setting the first time. FX columns belong
+envelopes and LFOs, its accumulator and arpeggio, FX its effects, and Gen the live
+columns of the phrase under the cursor. `H` and `L` go to the previous or next page, each with the cursor where you left it, or on its first setting the first time. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -1464,6 +1465,41 @@ is, `Tick` or a note division from `1/128` to `1/8`, as a share of the track's s
 and `Retrig`, `off` to only change the pitch, sliding on `Acid`, or `on` to start
 each note again. `=` and `-` move each, `i` types the octaves and `K` lists the
 others. See **FX commands**.
+
+## The Gen page
+
+The fourth page, after FX, shows the live columns of the phrase under the cursor,
+the one `gl` reopens, as devices you turn as you would a filter. Its title names
+the phrase, `Phrase 00`, and adds `▶ 02`, dim, while the track is playing another.
+A fixed track has no phrases, so its page is empty.
+
+Each live column is a device, in the phrase view's order: Note, Velocity, Nudge,
+Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
+them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
+`Where`, then where it acts, dim: `Ramp  Euclid · Note 00–0F`, or `FX1 CUT lane 0C`
+for a lane. A `Where` that's its column's own is dim too. Its settings are the
+shape panel's, laid out by what they do: the fill's down the first two columns,
+and the `Where`'s, `Hits` and `Rotate` or an amount, at the foot of the last, so
+they stay put as the fill changes.
+
+| Keys | Does |
+|---|---|
+| `=` `-` `+` `_` | Turn it, writing the column again, an undo step a press |
+| `i` | Type a value: a note, a number, or hex on an FX column |
+| `K` | List the fill, `Where`, shape, rate or source; switch one that's off or on |
+| `x` | Back to where it starts |
+| `r` | Roll the generator again, from anywhere in it, as in the panel |
+| `Space g a` | Apply it, leaving its values as plain ones |
+| `dd` | Take it away, putting back what was under it; `u` brings it back |
+| `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
+
+**Making a column live.** The last device, `Empty`, has `K` list the columns of
+the phrase with nothing live on them. Choosing one makes it live over the phrase's
+loop, or its lane, with the ramp `S` starts with, as `vG` `S` `L` would in the
+phrase view, and puts the cursor on it. An empty FX column lists the commands
+first. Notes generated on an empty column own their velocities, so a live
+Velocity column over them applies them, as a hand edit would; their nudges and
+lengths are free.
 
 ## The mixer
 
