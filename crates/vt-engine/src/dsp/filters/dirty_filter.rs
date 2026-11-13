@@ -35,6 +35,7 @@
 //! <http://www.gnu.org/licenses/>.
 
 use super::diode_filter::{Complex, OnePole, tanh};
+use crate::dsp::blocks::flush::tiny_by_fields;
 
 /// The loop's resonance at no `Res` and at full. It self-oscillates from about 2.
 const LEAST_RESONANCE: f32 = 0.1;
@@ -160,6 +161,13 @@ pub struct DirtyFilter {
     low: OnePole,
     band: OnePole,
 }
+
+tiny_by_fields!(DirtyFilter {
+    before,
+    entry,
+    low,
+    band
+});
 
 /// What a two-pole gives out: its input, its first one-pole and its second, `1`, `L` and `L^2`,
 /// weighted as a mode has them.

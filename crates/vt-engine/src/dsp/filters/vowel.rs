@@ -29,6 +29,7 @@ use std::f32::consts::PI;
 
 use vt_model::insert::{Vowel as Settings, vowel_blend};
 
+use crate::dsp::blocks::flush::flush;
 use crate::dsp::blocks::sides::Sides;
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::resonator::{Limiter, semitones};
@@ -271,6 +272,10 @@ impl Formants {
         }
         let (now, a1) = (&self.now, &self.a1);
         let out = self.filters.process(input, same, |filters, sample| {
+            // With nothing coming in, each formant's state goes once it's tiny (#260).
+            if sample == 0.0 {
+                filters.iter_mut().for_each(flush);
+            }
             let mut out = 0.0;
             for (at, filter) in filters.iter_mut().enumerate() {
                 let (band, _) = filter.tick_tuned(sample, now.g[at], a1[at]);

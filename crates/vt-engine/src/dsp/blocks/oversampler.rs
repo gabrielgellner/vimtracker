@@ -1,5 +1,6 @@
 //! Going to twice the rate and back, for what would otherwise alias.
 
+use super::flush::tiny_by_fields;
 use super::sides::SameBits;
 
 /// A chain of first-order allpass filters, `(a + z^-1) / (1 + a z^-1)`.
@@ -109,6 +110,9 @@ impl PairOversampler {
         0.5 * (a + b)
     }
 }
+
+tiny_by_fields!(Allpass { state });
+tiny_by_fields!(Oversampler { up, down });
 
 impl SameBits for Allpass {
     #[inline]

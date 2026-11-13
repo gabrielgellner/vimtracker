@@ -21,6 +21,8 @@
 //! You should have received a copy of the GNU General Public License along with vital. If not, see
 //! <http://www.gnu.org/licenses/>.
 
+use crate::dsp::blocks::flush::tiny_by_fields;
+
 /// The feedback at no resonance and at full.
 const LEAST_RESONANCE: f32 = 0.7;
 const MOST_RESONANCE: f32 = 17.0;
@@ -43,6 +45,12 @@ pub(crate) struct OnePole {
     state: f32,
     pub(crate) saturated: f32,
 }
+
+tiny_by_fields!(OnePole {
+    current,
+    state,
+    saturated
+});
 
 impl OnePole {
     /// One sample with no saturation.
@@ -113,6 +121,12 @@ pub struct DiodeFilter {
     feedback_high_pass: OnePole,
     stages: [OnePole; 4],
 }
+
+tiny_by_fields!(DiodeFilter {
+    high_pass,
+    feedback_high_pass,
+    stages
+});
 
 impl DiodeFilter {
     /// One sample, at a cutoff as a fraction of its rate, with resonance from 0 to 1, a drive as a

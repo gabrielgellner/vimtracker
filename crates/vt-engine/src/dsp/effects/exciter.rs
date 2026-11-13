@@ -25,6 +25,7 @@ use vt_model::insert::{
 };
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::flush::{flush, tiny_by_fields};
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::sides::{SameBits, Sides, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
@@ -79,6 +80,12 @@ pub(crate) struct Side {
     /// The detector's level.
     level: f32,
 }
+
+tiny_by_fields!(Side {
+    oversampler,
+    held,
+    level
+});
 
 impl SameBits for Side {
     #[inline]
@@ -190,6 +197,11 @@ impl Exciter {
         let HighPass { b0, b1, a1, a2 } = self.high_pass;
         let (attack, release) = (self.attack, self.release);
         self.sides.process(input, same, |side, input| {
+            // With nothing coming in, all it keeps goes once it's tiny, so it falls to an exact
+            // zero rather than trading denormals for good (#260).
+            if input == 0.0 {
+                flush(side);
+            }
             let Side {
                 oversampler,
                 held,

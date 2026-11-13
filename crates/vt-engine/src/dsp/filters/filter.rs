@@ -10,6 +10,7 @@
 use vt_model::song::{FilterMode, FilterType, Track};
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::flush::{flush, tiny_by_fields};
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::sides::SameBits;
 use crate::dsp::blocks::smoother;
@@ -700,6 +701,8 @@ impl SameBits for Svf {
     }
 }
 
+tiny_by_fields!(Svf { ic1, ic2 });
+
 impl Svf {
     /// One sample's band and low outputs.
     #[inline]
@@ -765,6 +768,12 @@ pub struct Ladder {
     last: [f32; 4],
     last_input: f32,
 }
+
+tiny_by_fields!(Ladder {
+    state,
+    last,
+    last_input
+});
 
 impl Ladder {
     /// One step at twice the rate. Each stage's `tanh` is replaced by its slope at the last output,
@@ -845,6 +854,9 @@ impl Channel {
     /// Filter one sample. `drive` runs from 0, which takes the clean path, to 1.
     #[inline]
     pub fn process(&mut self, input: f32, kind: FilterType, drive: f32, c: &Coefficients) -> f32 {
+        if input == 0.0 {
+            self.let_go(kind);
+        }
         if !self.mixing {
             self.mix = c.mix;
             self.mixing = true;
@@ -872,6 +884,27 @@ impl Channel {
     /// Start on the coefficients' mix next time, rather than moving to it, for a new sound.
     pub fn settle(&mut self) {
         self.mixing = false;
+    }
+
+    /// With nothing coming in, start each part `kind` uses again from nothing once all it keeps
+    /// is far below anything heard, so it falls to an exact zero rather than trading denormals for
+    /// good (#260).
+    #[inline]
+    fn let_go(&mut self, kind: FilterType) {
+        flush(&mut self.svf);
+        flush(&mut self.second);
+        match kind {
+            FilterType::Ladder => flush(&mut self.ladder),
+            FilterType::Diode => flush(&mut self.diode),
+            FilterType::Ms20LowPass | FilterType::Ms20HighPass => flush(&mut self.korg),
+            FilterType::Dirty => flush(&mut self.dirty),
+            FilterType::ObX => flush(&mut self.obx),
+            FilterType::LowPass
+            | FilterType::HighPass
+            | FilterType::BandPass
+            | FilterType::Notch => {}
+        }
+        flush(&mut self.oversampler);
     }
 
     /// What saturates, at twice the rate. It's kept apart so the clean path stays small enough to
@@ -1081,6 +1114,10 @@ impl Trim {
     /// Pass through the high-pass.
     #[inline]
     pub fn low_cut(&mut self, input: f32, c: &Coefficients) -> f32 {
+        // With nothing coming in, it lets go of what's left once it's tiny, as the filter does.
+        if input == 0.0 {
+            flush(&mut self.high_pass);
+        }
         let (band, low) = self.high_pass.tick(input, c);
         input - c.k * band - low
     }
@@ -1088,6 +1125,9 @@ impl Trim {
     /// Pass through the low-pass.
     #[inline]
     pub fn high_cut(&mut self, input: f32, c: &Coefficients) -> f32 {
+        if input == 0.0 {
+            flush(&mut self.low_pass);
+        }
         self.low_pass.tick(input, c).1
     }
 
@@ -1129,6 +1169,88 @@ mod tests {
     use super::*;
 
     const RATE: u32 = 48_000;
+
+    /// A loud burst with noise on it, then silence: how many frames until `step` gives exact
+    /// silence for a second on end, within `seconds`, or none.
+    fn frames_to_silence(seconds: usize, mut step: impl FnMut(f32) -> f32) -> Option<usize> {
+        let mut noise = 1_u32;
+        for frame in 0..RATE as usize / 5 {
+            noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let noise = (noise >> 9) as f32 / (1 << 23) as f32 - 0.5;
+            step((frame as f32 * 0.03).sin() * 0.9 + noise);
+        }
+        let mut silent_since = None;
+        for frame in 0..seconds * RATE as usize {
+            if step(0.0) != 0.0 {
+                silent_since = None;
+            } else if frame - *silent_since.get_or_insert(frame) >= RATE as usize {
+                return silent_since;
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn every_filter_falls_to_an_exact_silence_after_a_sound() {
+        // Each type in each of its modes, clean and driven, as far as resonance goes without
+        // ringing by itself, and high enough that the diode's high-pass far under the cutoff
+        // dies away within the time: at 40 Hz, nine octaves under it takes a minute and a half. Left to themselves, they fell into the denormals and
+        // traded the smallest floats between their states for good, so a delay after them rang
+        // for ever (#260).
+        for kind in FilterType::ALL {
+            for &mode in kind.modes() {
+                for drive in [0.0, 0.6] {
+                    for (cut, res) in [(0.5, 0.5), (0.7, 0.7), (0.95, 0.3)] {
+                        let c = Coefficients::with_mode(cut, res, mode, RATE);
+                        let mut channel = Channel::default();
+                        let silent = frames_to_silence(10, |x| channel.process(x, kind, drive, &c));
+                        assert!(
+                            silent.is_some(),
+                            "{kind:?} {mode:?} at drive {drive}, cutoff {cut} and resonance {res}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_utility_filter_falls_to_an_exact_silence_after_a_sound() {
+        for cut in [0.05, 0.5, 0.95] {
+            let c = Coefficients::new(cut, 0.0, RATE);
+            let mut trim = Trim::default();
+            assert!(frames_to_silence(10, |x| trim.low_cut(x, &c)).is_some());
+            assert!(frames_to_silence(10, |x| trim.high_cut(x, &c)).is_some());
+        }
+    }
+
+    #[test]
+    fn letting_go_changes_nothing_heard() {
+        // A resonant filter ringing out down low is exactly as it was until it's far below
+        // anything heard, and its band isn't let go before the rest, which held its low-pass up
+        // for seconds.
+        let c = Coefficients::with_mode(0.05, 1.0, FilterMode::Slope12, RATE);
+        let (_, a1) = c.first(FilterType::LowPass, false);
+        let mut channel = Channel::default();
+        let mut kept = Svf::default();
+        let mut gone = None;
+        for frame in 0..RATE as usize * 10 {
+            let x = if frame < 1000 { 0.5 } else { 0.0 };
+            let ours = channel.process(x, FilterType::LowPass, 0.0, &c);
+            let (_, low) = kept.tick_tuned(x, c.g, a1);
+            if low.abs() > 1e-15 {
+                assert_eq!(ours.to_bits(), low.to_bits(), "{frame}");
+            }
+            assert!((ours - low).abs() < 1e-18, "{frame}: {ours} {low}");
+            if ours == 0.0 {
+                gone.get_or_insert(frame);
+            }
+        }
+        assert!(
+            gone.is_some_and(|frame| frame < RATE as usize * 8),
+            "{gone:?}"
+        );
+    }
 
     /// A cutoff value for a frequency in hertz.
     fn cutoff(hertz: f32) -> f32 {

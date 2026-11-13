@@ -22,6 +22,7 @@
 //! code is available at <https://github.com/surge-synthesizer/OB-Xf>
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::flush::tiny_by_fields;
 
 /// The resonance at full `Res`: 1 is where a quiet filter has no damping left, and the rest is
 /// OB-Xd's push past it, so it rings by itself.
@@ -44,6 +45,8 @@ pub struct ObX {
     band: f32,
     low: f32,
 }
+
+tiny_by_fields!(ObX { band, low });
 
 impl ObX {
     /// One sample's low-pass, band-pass and high-pass, tuned by `g`, `tan(pi f)` for its cutoff `f`

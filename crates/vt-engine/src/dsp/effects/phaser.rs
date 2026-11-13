@@ -17,6 +17,7 @@ use std::f32::consts::PI;
 use vt_model::insert::{MOST_PHASER_SEMITONES, Phaser as Settings};
 use vt_model::lfo::SWEEP_TICKS;
 
+use crate::dsp::blocks::flush::{flush, tiny_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::filters::filter::soft_clip;
 
@@ -64,11 +65,23 @@ struct Side {
     out: f32,
 }
 
+tiny_by_fields!(Side {
+    stages,
+    lows,
+    highs,
+    out
+});
+
 impl Side {
     /// One sample through, at a coefficient for the all-passes, with the given feedback and how
     /// much of the fourth, eighth and twelfth all-pass's output comes out.
     #[inline]
     fn process(&mut self, input: f32, coefficient: f32, feedback: f32, taps: [f32; 3]) -> f32 {
+        // With nothing coming in, all it keeps goes once it's tiny, so it falls to an exact zero
+        // rather than trading denormals round its loop for good (#260).
+        if input == 0.0 {
+            flush(self);
+        }
         let lows = low_pass(
             &mut self.lows,
             self.out,

@@ -8,6 +8,7 @@ use std::f32::consts::PI;
 use vt_model::insert::Equaliser as Settings;
 use vt_model::settings::{band_db, band_q};
 
+use crate::dsp::blocks::flush::{flush, tiny_by_fields};
 use crate::dsp::blocks::sides::{SameBits, Sides, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
 
@@ -145,6 +146,8 @@ struct Band {
     ic2: f32,
 }
 
+tiny_by_fields!(Band { ic1, ic2 });
+
 impl SameBits for Band {
     #[inline]
     fn same_bits(&self, other: &Self) -> bool {
@@ -241,6 +244,11 @@ impl ThreeBands {
         let coefficients = &self.coefficients;
         self.bands.process(input, same, |bands, mut sample| {
             for (band, coefficients) in bands.iter_mut().zip(coefficients) {
+                // With nothing coming in, a band's state goes once it's tiny, so it falls to an
+                // exact zero rather than trading denormals for good, and the slot settles (#260).
+                if sample == 0.0 {
+                    flush(band);
+                }
                 sample = band.process(coefficients, sample);
             }
             sample

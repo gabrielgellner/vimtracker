@@ -25,6 +25,7 @@ use std::f32::consts::PI;
 
 use crate::rng::Pcg32;
 
+use super::flush::Tiny;
 use super::sides::SameBits;
 
 /// Noise on `0..1`.
@@ -103,6 +104,15 @@ impl Svf {
         let lp = self.g * bp + self.state_2;
         self.state_2 = self.g * bp + lp;
         (hp, bp, lp)
+    }
+
+    /// Start its state again from nothing once all of it is far below anything heard, for a frame
+    /// with nothing coming in, so it falls to an exact zero rather than trading denormals (#260).
+    #[inline]
+    pub(in crate::dsp) fn let_go(&mut self) {
+        if [self.state_1, self.state_2].tiny() {
+            (self.state_1, self.state_2) = (0.0, 0.0);
+        }
     }
 
     #[inline]
