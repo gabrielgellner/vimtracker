@@ -5,6 +5,8 @@
 //!
 //! After a change to the format or to a builder, `just tutorial-songs` writes them again.
 
+mod support;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -861,6 +863,20 @@ fn every_tutorial_song_loads_plays_and_stays_below_full_scale() {
         let rms = (out.iter().map(|s| s * s).sum::<f32>() / out.len() as f32).sqrt();
         assert!(rms > 0.02, "{name} is nearly silent: RMS {rms}");
         assert!(peak < 0.99, "{name} reaches full scale: peak {peak}");
+    }
+}
+
+/// Their live generators rest, so the engine plays each as written, sample for sample as before
+/// it could render them (decision 288).
+#[test]
+fn every_tutorial_song_renders_as_it_did_before_the_engine_ran_generators() {
+    for (name, song) in songs() {
+        let version = Arc::new(Published::new(
+            Arc::new(song),
+            Arc::new(SamplePool::default()),
+        ));
+        let out = render_loop(version, RATE, RenderOptions::default());
+        support::golden(&format!("tutorial-{name}"), &out);
     }
 }
 
