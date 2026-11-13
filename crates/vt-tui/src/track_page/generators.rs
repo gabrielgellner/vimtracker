@@ -109,7 +109,7 @@ impl DeviceSpec {
         for (place, param) in GenParam::title(shape).into_iter().enumerate() {
             title[place] = control(param);
         }
-        let columns = GenParam::grid(shape, generates);
+        let columns = GenParam::grid(shape, generator.column, generates);
         let grid = std::array::from_fn(|row| {
             std::array::from_fn(|column| {
                 columns.get(column).and_then(|places| control(places[row]))

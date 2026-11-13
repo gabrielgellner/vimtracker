@@ -133,7 +133,7 @@ impl GenHolds {
         for (at, (own, by_macro)) in held.enumerate() {
             let param = GenParam::ALL[at];
             if let Some(number) = own.or(*by_macro)
-                && param.exists_for(&heard, generates)
+                && param.exists_for(&heard, context.column, generates)
             {
                 param.set_number(&mut heard, context, number);
             }
@@ -697,6 +697,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids: vt_model::shape::Grids::default(),
+            random: vt_model::shape::Random::default(),
             vary: 0,
             variation: vt_model::shape::Variation::default(),
         }

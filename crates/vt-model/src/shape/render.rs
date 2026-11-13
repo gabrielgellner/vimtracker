@@ -8,6 +8,7 @@
 //! themselves before it writes them, so it needs nothing more.
 
 use super::mix;
+use super::random::{Odds, unit};
 use super::{
     FillKind, Ladder, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, follow, grids,
     variation, walk,
@@ -331,6 +332,7 @@ pub(super) fn render(
                         shape,
                         top,
                         &|exact| f64::from(exact) / 256.0,
+                        None,
                         &mut out,
                     );
                 }
@@ -563,7 +565,7 @@ fn noted<F: FnMut(usize, &Shaped)>(
     let note = |exact: u16| f64::from(exact >> 8);
     match shape.kind {
         FillKind::Alternate | FillKind::List => {
-            filled(rows, range, shape, f64::from(MAX_NOTE), &note, out);
+            filled(rows, range, shape, f64::from(MAX_NOTE), &note, None, out);
         }
         FillKind::Snap => {
             for offset in rows.ones() {
@@ -593,12 +595,24 @@ fn noted<F: FnMut(usize, &Shaped)>(
                 seen: &mut out.seen,
             };
             let position = |exact: u16| ladder.position((exact >> 8) as u8);
+            // A random fill weighing its notes works out each one's odds once.
+            let odds = (kind == FillKind::Random && shape.random.weighs(scale)).then(|| {
+                let (low, high) = (along.from.min(along.to), along.from.max(along.to));
+                let notes = ladder.notes();
+                let high = usize::from(high).min(notes.len() - 1);
+                Odds::new(
+                    &shape.random,
+                    scale,
+                    &notes[usize::from(low).min(high)..=high],
+                )
+            });
             filled(
                 rows,
                 range,
                 &along,
                 ladder.top(),
                 &position,
+                odds.as_ref(),
                 &mut along_ladder,
             );
         }
@@ -606,13 +620,15 @@ fn noted<F: FnMut(usize, &Shaped)>(
 }
 
 /// The values on the rows chosen, for a column whose values run from 0 to `top`. A transform reads
-/// the values there through `read`, from the column's value with its fine part.
+/// the values there through `read`, from the column's value with its fine part, and a random fill
+/// weighing its notes draws them by their `odds`.
 fn filled<F: FnMut(usize, &Shaped)>(
     rows: &Rows,
     range: StepRange,
     shape: &Shape,
     top: f64,
     read: &dyn Fn(u16) -> f64,
+    odds: Option<&Odds>,
     out: &mut Out<'_, F>,
 ) {
     if shape.kind.reworks() {
@@ -648,7 +664,16 @@ fn filled<F: FnMut(usize, &Shaped)>(
             }
             FillKind::Random => {
                 let span = high - low + 1;
-                whole((low + mix(shape.seed, held) % span) as f64)
+                let drawn = mix(shape.seed, held);
+                // Drawn evenly as it always was, unless it's shaped or weighed (decision 302).
+                let along = match odds {
+                    Some(odds) => odds.pick(&shape.random, unit(drawn)) as u64,
+                    None if shape.random.shaped() => {
+                        shape.random.pick(unit(drawn), span as usize) as u64
+                    }
+                    None => drawn % span,
+                };
+                whole((low + along) as f64)
             }
             FillKind::Walk => whole(f64::from(walker.at(index / run))),
             FillKind::Pink => {

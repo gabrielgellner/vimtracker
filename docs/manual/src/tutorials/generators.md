@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds eleven of them out of what vimtracker already has, each as a
+let you steer. This chapter builds twelve of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -19,6 +19,7 @@ there are no samples to find.
 | `euclid`, again | Noise Engineering's Numeric Repetitor | `S`'s `Multiply` on the kick's rhythm |
 | `walks`, again | Xaoc Devices' Leibniz | `S`'s bit transforms on the tune and the hats |
 | `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
+| `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
@@ -664,6 +665,58 @@ order, so three tracks of samples named `BD`, `SD` and `CH`, or nothing at all, 
 *   On the Gen page, `Space 8`, the drum's device is titled `Grids  BD`, its map, density and
     chaos ready to turn while it plays, and on the Roto its first knobs.
 
+## Marbles' X
+
+Marbles' X section makes random voltages, and three knobs shape them. Spread runs from one
+value, through a bell narrowing round it, to any value as likely at noon, and on to the two ends
+alone. Bias leans them low or high. Steps quantizes them to a scale, and turned further lets
+fewer of its degrees through, the most important first: the root, then the fifth, then the
+third. Vermona's meloDICER has a fader for each semitone, how often it comes. `Random` has all
+of these: `Spread`, `Bias`, and on the Note column `Steps` and `Weights`.
+
+**How the song does it.** Four tracks in D dorian, three of them live `Random`s:
+
+| Track | Column | Shape |
+|---|---|---|
+| `X1` | Note | `D-3` to `D-5` on every other row of two bars, `Spread` `40%`, `Steps` 4 |
+| `X2` | Note | `D-1` to `D-2` on `Euclid` 7 of 16, `Spread` `100%`, `Bias` `-40` |
+| `HH` | Velocity | `30` to `7F` over 16 hats, `Spread` `25%`, `Bias` `+50` |
+
+`Steps` 4 lets through dorian's root, fifth, third and seventh, D, A, F and C, so the tune is
+always on a Dm7, and the bell keeps it near the middle, round `D-4`, with a leap now and then.
+The bass has only its two ends, an octave apart, the low one seven notes in ten. The hats'
+velocities gather toward the top, loud but never the same twice. Then a kick on every beat.
+[`song.ron`](songs/marbles/song.ron)
+
+**Build it.**
+
+1.  `:set scale=dorian`, `:set root=d` and `:bpm 112`.
+2.  The tune, on track 1: `Space 5`, `K` `string` `Enter`, `:name X1`. `Space 3`, `:len 32`,
+    then `vG` on the Note column and `S`. On `Fill`, `K` `random` `Enter`. `From` `d3` and `To`
+    `d5` (`i`, the note, `Enter`), `Spread` `40` and `Steps` 4 (`i` and the number, `Enter`),
+    `Where` `Every` with an `Amount` of 2, and `L`. The panel says `4 of 7: D A F C`.
+3.  The bass: `W`, on its Sound page `K` `va` `Enter`, `:name X2`, and in the phrase view `vG`,
+    `S`, `Fill` `Random`, `From` `d1`, `To` `d2`, `Spread` `100`, `Bias` `-40`, `Where` `Euclid`
+    with 7 hits, and `L`.
+4.  The hats: `W`, `K` `/hat` `Enter`, `:name HH`, and a `C-4` on all 16 rows. `l` to the
+    Velocity column, `gg`, `vG`, `S`, `Fill` `Random`, `From` `30`, `To` `7F`, `Spread` `25`,
+    `Bias` `50`, and `L`.
+
+Then a `Kick` on every beat. The finished song also sets the string's `Decay` and `Bright`, the
+bass's filter, the delay and reverb sends, and the levels.
+
+**Try next.**
+
+*   `gl` on the tune and `-` on `Steps`: at 3 it's a D minor arpeggio, at 1 only Ds, an octave
+    line. All 7 is dorian again.
+*   `Steps` back to all 7, then `Weights`, `i` `F4F4F4F` `Enter`: a hex digit a degree from D,
+    so all of dorian plays, but the chord's four notes most of the time, as on the meloDICER.
+*   `Spread` `0%` on the tune: one note, `D-4`, the middle of the range. With `Bias` `+50`, the
+    `A-4` three quarters of the way up.
+*   On the Gen page, `Space 8`, `Spread` and `Bias` are cells to turn while it plays, and with
+    `M` a macro: map both to one, and an LFO on it sweeps the tune from a drone to a scatter.
+*   `Vary` `Each pass` on the bass, and every pass draws a new pattern of octaves.
+
 ## Variations of your own phrase
 
 Write a line, then ask for another one like it. A Markov chain does that by
@@ -720,7 +773,6 @@ These are planned, each its own issue, and this chapter grows a section as each 
 
 | Issue | Generator |
 |---|---|
-| [#585](https://github.com/gabrielgellner/vimtracker/issues/585) | Marbles' shaped random values: Spread, Bias and weighted scale Steps |
 | [#586](https://github.com/gabrielgellner/vimtracker/issues/586) | Marbles' rhythm models as `Where` choices |
 | [#589](https://github.com/gabrielgellner/vimtracker/issues/589) | Cellular automata rhythms from Wolfram's elementary rules |
 | [#590](https://github.com/gabrielgellner/vimtracker/issues/590) | Tonnetz chord movement: P, L and R moves |

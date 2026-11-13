@@ -52,6 +52,7 @@ fn ramp(from: u8, to: u8) -> Shape {
         pink: Pink::default(),
         bits: Bits::default(),
         grids: Grids::default(),
+        random: vt_model::shape::Random::default(),
         vary: 0,
         variation: vt_model::shape::Variation::default(),
     }

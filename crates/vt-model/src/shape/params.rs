@@ -11,13 +11,14 @@
 //! and, later, the engine work them out alike.
 
 use crate::lfo::{Shape as Wave, note_rates};
+use crate::scale::Scale;
 use crate::step::Step;
 
 use super::{
-    Acid, Bits, DEFAULT_RATE, DrumPart, EUCLID_HITS, Edge, FillKind, Grids, MAX_ACID_NOTES,
-    MAX_BEND, MAX_DEPTH, MAX_FACTOR, MAX_ORDER, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Pink, Shape,
-    ShapeColumn, Source, VARIES, Values, Variation, WAVES, WaveRate, Where, default_step,
-    first_note,
+    Acid, Bits, DEFAULT_RATE, Degrees, DrumPart, EUCLID_HITS, Edge, FillKind, Grids,
+    MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH, MAX_FACTOR, MAX_ORDER, MAX_SPREAD,
+    MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Pink, Random, Shape, ShapeColumn, Source, VARIES, Values,
+    Variation, WAVES, WaveRate, Where, default_step, degree_count, degree_name, first_note,
 };
 
 /// How far a small and a large step move a curve.
@@ -189,6 +190,8 @@ pub enum Typing {
     Rate,
     /// A whole number of up to four digits, with a sign before it if `signed`.
     Whole { signed: bool },
+    /// A hex digit for each of the scale's degrees, from the root, kept with `Enter`.
+    Weights,
 }
 
 /// How a setting's values read.
@@ -219,6 +222,8 @@ pub enum Units {
     Named,
     /// A byte's bits, in hex, as a mask of them.
     Bits,
+    /// A hex digit for each of the scale's degrees, from the root, how often it comes.
+    Weights,
 }
 
 /// A generator's setting. [`GenParam::ALL`] is every one, in the order the shape panel lists
@@ -252,6 +257,13 @@ pub enum GenParam {
     Step,
     Edge,
     Depth,
+    /// A `Random` fill's own, after Marbles: how widely its values spread and which way they
+    /// lean, and on notes how many degrees it lets through, the most important first, and how
+    /// often each comes.
+    Spread,
+    Bias,
+    Steps,
+    Weights,
     /// What `Multiply` multiplies the rhythm by, and whether factors 2 and 3 mask it first.
     Factor,
     Masks,
@@ -300,7 +312,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 48] = [
+    pub const ALL: [Self; 52] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -320,6 +332,10 @@ impl GenParam {
         Self::Step,
         Self::Edge,
         Self::Depth,
+        Self::Spread,
+        Self::Bias,
+        Self::Steps,
+        Self::Weights,
         Self::Factor,
         Self::Masks,
         Self::Part,
@@ -373,6 +389,10 @@ impl GenParam {
             Self::Step => "step",
             Self::Edge => "edge",
             Self::Depth => "depth",
+            Self::Spread => "spread",
+            Self::Bias => "bias",
+            Self::Steps => "steps",
+            Self::Weights => "weights",
             Self::Factor => "factor",
             Self::Masks => "masks",
             Self::Part => "part",
@@ -433,6 +453,10 @@ impl GenParam {
             Self::Step => "Step",
             Self::Edge => "Edge",
             Self::Depth => "Depth",
+            Self::Spread => "Spread",
+            Self::Bias => "Bias",
+            Self::Steps => "Steps",
+            Self::Weights => "Weights",
             Self::Factor => "Factor",
             Self::Masks => "Masks",
             Self::Part => "Part",
@@ -468,7 +492,7 @@ impl GenParam {
     pub fn units(self) -> Units {
         match self {
             Self::From | Self::To | Self::Values | Self::Axis | Self::Pitch => Units::Column,
-            Self::Curve | Self::S => Units::Bend,
+            Self::Curve | Self::S | Self::Bias => Units::Bend,
             Self::Transpose => Units::Interval,
             Self::Phase => Units::Degrees,
             Self::Notes
@@ -477,7 +501,9 @@ impl GenParam {
             | Self::Depth
             | Self::Factor
             | Self::Turn
+            | Self::Steps
             | Self::Order => Units::Count,
+            Self::Weights => Units::Weights,
             Self::Flip | Self::Keep => Units::Bits,
             Self::Step => Units::Step,
             Self::Every | Self::Late => Units::Rows,
@@ -487,6 +513,7 @@ impl GenParam {
             | Self::Accent
             | Self::Slide
             | Self::Chance
+            | Self::Spread
             | Self::Temperature => Units::Percent,
             Self::MapX
             | Self::MapY
@@ -513,12 +540,18 @@ impl GenParam {
 
     /// Whether the engine can hold it as it plays, so a macro's lock or modulation reaches it
     /// (decision 300): not a list setting, whose choices are a `Vec` built as they're asked for,
-    /// nor a `List`'s values, which have no number. A macro on `Wave` or `Rate` writes its column
-    /// by hand instead (decision 294).
+    /// nor a `List`'s values or a `Random`'s weights, which have no number. A macro on `Wave` or
+    /// `Rate` writes its column by hand instead (decision 294).
     pub fn held_in_engine(self) -> bool {
         !matches!(
             self,
-            Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Source | Self::Values
+            Self::Fill
+                | Self::Wave
+                | Self::Rate
+                | Self::Where
+                | Self::Source
+                | Self::Values
+                | Self::Weights
         )
     }
 
@@ -533,10 +566,12 @@ impl GenParam {
     /// `Where`; each bit transform has its one setting. `Grids` makes its own rhythm, so it has
     /// no `Where` either; it has the density of its own part alone, or while the panel shapes
     /// several tracks, each taking its own part, every part's and no `Part`; and its `Note` only
-    /// where it `generates`, as a hit takes the note there or the first one. A `Variation` learns
-    /// its rows with its notes, so it has its `Order` and `Temperature` and no `Where`. Only a
-    /// shape that draws from its seed has `Vary`.
-    pub fn exists_for(self, shape: &Shape, generates: bool) -> bool {
+    /// where it `generates`, as a hit takes the note there or the first one. `Random` has its
+    /// `Spread` and `Bias` on every `column`, and its `Steps` and `Weights` on the Note column,
+    /// where there are degrees to let through. A `Variation` learns its rows with its notes, so
+    /// it has its `Order` and `Temperature` and no `Where`. Only a shape that draws from its seed
+    /// has `Vary`.
+    pub fn exists_for(self, shape: &Shape, column: ShapeColumn, generates: bool) -> bool {
         let kind = shape.kind;
         let grids = kind == FillKind::Grids;
         let density = |part: DrumPart| grids && shape.grids.part.is_none_or(|own| own == part);
@@ -571,6 +606,10 @@ impl GenParam {
             Self::Density => acid && generates,
             Self::Step | Self::Edge => kind == FillKind::Walk,
             Self::Depth => kind == FillKind::Pink,
+            Self::Spread | Self::Bias => kind == FillKind::Random,
+            Self::Steps | Self::Weights => {
+                kind == FillKind::Random && matches!(column, ShapeColumn::Note { .. })
+            }
             Self::Factor | Self::Masks => kind == FillKind::Multiply,
             Self::Part => grids && shape.grids.part.is_some(),
             Self::Pitch => grids && generates,
@@ -622,8 +661,9 @@ impl GenParam {
             ],
             _ => [Some(Self::Fill), Some(Self::Where), None, None],
         };
+        // A shape has `Vary` where it draws from its seed, whatever its column.
         if let Some(free) = title.iter_mut().find(|place| place.is_none())
-            && Self::Vary.exists_for(shape, false)
+            && shape.draws()
         {
             *free = Some(Self::Vary);
         }
@@ -632,13 +672,19 @@ impl GenParam {
 
     /// Where a shape's other settings sit on the Gen page, in columns of rows, top to bottom (the
     /// study's §3.2): the fill's own in the first two, and its `Where`'s at the foot of the last,
-    /// so they stay put as the fill changes, with `Acid`'s `Density` above them. A random fill's
-    /// curve does nothing, so it isn't placed, and only the settings the shape has are. `Grids`
-    /// has the map and chaos first, then its part's density, and has no `Where`.
-    pub fn grid(shape: &Shape, generates: bool) -> [[Option<Self>; GEN_ROWS]; GEN_COLUMNS] {
+    /// so they stay put as the fill changes, with `Acid`'s `Density` or a random fill's `Weights`
+    /// above them. A random fill's curve does nothing, so it isn't placed, and only the settings
+    /// the shape has on its `column` are. `Grids` has the map and chaos first, then its part's
+    /// density, and has no `Where`.
+    pub fn grid(
+        shape: &Shape,
+        column: ShapeColumn,
+        generates: bool,
+    ) -> [[Option<Self>; GEN_ROWS]; GEN_COLUMNS] {
         use GenParam::*;
         let none = [None; GEN_ROWS];
-        let has = |param: Option<Self>| param.filter(|param| param.exists_for(shape, generates));
+        let has =
+            |param: Option<Self>| param.filter(|param| param.exists_for(shape, column, generates));
         if shape.kind == FillKind::Grids {
             let grid = match shape.grids.part {
                 Some(part) => [
@@ -659,7 +705,11 @@ impl GenParam {
                 [Some(From), Some(To), Some(Run)],
                 [Some(Curve), Some(S), None],
             ],
-            FillKind::Random | FillKind::Alternate => [[Some(From), Some(To), Some(Run)], none],
+            FillKind::Random => [
+                [Some(From), Some(To), Some(Run)],
+                [Some(Spread), Some(Bias), Some(Steps)],
+            ],
+            FillKind::Alternate => [[Some(From), Some(To), Some(Run)], none],
             FillKind::Walk => [
                 [Some(From), Some(To), Some(Run)],
                 [Some(Step), Some(Edge), None],
@@ -695,8 +745,10 @@ impl GenParam {
             super::Where::Euclid { .. } => [None, Some(Hits), Some(Rotate)],
             _ => none,
         };
-        if shape.kind == FillKind::Acid {
-            last[0] = Some(Density);
+        match shape.kind {
+            FillKind::Acid => last[0] = Some(Density),
+            FillKind::Random => last[0] = Some(Weights),
+            _ => {}
         }
         [fill[0].map(has), fill[1].map(has), last.map(has)]
     }
@@ -729,11 +781,11 @@ impl GenParam {
         self.grids_byte(&mut grids).map(|value| *value)
     }
 
-    /// The settings a shape has, in order.
-    pub fn of(shape: &Shape, generates: bool) -> Vec<Self> {
+    /// The settings a shape has on a column, in order.
+    pub fn of(shape: &Shape, column: ShapeColumn, generates: bool) -> Vec<Self> {
         Self::ALL
             .into_iter()
-            .filter(|param| param.exists_for(shape, generates))
+            .filter(|param| param.exists_for(shape, column, generates))
             .collect()
     }
 
@@ -821,6 +873,16 @@ impl GenParam {
             }
             Self::Edge => shape.walk.edge.name().to_owned(),
             Self::Depth => shape.pink.depth.to_string(),
+            Self::Spread => format!("{}%", shape.random.spread),
+            Self::Bias => bend(shape.random.bias),
+            Self::Steps => match column {
+                ShapeColumn::Note { scale, .. } => steps_name(shape.random, scale),
+                _ => String::new(),
+            },
+            Self::Weights => match column {
+                ShapeColumn::Note { scale, .. } => shape.random.weights_text(scale),
+                _ => String::new(),
+            },
             Self::Factor => shape.bits.factor.to_string(),
             Self::Masks => on_off(shape.bits.masks),
             Self::Part => shape
@@ -898,7 +960,8 @@ impl GenParam {
             Self::Values if hex => Typing::HexList,
             Self::Values => Typing::Named { list: true },
             Self::Rate => Typing::Rate,
-            Self::Curve | Self::S | Self::Transpose => Typing::Whole { signed: true },
+            Self::Weights => Typing::Weights,
+            Self::Curve | Self::S | Self::Transpose | Self::Bias => Typing::Whole { signed: true },
             _ => Typing::Whole { signed: false },
         }
     }
@@ -1067,6 +1130,29 @@ impl GenParam {
                 let (low, high) = (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH));
                 shape.pink.depth = moved(i32::from(shape.pink.depth), by(1, 2), low, high) as u8;
             }
+            Self::Spread => {
+                let most = i32::from(MAX_SPREAD);
+                let spread = moved(i32::from(shape.random.spread), by(1, CHANCE_JUMP), 0, most);
+                shape.random.spread = spread as u8;
+            }
+            Self::Bias => {
+                let most = i32::from(MAX_BIAS);
+                let by = by(BEND_NUDGE, BEND_JUMP);
+                shape.random.bias = moved(i32::from(shape.random.bias), by, -most, most) as i8;
+            }
+            Self::Steps => {
+                if let ShapeColumn::Note { scale, .. } = column {
+                    let kept = shape.random.kept(scale) as i32;
+                    let most = degree_count(scale) as i32;
+                    let kept = moved(kept, by(1, EUCLID_JUMP), 1, most);
+                    shape.random.steps = steps_kept(kept, scale);
+                }
+            }
+            Self::Weights => {
+                return Err(
+                    "Type the weights with i, a hex digit a degree from the root, like F8C4",
+                );
+            }
             Self::Factor => {
                 let most = i32::from(MAX_FACTOR);
                 let by = by(1, FACTOR_JUMP);
@@ -1151,6 +1237,10 @@ impl GenParam {
             Self::Step => shape.walk.step = default_step(context.column),
             Self::Edge => shape.walk.edge = Edge::default(),
             Self::Depth => shape.pink.depth = Pink::default().depth,
+            Self::Spread => shape.random.spread = Random::default().spread,
+            Self::Bias => shape.random.bias = Random::default().bias,
+            Self::Steps => shape.random.steps = Random::default().steps,
+            Self::Weights => shape.random.weights = Random::default().weights,
             Self::Factor => shape.bits.factor = Bits::default().factor,
             Self::Masks => shape.bits.masks = Bits::default().masks,
             Self::Part => shape.grids.part = Some(starts.part.unwrap_or_default()),
@@ -1308,6 +1398,39 @@ impl GenParam {
                     _ => return Err("Step is a whole number above 0"),
                 }
             }
+            Self::Spread => match text.parse::<u16>() {
+                Ok(spread) => shape.random.spread = spread.min(u16::from(MAX_SPREAD)) as u8,
+                Err(_) => return Err("Spread runs from 0 to 100"),
+            },
+            Self::Bias => match text.parse::<i16>() {
+                Ok(lean) => {
+                    let most = i16::from(MAX_BIAS);
+                    shape.random.bias = lean.clamp(-most, most) as i8;
+                }
+                Err(_) => return Err("Bias runs from -100 to 100"),
+            },
+            Self::Steps => match (column, text.parse::<u8>()) {
+                (ShapeColumn::Note { scale, .. }, Ok(kept)) if kept > 0 => {
+                    shape.random.steps = steps_kept(i32::from(kept), scale);
+                }
+                _ => return Err("Steps is how many degrees it lets through, from 1"),
+            },
+            Self::Weights => {
+                let ShapeColumn::Note { scale, .. } = column else {
+                    return Ok(());
+                };
+                let digits: Option<Vec<u8>> = text
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .map(|c| c.to_digit(16).map(|digit| digit as u8))
+                    .collect();
+                match digits {
+                    Some(digits) if !digits.is_empty() && digits.len() <= degree_count(scale) => {
+                        shape.random.weights[..digits.len()].copy_from_slice(&digits);
+                    }
+                    _ => return Err("Weights are a hex digit a degree from the root, like F8C4"),
+                }
+            }
             Self::Depth => match text.parse::<u8>() {
                 Ok(depth) if (MIN_DEPTH..=MAX_DEPTH).contains(&depth) => shape.pink.depth = depth,
                 _ => return Err("Depth runs from 2 to 8"),
@@ -1400,6 +1523,13 @@ impl GenParam {
             Self::Temperature => (0, 100),
             Self::Step => (1, i32::from(longest_step(column))),
             Self::Depth => (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH)),
+            Self::Spread => (0, i32::from(MAX_SPREAD)),
+            Self::Bias => (-i32::from(MAX_BIAS), i32::from(MAX_BIAS)),
+            Self::Steps => match column {
+                ShapeColumn::Note { scale, .. } => (1, degree_count(scale) as i32),
+                _ => return None,
+            },
+            Self::Weights => return None,
             Self::Phase => (0, 359),
             Self::Values => return None,
             Self::Run => (1, i32::from(MAX_RUN)),
@@ -1434,6 +1564,13 @@ impl GenParam {
             Self::Step => i32::from(shape.walk.step),
             Self::Edge => i32::from(shape.walk.edge == Edge::Wrap),
             Self::Depth => i32::from(shape.pink.depth),
+            Self::Spread => i32::from(shape.random.spread),
+            Self::Bias => i32::from(shape.random.bias),
+            Self::Steps => match context.column {
+                ShapeColumn::Note { scale, .. } => shape.random.kept(scale) as i32,
+                _ => return None,
+            },
+            Self::Weights => return None,
             Self::Factor => i32::from(shape.bits.factor),
             Self::Masks => i32::from(shape.bits.masks),
             Self::Part => shape.grids.part?.index() as i32,
@@ -1550,6 +1687,14 @@ impl GenParam {
                 };
             }
             Self::Depth => shape.pink.depth = number as u8,
+            Self::Spread => shape.random.spread = number as u8,
+            Self::Bias => shape.random.bias = number as i8,
+            Self::Steps => {
+                if let ShapeColumn::Note { scale, .. } = context.column {
+                    shape.random.steps = steps_kept(number, scale);
+                }
+            }
+            Self::Weights => {}
             Self::Factor => shape.bits.factor = number as u8,
             Self::Masks => shape.bits.masks = number != 0,
             Self::Part => shape.grids.part = Some(DrumPart::ALL[number as usize]),
@@ -1582,6 +1727,31 @@ fn vary_name(passes: u8) -> String {
         0 => "Once".to_owned(),
         1 => "Each pass".to_owned(),
         passes => format!("Every {passes} passes"),
+    }
+}
+
+/// `Steps` as the panel shows it: `All 7`, or how many of the degrees it lets through and which,
+/// the most important first, as `3 of 7: C G E`.
+fn steps_name(random: Random, scale: Scale) -> String {
+    let (kept, degrees) = (random.kept(scale), degree_count(scale));
+    if kept >= degrees {
+        return format!("All {degrees}");
+    }
+    let names: Vec<&str> = Degrees::of(scale).order()[..kept]
+        .iter()
+        .map(|degree| degree_name(scale, usize::from(*degree)))
+        .collect();
+    format!("{kept} of {degrees}: {}", names.join(" "))
+}
+
+/// What `Steps` keeps for letting `kept` degrees through: 0 for all of them, so letting every
+/// degree through is as it starts.
+fn steps_kept(kept: i32, scale: Scale) -> u8 {
+    let degrees = degree_count(scale) as i32;
+    if kept >= degrees {
+        0
+    } else {
+        kept.max(1) as u8
     }
 }
 
@@ -1701,6 +1871,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids: Grids::default(),
+            random: crate::shape::Random::default(),
             vary: 0,
             variation: crate::shape::Variation::default(),
         }
@@ -1736,7 +1907,7 @@ mod tests {
     #[test]
     fn each_fill_has_its_own_settings_in_the_panels_order() {
         use GenParam::*;
-        let of = |kind, generates| GenParam::of(&shape(kind), generates);
+        let of = |kind, generates| GenParam::of(&shape(kind), note(), generates);
         assert_eq!(
             of(FillKind::Ramp, false),
             [Fill, From, To, Curve, S, Run, Where]
@@ -1781,31 +1952,31 @@ mod tests {
         let mut kept = shape(FillKind::Acid);
         kept.acid.keep = true;
         assert_eq!(
-            GenParam::of(&kept, false),
+            GenParam::of(&kept, note(), false),
             [Fill, Octave, Accent, Slide, Pitches, Where, Vary]
         );
         let mut euclid = shape(FillKind::Alternate);
         euclid.place = crate::shape::Where::Euclid { hits: 3, rotate: 0 };
         assert_eq!(
-            GenParam::of(&euclid, false),
+            GenParam::of(&euclid, note(), false),
             [Fill, From, To, Run, Where, Hits, Rotate]
         );
         euclid.place = crate::shape::Where::Chance(50);
         assert!(
-            GenParam::of(&euclid, false).ends_with(&[Where, Chance, Vary]),
+            GenParam::of(&euclid, note(), false).ends_with(&[Where, Chance, Vary]),
             "rows chosen by chance are drawn, so they vary"
         );
         let mut random = shape(FillKind::Wave);
         random.wave = crate::lfo::Shape::Smooth;
-        assert!(GenParam::of(&random, false).ends_with(&[Where, Vary]));
+        assert!(GenParam::of(&random, note(), false).ends_with(&[Where, Vary]));
         let mut follow = shape(FillKind::Follow);
         assert_eq!(
-            GenParam::of(&follow, false),
+            GenParam::of(&follow, note(), false),
             [Fill, Source, Transpose, Invert, Reverse, Late, CopyFx],
             "a Follow writes every row, so it has no Where"
         );
         follow.follow.invert = true;
-        assert!(GenParam::of(&follow, false).contains(&Axis));
+        assert!(GenParam::of(&follow, note(), false).contains(&Axis));
     }
 
     /// `Vary` lists its choices, goes round them, and as a number is their place, set and read
@@ -1850,7 +2021,7 @@ mod tests {
         GenParam::Vary.reset(&mut random, &velocity, Starts::default());
         assert_eq!(random.vary, 0);
         // A ramp writes the same whatever its seed, so it has nothing to vary.
-        assert!(!GenParam::Vary.exists_for(&shape(FillKind::Ramp), false));
+        assert!(!GenParam::Vary.exists_for(&shape(FillKind::Ramp), note(), false));
         assert_eq!(
             GenParam::title(&random),
             [
@@ -1891,7 +2062,7 @@ mod tests {
         GenParam::Temperature.reset(&mut variation, &notes, Starts::default());
         assert!(variation.variation.is_default());
         assert_eq!(
-            GenParam::grid(&variation, false)[0],
+            GenParam::grid(&variation, note(), false)[0],
             [Some(GenParam::Order), Some(GenParam::Temperature), None]
         );
         assert_eq!(
@@ -1922,10 +2093,14 @@ mod tests {
                     base.follow.invert = true;
                     let placed: Vec<GenParam> = GenParam::title(&base)
                         .into_iter()
-                        .chain(GenParam::grid(&base, generates).into_iter().flatten())
+                        .chain(
+                            GenParam::grid(&base, note(), generates)
+                                .into_iter()
+                                .flatten(),
+                        )
                         .flatten()
                         .collect();
-                    let mut wanted = GenParam::of(&base, generates);
+                    let mut wanted = GenParam::of(&base, note(), generates);
                     // A random fill's curve does nothing, so the page leaves it out.
                     if kind == FillKind::Random {
                         wanted.retain(|param| !matches!(param, GenParam::Curve | GenParam::S));
@@ -1953,8 +2128,11 @@ mod tests {
                 base.follow.invert = true;
                 base.follow.transpose = -48;
                 base.run = MAX_RUN;
-                for param in GenParam::of(&base, true) {
-                    if param.units() == Units::Named || param == GenParam::Values {
+                for param in GenParam::of(&base, note(), true) {
+                    // Lists show in full, as they have no bar beside them.
+                    if matches!(param.units(), Units::Named | Units::Weights)
+                        || param == GenParam::Values
+                    {
                         continue;
                     }
                     let brief = param.brief(&base, &generated);
@@ -2059,7 +2237,7 @@ mod tests {
             for place in note().wheres() {
                 let mut base = shape(kind);
                 base.place = place;
-                for param in GenParam::of(&base, true) {
+                for param in GenParam::of(&base, note(), true) {
                     let Some((low, high)) = param.bounds(&generated) else {
                         continue;
                     };
@@ -2087,5 +2265,84 @@ mod tests {
         let at = GenParam::Where.number(&ramp, &velocity).unwrap();
         GenParam::Where.set_number(&mut ramp, &velocity, at);
         assert_eq!(ramp.place, Where::Every(7));
+    }
+
+    /// `Random`'s own settings after Marbles (decision 302): `Spread` and `Bias` on every column,
+    /// and `Steps` and `Weights` on notes, where there are degrees; as they start, they're left
+    /// out of the song.
+    #[test]
+    fn a_random_fill_spreads_leans_and_weighs_its_degrees() {
+        use GenParam::*;
+        let mut random = shape(FillKind::Random);
+        assert_eq!(
+            GenParam::of(&random, note(), false),
+            [
+                Fill, From, To, Spread, Bias, Steps, Weights, Curve, S, Run, Where, Vary
+            ]
+        );
+        assert_eq!(
+            GenParam::of(&random, ShapeColumn::Velocity, false),
+            [Fill, From, To, Spread, Bias, Curve, S, Run, Where, Vary]
+        );
+        assert_eq!(
+            GenParam::grid(&random, note(), false),
+            [
+                [Some(From), Some(To), Some(Run)],
+                [Some(Spread), Some(Bias), Some(Steps)],
+                [Some(Weights), None, None],
+            ]
+        );
+        let notes = context(ShapeColumn::Note {
+            scale: Scale {
+                on: true,
+                ..Scale::default()
+            },
+            writes: None,
+        });
+        assert_eq!(Spread.shown(&random, &notes), "50%");
+        assert_eq!(Bias.shown(&random, &notes), "0");
+        assert_eq!(Steps.shown(&random, &notes), "All 7");
+        assert_eq!(Weights.shown(&random, &notes), "FFFFFFF");
+        assert!(random.random.is_default());
+
+        Bias.step(&mut random, &notes, 1, true).unwrap();
+        assert_eq!(Bias.shown(&random, &notes), "+25");
+        Spread.typed(&mut random, &notes, "150").unwrap();
+        assert_eq!(random.random.spread, 100);
+        Steps.step(&mut random, &notes, -1, false).unwrap();
+        Steps.step(&mut random, &notes, -1, false).unwrap();
+        Steps.step(&mut random, &notes, -1, false).unwrap();
+        Steps.step(&mut random, &notes, -1, false).unwrap();
+        assert_eq!(Steps.shown(&random, &notes), "3 of 7: C G E");
+        assert_eq!(Steps.brief(&random, &notes), "3");
+        Steps.typed(&mut random, &notes, "9").unwrap();
+        assert_eq!(random.random.steps, 0, "past the last, every degree");
+        assert!(Steps.typed(&mut random, &notes, "0").is_err());
+        Steps.set_number(&mut random, &notes, 2);
+        assert_eq!(Steps.number(&random, &notes), Some(2));
+        assert_eq!(Steps.bounds(&notes), Some((1, 7)));
+        assert_eq!(Steps.bounds(&context(ShapeColumn::Velocity)), None);
+
+        Weights.typed(&mut random, &notes, "f0 8").unwrap();
+        assert_eq!(Weights.shown(&random, &notes), "F08FFFF");
+        assert!(
+            Weights.typed(&mut random, &notes, "FFFFFFFF").is_err(),
+            "eight"
+        );
+        assert!(Weights.typed(&mut random, &notes, "G").is_err());
+        assert!(Weights.step(&mut random, &notes, 1, false).is_err());
+        assert_eq!(Weights.typing(note()), Typing::Weights);
+        assert_eq!(Weights.bounds(&notes), None);
+        let chromatic = context(note());
+        assert_eq!(Weights.shown(&random, &chromatic), "F08FFFFFFFFF");
+        assert_eq!(Steps.shown(&random, &chromatic), "2 of 12: C G");
+
+        // Spread and Bias are numbers the engine holds, so macros reach them; Weights isn't.
+        assert!(Spread.held_in_engine() && Bias.held_in_engine() && Steps.held_in_engine());
+        assert!(!Weights.held_in_engine());
+        for param in [Spread, Bias, Steps, Weights] {
+            param.reset(&mut random, &notes, Starts::default());
+        }
+        assert!(random.random.is_default());
     }
 }

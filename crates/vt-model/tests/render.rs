@@ -16,8 +16,8 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
     Acid, Bits, DrumPart, Edge, FillKind, Follow, GenCell, Grids, MAX_DEPTH, MAX_FACTOR,
-    MAX_VALUES, Pink, RowView, Shape, ShapeColumn, Values, Variation, WAVES, Walk, WaveRate, Where,
-    render_into, written_from,
+    MAX_VALUES, MAX_WEIGHT, Pink, Random, RowView, Shape, ShapeColumn, Values, Variation, WAVES,
+    Walk, WaveRate, Where, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -312,6 +312,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         pink: Pink::default(),
         bits: Bits::default(),
         grids: Grids::default(),
+        random: Random::default(),
         vary: 0,
         variation: Variation::default(),
     };
@@ -349,6 +350,41 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         },
     };
     shape
+}
+
+/// A fill's settings added since its line was made, drawn, each such fill hashed again under a name
+/// of its own (decision 302), so its own line, with them as they start, stays as it was.
+type Variant = (&'static str, FillKind, fn(&mut Shape));
+
+const VARIANTS: [Variant; 1] = [("Random shaped", FillKind::Random, shaped_random)];
+
+/// A `Random`'s spread, bias, steps and weights, drawn from its seed, some at their ends.
+fn shaped_random(shape: &mut Shape) {
+    let mut more = Dice(shape.seed ^ 0x6A2B);
+    let spread = if more.chance(25) {
+        more.pick(&[0, 50, 100])
+    } else {
+        more.below(101) as u8
+    };
+    let bias = if more.chance(30) {
+        0
+    } else {
+        (more.below(201) as i16 - 100) as i8
+    };
+    let steps = more.below(14) as u8;
+    let weights = std::array::from_fn(|_| {
+        if more.chance(50) {
+            MAX_WEIGHT
+        } else {
+            more.below(u64::from(MAX_WEIGHT) + 1) as u8
+        }
+    });
+    shape.random = Random {
+        spread,
+        bias,
+        steps,
+        weights,
+    };
 }
 
 /// One case: the phrase's steps, the rows, and what a `Follow` reads.
@@ -400,6 +436,22 @@ fn fnv(hash: &mut u64, bytes: &[u8]) {
 
 const CASES: usize = 160;
 
+/// A fill to hash by its name, with what a variant draws on top of its case, if it's one.
+type Hashed = (&'static str, FillKind, Option<fn(&mut Shape)>);
+
+/// Every fill by its name, then the variants, each with what it draws on top of a fill's case.
+fn fills() -> Vec<Hashed> {
+    FillKind::ALL
+        .into_iter()
+        .map(|kind| (kind.name(), kind, None))
+        .chain(
+            VARIANTS
+                .into_iter()
+                .map(|(name, kind, more)| (name, kind, Some(more))),
+        )
+        .collect()
+}
+
 /// What each fill writes on each column over its cases, hashed, with how many rows it wrote, keyed
 /// by the two names. Each fill and column draws its cases from its names, so a fill added changes
 /// no other's.
@@ -407,16 +459,19 @@ fn hashes(
     write: impl Fn(&Case, ShapeColumn) -> Vec<(usize, Step)>,
 ) -> BTreeMap<String, (String, usize)> {
     let mut found = BTreeMap::new();
-    for kind in FillKind::ALL {
+    for (fill, kind, more) in fills() {
         for at in 0..columns(&mut Dice(0)).len() {
-            let name = format!("{} on {}", kind.name(), columns(&mut Dice(0))[at].0);
+            let name = format!("{fill} on {}", columns(&mut Dice(0))[at].0);
             let mut seed = 0xcbf2_9ce4_8422_2325_u64;
             fnv(&mut seed, name.as_bytes());
             let mut dice = Dice(seed);
             let (mut hash, mut rows) = (0xcbf2_9ce4_8422_2325_u64, 0);
             for _ in 0..CASES {
                 let column = columns(&mut dice)[at].1;
-                let case = case(&mut dice, kind, column);
+                let mut case = case(&mut dice, kind, column);
+                if let Some(more) = more {
+                    more(&mut case.shape);
+                }
                 for (row, step) in write(&case, column) {
                     fnv(&mut hash, format!("{row} {step:?}\n").as_bytes());
                     rows += 1;
@@ -473,13 +528,12 @@ fn every_fill_writes_what_it_wrote_before_on_every_column() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/renders.txt");
     let found = hashes(rendered);
     // Every fill a column offers writes something over its cases, so each hash means something.
-    for kind in FillKind::ALL {
+    for (fill, kind, _) in fills() {
         for (name, column) in columns(&mut Dice(0)) {
-            let (_, rows) = found[&format!("{} on {name}", kind.name())];
+            let (_, rows) = found[&format!("{fill} on {name}")];
             assert!(
                 rows > 0 || !column.fills().contains(&kind),
-                "{} on {name} wrote nothing",
-                kind.name()
+                "{fill} on {name} wrote nothing"
             );
         }
     }
@@ -544,6 +598,15 @@ fn every_fill_renders_on_every_column_without_allocating() {
                             hits: 1 + dice.below(64) as u16,
                             rotate: dice.below(64) as u16,
                         };
+                    }
+                    // Half of each fill's with its variants' settings drawn, weighed notes
+                    // among them.
+                    if nth % 2 == 1 {
+                        for (_, varied, more) in VARIANTS {
+                            if varied == kind {
+                                more(&mut case.shape);
+                            }
+                        }
                     }
                     case
                 })

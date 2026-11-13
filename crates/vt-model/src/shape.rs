@@ -11,6 +11,7 @@ mod bits;
 mod follow;
 mod grids;
 pub mod params;
+mod random;
 mod render;
 mod variation;
 mod walk;
@@ -21,6 +22,10 @@ pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
 pub use params::{Context, GEN_COLUMNS, GEN_ROWS, GenParam, Starts};
+pub use random::{
+    Degrees, EVEN_SPREAD, MAX_BIAS, MAX_SPREAD, MAX_WEIGHT, Random, WEIGHTS, degree_count,
+    degree_name,
+};
 pub use render::{GenCell, RowView, render_into};
 use serde::{Deserialize, Serialize};
 pub use variation::{
@@ -750,6 +755,10 @@ pub struct Shape {
     /// Where a `Grids` fill reads its map, and the part it plays. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Grids::is_default")]
     pub grids: Grids,
+    /// How a `Random` fill spreads and leans its values, and on notes which degrees it lets
+    /// through and how often each comes. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Random::is_default")]
+    pub random: Random,
     /// What a `Variation` learns and how far it strays. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Variation::is_default")]
     pub variation: Variation,
@@ -1109,6 +1118,7 @@ mod tests {
             pink: Pink::default(),
             bits: Bits::default(),
             grids: Grids::default(),
+            random: crate::shape::Random::default(),
             vary: 0,
             variation: crate::shape::Variation::default(),
         }
