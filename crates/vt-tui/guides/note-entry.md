@@ -28,8 +28,8 @@ let go, so a chord is heard, though a row holds one note.
 
 | Keys | Does |
 |---|---|
-| `z` `x` | Octave down or up, for every note after. The status line shows it as `Oct` |
-| `k` `,` | The note just written an octave up or down, or held, the notes played |
+| `z` `x` | Octave down or up, from now on. The status line shows `Oct` |
+| `k` `,` | The last note an octave up or down, or held, the notes played |
 | `c` `v` | Lower or raise the velocity written. The status line shows `Vel` |
 | `1` | Note off |
 | `'` | Accent the note just written, or held, the notes played |
