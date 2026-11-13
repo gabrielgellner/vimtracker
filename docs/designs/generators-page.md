@@ -749,6 +749,10 @@ holds `MAX_ACID_NOTES + 1`.)
   the column the generator owns. A small `RowView` of the step and its cells does that in one
   place.
 
+(Built in #622 as decisions 288 and 289 say: what moves a generator is, for now, a number the engine
+holds one of its settings at, which #623's macros will set; the list settings stay the shape's; and
+the scratch has room for a whole phrase of cells for each track.)
+
 ### 7.3 Passes and seeds
 
 * **A pass** is each time the phrase starts on its track, counted from its place in the chain, as

@@ -16,7 +16,7 @@ pub use bits::{Bits, MAX_FACTOR};
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use params::{Context, GEN_COLUMNS, GEN_ROWS, GenParam, Starts};
-pub use render::{GenCell, render_into};
+pub use render::{GenCell, RowView, render_into};
 use serde::{Deserialize, Serialize};
 pub use walk::{Edge, MAX_DEPTH, MIN_DEPTH, Pink, Walk, default_step};
 

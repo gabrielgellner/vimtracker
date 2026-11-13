@@ -15,7 +15,7 @@ use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
 use crate::scale::Scale;
 use crate::selection::StepRange;
-use crate::step::{FxSlot, Gate, MAX_NOTE, MAX_NUDGE, MIN_NOTE, Mark, Note, Step};
+use crate::step::{FxSlot, Gate, GateKind, MAX_NOTE, MAX_NUDGE, MIN_NOTE, Mark, Note, Step};
 
 /// What a shape leaves in its column on a row: a small value of its own, never a `Step`, whose FX
 /// are a `Vec`, so a buffer of them can be made ahead and filled on the audio thread.
@@ -82,6 +82,94 @@ impl GenCell {
             Self::Fx(fx) => {
                 if let ShapeColumn::Fx { slot, .. } = column
                     && let Some(cell) = step.fx.get_mut(slot)
+                {
+                    *cell = fx;
+                }
+            }
+        }
+    }
+}
+
+/// A row as it's heard: a step's cells, copied out of it so a generator's cells can be laid over
+/// them where they're read, without a `Step` to write into. The engine reads every row through
+/// one, and what's laid over one is what [`GenCell::apply`] writes into a step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RowView {
+    pub note: Note,
+    pub velocity: Option<u8>,
+    pub nudge: i8,
+    pub gate: Option<Gate>,
+    /// Each FX slot the step has.
+    fx: [Option<FxSlot>; FX_SLOTS],
+}
+
+impl RowView {
+    /// A step as it's written.
+    pub fn of(step: &Step) -> Self {
+        Self {
+            note: step.note,
+            velocity: step.velocity,
+            nudge: step.nudge,
+            gate: step.gate,
+            fx: std::array::from_fn(|slot| step.fx.get(slot).copied()),
+        }
+    }
+
+    /// An FX slot, if the step has it.
+    pub fn fx(&self, slot: usize) -> Option<&FxSlot> {
+        self.fx.get(slot)?.as_ref()
+    }
+
+    /// How many steps the row lasts.
+    pub fn pulses(&self) -> usize {
+        usize::from(self.gate.map_or(1, |gate| gate.pulses))
+    }
+
+    /// What its note does over its pulses.
+    pub fn gate_kind(&self) -> GateKind {
+        self.gate.map_or(GateKind::Single, |gate| gate.kind)
+    }
+
+    /// How much of its last pulse its note lasts, if the row says.
+    pub fn length(&self) -> Option<u8> {
+        self.gate.and_then(|gate| gate.length)
+    }
+
+    /// Lay a generator's cell over it, as [`GenCell::apply`] writes one over a step.
+    pub fn lay(&mut self, column: ShapeColumn, cell: GenCell) {
+        match cell {
+            GenCell::Under => {}
+            GenCell::Pitch(note) => self.note = Note::On(note),
+            GenCell::Note {
+                note,
+                velocity,
+                gate,
+            } => {
+                self.note = note;
+                self.velocity = velocity;
+                self.gate = gate;
+            }
+            GenCell::NoteFx {
+                note,
+                velocity,
+                gate,
+                fx,
+            } => {
+                self.note = note;
+                self.velocity = velocity;
+                self.gate = gate;
+                for (slot, cell) in self.fx.iter_mut().enumerate() {
+                    if let Some(cell) = cell {
+                        *cell = fx[slot];
+                    }
+                }
+            }
+            GenCell::Velocity(velocity) => self.velocity = Some(velocity),
+            GenCell::Nudge(nudge) => self.nudge = nudge,
+            GenCell::Gate(gate) => self.gate = Some(gate),
+            GenCell::Fx(fx) => {
+                if let ShapeColumn::Fx { slot, .. } = column
+                    && let Some(Some(cell)) = self.fx.get_mut(slot)
                 {
                     *cell = fx;
                 }
