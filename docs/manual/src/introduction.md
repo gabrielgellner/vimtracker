@@ -86,9 +86,10 @@ distortion. See [The track pages: Sound, Mod and FX](guides/tracks.md).
 curve with a mark at its cutoff, a sampler's slice as a thumbnail with its start and end,
 a meter after `Trim`, each envelope's shape and each LFO's cycle with a dot riding it
 where the LFO is now, the compressor's curve and how far it's turning down, the EQ's
-curve, a scope over the main meter, and the sample page's waveform.
+curve, a scope over the main meter, the sample page's waveform, and every on/off switch, a
+small pill as big in any font, its knob right and green while on, left and faint while off.
 
-**Icons** are Nerd Font symbols, each standing for something, as a switch's state does:
+**Icons** are Nerd Font symbols, each standing for something:
 the transport on the status line, `󰐊` playing, `󰏤` paused, `󰓛` stopped and
 `󰑊` recording, a red `󰀦` once audio has dropped out, and each track's machine or
 kind in its heading. A dim leaf, `󰌪`, before the CPU figure at the top right means the

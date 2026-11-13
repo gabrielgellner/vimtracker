@@ -285,21 +285,22 @@ pub fn fx_page_text(app: &App) -> Vec<String> {
 }
 
 /// A slot's title as the FX page writes it on its frame's top: its digit, its bypass's toggle, on
-/// or off, two cells with the plain space it's drawn over, or on an empty slot the room for one,
-/// then what's after it.
+/// or off, three cells with the plain spaces its picture covers, or on an empty slot the room for
+/// one, then what's after it.
 pub fn slot_title(slot: usize, switch: Option<bool>, controls: &str) -> String {
+    use vt_tui::views::widgets::toggle;
     let switch = match switch {
-        Some(on) => format!("{} ", vt_tui::views::widgets::toggle::glyph(on)),
-        None => "  ".to_owned(),
+        Some(on) => toggle::text(on),
+        None => " ".repeat(toggle::WIDTH),
     };
     format!("╭─ {}  {switch} {controls}", slot + 1)
 }
 
-/// A mod slot's title, as `device_title` gives it: its name, its switch on or off, two cells
-/// with the plain space it's drawn over, then what follows, its type, mode and destination.
+/// A mod slot's title, as `device_title` gives it: its name, its switch on or off, three cells
+/// with the plain spaces its picture covers, then what follows, its type, mode and destination.
 pub fn modulator_title(identity: &str, on: bool, controls: &str) -> String {
-    let switch = vt_tui::views::widgets::toggle::glyph(on);
-    format!("╭─ {identity}  {switch}  {controls}")
+    let switch = vt_tui::views::widgets::toggle::text(on);
+    format!("╭─ {identity}  {switch} {controls}")
 }
 
 /// The chain the FX page's design shows: Glue, EQ3, an Overdrive and a Delay, with the cursor back
@@ -376,8 +377,8 @@ pub fn track_page_buffer(app: &App) -> ratatui::buffer::Buffer {
 
 /// Where two drawings of the same page differ, which should be only toggles flipped: every other
 /// cell's character is the same, so nothing has moved, and every toggle in either is its glyph
-/// then a plain space in its colours, two cells, which the terminal draws the glyph over. Gives
-/// the cells that flipped.
+/// then two plain spaces in its colours, three cells, which its picture covers. Gives the cells
+/// that flipped.
 pub fn toggles_flipped(
     before: &ratatui::buffer::Buffer,
     after: &ratatui::buffer::Buffer,
@@ -395,14 +396,16 @@ pub fn toggles_flipped(
         for x in 0..area.width {
             for buffer in [before, after] {
                 if switch(buffer[(x, y)].symbol()) {
-                    let space = &buffer[(x + 1, y)];
-                    assert_eq!(
-                        space.symbol(),
-                        " ",
-                        "the second cell of the toggle at {x}, {y}"
-                    );
-                    assert_eq!(space.fg, buffer[(x, y)].fg, "at {x}, {y}");
-                    assert_eq!(space.bg, buffer[(x, y)].bg, "at {x}, {y}");
+                    for after in 1..vt_tui::views::widgets::toggle::WIDTH as u16 {
+                        let space = &buffer[(x + after, y)];
+                        assert_eq!(
+                            space.symbol(),
+                            " ",
+                            "cell {after} after the toggle at {x}, {y}"
+                        );
+                        assert_eq!(space.fg, buffer[(x, y)].fg, "at {x}, {y}");
+                        assert_eq!(space.bg, buffer[(x, y)].bg, "at {x}, {y}");
+                    }
                 }
             }
             let (was, now) = (before[(x, y)].symbol(), after[(x, y)].symbol());
