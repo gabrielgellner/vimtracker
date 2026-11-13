@@ -586,6 +586,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
         mods: Default::default(),
         steps: Default::default(),
         drawn: Default::default(),
+        macros: Default::default(),
     });
     assert!(cut(&app).contains("FF00 ▕██▎     │▏"), "{}", cut(&app));
 }
@@ -1928,6 +1929,7 @@ fn the_filter_curve_moves_with_what_plays() {
         mods: Default::default(),
         steps: Default::default(),
         drawn: Default::default(),
+        macros: Default::default(),
     };
 
     // Each new value draws it once, and it holds while the value does.

@@ -588,6 +588,15 @@ the same clock (decision 239).
     starts. A slot sees values, not steps, so a step that locks a `Trig` on also marks its slot
     `struck`, and the slot is told with `InsertState::strike` as it's next given its values: a
     stutter starts again even where `Trig` was on already (decision 219).
+*   **Macros** (decision 284). After the mod slots and before the slots' effects and the voice
+    are given their values, `modulate` works each macro out, its held value (`macro_held`, which
+    a turn, a `MAC` lock or a glide sets as for any setting) plus what modulation adds, and
+    `put_macros` sets each setting it holds as that setting's base through `MacroMap::at`, where a
+    hand's turn sits: only when the macro has moved, and at once after a swap or a reset
+    (`put_macros_again`). A mod slot's own settings, the accumulator's and the arpeggio's have held
+    values too (`own_held`, `played_held`), and what plays them reads a copy with those put in
+    (`heard_slot`, `heard_mod`, `heard_accumulation`, `heard_arpeggio`) wherever they differ from
+    the song's, so a slot at rest is read as written and the code that plays it is unchanged.
 *   **Groups, returns and the master.** A grouped track's frame goes to its group, which plays the
     sum through its own trim, slots, level and pan and sends from there (`process_group`); each
     return plays what's sent to it (`process_return`); and the master plays the sum through its
