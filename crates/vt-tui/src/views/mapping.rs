@@ -74,8 +74,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
             .chars()
             .take(SETTING_WIDTH - 1)
             .collect();
-        // A generator's setting is reached by hand for now, which its row says, dim.
-        let by_hand = target.setting().is_none();
+        // A generator's `Wave` or `Rate` is reached by hand alone, which its row says, dim.
+        let by_hand = target.by_hand();
         let end = |max: bool, value: u16| {
             let text = match &view.typing {
                 Some(typed) if here && view.max == max => format!("{typed}_"),

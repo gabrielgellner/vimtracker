@@ -2476,7 +2476,7 @@ fn space_g_capital_a_leaves_envelopes_on_pitch_alone() {
     press(&mut app, " gA");
     assert_eq!(
         app.status,
-        "No Steps or LFO slot on Pitch to write into the notes"
+        "No Steps or LFO slot on Pitch, and no generator moved, to write in"
     );
 }
 

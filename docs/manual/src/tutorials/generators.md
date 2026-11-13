@@ -468,6 +468,9 @@ The finished song also sets the `Acid`'s `Resonance` `B0` and `Env mod` `70`, th
     column of the phrase under the cursor is a device, `Random  Euclid · Note 00–0F` and
     `Wave  All rows · FX1 FREQ lane 0C`. `jj$` on the note device lands on `Hits`, and `=` and `-` turn it
     as the line plays, each press its own undo step.
+*   `M1` on `Hits` maps it to macro 1, then on the Mod page an LFO with `Dest` `MAC1`: the hits
+    move under the playhead as it sweeps. The title says `󰁨 Note~`, the row playing shows the
+    notes heard, and `Space g a` keeps the pass just heard as plain notes.
 
 ## Acid lines
 

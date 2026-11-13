@@ -552,6 +552,11 @@ and a `GenScratch`, room made ahead for every track's runs and cells, which the 
 swaps the version in and leaves in the old one going back, so it's dropped on the edit thread
 (decision 289). The engine reads every row through a `RowView`, the step as written with any moving
 generator's cells laid over; at rest nothing renders, and the row is the step (decision 288).
+Each row a track plays while something reaches its generators is reported on `GEN_HEARD_QUEUE`, a
+`GenReport::Row` for each live generator on it with the cell it played, or none where it played
+what's written, and a phrase played with nothing reaching them, once, as `GenReport::Rest`; the app
+keeps the latest for each row (`App::heard_rows`), for the playhead's row, the overview, the
+title's `~`, the status line and `Space g a` and `Space g A` (decision 300).
 
 A `Playable` is one bank entry ready to play: its `SampleId` and frames, a `Span` for each slice in
 `SLI`'s order, or one for the whole entry, the whole entry's span for the sample page, its start
@@ -572,7 +577,7 @@ in `SampleEdit` changes only how a span is worked out, and the engine plays span
 a slice's settings cost the voice nothing; and `SLI 'a` is looked up rather than searched for.
 `vt-engine` names nothing from `vt_model::bank`.
 
-**Decisions:** 94, 97, 98, 105, 111, 288 and 289.
+**Decisions:** 94, 97, 98, 105, 111, 288, 289 and 300.
 
 ### The engine's block
 
@@ -607,6 +612,10 @@ the same clock (decision 239).
     values too (`own_held`, `played_held`), and what plays them reads a copy with those put in
     (`heard_slot`, `heard_mod`, `heard_accumulation`, `heard_arpeggio`) wherever they differ from
     the song's, so a slot at rest is read as written and the code that plays it is unchanged.
+    A generator's setting a macro holds (`MacroTarget::Gen`) is put into the track's `GenHolds`
+    instead (`hold_by_macro`, a layer under what `Engine::hold_generator` holds), which the next
+    row read renders from; a row's own `MAC` lock is put at once (`put_macros_now`) and the row
+    read again, so the lock is heard on its own row (decision 300).
 *   **Groups, returns and the master.** A grouped track's frame goes to its group, which plays the
     sum through its own trim, slots, level and pan and sends from there (`process_group`); each
     return plays what's sent to it (`process_return`); and the master plays the sum through its

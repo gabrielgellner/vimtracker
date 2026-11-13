@@ -27,7 +27,7 @@ use crate::theme;
 use crate::track_page::tuning::tuning_shown;
 use crate::track_page::{AccumulatorField, ArpField, Control};
 use crate::tree::ChainColumn;
-use crate::views::phrase::{heard_note, playhead_step};
+use crate::views::phrase::{generator_cell_text, heard_note, playhead_step};
 
 /// Show a tempo without trailing zeros.
 pub fn format_bpm(millibpm: u32) -> String {
@@ -120,7 +120,7 @@ pub fn column_name(app: &App) -> String {
 pub fn value_shown(app: &App) -> Option<String> {
     let track = app.track_here()?;
     if app.view == View::Phrase {
-        return phrase_value(app, app.cursor.field);
+        return heard_shown(app, app.cursor.field).or_else(|| phrase_value(app, app.cursor.field));
     }
     if app.view == View::Track
         && let Control::Accumulator(field) = app.track_control()
@@ -181,6 +181,33 @@ pub fn value_shown(app: &App) -> Option<String> {
     };
     id.exists_on(track)
         .then(|| format!("{}{note}{held}", shown(id, value)))
+}
+
+/// On a cell of a live generator a macro or `Vary` moved, what's written and what was last heard
+/// there, as `C-2 written; D#2 heard on pass 3` (decision 300).
+fn heard_shown(app: &App, field: Field) -> Option<String> {
+    let id = app.phrase_id()?;
+    let phrase = app.phrase_here()?;
+    let row = app.cursor.step;
+    let (at, generator) = phrase
+        .generators()
+        .iter()
+        .enumerate()
+        .find(|(_, generator)| {
+            crate::shaping::on_column(field, generator.column)
+                && generator
+                    .rows()
+                    .is_some_and(|rows| (rows.first..=rows.last).contains(&row))
+        })?;
+    let (heard, pass) = app.heard_cell(app.cursor.track, id, at, row)?;
+    let written = phrase.steps().get(row)?;
+    let shown = |step| generator_cell_text(step, &heard, generator.column, app.track_here());
+    Some(format!(
+        "{} written; {} heard on pass {}",
+        shown(written),
+        shown(&heard),
+        pass + 1
+    ))
 }
 
 /// A field of the row under the cursor in its setting's units, where it has them: the nudge, the
@@ -604,7 +631,7 @@ fn gen_shown(app: &App, phrase: u32, generator: usize, param: GenParam) -> Strin
         return String::new();
     };
     let context = live.context();
-    // As it's heard, and which macro holds it, by hand (decision 294).
+    // As its macros turn it, and which macro holds it (decisions 294 and 300).
     let shape = &live.generator.heard();
     let shown = match (param, shape.place) {
         (GenParam::Hits, Where::Euclid { hits, .. }) => {

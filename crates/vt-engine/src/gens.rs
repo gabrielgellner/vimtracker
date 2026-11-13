@@ -17,9 +17,11 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use vt_model::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
 use vt_model::generator::{Span, lay_under};
+use vt_model::macros::GenColumn;
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Context, FillKind, GenCell, GenParam, RowView, Shape, ShapeColumn, open_rows, render_into,
+    Context, FillKind, GenCell, GenParam, RowView, Shape, ShapeColumn, is_empty, open_rows,
+    render_into,
 };
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
@@ -32,44 +34,44 @@ const PARAMS: usize = GenParam::ALL.len();
 
 /// Where a column's settings are kept: an FX column's by its slot, whatever its command.
 fn column_place(column: ShapeColumn) -> usize {
-    match column {
-        ShapeColumn::Note { .. } => 0,
-        ShapeColumn::Velocity => 1,
-        ShapeColumn::Nudge { .. } => 2,
-        ShapeColumn::Length => 3,
-        ShapeColumn::Fx { slot, .. } => 4 + slot.min(FX_SLOTS - 1),
-    }
+    place_of(GenColumn::of(column))
 }
 
-/// Whether the engine can set a setting without allocating: a list setting's choices are a `Vec`
-/// built as they're asked for, and a `List`'s values have no number.
-fn held_in_engine(param: GenParam) -> bool {
-    !matches!(
-        param,
-        GenParam::Fill
-            | GenParam::Wave
-            | GenParam::Rate
-            | GenParam::Where
-            | GenParam::Source
-            | GenParam::Values
-    )
+/// Where a column's settings are kept, as a macro's mapping names the column.
+fn place_of(column: GenColumn) -> usize {
+    match column {
+        GenColumn::Note => 0,
+        GenColumn::Velocity => 1,
+        GenColumn::Nudge => 2,
+        GenColumn::Length => 3,
+        GenColumn::Fx(slot) => 4 + slot.min(FX_SLOTS - 1),
+    }
 }
 
 /// The numbers a track's generator settings are held at by the engine rather than by their
 /// `Shape`s, by column: what a generator on that column of any of the track's phrases plays with,
-/// as an absolute macro would hold them. None is the shape's own.
+/// as an absolute macro holds them. None is the shape's own. A number held directly
+/// ([`GenHolds::hold`]) wins over one a macro puts there, which the macros set each block as they
+/// set the registry's settings (decision 300).
 #[derive(Debug, Clone)]
 pub struct GenHolds {
     held: [[Option<i32>; PARAMS]; COLUMNS],
+    /// Where the track's macros put them, from each one's turn, a step's `MAC` lock or glide, and
+    /// what modulation adds.
+    by_macros: [[Option<i32>; PARAMS]; COLUMNS],
     /// Whether any is held, without which no row needs a generator's cells laid over it.
     any: bool,
+    /// How many times a macro has moved one, counting round, to tell whether one just did.
+    changes: u32,
 }
 
 impl Default for GenHolds {
     fn default() -> Self {
         Self {
             held: [[None; PARAMS]; COLUMNS],
+            by_macros: [[None; PARAMS]; COLUMNS],
             any: false,
+            changes: 0,
         }
     }
 }
@@ -78,14 +80,37 @@ impl GenHolds {
     /// Hold a column's setting at a number, or give it back to the shape with none. A list
     /// setting is left to the shape.
     pub fn hold(&mut self, column: ShapeColumn, param: GenParam, number: Option<i32>) {
-        let Some(at) = GenParam::ALL.iter().position(|each| *each == param) else {
-            return;
-        };
-        if !held_in_engine(param) {
-            return;
+        if let Some(at) = param_place(param) {
+            self.held[column_place(column)][at] = number;
+            self.count();
         }
-        self.held[column_place(column)][at] = number;
-        self.any = self.held.iter().flatten().any(Option::is_some);
+    }
+
+    /// Hold a column's setting where a macro puts it, the column as a mapping names it.
+    pub fn hold_by_macro(&mut self, column: GenColumn, param: GenParam, number: i32) {
+        if let Some(at) = param_place(param) {
+            let held = &mut self.by_macros[place_of(column)][at];
+            if *held != Some(number) {
+                *held = Some(number);
+                self.any = true;
+                self.changes = self.changes.wrapping_add(1);
+            }
+        }
+    }
+
+    /// Let go of every setting the macros hold, as they're about to be put again.
+    pub fn forget_macros(&mut self) {
+        self.by_macros = [[None; PARAMS]; COLUMNS];
+        self.count();
+    }
+
+    fn count(&mut self) {
+        self.any = self
+            .held
+            .iter()
+            .chain(&self.by_macros)
+            .flatten()
+            .any(Option::is_some);
     }
 
     /// Whether any setting is held.
@@ -93,16 +118,34 @@ impl GenHolds {
         self.any
     }
 
-    /// A shape as it's heard on a column: its settings held here set, each within its bounds.
-    fn heard(&self, written: &Shape, context: &Context) -> Shape {
+    /// How many times a macro has moved a setting, counting round.
+    pub fn changes(&self) -> u32 {
+        self.changes
+    }
+
+    /// A shape as it's heard on a column: its settings held here set, each within its bounds. A
+    /// setting the shape doesn't have is left alone, as the edit thread's macros leave it, so
+    /// holding it never moves a generator it means nothing to.
+    fn heard(&self, written: &Shape, context: &Context, generates: bool) -> Shape {
         let mut heard = *written;
-        for (at, number) in self.held[column_place(context.column)].iter().enumerate() {
-            if let Some(number) = number {
-                GenParam::ALL[at].set_number(&mut heard, context, *number);
+        let place = column_place(context.column);
+        let held = self.held[place].iter().zip(&self.by_macros[place]);
+        for (at, (own, by_macro)) in held.enumerate() {
+            let param = GenParam::ALL[at];
+            if let Some(number) = own.or(*by_macro)
+                && param.exists_for(&heard, generates)
+            {
+                param.set_number(&mut heard, context, number);
             }
         }
         heard
     }
+}
+
+/// Where a setting is kept among a column's, if the engine can hold it.
+fn param_place(param: GenParam) -> Option<usize> {
+    let at = GenParam::ALL.iter().position(|each| *each == param)?;
+    param.held_in_engine().then_some(at)
 }
 
 /// The steps under each live generator, by track and phrase, one list for each of the phrase's
@@ -166,8 +209,10 @@ struct GenRun {
     pass: i64,
     /// How many times it has rendered since the version came.
     renders: u32,
+    /// Whether its column is empty without it, which some settings are only there for.
+    generates: bool,
     /// The pass it was last heard on while it varies, and what it played then, if that's waiting
-    /// to be reported.
+    /// to be reported: only the latest, so a long block never loses it among the rows.
     told: Option<i64>,
     report: Option<GenPass>,
 }
@@ -175,7 +220,7 @@ struct GenRun {
 /// Which pass a generator that varies was heard on, and the seeds it played it with, as its row
 /// first played on that pass: what `Space g a` on the Gen page keeps (decision 293). It's reported
 /// for each live generator whose `Vary` is on, whether that pass is the written one or not, on a
-/// queue of its own (`GEN_PASS_QUEUE`), as `NotePitch` is.
+/// queue of its own (`GEN_HEARD_QUEUE`), as `NotePitch` is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GenPass {
     pub phrase: u32,
@@ -189,6 +234,53 @@ pub struct GenPass {
     pub roll: u64,
 }
 
+/// A row of a live generator as it was heard: the cell it played there, if it played one of its
+/// own rather than what's written, and on which pass, for the playhead's row, the overview and
+/// the status line to show, and `Space g a` and `Space g A` to keep (decision 300). Reported for
+/// each row each live generator of a track plays while something reaches its generators.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GenRow {
+    pub phrase: u32,
+    /// Its place in its phrase's list.
+    pub generator: usize,
+    pub column: ShapeColumn,
+    /// The stored row.
+    pub row: usize,
+    /// Which pass of its phrase, or of its lane's loop, counted from 0.
+    pub pass: i64,
+    /// What it played on the row, laid over what's under it as [`GenCell::apply`] writes it, or
+    /// none if it played what's written.
+    pub cell: Option<GenCell>,
+}
+
+/// What the engine says of a track's live generators as it plays them, on a queue of its own
+/// (`GEN_HEARD_QUEUE`), as `NotePitch` is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GenReport {
+    /// A generator that varies was heard on a pass, with these seeds.
+    Pass(GenPass),
+    /// A live generator played a row.
+    Row(GenRow),
+    /// Nothing reaches a track's generators now, and a row of this phrase played as written: what
+    /// was heard of its generators before is gone.
+    Rest { phrase: u32 },
+}
+
+/// What may wait in a scratch for the callback to take, at most: a few rows for each run, as a
+/// block plays a row or two of each track, and what doesn't fit is dropped, as the queue's are.
+const REPORTS_PER_RUN: usize = 4;
+
+/// Which read of a row this is: one that plays, the note's row or a lane's, or one that only looks
+/// ahead at it, which reports nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Played {
+    Ahead,
+    /// The first pulse of the row the note reads.
+    Row,
+    /// The row an FX column's lane reads.
+    Lane(usize),
+}
+
 /// A track's share of the scratch: room for the most runs and cells any one of its phrases needs,
 /// and the phrase its runs are for now.
 #[derive(Debug, Clone, Copy, Default)]
@@ -196,6 +288,8 @@ struct Room {
     phrase: Option<u32>,
     /// Whether a generator of one of its phrases varies, so it's heard moving with nothing held.
     varies: bool,
+    /// The phrase the app was last told is at rest, as nothing moves the track's generators.
+    quiet: Option<u32>,
     runs: usize,
     most_runs: usize,
     cells: usize,
@@ -212,6 +306,9 @@ pub struct GenScratch {
     rooms: Box<[Room]>,
     runs: Box<[Option<GenRun>]>,
     cells: Box<[GenCell]>,
+    /// What's waiting for the callback to take, by track, made ahead with room for
+    /// [`REPORTS_PER_RUN`] a run, and never grown.
+    reports: Vec<(usize, GenReport)>,
 }
 
 /// What a moving generator was last heard as, for tests and for what reports it.
@@ -250,6 +347,7 @@ impl GenScratch {
     /// the most rows between them.
     pub(crate) fn for_song(song: &Song) -> Self {
         let mut rooms = Vec::with_capacity(song.tracks.len());
+        let rooms_len = song.tracks.len();
         let (mut runs, mut cells) = (0, 0);
         for track in &song.tracks {
             let varies = track
@@ -268,6 +366,7 @@ impl GenScratch {
             rooms.push(Room {
                 phrase: None,
                 varies,
+                quiet: None,
                 runs,
                 most_runs,
                 cells,
@@ -280,6 +379,7 @@ impl GenScratch {
             rooms: rooms.into(),
             runs: vec![None; runs].into(),
             cells: vec![GenCell::Under; cells].into(),
+            reports: Vec::with_capacity((runs * REPORTS_PER_RUN).max(rooms_len)),
         }
     }
 
@@ -312,6 +412,7 @@ impl GenScratch {
                 rendered: None,
                 pass: 0,
                 renders: 0,
+                generates: is_empty(under, rows, generator.column),
                 told: None,
                 report: None,
             });
@@ -328,7 +429,8 @@ impl GenScratch {
     /// A row as it's heard: its step as written, with the cells of each moving generator on it
     /// laid over, each rendered first if what it's heard with has changed since it last was. A
     /// row `played`, not only looked at ahead, reports the pass of each generator on it that
-    /// varies, the first time it's heard on that pass.
+    /// varies, the first time it's heard on that pass, and the row as each generator on it played
+    /// it, or that nothing reaches them now (decision 300).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn view(
         &mut self,
@@ -338,10 +440,13 @@ impl GenScratch {
         at: RowAt,
         step: &Step,
         passes: impl FnOnce() -> Passes,
-        played: bool,
+        played: Played,
     ) -> RowView {
         let mut view = RowView::of(step);
         if !holds.any() && !self.varies(at.track) {
+            if played != Played::Ahead {
+                self.quieten(at);
+            }
             return view;
         }
         let Some(phrase) = song
@@ -380,31 +485,54 @@ impl GenScratch {
             let context = Context {
                 column: run.column,
                 open: run.open,
-                generates: false,
+                generates: run.generates,
                 sources: &[],
                 source,
             };
-            run.pass = match run.column {
-                ShapeColumn::Fx { slot, .. } if generator.span == Span::Lane => {
-                    passes.lanes.get(slot).copied().unwrap_or(0)
-                }
-                _ => passes.rows,
+            let on_lane = match run.column {
+                ShapeColumn::Fx { slot, .. } if generator.span == Span::Lane => Some(slot),
+                _ => None,
             };
-            let held = holds.heard(written, &context);
+            run.pass = match on_lane {
+                Some(slot) => passes.lanes.get(slot).copied().unwrap_or(0),
+                None => passes.rows,
+            };
+            // Its own row, as the note's row is read for every column and a lane's for its own.
+            let plays = match played {
+                Played::Ahead => false,
+                Played::Row => on_lane.is_none(),
+                Played::Lane(slot) => on_lane == Some(slot),
+            };
+            let held = holds.heard(written, &context, run.generates);
             let heard = held.on_pass(run.pass);
-            if played && held.varies() && run.told != Some(run.pass) {
+            if played != Played::Ahead && held.varies() && run.told != Some(run.pass) {
                 run.told = Some(run.pass);
-                run.report = Some(GenPass {
+                let pass = GenPass {
                     phrase: at.phrase,
                     generator: run.generator,
                     column: run.column,
                     pass: run.pass,
                     seed: heard.seed,
                     roll: heard.acid.roll,
-                });
+                };
+                run.report = Some(pass);
+            }
+            let mut row = GenRow {
+                phrase: at.phrase,
+                generator: run.generator,
+                column: run.column,
+                row: at.row,
+                pass: run.pass,
+                cell: None,
+            };
+            if plays {
+                self.rooms[at.track].quiet = None;
             }
             if heard == *written {
                 run.rendered = None;
+                if plays {
+                    tell(&mut self.reports, at.track, GenReport::Row(row));
+                }
                 continue;
             }
             let length = run.rows.len().min(MAX_PHRASE_STEPS);
@@ -424,9 +552,34 @@ impl GenScratch {
                     lay_under(generator, under, &mut view);
                 }
                 view.lay(run.column, *cell);
+                if plays {
+                    row.cell = Some(*cell);
+                    tell(&mut self.reports, at.track, GenReport::Row(row));
+                }
             }
         }
         view
+    }
+
+    /// Tell the app a track's phrase plays as written, once, as a row of it plays with nothing
+    /// moving its generators, so what it heard of them before is gone.
+    fn quieten(&mut self, at: RowAt) {
+        let Some(room) = self.rooms.get_mut(at.track) else {
+            return;
+        };
+        if room.most_runs == 0 || room.quiet == Some(at.phrase) {
+            return;
+        }
+        room.quiet = Some(at.phrase);
+        let room = *room;
+        for run in self.runs[room.runs..room.runs + room.most_runs]
+            .iter_mut()
+            .flatten()
+        {
+            run.rendered = None;
+        }
+        let rest = GenReport::Rest { phrase: at.phrase };
+        tell(&mut self.reports, at.track, rest);
     }
 
     /// Leave a track's generators at rest, as nothing it holds moves them now.
@@ -440,19 +593,21 @@ impl GenScratch {
         }
     }
 
-    /// Hand each of a track's generators' passes heard since the last call to `report`, for the
-    /// phrase it last read one of.
-    pub(crate) fn take_passes(&mut self, track: usize, mut report: impl FnMut(GenPass)) {
-        let Some(room) = self.rooms.get(track).copied() else {
-            return;
-        };
-        for run in self.runs[room.runs..room.runs + room.most_runs]
-            .iter_mut()
-            .flatten()
-        {
-            if let Some(pass) = run.report.take() {
-                report(pass);
+    /// Hand what's been heard of every track's generators since the last call to `report`, by
+    /// track, in the order it was heard.
+    pub(crate) fn take_reports(&mut self, mut report: impl FnMut(usize, GenReport)) {
+        for (track, room) in self.rooms.iter().enumerate() {
+            for run in self.runs[room.runs..room.runs + room.most_runs]
+                .iter_mut()
+                .flatten()
+            {
+                if let Some(pass) = run.report.take() {
+                    report(track, GenReport::Pass(pass));
+                }
             }
+        }
+        for (track, each) in self.reports.drain(..) {
+            report(track, each);
         }
     }
 
@@ -469,6 +624,14 @@ impl GenScratch {
                 renders: run.renders,
                 moving: run.rendered.is_some(),
             })
+    }
+}
+
+/// Keep a report for the callback to take, if there's room made for it; one that doesn't fit is
+/// dropped, as the queue's are.
+fn tell(reports: &mut Vec<(usize, GenReport)>, track: usize, report: GenReport) {
+    if reports.len() < reports.capacity() {
+        reports.push((track, report));
     }
 }
 
@@ -634,6 +797,69 @@ mod tests {
         assert!(renders > 0, "the generators rendered");
     }
 
+    /// The song with macro 1 holding the `Acid`'s density and the `Cut` ramp's end, an LFO on it,
+    /// a `MAC1` lock every third row, and macro 2 on the Euclid's hits, turned to `turn`.
+    fn macro_song(rows: usize, turn: u16) -> Song {
+        use vt_model::lfo::{Lfo, Rate};
+        use vt_model::macros::{GenColumn, MacroMap, MacroTarget};
+        use vt_model::modulation::ModSlot;
+
+        let mut song = song(rows);
+        let target = |column, param| MacroTarget::Gen { column, param };
+        let track = &mut song.tracks[0];
+        track.macros[0].maps = vec![
+            MacroMap::numbers(target(GenColumn::Note, GenParam::Density), (0, 100)),
+            MacroMap::numbers(target(GenColumn::Fx(0), GenParam::To), (0x20, 0xF0)),
+        ];
+        track.mods[3] = ModSlot::lfo(
+            SettingId::macro_at(0),
+            Lfo {
+                rate: Rate::Steps(2),
+                ..Lfo::default()
+            },
+        )
+        .with_depth(0x7F);
+        let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+        for row in (0..rows).step_by(3) {
+            if let Some(step) = phrase.step_mut(row) {
+                step.fx[1] = "macro1:C0".parse().unwrap();
+            }
+        }
+        let other = &mut song.tracks[1];
+        let hits = target(GenColumn::Velocity, GenParam::Hits);
+        other.macros[1].maps = vec![MacroMap::numbers(hits, (1, 16))];
+        other.macros[1].value = turn;
+        song
+    }
+
+    /// With macros moving generators by their turns, locks and an LFO, and new versions coming,
+    /// putting the macros, rendering and reporting what's heard allocate and free nothing.
+    #[test]
+    fn macros_moving_generators_never_allocate_in_the_callback() {
+        let mut engine = Engine::new(RATE, version(&macro_song(32, 0)));
+        engine.play_from(0);
+        let mut out = vec![0.0; BLOCK * 2];
+        let (mut violations, mut rows) = (0, 0);
+        let mut old = Vec::with_capacity(64);
+        for round in 0..400 {
+            let turn = (round as u32 * 0x0700 % 0xFF00) as u16;
+            let next = (round % 16 == 0).then(|| version(&macro_song(32, turn)));
+            let ((), count) = forbidden(|| {
+                if let Some(next) = next {
+                    old.push(engine.swap(next));
+                }
+                engine.process(&mut out);
+                engine.take_gen_reports(|_, report| {
+                    rows += usize::from(matches!(report, GenReport::Row(_)));
+                });
+            });
+            violations += count;
+        }
+        assert_eq!(violations, 0);
+        assert!(rows > 0, "rows were heard");
+        assert!(engine.generators_heard(0).any(|heard| heard.renders > 0));
+    }
+
     /// The song with its `Acid` line given a new seed each pass, over a phrase of `rows`.
     fn varying(rows: usize) -> Song {
         let song = song(rows);
@@ -664,7 +890,9 @@ mod tests {
                     old.push(engine.swap(next));
                 }
                 engine.process(&mut out);
-                engine.take_gen_passes(0, |_| reported += 1);
+                engine.take_gen_reports(|_, report| {
+                    reported += usize::from(matches!(report, GenReport::Pass(_)));
+                });
             });
             violations += count;
         }

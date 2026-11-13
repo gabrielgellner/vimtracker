@@ -834,6 +834,13 @@ As decisions 269 and 270 keep `Mutate`'s draws and the pitch slots moved:
   pass's seed as the `Shape`'s and turn `Vary` off, leaving it live: the Turing Machine's lock
   again.
 
+(Built in #623 as decision 300 says, with these differences: every row each live generator plays
+is reported, for every track, while anything reaches the track's generators, with no cell where it
+played what's written, so the app drops what it kept as soon as a row plays as written again;
+reports carry no version, and the app checks the generator in that place is still on that column;
+and what was heard is kept after stopping, as `Space g A`'s pitches are, so play, stop and keep
+works.)
+
 ### 7.7 Real-time safety
 
 * **No allocation on the audio thread.** The render fills buffers made ahead. The engine's

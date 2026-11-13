@@ -63,7 +63,8 @@ pub enum MacroTarget {
     Setting(SettingId),
     /// A setting of the live generator on a column, in every phrase of the track with one there
     /// (decision 294). Its ends are numbers in the setting's own, as [`GenParam::number`] gives
-    /// them, set off by [`GEN_ZERO`]. By hand for now: a turn writes the column again.
+    /// them, set off by [`GEN_ZERO`]. A turn writes the column again, and the engine holds the
+    /// setting where a lock or modulation puts the macro as it plays (decision 300).
     Gen {
         column: GenColumn,
         #[serde(with = "param_key")]
@@ -140,6 +141,13 @@ impl MacroTarget {
                 GenParam::Values | GenParam::Fill | GenParam::Where | GenParam::Source
             ),
         }
+    }
+
+    /// Whether it's reached by hand alone: a generator's setting the engine can't hold as it
+    /// plays, `Wave` or `Rate`, which a turn writes into its column but a lock or modulation
+    /// doesn't reach (decisions 294 and 300).
+    pub fn by_hand(self) -> bool {
+        matches!(self, Self::Gen { param, .. } if !param.held_in_engine())
     }
 
     /// The setting of the registry it is, if it's one.
@@ -468,6 +476,25 @@ impl Track {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_generators_list_settings_are_reached_by_hand_alone() {
+        let on = |param| MacroTarget::Gen {
+            column: GenColumn::Note,
+            param,
+        };
+        assert!(on(GenParam::Wave).by_hand());
+        assert!(on(GenParam::Rate).by_hand());
+        for param in [
+            GenParam::Hits,
+            GenParam::Density,
+            GenParam::To,
+            GenParam::Vary,
+        ] {
+            assert!(!on(param).by_hand(), "{param:?}");
+        }
+        assert!(!MacroTarget::Setting(SettingId::CUT).by_hand());
+    }
 
     #[test]
     fn a_map_goes_from_its_min_at_00_to_its_max_at_ff() {

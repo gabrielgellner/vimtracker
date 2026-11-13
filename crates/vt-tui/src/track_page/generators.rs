@@ -322,8 +322,9 @@ impl App {
             .map_or_else(String::new, generator_label)
     }
 
-    /// `Space g a`: apply the generator, leaving its values as plain ones; or, for one that varies,
-    /// keep the variation last heard, as its seed, with `Vary` back to `Once`, so it stays live.
+    /// `Space g a`: apply the generator, leaving its values as plain ones, as last heard where
+    /// something moved it; or, for one that varies, keep the variation last heard, as its seed,
+    /// with `Vary` back to `Once`, so it stays live.
     pub(super) fn apply_gen(&mut self) {
         let Some((phrase, generator, _)) = self.gen_here() else {
             self.status = "Space g a applies a generator: go to one first".to_owned();
@@ -336,12 +337,7 @@ impl App {
             self.keep_variation(phrase, generator, &name);
             return;
         }
-        self.apply(&Action::ApplyGenerator {
-            track: self.cursor.track,
-            phrase,
-            generator,
-        });
-        self.status = format!("{name} is applied, as plain values");
+        self.apply_generator(self.cursor.track, phrase, generator, &name);
     }
 
     /// Keep the variation of a generator that varies last heard: the seeds it played that pass

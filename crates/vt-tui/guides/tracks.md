@@ -1447,6 +1447,10 @@ left playing. Envelopes and Track slots on `Pitch` stay too, as they shape each
 note rather than choose it. With `Mutate` up, it's the time round just heard that's written, so
 play, listen, and press `Space g A` on a pass you like.
 
+It writes in the phrase's live columns a macro or `Vary` moved too, each applied as it was last
+heard and its rows not heard yet as written, so it's the one key for making the phrase what you
+just heard.
+
 ## The accumulator
 
 The `Accumulator` device, under the envelopes, says how the track's `ACU`s move its
@@ -1586,9 +1590,13 @@ macro, nor an LFO's or Steps' `Rate` yet.
 setting of the generator on that column in every phrase of the track, between numbers of its
 own, its bounds to start with. Turning the macro writes each of those columns again, one undo
 step, and the generator keeps its own setting underneath, so taking it off the macro gives it
-back. For now that's by hand: a `MAC` lock or an LFO on the macro moves its other settings but not
-a generator's, which the mapping view says, dim, with `by hand`. The fill, the `Where` and a
-`Follow`'s source aren't for macros, as they're what the generator is.
+back. A `MAC` lock, a glide or an LFO on the macro reaches it too, as it plays: the engine renders
+the generator again with the setting where the macro has it, from the row the lock is on, and the
+phrase still holds what the macro's turn writes, so with nothing moving the macro, what's heard is
+what's written. The phrase view shows what was heard of it, and `Space g a` keeps it. A `Wave` or a
+`Rate` is the exception: a turn writes it in, but a lock or an LFO doesn't reach it, which the
+mapping view says, dim, with `by hand`. The fill, the `Where` and a `Follow`'s source aren't for
+macros, as they're what the generator is.
 
 **Playing a macro.** A step's `MAC1` to `MAC8` locks one for its note, and with it everything it
 holds, as `MAC3 80`. A mod slot's `Dest` lists the eight under `Macros`, so an LFO on a macro
