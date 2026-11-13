@@ -11,10 +11,11 @@
 //! and, later, the engine work them out alike.
 
 use crate::lfo::{Shape as Wave, note_rates};
+use crate::step::Step;
 
 use super::{
-    Acid, DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_ACID_NOTES, MAX_BEND, Shape, ShapeColumn,
-    Values, WAVES, WaveRate, Where,
+    Acid, DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_ACID_NOTES, MAX_BEND, MAX_TRANSPOSE, Shape,
+    ShapeColumn, Source, Values, WAVES, WaveRate, Where, first_note,
 };
 
 /// How far a small and a large step move a curve.
@@ -40,7 +41,7 @@ const LISTED_CYCLES: [u16; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 
 /// What a generator's settings act on, which what some of them mean hangs on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Context {
+pub struct Context<'a> {
     /// The column it fills, which `From` and `To` are values of.
     pub column: ShapeColumn,
     /// How many rows the column could change, which Euclid's `Hits` are spread over and its
@@ -49,16 +50,36 @@ pub struct Context {
     /// Whether the column was empty, so it's generated on rather than reshaped: a transform has
     /// nothing to rework then, and no command is there to choose rows by.
     pub generates: bool,
+    /// The phrases a `Follow` can read, and the loop of the one it reads now, which its `Rotate`
+    /// goes round and its `Invert` turns about the first note of. Elsewhere, none.
+    pub sources: &'a [Source],
+    pub source: Option<&'a [Step]>,
 }
 
-impl Context {
-    /// The fills it offers. A transform reworks what's there, so it's left out when nothing is.
+/// What a setting goes back to with `x` where that hangs on what's there: `From` and `To` to the
+/// ends of what's there or, on a column generated on, the ends it starts with, and a `Follow`'s
+/// `Source` to the phrase it started on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Starts {
+    pub ends: (u8, u8),
+    pub source: Option<Source>,
+}
+
+impl Context<'_> {
+    /// The fills it offers. A transform reworks what's there, so it's left out when nothing is,
+    /// and `Follow` when there's no other phrase to follow.
     pub fn fills(&self) -> Vec<FillKind> {
         self.column
             .fills()
             .into_iter()
             .filter(|kind| !(self.generates && kind.reworks()))
+            .filter(|kind| *kind != FillKind::Follow || !self.sources.is_empty())
             .collect()
+    }
+
+    /// How many rows the source a `Follow` reads has, at least one.
+    fn source_rows(&self) -> usize {
+        self.source.map_or(1, <[Step]>::len).max(1)
     }
 
     /// The choices of rows. Where nothing is there, the rows already holding a command aren't one.
@@ -96,6 +117,7 @@ pub enum Choice {
     Wave(Wave),
     Rate(WaveRate),
     Where(Where),
+    Source(Source),
 }
 
 impl Choice {
@@ -106,6 +128,7 @@ impl Choice {
             Self::Wave(wave) => wave.name().to_owned(),
             Self::Rate(rate) => rate.to_string(),
             Self::Where(place) => place.name().to_owned(),
+            Self::Source(source) => source.to_string(),
         }
     }
 
@@ -124,6 +147,7 @@ impl Choice {
             Self::Wave(wave) => shape.wave = wave,
             Self::Rate(rate) => shape.rate = rate,
             Self::Where(place) => shape.place = place,
+            Self::Source(source) => shape.follow.source = source,
         }
     }
 }
@@ -154,6 +178,8 @@ pub enum Units {
     Column,
     /// A bend either way, with its sign, from `-100` to `100`.
     Bend,
+    /// Semitones, or the scale's degrees while it's on, with a sign.
+    Interval,
     /// Round a cycle, in degrees.
     Degrees,
     /// A whole number of rows or notes.
@@ -186,6 +212,15 @@ pub enum GenParam {
     Accent,
     Slide,
     Pitches,
+    /// A `Follow` fill's own: the phrase it follows, the canon's moves on the way (transposed,
+    /// inverted about a note, backwards and late), and whether it copies the FX columns too.
+    Source,
+    Transpose,
+    Invert,
+    Axis,
+    Reverse,
+    Late,
+    CopyFx,
     /// How a ramp bends, early or late, and how it eases at both ends.
     Curve,
     S,
@@ -208,7 +243,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 28] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -218,6 +253,13 @@ impl GenParam {
         Self::Accent,
         Self::Slide,
         Self::Pitches,
+        Self::Source,
+        Self::Transpose,
+        Self::Invert,
+        Self::Axis,
+        Self::Reverse,
+        Self::Late,
+        Self::CopyFx,
         Self::Curve,
         Self::S,
         Self::Wave,
@@ -244,6 +286,13 @@ impl GenParam {
             Self::Accent => "accent",
             Self::Slide => "slide",
             Self::Pitches => "pitches",
+            Self::Source => "source",
+            Self::Transpose => "transpose",
+            Self::Invert => "invert",
+            Self::Axis => "axis",
+            Self::Reverse => "reverse",
+            Self::Late => "late",
+            Self::CopyFx => "fx",
             Self::Curve => "curve",
             Self::S => "s",
             Self::Wave => "wave",
@@ -277,6 +326,13 @@ impl GenParam {
             Self::Accent => "Accent",
             Self::Slide => "Slide",
             Self::Pitches => "Pitches",
+            Self::Source => "Source",
+            Self::Transpose => "Transpose",
+            Self::Invert => "Invert",
+            Self::Axis => "About",
+            Self::Reverse => "Reverse",
+            Self::Late => "Rotate",
+            Self::CopyFx => "FX",
             Self::Curve => "Curve",
             Self::S => "S",
             Self::Wave => "Shape",
@@ -294,16 +350,25 @@ impl GenParam {
     /// How its values read.
     pub fn units(self) -> Units {
         match self {
-            Self::From | Self::To | Self::Values => Units::Column,
+            Self::From | Self::To | Self::Values | Self::Axis => Units::Column,
             Self::Curve | Self::S => Units::Bend,
+            Self::Transpose => Units::Interval,
             Self::Phase => Units::Degrees,
             Self::Notes | Self::Run | Self::Rotate => Units::Count,
-            Self::Every => Units::Rows,
+            Self::Every | Self::Late => Units::Rows,
             Self::Hits => Units::OfRows,
             Self::Octave | Self::Density | Self::Accent | Self::Slide | Self::Chance => {
                 Units::Percent
             }
-            Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Pitches => Units::Named,
+            Self::Fill
+            | Self::Wave
+            | Self::Rate
+            | Self::Where
+            | Self::Pitches
+            | Self::Source
+            | Self::Invert
+            | Self::Reverse
+            | Self::CopyFx => Units::Named,
         }
     }
 
@@ -312,13 +377,23 @@ impl GenParam {
     /// the values there with no settings of its own, and a `Where`'s amount only comes with the
     /// choices that have one. `Acid` has its riff's settings, its `Density` only where it
     /// `generates` notes of its own, and keeping the pitches there leaves it no ends or notes to
-    /// choose.
+    /// choose. A `Follow` writes every row from its source, so it has no `Where`, and turns
+    /// about a note only while it inverts.
     pub fn exists_for(self, shape: &Shape, generates: bool) -> bool {
         let kind = shape.kind;
         let acid = kind == FillKind::Acid;
         let riff = acid && (generates || !shape.acid.keep);
+        let rows = kind != FillKind::Follow;
         match self {
-            Self::Fill | Self::Where => true,
+            Self::Fill => true,
+            Self::Where => rows,
+            Self::Source
+            | Self::Transpose
+            | Self::Invert
+            | Self::Reverse
+            | Self::Late
+            | Self::CopyFx => !rows,
+            Self::Axis => !rows && shape.follow.invert,
             Self::From | Self::To => {
                 riff || matches!(
                     kind,
@@ -345,9 +420,9 @@ impl GenParam {
                     | FillKind::Alternate
                     | FillKind::List
             ),
-            Self::Every => matches!(shape.place, Where::Every(_)),
-            Self::Chance => matches!(shape.place, Where::Chance(_)),
-            Self::Hits | Self::Rotate => matches!(shape.place, Where::Euclid { .. }),
+            Self::Every => rows && matches!(shape.place, Where::Every(_)),
+            Self::Chance => rows && matches!(shape.place, Where::Chance(_)),
+            Self::Hits | Self::Rotate => rows && matches!(shape.place, Where::Euclid { .. }),
         }
     }
 
@@ -401,6 +476,34 @@ impl GenParam {
             }
             Self::Pitches if shape.acid.keep => "Keep".to_owned(),
             Self::Pitches => "Roll".to_owned(),
+            Self::Source => shape.follow.source.to_string(),
+            Self::Transpose => {
+                let by = shape.follow.transpose;
+                let unit = match column {
+                    ShapeColumn::Note { scale, .. } if scale.on => "degree",
+                    _ => "semitone",
+                };
+                match by {
+                    0 => "0".to_owned(),
+                    1 | -1 => format!("{by:+} {unit}"),
+                    _ => format!("{by:+} {unit}s"),
+                }
+            }
+            Self::Invert => on_off(shape.follow.invert),
+            Self::Axis => match shape.follow.axis {
+                Some(note) => column.show(note),
+                None => match context.source.and_then(first_note) {
+                    Some(note) => format!("First, {}", column.show(note)),
+                    None => "First".to_owned(),
+                },
+            },
+            Self::Reverse => on_off(shape.follow.reverse),
+            Self::Late => match shape.follow.rotate {
+                0 => "0".to_owned(),
+                1 => "1 row late".to_owned(),
+                rows => format!("{rows} rows late"),
+            },
+            Self::CopyFx => on_off(shape.follow.fx),
         }
     }
 
@@ -408,14 +511,15 @@ impl GenParam {
     pub fn typing(self, column: ShapeColumn) -> Typing {
         let hex = typed_in_hex(column);
         match self {
-            Self::Fill | Self::Wave | Self::Where => Typing::Listed,
-            Self::Pitches => Typing::Toggled,
+            Self::Fill | Self::Wave | Self::Where | Self::Source => Typing::Listed,
+            Self::Pitches | Self::Invert | Self::Reverse | Self::CopyFx => Typing::Toggled,
+            Self::Axis => Typing::Named { list: false },
             Self::From | Self::To if hex => Typing::Hex,
             Self::From | Self::To => Typing::Named { list: false },
             Self::Values if hex => Typing::HexList,
             Self::Values => Typing::Named { list: true },
             Self::Rate => Typing::Rate,
-            Self::Curve | Self::S => Typing::Whole { signed: true },
+            Self::Curve | Self::S | Self::Transpose => Typing::Whole { signed: true },
             _ => Typing::Whole { signed: false },
         }
     }
@@ -427,6 +531,12 @@ impl GenParam {
             Self::Wave => WAVES.into_iter().map(Choice::Wave).collect(),
             Self::Rate => listed_rates().into_iter().map(Choice::Rate).collect(),
             Self::Where => context.wheres().into_iter().map(Choice::Where).collect(),
+            Self::Source => context
+                .sources
+                .iter()
+                .copied()
+                .map(Choice::Source)
+                .collect(),
             _ => return None,
         })
     }
@@ -443,6 +553,7 @@ impl GenParam {
                 Choice::Where(place) => {
                     std::mem::discriminant(&place) == std::mem::discriminant(&shape.place)
                 }
+                Choice::Source(source) => source == shape.follow.source,
             })
     }
 
@@ -466,7 +577,7 @@ impl GenParam {
             Self::To => shape.to = stepped(column, shape.to, sign, large),
             Self::Curve => shape.curve = bent(shape.curve, by(BEND_NUDGE, BEND_JUMP)),
             Self::S => shape.s = bent(shape.s, by(BEND_NUDGE, BEND_JUMP)),
-            Self::Fill | Self::Wave | Self::Where => {
+            Self::Fill | Self::Wave | Self::Where | Self::Source => {
                 let choices = self.choices(context).unwrap_or_default();
                 if !choices.is_empty() {
                     let at = self.chosen(shape, context).unwrap_or(0);
@@ -529,15 +640,39 @@ impl GenParam {
                 }
             }
             Self::Pitches => shape.acid.keep = !shape.acid.keep,
+            Self::Transpose => {
+                let octave = match column {
+                    ShapeColumn::Note { scale, .. } if scale.on => {
+                        scale.kind.intervals().len() as i32
+                    }
+                    _ => 12,
+                };
+                let most = i32::from(MAX_TRANSPOSE);
+                let by = by(1, octave);
+                shape.follow.transpose =
+                    moved(i32::from(shape.follow.transpose), by, -most, most) as i8;
+            }
+            Self::Invert => shape.follow.invert = !shape.follow.invert,
+            // From the first note, it moves as an end does.
+            Self::Axis => {
+                let from = shape.follow.axis.or(context.source.and_then(first_note));
+                shape.follow.axis = from.map(|note| stepped(column, note, sign, large));
+            }
+            Self::Reverse => shape.follow.reverse = !shape.follow.reverse,
+            Self::Late => {
+                let rows = context.source_rows() as i32;
+                shape.follow.rotate =
+                    (i32::from(shape.follow.rotate) + by(1, EUCLID_JUMP)).rem_euclid(rows) as u16;
+            }
+            Self::CopyFx => shape.follow.fx = !shape.follow.fx,
         }
         Ok(())
     }
 
-    /// Put it back to what it starts as: `From` and `To` to `ends`, which are the ends of what's
-    /// there or, on a column generated on, the ends it starts with; a `Where` to its column's;
-    /// and an amount to its own.
-    pub fn reset(self, shape: &mut Shape, context: &Context, ends: (u8, u8)) {
-        let (from, to) = ends;
+    /// Put it back to what it starts as: `From`, `To` and `Source` to where they `start`, a
+    /// `Where` to its column's, and an amount to its own.
+    pub fn reset(self, shape: &mut Shape, context: &Context, starts: Starts) {
+        let (from, to) = starts.ends;
         match self {
             Self::From => shape.from = from,
             Self::To => shape.to = to,
@@ -567,6 +702,17 @@ impl GenParam {
                 }
             }
             Self::Pitches => shape.acid.keep = false,
+            Self::Source => {
+                if let Some(source) = starts.source {
+                    shape.follow.source = source;
+                }
+            }
+            Self::Transpose => shape.follow.transpose = 0,
+            Self::Invert => shape.follow.invert = false,
+            Self::Axis => shape.follow.axis = None,
+            Self::Reverse => shape.follow.reverse = false,
+            Self::Late => shape.follow.rotate = 0,
+            Self::CopyFx => shape.follow.fx = false,
             Self::Hits => {
                 if let Where::Euclid { rotate, .. } = shape.place {
                     shape.place = Where::Euclid {
@@ -676,14 +822,33 @@ impl GenParam {
                     _ => return Err("Values are hex values like 70 40 55, up to 8 of them"),
                 }
             }
-            Self::Fill | Self::Wave | Self::Where | Self::Pitches => {}
+            Self::Transpose => match text.parse::<i16>() {
+                Ok(by) => {
+                    let most = i16::from(MAX_TRANSPOSE);
+                    shape.follow.transpose = by.clamp(-most, most) as i8;
+                }
+                Err(_) => return Err("Transpose runs from -48 to 48"),
+            },
+            Self::Axis => shape.follow.axis = Some(column.parse(text).ok_or(unknown)?),
+            Self::Late => match text.parse::<u16>() {
+                Ok(rows) => shape.follow.rotate = rows % context.source_rows() as u16,
+                Err(_) => return Err("Rotate is a whole number of rows"),
+            },
+            Self::Fill
+            | Self::Wave
+            | Self::Where
+            | Self::Pitches
+            | Self::Source
+            | Self::Invert
+            | Self::Reverse
+            | Self::CopyFx => {}
         }
         Ok(())
     }
 
     /// The lowest and highest it takes as a number, for a knob or a macro's range: a list
-    /// setting's are its choices' places, and `Pitches` is `0` to roll and `1` to keep. A `List`'s
-    /// values have none.
+    /// setting's are its choices' places, one that's off or on is `0` or `1` (`Pitches` `1` to
+    /// keep), and `About` is a note. A `List`'s values have none.
     pub fn bounds(self, context: &Context) -> Option<(i32, i32)> {
         let column = context.column;
         let open = context.open as i32;
@@ -691,9 +856,13 @@ impl GenParam {
         Some(match self {
             Self::From | Self::To => (i32::from(column.lowest()), i32::from(column.highest())),
             Self::Curve | Self::S => (-most, most),
-            Self::Fill | Self::Wave | Self::Rate | Self::Where => {
+            Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Source => {
                 (0, self.choices(context)?.len().checked_sub(1)? as i32)
             }
+            Self::Axis => (i32::from(column.lowest()), i32::from(column.highest())),
+            Self::Transpose => (-i32::from(MAX_TRANSPOSE), i32::from(MAX_TRANSPOSE)),
+            Self::Late => (0, context.source_rows() as i32 - 1),
+            Self::Invert | Self::Reverse | Self::CopyFx => (0, 1),
             Self::Phase => (0, 359),
             Self::Values => return None,
             Self::Run => (1, i32::from(MAX_RUN)),
@@ -714,9 +883,15 @@ impl GenParam {
             Self::To => i32::from(shape.to),
             Self::Curve => i32::from(shape.curve),
             Self::S => i32::from(shape.s),
-            Self::Fill | Self::Wave | Self::Rate | Self::Where => {
+            Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Source => {
                 self.chosen(shape, context)? as i32
             }
+            Self::Axis => i32::from(shape.follow.axis.or(context.source.and_then(first_note))?),
+            Self::Transpose => i32::from(shape.follow.transpose),
+            Self::Late => i32::from(shape.follow.rotate),
+            Self::Invert => i32::from(shape.follow.invert),
+            Self::Reverse => i32::from(shape.follow.reverse),
+            Self::CopyFx => i32::from(shape.follow.fx),
             Self::Phase => i32::from(shape.phase),
             Self::Values => return None,
             Self::Run => i32::from(shape.run),
@@ -756,7 +931,7 @@ impl GenParam {
             Self::To => shape.to = number as u8,
             Self::Curve => shape.curve = number as i8,
             Self::S => shape.s = number as i8,
-            Self::Fill | Self::Wave | Self::Rate | Self::Where => {
+            Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Source => {
                 if self.chosen(shape, context) != Some(number as usize)
                     && let Some(choice) = self
                         .choices(context)
@@ -801,8 +976,19 @@ impl GenParam {
                 }
             }
             Self::Pitches => shape.acid.keep = number != 0,
+            Self::Axis => shape.follow.axis = Some(number as u8),
+            Self::Transpose => shape.follow.transpose = number as i8,
+            Self::Late => shape.follow.rotate = number as u16,
+            Self::Invert => shape.follow.invert = number != 0,
+            Self::Reverse => shape.follow.reverse = number != 0,
+            Self::CopyFx => shape.follow.fx = number != 0,
         }
     }
+}
+
+/// Off or on, as a switch reads.
+fn on_off(on: bool) -> String {
+    if on { "On" } else { "Off" }.to_owned()
 }
 
 /// A bend, with its sign.
@@ -881,6 +1067,7 @@ fn acid_chance_mut(acid: &mut Acid, param: GenParam) -> Option<&mut u8> {
 mod tests {
     use super::*;
     use crate::scale::Scale;
+    use crate::shape::Follow;
 
     fn shape(kind: FillKind) -> Shape {
         Shape {
@@ -897,14 +1084,17 @@ mod tests {
             place: Where::Notes,
             seed: 1,
             acid: Acid::default(),
+            follow: Follow::default(),
         }
     }
 
-    fn context(column: ShapeColumn) -> Context {
+    fn context(column: ShapeColumn) -> Context<'static> {
         Context {
             column,
             open: 16,
             generates: false,
+            sources: &[],
+            source: None,
         }
     }
 
@@ -963,6 +1153,14 @@ mod tests {
         );
         euclid.place = crate::shape::Where::Chance(50);
         assert!(GenParam::of(&euclid, false).ends_with(&[Where, Chance]));
+        let mut follow = shape(FillKind::Follow);
+        assert_eq!(
+            GenParam::of(&follow, false),
+            [Fill, Source, Transpose, Invert, Reverse, Late, CopyFx],
+            "a Follow writes every row, so it has no Where"
+        );
+        follow.follow.invert = true;
+        assert!(GenParam::of(&follow, false).contains(&Axis));
     }
 
     #[test]
@@ -1038,7 +1236,11 @@ mod tests {
         assert!(GenParam::Phase.typed(&mut ramp, &velocity, "360").is_err());
         GenParam::From.typed(&mut ramp, &velocity, "4a").unwrap();
         assert_eq!(ramp.from, 0x4A);
-        GenParam::From.reset(&mut ramp, &velocity, (0x10, 0x70));
+        let starts = Starts {
+            ends: (0x10, 0x70),
+            source: None,
+        };
+        GenParam::From.reset(&mut ramp, &velocity, starts);
         assert_eq!(ramp.from, 0x10);
         assert_eq!(GenParam::From.typing(ShapeColumn::Velocity), Typing::Hex);
         assert_eq!(GenParam::From.typing(note()), Typing::Named { list: false });

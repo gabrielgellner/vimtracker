@@ -1,18 +1,19 @@
 //! The shape panel: fill a selected column with a ramp, random values, a wave, two values in turn
-//! or a short list of them, or rework the values there, heard while it's adjusted.
+//! or a short list of them, or rework the values there, heard while it's adjusted. On the Note
+//! column it can also follow another track's phrase.
 
 use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, edit};
-use vt_model::generator::{Span, applied};
+use vt_model::generator::{Generator, Span, applied, reads, unfollowed};
 use vt_model::lfo::Shape as Wave;
 use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Acid, Context, DEFAULT_RATE, FillKind, GenParam, MAX_VALUES, Shape, ShapeColumn, Values, Where,
-    default_ends, open_rows, track_seed,
+    Acid, Context, DEFAULT_RATE, FillKind, Follow, GenParam, MAX_VALUES, Shape, ShapeColumn,
+    Source, Starts, Values, Where, default_ends, open_rows, track_seed,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -80,6 +81,12 @@ pub struct ShapePanel {
     base: Arc<Song>,
     /// On a live generator, its phrase's steps as they'd be without it, which it shapes from.
     under: Option<Vec<Step>>,
+    /// The phrases a `Follow` can read, by track and then ID: those on sound tracks but the
+    /// parts' own, and any that read one of them, which would go round a cycle.
+    pub sources: Vec<Source>,
+    /// The one it starts on: the phrase beside it on the nearest track with one, before it first,
+    /// or what that one follows.
+    default_source: Option<Source>,
 }
 
 impl ShapePanel {
@@ -89,13 +96,35 @@ impl ShapePanel {
         GenParam::of(&self.shape, self.parts.iter().any(|part| part.generate))
     }
 
-    /// What its settings act on: its column, the rows it could change, and whether every part
-    /// is generated on.
-    pub fn context(&self) -> Context {
+    /// What its settings act on: its column, the rows it could change, whether every part is
+    /// generated on, and what a `Follow` can read and reads now.
+    pub fn context(&self) -> Context<'_> {
         Context {
             column: self.column,
             open: self.open_rows(),
             generates: self.generates(),
+            sources: &self.sources,
+            source: self.source_steps(),
+        }
+    }
+
+    /// The loop of the phrase a `Follow` reads, as the panel opened on it.
+    pub fn source_steps(&self) -> Option<&[Step]> {
+        if self.shape.kind != FillKind::Follow {
+            return None;
+        }
+        self.base
+            .source_phrase(self.shape.follow.source)
+            .map(|phrase| phrase.loop_steps())
+    }
+
+    /// Follow a phrase it can, the one it starts on if what it holds isn't one.
+    fn fit_source(&mut self) {
+        let follow = &mut self.shape.follow;
+        if !self.sources.contains(&follow.source)
+            && let Some(source) = self.default_source.or(self.sources.first().copied())
+        {
+            follow.source = source;
         }
     }
 
@@ -219,6 +248,16 @@ impl ShapePanel {
             .get(part.track)
             .and_then(|track| track.phrases.get(&part.phrase))
             .is_some_and(|phrase| phrase.lane(slot).is_some())
+    }
+}
+
+/// A live generator's name in the phrase's heading: its column, and for a `Follow` what it
+/// follows, like `Note←T02:05`.
+pub fn generator_label(generator: &Generator) -> String {
+    let column = column_label(generator.column);
+    match generator.source() {
+        Some(source) => format!("{column}←{source}"),
+        None => column,
     }
 }
 
@@ -450,6 +489,10 @@ impl App {
         } else {
             column.default_where()
         };
+        let (sources, default_source) = match column {
+            ShapeColumn::Note { .. } => self.follow_sources(&base, &parts),
+            _ => (Vec::new(), None),
+        };
         let panel = ShapePanel {
             selection,
             parts,
@@ -468,18 +511,65 @@ impl App {
                 place,
                 seed: base.seed.wrapping_add(self.shape_seed),
                 acid: Acid::default(),
+                follow: Follow::default(),
             },
             row: GenParam::Fill,
             typing: None,
             live: None,
             base,
             under: None,
+            sources,
+            default_source,
         };
         self.leave_selection(selection);
         self.cursor.field = field;
         self.shape = Some(panel);
         self.mode = Mode::Shape;
         self.preview_shape();
+    }
+
+    /// The phrases these parts can follow, and the one to start on: the phrase beside them on the
+    /// nearest track that has one, looking before the first part's track and then after it, as a
+    /// canon's theme is usually above its answers, or what that phrase follows, if it does.
+    fn follow_sources(&self, song: &Song, parts: &[Part]) -> (Vec<Source>, Option<Source>) {
+        let own: Vec<Source> = parts
+            .iter()
+            .map(|part| Source {
+                track: part.track,
+                phrase: part.phrase,
+            })
+            .collect();
+        let sources: Vec<Source> = song
+            .tracks
+            .iter()
+            .enumerate()
+            .take(song.sound_tracks())
+            .flat_map(|(track, owner)| {
+                owner.phrases.keys().map(move |phrase| Source {
+                    track,
+                    phrase: *phrase,
+                })
+            })
+            .filter(|source| !own.iter().any(|here| reads(song, *source, *here)))
+            .collect();
+        let first = parts.first().map_or(0, |part| part.track);
+        let before = (0..first).rev();
+        let after = first + 1..song.sound_tracks();
+        let mut beside = before.chain(after).find_map(|track| {
+            let (phrase, _) = self.phrase_beside(track)?;
+            let source = Source { track, phrase };
+            sources.contains(&source).then_some(source)
+        });
+        // One that follows another itself gives way to what it follows, so each voice of a canon
+        // starts on the theme. Cycles are refused, so this ends.
+        while let Some(followed) = beside
+            .and_then(|source| song.source_phrase(source))
+            .and_then(|phrase| phrase.generators().iter().find_map(Generator::source))
+            .filter(|source| sources.contains(source))
+        {
+            beside = Some(followed);
+        }
+        (sources, beside)
     }
 
     /// Where a shape on an empty column starts and ends: for notes, an octave up from the scale's
@@ -548,7 +638,10 @@ impl App {
         }
         self.publish();
         self.remember_shape(&panel);
-        let name = column_label(part.column);
+        let mut name = column_label(part.column);
+        if panel.shape.kind == FillKind::Follow {
+            name = format!("{name}←{}", panel.shape.follow.source);
+        }
         match (panel.live, live) {
             (None, true) => {
                 let lane = panel.on_lane(&part);
@@ -572,7 +665,11 @@ impl App {
 
     /// Say so if an edit applied a live generator, as it changed one of its cells by hand.
     pub(crate) fn say_applied(&mut self, next: &Arc<Song>) {
-        if let Some(column) = applied(self.song(), next).first() {
+        if let Some(source) = unfollowed(self.song(), next).first() {
+            self.status = format!(
+                "{source} is gone, so what followed it is plain notes now. u brings it back"
+            );
+        } else if let Some(column) = applied(self.song(), next).first() {
             self.status = format!(
                 "{} was live: it's plain values now. u makes it live again",
                 column_label(*column)
@@ -627,6 +724,10 @@ impl App {
             generate: empty_column(&under, range, generator.column),
         };
         let shape = generator.shape;
+        let (sources, default_source) = match part.column {
+            ShapeColumn::Note { .. } => self.follow_sources(&base, &[part]),
+            _ => (Vec::new(), None),
+        };
         self.shape = Some(ShapePanel {
             selection: Selection {
                 range,
@@ -641,6 +742,8 @@ impl App {
             live: Some(index),
             base,
             under: Some(under),
+            sources,
+            default_source,
         });
         self.mode = Mode::Shape;
         self.preview_shape();
@@ -653,13 +756,14 @@ impl App {
             return;
         };
         let track = self.cursor.track;
-        let column = self.song().tracks[track].phrases[&phrase].generators()[generator].column;
+        let name =
+            generator_label(&self.song().tracks[track].phrases[&phrase].generators()[generator]);
         self.apply(&Action::ApplyGenerator {
             track,
             phrase,
             generator,
         });
-        self.status = format!("{} is applied, as plain values", column_label(column));
+        self.status = format!("{name} is applied, as plain values");
     }
 
     /// Put back what was there before the panel opened.
@@ -818,6 +922,9 @@ impl App {
     fn change_shape(&mut self, change: impl FnOnce(&mut ShapePanel)) {
         if let Some(panel) = &mut self.shape {
             change(panel);
+            if panel.shape.kind == FillKind::Follow {
+                panel.fit_source();
+            }
             // A list starts as the two ends, so it sounds as `Alternate` did until it's typed.
             let shape = &mut panel.shape;
             if shape.kind == FillKind::List && shape.values.is_empty() {
@@ -864,12 +971,21 @@ impl App {
         let Some(panel) = &self.shape else {
             return;
         };
-        let ends = self.shape_ends(panel);
+        let starts = Starts {
+            ends: self.shape_ends(panel),
+            source: panel.default_source,
+        };
         self.change_shape(|panel| {
-            let context = panel.context();
-            panel.row.reset(&mut panel.shape, &context, ends);
-            if !panel.rows().contains(&panel.row) {
-                panel.row = GenParam::Where;
+            let mut shape = panel.shape;
+            panel.row.reset(&mut shape, &panel.context(), starts);
+            panel.shape = shape;
+            let rows = panel.rows();
+            if !rows.contains(&panel.row) {
+                panel.row = if rows.contains(&GenParam::Where) {
+                    GenParam::Where
+                } else {
+                    GenParam::Fill
+                };
             }
         });
     }
@@ -880,7 +996,7 @@ impl App {
         };
         let context = panel.context();
         let Some(choices) = panel.row.choices(&context) else {
-            self.status = "K chooses from a list on Fill, Shape, Rate and Where".to_owned();
+            self.status = "K chooses from a list on Fill, Shape, Rate, Where and Source".to_owned();
             return;
         };
         let position = panel.row.chosen(&panel.shape, &context).unwrap_or(0);
@@ -888,13 +1004,24 @@ impl App {
             .into_iter()
             .map(|choice| {
                 let item = Item::new(choice.name(), Pick::ShapeChoice(choice));
-                match choice.description() {
-                    Some(meaning) => item.meaning(meaning),
-                    None => item,
+                match (choice, choice.description()) {
+                    (Choice::Source(source), _) => {
+                        let rows = panel
+                            .base
+                            .source_phrase(source)
+                            .map_or(0, |phrase| phrase.loop_steps().len());
+                        let name = crate::views::phrase::track_name(self, source.track);
+                        item.meaning(format!("Track {name}, {rows} rows"))
+                    }
+                    (_, Some(meaning)) => item.meaning(meaning),
+                    (_, None) => item,
                 }
             })
             .collect();
-        let title = panel.row.name();
+        let title = match panel.row {
+            GenParam::Source => "Follow",
+            row => row.name(),
+        };
         self.show_picker(Picker::new(title, items).opened_on(Some(position)));
     }
 
@@ -972,8 +1099,9 @@ impl App {
         };
         let mut refused = None;
         self.change_shape(|panel| {
-            let context = panel.context();
-            refused = panel.row.typed(&mut panel.shape, &context, &text).err();
+            let mut shape = panel.shape;
+            refused = panel.row.typed(&mut shape, &panel.context(), &text).err();
+            panel.shape = shape;
         });
         if let Some(reason) = refused {
             self.status = reason.to_owned();

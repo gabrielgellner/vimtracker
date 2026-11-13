@@ -1,13 +1,16 @@
 //! Filling a column across a selection with a shaped ramp, random values, a wave, two values in
 //! turn, or a short list of them in turn, or reworking the values already there. On the Note
-//! column, the steps are the scale's degrees while it's on, and `Acid` writes a 303 line, its
-//! notes, accents and slides together.
+//! column, the steps are the scale's degrees while it's on, `Acid` writes a 303 line, its notes,
+//! accents and slides together, and `Follow` mirrors another track's phrase.
 
 mod acid;
+mod follow;
 pub mod params;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
-pub use params::{Context, GenParam};
+pub(crate) use follow::copy_fx;
+pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
+pub use params::{Context, GenParam, Starts};
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
@@ -127,6 +130,9 @@ pub enum FillKind {
     /// A 303 line: notes from a small set, with accents, slides and octaves, and on an empty
     /// column a rhythm weighted toward the strong beats.
     Acid,
+    /// Another phrase's notes, with their velocities and gates, turned on the way as a canon's
+    /// voices are.
+    Follow,
     /// The values there, from their own lowest and highest onto the two values, along the curve.
     Scale,
     /// The values there, each flipped within their own range.
@@ -141,13 +147,14 @@ pub enum FillKind {
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Ramp,
         Self::Random,
         Self::Wave,
         Self::Alternate,
         Self::List,
         Self::Acid,
+        Self::Follow,
         Self::Scale,
         Self::Invert,
         Self::Shuffle,
@@ -164,6 +171,7 @@ impl FillKind {
             Self::Alternate => "Alternate",
             Self::List => "List",
             Self::Acid => "Acid",
+            Self::Follow => "Follow",
             Self::Scale => "Scale",
             Self::Invert => "Invert",
             Self::Shuffle => "Shuffle",
@@ -181,6 +189,7 @@ impl FillKind {
             Self::Alternate => "One value, then the other",
             Self::List => "A few values in turn",
             Self::Acid => "A 303 line, with accents and slides",
+            Self::Follow => "Another track's phrase, kept in step",
             Self::Scale => "The values there onto the two",
             Self::Invert => "The values there, upside down",
             Self::Shuffle => "The values there, in a new order",
@@ -314,13 +323,13 @@ impl ShapeColumn {
         }
     }
 
-    /// The fills it offers: `Snap` and `Acid` only mean something for notes, and a transform
-    /// nothing for notes of its own, as there are none to rework.
+    /// The fills it offers: `Snap`, `Acid` and `Follow` only mean something for notes, and a
+    /// transform nothing for notes of its own, as there are none to rework.
     pub fn fills(self) -> Vec<FillKind> {
         FillKind::ALL
             .into_iter()
             .filter(|kind| {
-                !matches!(kind, FillKind::Snap | FillKind::Acid)
+                !matches!(kind, FillKind::Snap | FillKind::Acid | FillKind::Follow)
                     || matches!(self, Self::Note { .. })
             })
             .filter(|kind| !(kind.reworks() && self.writes_notes()))
@@ -656,6 +665,9 @@ pub struct Shape {
     /// What an `Acid` fill writes besides its pitches. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Acid::is_default")]
     pub acid: Acid,
+    /// What a `Follow` fill reads and how it turns it. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Follow::is_default")]
+    pub follow: Follow,
 }
 
 /// Bias: bends `t` toward 1 for `a` above 0.5.
@@ -750,13 +762,30 @@ pub fn open_rows(steps: &[Step], range: StepRange, column: ShapeColumn) -> usize
 }
 
 /// The rows a shape changes, each with its step as the shape leaves it: a value of its column, or
-/// for `Acid`, a note with its velocity and gate.
+/// for `Acid`, a note with its velocity and gate. `Follow` needs what it reads, so it writes
+/// nothing here: see [`written_from`].
 pub fn written(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, Step)> {
+    written_from(steps, range, column, shape, None)
+}
+
+/// The same, given the loop's steps of the phrase a `Follow` reads, if it has one.
+pub fn written_from(
+    steps: &[Step],
+    range: StepRange,
+    column: ShapeColumn,
+    shape: &Shape,
+    source: Option<&[Step]>,
+) -> Vec<(usize, Step)> {
+    if shape.kind == FillKind::Follow {
+        return source.map_or_else(Vec::new, |source| {
+            follow::written(steps, range, column, &shape.follow, source)
+        });
+    }
     if shape.kind == FillKind::Acid {
         return acid::written(steps, range, column, shape);
     }
@@ -820,6 +849,10 @@ fn shaped(
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, Shaped)> {
+    // What it writes comes from what it follows, which a shape alone hasn't.
+    if shape.kind == FillKind::Follow {
+        return Vec::new();
+    }
     if shape.kind == FillKind::Acid {
         // Its notes, without the accents and slides that go with them.
         return acid::written(steps, range, column, shape)
@@ -977,6 +1010,7 @@ fn filled(
                 | FillKind::Reverse
                 | FillKind::Snap => unreachable!("reworked above"),
                 FillKind::Acid => unreachable!("written by `acid::written`"),
+                FillKind::Follow => unreachable!("read from what it follows"),
             };
             (row, value)
         })
@@ -1165,6 +1199,7 @@ mod tests {
             place: Where::Notes,
             seed: 1,
             acid: Acid::default(),
+            follow: Follow::default(),
         }
     }
 

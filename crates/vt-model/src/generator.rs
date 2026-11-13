@@ -1,12 +1,15 @@
 //! Live generators: the shape panel kept live on a column of a phrase. One owns the cells it fills
 //! and keeps the values from under them, so it can be reshaped as often as wanted, until a hand
-//! edit to one of its cells applies it and leaves plain values.
+//! edit to one of its cells applies it and leaves plain values. A `Follow` reads another phrase,
+//! usually on another track, and writes it again whenever that phrase changes.
 
 use serde::{Deserialize, Serialize};
 
+use crate::song::Song;
+
 use crate::scale::Scale;
 use crate::selection::StepRange;
-use crate::shape::{FillKind, Shape, ShapeColumn, written};
+use crate::shape::{FillKind, Shape, ShapeColumn, Source, copy_fx, written_from};
 use crate::step::{FxCommand, FxSlot, Note, Step};
 
 /// Where a live generator writes.
@@ -53,16 +56,33 @@ fn on_notes(column: ShapeColumn) -> bool {
     )
 }
 
-/// Whether a shape owns a note's velocity and gate as well as its pitch, as `Acid` writes its
-/// accents and slides there.
-fn whole_notes(shape: &Shape) -> bool {
-    shape.kind == FillKind::Acid
+/// How much of each of its rows a generator on the Note column owns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Owns {
+    /// Its column's cell alone.
+    Cell,
+    /// A note's velocity and gate as well as its pitch, as `Acid` writes its accents and slides
+    /// there, and `Follow` copies them.
+    Note,
+    /// Those and the row's FX, for a `Follow` copying them too.
+    NoteFx,
+}
+
+/// What a shape owns of each row.
+fn owns(shape: &Shape) -> Owns {
+    match shape.kind {
+        FillKind::Acid => Owns::Note,
+        FillKind::Follow if shape.follow.fx => Owns::NoteFx,
+        FillKind::Follow => Owns::Note,
+        _ => Owns::Cell,
+    }
 }
 
 /// Copy a column's cell from one step to another: a note, with its velocity for notes of its own,
-/// and its velocity and gate for whole notes; a velocity, a nudge, a whole gate cell, or an FX
-/// slot.
-fn copy(column: ShapeColumn, whole: bool, from: &Step, to: &mut Step) {
+/// and its velocity and gate, and perhaps the row's FX, for whole notes; a velocity, a nudge, a
+/// whole gate cell, or an FX slot.
+fn copy(column: ShapeColumn, owns: Owns, from: &Step, to: &mut Step) {
+    let whole = owns != Owns::Cell;
     match column {
         ShapeColumn::Note { writes, .. } => {
             to.note = from.note;
@@ -71,6 +91,9 @@ fn copy(column: ShapeColumn, whole: bool, from: &Step, to: &mut Step) {
             }
             if whole {
                 to.gate = from.gate;
+            }
+            if owns == Owns::NoteFx {
+                copy_fx(from, to);
             }
         }
         ShapeColumn::Velocity => to.velocity = from.velocity,
@@ -85,22 +108,27 @@ fn copy(column: ShapeColumn, whole: bool, from: &Step, to: &mut Step) {
 }
 
 /// A column's cell on a step, alone on a step of its own.
-fn cell(column: ShapeColumn, whole: bool, step: &Step) -> Step {
+fn cell(column: ShapeColumn, owns: Owns, step: &Step) -> Step {
     let mut cell = Step::default();
     if let ShapeColumn::Fx { slot, .. } = column {
         cell.fx = vec![FxSlot::default(); slot + 1];
     }
-    copy(column, whole, step, &mut cell);
+    if owns == Owns::NoteFx {
+        cell.fx = vec![FxSlot::default(); step.fx.len()];
+    }
+    copy(column, owns, step, &mut cell);
     cell
 }
 
 /// Whether two steps hold the same cell in a column.
-fn same(column: ShapeColumn, whole: bool, a: &Step, b: &Step) -> bool {
+fn same(column: ShapeColumn, owns: Owns, a: &Step, b: &Step) -> bool {
+    let whole = owns != Owns::Cell;
     match column {
         ShapeColumn::Note { writes, .. } => {
             a.note == b.note
                 && ((writes.is_none() && !whole) || a.velocity == b.velocity)
                 && (!whole || a.gate == b.gate)
+                && (owns != Owns::NoteFx || a.fx == b.fx)
         }
         ShapeColumn::Velocity => a.velocity == b.velocity,
         ShapeColumn::Nudge => a.nudge == b.nudge,
@@ -150,43 +178,53 @@ impl Generator {
     fn restore(&self, steps: &mut [Step]) {
         for (offset, cell) in self.under.iter().enumerate() {
             if let Some(step) = steps.get_mut(self.first + offset) {
-                copy(self.column, whole_notes(&self.shape), cell, step);
+                copy(self.column, owns(&self.shape), cell, step);
             }
         }
     }
 
-    /// Start on these rows, keeping what's there as what's under it, and write its values.
-    pub(crate) fn start(&mut self, steps: &mut [Step], range: StepRange) {
+    /// The phrase it follows, if it's a `Follow`.
+    pub fn source(&self) -> Option<Source> {
+        (self.shape.kind == FillKind::Follow).then_some(self.shape.follow.source)
+    }
+
+    /// Start on these rows, keeping what's there as what's under it, and write its values. A
+    /// `Follow` writes from `source`, the loop of the phrase it follows.
+    pub(crate) fn start(&mut self, steps: &mut [Step], range: StepRange, source: Option<&[Step]>) {
         self.first = range.first;
         self.under = (range.first..=range.last)
             .filter_map(|row| steps.get(row))
-            .map(|step| cell(self.column, whole_notes(&self.shape), step))
+            .map(|step| cell(self.column, owns(&self.shape), step))
             .collect();
-        self.render(steps);
+        self.render(steps, source);
     }
 
     /// Take a new shape and write it. One that owns more of each note, as `Acid` owns its velocity
     /// and gate, takes what's there now as what's under those, and one that owns less puts back
     /// what was under them first.
-    pub(crate) fn reshape(&mut self, steps: &mut [Step], shape: Shape) {
+    pub(crate) fn reshape(&mut self, steps: &mut [Step], shape: Shape, source: Option<&[Step]>) {
         self.restore(steps);
         self.shape = shape;
-        let whole = whole_notes(&self.shape);
+        let owns = owns(&self.shape);
         for (offset, under) in self.under.iter_mut().enumerate() {
             if let Some(step) = steps.get(self.first + offset) {
-                *under = cell(self.column, whole, step);
+                *under = cell(self.column, owns, step);
             }
         }
-        self.render(steps);
+        self.render(steps, source);
     }
 
-    /// Write its values over what's under it, changing its own cells only.
-    pub(crate) fn render(&mut self, steps: &mut [Step]) {
+    /// Write its values over what's under it, changing its own cells only. A `Follow` with
+    /// nothing to read, as its source has gone, leaves what it last wrote, for the edit to apply.
+    pub(crate) fn render(&mut self, steps: &mut [Step], source: Option<&[Step]>) {
+        if self.shape.kind == FillKind::Follow && source.is_none() {
+            return;
+        }
         self.restore(steps);
         let Some(range) = self.rows() else {
             return;
         };
-        for (row, step) in written(steps, range, self.column, &self.shape) {
+        for (row, step) in written_from(steps, range, self.column, &self.shape, source) {
             if let Some(target) = steps.get_mut(row) {
                 *target = step;
             }
@@ -194,16 +232,29 @@ impl Generator {
         self.seen = steps[range.first..=range.last.min(steps.len() - 1)].to_vec();
     }
 
+    /// Write a `Follow` again from its source, which an edit changed: true if that changed its
+    /// rows.
+    pub(crate) fn refollow(&mut self, steps: &mut [Step], source: &[Step]) -> bool {
+        let before = self.seen.clone();
+        self.render(steps, Some(source));
+        self.seen != before
+    }
+
     /// Follow an edit to its phrase, now that it should cover `range`: false if the edit changed
     /// one of its cells by hand, which applies it, leaving the cells as the edit left them.
     /// Otherwise it rerenders if the edit changed the notes it reads, or moved its lane, and stays
     /// live. A note that comes or goes on a column whose rows are the notes takes the cell the
-    /// edit gave it as what's under it.
-    pub(crate) fn follow(&mut self, steps: &mut [Step], range: Option<StepRange>) -> bool {
+    /// edit gave it as what's under it. A `Follow` rerenders from `source`.
+    pub(crate) fn follow(
+        &mut self,
+        steps: &mut [Step],
+        range: Option<StepRange>,
+        source: Option<&[Step]>,
+    ) -> bool {
         let Some(range) = range else {
             return false;
         };
-        let whole = whole_notes(&self.shape);
+        let whole = owns(&self.shape);
         let mut changed = false;
         for (offset, seen) in self.seen.iter().enumerate() {
             let Some(now) = steps.get(self.first + offset) else {
@@ -225,7 +276,7 @@ impl Generator {
             changed = true;
         }
         if changed {
-            self.render(steps);
+            self.render(steps, source);
         }
         true
     }
@@ -233,7 +284,7 @@ impl Generator {
     /// Move onto other rows, as a lane does: the rows it leaves get back what was under them, and
     /// the rows it takes keep what's there as what's under them.
     fn retarget(&mut self, steps: &mut [Step], range: StepRange) {
-        let whole = whole_notes(&self.shape);
+        let whole = owns(&self.shape);
         let (old_first, old_under) = (self.first, std::mem::take(&mut self.under));
         let inside = |row: usize| (range.first..=range.last).contains(&row);
         for (offset, cell) in old_under.iter().enumerate() {
@@ -367,6 +418,41 @@ impl From<ColumnFile> for ShapeColumn {
             },
         }
     }
+}
+
+/// Whether a phrase reads another: it is that phrase, or it follows it, directly or through the
+/// phrases it follows. A phrase can't follow one that reads it, as that would go round a cycle.
+pub fn reads(song: &Song, phrase: Source, other: Source) -> bool {
+    let mut seen: Vec<Source> = Vec::new();
+    let mut next = vec![phrase];
+    while let Some(here) = next.pop() {
+        if here == other {
+            return true;
+        }
+        if seen.contains(&here) {
+            continue;
+        }
+        seen.push(here);
+        if let Some(found) = song.source_phrase(here) {
+            next.extend(found.generators().iter().filter_map(Generator::source));
+        }
+    }
+    false
+}
+
+/// The phrases an edit took away that live `Follow`s read, which it applied, for saying so.
+pub fn unfollowed(before: &Song, after: &Song) -> Vec<Source> {
+    let mut gone: Vec<Source> = Vec::new();
+    for track in before.tracks.iter().take(before.sound_tracks()) {
+        for phrase in track.phrases.values() {
+            for source in phrase.generators().iter().filter_map(Generator::source) {
+                if after.source_phrase(source).is_none() && !gone.contains(&source) {
+                    gone.push(source);
+                }
+            }
+        }
+    }
+    gone
 }
 
 /// The columns of the live generators an edit applied, for saying so.
