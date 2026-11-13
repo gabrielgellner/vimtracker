@@ -374,6 +374,23 @@ impl InsertState {
         }
     }
 
+    /// Whether taking the same settings again would change nothing: it has what its effect keeps,
+    /// if it keeps anything, and nothing in it is about to wake.
+    pub fn holding(&self) -> bool {
+        match &self.memory {
+            Some(memory) => !memory.waking(),
+            None => !Memory::kept_by(self.insert),
+        }
+    }
+
+    /// What taking its settings again would still change, while they stay the same: what goes by
+    /// the frame.
+    pub fn keep_time(&mut self, frames: u64) {
+        if let Some(memory) = &mut self.memory {
+            memory.keep_time(frames);
+        }
+    }
+
     /// A step has switched the slot's trigger on: a stutter in it starts again from what comes in
     /// next, even if it's on already. Nothing else has one.
     pub fn strike(&mut self) {

@@ -1018,6 +1018,9 @@ pub struct TrackState {
     bypassed: [bool; INSERTS],
     /// The frames rendered when the shares last moved.
     shared_at: u64,
+    /// What its modulation was last worked out with, if that left nothing moving, so working it
+    /// out again changes nothing until something it reads does, which wakes it (#547).
+    rest: Option<Rest>,
     /// The loaded voice's held settings, in its order, on `0..=1`.
     synth: [f32; MAX_MACHINE_SETTINGS],
     /// Whether an LFO moves the filter, so it stays running at the top of its range.
@@ -1026,6 +1029,14 @@ pub struct TrackState {
     pub key: [f32; 2],
     /// How long each slot has taken, while `vimtracker bench --tracks` times the engine.
     pub slot_times: SlotTimes,
+}
+
+/// What a track's modulation was worked out with when it left nothing moving: whether the song
+/// was stopped, and its tempo, which some slots' effects keep time with.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Rest {
+    stopped: bool,
+    frames_per_tick: f64,
 }
 
 /// The pan gains for a `0..=1` position. The centre is unity, and it keeps equal power.
@@ -1246,6 +1257,7 @@ impl TrackState {
             }),
             bypassed: [false; INSERTS],
             shared_at: 0,
+            rest: None,
             filter_moving: false,
             key: [0.0; 2],
             slot_times: SlotTimes::default(),
@@ -1282,6 +1294,7 @@ impl TrackState {
     /// Carry the sounding note on as this one, with no new attack, gliding there for as long as
     /// `GLD` says as it's heard now.
     pub fn tie(&mut self, note: NoteOn) {
+        self.wake();
         self.last_note = Some(note);
         self.new_note = true;
         self.voice.tie(note, glide_ms(self.held_glide));
@@ -1322,6 +1335,7 @@ impl TrackState {
     /// track has had since its settings were last reset to an empty track's, as nothing else
     /// changes them, and going through every setting is most of a reset's time.
     pub fn reset_all_but_settings(&mut self, seed: u64, index: usize, clock: u64) {
+        self.wake();
         self.rng = Pcg32::new(seed, index as u64);
         self.forget_conditions();
         self.forget_accumulators();
@@ -1346,6 +1360,7 @@ impl TrackState {
     /// Count every slot's cycles from the top of the song, as playing starts there, keeping the
     /// clock they count real time from.
     pub fn count_cycles_from_the_top(&mut self) {
+        self.wake();
         for run in &mut self.slots {
             run.start.tick = 0.0;
             run.notes = 0;
@@ -1412,6 +1427,8 @@ impl TrackState {
         let mut moved = Moved::default();
         let mut marks = 0;
         let mut filter_moving = false;
+        // Whether any slot moves anything, or might.
+        let mut working = false;
         let shaping = note_shape_slot(&track.mods);
         let has_cut = SettingId::CUT.exists_on(track);
         let offsets = &mut self.offsets;
@@ -1437,6 +1454,7 @@ impl TrackState {
                 let closed = f32::from(slot.lpg.colour) / 255.0 * Lpg::closing(level);
                 moved.add(SettingId::CUT.index(), -closed * run.share);
                 filter_moving = true;
+                working = true;
             }
             let moved_by = |setting: usize| {
                 SettingId::modulator(at, setting)
@@ -1472,6 +1490,7 @@ impl TrackState {
                 run.rest(slot.kind);
                 continue;
             }
+            working = true;
             let depth = depth.clamp(-f32::from(MAX_DEPTH), f32::from(MAX_DEPTH));
             // A slot in scale on `Pitch` moves the note to the scale's notes.
             let tuned = |added: f32| {
@@ -1614,6 +1633,48 @@ impl TrackState {
         self.voice.set_synth(self.synth_settings());
         self.update_gains();
         self.tell_slots_the_note();
+        // Working it out again would change nothing while no slot moves anything, no glide runs,
+        // each mod slot's share is where its switch is, and each slot's effect has what it keeps.
+        let still = !working
+            && (stopped || self.gliding == 0)
+            && self.slots.iter().zip(&track.mods).all(|(run, slot)| {
+                run.glide_left == 0.0 && run.share == if slot.bypassed { 0.0 } else { 1.0 }
+            })
+            && self.inserts.iter().all(InsertState::holding);
+        self.rest = still.then_some(Rest {
+            stopped,
+            frames_per_tick: now.frames_per_tick,
+        });
+    }
+
+    /// Whether working its modulation out now would change nothing, as nothing it reads has
+    /// changed since it was last worked out and that left nothing moving.
+    pub fn rests(&self, now: SongTime, stopped: bool) -> bool {
+        self.rest
+            == Some(Rest {
+                stopped,
+                frames_per_tick: now.frames_per_tick,
+            })
+    }
+
+    /// Whether its modulation, as last worked out, left nothing moving.
+    pub fn at_rest(&self) -> bool {
+        self.rest.is_some()
+    }
+
+    /// Something its modulation reads has changed, so it's worked out again next time.
+    #[inline]
+    pub fn wake(&mut self) {
+        self.rest = None;
+    }
+
+    /// What working its modulation out again would still do while it rests: the shares' clock
+    /// moves on, and so do a reverb's or a plate's wobbles, which go by the frame.
+    pub fn keep_resting(&mut self, now: SongTime) {
+        self.shared_at = now.rendered;
+        for insert in &mut self.inserts {
+            insert.keep_time(now.rendered);
+        }
     }
 
     /// Move each mod slot's share toward 1 if it's in or 0 if it's switched out, and what's left
@@ -1737,6 +1798,7 @@ impl TrackState {
     /// starts, whatever type each is now, so one that changes type picks the new one up as though
     /// it had always been it.
     pub fn trigger_mods(&mut self, track: &Track, now: SongTime) {
+        self.wake();
         for (slot, run) in track.mods.iter().zip(&mut self.slots) {
             trigger_slot(slot, run, now, self.chain_pass);
         }
@@ -1749,6 +1811,7 @@ impl TrackState {
     /// Start the release of every slot's envelope, when a note ends, but a one-shot's, which plays
     /// through whatever the note's length.
     pub fn release_mods(&mut self, track: &Track, now: SongTime) {
+        self.wake();
         for (slot, run) in track.mods.iter().zip(&mut self.slots) {
             let envelope = slot.envelope();
             if matches!(run.envelope, EnvelopeRun::Held { .. }) && !envelope.one_shot() {
@@ -1788,6 +1851,7 @@ impl TrackState {
     }
 
     fn begin(&mut self, note: NoteOn, rate: u32, arpeggio: bool) {
+        self.wake();
         let from = if note.shape.reset() {
             0.0
         } else {
@@ -2014,6 +2078,7 @@ impl TrackState {
 
     /// Fade the playing note.
     pub fn cut_to_tail(&mut self) {
+        self.wake();
         if self.voice.active() {
             self.tail = self.voice;
             self.tail.fade();
@@ -2023,6 +2088,7 @@ impl TrackState {
 
     /// Stop sounding and drop anything pending, when the transport halts.
     pub fn stop(&mut self) {
+        self.wake();
         self.cut_to_tail();
         self.delayed = None;
         self.kill_at = None;
@@ -2041,6 +2107,7 @@ impl TrackState {
     /// Run a lock or hold value from a step. Anything else on that value gives way to it. A fader
     /// a hand has taken over keeps it underneath, unheard, for when it's given back.
     pub fn set_value(&mut self, id: SettingId, value: u16, mark: Mark) {
+        self.wake();
         if let Some(fader) = id.fader() {
             let run = &mut self.faders[fader];
             run.automated = true;
@@ -2083,6 +2150,7 @@ impl TrackState {
     /// A hand moved a fader the steps drive: from now its track page's value is heard, and the
     /// steps' values for it are kept underneath, unheard, until it's given back.
     pub fn take_over(&mut self, fader: usize) {
+        self.wake();
         let Some(run) = self.faders.get_mut(fader) else {
             return;
         };
@@ -2094,6 +2162,7 @@ impl TrackState {
     /// Give a fader back to the steps, as Live's Re-Enable Automation does: it's heard where they
     /// have it now, a lock's or a hold's value or, at the next update, a glide's place.
     pub fn give_back(&mut self, fader: usize) {
+        self.wake();
         let Some(run) = self.faders.get_mut(fader) else {
             return;
         };
@@ -2127,6 +2196,7 @@ impl TrackState {
         to: Option<(FxSlot, f64)>,
         now: SongTime,
     ) {
+        self.wake();
         self.set_value(id, value, Mark::Lock);
         if let Some((to, ticks)) = to {
             let layers = &mut self.values[id.index()];
@@ -2156,6 +2226,7 @@ impl TrackState {
     /// gives way to it. On a fader a hand has taken over it's heard at once, whatever the steps do,
     /// which keep their hold for when it's given back.
     pub fn set_base(&mut self, id: SettingId, value: u16) {
+        self.wake();
         if let Some(fader) = id.fader() {
             let run = &mut self.faders[fader];
             run.song = value;
@@ -2208,6 +2279,7 @@ impl TrackState {
     /// A setting of a voice or an effect that isn't loaded keeps its value for when it is, and
     /// isn't heard.
     fn write_value(&mut self, id: SettingId, value: f32) {
+        self.wake();
         match id.owner() {
             (Owner::Mod(slot), at) => {
                 self.slots[slot].values[at] = value;
@@ -2287,6 +2359,7 @@ impl TrackState {
 
     /// Give the long buffers its slots hold back to the pool, as the track's gone.
     pub fn give_back_memory(&mut self, memory: &mut MemoryPool) {
+        self.wake();
         for insert in &mut self.inserts {
             insert.give_back(memory);
         }
