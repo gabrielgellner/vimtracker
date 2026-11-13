@@ -76,7 +76,7 @@ fn a_held_lev_and_pan_move_the_faders_shown_but_not_the_song() {
 #[test]
 fn the_status_line_says_a_fader_is_from_the_steps() {
     let (mut app, _realtime) = automated();
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     let status = status_line(&app);
     assert!(status.contains("-24.0 dB, from the steps"), "{status}");
 }
@@ -84,7 +84,7 @@ fn the_status_line_says_a_fader_is_from_the_steps() {
 #[test]
 fn a_hand_moving_a_fader_the_steps_drive_takes_it_over_from_where_it_is() {
     let (mut app, mut realtime) = automated();
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     press(&mut app, "=");
     assert_eq!(
         app.song().tracks[0].level,
@@ -115,7 +115,7 @@ fn a_hand_moving_a_fader_the_steps_drive_takes_it_over_from_where_it_is() {
 #[test]
 fn space_e_gives_the_tracks_faders_back_and_space_capital_e_every_tracks() {
     let (mut app, mut realtime) = automated();
-    press(&mut app, " 6=l=h");
+    press(&mut app, " 4=l=h");
     block(&mut realtime, &mut app);
     assert!(app.faders(0).taken[0] && app.faders(1).taken[0]);
     press(&mut app, " e");
@@ -135,7 +135,7 @@ fn space_e_gives_the_tracks_faders_back_and_space_capital_e_every_tracks() {
 #[test]
 fn a_fader_no_step_has_set_is_only_edited() {
     let (mut app, mut realtime) = automated();
-    press(&mut app, " 6jj=");
+    press(&mut app, " 4jj=");
     assert_eq!(app.song().tracks[0].send_a, 0x01);
     block(&mut realtime, &mut app);
     assert!(!app.faders(0).taken[2] && !app.faders(0).automated[2]);
@@ -144,7 +144,7 @@ fn a_fader_no_step_has_set_is_only_edited() {
 #[test]
 fn the_output_device_shows_the_fader_where_the_steps_have_it() {
     let (mut app, _realtime) = automated();
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     let backend = ratatui::backend::TestBackend::new(163, 42);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -178,7 +178,7 @@ fn the_rotos_mix_mode_knobs_follow_the_faders_the_steps_drive() {
         Some(level_position(f64::from(0xE0_u8)))
     );
     // Taken over, the knob is where the hand put it.
-    press(&mut app, " 6=");
+    press(&mut app, " 4=");
     block(&mut realtime, &mut app);
     let faders: Vec<_> = (0..app.song().tracks.len())
         .map(|at| app.faders(at))

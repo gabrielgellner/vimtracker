@@ -5,7 +5,7 @@ that sound goes. Most of the time you won't need it, as a track plays its rows i
 order, one step each, as in any tracker. It matters once rows have gates of different
 lengths, FX columns loop on their own, or a phrase plays its rows in another order.
 
-The track settings named here are on its track pages, `Space 4`: `Gate`, `Glide`,
+The track settings named here are on its track pages, `Space 5` to `Space 8`: `Gate`, `Glide`,
 `Speed`, `Groove` and `Reset` in the Play device on the Sound page, the accumulator and
 the arpeggio on the Mod page, and the effects on the FX page.
 

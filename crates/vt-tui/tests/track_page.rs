@@ -1,6 +1,6 @@
-//! The track page, `Space 4`: its Sound and Mod pages' settings and what each key does to
-//! them, the cursor's moves through their rows, `/`'s jumps, and their drawings: the bars, the
-//! filter's curve, the mod slots' pictures and the sample's waveform. The FX page is
+//! The track page, `Space 5` and `Space 6`: its Sound and Mod pages' settings and what each key
+//! does to them, the cursor's moves through their rows, `/`'s jumps, and their drawings: the bars,
+//! the filter's curve, the mod slots' pictures and the sample's waveform. The FX page is
 //! `fx_page.rs`.
 
 use std::sync::Arc;
@@ -87,7 +87,7 @@ fn a_fixed_tracks_pages_only_show_what_it_has() {
             ],
         ),
     ];
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     for (track, title, reached) in pages {
         app.cursor.track = track;
         let lines = track_text(&app);
@@ -168,7 +168,7 @@ fn machine_value(app: &App, setting: usize) -> u8 {
 #[test]
 fn typing_in_the_machine_list_finds_a_voice_under_any_kind() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     for (typed, voice) in [
         ("Twin Peaks", SynthVoice::TwinPeaks),
         ("Kick", SynthVoice::Kick),
@@ -194,7 +194,7 @@ fn typing_in_the_machine_list_finds_a_voice_under_any_kind() {
 fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     assert_eq!(column_name(&app), "Machine");
     assert!(
         title_line(&app, "Machine").starts_with("╭─ Machine  Sampler  Off ─"),
@@ -390,7 +390,7 @@ fn choosing_a_sample_goes_back_to_playing_samples() {
     let kit = kit_file();
     command(&mut app, &format!("kit {}", kit.display()));
     choose_machine(&mut app, "VA");
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].machine, Machine::Sampler);
     assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
@@ -409,7 +409,7 @@ fn bars_show_where_a_value_is() {
     assert_eq!(centre_bar(0x80, 9), "    │    ");
     assert_eq!(centre_bar(0xFF, 9), "        │");
     let (mut app, _realtime) = app();
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     let text = track_text(&app).join("\n");
     assert!(text.contains("8000 ▕    │    ▏"), "{text}");
 }
@@ -564,7 +564,7 @@ fn a_bar_moves_at_the_same_pace_through_the_mark_as_either_side_of_it() {
 #[test]
 fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     let cut = |app: &App| from_name(app, "Cut");
     assert!(cut(&app).contains("FF00 ▕█████████▏"), "{}", cut(&app));
     app.live = Some(vt_engine::track_state::LiveValues {
@@ -594,7 +594,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
 #[test]
 fn the_ends_of_bars_line_up_down_each_column() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     for mark in ['▕', '▏'] {
         let mut columns: Vec<usize> = track_text(&app)
             .iter()
@@ -617,7 +617,7 @@ fn the_ends_of_bars_line_up_down_each_column() {
 fn on_track_page() -> (App, Realtime) {
     let (mut app, realtime) = tracks_of_different_lengths();
     // On Cut, the Filter's first setting, as the Machine's aren't all values.
-    press(&mut app, " 4}j");
+    press(&mut app, " 5}j");
     assert_eq!(app.view, View::Track);
     (app, realtime)
 }
@@ -1028,7 +1028,7 @@ fn the_track_page_quantises_the_nudges_from_under_velocity_and_leaves_them_writt
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    press(&mut app, " 4}j");
+    press(&mut app, " 5}j");
     let quantise = |app: &App| app.song().tracks[0].quantise;
     let line = from_name(&app, "Quantise");
     assert!(line.starts_with("Quantise  0000 ▕         ▏"), "{line}");
@@ -1526,7 +1526,7 @@ fn typing_a_value_and_long_words_keep_the_sound_pages_columns_in_line() {
     let (mut app, _realtime) = app();
     let line = from_name;
     // The bar stays where it is while a value is typed, from its first key.
-    press(&mut app, " 4jli");
+    press(&mut app, " 5jli");
     assert!(
         line(&app, "Start").starts_with("Start     _ 00 ▕         ▏"),
         "{}",
@@ -1746,7 +1746,7 @@ fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
     app.mod_images = Some([
         0x01_02_03, 0x04_05_06, 0x07_08_09, 0x0A_0B_0C, 0x0D_0E_0F, 0x10_11_12,
     ]);
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     // As much of the page as the author's screen has room for, beside the meter.
     let buffer = {
         let backend = ratatui::backend::TestBackend::new(150, 40);
@@ -1801,7 +1801,7 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
     };
     // Nothing is sent until the page that shows them.
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     // The envelopes' shapes and the LFOs' cycles, all at the half size.
     assert_eq!(sync(&mut app, &mut graphics).0, MOD_SLOTS);
     let first = app.mod_images.unwrap();
@@ -1835,7 +1835,7 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
 #[test]
 fn an_lfos_shape_is_a_word_in_its_grid_with_no_glyph_beside_it() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     assert_eq!(app.song().tracks[0].mods[3].lfo.shape, Shape::Tri);
     let lines = screen_cells(&mut app);
     let (top, left) = device_at(&lines, "Mod 4");
@@ -1867,7 +1867,7 @@ fn the_filter_curve_follows_its_settings_and_the_cursor() {
         graphics.sync(app, &mut out).unwrap();
         String::from_utf8(out).unwrap().matches(",c=49,").count()
     };
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     assert_eq!(sync(&mut app, &mut graphics), 1);
     let plain = app.filter_image.unwrap();
     assert_eq!(sync(&mut app, &mut graphics), 0);
@@ -1910,7 +1910,7 @@ fn the_filter_curve_moves_with_what_plays() {
         let out = String::from_utf8(out).unwrap();
         (out.matches(",c=49,").count(), out.matches("a=d,").count())
     };
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     sync(&mut app, &mut graphics);
     let still = app.filter_image.unwrap();
     let track = app.song().tracks[0].clone();
@@ -1975,7 +1975,7 @@ fn jump_labels(app: &App) -> Vec<String> {
 fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
-    press(&mut app, " 4/");
+    press(&mut app, " 5/");
     assert_eq!(app.mode, Mode::Jump);
     assert!(jump_labels(&app).is_empty(), "nothing until you type");
     // Machine, Slice, the sampler's Cents and Punch take the first labels for the `c`, and go
@@ -1998,7 +1998,7 @@ fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
 #[test]
 fn a_jumps_label_is_never_the_next_letter_and_stays_as_you_type() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4/c");
+    press(&mut app, " 5/c");
     let first = jump_labels(&app);
     assert!(first.iter().any(|label| label.ends_with("Machine")));
     assert!(
@@ -2030,7 +2030,7 @@ fn a_jump_finds_each_row_of_a_repeated_name_and_can_be_left() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
     // Every slot's.
-    press(&mut app, " 4L/dep");
+    press(&mut app, " 5L/dep");
     assert_eq!(
         jump_labels(&app).len(),
         MOD_SLOTS,
@@ -2069,7 +2069,7 @@ fn ctrl_o_comes_back_from_a_jump_to_the_setting_it_left() {
     use vt_tui::track_page::Page;
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
-    press(&mut app, " 4jj");
+    press(&mut app, " 5jj");
     let start = (app.track_page.row, app.track_page.field);
     press(&mut app, "/res");
     special(&mut app, KeyCode::Enter);
@@ -2091,7 +2091,7 @@ fn ctrl_o_comes_back_from_a_jump_to_the_setting_it_left() {
 #[test]
 fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4/res");
+    press(&mut app, " 5/res");
     let backend = ratatui::backend::TestBackend::new(150, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -2126,7 +2126,7 @@ fn a_jumps_labels_cover_the_values_and_the_search_shows_below() {
 fn a_jumps_labels_also_follow_the_names_being_searched() {
     use vt_tui::track_page::{Control, ModField};
     let (mut app, _realtime) = app();
-    press(&mut app, " 4/cu");
+    press(&mut app, " 5/cu");
     let line = from_name;
     // Over the letter after what's typed, in the same columns as without a label.
     assert!(line(&app, "Cuf").starts_with("Cuf       fF00 ▕"));
@@ -2172,7 +2172,7 @@ fn a_jump_works_on_the_mixer_and_stays_on_the_cursors_track() {
     use vt_tui::track_page::Control;
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
-    press(&mut app, " 6l");
+    press(&mut app, " 4l");
     assert_eq!(app.view, View::Mixer);
     assert_eq!(app.cursor.track, 1);
     press(&mut app, "/s");
@@ -2305,7 +2305,7 @@ fn semicolon_on_the_track_page_plays_the_sound_from_the_keyboard() {
 fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
     use vt_tui::track_page::Control;
     let (mut app, _rt) = app();
-    press(&mut app, " 4LL");
+    press(&mut app, " 5LL");
     press(&mut app, "K");
     press(&mut app, "EQ3");
     special(&mut app, KeyCode::Enter);
@@ -2382,7 +2382,7 @@ fn a_samplers_thumbnail_is_sent_once_and_again_only_for_a_change() {
             .matches(",c=49,r=5,")
             .count()
     };
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     // The filter's curve and the thumbnail, picked out as the cursor's in the Machine.
     assert_eq!(sync(&mut app, &mut graphics), 2);
     let picked = app.waveform_image.unwrap();
@@ -2430,7 +2430,7 @@ fn a_samplers_thumbnail_is_sent_once_and_again_only_for_a_change() {
 fn the_filter_curve_and_the_envelopes_are_smooth_at_their_sizes() {
     let (mut app, _realtime) = app();
     let mut graphics = vt_tui::kitty::Graphics::new();
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     let mut out = Vec::new();
     graphics.sync(&mut app, &mut out).unwrap();
     let sent = vt_tui::screenshot::sent_images(&out);
@@ -2559,7 +2559,7 @@ fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
     // Down the left column past the envelopes, onto its first row, as its title has nothing.
-    press(&mut app, " 4L3}");
+    press(&mut app, " 5L3}");
     let rows = |app: &mut App| {
         let lines = screen_cells(app);
         let (top, left) = device_at(&lines, "Accumulator");
@@ -2653,7 +2653,7 @@ fn a_return_has_no_accumulator() {
     for _ in 0..returns {
         press(&mut app, "W");
     }
-    press(&mut app, " 4LG");
+    press(&mut app, " 5LG");
     let text = screen_cells(&mut app).join("\n");
     assert!(
         text.contains("╭─ Mod 6 ") && !text.contains("Accumulator"),
@@ -2668,7 +2668,7 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     use vt_tui::views::widgets::toggle;
     let (mut app, _realtime) = app();
     // Across to the LFOs and down past them, onto its first row, as its title has nothing.
-    press(&mut app, " 4L$l3}");
+    press(&mut app, " 5L$l3}");
     let rows = |app: &mut App| {
         let lines = screen_cells(app);
         let (top, left) = device_at(&lines, "Arpeggio");
@@ -2800,7 +2800,7 @@ fn a_return_has_no_arpeggio() {
     for _ in 0..returns {
         press(&mut app, "W");
     }
-    press(&mut app, " 4LG");
+    press(&mut app, " 5LG");
     let text = screen_cells(&mut app).join("\n");
     assert!(
         text.contains("╭─ Mod 6 ") && !text.contains("Arpeggio"),
@@ -3264,7 +3264,7 @@ fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    press(&mut app, " 4LL");
+    press(&mut app, " 5LL");
     let fx = full_screen_text(&mut app);
     let names = ["Distort", "Delay", "Reverb", "Comp"];
     assert_eq!(names.len(), INSERTS);
@@ -3305,7 +3305,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     use vt_tui::track_page::{Control, ModField};
     let (mut app, _realtime) = app();
     // A delay in the last slot.
-    press(&mut app, " 4LL");
+    press(&mut app, " 5LL");
     press(&mut app, &"}".repeat(INSERTS - 1));
     assert_eq!(app.track_control(), Control::Insert(INSERTS - 1));
     press(&mut app, "K");
@@ -3328,7 +3328,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     assert_eq!(step.fx[0].command, Some(FxCommand::Set(bypass)));
 
     // The last slot, an LFO, on the delay's feedback, and the last envelope on its depth.
-    press(&mut app, " 4H");
+    press(&mut app, " 6");
     press(&mut app, &to_lfo(2));
     press(&mut app, "$");
     assert_eq!(
@@ -3371,7 +3371,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
 #[test]
 fn a_bar_swept_by_hand_follows_it_with_no_mark_flickering() {
     let (mut app, mut realtime) = app();
-    press(&mut app, " 4}j");
+    press(&mut app, " 5}j");
     assert_eq!(vt_tui::views::status::column_name(&app), "Cut");
     let mut out = vec![0.0; 1600 * 2];
     realtime.process(&mut out);
@@ -3398,7 +3398,7 @@ fn each_page_keeps_its_own_cursor_and_starts_on_its_first_setting() {
     use vt_model::insert::Insert;
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app_with_distort();
-    press(&mut app, " 4L$");
+    press(&mut app, " 5L$");
     assert_eq!(column_name(&app), "Dest");
     // The FX page starts on its first slot's effect, not on its type under the Mod page's column,
     // so `x` empties the slot.
@@ -3422,7 +3422,7 @@ fn each_page_keeps_its_own_cursor_and_starts_on_its_first_setting() {
 
     // From the Sound page's last column straight through to the FX page, too.
     let (mut app, _realtime) = app_with_distort();
-    press(&mut app, " 4$");
+    press(&mut app, " 5$");
     assert_eq!(column_name(&app), "Sample");
     press(&mut app, "LL");
     assert_eq!(column_name(&app), "Effect");

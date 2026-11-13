@@ -6,6 +6,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_tui::input::keys::parse_sequence;
 use vt_tui::input::mode::{Mode, View};
 use vt_tui::input::picker::Pick;
+use vt_tui::track_page::Page;
 
 mod common;
 use common::*;
@@ -46,7 +47,7 @@ fn the_track_picker_goes_to_a_track_by_number_or_name_like_a_buffer() {
 #[test]
 fn the_view_picker_flips_back_and_escape_changes_nothing() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     assert_eq!(app.view, View::Track);
     press(&mut app, "  ");
     assert_eq!(app.mode, Mode::Picker);
@@ -72,16 +73,17 @@ fn the_view_picker_flips_back_and_escape_changes_nothing() {
 #[test]
 fn the_view_picker_searches_and_moves_with_ctrl_keys() {
     let (mut app, _realtime) = app();
-    press(&mut app, "  tra");
+    press(&mut app, "  fx");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.view, View::Track);
+    assert_eq!(app.track_page.page, Page::Fx);
     press(&mut app, "  zz");
     special(&mut app, KeyCode::Backspace);
     special(&mut app, KeyCode::Backspace);
     assert_eq!(
         app.picker.as_ref().unwrap().shown().count(),
-        8,
-        "every view"
+        11,
+        "every view, with each of the track page's pages"
     );
     app.key(parse_sequence("C-p").unwrap()[0], Instant::now());
     assert_eq!(app.picker.as_ref().unwrap().selected, 0);
@@ -116,4 +118,41 @@ fn the_track_picker_names_a_synths_voice_and_can_find_it() {
             .map(|item| item.pick.clone()),
         Some(Pick::Track(0))
     );
+}
+
+#[test]
+fn the_view_picker_lists_each_view_with_the_key_that_shows_it() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 6");
+    press(&mut app, "  ");
+    let listed: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items()
+        .iter()
+        .map(listed)
+        .collect();
+    assert_eq!(
+        listed,
+        [
+            "mod  Space 6",
+            "phrase  Space 3",
+            "chain  Space 2",
+            "song  Space 1",
+            "mixer  Space 4",
+            "project  Space 9, H",
+            "audio  Space 9, L",
+            "sample  Space 0",
+            "sound  Space 5",
+            "fx  Space 7",
+            "gen  Space 8",
+        ]
+    );
+    // The view before this one is highlighted, so Enter flips back.
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.view, View::Phrase);
+    press(&mut app, "  ");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!((app.view, app.track_page.page), (View::Track, Page::Mod));
 }

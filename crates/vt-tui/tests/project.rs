@@ -1157,3 +1157,41 @@ fn changing_a_groove_that_comes_with_it_makes_one_of_the_projects_own() {
     tap(&mut app, "x");
     assert_eq!(app.shown_groove().0, custom);
 }
+
+#[test]
+fn the_project_page_has_the_songs_settings_then_this_machines_audio_on_h_and_l() {
+    let (mut app, _rt) = app();
+    let title = |app: &mut App| {
+        screen_rows(app)
+            .into_iter()
+            .find(|row| row.starts_with("Project"))
+            // The CPU's figure is at the far right of the same row.
+            .and_then(|row| row.split("    ").next().map(str::to_owned))
+    };
+    press(&mut app, " 9");
+    assert_eq!(app.view, View::Project, "Song first");
+    assert_eq!(
+        title(&mut app).as_deref(),
+        Some("Project  Song  Audio · this machine")
+    );
+    press(&mut app, "jj");
+    press(&mut app, "L");
+    assert_eq!(app.view, View::Audio);
+    assert_eq!(app.mode, Mode::Normal);
+    press(&mut app, "jL");
+    assert_eq!(app.view, View::Audio, "L stops at the last");
+    assert_eq!(app.audio_row, 1);
+    press(&mut app, "H");
+    assert_eq!(app.view, View::Project);
+    assert_eq!(app.project_row, 2, "each keeps its cursor");
+    press(&mut app, "HL");
+    assert_eq!((app.view, app.audio_row), (View::Audio, 1));
+
+    // Space 9 opens whichever showed last, as a jump C-o comes back from.
+    press(&mut app, " 3 9");
+    assert_eq!(app.view, View::Audio);
+    press(&mut app, "H 3 9");
+    assert_eq!(app.view, View::Project);
+    app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
+    assert_eq!(app.view, View::Phrase);
+}

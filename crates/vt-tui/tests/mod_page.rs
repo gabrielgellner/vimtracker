@@ -1,4 +1,4 @@
-//! The Mod page, `Space 4` then `L`: a rack of half-width devices, the six mod slots down two
+//! The Mod page, `Space 6`: a rack of half-width devices, the six mod slots down two
 //! columns, `Mod 1` to `Mod 3` on the left beside `Mod 4` to `Mod 6` on the right, and the
 //! accumulator beside the arpeggio under them. Each slot's type, mode and destination are in its
 //! title. The cursor moves across the two columns with `h` and `l`, and down each with `j`, `k`,
@@ -369,7 +369,7 @@ fn braces_j_and_k_go_down_and_up_each_column_of_devices() {
 #[test]
 fn the_keys_move_across_the_mod_page_in_the_app() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     assert_eq!(app.track_control(), Control::Mod(0, ModField::Type));
     press(&mut app, "$l}");
     assert_eq!(app.track_control(), Control::Mod(4, ModField::Type));
@@ -384,7 +384,7 @@ fn the_keys_move_across_the_mod_page_in_the_app() {
 #[test]
 fn each_slots_type_mode_and_destination_are_in_its_title() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let title = |app: &App, slot: usize, on: bool, controls: &str| {
         let identity = format!("Mod {slot}");
         let found = device_title(app, &identity);
@@ -435,7 +435,7 @@ fn the_mod_page_fills_the_keys_box_at_163_by_42() {
     app.mod_images = Some([
         0x01_02_03, 0x04_05_06, 0x07_08_09, 0x0A_0B_0C, 0x0D_0E_0F, 0x10_11_12,
     ]);
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     for keys_mode in [false, true] {
         if keys_mode {
             app.mode = Mode::Keys;
@@ -529,7 +529,7 @@ fn depth_shown(app: &mut App, slot: usize) -> String {
 #[test]
 fn the_default_mod_page_shows_six_slots_as_three_envelopes_beside_three_lfos() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let lines = screen_cells(&mut app);
     let text = lines.join("\n");
     let switch = vt_tui::views::widgets::toggle::text(true);
@@ -552,7 +552,7 @@ fn the_default_mod_page_shows_six_slots_as_three_envelopes_beside_three_lfos() {
 #[test]
 fn the_mod_page_goes_by_whole_bands_where_fewer_fit() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let draw = |app: &App| {
         // Room for two bands of devices under the page's title.
         let (width, height) = (150, 2 + 9 * 2 + 4);
@@ -599,7 +599,7 @@ fn b_switches_a_modulator_out_and_back_with_its_toggle_in_the_title() {
     use vt_tui::glyphs::{SWITCH_OFF, SWITCH_ON};
     use vt_tui::theme;
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let lfo = |app: &App| app.song().tracks[0].mods[3];
     // Every slot is in, with its switch green.
     let buffer = track_page_buffer(&app);
@@ -667,7 +667,7 @@ fn b_switches_a_modulator_out_and_back_with_its_toggle_in_the_title() {
 #[test]
 fn b_refuses_what_has_no_switch() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let before = app.song().tracks[0].clone();
     let depth = app.history.undo_depth();
     // The arpeggio, at the bottom of the LFOs' column, has nothing to switch.
@@ -685,7 +685,7 @@ fn b_refuses_what_has_no_switch() {
 #[test]
 fn k_on_a_slots_type_changes_it_keeping_where_it_goes_and_each_types_settings() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let slot = |app: &App| app.song().tracks[0].mods[1];
     // Mod 2, the filter's envelope, given a longer decay and depth, and switched out.
     press(&mut app, "}jj=");
@@ -752,7 +752,7 @@ fn k_on_a_slots_type_changes_it_keeping_where_it_goes_and_each_types_settings() 
 #[test]
 fn equals_on_a_type_refuses_and_x_puts_back_the_slots_own() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let before = app.song().tracks[0].clone();
     let depth = app.history.undo_depth();
     // `=` and `-` don't move a type, as it changes what the device is.
@@ -783,7 +783,7 @@ fn equals_on_a_type_refuses_and_x_puts_back_the_slots_own() {
 #[test]
 fn k_on_an_lfos_mode_sets_whether_notes_start_it() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     press(&mut app, &format!("{}l", to_lfo(0)));
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Mode));
     press(&mut app, "K");
@@ -815,7 +815,7 @@ fn k_on_an_lfos_mode_sets_whether_notes_start_it() {
 #[test]
 fn an_lfos_fade_is_under_its_phase_as_a_signed_length() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     press(&mut app, &format!("{}jlj", to_lfo(0)));
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Fade));
     let fade = |app: &App| app.song().tracks[0].mods[3].lfo.fade;
@@ -848,7 +848,7 @@ fn an_lfos_fade_is_under_its_phase_as_a_signed_length() {
 #[test]
 fn an_envelopes_depth_is_a_destination_of_the_envelope_before_it() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     // Mod 1's destination list has Mod 2's depth, an envelope's, after the LFOs' settings.
     press(&mut app, "$K/M2 Depth");
     special(&mut app, KeyCode::Enter);
@@ -877,7 +877,7 @@ fn a_switched_out_envelopes_shape_is_sent_faint_and_its_own_comes_back() {
     use vt_tui::kitty::Graphics;
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     graphics.sync(&mut app, &mut Vec::new()).unwrap();
     let shown = app.mod_images.unwrap();
     press(&mut app, "b");
@@ -896,7 +896,7 @@ fn a_slots_picture_follows_its_type() {
     use vt_tui::kitty::Graphics;
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     graphics.sync(&mut app, &mut Vec::new()).unwrap();
     let shown = app.mod_images.unwrap();
     // Mod 3, made an LFO, has a cycle where its envelope's shape was, and its cycle is placed.
@@ -923,7 +923,7 @@ fn with_lfos(lfos: [ModSlot; LFOS]) -> (App, Realtime) {
             modulator,
         });
     }
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     (app, realtime)
 }
 
@@ -1259,7 +1259,7 @@ fn three_lfos_dots_move_by_placing_alone_at_about_60_bytes_each() {
 #[test]
 fn a_modulators_toggles_take_three_cells_and_nothing_moves_when_one_flips() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     // On Mod 1's Reset, which is on, its colours over all the toggle's cells.
     press(&mut app, "jjjl");
     assert_eq!(app.track_control(), Control::Mod(0, ModField::Reset));
@@ -1277,7 +1277,7 @@ fn a_modulators_toggles_take_three_cells_and_nothing_moves_when_one_flips() {
 #[test]
 fn a_slots_polarity_is_in_its_title_and_equals_flips_it_as_one_undo_step() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let slot = |app: &App| app.song().tracks[0].mods[1];
     // Mod 2's polarity, after its type and its curve, is its type's own until one is chosen.
     press(&mut app, "}2l");
@@ -1319,7 +1319,7 @@ fn a_slots_polarity_is_in_its_title_and_equals_flips_it_as_one_undo_step() {
 #[test]
 fn k_on_a_polarity_lists_one_way_and_both() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     // On Mod 4's, an LFO's, after its mode.
     press(&mut app, &format!("{}ll", to_lfo(0)));
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Polarity));
@@ -1349,7 +1349,7 @@ fn k_on_a_polarity_lists_one_way_and_both() {
 #[test]
 fn a_type_change_keeps_a_chosen_polarity_and_otherwise_follows_the_type() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let slot = |app: &App| app.song().tracks[0].mods[2];
     let pick = |app: &mut App, up: bool| {
         press(app, "0K");
@@ -1434,7 +1434,7 @@ fn an_envelopes_curve_is_its_mode_in_the_title_and_its_picture_follows_it() {
         graphics.sync(app, &mut Vec::new()).unwrap();
         app.mod_images.unwrap()
     };
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let first = ids(&mut app);
     let curve = |app: &App| app.song().tracks[0].mods[0].adsr.curve;
     // `l` from Mod 1's type is its curve, `Exp` until chosen.
@@ -1489,7 +1489,7 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
         graphics.sync(app, &mut Vec::new()).unwrap();
         app.mod_images.unwrap()
     };
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let first = ids(&mut app);
     let slot = |app: &App| app.song().tracks[0].mods[1];
     // Mod 2, the filter's envelope, made an AHD: the second type listed, after ADSR.
@@ -1578,7 +1578,7 @@ fn a_drum_slot_strikes_onto_a_body_with_its_own_settings_ratchet_and_picture() {
         graphics.sync(app, &mut Vec::new()).unwrap();
         app.mod_images.unwrap()
     };
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let first = ids(&mut app);
     let slot = |app: &App| app.song().tracks[0].mods[1];
     // Mod 2 made a drum envelope, the third type listed.
@@ -1652,7 +1652,7 @@ fn an_lpg_slot_has_no_mode_and_its_own_attack_decay_colour_and_reset() {
         graphics.sync(app, &mut Vec::new()).unwrap();
         app.mod_images.unwrap()
     };
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     let first = ids(&mut app);
     let slot = |app: &App| app.song().tracks[0].mods[1];
     // Mod 2 made a low-pass gate: no curve in its title, as its curve is the point of it.
@@ -1705,7 +1705,7 @@ fn an_lpg_slot_has_no_mode_and_its_own_attack_decay_colour_and_reset() {
 #[test]
 fn a_drum_on_vol_shapes_the_notes_with_no_depth() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LK/drum");
+    press(&mut app, " 5LK/drum");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].mods[0].kind, ModKind::Drum);
     assert!(device_title(&app, "Mod 1").starts_with(&modulator_title(
@@ -1718,7 +1718,7 @@ fn a_drum_on_vol_shapes_the_notes_with_no_depth() {
 #[test]
 fn an_ahd_on_vol_shapes_the_notes_with_no_depth() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LK");
+    press(&mut app, " 5LK");
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].mods[0].kind, ModKind::Ahd);
@@ -1733,7 +1733,7 @@ fn an_ahd_on_vol_shapes_the_notes_with_no_depth() {
 #[test]
 fn a_slot_made_steps_with_no_depth_is_given_ff_and_its_title_has_its_mode_and_loop() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     press(&mut app, &format!("{}K", to_lfo(0)));
     press(&mut app, "/steps");
     special(&mut app, KeyCode::Enter);
@@ -1791,7 +1791,7 @@ fn with_steps() -> (App, vt_engine::link::Realtime) {
         slot: 3,
         modulator: ModSlot::steps(Some(SettingId::CUT), Steps::default()),
     });
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     press(&mut app, &to_lfo(0));
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Type));
     (app, realtime)
@@ -1985,7 +1985,7 @@ fn a_steps_mutate_and_smooth_are_under_its_start() {
 #[test]
 fn pitch_in_scale_is_a_destination_of_its_own_for_every_type() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     // Mod 4, an LFO: its destination's list has `Pitch` and then `Pitch in scale`.
     press(&mut app, &format!("{}$K", to_lfo(0)));
     let picker = app.picker.as_ref().unwrap();
@@ -2024,7 +2024,7 @@ fn with_tracking(tracking: ModSlot) -> (App, vt_engine::link::Realtime) {
         slot: 3,
         modulator: tracking,
     });
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     press(&mut app, &to_lfo(0));
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Type));
     (app, realtime)
@@ -2034,7 +2034,7 @@ fn with_tracking(tracking: ModSlot) -> (App, vt_engine::link::Realtime) {
 fn a_track_slot_follows_velocity_with_its_source_in_the_title_and_its_map_down_the_left() {
     use vt_model::tracking::{Source, Tracking};
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     press(&mut app, &format!("{}K", to_lfo(0)));
     press(&mut app, "/track");
     special(&mut app, KeyCode::Enter);
@@ -2192,7 +2192,7 @@ fn space_g_a_keeps_what_mutate_drew_as_the_values_heard_in_one_undo_step() {
         step: 0,
         note: Note::On(60),
     });
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     press(&mut app, &to_lfo(0));
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Type));
     // Nothing has played, so nothing's drawn.
@@ -2279,7 +2279,7 @@ fn space_g_a_keeps_what_mutate_drew_as_the_values_heard_in_one_undo_step() {
 #[test]
 fn space_g_a_on_another_type_or_page_says_what_it_keeps() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     press(&mut app, " ga");
     assert_eq!(
         app.status,
@@ -2512,7 +2512,7 @@ fn space_g_capital_a_writes_what_a_random_lfo_held_at_each_note_played_in_scale(
 #[test]
 fn a_steps_slots_lists_find_a_name_before_a_meaning_and_each_word_on_its_own() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4L");
+    press(&mut app, " 5L");
     press(&mut app, &format!("{}K/steps", to_lfo(0)));
     special(&mut app, KeyCode::Enter);
     let slot = |app: &App| app.song().tracks[0].mods[3];

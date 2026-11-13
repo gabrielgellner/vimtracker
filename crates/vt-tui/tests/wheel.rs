@@ -101,7 +101,7 @@ fn the_wheel_is_off_until_turned_on_on_the_audio_page_and_kept_for_the_machine()
     scroll(&mut app, true, Instant::now());
     assert_eq!(steps(&app), [NOTE], "a report while it's off does nothing");
     // Its row is after the buffer, before the Roto's.
-    press(&mut app, " 7jjj");
+    press(&mut app, " 9Ljjj");
     assert_eq!(app.audio_row_here(), AudioRow::Wheel);
     press(&mut app, "=");
     assert!(app.wants_mouse());
@@ -203,7 +203,7 @@ fn the_value_follows_the_fingers_under_natural_scrolling_unless_reversed() {
     let folder = folder();
     let path = folder.join("vimtracker").join(vt_tui::wheel::SETTING_FILE);
     app.wheel.setting_path = Some(path.clone());
-    press(&mut app, " 7jjjj");
+    press(&mut app, " 9Ljjjj");
     assert_eq!(app.audio_row_here(), AudioRow::WheelDirection);
     press(&mut app, "=");
     assert!(app.wheel.setting.reversed);
@@ -215,7 +215,7 @@ fn the_value_follows_the_fingers_under_natural_scrolling_unless_reversed() {
         ["C-3 40 cut:20 --- ---"],
         "against the fingers"
     );
-    press(&mut app, " 7x");
+    press(&mut app, " 9Lx");
     assert!(
         !app.wheel.setting.reversed,
         "x puts it back with the fingers"
@@ -438,7 +438,7 @@ fn a_frame_makes_its_ticks_once_and_a_key_makes_them_before_it_acts() {
 fn a_tick_on_a_sound_page_setting_moves_its_fine_digits() {
     let (mut app, _realtime) = app_with(&[NOTE]);
     // Cut, the Filter's first setting, open at the top.
-    press(&mut app, " 4}j");
+    press(&mut app, " 5}j");
     assert_eq!(app.view, View::Track);
     let cut = |app: &App| {
         let track = &app.song().tracks[0];

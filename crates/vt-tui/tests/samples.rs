@@ -334,10 +334,10 @@ fn cleaning_the_bank_removes_what_nothing_plays_and_keeps_the_numbers() {
 }
 
 #[test]
-fn space_5_chooses_a_sample_for_the_current_track() {
+fn sample_chooses_a_sample_for_the_current_track() {
     let (mut app, _realtime) = app();
     // With nothing to list it asks for a path, and either way the view stays.
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     assert_ne!(app.mode, Mode::Normal);
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.mode, Mode::Normal);

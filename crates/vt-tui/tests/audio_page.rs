@@ -1,5 +1,5 @@
-//! The audio page, `Space 7`: devices, buffers and rates, what plays, the CPU's leaf, dropouts,
-//! a new engine, and the scope.
+//! The audio page, the project page's Audio sub-page (`Space 9 L`): devices, buffers and rates,
+//! what plays, the CPU's leaf, dropouts, a new engine, and the scope.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

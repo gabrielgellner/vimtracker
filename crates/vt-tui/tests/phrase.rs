@@ -495,7 +495,7 @@ fn the_status_line_shows_the_grid_in_the_phrase_view() {
     assert!(draw(&app).contains("Grid 1/4"), "{}", draw(&app));
     app.key(parse_sequence("M-1").unwrap()[0], Instant::now());
     assert!(draw(&app).contains("Grid 1/8"), "{}", draw(&app));
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     assert!(!draw(&app).contains("Grid"), "{}", draw(&app));
 }
 
