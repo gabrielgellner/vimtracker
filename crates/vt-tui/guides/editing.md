@@ -231,6 +231,30 @@ to choose from a list and `x` for the default. `Tab` still plays and pauses.
 `1/f` takes that selection's own ends, `Wave`, `Alternate` and `Scale` keep theirs, `List` keeps
 its list, and the other transforms rework that selection's own values.
 
+### Multiplying a rhythm
+
+`Multiply`, on the Note and FX columns, reworks the rhythm there rather than
+its values, after Noise Engineering's Numeric Repetitor: one rhythm, a family
+of variations from one setting. Sixteen rows are read as a 16-bit number, a
+note or the column's command a 1, the first row the lowest bit. The number is
+multiplied by `Factor`, from 1 to 16, and kept to 16 bits, so what carries
+past the sixteenth row is lost. A longer selection goes sixteen rows at a time.
+
+| Row | Does |
+|---|---|
+| Factor | What the rhythm is multiplied by. `1` leaves it as it is |
+| Masks | `On` thins the rhythm before 2 and 3 multiply it, as the module does |
+
+Four on the floor, `x...x...x...x...`, times 3 is `xx..xx..xx..xx..` and
+times 5 `x.x.x.x.x.x.x.x.`. An odd factor always keeps the downbeat, and 2, 4
+and 8 move the rhythm 1, 2 or 3 rows later. A note the product keeps stays as
+it is, a new one takes the note before it, with its velocity and gate, and one
+it drops is cleared; on an FX column the same goes for the command and its
+value. An `OFF` stays, and so does another command in the slot. It has no
+`Where`, as it reads the rhythm itself. With Masks on, 2 keeps only rows 1–4
+and 9–12 before it multiplies, and 3 rows 1, 2 and 13–16. Factor starts at 3:
+`=` and `-` move it by one, `+` and `_` by 4, and `i` types it.
+
 ### On an empty column
 
 On a Note column with no notes in the rows selected, `S` writes notes of its

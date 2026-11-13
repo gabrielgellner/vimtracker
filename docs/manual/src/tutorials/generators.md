@@ -16,6 +16,7 @@ there are no samples to find.
 | `live-generators` | Elektron's Euclidean mode | Columns kept live with `L`, and what hand edits do to them |
 | `acid-lines` | Roland's TB-303 | `S`'s `Acid` fill: notes, accents and slides rolled together |
 | `walks` | Max's `drunk` and Voss's 1/f music | `S`'s `Walk` and `1/f` fills, kept live |
+| `euclid`, again | Noise Engineering's Numeric Repetitor | `S`'s `Multiply` on the kick's rhythm |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -551,6 +552,33 @@ bass's filter, the delay and reverb sends, and the levels.
 *   `Fill` `Walk` on the tune, then `1/f` again, to hear brown against pink; `Random` is white.
 *   `Edge` `Wrap` on the bass: a walk past `A-2` comes back in at `A-1`.
 *   `Step` `20` on the hats for a rougher player, or `Run` 2 to hold each velocity for two.
+
+## Numeric Repetitor
+
+Noise Engineering's Numeric Repetitor reads a 16-step rhythm as a 16-bit number and multiplies
+it: one knob turns a single rhythm into a family of related ones, all of them still in step with
+it. Doubling moves the rhythm a step later, and an odd number always keeps the downbeat.
+
+**Try it on the `euclid` song.** Open it, and on the kick's phrase (track 1, `Space 3`):
+
+1.  `Space g a` turns the live `Euclid` into plain notes, `x..x..x..x..x...`.
+2.  `gg` `vG` on the Note column and `S`. On `Fill`, `K`, `multiply`, `Enter`. `Factor` starts
+    at 3: `xx.xx.xx.xx.xx..`, a gallop.
+3.  `L` keeps it live, so `gl` opens it again later.
+
+**Try next.** `gl` on the kick and `=` or `-` on `Factor` while it plays:
+
+| Factor | Kick |
+|---|---|
+| 1 | `x..x..x..x..x...`, as it was |
+| 2 | `.x..x..x..x..x..`, a row late |
+| 5 | `x.xx.xx.xx.xx.x.` |
+| 9 | `x...x..x..x..x.x` |
+| 11 | `xx...x..x..x..xx` |
+
+`Masks` `On` thins the rhythm before 2 and 3 multiply it, as the module does. On the bass,
+after `Space g a`, whose notes differ, a new note takes the pitch of the one before it, so the
+line keeps its shape while the rhythm changes.
 
 ## Generators still to come
 

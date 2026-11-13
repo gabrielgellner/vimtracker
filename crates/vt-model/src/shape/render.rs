@@ -9,7 +9,7 @@
 
 use super::mix;
 use super::{
-    FillKind, Ladder, NUDGES, Shape, ShapeColumn, WaveRate, Where, acid, curved, follow, walk,
+    FillKind, Ladder, NUDGES, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, follow, walk,
 };
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
@@ -210,6 +210,7 @@ pub(super) fn render(
             }
         }
         FillKind::Acid => acid::render(steps, range, column, shape, &mut out),
+        FillKind::Multiply => bits::render(steps, range, column, shape.bits, out.cells),
         _ => {
             let rows = chosen(steps, range, column, shape.place, shape.seed, len);
             match column {
@@ -583,6 +584,7 @@ fn filled<F: FnMut(usize, &Shaped)>(
             | FillKind::Shuffle
             | FillKind::Reverse
             | FillKind::Snap => unreachable!("reworked above"),
+            FillKind::Multiply => unreachable!("rendered by `bits::render`"),
             FillKind::Acid => unreachable!("rendered by `acid::render`"),
             FillKind::Follow => unreachable!("read from what it follows"),
         };

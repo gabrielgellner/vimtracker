@@ -144,6 +144,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
             _ => "The scale is off, so nothing moves",
         },
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse => "From the values there",
+        FillKind::Multiply => "16 rows a number, row 1 its lowest bit",
         _ => "~ swap the ends",
     };
     lines.push(Line::styled(hint, theme::dim()));
