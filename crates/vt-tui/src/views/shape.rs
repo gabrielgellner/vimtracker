@@ -128,7 +128,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         lines.push(Line::from(line));
     }
     let hint = match panel.shape.kind {
-        FillKind::Random if app.mode == Mode::Shape => "~ swap  r reroll",
+        FillKind::Random | FillKind::Walk | FillKind::Pink if app.mode == Mode::Shape => {
+            "~ swap  r reroll"
+        }
         FillKind::Wave if panel.shape.wave == Wave::Smooth && app.mode == Mode::Shape => {
             "~ swap  r reroll"
         }
