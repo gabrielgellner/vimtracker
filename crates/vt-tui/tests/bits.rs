@@ -99,7 +99,11 @@ fn multiply_turns_four_on_the_floor_by_its_factor() {
     // It starts at 3.
     assert_eq!(rhythm(&app), "xx..xx..xx..xx..");
     let screen = drawn(&app);
-    for expected in ["Factor  3", "Masks   Off", "16 rows a number, row 1 its lowest bit"] {
+    for expected in [
+        "Factor  3",
+        "Masks   Off",
+        "16 rows a number, row 1 its lowest bit",
+    ] {
         assert!(screen.contains(expected), "{expected} in\n{screen}");
     }
     // `=` and `-` move it by one, `+` by 4, `i` types it, and `x` puts it back.
