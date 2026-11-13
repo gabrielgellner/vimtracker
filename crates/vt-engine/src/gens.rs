@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use vt_model::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
-use vt_model::generator::Span;
+use vt_model::generator::{Span, lay_under};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
     Context, FillKind, GenCell, GenParam, RowView, Shape, ShapeColumn, open_rows, render_into,
@@ -366,7 +366,11 @@ impl GenScratch {
                 run.rendered = Some(heard);
                 run.renders = run.renders.wrapping_add(1);
             }
+            // What's under it first, as the edit thread's render restores it, then the cell.
             if let Some(cell) = cells.get(at.row - run.rows.first) {
+                if let Some(under) = under.get(at.row) {
+                    lay_under(generator, under, &mut view);
+                }
                 view.lay(run.column, *cell);
             }
         }

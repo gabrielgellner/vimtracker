@@ -5,12 +5,13 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::constants::FX_SLOTS;
 use crate::song::Song;
 
 use crate::scale::Scale;
 use crate::selection::StepRange;
 use crate::shape::{
-    Context, FillKind, GenCell, Shape, ShapeColumn, Source, copy_fx, is_empty, open_rows,
+    Context, FillKind, GenCell, RowView, Shape, ShapeColumn, Source, copy_fx, is_empty, open_rows,
     render_into,
 };
 use crate::step::{FxCommand, FxSlot, Note, Step};
@@ -112,6 +113,38 @@ fn copy(column: ShapeColumn, owns: Owns, from: &Step, to: &mut Step) {
                 *cell = from.fx.get(slot).copied().unwrap_or_default();
             }
         }
+    }
+}
+
+/// Lay what's under a live generator's cell on a row over a view of the row, as its render puts
+/// it back before writing: the column's cell of the step under it, `under`, and with it a note's
+/// velocity and gate, and the row's FX, as much as the generator owns. The engine lays this first
+/// wherever it plays a render of its own, so a row the render leaves as [`GenCell::Under`] plays
+/// what's under the generator, as it would were the render written, not what the phrase has
+/// written there (#622).
+pub fn lay_under(generator: &Generator, under: &Step, view: &mut RowView) {
+    let owns = owns(&generator.shape);
+    let whole = owns != Owns::Cell;
+    let fx = |slot: usize| under.fx.get(slot).copied().unwrap_or_default();
+    match generator.column {
+        ShapeColumn::Note { writes, .. } => {
+            view.note = under.note;
+            if writes.is_some() || whole {
+                view.velocity = under.velocity;
+            }
+            if whole {
+                view.gate = under.gate;
+            }
+            if owns == Owns::NoteFx {
+                for slot in 0..FX_SLOTS {
+                    view.set_fx(slot, fx(slot));
+                }
+            }
+        }
+        ShapeColumn::Velocity => view.velocity = under.velocity,
+        ShapeColumn::Nudge => view.nudge = under.nudge,
+        ShapeColumn::Length => view.gate = under.gate,
+        ShapeColumn::Fx { slot, .. } => view.set_fx(slot, fx(slot)),
     }
 }
 
