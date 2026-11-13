@@ -22,7 +22,9 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
-use vt_model::shape::{Acid, DEFAULT_RATE, FillKind, Shape, ShapeColumn, Values, WaveRate, Where};
+use vt_model::shape::{
+    Acid, DEFAULT_RATE, FillKind, Follow, Shape, ShapeColumn, Source, Values, WaveRate, Where,
+};
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Note, Step};
@@ -152,6 +154,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         place,
         seed: 1,
         acid: Acid::default(),
+        follow: Follow::default(),
     }
 }
 
@@ -369,64 +372,82 @@ fn euclid() -> Song {
     song
 }
 
-/// Fugue Machine: one theme played by four tracks at once, each at its own speed, in its own
-/// order and transposed.
+/// The fugue's theme, on its first track.
+const FUGUE_THEME: [&str; 8] = [
+    "A-3 64 --- --- ---",
+    "E-4 50 --- --- ---",
+    "D-4 64 --- --- ---",
+    "C-4 50 --- --- ---",
+    "B-3 64 --- --- ---",
+    "C-4 50 --- --- ---",
+    "G#3 64 --- --- ---",
+    "B-3 50 --- --- ---",
+];
+
+/// Fugue Machine: one theme on the first track, and three tracks following it live with `Follow`,
+/// each at its own speed and turned its own way: a fifth up, inverted and an octave down, and
+/// backwards and two rows late. An edit to the theme reaches all three.
 fn fugue() -> Song {
     let mut song = song("fugue", 92, 9, ScaleKind::HarmonicMinor, 4);
     song.seed = 0xF0;
-    let theme = [
-        "A-3 64 --- --- ---",
-        "E-4 50 --- --- ---",
-        "D-4 64 --- --- ---",
-        "C-4 50 --- --- ---",
-        "B-3 64 --- --- ---",
-        "C-4 50 --- --- ---",
-        "G#3 64 --- --- ---",
-        "B-3 50 --- --- ---",
-    ];
+    voice(&mut song, 0, "V1", SynthVoice::Fm, &FUGUE_THEME);
+    let theme = Source::default();
     let voices = [
         (
-            "V1",
+            "V2",
             SynthVoice::String,
             Speed::Sixteenth,
-            Order::UpDown,
-            12,
+            Follow {
+                transpose: 4,
+                ..Follow::default()
+            },
         ),
-        ("V2", SynthVoice::Fm, Speed::Eighth, Order::Forward, 0),
         (
             "V3",
             SynthVoice::VirtualAnalog,
             Speed::Quarter,
-            Order::Forward,
-            -24,
+            Follow {
+                invert: true,
+                transpose: -7,
+                ..Follow::default()
+            },
         ),
         (
             "V4",
             SynthVoice::Modal,
             Speed::EighthTriplet,
-            Order::Reverse,
-            7,
+            Follow {
+                reverse: true,
+                rotate: 2,
+                ..Follow::default()
+            },
         ),
     ];
-    for (track, (name, sound, speed, order, transpose)) in voices.into_iter().enumerate() {
-        voice(&mut song, track, name, sound, &theme);
-        let track = &mut song.tracks[track];
-        track.speed = speed;
-        let mut phrase = (*track.phrases[&0]).clone();
-        phrase.set_order(order);
-        track.phrases.insert(0, Arc::new(phrase));
-        let mut chain = (*track.chains[&0]).clone();
-        chain.entries[0].transpose = transpose;
-        track.chains.insert(0, Arc::new(chain));
+    for (track, (name, sound, speed, follow)) in voices.into_iter().enumerate() {
+        let track = track + 1;
+        voice(&mut song, track, name, sound, &[REST; 8]);
+        song.tracks[track].speed = speed;
+        let mut answer = shape(FillKind::Follow, 0, 0, Where::AllRows);
+        answer.follow = Follow {
+            source: theme,
+            ..follow
+        };
+        let notes = empty_notes(&song);
+        song = generate(song, track, notes, 8, answer);
     }
-    set(&mut song, 0, "string.decay", 0x90);
-    song.tracks[0].level = 0xC0;
-    song.tracks[0].send_a = 0xA0;
-    set(&mut song, 1, "fm.ratio", 0x80);
-    set(&mut song, 1, "fm.index", 0x40);
-    pluck(&mut song, 1, 400, 40, 200);
-    song.tracks[1].level = 0xC8;
-    song.tracks[1].send_b = 0xA0;
+    // The fastest voice runs up and down what it follows, as one of Fugue Machine's playheads can.
+    let mut phrase = (*song.tracks[1].phrases[&0]).clone();
+    phrase.set_order(Order::UpDown);
+    song.tracks[1].phrases.insert(0, Arc::new(phrase));
+    set(&mut song, 0, "fm.ratio", 0x80);
+    set(&mut song, 0, "fm.index", 0x40);
+    pluck(&mut song, 0, 400, 40, 200);
+    song.tracks[0].level = 0xC8;
+    song.tracks[0].send_b = 0xA0;
+    set(&mut song, 1, "string.decay", 0x90);
+    song.tracks[1].level = 0xC0;
+    song.tracks[1].send_a = 0xA0;
+    song.tracks[1].pan = 0x60;
     song.tracks[2].cutoff = 0x70;
     pluck(&mut song, 2, 900, 60, 300);
     song.tracks[2].level = 0xD8;
@@ -434,7 +455,6 @@ fn fugue() -> Song {
     song.tracks[3].level = 0xD8;
     song.tracks[3].send_b = 0xB0;
     song.tracks[3].pan = 0xA0;
-    song.tracks[0].pan = 0x60;
     song
 }
 
@@ -782,5 +802,49 @@ fn every_tutorial_song_loads_plays_and_stays_below_full_scale() {
         let rms = (out.iter().map(|s| s * s).sum::<f32>() / out.len() as f32).sqrt();
         assert!(rms > 0.02, "{name} is nearly silent: RMS {rms}");
         assert!(peak < 0.99, "{name} reaches full scale: peak {peak}");
+    }
+}
+
+#[test]
+fn the_fugues_three_voices_follow_its_theme_and_an_edit_to_it_reaches_them() {
+    let song = Arc::new(load_song(&songs_folder().join("fugue")).unwrap());
+    let notes = |song: &Song, track: usize| -> Vec<String> {
+        song.tracks[track].phrases[&0]
+            .steps()
+            .iter()
+            .map(|step| step.to_string()[..3].to_owned())
+            .collect()
+    };
+    // A fifth up in A harmonic minor, four degrees.
+    assert_eq!(
+        notes(&song, 1),
+        ["E-4", "B-4", "A-4", "G#4", "F-4", "G#4", "D-4", "F-4"]
+    );
+    // Inverted about A-3, then an octave down.
+    assert_eq!(
+        notes(&song, 2),
+        ["A-2", "D-2", "E-2", "F-2", "G#2", "F-2", "B-2", "G#2"]
+    );
+    // Backwards, then two rows late.
+    assert_eq!(
+        notes(&song, 3),
+        ["E-4", "A-3", "B-3", "G#3", "C-4", "B-3", "C-4", "D-4"]
+    );
+    // The theme's E up to F: one edit, and every voice has it.
+    let edited = edit(
+        &song,
+        &Action::SetNote {
+            track: 0,
+            phrase: 0,
+            step: 1,
+            note: Note::On(note("F-4")),
+        },
+    )
+    .unwrap();
+    assert_eq!(notes(&edited, 1)[1], "C-5");
+    assert_eq!(notes(&edited, 2)[1], "C-2");
+    assert_eq!(notes(&edited, 3)[0], "F-4");
+    for track in 1..4 {
+        assert_eq!(edited.tracks[track].phrases[&0].generators().len(), 1);
     }
 }

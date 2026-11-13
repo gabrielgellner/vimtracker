@@ -180,7 +180,8 @@ pub struct ShapePanel {
     /// The phrases a `Follow` can read, by track and then ID: those on sound tracks but the
     /// parts' own, and any that read one of them, which would go round a cycle.
     pub sources: Vec<Source>,
-    /// The one it starts on: the phrase beside it on the nearest track with one, before it first.
+    /// The one it starts on: the phrase beside it on the nearest track with one, before it first,
+    /// or what that one follows.
     default_source: Option<Source>,
 }
 
@@ -751,7 +752,7 @@ impl App {
 
     /// The phrases these parts can follow, and the one to start on: the phrase beside them on the
     /// nearest track that has one, looking before the first part's track and then after it, as a
-    /// canon's theme is usually above its answers.
+    /// canon's theme is usually above its answers, or what that phrase follows, if it does.
     fn follow_sources(&self, song: &Song, parts: &[Part]) -> (Vec<Source>, Option<Source>) {
         let own: Vec<Source> = parts
             .iter()
@@ -776,11 +777,20 @@ impl App {
         let first = parts.first().map_or(0, |part| part.track);
         let before = (0..first).rev();
         let after = first + 1..song.sound_tracks();
-        let beside = before.chain(after).find_map(|track| {
+        let mut beside = before.chain(after).find_map(|track| {
             let (phrase, _) = self.phrase_beside(track)?;
             let source = Source { track, phrase };
             sources.contains(&source).then_some(source)
         });
+        // One that follows another itself gives way to what it follows, so each voice of a canon
+        // starts on the theme. Cycles are refused, so this ends.
+        while let Some(followed) = beside
+            .and_then(|source| song.source_phrase(source))
+            .and_then(|phrase| phrase.generators().iter().find_map(Generator::source))
+            .filter(|source| sources.contains(source))
+        {
+            beside = Some(followed);
+        }
         (sources, beside)
     }
 

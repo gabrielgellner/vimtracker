@@ -86,7 +86,7 @@ nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Wave`, `Alternate`, `List`, `Acid` or a transform |
+| Fill | `Ramp`, `Random`, `Wave`, `Alternate`, `List`, `Acid`, `Follow` or a transform |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
@@ -245,6 +245,39 @@ the accents, slides and octaves, and the notes and rhythm stay: Roland's second
 die. On notes already there, `Keep` keeps their own pitches, so a line you wrote
 gets new accents and slides and nothing else. Keep it live with `L` to come back
 with `gl` and roll again while it loops, until one sticks.
+
+### Following another track
+
+`Follow`, on the Note column only, writes another phrase's notes into the rows
+selected, with their velocities, gates, accents and slides: the voices of a
+canon. Kept live with `L`, the column mirrors its source, so an edit to the
+source rewrites it in the same edit, as one undo with it. Each track still owns
+its phrases: the follower keeps its own copy of the notes, which the source
+writes again whenever it changes, and plays them at its own track's `Speed`.
+
+| Row | Does |
+|---|---|
+| Source | The phrase it follows, like `T02:05`: phrase `05` of track 2. `K` lists them |
+| Transpose | Up or down, in the scale's degrees while it's on, and semitones off |
+| Invert | Turns the notes upside down, about the source's first note |
+| About | With Invert on, the note it turns about: `First`, or one you choose |
+| Reverse | Plays the source backwards, its last row first |
+| Rotate | Comes in that many rows late, going round the source |
+| FX | Copies the source's FX columns too. Off, as a lock may mean something else here |
+
+`Source` starts on the phrase beside it on the nearest track before, or after
+if there's none, or on what that phrase follows, so each voice of a canon starts
+on the theme. A source shorter than the rows selected loops to fill them, and a
+longer one is cut off. `Enter` writes a one-off copy as plain notes.
+
+It's a live column like any other: `gl` reopens it to change the source or the
+moves, `Space g a` freezes it as plain notes, and typing over one of its notes
+takes it over by hand, with `u` to make it live again. Its phrase's title names
+it with its source, like `󰁨 Note←T02:05`, and the source's title says how many
+follow it, like `Followed by 3`. A phrase can follow one that follows another,
+but never one that follows it back, directly or through others: those aren't
+offered, and `L` refuses one. Deleting the source's track with `:track del`
+leaves its followers as plain notes, and says so.
 
 ### Keeping it live
 

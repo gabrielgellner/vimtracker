@@ -2389,6 +2389,13 @@ fn follow_keeps_a_track_in_step_with_another_as_one_undo() {
     assert_eq!(panel.live, Some(0));
     assert_eq!(panel.shape.follow.rotate, 1);
     keys(&mut app, "<Esc>");
+    // The next voice starts on the theme, what the answer beside it follows.
+    keys(&mut app, "WvjjjSKfollow<Enter>");
+    assert_eq!(
+        app.shape.as_ref().unwrap().shape.follow.source,
+        Source::default()
+    );
+    keys(&mut app, "<Esc>");
 }
 
 #[test]
