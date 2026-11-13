@@ -47,7 +47,9 @@ use super::layouts::{self, Setting, Turn};
 use crate::shaping::{column_label, with_live};
 use crate::theme;
 use crate::track_page::tuning::{tuning, tuning_most};
-use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page};
+use crate::track_page::{
+    AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page, macros_device,
+};
 use crate::views::track::toggle_on;
 
 /// What a setting is for, which gives its knob's colour, the same wherever the setting is.
@@ -301,13 +303,29 @@ pub fn family(control: Control, track: &Track) -> Family {
         )
         | Control::Arpeggio(ArpField::Rate) => Family::Time,
         Control::Mod(_, ModField::Sustain) => Family::Level,
-        Control::Mod(..) | Control::Accumulator(_) | Control::Arpeggio(_) => Family::Modulation,
+        // A macro is modulation by hand, so all eight are its colour, whatever they hold.
+        Control::Mod(..) | Control::Accumulator(_) | Control::Arpeggio(_) | Control::Macro(_) => {
+            Family::Modulation
+        }
         _ => Family::Choice,
     }
 }
 
-/// A knob's name: its setting's on the track page, an effect's setting by its own name.
+/// Whether a device is the track's macros' band.
+fn is_macros(spec: &DeviceSpec) -> bool {
+    matches!(spec.grid[0][0], Some(Control::Macro(_)))
+}
+
+/// A knob's name: its setting's on the track page, an effect's setting by its own name, and a
+/// macro by its own, cut to the Roto's 12 characters.
 pub fn name(control: Control, track: &Track) -> Label {
+    if let Control::Macro(at) = control {
+        let name: String = crate::macroing::macro_name(&track.macros[at], at)
+            .chars()
+            .take(vt_model::macros::MACRO_NAME_LENGTH)
+            .collect();
+        return Label::new(&name);
+    }
     let text = match control {
         Control::InsertParam(..) => control.name_on(track),
         _ => control.label_on(track),
@@ -913,6 +931,7 @@ fn identity(
             track.machine.name().to_owned(),
             format!("vimtracker/machine/{}", lower(track.machine.name())),
         ),
+        Page::Gen if is_macros(spec) => ("Macros".to_owned(), "vimtracker/macros".to_owned()),
         // A generator by its column and its fill, as `Note Ramp`.
         Page::Gen => {
             let Some(Control::Gen {
@@ -1018,19 +1037,22 @@ pub fn live_devices(
 /// A track's devices in the order the Roto's list has them, each with its page and its place
 /// on that page.
 pub fn track_devices(track: &Track, phrase: Option<u32>) -> Vec<(Page, usize, DeviceSpec)> {
-    [Page::Sound, Page::Fx, Page::Mod, Page::Gen]
+    let pages = [Page::Sound, Page::Fx, Page::Mod, Page::Gen]
         .into_iter()
         .flat_map(|page| {
             page.devices_on(track, phrase)
                 .into_iter()
-                // The Gen page's `Empty` makes a column live, which only the app does. Its macros'
-                // band waits for its own layout, first on the list (#618).
+                // The Gen page's `Empty` makes a column live, which only the app does, and its
+                // macros' band comes first of all.
                 .filter(|spec| !matches!(spec.title[0], Some(Control::NewGenerator(_))))
-                .filter(|spec| !matches!(spec.grid[0][0], Some(Control::Macro(_))))
+                .filter(|spec| !is_macros(spec))
                 .enumerate()
                 .map(move |(slot, spec)| (page, slot, spec))
                 .collect::<Vec<_>>()
-        })
+        });
+    // The macros first, before the machine, as the Gen page has them first (decision 286).
+    std::iter::once((Page::Gen, 0, macros_device()))
+        .chain(pages)
         .collect()
 }
 
@@ -1100,6 +1122,8 @@ pub fn every_kind_of_device() -> Vec<(Song, usize, Page, usize)> {
     for slot in 0..Page::Mod.devices(&base.tracks[0]).len() {
         found.push((base.clone(), 0, Page::Mod, slot));
     }
+    // The macros, the Gen page's first band.
+    found.push((base.clone(), 0, Page::Gen, 0));
     // Each type of mod slot a new track hasn't, in `Mod 3`.
     let unused = ModKind::ALL
         .into_iter()
