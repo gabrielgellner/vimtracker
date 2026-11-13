@@ -402,6 +402,24 @@ pub struct LiveValues {
     /// Which step each mod slot that's Steps is playing now, counted from 0, for the Mod page to
     /// light: none for one that isn't running, as an LFO's place is.
     pub steps: [Option<u8>; MOD_SLOTS],
+    /// What each mod slot that's Steps has drawn with `Mutate` in place of its written values, as
+    /// it's heard, for `Space g a` to keep (#530): nothing while `Mutate` is at none.
+    pub drawn: [Drawn; MOD_SLOTS],
+}
+
+/// The values a Steps slot's `Mutate` has drawn in place of the written ones, and which steps they
+/// are, a bit a step: a step drawn is heard at its value here until it's drawn again.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Drawn {
+    pub which: u16,
+    pub values: [i16; STEPS],
+}
+
+impl Drawn {
+    /// The value drawn for a step, if it's been drawn.
+    pub fn value(&self, step: usize) -> Option<i16> {
+        (step < STEPS && self.which & (1 << step) != 0).then(|| self.values[step])
+    }
 }
 
 /// Written out, as an array as long as `4-op`'s settings has no `Default` of its own.
@@ -421,6 +439,7 @@ impl Default for LiveValues {
             after_trim: Default::default(),
             mods: Default::default(),
             steps: Default::default(),
+            drawn: Default::default(),
         }
     }
 }
@@ -1780,6 +1799,10 @@ impl TrackState {
             after_trim: [0.0; 2],
             mods: self.slots.map(|run| run.now),
             steps: self.slots.map(|run| run.playing),
+            drawn: self.slots.map(|run| Drawn {
+                which: run.drawn,
+                values: run.drift,
+            }),
         }
     }
 

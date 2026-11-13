@@ -1329,6 +1329,13 @@ until it's drawn again. `0%` plays the values as written, `100%` a new one each
 time, and between them the loop drifts. It draws from the project's seed, so a
 render repeats, and back at `0%` the values are as written again.
 
+**Keeping a drift.** When the loop drifts somewhere you like, `Space g a` on the
+slot keeps it: the values it drew are written in as its values, in one undo step,
+and the box shows them. Turn `Mutate` down after, and the loop you heard plays as
+written, every time round and in a render. Mutate up, listen, `Space g a`, Mutate
+down: the Turing Machine's lock. `u` gives back the values as they were. Steps it
+hasn't drawn keep their own.
+
 **Smooth** at `00` steps. Up to `+80` each step glides in from the one before over
 its first part, all of it at `+80`, and on to `+FF` the glide becomes a curve
 through the steps. Down to `-80` each step falls to nothing over its last part, a
