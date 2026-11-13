@@ -9,9 +9,13 @@ pub use vt_model::playable::{LoopSpan, Playable, Span};
 use vt_model::playable::{normalize_peak, onset_analysis};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
+use vt_model::shape::ShapeColumn;
 use vt_model::song::Song;
 use vt_model::speed::Speed;
 use vt_model::step::FxCommand;
+use vt_model::step::MAX_NUDGE;
+
+use crate::gens::{GenScratch, ScratchSlot, Unders};
 
 /// Each bank number's entry, `00` to `FF`, worked out on the edit thread so the callback only has
 /// to look it up, if it has one and its file loaded.
@@ -29,14 +33,16 @@ pub struct Published {
     pub bank: Bank,
     /// How far ahead of its place on the grid a step is worked out, in ticks, so a groove or a
     /// nudge can play it early: as early as any groove the song can play lands a step, and further
-    /// by the earliest nudge in the song, as shares of the longest step any track can play. With
+    /// by the earliest nudge in the song, as shares of the longest step any track can play. A live
+    /// Nudge generator counts as early as its range allows, as the engine can move it. With
     /// neither, it's 0, and steps are worked out on the grid as they always were. Every track
     /// works its steps out this far ahead, so they're all worked out in the order they fall.
     pub lead: u64,
     /// How early any groove the song can play lands a step, in ticks of a sixteenth, which a step's
     /// push is kept within.
     pub groove_lead: u64,
-    /// Whether any row has a nudge, without which a step's row needn't be looked up for one.
+    /// Whether any row has a nudge, or a live generator could give one, without which a step's
+    /// row needn't be looked up for one.
     pub nudges: bool,
     /// Whether any step has a `GRV`, without which a step's groove needn't be looked for on it.
     pub groove_steps: bool,
@@ -45,6 +51,10 @@ pub struct Published {
     /// Whether any track can play at another speed than a sixteenth, so a fast track's steps can
     /// be worked out before the one before has landed.
     pub speeds: bool,
+    /// The steps under each live generator, which the engine renders a moving one from.
+    pub(crate) unders: Unders,
+    /// What the engine renders moving generators into, until it takes it.
+    pub(crate) scratch: ScratchSlot,
 }
 
 impl Published {
@@ -81,6 +91,8 @@ impl Published {
                     .tracks
                     .iter()
                     .any(|track| track.speed != Speed::Sixteenth),
+            unders: Unders::of(&song, last.map(|last| (&*last.song, &last.unders))),
+            scratch: ScratchSlot::new(GenScratch::for_song(&song)),
             song,
             samples,
         }
@@ -139,15 +151,22 @@ fn longest_step(song: &Song) -> (u64, bool) {
 }
 
 /// How far the earliest nudge in the song moves its row, in ticks, if any row has one: 0 when every
-/// nudge is late.
+/// nudge is late. A live Nudge generator can be moved to any nudge its column takes, so it counts
+/// as the earliest there is.
 fn earliest_nudge(song: &Song) -> Option<i64> {
-    song.tracks
-        .iter()
-        .flat_map(|track| track.phrases.values())
+    let phrases = song.tracks.iter().flat_map(|track| track.phrases.values());
+    let generated = phrases
+        .clone()
+        .flat_map(|phrase| phrase.generators())
+        .any(|generator| generator.column == ShapeColumn::Nudge)
+        .then_some(-MAX_NUDGE);
+    phrases
         .flat_map(|phrase| phrase.steps())
         .filter(|step| step.nudge != 0)
-        .map(|step| i64::from(step.nudge.min(0)) * NUDGE_TICKS as i64)
+        .map(|step| step.nudge.min(0))
+        .chain(generated)
         .min()
+        .map(|nudge| i64::from(nudge) * NUDGE_TICKS as i64)
 }
 
 /// How early any groove the song can play lands a step: the project's, the tracks' own, and any a

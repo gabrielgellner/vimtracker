@@ -2,6 +2,7 @@
 
 pub mod dsp;
 pub mod engine;
+pub mod gens;
 pub mod link;
 pub mod mixer;
 mod preview;
