@@ -462,6 +462,10 @@ The finished song also sets the `Acid`'s `Resonance` `B0` and `Env mod` `70`, th
 *   `gl` on FX 1, `Shape` `Saw` or `Smooth`, or `:lane 7` for a shorter drift: the wave fills the
     new lane.
 *   `Space g a` on any of them when you're done, to keep the values as plain ones.
+*   All three on track 3's bass at once: `Space 4`, then `L` to the Gen page, where each live
+    column of the phrase under the cursor is a device, `Random  Euclid · Note 00–0F` and
+    `Wave  All rows · FX1 FREQ lane 0C`. `jj$` on the note device lands on `Hits`, and `=` and `-` turn it
+    as the line plays, each press its own undo step.
 
 ## Acid lines
 

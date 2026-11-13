@@ -42,6 +42,10 @@ const LISTED_CYCLES: [u16; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 /// The longest `Step` a walk of notes takes: two octaves of semitones, or of degrees.
 const MAX_NOTE_STEP: u8 = 24;
 
+/// How many columns and rows a generator's settings take on the Gen page.
+pub const GEN_COLUMNS: usize = 3;
+pub const GEN_ROWS: usize = 3;
+
 /// What a generator's settings act on, which what some of them mean hangs on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Context<'a> {
@@ -452,6 +456,66 @@ impl GenParam {
             Self::Chance => rows && matches!(shape.place, Where::Chance(_)),
             Self::Hits | Self::Rotate => rows && matches!(shape.place, Where::Euclid { .. }),
         }
+    }
+
+    /// The settings in a generator's title on the Gen page, the ones that change what it is: its
+    /// fill, then its `Where`, or for a `Follow`, the phrase it follows, and for `Acid`, its
+    /// `Pitches`, as the second die is a mode of the riff's.
+    pub fn title(shape: &Shape) -> [Option<Self>; GEN_COLUMNS] {
+        match shape.kind {
+            FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None],
+            FillKind::Acid => [Some(Self::Fill), Some(Self::Where), Some(Self::Pitches)],
+            _ => [Some(Self::Fill), Some(Self::Where), None],
+        }
+    }
+
+    /// Where a shape's other settings sit on the Gen page, in columns of rows, top to bottom (the
+    /// study's §3.2): the fill's own in the first two, and its `Where`'s at the foot of the last,
+    /// so they stay put as the fill changes, with `Acid`'s `Density` above them. A random fill's
+    /// curve does nothing, so it isn't placed, and only the settings the shape has are.
+    pub fn grid(shape: &Shape, generates: bool) -> [[Option<Self>; GEN_ROWS]; GEN_COLUMNS] {
+        use GenParam::*;
+        let none = [None; GEN_ROWS];
+        let fill: [[Option<Self>; GEN_ROWS]; 2] = match shape.kind {
+            FillKind::Ramp => [
+                [Some(From), Some(To), Some(Run)],
+                [Some(Curve), Some(S), None],
+            ],
+            FillKind::Random | FillKind::Alternate => [[Some(From), Some(To), Some(Run)], none],
+            FillKind::Walk => [
+                [Some(From), Some(To), Some(Run)],
+                [Some(Step), Some(Edge), None],
+            ],
+            FillKind::Pink => [[Some(From), Some(To), Some(Run)], [Some(Depth), None, None]],
+            FillKind::Wave => [
+                [Some(From), Some(To), Some(Wave)],
+                [Some(Rate), Some(Phase), Some(Run)],
+            ],
+            FillKind::List => [[Some(Values), Some(Run), None], none],
+            FillKind::Acid => [
+                [Some(From), Some(To), Some(Notes)],
+                [Some(Octave), Some(Accent), Some(Slide)],
+            ],
+            FillKind::Follow => [
+                [Some(Transpose), Some(Invert), Some(Axis)],
+                [Some(Reverse), Some(Late), Some(CopyFx)],
+            ],
+            FillKind::Scale => [[Some(From), Some(To), Some(Curve)], [Some(S), None, None]],
+            FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => {
+                [none, none]
+            }
+        };
+        let mut last = match shape.place {
+            super::Where::Every(_) => [None, None, Some(Every)],
+            super::Where::Chance(_) => [None, None, Some(Chance)],
+            super::Where::Euclid { .. } => [None, Some(Hits), Some(Rotate)],
+            _ => none,
+        };
+        if shape.kind == FillKind::Acid {
+            last[0] = Some(Density);
+        }
+        let has = |param: Option<Self>| param.filter(|param| param.exists_for(shape, generates));
+        [fill[0].map(has), fill[1].map(has), last.map(has)]
     }
 
     /// The settings a shape has, in order.
@@ -1278,6 +1342,34 @@ mod tests {
         );
         follow.follow.invert = true;
         assert!(GenParam::of(&follow, false).contains(&Axis));
+    }
+
+    #[test]
+    fn the_gen_page_places_every_setting_a_shape_has_once() {
+        for kind in FillKind::ALL {
+            for place in note().wheres() {
+                for generates in [false, true] {
+                    let mut base = shape(kind);
+                    base.place = place;
+                    base.follow.invert = true;
+                    let placed: Vec<GenParam> = GenParam::title(&base)
+                        .into_iter()
+                        .chain(GenParam::grid(&base, generates).into_iter().flatten())
+                        .flatten()
+                        .collect();
+                    let mut wanted = GenParam::of(&base, generates);
+                    // A random fill's curve does nothing, so the page leaves it out.
+                    if kind == FillKind::Random {
+                        wanted.retain(|param| !matches!(param, GenParam::Curve | GenParam::S));
+                    }
+                    for param in &wanted {
+                        let times = placed.iter().filter(|found| *found == param).count();
+                        assert_eq!(times, 1, "{} on {}", param.key(), kind.name());
+                    }
+                    assert_eq!(placed.len(), wanted.len(), "{}", kind.name());
+                }
+            }
+        }
     }
 
     #[test]

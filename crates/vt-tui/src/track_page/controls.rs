@@ -5,6 +5,7 @@ use vt_model::action::TrackControl;
 use vt_model::lfo::phase_value;
 use vt_model::modulation::{ModKind, depth_value};
 use vt_model::settings::{Effect, SettingId};
+use vt_model::shape::GenParam;
 use vt_model::song::{FilterType, Machine, Track, TrackKind};
 
 /// One setting of a mod slot: its type, its mode, where it goes and how far, which every type has
@@ -153,6 +154,15 @@ pub enum Control {
     Arpeggio(ArpField),
     /// What's in one of the track's slots.
     Insert(usize),
+    /// One of the settings of a phrase's live generator, by its place in the phrase's list, on
+    /// the Gen page.
+    Gen {
+        phrase: u32,
+        generator: usize,
+        param: GenParam,
+    },
+    /// The Gen page's `Empty`, where `K` makes another column of the phrase live.
+    NewGenerator(u32),
     /// One of the settings declared by what's in a slot.
     InsertParam(usize, usize),
 }
@@ -239,6 +249,8 @@ impl Control {
             Self::Arpeggio(ArpField::Retrig) => "Retrig",
             Self::Insert(_) => "Effect",
             Self::InsertParam(..) => "Setting",
+            Self::Gen { param, .. } => param.name(),
+            Self::NewGenerator(_) => "Empty",
         }
     }
 

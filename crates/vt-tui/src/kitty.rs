@@ -933,6 +933,7 @@ impl Graphics {
                 Page::Sound => {}
                 Page::Mod => self.sync_mod(app, &track, out)?,
                 Page::Fx => self.sync_fx(app, &track, out)?,
+                Page::Gen => {}
             }
         }
         if app.view == View::Sample {
