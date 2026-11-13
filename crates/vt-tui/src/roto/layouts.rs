@@ -45,6 +45,7 @@ use vt_roto::sysex::CONTROLS;
 use super::devices::Family;
 use vt_model::modulation::ModKind;
 use vt_model::settings::{FOUR_OP_EACH, FOUR_OP_SHARED};
+use vt_model::shape::{FillKind, GenParam};
 use vt_model::steps::STEPS;
 
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField};
@@ -1501,6 +1502,236 @@ const SPACE: DeviceLayout = live(
     )],
 );
 
+// Live generators, after the Mod page's devices: a layout a fill, from the declared table
+// (`GenParam`), its settings in their musical order, and its `Where`'s on knobs 7 and 8 as an
+// effect's `Mix` and `Gain` are, `where1` being Euclid's `Hits` or an `Every` or a `Chance`, and
+// `where2` Euclid's `Rotate`. The fill and the `Where`, and a `Follow`'s source, are what the
+// device is, so they're chosen in the app (the generators study, `generators-page.md` §6). A
+// generator has no off/on settings of its own, so it's live, and `Acid`'s `Pitches` is a
+// two-step knob. A setting the shape hasn't now, as `Hits` without Euclid, leaves its knob dark.
+
+/// Knob 7 and 8's keys: what the `Where` has, whichever it is.
+pub const WHERE_FIRST: &str = "where1";
+pub const WHERE_SECOND: &str = "where2";
+
+const GEN_RAMP: DeviceLayout = live(
+    "gen/ramp",
+    &[knobs(
+        "Ramp",
+        [
+            s("from"),
+            s("to"),
+            s("curve"),
+            s("s"),
+            s("run"),
+            GAP,
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
+const GEN_RANDOM: DeviceLayout = live(
+    "gen/random",
+    &[knobs(
+        "Random",
+        [
+            s("from"),
+            s("to"),
+            s("run"),
+            GAP,
+            GAP,
+            GAP,
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
+const GEN_WAVE: DeviceLayout = live(
+    "gen/wave",
+    &[knobs(
+        "Wave",
+        [
+            s("from"),
+            s("to"),
+            s("wave"),
+            s("rate"),
+            s("phase"),
+            s("run"),
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
+const GEN_ALTERNATE: DeviceLayout = live(
+    "gen/alternate",
+    &[knobs(
+        "Alternate",
+        [
+            s("from"),
+            s("to"),
+            s("run"),
+            GAP,
+            GAP,
+            GAP,
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
+/// A list's values are typed, so only its run and its rows are on the Roto.
+const GEN_LIST: DeviceLayout = live(
+    "gen/list",
+    &[knobs(
+        "List",
+        [
+            s("run"),
+            GAP,
+            GAP,
+            GAP,
+            GAP,
+            GAP,
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
+/// `Acid`'s riff first, as a 303's randomiser has it, then its range on a page of its own, as
+/// it has more than eight.
+const GEN_ACID: DeviceLayout = live(
+    "gen/acid",
+    &[
+        knobs(
+            "Acid",
+            [
+                s("notes"),
+                s("octave"),
+                s("accent"),
+                s("slide"),
+                s("density"),
+                s("pitches"),
+                s(WHERE_FIRST),
+                s(WHERE_SECOND),
+            ],
+        ),
+        knobs("Range", [s("from"), s("to"), __, __, __, __, __, __]),
+    ],
+);
+/// A canon's moves; it writes every row, so it has no `Where`.
+const GEN_FOLLOW: DeviceLayout = live(
+    "gen/follow",
+    &[knobs(
+        "Follow",
+        [
+            s("transpose"),
+            s("invert"),
+            s("axis"),
+            s("reverse"),
+            s("late"),
+            s("fx"),
+            __,
+            __,
+        ],
+    )],
+);
+const GEN_SCALE: DeviceLayout = live(
+    "gen/scale",
+    &[knobs(
+        "Scale",
+        [
+            s("from"),
+            s("to"),
+            s("curve"),
+            s("s"),
+            GAP,
+            GAP,
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
+const GEN_WALK: DeviceLayout = live(
+    "gen/walk",
+    &[knobs(
+        "Walk",
+        [
+            s("from"),
+            s("to"),
+            s("step"),
+            s("edge"),
+            s("run"),
+            GAP,
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
+const GEN_PINK: DeviceLayout = live(
+    "gen/pink",
+    &[knobs(
+        "1/f",
+        [
+            s("from"),
+            s("to"),
+            s("depth"),
+            s("run"),
+            GAP,
+            GAP,
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
+/// A transform reworks what's there, with no settings of its own but its rows.
+const GEN_REWORK: DeviceLayout = live(
+    "gen/rework",
+    &[knobs(
+        "Rework",
+        [
+            GAP,
+            GAP,
+            GAP,
+            GAP,
+            GAP,
+            GAP,
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
+
+/// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
+/// rather than a kind of device a track always has.
+pub const GENERATORS: [&DeviceLayout; 11] = [
+    &GEN_RAMP,
+    &GEN_RANDOM,
+    &GEN_WAVE,
+    &GEN_ALTERNATE,
+    &GEN_LIST,
+    &GEN_ACID,
+    &GEN_FOLLOW,
+    &GEN_SCALE,
+    &GEN_WALK,
+    &GEN_PINK,
+    &GEN_REWORK,
+];
+
+/// A live generator's layout, by its fill.
+pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
+    match kind {
+        FillKind::Ramp => &GEN_RAMP,
+        FillKind::Random => &GEN_RANDOM,
+        FillKind::Wave => &GEN_WAVE,
+        FillKind::Alternate => &GEN_ALTERNATE,
+        FillKind::List => &GEN_LIST,
+        FillKind::Acid => &GEN_ACID,
+        FillKind::Follow => &GEN_FOLLOW,
+        FillKind::Scale => &GEN_SCALE,
+        FillKind::Walk => &GEN_WALK,
+        FillKind::Pink => &GEN_PINK,
+        FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,
+    }
+}
+
 /// Every kind of device's layout, for the tests and the stored setups.
 pub const ALL: [&DeviceLayout; 99] = [
     &SAMPLER,
@@ -1728,6 +1959,15 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
+        Some(Control::Gen {
+            phrase, generator, ..
+        }) => generator_layout(
+            track
+                .phrases
+                .get(&phrase)
+                .and_then(|found| found.generators().get(generator))
+                .map_or(FillKind::Ramp, |found| found.shape.kind),
+        ),
         _ => match track.kind {
             TrackKind::Sound => &OUTPUT,
             TrackKind::Group(_) => &GROUP_OUTPUT,
@@ -1743,6 +1983,12 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
 pub fn app_only(control: Control, track: &Track) -> bool {
     match control {
         Control::Machine | Control::Insert(_) | Control::Mod(_, ModField::Type) => true,
+        // A generator's fill and rows, and what a `Follow` follows, are what it is, and a
+        // `List`'s values are typed.
+        Control::Gen { param, .. } => matches!(
+            param,
+            GenParam::Fill | GenParam::Where | GenParam::Source | GenParam::Values
+        ),
         Control::InsertParam(slot, param) => track.inserts[slot].type_param() == Some(param),
         _ => false,
     }
@@ -1760,7 +2006,14 @@ pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Co
             _ => None,
         });
     }
-    controls().find(|control| key(*control, track) == setting.key)
+    // A generator's `Where`'s settings, whichever it has.
+    let wanted: &[GenParam] = match setting.key {
+        WHERE_FIRST => &[GenParam::Hits, GenParam::Every, GenParam::Chance],
+        WHERE_SECOND => &[GenParam::Rotate],
+        _ => return controls().find(|control| key(*control, track) == setting.key),
+    };
+    controls()
+        .find(|control| matches!(control, Control::Gen { param, .. } if wanted.contains(param)))
 }
 
 /// Steps' values' keys, by their place.

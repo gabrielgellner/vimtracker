@@ -777,7 +777,9 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     phrase as well as the track, so `Page::devices_on` takes the phrase under the cursor, which
     the app gives `TrackPage::phrase` as each key comes: a device each for its live generators,
     their title and grid from `vt-model`'s `GenParam::title` and `GenParam::grid`, as
-    `Control::Gen`, then `Empty`. A `DeviceSpec` is its
+    `Control::Gen`, then `Empty`. The Roto shows those of the phrase level with the cursor on its
+    track after the Mod page's, laid out by `roto/layouts.rs`'s `GENERATORS`, a layout a fill
+    (decision 281). A `DeviceSpec` is its
     identity, its title controls over the grid's first columns, its grid of `Control`s and its
     width, full or half, built by `DeviceSpec::new` from a model's `Grid` (`vt-model`'s
     `grid.rs`), as `Insert::grid` is. `rack_places` lays a page's devices out in the order they're
