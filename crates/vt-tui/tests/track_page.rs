@@ -288,19 +288,19 @@ fn each_voice_keeps_its_own_settings() {
             .map(|row| text[row].split_whitespace().nth(1).unwrap().to_owned())
             .to_vec()
     };
-    choose_machine(&mut app, "FM");
+    choose_machine(&mut app, "PD");
     assert_eq!(
         app.song().tracks[0].machine,
-        Machine::Plaits(SynthVoice::Fm)
+        Machine::Plaits(SynthVoice::PhaseDistortion)
     );
-    assert_eq!(names(&app), ["Ratio", "Index", "Feedback"]);
+    assert_eq!(names(&app), ["Ratio", "Amount", "Skew"]);
     press(&mut app, "jj");
-    assert_eq!(column_name(&app), "Index");
+    assert_eq!(column_name(&app), "Amount");
     press(&mut app, "i40");
     assert_eq!(machine_value(&app, 1), 0x40);
 
-    // Another voice starts from its own defaults. Fold is two along, past PD.
-    press(&mut app, "gg==");
+    // Another voice starts from its own defaults. Fold is the next, under `Digital`.
+    press(&mut app, "gg=");
     assert_eq!(
         app.song().tracks[0].machine,
         Machine::Plaits(SynthVoice::Waveshaping),
@@ -311,8 +311,8 @@ fn each_voice_keeps_its_own_settings() {
     press(&mut app, "jji20");
     assert_eq!(machine_value(&app, 1), 0x20);
 
-    // Back to FM finds it as it was, and the same through samples.
-    press(&mut app, "gg--");
+    // Back to PD finds it as it was, and the same through samples.
+    press(&mut app, "gg-");
     assert_eq!(machine_value(&app, 1), 0x40);
     choose_machine(&mut app, "Sample");
     assert_eq!(app.song().tracks[0].machine, Machine::Sampler);
