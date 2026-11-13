@@ -357,3 +357,31 @@ fn the_roto_shows_the_macros_first_each_knob_named_by_its_macro_and_turns_them()
         }
     );
 }
+
+#[test]
+fn m_on_an_lfos_rate_maps_it_and_its_ends_read_as_rates() {
+    use vt_tui::track_page::ModField;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 5L");
+    press(&mut app, &format!("{}jj", to_lfo(0)));
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Rate));
+    press(&mut app, "M1");
+    let rate = MacroTarget::Setting(SettingId::mod_own(3, 9).unwrap());
+    let track = &app.song().tracks[0];
+    let (at, _) = track.macro_holding(rate).unwrap();
+    assert_eq!(at, 0);
+    assert_eq!(
+        track.macros[0].value >> 8,
+        0x79,
+        "turned to where 1/4 is, so it doesn't jump"
+    );
+    press(&mut app, "gm");
+    assert_eq!(app.mode, Mode::Mapping);
+    assert!(
+        app.status
+            .contains("At 00 the macro sets M4 Rate to 64 bars, at FF to 1/64")
+            && app.status.contains("so Rate is 1/4"),
+        "{}",
+        app.status
+    );
+}

@@ -7,7 +7,7 @@ use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
 use vt_model::envelope::{Envelope, Lpg};
 use vt_model::groove::Groove;
 use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS, Setting};
-use vt_model::lfo::{LfoMode, MAX_DEFORM, deformed_wave, phase_of};
+use vt_model::lfo::{LfoMode, MAX_DEFORM, Rate, deformed_wave, phase_of};
 use vt_model::macros::{MACROS, MacroTarget};
 use vt_model::modulation::{
     MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, note_shape_slot,
@@ -21,7 +21,7 @@ use vt_model::settings::{
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark, slice_letter};
-use vt_model::steps::{MAX_STEP, STEPS, Steps, StepsMode, smoothed};
+use vt_model::steps::{MAX_STEP, STEPS, StepRate, Steps, StepsMode, smoothed};
 
 use crate::dsp::blocks::sides::same_sides;
 use crate::dsp::distort::{BYPASS_FADE_MS, InsertState};
@@ -88,6 +88,94 @@ struct LfoStart {
     clock: u64,
 }
 
+impl LfoStart {
+    /// Where the song is now.
+    fn now(now: SongTime) -> Self {
+        Self {
+            tick: now.tick,
+            clock: now.clock,
+        }
+    }
+}
+
+/// How far a slot's LFO, or its Steps, has gone since its start, at the rate `R` it's had: a
+/// running phase, so moving the rate speeds it up or slows it down from where it is rather than
+/// jumping, as Vital's and Surge's LFOs do (decision 301). It's counted from its start at the rate
+/// it has there, and from where it was at each change of rate on at the new one, always by the
+/// song's ticks and the playing clock rather than the blocks, so a render repeats whatever their
+/// size and a synced rate stays on the bar. A rate that never moves leaves it counting from its
+/// start alone, which is where the song is, exactly as before.
+#[derive(Debug, Clone, Copy)]
+struct Lap<R> {
+    /// Where its rate last changed, or its start.
+    from: LfoStart,
+    /// How far it had gone there, in cycles or steps.
+    gone: f64,
+    /// The rate it's gone at since, none from a start until it's next worked out, so a start
+    /// counts at the rate it has then.
+    rate: Option<R>,
+}
+
+impl<R> Default for Lap<R> {
+    fn default() -> Self {
+        Self {
+            from: LfoStart::default(),
+            gone: 0.0,
+            rate: None,
+        }
+    }
+}
+
+impl<R> Lap<R> {
+    /// Count from a start again, at the rate it has when it's next worked out.
+    fn start(&mut self, start: LfoStart) {
+        *self = Self {
+            from: start,
+            ..Self::default()
+        };
+    }
+}
+
+impl Lap<Rate> {
+    /// How many cycles an LFO at `rate` since its last change has gone by `until`.
+    #[inline]
+    fn cycles(&self, rate: Rate, until: LfoStart, sample_rate: u32) -> f64 {
+        let seconds = until.clock.wrapping_sub(self.from.clock) as f64 / f64::from(sample_rate);
+        self.gone + rate.cycles(until.tick - self.from.tick, seconds)
+    }
+
+    /// Go on at `rate` from now, counting what it went at the last up to here.
+    #[inline]
+    fn keep(&mut self, rate: Rate, now: SongTime) {
+        if let Some(was) = self.rate.filter(|was| *was != rate) {
+            let here = LfoStart::now(now);
+            self.gone = self.cycles(was, here, now.rate);
+            self.from = here;
+        }
+        self.rate = Some(rate);
+    }
+}
+
+impl Lap<StepRate> {
+    /// How many steps it's gone at `ticks` a step since its last change, by `now`.
+    #[inline]
+    fn steps(&self, ticks: f64, now: SongTime) -> f64 {
+        (self.gone + (now.tick - self.from.tick) / ticks).max(0.0)
+    }
+
+    /// Go on at `rate` from now, counting what it went at the last up to here. From `Pass`,
+    /// which isn't a speed, it goes on from where it last was in time.
+    #[inline]
+    fn keep(&mut self, rate: StepRate, now: SongTime, step_ticks: u64) {
+        let was = self.rate.filter(|was| *was != rate);
+        if let Some(ticks) = was.and_then(|was| was.ticks(step_ticks)) {
+            self.gone = self.steps(ticks, now);
+            self.from = LfoStart::now(now);
+        }
+        self.rate = Some(rate);
+    }
+}
+
 /// Where one of a track's envelopes has got to.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 enum EnvelopeRun {
@@ -122,8 +210,13 @@ struct SlotRun {
     seen: Option<ModKind>,
     /// Where its envelope has got to, which each note starts and ends.
     envelope: EnvelopeRun,
-    /// Where its cycles count from.
+    /// Where its cycles count from: a note's start, or the top of the song.
     start: LfoStart,
+    /// How far its LFO and its Steps have gone since then, each at its own rate.
+    lfo_lap: Lap<Rate>,
+    steps_lap: Lap<StepRate>,
+    /// Where its LFO was at the track's last note, which `Hold` holds.
+    held: f64,
     /// Its held depth, phase, polarity and deform, on the `00` to `FF` scale, as steps and the
     /// page set them. The polarity is below zero until it's first set, which is the slot's own.
     values: [f32; 4],
@@ -170,6 +263,9 @@ impl Default for SlotRun {
             seen: None,
             envelope: EnvelopeRun::Idle,
             start: LfoStart::default(),
+            lfo_lap: Lap::default(),
+            steps_lap: Lap::default(),
+            held: 0.0,
             values: [128.0, 0.0, -1.0, 128.0],
             share: 1.0,
             out: 0.0,
@@ -190,6 +286,15 @@ impl Default for SlotRun {
 }
 
 impl SlotRun {
+    /// Count its cycles and steps from a start again, a note's or the top of the song's, from
+    /// where the song is at the rates they have then: so playing from anywhere, or a note that
+    /// restarts it, finds it where it would be had its rate never moved.
+    fn restart(&mut self, start: LfoStart) {
+        self.start = start;
+        self.lfo_lap.start(start);
+        self.steps_lap.start(start);
+    }
+
     /// Draw the value of the step that's come round again, with `Mutate`'s chance, once each time
     /// it comes round, within the full `-FF` to `+FF`, which the slot's depth then scales. With no
     /// `Mutate`, the values are as written and what was drawn is forgotten.
@@ -271,15 +376,15 @@ fn trigger_slot(slot: &ModSlot, run: &mut SlotRun, now: SongTime, pass: i64) {
     run.notes += 1;
     run.pass_at = pass;
     run.roll = (run.rolls.next_u32() >> 24) as u8;
+    // Where its LFO is at the note, for `Hold`, at the rate it's going at.
+    let rate = run.lfo_lap.rate.unwrap_or(slot.lfo.rate);
+    run.held = run.lfo_lap.cycles(rate, LfoStart::now(now), now.rate);
     let restarts = match slot.kind {
         ModKind::Steps => slot.steps.mode == StepsMode::Trig,
         _ => slot.lfo.mode.restarts(),
     };
     if restarts {
-        run.start = LfoStart {
-            tick: now.tick,
-            clock: now.clock,
-        };
+        run.restart(LfoStart::now(now));
     }
 }
 
@@ -301,7 +406,7 @@ fn steps_count(
         StepsMode::Trig if run.notes == 0 => None,
         mode => Some(match steps.rate.ticks(step_ticks) {
             Some(ticks) => {
-                let along = ((now.tick - run.start.tick) / ticks).max(0.0);
+                let along = run.steps_lap.steps(ticks, now);
                 (along.floor() as i64, Some(along.fract() as f32))
             }
             None if mode == StepsMode::Trig => (pass - run.pass_at, None),
@@ -328,22 +433,20 @@ fn in_scale(added: f32, note: Option<f32>, scale: Scale) -> f32 {
 }
 
 /// How many cycles an LFO slot is through its wave now, before its phase, under its mode: from
-/// its start, which a note that restarts it moves, and for `Hold` only as far as the track's last
-/// note, or its start if none has played. A one-shot stays at the end of what it plays, just short
-/// of it so a saw is still at its bottom, and before any note it's already there.
+/// its start, which a note that restarts it moves, at the rates it's had since, and for `Hold`
+/// only as far as the track's last note, or its start if none has played. A one-shot stays at the
+/// end of what it plays, just short of it so a saw is still at its bottom, and before any note
+/// it's already there.
 #[inline]
-fn lfo_cycles(slot: &ModSlot, start: LfoStart, noted: Option<LfoStart>, now: SongTime) -> f64 {
+fn lfo_cycles(slot: &ModSlot, run: &SlotRun, noted: Option<LfoStart>, now: SongTime) -> f64 {
     let mode = slot.lfo.mode;
-    let until = match (mode, noted) {
-        (LfoMode::Hold, Some(note)) => note,
-        (LfoMode::Hold, None) => start,
-        _ => LfoStart {
-            tick: now.tick,
-            clock: now.clock,
-        },
+    let cycles = match (mode, noted) {
+        (LfoMode::Hold, Some(_)) => run.held,
+        (LfoMode::Hold, None) => 0.0,
+        _ => run
+            .lfo_lap
+            .cycles(slot.lfo.rate, LfoStart::now(now), now.rate),
     };
-    let seconds = until.clock.wrapping_sub(start.clock) as f64 / f64::from(now.rate);
-    let cycles = slot.lfo.rate.cycles(until.tick - start.tick, seconds);
     match mode.plays_for() {
         Some(most) if noted.is_some() => cycles.min(most - ONE_SHOT_END),
         Some(most) => most - ONE_SHOT_END,
@@ -1525,7 +1628,7 @@ impl TrackState {
         self.last_note = None;
         self.chain_pass = 0;
         for (at, run) in self.slots.iter_mut().enumerate() {
-            run.start = LfoStart { tick: 0.0, clock };
+            run.restart(LfoStart { tick: 0.0, clock });
             run.notes = 0;
             run.dice = mutate_rng(seed, index, at);
             run.rolls = roll_rng(seed, index, at);
@@ -1541,7 +1644,10 @@ impl TrackState {
     pub fn count_cycles_from_the_top(&mut self) {
         self.wake();
         for run in &mut self.slots {
-            run.start.tick = 0.0;
+            run.restart(LfoStart {
+                tick: 0.0,
+                clock: run.start.clock,
+            });
             run.notes = 0;
             run.counted = None;
         }
@@ -1634,6 +1740,10 @@ impl TrackState {
             };
             run.now = None;
             run.playing = None;
+            // Each rate as it's heard now goes on from where its last left off, whatever the
+            // slot's type, as every type's state is kept going underneath.
+            run.lfo_lap.keep(slot.lfo.rate, now);
+            run.steps_lap.keep(slot.steps.rate, now, step_ticks);
             let Some(destination) = slot.destination else {
                 run.rest(slot.kind);
                 continue;
@@ -1700,7 +1810,7 @@ impl TrackState {
                     moved.add(destination.index(), added);
                 }
                 ModKind::Lfo => {
-                    let cycles = lfo_cycles(slot, run.start, noted, now);
+                    let cycles = lfo_cycles(slot, run, noted, now);
                     let key = now.seed ^ ((index as u64) << 8 | wave_key(at));
                     let phase = f64::from(phase_of(phase) + moved_by(1));
                     let deform = ((depth_of(deform) + moved_by(3) * 255.0) / f32::from(MAX_DEFORM))

@@ -386,8 +386,23 @@ impl ModSlot {
             6 if kind == ModKind::Steps => whole(self.steps.length.saturating_sub(1)),
             7 if kind == ModKind::Steps => whole(self.steps.mutate),
             8 if kind == ModKind::Steps => depth_value(self.steps.smooth),
+            9 if kind == ModKind::Lfo => self.lfo.rate.place(),
+            9 if kind == ModKind::Steps => self.steps.rate.place()?,
             _ => return None,
         })
+    }
+
+    /// One of its type's own settings at a value on the `00` to `FF` scale, with a coarse byte and
+    /// a fine one, in its units where they depend on the slot rather than the registry's entry:
+    /// its `Rate`, as the kind of rate it has, `1/16`, `7st` or `2.5hz`.
+    pub fn own_shown(&self, at: usize, value: u16) -> Option<String> {
+        let mut moved = *self;
+        moved.set_own(at, f32::from(value) / 256.0);
+        match (at, self.kind) {
+            (9, ModKind::Lfo) => Some(moved.lfo.rate.to_string()),
+            (9, ModKind::Steps) => Some(moved.steps.rate.to_string()),
+            _ => None,
+        }
     }
 
     /// Set one of its type's own settings from a value on the `00` to `FF` scale, with any fine
@@ -412,6 +427,8 @@ impl ModSlot {
             (8, ModKind::Steps) => {
                 self.steps.smooth = depth_of(value).round().clamp(-MAX_STEP_F, MAX_STEP_F) as i16;
             }
+            (9, ModKind::Lfo) => self.lfo.rate = self.lfo.rate.placed(value),
+            (9, ModKind::Steps) => self.steps.rate = self.steps.rate.placed(value),
             _ => {}
         }
     }
@@ -547,6 +564,37 @@ mod tests {
         assert_eq!(ron::from_str::<ModSlot>(&text).unwrap(), trig);
         let text = ron::to_string(&mods[0]).unwrap();
         assert_eq!(ron::from_str::<ModSlot>(&text).unwrap(), mods[0]);
+    }
+
+    #[test]
+    fn an_lfos_and_steps_rate_are_one_own_setting_shown_as_their_kind_of_rate() {
+        use crate::lfo::Rate;
+        use crate::steps::StepRate;
+        let mut lfo = ModSlot::lfo(None, Lfo::default());
+        let quarter = lfo.own_value(9).unwrap();
+        assert_eq!(lfo.own_shown(9, quarter).as_deref(), Some("1/4"));
+        assert_eq!(lfo.own_shown(9, 0xFF00).as_deref(), Some("1/64"));
+        assert_eq!(
+            lfo.own_shown(1, 0xFF00),
+            None,
+            "a time has the registry's units"
+        );
+        lfo.set_own(9, 255.0);
+        assert_eq!(lfo.lfo.rate, Rate::Note(60));
+        lfo.lfo.rate = Rate::Hertz(250);
+        assert_eq!(
+            lfo.own_shown(9, lfo.own_value(9).unwrap()).as_deref(),
+            Some("2.5hz")
+        );
+        // Steps' is the same setting, on the divisions to a tick, and none at `Pass`.
+        let mut steps = ModSlot::steps(None, Steps::default());
+        assert_eq!(steps.own_shown(9, 0xFF00).as_deref(), Some("Tick"));
+        steps.set_own(9, 0.0);
+        assert_eq!(steps.steps.rate, StepRate::Note(3840));
+        steps.steps.rate = StepRate::Pass;
+        assert_eq!(steps.own_value(9), None);
+        // Other types haven't it.
+        assert_eq!(ModSlot::adsr(None, Adsr::decay()).own_value(9), None);
     }
 
     #[test]
