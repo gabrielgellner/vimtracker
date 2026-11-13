@@ -491,6 +491,7 @@ pub enum TrackControl {
     HighCut,
     Pitch,
     VelocityDelta,
+    Quantise,
 }
 
 impl TrackControl {
@@ -504,6 +505,7 @@ impl TrackControl {
             Self::SendB => Some(SettingId::SEND_B),
             Self::Pitch => Some(SettingId::PITCH),
             Self::VelocityDelta => Some(SettingId::VELOCITY_DELTA),
+            Self::Quantise => Some(SettingId::QUANTISE),
             Self::Drive | Self::Punch | Self::LowCut | Self::HighCut => None,
         }
     }
@@ -938,6 +940,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 TrackControl::HighCut => track.high_cut = *value,
                 TrackControl::Pitch => track.pitch = *value,
                 TrackControl::VelocityDelta => track.velocity_delta = *value,
+                TrackControl::Quantise => track.quantise = *value,
             }
             // At the top, a fine part goes.
             if let Some(id) = control.setting() {

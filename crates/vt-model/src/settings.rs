@@ -227,6 +227,13 @@ pub fn moved_velocity(velocity: u8, value: f32) -> u8 {
         .clamp(0.0, f32::from(MAX_VELOCITY)) as u8
 }
 
+/// A row's nudge, in ticks, as it plays under a `QNT` value: brought that far toward the grid, so
+/// `00` plays it as written, `80` halves it and `FF` plays it on the grid.
+pub fn quantised_nudge(ticks: i64, value: f32) -> i64 {
+    let kept = 1.0 - value.clamp(0.0, 255.0) / 255.0;
+    (ticks as f32 * kept).round() as i64
+}
+
 /// How far an EQ band boosts or cuts, in dB, at either end.
 pub const BAND_DB: f32 = 15.0;
 /// An EQ band's narrowest and widest.
@@ -499,7 +506,7 @@ const ON_LEVEL_SCALE: Kind = Kind::Continuous {
 };
 
 /// The track's own, in the order the table keeps them.
-const TRACK: [Entry; 15] = [
+const TRACK: [Entry; 16] = [
     on_level_scale("vol", "Vol", "VOL", UNITY_LEVEL),
     Entry {
         kind: Kind::Continuous {
@@ -618,11 +625,14 @@ const TRACK: [Entry; 15] = [
     // 174). Its base is the track's `level`, and modulation can't reach it, as `VOL` is where
     // modulation moves the volume.
     on_level_scale("level", "Level", "LEV", UNITY_LEVEL),
+    // How far its rows' nudges are brought toward the grid as they play, read before a row plays,
+    // as `GRV` is, so a take can be tightened live, or loosened again, and keeps what was played.
+    level("quantise", "Quantise", "QNT", 0x00),
 ];
 /// What each of the track's is listed with.
-const TRACK_GROUPS: [&str; 15] = [
+const TRACK_GROUPS: [&str; 16] = [
     "Output", "Output", "Filter", "Filter", "Output", "Output", "Machine", "Filter", "Machine",
-    "Machine", "Machine", "Machine", "Machine", "Machine", "Output",
+    "Machine", "Machine", "Machine", "Machine", "Machine", "Output", "Machine",
 ];
 
 const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
@@ -2139,6 +2149,9 @@ impl SettingId {
     pub const VELOCITY_DELTA: Self = Self(13);
     /// The track's fader, its `Level`, on the level scale.
     pub const LEVEL: Self = Self(14);
+    /// How far a row's nudge is brought toward the grid as it plays, as [`quantised_nudge`] gives
+    /// it.
+    pub const QUANTISE: Self = Self(15);
     /// Which of the bank's entries a sampler plays: `00` none, or an entry's number.
     pub const SAMPLE: Self = Self(SAMPLER_START as u16);
     /// Which of its entry's slices a sampler plays, by number, clamped to the last.
@@ -2391,6 +2404,23 @@ mod tests {
     }
 
     #[test]
+    fn quantise_brings_every_nudge_toward_the_grid_by_its_share() {
+        use crate::constants::NUDGE_TICKS;
+        for nudge in -11_i64..=11 {
+            let ticks = nudge * NUDGE_TICKS as i64;
+            assert_eq!(quantised_nudge(ticks, 0.0), ticks, "as written");
+            assert_eq!(
+                quantised_nudge(ticks, 128.0),
+                ticks / 2,
+                "halved, to the tick"
+            );
+            assert_eq!(quantised_nudge(ticks, 255.0), 0, "on the grid");
+        }
+        assert_eq!(quantised_nudge(-110, 300.0), 0, "kept to the scale");
+        assert_eq!(quantised_nudge(-110, -40.0), -110);
+    }
+
+    #[test]
     fn the_level_scale_is_two_digits_and_positions_are_four() {
         for id in [
             SettingId::VOL,
@@ -2560,6 +2590,11 @@ mod tests {
         assert_eq!(shown(SettingId::VELOCITY_DELTA, 0x9000), "+10 vel");
         assert_eq!(shown(SettingId::VELOCITY_DELTA, 0x0000), "-80 vel");
         assert_eq!(SettingId::VELOCITY_DELTA.label(), Some("VDLT".into()));
+        assert_eq!(shown(SettingId::QUANTISE, 0x0000), "0 %");
+        assert_eq!(shown(SettingId::QUANTISE, 0x8000), "50 %");
+        assert_eq!(shown(SettingId::QUANTISE, 0xFF00), "100 %");
+        assert_eq!(SettingId::QUANTISE.label(), Some("QNT".into()));
+        assert_eq!(SettingId::QUANTISE.key(), "quantise");
         assert_eq!(
             (depth.label(), phase.label(), SettingId::PITCH.label()),
             (

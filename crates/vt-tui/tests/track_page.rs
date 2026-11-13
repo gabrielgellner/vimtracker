@@ -716,7 +716,7 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        19,
+        20,
         "what a sample track has, its Sample, Slice, Start and Length, Pitch in scale, none, and Mod 6's three"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
@@ -981,6 +981,46 @@ fn the_track_page_moves_every_notes_velocity_from_under_choke() {
     assert_eq!(delta(&app), 0x8F);
     press(&mut app, "x");
     assert_eq!(delta(&app), 0x80);
+}
+
+#[test]
+fn the_track_page_quantises_the_nudges_from_under_velocity_and_leaves_them_written() {
+    use vt_model::song::Phrase;
+    use vt_model::step::Step;
+    use vt_tui::views::status::value_shown;
+    let mut song = Song::new(1);
+    let steps: Vec<Step> = ["C-3 40 -3", "C-3 40 +B", "C-3 40", "C-3 40 -B"]
+        .iter()
+        .map(|text| text.parse().unwrap())
+        .collect();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, " 4}j");
+    let quantise = |app: &App| app.song().tracks[0].quantise;
+    let line = from_name(&app, "Quantise");
+    assert!(line.starts_with("Quantise  0000 ▕         ▏"), "{line}");
+
+    let written = app.song().tracks[0].phrases.clone();
+    press(&mut app, "2}jj$");
+    assert_eq!(app.track_control().label(), "Quantise");
+    assert_eq!(value_shown(&app).as_deref(), Some("0 %"));
+    press(&mut app, "i80");
+    assert_eq!(quantise(&app), 0x80);
+    assert_eq!(value_shown(&app).as_deref(), Some("50 %"));
+    press(&mut app, "iFF");
+    assert_eq!(value_shown(&app).as_deref(), Some("100 %"));
+    assert_eq!(
+        app.song().tracks[0].phrases,
+        written,
+        "the nudges are as written"
+    );
+    press(&mut app, "x");
+    assert_eq!(quantise(&app), 0);
 }
 
 #[test]
@@ -2261,7 +2301,7 @@ fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
     press(&mut app, "kk");
     assert_eq!(app.track_control().label(), "High cut");
     press(&mut app, "G");
-    assert_eq!(app.track_control().label(), "Reset");
+    assert_eq!(app.track_control().label(), "Quantise");
     press(&mut app, "gg");
     assert_eq!(app.track_control(), Control::Sample, "G and gg keep it too");
 }
@@ -2427,8 +2467,8 @@ fn a_tracks_reset_on_the_page_is_typed_in_steps_or_bars() {
     let reset = |app: &App| app.song().tracks[0].reset;
     let line = |app: &App| from_name(app, "Reset");
     assert!(line(&app).contains("Off"), "{}", line(&app));
-    // At the bottom of Play's second column.
-    press(&mut app, "2}jj$");
+    // At the bottom of Play's second column, beside `Quantise`.
+    press(&mut app, "2}jj$h");
     assert_eq!(app.track_control(), Control::Reset);
     assert_eq!(
         value_shown(&app).as_deref(),
