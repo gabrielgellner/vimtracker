@@ -176,6 +176,11 @@ impl Follower {
     /// sound is all the way.
     #[inline]
     fn process(&mut self, input: f32) -> f32 {
+        // With nothing coming in, the splits' states go once they're tiny (#260).
+        if input == 0.0 {
+            self.low.let_go();
+            self.medium.let_go();
+        }
         let (low_high, _, low) = self.low.process_all(input);
         let (high, _, medium) = self.medium.process_all(low_high);
         let mut envelope = 0.0;
@@ -421,6 +426,10 @@ impl LowPassGate {
         let q = LEAST_Q * (MOST_Q / LEAST_Q).powf(resonance);
         let (filtered, level) = (1.0 - vca, self.level);
         self.filters.process(input, same, |filter, sample| {
+            // With nothing coming in, its state goes once it's tiny (#260).
+            if sample == 0.0 {
+                filter.let_go();
+            }
             filter.set_g_q(g, q);
             let low = filter.low_pass(sample);
             (low * filtered + sample * vca) * level

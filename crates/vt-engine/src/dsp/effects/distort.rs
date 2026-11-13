@@ -19,6 +19,7 @@ use vt_model::insert::{
 use vt_model::song::level_gain;
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::flush::{flush, tiny_by_fields};
 use crate::dsp::blocks::oversampler::Oversampler;
 use crate::dsp::blocks::sides::{SameBits, Sides, same_sides};
 use crate::dsp::blocks::smoother::Smoothed;
@@ -263,6 +264,12 @@ struct Shaper {
     last_integral: f64,
 }
 
+tiny_by_fields!(Shaper {
+    oversampler,
+    last,
+    last_integral
+});
+
 impl SameBits for Shaper {
     #[inline]
     fn same_bits(&self, other: &Self) -> bool {
@@ -283,6 +290,13 @@ impl Shaper {
         drive: f32,
         shape: impl Fn(f32) -> f32,
     ) -> f32 {
+        // With nothing coming in, all it keeps goes once it's tiny, so it falls to an exact zero
+        // rather than trading denormals round its oversampling for good (#260). Each shape's
+        // antiderivative is nothing at nothing, so the last sample and its antiderivative go
+        // together.
+        if input == 0.0 {
+            flush(self);
+        }
         let Self {
             oversampler,
             last,
@@ -323,9 +337,11 @@ fn shaped(kind: DistortType, driven: f32) -> f32 {
             let adjusted = driven * 0.25 + 0.75;
             (adjusted - adjusted.floor()).mul_add(-4.0, 2.0).abs() - 1.0
         }
+        // `sin(pi x / 2)`, its turn taken about nothing so that nothing gives exactly nothing,
+        // where a turn about a half gave `sin(pi)`, about -141 dB, for good (#260).
         DistortType::Sine => {
-            let adjusted = driven * -0.25 + 0.5;
-            ((adjusted - adjusted.floor()) * std::f32::consts::TAU).sin()
+            let turn = driven * 0.25;
+            ((turn - turn.round()) * std::f32::consts::TAU).sin()
         }
         // These don't shape at the higher rate here: the pedals have their own.
         DistortType::Crush
@@ -1695,6 +1711,79 @@ mod tests {
                 assert_eq!(settled, 0, "{insert:?}");
             }
         }
+    }
+
+    /// A burst of a loud sine with noise on it, different on each side, then silence for at most
+    /// `seconds`, until the slot has given exact silence for a second and, if `settles`, has
+    /// settled. Returns when, in seconds, or none if it never did.
+    fn falls_silent(insert: Insert, seconds: usize, settles: bool) -> Option<f32> {
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        let keys = Keys::default();
+        let mut state = holding(insert);
+        let mut noise = 1_u32;
+        for sample in sine(220.0, 0.9, RATE as usize / 5) {
+            noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let noise = (noise >> 9) as f32 / (1 << 23) as f32 - 0.5;
+            let frame = [sample + noise, sample * 0.7 - noise];
+            state.process_sides(frame, false, smoothing, RATE, &keys);
+        }
+        let mut silent_since = None;
+        for frame in 0..seconds * RATE as usize {
+            let (out, _) = state.process_sides([0.0; 2], true, smoothing, RATE, &keys);
+            if out != [0.0; 2] {
+                silent_since = None;
+                continue;
+            }
+            let since = *silent_since.get_or_insert(frame);
+            let settled = !settles
+                || state
+                    .settled([0.0; 2], true, smoothing, RATE, &keys)
+                    .is_some();
+            if frame - since >= RATE as usize && settled {
+                return Some(frame as f32 / RATE as f32);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn every_effect_falls_to_an_exact_silence_after_a_sound() {
+        // Left to itself, a filter's state fell into the denormals and traded the smallest floats
+        // between its states for good, so a delay after it rang for ever and a resting mix never
+        // rested (#260). Each slot now gives exact silence soon after a sound, and has settled
+        // too, but for what moves by itself and what takes longer by design: a compressor's
+        // `Auto` follows the level for a minute and a half before it settles (decision 260), and
+        // a low-pass gate's vactrol takes minutes to forget it was lit.
+        for insert in every_effect() {
+            let settles = !matches!(
+                insert,
+                Insert::Phaser(_)
+                    | Insert::Vowel(_)
+                    | Insert::Compressor(_)
+                    | Insert::Lpg(_)
+                    | Insert::Distort(Distort {
+                        kind: DistortType::Down,
+                        ..
+                    })
+            );
+            assert!(
+                falls_silent(insert, 30, settles).is_some(),
+                "{insert:?} still sounds or moves after 30 s"
+            );
+        }
+    }
+
+    #[test]
+    fn an_eq_at_its_narrowest_settles_too() {
+        // The EQ at its narrowest and loudest.
+        let narrow = Insert::Eq(Equaliser {
+            low: 0xFF,
+            mid: 0xFF,
+            mid_q: 0xFF,
+            high: 0xFF,
+            ..Equaliser::DEFAULT
+        });
+        assert!(falls_silent(narrow, 30, true).is_some());
     }
 
     #[test]
