@@ -86,7 +86,7 @@ nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Walk`, `1/f`, `Wave`, `Alternate`, `List`, `Acid` or a transform |
+| Fill | `Ramp`, `Random`, `Walk`, `1/f`, `Wave`, `List`, `Acid` and others |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
