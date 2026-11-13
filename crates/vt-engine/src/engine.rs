@@ -206,6 +206,8 @@ pub struct Engine {
     realign_waiting: bool,
     /// Where its time goes, while `vimtracker bench --tracks` asks.
     stopwatch: Stopwatch,
+    /// Whether a track at rest is left as it is rather than worked out again.
+    resting: bool,
 }
 
 /// The next row with a length after this one, in order, and whether that went past the last. If no
@@ -283,6 +285,7 @@ impl Engine {
             scale,
             realign_waiting: false,
             stopwatch: Stopwatch::default(),
+            resting: true,
         };
         engine.follow_levels();
         engine.reset_tracks();
@@ -896,6 +899,10 @@ impl Engine {
     /// no longer exists is silent, and a removed track's voices fade.
     pub fn swap(&mut self, version: Arc<Published>) -> Arc<Published> {
         let old = std::mem::replace(&mut self.current, version);
+        // What any track plays with may have changed.
+        for track in self.tracks.iter_mut() {
+            track.wake();
+        }
         self.used = self
             .used
             .max(self.current.song.tracks.len().min(MAX_TRACKS));
@@ -1233,13 +1240,50 @@ impl Engine {
         }
     }
 
+    /// Work out what each track's mod slots add now, and give its voice and slots their settings.
+    /// A track resting, where that would change nothing, is left as it is while it's silent, with
+    /// no tail ringing and no preview through it; the groups, returns and master, which hear the
+    /// others, while every sound track is (#547).
     fn update_lfos(&mut self) {
         let now = self.song_time();
         let stopped = self.transport == Transport::Stopped;
+        let sounds = self.sounds();
+        let previews = self.previews.sounding();
+        let mut silent = [false; MAX_TRACKS];
+        let mut all_silent = true;
+        for (index, silent) in silent.iter_mut().enumerate().take(sounds) {
+            let state = &self.tracks[index];
+            *silent = !state.sounding()
+                && !state.ringing(self.rate)
+                && !self.previews.on_track(&previews, index);
+            all_silent &= *silent;
+        }
         let tracks = self.tracks.iter_mut().enumerate();
         for ((index, state), track) in tracks.zip(&self.current.song.tracks) {
-            state.modulate(track, index, now, stopped, &mut self.memory);
+            let silent = if index < sounds {
+                silent[index]
+            } else {
+                all_silent && !state.ringing(self.rate)
+            };
+            if silent && self.resting && state.rests(now, stopped) {
+                state.keep_resting(now);
+            } else {
+                state.modulate(track, index, now, stopped, &mut self.memory);
+            }
         }
+    }
+
+    /// Whether a track at rest is left as it is rather than worked out again, as it is unless a
+    /// test asks otherwise to hear that it changes nothing.
+    #[doc(hidden)]
+    pub fn let_rest(&mut self, on: bool) {
+        self.resting = on;
+    }
+
+    /// Whether a track is at rest, for tests.
+    #[doc(hidden)]
+    pub fn rests(&self, index: usize) -> bool {
+        self.tracks.get(index).is_some_and(TrackState::at_rest)
     }
 
     /// Start a note's modulation: the track's envelopes, and LFOs that follow its notes.
@@ -2120,6 +2164,7 @@ impl Engine {
         track.off_at = off;
         track.gate_at = gate;
         track.last_note = Some(next);
+        track.wake();
         track.retrigger = Some(Retrigger {
             next_at: retrigger.next_at + retrigger.interval,
             ..retrigger
@@ -2157,6 +2202,7 @@ impl Engine {
             track.off_at = off;
             track.gate_at = gate;
             track.last_note = Some(next);
+            track.wake();
         } else {
             self.tracks[index].tie(next);
         }
@@ -2399,6 +2445,7 @@ impl Engine {
         // Which time round its chain the track is, for a Steps slot that moves on a pass.
         if pending.leads {
             self.tracks[index].chain_pass = place as i64 / owner.chain_steps(chain).max(1) as i64;
+            self.tracks[index].wake();
         }
         let Some(position) = owner.chain_position(chain, place, self.dealer(index)) else {
             return;
@@ -2622,6 +2669,7 @@ impl Engine {
                     Some(on) if tie => self.tracks[index].tie(on),
                     Some(on) if start_frames > 0 => {
                         self.tracks[index].last_note = Some(on);
+                        self.tracks[index].wake();
                         self.tracks[index].delayed = Some(DelayedNote {
                             at: start_at,
                             note: on,
@@ -2633,6 +2681,7 @@ impl Engine {
                     }
                     Some(on) => {
                         self.tracks[index].last_note = Some(on);
+                        self.tracks[index].wake();
                         self.tracks[index].cut_to_tail();
                     }
                     None => self.tracks[index].cut_to_tail(),
@@ -2919,6 +2968,7 @@ impl Engine {
             let last_note = track.last_note;
             track.start(on, self.rate);
             track.last_note = last_note;
+            track.wake();
             self.auditioned[index] = true;
             self.choke(index);
         }

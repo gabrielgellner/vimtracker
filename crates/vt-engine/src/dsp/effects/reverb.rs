@@ -182,9 +182,7 @@ impl Reverb {
     /// the frame rather than by what the reverb has done, so one that's slept is where it would
     /// have been.
     pub fn follow(&mut self, settings: Settings, frames: u64) {
-        let seconds = frames as f64 / f64::from(self.rate);
-        self.wobble =
-            WOBBLE_HERTZ.map(|hertz| (std::f64::consts::TAU * hertz * seconds).cos() as f32);
+        self.keep_time(frames);
         self.pre_frames.target = f32::from(settings.pre) / 255.0 * LONGEST_PRE * self.rate as f32;
         self.decay.target = f32::from(settings.decay) / 255.0 * MOST_DECAY;
         let at_tuning_rate = 1.0 - f32::from(settings.damp) / 255.0 * (1.0 - MOST_DAMPING);
@@ -206,6 +204,13 @@ impl Reverb {
             settings.high_cut,
             settings.high_cut < 0xFF,
         );
+    }
+
+    /// Move the wobbles to where they are this many frames in.
+    pub fn keep_time(&mut self, frames: u64) {
+        let seconds = frames as f64 / f64::from(self.rate);
+        self.wobble =
+            WOBBLE_HERTZ.map(|hertz| (std::f64::consts::TAU * hertz * seconds).cos() as f32);
     }
 
     /// Jump to the settings, for starting afresh.

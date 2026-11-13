@@ -219,6 +219,31 @@ impl Memory {
         }
     }
 
+    /// Move what goes by the frame rather than by what it's done to where it is this many frames
+    /// in, as taking its settings does: a reverb's and a plate's wobbles.
+    pub fn keep_time(&mut self, frames: u64) {
+        match self {
+            Self::Reverb(reverb) => reverb.keep_time(frames),
+            Self::Plate(plate) => plate.keep_time(frames),
+            _ => {}
+        }
+    }
+
+    /// Whether an effect keeps a long buffer, which it takes from the pool.
+    pub fn kept_by(insert: Insert) -> bool {
+        !matches!(
+            insert,
+            Insert::Empty
+                | Insert::Distort(_)
+                | Insert::Exciter(_)
+                | Insert::Eq(_)
+                | Insert::Compressor(_)
+                | Insert::Lpg(_)
+                | Insert::Phaser(_)
+                | Insert::Vowel(_)
+        )
+    }
+
     /// Whether it's about to play something of its own with nothing going in, as a spring that's
     /// just been knocked does, or a stutter that's just been triggered, so it has to be woken.
     pub fn waking(&self) -> bool {
