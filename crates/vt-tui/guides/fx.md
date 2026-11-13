@@ -284,8 +284,8 @@ Note column.
 
 `ARP xy` goes round its row's note, the note `x` up and the note `y` up, as
 Renoise's `-Axy` and the M8's `ARP` do, so `ARP 47` on a `C-3` plays C, E and G
-over and over. With the scale on, `x` and `y` are scale degrees, as the home row
-is, so `ARP 24` plays a triad in any scale; with it off they're semitones. A `0`
+over and over. With the scale on, `x` and `y` are scale degrees, as the keyboard's
+are, so `ARP 24` plays a triad in any scale; with it off they're semitones. A `0`
 leaves that one out, for a two-note arpeggio: `ARP 70` and `ARP 07` both go
 between the note and its fifth. Type its two digits after choosing it with `K`;
 `=` and `-` move `y`, and `+` and `_` move `x`.

@@ -1676,7 +1676,9 @@ Step:  NOTE VOL INST FX FX FX     C-3 64 01 CUT40 ---00 RET14
 | Shape | `L` | Keep it live, as one undo |
 | Shape | `Esc` | Cancel, restoring the version from before Shape mode |
 | Insert (note) | `a w s e d f t g y h u j` | C to B, current octave, as in Ableton's computer keyboard |
-| Insert (note) | `k o l p ;` | C to E, one octave up |
+| Insert (note) | `k ,` | The note just written an octave up or down, or held, the notes played, as a 303's UP and DOWN (decision 298) |
+| Insert (note) | `o l` | Wider or narrower grid, as `Option-2` and `Option-1` (decision 298) |
+| Insert (note) | `'` `/` | Accent, or slide from, the note just written, or held, the notes played (decision 83) |
 | Insert (note) | `1` | Note-off |
 | Insert (note) | `z x` | Octave down or up. Starts at octave 3, where `a` is `C-3`, middle C, as Live names it. From -1 to 8 |
 | Insert (note) | `c v` | Lower or raise the velocity written with each note, like the octave. It starts at `64`, leaving room for accents, and moves by the top digit from `04` up to `74`, then `7F`. The note heard while typing uses it |

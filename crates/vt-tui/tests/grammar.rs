@@ -839,8 +839,8 @@ fn a_selection_can_grow_to_the_ends_of_the_row() {
 #[test]
 fn r_replaces_a_note_and_keeps_everything_else() {
     let (mut app, _rt) = app_with(&[FULL, E]);
-    keys(&mut app, "rk");
-    assert_eq!(steps(&app)[0], "C-4 70 vol:10 pan:20 cut:30");
+    keys(&mut app, "rj");
+    assert_eq!(steps(&app)[0], "B-3 70 vol:10 pan:20 cut:30");
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.cursor.step, 0);
     assert_eq!(app.cursor.field, Field::Note);
@@ -855,8 +855,8 @@ fn r_ignores_the_note_velocity_setting() {
     let (mut app, _rt) = app_with(&[FULL]);
     keys(&mut app, "ic<Esc>");
     assert_eq!(app.note_velocity, 0x54);
-    keys(&mut app, "rk");
-    assert_eq!(steps(&app)[0], "C-4 70 vol:10 pan:20 cut:30");
+    keys(&mut app, "rj");
+    assert_eq!(steps(&app)[0], "B-3 70 vol:10 pan:20 cut:30");
     assert_eq!(app.note_velocity, 0x54);
 }
 
@@ -925,10 +925,10 @@ fn backspace_edits_a_replace_and_never_moves() {
 fn dot_repeats_a_replace_at_the_cursor() {
     check(
         &[FULL, FULL, "--- -- --- --- ---"],
-        "rkj.",
+        "rhj.",
         &[
-            "C-4 70 vol:10 pan:20 cut:30",
-            "C-4 70 vol:10 pan:20 cut:30",
+            "A-3 70 vol:10 pan:20 cut:30",
+            "A-3 70 vol:10 pan:20 cut:30",
             "--- -- --- --- ---",
         ],
     );
@@ -946,7 +946,7 @@ fn dot_repeats_a_replace_at_the_cursor() {
 
 #[test]
 fn a_count_on_r_does_not_change_more_than_this_field() {
-    check(&[FULL, FULL], "3rk", &["C-4 70 vol:10 pan:20 cut:30", FULL]);
+    check(&[FULL, FULL], "3rj", &["B-3 70 vol:10 pan:20 cut:30", FULL]);
 }
 
 #[test]
@@ -957,8 +957,8 @@ fn s_clears_the_field_and_starts_insert_there() {
     assert_eq!(app.mode, Mode::Insert);
     assert_eq!(app.cursor.step, 0);
     // A note typed in Insert takes the current velocity, as it always does.
-    keys(&mut app, "k");
-    assert_eq!(steps(&app)[0], "C-4 64 vol:10 pan:20 cut:30");
+    keys(&mut app, "j");
+    assert_eq!(steps(&app)[0], "B-3 64 vol:10 pan:20 cut:30");
     assert_eq!(app.cursor.step, 0, "Insert stays put as usual");
     keys(&mut app, "<Esc>uu");
     assert_eq!(steps(&app)[0], FULL);
@@ -1006,8 +1006,8 @@ fn a_count_on_s_clears_only_this_field() {
 fn dot_does_not_repeat_s() {
     check(
         &[FULL, FULL],
-        "rks<Esc>j.",
-        &["--- 70 vol:10 pan:20 cut:30", "C-4 70 vol:10 pan:20 cut:30"],
+        "rjs<Esc>j.",
+        &["--- 70 vol:10 pan:20 cut:30", "B-3 70 vol:10 pan:20 cut:30"],
     );
 }
 
