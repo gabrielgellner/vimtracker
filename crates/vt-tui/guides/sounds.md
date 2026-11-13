@@ -644,9 +644,9 @@ the Digitakt's and the Octatrack's samples and Ableton's Simpler have them:
 
 | Layer | Where | For |
 |---|---|---|
-| The sample's `Tune` and `Cents` | The sampler's Machine, the sample page, `:sample tune` | Tuning it once |
-| The note | Each row | Playing it, up and down the keys |
-| The track's `Pitch` | The Play device, `PTCH` on a step, a mod slot | Transposing and moving it |
+| Its `Tune`, `Cents` | The Machine, the sample page | Tuning it once |
+| The note | Each row | Playing it up and down |
+| The track's `Pitch` | Play, `PTCH`, a mod slot | Transposing, moving it |
 
 Tune a sample once, so `C-3` is in tune with the song: a kick tuned to the key, or
 a vocal chop a few cents flat brought up. The tune is kept with the sample in the

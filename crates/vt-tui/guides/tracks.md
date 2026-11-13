@@ -56,7 +56,7 @@ and its settings in up to four columns of three.
 
 | Device | Title | Settings, column by column |
 |---|---|---|
-| Machine | Machine, type | The machine's own, and a sampler's sample's `Tune` `Cents` |
+| Machine | Machine, type | The machine's own; a sample's `Tune` `Cents` |
 | Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; |
