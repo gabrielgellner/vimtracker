@@ -888,14 +888,24 @@ impl Machine {
         }
     }
 
-    /// Every machine, in the order a list shows them: Sampler, then each Plaits voice.
+    /// Every machine, in the order the machine list, its `-` and `=` and the Roto's knob go
+    /// through them: `Sampler` first, as the most used, then the voices kind by kind
+    /// (decision 265).
     pub const ALL: [Self; 1 + SynthVoice::ALL.len()] = {
         let mut all = [Self::Sampler; 1 + SynthVoice::ALL.len()];
-        let mut at = 0;
-        while at < SynthVoice::ALL.len() {
-            all[at + 1] = Self::Plaits(SynthVoice::ALL[at]);
-            at += 1;
+        let mut at = 1;
+        let mut kind = 0;
+        while kind < SynthVoice::KINDS.len() {
+            let voices = SynthVoice::KINDS[kind].1;
+            let mut voice = 0;
+            while voice < voices.len() {
+                all[at] = Self::Plaits(voices[voice]);
+                at += 1;
+                voice += 1;
+            }
+            kind += 1;
         }
+        assert!(at == all.len(), "every voice is in one kind");
         all
     };
 
@@ -915,12 +925,12 @@ impl Machine {
         }
     }
 
-    /// The category a list shows it under, or none for the top of the list: Braids' models are
-    /// under `Macro`, as the M8's Macrosynth plays them (decision 212).
+    /// The category a list shows it under, or none for the top of the list: `Sampler` is at the
+    /// top, and each voice is under its kind (decision 265).
     pub fn category(self) -> &'static str {
         match self {
-            Self::Plaits(voice) if voice.is_macro() => "Macro",
-            _ => "",
+            Self::Sampler => "",
+            Self::Plaits(voice) => voice.kind(),
         }
     }
 
@@ -1131,7 +1141,8 @@ pub enum SynthVoice {
 }
 
 impl SynthVoice {
-    /// Every voice, in the order a list shows them.
+    /// Every voice, in the order they came. The machine list shows them by kind, as
+    /// `Machine::ALL` has them.
     pub const ALL: [Self; 49] = [
         Self::VirtualAnalog,
         Self::VirtualAnalogVcf,
@@ -1183,6 +1194,101 @@ impl SynthVoice {
         Self::GrainCloud,
         Self::Modem,
     ];
+
+    /// The kinds the machine list groups the voices under, in its order, each with its voices
+    /// in theirs (decision 265).
+    pub const KINDS: [(&'static str, &'static [Self]); 8] = [
+        (
+            "Analog",
+            &[
+                Self::VirtualAnalog,
+                Self::VirtualAnalogVcf,
+                Self::Acid,
+                Self::Supersaw,
+                Self::Chiptune,
+                Self::CSaw,
+                Self::Morph,
+                Self::SawSquare,
+                Self::HardSync,
+                Self::Triple,
+            ],
+        ),
+        (
+            "FM",
+            &[
+                Self::Fm,
+                Self::SixOp,
+                Self::FourOp,
+                Self::FeedbackFm,
+                Self::ChaoticFm,
+            ],
+        ),
+        (
+            "Digital",
+            &[
+                Self::PhaseDistortion,
+                Self::Waveshaping,
+                Self::Additive,
+                Self::Ring,
+                Self::SawComb,
+                Self::Toy,
+                Self::ZFilter,
+            ],
+        ),
+        (
+            "Wavetable",
+            &[
+                Self::Wavetable,
+                Self::WaveTerrain,
+                Self::WaveMap,
+                Self::WaveLine,
+                Self::Paraphonic,
+            ],
+        ),
+        (
+            "Physical",
+            &[
+                Self::String,
+                Self::Modal,
+                Self::Bowed,
+                Self::Blown,
+                Self::Fluted,
+                Self::Bell,
+                Self::Drum,
+            ],
+        ),
+        (
+            "Voice",
+            &[
+                Self::Formant,
+                Self::Speech,
+                Self::Chord,
+                Self::Vosim,
+                Self::Fof,
+            ],
+        ),
+        (
+            "Noise",
+            &[
+                Self::Dust,
+                Self::Noise,
+                Self::Swarm,
+                Self::TwinPeaks,
+                Self::Clocked,
+                Self::GrainCloud,
+                Self::Modem,
+            ],
+        ),
+        ("Drums", &[Self::Kick, Self::Snare, Self::Hat]),
+    ];
+
+    /// The kind the machine list shows it under.
+    pub fn kind(self) -> &'static str {
+        Self::KINDS
+            .iter()
+            .find(|(_, voices)| voices.contains(&self))
+            .map_or("", |(kind, _)| kind)
+    }
 
     /// The name on screen.
     pub fn name(self) -> &'static str {
@@ -1343,7 +1449,7 @@ impl SynthVoice {
         )
     }
 
-    /// Whether it's one of Braids' models, which the machine picker lists under `Macro`.
+    /// Whether it's one of Braids' models, rather than Plaits' or our own.
     pub fn is_macro(self) -> bool {
         matches!(
             self,
@@ -2434,6 +2540,33 @@ pub fn lowest_unused<T>(items: &BTreeMap<u32, T>) -> u32 {
 mod tests {
     use super::*;
     use crate::insert::{Distort, DistortType};
+
+    #[test]
+    fn the_machine_list_starts_with_the_sampler_then_each_voice_once_under_its_kind() {
+        // The sampler is the most used, so it comes first, at the top with no heading.
+        assert_eq!(Machine::ALL[0], Machine::Sampler);
+        assert_eq!(Machine::Sampler.category(), "");
+        for voice in SynthVoice::ALL {
+            let kinds: Vec<&str> = SynthVoice::KINDS
+                .iter()
+                .flat_map(|(kind, voices)| voices.iter().filter(|v| **v == voice).map(|_| *kind))
+                .collect();
+            assert_eq!(kinds.len(), 1, "{voice:?} is in {kinds:?}");
+            assert_eq!(Machine::Plaits(voice).category(), kinds[0]);
+            let listed = Machine::ALL
+                .iter()
+                .filter(|m| **m == Machine::Plaits(voice));
+            assert_eq!(listed.count(), 1, "{voice:?}");
+        }
+        // Each kind's voices are next to each other, in the kinds' order, as the picker wants.
+        let categories: Vec<&str> = Machine::ALL[1..].iter().map(|m| m.category()).collect();
+        let headings: Vec<&str> = categories
+            .chunk_by(|a, b| a == b)
+            .map(|run| run[0])
+            .collect();
+        let kinds: Vec<&str> = SynthVoice::KINDS.iter().map(|(kind, _)| *kind).collect();
+        assert_eq!(headings, kinds);
+    }
 
     #[test]
     fn every_machines_grid_places_each_of_its_settings_once_with_its_type_in_the_title() {
