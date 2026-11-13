@@ -598,14 +598,14 @@ passed over where they run out.
 
 | Snake | Plays, in a phrase of 16 |
 |---|---|
-| 1 `zigzag` | along a line, back along the next: 1 2 3 4 8 7 6 5 9 … |
+| 1 `zigzag` | along a line, back along the next: 1 2 3 4 8 7 … |
 | 2 `columns` | down each column: 1 5 9 13 2 6 10 14 3 … |
-| 3 `column-zigzag` | down a column, up the next: 1 5 9 13 14 10 6 2 3 … |
-| 4 `diagonal` | along the diagonals: 1 2 5 3 6 9 4 7 10 13 8 … |
-| 5 `diagonal-zigzag` | the diagonals, turning: 1 2 5 9 6 3 4 7 10 13 14 … |
-| 6 `spiral` | round the edge and in: 1 2 3 4 8 12 16 15 14 13 9 5 6 7 11 10 |
-| 7 `spiral-out` | the spiral backwards, from the middle out: 10 11 7 6 … |
-| 8 `checker` | a chessboard's black squares, then its white: 1 3 6 8 9 11 … |
+| 3 `column-zigzag` | down a column, up the next: 1 5 9 13 14 10 … |
+| 4 `diagonal` | along the diagonals: 1 2 5 3 6 9 4 7 … |
+| 5 `diagonal-zigzag` | the diagonals, turning: 1 2 5 9 6 3 4 7 … |
+| 6 `spiral` | round the edge and in: 1 2 3 4 8 12 16 15 … |
+| 7 `spiral-out` | the spiral backwards: 10 11 7 6 5 9 13 … |
+| 8 `checker` | a chessboard's black, then white: 1 3 6 8 9 … |
 
 `:order cartesian 1 3` runs two counters: X moves along a line every row,
 and Y down the lines every 3 rows, and the row played is the one at X and Y,
