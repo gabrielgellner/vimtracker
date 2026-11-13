@@ -16,6 +16,7 @@ use crate::generator::{Generator, Span};
 use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
 use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
+use crate::macros::{MACRO_NAME_LENGTH, MACROS, MacroMap, MacroTarget, valid_name};
 use crate::modulation::ModSlot;
 use crate::names::is_project_name;
 use crate::order::Order;
@@ -225,6 +226,30 @@ pub enum Action {
         track: usize,
         slot: usize,
         modulator: ModSlot,
+    },
+    /// Turn one of a track's macros, from `0000` to `FF00` (decision 282).
+    SetMacro {
+        track: usize,
+        at: usize,
+        value: u16,
+    },
+    /// Put a setting on one of a track's macros, or change its mapping there. A setting is on one
+    /// macro at most, so it comes off any other.
+    MapMacro {
+        track: usize,
+        at: usize,
+        map: MacroMap,
+    },
+    /// Take a setting off whichever of a track's macros holds it.
+    UnmapMacro {
+        track: usize,
+        target: MacroTarget,
+    },
+    /// Name one of a track's macros, or give it back its first mapping's name with `None`.
+    NameMacro {
+        track: usize,
+        at: usize,
+        name: Option<String>,
     },
     /// Put an effect, or nothing, in one of a track's slots.
     SetInsert {
@@ -631,6 +656,10 @@ pub enum EditError {
     #[error("an arpeggio climbs from 1 to {MOST_OCTAVES} octaves")]
     Arpeggio,
     #[error(
+        "a track has macros 1 to {MACROS}, each turning settings within their range, never another macro, and named with up to {MACRO_NAME_LENGTH} plain characters"
+    )]
+    Macro,
+    #[error(
         "a project's name is up to {MAX_PROJECT_NAME_CHARS} characters, with no / and not starting with a dot"
     )]
     SongName,
@@ -998,6 +1027,45 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .mods
                 .get_mut(*slot)
                 .ok_or(EditError::Mod)? = *modulator;
+        }
+        Action::SetMacro { track, at, value } => {
+            let held = track_mut(&mut next, *track)?
+                .macros
+                .get_mut(*at)
+                .ok_or(EditError::Macro)?;
+            held.value = (*value).min(0xFF00);
+        }
+        Action::MapMacro { track, at, map } => {
+            if *at >= MACROS || !map.in_range() {
+                return Err(EditError::Macro);
+            }
+            let macros = &mut track_mut(&mut next, *track)?.macros;
+            for (place, held) in macros.iter_mut().enumerate() {
+                match held.map_of(map.target) {
+                    Some(found) if place == *at => held.maps[found] = *map,
+                    Some(found) => {
+                        held.maps.remove(found);
+                    }
+                    None if place == *at => held.maps.push(*map),
+                    None => {}
+                }
+            }
+        }
+        Action::UnmapMacro { track, target } => {
+            for held in &mut track_mut(&mut next, *track)?.macros {
+                held.maps.retain(|map| map.target != *target);
+            }
+        }
+        Action::NameMacro { track, at, name } => {
+            if name.as_deref().is_some_and(|name| !valid_name(name)) {
+                return Err(EditError::Macro);
+            }
+            track_mut(&mut next, *track)?
+                .macros
+                .get_mut(*at)
+                .ok_or(EditError::Macro)?
+                .name
+                .clone_from(name);
         }
         Action::SetReset { section, reset } => {
             if *reset == Some(0) {

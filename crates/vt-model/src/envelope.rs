@@ -7,6 +7,27 @@ use crate::constants::MAX_ENVELOPE_MS;
 /// The longest an AHD's hold can be timed, in milliseconds.
 pub const MAX_HOLD_MS: u16 = 2000;
 
+/// An envelope's time in ms for a value on the registry's `00` to `FF` scale, as a macro or
+/// modulation moves one: none at `00`, then from 1 ms at `01` to [`MAX_ENVELOPE_MS`] at `FF`,
+/// evenly in ratio, so each step is about 3.6 % longer than the last (decision 283).
+pub fn time_at(value: f32) -> u16 {
+    if value < 1.0 {
+        return 0;
+    }
+    let along = (value.min(255.0) - 1.0) / 254.0;
+    f32::from(MAX_ENVELOPE_MS).powf(along).round() as u16
+}
+
+/// Where a time in ms is on the registry's scale, with a coarse byte and a fine one, nearest to
+/// what [`time_at`] gives back.
+pub fn time_value(ms: u16) -> u16 {
+    if ms == 0 {
+        return 0;
+    }
+    let along = f32::from(ms.min(MAX_ENVELOPE_MS)).ln() / f32::from(MAX_ENVELOPE_MS).ln();
+    ((1.0 + along * 254.0) * 256.0).round() as u16
+}
+
 /// How far `Exp`'s decays and releases bend: the same as Mutable Instruments' Peaks.
 const FALL_RATE: f32 = 4.0;
 /// How far `Snap`'s bend, twice as far, so they fall about twice as fast and then have a longer
@@ -655,6 +676,20 @@ mod tests {
     use super::*;
 
     const RATE: u32 = 48_000;
+
+    #[test]
+    fn a_time_comes_back_from_the_registrys_scale_to_within_a_ms_in_700() {
+        assert_eq!(time_at(0.0), 0);
+        assert_eq!(time_at(1.0), 1);
+        assert_eq!(time_at(255.0), MAX_ENVELOPE_MS);
+        for ms in 0..=MAX_ENVELOPE_MS {
+            let back = time_at(f32::from(time_value(ms)) / 256.0);
+            assert!(back.abs_diff(ms) <= ms / 700, "{ms} came back as {back}");
+            if ms <= 1000 {
+                assert_eq!(back, ms, "exact up to a second");
+            }
+        }
+    }
 
     fn adsr(attack_ms: u16, decay_ms: u16, sustain: u8, release_ms: u16) -> Adsr {
         Adsr {

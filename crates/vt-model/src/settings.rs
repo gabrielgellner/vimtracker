@@ -3,7 +3,10 @@
 //! long name for finding it, a short label for the grid, its kind and its default. A setting's
 //! place in the table is its [`SettingId`], fixed when the program is built.
 
+use crate::accumulator::MOST_DEGREES;
+use crate::arpeggio::{ArpRate, MOST_OCTAVES};
 use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
+use crate::envelope::time_at;
 use crate::groove::GROOVE_CHOICES;
 use crate::insert::{
     ALGORITHM_NAMES, CHORUS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS, DISTORT_PARAMS,
@@ -16,11 +19,13 @@ use crate::insert::{
     limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms, repeat_decay_db,
     shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db, vowel_blend,
 };
+use crate::macros::MACROS;
 use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
 use crate::patch_names::PATCH_NAMES;
 use crate::song::{DEFAULT_ACCENT, FILTER_MODE_NAMES, FULL_GATE, SynthVoice};
 use crate::speed::{SPEED_NAMES, Speed};
 use crate::step::{FxCommand, MAX_VELOCITY};
+use crate::steps::{MAX_MUTATE, STEPS};
 
 /// The most settings a machine has: `4-op`'s, four it shares and ten for each of its four
 /// operators (decision 234).
@@ -119,6 +124,8 @@ pub enum Units {
     VelocityDelta,
     /// How long a tied note takes to glide to the next, as [`glide_ms`] gives it, or off.
     Glide,
+    /// An envelope's time, as [`time_at`] gives it.
+    EnvelopeTime,
 }
 
 /// The acid voice's cutoff at either end of its range, in Hz, where its filter resonates.
@@ -365,6 +372,7 @@ impl Kind {
                 Units::Glide => {
                     glide_ms(coarse as f32).map_or_else(|| "Off".to_owned(), milliseconds)
                 }
+                Units::EnvelopeTime => format!("{} ms", time_at(coarse as f32)),
                 Units::Degrees => format!("{:.0}°", coarse / 255.0 * 360.0),
                 Units::Semitones => {
                     let cents = ((coarse - 128.0) * 100.0).round() as i32;
@@ -1695,6 +1703,174 @@ const SAMPLER: [Entry; 5] = [
     },
 ];
 
+/// A macro, the same entry for all eight but its name: where it's turned, from `00` to `FF` with a
+/// fine part, as a cutoff is (decision 282). With its number after it, as `MAC1`.
+const MACRO: Entry = Entry {
+    key: "macro",
+    name: "Macro",
+    label: Some("MAC"),
+    kind: Kind::Continuous {
+        top: 0xFF,
+        middle: false,
+        units: Units::Percent,
+    },
+    default: 0,
+};
+
+/// What each macro is called in lists before it's named.
+const MACRO_NAMES: [&str; MACROS] = [
+    "Macro 1", "Macro 2", "Macro 3", "Macro 4", "Macro 5", "Macro 6", "Macro 7", "Macro 8",
+];
+
+/// Whole numbers from 1, for a count chosen from a list, as Steps' `Length` is.
+const COUNTS: [&str; MOST_DEGREES as usize] = [
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17",
+    "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28",
+];
+
+/// An envelope's time, unlabelled, so only modulation and macros move it.
+const fn time(key: &'static str, name: &'static str) -> Entry {
+    Entry {
+        key,
+        name,
+        label: None,
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::EnvelopeTime,
+        },
+        default: 0,
+    }
+}
+
+/// A percentage from none to all, unlabelled, as an envelope's sustain is.
+const fn percentage(key: &'static str, name: &'static str) -> Entry {
+    Entry {
+        key,
+        name,
+        label: None,
+        kind: Kind::Continuous {
+            top: 100,
+            middle: false,
+            units: Units::Percent,
+        },
+        default: 0,
+    }
+}
+
+/// A mod slot's type's own settings that a macro or modulation can move, by what they are, so an
+/// ADSR's, an AHD's and an LPG's `Attack` are one: unlabelled, as steps can't lock them (decision
+/// 283). Each is on the slot only while its type has it.
+const MOD_OWN: [Entry; 9] = [
+    time("attack", "Attack"),
+    time("decay", "Decay"),
+    percentage("sustain", "Sustain"),
+    time("release", "Release"),
+    percentage("body", "Body"),
+    Entry {
+        key: "colour",
+        name: "Colour",
+        label: None,
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::Percent,
+        },
+        default: 0,
+    },
+    Entry {
+        key: "length",
+        name: "Length",
+        label: None,
+        kind: Kind::Stepped {
+            choices: COUNTS.split_at(STEPS).0,
+            wraps: false,
+        },
+        default: 0,
+    },
+    Entry {
+        key: "mutate",
+        name: "Mutate",
+        label: None,
+        kind: Kind::Continuous {
+            top: MAX_MUTATE,
+            middle: false,
+            units: Units::Percent,
+        },
+        default: 0,
+    },
+    Entry {
+        key: "smooth",
+        name: "Smooth",
+        label: None,
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: true,
+            units: Units::Depth,
+        },
+        default: 0x80,
+    },
+];
+
+/// The accumulator's settings a macro or modulation can move: how far up and down it goes.
+const ACCUMULATION: [Entry; 2] = [
+    Entry {
+        key: "up",
+        name: "Up",
+        label: None,
+        kind: Kind::Stepped {
+            choices: &COUNTS,
+            wraps: false,
+        },
+        default: 0,
+    },
+    Entry {
+        key: "down",
+        name: "Down",
+        label: None,
+        kind: Kind::Stepped {
+            choices: &COUNTS,
+            wraps: false,
+        },
+        default: 0,
+    },
+];
+
+/// The arpeggio's rates' names, in [`ArpRate::ALL`]'s order.
+const ARP_RATE_NAMES: [&str; ArpRate::ALL.len()] = {
+    let mut names = [""; ArpRate::ALL.len()];
+    let mut at = 0;
+    while at < names.len() {
+        names[at] = ArpRate::ALL[at].name();
+        at += 1;
+    }
+    names
+};
+
+/// The arpeggio's settings a macro or modulation can move: how fast and over how many octaves.
+const ARPEGGIO: [Entry; 2] = [
+    Entry {
+        key: "rate",
+        name: "Rate",
+        label: None,
+        kind: Kind::Stepped {
+            choices: &ARP_RATE_NAMES,
+            wraps: false,
+        },
+        default: 0,
+    },
+    Entry {
+        key: "octaves",
+        name: "Octaves",
+        label: None,
+        kind: Kind::Stepped {
+            choices: COUNTS.split_at(MOST_OCTAVES as usize).0,
+            wraps: false,
+        },
+        default: 0,
+    },
+];
+
 const fn voices_size() -> usize {
     let mut total = 0;
     let mut at = 0;
@@ -2088,6 +2264,10 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
+const MACROS_START: usize = SAMPLER_START + SAMPLER.len();
+const MOD_OWN_START: usize = MACROS_START + MACROS;
+const ACCUMULATION_START: usize = MOD_OWN_START + MOD_SLOTS * MOD_OWN.len();
+const ARPEGGIO_START: usize = ACCUMULATION_START + ACCUMULATION.len();
 
 /// What a setting belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2104,6 +2284,14 @@ pub enum Owner {
     Bypass(usize),
     /// The sampler machine's.
     Sampler,
+    /// One of the track's eight macros, by its place (decision 282).
+    Macro(usize),
+    /// One of a mod slot's type's own settings, by the slot's place, which only macros and
+    /// modulation move.
+    ModOwn(usize),
+    /// The accumulator's and the arpeggio's, which only macros and modulation move.
+    Accumulation,
+    Arpeggio,
 }
 
 /// A setting's place in the table.
@@ -2164,7 +2352,7 @@ impl SettingId {
     pub const PLAY: Self = Self(SAMPLER_START as u16 + 4);
 
     /// How many settings there are.
-    pub const COUNT: usize = SAMPLER_START + SAMPLER.len();
+    pub const COUNT: usize = ARPEGGIO_START + ARPEGGIO.len();
 
     /// Every setting, in the table's order.
     pub fn all() -> impl Iterator<Item = Self> {
@@ -2228,6 +2416,54 @@ impl SettingId {
         }
     }
 
+    /// One of the track's macros, by its place, from 0 to 7.
+    pub const fn macro_at(at: usize) -> Option<Self> {
+        if at < MACROS {
+            Some(Self((MACROS_START + at) as u16))
+        } else {
+            None
+        }
+    }
+
+    /// One of a mod slot's type's own settings, by its place among them: 0 is `Attack`.
+    pub const fn mod_own(slot: usize, setting: usize) -> Option<Self> {
+        if slot < MOD_SLOTS && setting < MOD_OWN.len() {
+            Some(Self(
+                (MOD_OWN_START + slot * MOD_OWN.len() + setting) as u16,
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// One of the accumulator's: 0 is `Up`, 1 is `Down`.
+    pub const fn accumulation(setting: usize) -> Option<Self> {
+        if setting < ACCUMULATION.len() {
+            Some(Self((ACCUMULATION_START + setting) as u16))
+        } else {
+            None
+        }
+    }
+
+    /// One of the arpeggio's: 0 is `Rate`, 1 is `Octaves`.
+    pub const fn arpeggio(setting: usize) -> Option<Self> {
+        if setting < ARPEGGIO.len() {
+            Some(Self((ARPEGGIO_START + setting) as u16))
+        } else {
+            None
+        }
+    }
+
+    /// Which macro it is, if it's one.
+    pub const fn macro_place(self) -> Option<usize> {
+        let at = self.index();
+        if at >= MACROS_START && at < MACROS_START + MACROS {
+            Some(at - MACROS_START)
+        } else {
+            None
+        }
+    }
+
     /// A slot's bypass: `00` heard, `01` switched out.
     pub const fn bypass(slot: usize) -> Option<Self> {
         if slot < INSERTS {
@@ -2240,6 +2476,22 @@ impl SettingId {
     /// What it belongs to, and its place among that owner's settings.
     pub fn owner(self) -> (Owner, usize) {
         let at = self.index();
+        if at >= ARPEGGIO_START {
+            return (Owner::Arpeggio, at - ARPEGGIO_START);
+        }
+        if at >= ACCUMULATION_START {
+            return (Owner::Accumulation, at - ACCUMULATION_START);
+        }
+        if at >= MOD_OWN_START {
+            let within = at - MOD_OWN_START;
+            return (
+                Owner::ModOwn(within / MOD_OWN.len()),
+                within % MOD_OWN.len(),
+            );
+        }
+        if at >= MACROS_START {
+            return (Owner::Macro(at - MACROS_START), 0);
+        }
         if at >= SAMPLER_START {
             return (Owner::Sampler, at - SAMPLER_START);
         }
@@ -2281,6 +2533,13 @@ impl SettingId {
             (Owner::Mod(_), at) => MOD[at],
             (Owner::Bypass(_), at) => SLOT_OWN[at],
             (Owner::Sampler, at) => SAMPLER[at],
+            (Owner::Macro(at), _) => Entry {
+                name: MACRO_NAMES[at],
+                ..MACRO
+            },
+            (Owner::ModOwn(_), at) => MOD_OWN[at],
+            (Owner::Accumulation, at) => ACCUMULATION[at],
+            (Owner::Arpeggio, at) => ARPEGGIO[at],
         }
     }
 
@@ -2295,6 +2554,10 @@ impl SettingId {
             Owner::Mod(slot) => format!("mod{}.{key}", slot + 1),
             Owner::Bypass(slot) => format!("{}.{key}", slot + 1),
             Owner::Sampler => format!("sampler.{key}"),
+            Owner::Macro(at) => format!("{key}{}", at + 1),
+            Owner::ModOwn(slot) => format!("mod{}.{key}", slot + 1),
+            Owner::Accumulation => format!("acu.{key}"),
+            Owner::Arpeggio => format!("arp.{key}"),
         }
     }
 
@@ -2309,7 +2572,7 @@ impl SettingId {
         let label = self.entry().label?;
         Some(match self.owner().0 {
             Owner::Slot { slot, .. } | Owner::Bypass(slot) => format!("{}{label}", slot + 1),
-            Owner::Mod(slot) => format!("{label}{}", slot + 1),
+            Owner::Mod(slot) | Owner::Macro(slot) => format!("{label}{}", slot + 1),
             _ => label.to_owned(),
         })
     }
@@ -2328,6 +2591,10 @@ impl SettingId {
             (Owner::Mod(slot), _) => format!("Mod {}", slot + 1),
             (Owner::Bypass(slot), _) => format!("FX {}", slot + 1),
             (Owner::Sampler, _) => "Sampler".to_owned(),
+            (Owner::Macro(_), _) => "Macros".to_owned(),
+            (Owner::ModOwn(slot), _) => format!("Mod {}", slot + 1),
+            (Owner::Accumulation, _) => "Accumulator".to_owned(),
+            (Owner::Arpeggio, _) => "Arpeggio".to_owned(),
         }
     }
 }
@@ -2380,6 +2647,10 @@ mod tests {
                 (Owner::Mod(slot), at) => SettingId::modulator(slot, at),
                 (Owner::Bypass(slot), _) => SettingId::bypass(slot),
                 (Owner::Sampler, at) => SettingId::sampler(at),
+                (Owner::Macro(at), _) => SettingId::macro_at(at),
+                (Owner::ModOwn(slot), at) => SettingId::mod_own(slot, at),
+                (Owner::Accumulation, at) => SettingId::accumulation(at),
+                (Owner::Arpeggio, at) => SettingId::arpeggio(at),
             };
             assert_eq!(back, Some(id), "{}", id.key());
         }
@@ -2462,7 +2733,7 @@ mod tests {
                     assert!(label.starts_with(&(slot + 1).to_string()), "{label}");
                     &label[1..]
                 }
-                Owner::Mod(slot) => {
+                Owner::Mod(slot) | Owner::Macro(slot) => {
                     assert!(label.ends_with(&(slot + 1).to_string()), "{label}");
                     &label[..label.len() - 1]
                 }
@@ -2500,6 +2771,7 @@ mod tests {
                 .chain(labels((0..MOD_SLOTS).flat_map(|slot| {
                     (0..MOD.len()).filter_map(move |at| SettingId::modulator(slot, at))
                 })))
+                .chain(labels(SettingId::macros()))
                 .chain(EVENTS.map(|event| event.name().to_owned()))
         };
         for voice in SynthVoice::ALL {
