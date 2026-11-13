@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::KeyCode;
 use ratatui::style::Color;
@@ -18,6 +18,11 @@ use vt_model::song::{Phrase, Song};
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
 use vt_tui::input::keys::{Key, parse_sequence};
+use vt_tui::input::mode::View;
+
+mod recording;
+#[allow(unused_imports)]
+pub use recording::*;
 
 pub fn app() -> (App, Realtime) {
     let song = Song::new(2);
@@ -480,4 +485,248 @@ pub fn device_at(lines: &[String], identity: &str) -> (usize, usize) {
 /// A line from a column on, counted in characters.
 pub fn from_column(line: &str, column: usize) -> String {
     line.chars().skip(column).collect()
+}
+
+/// The explorer's rows as they're shown: each indented by its depth, a folder with its arrow, and
+/// a folder at the top by why it's there.
+pub fn explorer_rows(app: &App) -> Vec<String> {
+    use vt_tui::input::picker::Row;
+    let picker = app.picker.as_ref().expect("the explorer is open");
+    picker
+        .rows()
+        .iter()
+        .map(|row| {
+            let Row::Item(item) = row else {
+                return String::new();
+            };
+            let arrow = match picker.folder_open(*item) {
+                Some(true) => "v ",
+                Some(false) => "> ",
+                None => "  ",
+            };
+            let depth = picker.depth(*item);
+            let shown = picker.item(*item);
+            let label = if depth == 0 && !shown.meaning.is_empty() {
+                &shown.meaning
+            } else {
+                &shown.label
+            };
+            format!("{}{arrow}{label}", "  ".repeat(depth))
+        })
+        .collect()
+}
+
+/// The folders at the top of the explorer: each one's name and why it's there.
+pub fn explorer_roots(app: &App) -> Vec<(String, String)> {
+    let picker = app.picker.as_ref().expect("the explorer is open");
+    picker
+        .items()
+        .iter()
+        .enumerate()
+        .filter(|(at, _)| picker.depth(*at) == 0)
+        .map(|(_, item)| (item.label.clone(), item.meaning.clone()))
+        .collect()
+}
+
+pub fn notes(app: &App) -> Vec<Note> {
+    let id = app.phrase_id().unwrap();
+    app.song().tracks[app.cursor.track].phrases[&id]
+        .steps()
+        .iter()
+        .map(|s| s.note)
+        .collect()
+}
+
+/// Turn auto-jump on with a grid of one row, so entries go down the rows one by one.
+pub fn entering_steps_down(app: &mut App) {
+    command(app, "set skip=1");
+    app.auto_jump = true;
+}
+
+/// Press a key now, and let it go after this many milliseconds.
+pub fn hold_for(app: &mut App, c: char, milliseconds: u64) {
+    let now = Instant::now();
+    app.key(Key::char(c), now);
+    app.key_released(Key::char(c), now + Duration::from_millis(milliseconds));
+}
+
+pub fn labelled_kit() -> PathBuf {
+    let kit = kit_file();
+    std::fs::write(
+        &kit,
+        r#"(sounds: [
+            (label: "BD", path: "drums/kick.wav"),
+            (label: "CH", path: "drums/hat.wav"),
+            (path: "drums/snare.wav"),
+        ])"#,
+    )
+    .unwrap();
+    kit
+}
+
+/// A row of the phrase view as text, up to the end of its number.
+pub fn row_number_at(buffer: &ratatui::buffer::Buffer, y: u16) -> String {
+    (3..6).map(|x| buffer[(x, y)].symbol()).collect()
+}
+
+/// Another track's column on one row of steps: its marker and note, and its colour.
+/// A column of the overview past the track being edited, which is the overview's first here.
+pub fn beside(buffer: &ratatui::buffer::Buffer, column: u16, row: u16) -> (String, Color) {
+    let x = 72 + column * 5;
+    let text = (x..x + 4).map(|x| buffer[(x, row + 2)].symbol()).collect();
+    (text, buffer[(x + 1, row + 2)].fg)
+}
+
+/// The mixer's text, drawn this many columns wide.
+pub fn mixer_text_at(app: &App, width: u16) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(width, 17);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::mixer::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..17)
+        .map(|y| {
+            (0..width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect()
+}
+
+pub fn song_text(app: &App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(80, 12);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::song::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..12)
+        .map(|y| (0..80).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+        .collect()
+}
+
+/// Run enough audio for reports and a step or more to arrive.
+/// Have each track report the chain of the row being edited, for setting a playhead by hand.
+pub fn on_the_row_being_edited(app: &mut App) {
+    let chains = app.section_here().unwrap().chains.clone();
+    for (jam, chain) in app.jam.iter_mut().zip(chains) {
+        jam.chain = chain;
+    }
+}
+
+pub fn written_notes(app: &App) -> Vec<Note> {
+    app.phrase_here()
+        .unwrap()
+        .steps()
+        .iter()
+        .map(|step| step.note)
+        .filter(|note| *note != Note::Empty)
+        .collect()
+}
+
+/// The colour of the rule under a row of the phrase view's grid, at its first column, if it has one.
+pub fn rule_under(buffer: &ratatui::buffer::Buffer, y: u16) -> Option<ratatui::style::Color> {
+    let cell = &buffer[(9, y)];
+    cell.modifier
+        .contains(ratatui::style::Modifier::UNDERLINED)
+        .then_some(cell.underline_color)
+}
+
+/// An app on the audio page, playing through the first of two devices.
+pub fn on_the_audio_page() -> (App, Realtime) {
+    use vt_tui::audio::DeviceInfo;
+    let (mut app, realtime) = app();
+    app.audio.devices = vec![
+        DeviceInfo {
+            id: "coreaudio:speakers".to_owned(),
+            name: "Speakers".to_owned(),
+            rates: vec![44_100, 48_000],
+            buffers: vec![64, 128, 256, 512],
+            default: true,
+        },
+        DeviceInfo {
+            id: "coreaudio:headset".to_owned(),
+            name: "Headset".to_owned(),
+            rates: vec![44_100],
+            buffers: vec![512, 1024],
+            default: false,
+        },
+    ];
+    app.audio.device = "Speakers".to_owned();
+    app.audio.buffer = Some(512);
+    app.audio.running = true;
+    press(&mut app, " 7");
+    assert_eq!(app.view, View::Audio);
+    assert!(app.audio.refresh, "it lists the devices afresh");
+    (app, realtime)
+}
+
+/// The screen's rows as text, at the author's 163 by 42.
+pub fn screen_rows(app: &mut App) -> Vec<String> {
+    let backend = ratatui::backend::TestBackend::new(163, 42);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_screen(frame, app, None, Instant::now()))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..42)
+        .map(|y| (0..163).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect()
+}
+
+/// The picker as text, drawn on a screen this big.
+pub fn picker_text(app: &App, width: u16, height: u16) -> String {
+    let backend = ratatui::backend::TestBackend::new(width, height);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    let mut picker = app.picker.clone().unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::picker::draw(frame, frame.area(), &mut picker))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..height)
+        .map(|y| {
+            (0..width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                + "\n"
+        })
+        .collect()
+}
+
+/// Put the project page's cursor on a setting.
+pub fn project_cursor_on(app: &mut App, control: vt_tui::project_page::ProjectControl) {
+    use vt_tui::project_page::PROJECT_ROWS;
+    let (row, field) = PROJECT_ROWS
+        .iter()
+        .enumerate()
+        .find_map(|(row, controls)| {
+            let field = controls.iter().position(|found| *found == control)?;
+            Some((row, field))
+        })
+        .expect("the page has it");
+    tap(app, "gg");
+    tap(app, "0");
+    for _ in 0..row {
+        tap(app, "j");
+    }
+    for _ in 0..field {
+        tap(app, "l");
+    }
+    // The tempo's fine part is a stop of its own.
+    if field > 0 && app.project_fine {
+        tap(app, "l");
+    }
+    assert_eq!(app.project_control(), control);
+}
+
+/// What's drawn, a line at a time.
+pub fn drawn_lines(buffer: &ratatui::buffer::Buffer) -> Vec<String> {
+    (0..buffer.area.height)
+        .map(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect()
+        })
+        .collect()
 }
