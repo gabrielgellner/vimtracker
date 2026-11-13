@@ -95,6 +95,9 @@ what the figure would be at full speed:
 The system speeds the thread up as the work grows, so the leaf is nothing to worry
 about while `late` and `xruns` stay at `0`.
 
+Stopped, a track with nothing sounding and nothing moving isn't worked out at all, so the
+figure is low; it rises for as long as a tail rings out or a note is previewed.
+
 Once audio has dropped out, the right of the status line shows a red `󰀦` and how many
 times, `late` and `xruns` together, until the device is opened again.
 

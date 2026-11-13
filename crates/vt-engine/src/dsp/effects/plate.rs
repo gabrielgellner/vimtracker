@@ -267,9 +267,7 @@ impl Plate {
     /// frame rather than by what the plate has done, so one that's slept is where it would have
     /// been.
     pub fn follow(&mut self, settings: Settings, frames: u64) {
-        let turns = frames as f64 / f64::from(self.rate) * WOBBLE_HZ;
-        let angle = std::f64::consts::TAU * (turns - turns.floor());
-        self.wobble = (angle.cos() as f32, angle.sin() as f32);
+        self.keep_time(frames);
         self.pre_frames.target = f32::from(settings.pre) / 255.0 * LONGEST_PRE * self.rate as f32;
         self.decay.target = f32::from(settings.decay) / 255.0 * MOST_DECAY;
         let at_tuning_rate = 1.0 - f32::from(settings.damp) / 255.0 * (1.0 - MOST_DAMPING);
@@ -282,6 +280,13 @@ impl Plate {
         };
         self.size.target = plate_size(f32::from(settings.size));
         self.excursion.target = f32::from(settings.excursion) / 255.0 * MOST_EXCURSION * self.scale;
+    }
+
+    /// Move the wobble to where it is this many frames in.
+    pub fn keep_time(&mut self, frames: u64) {
+        let turns = frames as f64 / f64::from(self.rate) * WOBBLE_HZ;
+        let angle = std::f64::consts::TAU * (turns - turns.floor());
+        self.wobble = (angle.cos() as f32, angle.sin() as f32);
     }
 
     /// Jump to the settings, for starting afresh.
