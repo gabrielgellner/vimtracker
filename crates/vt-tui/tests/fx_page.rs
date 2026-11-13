@@ -486,6 +486,7 @@ fn the_fx_pages_bars_follow_what_plays() {
         after_trim: Default::default(),
         mods: Default::default(),
         steps: Default::default(),
+        drawn: Default::default(),
     };
     live.inserts[0][..4].copy_from_slice(&[0, 0xFF, 0xFF, 0xE0]);
     app.live = Some(live);

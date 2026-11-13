@@ -8,6 +8,7 @@ use vt_model::action::Action;
 use vt_model::grid::Grid;
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
 use vt_model::song::Track;
+use vt_model::steps::STEPS;
 
 use crate::app::App;
 
@@ -230,5 +231,50 @@ impl App {
         } else {
             format!("{name} is back in")
         };
+    }
+
+    /// `Space g a` on a Steps slot: keep what its `Mutate` has drawn as its values, as one undo
+    /// step, so the loop heard stays when `Mutate` goes back to none (#530). The engine reports the
+    /// draws, as it hears them, and this makes the edit, so the song says what was heard and a
+    /// render plays it again. Only steps drawn change, so a value written since keeps its own.
+    pub(crate) fn keep_drift(&mut self) {
+        let Control::Mod(slot, _) = self.track_control() else {
+            self.status = "Space g a keeps a Steps slot's drift: this isn't a mod slot".to_owned();
+            return;
+        };
+        let name = format!("Mod {}", slot + 1);
+        let mut modulator = self.page_track().mods[slot];
+        if modulator.kind != ModKind::Steps {
+            self.status = format!(
+                "Space g a keeps a Steps slot's drift: {name} is {}",
+                modulator.kind.name()
+            );
+            return;
+        }
+        // The draws were worked out from the version the latest report is of, a frame or so
+        // behind the song while it's being changed, and are kept only from a Steps slot there.
+        let reported = self
+            .reported_track()
+            .is_some_and(|track| track.mods[slot].kind == ModKind::Steps);
+        let drawn = self
+            .live
+            .filter(|_| reported)
+            .map(|live| live.drawn[slot])
+            .unwrap_or_default();
+        let steps = &mut modulator.steps;
+        let mut kept = 0;
+        for step in 0..usize::from(steps.length).min(STEPS) {
+            if let Some(value) = drawn.value(step) {
+                kept += 1;
+                steps.values[step] = value;
+            }
+        }
+        if kept == 0 {
+            self.status = format!("{name} has drawn nothing to keep: Mutate draws as it plays");
+            return;
+        }
+        self.set_mod(slot, modulator);
+        let values = if kept == 1 { "value" } else { "values" };
+        self.status = format!("Kept the {kept} {values} {name} drew: Mutate 0% now plays them");
     }
 }
