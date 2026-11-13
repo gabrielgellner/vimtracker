@@ -467,6 +467,7 @@ fn a_live_generator_round_trips_through_saving() {
     ]);
     let note = ShapeColumn::Note {
         scale: Scale::default(),
+        writes: None,
     };
     let mut wave = ramp(0x30, 0x50, Where::Notes);
     wave.kind = FillKind::List;
@@ -499,4 +500,41 @@ fn a_live_generator_round_trips_through_saving() {
     assert_eq!(phrase(&edited).generators().len(), 2);
     // A song with none saves no generators at all.
     assert!(!ron::ser::to_string(&*start).unwrap().contains("generators"));
+}
+
+#[test]
+fn live_notes_of_its_own_own_their_velocities_and_save() {
+    let start = song_with(&[EMPTY; 8]);
+    let writing = ShapeColumn::Note {
+        scale: Scale::default(),
+        writes: Some(0x50),
+    };
+    let tresillo = ramp(60, 72, Where::Euclid { hits: 3, rotate: 0 });
+    let live = generate(&start, writing, all(8), tresillo);
+    let at = |song: &Song| -> Vec<usize> {
+        texts(song)
+            .iter()
+            .enumerate()
+            .filter(|(_, text)| !text.starts_with("---"))
+            .map(|(row, _)| row)
+            .collect()
+    };
+    assert_eq!(at(&live), [0, 3, 6]);
+    assert_eq!(velocities(&live)[0], "50");
+    // Turning it leaves the rows it leaves empty, velocities and all.
+    let turned = reshape(&live, 0, ramp(60, 72, Where::Euclid { hits: 3, rotate: 1 }));
+    assert_eq!(at(&turned), [1, 4, 7]);
+    assert_eq!(velocities(&turned)[0], "--");
+    // Saved and opened again, it's still live.
+    let folder = std::env::temp_dir().join(format!("vt-own-notes-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&folder);
+    save_song(&folder, &turned).unwrap();
+    let loaded = load_song(&folder).unwrap();
+    let _ = fs::remove_dir_all(&folder);
+    assert_eq!(phrase(&loaded), phrase(&turned));
+    assert_eq!(phrase(&loaded).generators()[0].column, writing);
+    // A velocity it wrote is its own, so changing one by hand applies it.
+    let edited = set_velocity(&Arc::new(loaded), 1, 0x10);
+    assert!(phrase(&edited).generators().is_empty());
+    assert_eq!(velocities(&edited)[1], "10");
 }

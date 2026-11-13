@@ -76,9 +76,13 @@ up 23 semitones, a press at a time, with the selection kept.
 Select part of a Note, Velocity, Nudge, length or FX column with `v`, then press `S` for a panel
 beside the grid. The column changes as you adjust it, and you hear it if the
 loop is playing. `Enter` keeps it as one undo, and `Esc` puts everything back.
-A selection reaching other tracks with `W` shapes the same column on each of
-them with the same settings, and each picks its own random values; a track with
-nothing to shape there is left alone.
+What's in the column decides what `S` does: on notes or commands already there
+it reshapes them, and on a Note or FX column with nothing in the rows selected
+it generates, as below. The panel's title says which. A selection reaching
+other tracks with `W` shapes the same column on each of them with the same
+settings, and each picks its own random values. Each track goes by its own
+column, so an empty one generates while the others reshape, and a track with
+nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
@@ -194,6 +198,23 @@ to choose from a list and `x` for the default. `Tab` still plays and pauses.
 selection's own ends, `Wave`, `Alternate` and `Scale` keep theirs, `List` keeps
 its list, and the other transforms rework that selection's own values.
 
+### On an empty column
+
+On a Note column with no notes in the rows selected, `S` writes notes of its
+own, and the panel's title says `Generate`. `Where` gives the rhythm, from
+`All rows`, `Every`, `Chance` and `Euclid`, and the fill the pitches: a `Ramp`
+from the scale's root an octave up, in the octave notes are typed in, or a
+`Random`, `Wave`, `Alternate` or `List`, in the scale's degrees while it's on.
+Each note takes the velocity notes are typed with and the track's gate, and an
+`OFF` there stays. `Euclid` with 3 hits over 8 rows is a tresillo to start a
+line from.
+
+On an FX column with no command in the rows selected, `S` first lists the
+commands, as `K` does, and the one you choose is written on the rows `Where`
+picks, every row to begin with, from its lowest value to its highest. `Esc` in
+the list leaves the column as it was. A transform has nothing to rework on an
+empty column, so it isn't offered. Velocity, Nudge and length still need notes.
+
 ### Keeping it live
 
 `L` in place of `Enter` keeps the shape live: the column stays tied to its
@@ -220,7 +241,9 @@ Nudge and length always do and an FX column does with Where on Notes or No
 notes, editing the notes fills it again, so a note added gets a generated
 velocity, as one undo with the note. Under the hood it keeps what was in its
 rows before it, so turning `Rotate` puts back the values of the rows the hits
-leave.
+leave. Notes generated on an empty column keep live the same way, with their
+velocities as its own too: turning `Rotate` moves the notes along, and `gl`
+opens it generating again.
 
 On an FX column with a lane, a live column fills the lane's steps, whichever
 rows you selected, and follows the lane when `:lane`, `gs`, `ge` or `]l` move
