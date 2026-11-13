@@ -460,6 +460,7 @@ mod tests {
             walk: Walk::default(),
             pink: Pink::default(),
             bits: Bits::default(),
+            grids: vt_model::shape::Grids::default(),
         }
     }
 

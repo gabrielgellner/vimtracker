@@ -305,6 +305,7 @@ mod tests {
             walk: Walk::default(),
             pink: Pink::default(),
             bits: Bits::default(),
+            grids: crate::shape::Grids::default(),
         }
     }
 

@@ -86,7 +86,7 @@ nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Walk`, `1/f`, `Wave`, `List`, `Acid`, `Follow` and more |
+| Fill | `Ramp`, `Random`, `Walk`, `1/f`, `Wave`, `List`, `Acid`, `Grids`, `Follow` and more |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
@@ -254,6 +254,45 @@ value. An `OFF` stays, and so does another command in the slot. It has no
 `Where`, as it reads the rhythm itself. With Masks on, 2 keeps only rows 1–4
 and 9–12 before it multiplies, and 3 rows 1, 2 and 13–16. Factor starts at 3:
 `=` and `-` move it by one, `+` and `_` by 4, and `i` types it.
+
+### Drums from Grids' map
+
+`Grids`, on the Note column only, writes a drum part after Mutable
+Instruments' Grids, from its map of 25 drum patterns, each with a kick's, a
+snare's and a hats' part. `X` and `Y` pick a place on the map, and the four
+patterns nearest it are blended. Each step of a part has a level, how much it
+belongs to the pattern, and a part's density is how many play: turning it up
+adds the next most important hit first, so a kick grows from the downbeat
+outwards. A step whose level is over Grids' second threshold is accented, `7F`.
+
+| Row | Does |
+|---|---|
+| Part | Which part this track plays: `BD`, `SD` or `HH`. `K` lists them |
+| Note | On an empty column, the note it writes |
+| X, Y | The place on the map, from `00` to `FF` each way |
+| BD, SD, HH density | How many of the part's hits play: none at `00`, all at `FF` |
+| Chaos | How far each step's level is raised at random, so weaker hits come and go |
+| Rows | `1/16` reads every other step of the map's 32 a bar; `1/32` reads them all |
+
+Select a kick's, a snare's and a hat's tracks with `W`, `vGWW`, and `S`: each
+track plays its own part of the same place on the map, so the three are one
+beat, and the panel shows all three densities and no Part. A track's part comes
+from its sound: an 808 `Kick`, `Snare` or `Hat` voice, or a name such as `BD`,
+`SD`, `CP`, `CH` or `OH`, as a kit names its tracks. The others take the parts
+left, in order, so three tracks with nothing to go by are the kick, the snare
+and the hats.
+
+A hit on a note keeps its pitch, and a new one takes the first note in the
+rows, so type one note on each drum track, a low kick and a high hat, before
+`S`. On an empty column it writes `Note`. A row that doesn't play is cleared,
+and an `OFF` stays. `r` rolls the chaos again, and each bar of a longer
+selection rolls its own. The map, X, Y and the densities move by one with `=`
+and `-` and by `10` with `+` and `_`, and `i` types them in hex.
+
+Kept live with `L`, it's a live column a track, each with its part, so `gl` on
+the snare reopens the snare's alone, with its own density and the Part row; a
+change there moves that track and leaves the others. On the Gen page its title
+is its part, like `Grids  SD`.
 
 ### On an empty column
 

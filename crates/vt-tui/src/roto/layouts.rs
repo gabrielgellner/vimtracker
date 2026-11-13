@@ -1513,6 +1513,8 @@ const SPACE: DeviceLayout = live(
 /// Knob 7 and 8's keys: what the `Where` has, whichever it is.
 pub const WHERE_FIRST: &str = "where1";
 pub const WHERE_SECOND: &str = "where2";
+/// `Grids`' density knob's key: its own part's, whichever it plays.
+pub const PART_DENSITY: &str = "partdensity";
 
 const GEN_RAMP: DeviceLayout = live(
     "gen/ramp",
@@ -1689,6 +1691,24 @@ const GEN_MULTIPLY: DeviceLayout = live(
         [s("factor"), s("masks"), __, __, __, __, __, __],
     )],
 );
+/// Grids' knobs as the module has them, the map first, then the part's density and chaos; it
+/// makes its own rhythm, so it has no `Where`, and its part is what it is.
+const GEN_GRIDS: DeviceLayout = live(
+    "gen/grids",
+    &[knobs(
+        "Grids",
+        [
+            s("x"),
+            s("y"),
+            s(PART_DENSITY),
+            s("chaos"),
+            GAP,
+            GAP,
+            s("note"),
+            s("rows"),
+        ],
+    )],
+);
 /// A transform reworks what's there, with no settings of its own but its rows.
 const GEN_REWORK: DeviceLayout = live(
     "gen/rework",
@@ -1709,7 +1729,7 @@ const GEN_REWORK: DeviceLayout = live(
 
 /// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
 /// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 12] = [
+pub const GENERATORS: [&DeviceLayout; 13] = [
     &GEN_RAMP,
     &GEN_RANDOM,
     &GEN_WAVE,
@@ -1721,6 +1741,7 @@ pub const GENERATORS: [&DeviceLayout; 12] = [
     &GEN_WALK,
     &GEN_PINK,
     &GEN_MULTIPLY,
+    &GEN_GRIDS,
     &GEN_REWORK,
 ];
 
@@ -1738,6 +1759,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
         FillKind::Walk => &GEN_WALK,
         FillKind::Pink => &GEN_PINK,
         FillKind::Multiply => &GEN_MULTIPLY,
+        FillKind::Grids => &GEN_GRIDS,
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,
     }
 }
@@ -1993,11 +2015,11 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
 pub fn app_only(control: Control, track: &Track) -> bool {
     match control {
         Control::Machine | Control::Insert(_) | Control::Mod(_, ModField::Type) => true,
-        // A generator's fill and rows, and what a `Follow` follows, are what it is, and a
-        // `List`'s values are typed.
+        // A generator's fill and rows, what a `Follow` follows and which part a `Grids` plays are
+        // what it is, and a `List`'s values are typed.
         Control::Gen { param, .. } => matches!(
             param,
-            GenParam::Fill | GenParam::Where | GenParam::Source | GenParam::Values
+            GenParam::Fill | GenParam::Where | GenParam::Source | GenParam::Values | GenParam::Part
         ),
         Control::InsertParam(slot, param) => track.inserts[slot].type_param() == Some(param),
         _ => false,
@@ -2020,6 +2042,11 @@ pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Co
     let wanted: &[GenParam] = match setting.key {
         WHERE_FIRST => &[GenParam::Hits, GenParam::Every, GenParam::Chance],
         WHERE_SECOND => &[GenParam::Rotate],
+        PART_DENSITY => &[
+            GenParam::KickDensity,
+            GenParam::SnareDensity,
+            GenParam::HatDensity,
+        ],
         _ => return controls().find(|control| key(*control, track) == setting.key),
     };
     controls()

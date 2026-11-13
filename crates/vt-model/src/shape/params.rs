@@ -14,9 +14,9 @@ use crate::lfo::{Shape as Wave, note_rates};
 use crate::step::Step;
 
 use super::{
-    Acid, Bits, DEFAULT_RATE, EUCLID_HITS, Edge, FillKind, MAX_ACID_NOTES, MAX_BEND, MAX_DEPTH,
-    MAX_FACTOR, MAX_TRANSPOSE, MIN_DEPTH, Pink, Shape, ShapeColumn, Source, Values, WAVES,
-    WaveRate, Where, default_step, first_note,
+    Acid, Bits, DEFAULT_RATE, DrumPart, EUCLID_HITS, Edge, FillKind, Grids, MAX_ACID_NOTES,
+    MAX_BEND, MAX_DEPTH, MAX_FACTOR, MAX_TRANSPOSE, MIN_DEPTH, Pink, Shape, ShapeColumn, Source,
+    Values, WAVES, WaveRate, Where, default_step, first_note,
 };
 
 /// How far a small and a large step move a curve.
@@ -66,12 +66,13 @@ pub struct Context<'a> {
 }
 
 /// What a setting goes back to with `x` where that hangs on what's there: `From` and `To` to the
-/// ends of what's there or, on a column generated on, the ends it starts with, and a `Follow`'s
-/// `Source` to the phrase it started on.
+/// ends of what's there or, on a column generated on, the ends it starts with, a `Follow`'s
+/// `Source` to the phrase it started on, and a `Grids`' `Part` to the one its track's sound plays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Starts {
     pub ends: (u8, u8),
     pub source: Option<Source>,
+    pub part: Option<DrumPart>,
 }
 
 impl Context<'_> {
@@ -127,6 +128,7 @@ pub enum Choice {
     Rate(WaveRate),
     Where(Where),
     Source(Source),
+    Part(DrumPart),
 }
 
 impl Choice {
@@ -138,6 +140,7 @@ impl Choice {
             Self::Rate(rate) => rate.to_string(),
             Self::Where(place) => place.name().to_owned(),
             Self::Source(source) => source.to_string(),
+            Self::Part(part) => part.name().to_owned(),
         }
     }
 
@@ -145,6 +148,7 @@ impl Choice {
     pub fn description(self) -> Option<&'static str> {
         match self {
             Self::Fill(kind) => Some(kind.description()),
+            Self::Part(part) => Some(part.description()),
             _ => None,
         }
     }
@@ -157,6 +161,7 @@ impl Choice {
             Self::Rate(rate) => shape.rate = rate,
             Self::Where(place) => shape.place = place,
             Self::Source(source) => shape.follow.source = source,
+            Self::Part(part) => shape.grids.part = Some(part),
         }
     }
 }
@@ -202,6 +207,8 @@ pub enum Units {
     Step,
     /// A chance or share, in percent.
     Percent,
+    /// A byte in hex, `00` to `FF`, as a knob of Grids reads.
+    Byte,
     /// One of a list, by name.
     Named,
 }
@@ -240,6 +247,18 @@ pub enum GenParam {
     /// What `Multiply` multiplies the rhythm by, and whether factors 2 and 3 mask it first.
     Factor,
     Masks,
+    /// A `Grids` fill's own: the part its track plays, the note it writes on an empty column, the
+    /// place on the map, each part's density, how far chaos raises each step, and whether a row
+    /// is a 32nd.
+    Part,
+    Pitch,
+    MapX,
+    MapY,
+    KickDensity,
+    SnareDensity,
+    HatDensity,
+    Chaos,
+    Rows,
     /// How a ramp bends, early or late, and how it eases at both ends.
     Curve,
     S,
@@ -262,7 +281,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 33] = [
+    pub const ALL: [Self; 42] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -284,6 +303,15 @@ impl GenParam {
         Self::Depth,
         Self::Factor,
         Self::Masks,
+        Self::Part,
+        Self::Pitch,
+        Self::MapX,
+        Self::MapY,
+        Self::KickDensity,
+        Self::SnareDensity,
+        Self::HatDensity,
+        Self::Chaos,
+        Self::Rows,
         Self::Curve,
         Self::S,
         Self::Wave,
@@ -322,6 +350,15 @@ impl GenParam {
             Self::Depth => "depth",
             Self::Factor => "factor",
             Self::Masks => "masks",
+            Self::Part => "part",
+            Self::Pitch => "note",
+            Self::MapX => "x",
+            Self::MapY => "y",
+            Self::KickDensity => "bd",
+            Self::SnareDensity => "sd",
+            Self::HatDensity => "hh",
+            Self::Chaos => "chaos",
+            Self::Rows => "rows",
             Self::Curve => "curve",
             Self::S => "s",
             Self::Wave => "wave",
@@ -367,6 +404,15 @@ impl GenParam {
             Self::Depth => "Depth",
             Self::Factor => "Factor",
             Self::Masks => "Masks",
+            Self::Part => "Part",
+            Self::Pitch => "Note",
+            Self::MapX => "X",
+            Self::MapY => "Y",
+            Self::KickDensity => "BD density",
+            Self::SnareDensity => "SD density",
+            Self::HatDensity => "HH density",
+            Self::Chaos => "Chaos",
+            Self::Rows => "Rows",
             Self::Curve => "Curve",
             Self::S => "S",
             Self::Wave => "Shape",
@@ -384,7 +430,7 @@ impl GenParam {
     /// How its values read.
     pub fn units(self) -> Units {
         match self {
-            Self::From | Self::To | Self::Values | Self::Axis => Units::Column,
+            Self::From | Self::To | Self::Values | Self::Axis | Self::Pitch => Units::Column,
             Self::Curve | Self::S => Units::Bend,
             Self::Transpose => Units::Interval,
             Self::Phase => Units::Degrees,
@@ -395,6 +441,12 @@ impl GenParam {
             Self::Octave | Self::Density | Self::Accent | Self::Slide | Self::Chance => {
                 Units::Percent
             }
+            Self::MapX
+            | Self::MapY
+            | Self::KickDensity
+            | Self::SnareDensity
+            | Self::HatDensity
+            | Self::Chaos => Units::Byte,
             Self::Fill
             | Self::Wave
             | Self::Rate
@@ -405,7 +457,9 @@ impl GenParam {
             | Self::Reverse
             | Self::CopyFx
             | Self::Edge
-            | Self::Masks => Units::Named,
+            | Self::Masks
+            | Self::Part
+            | Self::Rows => Units::Named,
         }
     }
 
@@ -417,9 +471,14 @@ impl GenParam {
     /// choose. A `Follow` writes every row from its source, so it has no `Where`, and turns
     /// about a note only while it inverts. `Walk` has its `Step` and `Edge`, and `1/f` its
     /// `Depth`. `Multiply` reads the rhythm itself, so it has its `Factor` and `Masks` and no
-    /// `Where`.
+    /// `Where`. `Grids` makes its own rhythm, so it has no `Where` either; it has the density of
+    /// its own part alone, or while the panel shapes several tracks, each taking its own part,
+    /// every part's and no `Part`; and its `Note` only where it `generates`, as a hit takes the
+    /// note there or the first one.
     pub fn exists_for(self, shape: &Shape, generates: bool) -> bool {
         let kind = shape.kind;
+        let grids = kind == FillKind::Grids;
+        let density = |part: DrumPart| grids && shape.grids.part.is_none_or(|own| own == part);
         let acid = kind == FillKind::Acid;
         let riff = acid && (generates || !shape.acid.keep);
         let rows = kind.has_where();
@@ -452,6 +511,12 @@ impl GenParam {
             Self::Step | Self::Edge => kind == FillKind::Walk,
             Self::Depth => kind == FillKind::Pink,
             Self::Factor | Self::Masks => kind == FillKind::Multiply,
+            Self::Part => grids && shape.grids.part.is_some(),
+            Self::Pitch => grids && generates,
+            Self::MapX | Self::MapY | Self::Chaos | Self::Rows => grids,
+            Self::KickDensity => density(DrumPart::Kick),
+            Self::SnareDensity => density(DrumPart::Snare),
+            Self::HatDensity => density(DrumPart::Hats),
             Self::Curve | Self::S => {
                 matches!(kind, FillKind::Ramp | FillKind::Random | FillKind::Scale)
             }
@@ -475,11 +540,13 @@ impl GenParam {
 
     /// The settings in a generator's title on the Gen page, the ones that change what it is: its
     /// fill, then its `Where`, or for a `Follow`, the phrase it follows, and for `Acid`, its
-    /// `Pitches`, as the second die is a mode of the riff's. `Multiply` has its fill alone.
+    /// `Pitches`, as the second die is a mode of the riff's. `Multiply` has its fill alone, and
+    /// `Grids` its part, which drum it is.
     pub fn title(shape: &Shape) -> [Option<Self>; GEN_COLUMNS] {
         match shape.kind {
             FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None],
             FillKind::Multiply => [Some(Self::Fill), None, None],
+            FillKind::Grids => [Some(Self::Fill), Some(Self::Part), None],
             FillKind::Acid => [Some(Self::Fill), Some(Self::Where), Some(Self::Pitches)],
             _ => [Some(Self::Fill), Some(Self::Where), None],
         }
@@ -488,10 +555,27 @@ impl GenParam {
     /// Where a shape's other settings sit on the Gen page, in columns of rows, top to bottom (the
     /// study's §3.2): the fill's own in the first two, and its `Where`'s at the foot of the last,
     /// so they stay put as the fill changes, with `Acid`'s `Density` above them. A random fill's
-    /// curve does nothing, so it isn't placed, and only the settings the shape has are.
+    /// curve does nothing, so it isn't placed, and only the settings the shape has are. `Grids`
+    /// has the map and chaos first, then its part's density, and has no `Where`.
     pub fn grid(shape: &Shape, generates: bool) -> [[Option<Self>; GEN_ROWS]; GEN_COLUMNS] {
         use GenParam::*;
         let none = [None; GEN_ROWS];
+        let has = |param: Option<Self>| param.filter(|param| param.exists_for(shape, generates));
+        if shape.kind == FillKind::Grids {
+            let grid = match shape.grids.part {
+                Some(part) => [
+                    [Some(MapX), Some(MapY), Some(Chaos)],
+                    [Some(Self::density_of(part)), Some(Pitch), Some(Rows)],
+                    none,
+                ],
+                None => [
+                    [Some(MapX), Some(MapY), Some(Chaos)],
+                    [Some(KickDensity), Some(SnareDensity), Some(HatDensity)],
+                    [Some(Pitch), Some(Rows), None],
+                ],
+            };
+            return grid.map(|column| column.map(has));
+        }
         let fill: [[Option<Self>; GEN_ROWS]; 2] = match shape.kind {
             FillKind::Ramp => [
                 [Some(From), Some(To), Some(Run)],
@@ -518,6 +602,7 @@ impl GenParam {
             ],
             FillKind::Scale => [[Some(From), Some(To), Some(Curve)], [Some(S), None, None]],
             FillKind::Multiply => [[Some(Factor), Some(Masks), None], none],
+            FillKind::Grids => unreachable!("laid out above"),
             FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => {
                 [none, none]
             }
@@ -531,8 +616,35 @@ impl GenParam {
         if shape.kind == FillKind::Acid {
             last[0] = Some(Density);
         }
-        let has = |param: Option<Self>| param.filter(|param| param.exists_for(shape, generates));
         [fill[0].map(has), fill[1].map(has), last.map(has)]
+    }
+
+    /// A part's density.
+    pub fn density_of(part: DrumPart) -> Self {
+        match part {
+            DrumPart::Kick => Self::KickDensity,
+            DrumPart::Snare => Self::SnareDensity,
+            DrumPart::Hats => Self::HatDensity,
+        }
+    }
+
+    /// A `Grids` setting that's a byte, as its field.
+    fn grids_byte(self, grids: &mut Grids) -> Option<&mut u8> {
+        Some(match self {
+            Self::MapX => &mut grids.x,
+            Self::MapY => &mut grids.y,
+            Self::KickDensity => &mut grids.density[DrumPart::Kick.index()],
+            Self::SnareDensity => &mut grids.density[DrumPart::Snare.index()],
+            Self::HatDensity => &mut grids.density[DrumPart::Hats.index()],
+            Self::Chaos => &mut grids.chaos,
+            _ => return None,
+        })
+    }
+
+    /// The same, read.
+    fn grids_value(self, grids: Grids) -> Option<u8> {
+        let mut grids = grids;
+        self.grids_byte(&mut grids).map(|value| *value)
     }
 
     /// The settings a shape has, in order.
@@ -629,6 +741,20 @@ impl GenParam {
             Self::Depth => shape.pink.depth.to_string(),
             Self::Factor => shape.bits.factor.to_string(),
             Self::Masks => on_off(shape.bits.masks),
+            Self::Part => shape
+                .grids
+                .part
+                .map_or("By track", DrumPart::name)
+                .to_owned(),
+            Self::Pitch => column.show(shape.from),
+            Self::MapX
+            | Self::MapY
+            | Self::KickDensity
+            | Self::SnareDensity
+            | Self::HatDensity
+            | Self::Chaos => format!("{:02X}", self.grids_value(shape.grids).unwrap_or(0)),
+            Self::Rows if shape.grids.fine => "1/32".to_owned(),
+            Self::Rows => "1/16".to_owned(),
         }
     }
 
@@ -664,8 +790,16 @@ impl GenParam {
             | Self::Reverse
             | Self::CopyFx
             | Self::Edge
-            | Self::Masks => Typing::Toggled,
-            Self::Axis => Typing::Named { list: false },
+            | Self::Masks
+            | Self::Rows => Typing::Toggled,
+            Self::Part => Typing::Listed,
+            Self::Axis | Self::Pitch => Typing::Named { list: false },
+            Self::MapX
+            | Self::MapY
+            | Self::KickDensity
+            | Self::SnareDensity
+            | Self::HatDensity
+            | Self::Chaos => Typing::Hex,
             Self::From | Self::To | Self::Step if hex => Typing::Hex,
             Self::From | Self::To => Typing::Named { list: false },
             Self::Values if hex => Typing::HexList,
@@ -689,6 +823,7 @@ impl GenParam {
                 .copied()
                 .map(Choice::Source)
                 .collect(),
+            Self::Part => DrumPart::ALL.into_iter().map(Choice::Part).collect(),
             _ => return None,
         })
     }
@@ -706,6 +841,7 @@ impl GenParam {
                     std::mem::discriminant(&place) == std::mem::discriminant(&shape.place)
                 }
                 Choice::Source(source) => source == shape.follow.source,
+                Choice::Part(part) => Some(part) == shape.grids.part,
             })
     }
 
@@ -729,7 +865,7 @@ impl GenParam {
             Self::To => shape.to = stepped(column, shape.to, sign, large),
             Self::Curve => shape.curve = bent(shape.curve, by(BEND_NUDGE, BEND_JUMP)),
             Self::S => shape.s = bent(shape.s, by(BEND_NUDGE, BEND_JUMP)),
-            Self::Fill | Self::Wave | Self::Where | Self::Source => {
+            Self::Fill | Self::Wave | Self::Where | Self::Source | Self::Part => {
                 let choices = self.choices(context).unwrap_or_default();
                 if !choices.is_empty() {
                     let at = self.chosen(shape, context).unwrap_or(0);
@@ -842,6 +978,18 @@ impl GenParam {
                 shape.bits.factor = moved(i32::from(shape.bits.factor), by, 1, most) as u8;
             }
             Self::Masks => shape.bits.masks = !shape.bits.masks,
+            Self::Pitch => shape.from = stepped(column, shape.from, sign, large),
+            Self::MapX
+            | Self::MapY
+            | Self::KickDensity
+            | Self::SnareDensity
+            | Self::HatDensity
+            | Self::Chaos => {
+                if let Some(value) = self.grids_byte(&mut shape.grids) {
+                    *value = moved(i32::from(*value), by(1, HEX_JUMP), 0, 0xFF) as u8;
+                }
+            }
+            Self::Rows => shape.grids.fine = !shape.grids.fine,
         }
         Ok(())
     }
@@ -895,6 +1043,20 @@ impl GenParam {
             Self::Depth => shape.pink.depth = Pink::default().depth,
             Self::Factor => shape.bits.factor = Bits::default().factor,
             Self::Masks => shape.bits.masks = Bits::default().masks,
+            Self::Part => shape.grids.part = Some(starts.part.unwrap_or_default()),
+            Self::Pitch => shape.from = from,
+            Self::MapX
+            | Self::MapY
+            | Self::KickDensity
+            | Self::SnareDensity
+            | Self::HatDensity
+            | Self::Chaos => {
+                let start = self.grids_value(Grids::default());
+                if let (Some(value), Some(start)) = (self.grids_byte(&mut shape.grids), start) {
+                    *value = start;
+                }
+            }
+            Self::Rows => shape.grids.fine = Grids::default().fine,
             Self::Hits => {
                 if let Where::Euclid { rotate, .. } = shape.place {
                     shape.place = Where::Euclid {
@@ -927,9 +1089,9 @@ impl GenParam {
             _ => "A value is two hex digits",
         };
         match self {
-            Self::From | Self::To => {
+            Self::From | Self::To | Self::Pitch => {
                 let value = column.parse(text).ok_or(unknown)?;
-                if self == Self::From {
+                if self != Self::To {
                     shape.from = value;
                 } else {
                     shape.to = value;
@@ -1047,7 +1209,21 @@ impl GenParam {
             | Self::Reverse
             | Self::CopyFx
             | Self::Edge
-            | Self::Masks => {}
+            | Self::Masks
+            | Self::Part
+            | Self::Rows => {}
+            Self::MapX
+            | Self::MapY
+            | Self::KickDensity
+            | Self::SnareDensity
+            | Self::HatDensity
+            | Self::Chaos => {
+                let typed =
+                    u8::from_str_radix(text, 16).map_err(|_| "A value is two hex digits")?;
+                if let Some(value) = self.grids_byte(&mut shape.grids) {
+                    *value = typed;
+                }
+            }
         }
         Ok(())
     }
@@ -1060,8 +1236,19 @@ impl GenParam {
         let open = context.open as i32;
         let most = i32::from(MAX_BEND);
         Some(match self {
-            Self::From | Self::To => (i32::from(column.lowest()), i32::from(column.highest())),
+            Self::From | Self::To | Self::Pitch => {
+                (i32::from(column.lowest()), i32::from(column.highest()))
+            }
             Self::Curve | Self::S => (-most, most),
+            // Its parts' places, without a list, so the engine can hold it.
+            Self::Part => (0, DrumPart::ALL.len() as i32 - 1),
+            Self::MapX
+            | Self::MapY
+            | Self::KickDensity
+            | Self::SnareDensity
+            | Self::HatDensity
+            | Self::Chaos => (0, 0xFF),
+            Self::Rows => (0, 1),
             Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Source => {
                 (0, self.choices(context)?.len().checked_sub(1)? as i32)
             }
@@ -1106,6 +1293,15 @@ impl GenParam {
             Self::Depth => i32::from(shape.pink.depth),
             Self::Factor => i32::from(shape.bits.factor),
             Self::Masks => i32::from(shape.bits.masks),
+            Self::Part => shape.grids.part?.index() as i32,
+            Self::Pitch => i32::from(shape.from),
+            Self::MapX
+            | Self::MapY
+            | Self::KickDensity
+            | Self::SnareDensity
+            | Self::HatDensity
+            | Self::Chaos => i32::from(self.grids_value(shape.grids)?),
+            Self::Rows => i32::from(shape.grids.fine),
             Self::Phase => i32::from(shape.phase),
             Self::Values => return None,
             Self::Run => i32::from(shape.run),
@@ -1207,6 +1403,19 @@ impl GenParam {
             Self::Depth => shape.pink.depth = number as u8,
             Self::Factor => shape.bits.factor = number as u8,
             Self::Masks => shape.bits.masks = number != 0,
+            Self::Part => shape.grids.part = Some(DrumPart::ALL[number as usize]),
+            Self::Pitch => shape.from = number as u8,
+            Self::MapX
+            | Self::MapY
+            | Self::KickDensity
+            | Self::SnareDensity
+            | Self::HatDensity
+            | Self::Chaos => {
+                if let Some(value) = self.grids_byte(&mut shape.grids) {
+                    *value = number as u8;
+                }
+            }
+            Self::Rows => shape.grids.fine = number != 0,
         }
     }
 }
@@ -1321,6 +1530,7 @@ mod tests {
             walk: crate::shape::Walk::default(),
             pink: Pink::default(),
             bits: Bits::default(),
+            grids: Grids::default(),
         }
     }
 
@@ -1540,6 +1750,7 @@ mod tests {
         let starts = Starts {
             ends: (0x10, 0x70),
             source: None,
+            part: None,
         };
         GenParam::From.reset(&mut ramp, &velocity, starts);
         assert_eq!(ramp.from, 0x10);
