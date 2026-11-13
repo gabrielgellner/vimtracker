@@ -158,3 +158,26 @@ fn a_song_whose_generators_rest_renders_as_it_did_before_the_engine_ran_them() {
     let out = render_loop(version(&song), RATE, RenderOptions::default());
     golden("generators-at-rest", &out);
 }
+
+/// A Nudge generator that's only ever late on what's written, so the song's lead as written is 0.
+pub fn late_song() -> Song {
+    let mut song = Song::new(1);
+    let hit: Step = "C-3 64 --- --- ---".parse().unwrap();
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(vec![hit; 16])));
+    generate(
+        song,
+        0,
+        ShapeColumn::Nudge,
+        rows(15),
+        shape(FillKind::Ramp, 11, 22, Where::AllRows),
+    )
+}
+
+#[test]
+fn a_nudge_generator_at_rest_renders_as_before_however_early_it_could_go() {
+    let out = render_loop(version(&late_song()), RATE, RenderOptions::default());
+    golden("generators-late-at-rest", &out);
+}
