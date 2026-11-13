@@ -9,7 +9,7 @@ use vt_model::constants::{MAX_GROUPS, MAX_LABEL_CHARS};
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::kit::MAX_TUNE;
 use vt_model::label::is_name;
-use vt_model::order::{ORDER_WORDS, Order};
+use vt_model::order::Order;
 use vt_model::song::{LAUNCH_WORDS, Launch};
 
 /// A parsed command.
@@ -452,7 +452,7 @@ pub enum LineError {
     #[error(":gen takes apply, to apply the live column under the cursor")]
     Gen,
     #[error(
-        ":order takes forward, reverse, up-down, up-down-inc, down-up, down-up-inc, odd-even, converge, diverge, pedal, shuffle or random, or nothing to choose"
+        ":order takes forward, reverse, up-down, up-down-inc, down-up, down-up-inc, odd-even, converge, diverge, pedal, shuffle, random, snake and a snake or its number 1 to 8, or cartesian and its X and Y rates 1 to 16 with X and Y lengths 1 to 8 if you like, or nothing to choose"
     )]
     Order,
     #[error(":bank takes clean, or nothing to list the bank")]
@@ -646,6 +646,8 @@ pub enum Takes {
     Root,
     /// A groove's name, and for some commands `off`.
     Groove { off: bool },
+    /// An order's word, and after `snake` a snake's.
+    Order,
 }
 
 /// A command: its name, what it does, what it takes, and how its argument is read.
@@ -961,7 +963,7 @@ pub const COMMANDS: [Command; 42] = [
     Command {
         name: "order",
         meaning: "The order this phrase's rows play in",
-        takes: Takes::Words(&ORDER_WORDS),
+        takes: Takes::Order,
         parse: |argument| match argument {
             "" => Ok(Line::Order(None)),
             _ => Order::named(argument)

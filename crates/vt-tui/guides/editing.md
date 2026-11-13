@@ -586,9 +586,41 @@ on from one pass to the next.
 | `pedal` | 1 2 1 3, 1 4 1 2, the first between the others |
 | `shuffle` | each row once a pass, dealt again each pass |
 | `random` | any row each step, so rows repeat |
+| `snake spiral` | the rows as a grid, wound through by a path |
+| `cartesian 1 3` | the rows as a grid, crossed by two counters |
 
-The up-and-down orders and `pedal` take longer than a pass to come round, so
-they drift against other tracks as a polymeter does. The walk starts again
+`snake` and `cartesian` read the rows as a grid, as Make Noise's René does:
+lines of four rows, a beat of sixteenths each, so 16 rows are 4×4, and lines
+of eight above 32 rows, so 64 are 8×8. A last line the rows don't fill is
+passed over where they run out.
+
+`:order snake` and a snake's word or number winds a path through every cell:
+
+| Snake | Plays, in a phrase of 16 |
+|---|---|
+| 1 `zigzag` | along a line, back along the next: 1 2 3 4 8 7 6 5 9 … |
+| 2 `columns` | down each column: 1 5 9 13 2 6 10 14 3 … |
+| 3 `column-zigzag` | down a column, up the next: 1 5 9 13 14 10 6 2 3 … |
+| 4 `diagonal` | along the diagonals: 1 2 5 3 6 9 4 7 10 13 8 … |
+| 5 `diagonal-zigzag` | the diagonals, turning: 1 2 5 9 6 3 4 7 10 13 14 … |
+| 6 `spiral` | round the edge and in: 1 2 3 4 8 12 16 15 14 13 9 5 6 7 11 10 |
+| 7 `spiral-out` | the spiral backwards, from the middle out: 10 11 7 6 … |
+| 8 `checker` | a chessboard's black squares, then its white: 1 3 6 8 9 11 … |
+
+`:order cartesian 1 3` runs two counters: X moves along a line every row,
+and Y down the lines every 3 rows, and the row played is the one at X and Y,
+Y × the width + X. In a phrase of 16 that's 1 2 3 8 5 6 11 12 9 14 15 16, and
+round again. Each rate is 1 to 16 rows. Two more numbers set how far each
+counts, 1 to 8, so `:order cartesian 1 3 4 2` keeps X to 4 cells and Y to the
+top two lines; without them X counts the grid's width and Y its height, up to
+8 lines. Equal rates move both together, on the diagonal; Y's rate at the
+width plays the grid forward. `:order cartesian` alone is `1 3`. The title
+shows the order as it's typed, `Snake spiral` or `Cartesian 1 3`, and `:order`
+lists each snake and Cartesian, with the phrase's own numbers if it has them.
+
+The up-and-down orders, `pedal` and most of Cartesian's counters take longer
+than a pass to come round, so they drift against other tracks as a polymeter
+does. The walk starts again
 where the chain does: from the top, a section that brings it in, a launch, or
 `:reset`. A row's pulses stay together, so a row whose pulses run past the end
 of a pass plays the rest at the start of the next, and a `HLD` ties into

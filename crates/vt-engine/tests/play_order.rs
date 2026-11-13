@@ -8,7 +8,7 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::order::{Deal, Order, Round};
+use vt_model::order::{Cartesian, Deal, Order, Round, Snake};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
@@ -444,4 +444,78 @@ fn changing_an_order_while_playing_finds_the_row_in_the_new_walks_pass() {
     let left: Vec<f32> = after.chunks(2).map(|frame| frame[0]).collect();
     let heard: Vec<Option<i32>> = (1..5).map(|step| note_at(&left, step * STEP - 1)).collect();
     assert_eq!(heard, named("G A B C4"));
+}
+
+#[test]
+fn a_snake_winds_through_the_rows_read_as_a_grid() {
+    // Eight rows are a grid four wide and two high: 1 2 3 4 over 5 6 7 8.
+    let walk = |snake| notes(&scale_song(Order::Snake(snake)), 16);
+    assert_eq!(
+        walk(Snake::Spiral),
+        named("C D E F C4 B A G  C D E F C4 B A G")
+    );
+    assert_eq!(
+        walk(Snake::Columns),
+        named("C G D A E B F C4  C G D A E B F C4")
+    );
+    assert_eq!(
+        walk(Snake::Checker),
+        named("C E A C4 D F G B  C E A C4 D F G B")
+    );
+}
+
+#[test]
+fn cartesian_walks_its_two_counters_on_across_passes() {
+    // X every row over 4 and Y every 3 rows over 2, on the grid of eight rows: a round of twelve,
+    // 1 2 3 8 5 6 3 4 1 6 7 8, which drifts across the passes of eight.
+    assert_eq!(
+        notes(&scale_song(Order::Cartesian(Cartesian::new(1, 3))), 24),
+        named("C D E C4 G A E F  C A B C4 C D E C4  G A E F C A B C4")
+    );
+    // Equal rates move both together, on the diagonal: 1 6, then 3 8.
+    assert_eq!(
+        notes(&scale_song(Order::Cartesian(Cartesian::new(1, 1))), 8),
+        named("C A E C4 C A E C4")
+    );
+}
+
+#[test]
+fn a_conditions_pass_under_cartesian_is_the_phrases_length() {
+    // The walk above plays the third row at steps 2 and 6 of the first pass, 14 of the second and
+    // 18 of the third: its 1:2 is heard in the first and third passes only.
+    let mut rows = vec!["--- --"; 8];
+    rows[2] = "C-3 -- cnd:12";
+    let song = song(&rows, Order::Cartesian(Cartesian::new(1, 3)));
+    assert_eq!(hits(&song, 24), [2, 6, 18]);
+}
+
+#[test]
+fn songs_with_snakes_and_cartesian_render_the_same_twice_and_from_any_step() {
+    for order in [
+        Order::Snake(Snake::DiagonalZigzag),
+        Order::Cartesian(Cartesian::new(3, 2).sized(4, 2)),
+    ] {
+        let song = scale_song(order);
+        assert_eq!(
+            render(&song, ramp_pool(), 24),
+            render(&song, ramp_pool(), 24),
+            "{order}"
+        );
+        // Playing from the third pass hears what playing up to it would.
+        let mut longer = song.clone();
+        longer.add_track();
+        longer.tracks[1]
+            .phrases
+            .insert(0, Arc::new(Phrase::new(64)));
+        let whole = render(&longer, ramp_pool(), 28);
+        let mut engine = Engine::new(RATE, version(&longer, ramp_pool()));
+        engine.play_from(19);
+        let mut out = vec![0.0; 8 * STEP * 2];
+        engine.process(&mut out);
+        let from: Vec<f32> = out.chunks(2).map(|frame| frame[0]).collect();
+        let expected: Vec<Option<i32>> =
+            (19..27).map(|step| note_at(&whole, step * STEP)).collect();
+        let heard: Vec<Option<i32>> = (0..8).map(|step| note_at(&from, step * STEP)).collect();
+        assert_eq!(heard, expected, "{order}");
+    }
 }

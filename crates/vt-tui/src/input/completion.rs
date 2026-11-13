@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use vt_model::groove::GrooveId;
+use vt_model::order::{ORDER_WORDS, Snake};
 use vt_model::sample::is_sample_file;
 use vt_model::scale::{ROOTS, ScaleKind};
 
@@ -245,6 +246,15 @@ fn value_of(
             words(start, title, typed, all)
         }
         Takes::Root => words(start, title, typed, ROOTS),
+        Takes::Order => match typed.split_once(char::is_whitespace) {
+            None => words(start, title, typed, ORDER_WORDS),
+            Some((first, snake)) if first.eq_ignore_ascii_case("snake") => {
+                let snake = snake.trim_start();
+                let at = start + typed.len() - snake.len();
+                words(at, "snake", snake, Snake::ALL.map(Snake::word))
+            }
+            Some(_) => Completions::none(start + typed.len()),
+        },
         Takes::Groove { off } => {
             let names: Vec<String> = GrooveId::all().map(command::groove_word).collect();
             let off = off.then_some("off");
@@ -704,7 +714,7 @@ mod tests {
             };
             if matches!(
                 command.takes,
-                Takes::Words(_) | Takes::Setting | Takes::Groove { .. }
+                Takes::Words(_) | Takes::Setting | Takes::Groove { .. } | Takes::Order
             ) {
                 assert!(!lines.is_empty(), "{} completes something", command.name);
             }
@@ -714,6 +724,24 @@ mod tests {
             }
         }
         assert!(checked > 30, "only {checked} lines");
+    }
+
+    #[test]
+    fn order_completes_its_words_and_a_snake_after_snake() {
+        assert_eq!(tab("order sn", nowhere()), "order snake");
+        assert_eq!(tab("order cart", nowhere()), "order cartesian");
+        assert_eq!(tab("order snake sp", nowhere()), "order snake spiral");
+        assert_eq!(
+            tab("order snake spiral-", nowhere()),
+            "order snake spiral-out"
+        );
+        assert_eq!(tab("order cartesian 1", nowhere()), "order cartesian 1");
+        let found = complete("order snake ", nowhere());
+        assert_eq!(found.candidates.len(), 8);
+        for candidate in &found.candidates {
+            let line = replaced("order snake ", found.start, &candidate.text);
+            assert!(parse(&line).is_ok(), "{line} parses");
+        }
     }
 
     #[test]
