@@ -1681,6 +1681,14 @@ const GEN_PINK: DeviceLayout = live(
         ],
     )],
 );
+/// The rhythm there multiplied; it reads the rhythm itself, so it has no `Where`.
+const GEN_MULTIPLY: DeviceLayout = live(
+    "gen/multiply",
+    &[knobs(
+        "Multiply",
+        [s("factor"), s("masks"), __, __, __, __, __, __],
+    )],
+);
 /// A transform reworks what's there, with no settings of its own but its rows.
 const GEN_REWORK: DeviceLayout = live(
     "gen/rework",
@@ -1701,7 +1709,7 @@ const GEN_REWORK: DeviceLayout = live(
 
 /// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
 /// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 11] = [
+pub const GENERATORS: [&DeviceLayout; 12] = [
     &GEN_RAMP,
     &GEN_RANDOM,
     &GEN_WAVE,
@@ -1712,6 +1720,7 @@ pub const GENERATORS: [&DeviceLayout; 11] = [
     &GEN_SCALE,
     &GEN_WALK,
     &GEN_PINK,
+    &GEN_MULTIPLY,
     &GEN_REWORK,
 ];
 
@@ -1728,6 +1737,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
         FillKind::Scale => &GEN_SCALE,
         FillKind::Walk => &GEN_WALK,
         FillKind::Pink => &GEN_PINK,
+        FillKind::Multiply => &GEN_MULTIPLY,
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,
     }
 }

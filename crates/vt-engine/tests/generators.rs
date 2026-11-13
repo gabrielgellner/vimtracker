@@ -17,8 +17,8 @@ use vt_model::samples::SamplePool;
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, Context, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Shape, ShapeColumn, Values,
-    Walk, Where,
+    Acid, Bits, Context, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Shape, ShapeColumn,
+    Values, Walk, Where,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::step::{FxCommand, Step};
@@ -46,6 +46,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         follow: Follow::default(),
         walk: Walk::default(),
         pink: Pink::default(),
+        bits: Bits::default(),
     }
 }
 

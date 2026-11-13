@@ -83,6 +83,8 @@ fn owns(shape: &Shape) -> Owns {
         FillKind::Acid => Owns::Note,
         FillKind::Follow if shape.follow.fx => Owns::NoteFx,
         FillKind::Follow => Owns::Note,
+        // A note it adds or clears takes or leaves its velocity and gate.
+        FillKind::Multiply => Owns::Note,
         _ => Owns::Cell,
     }
 }

@@ -2508,3 +2508,30 @@ fn space_g_capital_a_writes_what_a_random_lfo_held_at_each_note_played_in_scale(
     let apart = most_apart(&was[2 * LAP..], &now[2 * LAP..]);
     assert!(apart < 1e-3, "{apart}");
 }
+
+#[test]
+fn a_steps_slots_lists_find_a_name_before_a_meaning_and_each_word_on_its_own() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4L");
+    press(&mut app, &format!("{}K/steps", to_lfo(0)));
+    special(&mut app, KeyCode::Enter);
+    let slot = |app: &App| app.song().tracks[0].mods[3];
+    // Its mode: `Trig`'s meaning says `note`, but `Note` is a name.
+    press(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Mode));
+    press(&mut app, "Knote");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(slot(&app).steps.mode, StepsMode::Note);
+    // Its destination: `pitch in` takes `Pitch in scale` rather than `Pitch`, whose meaning has
+    // an `in`, and so do each word on its own and the whole name.
+    press(&mut app, "ll");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Destination));
+    for search in ["pitch in", "pi sc", "pitch in scale"] {
+        press(&mut app, &format!("K{search}"));
+        special(&mut app, KeyCode::Enter);
+        assert_eq!(slot(&app).destination, Some(SettingId::PITCH), "{search}");
+        assert!(slot(&app).in_scale, "{search}");
+        press(&mut app, "-");
+        assert!(!slot(&app).in_scale, "{search}");
+    }
+}

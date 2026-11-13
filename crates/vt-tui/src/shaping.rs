@@ -12,9 +12,9 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Acid, Context, DEFAULT_RATE, FillKind, Follow, GenParam, MAX_VALUES, Pink, Shape, ShapeColumn,
-    Source, Starts, Values, Walk, Where, default_ends, default_step, is_empty, open_rows,
-    track_seed,
+    Acid, Bits, Context, DEFAULT_RATE, FillKind, Follow, GenParam, MAX_VALUES, Pink, Shape,
+    ShapeColumn, Source, Starts, Values, Walk, Where, default_ends, default_step, is_empty,
+    open_rows, track_seed,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -600,6 +600,7 @@ impl App {
                     ..Walk::default()
                 },
                 pink: Pink::default(),
+                bits: Bits::default(),
             },
             row: GenParam::Fill,
             typing: None,

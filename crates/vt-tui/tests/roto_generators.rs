@@ -8,7 +8,8 @@ use vt_model::action::{Action, edit};
 use vt_model::generator::{Generator, Span};
 use vt_model::scale::Scale;
 use vt_model::shape::{
-    Acid, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Shape, ShapeColumn, Values, Walk, Where,
+    Acid, Bits, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Shape, ShapeColumn, Values, Walk,
+    Where,
 };
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
@@ -36,6 +37,7 @@ fn shape(kind: FillKind, place: Where) -> Shape {
         follow: Follow::default(),
         walk: Walk::default(),
         pink: Pink::default(),
+        bits: Bits::default(),
     }
 }
 
