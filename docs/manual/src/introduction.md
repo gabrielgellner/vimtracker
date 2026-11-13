@@ -80,7 +80,7 @@ resonator, comb and formant filters, a limiter and a compressor. The compressor 
 types: `Clean`; `Console`, an SSL bus compressor fitted to Arturia's Bus FORCE; and
 `Glue`, fitted to Ableton Live's Glue Compressor. `Distort` has six modes and two
 guitar pedals, `Overdrive`, a Tube Screamer's circuit, and `Distortion`, an op-amp
-distortion. See [The track pages: Sound, Mod and FX](guides/tracks.md).
+distortion. See [The track pages: Sound, Mod, FX and Gen](guides/tracks.md).
 
 **Graphics** are images the terminal is sent, drawn at its own pixels: the filter's
 curve with a mark at its cutoff, a sampler's slice as a thumbnail with its start and end,

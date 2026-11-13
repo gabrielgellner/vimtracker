@@ -11,6 +11,7 @@ use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{Fade, Lfo, Rate};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
 use vt_model::settings::{LONGEST_GLIDE_MS, gate_value, glide_value};
+use vt_model::shape::params::Typing;
 use vt_model::song::reset_named;
 use vt_model::step::Note;
 use vt_model::steps::{MAX_MUTATE, STEPS, StepRate, Steps};
@@ -20,6 +21,9 @@ use crate::app::{App, Entry};
 use crate::input::mode::Mode;
 
 use super::{AccumulatorField, ArpField, Control, ModField};
+
+/// The longest a generator's value can be typed: a list of eight notes and the spaces between.
+const GEN_TEXT: usize = 40;
 
 /// Read a depth, with an optional sign, in hex.
 fn parse_depth(text: &str) -> Option<i16> {
@@ -35,6 +39,12 @@ impl App {
     /// Type a value: two hex digits for levels, and anything else then `Enter`.
     pub(crate) fn insert_track_page(&mut self, key: KeyCode) {
         let control = self.track_control();
+        // A generator's ends on a column of hex values enter themselves, as levels do, and a
+        // list of notes takes more room.
+        let (hex, longest) = match control {
+            Control::Gen { .. } => (self.gen_typing() == Some(Typing::Hex), GEN_TEXT),
+            _ => (control.is_hex(), 12),
+        };
         match key {
             KeyCode::Esc => {
                 self.entry = Entry::default();
@@ -43,14 +53,14 @@ impl App {
             KeyCode::Backspace => {
                 self.entry.text.pop();
             }
-            KeyCode::Enter if !control.is_hex() => {
+            KeyCode::Enter if !hex => {
                 let text = std::mem::take(&mut self.entry.text);
                 self.mode = Mode::Normal;
                 if !text.is_empty() {
                     self.commit_control(control, &text);
                 }
             }
-            KeyCode::Char(c) if control.is_hex() && c.is_ascii_hexdigit() => {
+            KeyCode::Char(c) if hex && c.is_ascii_hexdigit() => {
                 self.entry.text.push(c.to_ascii_uppercase());
                 if self.entry.text.len() == 2 {
                     let text = std::mem::take(&mut self.entry.text);
@@ -64,7 +74,7 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char(c) if !control.is_hex() && self.entry.text.len() < 12 => {
+            KeyCode::Char(c) if !hex && self.entry.text.len() < longest => {
                 self.entry.text.push(c);
             }
             _ => {}
@@ -74,6 +84,8 @@ impl App {
     fn commit_control(&mut self, control: Control, text: &str) {
         let track = self.page_track();
         match control {
+            Control::Gen { .. } => self.type_gen(text),
+            Control::NewGenerator(_) => {}
             Control::Mute | Control::Solo | Control::Limiter | Control::Safe => {}
             Control::Sample => {}
             Control::Tune | Control::Cents => self.type_tuning(control, text),

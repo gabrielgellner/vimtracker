@@ -212,8 +212,12 @@ impl App {
     pub(crate) fn press(&mut self, key: Key, now: Instant) {
         let was = self.mode;
         self.started = None;
+        // The Gen page shows the phrase under the cursor, wherever a key or the time between
+        // keys has moved it.
+        self.track_page.phrase = self.phrase_id();
         self.handle_key(key, now);
         self.keep_cursor_shown();
+        self.track_page.phrase = self.phrase_id();
         // Something that lasts while its key is down is tied to that key, and doesn't repeat.
         // One already held ends as if let go now, as only one is kept.
         if let Some(what) = self.started.take() {

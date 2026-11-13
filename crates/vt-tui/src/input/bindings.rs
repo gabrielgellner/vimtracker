@@ -118,6 +118,8 @@ pub enum Cmd {
     Shape,
     /// Open the shape panel again on the live generator under the cursor.
     ReopenGenerator,
+    /// Roll the live generator under the cursor again, on the Gen page.
+    RollGenerator,
     /// Apply the live generator under the cursor, leaving plain values; on the Mod page, keep what
     /// a Steps slot's `Mutate` drew as its values.
     ApplyGenerator,
@@ -495,9 +497,13 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
         Cmd::Move(Motion::Last),
         "Last row, of this column of devices",
     ),
-    ("H", Cmd::PreviousPage, "Previous page: Sound, Mod, FX"),
-    ("L", Cmd::NextPage, "Next page: Sound, Mod, FX"),
-    ("d d", Cmd::RemoveRow, "Take an effect out of its slot"),
+    ("H", Cmd::PreviousPage, "Previous page: Sound, Mod, FX, Gen"),
+    ("L", Cmd::NextPage, "Next page: Sound, Mod, FX, Gen"),
+    (
+        "d d",
+        Cmd::RemoveRow,
+        "Take an effect out of its slot, or a generator away",
+    ),
     ("p", Cmd::Paste, "Put the effect taken in this slot"),
     (
         "b",
@@ -523,7 +529,17 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
     (
         "Space g a",
         Cmd::ApplyGenerator,
-        "On a Steps slot, keep what Mutate drew as its values",
+        "On a Steps slot, keep what Mutate drew; on Gen, apply it",
+    ),
+    (
+        "r",
+        Cmd::RollGenerator,
+        "On the Gen page, roll the generator again",
+    ),
+    (
+        "Enter",
+        Cmd::ReopenGenerator,
+        "On the Gen page, open the shape panel on it",
     ),
     (
         "}",

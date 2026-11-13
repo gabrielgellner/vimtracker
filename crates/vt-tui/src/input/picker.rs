@@ -21,6 +21,7 @@ use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
 use vt_model::modulation::ModSlot;
 use vt_model::scale::{Scale, ScaleKind};
+use vt_model::selection::Field;
 use vt_model::settings::SettingId;
 use vt_model::shape::params::Choice;
 use vt_model::song::{FilterMode, FilterType, Machine};
@@ -174,6 +175,20 @@ pub enum Pick {
     /// A choice for the shape panel's setting: its fill, its wave and the wave's length, or
     /// which rows it fills.
     ShapeChoice(Choice),
+    /// A choice for a setting of one of a phrase's live generators, on the Gen page, by its
+    /// place in the phrase's list.
+    GenChoice {
+        phrase: u32,
+        generator: usize,
+        choice: Choice,
+    },
+    /// A column of the phrase under the cursor to make live, from the Gen page's `Empty`.
+    GenColumn(Field),
+    /// The same for an empty FX column, with the command it writes.
+    GenCommand {
+        field: Field,
+        command: FxCommand,
+    },
     /// The command the shape panel writes on an FX column with none.
     ShapeCommand(FxCommand),
     Use {

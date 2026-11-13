@@ -150,6 +150,8 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
         return switched(control, at, track, now);
     }
     match control {
+        // Generators reach the Roto by their own layouts (#613).
+        Control::Gen { .. } | Control::NewGenerator(_) => None,
         Control::Machine => changed(pick(&Machine::ALL, position), track.machine, |machine| {
             Action::SetTrackMachine { track: at, machine }
         }),

@@ -1,4 +1,4 @@
-//! The track page, `Space 4`: a track's Sound, Mod and FX pages. `TrackPage` is the page as a
+//! The track page, `Space 4`: a track's Sound, Mod, FX and Gen pages. `TrackPage` is the page as a
 //! component, which page shows and where its cursor is, with the moves that need only the cursor's
 //! track; the edits, which change the song, are `App`'s. Each page's settings are in a file of its
 //! own (`sound`, `modulation`, `fx`), each gives its devices to `Page::devices` if it's a rack
@@ -8,6 +8,7 @@ mod controls;
 mod device;
 mod editing;
 mod fx;
+mod generators;
 mod mixer;
 mod modulation;
 mod pickers;
@@ -41,11 +42,13 @@ pub enum Page {
     Sound,
     Mod,
     Fx,
+    /// The live generators of the phrase under the cursor.
+    Gen,
 }
 
 impl Page {
     /// Every page, in order.
-    pub const ALL: [Self; 3] = [Self::Sound, Self::Mod, Self::Fx];
+    pub const ALL: [Self; 4] = [Self::Sound, Self::Mod, Self::Fx, Self::Gen];
 
     /// The page's name on screen.
     pub fn name(self) -> &'static str {
@@ -53,6 +56,7 @@ impl Page {
             Self::Sound => "Sound",
             Self::Mod => "Mod",
             Self::Fx => "FX",
+            Self::Gen => "Gen",
         }
     }
 
@@ -72,12 +76,20 @@ impl Page {
     /// page's machine, filter, output and play, or a fixed track's output alone, the Mod page's
     /// mod slots, accumulator and arpeggio, and the FX page's slots. The cursor, `j`, `k`,
     /// `h`, `l`, `{` and `}` go through whatever devices a page gives, laid out as its rack
-    /// ([`rack_places`]).
+    /// ([`rack_places`]). The Gen page's hang on a phrase as well, so they're
+    /// [`Page::devices_on`]'s, and here there are none.
     pub fn devices(self, track: &Track) -> Vec<DeviceSpec> {
+        self.devices_on(track, None)
+    }
+
+    /// The page's devices, the Gen page's being a device for each live generator of this phrase
+    /// of the track, then `Empty`.
+    pub fn devices_on(self, track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
         match self {
             Self::Sound => sound::devices(track),
             Self::Mod => modulation::devices(track),
             Self::Fx => fx::devices(track),
+            Self::Gen => generators::devices(track, phrase),
         }
     }
 }
@@ -145,12 +157,15 @@ pub struct TrackPage {
     /// The row and field the cursor was kept at on each page, by [`Page::index`], the showing
     /// page's being `row` and `field`.
     kept: [(usize, usize); Page::ALL.len()],
+    /// The phrase the Gen page shows: the one under the app's cursor, which the app gives it
+    /// as each key comes, so the page itself holds no song.
+    pub phrase: Option<u32>,
 }
 
 impl TrackPage {
     /// The page's devices, or none with no track.
     pub fn devices(&self, track: Option<&Track>) -> Vec<DeviceSpec> {
-        track.map_or_else(Vec::new, |track| self.page.devices(track))
+        track.map_or_else(Vec::new, |track| self.page.devices_on(track, self.phrase))
     }
 
     /// The page's rows as the cursor goes through them, each device's in turn, each a list of
@@ -479,6 +494,7 @@ impl App {
 
     /// Run a command on the track page. Returns false if it means the same as anywhere.
     pub(crate) fn run_track_page(&mut self, cmd: Cmd) -> bool {
+        self.track_page.phrase = self.phrase_id();
         let song = Arc::clone(self.song());
         let track = song.tracks.get(self.cursor.track);
         // Only `{` and `}` go on from where the cursor was kept, so they come back to it.
@@ -509,20 +525,27 @@ impl App {
                 self.mode = Mode::Keys;
                 self.status = "a w s e d f play, < > change octave, ; stops".to_owned();
             }
+            _ if self.track_page.page == Page::Gen && self.run_gen_page(cmd, times) => {}
+            Cmd::RollGenerator | Cmd::ReopenGenerator => {
+                self.status = "r and Enter work on a generator, on the Gen page".to_owned();
+            }
             Cmd::RemoveRow | Cmd::Paste if self.track_page.page != Page::Fx => {
                 self.status = "dd and p move effects, on the FX page".to_owned();
             }
             Cmd::Bypass => match self.track_page.page {
                 Page::Fx => self.toggle_bypass(),
                 Page::Mod => self.toggle_modulator(),
-                Page::Sound => {
+                Page::Sound | Page::Gen => {
                     self.status =
                         "b switches an effect or a modulator, on the FX and Mod pages".to_owned();
                 }
             },
             Cmd::ApplyGenerator if self.track_page.page == Page::Mod => self.keep_drift(),
             Cmd::ApplyGenerator => {
-                self.status = "Space g a keeps a Steps slot's drift, on the Mod page".to_owned();
+                self.status =
+                    "Space g a keeps a Steps slot's drift on the Mod page, or applies a generator \
+                     on the Gen page"
+                        .to_owned();
             }
             Cmd::RemoveRow => self.take_insert(),
             Cmd::Paste => self.put_insert(),

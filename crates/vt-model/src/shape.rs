@@ -11,7 +11,7 @@ mod walk;
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
-pub use params::{Context, GenParam, Starts};
+pub use params::{Context, GEN_COLUMNS, GEN_ROWS, GenParam, Starts};
 use serde::{Deserialize, Serialize};
 pub use walk::{Edge, MAX_DEPTH, MIN_DEPTH, Pink, Walk, default_step};
 
@@ -769,6 +769,20 @@ pub fn targets(
             }
         })
         .collect()
+}
+
+/// Whether a column has nothing on these rows to reshape: no note, or no FX command in its slot,
+/// so a shape is generated there rather than reshaping what's there. A note's velocity, nudge
+/// and length always have their notes.
+pub fn is_empty(steps: &[Step], range: StepRange, column: ShapeColumn) -> bool {
+    let mut rows = (range.first..=range.last).filter_map(|row| steps.get(row));
+    match column {
+        ShapeColumn::Note { .. } => !rows.any(|step| matches!(step.note, Note::On(_))),
+        ShapeColumn::Fx { slot, .. } => {
+            !rows.any(|step| step.fx.get(slot).is_some_and(|fx| fx.command.is_some()))
+        }
+        _ => false,
+    }
 }
 
 /// How many rows of a range a column could change, which a Euclidean `Where` spreads its hits

@@ -409,6 +409,8 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             .collect::<Vec<_>>()
     };
     let found = match control {
+        // Generators reach the Roto by their own layouts (#613).
+        Control::Gen { .. } | Control::NewGenerator(_) => return None,
         Control::Machine => list(
             Machine::ALL.iter().map(|machine| machine.name().to_owned()),
             Machine::ALL

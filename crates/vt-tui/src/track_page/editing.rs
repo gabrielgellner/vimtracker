@@ -507,6 +507,8 @@ impl App {
             moved.clamp(0, i64::from(top)) as u8
         };
         match control {
+            // The Gen page's own keys reshape its generators (`generators::run_gen_page`).
+            Control::Gen { .. } | Control::NewGenerator(_) => {}
             Control::Mute | Control::Solo => {
                 let live = self
                     .levels
@@ -801,6 +803,7 @@ impl App {
         let track = self.page_track();
         let fresh = Track::default();
         match control {
+            Control::Gen { .. } | Control::NewGenerator(_) => {}
             Control::Base(which) => {
                 let value = |track: &Track| match which {
                     TrackControl::Cutoff => track.cutoff,
