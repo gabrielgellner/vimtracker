@@ -15,12 +15,75 @@ impl SameBits for f32 {
     }
 }
 
+impl SameBits for f64 {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.to_bits() == other.to_bits()
+    }
+}
+
 impl<T: SameBits, const N: usize> SameBits for [T; N] {
     #[inline]
     fn same_bits(&self, other: &Self) -> bool {
         self.iter().zip(other).all(|(a, b)| a.same_bits(b))
     }
 }
+
+impl<T: SameBits> SameBits for Option<T> {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Some(a), Some(b)) => a.same_bits(b),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
+
+impl<A: SameBits, B: SameBits> SameBits for (A, B) {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.0.same_bits(&other.0) && self.1.same_bits(&other.1)
+    }
+}
+
+impl<A: SameBits, B: SameBits, C: SameBits> SameBits for (A, B, C) {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.0.same_bits(&other.0) && self.1.same_bits(&other.1) && self.2.same_bits(&other.2)
+    }
+}
+
+/// [`SameBits`] for types with no float in them, whose `==` is already exact: the settings a
+/// state was worked out from, a rate, a switch.
+macro_rules! same_bits_by_eq {
+    ($($kind:ty),* $(,)?) => {
+        $(impl $crate::dsp::blocks::sides::SameBits for $kind {
+            #[inline]
+            fn same_bits(&self, other: &Self) -> bool {
+                self == other
+            }
+        })*
+    };
+}
+pub(crate) use same_bits_by_eq;
+
+same_bits_by_eq!(bool, u8, u32, usize);
+
+/// [`SameBits`] for a struct, field by field. Every field must be named, as the struct is taken
+/// apart without `..`, so a field added later can't be left out by mistake.
+macro_rules! same_bits_by_fields {
+    ($kind:ident { $($field:ident),* $(,)? }) => {
+        impl $crate::dsp::blocks::sides::SameBits for $kind {
+            #[inline]
+            fn same_bits(&self, other: &Self) -> bool {
+                let $kind { $($field),* } = self;
+                $($field.same_bits(&other.$field))&&*
+            }
+        }
+    };
+}
+pub(crate) use same_bits_by_fields;
 
 /// Whether a frame's two sides are the same, bit for bit.
 #[inline]
@@ -48,6 +111,13 @@ impl<T: Default> Default for Sides<T> {
             states: [T::default(), T::default()],
             together: true,
         }
+    }
+}
+
+impl<T: SameBits> SameBits for Sides<T> {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        self.together == other.together && self.states.same_bits(&other.states)
     }
 }
 

@@ -2,6 +2,8 @@
 
 use vt_model::constants::{FAST_SMOOTHING_MS, SMOOTHING_MS};
 
+use super::sides::same_bits_by_fields;
+
 /// How much of the remaining distance to cover each frame.
 pub fn coefficient(rate: u32) -> f32 {
     let frames = SMOOTHING_MS as f32 / 1000.0 * rate as f32;
@@ -41,4 +43,14 @@ impl Smoothed {
         self.value += (self.target - self.value) * coefficient;
         self.value
     }
+
+    /// Whether moving a frame would leave it exactly where it is: at its target, or so near that
+    /// what's left rounds away, where a smoother stops short of its target for good.
+    #[inline]
+    pub fn still(&self, coefficient: f32) -> bool {
+        let moved = self.value + (self.target - self.value) * coefficient;
+        moved.to_bits() == self.value.to_bits()
+    }
 }
+
+same_bits_by_fields!(Smoothed { target, value });

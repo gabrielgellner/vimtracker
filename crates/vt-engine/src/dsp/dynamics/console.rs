@@ -29,6 +29,7 @@ use vt_model::insert::{
     CONSOLE_AUTO_RELEASE, CONSOLE_RATIOS, CONSOLE_RELEASES_MS, Compressor as Settings, threshold_db,
 };
 
+use crate::dsp::blocks::sides::same_bits_by_fields;
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// Below this, a level counts as silence, about -120 dB, so the log stays finite.
@@ -129,6 +130,25 @@ pub struct Console {
     /// The settings the times were worked out from, and the times.
     times: Option<(Settings, Times)>,
 }
+
+same_bits_by_fields!(Times {
+    attack,
+    release,
+    hold,
+    discharge,
+    into_slow,
+    slow_fills,
+});
+same_bits_by_fields!(Console {
+    reduction,
+    slow,
+    held,
+    threshold,
+    slope,
+    knee,
+    offset,
+    times,
+});
 
 impl Console {
     /// How far it's turning down now, in dB, for a meter.

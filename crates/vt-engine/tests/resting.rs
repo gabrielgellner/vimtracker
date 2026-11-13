@@ -1,6 +1,8 @@
 //! A track at rest, with nothing moving and nothing to hear, isn't worked out again until
-//! something changes (#547): the song sounds exactly as it does when every track is worked out
-//! every time, stopped or playing, through edits, previews, auditions and tails ringing out.
+//! something changes (#547), and a group, return or master with nothing coming in that would give
+//! the same and change nothing is left out of the mix (#558): the song sounds exactly as it does
+//! when everything is worked out every time, stopped or playing, through edits, previews,
+//! auditions and tails ringing out.
 
 use std::sync::Arc;
 
@@ -8,7 +10,8 @@ use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_model::constants::MAX_GROUPS;
 use vt_model::insert::{
-    Compressor, Delay, Distort, DistortType, Insert, Plate, Reverb, Space, Spring, Stutter,
+    Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Exciter, Insert, Limiter,
+    LowPassGate, Plate, Reverb, Space, Spring, Stutter,
 };
 use vt_model::lfo::Lfo;
 use vt_model::modulation::ModSlot;
@@ -25,6 +28,8 @@ const SOUNDS: usize = 5;
 const GROUP: usize = SOUNDS;
 const RETURN_A: usize = SOUNDS + MAX_GROUPS;
 const MASTER: usize = RETURN_A + 2;
+/// The master's place among the fixed tracks, for `Engine::bus_rested`.
+const MASTER_BUS: usize = MAX_GROUPS + 2;
 
 fn pool() -> Arc<SamplePool> {
     let frames = (0..9600)
@@ -60,8 +65,9 @@ fn song() -> Song {
         kind: DistortType::Overdrive,
         ..Distort::DEFAULT
     });
-    song.tracks[3].group = Some(0);
-    song.tracks[4].group = Some(0);
+    // Groups count from 1, as `G1` does.
+    song.tracks[3].group = Some(1);
+    song.tracks[4].group = Some(1);
     song.tracks[GROUP].inserts[0] = Insert::Compressor(Compressor::DEFAULT);
     song.tracks[RETURN_A].inserts[0] = Insert::Space(Space::DEFAULT);
     song.tracks[MASTER].inserts[0] = Insert::Compressor(Compressor::DEFAULT);
@@ -80,21 +86,62 @@ fn song() -> Song {
     song
 }
 
+/// The same with more in the mix: a Glue compressor with its clip and `Auto`, an EQ, a soft clip
+/// and a limiter on the master, a low-pass gate and an exciter on a group no track is in, and a
+/// delay on return B.
+fn busy_mix() -> Song {
+    let mut song = song();
+    song.tracks[MASTER].inserts = [
+        Insert::Compressor(Compressor {
+            kind: CompressorType::Glue,
+            auto: 1,
+            peak_clip: 1,
+            ..Compressor::DEFAULT
+        }),
+        Insert::Eq(Equaliser::DEFAULT),
+        Insert::Distort(Distort {
+            kind: DistortType::Soft,
+            ..Distort::DEFAULT
+        }),
+        Insert::Limit(Limiter::DEFAULT),
+    ];
+    song.tracks[GROUP + 1].inserts[0] = Insert::Lpg(LowPassGate::DEFAULT);
+    song.tracks[GROUP + 1].inserts[1] = Insert::Exciter(Exciter::DEFAULT);
+    song.tracks[RETURN_A + 1].inserts[0] = Insert::Delay(Delay::DEFAULT);
+    song.tracks[1].send_b = 0x80;
+    song
+}
+
+/// The same with a master whose slots settle soon after a sound, a limiter and a bit crusher,
+/// and no long reverb on return A, so the whole mix rests again once the tracks' tails die away.
+fn settling_mix() -> Song {
+    let mut song = song();
+    song.tracks[RETURN_A].inserts[0] = Insert::Empty;
+    song.tracks[MASTER].inserts[0] = Insert::Limit(Limiter::DEFAULT);
+    song.tracks[MASTER].inserts[1] = Insert::Distort(Distort {
+        kind: DistortType::Crush,
+        ..Distort::DEFAULT
+    });
+    song
+}
+
 fn version(song: Song) -> Arc<Published> {
     Arc::new(Published::new(Arc::new(song), pool()))
 }
 
 /// Play through stopped and playing, with edits, previews, an audition and tails, letting tracks
-/// rest or not.
-fn play(rest: bool) -> Vec<u32> {
+/// rest or not, and say how many blocks the master was left out of.
+fn play(song: fn() -> Song, rest: bool) -> (Vec<u32>, usize) {
     let mut engine = Engine::new(RATE, version(song()));
     engine.let_rest(rest);
     let mut heard = Vec::new();
+    let mut rested = 0;
     let mut out = vec![0.0; BLOCK * 2];
     let mut run = |engine: &mut Engine, blocks: usize| {
         for _ in 0..blocks {
             engine.process(&mut out);
             heard.extend(out.iter().map(|sample| sample.to_bits()));
+            rested += usize::from(engine.bus_rested(MASTER_BUS));
         }
     };
     run(&mut engine, 20);
@@ -105,6 +152,7 @@ fn play(rest: bool) -> Vec<u32> {
     run(&mut engine, 200);
     // Edited while stopped: the next note hears it at once.
     let mut edited = song();
+    edited.tracks[MASTER].level = 0xC0;
     for track in edited.tracks.iter_mut().take(SOUNDS) {
         track.set_setting(SettingId::CUT, 0x50);
         track.set_setting(SettingId::PITCH, 0x84);
@@ -147,19 +195,50 @@ fn play(rest: bool) -> Vec<u32> {
         run(&mut engine, 5);
     }
     run(&mut engine, 200);
-    heard
+    (heard, rested)
 }
 
 #[test]
 fn resting_tracks_change_nothing_heard() {
-    let (resting, worked) = (play(true), play(false));
+    // A compressor's `Auto` follows the level over a second whether it's on or not, so a master
+    // with one rests only until it has heard something, for the length of this. One without
+    // rests again once what it heard has died away.
+    for (song, least) in [(song as fn() -> Song, 20), (settling_mix, 100)] {
+        let ((resting, rested), (worked, none)) = (play(song, true), play(song, false));
+        assert!(
+            resting
+                .iter()
+                .any(|&bits| f32::from_bits(bits).abs() > 0.01),
+            "it plays"
+        );
+        assert!(resting == worked, "resting changed the sound");
+        assert!(
+            rested >= least && none == 0,
+            "the master rested for {rested} blocks"
+        );
+    }
+}
+
+#[test]
+fn the_mix_rests_while_silent_and_wakes_for_what_comes_in() {
+    let mut engine = Engine::new(RATE, version(busy_mix()));
+    let mut out = vec![0.0; BLOCK * 2];
+    engine.process(&mut out);
     assert!(
-        resting
-            .iter()
-            .any(|&bits| f32::from_bits(bits).abs() > 0.01),
-        "it plays"
+        (0..=MASTER_BUS).all(|bus| engine.bus_rested(bus)),
+        "stopped and silent, the whole mix rests"
     );
-    assert!(resting == worked, "resting changed the sound");
+    engine.preview(3, 60, 100);
+    engine.process(&mut out);
+    assert!(!engine.bus_rested(0), "a preview wakes its group");
+    assert!(
+        engine.bus_rested(1),
+        "a group none of whose tracks plays rests"
+    );
+    assert!(
+        !engine.bus_rested(MAX_GROUPS) && !engine.bus_rested(MASTER_BUS),
+        "and while any track plays, the returns and master don't"
+    );
 }
 
 #[test]

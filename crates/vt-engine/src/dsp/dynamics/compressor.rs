@@ -21,6 +21,7 @@ use vt_model::insert::{
 
 use super::console::{self, Console};
 use super::glue::{self, Glue};
+use crate::dsp::blocks::sides::{SameBits, same_bits_by_eq, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// The knee's width in dB: the curve bends over this much either side of the threshold.
@@ -58,6 +59,40 @@ enum Kind {
 impl Default for Kind {
     fn default() -> Self {
         Self::Clean(Clean::default())
+    }
+}
+
+same_bits_by_eq!(Settings);
+same_bits_by_fields!(Compressor {
+    kind,
+    auto,
+    makeup,
+    makeup_from,
+});
+same_bits_by_fields!(AutoGain {
+    heard,
+    left,
+    makeup,
+    on,
+    keeps,
+});
+same_bits_by_fields!(Clean {
+    reduction,
+    released,
+    threshold,
+    slope,
+    times,
+});
+
+impl SameBits for Kind {
+    #[inline]
+    fn same_bits(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Clean(a), Self::Clean(b)) => a.same_bits(b),
+            (Self::Console(a), Self::Console(b)) => a.same_bits(b),
+            (Self::Glue(a), Self::Glue(b)) => a.same_bits(b),
+            _ => false,
+        }
     }
 }
 

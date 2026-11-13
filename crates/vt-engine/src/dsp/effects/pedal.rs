@@ -29,7 +29,7 @@ use vt_model::insert::DistortType;
 
 use crate::dsp::blocks::oversampler::QuadrupleOversampler;
 use crate::dsp::blocks::plaits_parts::Svf;
-use crate::dsp::blocks::sides::{SameBits, Sides};
+use crate::dsp::blocks::sides::{SameBits, Sides, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// How many volts full scale stands for in the Tube Screamer: about what a TB-303 puts out, a volt
@@ -257,6 +257,20 @@ struct Coefficients {
     coupling: f32,
 }
 
+same_bits_by_fields!(Coefficients {
+    gain,
+    diodes,
+    gain_branch,
+    feedback,
+    tone_low_pass,
+    shelf,
+    top,
+    treble,
+    drive,
+    distortion_high_pass,
+    coupling,
+});
+
 impl Default for Coefficients {
     fn default() -> Self {
         Self {
@@ -290,6 +304,14 @@ pub(crate) struct Pedal {
     /// Whether it's resting at zero, with nothing going in.
     resting: bool,
 }
+
+same_bits_by_fields!(Pedal {
+    channels,
+    tone,
+    worked_out,
+    coefficients,
+    resting,
+});
 
 impl Default for Pedal {
     fn default() -> Self {

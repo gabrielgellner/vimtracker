@@ -26,7 +26,7 @@ use vt_model::insert::{
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::oversampler::Oversampler;
-use crate::dsp::blocks::sides::{SameBits, Sides};
+use crate::dsp::blocks::sides::{SameBits, Sides, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// The diode's curve, `25 β (exp(α x) - 1)`, with Chowdhury's `α = 0.05 / 0.0259` and `β = 0.2`.
@@ -106,6 +106,20 @@ pub struct Exciter {
     attack: f32,
     release: f32,
 }
+
+same_bits_by_fields!(HighPass { b0, b1, a1, a2 });
+same_bits_by_fields!(Exciter {
+    sides,
+    drive,
+    tone,
+    attack_ms,
+    release_ms,
+    rate,
+    tuned,
+    high_pass,
+    attack,
+    release,
+});
 
 impl Default for Exciter {
     fn default() -> Self {
