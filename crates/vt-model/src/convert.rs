@@ -128,20 +128,13 @@ pub fn convert_text(text: &str, path: &str) -> Result<(Song, Converted), Convert
     }
     // The format's only other change: a Nudge column says how far its nudges go.
     let text = text
-        .replacen(
-            &format!("format_version: {FROM_FORMAT}"),
-            &format!("format_version: {}", crate::constants::FORMAT_VERSION),
-            1,
-        )
         .replace(
             "column: Nudge,",
             &format!("column: Nudge(most: {OLD_MOST}),"),
         )
-        .replace(
-            "column:Nudge,",
-            &format!("column:Nudge(most:{OLD_MOST}),"),
-        );
+        .replace("column:Nudge,", &format!("column:Nudge(most:{OLD_MOST}),"));
     let mut song: Song = ron::from_str(&text).map_err(|e| parse(&e))?;
+    song.format_version = crate::constants::FORMAT_VERSION;
     song.ensure_fixed_tracks();
     let converted = convert_song(&mut song);
     Ok((song, converted))

@@ -30,7 +30,7 @@ fn column_order(column: ShapeColumn) -> usize {
     match column {
         ShapeColumn::Note { .. } => 0,
         ShapeColumn::Velocity => 1,
-        ShapeColumn::Nudge => 2,
+        ShapeColumn::Nudge { .. } => 2,
         ShapeColumn::Length => 3,
         ShapeColumn::Fx { slot, .. } => 4 + slot,
     }
@@ -130,7 +130,7 @@ fn field_of(column: ShapeColumn) -> Field {
     match column {
         ShapeColumn::Note { .. } => Field::Note,
         ShapeColumn::Velocity => Field::Velocity,
-        ShapeColumn::Nudge => Field::Nudge,
+        ShapeColumn::Nudge { .. } => Field::Nudge,
         ShapeColumn::Length => Field::GateLength,
         ShapeColumn::Fx { slot, .. } => Field::FxValue(slot),
     }

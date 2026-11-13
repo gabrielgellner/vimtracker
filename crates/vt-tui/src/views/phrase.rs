@@ -11,7 +11,8 @@ use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS, TICKS_PER_STEP};
 use vt_model::selection::{Scope, StepRange};
 use vt_model::shape::{ShapeColumn, Source};
 use vt_model::song::{Phrase, Track};
-use vt_model::step::{FxCommand, GateKind, Mark, Note, Step};
+use vt_model::speed::Speed;
+use vt_model::step::{FxCommand, GateKind, Mark, Note, Step, nudge_text};
 
 use crate::app::{App, Field, TrackSpan};
 use crate::glyphs;
@@ -66,10 +67,11 @@ const LENGTH_EMPTY: &str = "..";
 /// How an empty FX slot shows its command and its value: no `00`, as it has none.
 const COMMAND_EMPTY: &str = "...";
 const VALUE_EMPTY: &str = "..";
-/// How a row on the grid shows its nudge: as nothing, so only a nudged row's catches the eye.
-const NUDGE_EMPTY: &str = "  ";
+/// How wide a row's nudge is on the grid: a sign and two hex digits, as far as a track at a quarter
+/// goes. A track whose nudges need one digit leaves the third blank.
+const NUDGE_WIDTH: usize = 3;
 /// Where the first FX slot starts: after the note, velocity, nudge and gate cell with its length.
-const FX_START: usize = 18;
+const FX_START: usize = 19;
 
 /// Where a row falls in the bar: on the first step of a bar or of a beat, or between them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,12 +122,12 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
     let length = step
         .length()
         .map_or_else(|| LENGTH_EMPTY.to_owned(), |length| format!("{length:02X}"));
-    // A sign and the 24ths in one hex digit, as the most is `B`.
-    let nudge = match step.nudge {
-        0 => NUDGE_EMPTY.to_owned(),
-        late if late > 0 => format!("+{late:X}"),
-        early => format!("-{:X}", early.unsigned_abs()),
-    };
+    // A sign and the 24ths in as many hex digits as the track's nudges need, and nothing on the
+    // grid, so only a nudged row's catches the eye.
+    let most = track
+        .map_or(Speed::Sixteenth, |track| track.speed)
+        .most_nudge();
+    let nudge = format!("{:<NUDGE_WIDTH$}", nudge_text(step.nudge, most));
     let mut text = format!("{} {velocity} {nudge} {gate} {length}", step.note);
     for slot in &step.fx {
         let name = match (slot.command, track) {
@@ -191,9 +193,9 @@ fn field_range(field: Field) -> (usize, usize) {
     match field {
         Field::Note => (0, 3),
         Field::Velocity => (4, 6),
-        Field::Nudge => (7, 9),
-        Field::Gate => (10, 14),
-        Field::GateLength => (15, 17),
+        Field::Nudge => (7, 7 + NUDGE_WIDTH),
+        Field::Gate => (11, 15),
+        Field::GateLength => (16, 18),
         Field::FxCommand(slot) => (fx_start(slot), fx_start(slot) + COMMAND_WIDTH),
         Field::FxValue(slot) => (
             fx_start(slot) + COMMAND_WIDTH,
@@ -276,7 +278,7 @@ fn live_cells(column: ShapeColumn) -> (usize, usize) {
     match column {
         ShapeColumn::Note { .. } => field_range(Field::Note),
         ShapeColumn::Velocity => field_range(Field::Velocity),
-        ShapeColumn::Nudge => field_range(Field::Nudge),
+        ShapeColumn::Nudge { .. } => field_range(Field::Nudge),
         ShapeColumn::Length => field_range(Field::GateLength),
         ShapeColumn::Fx { slot, .. } => field_range(Field::FxCommand(slot)),
     }
@@ -288,7 +290,7 @@ fn live_value(step: &Step, column: ShapeColumn) -> bool {
     match column {
         ShapeColumn::Note { .. } => step.note != Note::Empty,
         ShapeColumn::Velocity => step.velocity.is_some(),
-        ShapeColumn::Nudge => step.nudge != 0,
+        ShapeColumn::Nudge { .. } => step.nudge != 0,
         ShapeColumn::Length => step.length().is_some(),
         ShapeColumn::Fx { slot, .. } => step.fx.get(slot).is_some_and(|fx| fx.command.is_some()),
     }
@@ -1031,7 +1033,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 text.replace_range(start..end, &format!("{typed:<width$}", width = end - start));
             }
         }
-        // The first digit of a value being typed shows in its place.
+        // The first digit of a value being typed shows in its place, and a nudge's sign and its
+        // first digit where it takes two.
+        let nudge = app.cursor.field == Field::Nudge && !app.entry.text.is_empty();
         if typing
             && matches!(
                 app.cursor.field,
@@ -1041,11 +1045,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                     | Field::Nudge
                     | Field::GateLength
             )
-            && app.entry.text.len() == 1
+            && (app.entry.text.len() == 1 || nudge)
         {
             let (start, end) = field_range(app.cursor.field);
             if end <= text.len() {
-                text.replace_range(start..end, &format!("{}_", app.entry.text));
+                let typed = format!("{}_", app.entry.text);
+                text.replace_range(start..end, &format!("{typed:<width$}", width = end - start));
             }
         }
         // The row playing shows the note heard where an accumulator moved it, as the note column

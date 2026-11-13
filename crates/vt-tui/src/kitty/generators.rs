@@ -7,7 +7,7 @@
 
 use vt_model::generator::Generator;
 use vt_model::shape::ShapeColumn;
-use vt_model::step::{MAX_NUDGE, MAX_VELOCITY, Note, Step};
+use vt_model::step::{MAX_VELOCITY, Note, Step};
 
 use super::plot::Plot;
 
@@ -44,8 +44,10 @@ fn value(column: ShapeColumn, step: &Step) -> Option<f32> {
         ShapeColumn::Velocity => {
             note.then(|| f32::from(step.velocity.unwrap_or(MAX_VELOCITY)) / f32::from(MAX_VELOCITY))
         }
-        ShapeColumn::Nudge => note
-            .then(|| (f32::from(step.nudge) + f32::from(MAX_NUDGE)) / (2.0 * f32::from(MAX_NUDGE))),
+        ShapeColumn::Nudge { most } => note.then(|| {
+            let most = f32::from(most.max(1));
+            ((f32::from(step.nudge) + most) / (2.0 * most)).clamp(0.0, 1.0)
+        }),
         ShapeColumn::Length => step
             .length()
             .filter(|_| note)
@@ -70,7 +72,7 @@ impl GenDrawing {
         let look = match column {
             ShapeColumn::Note { .. } => GenLook::Notes,
             ShapeColumn::Velocity | ShapeColumn::Length => GenLook::Bars,
-            ShapeColumn::Nudge => GenLook::Centred,
+            ShapeColumn::Nudge { .. } => GenLook::Centred,
             ShapeColumn::Fx { .. } => GenLook::Line,
         };
         if look == GenLook::Notes {

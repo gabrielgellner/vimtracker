@@ -6,8 +6,7 @@ use crate::condition::Condition;
 use crate::constants::BEAT_STEPS;
 use crate::scale::Scale;
 use crate::step::{
-    FxCommand, FxSlot, Gate, MAX_NOTE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note,
-    Step,
+    FxCommand, FxSlot, Gate, MAX_NOTE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step,
 };
 
 /// One editable part of a step.
@@ -772,7 +771,11 @@ mod tests {
         assert_eq!(quarter("C-3 64", -20, Shift::NudgeLarge), "C-3 64 -2F");
         let fast = |text, by, kind| nudged_at(text, by, kind, Speed::ThirtySecond);
         assert_eq!(fast("C-3 64", 9, Shift::Nudge), "C-3 64 +5");
-        assert_eq!(fast("C-3 64 -B", 1, Shift::Nudge), "C-3 64 -5", "kept to its range");
+        assert_eq!(
+            fast("C-3 64 -B", 1, Shift::Nudge),
+            "C-3 64 -5",
+            "kept to its range"
+        );
     }
 
     #[test]
@@ -794,7 +797,15 @@ mod tests {
 
     fn lengthened(text: &str, by: i32, kind: Shift, gate: u8) -> String {
         let mut step: Step = text.parse().unwrap();
-        shift_step(&mut step, Scope::column(GATE_GROUP), by, kind, None, gate, 11);
+        shift_step(
+            &mut step,
+            Scope::column(GATE_GROUP),
+            by,
+            kind,
+            None,
+            gate,
+            11,
+        );
         step.to_string()
     }
 

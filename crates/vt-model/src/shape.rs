@@ -25,9 +25,7 @@ use crate::constants::{MAX_PHRASE_STEPS, TICKS_PER_QUARTER};
 use crate::lfo::{Rate, Shape as Wave};
 use crate::scale::Scale;
 use crate::selection::StepRange;
-use crate::step::{
-    FxCommand, MAX_NOTE, MAX_VELOCITY, MIDDLE_C, MIN_NOTE, Note, Step, nudge_text,
-};
+use crate::step::{FxCommand, MAX_NOTE, MAX_VELOCITY, MIDDLE_C, MIN_NOTE, Note, Step, nudge_text};
 
 /// The furthest `curve` and `s` go either way.
 pub const MAX_BEND: i8 = 100;
@@ -323,7 +321,9 @@ pub enum ShapeColumn {
     /// A note's nudge, held as `0` for the earliest to twice `most` for the latest, so it's a plain
     /// range. `most` is the furthest its track's nudges went when the panel opened, `B` at a
     /// sixteenth, which is kept with a live generator as a Note column's scale is.
-    Nudge { most: i8 },
+    Nudge {
+        most: i8,
+    },
     /// A note's length, the gate cell's last two digits.
     Length,
     Fx {
@@ -395,7 +395,9 @@ impl ShapeColumn {
     /// The nudge a value held on the Nudge column is, kept to the column's range, or 0 elsewhere.
     pub fn nudge_of(self, value: u8) -> i8 {
         match self {
-            Self::Nudge { most } => (i16::from(value).min(2 * i16::from(most)) - i16::from(most)) as i8,
+            Self::Nudge { most } => {
+                (i16::from(value).min(2 * i16::from(most)) - i16::from(most)) as i8
+            }
             _ => 0,
         }
     }
@@ -523,7 +525,6 @@ impl ShapeColumn {
         self.cell(step, value).apply(self, step);
     }
 }
-
 
 /// A note's name as the grid shows it, like `C-3` or `C#3`, or more loosely, like `c3`, `c-3` or
 /// `c#3`.
@@ -1878,7 +1879,11 @@ mod tests {
         assert_eq!(slow.parse("+30"), Some(94), "kept at 2F");
         assert_eq!(slow.parse("+B"), Some(58));
         let mut step = steps[2].clone();
-        assert_eq!(slow.value(&step), Some(49), "+2 is the same time on every track");
+        assert_eq!(
+            slow.value(&step),
+            Some(49),
+            "+2 is the same time on every track"
+        );
         slow.write(&mut step, 0);
         assert_eq!(step.nudge, -47);
         assert_eq!(nudge.value(&step), Some(0), "kept to a sixteenth's range");

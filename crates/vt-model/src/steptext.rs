@@ -13,7 +13,7 @@ use thiserror::Error;
 
 use crate::settings::SettingId;
 use crate::step::{
-    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_PULSES, MOST_NUDGE, MAX_VELOCITY, MIN_NOTE,
+    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, MOST_NUDGE,
     Mark, NOTE_NAMES, NOTE_NAMES_BELOW_ZERO, Note, Step, octave_start,
 };
 
@@ -387,7 +387,11 @@ mod tests {
         assert_eq!(nudge("C-3 64 -3 SGL1"), Ok(-3));
         assert_eq!(nudge("C-3 -- +B cut:40"), Ok(11));
         assert_eq!(nudge("C-3 -- -2F SGL1"), Ok(-47));
-        assert_eq!(nudge("C-3 -- +0B"), Ok(11), "with a leading 0, as a slow track shows it");
+        assert_eq!(
+            nudge("C-3 -- +0B"),
+            Ok(11),
+            "with a leading 0, as a slow track shows it"
+        );
         let far: Step = "C-3 -- -2F".parse().unwrap();
         assert_eq!(far.to_string(), "C-3 -- -2F");
         assert_eq!(
@@ -395,7 +399,13 @@ mod tests {
             Ok(0),
             "a row without one is on the grid"
         );
-        for text in ["C-3 -- +30", "C-3 -- -0", "C-3 -- -00", "C-3 -- +b", "C-3 -- ++"] {
+        for text in [
+            "C-3 -- +30",
+            "C-3 -- -0",
+            "C-3 -- -00",
+            "C-3 -- +b",
+            "C-3 -- ++",
+        ] {
             let field = text.split(' ').nth(2).unwrap();
             assert_eq!(
                 text.parse::<Step>(),

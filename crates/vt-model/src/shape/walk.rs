@@ -486,7 +486,11 @@ mod tests {
         // A slower track's range is wider, and so is its first step.
         let steps: Vec<u8> = crate::speed::Speed::ALL
             .iter()
-            .map(|speed| default_step(ShapeColumn::Nudge { most: speed.most_nudge() }))
+            .map(|speed| {
+                default_step(ShapeColumn::Nudge {
+                    most: speed.most_nudge(),
+                })
+            })
             .collect();
         assert_eq!(steps, [1, 1, 2, 3, 5, 7, 11]);
         assert_eq!(default_step(ShapeColumn::Velocity), 0x10);

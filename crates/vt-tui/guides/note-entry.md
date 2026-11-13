@@ -101,7 +101,7 @@ Notes sound as you play them, chords too.
   playing. Each track loops at its own length, so a 4-row phrase against a
   16-row one gets its own row. A key pressed past halfway through a row goes on
   the next one. How early or late it was goes in the row's nudge, to the nearest
-  24th of a step, so it plays back as you played it. A track at another `Speed`
+  24th of a sixteenth, so it plays back as you played it. A track at another `Speed`
   is recorded on its own rows, as long as its speed makes them.
 - **How long.** The note's length goes in its gate cell, and its row keeps its
   pulses, so recording never changes how long a row or the loop is. The length is
@@ -181,7 +181,7 @@ Press `l` in Normal mode to move to another column, then `i`:
 | Column | In Insert |
 |---|---|
 | Velocity | Two hex digits up to `7F`, such as `40`. Auto-jump moves on |
-| Nudge | A digit to `B`, after `-` if early, such as `-3`. `0` is on the grid |
+| Nudge | A digit to `B`, after `-` if early, such as `-3`, or two to `2F` on a slow track. `0` is on the grid |
 | Gate | A gate and its pulses, such as `HLD3`, or a digit alone |
 | Length | The gate's length, two hex digits: `80` is half the last pulse |
 | FX | A label, `Enter`, then a value, like `CUT` `Enter` `40`. See **FX commands** |
@@ -210,18 +210,38 @@ that starts on a beat, however long the rows before it.
 
 ## Nudging a note off the grid
 
-A row's nudge moves its note a little early or late, in 24ths of a step, up to
-`B`, just under half a step, either way, as Elektron's micro-timing does. The
-step is the track's own, so on a track at `1/8` a 24th is twice as long. It sits
-between the velocity and the gate, drawn dim, and is blank on a row that's on
-the grid: `C-3 40 -3 SGL1` plays three 24ths early.
+A row's nudge moves its note a little early or late, in 24ths of a sixteenth, 96
+to a quarter note as the MPC's sequencer counts, and Elektron's micro-timing. A
+24th is the same time on every track, whatever its `Speed`, and a nudge goes up
+to just under half the track's step either way, so a note can't pass the next
+row's:
+
+| `Speed` | 24ths a step | A nudge goes to |
+|---|---|---|
+| `1/32` | 12 | `5` |
+| `1/16T` | 16 | `7` |
+| `1/16` | 24 | `B` |
+| `1/8T` | 32 | `F` |
+| `1/8` | 48 | `17` |
+| `1/4T` | 64 | `1F` |
+| `1/4` | 96 | `2F` |
+
+It sits between the velocity and the gate, drawn dim, and is blank on a row
+that's on the grid: `C-3 40 -3 SGL1` plays three 24ths early. A track whose
+nudges go past `F` shows two digits, so `-03` there is the same `-3`.
 
 | Keys | Does |
 |---|---|
 | `=` `-` | Nudge it a 24th later or earlier |
-| `+` `_` | A sixth of a step, `DEL`'s unit |
-| `i` | `-` for early, then the 24ths as one digit; a digit alone is late |
+| `+` `_` | Four 24ths, a sixth of a sixteenth |
+| `i` | `-` for early, then the 24ths, one digit or two as the track shows them; digits alone are late |
 | `x` | Back on the grid |
+
+A `RATE` lock that changes a step's speed keeps its nudge's time, as the nudge
+doesn't count the track's steps, but a step faster than the track's plays it no
+further than its own range: `+8` under a lock to `1/32` plays as `+5`. Changing
+the track's `Speed` on the Sound page does the same as it plays, and leaves the
+nudges written as they were.
 
 The whole row's note part moves: the note, its velocity and length, its own FX
 columns, and its envelopes. `DEL`, `KIL`, `OFF` and `RET` count from where the

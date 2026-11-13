@@ -340,8 +340,14 @@ fn a_nudge_goes_just_under_half_its_tracks_step() {
     for speed in Speed::ALL {
         let step = step_frames(speed);
         let most = speed.most_nudge();
-        assert!(2 * usize::from(most.unsigned_abs()) * NUDGE < step, "{speed}");
-        assert!(2 * (usize::from(most.unsigned_abs()) + 1) * NUDGE >= step, "{speed}");
+        assert!(
+            2 * usize::from(most.unsigned_abs()) * NUDGE < step,
+            "{speed}"
+        );
+        assert!(
+            2 * (usize::from(most.unsigned_abs()) + 1) * NUDGE >= step,
+            "{speed}"
+        );
         // The furthest any track goes, written on this one, plays as far as this one's goes.
         let played = song(&[(speed, &["C-3 --", "C-3 -- +2F", "C-3 -- -2F", "--- --"])]);
         let most = usize::from(most.unsigned_abs()) * NUDGE;
@@ -356,11 +362,17 @@ fn a_nudge_goes_just_under_half_its_tracks_step() {
 #[test]
 fn a_rate_lock_keeps_a_nudges_time_and_keeps_it_to_the_new_steps_range() {
     // A sixteenth's `+8` under a lock to an eighth is still 8 24ths of a sixteenth late.
-    let slower = song(&[(Speed::Sixteenth, &["C-3 --", "C-3 -- +8 speed:04", "C-3 --"])]);
+    let slower = song(&[(
+        Speed::Sixteenth,
+        &["C-3 --", "C-3 -- +8 speed:04", "C-3 --"],
+    )]);
     // The eighth starts on the second sixteenth, so it lasts to the next eighth.
     assert_eq!(hits(&slower, 3 * STEP, 0), [0, STEP + 8 * NUDGE, 2 * STEP]);
     // Under a lock to a 32nd, whose range is 5, it's kept to 5.
-    let faster = song(&[(Speed::Sixteenth, &["C-3 --", "C-3 -- +8 speed:00", "C-3 --"])]);
+    let faster = song(&[(
+        Speed::Sixteenth,
+        &["C-3 --", "C-3 -- +8 speed:00", "C-3 --"],
+    )]);
     assert_eq!(
         hits(&faster, 2 * STEP, 0),
         [0, STEP + 5 * NUDGE, STEP + STEP / 2]
@@ -382,7 +394,11 @@ fn the_engine_works_ahead_as_far_as_each_speeds_earliest_nudge() {
         let early = format!("C-3 -- -{:X}", most);
         let played = song(&[(speed, &["C-3 --", early.as_str(), "C-3 --"])]);
         let published = version(&played, hits_pool());
-        assert_eq!(published.lead, u64::from(most.unsigned_abs()) * 10, "{speed}");
+        assert_eq!(
+            published.lead,
+            u64::from(most.unsigned_abs()) * 10,
+            "{speed}"
+        );
         let at = step - usize::from(most.unsigned_abs()) * NUDGE;
         assert_eq!(hits(&played, 3 * step, 0), [0, at, 2 * step], "{speed}");
     }

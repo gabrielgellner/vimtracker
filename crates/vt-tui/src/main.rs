@@ -75,6 +75,11 @@ enum Command {
         #[arg(long)]
         machine: Option<String>,
     },
+    /// Convert a project saved in format 10 to format 11, once: a nudge on a track not at 1/16
+    /// was a 24th of its step, and is now a 24th of a sixteenth. The old files are kept beside
+    /// the new as song.format-10.ron and song.autosave.format-10.ron. Run it on a copy.
+    #[command(hide = true)]
+    ConvertNudges { project: PathBuf },
     /// Make and manage kits.
     Kits {
         #[command(subcommand)]
@@ -208,6 +213,18 @@ fn main() -> std::process::ExitCode {
             choice: vt_tui::track_notes::Choice { track, machine },
         })
         .map_err(|e| e.to_string()),
+        Some(Command::ConvertNudges { project }) => vt_model::convert::convert_project(&project)
+            .map(|done| {
+                println!(
+                    "{}: {} nudges converted, {} of them kept to their track's range, and {} \
+                     live Nudge generators",
+                    project.display(),
+                    done.nudges,
+                    done.clamped,
+                    done.generators
+                );
+            })
+            .map_err(|e| e.to_string()),
         None => vt_tui::run::run(cli.project).map_err(|e| e.to_string()),
     };
     match result {

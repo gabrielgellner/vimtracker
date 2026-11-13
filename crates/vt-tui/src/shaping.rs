@@ -334,7 +334,7 @@ pub fn column_label(column: ShapeColumn) -> String {
     match column {
         ShapeColumn::Note { .. } => "Note".to_owned(),
         ShapeColumn::Velocity => "Vel".to_owned(),
-        ShapeColumn::Nudge => "Nudge".to_owned(),
+        ShapeColumn::Nudge { .. } => "Nudge".to_owned(),
         ShapeColumn::Length => "Len".to_owned(),
         ShapeColumn::Fx { slot, .. } => format!("FX{}", slot + 1),
     }
@@ -345,7 +345,7 @@ fn on_column(field: Field, column: ShapeColumn) -> bool {
     match (field, column) {
         (Field::Note, ShapeColumn::Note { .. })
         | (Field::Velocity, ShapeColumn::Velocity)
-        | (Field::Nudge, ShapeColumn::Nudge)
+        | (Field::Nudge, ShapeColumn::Nudge { .. })
         | (Field::Gate | Field::GateLength, ShapeColumn::Length) => true,
         (
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot),
@@ -417,7 +417,10 @@ impl App {
                 !notes,
             ),
             Field::Velocity => on_notes(ShapeColumn::Velocity)?,
-            Field::Nudge => on_notes(ShapeColumn::Nudge)?,
+            // As far as the track's nudges go at its speed.
+            Field::Nudge => on_notes(ShapeColumn::Nudge {
+                most: track.speed.most_nudge(),
+            })?,
             Field::GateLength => on_notes(ShapeColumn::Length)?,
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 match rows().find_map(|step| step.fx.get(slot).and_then(|fx| fx.command)) {

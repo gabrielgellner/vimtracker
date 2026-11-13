@@ -16,7 +16,7 @@ const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, and 25 per tick.
 const STEP: usize = 6000;
 const TICK: usize = 25;
-/// A nudge's unit, a 24th of a step, in frames.
+/// A nudge's unit, a 24th of a sixteenth, in frames.
 const NUDGE: usize = 10 * TICK;
 /// Below this, nothing's sounding.
 const SILENT: f32 = 1e-4;
