@@ -10,8 +10,8 @@ use vt_model::lfo::{Shape as Wave, note_rates};
 use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::{
-    DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_BEND, MAX_VALUES, Shape, ShapeColumn, Values, WAVES,
-    WaveRate, Where, default_ends, open_rows, track_seed,
+    Acid, DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_ACID_NOTES, MAX_BEND, MAX_VALUES, Shape,
+    ShapeColumn, Values, WAVES, WaveRate, Where, default_ends, open_rows, track_seed,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -60,6 +60,14 @@ pub enum ShapeRow {
     Amount,
     Hits,
     Rotate,
+    /// An `Acid` fill's own: how many notes its riff has, the chances of an octave, a row playing,
+    /// an accent and a slide, and whether a roll keeps the pitches.
+    Notes,
+    Octave,
+    Density,
+    Accent,
+    Slide,
+    Pitches,
 }
 
 impl ShapeRow {
@@ -80,6 +88,12 @@ impl ShapeRow {
             Self::Amount => "Amount",
             Self::Hits => "Hits",
             Self::Rotate => "Rotate",
+            Self::Notes => "Notes",
+            Self::Octave => "Octave",
+            Self::Density => "Density",
+            Self::Accent => "Accent",
+            Self::Slide => "Slide",
+            Self::Pitches => "Pitches",
         }
     }
 }
@@ -135,6 +149,8 @@ pub struct ShapePanel {
     pub live: Option<usize>,
     /// The song from before the panel opened.
     base: Arc<Song>,
+    /// On a live generator, its phrase's steps as they'd be without it, which it shapes from.
+    under: Option<Vec<Step>>,
 }
 
 impl ShapePanel {
@@ -142,10 +158,23 @@ impl ShapePanel {
     /// their own settings in place of a curve, a `List` has its values in place of the two ends,
     /// a transform but `Scale` works from the values there with no settings of its own,
     /// and `Amount` only means something for some choices of rows, as `Hits` and `Rotate` do for
-    /// a Euclidean one.
+    /// a Euclidean one. `Acid` has its riff's settings, its `Density` only where it writes notes
+    /// of its own, and keeping the pitches there leaves it no ends or notes to choose.
     pub fn rows(&self) -> Vec<ShapeRow> {
         let mut rows = vec![ShapeRow::Fill];
+        if self.shape.kind == FillKind::Acid {
+            let generates = self.parts.iter().any(|part| part.generate);
+            if generates || !self.shape.acid.keep {
+                rows.extend_from_slice(&[ShapeRow::From, ShapeRow::To, ShapeRow::Notes]);
+            }
+            rows.push(ShapeRow::Octave);
+            if generates {
+                rows.push(ShapeRow::Density);
+            }
+            rows.extend_from_slice(&[ShapeRow::Accent, ShapeRow::Slide, ShapeRow::Pitches]);
+        }
         rows.extend_from_slice(match self.shape.kind {
+            FillKind::Acid => &[],
             FillKind::Ramp | FillKind::Random => &[
                 ShapeRow::From,
                 ShapeRow::To,
@@ -185,8 +214,11 @@ impl ShapePanel {
             .unwrap_or(0)
     }
 
-    /// A part's steps, as they were when the panel opened.
+    /// A part's steps, as they were when the panel opened, without the live generator it's on.
     pub fn base_steps(&self, part: &Part) -> &[vt_model::step::Step] {
+        if let Some(under) = &self.under {
+            return under;
+        }
         self.base
             .tracks
             .get(part.track)
@@ -347,6 +379,17 @@ fn on_column(field: Field, column: ShapeColumn) -> bool {
             ShapeColumn::Fx { slot: owned, .. },
         ) => slot == owned,
         _ => false,
+    }
+}
+
+/// The chance in percent an `Acid` row sets: of an octave, a row playing, an accent or a slide.
+fn acid_chance(acid: &mut Acid, row: ShapeRow) -> Option<&mut u8> {
+    match row {
+        ShapeRow::Octave => Some(&mut acid.octave),
+        ShapeRow::Density => Some(&mut acid.density),
+        ShapeRow::Accent => Some(&mut acid.accent),
+        ShapeRow::Slide => Some(&mut acid.slide),
+        _ => None,
     }
 }
 
@@ -612,11 +655,13 @@ impl App {
                 values: Values::default(),
                 place,
                 seed: base.seed.wrapping_add(self.shape_seed),
+                acid: Acid::default(),
             },
             row: ShapeRow::Fill,
             typing: None,
             live: None,
             base,
+            under: None,
         };
         self.leave_selection(selection);
         self.cursor.field = field;
@@ -783,6 +828,7 @@ impl App {
             typing: None,
             live: Some(index),
             base,
+            under: Some(under),
         });
         self.mode = Mode::Shape;
         self.preview_shape();
@@ -942,7 +988,13 @@ impl App {
                 self.shape_seed = self.shape_seed.wrapping_add(1);
                 let seed = self.shape_seed;
                 self.change_shape(|panel| {
-                    panel.shape.seed = panel.base.seed.wrapping_add(seed);
+                    let shape = &mut panel.shape;
+                    // With the pitches kept, only the second die rolls: accents, slides, octaves.
+                    if shape.kind == FillKind::Acid && shape.acid.keep {
+                        shape.acid.roll = shape.acid.roll.wrapping_add(seed).wrapping_add(1);
+                    } else {
+                        shape.seed = panel.base.seed.wrapping_add(seed);
+                    }
                 });
             }
             KeyCode::Char('K') => self.open_shape_picker(),
@@ -1029,6 +1081,18 @@ impl App {
                     }
                     _ => {}
                 },
+                ShapeRow::Notes => {
+                    let by = sign * if large { 4 } else { 1 };
+                    let most = i16::from(MAX_ACID_NOTES);
+                    shape.acid.notes = moved(i16::from(shape.acid.notes), by, 1, most) as u8;
+                }
+                ShapeRow::Octave | ShapeRow::Density | ShapeRow::Accent | ShapeRow::Slide => {
+                    let by = sign * if large { CHANCE_JUMP } else { 1 };
+                    if let Some(percent) = acid_chance(&mut shape.acid, panel.row) {
+                        *percent = moved(i16::from(*percent), by, 0, 100) as u8;
+                    }
+                }
+                ShapeRow::Pitches => shape.acid.keep = !shape.acid.keep,
                 ShapeRow::Hits | ShapeRow::Rotate => {
                     if let Where::Euclid { hits, rotate } = shape.place {
                         let by = sign * if large { EUCLID_JUMP } else { 1 };
@@ -1079,6 +1143,17 @@ impl App {
                         place => place,
                     };
                 }
+                ShapeRow::Notes => shape.acid.notes = Acid::default().notes,
+                ShapeRow::Octave | ShapeRow::Density | ShapeRow::Accent | ShapeRow::Slide => {
+                    let mut start = Acid::default();
+                    let from = acid_chance(&mut start, panel.row).map(|percent| *percent);
+                    if let (Some(percent), Some(from)) =
+                        (acid_chance(&mut shape.acid, panel.row), from)
+                    {
+                        *percent = from;
+                    }
+                }
+                ShapeRow::Pitches => shape.acid.keep = false,
                 ShapeRow::Hits | ShapeRow::Rotate => {
                     if let Where::Euclid { hits, rotate } = shape.place {
                         shape.place = if panel.row == ShapeRow::Hits {
@@ -1185,6 +1260,8 @@ impl App {
         };
         if matches!(panel.row, ShapeRow::Fill | ShapeRow::Wave | ShapeRow::Where) {
             self.open_shape_picker();
+        } else if panel.row == ShapeRow::Pitches {
+            self.adjust_shape(1, false);
         } else if let Some(panel) = &mut self.shape {
             panel.typing = Some(String::new());
         }
@@ -1316,6 +1393,16 @@ impl App {
                     Ok(phase) if phase < 360 => shape.phase = phase,
                     _ => refused = Some("Phase runs from 0 to 359"),
                 },
+                ShapeRow::Notes => match text.parse::<u8>() {
+                    Ok(notes) if notes > 0 => shape.acid.notes = notes.min(MAX_ACID_NOTES),
+                    _ => refused = Some("Notes runs from 1 to 8"),
+                },
+                ShapeRow::Octave | ShapeRow::Density | ShapeRow::Accent | ShapeRow::Slide => {
+                    match (acid_chance(&mut shape.acid, panel.row), text.parse::<u16>()) {
+                        (Some(percent), Ok(typed)) => *percent = typed.min(100) as u8,
+                        _ => refused = Some("A chance runs from 0 to 100"),
+                    }
+                }
                 ShapeRow::Run => match text.parse::<i16>() {
                     Ok(run) if run > 0 => shape.run = run.min(MAX_RUN) as u16,
                     _ => refused = Some("Run is a whole number above 0"),
@@ -1331,7 +1418,7 @@ impl App {
                         _ => refused = Some("Values are hex values like 70 40 55, up to 8 of them"),
                     }
                 }
-                ShapeRow::Fill | ShapeRow::Wave | ShapeRow::Where => {}
+                ShapeRow::Fill | ShapeRow::Wave | ShapeRow::Where | ShapeRow::Pitches => {}
             }
         });
         if let Some(reason) = refused {

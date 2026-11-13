@@ -8,7 +8,7 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::action::Action;
 use vt_model::constants::DEFAULT_NOTE_VELOCITY;
 use vt_model::selection::Field;
-use vt_model::step::{ACCENT_VELOCITY, Gate, GateKind, MAX_VELOCITY, Note, Step};
+use vt_model::step::{ACCENT_VELOCITY, GateKind, MAX_VELOCITY, Note, Step, slid};
 
 use crate::app::{App, Cursor};
 use crate::input::bindings::{Cmd, Resolved};
@@ -231,14 +231,4 @@ impl App {
 fn accented(step: &Step) -> bool {
     step.velocity
         .is_none_or(|velocity| velocity >= ACCENT_VELOCITY)
-}
-
-/// A gate cell with its slide on or off. It keeps its pulses and length, so the row lasts as long
-/// either way, and the length is back when the slide comes off. Off is `SGL`, the one note
-/// a slide is, and a cell left as an empty one plays is emptied.
-pub(crate) fn slid(gate: Option<Gate>, on: bool) -> Option<Gate> {
-    let gate = gate.unwrap_or_default();
-    let kind = if on { GateKind::Hold } else { GateKind::Single };
-    let gate = Gate { kind, ..gate };
-    (gate != Gate::default()).then_some(gate)
 }

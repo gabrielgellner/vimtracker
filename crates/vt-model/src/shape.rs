@@ -1,7 +1,11 @@
 //! Filling a column across a selection with a shaped ramp, random values, a wave, two values in
 //! turn, or a short list of them in turn, or reworking the values already there. On the Note
-//! column, the steps are the scale's degrees while it's on.
+//! column, the steps are the scale's degrees while it's on, and `Acid` writes a 303 line, its
+//! notes, accents and slides together.
 
+mod acid;
+
+pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
@@ -118,6 +122,9 @@ pub enum FillKind {
     Alternate,
     /// Each value of a short list in turn, on the rows it fills, then round again.
     List,
+    /// A 303 line: notes from a small set, with accents, slides and octaves, and on an empty
+    /// column a rhythm weighted toward the strong beats.
+    Acid,
     /// The values there, from their own lowest and highest onto the two values, along the curve.
     Scale,
     /// The values there, each flipped within their own range.
@@ -132,12 +139,13 @@ pub enum FillKind {
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Ramp,
         Self::Random,
         Self::Wave,
         Self::Alternate,
         Self::List,
+        Self::Acid,
         Self::Scale,
         Self::Invert,
         Self::Shuffle,
@@ -153,6 +161,7 @@ impl FillKind {
             Self::Wave => "Wave",
             Self::Alternate => "Alternate",
             Self::List => "List",
+            Self::Acid => "Acid",
             Self::Scale => "Scale",
             Self::Invert => "Invert",
             Self::Shuffle => "Shuffle",
@@ -169,6 +178,7 @@ impl FillKind {
             Self::Wave => "Swinging between the two",
             Self::Alternate => "One value, then the other",
             Self::List => "A few values in turn",
+            Self::Acid => "A 303 line, with accents and slides",
             Self::Scale => "The values there onto the two",
             Self::Invert => "The values there, upside down",
             Self::Shuffle => "The values there, in a new order",
@@ -302,12 +312,15 @@ impl ShapeColumn {
         }
     }
 
-    /// The fills it offers: `Snap` only means something for notes, and a transform nothing for
-    /// notes of its own, as there are none to rework.
+    /// The fills it offers: `Snap` and `Acid` only mean something for notes, and a transform
+    /// nothing for notes of its own, as there are none to rework.
     pub fn fills(self) -> Vec<FillKind> {
         FillKind::ALL
             .into_iter()
-            .filter(|kind| *kind != FillKind::Snap || matches!(self, Self::Note { .. }))
+            .filter(|kind| {
+                !matches!(kind, FillKind::Snap | FillKind::Acid)
+                    || matches!(self, Self::Note { .. })
+            })
             .filter(|kind| !(kind.reworks() && self.writes_notes()))
             .collect()
     }
@@ -638,6 +651,9 @@ pub struct Shape {
     pub place: Where,
     /// Picks the random values and the chance rows, so a change elsewhere doesn't reroll them.
     pub seed: u64,
+    /// What an `Acid` fill writes besides its pitches. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Acid::is_default")]
+    pub acid: Acid,
 }
 
 /// Bias: bends `t` toward 1 for `a` above 0.5.
@@ -731,6 +747,27 @@ pub fn open_rows(steps: &[Step], range: StepRange, column: ShapeColumn) -> usize
         .count()
 }
 
+/// The rows a shape changes, each with its step as the shape leaves it: a value of its column, or
+/// for `Acid`, a note with its velocity and gate.
+pub fn written(
+    steps: &[Step],
+    range: StepRange,
+    column: ShapeColumn,
+    shape: &Shape,
+) -> Vec<(usize, Step)> {
+    if shape.kind == FillKind::Acid {
+        return acid::written(steps, range, column, shape);
+    }
+    exact_values(steps, range, column, shape)
+        .into_iter()
+        .filter_map(|(row, value)| {
+            let mut step = steps.get(row)?.clone();
+            column.write_exact(&mut step, value);
+            Some((row, step))
+        })
+        .collect()
+}
+
 /// The values a shape writes, by row. A ramp's ends are the first and last rows it fills, and rows
 /// keep their spacing along it.
 pub fn values(
@@ -781,6 +818,22 @@ fn shaped(
     column: ShapeColumn,
     shape: &Shape,
 ) -> Vec<(usize, Shaped)> {
+    if shape.kind == FillKind::Acid {
+        // Its notes, without the accents and slides that go with them.
+        return acid::written(steps, range, column, shape)
+            .into_iter()
+            .filter_map(|(row, step)| match step.note {
+                Note::On(note) => Some((
+                    row,
+                    Shaped {
+                        exact: f64::from(note),
+                        whole: note,
+                    },
+                )),
+                _ => None,
+            })
+            .collect();
+    }
     let rows = targets(steps, range, column, shape.place, shape.seed);
     let ShapeColumn::Note { scale, .. } = column else {
         let top = f64::from(column.highest());
@@ -921,6 +974,7 @@ fn filled(
                 | FillKind::Shuffle
                 | FillKind::Reverse
                 | FillKind::Snap => unreachable!("reworked above"),
+                FillKind::Acid => unreachable!("written by `acid::written`"),
             };
             (row, value)
         })
@@ -1108,6 +1162,7 @@ mod tests {
             values: Values::default(),
             place: Where::Notes,
             seed: 1,
+            acid: Acid::default(),
         }
     }
 

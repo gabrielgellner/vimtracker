@@ -346,6 +346,16 @@ pub const MAX_PULSES: u8 = 8;
 /// Elektron's micro-timing goes, so a row's note can't pass the next row's.
 pub const MAX_NUDGE: i8 = 11;
 
+/// A gate cell with its slide on or off. It keeps its pulses and length, so the row lasts as long
+/// either way, and the length is back when the slide comes off. Off is `SGL`, the one note
+/// a slide is, and a cell left as an empty one plays is emptied.
+pub fn slid(gate: Option<Gate>, on: bool) -> Option<Gate> {
+    let gate = gate.unwrap_or_default();
+    let kind = if on { GateKind::Hold } else { GateKind::Single };
+    let gate = Gate { kind, ..gate };
+    (gate != Gate::default()).then_some(gate)
+}
+
 impl Default for Gate {
     fn default() -> Self {
         Self {

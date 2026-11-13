@@ -6,7 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use vt_model::lfo::Shape as Wave;
-use vt_model::shape::{FillKind, ShapeColumn, Where, values};
+use vt_model::shape::{FillKind, ShapeColumn, Where, written};
 
 use crate::app::App;
 use crate::input::mode::Mode;
@@ -62,6 +62,13 @@ fn value(panel: &ShapePanel, row: ShapeRow) -> String {
             Where::Euclid { rotate, .. } => rotate.to_string(),
             _ => String::new(),
         },
+        ShapeRow::Notes => shape.acid.notes.to_string(),
+        ShapeRow::Octave => format!("{}%", shape.acid.octave),
+        ShapeRow::Density => format!("{}%", shape.acid.density),
+        ShapeRow::Accent => format!("{}%", shape.acid.accent),
+        ShapeRow::Slide => format!("{}%", shape.acid.slide),
+        ShapeRow::Pitches if shape.acid.keep => "Keep".to_owned(),
+        ShapeRow::Pitches => "Roll".to_owned(),
     }
 }
 
@@ -116,7 +123,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     let (mut filled, mut rows_shaped) = (0, 0);
     for (nth, part) in panel.parts.iter().enumerate() {
         let steps = panel.base_steps(part);
-        filled += values(steps, part.range, part.column, &panel.shape_of(nth)).len();
+        filled += written(steps, part.range, part.column, &panel.shape_of(nth)).len();
         rows_shaped += part.range.len();
     }
     let tracks = match panel.parts.len() {
@@ -151,6 +158,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
             "~ swap  r reroll"
         }
         FillKind::Shuffle if app.mode == Mode::Shape => "r deals again",
+        FillKind::Acid if panel.shape.acid.keep => "r rolls the accents, slides and octaves",
+        FillKind::Acid => "r rolls a new riff  ~ swap the ends",
         FillKind::List => "~ reverse the list",
         FillKind::Snap => match panel.column {
             ShapeColumn::Note { scale, .. } if scale.on => "To the nearest note in the scale",
