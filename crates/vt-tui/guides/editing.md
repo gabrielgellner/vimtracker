@@ -109,8 +109,9 @@ It shows these in place of Curve and S:
 
 A move can be anything from `Step` down to none, so with a Step of `10` a
 velocity goes up or down by at most `10` a note. Step starts at an eighth of
-the column's range, `10` on Velocity, and at 2 on notes and nudges: `=` and `-`
-move it by one, `+` and `_` by `10`, or 4 on a nudge, and `i` types it. With `Wrap`, a walk past
+the column's range, `10` on Velocity and 2 on a nudge at `1/16`, more on a
+slower track, and at 2 on notes: `=` and `-` move it by one, `+` and `_` by
+`10`, or 4 on a nudge, and `i` types it. With `Wrap`, a walk past
 To comes back in at From's end, which on notes is a leap.
 
 `1/f` is between `Random` and `Walk`: it wanders, but comes back. It sums a few
@@ -220,9 +221,10 @@ scale, the lower of two as near, for a take played without it. It's the only
 way notes are forced into the scale: playing never does. A note outside the
 scale shows in the panel in the grid's colour for one.
 
-On Nudge, the ends run from `-B` to `+B`, in 24ths of a step, so `Random`
-between `-3` and `+3` is a humanise you can see, and a `Ramp` rushes or drags
-into a fill. On a gate's length, a `Wave` or `List` of lengths shapes the
+On Nudge, the ends run as far as the track's nudges go, `-B` to `+B` at `1/16`
+and `-2F` to `+2F` at `1/4`, in 24ths of a sixteenth, so `Random` between `-3`
+and `+3` is a humanise you can see, and a `Ramp` rushes or drags into a fill. A
+live one keeps the range it opened with. On a gate's length, a `Wave` or `List` of lengths shapes the
 phrasing; a row with no length of its own, `··`, keeps it unless filled.
 
 The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+` and Cmd with `h` `l` `j` `k` for them, `i` to type, `K`
@@ -261,7 +263,7 @@ Three transforms treat each value there as a binary number and work on its
 bits, after Xaoc Devices' Leibniz, whose modules invert and mask a number's
 bits for odd quantizations and folds. A value has as many bits as its
 column's highest needs: 7 on Velocity, 8 on most FX commands and lengths, and
-5 on a nudge. They rework the rows `Where` chooses, as the other transforms do.
+5 on a nudge at `1/16`, as its values there run from 0 to 22. They rework the rows `Where` chooses, as the other transforms do.
 
 | Fill | Row | Does |
 |---|---|---|

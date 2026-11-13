@@ -251,6 +251,7 @@ fn an_sli_by_a_letter_reads_back_moves_through_the_letters_and_typing_makes_it_a
         Shift::Increment,
         None,
         0,
+        11,
     );
     assert_eq!(moved.fx[0].slice_mark(), Some('c'));
     shift_step(
@@ -260,6 +261,7 @@ fn an_sli_by_a_letter_reads_back_moves_through_the_letters_and_typing_makes_it_a
         Shift::Increment,
         None,
         0,
+        11,
     );
     assert_eq!(moved.fx[0].slice_mark(), Some('a'), "it stops at a");
     // Typing two digits over it locks by number.

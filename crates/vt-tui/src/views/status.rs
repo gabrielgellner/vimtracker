@@ -383,12 +383,12 @@ fn lowered(text: &str) -> String {
     })
 }
 
-/// How far a nudge moves its row, in 24ths of a step.
+/// How far a nudge moves its row, in 24ths of a sixteenth, which is the same time on every track.
 fn nudge_shown(nudge: i8) -> String {
     match nudge {
         0 => "on the grid".to_owned(),
-        late if late > 0 => format!("{late}/24 of a step late"),
-        early => format!("{}/24 of a step early", early.unsigned_abs()),
+        late if late > 0 => format!("{late}/24 of a sixteenth late"),
+        early => format!("{}/24 of a sixteenth early", early.unsigned_abs()),
     }
 }
 

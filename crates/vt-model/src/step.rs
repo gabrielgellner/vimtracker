@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::constants::FX_SLOTS;
+use crate::constants::{FX_SLOTS, NUDGE_TICKS};
 use crate::settings::{Kind, SettingId};
 
 /// Lowest note the format can write, `c_1`: the C in octave -1.
@@ -342,9 +342,32 @@ pub struct Gate {
 /// The most pulses a row can last.
 pub const MAX_PULSES: u8 = 8;
 
-/// The furthest a row's nudge moves it either way, in 24ths of a step: just under half a step, as
-/// Elektron's micro-timing goes, so a row's note can't pass the next row's.
-pub const MAX_NUDGE: i8 = 11;
+/// The furthest a row's nudge moves it either way on a step this many ticks long, in 24ths of a
+/// sixteenth: just under half the step, as Elektron's micro-timing goes, so a row's note can't
+/// pass the next row's. It's `B` at a sixteenth and `2F` at a quarter.
+pub const fn most_nudge(step: u64) -> i8 {
+    (step / NUDGE_TICKS / 2).saturating_sub(1) as i8
+}
+
+/// The furthest any row's nudge goes, on a track at a quarter, the longest step.
+pub const MOST_NUDGE: i8 = crate::speed::Speed::Quarter.most_nudge();
+
+/// How many hex digits a nudge takes on a track whose nudges go this far: one up to `F`, and two
+/// past it.
+pub const fn nudge_digits(most: i8) -> usize {
+    if most > 0x0F { 2 } else { 1 }
+}
+
+/// A nudge as the grid shows it, with its sign and as many digits as the track's nudges need,
+/// like `-3`, `+B` or `-0B`, and nothing at 0.
+pub fn nudge_text(nudge: i8, most: i8) -> String {
+    let digits = nudge_digits(most);
+    match nudge {
+        0 => String::new(),
+        late if late > 0 => format!("+{late:0digits$X}"),
+        early => format!("-{:0digits$X}", early.unsigned_abs()),
+    }
+}
 
 /// A gate cell with its slide on or off. It keeps its pulses and length, so the row lasts as long
 /// either way, and the length is back when the slide comes off. Off is `SGL`, the one note
@@ -372,8 +395,9 @@ pub struct Step {
     pub note: Note,
     /// `None` means full level.
     pub velocity: Option<u8>,
-    /// How far the row's note part lands from its place, in 24ths of a step: late above 0, early
-    /// below, and on the grid at 0. It moves the note and the row's own FX together.
+    /// How far the row's note part lands from its place, in 24ths of a sixteenth whatever the
+    /// track's speed: late above 0, early below, and on the grid at 0. It moves the note and the
+    /// row's own FX together.
     pub nudge: i8,
     /// `None` plays as one pulse of `Single`, as every row did before gates.
     pub gate: Option<Gate>,

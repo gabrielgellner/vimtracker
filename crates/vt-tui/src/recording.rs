@@ -11,7 +11,8 @@ use vt_engine::engine::{TrackPlace, Transport};
 use vt_model::action::Action;
 use vt_model::constants::{NUDGE_TICKS, TICKS_PER_QUARTER, TICKS_PER_STEP};
 use vt_model::groove::Groove;
-use vt_model::step::{Gate, GateKind, MAX_NUDGE, Note};
+use vt_model::speed::Speed;
+use vt_model::step::{Gate, GateKind, Note};
 
 use crate::app::App;
 use crate::input::keys::Key;
@@ -55,6 +56,10 @@ struct Take {
     seen: f64,
     /// How long it can last: until its row comes round again.
     longest: f64,
+    /// How long its track's step was as it was played, in ticks, and the furthest its track's
+    /// nudges go, so its nudge is in 24ths of a sixteenth whatever the track's speed.
+    ticks: u64,
+    most: i8,
     /// How far the groove moves the row's last pulse from its first, and how long it makes that
     /// pulse, in steps, so its length is a share of the pulse as it's heard.
     moved: f64,
@@ -126,6 +131,16 @@ impl App {
         let velocity = self.flagged_velocity(self.note_velocity);
         let slide = self.flagged_slide();
         self.use_flags();
+        let ticks = self
+            .places
+            .get(track)
+            .map_or(TICKS_PER_STEP, |place| u64::from(place.ticks.max(1)));
+        let most = self
+            .song()
+            .tracks
+            .get(track)
+            .map_or(Speed::Sixteenth, |owner| owner.speed)
+            .most_nudge();
         let Some(recording) = self.recording.as_mut() else {
             return;
         };
@@ -145,6 +160,8 @@ impl App {
             starts: row.starts,
             seen: now,
             longest: row.longest,
+            ticks,
+            most,
             moved: row.moved,
             last_pulse: row.last_pulse,
             written: false,
@@ -316,7 +333,7 @@ impl App {
         };
         step.note = Note::On(take.note);
         step.velocity = Some(take.velocity);
-        step.nudge = recorded_nudge(take.pressed - take.starts);
+        step.nudge = recorded_nudge(take.pressed - take.starts, take.ticks, take.most);
         // The note is one note, held, so its gate is a `SGL`, on the pulses the row had, or a
         // `HLD` if it was played with the slide's key down. Until it's let go, it holds on until
         // something ends it.
@@ -362,11 +379,12 @@ fn pushed(groove: &Groove, count: f64) -> f64 {
     f64::from(groove.push(running(count))) / TICKS_PER_STEP as f64
 }
 
-/// The nudge a note played this many steps from where its row lands is written with, to the
-/// nearest 24th of a step and no further than a nudge goes.
-fn recorded_nudge(off: f64) -> i8 {
-    let most = f64::from(MAX_NUDGE);
-    (off * (TICKS_PER_STEP / NUDGE_TICKS) as f64)
+/// The nudge a note played this many of its track's steps from where its row lands is written
+/// with, the steps being so many ticks long: to the nearest 24th of a sixteenth, and no further
+/// than the track's nudges go.
+fn recorded_nudge(off: f64, ticks: u64, most: i8) -> i8 {
+    let most = f64::from(most);
+    (off * ticks as f64 / NUDGE_TICKS as f64)
         .round()
         .clamp(-most, most) as i8
 }
@@ -416,15 +434,17 @@ mod tests {
 
     #[test]
     fn a_note_played_off_its_row_is_nudged_to_the_nearest_24th() {
-        assert_eq!(recorded_nudge(0.0), 0);
-        assert_eq!(recorded_nudge(0.1), 2);
-        assert_eq!(recorded_nudge(-0.13), -3);
-        assert_eq!(
-            recorded_nudge(0.49),
-            MAX_NUDGE,
-            "half a step is as far as it goes"
-        );
-        assert_eq!(recorded_nudge(-0.5), -MAX_NUDGE);
+        let sixteenth = |off| recorded_nudge(off, TICKS_PER_STEP, 11);
+        assert_eq!(sixteenth(0.0), 0);
+        assert_eq!(sixteenth(0.1), 2);
+        assert_eq!(sixteenth(-0.13), -3);
+        assert_eq!(sixteenth(0.49), 11, "half a step is as far as it goes");
+        assert_eq!(sixteenth(-0.5), -11);
+        // On a track at a quarter, a tenth of its step is nearly ten 24ths of a sixteenth.
+        let quarter = |off| recorded_nudge(off, Speed::Quarter.ticks(), 47);
+        assert_eq!(quarter(0.1), 10);
+        assert_eq!(quarter(-0.49), -47);
+        assert_eq!(recorded_nudge(0.49, Speed::ThirtySecond.ticks(), 5), 5);
     }
 
     #[test]

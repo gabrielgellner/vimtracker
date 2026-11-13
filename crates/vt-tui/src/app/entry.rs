@@ -9,10 +9,11 @@ use vt_model::action::{Action, FieldValue};
 use vt_model::condition::Condition;
 use vt_model::scale::Scale;
 use vt_model::selection::Field;
+use vt_model::speed::Speed;
 use vt_model::step::slid;
 use vt_model::step::{
-    FxCommand, FxSlot, Gate, GateKind, HIGHEST_OCTAVE, LOWEST_OCTAVE, MAX_NUDGE, MAX_PULSES,
-    MAX_VELOCITY, Mark, Note, Step,
+    FxCommand, FxSlot, Gate, GateKind, HIGHEST_OCTAVE, LOWEST_OCTAVE, MAX_PULSES, MAX_VELOCITY,
+    Mark, Note, Step, nudge_digits,
 };
 
 use crate::input::bindings::{Cmd, Resolved};
@@ -596,9 +597,10 @@ impl App {
         self.set_field(FieldValue::Gate(gate));
     }
 
-    /// A nudge's 24ths as one hex digit, `0` to `B`, late unless `-` comes first, and `+` or `=`
-    /// first says late again. `0` puts the row back on the grid, and auto-jump moves on by the
-    /// grid once the digit's in.
+    /// A nudge's 24ths of a sixteenth in hex, late unless `-` comes first, and `+` or `=` first
+    /// says late again: one digit, `0` to `B` at a sixteenth, on a track whose nudges go no
+    /// further than `F`, and two, `00` to `2F` at a quarter, on one whose go further. All `0`s
+    /// put the row back on the grid, and auto-jump moves on by the grid once the digits are in.
     fn insert_nudge(&mut self, key: Key) {
         match key.code {
             KeyCode::Esc => self.cancel_entry(),
@@ -608,17 +610,26 @@ impl App {
                     self.set_nudge(0);
                 }
             }
-            KeyCode::Char(sign @ ('-' | '+' | '=')) if !key.ctrl => {
+            KeyCode::Char(sign @ ('-' | '+' | '=')) if !key.ctrl && self.entry.text.len() <= 1 => {
                 self.entry.text = if sign == '-' { "-" } else { "+" }.to_owned();
             }
             KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
-                let amount = c.to_digit(16).unwrap_or(0) as i8;
-                if amount > MAX_NUDGE {
-                    self.status =
-                        format!("A nudge goes up to {MAX_NUDGE:X}, just under half a step");
+                let most = self.most_nudge_here();
+                let early = self.entry.text.starts_with('-');
+                let mut digits: String = self.entry.text.trim_start_matches(['-', '+']).to_owned();
+                digits.push(c.to_ascii_uppercase());
+                let amount = i8::from_str_radix(&digits, 16).unwrap_or(0);
+                if amount > most {
+                    self.status = format!(
+                        "A nudge on this track goes up to {most:X}, just under half its step"
+                    );
                     return;
                 }
-                let early = std::mem::take(&mut self.entry.text) == "-";
+                if digits.len() < nudge_digits(most) {
+                    self.entry.text.push(c.to_ascii_uppercase());
+                    return;
+                }
+                self.entry.text.clear();
                 self.set_nudge(if early { -amount } else { amount });
                 self.advance();
             }
@@ -626,12 +637,19 @@ impl App {
         }
     }
 
+    /// The furthest the cursor's track's nudges go at its speed.
+    pub(crate) fn most_nudge_here(&self) -> i8 {
+        self.track_here()
+            .map_or(Speed::Sixteenth, |track| track.speed)
+            .most_nudge()
+    }
+
     /// Nudge the row under the cursor, or put it back on the grid with 0.
     pub(crate) fn set_nudge(&mut self, nudge: i8) {
         self.set_field(FieldValue::Nudge(nudge));
     }
 
-    /// How far the row under the cursor is nudged, in 24ths of a step.
+    /// How far the row under the cursor is nudged, in 24ths of a sixteenth.
     pub(crate) fn current_nudge(&self) -> i8 {
         self.phrase_here()
             .and_then(|phrase| phrase.steps().get(self.cursor.step))

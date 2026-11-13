@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
-use vt_model::step::{FxCommand, FxSlot, GateKind, Mark, Note, Step};
+use vt_model::step::{FxCommand, FxSlot, GateKind, Mark, Note, Step, nudge_text};
 
 use crate::app::{App, Field};
 use crate::theme;
@@ -93,7 +93,8 @@ fn lines(app: &App, step: &Step) -> Vec<Line<'static>> {
     });
     if step.nudge != 0 {
         let nudge = phrase_value(app, Field::Nudge).unwrap_or_default();
-        lines.push(part("Nudge", text(format!("{:+X}", step.nudge)), nudge));
+        let most = app.most_nudge_here();
+        lines.push(part("Nudge", text(nudge_text(step.nudge, most)), nudge));
     }
     lines.push(match step.gate {
         Some(gate) => part(

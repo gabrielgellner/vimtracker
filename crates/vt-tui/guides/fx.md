@@ -380,7 +380,8 @@ A track's `Speed`, in its Sound page's Play device, is how long each of its step
 `1/16T`, `1/16`, `1/8T`, `1/8`, `1/4T` or `1/4`, the song's `1/16` unless
 changed. A track at `1/8` plays its rows half as fast, and everything on it
 follows its step: its pulses, its lanes, `DEL`, `KIL`, `OFF` and `RET`, its
-nudges, its groove's pushes and its notes' `Gate`. Sections, `:reset`, launches
+groove's pushes and its notes' `Gate`. A nudge is the same time on every track,
+in 24ths of a sixteenth, and goes further on a slower one: see **Note entry**. Sections, `:reset`, launches
 and renders count the song's sixteenths, so a section lasts its longest chain
 at that chain's speed: 16 rows at `1/8` are 32 sixteenths.
 

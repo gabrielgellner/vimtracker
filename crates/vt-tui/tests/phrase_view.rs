@@ -58,22 +58,22 @@ fn the_overview_shows_every_track_and_marks_the_one_being_edited() {
     let (mut app, _realtime) = app();
     press(&mut app, "W");
     let buffer = screen(&app);
-    let labels: String = (67..100).map(|x| buffer[(x, 1)].symbol()).collect();
+    let labels: String = (68..100).map(|x| buffer[(x, 1)].symbol()).collect();
     assert_eq!(
         labels.trim_end(),
         " 01   02",
         "the returns and master are left out"
     );
     assert_eq!(
-        buffer[(73, 1)].bg,
+        buffer[(74, 1)].bg,
         vt_tui::theme::GREEN,
         "track 02 is marked"
     );
-    assert_ne!(buffer[(68, 1)].bg, vt_tui::theme::GREEN);
+    assert_ne!(buffer[(69, 1)].bg, vt_tui::theme::GREEN);
     let headings: String = (0..30).map(|x| buffer[(x, 1)].symbol()).collect();
-    assert_eq!(headings.trim_end(), "        ╭Note ──────────── FX");
+    assert_eq!(headings.trim_end(), "        ╭Note ───────────── FX");
     assert_eq!(
-        buffer[(27, 2)].bg,
+        buffer[(28, 2)].bg,
         vt_tui::theme::FX_BAND,
         "the FX sit on a band"
     );
@@ -90,7 +90,7 @@ fn other_tracks_light_the_step_they_are_playing() {
     // The first track's column in the overview, its marker's cell and then its note's, on a step
     // two rows below the title.
     let color = |app: &App, x: u16, row: u16| screen(app)[(x, row + 2)].fg;
-    let (marker, note) = (67, 68);
+    let (marker, note) = (68, 69);
     let dimmed_green = vt_tui::theme::dimmed(vt_tui::theme::GREEN);
     on_the_row_being_edited(&mut app);
     app.set_playhead(2);
@@ -123,10 +123,10 @@ fn insert_turns_the_cursor_and_the_grids_frame_green_without_moving_anything() {
     assert_eq!(normal[(8, 18)].symbol(), "╰");
     assert_eq!(normal[(8, 2)].fg, vt_tui::theme::SURFACE1);
     assert_eq!(normal[(15, 1)].fg, vt_tui::theme::SURFACE1, "the edge");
-    let headings: String = (8..66).map(|x| normal[(x, 1)].symbol()).collect();
+    let headings: String = (8..67).map(|x| normal[(x, 1)].symbol()).collect();
     assert_eq!(
         headings,
-        "╭Note ──────────── FX 1 ─────── FX 2 ─────── FX 3 ───────╮"
+        "╭Note ───────────── FX 1 ─────── FX 2 ─────── FX 3 ───────╮"
     );
     assert_eq!(normal[(9, 1)].fg, vt_tui::theme::OVERLAY2, "a heading");
 
@@ -139,12 +139,12 @@ fn insert_turns_the_cursor_and_the_grids_frame_green_without_moving_anything() {
     assert_eq!(insert[(8, 18)].symbol(), "╰");
     assert_eq!(insert[(8, 2)].fg, vt_tui::theme::GREEN);
     // Each heading is set into the top edge over its column, a space either side.
-    let edge: String = (8..66).map(|x| insert[(x, 1)].symbol()).collect();
+    let edge: String = (8..67).map(|x| insert[(x, 1)].symbol()).collect();
     assert_eq!(
         edge,
-        "╭Note ──────────── FX 1 ─────── FX 2 ─────── FX 3 ───────╮"
+        "╭Note ───────────── FX 1 ─────── FX 2 ─────── FX 3 ───────╮"
     );
-    assert_eq!(insert[(65, 18)].symbol(), "╯");
+    assert_eq!(insert[(66, 18)].symbol(), "╯");
 
     // Only the frame's colour changes, and the steps are where they were.
     assert_eq!(row(&normal, 2), row(&insert, 2));
@@ -199,16 +199,16 @@ fn the_row_playing_lights_what_is_written_and_sets_back_what_is_empty() {
     let buffer = screen(&app);
     assert_eq!(buffer[(7, 2)].fg, green, "the marker");
     assert_eq!(buffer[(13, 2)].fg, green, "the velocity");
-    assert_eq!(buffer[(19, 2)].fg, set_back, "the empty gate");
-    assert_eq!(buffer[(27, 2)].fg, set_back, "the empty FX slot");
+    assert_eq!(buffer[(20, 2)].fg, set_back, "the empty gate");
+    assert_eq!(buffer[(28, 2)].fg, set_back, "the empty FX slot");
     // Row 01, empty, is set back throughout, and row 00 goes back to how it was.
     app.set_playhead(1);
     let buffer = screen(&app);
     assert_eq!(buffer[(7, 3)].fg, green, "the marker");
-    for x in [9, 13, 19, 27] {
+    for x in [9, 13, 20, 28] {
         assert_eq!(buffer[(x, 3)].fg, set_back, "cell {x}");
     }
-    assert_eq!(buffer[(19, 2)].fg, vt_tui::theme::OVERLAY0);
+    assert_eq!(buffer[(20, 2)].fg, vt_tui::theme::OVERLAY0);
 }
 
 #[test]
@@ -255,7 +255,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     press(&mut app, "]L");
     app.top = 0;
     let buffer = screen(&app);
-    let neighbour = |y: u16| -> String { (73..76).map(|x| buffer[(x, y)].symbol()).collect() };
+    let neighbour = |y: u16| -> String { (74..77).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
     assert_eq!(neighbour(6), "---", "row 00 has the other track's row 00");
     assert_eq!(
@@ -310,13 +310,13 @@ fn empty_cells_are_faint_dots_and_an_empty_slot_has_no_value() {
     let (app, _realtime) = app();
     let buffer = screen(&app);
     // Row 01 of a new phrase, past the cursor's.
-    let row: String = (9..65).map(|x| buffer[(x, 3)].symbol()).collect();
+    let row: String = (9..66).map(|x| buffer[(x, 3)].symbol()).collect();
     assert_eq!(
         row,
-        "--- ··    ···· ·· ···   ··     ···   ··     ···   ··    "
+        "--- ··     ···· ·· ···   ··     ···   ··     ···   ··    "
     );
     assert_eq!(buffer[(13, 3)].fg, vt_tui::theme::OVERLAY0);
-    assert_eq!(buffer[(33, 3)].fg, vt_tui::theme::OVERLAY0);
+    assert_eq!(buffer[(34, 3)].fg, vt_tui::theme::OVERLAY0);
 }
 
 #[test]
@@ -327,13 +327,13 @@ fn the_phrase_title_is_in_groups_and_the_track_labels_head_their_columns() {
     assert!(lines[0].contains("Track 01  Chain 00  00"), "{}", lines[0]);
     assert!(!lines[0].contains("01  02"), "the labels left the title");
     // Each label over its column's note, past the marker's cell.
-    let headings: String = lines[1].chars().skip(67).collect();
+    let headings: String = lines[1].chars().skip(68).collect();
     assert!(headings.starts_with(" 01   02   03 "), "{headings}");
-    assert_eq!(buffer[(68, 1)].bg, vt_tui::theme::GREEN);
+    assert_eq!(buffer[(69, 1)].bg, vt_tui::theme::GREEN);
     // In Insert they sit beside the box's top edge, in the same columns.
     app.key(Key::char('i'), Instant::now());
     let insert = drawn_lines(&screen(&app))[1].clone();
-    let after: String = insert.chars().skip(65).collect();
+    let after: String = insert.chars().skip(66).collect();
     assert!(after.starts_with("╮  01   02   03 "), "{after}");
 }
 
@@ -566,7 +566,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
     let buffer = screen(&app);
     // Row 04 is past the selected track's end: it closes the box beside the longer track.
     let text = |row: u16| -> String {
-        (0..65)
+        (0..66)
             .map(|x| buffer[(x, row + 2)].symbol())
             .collect::<String>()
     };
@@ -782,16 +782,16 @@ fn a_gate_cell_shows_its_own_length_dim_and_the_tracks_as_faint_dots() {
     let buffer = screen(&app);
     let row = |y: u16| -> String { (9..40).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
-        row(2).starts_with("C-3 40    SGL1 80 CUT   4000"),
+        row(2).starts_with("C-3 40     SGL1 80 CUT   4000"),
         "{}",
         row(2)
     );
-    assert!(row(3).starts_with("C-3 40    HLD2 ·· ···"), "{}", row(3));
+    assert!(row(3).starts_with("C-3 40     HLD2 ·· ···"), "{}", row(3));
     // The `HLD2` lasts two lines of the timeline.
     assert_eq!(row(4).trim_end(), " │", "{}", row(4));
-    assert!(row(5).starts_with("C-3 40    ···· ·· ···"), "{}", row(5));
+    assert!(row(5).starts_with("C-3 40     ···· ·· ···"), "{}", row(5));
     // The length is the cell's third part, after the gate and its pulses.
-    let length = 9 + 15;
+    let length = 9 + 16;
     assert_eq!(Some(buffer[(length, 2)].fg), theme::dim().fg);
     assert_ne!(
         Some(buffer[(length - 3, 2)].fg),
@@ -831,12 +831,12 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
     let buffer = screen(&app);
     let row = |y: u16| -> String { (9..40).map(|x| buffer[(x, y)].symbol()).collect() };
     assert!(
-        row(2).starts_with("C-3 40 -3 SGL1 80 CUT   4000"),
+        row(2).starts_with("C-3 40 -3  SGL1 80 CUT   4000"),
         "{}",
         row(2)
     );
-    assert!(row(3).starts_with("C-3 40    ···· ·· ···"), "{}", row(3));
-    assert!(row(4).starts_with("--- ·· +B ···· ·· ···"), "{}", row(4));
+    assert!(row(3).starts_with("C-3 40     ···· ·· ···"), "{}", row(3));
+    assert!(row(4).starts_with("--- ·· +B  ···· ·· ···"), "{}", row(4));
     let nudge = 9 + 7;
     assert_eq!(Some(buffer[(nudge, 2)].fg), theme::dim().fg);
     assert_eq!(Some(buffer[(nudge + 1, 4)].fg), theme::dim().fg);
@@ -850,11 +850,17 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
     press(&mut app, "ll");
     assert_eq!(app.cursor.field, vt_tui::app::Field::Nudge);
     assert_eq!(column_name(&app), "Nudge");
-    assert_eq!(value_shown(&app).as_deref(), Some("3/24 of a step early"));
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("3/24 of a sixteenth early")
+    );
     press(&mut app, "j");
     assert_eq!(value_shown(&app).as_deref(), Some("on the grid"));
     press(&mut app, "j");
-    assert_eq!(value_shown(&app).as_deref(), Some("11/24 of a step late"));
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("11/24 of a sixteenth late")
+    );
 
     // A sign typed first shows in the cell until its digit comes.
     press(&mut app, "ki-");

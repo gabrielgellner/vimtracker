@@ -31,13 +31,13 @@ use crate::song::{
     SectionStart, Song, Track, lowest_unused,
 };
 use crate::speed::Speed;
-use crate::step::{FxCommand, FxSlot, Gate, MAX_NUDGE, Mark, Note, Step};
+use crate::step::{FxCommand, FxSlot, Gate, Mark, Note, Step};
 
 /// A new value for one field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FieldValue {
     Velocity(Option<u8>),
-    /// A row's nudge, in 24ths of a step.
+    /// A row's nudge, in 24ths of a sixteenth, kept within its track's range.
     Nudge(i8),
     Gate(Option<Gate>),
     Slot(usize, FxSlot),
@@ -711,10 +711,11 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             step,
             value,
         } => {
+            let most = most_nudge(&next, *track)?;
             let target = step_mut(&mut next, *track, *phrase, *step)?;
             match value {
                 FieldValue::Velocity(velocity) => target.velocity = *velocity,
-                FieldValue::Nudge(nudge) => target.nudge = (*nudge).clamp(-MAX_NUDGE, MAX_NUDGE),
+                FieldValue::Nudge(nudge) => target.nudge = (*nudge).clamp(-most, most),
                 FieldValue::Gate(gate) => target.gate = *gate,
                 FieldValue::Slot(slot, fx) => {
                     *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = snapped(*fx);
@@ -801,6 +802,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             range,
             fill,
         } => {
+            let most = most_nudge(&next, *track)?;
             for index in range.first..=range.last {
                 let target = step_mut(&mut next, *track, *phrase, index)?;
                 let has_note = matches!(target.note, Note::On(_));
@@ -824,7 +826,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                     }
                     Fill::GateLength(_) => {}
                     Fill::Nudge(nudge) if has_note || *nudge == 0 => {
-                        target.nudge = (*nudge).clamp(-MAX_NUDGE, MAX_NUDGE);
+                        target.nudge = (*nudge).clamp(-most, most);
                     }
                     Fill::Nudge(_) => {}
                     Fill::Slot(slot, value) => {
@@ -886,11 +888,8 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             scale,
         } => {
             // An empty length moves from the track's `Gate`, as that's what it plays at.
-            let gate = next
-                .tracks
-                .get(*track)
-                .ok_or(EditError::NoTrack(*track))?
-                .gate_length();
+            let owner = next.tracks.get(*track).ok_or(EditError::NoTrack(*track))?;
+            let (gate, most) = (owner.gate_length(), owner.speed.most_nudge());
             for index in range.first..=range.last {
                 shift_step(
                     step_mut(&mut next, *track, *phrase, index)?,
@@ -899,6 +898,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                     *kind,
                     *scale,
                     gate,
+                    most,
                 );
             }
         }
@@ -1770,6 +1770,12 @@ fn phrase_mut(song: &mut Song, track: usize, phrase: u32) -> Result<&mut Phrase,
         .get_mut(&phrase)
         .ok_or(EditError::NoPhrase(phrase))?;
     Ok(Arc::make_mut(target))
+}
+
+/// The furthest a track's nudges go at its speed, which a nudge written to it is kept within.
+fn most_nudge(song: &Song, track: usize) -> Result<i8, EditError> {
+    let owner = song.tracks.get(track).ok_or(EditError::NoTrack(track))?;
+    Ok(owner.speed.most_nudge())
 }
 
 fn step_mut(

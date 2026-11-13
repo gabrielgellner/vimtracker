@@ -207,7 +207,7 @@ fn columns(dice: &mut Dice) -> Vec<(&'static str, ShapeColumn)> {
             },
         ),
         ("Velocity", ShapeColumn::Velocity),
-        ("Nudge", ShapeColumn::Nudge),
+        ("Nudge", ShapeColumn::Nudge { most: 11 }),
         ("Length", ShapeColumn::Length),
         (
             "FX, fine",

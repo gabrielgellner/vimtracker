@@ -89,7 +89,7 @@ enum Unit {
     Degree,
     Step,
     LargeStep,
-    /// A nudge's 24ths of a step.
+    /// A nudge's 24ths of a sixteenth.
     Nudge,
 }
 
@@ -129,8 +129,8 @@ impl Unit {
             (Self::Step, true) => "steps",
             (Self::LargeStep, false) => "large step",
             (Self::LargeStep, true) => "large steps",
-            (Self::Nudge, false) => "24th of a step",
-            (Self::Nudge, true) => "24ths of a step",
+            (Self::Nudge, false) => "24th of a sixteenth",
+            (Self::Nudge, true) => "24ths of a sixteenth",
         }
     }
 }
@@ -752,7 +752,7 @@ impl App {
             // On a gate's length, they move the length rather than the pulses.
             (Field::GateLength, Shift::Large) => Shift::LengthLarge,
             (Field::GateLength, Shift::Increment | Shift::Chromatic) => Shift::Length,
-            // On a nudge, they move it by 24ths of a step, or `DEL`'s sixths.
+            // On a nudge, they move it by 24ths of a sixteenth, or sixths of one.
             (Field::Nudge, Shift::Large) => Shift::NudgeLarge,
             (Field::Nudge, Shift::Increment | Shift::Chromatic) => Shift::Nudge,
             _ => kind,

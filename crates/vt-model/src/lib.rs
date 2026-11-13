@@ -7,6 +7,7 @@ pub mod arpeggio;
 pub mod bank;
 pub mod condition;
 pub mod constants;
+pub mod convert;
 pub mod envelope;
 pub mod generator;
 pub mod grid;

@@ -92,7 +92,7 @@ impl GenColumn {
         match column {
             ShapeColumn::Note { .. } => Self::Note,
             ShapeColumn::Velocity => Self::Velocity,
-            ShapeColumn::Nudge => Self::Nudge,
+            ShapeColumn::Nudge { .. } => Self::Nudge,
             ShapeColumn::Length => Self::Length,
             ShapeColumn::Fx { slot, .. } => Self::Fx(slot),
         }

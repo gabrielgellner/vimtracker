@@ -11,6 +11,7 @@ use vt_model::constants::MAX_PHRASE_STEPS;
 use vt_model::samples::SamplePool;
 use vt_model::shape::FillKind;
 use vt_model::song::{Phrase, Song};
+use vt_model::speed::Speed;
 use vt_model::step::Step;
 use vt_tui::app::{App, Field};
 use vt_tui::input::keys::Key;
@@ -1890,7 +1891,10 @@ fn shape_fills_a_nudge_and_a_length() {
     ]);
     keys(&mut app, "llvGS");
     let panel = |app: &App| app.shape.clone().unwrap();
-    assert_eq!(panel(&app).column, vt_model::shape::ShapeColumn::Nudge);
+    assert_eq!(
+        panel(&app).column,
+        vt_model::shape::ShapeColumn::Nudge { most: 11 }
+    );
     keys(&mut app, "ji-3<Enter>ji+3<Enter>");
     assert_eq!(
         steps(&app),
@@ -3048,6 +3052,43 @@ fn a_nudge_is_typed_as_a_sign_and_a_digit_and_cleared_on_its_own() {
     keys(&mut app, "lli;4");
     assert_eq!(app.cursor.step, 1);
     assert_eq!(app.cursor.field, Field::Nudge);
+}
+
+/// Run keys on steps of a track at a speed, and its steps after.
+fn at_speed(speed: Speed, start: &[&str], typed: &str) -> (Vec<String>, String) {
+    let mut song = Song::new(1);
+    let rows: Vec<Step> = start.iter().map(|s| s.parse().unwrap()).collect();
+    song.tracks[0].speed = speed;
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(rows)));
+    let samples = Arc::new(SamplePool::default());
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, _rt) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    keys(&mut app, typed);
+    (steps(&app), app.status.clone())
+}
+
+#[test]
+fn a_nudge_goes_as_far_as_its_tracks_step_and_takes_two_digits_where_that_needs_them() {
+    // At a quarter it goes to `2F`, typed as two digits, `00` putting it back on the grid.
+    let quarter = |start: &[&str], typed| at_speed(Speed::Quarter, start, typed).0;
+    assert_eq!(quarter(&[A], "lli2F<Esc>"), ["C-3 40 +2F cut:20 --- ---"]);
+    assert_eq!(quarter(&[A], "lli-0B<Esc>"), ["C-3 40 -B cut:20 --- ---"]);
+    assert_eq!(quarter(&["C-3 40 -B cut:20 --- ---"], "lli00<Esc>"), [A]);
+    let (steps, status) = at_speed(Speed::Quarter, &[A], "lli30");
+    assert_eq!(steps, [A]);
+    assert!(status.contains("up to 2F"), "{status}");
+    // `=`, `-`, `+` and `_` move it as far.
+    assert_eq!(quarter(&[A], "ll20+"), ["C-3 40 +2F cut:20 --- ---"]);
+    assert_eq!(quarter(&[A], "ll12="), ["C-3 40 +C cut:20 --- ---"]);
+    // At a 32nd it goes to 5, so `6` is too far, and `+` stops there.
+    let (steps, status) = at_speed(Speed::ThirtySecond, &[A], "lli6");
+    assert_eq!(steps, [A]);
+    assert!(status.contains("up to 5"), "{status}");
+    let fast = at_speed(Speed::ThirtySecond, &[A], "ll+++").0;
+    assert_eq!(fast, ["C-3 40 +5 cut:20 --- ---"]);
 }
 
 #[test]

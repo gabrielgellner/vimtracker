@@ -3,7 +3,8 @@
 //! `NOTE VEL GATE FX FX FX`, such as `C-3 64 HLD3 cut:40 --- ret:14`. A row without a gate cell
 //! leaves it out, as every row did before gates: `C-3 64 cut:40 --- ret:14`. A gate with a length
 //! of its own has it after the pulses, as the grid shows it: `C-3 64 SGL1 80 cut:40`. A row with
-//! a nudge has it after the velocity, a sign and a hex digit in 24ths of a step: `C-3 64 -3 SGL1`.
+//! a nudge has it after the velocity, a sign and one or two hex digits in 24ths of a sixteenth:
+//! `C-3 64 -3 SGL1`, `C-3 64 -2F SGL1`.
 
 use std::fmt;
 use std::str::FromStr;
@@ -12,7 +13,7 @@ use thiserror::Error;
 
 use crate::settings::SettingId;
 use crate::step::{
-    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_NUDGE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE,
+    FxCommand, FxSlot, Gate, GateKind, MAX_NOTE, MAX_PULSES, MAX_VELOCITY, MIN_NOTE, MOST_NUDGE,
     Mark, NOTE_NAMES, NOTE_NAMES_BELOW_ZERO, Note, Step, octave_start,
 };
 
@@ -29,7 +30,7 @@ pub enum StepTextError {
     Slot(String),
     #[error("unknown FX command: {0:?}")]
     Command(String),
-    #[error("not a nudge: {0:?}, which is + or - and 1 to B 24ths of a step, like -3")]
+    #[error("not a nudge: {0:?}, which is + or - and 1 to 2F 24ths of a sixteenth, like -3")]
     Nudge(String),
     #[error("not a gate: {0:?}, which is a gate, 0 to 8 pulses and perhaps a length, like SGL1 80")]
     Gate(String),
@@ -81,20 +82,24 @@ fn hex_byte(text: &str) -> Option<u8> {
     upper.then(|| u8::from_str_radix(text, 16).ok()).flatten()
 }
 
-/// Read a nudge: `+` or `-`, then one uppercase hex digit from 1 to the most a nudge goes.
+/// Read a nudge: `+` or `-`, then one or two uppercase hex digits from 1 to the most any track's
+/// nudge goes. Whether it goes that far on its own track is the track's to say.
 fn nudge(text: &str) -> Result<i8, StepTextError> {
     let bad = || StepTextError::Nudge(text.to_owned());
-    let (sign, digit) = match text.as_bytes() {
-        [b'+', digit] => (1, *digit),
-        [b'-', digit] => (-1, *digit),
+    let (sign, digits) = match text.as_bytes() {
+        [b'+', digits @ ..] => (1, digits),
+        [b'-', digits @ ..] => (-1, digits),
         _ => return Err(bad()),
     };
-    let amount: i8 = match digit {
-        b'0'..=b'9' => (digit - b'0') as i8,
-        b'A'..=b'F' => (digit - b'A' + 10) as i8,
-        _ => return Err(bad()),
-    };
-    (1..=MAX_NUDGE)
+    let upper = |digit: &u8| digit.is_ascii_digit() || (b'A'..=b'F').contains(digit);
+    if !(1..=2).contains(&digits.len()) || !digits.iter().all(upper) {
+        return Err(bad());
+    }
+    let amount = std::str::from_utf8(digits)
+        .ok()
+        .and_then(|digits| i8::from_str_radix(digits, 16).ok())
+        .ok_or_else(bad)?;
+    (1..=MOST_NUDGE)
         .contains(&amount)
         .then_some(sign * amount)
         .ok_or_else(bad)
@@ -232,9 +237,15 @@ impl FromStr for Step {
             ),
         };
         let mut fields = fields.peekable();
-        // A nudge is a sign and one digit, which neither a gate nor an FX slot is.
-        let is_nudge =
-            |field: &&str| field.len() == 2 && (field.starts_with('+') || field.starts_with('-'));
+        // A nudge is a sign and one or two digits, which neither a gate nor an FX slot is.
+        // An empty slot's `---` isn't one.
+        let is_nudge = |field: &&str| {
+            let signed = field.starts_with('+') || field.starts_with('-');
+            let digits = field.get(1..).unwrap_or_default();
+            signed
+                && (field.len() == 2
+                    || (field.len() == 3 && digits.bytes().all(|b| b.is_ascii_alphanumeric())))
+        };
         let nudge = match fields.next_if(is_nudge) {
             Some(field) => self::nudge(field)?,
             None => 0,
@@ -371,16 +382,30 @@ mod tests {
     }
 
     #[test]
-    fn a_nudge_is_a_sign_and_up_to_b_24ths() {
+    fn a_nudge_is_a_sign_and_up_to_2f_24ths() {
         let nudge = |text: &str| text.parse::<Step>().map(|step| step.nudge);
         assert_eq!(nudge("C-3 64 -3 SGL1"), Ok(-3));
         assert_eq!(nudge("C-3 -- +B cut:40"), Ok(11));
+        assert_eq!(nudge("C-3 -- -2F SGL1"), Ok(-47));
+        assert_eq!(
+            nudge("C-3 -- +0B"),
+            Ok(11),
+            "with a leading 0, as a slow track shows it"
+        );
+        let far: Step = "C-3 -- -2F".parse().unwrap();
+        assert_eq!(far.to_string(), "C-3 -- -2F");
         assert_eq!(
             nudge("C-3 64 SGL1"),
             Ok(0),
             "a row without one is on the grid"
         );
-        for text in ["C-3 -- +C", "C-3 -- -0", "C-3 -- +b", "C-3 -- ++"] {
+        for text in [
+            "C-3 -- +30",
+            "C-3 -- -0",
+            "C-3 -- -00",
+            "C-3 -- +b",
+            "C-3 -- ++",
+        ] {
             let field = text.split(' ').nth(2).unwrap();
             assert_eq!(
                 text.parse::<Step>(),
