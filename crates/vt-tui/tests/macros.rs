@@ -231,7 +231,7 @@ fn on_hits() -> (App, vt_engine::link::Realtime) {
     let mut app = App::new(song, None, samples, handle, 48_000);
     press(&mut app, "vGSjjjjjj===");
     special(&mut app, KeyCode::Char('L'));
-    press(&mut app, " 4LLL}kjj$");
+    press(&mut app, " 8}kjj$");
     assert!(matches!(
         app.track_control(),
         Control::Gen {
