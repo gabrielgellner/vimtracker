@@ -1948,12 +1948,12 @@ fn a_jump_labels_matching_settings_nearest_first_and_lands_on_the_value() {
     press(&mut app, " 4/");
     assert_eq!(app.mode, Mode::Jump);
     assert!(jump_labels(&app).is_empty(), "nothing until you type");
-    // Machine, Slice and Punch take `a`, `s` and `f` for the `c`, and go when the search narrows,
-    // leaving the rest as they were.
+    // Machine, Slice, the sampler's Cents and Punch take the first labels for the `c`, and go
+    // when the search narrows, leaving the rest as they were.
     press(&mut app, "cu");
-    assert_eq!(jump_labels(&app), ["d Cut", "g Low cut", "j High cut"]);
+    assert_eq!(jump_labels(&app), ["f Cut", "j Low cut", "k High cut"]);
 
-    press(&mut app, "g");
+    press(&mut app, "j");
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.field_jump.is_none());
     assert_eq!(column_name(&app), "Low cut");
@@ -2099,13 +2099,13 @@ fn a_jumps_labels_also_follow_the_names_being_searched() {
     press(&mut app, " 4/cu");
     let line = from_name;
     // Over the letter after what's typed, in the same columns as without a label.
-    assert!(line(&app, "Cud").starts_with("Cud       dF00 ▕"));
-    assert!(line(&app, "Low cug").starts_with("Low cug   g0   ▕"));
-    assert!(line(&app, "High cuj").starts_with("High cuj  jF   ▕"));
+    assert!(line(&app, "Cuf").starts_with("Cuf       fF00 ▕"));
+    assert!(line(&app, "Low cuj").starts_with("Low cuj   j0   ▕"));
+    assert!(line(&app, "High cuk").starts_with("High cuk  kF   ▕"));
     assert!(line(&app, "Res").starts_with("Res       0000 ▕"));
     // It moves along as you type, and past the end of a name it sits just after it.
     press(&mut app, "t");
-    assert!(line(&app, "Cutd").starts_with("Cutd      dF00 ▕"));
+    assert!(line(&app, "Cutf").starts_with("Cutf      fF00 ▕"));
     special(&mut app, KeyCode::Esc);
 
     // A name in every device has a label in each, and the columns stay put.
