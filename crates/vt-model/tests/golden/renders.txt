@@ -178,6 +178,16 @@ f482f2082077303b Snap on Length
 4b8c9d807a062de2 Snap on Note, in key
 57e990fdecb3718e Snap on Nudge
 f189bcb9422a1bf4 Snap on Velocity
+87e59c5569117b25 Variation on FX, event
+87e59c5569117b25 Variation on FX, fine
+87e59c5569117b25 Variation on FX, last slot
+87e59c5569117b25 Variation on Length
+cbb6cab9c54df5f5 Variation on Note of its own, chromatic
+66ffffee6ebde32c Variation on Note of its own, in key
+e6d2e5fa942a3701 Variation on Note, chromatic
+859f89a5a196684f Variation on Note, in key
+87e59c5569117b25 Variation on Nudge
+87e59c5569117b25 Variation on Velocity
 4cdf96e06f4db9a6 Walk on FX, event
 ddbe2cd67e0c43d1 Walk on FX, fine
 15559d5d6ddfba5a Walk on FX, last slot

@@ -4,7 +4,7 @@
 //! line, its notes, accents and slides together, and `Follow` mirrors another track's phrase.
 //! `Multiply` reworks the rhythm there rather than its values, the bit transforms each value's
 //! bits, and `Grids` writes a drum part from a map of real patterns, one part a track across a
-//! kit's.
+//! kit's. `Variation` writes something like the notes there, from a Markov chain learned from them.
 
 mod acid;
 mod bits;
@@ -13,6 +13,7 @@ mod grids;
 pub mod params;
 mod random;
 mod render;
+mod variation;
 mod walk;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
@@ -27,6 +28,9 @@ pub use random::{
 };
 pub use render::{GenCell, RowView, render_into};
 use serde::{Deserialize, Serialize};
+pub use variation::{
+    MAX_LEARNED, MAX_ORDER, MIN_NOTES as VARIATION_NOTES, Variation, notes as variation_notes,
+};
 pub use walk::{Edge, MAX_DEPTH, MIN_DEPTH, Pink, Walk, default_step};
 
 use crate::constants::{MAX_PHRASE_STEPS, TICKS_PER_QUARTER};
@@ -152,6 +156,9 @@ pub enum FillKind {
     /// Another phrase's notes, with their velocities and gates, turned on the way as a canon's
     /// voices are.
     Follow,
+    /// Something like the notes there: a line drawn from a Markov chain learned from them, with
+    /// their rests, accents and slides.
+    Variation,
     /// The values there, from their own lowest and highest onto the two values, along the curve.
     Scale,
     /// The values there, each flipped within their own range.
@@ -174,7 +181,7 @@ pub enum FillKind {
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::Ramp,
         Self::Random,
         Self::Walk,
@@ -185,6 +192,7 @@ impl FillKind {
         Self::Acid,
         Self::Grids,
         Self::Follow,
+        Self::Variation,
         Self::Scale,
         Self::Invert,
         Self::Shuffle,
@@ -209,6 +217,7 @@ impl FillKind {
             Self::Acid => "Acid",
             Self::Grids => "Grids",
             Self::Follow => "Follow",
+            Self::Variation => "Variation",
             Self::Scale => "Scale",
             Self::Invert => "Invert",
             Self::Shuffle => "Shuffle",
@@ -234,6 +243,7 @@ impl FillKind {
             Self::Acid => "A 303 line, with accents and slides",
             Self::Grids => "A drum part from Grids' map",
             Self::Follow => "Another track's phrase, kept in step",
+            Self::Variation => "Something like the notes there",
             Self::Scale => "The values there onto the two",
             Self::Invert => "The values there, upside down",
             Self::Shuffle => "The values there, in a new order",
@@ -246,11 +256,13 @@ impl FillKind {
         }
     }
 
-    /// Whether it reworks the values already in the rows, rather than making new ones.
+    /// Whether it reworks the values already in the rows, rather than making new ones. A
+    /// `Variation` learns from them.
     pub fn reworks(self) -> bool {
         matches!(
             self,
-            Self::Scale
+            Self::Variation
+                | Self::Scale
                 | Self::Invert
                 | Self::Shuffle
                 | Self::Reverse
@@ -268,9 +280,13 @@ impl FillKind {
     }
 
     /// Whether it chooses its rows with a `Where`. A `Follow` writes every row from its source,
-    /// `Multiply` reads and writes the rhythm itself, and `Grids` makes one of its own.
+    /// `Multiply` reads and writes the rhythm itself, `Grids` makes one of its own, and a
+    /// `Variation` learns one with the notes.
     pub fn has_where(self) -> bool {
-        !matches!(self, Self::Follow | Self::Multiply | Self::Grids)
+        !matches!(
+            self,
+            Self::Follow | Self::Multiply | Self::Grids | Self::Variation
+        )
     }
 }
 
@@ -377,16 +393,20 @@ impl ShapeColumn {
         }
     }
 
-    /// The fills it offers: `Snap`, `Acid`, `Grids` and `Follow` only mean something for notes,
-    /// `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform nothing for
-    /// notes of its own, as there are none to rework.
+    /// The fills it offers: `Snap`, `Acid`, `Grids`, `Follow` and `Variation` only mean something
+    /// for notes, `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform
+    /// or a `Variation` nothing for notes of its own, as there are none to rework or learn from.
     pub fn fills(self) -> Vec<FillKind> {
         FillKind::ALL
             .into_iter()
             .filter(|kind| {
                 !matches!(
                     kind,
-                    FillKind::Snap | FillKind::Acid | FillKind::Grids | FillKind::Follow
+                    FillKind::Snap
+                        | FillKind::Acid
+                        | FillKind::Grids
+                        | FillKind::Follow
+                        | FillKind::Variation
                 ) || matches!(self, Self::Note { .. })
             })
             .filter(|kind| {
@@ -739,6 +759,9 @@ pub struct Shape {
     /// through and how often each comes. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Random::is_default")]
     pub random: Random,
+    /// What a `Variation` learns and how far it strays. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Variation::is_default")]
+    pub variation: Variation,
     /// How many passes each of its variations lasts, a new seed each time: `0` for none, the
     /// seed every pass, as written. Only a shape that [draws](Shape::draws) varies. Saved only
     /// once it's set.
@@ -759,8 +782,8 @@ const PASS_KEY: u64 = 0x7A55_0000;
 
 impl Shape {
     /// Whether anything it writes is drawn from its seed, so another seed would write something
-    /// else: a random fill, a walk, `1/f`, `Acid`, `Shuffle`, `Grids`' chaos or a random wave, or
-    /// rows chosen by chance.
+    /// else: a random fill, a walk, `1/f`, `Acid`, `Shuffle`, `Grids`' chaos, a `Variation` or a
+    /// random wave, or rows chosen by chance.
     pub fn draws(&self) -> bool {
         let random_wave =
             self.kind == FillKind::Wave && matches!(self.wave, Wave::Random | Wave::Smooth);
@@ -774,6 +797,7 @@ impl Shape {
                     | FillKind::Acid
                     | FillKind::Shuffle
                     | FillKind::Grids
+                    | FillKind::Variation
             )
     }
 
@@ -1096,6 +1120,7 @@ mod tests {
             grids: Grids::default(),
             random: crate::shape::Random::default(),
             vary: 0,
+            variation: crate::shape::Variation::default(),
         }
     }
 

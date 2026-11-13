@@ -51,6 +51,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         grids: vt_model::shape::Grids::default(),
         random: vt_model::shape::Random::default(),
         vary: 0,
+        variation: vt_model::shape::Variation::default(),
     }
 }
 
@@ -603,4 +604,79 @@ fn a_held_setting_hitting_fewer_rows_plays_whats_under_on_the_rest() {
         "held, it plays as written, with what's under"
     );
     assert!(heard(&engine, 0).iter().any(|run| run.moving));
+}
+
+/// The nine-pass song with a line of its own on the Note column, a live `Variation` of it at
+/// order 1, a new variation every pass.
+fn varying_line() -> Song {
+    let mut song = nine_passes();
+    let line = [
+        "C-2 7F --- --- ---",
+        "--- -- --- --- ---",
+        "C-2 50 --- --- ---",
+        "D#2 50 HLD1 --- --- ---",
+        "G-2 50 --- --- ---",
+        "--- -- --- --- ---",
+        "C-2 7F --- --- ---",
+        "C-3 50 --- --- ---",
+        "--- -- --- --- ---",
+        "A#2 50 HLD1 --- --- ---",
+        "C-2 50 --- --- ---",
+        "OFF -- --- --- ---",
+        "C-2 7F --- --- ---",
+        "--- -- --- --- ---",
+        "G-2 50 --- --- ---",
+        "D#2 7F --- --- ---",
+    ];
+    let steps: Vec<Step> = line.iter().map(|row| row.parse().unwrap()).collect();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    let mut line = shape(FillKind::Variation, 0, 0, Where::AllRows);
+    line.variation = vt_model::shape::Variation {
+        order: 1,
+        temperature: 100,
+    };
+    line.vary = 1;
+    generate(song, 0, notes(), rows(15), line)
+}
+
+fn notes() -> ShapeColumn {
+    ShapeColumn::Note {
+        scale: vt_model::scale::Scale::default(),
+        writes: None,
+    }
+}
+
+/// A `Variation` draws from its seed, so `Vary` gives each pass a variation of its own, which
+/// plays sample for sample as writing that pass's seed would; and holding its `Temperature`
+/// plays what writing it would.
+#[test]
+fn a_variation_varies_by_pass_and_its_temperature_can_be_held() {
+    let song = varying_line();
+    let kept = |pass: i64| {
+        let mut shape = written(&song, 0, notes()).on_pass(pass);
+        shape.vary = 0;
+        reshape(&song, shape)
+    };
+    let (first, engine) = play_pass(&song, 0);
+    assert!(first == play_pass(&kept(0), 0).0, "pass 0 is as written");
+    assert!(heard(&engine, 0).iter().all(|run| run.renders == 0));
+    for pass in [1, 2] {
+        let (heard_out, _) = play_pass(&song, pass);
+        assert!(
+            heard_out == play_pass(&kept(pass as i64), pass).0,
+            "pass {pass}"
+        );
+        assert!(
+            heard_out != play_pass(&kept(0), pass).0,
+            "pass {pass} differs"
+        );
+    }
+    let cold = (0, notes(), GenParam::Temperature, 0);
+    let still = kept(0);
+    let (held, _) = play(&still, &[cold], 16);
+    let (written_out, _) = play(&reshaped(&still, cold), &[], 16);
+    assert!(held == written_out, "a held temperature plays as written");
+    assert!(held != play(&still, &[], 16).0, "and not as before");
 }

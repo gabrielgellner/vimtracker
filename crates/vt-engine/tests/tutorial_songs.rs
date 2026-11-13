@@ -54,6 +54,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("walks", walks()),
         ("grids", grids()),
         ("marbles", marbles()),
+        ("variations", variations()),
         ("rene", rene()),
     ]
 }
@@ -168,6 +169,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         grids: Grids::default(),
         random: Random::default(),
         vary: 0,
+        variation: vt_model::shape::Variation::default(),
     }
 }
 
@@ -943,6 +945,58 @@ fn marbles() -> Song {
     song
 }
 
+/// An `Acid` line written by hand, and a live `Variation` of it at order 2, a new one every four
+/// passes: something like the line, learned from its own notes, accents and slides alone.
+fn variations() -> Song {
+    let mut song = song("variations", 124, 0, ScaleKind::Minor, 4);
+    song.seed = 0x5A;
+    let line = [
+        "C-2 7F --- --- ---",
+        "C-2 50 --- --- ---",
+        "C-3 50 HLD1 --- --- ---",
+        "C-2 50 --- --- ---",
+        REST,
+        "D#2 50 --- --- ---",
+        "C-2 7F --- --- ---",
+        "G-2 50 HLD1 --- --- ---",
+        "A#1 50 --- --- ---",
+        REST,
+        "C-2 50 --- --- ---",
+        "C-3 7F --- --- ---",
+        REST,
+        "G-2 50 HLD1 --- --- ---",
+        "D#2 50 --- --- ---",
+        "C-2 50 --- --- ---",
+    ];
+    voice(&mut song, 0, "TB", SynthVoice::Acid, &line);
+    set(&mut song, 0, "acid.cutoff", 0x58);
+    set(&mut song, 0, "acid.resonance", 0xB0);
+    set(&mut song, 0, "acid.envmod", 0x90);
+    set(&mut song, 0, "acid.decay", 0x60);
+    song.tracks[0].level = 0xC4;
+    song.tracks[0].send_a = 0x90;
+    let mut variation = shape(FillKind::Variation, 0, 0, Where::AllRows);
+    variation.seed = 3;
+    variation.vary = 4;
+    let column = ShapeColumn::Note {
+        scale: song.scale,
+        writes: None,
+    };
+    let mut song = generate(song, 0, column, 16, variation);
+    four_on_the_floor(&mut song, 1);
+    off_beat_hats(&mut song, 2);
+    voice(
+        &mut song,
+        3,
+        "SD",
+        SynthVoice::Snare,
+        &texts(&hits("....x.......x...", "G-2")),
+    );
+    song.tracks[3].level = 0xC8;
+    song.tracks[3].send_b = 0x98;
+    song
+}
+
 /// René: sixteen notes read as a 4×4 grid, a line a chord, walked by the Cartesian order's two
 /// counters at different rates; a bass of two lines, an octave apart, wound through by a snake
 /// down its columns; and a beat.
@@ -1081,6 +1135,46 @@ fn every_tutorial_song_renders_as_it_did_before_the_engine_ran_generators() {
         let out = render_loop(version, RATE, RenderOptions::default());
         support::golden(&format!("tutorial-{name}"), &out);
     }
+}
+
+/// The variation is something like the line under it, and order 3 at temperature 0 gives the
+/// line back, as the chapter's first thing to try says.
+#[test]
+fn the_variation_is_like_its_line_and_order_3_cold_writes_the_line_back() {
+    let song = Arc::new(load_song(&songs_folder().join("variations")).unwrap());
+    let phrase = &song.tracks[0].phrases[&0];
+    let generator = &phrase.generators()[0];
+    let line: Vec<String> = generator
+        .under(phrase.steps())
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    let written: Vec<String> = phrase.steps().iter().map(ToString::to_string).collect();
+    assert_ne!(written, line, "a variation, not the line");
+    assert!(written.iter().all(|row| line.contains(row)), "{written:?}");
+    let shape = Shape {
+        variation: vt_model::shape::Variation {
+            order: 3,
+            temperature: 0,
+        },
+        ..generator.shape
+    };
+    let close = edit(
+        &song,
+        &Action::Reshape {
+            track: 0,
+            phrase: 0,
+            generator: 0,
+            shape,
+        },
+    )
+    .unwrap();
+    let back: Vec<String> = close.tracks[0].phrases[&0]
+        .steps()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(back, line);
 }
 
 #[test]

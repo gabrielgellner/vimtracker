@@ -85,6 +85,7 @@ fn following(source: Source, follow: Follow) -> Shape {
         grids: vt_model::shape::Grids::default(),
         random: vt_model::shape::Random::default(),
         vary: 0,
+        variation: vt_model::shape::Variation::default(),
     }
 }
 

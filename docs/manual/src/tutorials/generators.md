@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds twelve of them out of what vimtracker already has, each as a
+let you steer. This chapter builds thirteen of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -20,6 +20,7 @@ there are no samples to find.
 | `walks`, again | Xaoc Devices' Leibniz | `S`'s bit transforms on the tune and the hats |
 | `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
+| `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
@@ -717,6 +718,56 @@ bass's filter, the delay and reverb sends, and the levels.
     `M` a macro: map both to one, and an LFO on it sweeps the tune from a drone to a scatter.
 *   `Vary` `Each pass` on the bass, and every pass draws a new pattern of octaves.
 
+## Variations of your own phrase
+
+Write a line, then ask for another one like it. A Markov chain does that by
+counting: which note came after which, and how often, so it can write a new line
+that only ever takes steps the old one took. aicd, a Max for Live device, writes
+acid lines this way from n-grams of hundreds of 303 patterns, with a temperature
+dial for how adventurous it gets. Here the only pattern it learns from is yours:
+the rows you select, their rests, accents and slides with the notes.
+
+**How the song does it.** Track 1, an `Acid` in C minor, has a 16-row line
+written by hand, and a live `Variation` over it at `Order` 1 and `Temp`
+`50%`, with `Vary` on `Every 4 passes`, under a kick, hats and a snare. What
+plays is a variation; the line you wrote is under it, which the generator learns
+from every time. [`song.ron`](songs/variations/song.ron) The line, its accents
+`7F` and slides `HLD`:
+
+```text
+C-2 7F   C-2 50   C-3 HLD  C-2 50   ---      D#2 50   C-2 7F   G-2 HLD
+A#1 50   ---      C-2 50   C-3 7F   ---      G-2 HLD  D#2 50   C-2 50
+```
+
+**Build it.**
+
+1.  `:set scale=minor` and `:bpm 124`.
+2.  Track 1: `K` `acid` `Enter`, `:name TB`, and the line above in the phrase view:
+    `'` accents a note and `/` makes it slide.
+3.  `gg` `vG` on the Note column and `S`. On `Fill`, `K`, `/variation`, `Enter`.
+    The panel's heading counts the notes it wrote, and the line changes.
+4.  `r` until you like it, and `L` to keep it live.
+5.  `Space 8` for the Gen page, and on the device's title, `K` on `Vary`, `Every
+    4 passes`.
+
+Then a `Kick` on every beat, `Hat`s on the off-beats and a `Snare` on rows `04`
+and `0C`, as in `acid-lines`.
+
+**Try next.**
+
+*   `gl`, then `Order` 3 and `Temp` 0: the line you wrote comes back, as
+    every three rows of it are followed by one row only. In a bar this short
+    `Order` 2 is the same, as no two rows of it come twice in a row; `Order` 1
+    takes it apart and puts it together another way.
+*   `Temp` `100%`: every row that ever followed is as likely, so a slide
+    the line has once comes as often as a note it has five times.
+*   `dd` on the Gen page takes the generator away and gives the line back, to
+    edit; `Space g a` instead keeps the variation as plain notes.
+*   On a longer line, two bars or four of a melody that comes back to its
+    figures, `Order` 2 gives phrases that sound like it without repeating it.
+*   A line with fewer than four notes is too little to learn from, and the panel
+    says so.
+
 ## René
 
 [Make Noise's René](https://www.makenoisemusic.com/modules/rene) is a sequencer of sixteen
@@ -779,7 +830,6 @@ These are planned, each its own issue, and this chapter grows a section as each 
 | Issue | Generator |
 |---|---|
 | [#586](https://github.com/gabrielgellner/vimtracker/issues/586) | Marbles' rhythm models as `Where` choices |
-| [#587](https://github.com/gabrielgellner/vimtracker/issues/587) | Variation: a Markov chain learned from the phrase's own notes |
 | [#589](https://github.com/gabrielgellner/vimtracker/issues/589) | Cellular automata rhythms from Wolfram's elementary rules |
 | [#590](https://github.com/gabrielgellner/vimtracker/issues/590) | Tonnetz chord movement: P, L and R moves |
 | [#591](https://github.com/gabrielgellner/vimtracker/issues/591) | Per-attribute loop lengths after Kria |
