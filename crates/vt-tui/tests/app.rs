@@ -3737,7 +3737,7 @@ fn the_shape_panel_draws_its_settings_beside_the_grid() {
         .collect();
     let all = text.join("\n");
     for expected in [
-        "Shape",
+        "Reshape",
         "Velocity: 4 of 4 rows",
         "From",
         "Curve",

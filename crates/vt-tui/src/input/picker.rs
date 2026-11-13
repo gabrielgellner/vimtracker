@@ -170,6 +170,8 @@ pub enum Pick {
     ShapeRate(WaveRate),
     /// Which rows the shape panel fills.
     ShapeWhere(Where),
+    /// The command the shape panel writes on an FX column with none.
+    ShapeCommand(FxCommand),
     Use {
         section: usize,
         track: usize,

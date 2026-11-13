@@ -472,10 +472,6 @@ impl App {
     /// a name at once, and `Esc` goes to the list. A query starts it searching for that.
     pub(crate) fn open_fx_picker(&mut self, slot: usize, query: &str) {
         let current = self.current_slot(slot).and_then(|s| s.command);
-        let track = self.song().tracks.get(self.cursor.track);
-        // Only what this track has, from its machine and its slots.
-        let commands: Vec<FxCommand> =
-            track.map_or_else(|| FxCommand::EVENTS.to_vec(), FxCommand::on_track);
         let empty = Item::new(
             "---",
             Pick::FxCommand {
@@ -484,24 +480,12 @@ impl App {
             },
         )
         .meaning("Empty");
-        let items = std::iter::once(empty)
-            .chain(commands.iter().map(|command| {
-                let (name, category) = match (command, track) {
-                    (FxCommand::Set(id), Some(track)) => (id.name_on(track), id.group_on(track)),
-                    (FxCommand::Set(id), None) => (command.meaning(), id.group()),
-                    _ => (command.meaning(), "Events".to_owned()),
-                };
-                Item::new(
-                    command.name(),
-                    Pick::FxCommand {
-                        slot,
-                        command: Some(*command),
-                    },
-                )
-                .meaning(name)
-                .category(category)
-            }))
-            .collect();
+        let (commands, listed) =
+            self.fx_command_items(self.cursor.track, |command| Pick::FxCommand {
+                slot,
+                command: Some(command),
+            });
+        let items = std::iter::once(empty).chain(listed).collect();
         let position = commands
             .iter()
             .position(|command| Some(*command) == current)
@@ -511,6 +495,33 @@ impl App {
                 .opened_on(Some(position))
                 .searching(query),
         );
+    }
+
+    /// The FX commands a track has, and an item for each choosing it as `pick` says, in categories
+    /// as `Dest` is: the filter, output, the voice, each slot's effect, then the events.
+    pub(crate) fn fx_command_items(
+        &self,
+        track: usize,
+        pick: impl Fn(FxCommand) -> Pick,
+    ) -> (Vec<FxCommand>, Vec<Item>) {
+        let track = self.song().tracks.get(track);
+        // Only what this track has, from its machine and its slots.
+        let commands: Vec<FxCommand> =
+            track.map_or_else(|| FxCommand::EVENTS.to_vec(), FxCommand::on_track);
+        let items = commands
+            .iter()
+            .map(|command| {
+                let (name, category) = match (command, track) {
+                    (FxCommand::Set(id), Some(track)) => (id.name_on(track), id.group_on(track)),
+                    (FxCommand::Set(id), None) => (command.meaning(), id.group()),
+                    _ => (command.meaning(), "Events".to_owned()),
+                };
+                Item::new(command.name(), pick(*command))
+                    .meaning(name)
+                    .category(category)
+            })
+            .collect();
+        (commands, items)
     }
 
     /// Put a chosen command in a slot. A slot with a value keeps it. An empty one waits for its value
@@ -713,6 +724,8 @@ impl App {
             }
             Outcome::Close => {
                 self.picker = None;
+                // A shape waiting for its command is given up.
+                self.shape_command = None;
                 self.mode = self.mode_after_picker();
                 self.leave_explorer();
             }
@@ -855,6 +868,7 @@ impl App {
             Pick::ShapeWave(wave) => self.pick_shape_wave(wave),
             Pick::ShapeRate(rate) => self.pick_shape_rate(rate),
             Pick::ShapeWhere(place) => self.pick_shape_where(place),
+            Pick::ShapeCommand(command) => self.pick_shape_command(command),
             Pick::Guide(guide) => {
                 self.guide = Some(guide);
                 self.guide_scroll = 0;

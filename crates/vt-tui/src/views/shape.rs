@@ -67,7 +67,7 @@ fn value(panel: &ShapePanel, row: ShapeRow) -> String {
 
 /// A row's value in spans, with a note outside the scale coloured as the grid colours it.
 fn spans(panel: &ShapePanel, row: ShapeRow) -> Vec<Span<'static>> {
-    let ShapeColumn::Note { scale } = panel.column else {
+    let ShapeColumn::Note { scale, .. } = panel.column else {
         return vec![Span::raw(value(panel, row))];
     };
     let notes: Vec<u8> = match row {
@@ -153,7 +153,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         FillKind::Shuffle if app.mode == Mode::Shape => "r deals again",
         FillKind::List => "~ reverse the list",
         FillKind::Snap => match panel.column {
-            ShapeColumn::Note { scale } if scale.on => "To the nearest note in the scale",
+            ShapeColumn::Note { scale, .. } if scale.on => "To the nearest note in the scale",
             _ => "The scale is off, so nothing moves",
         },
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse => "From the values there",
@@ -165,7 +165,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         Paragraph::new(lines).block(
             widgets::window_border()
                 .style(theme::window())
-                .title(" Shape ")
+                // What it does: generate on an empty column, or reshape what's there.
+                .title(format!(" {} ", panel.verb()))
                 .title_bottom(if panel.live.is_some() {
                     " Enter apply  L keep live  Esc cancel "
                 } else {
