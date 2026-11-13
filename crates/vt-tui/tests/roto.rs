@@ -311,11 +311,11 @@ fn turned_on_the_roto_shows_the_tracks_devices_live_and_stores_nothing() {
         let names: Vec<&str> = fake.plugins.values().map(|p| p.name.as_str()).collect();
         let expected: Vec<&str> = devices.iter().take(8).map(|d| d.name.as_str()).collect();
         assert_eq!(names, expected);
-        assert_eq!(names[0], "Sampler");
+        assert_eq!(names[..2], ["Macros", "Sampler"], "the macros first");
         assert!(fake.plugins.values().all(|p| p.kind == PluginKind::Macro));
     });
-    // The machine's first page, as its device describes it.
-    let machine = &devices[0];
+    // The macros' page, as their device describes it: eight knobs named by the macros.
+    let macros = &devices[0];
     assert!(tick_until(&mut app, &ports, |fake| {
         (1..=8).all(|index| {
             fake.knob(index)
@@ -325,7 +325,7 @@ fn turned_on_the_roto_shows_the_tracks_devices_live_and_stores_nothing() {
     ports.with(|fake| {
         for index in 1..=8u16 {
             let shown = fake.knob(index).unwrap();
-            match machine.control(index) {
+            match macros.control(index) {
                 Some(control) => {
                     assert_eq!(shown.name, control.name);
                     assert_eq!(shown.colour, control.colour);
@@ -338,9 +338,9 @@ fn turned_on_the_roto_shows_the_tracks_devices_live_and_stores_nothing() {
         assert!(fake.serial_changes.is_empty());
     });
     // The filter, chosen on the Roto.
-    ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(1))]);
+    ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(2))]);
     assert!(tick_until(&mut app, &ports, |fake| {
-        fake.shown == Some((1, 0)) && fake.knob(1).is_some_and(|knob| knob.name.as_str() == "Cut")
+        fake.shown == Some((2, 0)) && fake.knob(1).is_some_and(|knob| knob.name.as_str() == "Cut")
     }));
 }
 
@@ -539,13 +539,14 @@ fn values_shown(fake: &FakeRoto, knob: u8) -> Vec<String> {
         .collect()
 }
 
-/// The Output device, the third, has `Level` on its first knob and `Trim` on its fifth.
-const OUTPUT: u8 = 2;
+/// The Output device, the fourth after the macros, the machine and the filter, has `Level` on its
+/// first knob and `Trim` on its fifth.
+const OUTPUT: u8 = 3;
 const TRIM_KNOB: u8 = 4;
 const LEVEL_KNOB: u8 = 0;
 
-/// The Play device, the fourth, has `Speed` on its fifth knob.
-const PLAY: u8 = 3;
+/// The Play device, the fifth, has `Speed` on its fifth knob.
+const PLAY: u8 = 4;
 const SPEED_KNOB: u8 = 4;
 
 #[test]
@@ -715,34 +716,34 @@ fn sel_switches_an_effect_or_a_modulator_and_b_shows_on_the_roto() {
         slot: 0,
         insert: Insert::ALL[2],
     });
-    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 4) == Some(true)));
+    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 5) == Some(true)));
     // Tapping SEL and the slot bypasses it.
-    tap(&ports, 4, false);
+    tap(&ports, 5, false);
     assert!(tick_until_song(&mut app, |song| song.tracks[0].bypassed[0]));
-    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 4) == Some(false)));
+    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 5) == Some(false)));
     // `b` in the app, as its action, brings it back, which shows on the Roto.
     app.apply(&Action::SetBypass {
         track: 0,
         slot: 0,
         bypassed: false,
     });
-    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 4) == Some(true)));
-    // On the second bank, counted from it as the Roto counts: its second device is LFO 1.
+    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 5) == Some(true)));
+    // On the second bank, counted from it as the Roto counts: its third device is LFO 1.
     let page = ports.with(|fake| fake.press(FromRoto::SetFirstPlugin(8)));
     ports.from_roto(vec![page]);
     assert!(tick_until(&mut app, &ports, |fake| fake.first_plugin == 8));
-    tap(&ports, 1, false);
+    tap(&ports, 2, false);
     assert!(tick_until_song(&mut app, |song| song.tracks[0].mods[3].bypassed));
-    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 9) == Some(false)));
+    assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 10) == Some(false)));
     assert_eq!(ports.with(|fake| fake.first_plugin), 8, "the bank stays");
     // The accumulator has no switch: it stays on, and is sent so again.
     let (sent, undo) = (
         ports.with(|fake| fake.received.len()),
         app.history.undo_depth(),
     );
-    tap(&ports, 6, false);
+    tap(&ports, 7, false);
     assert!(tick_until(&mut app, &ports, |fake| fake.received.len() > sent));
-    assert_eq!(ports.with(|fake| enabled(fake, 14)), Some(true));
+    assert_eq!(ports.with(|fake| enabled(fake, 15)), Some(true));
     assert_eq!(app.history.undo_depth(), undo, "and nothing changed");
 }
 
@@ -755,12 +756,12 @@ fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
         let (mut app, _realtime, ports) = showing(OUTPUT);
         let depth = app.history.undo_depth();
         // Tapping SEL, paging to the second bank, then holding SEL and pressing LFO 1, the
-        // tenth device: the Roto switches it as the button goes down.
+        // eleventh device: the Roto switches it as the button goes down.
         let messages = ports.with(|fake| {
             vec![
                 fake.press(FromRoto::SetFirstPlugin(8)),
                 fake.press(FromRoto::SetPluginEnabled {
-                    index: 1,
+                    index: 2,
                     enabled: false,
                 }),
             ]
@@ -778,17 +779,17 @@ fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
             })]
         });
         if says_so {
-            messages.push(ports.with(|fake| fake.choose_plugin(1)));
+            messages.push(ports.with(|fake| fake.choose_plugin(2)));
         }
         ports.from_roto(messages);
-        let lfo = live_devices(&app.song().tracks[0], None, app.song(), false)[9].clone();
+        let lfo = live_devices(&app.song().tracks[0], None, app.song(), false)[10].clone();
         let first = lfo.control(1).unwrap().name.clone();
         assert!(tick_until(&mut app, &ports, |fake| {
-            fake.shown == Some((9, 0)) && fake.knob(1).is_some_and(|knob| knob.name == first)
+            fake.shown == Some((10, 0)) && fake.knob(1).is_some_and(|knob| knob.name == first)
         }));
         assert_eq!(
             app.roto.view.selected_index(),
-            9,
+            10,
             "LFO 1's knobs, {says_so}"
         );
         assert!(
@@ -797,7 +798,7 @@ fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
         );
         assert_eq!(app.history.undo_depth(), depth, "and no undo step left");
         assert_eq!(
-            ports.with(|fake| fake.plugins.get(&9).map(|p| p.enabled)),
+            ports.with(|fake| fake.plugins.get(&10).map(|p| p.enabled)),
             Some(true)
         );
     }
@@ -822,7 +823,7 @@ fn func_chooses_the_track_the_roto_shows_and_the_cursor_stays() {
     ports.from_roto(vec![choose]);
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.plugins
-            .get(&0)
+            .get(&1)
             .is_some_and(|p| p.name.as_str() == machine.name())
     }));
     assert_eq!(app.roto.track, 1);
@@ -990,14 +991,14 @@ fn a_device_with_buttons_is_stored_and_its_buttons_switch_its_settings_lit_from_
     let glue_hash = PluginHash::of("vimtracker:fx/comp-glue");
     assert!(tick_until(&mut app, &ports, |fake| fake
         .plugins
-        .get(&4)
+        .get(&5)
         .is_some_and(
             |p| p.kind == PluginKind::Normal && p.hash == glue_hash
         )));
-    ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(4))]);
+    ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(5))]);
     let was = auto_on(app.song());
     assert!(tick_until(&mut app, &ports, |fake| {
-        fake.shown == Some((4, 0)) && fake.light(4) == Some(was)
+        fake.shown == Some((5, 0)) && fake.light(4) == Some(was)
     }));
     ports.with(|fake| {
         let threshold = fake.knob(1).unwrap().learned.clone().unwrap();

@@ -150,7 +150,9 @@ The Roto works beside the keyboard, not through the screen: it has a track and a
 device of its own, which the cursor never moves, so a knob can change an effect while the
 keys edit an instrument on another track.
 
-In its PLUGIN mode the Roto shows one track's devices: the Sound page's (the machine,
+In its PLUGIN mode the Roto shows one track's devices: first `Macros`, the track's eight
+macros on knobs 1 to 8, each named by its macro and turned as `=` turns it on the Gen page's
+band, then the Sound page's (the machine,
 `Filter`, `Output` and `Play`), then the FX slots, then the Mod page's (the six mod
 slots, named by number and type as `M1 ADSR`, `M2 AHD`, `M3 Drum`, `M4 LFO` and `M5 LPG`, then
 `Accumulator` and

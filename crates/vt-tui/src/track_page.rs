@@ -21,6 +21,7 @@ pub use device::{
     DEVICE_COLUMNS, DEVICE_ROWS, DeviceCursor, DeviceSpec, DeviceWidth, RackPlace, rack_places,
 };
 pub use fx::TakenInsert;
+pub(crate) use generators::macros_device;
 pub use mixer::{MIXER, MIXER_ROWS, MIXER_START};
 pub(crate) use modulation::modulator_bypassed;
 
