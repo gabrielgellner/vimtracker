@@ -98,7 +98,7 @@ The song has a loop already kept, and `Mutate` at `20%`, so it wanders away from
 4.  The register: `Space 4`, then `L` for the Mod page. Put the cursor on `Mod 4`'s type, in the
     title of the device at the top right, `LFO` (`l` goes along a title and on into the device
     beside it), and press `K`, `steps`, `Enter`.
-5.  Still in its title: `l` to its mode, `Trig`, and `=` twice for `Note`. `l` `l` to its
+5.  Still in its title: `l` to its mode, `Trig`, and `K`, `note`, `Enter`. `l` `l` to its
     `Dest`, `---`, and `K`, `scale`, `Enter` for `Pitch in scale`.
 6.  Its `Depth`, the third row on its left, `i` `0C` `Enter`, so a drawn value moves the note
     by up to an octave either way.
@@ -155,7 +155,7 @@ every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu
 3.  `Space 3`, `:len 8`, and type the eight notes above in Insert.
 4.  `:order random`. The phrase's title says `Random`, and the playhead jumps.
 5.  `Space 4`, `L`, and make `Mod 4` a `Steps` slot as in the Turing Machine: `K` `steps`
-    `Enter` on its type, `=` twice on its mode for `Note`, `Pitch in scale` as its `Dest`,
+    `Enter` on its type, `K` `note` `Enter` on its mode, `Pitch in scale` as its `Dest`,
     `Depth` `0C`, and `Mutate` `12%` (`+` once, `=` twice).
 6.  The drone: `W`, a `VA` (`K`, `va`, `Enter`), `:name Y1`. In the phrase view, `:len 2`, a
     `D-1` on row `00` and an `A-1` on row `01`, each with a gate of `SGL8`: in Insert on the gate

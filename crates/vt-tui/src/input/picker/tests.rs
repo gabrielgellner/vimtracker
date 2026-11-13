@@ -383,12 +383,16 @@ fn a_search_flattens_the_tree_and_escape_clears_it_then_closes() {
     assert_eq!(picker.focus, Focus::List);
     assert_eq!(picker.query, "amp");
     assert_eq!(picker.matching(), 2);
-    // Typing again starts a new search, which emptied shows the whole list.
-    press(&mut picker, "/<Backspace><Backspace><Backspace><Esc>");
+    // `/` goes back to the search to change it. A name comes before a category's.
+    press(&mut picker, "/<Backspace><Backspace>");
+    assert_eq!(picker.query, "a");
+    assert_eq!(label(&picker), "Pan", "before Amp's two");
+    // Emptied, it shows the whole list.
+    press(&mut picker, "<Backspace>g<Backspace><Esc>");
     assert!(picker.query.is_empty());
     assert_eq!(
         label(&picker),
-        "Vol",
+        "Gain",
         "back on what it found, its category open"
     );
     assert!(picker.category(1).2);
@@ -462,6 +466,69 @@ fn an_empty_search_keeps_the_given_order() {
 fn ties_go_to_the_earlier_row() {
     assert_eq!(rank(&["ab one", "ab two"], "ab"), [0, 1]);
     assert_eq!(rank(&["ab two", "ab one"], "ab"), [0, 1]);
+}
+
+/// A list with meanings, as a Steps slot's mode and destination lists have.
+fn meant(items: &[(&str, &str)]) -> Picker {
+    let items = items
+        .iter()
+        .map(|(label, meaning)| Item::new(*label, Pick::Track(0)).meaning(*meaning))
+        .collect();
+    Picker::new("Choices", items)
+}
+
+#[test]
+fn each_word_of_a_search_matches_on_its_own() {
+    let mut picker = meant(&[
+        ("Pitch", "Pitch, with depth in semitones"),
+        ("Pitch in scale", "Moves the note along the song's scale"),
+        ("Cut", "Filter cutoff"),
+    ]);
+    for search in ["pitch in", "pi sc", "Pitch  in scale", "scale"] {
+        picker.set_query(search.to_owned());
+        assert_eq!(label(&picker), "Pitch in scale", "{search}");
+    }
+    // Its matched letters are in the name.
+    picker.set_query("pi sc".to_owned());
+    assert_eq!(picker.matched(0), [0, 1, 9, 10]);
+}
+
+#[test]
+fn a_name_comes_before_a_meaning() {
+    let mut picker = meant(&[
+        ("Trig", "each note starts it at its start"),
+        ("Free", "runs from the song's position"),
+        ("Note", "one step on with each note"),
+    ]);
+    picker.set_query("note".to_owned());
+    assert_eq!(label(&picker), "Note");
+    assert_eq!(picker.rows().len(), 3, "Trig and Free still match, after");
+    // The name itself, then one it starts, then one its words are in, then a meaning.
+    let texts = [
+        ("Pitches", "Pitches"),
+        ("Spitch", "Spitch"),
+        ("Cut", "Cut pitch"),
+        ("Pitch", "Pitch"),
+    ];
+    assert_eq!(
+        rank_with_positions(&texts, "pitch")
+            .into_iter()
+            .map(|(at, _)| at)
+            .collect::<Vec<_>>(),
+        [3, 0, 1, 2]
+    );
+}
+
+#[test]
+fn a_meaning_alone_still_finds_an_item() {
+    let mut picker = meant(&[
+        ("Random", "Any value between the two"),
+        ("Walk", "Each value a step from the last"),
+        ("1/f", "Pink, between random and a walk"),
+    ]);
+    picker.set_query("pink".to_owned());
+    assert_eq!(label(&picker), "1/f");
+    assert_eq!(picker.rows().len(), 1);
 }
 
 #[test]
