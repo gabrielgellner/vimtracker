@@ -5,8 +5,10 @@
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::Action;
-use vt_model::macros::{MACROS, Macro, MacroMap, MacroTarget, top_value, valid_name};
-use vt_model::settings::{Kind, SettingId};
+use vt_model::macros::{
+    GEN_ZERO, GenColumn, MACROS, Macro, MacroMap, MacroTarget, top_value, valid_name,
+};
+use vt_model::settings::Kind;
 use vt_model::song::Track;
 
 use crate::app::App;
@@ -14,6 +16,7 @@ use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker};
+use crate::track_page::Control;
 
 /// The macro picker's title, which `M` opens and a digit chooses in at once.
 pub const MACRO_PICKER: &str = "Map to a macro";
@@ -35,13 +38,24 @@ pub struct MappingView {
 }
 
 /// An end of a mapping as the view shows it: a list's choice by name, and anything else as its
-/// coarse hex, as the track page shows it.
-pub fn end_text(id: SettingId, value: u16) -> String {
+/// coarse hex, as the track page shows it, or a generator's setting as its number.
+pub fn end_text(target: MacroTarget, value: u16) -> String {
+    let Some(id) = target.setting() else {
+        return (i32::from(value) - GEN_ZERO).to_string();
+    };
     match id.entry().kind {
         Kind::Stepped { choices, .. } => choices
             .get(usize::from(value >> 8))
             .map_or_else(String::new, |choice| (*choice).to_owned()),
         Kind::Continuous { .. } => format!("{:02X}", value >> 8),
+    }
+}
+
+/// An end of a mapping in its setting's units, for the status line.
+fn end_shown(target: MacroTarget, value: u16) -> String {
+    match target.setting() {
+        Some(id) => id.entry().kind.shown(value),
+        None => (i32::from(value) - GEN_ZERO).to_string(),
     }
 }
 
@@ -60,39 +74,74 @@ pub fn holds(track: &Track, at: usize) -> String {
         return "nothing yet".to_owned();
     }
     maps.iter()
-        .map(|map| map.target.setting().name_on(track))
+        .map(|map| map.target.name_on(track))
         .collect::<Vec<_>>()
         .join(", ")
 }
 
 /// What the status line says of a setting a macro holds: its macro, and where the macro takes it,
-/// in its units.
-pub fn held_text(track: &Track, id: SettingId) -> Option<String> {
-    let (at, map) = track.macro_holding(MacroTarget::Setting(id))?;
-    let kind = id.entry().kind;
+/// in its units, and for a generator's, that it's by hand.
+pub fn held_text(track: &Track, target: MacroTarget) -> Option<String> {
+    let (at, map) = track.macro_holding(target)?;
+    let by_hand = if target.setting().is_none() {
+        ", by hand"
+    } else {
+        ""
+    };
     Some(format!(
-        "on macro {} {}, {} to {}",
+        "on macro {} {}, {} to {}{by_hand}",
         at + 1,
         macro_name(&track.macros[at], at),
-        kind.shown(map.min),
-        kind.shown(map.max)
+        end_shown(target, map.min),
+        end_shown(target, map.max)
     ))
 }
 
 impl App {
-    /// The setting under the cursor on the track page, if it's one a macro can hold.
-    fn setting_here(&self) -> Option<SettingId> {
+    /// The setting under the cursor on the track page, if it's one a macro can hold: one of the
+    /// registry's, or a live generator's on the Gen page, by its column.
+    fn setting_here(&self) -> Option<MacroTarget> {
         let track = self.song().tracks.get(self.cursor.track)?;
-        let id = self.track_control().setting_for_macro(track)?;
-        MacroTarget::Setting(id).mappable().then_some(id)
+        let target = match self.track_control() {
+            Control::Gen {
+                phrase,
+                generator,
+                param,
+            } => {
+                let found = track.phrases.get(&phrase)?.generators().get(generator)?;
+                MacroTarget::Gen {
+                    column: GenColumn::of(found.column),
+                    param,
+                }
+            }
+            control => MacroTarget::Setting(control.setting_for_macro(track)?),
+        };
+        target.mappable().then_some(target)
+    }
+
+    /// A generator setting's bounds and where it is now, on the generator under the cursor.
+    fn gen_numbers(&self) -> Option<((i32, i32), i32)> {
+        let Control::Gen {
+            phrase,
+            generator,
+            param,
+        } = self.track_control()
+        else {
+            return None;
+        };
+        let live = self.live_generator(self.cursor.track, phrase, generator)?;
+        let context = live.context();
+        let bounds = param.bounds(&context)?;
+        let now = param.number(&live.generator.heard(), &context)?;
+        Some((bounds, now))
     }
 
     /// The macro holding the setting under the cursor, and its mapping there, if one does.
-    pub(crate) fn macro_here(&self) -> Option<(SettingId, usize, MacroMap)> {
-        let id = self.setting_here()?;
+    pub(crate) fn macro_here(&self) -> Option<(MacroTarget, usize, MacroMap)> {
+        let target = self.setting_here()?;
         let track = self.song().tracks.get(self.cursor.track)?;
-        let (at, map) = track.macro_holding(MacroTarget::Setting(id))?;
-        Some((id, at, *map))
+        let (at, map) = track.macro_holding(target)?;
+        Some((target, at, *map))
     }
 
     /// Whether a command would turn a setting a macro holds, which is refused, saying where to
@@ -108,24 +157,23 @@ impl App {
                 | Cmd::PickValue
                 | Cmd::EnterInsert
         );
-        let Some((id, at, _)) = self.macro_here().filter(|_| turns) else {
+        let Some((target, at, _)) = self.macro_here().filter(|_| turns) else {
             return false;
         };
-        let name = self.track_control().name_on(&self.page_track());
+        let name = target.name_on(&self.page_track());
         self.status = format!(
             "{name} is on macro {}: turn it there, or gm for its range",
             at + 1
         );
-        let _ = id;
         true
     }
 
     /// `M`: list the eight macros, each with what it holds, to put the setting under the cursor
     /// on one, opened on the one it's on already.
     pub(crate) fn open_macro_picker(&mut self) {
-        let Some(id) = self.setting_here() else {
+        let Some(target) = self.setting_here() else {
             self.status = match self.track_control() {
-                crate::track_page::Control::Macro(_) => {
+                Control::Macro(_) => {
                     "A macro can't hold a macro: M maps the settings around it".to_owned()
                 }
                 _ => "M maps a setting to a macro, and this isn't one a macro reaches".to_owned(),
@@ -133,9 +181,7 @@ impl App {
             return;
         };
         let track = self.page_track();
-        let on = track
-            .macro_holding(MacroTarget::Setting(id))
-            .map(|(at, _)| at);
+        let on = track.macro_holding(target).map(|(at, _)| at);
         let items = (0..MACROS)
             .map(|at| {
                 let label = format!("{} {}", at + 1, macro_name(&track.macros[at], at));
@@ -149,7 +195,7 @@ impl App {
         self.show_picker(Picker::new(MACRO_PICKER, items).opened_on(on));
         self.status = format!(
             "Enter maps {} to the macro chosen, from bottom to top to start with; a digit chooses at once",
-            id.name_on(&track)
+            target.name_on(&track)
         );
     }
 
@@ -158,12 +204,11 @@ impl App {
     /// mapping of a macro holding nothing turns the macro to where the setting is, so nothing
     /// jumps.
     pub(crate) fn map_to_macro(&mut self, at: usize) {
-        let Some(id) = self.setting_here() else {
+        let Some(target) = self.setting_here() else {
             return;
         };
         let track = self.page_track();
-        let target = MacroTarget::Setting(id);
-        let name = id.name_on(&track);
+        let name = target.name_on(&track);
         let index = self.cursor.track;
         let held = &track.macros[at];
         match track.macro_holding(target) {
@@ -188,7 +233,16 @@ impl App {
                 );
             }
             None => {
-                let map = MacroMap::whole(target);
+                let (map, now) = match target.setting() {
+                    Some(id) => (MacroMap::whole(target), track.value_of(id)),
+                    None => {
+                        let Some((bounds, now)) = self.gen_numbers() else {
+                            return;
+                        };
+                        let now = (now + GEN_ZERO).clamp(0, i32::from(u16::MAX)) as u16;
+                        (MacroMap::numbers(target, bounds), now)
+                    }
+                };
                 let mut actions = vec![Action::MapMacro {
                     track: index,
                     at,
@@ -198,7 +252,7 @@ impl App {
                     actions.push(Action::SetMacro {
                         track: index,
                         at,
-                        value: map.macro_for(track.value_of(id)),
+                        value: map.macro_for(now),
                     });
                 }
                 let first = held.maps.is_empty();
@@ -226,14 +280,9 @@ impl App {
     pub(crate) fn open_mapping(&mut self) {
         let track = self.page_track();
         let (at, row) = match self.track_control() {
-            crate::track_page::Control::Macro(at) => (at, 0),
+            Control::Macro(at) => (at, 0),
             _ => match self.macro_here() {
-                Some((id, at, _)) => (
-                    at,
-                    track.macros[at]
-                        .map_of(MacroTarget::Setting(id))
-                        .unwrap_or(0),
-                ),
+                Some((target, at, _)) => (at, track.macros[at].map_of(target).unwrap_or(0)),
                 None => {
                     self.status =
                         "This isn't on a macro: M maps it to one, and gm on a macro opens it"
@@ -272,18 +321,22 @@ impl App {
             return;
         };
         let track = self.page_track();
-        let id = map.target.setting();
-        let kind = id.entry().kind;
+        let target = map.target;
         let held = &track.macros[view.at];
         let now = map.at(f32::from(held.value) / 256.0);
+        let by_hand = if target.setting().is_none() {
+            ", by hand: its locks and modulation reach it once the engine plays generators"
+        } else {
+            ""
+        };
         self.status = format!(
-            "At 00 the macro sets {} to {}, at FF to {}; it's at {:02X}, so {} is {}",
-            id.name_on(&track),
-            kind.shown(map.min),
-            kind.shown(map.max),
+            "At 00 the macro sets {} to {}, at FF to {}; it's at {:02X}, so {} is {}{by_hand}",
+            target.name_on(&track),
+            end_shown(target, map.min),
+            end_shown(target, map.max),
             held.value >> 8,
-            id.name(),
-            kind.shown(now)
+            target.name(),
+            end_shown(target, now)
         );
     }
 
@@ -305,9 +358,15 @@ impl App {
         let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row()) else {
             return;
         };
-        let top = i32::from(top_value(map.target.setting().entry().kind));
         let end = if view.max { map.max } else { map.min };
-        let moved = (i32::from(end >> 8 << 8) + by * 0x100).clamp(0, top) as u16;
+        // A setting's coarse step, or a generator's whole number.
+        let moved = match map.target.setting() {
+            Some(id) => {
+                let top = i32::from(top_value(id.entry().kind));
+                (i32::from(end >> 8 << 8) + by * 0x100).clamp(0, top) as u16
+            }
+            None => (i32::from(end) + by).clamp(0, i32::from(u16::MAX)) as u16,
+        };
         let map = if view.max {
             MacroMap { max: moved, ..map }
         } else {
@@ -406,8 +465,12 @@ impl App {
                 else {
                     return;
                 };
-                let top = top_value(map.target.setting().entry().kind);
-                let value = (u16::from(u8::from_str_radix(&typed, 16).unwrap_or(0)) << 8).min(top);
+                let typed = u8::from_str_radix(&typed, 16).unwrap_or(0);
+                let value = match map.target.setting() {
+                    Some(id) => (u16::from(typed) << 8).min(top_value(id.entry().kind)),
+                    // A generator's setting typed as a number, in hex as every value is.
+                    None => (i32::from(typed) + GEN_ZERO) as u16,
+                };
                 self.set_range(if view.max {
                     MacroMap { max: value, ..map }
                 } else {
@@ -439,19 +502,17 @@ impl App {
             return;
         };
         let track = self.page_track();
-        let id = map.target.setting();
+        let name = map.target.name_on(&track);
         self.apply(&Action::UnmapMacro {
             track: self.cursor.track,
             target: map.target,
         });
         self.keep_mapping_open();
         if self.mapping.is_some() {
-            self.status = format!("{} is off the macro: u brings it back", id.name_on(&track));
+            self.status = format!("{name} is off the macro: u brings it back");
         } else {
-            self.status = format!(
-                "{} is off the macro, which holds nothing now: u brings it back",
-                id.name_on(&track)
-            );
+            self.status =
+                format!("{name} is off the macro, which holds nothing now: u brings it back");
         }
     }
 
@@ -480,7 +541,7 @@ impl App {
     pub(crate) fn name_macro(&mut self, name: &str) {
         let at = match (&self.mapping, self.track_control()) {
             (Some(view), _) => Some(view.at),
-            (None, crate::track_page::Control::Macro(at)) => Some(at),
+            (None, Control::Macro(at)) => Some(at),
             (None, _) => self.macro_here().map(|(_, at, _)| at),
         };
         let Some(at) =

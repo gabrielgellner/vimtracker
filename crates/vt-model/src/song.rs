@@ -1926,6 +1926,20 @@ impl Phrase {
         true
     }
 
+    /// Have a live generator held by its track's macros as this shape, or let go with none,
+    /// writing its column again if that changes what's heard, a `Follow` from `source`.
+    pub fn hold_generator(
+        &mut self,
+        index: usize,
+        held: Option<Shape>,
+        source: Option<&[Step]>,
+    ) -> bool {
+        let steps = &mut self.steps;
+        self.generators
+            .get_mut(index)
+            .is_some_and(|generator| generator.hold(steps, held, source))
+    }
+
     /// Write a live `Follow` again from its source's loop, which an edit changed: true if that
     /// changed its rows.
     pub fn refollow(&mut self, index: usize, source: &[Step]) -> bool {

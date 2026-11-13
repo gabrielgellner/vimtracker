@@ -399,3 +399,49 @@ fn a_generators_pass_is_where_the_song_is_not_how_it_got_there() {
     assert_eq!(pass(&from_top), 8);
     assert_eq!(pass(&engine), 8);
 }
+
+/// One synth track of sixteen quiet notes, `20`, with accents of `7F` on nine of them from a
+/// Euclid kept live on their velocities.
+fn accents() -> Song {
+    let mut song = Song::new(1);
+    song.millibpm = 128_000;
+    let quiet: Step = "C-3 20 --- --- ---".parse().unwrap();
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(vec![quiet; 16])));
+    generate(
+        song,
+        0,
+        ShapeColumn::Velocity,
+        rows(15),
+        shape(
+            FillKind::Alternate,
+            0x7F,
+            0x7F,
+            Where::Euclid { hits: 9, rotate: 0 },
+        ),
+    )
+}
+
+/// A held setting that hits fewer rows plays what's under the generator on the rows it no longer
+/// hits, as writing it would, not the accents written there at rest.
+#[test]
+fn a_held_setting_hitting_fewer_rows_plays_whats_under_on_the_rest() {
+    let song = accents();
+    let hold = (0, ShapeColumn::Velocity, GenParam::Hits, 3);
+    let (held, engine) = play(&song, &[hold], 16);
+    let written = reshaped(&song, hold);
+    let quiet = written.tracks[0].phrases[&0]
+        .steps()
+        .iter()
+        .filter(|step| step.velocity == Some(0x20))
+        .count();
+    assert_eq!(quiet, 13, "three accents, the rest as under");
+    let (writes, _) = play(&written, &[], 16);
+    assert!(
+        held == writes,
+        "held, it plays as written, with what's under"
+    );
+    assert!(heard(&engine, 0).iter().any(|run| run.moving));
+}

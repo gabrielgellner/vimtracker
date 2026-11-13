@@ -16,6 +16,8 @@ use crate::views::widgets;
 /// How wide the setting's column is, and each end's.
 const SETTING_WIDTH: usize = 26;
 const END_WIDTH: usize = 7;
+/// Room after the ends for `by hand`.
+const BY_HAND_WIDTH: usize = 8;
 /// The keys it takes, along its bottom.
 const KEYS: &str = " = - move  i types  ~ swaps  dd unmaps  Esc ";
 
@@ -25,7 +27,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
         return;
     };
     let held = &track.macros[view.at];
-    let width = (2 + 2 + SETTING_WIDTH + 2 * END_WIDTH + 2).max(KEYS.len() + 4) as u16;
+    let width =
+        (2 + 2 + SETTING_WIDTH + 2 * END_WIDTH + BY_HAND_WIDTH + 2).max(KEYS.len() + 4) as u16;
     let height = (held.maps.len() + 5) as u16;
     let window = Rect {
         x: area.x + area.width.saturating_sub(width) / 2,
@@ -63,29 +66,41 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
         Line::raw(""),
     ];
     for (row, map) in held.maps.iter().enumerate() {
-        let id = map.target.setting();
+        let target = map.target;
         let here = row == view.row;
         let marker = if here { "›" } else { " " };
-        let name: String = id.name_on(track).chars().take(SETTING_WIDTH - 1).collect();
+        let name: String = target
+            .name_on(track)
+            .chars()
+            .take(SETTING_WIDTH - 1)
+            .collect();
+        // A generator's setting is reached by hand for now, which its row says, dim.
+        let by_hand = target.setting().is_none();
         let end = |max: bool, value: u16| {
             let text = match &view.typing {
                 Some(typed) if here && view.max == max => format!("{typed}_"),
-                _ => end_text(id, value),
+                _ => end_text(target, value),
             };
             let style = if here && view.max == max {
                 theme::cursor(app.mode)
+            } else if by_hand {
+                theme::dim()
             } else {
                 Style::new()
             };
             let padded = format!("{text:<width$}", width = END_WIDTH - 1);
             [Span::styled(padded, style), Span::raw(" ")]
         };
+        let name_style = if by_hand { theme::dim() } else { Style::new() };
         let mut spans = vec![
             Span::styled(format!(" {marker}"), theme::dim()),
-            Span::raw(format!("{name:<SETTING_WIDTH$}")),
+            Span::styled(format!("{name:<SETTING_WIDTH$}"), name_style),
         ];
         spans.extend(end(false, map.min));
         spans.extend(end(true, map.max));
+        if by_hand {
+            spans.push(Span::styled("by hand", theme::dim()));
+        }
         lines.push(Line::from(spans));
     }
     frame.render_widget(Paragraph::new(lines), inner);
