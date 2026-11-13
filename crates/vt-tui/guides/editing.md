@@ -295,12 +295,12 @@ outwards. A step whose level is over Grids' second threshold is accented, `7F`.
 
 | Row | Does |
 |---|---|
-| Part | Which part this track plays: `BD`, `SD` or `HH`. `K` lists them |
+| Part | Which part this track plays: `BD`, `SD` or `HH` |
 | Note | On an empty column, the note it writes |
-| X, Y | The place on the map, from `00` to `FF` each way |
-| BD, SD, HH density | How many of the part's hits play: none at `00`, all at `FF` |
-| Chaos | How far each step's level is raised at random, so weaker hits come and go |
-| Rows | `1/16` reads every other step of the map's 32 a bar; `1/32` reads them all |
+| X, Y | The place on the map, `00` to `FF` each way |
+| BD density | How many of the kick's hits play, and SD and HH the others' |
+| Chaos | How far each step's level is raised at random |
+| Rows | A row a 16th, `1/16`, or a 32nd, `1/32` |
 
 Select a kick's, a snare's and a hat's tracks with `W`, `vGWW`, and `S`: each
 track plays its own part of the same place on the map, so the three are one
@@ -313,7 +313,7 @@ and the hats.
 A hit on a note keeps its pitch, and a new one takes the first note in the
 rows, so type one note on each drum track, a low kick and a high hat, before
 `S`. On an empty column it writes `Note`. A row that doesn't play is cleared,
-and an `OFF` stays. `r` rolls the chaos again, and each bar of a longer
+and an `OFF` stays. Chaos makes weaker hits come and go: `r` rolls it again, and each bar of a longer
 selection rolls its own. The map, X, Y and the densities move by one with `=`
 and `-` and by `10` with `+` and `_`, and `i` types them in hex.
 
