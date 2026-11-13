@@ -19,6 +19,8 @@ A request is one line of JSON over TCP on 127.0.0.1, and its answer is one line 
   `"Overdrive"`, `true`): sets each and answers with what each shows now, and every other one's.
 - `render`, with `path` and `seconds`: plays the file through the source track, records the sink
   for that long, and answers with the recording's path once Live has written it.
+- `take`, `render take` and `probe take`: read a riff recorded into a clip, play it again and
+  record it, or play a probe's notes on its instrument (`takes.py`, #565).
 
 Nothing here waits: Live calls `poll` about ten times a second from its main thread, and a
 request that takes time, such as a render, is a generator that yields until it's done. Everything
@@ -33,7 +35,7 @@ import os
 import socket
 import time
 
-from . import values
+from . import takes, values
 
 VERSION = 1
 HOST = "127.0.0.1"
@@ -199,12 +201,17 @@ class Bridge:
             return self.set(request.get("parameters") or {})
         if command == "reload":
             return self.reload()
+        if command in takes.COMMANDS:
+            return takes.handle(self, command, request)
         if command == "render":
             if self.rendering:
                 raise Refused("a render is already running")
             self.rendering = True
             return self.render(request["path"], float(request["seconds"]))
-        raise Refused(f"no command called {command}; there are ping, load, parameters, set, render and reload")
+        raise Refused(
+            f"no command called {command}; there are ping, load, parameters, set, render, reload, take, "
+            "render take and probe take"
+        )
 
     def reload(self):
         """Read this module and `values` again from disk, so a change to the bridge takes without
@@ -212,6 +219,7 @@ class Bridge:
         if self.rendering:
             raise Refused("a render is running; reload once it's done")
         importlib.reload(values)
+        importlib.reload(takes)
         module = importlib.reload(importlib.import_module(__name__))
         self.__class__ = module.Bridge
         return {"bridge": module.VERSION}
