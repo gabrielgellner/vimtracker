@@ -427,8 +427,11 @@ fn fnv(hash: &mut u64, bytes: &[u8]) {
 
 const CASES: usize = 160;
 
+/// A fill to hash by its name, with what a variant draws on top of its case, if it's one.
+type Hashed = (&'static str, FillKind, Option<fn(&mut Shape)>);
+
 /// Every fill by its name, then the variants, each with what it draws on top of a fill's case.
-fn fills() -> Vec<(&'static str, FillKind, Option<fn(&mut Shape)>)> {
+fn fills() -> Vec<Hashed> {
     FillKind::ALL
         .into_iter()
         .map(|kind| (kind.name(), kind, None))
