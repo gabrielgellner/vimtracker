@@ -1669,7 +1669,7 @@ pub const SAMPLER_SETTINGS: usize = SAMPLER.len();
 
 /// How many of a mod slot's type's own settings the registry holds, and of the accumulator's and
 /// the arpeggio's together.
-pub const MOD_OWN_SETTINGS: usize = 9;
+pub const MOD_OWN_SETTINGS: usize = 10;
 pub const PLAYED_SETTINGS: usize = ACCUMULATION.len() + ARPEGGIO.len();
 
 /// The sampler's own, which it keeps whatever it plays. `Length` isn't `LEN`, which is `Gate`'s.
@@ -1814,6 +1814,19 @@ const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
             units: Units::Depth,
         },
         default: 0x80,
+    },
+    // An LFO's and Steps' `Rate`, faster up the scale, through its own kind of rate (decision
+    // 301); the default is a new LFO's `1/4`.
+    Entry {
+        key: "rate",
+        name: "Rate",
+        label: None,
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::Percent,
+        },
+        default: 0x7A,
     },
 ];
 
