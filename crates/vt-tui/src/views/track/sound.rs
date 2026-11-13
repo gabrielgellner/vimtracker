@@ -214,7 +214,7 @@ impl CellSource for SoundCells<'_> {
         let then = self
             .app
             .reported_track()
-            .and_then(|track| bar_value(control, track));
+            .and_then(|track| bar_value(control, &track.with_macros()));
         let live = match (
             self.app.live.and_then(|live| live_value(control, &live)),
             then,
@@ -227,7 +227,10 @@ impl CellSource for SoundCells<'_> {
         } else {
             ValueBar::new(value, BAR_CELLS).playing(live)
         };
-        Some(bar.centred(centred))
+        Some(
+            bar.centred(centred)
+                .range(super::macro_range(control, self.track)),
+        )
     }
 }
 

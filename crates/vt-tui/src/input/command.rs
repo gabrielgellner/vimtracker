@@ -116,6 +116,8 @@ pub enum Line {
     /// This track's own groove, or none to follow the project's.
     TrackGroove(Option<GrooveId>),
     TrackLevel(u8),
+    /// Name the macro under the cursor, or with nothing give it back its first mapping's name.
+    MacroName(String),
     Reset(Option<usize>),
     /// Set when launched chains start, or show it.
     Launch(Option<Launch>),
@@ -710,7 +712,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 41] = [
+pub const COMMANDS: [Command; 42] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -932,6 +934,12 @@ pub const COMMANDS: [Command; 41] = [
                 .map(Line::TrackLevel)
                 .map_err(|_| LineError::TrackLevel)
         },
+    },
+    Command {
+        name: "macro",
+        meaning: "Name the macro under the cursor, or with nothing go back to its first setting's",
+        takes: Takes::Nothing,
+        parse: |argument| Ok(Line::MacroName(argument.to_owned())),
     },
     Command {
         name: "len",

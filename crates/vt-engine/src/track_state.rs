@@ -7,10 +7,10 @@ use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
 use vt_model::envelope::{Envelope, Lpg};
 use vt_model::groove::Groove;
 use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS, Setting};
-use vt_model::lfo::{LfoMode, MAX_DEFORM, deformed_wave, phase_of, phase_value};
+use vt_model::lfo::{LfoMode, MAX_DEFORM, deformed_wave, phase_of};
 use vt_model::macros::MACROS;
 use vt_model::modulation::{
-    MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, depth_value, note_shape_slot,
+    MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, note_shape_slot,
 };
 use vt_model::playable::Playable;
 use vt_model::scale::Scale;
@@ -1118,57 +1118,7 @@ fn pan_position(value: f32) -> f32 {
 /// one. A voice keeps its own, an effect's setting is what's in its slot, or its default while
 /// another effect is there, and a mod slot's depth and phase are what its page has.
 pub fn base_of(id: SettingId, track: &Track) -> u16 {
-    let modulator = |slot: usize, at: usize| match at {
-        0 => depth_value(track.mods[slot].depth),
-        1 if track.mods[slot].kind == ModKind::Steps => track.mods[slot].steps.start_value(),
-        1 => phase_value(track.mods[slot].lfo.phase),
-        2 => u16::from(track.mods[slot].polarity().index()) << 8,
-        _ => depth_value(track.mods[slot].lfo.deform),
-    };
-    let whole = match id.owner() {
-        (Owner::Mod(n), at) => return modulator(n, at),
-        (Owner::Macro(at), _) => return track.macros[at].value,
-        // One its type hasn't is at its default, and does nothing until its type has it.
-        (Owner::ModOwn(n), at) => {
-            return track.mods[n]
-                .own_value(at)
-                .unwrap_or(u16::from(id.entry().default) << 8);
-        }
-        (Owner::Accumulation, at) => return track.accumulation.own_value(at),
-        (Owner::Arpeggio, at) => return track.arpeggio.own_value(at),
-        (Owner::Track, _) => match id {
-            SettingId::VOL => UNITY_LEVEL,
-            SettingId::LEVEL => track.level,
-            SettingId::PAN => track.pan,
-            SettingId::CUT => track.cutoff,
-            SettingId::RES => track.resonance,
-            SettingId::SEND_A => track.send_a,
-            SettingId::SEND_B => track.send_b,
-            SettingId::PITCH => track.pitch,
-            SettingId::VELOCITY_DELTA => track.velocity_delta,
-            SettingId::QUANTISE => track.quantise,
-            SettingId::FILTER_MODE => track.filter_mode.index(),
-            SettingId::GATE_LENGTH => track.gate_length(),
-            SettingId::GROOVE => track
-                .groove
-                .map_or(0, |groove| (groove.index() + 1).min(0xFF) as u8),
-            SettingId::SPEED => track.speed.index(),
-            SettingId::GLIDE => track.glide,
-            _ => id.entry().default,
-        },
-        (Owner::Bypass(slot), _) => u8::from(track.bypassed[slot]),
-        (Owner::Voice(_) | Owner::Sampler, _) => track.setting(id),
-        (Owner::Slot { slot, effect }, at) => {
-            let insert = track.inserts[slot];
-            // A distortion keeps every mode's settings, so one its mode doesn't show still reads.
-            if Effect::of(insert) == Some(effect) {
-                insert.read(effect.params()[at].setting).unwrap_or(0)
-            } else {
-                id.entry().default
-            }
-        }
-    };
-    u16::from(whole) << 8 | u16::from(track.fine(id))
+    track.value_of(id)
 }
 
 /// How many of the played settings are the accumulator's, before the arpeggio's.
