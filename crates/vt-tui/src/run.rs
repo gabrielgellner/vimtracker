@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{
     self, DisableFocusChange, EnableFocusChange, Event, PopKeyboardEnhancementFlags,
     PushKeyboardEnhancementFlags,
@@ -14,7 +15,7 @@ use ratatui::crossterm::{execute, terminal};
 use ratatui::layout::{Constraint, Layout, Margin};
 use ratatui::widgets::Block;
 use thiserror::Error;
-use vt_engine::engine::Engine;
+use vt_engine::engine::{Engine, Transport};
 use vt_engine::link::connect;
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems, write_wav};
@@ -299,6 +300,59 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
 /// How often the main loop asks whether Low Power Mode is on, or the Mac is hot.
 const POWER_EVERY: Duration = Duration::from_secs(2);
 
+/// Frames in a row drawn the same, about half a second, before the screen counts as still.
+const STILL_AFTER: u32 = 15;
+/// While the screen is still, it's drawn every this many frames, about four times a second, for
+/// a change that no key, mouse or window event brought.
+const STILL_EVERY: u32 = 8;
+
+/// When the screen is drawn. Drawing it the same as last time was most of what the interface did
+/// while nothing happened, so once it has come out the same for a while it's drawn only now and
+/// then, and at once again when a key, the mouse or the window brings something, the song
+/// changes, or the song plays (#547). The loop still runs every frame, so nothing else waits.
+#[derive(Debug, Default)]
+struct Redraws {
+    /// Frames in a row drawn the same as the one before.
+    same: u32,
+    /// Frames gone by since it was last drawn.
+    since: u32,
+}
+
+impl Redraws {
+    /// Whether to draw this frame, given whether something woke the screen.
+    fn due(&mut self, woken: bool) -> bool {
+        self.since += 1;
+        woken || self.same < STILL_AFTER || self.since >= STILL_EVERY
+    }
+
+    /// It was drawn, the same as the time before or not.
+    fn drawn(&mut self, changed: bool) {
+        self.same = if changed {
+            0
+        } else {
+            self.same.saturating_add(1)
+        };
+        self.since = 0;
+    }
+}
+
+/// A writer that notes whether anything went through it.
+struct Noted<W> {
+    inner: W,
+    wrote: bool,
+}
+
+impl<W: std::io::Write> std::io::Write for Noted<W> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.wrote |= !bytes.is_empty();
+        self.inner.write(bytes)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 fn main_loop(
     terminal: &mut ratatui::DefaultTerminal,
     app: &mut App,
@@ -313,6 +367,11 @@ fn main_loop(
     let mut power_asked: Option<Instant> = None;
     // Whether the terminal is sending the mouse, which the wheel's setting turns on and off.
     let mut mouse = false;
+    let mut redraws = Redraws::default();
+    // The screen as last drawn, and the song it showed, to tell whether anything changed.
+    let mut shown = Buffer::empty(ratatui::layout::Rect::ZERO);
+    let mut shown_song = Arc::clone(app.song());
+    let mut woken = true;
     while !app.should_quit {
         if app.wants_mouse() != mouse {
             mouse = app.wants_mouse();
@@ -358,15 +417,31 @@ fn main_loop(
             app.slowdown.power = audio::PowerState::now();
         }
         app.autosave_if_due(Instant::now());
-        // The sample page's waveform is drawn at one pixel for each of the screen's.
-        if let Ok(size) = terminal::window_size() {
-            graphics.use_window(size);
+        woken |= app.transport == Transport::Playing || !Arc::ptr_eq(app.song(), &shown_song);
+        if redraws.due(woken) {
+            // The sample page's waveform is drawn at one pixel for each of the screen's.
+            if let Ok(size) = terminal::window_size() {
+                graphics.use_window(size);
+            }
+            let mut out = Noted {
+                inner: std::io::stdout(),
+                wrote: false,
+            };
+            graphics.sync(app, &mut out)?;
+            let drawn =
+                terminal.draw(|frame| draw_screen(frame, app, Some(stats), Instant::now()))?;
+            let changed = *drawn.buffer != shown;
+            if changed {
+                shown.clone_from(drawn.buffer);
+            }
+            graphics.place(app, &mut out)?;
+            redraws.drawn(changed || out.wrote);
+            shown_song = Arc::clone(app.song());
         }
-        graphics.sync(app, &mut std::io::stdout())?;
-        terminal.draw(|frame| draw_screen(frame, app, Some(stats), Instant::now()))?;
-        graphics.place(app, &mut std::io::stdout())?;
+        woken = false;
         if event::poll(frame_time)? {
             while event::poll(Duration::ZERO)? {
+                woken = true;
                 match event::read()? {
                     Event::Key(key) => {
                         app.key_event(Key::from_event(key), key.kind, Instant::now())
@@ -487,5 +562,34 @@ pub fn draw_screen(
         // Under the names it finishes, after the `:`.
         let column = 1 + menu.column(&app.command_line);
         views::picker::draw_menu(frame, status, column, &mut menu.picker);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Frames until the next draw, from now.
+    fn wait(redraws: &mut Redraws) -> u32 {
+        (1..100).find(|_| redraws.due(false)).unwrap()
+    }
+
+    #[test]
+    fn a_still_screen_is_drawn_now_and_then_and_at_once_when_woken() {
+        let mut redraws = Redraws::default();
+        for _ in 0..STILL_AFTER {
+            assert!(redraws.due(false), "drawn every frame until it's still");
+            redraws.drawn(false);
+        }
+        assert_eq!(wait(&mut redraws), STILL_EVERY, "then now and then");
+        redraws.drawn(false);
+        assert!(!redraws.due(false));
+        assert!(redraws.due(true), "a key draws it at once");
+        redraws.drawn(true);
+        for _ in 0..STILL_AFTER {
+            assert!(redraws.due(false), "and every frame while it changes");
+            redraws.drawn(false);
+        }
+        assert!(!redraws.due(false));
     }
 }
