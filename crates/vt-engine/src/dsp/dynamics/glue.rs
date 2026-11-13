@@ -50,6 +50,7 @@ use vt_model::insert::{
     Compressor as Settings, GLUE_AUTO_RELEASE, GLUE_RATIOS, range_db, threshold_db,
 };
 
+use crate::dsp::blocks::sides::same_bits_by_fields;
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// Below this, a level counts as silence, about -120 dB, so the log stays finite.
@@ -239,6 +240,26 @@ pub struct Glue {
     /// The settings the times were worked out from, and the times.
     times: Option<(Settings, Times)>,
 }
+
+same_bits_by_fields!(Times {
+    attack,
+    release,
+    discharge,
+    into_slow,
+    slow_fills,
+});
+same_bits_by_fields!(Glue {
+    reduction,
+    slow,
+    threshold,
+    start,
+    width,
+    power,
+    slope,
+    ceiling,
+    times,
+});
+same_bits_by_fields!(PeakClip { on, target });
 
 impl Glue {
     /// How far it's turning down now, in dB, for a meter.

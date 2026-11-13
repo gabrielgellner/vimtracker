@@ -542,6 +542,122 @@ impl InsertState {
             .is_some_and(|memory| self.quiet < memory.quiet_frames(rate))
     }
 
+    /// What the slot would give for `input`, and whether its two sides are the same, if taking it
+    /// would leave everything it keeps as it was, so that it would give the same for the same
+    /// input every frame after. A mix bus whose slots all have settled like this with silence
+    /// coming in can skip them until something comes in or changes (#558). What it hears from
+    /// another track has to stay as `keys` has it now. `smoothing` is what its settings move by.
+    ///
+    /// A copy of the slot, without its long buffer, takes the frame, and what it keeps is compared
+    /// with the slot's bit for bit. One with a long buffer does no work only with nothing coming in
+    /// and nothing ringing, and is otherwise never settled. A phaser's sweep, a vowel filter's
+    /// block and `Down`'s hold go on by themselves, so they never settle either.
+    pub fn settled(
+        &self,
+        input: [f32; 2],
+        same: bool,
+        smoothing: f32,
+        rate: u32,
+        keys: &Keys,
+    ) -> Option<([f32; 2], bool)> {
+        let moves_by_itself = matches!(
+            self.insert,
+            Insert::Phaser(_)
+                | Insert::Vowel(_)
+                | Insert::Distort(Distort {
+                    kind: DistortType::Down,
+                    ..
+                })
+        );
+        let buffer_working =
+            Memory::kept_by(self.insert) && (input != [0.0, 0.0] || self.ringing(rate));
+        if !self.on.value.same_bits(&self.on.target) || moves_by_itself || buffer_working {
+            return None;
+        }
+        let mut tried = self.without_memory();
+        let out = tried.process_sides(input, same, smoothing, rate, keys);
+        tried.kept_as(self).then_some(out)
+    }
+
+    /// The slot as it is but for its long buffer, which it doesn't have, to try a frame on.
+    fn without_memory(&self) -> Self {
+        let Self {
+            memory: _,
+            quiet,
+            insert,
+            amount,
+            mix,
+            gain,
+            oversampler,
+            bits,
+            held,
+            before,
+            since,
+            eq,
+            dynamics,
+            peak_clip,
+            phaser,
+            gate,
+            vowel,
+            exciter,
+            pedal,
+            on,
+            note,
+        } = self;
+        Self {
+            memory: None,
+            quiet: *quiet,
+            insert: *insert,
+            amount: *amount,
+            mix: *mix,
+            gain: *gain,
+            oversampler: *oversampler,
+            bits: *bits,
+            held: *held,
+            before: *before,
+            since: *since,
+            eq: *eq,
+            dynamics: *dynamics,
+            peak_clip: *peak_clip,
+            phaser: *phaser,
+            gate: *gate,
+            vowel: *vowel,
+            exciter: exciter.clone(),
+            pedal: *pedal,
+            on: *on,
+            note: *note,
+        }
+    }
+
+    /// Whether everything a frame can change, but for a long buffer, a phaser's and a vowel
+    /// filter's, is as it is in `other`, bit for bit.
+    fn kept_as(&self, other: &Self) -> bool {
+        self.quiet == other.quiet
+            && self.amount.same_bits(&other.amount)
+            && self.mix.same_bits(&other.mix)
+            && self.gain.same_bits(&other.gain)
+            && self.on.same_bits(&other.on)
+            && self.bits.same_bits(&other.bits)
+            && self.held.same_bits(&other.held)
+            && self.before.same_bits(&other.before)
+            && self.since.same_bits(&other.since)
+            && self.oversampler.same_bits(&other.oversampler)
+            && self.pedal.same_bits(&other.pedal)
+            && self.dynamics.same_bits(&other.dynamics)
+            && self.peak_clip.same_bits(&other.peak_clip)
+            && self.gate.same_bits(&other.gate)
+            && self.exciter.same_bits(&other.exciter)
+            && self.eq.same_bits(&other.eq)
+    }
+
+    /// Keep up what skipping these frames of silence, once the slot has settled, would leave
+    /// behind: how long Warps has been quiet.
+    pub fn rested(&mut self, frames: u32) {
+        if let (Insert::Warps(_), Some(Memory::Warps(_))) = (self.insert, &self.memory) {
+            self.quiet = self.quiet.saturating_add(frames);
+        }
+    }
+
     /// One frame through what the slot keeps. Once it's quiet with nothing going in, it does no work.
     #[inline]
     fn ring(&mut self, input: [f32; 2], rate: u32) -> [f32; 2] {
@@ -1509,5 +1625,108 @@ mod tests {
                 .collect();
             assert!(peak(&out) <= 1.2, "{kind:?}: {}", peak(&out));
         }
+    }
+
+    /// Every effect, every compressor type with `Auto` and Glue's clip on, and every distortion.
+    fn every_effect() -> Vec<Insert> {
+        let mut inserts = Insert::ALL.to_vec();
+        inserts.extend(CompressorType::ALL.map(|kind| {
+            Insert::Compressor(Compressor {
+                kind,
+                auto: 1,
+                peak_clip: 1,
+                ..Compressor::DEFAULT
+            })
+        }));
+        inserts.extend(DistortType::ALL.map(|kind| {
+            Insert::Distort(Distort {
+                kind,
+                amount: 0xA0,
+                ..Distort::DEFAULT
+            })
+        }));
+        inserts
+    }
+
+    /// A slot holding `insert`, with a long buffer of its own if it takes one.
+    fn holding(insert: Insert) -> InsertState {
+        let mut song = vt_model::song::Song::new(1);
+        song.tracks[0].inserts[0] = insert;
+        let mut pool = MemoryPool::for_song(&song, RATE);
+        let mut state = InsertState::default();
+        state.hold(insert, &mut pool, 100.0, 0);
+        state.settle();
+        state
+    }
+
+    #[test]
+    fn a_settled_slot_gives_what_it_said_it_would_for_silence() {
+        // After a sound, it's asked every 16 frames of silence, and each frame until the next is
+        // worked out as usual and has to be what it said, as a resting mix trusts it (#558).
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        let keys = Keys::default();
+        for insert in every_effect() {
+            let mut state = holding(insert);
+            for sample in sine(220.0, 0.5, RATE as usize / 20) {
+                state.process_sides([sample, sample * 0.8], false, smoothing, RATE, &keys);
+            }
+            let mut settled = 0;
+            for _ in 0..RATE as usize / 16 {
+                let said = state.settled([0.0; 2], true, smoothing, RATE, &keys);
+                for _ in 0..16 {
+                    let out = state.process_sides([0.0; 2], true, smoothing, RATE, &keys);
+                    if let Some((frame, same)) = said {
+                        assert!(frame.same_bits(&out.0), "{insert:?}: {frame:?} {out:?}");
+                        assert_eq!(same, out.1, "{insert:?}");
+                    }
+                }
+                settled += usize::from(said.is_some());
+            }
+            let never = matches!(
+                insert,
+                Insert::Phaser(_)
+                    | Insert::Vowel(_)
+                    | Insert::Distort(Distort {
+                        kind: DistortType::Down,
+                        ..
+                    })
+            );
+            if never {
+                assert_eq!(settled, 0, "{insert:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_slot_has_settled_only_while_nothing_moves_it() {
+        let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
+        let keys = Keys::default();
+        let silence = |state: &InsertState, input: [f32; 2]| {
+            state
+                .settled(input, same_sides(input), smoothing, RATE, &keys)
+                .is_some()
+        };
+        let mut eq = holding(Insert::Eq(Equaliser::DEFAULT));
+        assert!(
+            !silence(&eq, [0.0; 2]),
+            "its first frame works out its bands"
+        );
+        eq.process_sides([0.0; 2], true, smoothing, RATE, &keys);
+        assert!(silence(&eq, [0.0; 2]), "and then it has settled");
+        assert!(!silence(&eq, [0.5; 2]), "a sound moves it");
+        eq.set(Insert::Eq(Equaliser {
+            low: 0x20,
+            ..Equaliser::DEFAULT
+        }));
+        assert!(!silence(&eq, [0.0; 2]), "a setting on its way moves it");
+        let delay = holding(Insert::Delay(Delay::DEFAULT));
+        assert!(silence(&delay, [0.0; 2]), "an empty delay has settled");
+        assert!(
+            !silence(&delay, [1e-30; 2]),
+            "a long buffer settles only with nothing coming in"
+        );
+        let mut bypassed = holding(Insert::Eq(Equaliser::DEFAULT));
+        bypassed.bypass(true);
+        assert!(!silence(&bypassed, [0.0; 2]), "a switch fading moves it");
     }
 }

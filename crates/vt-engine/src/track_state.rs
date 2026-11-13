@@ -2767,6 +2767,80 @@ impl TrackState {
         }
     }
 
+    /// Whether a group with nothing coming in would give silence and change nothing, frame after
+    /// frame, so it can be skipped until something comes in (#558): its slots aren't ringing, so it
+    /// does no work, and what it sends isn't moving.
+    pub fn group_rests(&self, smoothing: f32, fast: f32, rate: u32) -> bool {
+        let keeping_up = |target: SettingId| {
+            if self.offsets[target.index()] == 0.0 {
+                smoothing
+            } else {
+                fast
+            }
+        };
+        !self.ringing(rate)
+            && self.send_a_gain.still(keeping_up(SettingId::SEND_A))
+            && self.send_b_gain.still(keeping_up(SettingId::SEND_B))
+    }
+
+    /// What a group or return with nothing coming in and nothing ringing does for a run of frames,
+    /// done once: it lets its mute's fade go and gives nothing to a compressor that hears it.
+    pub fn rest_bus(&mut self) {
+        self.key = [0.0, 0.0];
+        self.heard.settle();
+    }
+
+    /// What the master gives for silence coming in, if it would give the same and change nothing
+    /// frame after frame (#558): its trim and level aren't moving, and each of its slots has
+    /// settled (`InsertState::settled`) on what the one before gives, hearing only what other
+    /// tracks give now. It's usually silence, but a filter can be left holding a value too small
+    /// to hear for good, and then that's what it gives.
+    pub fn master_rests(
+        &self,
+        smoothing: f32,
+        fast: f32,
+        rate: u32,
+        keys: &Keys,
+    ) -> Option<MasterRest> {
+        let vol = if self.offsets[SettingId::VOL.index()] == 0.0 {
+            smoothing
+        } else {
+            fast
+        };
+        if !self.input_trim.still(smoothing)
+            || !self.gain.still(vol)
+            || !self.level.still(smoothing)
+        {
+            return None;
+        }
+        let trimmed = [0.0 * self.input_trim.value; 2];
+        let mut frame = trimmed;
+        let mut same = same_sides(frame);
+        for (slot, insert) in self.inserts.iter().enumerate() {
+            let keeping_up = if self.slot_moving[slot] {
+                fast
+            } else {
+                smoothing
+            };
+            (frame, same) = insert.settled(frame, same, keeping_up, rate, keys)?;
+        }
+        let gain = self.gain.value * self.level.value;
+        Some(MasterRest {
+            trimmed,
+            key: frame,
+            out: [frame[0] * gain, frame[1] * gain],
+        })
+    }
+
+    /// What the master, once it rests, does for a run of `frames`, done once.
+    pub fn rest_master(&mut self, rest: &MasterRest, frames: u32) {
+        self.take_in_after_trim(rest.trimmed);
+        self.key = rest.key;
+        for insert in &mut self.inserts {
+            insert.rested(frames);
+        }
+    }
+
     /// The master's slots and level, for the whole mix.
     #[inline]
     pub fn process_master(
@@ -2807,12 +2881,30 @@ impl Keys {
     }
 }
 
+/// What the master does every frame while it rests: what it takes in after its trim, what its
+/// slots give, and what it gives.
+#[derive(Debug, Clone, Copy)]
+pub struct MasterRest {
+    trimmed: [f32; 2],
+    key: [f32; 2],
+    pub out: [f32; 2],
+}
+
 /// One track's frame, and what it sends to the returns.
 #[derive(Debug, Clone, Copy)]
 pub struct ShapedFrame {
     pub dry: [f32; 2],
     pub send_a: [f32; 2],
     pub send_b: [f32; 2],
+}
+
+impl ShapedFrame {
+    /// Nothing, as a group with nothing coming in gives.
+    pub const SILENT: Self = Self {
+        dry: [0.0; 2],
+        send_a: [0.0; 2],
+        send_b: [0.0; 2],
+    };
 }
 
 #[cfg(test)]

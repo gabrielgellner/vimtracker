@@ -47,6 +47,19 @@ impl Reading {
         self.frames += 1;
     }
 
+    /// Count `frames` of the same frame, going into [`master`] and coming out. Silence leaves the
+    /// peaks and power as they were, so it's only counted.
+    pub fn add_steady(&mut self, mixed: [f32; 2], out: [f32; 2], frames: u32) {
+        let silent = |frame: [f32; 2]| frame.iter().all(|sample| sample.to_bits() == 0);
+        if silent(mixed) && silent(out) {
+            self.frames += frames;
+            return;
+        }
+        for _ in 0..frames {
+            self.add(mixed, out);
+        }
+    }
+
     /// Add another reading, keeping the highest peaks of the two.
     pub fn merge(&mut self, other: Self) {
         for channel in 0..2 {

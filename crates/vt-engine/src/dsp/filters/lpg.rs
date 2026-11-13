@@ -40,7 +40,7 @@
 use vt_model::insert::{GateMode, LowPassGate as Settings};
 
 use crate::dsp::blocks::plaits_parts::{Svf, tan_accurate};
-use crate::dsp::blocks::sides::Sides;
+use crate::dsp::blocks::sides::{Sides, same_bits_by_eq, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// The rate Streams runs at, which its per-sample constants are for.
@@ -224,6 +224,45 @@ struct Vactrol {
     sensitise: f32,
     desensitise: f32,
 }
+
+same_bits_by_fields!(Follower {
+    low,
+    medium,
+    energy,
+    peak,
+    smoothed,
+    attack,
+    decay,
+});
+same_bits_by_fields!(Vactrol {
+    excite,
+    first,
+    second,
+    sensitised,
+    overshoot,
+    attack,
+    decay,
+    fast_attack,
+    fast_decay,
+    excite_fall,
+    excite_rise,
+    overshoot_rate,
+    sensitise,
+    desensitise,
+});
+same_bits_by_eq!(Settings);
+same_bits_by_fields!(LowPassGate {
+    follower,
+    vactrol,
+    filters,
+    amount,
+    base,
+    resonance,
+    modes,
+    level,
+    cutoff,
+    tuned,
+});
 
 impl Vactrol {
     /// Take these places in the time table for its attack and decay, at a rate.

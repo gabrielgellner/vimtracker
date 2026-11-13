@@ -95,8 +95,12 @@ what the figure would be at full speed:
 The system speeds the thread up as the work grows, so the leaf is nothing to worry
 about while `late` and `xruns` stay at `0`.
 
-Stopped, a track with nothing sounding and nothing moving isn't worked out at all, so the
-figure is low; it rises for as long as a tail rings out or a note is previewed.
+Stopped, a track with nothing sounding and nothing moving isn't worked out at all, and nor
+are the groups, returns and master once nothing comes into them and their slots have settled,
+so the figure is low; it rises for as long as a tail rings out or a note is previewed. After
+a sound, a compressor on the master takes about a minute and a half to settle. An EQ, a filter
+or a distortion can be left holding a value far too small to hear for good, and a phaser, a
+vowel filter or `Down` moves by itself, so with one of those the master keeps working.
 
 Once audio has dropped out, the right of the status line shows a red `󰀦` and how many
 times, `late` and `xruns` together, until the device is opened again.

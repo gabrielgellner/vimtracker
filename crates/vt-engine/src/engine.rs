@@ -37,8 +37,8 @@ use crate::published::{Bank, Published, Span};
 use crate::timing::{Part as TimedPart, PartTimes, SlotTimes, Stopwatch};
 use crate::track_state::{
     Accumulating, Arpeggiating, Clock, Decided, DelayedNote, Drawn, Epoch, Faders, Keys,
-    LiveValues, NotePitch, Part, PendingStep, Retrigger, RowKey, SongTime, TrackState, Worked,
-    base_of,
+    LiveValues, MasterRest, NotePitch, Part, PendingStep, Retrigger, RowKey, ShapedFrame, SongTime,
+    TrackState, Worked, base_of,
 };
 use crate::voice::{Cut, NoteOn, Voice};
 use vt_model::samples::SampleId;
@@ -211,6 +211,8 @@ pub struct Engine {
     stopwatch: Stopwatch,
     /// Whether a track at rest is left as it is rather than worked out again.
     resting: bool,
+    /// Which buses the last run left out, for tests.
+    rested: RestingBuses,
 }
 
 /// The next row with a length after this one, in order, and whether that went past the last. If no
@@ -289,6 +291,7 @@ impl Engine {
             realign_waiting: false,
             stopwatch: Stopwatch::default(),
             resting: true,
+            rested: RestingBuses::default(),
         };
         engine.follow_levels();
         engine.reset_tracks();
@@ -1296,6 +1299,24 @@ impl Engine {
     #[doc(hidden)]
     pub fn rests(&self, index: usize) -> bool {
         self.tracks.get(index).is_some_and(TrackState::at_rest)
+    }
+
+    /// Whether the last run left a group, a return or the master out, as working it out would
+    /// have given the same frame and changed nothing, by its place among the fixed tracks, for
+    /// tests.
+    #[doc(hidden)]
+    pub fn bus_rested(&self, fixed: usize) -> bool {
+        let RestingBuses {
+            groups,
+            returns,
+            master,
+        } = self.rested;
+        match fixed.checked_sub(MAX_GROUPS) {
+            None => groups[fixed],
+            Some(place @ 0..2) => returns[place],
+            Some(2) => master.is_some(),
+            Some(_) => false,
+        }
     }
 
     /// Start a note's modulation: the track's envelopes, and LFOs that follow its notes.
@@ -3052,6 +3073,57 @@ impl Engine {
         }
     }
 
+    /// Which of the groups, returns and master can be left out of a run, as working them out would
+    /// give the same frame every frame and change nothing (#558). A group rests while none of its tracks plays, given
+    /// as each playing track's group, and the returns and master while no track plays at all and
+    /// every group rests; the master too once each of its slots has settled. A note, a preview or
+    /// an audition plays a track, and an edit, a lock or the transport changes what a bus is set
+    /// to, so each run asks again. Done once, a resting group or return hears its silence, which
+    /// is all that changes about it while it rests.
+    fn resting_buses(
+        &mut self,
+        routes: &[Option<usize>],
+        smoothing: f32,
+        fast: f32,
+        rate: u32,
+    ) -> RestingBuses {
+        let mut resting = RestingBuses::default();
+        if !self.resting {
+            return resting;
+        }
+        let groups = self.sounds();
+        let return_a = self.returns();
+        let master = return_a + 2;
+        let mut fed = [false; MAX_GROUPS];
+        for &group in routes.iter().flatten() {
+            fed[group] = true;
+        }
+        for (group, rests) in resting.groups.iter_mut().enumerate() {
+            let index = groups + group;
+            *rests = !fed[group] && self.tracks[index].group_rests(smoothing, fast, rate);
+            if *rests {
+                self.tracks[index].rest_bus();
+                self.keys.frames[index] = [0.0; 2];
+            }
+        }
+        if !routes.is_empty() || !resting.groups.iter().all(|&rests| rests) {
+            return resting;
+        }
+        for (place, rests) in resting.returns.iter_mut().enumerate() {
+            let index = return_a + place;
+            *rests = !self.tracks[index].ringing(rate);
+            if *rests {
+                self.tracks[index].rest_bus();
+                self.keys.frames[index] = [0.0; 2];
+            }
+        }
+        // Every other track is silent now, so whatever a slot of the master hears is.
+        if resting.returns.iter().all(|&rests| rests) {
+            resting.master = self.tracks[master].master_rests(smoothing, fast, rate, &self.keys);
+        }
+        resting
+    }
+
     /// Render voices and effects into a run of frames with no events in it.
     fn render(&mut self, out: &mut [f32]) {
         self.stopwatch.lap(TimedPart::Sequencing);
@@ -3103,6 +3175,24 @@ impl Engine {
                 routes[count] = route;
                 count += 1;
             }
+        }
+        let (smoothing, fast, rate) = (self.smoothing, self.fast_smoothing, self.rate);
+        let resting = self.resting_buses(&routes[..count], smoothing, fast, rate);
+        self.rested = resting;
+        if let Some(rest) = resting.master {
+            // Nothing in the mix moves, so every frame of the run is the same, nearly always
+            // silence.
+            let frames = (out.len() / 2) as u32;
+            let finished = master(rest.out, limiter);
+            let master_track = &mut self.tracks[master_track];
+            master_track.rest_master(&rest, frames);
+            master_track.reading.add_steady(rest.out, finished, frames);
+            self.reading.add_steady(rest.out, finished, frames);
+            for frame in out.as_chunks_mut::<2>().0 {
+                *frame = finished;
+            }
+            self.stopwatch.lap(TimedPart::Mixing);
+            return;
         }
         for frame in out.as_chunks_mut::<2>().0 {
             self.stopwatch.lap(TimedPart::Mixing);
@@ -3159,12 +3249,18 @@ impl Engine {
                 send_b[1] += shaped.send_b[1] * heard;
                 self.stopwatch.lap(TimedPart::Shaping(index));
             }
-            let (smoothing, fast, rate) = (self.smoothing, self.fast_smoothing, self.rate);
             let keys = &mut self.keys;
             for (group, bus) in buses.into_iter().enumerate() {
                 let index = groups + group;
-                let shaped = self.tracks[index].process_group(bus, smoothing, fast, rate, keys);
-                keys.frames[index] = self.tracks[index].key;
+                // A group at rest gives exactly what it would working out its silence. The zeros
+                // are still added, as adding one turns a `-0.0` into a `0.0`.
+                let shaped = if resting.groups[group] {
+                    ShapedFrame::SILENT
+                } else {
+                    let shaped = self.tracks[index].process_group(bus, smoothing, fast, rate, keys);
+                    keys.frames[index] = self.tracks[index].key;
+                    shaped
+                };
                 if !wet_only || lit[group] {
                     mix[0] += shaped.dry[0];
                     mix[1] += shaped.dry[1];
@@ -3175,12 +3271,18 @@ impl Engine {
                 send_b[1] += shaped.send_b[1];
                 self.stopwatch.lap(TimedPart::Shaping(index));
             }
-            let from_a = self.tracks[return_a].process_return(send_a, smoothing, fast, rate, keys);
-            keys.frames[return_a] = self.tracks[return_a].key;
-            self.stopwatch.lap(TimedPart::Shaping(return_a));
-            let from_b = self.tracks[return_b].process_return(send_b, smoothing, fast, rate, keys);
-            keys.frames[return_b] = self.tracks[return_b].key;
-            self.stopwatch.lap(TimedPart::Shaping(return_b));
+            let mut from = [[0.0_f32; 2]; 2];
+            for ((index, send), (from, rests)) in [(return_a, send_a), (return_b, send_b)]
+                .into_iter()
+                .zip(from.iter_mut().zip(resting.returns))
+            {
+                if !rests {
+                    *from = self.tracks[index].process_return(send, smoothing, fast, rate, keys);
+                    keys.frames[index] = self.tracks[index].key;
+                }
+                self.stopwatch.lap(TimedPart::Shaping(index));
+            }
+            let [from_a, from_b] = from;
             let mixed = [
                 mix[0] + from_a[0] + from_b[0],
                 mix[1] + from_a[1] + from_b[1],
@@ -3213,6 +3315,14 @@ impl Engine {
         self.previews
             .follow(|voice| keep_voice_time(voice, bank, step), |_| {});
     }
+}
+
+/// The groups, returns and master that rest through a run.
+#[derive(Debug, Clone, Copy, Default)]
+struct RestingBuses {
+    groups: [bool; MAX_GROUPS],
+    returns: [bool; 2],
+    master: Option<MasterRest>,
 }
 
 /// Tell a voice keeping to the tempo how long a step is, and with `Beats`, where its entry's sounds

@@ -8,7 +8,7 @@ use std::f32::consts::PI;
 use vt_model::insert::Equaliser as Settings;
 use vt_model::settings::{band_db, band_q};
 
-use crate::dsp::blocks::sides::{SameBits, Sides};
+use crate::dsp::blocks::sides::{SameBits, Sides, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
 
 /// The shelves' width: a gentle slope with no bump.
@@ -175,6 +175,23 @@ pub struct ThreeBands {
     /// What the coefficients were worked out from, so they're only worked out again as it moves.
     worked_out: [f32; 7],
 }
+
+same_bits_by_fields!(Coefficients {
+    g,
+    k,
+    a1,
+    a2,
+    a3,
+    m0,
+    m1,
+    m2,
+});
+same_bits_by_fields!(ThreeBands {
+    bands,
+    coefficients,
+    settings,
+    worked_out,
+});
 
 impl Default for ThreeBands {
     fn default() -> Self {
