@@ -61,6 +61,8 @@ pub enum Mode {
     Help,
     /// The shape panel is open.
     Shape,
+    /// A macro's mapping view is open, its settings and their ranges (decision 285).
+    Mapping,
     /// Searching the track page for a setting to jump to.
     Jump,
     /// Reading a guide.
@@ -101,6 +103,7 @@ impl Mode {
             Self::Command => "COMMAND",
             Self::Help => "HELP",
             Self::Shape => "SHAPE",
+            Self::Mapping => "MAP",
             Self::Jump => "JUMP",
             Self::Guide => "GUIDE",
             Self::Picker => "PICK",

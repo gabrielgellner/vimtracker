@@ -3,6 +3,7 @@
 
 use vt_model::action::TrackControl;
 use vt_model::lfo::phase_value;
+use vt_model::macros::MACROS;
 use vt_model::modulation::{ModKind, depth_value};
 use vt_model::settings::{Effect, SettingId};
 use vt_model::shape::GenParam;
@@ -165,7 +166,31 @@ pub enum Control {
     NewGenerator(u32),
     /// One of the settings declared by what's in a slot.
     InsertParam(usize, usize),
+    /// One of the track's macros, by its place, from 0 to 7 (decision 285).
+    Macro(usize),
 }
+
+/// Where a mod slot's field is among the registry's entries for its type's own settings, if it's
+/// one of them.
+fn own_place(field: ModField) -> Option<usize> {
+    Some(match field {
+        ModField::Attack => 0,
+        ModField::Decay => 1,
+        ModField::Sustain => 2,
+        ModField::Release => 3,
+        ModField::Body => 4,
+        ModField::Colour => 5,
+        ModField::Length => 6,
+        ModField::Mutate => 7,
+        ModField::Smooth => 8,
+        _ => return None,
+    })
+}
+
+/// The macros' names in the band before they're named.
+const MACRO_LABELS: [&str; MACROS] = [
+    "Macro 1", "Macro 2", "Macro 3", "Macro 4", "Macro 5", "Macro 6", "Macro 7", "Macro 8",
+];
 
 pub(super) const fn base(control: TrackControl) -> Control {
     Control::Base(control)
@@ -249,6 +274,7 @@ impl Control {
             Self::Arpeggio(ArpField::Retrig) => "Retrig",
             Self::Insert(_) => "Effect",
             Self::InsertParam(..) => "Setting",
+            Self::Macro(at) => MACRO_LABELS[at.min(MACROS - 1)],
             Self::Gen { param, .. } => param.name(),
             Self::NewGenerator(_) => "Empty",
         }
@@ -328,6 +354,7 @@ impl Control {
                 SettingId::FILTER_MODE,
                 u16::from(track.filter.plays(track.filter_mode).index()) << 8,
             )),
+            Self::Macro(at) => Some((SettingId::macro_at(at)?, track.macros[at].value)),
             Self::InsertParam(slot, param) => {
                 let insert = track.inserts[slot];
                 let setting = insert.params().get(param)?.setting;
@@ -337,6 +364,40 @@ impl Control {
                     .iter()
                     .position(|found| found.setting == setting)?;
                 base(SettingId::slot(slot, effect, at)?, insert.value(param))
+            }
+            _ => None,
+        }
+    }
+
+    /// The setting of the registry this is on this track, for a macro to hold: what
+    /// [`Control::value_on`] gives, and a mod slot's type's own, the accumulator's and the
+    /// arpeggio's that macros and modulation move, while the slot's type has it.
+    pub fn setting_for_macro(self, track: &Track) -> Option<SettingId> {
+        if let Some((id, _)) = self.value_on(track) {
+            return Some(id);
+        }
+        match self {
+            Self::Mod(slot, field) => {
+                let id = SettingId::mod_own(slot, own_place(field)?)?;
+                id.exists_on(track).then_some(id)
+            }
+            Self::Accumulator(field) => {
+                let at = match field {
+                    AccumulatorField::Up => 0,
+                    AccumulatorField::Down => 1,
+                    _ => return None,
+                };
+                let id = SettingId::accumulation(at)?;
+                Some(id)
+            }
+            Self::Arpeggio(field) => {
+                let at = match field {
+                    ArpField::Rate => 0,
+                    ArpField::Octaves => 1,
+                    _ => return None,
+                };
+                let id = SettingId::arpeggio(at)?;
+                Some(id)
             }
             _ => None,
         }
@@ -405,7 +466,12 @@ impl Control {
     pub(super) fn is_hex(self) -> bool {
         matches!(
             self,
-            Self::Base(_) | Self::Level | Self::Trim | Self::InsertParam(..) | Self::Setting(_)
+            Self::Base(_)
+                | Self::Level
+                | Self::Trim
+                | Self::InsertParam(..)
+                | Self::Setting(_)
+                | Self::Macro(_)
         )
     }
 

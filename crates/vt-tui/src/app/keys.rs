@@ -37,7 +37,7 @@ impl App {
     /// Whether a key, after any typed before it, means something here. The shape panel reads its
     /// own keys, `=` `-` `+` `_` among them, so their Cmd keys mean something there too.
     fn binds(&self, key: Key) -> bool {
-        if self.mode == Mode::Shape {
+        if matches!(self.mode, Mode::Shape | Mode::Mapping) {
             return adjusting_key(key).is_some();
         }
         let mut keys = self.pending.clone();
@@ -260,6 +260,7 @@ impl App {
             Mode::Guide => self.guide_key(key),
             Mode::Picker => self.picker_key(key),
             Mode::Shape => self.shape_key(key),
+            Mode::Mapping => self.mapping_key(key),
             Mode::Jump => self.jump_key(key),
             Mode::Restore => self.restore_key(key),
             Mode::Keys => self.keys_key(key, now),
@@ -513,6 +514,9 @@ impl App {
             Cmd::ReopenGenerator => self.reopen_generator(),
             Cmd::ApplyGenerator => self.apply_generator_here(),
             Cmd::BakeMods => self.bake_pitch_mods(),
+            Cmd::MapMacro | Cmd::MacroMapping => {
+                self.status = "M and gm map settings to macros, on the track page".to_owned();
+            }
             Cmd::PickSample => self.open_default_sample_picker(),
             Cmd::PickKit => self.open_kit_picker(),
             Cmd::Replace => self.begin_replace(),

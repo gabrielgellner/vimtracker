@@ -2022,6 +2022,11 @@ pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Co
         .find(|control| matches!(control, Control::Gen { param, .. } if wanted.contains(param)))
 }
 
+/// The macros' keys, by their place, as the registry has them.
+const MACRO_KEYS: [&str; vt_model::macros::MACROS] = [
+    "macro1", "macro2", "macro3", "macro4", "macro5", "macro6", "macro7", "macro8",
+];
+
 /// Steps' values' keys, by their place.
 const STEP_KEYS: [&str; STEPS] = [
     "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8", "step9", "step10",
@@ -2046,6 +2051,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             .get(param)
             .map_or("setting", |found| found.key),
         Control::Insert(_) => "effect",
+        Control::Macro(at) => MACRO_KEYS[at.min(MACRO_KEYS.len() - 1)],
         Control::Mute => "mute",
         Control::Solo => "solo",
         Control::Base(which) => match which {

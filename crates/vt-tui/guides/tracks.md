@@ -1471,9 +1471,10 @@ others. See **FX commands**.
 The fourth page, after FX, shows the live columns of the phrase under the cursor,
 the one `gl` reopens, as devices you turn as you would a filter. Its title names
 the phrase, `Phrase 00`, and adds `▶ 02`, dim, while the track is playing another.
-A fixed track has no phrases, so its page is empty.
+A fixed track has no phrases, so its page has only the macros. Its first band is the
+track's eight macros (see **Macros**), then the live columns.
 
-Each live column is a device, in the phrase view's order: Note, Velocity, Nudge,
+Each live column is a device, under the macros, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
 them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
 `Where`, then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
@@ -1528,6 +1529,63 @@ phrase view, and puts the cursor on it. An empty FX column lists the commands
 first. Notes generated on an empty column own their velocities, so a live
 Velocity column over them applies them, as a hand edit would; their nudges and
 lengths are free.
+
+## Macros
+
+Each track has eight macros, after Ableton Live's Rack macros: a macro is one knob that turns
+any number of the track's settings at once, each between a `Min` and a `Max` of its own. It's
+absolute, so at `00` every setting it holds is at its `Min` and at `FF` at its `Max`, and a `Min`
+above its `Max` turns that setting the other way. A setting is on one macro at most.
+
+The `Macros` band, first on the Gen page, has the eight in two rows of four, each with its name,
+its value in four digits and a bar. `=` `-` `+` `_` turn one, `i` types it, `x` takes it to `00`,
+and the status line says what it holds. A macro is named after the first setting it holds until
+you name it.
+
+| Keys | Does |
+|---|---|
+| `M` | On a setting, list the macros to map it to |
+| `M1` to `M8` | Map it to that macro at once |
+| `gm` | The mapping of this macro, or of this setting's |
+| `:macro Name` | Name this macro, or this setting's, up to 12 letters |
+| `:macro` | Go back to its first setting's name |
+
+**Mapping.** `M` on a setting lists the eight with what each holds; `Enter` or the macro's digit
+maps it, from the setting's bottom to its top. The first setting on a macro holding nothing turns
+the macro to where the setting is, so nothing jumps. One on a macro holding others jumps to where
+that macro puts it, and the status line says so. `M` on a setting a macro holds opens the list on
+its macro: choosing that one takes it off, back to its own value, and choosing another moves it,
+range and all. Each is one undo step.
+
+**A setting a macro holds** shows where the macro puts it, with the range the macro can take it
+over drawn faint behind its bar, `▕██▎░░░░  ▏`, and the status line says which macro and how far,
+as `Cut, 1.05 kHz: on macro 1 Bite, 170 Hz to 9.56 kHz`. Turning it is refused, as Live greys a
+mapped control out: turn its macro, or open its range with `gm`.
+
+**The mapping view**, `gm`, lists each setting the macro holds with its `Min` and `Max`:
+
+| Keys | Does |
+|---|---|
+| `j` `k` | The next or previous setting |
+| `h` `l` | Its `Min` or `Max` |
+| `=` `-` `+` `_` | Move that end a step, or `10` |
+| `i` | Type that end, two hex digits |
+| `~` | Swap `Min` and `Max`, so the setting goes the other way |
+| `dd` | Take the setting off the macro |
+| `u` | Take the last change back |
+| `Esc` | Close it |
+
+**What a macro reaches:** the track's own settings, its machine's, its effects', its mod slots'
+depths, phases and deforms, and their types' own: an envelope's `Attack`, `Decay`, `Sustain` and
+`Release`, a drum's `Body`, a gate's `Colour`, and Steps' `Length`, `Mutate` and `Smooth`, so a
+Turing Machine is a Steps slot with `Mutate`, `Length` and `Depth` on three macros. It reaches
+the accumulator's `Up` and `Down` and the arpeggio's `Rate` and `Octaves` too, but never another
+macro, nor an LFO's or Steps' `Rate` yet.
+
+**Playing a macro.** A step's `MAC1` to `MAC8` locks one for its note, and with it everything it
+holds, as `MAC3 80`. A mod slot's `Dest` lists the eight under `Macros`, so an LFO on a macro
+sweeps every setting it holds, each across its own range. A step's lock of a setting the macro
+holds still wins on its row, and modulation of that setting goes on top.
 
 ## The mixer
 
