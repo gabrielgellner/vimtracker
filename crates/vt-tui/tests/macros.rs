@@ -309,3 +309,51 @@ fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
     assert!(text.contains("Note Hits"), "{text}");
     assert!(text.contains("by hand"), "{text}");
 }
+
+#[test]
+fn the_roto_shows_the_macros_first_each_knob_named_by_its_macro_and_turns_them() {
+    use vt_model::action::Action;
+    use vt_tui::roto::devices::live_devices;
+    use vt_tui::roto::edits::turned;
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "M3");
+    command(&mut app, "macro A long macro name");
+    assert!(app.status.contains("12"), "{}", app.status);
+    command(&mut app, "macro Twelve chars");
+    let song = app.song().clone();
+    let devices = live_devices(&song.tracks[0], None, &song, false);
+    assert_eq!(devices[0].name.as_str(), "Macros");
+    assert_eq!(
+        devices[1].name.as_str(),
+        "Sampler",
+        "the machine after them"
+    );
+    let names: Vec<&str> = (1..=8)
+        .map(|knob| devices[0].control(knob).unwrap().name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "Macro 1",
+            "Macro 2",
+            "Twelve chars",
+            "Macro 4",
+            "Macro 5",
+            "Macro 6",
+            "Macro 7",
+            "Macro 8"
+        ]
+    );
+    // A knob turned to its bottom turns its macro to `00`, one action: it's at `FF`, where Cut
+    // was as it was mapped.
+    assert_eq!(song.tracks[0].macros[2].value, 0xFF00);
+    let action = turned(Control::Macro(2), 0, &song, 0).unwrap();
+    assert_eq!(
+        action,
+        Action::SetMacro {
+            track: 0,
+            at: 2,
+            value: 0
+        }
+    );
+}
