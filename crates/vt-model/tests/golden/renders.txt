@@ -1,0 +1,120 @@
+87e59c5569117b25 Acid on FX, event
+87e59c5569117b25 Acid on FX, fine
+87e59c5569117b25 Acid on FX, last slot
+87e59c5569117b25 Acid on Length
+fc4490808eebcfaa Acid on Note of its own, chromatic
+49d119e7464a4c71 Acid on Note of its own, in key
+baed90c19fa87d2c Acid on Note, chromatic
+0cefc3d116d4361c Acid on Note, in key
+87e59c5569117b25 Acid on Nudge
+87e59c5569117b25 Acid on Velocity
+cce56ab9ebd45da9 Alternate on FX, event
+483489bacf438830 Alternate on FX, fine
+669b8cf3908f707d Alternate on FX, last slot
+0193a364d78eb406 Alternate on Length
+6d469310915acce9 Alternate on Note of its own, chromatic
+ba01a2932394abc5 Alternate on Note of its own, in key
+df776ee82666f89d Alternate on Note, chromatic
+bbb5560ad9af8f76 Alternate on Note, in key
+c181f8d57a08f1ec Alternate on Nudge
+1a809c4fbe6871fe Alternate on Velocity
+87e59c5569117b25 Follow on FX, event
+87e59c5569117b25 Follow on FX, fine
+87e59c5569117b25 Follow on FX, last slot
+87e59c5569117b25 Follow on Length
+19e144395a945474 Follow on Note of its own, chromatic
+bb91324e58b75342 Follow on Note of its own, in key
+5c13e2e5c0aa2a93 Follow on Note, chromatic
+75ed11f10399c120 Follow on Note, in key
+87e59c5569117b25 Follow on Nudge
+87e59c5569117b25 Follow on Velocity
+ae85918437f6a507 Invert on FX, event
+6b5390a18dff9dac Invert on FX, fine
+8dcff7df85c1e85f Invert on FX, last slot
+ab73ecae9a20b36e Invert on Length
+87e59c5569117b25 Invert on Note of its own, chromatic
+87e59c5569117b25 Invert on Note of its own, in key
+8c10f1244e3a2417 Invert on Note, chromatic
+716ad8b9ade75d86 Invert on Note, in key
+a13f096174530fb0 Invert on Nudge
+fdf0d0c580c7d912 Invert on Velocity
+25add8cd96b3391e List on FX, event
+840c006abaa7f962 List on FX, fine
+f6ffb512ab07a005 List on FX, last slot
+6e77544030046253 List on Length
+b5ee3237bdcd87b7 List on Note of its own, chromatic
+dc3245cdef2b319d List on Note of its own, in key
+582adb1cba6a5388 List on Note, chromatic
+918022d726d34bef List on Note, in key
+b7e4fec82f941b23 List on Nudge
+93c4bef9a62d4bef List on Velocity
+608ddc153149a5ff Ramp on FX, event
+1fe02e0df536aca4 Ramp on FX, fine
+fe2f4c6bd7fe86b6 Ramp on FX, last slot
+a894db54bedba86b Ramp on Length
+85d33467043ec01f Ramp on Note of its own, chromatic
+327ee596e843c435 Ramp on Note of its own, in key
+12bdff2b701aaa5a Ramp on Note, chromatic
+2662eb42ba6c0742 Ramp on Note, in key
+aa89fa5fa5410262 Ramp on Nudge
+2e8e418bb64c737d Ramp on Velocity
+42d600394983fa04 Random on FX, event
+7a77142b9097a4d5 Random on FX, fine
+3a34ab4c7e458b16 Random on FX, last slot
+db9fadde81b6e66c Random on Length
+847f6921f6b132ab Random on Note of its own, chromatic
+9480a6534370dd8b Random on Note of its own, in key
+eca88f2939af50ec Random on Note, chromatic
+06781fe63f70e44a Random on Note, in key
+19a32dbe4b550625 Random on Nudge
+be8fda7cc1220b2f Random on Velocity
+2ca67f2fbdfc6dfc Reverse on FX, event
+305ea3c7e0767856 Reverse on FX, fine
+11dc386aa55b9156 Reverse on FX, last slot
+7e2acf6dc89af0b9 Reverse on Length
+87e59c5569117b25 Reverse on Note of its own, chromatic
+87e59c5569117b25 Reverse on Note of its own, in key
+2cb1fb36c9a0d3ab Reverse on Note, chromatic
+9ca03b824ddb4521 Reverse on Note, in key
+d60f35bce144ec65 Reverse on Nudge
+968f1d564e512700 Reverse on Velocity
+3714aad056a2fafd Scale on FX, event
+c0637824bb56c30d Scale on FX, fine
+7246e01e8e57a81e Scale on FX, last slot
+af0b218a30a45f08 Scale on Length
+87e59c5569117b25 Scale on Note of its own, chromatic
+87e59c5569117b25 Scale on Note of its own, in key
+d200e9f140ea1e5a Scale on Note, chromatic
+d889288de2706db4 Scale on Note, in key
+7da2adcfe735d78b Scale on Nudge
+65e53128bfdd76d5 Scale on Velocity
+e5fd13651f8f4ccf Shuffle on FX, event
+ac18c6ec6b5192bd Shuffle on FX, fine
+f3477d4473cf3fd4 Shuffle on FX, last slot
+b0ea292a7facdf57 Shuffle on Length
+87e59c5569117b25 Shuffle on Note of its own, chromatic
+87e59c5569117b25 Shuffle on Note of its own, in key
+a70b77fc7d3b2aa6 Shuffle on Note, chromatic
+205bd04dabd56567 Shuffle on Note, in key
+c2d402fcb2722999 Shuffle on Nudge
+b87d8b862102b346 Shuffle on Velocity
+8f952c332dd1c2fd Snap on FX, event
+676b1c5fbfe6f2ae Snap on FX, fine
+86b3ce9f17eb955e Snap on FX, last slot
+f482f2082077303b Snap on Length
+87e59c5569117b25 Snap on Note of its own, chromatic
+87e59c5569117b25 Snap on Note of its own, in key
+6742becbbd1e4f4a Snap on Note, chromatic
+4b8c9d807a062de2 Snap on Note, in key
+57e990fdecb3718e Snap on Nudge
+f189bcb9422a1bf4 Snap on Velocity
+6bfa59fb3ef6c598 Wave on FX, event
+b66fdcade023adcc Wave on FX, fine
+448d1d86e1f89891 Wave on FX, last slot
+f60c862215897d28 Wave on Length
+eafd3347d6cca62c Wave on Note of its own, chromatic
+f1d256a06f750821 Wave on Note of its own, in key
+90df0477977fd08e Wave on Note, chromatic
+0735eda0e5cffe76 Wave on Note, in key
+c05d636c844fd05a Wave on Nudge
+6b7e101d99414944 Wave on Velocity
