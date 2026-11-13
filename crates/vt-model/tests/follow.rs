@@ -83,6 +83,7 @@ fn following(source: Source, follow: Follow) -> Shape {
         pink: Pink::default(),
         bits: Bits::default(),
         grids: vt_model::shape::Grids::default(),
+        random: vt_model::shape::Random::default(),
         vary: 0,
     }
 }

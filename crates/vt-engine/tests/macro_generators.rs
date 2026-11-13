@@ -18,8 +18,8 @@ use vt_model::samples::SamplePool;
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, FillKind, Follow, GenCell, GenParam, Pink, Shape, ShapeColumn,
-    Values, Walk, Where,
+    Acid, Bits, DEFAULT_RATE, FillKind, Follow, GenCell, GenParam, Pink, Random, Shape,
+    ShapeColumn, Values, Walk, Where,
 };
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
 use vt_model::step::Step;
@@ -49,6 +49,7 @@ fn tresillo() -> Shape {
         pink: Pink::default(),
         bits: Bits::default(),
         grids: vt_model::shape::Grids::default(),
+        random: Random::default(),
         vary: 0,
     }
 }
@@ -209,6 +210,103 @@ fn an_lfo_on_a_macro_moves_its_generator_and_what_was_heard_plays_the_same_writt
     let (out, rows, engine) = play(&song, 16);
     let heard = as_heard(&song, &rows);
     assert_ne!(heard, written(&song), "the LFO moved the hits");
+    assert!(engine.generators_heard(0).any(|run| run.renders > 1));
+    let (kept, ..) = play(&plain(&song, heard), 16);
+    assert!(out == kept, "the rows heard, written in, play the same");
+}
+
+/// Random velocities from `20` to `60` on sixteen notes, these rows written as given, with macro
+/// 1 holding the fill's `Spread` from 0 to 100 and its `Bias` from -100 to 100, turned to its
+/// middle, where they're as they start: an even draw.
+fn random_song(rows: &[(usize, &str)]) -> Song {
+    let mut song = Song::new(1);
+    song.millibpm = 128_000;
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    let mut steps: Vec<Step> = vec!["C-3 40 --- --- ---".parse().unwrap(); 16];
+    for (row, text) in rows {
+        steps[*row] = text.parse().unwrap();
+    }
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    let random = Shape {
+        from: 0x20,
+        to: 0x60,
+        kind: FillKind::Random,
+        place: Where::Notes,
+        ..tresillo()
+    };
+    let mut song = apply(
+        song,
+        &Action::Generate {
+            track: 0,
+            phrase: 0,
+            column: ShapeColumn::Velocity,
+            span: Span::rows(StepRange::between(0, 15)),
+            shape: random,
+        },
+    );
+    for (param, ends) in [(GenParam::Spread, (0, 100)), (GenParam::Bias, (-100, 100))] {
+        let target = MacroTarget::Gen {
+            column: GenColumn::Velocity,
+            param,
+        };
+        song = apply(
+            song,
+            &Action::MapMacro {
+                track: 0,
+                at: 0,
+                map: MacroMap::numbers(target, ends),
+            },
+        );
+    }
+    // 100 x 0x80 / 0xFF is 50, and -100 + 200 x 0x80 / 0xFF is 0.
+    apply(
+        song,
+        &Action::SetMacro {
+            track: 0,
+            at: 0,
+            value: 0x8000,
+        },
+    )
+}
+
+/// A macro on a `Random`'s `Spread` and `Bias` (decision 302) reaches them as the engine plays: a
+/// `MAC1 00` lock on row 8 puts `Spread` at 0, one value at the bias point, which `Bias` -100
+/// puts at the bottom, `20`, on that row alone.
+#[test]
+fn a_mac_lock_narrows_and_leans_a_random_fill_on_its_own_row() {
+    let song = random_song(&[(8, "C-3 40 macro1:00 --- ---")]);
+    let written_rows = written(&song);
+    assert_ne!(
+        written_rows[8].velocity,
+        Some(0x20),
+        "row 8 isn't the bottom"
+    );
+    let (out, rows, _) = play(&song, 16);
+    let mut wanted = written_rows;
+    wanted[8].velocity = Some(0x20);
+    let (locked, ..) = play(&plain(&song, wanted.clone()), 16);
+    assert!(out == locked, "row 8 plays at the bottom, and only it");
+    assert_eq!(as_heard(&song, &rows), wanted, "kept, it's what played");
+}
+
+/// An LFO on that macro sweeps `Spread` and `Bias` together, and the velocities heard, written
+/// in, play the same.
+#[test]
+fn an_lfo_on_a_macro_sweeps_a_random_fills_spread_and_bias() {
+    let mut song = random_song(&[]);
+    song.tracks[0].mods[0] = ModSlot::lfo(
+        SettingId::macro_at(0),
+        Lfo {
+            rate: Rate::Steps(16),
+            ..Lfo::default()
+        },
+    )
+    .with_depth(0x7F);
+    let (out, rows, engine) = play(&song, 16);
+    let heard = as_heard(&song, &rows);
+    assert_ne!(heard, written(&song), "the LFO moved the velocities");
     assert!(engine.generators_heard(0).any(|run| run.renders > 1));
     let (kept, ..) = play(&plain(&song, heard), 16);
     assert!(out == kept, "the rows heard, written in, play the same");
