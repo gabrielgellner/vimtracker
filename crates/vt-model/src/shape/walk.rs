@@ -188,7 +188,7 @@ mod tests {
     use crate::lfo::Shape as Wave;
     use crate::scale::{Scale, ScaleKind};
     use crate::selection::StepRange;
-    use crate::shape::{Acid, DEFAULT_RATE, FillKind, Shape, Values, Where, values};
+    use crate::shape::{Acid, DEFAULT_RATE, FillKind, Follow, Shape, Values, Where, values};
     use crate::step::Step;
 
     fn walking(from: u8, to: u8, step: u8, edge: Edge, seed: u64) -> Shape {
@@ -206,6 +206,7 @@ mod tests {
             place: Where::Notes,
             seed,
             acid: Acid::default(),
+            follow: Follow::default(),
             walk: Walk { step, edge },
             pink: Pink::default(),
         }

@@ -1,18 +1,19 @@
 //! The shape panel: fill a selected column with a ramp, random values, a walk, a wave, two values
-//! in turn or a short list of them, or rework the values there, heard while it's adjusted.
+//! in turn or a short list of them, or rework the values there, heard while it's adjusted. On the
+//! Note column it can also follow another track's phrase.
 
 use std::sync::Arc;
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, edit};
-use vt_model::generator::{Span, applied};
-use vt_model::lfo::{Shape as Wave, note_rates};
+use vt_model::generator::{Generator, Span, applied, reads, unfollowed};
+use vt_model::lfo::Shape as Wave;
 use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
+use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Acid, DEFAULT_RATE, EUCLID_HITS, Edge, FillKind, MAX_ACID_NOTES, MAX_BEND, MAX_DEPTH,
-    MAX_VALUES, MIN_DEPTH, Pink, Shape, ShapeColumn, Values, WAVES, Walk, WaveRate, Where,
-    default_ends, default_step, open_rows, track_seed,
+    Acid, Context, DEFAULT_RATE, FillKind, Follow, GenParam, MAX_VALUES, Pink, Shape, ShapeColumn,
+    Source, Starts, Values, Walk, Where, default_ends, default_step, open_rows, track_seed,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -23,90 +24,8 @@ use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker};
 
-/// How far a small and a large step move a curve.
-const BEND_NUDGE: i16 = 5;
-const BEND_JUMP: i16 = 25;
-/// How many small steps a large one is for a value in hex.
-const HEX_JUMP: i16 = 0x10;
-/// How far a large step moves an `Every` or a `Chance`.
-const EVERY_JUMP: i16 = 4;
-const CHANCE_JUMP: i16 = 10;
-/// How far a small and a large step move a phase, in degrees, as on an LFO.
-const PHASE_NUDGE: i16 = 15;
-const PHASE_JUMP: i16 = 90;
-/// The longest `Run`, and how far a large step moves it.
-const MAX_RUN: i16 = 256;
-const RUN_JUMP: i16 = 4;
-/// How far a large step moves a Euclidean `Where`'s hits or rotation.
-const EUCLID_JUMP: i16 = 4;
 /// The longest rate that can be typed, like `64 bars`.
 const RATE_TEXT: usize = 8;
-/// The counts of cycles across the selection that `K` on `Rate` lists after the times.
-const LISTED_CYCLES: [u16; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
-/// The longest `Step` a walk of notes takes: two octaves of semitones, or of degrees.
-const MAX_NOTE_STEP: u8 = 24;
-
-/// A row of the panel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShapeRow {
-    From,
-    To,
-    Curve,
-    S,
-    Fill,
-    Wave,
-    Rate,
-    Phase,
-    Values,
-    Run,
-    Where,
-    Amount,
-    Hits,
-    Rotate,
-    /// An `Acid` fill's own: how many notes its riff has, the chances of an octave, a row playing,
-    /// an accent and a slide, and whether a roll keeps the pitches.
-    Notes,
-    Octave,
-    Density,
-    Accent,
-    Slide,
-    Pitches,
-    /// A `Walk`'s largest move and what it does at the ends, and how many values a `1/f` sums.
-    Step,
-    Edge,
-    Depth,
-}
-
-impl ShapeRow {
-    /// The row's name on screen.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::From => "From",
-            Self::To => "To",
-            Self::Curve => "Curve",
-            Self::S => "S",
-            Self::Fill => "Fill",
-            Self::Wave => "Shape",
-            Self::Rate => "Rate",
-            Self::Phase => "Phase",
-            Self::Values => "Values",
-            Self::Run => "Run",
-            Self::Where => "Where",
-            Self::Amount => "Amount",
-            Self::Hits => "Hits",
-            Self::Rotate => "Rotate",
-            Self::Notes => "Notes",
-            Self::Octave => "Octave",
-            Self::Density => "Density",
-            Self::Accent => "Accent",
-            Self::Slide => "Slide",
-            Self::Pitches => "Pitches",
-            Self::Step => "Step",
-            Self::Edge => "Edge",
-            Self::Depth => "Depth",
-        }
-    }
-}
 
 /// One track's part of what the panel shapes: the phrase it's on, its rows, and its column, whose
 /// FX command is the first on its own rows, or the one chosen for a column with none.
@@ -151,7 +70,8 @@ pub struct ShapePanel {
     pub parts: Vec<Part>,
     pub column: ShapeColumn,
     pub shape: Shape,
-    pub row: ShapeRow,
+    /// The setting the cursor is on.
+    pub row: GenParam,
     /// What's being typed into the current row.
     pub typing: Option<String>,
     /// The live generator it was opened on with `gl`, by its place in its phrase's list, which
@@ -161,66 +81,51 @@ pub struct ShapePanel {
     base: Arc<Song>,
     /// On a live generator, its phrase's steps as they'd be without it, which it shapes from.
     under: Option<Vec<Step>>,
+    /// The phrases a `Follow` can read, by track and then ID: those on sound tracks but the
+    /// parts' own, and any that read one of them, which would go round a cycle.
+    pub sources: Vec<Source>,
+    /// The one it starts on: the phrase beside it on the nearest track with one, before it first,
+    /// or what that one follows.
+    default_source: Option<Source>,
 }
 
 impl ShapePanel {
-    /// The rows on show. `Fill` comes first, as it decides the rest: a wave and `Alternate` have
-    /// their own settings in place of a curve, a `List` has its values in place of the two ends,
-    /// a transform but `Scale` works from the values there with no settings of its own,
-    /// and `Amount` only means something for some choices of rows, as `Hits` and `Rotate` do for
-    /// a Euclidean one. `Acid` has its riff's settings, its `Density` only where it writes notes
-    /// of its own, and keeping the pitches there leaves it no ends or notes to choose. `Walk` has
-    /// its `Step` and `Edge`, and `1/f` its `Depth`.
-    pub fn rows(&self) -> Vec<ShapeRow> {
-        let mut rows = vec![ShapeRow::Fill];
-        if self.shape.kind == FillKind::Acid {
-            let generates = self.parts.iter().any(|part| part.generate);
-            if generates || !self.shape.acid.keep {
-                rows.extend_from_slice(&[ShapeRow::From, ShapeRow::To, ShapeRow::Notes]);
-            }
-            rows.push(ShapeRow::Octave);
-            if generates {
-                rows.push(ShapeRow::Density);
-            }
-            rows.extend_from_slice(&[ShapeRow::Accent, ShapeRow::Slide, ShapeRow::Pitches]);
+    /// The rows on show: the settings its shape has, `Fill` first as it decides the rest
+    /// ([`GenParam::exists_for`]). `Acid`'s `Density` shows where any track generates.
+    pub fn rows(&self) -> Vec<GenParam> {
+        GenParam::of(&self.shape, self.parts.iter().any(|part| part.generate))
+    }
+
+    /// What its settings act on: its column, the rows it could change, whether every part is
+    /// generated on, and what a `Follow` can read and reads now.
+    pub fn context(&self) -> Context<'_> {
+        Context {
+            column: self.column,
+            open: self.open_rows(),
+            generates: self.generates(),
+            sources: &self.sources,
+            source: self.source_steps(),
         }
-        rows.extend_from_slice(match self.shape.kind {
-            FillKind::Acid => &[],
-            FillKind::Ramp | FillKind::Random => &[
-                ShapeRow::From,
-                ShapeRow::To,
-                ShapeRow::Curve,
-                ShapeRow::S,
-                ShapeRow::Run,
-            ],
-            FillKind::Walk => &[
-                ShapeRow::From,
-                ShapeRow::To,
-                ShapeRow::Step,
-                ShapeRow::Edge,
-                ShapeRow::Run,
-            ],
-            FillKind::Pink => &[ShapeRow::From, ShapeRow::To, ShapeRow::Depth, ShapeRow::Run],
-            FillKind::Scale => &[ShapeRow::From, ShapeRow::To, ShapeRow::Curve, ShapeRow::S],
-            FillKind::Wave => &[
-                ShapeRow::From,
-                ShapeRow::To,
-                ShapeRow::Wave,
-                ShapeRow::Rate,
-                ShapeRow::Phase,
-                ShapeRow::Run,
-            ],
-            FillKind::Alternate => &[ShapeRow::From, ShapeRow::To, ShapeRow::Run],
-            FillKind::List => &[ShapeRow::Values, ShapeRow::Run],
-            FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &[],
-        });
-        rows.push(ShapeRow::Where);
-        match self.shape.place {
-            Where::Every(_) | Where::Chance(_) => rows.push(ShapeRow::Amount),
-            Where::Euclid { .. } => rows.extend_from_slice(&[ShapeRow::Hits, ShapeRow::Rotate]),
-            _ => {}
+    }
+
+    /// The loop of the phrase a `Follow` reads, as the panel opened on it.
+    pub fn source_steps(&self) -> Option<&[Step]> {
+        if self.shape.kind != FillKind::Follow {
+            return None;
         }
-        rows
+        self.base
+            .source_phrase(self.shape.follow.source)
+            .map(|phrase| phrase.loop_steps())
+    }
+
+    /// Follow a phrase it can, the one it starts on if what it holds isn't one.
+    fn fit_source(&mut self) {
+        let follow = &mut self.shape.follow;
+        if !self.sources.contains(&follow.source)
+            && let Some(source) = self.default_source.or(self.sources.first().copied())
+        {
+            follow.source = source;
+        }
     }
 
     /// How many rows the column could change, which a Euclidean `Where`'s hits are spread over:
@@ -274,35 +179,6 @@ impl ShapePanel {
             (true, _) => "Generate",
             (false, true) => "Generate and reshape",
             (false, false) => "Reshape",
-        }
-    }
-
-    /// The fills it offers. A transform reworks what's there, so it's left out when nothing is.
-    pub fn fills(&self) -> Vec<FillKind> {
-        let generates = self.generates();
-        self.column
-            .fills()
-            .into_iter()
-            .filter(|kind| !(generates && kind.reworks()))
-            .collect()
-    }
-
-    /// The choices of rows. Where nothing is there, the rows already holding a command aren't one.
-    pub fn wheres(&self) -> Vec<Where> {
-        let generates = self.generates();
-        self.column
-            .wheres()
-            .into_iter()
-            .filter(|place| !(generates && *place == Where::Commands))
-            .collect()
-    }
-
-    /// The rows it chooses unless told otherwise: every row where nothing is there.
-    pub fn default_where(&self) -> Where {
-        if self.generates() {
-            Where::AllRows
-        } else {
-            self.column.default_where()
         }
     }
 
@@ -375,6 +251,16 @@ impl ShapePanel {
     }
 }
 
+/// A live generator's name in the phrase's heading: its column, and for a `Follow` what it
+/// follows, like `Note←T02:05`.
+pub fn generator_label(generator: &Generator) -> String {
+    let column = column_label(generator.column);
+    match generator.source() {
+        Some(source) => format!("{column}←{source}"),
+        None => column,
+    }
+}
+
 /// A column's short name, as the phrase's heading names its live ones.
 pub fn column_label(column: ShapeColumn) -> String {
     match column {
@@ -401,24 +287,6 @@ fn on_column(field: Field, column: ShapeColumn) -> bool {
     }
 }
 
-/// The chance in percent an `Acid` row sets: of an octave, a row playing, an accent or a slide.
-fn acid_chance(acid: &mut Acid, row: ShapeRow) -> Option<&mut u8> {
-    match row {
-        ShapeRow::Octave => Some(&mut acid.octave),
-        ShapeRow::Density => Some(&mut acid.density),
-        ShapeRow::Accent => Some(&mut acid.accent),
-        ShapeRow::Slide => Some(&mut acid.slide),
-        _ => None,
-    }
-}
-
-/// The next or previous choice, going round.
-fn turned<T: Copy + PartialEq>(choices: &[T], current: T, sign: i16) -> T {
-    let at = choices.iter().position(|c| *c == current).unwrap_or(0);
-    let step = if sign > 0 { 1 } else { choices.len() - 1 };
-    choices[(at + step) % choices.len()]
-}
-
 /// A character typed into a list of values. Two hex digits make a value, and the space after it
 /// comes by itself, so `704055` types `70 40 55`; a space ends a value of one digit sooner.
 fn type_list(text: &mut String, c: char) {
@@ -437,66 +305,8 @@ fn type_list(text: &mut String, c: char) {
     }
 }
 
-/// A value moved and kept in `0..=top`.
-fn moved(value: i16, by: i16, low: i16, high: i16) -> i16 {
-    (value + by).clamp(low, high)
-}
-
 /// The longest list of notes or nudges that can be typed: eight notes and the spaces between.
 const NAMED_LIST_TEXT: usize = 40;
-
-/// An end moved a small or a large step: a note by a semitone or an octave, or by a degree or an
-/// octave of them while the scale is on; a nudge by one or four 24ths; anything else by one or
-/// `10` in hex.
-fn stepped(column: ShapeColumn, value: u8, sign: i16, large: bool) -> u8 {
-    let jump = match column {
-        ShapeColumn::Note { scale, .. } if scale.on => {
-            let degrees = if large {
-                scale.kind.intervals().len()
-            } else {
-                1
-            };
-            return scale.moved(value, degrees as i32 * i32::from(sign));
-        }
-        ShapeColumn::Note { .. } => 12,
-        ShapeColumn::Nudge => 4,
-        _ => HEX_JUMP,
-    };
-    let (low, top) = (i16::from(column.lowest()), i16::from(column.highest()));
-    moved(
-        i16::from(value),
-        sign * if large { jump } else { 1 },
-        low,
-        top,
-    ) as u8
-}
-
-/// A walk's `Step` moved a small or a large step: on notes by one or an octave, of degrees while
-/// the scale is on; on a nudge by one or four 24ths; anything else by one or `10` in hex. It
-/// runs from 1 to two octaves of notes, or to the column's whole range.
-fn walk_step(column: ShapeColumn, step: u8, sign: i16, large: bool) -> u8 {
-    let jump = match column {
-        ShapeColumn::Note { scale, .. } if scale.on => scale.kind.intervals().len() as i16,
-        ShapeColumn::Note { .. } => 12,
-        ShapeColumn::Nudge => 4,
-        _ => HEX_JUMP,
-    };
-    let by = sign * if large { jump } else { 1 };
-    moved(i16::from(step), by, 1, i16::from(longest_step(column))) as u8
-}
-
-/// The longest `Step` a walk takes on a column.
-fn longest_step(column: ShapeColumn) -> u8 {
-    match column {
-        ShapeColumn::Note { .. } => MAX_NOTE_STEP,
-        column => column.highest() - column.lowest(),
-    }
-}
-
-/// Whether a column's values are typed as two hex digits, rather than as notes or nudges.
-fn typed_in_hex(column: ShapeColumn) -> bool {
-    !matches!(column, ShapeColumn::Note { .. } | ShapeColumn::Nudge)
-}
 
 /// Why a selection shapes nothing yet.
 enum Refusal {
@@ -679,6 +489,10 @@ impl App {
         } else {
             column.default_where()
         };
+        let (sources, default_source) = match column {
+            ShapeColumn::Note { .. } => self.follow_sources(&base, &parts),
+            _ => (Vec::new(), None),
+        };
         let panel = ShapePanel {
             selection,
             parts,
@@ -697,23 +511,70 @@ impl App {
                 place,
                 seed: base.seed.wrapping_add(self.shape_seed),
                 acid: Acid::default(),
+                follow: Follow::default(),
                 walk: Walk {
                     step: default_step(column),
                     ..Walk::default()
                 },
                 pink: Pink::default(),
             },
-            row: ShapeRow::Fill,
+            row: GenParam::Fill,
             typing: None,
             live: None,
             base,
             under: None,
+            sources,
+            default_source,
         };
         self.leave_selection(selection);
         self.cursor.field = field;
         self.shape = Some(panel);
         self.mode = Mode::Shape;
         self.preview_shape();
+    }
+
+    /// The phrases these parts can follow, and the one to start on: the phrase beside them on the
+    /// nearest track that has one, looking before the first part's track and then after it, as a
+    /// canon's theme is usually above its answers, or what that phrase follows, if it does.
+    fn follow_sources(&self, song: &Song, parts: &[Part]) -> (Vec<Source>, Option<Source>) {
+        let own: Vec<Source> = parts
+            .iter()
+            .map(|part| Source {
+                track: part.track,
+                phrase: part.phrase,
+            })
+            .collect();
+        let sources: Vec<Source> = song
+            .tracks
+            .iter()
+            .enumerate()
+            .take(song.sound_tracks())
+            .flat_map(|(track, owner)| {
+                owner.phrases.keys().map(move |phrase| Source {
+                    track,
+                    phrase: *phrase,
+                })
+            })
+            .filter(|source| !own.iter().any(|here| reads(song, *source, *here)))
+            .collect();
+        let first = parts.first().map_or(0, |part| part.track);
+        let before = (0..first).rev();
+        let after = first + 1..song.sound_tracks();
+        let mut beside = before.chain(after).find_map(|track| {
+            let (phrase, _) = self.phrase_beside(track)?;
+            let source = Source { track, phrase };
+            sources.contains(&source).then_some(source)
+        });
+        // One that follows another itself gives way to what it follows, so each voice of a canon
+        // starts on the theme. Cycles are refused, so this ends.
+        while let Some(followed) = beside
+            .and_then(|source| song.source_phrase(source))
+            .and_then(|phrase| phrase.generators().iter().find_map(Generator::source))
+            .filter(|source| sources.contains(source))
+        {
+            beside = Some(followed);
+        }
+        (sources, beside)
     }
 
     /// Where a shape on an empty column starts and ends: for notes, an octave up from the scale's
@@ -782,7 +643,10 @@ impl App {
         }
         self.publish();
         self.remember_shape(&panel);
-        let name = column_label(part.column);
+        let mut name = column_label(part.column);
+        if panel.shape.kind == FillKind::Follow {
+            name = format!("{name}←{}", panel.shape.follow.source);
+        }
         match (panel.live, live) {
             (None, true) => {
                 let lane = panel.on_lane(&part);
@@ -806,7 +670,11 @@ impl App {
 
     /// Say so if an edit applied a live generator, as it changed one of its cells by hand.
     pub(crate) fn say_applied(&mut self, next: &Arc<Song>) {
-        if let Some(column) = applied(self.song(), next).first() {
+        if let Some(source) = unfollowed(self.song(), next).first() {
+            self.status = format!(
+                "{source} is gone, so what followed it is plain notes now. u brings it back"
+            );
+        } else if let Some(column) = applied(self.song(), next).first() {
             self.status = format!(
                 "{} was live: it's plain values now. u makes it live again",
                 column_label(*column)
@@ -861,6 +729,10 @@ impl App {
             generate: empty_column(&under, range, generator.column),
         };
         let shape = generator.shape;
+        let (sources, default_source) = match part.column {
+            ShapeColumn::Note { .. } => self.follow_sources(&base, &[part]),
+            _ => (Vec::new(), None),
+        };
         self.shape = Some(ShapePanel {
             selection: Selection {
                 range,
@@ -870,11 +742,13 @@ impl App {
             parts: vec![part],
             column: part.column,
             shape,
-            row: ShapeRow::Fill,
+            row: GenParam::Fill,
             typing: None,
             live: Some(index),
             base,
             under: Some(under),
+            sources,
+            default_source,
         });
         self.mode = Mode::Shape;
         self.preview_shape();
@@ -887,13 +761,14 @@ impl App {
             return;
         };
         let track = self.cursor.track;
-        let column = self.song().tracks[track].phrases[&phrase].generators()[generator].column;
+        let name =
+            generator_label(&self.song().tracks[track].phrases[&phrase].generators()[generator]);
         self.apply(&Action::ApplyGenerator {
             track,
             phrase,
             generator,
         });
-        self.status = format!("{} is applied, as plain values", column_label(column));
+        self.status = format!("{name} is applied, as plain values");
     }
 
     /// Put back what was there before the panel opened.
@@ -1056,6 +931,9 @@ impl App {
     fn change_shape(&mut self, change: impl FnOnce(&mut ShapePanel)) {
         if let Some(panel) = &mut self.shape {
             change(panel);
+            if panel.shape.kind == FillKind::Follow {
+                panel.fit_source();
+            }
             // A list starts as the two ends, so it sounds as `Alternate` did until it's typed.
             let shape = &mut panel.shape;
             if shape.kind == FillKind::List && shape.values.is_empty() {
@@ -1075,97 +953,26 @@ impl App {
     }
 
     fn adjust_shape(&mut self, sign: i16, large: bool) {
-        if let Some(panel) = self.shape.as_ref().filter(|p| p.row == ShapeRow::Values) {
-            self.status = match panel.column {
-                ShapeColumn::Note { .. } => "Type the notes with i, like C-3 E-3 G-3",
-                ShapeColumn::Nudge => "Type the nudges with i, like -3 0 +3",
-                _ => "Type the values with i, as hex values like 70 40 55",
-            }
-            .to_owned();
+        let Some(panel) = &self.shape else {
+            return;
+        };
+        let mut shape = panel.shape;
+        if let Err(reason) = panel.row.step(&mut shape, &panel.context(), sign, large) {
+            self.status = reason.to_owned();
             return;
         }
-        self.change_shape(|panel| {
-            let column = panel.column;
-            let open = panel.open_rows() as i16;
-            let fills = panel.fills();
-            let wheres = panel.wheres();
-            let shape = &mut panel.shape;
-            let bend = sign * if large { BEND_JUMP } else { BEND_NUDGE };
-            let most = i16::from(MAX_BEND);
-            match panel.row {
-                ShapeRow::From => shape.from = stepped(column, shape.from, sign, large),
-                ShapeRow::To => shape.to = stepped(column, shape.to, sign, large),
-                ShapeRow::Curve => {
-                    shape.curve = moved(i16::from(shape.curve), bend, -most, most) as i8;
-                }
-                ShapeRow::S => shape.s = moved(i16::from(shape.s), bend, -most, most) as i8,
-                ShapeRow::Fill => shape.kind = turned(&fills, shape.kind, sign),
-                ShapeRow::Wave => shape.wave = turned(&WAVES, shape.wave, sign),
-                ShapeRow::Rate if large => shape.rate = shape.rate.jumped(sign > 0),
-                ShapeRow::Rate => shape.rate = shape.rate.nudged(sign > 0),
-                ShapeRow::Phase => {
-                    let by = sign * if large { PHASE_JUMP } else { PHASE_NUDGE };
-                    shape.phase = (shape.phase as i16 + by).rem_euclid(360) as u16;
-                }
-                ShapeRow::Values => {}
-                ShapeRow::Run => {
-                    let by = sign * if large { RUN_JUMP } else { 1 };
-                    shape.run = moved(shape.run as i16, by, 1, MAX_RUN) as u16;
-                }
-                ShapeRow::Where => {
-                    let same = |choice: &Where| {
-                        std::mem::discriminant(choice) == std::mem::discriminant(&shape.place)
-                    };
-                    let at = wheres.iter().position(same).unwrap_or(0);
-                    let step = if sign > 0 { 1 } else { wheres.len() - 1 };
-                    shape.place = wheres[(at + step) % wheres.len()];
-                }
-                ShapeRow::Amount => match shape.place {
-                    Where::Every(every) => {
-                        let by = sign * if large { EVERY_JUMP } else { 1 };
-                        shape.place = Where::Every(moved(every as i16, by, 1, 256) as u16);
-                    }
-                    Where::Chance(percent) => {
-                        let by = sign * if large { CHANCE_JUMP } else { 1 };
-                        shape.place = Where::Chance(moved(i16::from(percent), by, 0, 100) as u8);
-                    }
-                    _ => {}
-                },
-                ShapeRow::Notes => {
-                    let by = sign * if large { 4 } else { 1 };
-                    let most = i16::from(MAX_ACID_NOTES);
-                    shape.acid.notes = moved(i16::from(shape.acid.notes), by, 1, most) as u8;
-                }
-                ShapeRow::Octave | ShapeRow::Density | ShapeRow::Accent | ShapeRow::Slide => {
-                    let by = sign * if large { CHANCE_JUMP } else { 1 };
-                    if let Some(percent) = acid_chance(&mut shape.acid, panel.row) {
-                        *percent = moved(i16::from(*percent), by, 0, 100) as u8;
-                    }
-                }
-                ShapeRow::Pitches => shape.acid.keep = !shape.acid.keep,
-                ShapeRow::Step => {
-                    shape.walk.step = walk_step(column, shape.walk.step, sign, large);
-                }
-                ShapeRow::Edge => shape.walk.edge = shape.walk.edge.other(),
-                ShapeRow::Depth => {
-                    let by = sign * if large { 2 } else { 1 };
-                    let (low, high) = (i16::from(MIN_DEPTH), i16::from(MAX_DEPTH));
-                    shape.pink.depth = moved(i16::from(shape.pink.depth), by, low, high) as u8;
-                }
-                ShapeRow::Hits | ShapeRow::Rotate => {
-                    if let Where::Euclid { hits, rotate } = shape.place {
-                        let by = sign * if large { EUCLID_JUMP } else { 1 };
-                        shape.place = if panel.row == ShapeRow::Hits {
-                            let hits = moved(hits.min(open as u16) as i16, by, 0, open) as u16;
-                            Where::Euclid { hits, rotate }
-                        } else {
-                            let rotate = (rotate as i16 + by).rem_euclid(open.max(1)) as u16;
-                            Where::Euclid { hits, rotate }
-                        };
-                    }
-                }
-            }
-        });
+        self.change_shape(|panel| panel.shape = shape);
+    }
+
+    /// Where `From` and `To` go back to: the ends of what was there on the first track, or on a
+    /// column generated on, the ends it starts with.
+    fn shape_ends(&self, panel: &ShapePanel) -> (u8, u8) {
+        let first = panel.parts[0];
+        if first.generate {
+            self.generated_ends(first.column)
+        } else {
+            default_ends(panel.base_steps(&first), first.range, first.column)
+        }
     }
 
     /// Put the current row back to what it started as.
@@ -1173,64 +980,21 @@ impl App {
         let Some(panel) = &self.shape else {
             return;
         };
-        let ends = self.generated_ends(panel.parts[0].column);
+        let starts = Starts {
+            ends: self.shape_ends(panel),
+            source: panel.default_source,
+        };
         self.change_shape(|panel| {
-            let first = panel.parts[0];
-            let (from, to) = if first.generate {
-                ends
-            } else {
-                default_ends(panel.base_steps(&first), first.range, first.column)
-            };
-            let default_where = panel.default_where();
-            let shape = &mut panel.shape;
-            match panel.row {
-                ShapeRow::From => shape.from = from,
-                ShapeRow::To => shape.to = to,
-                ShapeRow::Curve => shape.curve = 0,
-                ShapeRow::S => shape.s = 0,
-                ShapeRow::Fill => shape.kind = FillKind::Ramp,
-                ShapeRow::Wave => shape.wave = Wave::Sine,
-                ShapeRow::Rate => shape.rate = DEFAULT_RATE,
-                ShapeRow::Phase => shape.phase = 0,
-                ShapeRow::Values => shape.values = Values::new(&[shape.from, shape.to]),
-                ShapeRow::Run => shape.run = 1,
-                ShapeRow::Where => shape.place = default_where,
-                ShapeRow::Amount => {
-                    shape.place = match shape.place {
-                        Where::Every(_) => Where::Every(4),
-                        Where::Chance(_) => Where::Chance(50),
-                        place => place,
-                    };
-                }
-                ShapeRow::Notes => shape.acid.notes = Acid::default().notes,
-                ShapeRow::Octave | ShapeRow::Density | ShapeRow::Accent | ShapeRow::Slide => {
-                    let mut start = Acid::default();
-                    let from = acid_chance(&mut start, panel.row).map(|percent| *percent);
-                    if let (Some(percent), Some(from)) =
-                        (acid_chance(&mut shape.acid, panel.row), from)
-                    {
-                        *percent = from;
-                    }
-                }
-                ShapeRow::Pitches => shape.acid.keep = false,
-                ShapeRow::Step => shape.walk.step = default_step(panel.column),
-                ShapeRow::Edge => shape.walk.edge = Edge::default(),
-                ShapeRow::Depth => shape.pink.depth = Pink::default().depth,
-                ShapeRow::Hits | ShapeRow::Rotate => {
-                    if let Where::Euclid { hits, rotate } = shape.place {
-                        shape.place = if panel.row == ShapeRow::Hits {
-                            Where::Euclid {
-                                hits: EUCLID_HITS,
-                                rotate,
-                            }
-                        } else {
-                            Where::Euclid { hits, rotate: 0 }
-                        };
-                    }
-                }
-            }
-            if !panel.rows().contains(&panel.row) {
-                panel.row = ShapeRow::Where;
+            let mut shape = panel.shape;
+            panel.row.reset(&mut shape, &panel.context(), starts);
+            panel.shape = shape;
+            let rows = panel.rows();
+            if !rows.contains(&panel.row) {
+                panel.row = if rows.contains(&GenParam::Where) {
+                    GenParam::Where
+                } else {
+                    GenParam::Fill
+                };
             }
         });
     }
@@ -1239,93 +1003,53 @@ impl App {
         let Some(panel) = &self.shape else {
             return;
         };
-        let (title, items, position): (&'static str, Vec<Item>, usize) = match panel.row {
-            ShapeRow::Fill => {
-                let fills = panel.fills();
-                let position = fills
-                    .iter()
-                    .position(|kind| *kind == panel.shape.kind)
-                    .unwrap_or(0);
-                let items = fills
-                    .into_iter()
-                    .map(|kind| {
-                        Item::new(kind.name(), Pick::ShapeFill(kind)).meaning(kind.description())
-                    })
-                    .collect();
-                ("Fill", items, position)
-            }
-            ShapeRow::Wave => (
-                "Shape",
-                WAVES
-                    .map(|wave| Item::new(wave.name(), Pick::ShapeWave(wave)))
-                    .to_vec(),
-                WAVES
-                    .iter()
-                    .position(|wave| *wave == panel.shape.wave)
-                    .unwrap_or(0),
-            ),
-            ShapeRow::Rate => {
-                let rates: Vec<WaveRate> = note_rates()
-                    .into_iter()
-                    .map(WaveRate::Time)
-                    .chain(LISTED_CYCLES.map(WaveRate::Cycles))
-                    .collect();
-                let position = rates
-                    .iter()
-                    .position(|rate| *rate == panel.shape.rate)
-                    .unwrap_or(0);
-                let items = rates
-                    .into_iter()
-                    .map(|rate| Item::new(rate.to_string(), Pick::ShapeRate(rate)))
-                    .collect();
-                ("Rate", items, position)
-            }
-            ShapeRow::Where => {
-                let choices = panel.wheres();
-                let same = |choice: &Where| {
-                    std::mem::discriminant(choice) == std::mem::discriminant(&panel.shape.place)
-                };
-                let position = choices.iter().position(same).unwrap_or(0);
-                let items = choices
-                    .into_iter()
-                    .map(|place| Item::new(place.name(), Pick::ShapeWhere(place)))
-                    .collect();
-                ("Where", items, position)
-            }
-            _ => {
-                self.status = "K chooses from a list on Fill, Shape, Rate and Where".to_owned();
-                return;
-            }
+        let context = panel.context();
+        let Some(choices) = panel.row.choices(&context) else {
+            self.status = "K chooses from a list on Fill, Shape, Rate, Where and Source".to_owned();
+            return;
+        };
+        let position = panel.row.chosen(&panel.shape, &context).unwrap_or(0);
+        let items = choices
+            .into_iter()
+            .map(|choice| {
+                let item = Item::new(choice.name(), Pick::ShapeChoice(choice));
+                match (choice, choice.description()) {
+                    (Choice::Source(source), _) => {
+                        let rows = panel
+                            .base
+                            .source_phrase(source)
+                            .map_or(0, |phrase| phrase.loop_steps().len());
+                        let name = crate::views::phrase::track_name(self, source.track);
+                        item.meaning(format!("Track {name}, {rows} rows"))
+                    }
+                    (_, Some(meaning)) => item.meaning(meaning),
+                    (_, None) => item,
+                }
+            })
+            .collect();
+        let title = match panel.row {
+            GenParam::Source => "Follow",
+            row => row.name(),
         };
         self.show_picker(Picker::new(title, items).opened_on(Some(position)));
     }
 
-    pub(crate) fn pick_shape_fill(&mut self, kind: FillKind) {
-        self.change_shape(|panel| panel.shape.kind = kind);
-    }
-
-    pub(crate) fn pick_shape_wave(&mut self, wave: Wave) {
-        self.change_shape(|panel| panel.shape.wave = wave);
-    }
-
-    pub(crate) fn pick_shape_rate(&mut self, rate: WaveRate) {
-        self.change_shape(|panel| panel.shape.rate = rate);
-    }
-
-    pub(crate) fn pick_shape_where(&mut self, place: Where) {
-        self.change_shape(|panel| panel.shape.place = place);
+    pub(crate) fn pick_shape_choice(&mut self, choice: Choice) {
+        self.change_shape(|panel| choice.apply(&mut panel.shape));
     }
 
     fn start_shape_typing(&mut self) {
         let Some(panel) = &self.shape else {
             return;
         };
-        if matches!(panel.row, ShapeRow::Fill | ShapeRow::Wave | ShapeRow::Where) {
-            self.open_shape_picker();
-        } else if matches!(panel.row, ShapeRow::Pitches | ShapeRow::Edge) {
-            self.adjust_shape(1, false);
-        } else if let Some(panel) = &mut self.shape {
-            panel.typing = Some(String::new());
+        match panel.row.typing(panel.column) {
+            Typing::Listed => self.open_shape_picker(),
+            Typing::Toggled => self.adjust_shape(1, false),
+            _ => {
+                if let Some(panel) = &mut self.shape {
+                    panel.typing = Some(String::new());
+                }
+            }
         }
     }
 
@@ -1333,53 +1057,42 @@ impl App {
         let Some(panel) = &mut self.shape else {
             return;
         };
-        let in_hex = typed_in_hex(panel.column);
-        let end = matches!(panel.row, ShapeRow::From | ShapeRow::To);
-        // A walk's step is typed as its column's values are, in hex or as a number.
-        let hex = (end || panel.row == ShapeRow::Step) && in_hex;
-        // A note's name or a nudge, alone or in a list, ended with Enter.
-        let named = (end || panel.row == ShapeRow::Values) && !in_hex;
-        let signed = matches!(panel.row, ShapeRow::Curve | ShapeRow::S);
-        let rate = panel.row == ShapeRow::Rate;
-        let list = panel.row == ShapeRow::Values;
+        let typing = panel.row.typing(panel.column);
         let Some(text) = &mut panel.typing else {
             return;
         };
-        let longest = if list { NAMED_LIST_TEXT } else { 4 };
-        match code {
-            KeyCode::Esc => panel.typing = None,
-            KeyCode::Backspace => {
+        match (code, typing) {
+            (KeyCode::Esc, _) => panel.typing = None,
+            (KeyCode::Backspace, _) => {
                 text.pop();
             }
-            KeyCode::Enter => self.commit_shape_typing(),
-            KeyCode::Char(c)
-                if named
-                    && text.len() < longest
+            (KeyCode::Enter, _) => self.commit_shape_typing(),
+            // A note's name or a nudge, alone or in a list, ended with Enter.
+            (KeyCode::Char(c), Typing::Named { list }) => {
+                let longest = if list { NAMED_LIST_TEXT } else { 4 };
+                if text.len() < longest
                     && (c.is_ascii_alphanumeric()
                         || matches!(c, '#' | '-' | '+' | '_')
-                        || (list && c == ' ')) =>
-            {
-                text.push(c);
+                        || (list && c == ' '))
+                {
+                    text.push(c);
+                }
             }
-            KeyCode::Char(_) if named => {}
-            KeyCode::Char(c) if list => type_list(text, c),
-            KeyCode::Char(c) if hex && c.is_ascii_hexdigit() => {
+            (KeyCode::Char(c), Typing::HexList) => type_list(text, c),
+            (KeyCode::Char(c), Typing::Hex) if c.is_ascii_hexdigit() => {
                 text.push(c.to_ascii_uppercase());
                 if text.len() == 2 {
                     self.commit_shape_typing();
                 }
             }
-            KeyCode::Char(c)
-                if rate
-                    && text.len() < RATE_TEXT
+            (KeyCode::Char(c), Typing::Rate)
+                if text.len() < RATE_TEXT
                     && (c.is_ascii_alphanumeric() || matches!(c, '/' | ' ')) =>
             {
                 text.push(c);
             }
-            KeyCode::Char(c)
-                if !hex
-                    && !rate
-                    && text.len() < 4
+            (KeyCode::Char(c), Typing::Whole { signed })
+                if text.len() < 4
                     && (c.is_ascii_digit()
                         || (signed && text.is_empty() && matches!(c, '-' | '+'))) =>
             {
@@ -1395,119 +1108,9 @@ impl App {
         };
         let mut refused = None;
         self.change_shape(|panel| {
-            let column = panel.column;
-            let open = panel.open_rows() as u16;
-            let shape = &mut panel.shape;
-            let unknown = match column {
-                ShapeColumn::Note { .. } => "A note is like C-3, C#3 or c3",
-                ShapeColumn::Nudge => "A nudge is like -3, 0 or +B, up to B either way",
-                _ => "A value is two hex digits",
-            };
-            match panel.row {
-                ShapeRow::From | ShapeRow::To => match column.parse(&text) {
-                    Some(value) if panel.row == ShapeRow::From => shape.from = value,
-                    Some(value) => shape.to = value,
-                    None => refused = Some(unknown),
-                },
-                ShapeRow::Curve | ShapeRow::S => match text.parse::<i16>() {
-                    Ok(value) => {
-                        let most = i16::from(MAX_BEND);
-                        let value = value.clamp(-most, most) as i8;
-                        if panel.row == ShapeRow::Curve {
-                            shape.curve = value;
-                        } else {
-                            shape.s = value;
-                        }
-                    }
-                    Err(_) => refused = Some("Curve and S run from -100 to 100"),
-                },
-                ShapeRow::Amount => match (shape.place, text.parse::<u16>()) {
-                    (Where::Every(_), Ok(every)) if every > 0 => {
-                        shape.place = Where::Every(every);
-                    }
-                    (Where::Chance(_), Ok(percent)) => {
-                        shape.place = Where::Chance(percent.min(100) as u8);
-                    }
-                    _ => refused = Some("That amount isn't a whole number above 0"),
-                },
-                ShapeRow::Hits | ShapeRow::Rotate => match (shape.place, text.parse::<u16>()) {
-                    (Where::Euclid { rotate, .. }, Ok(hits)) if panel.row == ShapeRow::Hits => {
-                        shape.place = Where::Euclid {
-                            hits: hits.min(open),
-                            rotate,
-                        };
-                    }
-                    (Where::Euclid { hits, .. }, Ok(rotate)) => {
-                        shape.place = Where::Euclid {
-                            hits,
-                            rotate: rotate % open.max(1),
-                        };
-                    }
-                    _ => refused = Some("Hits and Rotate are whole numbers"),
-                },
-                // A wave here is laid out by rows, so a rate has to be in time with them.
-                ShapeRow::Rate => match text.parse::<WaveRate>() {
-                    Ok(rate) => shape.rate = rate,
-                    Err(_) => {
-                        refused = Some("A rate here is like 1/4, 1/8d, 2 bars, 7st, or x3 cycles");
-                    }
-                },
-                ShapeRow::Phase => match text.parse::<u16>() {
-                    Ok(phase) if phase < 360 => shape.phase = phase,
-                    _ => refused = Some("Phase runs from 0 to 359"),
-                },
-                ShapeRow::Notes => match text.parse::<u8>() {
-                    Ok(notes) if notes > 0 => shape.acid.notes = notes.min(MAX_ACID_NOTES),
-                    _ => refused = Some("Notes runs from 1 to 8"),
-                },
-                ShapeRow::Octave | ShapeRow::Density | ShapeRow::Accent | ShapeRow::Slide => {
-                    match (acid_chance(&mut shape.acid, panel.row), text.parse::<u16>()) {
-                        (Some(percent), Ok(typed)) => *percent = typed.min(100) as u8,
-                        _ => refused = Some("A chance runs from 0 to 100"),
-                    }
-                }
-                ShapeRow::Step => {
-                    let typed = if typed_in_hex(column) {
-                        u8::from_str_radix(&text, 16)
-                    } else {
-                        text.parse::<u8>()
-                    };
-                    let longest = longest_step(column);
-                    match typed {
-                        Ok(step) if step > 0 => shape.walk.step = step.min(longest),
-                        _ if typed_in_hex(column) => {
-                            refused = Some("Step is a hex value above 00");
-                        }
-                        _ => refused = Some("Step is a whole number above 0"),
-                    }
-                }
-                ShapeRow::Depth => match text.parse::<u8>() {
-                    Ok(depth) if (MIN_DEPTH..=MAX_DEPTH).contains(&depth) => {
-                        shape.pink.depth = depth;
-                    }
-                    _ => refused = Some("Depth runs from 2 to 8"),
-                },
-                ShapeRow::Run => match text.parse::<i16>() {
-                    Ok(run) if run > 0 => shape.run = run.min(MAX_RUN) as u16,
-                    _ => refused = Some("Run is a whole number above 0"),
-                },
-                ShapeRow::Values => {
-                    let typed: Option<Vec<u8>> = text
-                        .split_whitespace()
-                        .map(|value| column.parse(value))
-                        .collect();
-                    match typed {
-                        Some(list) if !list.is_empty() => shape.values = Values::new(&list),
-                        _ if !typed_in_hex(column) => refused = Some(unknown),
-                        _ => refused = Some("Values are hex values like 70 40 55, up to 8 of them"),
-                    }
-                }
-                ShapeRow::Fill
-                | ShapeRow::Wave
-                | ShapeRow::Where
-                | ShapeRow::Pitches
-                | ShapeRow::Edge => {}
-            }
+            let mut shape = panel.shape;
+            refused = panel.row.typed(&mut shape, &panel.context(), &text).err();
+            panel.shape = shape;
         });
         if let Some(reason) = refused {
             self.status = reason.to_owned();

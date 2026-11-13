@@ -594,7 +594,7 @@ impl App {
     }
 
     /// The phrase a track is on, level with the cursor, and where its loop starts.
-    fn phrase_beside(&self, track: usize) -> Option<(u32, usize)> {
+    pub(crate) fn phrase_beside(&self, track: usize) -> Option<(u32, usize)> {
         let song = self.song();
         let id = if track == self.cursor.track {
             self.phrase_id()?

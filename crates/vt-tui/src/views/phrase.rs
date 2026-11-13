@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS, TICKS_PER_STEP};
 use vt_model::selection::{Scope, StepRange};
-use vt_model::shape::ShapeColumn;
+use vt_model::shape::{ShapeColumn, Source};
 use vt_model::song::{Phrase, Track};
 use vt_model::step::{FxCommand, GateKind, Mark, Note, Step};
 
@@ -839,9 +839,18 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mut live_names: Vec<String> = phrase
         .generators()
         .iter()
-        .map(|generator| crate::shaping::column_label(generator.column))
+        .map(crate::shaping::generator_label)
         .collect();
     live_names.dedup();
+    // How many phrases follow this one, live, on any track.
+    let followers = app.phrase_id().map_or(0, |id| {
+        app.song()
+            .followers(Source {
+                track: app.cursor.track,
+                phrase: id,
+            })
+            .len()
+    });
     let live: Vec<(StepRange, ShapeColumn)> = phrase
         .generators()
         .iter()
@@ -882,6 +891,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         after.push(Span::styled(
             format!("  {} {}", glyphs::LIVE, live_names.join(",")),
             bold.fg(theme::TEAL),
+        ));
+    }
+    if followers > 0 {
+        after.push(Span::styled(
+            format!("  Followed by {followers}"),
+            Style::new().fg(theme::TEAL),
         ));
     }
     // The strip has what's left of the row once the rest of the title and the CPU figure at its

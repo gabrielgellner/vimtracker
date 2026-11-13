@@ -8,12 +8,11 @@ use vt_engine::engine::Engine;
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::samples::SamplePool;
-use vt_model::shape::{Edge, FillKind};
+use vt_model::shape::{Edge, FillKind, GenParam};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::{Note, Step};
 use vt_tui::app::App;
 use vt_tui::input::keys::Key;
-use vt_tui::shaping::ShapeRow;
 
 const E: &str = "--- -- --- --- ---";
 const NOTE: &str = "C-3 40 --- --- ---";
@@ -98,13 +97,13 @@ fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
     assert_eq!(
         panel.rows(),
         [
-            ShapeRow::Fill,
-            ShapeRow::From,
-            ShapeRow::To,
-            ShapeRow::Step,
-            ShapeRow::Edge,
-            ShapeRow::Run,
-            ShapeRow::Where,
+            GenParam::Fill,
+            GenParam::From,
+            GenParam::To,
+            GenParam::Step,
+            GenParam::Edge,
+            GenParam::Run,
+            GenParam::Where,
         ]
     );
     // On Velocity a step starts at `10`, an eighth of the range, so it can be heard.
@@ -142,18 +141,18 @@ fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
     // The next fill along is `1/f`, with its `Depth` in place of the walk's settings.
     keys(&mut app, "kkkk=");
     let panel = app.shape.clone().unwrap();
-    assert_eq!(panel.row, ShapeRow::Fill);
+    assert_eq!(panel.row, GenParam::Fill);
     assert_eq!(panel.shape.kind, FillKind::Pink);
     assert_eq!(panel.shape.kind.name(), "1/f");
     assert_eq!(
         panel.rows(),
         [
-            ShapeRow::Fill,
-            ShapeRow::From,
-            ShapeRow::To,
-            ShapeRow::Depth,
-            ShapeRow::Run,
-            ShapeRow::Where,
+            GenParam::Fill,
+            GenParam::From,
+            GenParam::To,
+            GenParam::Depth,
+            GenParam::Run,
+            GenParam::Where,
         ]
     );
     assert_eq!(panel.shape.pink.depth, 4);

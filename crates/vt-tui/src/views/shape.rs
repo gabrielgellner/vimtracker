@@ -6,11 +6,12 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use vt_model::lfo::Shape as Wave;
-use vt_model::shape::{FillKind, ShapeColumn, Where, written};
+use vt_model::shape::{Context, FillKind, GenParam, ShapeColumn, written_from};
+use vt_model::step::Note;
 
 use crate::app::App;
 use crate::input::mode::Mode;
-use crate::shaping::{ShapePanel, ShapeRow};
+use crate::shaping::ShapePanel;
 use crate::theme;
 use crate::views::widgets;
 
@@ -20,83 +21,20 @@ const WIDTH: u16 = 42;
 const AROUND_ROWS: u16 = 4;
 /// Clear of the CPU figure at the top of the screen.
 const FROM_TOP: u16 = 2;
-
-/// A bend, with its sign.
-fn bend(value: i8) -> String {
-    if value > 0 {
-        format!("+{value}")
-    } else {
-        value.to_string()
-    }
-}
-
-/// A row's value as text.
-fn value(panel: &ShapePanel, row: ShapeRow) -> String {
-    let shape = &panel.shape;
-    match row {
-        ShapeRow::From => panel.column.show(shape.from),
-        ShapeRow::To => panel.column.show(shape.to),
-        ShapeRow::Curve | ShapeRow::S if shape.kind == FillKind::Random => "--".to_owned(),
-        ShapeRow::Curve => bend(shape.curve),
-        ShapeRow::S => bend(shape.s),
-        ShapeRow::Fill => shape.kind.name().to_owned(),
-        ShapeRow::Wave => shape.wave.name().to_owned(),
-        ShapeRow::Rate => shape.rate.to_string(),
-        ShapeRow::Phase => format!("{}°", shape.phase),
-        ShapeRow::Values => panel.column.show_list(&shape.values),
-        ShapeRow::Run => shape.run.to_string(),
-        ShapeRow::Where => shape.place.name().to_owned(),
-        ShapeRow::Amount => match shape.place {
-            Where::Every(every) => format!("{every} rows"),
-            Where::Chance(percent) => format!("{percent}%"),
-            _ => String::new(),
-        },
-        ShapeRow::Hits => match shape.place {
-            Where::Euclid { hits, .. } => {
-                let open = panel.open_rows();
-                format!("{} of {open}", usize::from(hits).min(open))
-            }
-            _ => String::new(),
-        },
-        ShapeRow::Rotate => match shape.place {
-            Where::Euclid { rotate, .. } => rotate.to_string(),
-            _ => String::new(),
-        },
-        ShapeRow::Notes => shape.acid.notes.to_string(),
-        ShapeRow::Octave => format!("{}%", shape.acid.octave),
-        ShapeRow::Density => format!("{}%", shape.acid.density),
-        ShapeRow::Accent => format!("{}%", shape.acid.accent),
-        ShapeRow::Slide => format!("{}%", shape.acid.slide),
-        ShapeRow::Pitches if shape.acid.keep => "Keep".to_owned(),
-        ShapeRow::Pitches => "Roll".to_owned(),
-        ShapeRow::Step => match panel.column {
-            ShapeColumn::Note { scale, .. } => {
-                let unit = match (scale.on, shape.walk.step) {
-                    (true, 1) => "degree",
-                    (true, _) => "degrees",
-                    (false, 1) => "semitone",
-                    (false, _) => "semitones",
-                };
-                format!("{} {unit}", shape.walk.step)
-            }
-            ShapeColumn::Nudge => shape.walk.step.to_string(),
-            _ => format!("{:02X}", shape.walk.step),
-        },
-        ShapeRow::Edge => shape.walk.edge.name().to_owned(),
-        ShapeRow::Depth => shape.pink.depth.to_string(),
-    }
-}
+/// The room a row's label takes unless one is longer.
+const LABEL: usize = 8;
 
 /// A row's value in spans, with a note outside the scale coloured as the grid colours it.
-fn spans(panel: &ShapePanel, row: ShapeRow) -> Vec<Span<'static>> {
+fn spans(panel: &ShapePanel, context: &Context, row: GenParam) -> Vec<Span<'static>> {
+    let value = || vec![Span::raw(row.shown(&panel.shape, context))];
     let ShapeColumn::Note { scale, .. } = panel.column else {
-        return vec![Span::raw(value(panel, row))];
+        return value();
     };
     let notes: Vec<u8> = match row {
-        ShapeRow::From => vec![panel.shape.from],
-        ShapeRow::To => vec![panel.shape.to],
-        ShapeRow::Values => panel.shape.values.as_slice().to_vec(),
-        _ => return vec![Span::raw(value(panel, row))],
+        GenParam::From => vec![panel.shape.from],
+        GenParam::To => vec![panel.shape.to],
+        GenParam::Values => panel.shape.values.as_slice().to_vec(),
+        _ => return value(),
     };
     let mut spans = Vec::new();
     for (index, note) in notes.into_iter().enumerate() {
@@ -116,6 +54,7 @@ fn spans(panel: &ShapePanel, row: ShapeRow) -> Vec<Span<'static>> {
 /// Draw the panel.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     let rows = panel.rows();
+    let context = panel.context();
     let width = WIDTH.min(area.width);
     let height = (rows.len() as u16 + AROUND_ROWS).min(area.height.saturating_sub(FROM_TOP));
     let window = Rect {
@@ -136,9 +75,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
             .map_or_else(|| command.name().to_owned(), |track| command.name_on(track)),
     };
     let (mut filled, mut rows_shaped) = (0, 0);
+    let source = panel.source_steps();
     for (nth, part) in panel.parts.iter().enumerate() {
         let steps = panel.base_steps(part);
-        filled += written(steps, part.range, part.column, &panel.shape_of(nth)).len();
+        let shape = panel.shape_of(nth);
+        let written = written_from(steps, part.range, part.column, &shape, source);
+        // A `Follow` writes every row, rests and all, so its count is of the notes.
+        filled += if shape.kind == FillKind::Follow {
+            written
+                .iter()
+                .filter(|(_, step)| matches!(step.note, Note::On(_)))
+                .count()
+        } else {
+            written.len()
+        };
         rows_shaped += part.range.len();
     }
     let tracks = match panel.parts.len() {
@@ -150,12 +100,22 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         format!("{name}{tracks}{live}: {filled} of {rows_shaped} rows"),
         theme::dim(),
     )];
+    // Room for the longest label, as `Transpose` is longer than the rest.
+    let labels = rows
+        .iter()
+        .map(|row| row.name().len() + 1)
+        .max()
+        .unwrap_or(0)
+        .max(LABEL);
     for row in rows {
         let current = row == panel.row;
         let typing = current.then_some(panel.typing.as_ref()).flatten();
-        let mut line = vec![Span::raw(format!("{:<8}", row.label()))];
+        let mut line = vec![Span::raw(format!("{:<labels$}", row.name()))];
         if current {
-            let text = typing.map_or_else(|| value(panel, row), |text| format!("{text}_"));
+            let text = typing.map_or_else(
+                || row.shown(&panel.shape, &context),
+                |text| format!("{text}_"),
+            );
             let style = theme::cursor(if panel.typing.is_some() {
                 Mode::Insert
             } else {
@@ -163,7 +123,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
             });
             line.push(Span::styled(text, style));
         } else {
-            line.extend(spans(panel, row));
+            line.extend(spans(panel, &context, row));
         }
         lines.push(Line::from(line));
     }
@@ -177,6 +137,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         FillKind::Shuffle if app.mode == Mode::Shape => "r deals again",
         FillKind::Acid if panel.shape.acid.keep => "r rolls the accents, slides and octaves",
         FillKind::Acid => "r rolls a new riff  ~ swap the ends",
+        FillKind::Follow => "L keeps it in step with its source",
         FillKind::List => "~ reverse the list",
         FillKind::Snap => match panel.column {
             ShapeColumn::Note { scale, .. } if scale.on => "To the nearest note in the scale",

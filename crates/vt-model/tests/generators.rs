@@ -10,7 +10,7 @@ use vt_model::project::{load_song, save_song};
 use vt_model::scale::Scale;
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, DEFAULT_RATE, Edge, FillKind, Pink, Shape, ShapeColumn, Values, Walk, Where,
+    Acid, DEFAULT_RATE, Edge, FillKind, Follow, Pink, Shape, ShapeColumn, Values, Walk, Where,
 };
 use vt_model::song::{Lane, Phrase, Song};
 use vt_model::step::{FxCommand, Note, Step};
@@ -75,6 +75,7 @@ fn ramp(from: u8, to: u8, place: Where) -> Shape {
         place,
         seed: 7,
         acid: Acid::default(),
+        follow: Follow::default(),
         walk: Walk::default(),
         pink: Pink::default(),
     }
@@ -685,9 +686,9 @@ fn a_shape_left_as_it_starts_saves_no_acid_settings() {
         all(4),
         ramp(0, 0x40, Where::Notes),
     );
-    let saved = ron::ser::to_string(&*live).unwrap();
-    assert!(!saved.contains("acid"));
-    assert!(!saved.contains("walk") && !saved.contains("pink"));
+    let text = ron::ser::to_string(&*live).unwrap();
+    assert!(!text.contains("acid") && !text.contains("follow"), "{text}");
+    assert!(!text.contains("walk") && !text.contains("pink"), "{text}");
 }
 
 #[test]

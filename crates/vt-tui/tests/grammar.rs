@@ -1442,7 +1442,7 @@ fn panel_keys_move_rows_change_values_and_swap_the_ends() {
     keys(&mut app, "jjjjj");
     assert_eq!(
         app.shape.as_ref().unwrap().row,
-        vt_tui::shaping::ShapeRow::Where
+        vt_model::shape::GenParam::Where
     );
 }
 
@@ -1490,7 +1490,7 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
     keys(&mut app, "j");
     assert_eq!(
         app.shape.as_ref().unwrap().row,
-        vt_tui::shaping::ShapeRow::Amount
+        vt_model::shape::GenParam::Every
     );
     keys(&mut app, "-");
     assert!(matches!(
@@ -1511,8 +1511,8 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
 
 #[test]
 fn a_euclidean_where_spreads_its_hits_among_the_notes_and_rotates() {
+    use vt_model::shape::GenParam;
     use vt_model::shape::Where;
-    use vt_tui::shaping::ShapeRow;
     let (mut app, _rt) = app_with(&["C-3 40 --- --- ---"; 8]);
     keys(&mut app, "lvGS");
     let panel = |app: &App| app.shape.clone().unwrap();
@@ -1524,7 +1524,7 @@ fn a_euclidean_where_spreads_its_hits_among_the_notes_and_rotates() {
     // The tresillo, then Alternate counts among the rows it changes.
     assert_eq!(vel(&app), ["7F", "40", "40", "00", "40", "40", "7F", "40"]);
     keys(&mut app, "j");
-    assert_eq!(panel(&app).row, ShapeRow::Hits);
+    assert_eq!(panel(&app).row, GenParam::Hits);
     keys(&mut app, "==");
     assert_eq!(vel(&app), ["7F", "40", "00", "7F", "40", "00", "7F", "40"]);
     keys(&mut app, "+");
@@ -1534,7 +1534,7 @@ fn a_euclidean_where_spreads_its_hits_among_the_notes_and_rotates() {
         "no more than 8"
     );
     keys(&mut app, "i5<Enter>j");
-    assert_eq!(panel(&app).row, ShapeRow::Rotate);
+    assert_eq!(panel(&app).row, GenParam::Rotate);
     keys(&mut app, "-");
     assert_eq!(
         panel(&app).shape.place,
@@ -1559,14 +1559,14 @@ fn a_euclidean_where_spreads_its_hits_among_the_notes_and_rotates() {
     );
     // Another Where hides Hits and Rotate.
     keys(&mut app, "kKnotes<Enter>");
-    assert!(!panel(&app).rows().contains(&ShapeRow::Hits));
+    assert!(!panel(&app).rows().contains(&GenParam::Hits));
     keys(&mut app, "<Enter>");
     assert_eq!(app.history.undo_depth(), 1);
 }
 
 #[test]
 fn the_transforms_rework_the_values_there_as_one_undo() {
-    use vt_tui::shaping::ShapeRow;
+    use vt_model::shape::GenParam;
     let start = [
         "C-3 10 --- --- ---",
         E,
@@ -1578,7 +1578,7 @@ fn the_transforms_rework_the_values_there_as_one_undo() {
     let panel = |app: &App| app.shape.clone().unwrap();
     keys(&mut app, "Kinvert<Enter>");
     assert_eq!(panel(&app).shape.kind, FillKind::Invert);
-    assert_eq!(panel(&app).rows(), [ShapeRow::Fill, ShapeRow::Where]);
+    assert_eq!(panel(&app).rows(), [GenParam::Fill, GenParam::Where]);
     assert_eq!(vel(&app), ["70", "--", "50", "10"]);
     keys(&mut app, "=");
     assert_eq!(panel(&app).shape.kind, FillKind::Shuffle);
@@ -1600,7 +1600,7 @@ fn the_transforms_rework_the_values_there_as_one_undo() {
     keys(&mut app, "-");
     keys(&mut app, "-");
     assert_eq!(panel(&app).shape.kind, FillKind::Scale);
-    assert!(panel(&app).rows().contains(&ShapeRow::Curve));
+    assert!(panel(&app).rows().contains(&GenParam::Curve));
     keys(&mut app, "ji40ji60");
     assert_eq!(vel(&app), ["40", "--", "4B", "60"]);
     keys(&mut app, "<Enter>");
@@ -1611,12 +1611,12 @@ fn the_transforms_rework_the_values_there_as_one_undo() {
 
 #[test]
 fn a_ramp_holds_for_its_run_and_a_wave_takes_a_rate_in_cycles() {
-    use vt_tui::shaping::ShapeRow;
+    use vt_model::shape::GenParam;
     let (mut app, _rt) = app_with(&["C-3 40 --- --- ---"; 8]);
     keys(&mut app, "lvGS");
     let panel = |app: &App| app.shape.clone().unwrap();
     keys(&mut app, "ji00ji30jjj");
-    assert_eq!(panel(&app).row, ShapeRow::Run);
+    assert_eq!(panel(&app).row, GenParam::Run);
     keys(&mut app, "=");
     assert_eq!(vel(&app), ["00", "00", "10", "10", "20", "20", "30", "30"]);
     keys(&mut app, "kkkkkKwave<Enter>");
@@ -1660,22 +1660,22 @@ fn random_fill_stays_in_range_and_rerolls() {
 
 #[test]
 fn the_panel_fills_with_a_wave_and_shows_only_its_settings() {
-    use vt_tui::shaping::ShapeRow;
+    use vt_model::shape::GenParam;
     let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
     keys(&mut app, "lvGS");
     let panel = |app: &App| app.shape.clone().unwrap();
-    assert!(panel(&app).rows().contains(&ShapeRow::Curve));
+    assert!(panel(&app).rows().contains(&GenParam::Curve));
     // It opens on Fill, and `=` goes on past Random, Walk and 1/f.
-    assert_eq!(panel(&app).row, ShapeRow::Fill);
+    assert_eq!(panel(&app).row, GenParam::Fill);
     keys(&mut app, "====");
     assert_eq!(panel(&app).shape.kind, FillKind::Wave);
     let rows = panel(&app).rows();
-    assert!(!rows.contains(&ShapeRow::Curve));
-    assert!(rows.contains(&ShapeRow::Rate));
-    assert_eq!(panel(&app).row, ShapeRow::Fill, "the cursor stays on Fill");
+    assert!(!rows.contains(&GenParam::Curve));
+    assert!(rows.contains(&GenParam::Rate));
+    assert_eq!(panel(&app).row, GenParam::Fill, "the cursor stays on Fill");
 
     keys(&mut app, "jjj=");
-    assert_eq!(panel(&app).row, ShapeRow::Wave);
+    assert_eq!(panel(&app).row, GenParam::Wave);
     assert_eq!(panel(&app).shape.wave.name(), "Tri");
     keys(&mut app, "j");
     assert_eq!(panel(&app).shape.rate.to_string(), "1/2");
@@ -1711,7 +1711,7 @@ fn the_panel_fills_with_a_wave_and_shows_only_its_settings() {
 
 #[test]
 fn the_panel_alternates_and_a_list_chooses_a_wave() {
-    use vt_tui::shaping::ShapeRow;
+    use vt_model::shape::GenParam;
     let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
     keys(&mut app, "lvGS");
     let panel = |app: &App| app.shape.clone().unwrap();
@@ -1720,7 +1720,7 @@ fn the_panel_alternates_and_a_list_chooses_a_wave() {
     assert_eq!(panel(&app).shape.kind, FillKind::Alternate);
     assert_eq!(vel(&app), ["10", "40", "--", "10"]);
     keys(&mut app, "jjj");
-    assert_eq!(panel(&app).row, ShapeRow::Run);
+    assert_eq!(panel(&app).row, GenParam::Run);
     keys(&mut app, "=");
     assert_eq!(panel(&app).shape.run, 2);
     assert_eq!(vel(&app), ["10", "10", "--", "40"]);
@@ -1760,7 +1760,7 @@ fn dot_keeps_the_two_values_a_wave_or_alternate_moves_between() {
 
 #[test]
 fn a_list_fill_types_its_values_and_goes_round_them() {
-    use vt_tui::shaping::ShapeRow;
+    use vt_model::shape::GenParam;
     let (mut app, _rt) = app_with(&[
         "C-3 10 --- --- ---",
         "C-3 7F --- --- ---",
@@ -1779,12 +1779,12 @@ fn a_list_fill_types_its_values_and_goes_round_them() {
     assert_eq!(panel(&app).shape.kind, FillKind::List);
     assert_eq!(list(&app), "10 40");
     let rows = panel(&app).rows();
-    assert!(!rows.contains(&ShapeRow::From) && !rows.contains(&ShapeRow::To));
+    assert!(!rows.contains(&GenParam::From) && !rows.contains(&GenParam::To));
     assert_eq!(vel(&app), ["10", "40", "--", "10", "40", "10", "40"]);
 
     // The values are typed: two digits make a value, a space ends a shorter one.
     keys(&mut app, "j");
-    assert_eq!(panel(&app).row, ShapeRow::Values);
+    assert_eq!(panel(&app).row, GenParam::Values);
     keys(&mut app, "=");
     assert!(app.status.contains("Type the values"), "{}", app.status);
     assert_eq!(list(&app), "10 40");
@@ -1829,7 +1829,7 @@ fn notes_of(app: &App) -> Vec<String> {
 
 #[test]
 fn shape_on_the_note_column_re_pitches_in_degrees_and_snaps() {
-    use vt_tui::shaping::ShapeRow;
+    use vt_model::shape::GenParam;
     let start = [
         "C-3 40 --- --- ---",
         "C-3 20 --- --- ---",
@@ -1846,7 +1846,7 @@ fn shape_on_the_note_column_re_pitches_in_degrees_and_snaps() {
     // It opens on the first and last notes, and keeps the rhythm, velocities, offs and rests.
     assert_eq!((panel(&app).shape.from, panel(&app).shape.to), (60, 61));
     keys(&mut app, "jj");
-    assert_eq!(panel(&app).row, ShapeRow::To);
+    assert_eq!(panel(&app).row, GenParam::To);
     keys(&mut app, "ic4<Enter>");
     assert_eq!(panel(&app).shape.to, 72);
     assert_eq!(notes_of(&app), ["C-3", "D-3", "---", "OFF", "B-3", "C-4"]);
@@ -1871,7 +1871,7 @@ fn shape_on_the_note_column_re_pitches_in_degrees_and_snaps() {
     // A motif is typed as notes.
     keys(&mut app, "u");
     keys(&mut app, "vGSK/list<Enter>j");
-    assert_eq!(panel(&app).row, ShapeRow::Values);
+    assert_eq!(panel(&app).row, GenParam::Values);
     keys(&mut app, "ic3 d#3 g3<Enter>");
     assert_eq!(notes_of(&app), ["C-3", "D#3", "---", "OFF", "G-3", "C-3"]);
     keys(&mut app, "ic3 q3<Enter>");
@@ -1961,9 +1961,9 @@ fn s_on_an_empty_note_column_writes_notes_in_key_with_the_rhythm_where_picks() {
     ));
     // Every row, a run up the scale an octave from the root, at the typed velocity.
     assert_eq!(panel.shape.place, Where::AllRows);
-    assert_eq!(panel.wheres()[0], Where::AllRows);
-    assert!(!panel.wheres().contains(&Where::Notes));
-    assert!(panel.fills().iter().all(|kind| !kind.reworks()));
+    assert_eq!(panel.context().wheres()[0], Where::AllRows);
+    assert!(!panel.context().wheres().contains(&Where::Notes));
+    assert!(panel.context().fills().iter().all(|kind| !kind.reworks()));
     assert_eq!(
         notes_and_velocities(&app),
         [
@@ -2027,7 +2027,7 @@ fn s_on_a_note_column_with_notes_still_re_pitches_them_and_writes_none() {
     assert!(!panel.generates());
     assert_eq!(panel.verb(), "Reshape");
     assert_eq!(panel.shape.place, vt_model::shape::Where::Notes);
-    assert!(panel.fills().contains(&FillKind::Reverse));
+    assert!(panel.context().fills().contains(&FillKind::Reverse));
     keys(&mut app, "jic3<Enter>jie3<Enter>");
     assert_eq!(
         notes_and_velocities(&app),
@@ -2053,7 +2053,12 @@ fn s_on_an_empty_fx_column_chooses_a_command_then_writes_it() {
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Generate");
     assert_eq!(panel.shape.place, vt_model::shape::Where::AllRows);
-    assert!(!panel.wheres().contains(&vt_model::shape::Where::Commands));
+    assert!(
+        !panel
+            .context()
+            .wheres()
+            .contains(&vt_model::shape::Where::Commands)
+    );
     keys(&mut app, "ji00ji30");
     assert_eq!(
         steps(&app),
@@ -2165,7 +2170,7 @@ fn pitch_classes(app: &App) -> Vec<String> {
 
 #[test]
 fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() {
-    use vt_tui::shaping::ShapeRow;
+    use vt_model::shape::GenParam;
     let (mut app, _rt) = app_with(&[E; 16]);
     app.note_velocity = 0x50;
     let depth = app.history.undo_depth();
@@ -2175,16 +2180,16 @@ fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() 
     assert_eq!(
         panel.rows(),
         [
-            ShapeRow::Fill,
-            ShapeRow::From,
-            ShapeRow::To,
-            ShapeRow::Notes,
-            ShapeRow::Octave,
-            ShapeRow::Density,
-            ShapeRow::Accent,
-            ShapeRow::Slide,
-            ShapeRow::Pitches,
-            ShapeRow::Where,
+            GenParam::Fill,
+            GenParam::From,
+            GenParam::To,
+            GenParam::Notes,
+            GenParam::Octave,
+            GenParam::Density,
+            GenParam::Accent,
+            GenParam::Slide,
+            GenParam::Pitches,
+            GenParam::Where,
         ]
     );
     // A riff over the octave from C-3, an octave either way at most, plain notes at the typed
@@ -2210,7 +2215,7 @@ fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() 
     // Turn the slides up to every note, then keep the pitches: `r` rolls only the accents,
     // slides and octaves, so each note keeps its name and row.
     keys(&mut app, "jjjjjjj");
-    assert_eq!(app.shape.as_ref().unwrap().row, ShapeRow::Slide);
+    assert_eq!(app.shape.as_ref().unwrap().row, GenParam::Slide);
     keys(&mut app, "i100<Enter>");
     assert!(written(&app).iter().all(|step| step.contains("HLD")));
     keys(&mut app, "j=");
@@ -2267,7 +2272,7 @@ fn acid_kept_live_rolls_again_through_gl() {
 
 #[test]
 fn acid_on_notes_keeps_their_rhythm_and_with_keep_their_pitches() {
-    use vt_tui::shaping::ShapeRow;
+    use vt_model::shape::GenParam;
     let start = [
         "C-3 40 --- --- ---",
         E,
@@ -2283,7 +2288,7 @@ fn acid_on_notes_keeps_their_rhythm_and_with_keep_their_pitches() {
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Reshape");
     assert!(
-        !panel.rows().contains(&ShapeRow::Density),
+        !panel.rows().contains(&GenParam::Density),
         "the rhythm is there"
     );
     let rhythm =
@@ -2295,17 +2300,17 @@ fn acid_on_notes_keeps_their_rhythm_and_with_keep_their_pitches() {
     assert_eq!(notes_of(&app)[3], "OFF");
     // Keep the pitches: the ends and notes go, and with no octaves every note is as it was.
     keys(&mut app, "jjjjjjj");
-    assert_eq!(app.shape.as_ref().unwrap().row, ShapeRow::Pitches);
+    assert_eq!(app.shape.as_ref().unwrap().row, GenParam::Pitches);
     keys(&mut app, "=");
     assert_eq!(
         app.shape.as_ref().unwrap().rows(),
         [
-            ShapeRow::Fill,
-            ShapeRow::Octave,
-            ShapeRow::Accent,
-            ShapeRow::Slide,
-            ShapeRow::Pitches,
-            ShapeRow::Where,
+            GenParam::Fill,
+            GenParam::Octave,
+            GenParam::Accent,
+            GenParam::Slide,
+            GenParam::Pitches,
+            GenParam::Where,
         ]
     );
     keys(&mut app, "kkki0<Enter>");
@@ -2315,6 +2320,140 @@ fn acid_on_notes_keeps_their_rhythm_and_with_keep_their_pitches() {
         keys(&mut app, "r");
         assert_eq!(notes_of(&app), notes);
     }
+}
+
+/// A theme of four notes on the first track, for `Follow`.
+const THEME: [&str; 4] = [
+    "C-3 50 --- --- ---",
+    "D#3 7F --- --- ---",
+    "G-3 50 --- --- ---",
+    "F-3 40 --- --- ---",
+];
+
+#[test]
+fn follow_keeps_a_track_in_step_with_another_as_one_undo() {
+    use vt_model::shape::GenParam;
+    use vt_model::shape::Source;
+    let (mut app, _rt) = tracks_with(&[&THEME, &[E; 4], &[E; 4]]);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "WvjjjSKfollow<Enter>");
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.shape.kind, FillKind::Follow);
+    assert_eq!(
+        panel.rows(),
+        [
+            GenParam::Fill,
+            GenParam::Source,
+            GenParam::Transpose,
+            GenParam::Invert,
+            GenParam::Reverse,
+            GenParam::Late,
+            GenParam::CopyFx,
+        ]
+    );
+    // It starts on the phrase beside it on the track before, and can follow the third's too.
+    assert_eq!(panel.shape.follow.source, Source::default());
+    assert_eq!(
+        panel.sources,
+        [
+            Source::default(),
+            Source {
+                track: 2,
+                phrase: 0
+            }
+        ]
+    );
+    assert_eq!(track_steps(&app, 1), THEME);
+    // A fifth up, in semitones with the scale off, and a row late.
+    keys(&mut app, "jji7<Enter>jjj=");
+    assert_eq!(app.shape.as_ref().unwrap().shape.follow.transpose, 7);
+    assert_eq!(
+        track_steps(&app, 1),
+        [
+            "C-4 40 --- --- ---",
+            "G-3 50 --- --- ---",
+            "A#3 7F --- --- ---",
+            "D-4 50 --- --- ---",
+        ]
+    );
+    keys(&mut app, "L");
+    assert_eq!(generators(&app, 1).len(), 1);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert!(app.status.contains("Note←T01:00 is live"), "{}", app.status);
+    // Raising the theme's first note raises the answer's in the same undo step.
+    keys(&mut app, "B=");
+    assert_eq!(track_steps(&app, 0)[0], "C#3 50 --- --- ---");
+    assert_eq!(track_steps(&app, 1)[1], "G#3 50 --- --- ---");
+    assert_eq!(app.history.undo_depth(), depth + 2);
+    keys(&mut app, "u");
+    assert_eq!(track_steps(&app, 0), THEME);
+    assert_eq!(track_steps(&app, 1)[1], "G-3 50 --- --- ---");
+    // `gl` on the answer opens it again on its settings.
+    keys(&mut app, "Wgl");
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.live, Some(0));
+    assert_eq!(panel.shape.follow.rotate, 1);
+    keys(&mut app, "<Esc>");
+    // The next voice starts on the theme, what the answer beside it follows.
+    keys(&mut app, "WvjjjSKfollow<Enter>");
+    assert_eq!(
+        app.shape.as_ref().unwrap().shape.follow.source,
+        Source::default()
+    );
+    keys(&mut app, "<Esc>");
+}
+
+#[test]
+fn follow_isnt_offered_where_it_would_go_round_a_cycle() {
+    let (mut app, _rt) = tracks_with(&[&THEME, &[E; 4]]);
+    keys(&mut app, "WvjjjSKfollow<Enter>L");
+    assert_eq!(generators(&app, 1).len(), 1);
+    // The theme's own track has only the answer to follow, which follows it.
+    keys(&mut app, "BvjjjS");
+    let panel = app.shape.clone().unwrap();
+    assert!(panel.sources.is_empty());
+    assert!(!panel.context().fills().contains(&FillKind::Follow));
+    keys(&mut app, "<Esc>");
+}
+
+#[test]
+fn a_follower_and_its_source_say_so_in_their_titles() {
+    let (mut app, _rt) = tracks_with(&[&THEME, &[E; 4]]);
+    keys(&mut app, "WvjjjSKfollow<Enter>L");
+    let title = |app: &App| -> String {
+        let backend = ratatui::backend::TestBackend::new(160, 8);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| vt_tui::views::phrase::draw(frame, frame.area(), app))
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        (0..160).map(|x| buffer[(x, 0)].symbol()).collect()
+    };
+    assert!(
+        title(&app).contains("\u{f0068} Note←T01:00"),
+        "{}",
+        title(&app)
+    );
+    keys(&mut app, "B");
+    assert!(title(&app).contains("Followed by 1"), "{}", title(&app));
+}
+
+#[test]
+fn removing_the_track_a_follower_reads_applies_it_and_says_so() {
+    let (mut app, _rt) = tracks_with(&[&[E; 4], &THEME]);
+    keys(&mut app, "vjjjSKfollow<Enter>");
+    assert_eq!(
+        app.shape.as_ref().unwrap().shape.follow.source.track,
+        1,
+        "with none before, the track after"
+    );
+    keys(&mut app, "L:track del<Enter>");
+    assert_eq!(app.song().sound_tracks(), 1);
+    assert!(generators(&app, 0).is_empty());
+    assert_eq!(track_steps(&app, 0), THEME);
+    assert!(app.status.contains("T02:00 is gone"), "{}", app.status);
+    keys(&mut app, "u");
+    assert_eq!(generators(&app, 0).len(), 1);
 }
 
 #[test]

@@ -254,6 +254,7 @@ mod tests {
             place: Where::AllRows,
             seed,
             acid,
+            follow: crate::shape::Follow::default(),
             walk: Walk::default(),
             pink: Pink::default(),
         }
