@@ -374,7 +374,9 @@ stopped), for the Mod page's dots, and which step each
 running as Steps plays (`LiveValues::steps`), which its panel lights, and what each one's `Mutate`
 has drawn (`LiveValues::drawn`), which `Space g a` keeps as its values (decision 269). `Handle::latest` merges every
 report since the last frame, so a meter doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
-fit, and jam changes through another.
+fit, and jam changes through another. What each mod slot moved each row's note by on `Pitch`, as it was heard (`NotePitch`, from
+`TrackState::modulate` once the note has started), comes through a third, `NOTE_PITCH_QUEUE` long, which the app keeps by row for
+`Space g A` (decision 270).
 
 **Real-time safety.** Nothing in `Realtime::process` allocates, frees, locks or does I/O. Each
 track's playing state for all `MAX_TRACKS`, the preview voices and the effect slots are made ahead of
@@ -1526,6 +1528,7 @@ These applied to every issue of M1 to M3, as first written. Some rows have been 
 | `RETURN_QUEUE` | 16 | Versions waiting to be freed |
 | `COMMAND_QUEUE` | 64 | Transport, preview and mute messages |
 | `TELEMETRY_QUEUE` | 64 | Playhead and load messages; newest dropped when full |
+| `NOTE_PITCH_QUEUE` | 256 | What the mod slots moved each note's pitch by; newest dropped when full |
 
 **Tuning values** can change by ear with no document update: `SMOOTHING_MS` (10), `DECLICK_FRAMES` (64), `PREVIEW_MS` (250), `FRAME_MS` (33), and `AUTOSAVE_SECONDS` (60).
 
