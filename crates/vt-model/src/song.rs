@@ -1940,6 +1940,13 @@ impl Phrase {
         (index < self.generators.len()).then(|| self.generators.remove(index))
     }
 
+    /// Take a live generator away, and put back what was under its cells.
+    pub fn remove_generator(&mut self, index: usize) -> Option<Generator> {
+        let generator = self.apply_generator(index)?;
+        generator.restore(&mut self.steps);
+        Some(generator)
+    }
+
     /// Follow an edit to the phrase: a live generator whose cells the edit changed by hand is
     /// applied, and the rest rerender where the edit changed what they read or moved their lane.
     /// A `Follow` rerenders from the loop `sources` gives for what it follows.

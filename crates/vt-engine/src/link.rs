@@ -1554,6 +1554,65 @@ mod tests {
     }
 
     #[test]
+    fn macros_moved_by_turns_locks_and_lfos_never_allocate_in_the_callback() {
+        use vt_model::lfo::{Lfo, Rate};
+        use vt_model::macros::{MacroMap, MacroTarget};
+        use vt_model::modulation::{ModKind, ModSlot};
+        use vt_model::song::{Machine, SynthVoice};
+
+        let pool = samples();
+        let turned = |round: usize| {
+            let mut next = song(8, 16);
+            for (index, track) in next.tracks.iter_mut().take(8).enumerate() {
+                if index % 2 == 1 {
+                    track.machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+                }
+                track.inserts[0] = FLANGER;
+                track.mods[4].kind = ModKind::Steps;
+                track.mods[3] = ModSlot::lfo(
+                    SettingId::macro_at(0),
+                    Lfo {
+                        rate: Rate::Steps(1),
+                        ..Lfo::default()
+                    },
+                )
+                .with_depth(0x60);
+                let targets = [
+                    SettingId::CUT,
+                    SettingId::voice(SynthVoice::VirtualAnalog, 0).unwrap(),
+                    SettingId::slot(0, vt_model::settings::Effect::Flanger, 0).unwrap(),
+                    SettingId::mod_own(1, 1).unwrap(),
+                    SettingId::mod_own(4, 7).unwrap(),
+                    SettingId::accumulation(0).unwrap(),
+                    SettingId::arpeggio(1).unwrap(),
+                ];
+                for target in targets {
+                    track.macros[index % 2]
+                        .maps
+                        .push(MacroMap::whole(MacroTarget::Setting(target)));
+                }
+                track.macros[1].value = (round as u16 * 0x0140) % 0xFF00;
+                let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+                for step in (0..16).step_by(3) {
+                    *phrase.step_mut(step).unwrap() = "C-3 -- macro2:C0 --- ---".parse().unwrap();
+                }
+            }
+            next
+        };
+        let engine = Engine::new(48_000, published(turned(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        handle.pump();
+        let mut violations = blocks(&mut rt, 8);
+        for round in 0..200 {
+            handle.publish(published(turned(round), &pool));
+            violations += blocks(&mut rt, 2);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
+    #[test]
     fn a_silent_track_count_of_one_eight_and_sixty_four_all_run() {
         let pool = samples();
         for tracks in [1, 8, 64] {

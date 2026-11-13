@@ -866,6 +866,13 @@ impl App {
                 ..self.scale
             }),
             Pick::ShapeChoice(choice) => self.pick_shape_choice(choice),
+            Pick::GenChoice {
+                phrase,
+                generator,
+                choice,
+            } => self.pick_gen_choice(phrase, generator, choice),
+            Pick::GenColumn(field) => self.pick_gen_column(field, None),
+            Pick::GenCommand { field, command } => self.pick_gen_column(field, Some(command)),
             Pick::ShapeCommand(command) => self.pick_shape_command(command),
             Pick::Guide(guide) => {
                 self.guide = Some(guide);

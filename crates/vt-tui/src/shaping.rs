@@ -13,7 +13,8 @@ use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
     Acid, Context, DEFAULT_RATE, FillKind, Follow, GenParam, MAX_VALUES, Pink, Shape, ShapeColumn,
-    Source, Starts, Values, Walk, Where, default_ends, default_step, open_rows, track_seed,
+    Source, Starts, Values, Walk, Where, default_ends, default_step, is_empty, open_rows,
+    track_seed,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -38,18 +39,6 @@ pub struct Part {
     /// Whether its column was empty, so it's generated rather than reshaped: notes of its own on
     /// the Note column, or the chosen command on an FX column.
     pub generate: bool,
-}
-
-/// Whether a column has nothing on these rows to reshape: no note, or no FX command in its slot.
-fn empty_column(steps: &[Step], range: StepRange, column: ShapeColumn) -> bool {
-    let mut rows = (range.first..=range.last).filter_map(|row| steps.get(row));
-    match column {
-        ShapeColumn::Note { .. } => !rows.any(|step| matches!(step.note, Note::On(_))),
-        ShapeColumn::Fx { slot, .. } => {
-            !rows.any(|step| step.fx.get(slot).is_some_and(|fx| fx.command.is_some()))
-        }
-        _ => false,
-    }
 }
 
 /// The rows a shape fills on a column it generates on. Where it would choose the notes or the
@@ -116,16 +105,6 @@ impl ShapePanel {
         self.base
             .source_phrase(self.shape.follow.source)
             .map(|phrase| phrase.loop_steps())
-    }
-
-    /// Follow a phrase it can, the one it starts on if what it holds isn't one.
-    fn fit_source(&mut self) {
-        let follow = &mut self.shape.follow;
-        if !self.sources.contains(&follow.source)
-            && let Some(source) = self.default_source.or(self.sources.first().copied())
-        {
-            follow.source = source;
-        }
     }
 
     /// How many rows the column could change, which a Euclidean `Where`'s hits are spread over:
@@ -249,6 +228,85 @@ impl ShapePanel {
             .and_then(|track| track.phrases.get(&part.phrase))
             .is_some_and(|phrase| phrase.lane(slot).is_some())
     }
+}
+
+/// A live generator as the Gen page edits it: a copy of it, with its phrase's steps as they'd be
+/// without it, the phrases a `Follow` can read and the loop it reads, and what `x` puts back.
+#[derive(Debug, Clone)]
+pub struct LiveGen {
+    pub generator: Generator,
+    pub under: Vec<Step>,
+    sources: Vec<Source>,
+    source: Option<Vec<Step>>,
+    pub starts: Starts,
+}
+
+impl LiveGen {
+    /// What its settings act on. It always covers rows, as [`App::live_generator`] gives one
+    /// only then.
+    pub fn context(&self) -> Context<'_> {
+        let rows = self.generator.rows().unwrap_or(StepRange::between(0, 0));
+        let source = (self.generator.shape.kind == FillKind::Follow)
+            .then_some(self.source.as_deref())
+            .flatten();
+        self.generator
+            .context(&self.under, &self.sources, source)
+            .unwrap_or(Context {
+                column: self.generator.column,
+                open: open_rows(&self.under, rows, self.generator.column),
+                generates: false,
+                sources: &self.sources,
+                source,
+            })
+    }
+
+    /// A shape it's given, made whole as the panel makes it: a list starts as the two ends, and
+    /// a `Follow` reads a phrase it can.
+    pub fn settle(&self, shape: &mut Shape) {
+        settle(shape, &self.sources, self.starts.source);
+    }
+}
+
+/// A shape made whole after a change: a list starts as the two ends, so it sounds as `Alternate`
+/// did until it's typed, and a `Follow` follows a phrase it can, the one it starts on if what it
+/// holds isn't one.
+fn settle(shape: &mut Shape, sources: &[Source], start: Option<Source>) {
+    if shape.kind == FillKind::List && shape.values.is_empty() {
+        shape.values = Values::new(&[shape.from, shape.to]);
+    }
+    if shape.kind == FillKind::Follow
+        && !sources.contains(&shape.follow.source)
+        && let Some(source) = start.or(sources.first().copied())
+    {
+        shape.follow.source = source;
+    }
+}
+
+/// A live generator's setting as the Gen page shows it, from the song alone, or nothing if
+/// there's no such generator.
+pub fn live_shown(
+    song: &Song,
+    track: &Track,
+    phrase: u32,
+    index: usize,
+    param: GenParam,
+) -> String {
+    let Some(found) = track.phrases.get(&phrase) else {
+        return String::new();
+    };
+    let Some(generator) = found.generators().get(index) else {
+        return String::new();
+    };
+    let under = generator.under(found.steps());
+    let source = generator
+        .source()
+        .and_then(|source| song.source_phrase(source))
+        .map(|followed| followed.loop_steps());
+    generator
+        .context(&under, &[], source)
+        .map_or_else(String::new, |context| {
+            param.shown(&generator.shape, &context)
+        })
 }
 
 /// A live generator's name in the phrase's heading: its column, and for a `Follow` what it
@@ -447,8 +505,8 @@ impl App {
     }
 
     fn open_shape_on(&mut self, selection: Selection, field: Field, command: Option<FxCommand>) {
-        let parts = match self.shape_parts(selection, field, command) {
-            Ok(parts) => parts,
+        let panel = match self.new_panel(selection, field, command) {
+            Ok(panel) => panel,
             Err(Refusal::Reason(reason)) => {
                 self.status = reason.to_owned();
                 return;
@@ -463,6 +521,21 @@ impl App {
                 return;
             }
         };
+        self.leave_selection(selection);
+        self.cursor.field = field;
+        self.shape = Some(panel);
+        self.mode = Mode::Shape;
+        self.preview_shape();
+    }
+
+    /// The panel a selection opens, on its first result, or why it opens none.
+    fn new_panel(
+        &mut self,
+        selection: Selection,
+        field: Field,
+        command: Option<FxCommand>,
+    ) -> Result<ShapePanel, Refusal> {
+        let parts = self.shape_parts(selection, field, command)?;
         let base = Arc::clone(self.song());
         let first = parts[0];
         let steps = base.tracks[first.track]
@@ -493,7 +566,7 @@ impl App {
             ShapeColumn::Note { .. } => self.follow_sources(&base, &parts),
             _ => (Vec::new(), None),
         };
-        let panel = ShapePanel {
+        Ok(ShapePanel {
             selection,
             parts,
             column,
@@ -525,12 +598,38 @@ impl App {
             under: None,
             sources,
             default_source,
+        })
+    }
+
+    /// Make a column of the phrase under the cursor live over its loop, or its lane, with the
+    /// shape the panel opens with, as `vG`, `S` and `L` would, for the Gen page's `Empty`. An
+    /// empty FX column lists the commands first. Says whether it did.
+    pub(crate) fn make_live(&mut self, field: Field, command: Option<FxCommand>) -> bool {
+        let extent = self.extent();
+        let track = self.cursor.track;
+        let selection = Selection {
+            range: StepRange::between(extent.start, extent.start + extent.length.max(1) - 1),
+            scope: Scope::column(field.group()),
+            tracks: TrackSpan::between(track, track),
         };
-        self.leave_selection(selection);
-        self.cursor.field = field;
-        self.shape = Some(panel);
-        self.mode = Mode::Shape;
-        self.preview_shape();
+        let panel = match self.new_panel(selection, field, command) {
+            Ok(panel) => panel,
+            Err(Refusal::Reason(reason)) => {
+                self.status = reason.to_owned();
+                return false;
+            }
+            Err(Refusal::Command(track)) => {
+                let (_, items) =
+                    self.fx_command_items(track, |command| Pick::GenCommand { field, command });
+                self.show_picker(Picker::new("FX commands", items).searching(""));
+                self.status = "Choose the command to write on the empty FX column".to_owned();
+                return false;
+            }
+        };
+        self.apply(&panel.live_action());
+        let name = column_label(panel.parts[0].column);
+        self.status = format!("{name} is live: turn it here, Enter opens the panel on it");
+        true
     }
 
     /// The phrases these parts can follow, and the one to start on: the phrase beside them on the
@@ -726,7 +825,7 @@ impl App {
             phrase,
             range,
             column: generator.column,
-            generate: empty_column(&under, range, generator.column),
+            generate: is_empty(&under, range, generator.column),
         };
         let shape = generator.shape;
         let (sources, default_source) = match part.column {
@@ -812,7 +911,7 @@ impl App {
         let places: Vec<(usize, u32, StepRange, ShapeColumn, bool)> = (tracks.first..=tracks.last)
             .filter_map(|track| {
                 let (phrase, range) = self.place_on(track, range)?;
-                let generate = empty_column(steps_on(track, phrase), range, column);
+                let generate = is_empty(steps_on(track, phrase), range, column);
                 // Notes go through the scale as it is now.
                 let column = match column {
                     ShapeColumn::Note { .. } => ShapeColumn::Note {
@@ -910,17 +1009,11 @@ impl App {
                 }
             }),
             KeyCode::Char('r') => {
-                self.shape_seed = self.shape_seed.wrapping_add(1);
-                let seed = self.shape_seed;
-                self.change_shape(|panel| {
-                    let shape = &mut panel.shape;
-                    // With the pitches kept, only the second die rolls: accents, slides, octaves.
-                    if shape.kind == FillKind::Acid && shape.acid.keep {
-                        shape.acid.roll = shape.acid.roll.wrapping_add(seed).wrapping_add(1);
-                    } else {
-                        shape.seed = panel.base.seed.wrapping_add(seed);
-                    }
-                });
+                let Some(mut shape) = self.shape.as_ref().map(|panel| panel.shape) else {
+                    return;
+                };
+                self.roll(&mut shape);
+                self.change_shape(|panel| panel.shape = shape);
             }
             KeyCode::Char('K') => self.open_shape_picker(),
             KeyCode::Char('i') => self.start_shape_typing(),
@@ -928,17 +1021,66 @@ impl App {
         }
     }
 
+    /// Roll a shape's seed again, as `r` does: with `Acid`'s pitches kept, only its second die,
+    /// the accents, slides and octaves.
+    pub(crate) fn roll(&mut self, shape: &mut Shape) {
+        self.shape_seed = self.shape_seed.wrapping_add(1);
+        let seed = self.shape_seed;
+        if shape.kind == FillKind::Acid && shape.acid.keep {
+            shape.acid.roll = shape.acid.roll.wrapping_add(seed).wrapping_add(1);
+        } else {
+            shape.seed = self.song().seed.wrapping_add(seed);
+        }
+    }
+
+    /// One of the track's live generators, with what its settings act on, if there's one there.
+    pub(crate) fn live_generator(
+        &self,
+        track: usize,
+        phrase: u32,
+        index: usize,
+    ) -> Option<LiveGen> {
+        let song = self.song();
+        let found = song.tracks.get(track)?.phrases.get(&phrase)?;
+        let generator = found.generators().get(index)?.clone();
+        let rows = generator.rows()?;
+        let under = generator.under(found.steps());
+        let generates = is_empty(&under, rows, generator.column);
+        let part = Part {
+            track,
+            phrase,
+            range: rows,
+            column: generator.column,
+            generate: generates,
+        };
+        let (sources, default_source) = match generator.column {
+            ShapeColumn::Note { .. } => self.follow_sources(song, &[part]),
+            _ => (Vec::new(), None),
+        };
+        let source = song
+            .source_phrase(generator.shape.follow.source)
+            .map(|phrase| phrase.loop_steps().to_vec());
+        let ends = if generates {
+            self.generated_ends(generator.column)
+        } else {
+            default_ends(&under, rows, generator.column)
+        };
+        Some(LiveGen {
+            generator,
+            under,
+            sources,
+            source,
+            starts: Starts {
+                ends,
+                source: default_source,
+            },
+        })
+    }
+
     fn change_shape(&mut self, change: impl FnOnce(&mut ShapePanel)) {
         if let Some(panel) = &mut self.shape {
             change(panel);
-            if panel.shape.kind == FillKind::Follow {
-                panel.fit_source();
-            }
-            // A list starts as the two ends, so it sounds as `Alternate` did until it's typed.
-            let shape = &mut panel.shape;
-            if shape.kind == FillKind::List && shape.values.is_empty() {
-                shape.values = Values::new(&[shape.from, shape.to]);
-            }
+            settle(&mut panel.shape, &panel.sources, panel.default_source);
         }
         self.preview_shape();
     }

@@ -9,7 +9,10 @@ use crate::song::Song;
 
 use crate::scale::Scale;
 use crate::selection::StepRange;
-use crate::shape::{FillKind, GenCell, Shape, ShapeColumn, Source, copy_fx, render_into};
+use crate::shape::{
+    Context, FillKind, GenCell, Shape, ShapeColumn, Source, copy_fx, is_empty, open_rows,
+    render_into,
+};
 use crate::step::{FxCommand, FxSlot, Note, Step};
 
 /// Where a live generator writes.
@@ -175,12 +178,31 @@ impl Generator {
     }
 
     /// Put back what's under it.
-    fn restore(&self, steps: &mut [Step]) {
+    pub(crate) fn restore(&self, steps: &mut [Step]) {
         for (offset, cell) in self.under.iter().enumerate() {
             if let Some(step) = steps.get_mut(self.first + offset) {
                 copy(self.column, owns(&self.shape), cell, step);
             }
         }
+    }
+
+    /// What its settings act on, given its phrase's steps as they'd be without it, `under`: its
+    /// column, the rows it could change and whether its column is empty without it, with what a
+    /// `Follow` can read and the loop it reads. It has none while it covers no rows.
+    pub fn context<'a>(
+        &self,
+        under: &[Step],
+        sources: &'a [Source],
+        source: Option<&'a [Step]>,
+    ) -> Option<Context<'a>> {
+        let rows = self.rows()?;
+        Some(Context {
+            column: self.column,
+            open: open_rows(under, rows, self.column),
+            generates: is_empty(under, rows, self.column),
+            sources,
+            source,
+        })
     }
 
     /// The phrase it follows, if it's a `Follow`.

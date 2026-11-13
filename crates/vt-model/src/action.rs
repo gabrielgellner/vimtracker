@@ -140,6 +140,12 @@ pub enum Action {
         phrase: u32,
         generator: usize,
     },
+    /// Take one of a phrase's live generators away, putting back what was under it.
+    RemoveGenerator {
+        track: usize,
+        phrase: u32,
+        generator: usize,
+    },
     /// Write one value across steps.
     Fill {
         track: usize,
@@ -772,6 +778,18 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
         } => {
             phrase_mut(&mut next, *track, *phrase)?
                 .apply_generator(*generator)
+                .ok_or(EditError::NoGenerator {
+                    phrase: *phrase,
+                    generator: *generator,
+                })?;
+        }
+        Action::RemoveGenerator {
+            track,
+            phrase,
+            generator,
+        } => {
+            phrase_mut(&mut next, *track, *phrase)?
+                .remove_generator(*generator)
                 .ok_or(EditError::NoGenerator {
                     phrase: *phrase,
                     generator: *generator,

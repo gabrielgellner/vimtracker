@@ -1773,6 +1773,8 @@ const STEP_KEYS: [&str; STEPS] = [
 /// key songs store them under, and the track's own settings by a name of their own.
 pub fn key(control: Control, track: &Track) -> &'static str {
     match control {
+        Control::Gen { param, .. } => param.key(),
+        Control::NewGenerator(_) => "empty",
         Control::Machine => "machine",
         Control::Sample => "sample",
         Control::Tune => "tune",

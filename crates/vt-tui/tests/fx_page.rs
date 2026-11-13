@@ -25,13 +25,19 @@ fn fx_line(app: &App, slot: usize) -> String {
 }
 
 #[test]
-fn l_reaches_the_fx_page_and_stops_there() {
+fn l_reaches_the_fx_page_and_then_the_gen_page() {
     use vt_tui::track_page::Page;
     let (mut app, _realtime) = on_fx_page();
     assert_eq!(app.track_page.page, Page::Fx);
     press(&mut app, "L");
-    assert_eq!(app.track_page.page, Page::Fx, "it stops at the last");
-    press(&mut app, "H");
+    assert_eq!(
+        app.track_page.page,
+        Page::Gen,
+        "the Gen page comes after it"
+    );
+    press(&mut app, "L");
+    assert_eq!(app.track_page.page, Page::Gen, "it stops at the last");
+    press(&mut app, "HH");
     assert_eq!(app.track_page.page, Page::Mod);
     press(&mut app, "L");
     for slot in [0, 2] {
@@ -487,6 +493,7 @@ fn the_fx_pages_bars_follow_what_plays() {
         mods: Default::default(),
         steps: Default::default(),
         drawn: Default::default(),
+        macros: Default::default(),
     };
     live.inserts[0][..4].copy_from_slice(&[0, 0xFF, 0xFF, 0xE0]);
     app.live = Some(live);

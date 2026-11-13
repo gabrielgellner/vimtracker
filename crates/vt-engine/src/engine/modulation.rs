@@ -3,7 +3,7 @@
 
 use vt_model::constants::{MAX_GROUPS, MAX_TRACKS};
 use vt_model::envelope::Envelope;
-use vt_model::modulation::{ModKind, ModSlot, note_shape_slot};
+use vt_model::modulation::{ModKind, note_shape_slot};
 
 use crate::track_state::{Drawn, LiveValues, NotePitch, TrackState};
 
@@ -163,12 +163,13 @@ impl Engine {
     /// in. Switched out, or with none, its notes have the plain shape a new track's have, from
     /// the next one.
     pub(super) fn note_shape(&self, index: usize) -> Envelope {
-        self.current
-            .song
-            .tracks
-            .get(index)
-            .and_then(|track| track.mods.get(note_shape_slot(&track.mods)?))
+        let Some(track) = self.current.song.tracks.get(index) else {
+            return Envelope::note_shape();
+        };
+        // Its own settings as macros and modulation have them now.
+        note_shape_slot(&track.mods)
+            .map(|at| self.tracks[index].heard_mod(track, at))
             .filter(|slot| !slot.bypassed)
-            .map_or(Envelope::note_shape(), ModSlot::envelope)
+            .map_or(Envelope::note_shape(), |slot| slot.envelope())
     }
 }
