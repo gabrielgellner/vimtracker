@@ -102,12 +102,14 @@ between the ends:
 
 | Row | Does |
 |---|---|
-| Spread | How far they stray. `0%` is one value, low a bell round it, `50%` any value as likely, as it starts, and high a bowl, until `100%` is the two ends alone |
-| Bias | Which way they lean, from `-100`, the low end, to `+100`, the high |
+| Spread | How far they stray, from one value to the two ends |
+| Bias | Which way they lean, `-100` low to `+100` high |
 
-With a narrow Spread, Bias is where the values gather: `0%` with `+50` writes the value three
-quarters of the way up on every row. With a wide one, it's how often they're in the top half, so
-`100%` with `+40` gives the higher end seven rows in ten. `=` and `-` move Spread by one and
+`Spread` `0%` is one value, low a bell round it, `50%` any value as likely, as it starts, and
+high a bowl, until `100%` is the two ends alone. With a narrow Spread, Bias is where the values
+gather: `0%` with `+50` writes the value three quarters of the way up on every row. With a wide
+one, it's how often they're in the top half, so `100%` with `+40` gives the higher end seven
+rows in ten. `=` and `-` move Spread by one and
 Bias by five, and `+` and `_` by ten and twenty-five. A macro can turn both while it plays: a
 wide Spread for a fill, a narrow one for the verse.
 
@@ -234,10 +236,11 @@ On notes, `Random` has two more rows, for lines that land on the notes that matt
 
 | Row | Does |
 |---|---|
-| Steps | How many of the scale's degrees it plays, the most important first. All of them to start |
-| Weights | How often each degree comes, a hex digit each from the root: `0` never, `F` the most |
+| Steps | How many degrees it plays, the most important first |
+| Weights | How often each comes, a hex digit each from the root |
 
-`Steps` lets the degrees through in Marbles' order of importance: the root, then the fifth, the
+`Steps` starts at all of them, and `Weights` at `F` for each, the most; `0`
+is never. `Steps` lets the degrees through in Marbles' order of importance: the root, then the fifth, the
 third, the seventh, the sixth, the second and the fourth. So in C major `Steps` 1 plays only
 Cs, 2 adds the Gs and 3 the Es, an arpeggio, and the panel names them: `3 of 7: C G E`. In a
 minor pentatonic it's the root, the fifth, the minor third, the seventh and the fourth. With
