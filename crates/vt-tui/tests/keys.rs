@@ -877,15 +877,18 @@ fn in_insert_every_note_key_writes_and_held_keys_sound_together() {
     assert_eq!(voices(&mut realtime), 2);
     let_go(&mut app, &mut realtime, "sf");
 
-    // Two keys holding the same note, an octave apart, hold it until both are let go.
-    press(&mut app, "kxa");
+    // Two keys holding the same note, an octave apart, hold it until both are let go: in C
+    // major, the top row's first key is the home row's an octave up.
+    alt(&mut app, "M-s");
+    press(&mut app, "qxa");
     assert_eq!(written_notes(&app)[3], Note::On(72));
     assert_eq!(voices(&mut realtime), 1, "C-4 twice is one note");
-    let_go(&mut app, &mut realtime, "k");
+    let_go(&mut app, &mut realtime, "q");
     assert_eq!(voices(&mut realtime), 1);
     let_go(&mut app, &mut realtime, "a");
     assert_eq!(voices(&mut realtime), 0);
     press(&mut app, "z");
+    alt(&mut app, "M-s");
 
     // Losing focus lets go of the whole chord, and leaving Insert does too.
     press(&mut app, "fd");

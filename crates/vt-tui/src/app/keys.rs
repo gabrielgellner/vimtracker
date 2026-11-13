@@ -234,6 +234,7 @@ impl App {
             self.let_go_of_held_notes();
             self.drop_flags();
             self.last_written = None;
+            self.octave_moved = None;
         }
     }
 
@@ -524,6 +525,7 @@ impl App {
             Cmd::EnterInsert => {
                 self.entry = Entry::default();
                 self.last_written = None;
+                self.octave_moved = None;
                 self.mode = Mode::Insert;
             }
             Cmd::EnterCommand => {

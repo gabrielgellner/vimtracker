@@ -1,14 +1,17 @@
-//! Accent and slide from the Note column in Insert, as a 303's ACCENT and SLIDE keys are pressed
-//! with a note or after it. `'` and `/` tapped after a note switch it on or off on the row just
-//! written, and held while notes are played, write them with it. Neither needs a new notation: an
-//! accent is a velocity of [`ACCENT_VELOCITY`] or more, and a slide is `HLD` on the gate (decision
-//! 46), so both work on every track.
+//! Accent, slide and a one-shot octave from the Note column in Insert, as a 303's ACCENT, SLIDE,
+//! UP and DOWN keys are pressed with a note or after it. `'`, `/`, `k` and `,` tapped after a note
+//! switch it on or off on the row just written, and held while notes are played, write them with
+//! it. None needs a new notation: an accent is a velocity of [`ACCENT_VELOCITY`] or more, a slide
+//! is `HLD` on the gate (decision 46), and an octave is the note itself, so all work on every
+//! track.
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::Action;
 use vt_model::constants::DEFAULT_NOTE_VELOCITY;
 use vt_model::selection::Field;
-use vt_model::step::{ACCENT_VELOCITY, GateKind, MAX_VELOCITY, Note, Step, slid};
+use vt_model::step::{
+    ACCENT_VELOCITY, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step, slid,
+};
 
 use crate::app::{App, Cursor};
 use crate::input::bindings::{Cmd, Resolved};
@@ -23,6 +26,8 @@ pub const ACCENTED: u8 = MAX_VELOCITY;
 pub enum Flag {
     Accent,
     Slide,
+    OctaveUp,
+    OctaveDown,
 }
 
 impl Flag {
@@ -30,6 +35,16 @@ impl Flag {
         match self {
             Self::Accent => "Accent",
             Self::Slide => "Slide",
+            Self::OctaveUp | Self::OctaveDown => "Octave",
+        }
+    }
+
+    /// The octaves it moves a note by, if it's one of the octave keys.
+    fn octaves(self) -> i8 {
+        match self {
+            Self::OctaveUp => 1,
+            Self::OctaveDown => -1,
+            Self::Accent | Self::Slide => 0,
         }
     }
 }
@@ -53,12 +68,23 @@ pub(crate) struct Written {
     pub(crate) cursor: Cursor,
 }
 
+/// A row whose note a tapped octave key moved, how far, and the note it left, so the same key
+/// tapped again puts it back. It's forgotten once the row's note is anything else.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Moved {
+    pub(crate) row: (usize, u32, usize),
+    pub(crate) octaves: i8,
+    pub(crate) note: u8,
+}
+
 impl App {
     /// The flag a key in Insert's Note column puts on, from the binding table.
     pub(crate) fn flag_key(&self, key: Key) -> Option<Flag> {
         match self.table.resolve(Mode::Insert, &[key]) {
             Resolved::Command(Cmd::Accent) => Some(Flag::Accent),
             Resolved::Command(Cmd::Slide) => Some(Flag::Slide),
+            Resolved::Command(Cmd::OctaveUp) => Some(Flag::OctaveUp),
+            Resolved::Command(Cmd::OctaveDown) => Some(Flag::OctaveDown),
             _ => None,
         }
     }
@@ -132,6 +158,17 @@ impl App {
         self.flag_held(Flag::Slide)
     }
 
+    /// The note played now goes in: an octave up while `k` is down, and down while `,` is, unless
+    /// that's out of range. Both down move it neither way.
+    pub(crate) fn flagged_note(&self, midi: u8) -> u8 {
+        let octaves = [Flag::OctaveUp, Flag::OctaveDown]
+            .into_iter()
+            .filter(|flag| self.flag_held(*flag))
+            .map(Flag::octaves)
+            .sum();
+        moved_by(midi, octaves).unwrap_or(midi)
+    }
+
     /// A note was played with these flags' keys down, so each counts as held rather than tapped,
     /// and the status line says what the note got.
     pub(crate) fn use_flags(&mut self) {
@@ -141,10 +178,25 @@ impl App {
         for held in &mut self.held_flags {
             held.used = true;
         }
-        self.status = match (self.flag_held(Flag::Accent), self.flag_held(Flag::Slide)) {
-            (true, true) => "Accent and slide on".to_owned(),
-            (true, false) => "Accent on".to_owned(),
-            _ => "Slide on".to_owned(),
+        let flags = match (self.flag_held(Flag::Accent), self.flag_held(Flag::Slide)) {
+            (true, true) => Some("Accent and slide on"),
+            (true, false) => Some("Accent on"),
+            (false, true) => Some("Slide on"),
+            (false, false) => None,
+        };
+        let octave = match (
+            self.flag_held(Flag::OctaveUp),
+            self.flag_held(Flag::OctaveDown),
+        ) {
+            (true, false) => Some("up"),
+            (false, true) => Some("down"),
+            _ => None,
+        };
+        self.status = match (flags, octave) {
+            (Some(flags), Some(way)) => format!("{flags}, octave {way}"),
+            (Some(flags), None) => flags.to_owned(),
+            (None, Some(way)) => format!("Octave {way}"),
+            (None, None) => "Octave as played".to_owned(),
         };
     }
 
@@ -173,8 +225,17 @@ impl App {
         else {
             return;
         };
-        if !matches!(step.note, Note::On(_)) {
-            self.status = format!("No note here to {}", flag.name().to_lowercase());
+        let Note::On(note) = step.note else {
+            let verb = match flag {
+                Flag::OctaveUp | Flag::OctaveDown => "move",
+                Flag::Accent => "accent",
+                Flag::Slide => "slide",
+            };
+            self.status = format!("No note here to {verb}");
+            return;
+        };
+        if flag.octaves() != 0 {
+            self.toggle_octave(flag.octaves(), (track, phrase, at), step, note);
             return;
         }
         let (value, on) = match flag {
@@ -194,6 +255,7 @@ impl App {
                 let gate = slid(step.gate, on);
                 (Step { gate, ..step }, on)
             }
+            Flag::OctaveUp | Flag::OctaveDown => return,
         };
         self.apply(&Action::SetStep {
             track,
@@ -204,11 +266,49 @@ impl App {
         self.status = format!("{} {}", flag.name(), if on { "on" } else { "off" });
     }
 
+    /// Move a row's note an octave up or down, as one change to undo, unless this key moved it
+    /// last, when it goes back to where it was played.
+    fn toggle_octave(&mut self, by: i8, row: (usize, u32, usize), step: Step, note: u8) {
+        let octaves = self
+            .octave_moved
+            .filter(|moved| moved.row == row && moved.note == note)
+            .map_or(0, |moved| moved.octaves);
+        let to = if octaves == by { 0 } else { octaves + by };
+        let Some(moved) = moved_by(note, to - octaves) else {
+            let way = if by > 0 { "above" } else { "below" };
+            self.status = format!("No octave {way} this note");
+            return;
+        };
+        let (track, phrase, at) = row;
+        self.apply(&Action::SetStep {
+            track,
+            phrase,
+            step: at,
+            value: Step {
+                note: Note::On(moved),
+                ..step
+            },
+        });
+        self.octave_moved = Some(Moved {
+            row,
+            octaves: to,
+            note: moved,
+        });
+        self.status = match to.signum() {
+            1 => "Octave up",
+            -1 => "Octave down",
+            _ => "Octave as played",
+        }
+        .to_owned();
+    }
+
     /// The key a flag is on, as the binding table has it.
     fn flag_key_name(&self, flag: Flag) -> &'static str {
         let cmd = match flag {
             Flag::Accent => Cmd::Accent,
             Flag::Slide => Cmd::Slide,
+            Flag::OctaveUp => Cmd::OctaveUp,
+            Flag::OctaveDown => Cmd::OctaveDown,
         };
         self.table
             .rows()
@@ -231,4 +331,12 @@ impl App {
 fn accented(step: &Step) -> bool {
     step.velocity
         .is_none_or(|velocity| velocity >= ACCENT_VELOCITY)
+}
+
+/// A note some octaves up or down, if that's still in range.
+fn moved_by(note: u8, octaves: i8) -> Option<u8> {
+    let moved = i16::from(note) + 12 * i16::from(octaves);
+    (i16::from(MIN_NOTE)..=i16::from(MAX_NOTE))
+        .contains(&moved)
+        .then_some(moved as u8)
 }

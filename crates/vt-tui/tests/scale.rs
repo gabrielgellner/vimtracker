@@ -13,26 +13,40 @@ mod common;
 use common::*;
 
 #[test]
-fn with_a_scale_the_home_row_goes_up_it_from_the_root() {
+fn with_a_scale_the_degrees_go_up_from_the_root_and_on_along_the_row_above() {
     let (mut app, _realtime) = app();
     command(&mut app, "set root=d");
     command(&mut app, "set scale=dorian");
     assert!(app.scale.on, "setting one turns it on");
     entering_steps_down(&mut app);
-    tap(&mut app, "iasdfghjkl");
+    tap(&mut app, "iasdfghjqwertyu");
     assert_eq!(
         written_notes(&app),
-        [62, 64, 65, 67, 69, 71, 72, 74, 76].map(Note::On)
+        [62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84].map(Note::On)
     );
 }
 
 #[test]
-fn with_a_scale_the_row_above_is_silent_and_note_off_and_octave_still_work() {
+fn a_scale_of_other_than_seven_notes_keeps_counting_along_the_rows() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "set scale=minor-pentatonic");
+    entering_steps_down(&mut app);
+    tap(&mut app, "iasdfghjqwertyu");
+    assert_eq!(
+        written_notes(&app),
+        [60, 63, 65, 67, 70, 72, 75, 77, 79, 82, 84, 87, 89, 91].map(Note::On),
+        "the row above isn't the home row an octave up, but the degrees after it"
+    );
+}
+
+#[test]
+fn with_a_scale_the_other_keys_are_silent_and_note_off_and_octave_still_work() {
     let (mut app, _realtime) = app();
     command(&mut app, "set scale=major");
     entering_steps_down(&mut app);
     let start = app.cursor.step;
-    press(&mut app, "iwetyuop");
+    press(&mut app, "iip;");
+    press(&mut app, ";");
     assert!(written_notes(&app).is_empty());
     assert_eq!(app.cursor.step, start, "and it doesn't move");
     press(&mut app, "1");

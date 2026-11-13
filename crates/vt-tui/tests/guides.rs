@@ -1,8 +1,11 @@
 //! The guides, `Space ?`, and the list of keys, `Space k`.
 
+use std::time::{Duration, Instant};
+
 use ratatui::crossterm::event::KeyCode;
 use vt_model::step::Note;
 use vt_tui::input::mode::Mode;
+use vt_tui::views::help::{POPUP_DELAY, draw_popup};
 
 mod common;
 use common::*;
@@ -84,4 +87,30 @@ fn the_guides_moves_do_what_they_say() {
     let before = app.cursor.step;
     press(&mut app, "ia");
     assert_eq!(app.cursor.step, before);
+}
+
+#[test]
+fn the_space_popup_is_wide_enough_for_every_description() {
+    let (mut app, _realtime) = app();
+    press(&mut app, " ");
+    let later = Instant::now() + Duration::from_secs(1);
+    let rows = app.popup_rows(later, POPUP_DELAY);
+    assert!(rows.iter().any(|(keys, _)| keys == "i"), "{rows:?}");
+    let (width, height) = (163, 42);
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| draw_popup(frame, frame.area(), &app, later))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let screen: Vec<String> = (0..height)
+        .map(|y| (0..width).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect();
+    for (keys, description) in rows {
+        assert!(
+            screen.iter().any(|line| line.contains(description)),
+            "{keys} {description} is cut off:\n{}",
+            screen.join("\n")
+        );
+    }
 }
