@@ -161,6 +161,80 @@ impl Rate {
     }
 }
 
+/// The note lengths a rate goes through on the registry's scale, longest first, so `00` is the
+/// slowest: the doubling bars down to two, then the divisions from a bar to `1/64`.
+const LENGTHS: [u32; DIVISIONS.len() + 6] = {
+    let mut lengths = [0; DIVISIONS.len() + 6];
+    let mut bars = 0;
+    while bars < 6 {
+        lengths[bars] = (MAX_RATE_BARS >> bars) * BAR_TICKS;
+        bars += 1;
+    }
+    let mut at = 0;
+    while at < DIVISIONS.len() {
+        lengths[6 + at] = DIVISIONS[DIVISIONS.len() - 1 - at].1;
+        at += 1;
+    }
+    lengths
+};
+
+/// How many places of the registry's scale a rate's ends span, from `00` to `FF`.
+const SCALE_TOP: f64 = 255.0;
+
+impl Rate {
+    /// Where it is on the registry's `00` to `FF` scale, with a coarse byte and a fine one, for
+    /// macros and modulation to move (decision 301): faster up the scale, as `=` is, in its own
+    /// kind. A note length steps through the lengths `+` and `-` go through, evenly, from 64 bars
+    /// at `00` to `1/64` at `FF`; steps go from 4096 at `00` to 1 at `FF`, and hertz from 0.01 at
+    /// `00` to 100 at `FF`, both evenly in ratio. A length between two is placed at the nearer.
+    pub fn place(self) -> u16 {
+        let along = match self {
+            Self::Note(ticks) => {
+                let off = |length: &u32| (f64::from(*length) / f64::from(ticks.max(1))).ln().abs();
+                let nearest = LENGTHS
+                    .iter()
+                    .position(|length| *length == ticks)
+                    .or_else(|| {
+                        (0..LENGTHS.len())
+                            .min_by(|a, b| off(&LENGTHS[*a]).total_cmp(&off(&LENGTHS[*b])))
+                    })
+                    .unwrap_or(0);
+                nearest as f64 / (LENGTHS.len() - 1) as f64
+            }
+            Self::Steps(steps) => {
+                1.0 - f64::from(steps.clamp(1, MAX_RATE_STEPS)).ln()
+                    / f64::from(MAX_RATE_STEPS).ln()
+            }
+            Self::Hertz(hundredths) => {
+                f64::from(hundredths.clamp(MIN_CENTIHERTZ, MAX_CENTIHERTZ)).ln()
+                    / f64::from(MAX_CENTIHERTZ).ln()
+            }
+        };
+        (along * SCALE_TOP * 256.0).round() as u16
+    }
+
+    /// The rate of the same kind at a place on the registry's scale, with any fine part as the
+    /// fraction, the inverse of [`Rate::place`]: the nearest length, whole number of steps or
+    /// hundredth of a hertz there.
+    #[must_use]
+    pub fn placed(self, value: f32) -> Self {
+        let along = (f64::from(value) / SCALE_TOP).clamp(0.0, 1.0);
+        match self {
+            Self::Note(_) => {
+                Self::Note(LENGTHS[(along * (LENGTHS.len() - 1) as f64).round() as usize])
+            }
+            Self::Steps(_) => {
+                let steps = f64::from(MAX_RATE_STEPS).powf(1.0 - along).round() as u32;
+                Self::Steps(steps.clamp(1, MAX_RATE_STEPS))
+            }
+            Self::Hertz(_) => {
+                let hundredths = f64::from(MAX_CENTIHERTZ).powf(along).round() as u32;
+                Self::Hertz(hundredths.clamp(MIN_CENTIHERTZ, MAX_CENTIHERTZ))
+            }
+        }
+    }
+}
+
 /// A rate as note lengths that can be chosen from a list: divisions, then doubling bars.
 pub fn note_rates() -> Vec<Rate> {
     let bars = [2, 4, 8, 16, 32, MAX_RATE_BARS].map(|bars| bars * BAR_TICKS);
@@ -398,7 +472,8 @@ fn random(key: u64, cycle: i64) -> f32 {
 
 /// How an LFO runs against the track's notes: the mode in its title, the Digitakt's five
 /// (`docs/designs/mod-slots.md` §2, #86). Every one is still worked out from the song's position
-/// and the time since the track's last note, so none is stepped along and a render repeats.
+/// and the time since the track's last note, and from where it was at each change of its rate on
+/// (decision 301), by the song's ticks rather than the blocks, so a render repeats.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LfoMode {
     /// It runs from the song's position, and only playing from the top starts it again.
@@ -730,6 +805,49 @@ mod tests {
         assert_eq!(rate("2hz").jumped(false), rate("1hz"));
         assert_eq!(rate("0.01hz").jumped(false), rate("0.01hz"));
         assert_eq!(rate("60hz").jumped(true), rate("100hz"));
+    }
+
+    #[test]
+    fn a_rate_on_the_registrys_scale_is_faster_up_it_in_its_own_kind() {
+        // The note lengths, evenly from 64 bars to `1/64`, with a new LFO's `1/4` where the
+        // registry's default says.
+        assert_eq!(rate("64 bars").place(), 0);
+        assert_eq!(rate("1/64").place(), 0xFF00);
+        assert_eq!(Lfo::default().rate.place().div_ceil(256), 0x7A);
+        let lengths: Vec<Rate> = note_rates().into_iter().rev().collect();
+        for (at, length) in lengths.iter().enumerate() {
+            assert_eq!(
+                LENGTHS[at],
+                match length {
+                    Rate::Note(ticks) => *ticks,
+                    _ => unreachable!(),
+                }
+            );
+            let place = length.place();
+            assert_eq!(length.placed(f32::from(place) / 256.0), *length, "{length}");
+            if at > 0 {
+                assert!(place > lengths[at - 1].place(), "{length} is faster");
+            }
+        }
+        // A length between two is placed at the nearer, and lands there.
+        assert_eq!(rate("3 bars").place(), rate("4 bars").place());
+        // Steps and hertz evenly in ratio, each staying its own kind.
+        assert_eq!(rate("4096st").place(), 0);
+        assert_eq!(rate("1st").place(), 0xFF00);
+        assert_eq!(rate("0.01hz").place(), 0);
+        assert_eq!(rate("100hz").place(), 0xFF00);
+        assert_eq!(rate("1hz").place(), 0x7F80);
+        for text in ["1st", "7st", "64st", "0.01hz", "0.5hz", "2.5hz", "40hz"] {
+            let rate = rate(text);
+            assert_eq!(rate.placed(f32::from(rate.place()) / 256.0), rate, "{text}");
+        }
+        assert_eq!(rate("7st").placed(0.0), rate("4096st"));
+        assert_eq!(rate("2hz").placed(255.0), rate("100hz"));
+        assert_eq!(
+            rate("1/4").placed(-3.0),
+            rate("64 bars"),
+            "kept to the scale"
+        );
     }
 
     #[test]

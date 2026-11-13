@@ -1586,6 +1586,10 @@ mod tests {
                 }
                 track.inserts[0] = FLANGER;
                 track.mods[4].kind = ModKind::Steps;
+                track.mods[4].destination = Some(SettingId::RES);
+                track.mods[4].depth = 0x40;
+                track.mods[5].destination = Some(SettingId::PAN);
+                track.mods[5].depth = 0x40;
                 track.mods[3] = ModSlot::lfo(
                     SettingId::macro_at(0),
                     Lfo {
@@ -1600,6 +1604,9 @@ mod tests {
                     SettingId::slot(0, vt_model::settings::Effect::Flanger, 0).unwrap(),
                     SettingId::mod_own(1, 1).unwrap(),
                     SettingId::mod_own(4, 7).unwrap(),
+                    // Steps' and an LFO's `Rate`, which keep a running phase (decision 301).
+                    SettingId::mod_own(4, 9).unwrap(),
+                    SettingId::mod_own(5, 9).unwrap(),
                     SettingId::accumulation(0).unwrap(),
                     SettingId::arpeggio(1).unwrap(),
                 ];

@@ -151,7 +151,8 @@ impl SettingId {
                         5 => ", how far a low-pass gate closes the filter",
                         6 => ", how many Steps play",
                         7 => ", the chance a Steps value is drawn again",
-                        _ => ", how Steps go from one to the next",
+                        8 => ", how Steps go from one to the next",
+                        _ => ", how fast an LFO or Steps go",
                     }
             }
             (Owner::Accumulation, 0) => "How far above its note an accumulator goes".to_owned(),
