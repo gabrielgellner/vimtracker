@@ -17,6 +17,16 @@ def constant(find, fallback):
         return fallback
 
 
+def make_note(note):
+    return Live.Clip.MidiNoteSpecification(
+        pitch=int(note["pitch"]),
+        start_time=float(note["start"]),
+        duration=float(note["duration"]),
+        velocity=float(note["velocity"]),
+        mute=False,
+    )
+
+
 class Surface(ControlSurface):
     def __init__(self, c_instance):
         ControlSurface.__init__(self, c_instance)
@@ -27,6 +37,8 @@ class Surface(ControlSurface):
             monitor_off=constant(lambda: Live.Track.Track.monitoring_states.OFF, MONITOR_OFF),
             no_quantization=constant(lambda: Live.Song.Quantization.q_no_q, NO_QUANTIZATION),
         )
+        # A probe's notes, as Live 11 and later take them into a clip (`takes.py`).
+        self._bridge.make_note = make_note
         try:
             self._bridge.start()
         except OSError as error:

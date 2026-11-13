@@ -229,7 +229,9 @@ beside it and `/Library/Arturia/<plugin>/tmp/plugin.pref.xml`, and print their l
 (`## LogInRelease : 0` and so on); u-he's write a cache.
 
 Acid V accents a note from velocity 100 and ours from `0x70`, 112, so the Acid specs play a plain
-note at 99 and an accent at `0x70`, which both sides read the same way. A reference's
+note at 99 and an accent at `0x70`, which both sides read the same way. It slides into a note that
+overlaps the last by 1 ms or more, and plays one that only touches it, or follows a gap, afresh
+(`take.py probe`, [below](#performance-takes)). A reference's
 `accent_from` gives its threshold, so a note's `accent = true` reaches each side at or over its
 own, and `accent = false` under all of them. They also turn Acid V's hiss
 off, `noise_db = -100`, which would otherwise brighten a quiet note's centroid.
@@ -458,6 +460,107 @@ the device under test and a sink recording with `sfrecord~` after it, on one tra
 `udpreceive`, so the recording is written by Max as 32-bit float and doesn't depend on Live's
 session recording. The `.amxd` files would have to be generated from a readable patcher in the
 repo, as Max can't be opened here, which is why Live's own clip and recording API came first.
+
+## Performance takes
+
+A knob swept on its own never meets the others, and a riff played with the knobs moving does
+(#565, after #348 and #349). So the author plays Acid V in Live, recording the notes and every
+knob move into a clip, and `take.py` reads the clip through the bridge, plays the same riff on our
+Acid with the same moves, and compares the two over time:
+
+```sh
+just take export riff          # the clip called riff: out/takes/riff/take.json
+just take render-live riff     # Acid V playing it in Live, silently: acid-v-live.wav
+just take probe-live "Acid V"  # how Acid V on that track takes accents and slides, by output
+just take compare riff         # our song, both sides rendered, and report.md
+```
+
+`just take` builds vimtracker and the song builder, then runs `uv run take.py` here; the first
+three need Live open with the bridge, and `compare` doesn't. It writes into `out/takes/riff/`:
+
+- `take.json`: the clip's notes in beats, with their velocities and lengths, so overlaps show;
+  every parameter of Acid V as it is; and each envelope the clip has, read every 64th of a beat
+  over one pass of the clip, from its start marker to its loop's end;
+- `ours/`, a project `vimtracker` opens, built by `crates/vt-tui/examples/take_song.rs` with the
+  program's own model from `rows.toml`, which `take_rows.py` lays out: the notes on an `Acid`
+  track, nudged off the grid as played, held for their lengths, accents at `7F` and slides as
+  `HLD`; and the knobs that moved in FX lanes, one value a step, gliding from each to the next;
+- `ours.wav`; `acid-v.wav`, Acid V hosted here playing the take's MIDI with its knobs moved along
+  the envelopes a buffer at a time (`take_replay.py`); and `acid-v-live.wav`, Live's own;
+- `report.md`, with `overview.png`, `spectrograms.png`, `balance.png` and `harmonics.png`, and
+  `measures.json` (`take_report.py`).
+
+The report reads each note on both sides where the take has it: its level over its first 60 ms
+and its brightness over its first 40, as the `notes` reports do, its brightness over the whole
+note, and its first eight harmonics every 5 ms. It gives ours less Acid V's, with the take's
+overall level difference taken out, then the gaps by each knob's thirds of the turn the take
+used, by accent and by slide, and the notes we drift most on with the knobs they were played
+with. Over the whole take: the spectrograms side by side and their difference, the long-term
+balance in third octaves, the levels over time, and how long one side's release rings on after
+the other's. It checks accent and slide by output too: how much louder and brighter the accented
+notes are on each side, and how far each slid-into note's pitch still has to go 5 to 25 ms in.
+With Live's render there, that's the side compared, and the replay is checked against it first,
+which says whether the export caught what Live played; without it, the replay is compared.
+
+`just take synthetic NAME` writes a take of its own, four bars at 126 BPM with accents, slides,
+notes played a little off the grid and three knobs moving, so everything after `export` runs
+without Live: `just take synthetic try && just take compare try`, about 20 seconds.
+
+**Acid V's knobs to ours.** Decision 117 fitted our `Cutoff`, `Resonance`, `Env mod`, `Decay` and
+`Accent` to Acid V's so the same share of a knob's turn sounds the same, as `nuance_specs.py` sets
+them, so a take's knob at 0.5 is our `80`, with the fine part for what's between. A knob with no
+envelope stays where it was on both sides. Acid V sounds an octave under the note Live sends at
+its `Osc Pitch` of 0, so ours plays each note 12 semitones down, and `Osc Pitch` moves that.
+What ours can't follow is listed at the report's top: a knob that isn't one of the five, its
+front panel's `Brightness`, `Timbre`, `Time` and `Movement`, which pedalboard finds independent of
+the knobs they sit over, and its distortion, sub oscillator or hiss turned up.
+
+**Accent and slide from Live's MIDI.** `take.py probe` plays Acid V velocities from 1 to 127 a
+note at a time, and pairs of notes a fifth apart from 20 ms apart to 30 ms overlapping, and reads
+the output: an accent is 1.5 dB louder or a quarter octave brighter than the plain notes, and a
+slide is a pitch still 150 cents short of the second note 5 to 25 ms in. On 2026-11-12, Acid V
+on its Default preset with Accent full: every velocity from 100 up accented, about 9 dB louder
+and 1.3 octaves brighter, and none under, with nothing between, as decision 121 has it; and a
+slide from an overlap of 1 ms, while notes that touch, or have any gap, play afresh. A take's
+notes are read the same way: an accent from velocity 100, and a slide where a note runs past the
+next one's start. `probe-live` plays the same notes in Live, from a clip it makes in the track's
+first empty slot and deletes after, and its findings, in `out/takes/acid-v-midi-live.json`, then
+take the place of these.
+
+**The bridge's side** (`live/VimtrackerBridge/takes.py`) has three requests: `take` reads a
+Session View clip, its notes (`Clip.get_notes_extended`) and each parameter's envelope
+(`Clip.automation_envelope(parameter).value_at_time`); `render take` plays it and records the
+track after its devices, as `render` records the source; and `probe take` plays notes from a clip
+it makes. While either plays, the master's fader is at its bottom, so nothing is heard, the track
+is disarmed and Session Record off, so nothing records into the clip, and all three are put back
+after; the recording is taken before the master, so it's the same either way. `render take`
+first enables automation again, as Live's Re-Enable Automation button does, so a knob touched
+since doesn't hold its envelope back. The recording is lined up with the take by its first
+note's onset, to about a millisecond.
+
+### Recording a take
+
+1. In Live, at 48 kHz with 32-bit recordings as the bridge needs ([Setting it up](#setting-it-up)),
+   put Acid V alone on a MIDI track, with nothing after it.
+2. In Acid V, from any preset: turn its **sequencer off**, so a key plays one
+   note; its **effects off**, the FX section bypassed and `Distortion` at 0% dry/wet; its `Sub
+   Osc` and `Noise` all the way down; `Master Volume` at 0 dB if you like, as the report takes
+   the overall level out anyway; and leave `Osc Fine` and `Master Tune` where they load.
+3. **Arm the track and switch Automation Arm on**, the button beside Live's transport.
+4. **Record into an empty Session View clip slot**, not Arrangement View, whose automation a
+   script can't read. Play the riff, unquantized is fine: velocity 100 and up is an accent, and a
+   note held on into the next is a slide. Turn these knobs as you play, on Acid V's panel or a
+   controller mapped to them, and they're followed:
+   - `Cutoff`, `Resonance`, `Envelope Mod`, `Decay` and `Accent`.
+
+   Leave its front panel's `Brightness`, `Timbre`, `Time` and `Movement` alone, as ours has no
+   counterpart; any other parameter that moves is recorded and listed as not followed.
+5. Stop, and give the clip a name of its own, such as `riff`, used by no other clip in the set.
+   The export reads the parameters Live lists for Acid V: if its device view shows none, press
+   `Configure` and turn the five knobs once on Acid V's panel, so Live lists them.
+6. Then `just take export riff`, `just take render-live riff`, `just take probe-live "<track>"`
+   with the track's name, and `just take compare riff`. Renders are silent and take as long as
+   the clip, and the probe about 18 seconds.
 
 ## A spec
 

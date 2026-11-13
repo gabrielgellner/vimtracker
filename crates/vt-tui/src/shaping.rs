@@ -7,12 +7,14 @@ use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, edit};
 use vt_model::generator::{Span, applied};
 use vt_model::lfo::{Shape as Wave, note_rates};
+use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::{
     DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_BEND, MAX_VALUES, Shape, ShapeColumn, Values, WAVES,
     WaveRate, Where, default_ends, open_rows, track_seed,
 };
-use vt_model::song::Song;
+use vt_model::song::{Song, Track};
+use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
 
 use crate::app::{App, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, adjusting_key};
@@ -83,13 +85,37 @@ impl ShapeRow {
 }
 
 /// One track's part of what the panel shapes: the phrase it's on, its rows, and its column, whose
-/// FX command is the first on its own rows.
+/// FX command is the first on its own rows, or the one chosen for a column with none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Part {
     pub track: usize,
     pub phrase: u32,
     pub range: StepRange,
     pub column: ShapeColumn,
+    /// Whether its column was empty, so it's generated rather than reshaped: notes of its own on
+    /// the Note column, or the chosen command on an FX column.
+    pub generate: bool,
+}
+
+/// Whether a column has nothing on these rows to reshape: no note, or no FX command in its slot.
+fn empty_column(steps: &[Step], range: StepRange, column: ShapeColumn) -> bool {
+    let mut rows = (range.first..=range.last).filter_map(|row| steps.get(row));
+    match column {
+        ShapeColumn::Note { .. } => !rows.any(|step| matches!(step.note, Note::On(_))),
+        ShapeColumn::Fx { slot, .. } => {
+            !rows.any(|step| step.fx.get(slot).is_some_and(|fx| fx.command.is_some()))
+        }
+        _ => false,
+    }
+}
+
+/// The rows a shape fills on a column it generates on. Where it would choose the notes or the
+/// commands already there, which an empty column hasn't, it takes every row.
+fn generating(place: Where, column: ShapeColumn) -> Where {
+    match (place, column) {
+        (Where::Notes, ShapeColumn::Note { .. }) | (Where::Commands, _) => Where::AllRows,
+        (place, _) => place,
+    }
 }
 
 /// The open panel. The song underneath it is a preview until `Enter` keeps it.
@@ -168,11 +194,64 @@ impl ShapePanel {
             .map_or(&[], |phrase| phrase.steps())
     }
 
-    /// The shape each part takes: the panel's, with the part's own seed.
+    /// The shape each part takes: the panel's, with the part's own seed, and on a column it
+    /// generates on, every row where the panel chooses the notes or commands there.
     pub fn shape_of(&self, nth: usize) -> Shape {
+        let part = &self.parts[nth];
         Shape {
             seed: track_seed(self.shape.seed, nth),
+            place: if part.generate {
+                generating(self.shape.place, part.column)
+            } else {
+                self.shape.place
+            },
             ..self.shape
+        }
+    }
+
+    /// Whether every part is generated, on a column that was empty.
+    pub fn generates(&self) -> bool {
+        self.parts.iter().all(|part| part.generate)
+    }
+
+    /// What it does, for its heading: generate, reshape, or across tracks, both.
+    pub fn verb(&self) -> &'static str {
+        match (
+            self.generates(),
+            self.parts.iter().any(|part| part.generate),
+        ) {
+            (true, _) => "Generate",
+            (false, true) => "Generate and reshape",
+            (false, false) => "Reshape",
+        }
+    }
+
+    /// The fills it offers. A transform reworks what's there, so it's left out when nothing is.
+    pub fn fills(&self) -> Vec<FillKind> {
+        let generates = self.generates();
+        self.column
+            .fills()
+            .into_iter()
+            .filter(|kind| !(generates && kind.reworks()))
+            .collect()
+    }
+
+    /// The choices of rows. Where nothing is there, the rows already holding a command aren't one.
+    pub fn wheres(&self) -> Vec<Where> {
+        let generates = self.generates();
+        self.column
+            .wheres()
+            .into_iter()
+            .filter(|place| !(generates && *place == Where::Commands))
+            .collect()
+    }
+
+    /// The rows it chooses unless told otherwise: every row where nothing is there.
+    pub fn default_where(&self) -> Where {
+        if self.generates() {
+            Where::AllRows
+        } else {
+            self.column.default_where()
         }
     }
 
@@ -309,7 +388,7 @@ const NAMED_LIST_TEXT: usize = 40;
 /// `10` in hex.
 fn stepped(column: ShapeColumn, value: u8, sign: i16, large: bool) -> u8 {
     let jump = match column {
-        ShapeColumn::Note { scale } if scale.on => {
+        ShapeColumn::Note { scale, .. } if scale.on => {
             let degrees = if large {
                 scale.kind.intervals().len()
             } else {
@@ -335,47 +414,91 @@ fn typed_in_hex(column: ShapeColumn) -> bool {
     !matches!(column, ShapeColumn::Note { .. } | ShapeColumn::Nudge)
 }
 
+/// Why a selection shapes nothing yet.
+enum Refusal {
+    Reason(&'static str),
+    /// An FX column on this track is empty, so the command to write on it is chosen first.
+    Command(usize),
+}
+
 impl App {
-    /// The column a track's rows can fill, or why they can't.
+    /// The column a track's rows can fill, and whether it's empty so it's generated, or why they
+    /// can't. An empty FX column takes the command chosen for it, if one is.
     fn shape_column(
         &self,
-        steps: &[vt_model::step::Step],
+        (index, track): (usize, &Track),
+        steps: &[Step],
         range: StepRange,
         field: Field,
-    ) -> Result<ShapeColumn, &'static str> {
+        command: Option<FxCommand>,
+    ) -> Result<(ShapeColumn, bool), Refusal> {
         if range.len() < 2 {
-            return Err("Select at least 2 rows to shape");
+            return Err(Refusal::Reason("Select at least 2 rows to shape"));
         }
         let rows = || (range.first..=range.last).filter_map(|r| steps.get(r));
-        // A note, its velocity, nudge and length are only shaped where there's a note.
+        let notes = rows().any(|step| matches!(step.note, Note::On(_)));
+        // A note's velocity, nudge and length are only shaped where there's a note.
         let on_notes = |column| {
-            if rows().any(|step| matches!(step.note, vt_model::step::Note::On(_))) {
-                Ok(column)
+            if notes {
+                Ok((column, false))
             } else {
-                Err("There are no notes in the selection")
+                Err(Refusal::Reason("There are no notes in the selection"))
             }
         };
-        match field {
-            Field::Note => on_notes(ShapeColumn::Note { scale: self.scale }),
-            Field::Velocity => on_notes(ShapeColumn::Velocity),
-            Field::Nudge => on_notes(ShapeColumn::Nudge),
-            Field::GateLength => on_notes(ShapeColumn::Length),
-            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => rows()
-                .find_map(|step| step.fx.get(slot).and_then(|fx| fx.command))
-                .map(|command| ShapeColumn::Fx { slot, command })
-                .ok_or("Type an FX command on a row of the selection first"),
-            Field::Gate => Err("Shape works on a gate's length, not its type and pulses"),
+        let (column, generate) = match field {
+            // An empty Note column takes notes of its own, at the velocity notes are typed with.
+            Field::Note => (
+                ShapeColumn::Note {
+                    scale: self.scale,
+                    writes: (!notes).then_some(self.note_velocity),
+                },
+                !notes,
+            ),
+            Field::Velocity => on_notes(ShapeColumn::Velocity)?,
+            Field::Nudge => on_notes(ShapeColumn::Nudge)?,
+            Field::GateLength => on_notes(ShapeColumn::Length)?,
+            Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
+                match rows().find_map(|step| step.fx.get(slot).and_then(|fx| fx.command)) {
+                    Some(command) => (ShapeColumn::Fx { slot, command }, false),
+                    None => match command {
+                        None => return Err(Refusal::Command(index)),
+                        Some(command) if FxCommand::on_track(track).contains(&command) => {
+                            (ShapeColumn::Fx { slot, command }, true)
+                        }
+                        Some(_) => {
+                            return Err(Refusal::Reason("This track has no such FX command"));
+                        }
+                    },
+                }
+            }
+            Field::Gate => {
+                return Err(Refusal::Reason(
+                    "Shape works on a gate's length, not its type and pulses",
+                ));
+            }
+        };
+        if generate && open_rows(steps, range, column) == 0 {
+            return Err(Refusal::Reason("There's nothing to shape here"));
         }
+        Ok((column, generate))
     }
 
     /// What a selection shapes on each track it covers, or why it shapes nothing. A track whose
-    /// rows have nothing to shape is passed over.
-    fn shape_parts(&self, selection: Selection, field: Field) -> Result<Vec<Part>, &'static str> {
+    /// rows have nothing to shape is passed over. An empty FX column on any of them waits for
+    /// its command.
+    fn shape_parts(
+        &self,
+        selection: Selection,
+        field: Field,
+        command: Option<FxCommand>,
+    ) -> Result<Vec<Part>, Refusal> {
         if selection.range.len() < 2 {
-            return Err("Select at least 2 rows to shape");
+            return Err(Refusal::Reason("Select at least 2 rows to shape"));
         }
         if selection.scope.first != selection.scope.last {
-            return Err("Shape works on one column at a time. Select with v");
+            return Err(Refusal::Reason(
+                "Shape works on one column at a time. Select with v",
+            ));
         }
         let song = self.song();
         let mut parts = Vec::new();
@@ -391,33 +514,58 @@ impl App {
                 continue;
             };
             let steps = sound.phrases.get(&phrase).map_or(&[][..], |p| p.steps());
-            match self.shape_column(steps, range, field) {
-                Ok(column) => parts.push(Part {
+            match self.shape_column((track, sound), steps, range, field, command) {
+                Ok((column, generate)) => parts.push(Part {
                     track,
                     phrase,
                     range,
                     column,
+                    generate,
                 }),
-                Err(reason) => {
+                Err(Refusal::Command(track)) => return Err(Refusal::Command(track)),
+                Err(Refusal::Reason(reason)) => {
                     refused.get_or_insert(reason);
                 }
             }
         }
         if parts.is_empty() {
-            Err(refused.unwrap_or("There's nothing to shape here"))
+            Err(Refusal::Reason(
+                refused.unwrap_or("There's nothing to shape here"),
+            ))
         } else {
             Ok(parts)
         }
     }
 
-    /// Open the panel on the selection, and show its first result.
+    /// Open the panel on the selection, and show its first result. An empty FX column lists the
+    /// commands first, to choose the one it writes.
     pub(crate) fn open_shape(&mut self) {
         let selection = self.current_selection();
         let field = self.cursor.field;
-        let parts = match self.shape_parts(selection, field) {
+        self.open_shape_on(selection, field, None);
+    }
+
+    /// Open the panel on the selection, now its empty FX column has its command.
+    pub(crate) fn pick_shape_command(&mut self, command: FxCommand) {
+        if let Some((selection, field)) = self.shape_command.take() {
+            self.open_shape_on(selection, field, Some(command));
+        }
+    }
+
+    fn open_shape_on(&mut self, selection: Selection, field: Field, command: Option<FxCommand>) {
+        let parts = match self.shape_parts(selection, field, command) {
             Ok(parts) => parts,
-            Err(reason) => {
+            Err(Refusal::Reason(reason)) => {
                 self.status = reason.to_owned();
+                return;
+            }
+            Err(Refusal::Command(track)) => {
+                self.leave_selection(selection);
+                self.cursor.field = field;
+                self.shape_command = Some((selection, field));
+                let (_, items) = self.fx_command_items(track, Pick::ShapeCommand);
+                self.show_picker(Picker::new("FX commands", items).searching(""));
+                self.status = "Choose the command to write on the empty FX column".to_owned();
                 return;
             }
         };
@@ -427,12 +575,30 @@ impl App {
             .phrases
             .get(&first.phrase)
             .map_or(&[][..], |p| p.steps());
-        let (from, to) = default_ends(steps, first.range, first.column);
+        let generates = parts.iter().all(|part| part.generate);
+        // Across tracks, a Note column with notes on some offers what re-pitching them does.
+        let column = match first.column {
+            ShapeColumn::Note { scale, .. } if !generates => ShapeColumn::Note {
+                scale,
+                writes: None,
+            },
+            column => column,
+        };
+        let (from, to) = if first.generate {
+            self.generated_ends(first.column)
+        } else {
+            default_ends(steps, first.range, first.column)
+        };
         self.shape_seed = self.shape_seed.wrapping_add(1);
+        let place = if generates {
+            Where::AllRows
+        } else {
+            column.default_where()
+        };
         let panel = ShapePanel {
             selection,
             parts,
-            column: first.column,
+            column,
             shape: Shape {
                 from,
                 to,
@@ -444,7 +610,7 @@ impl App {
                 phase: 0,
                 run: 1,
                 values: Values::default(),
-                place: first.column.default_where(),
+                place,
                 seed: base.seed.wrapping_add(self.shape_seed),
             },
             row: ShapeRow::Fill,
@@ -457,6 +623,22 @@ impl App {
         self.shape = Some(panel);
         self.mode = Mode::Shape;
         self.preview_shape();
+    }
+
+    /// Where a shape on an empty column starts and ends: for notes, an octave up from the scale's
+    /// root, or C with it off, in the octave notes are typed in; and the command's whole range.
+    fn generated_ends(&self, column: ShapeColumn) -> (u8, u8) {
+        match column {
+            ShapeColumn::Note { scale, .. } => {
+                let root = Scale {
+                    root: if scale.on { scale.root } else { 0 },
+                    ..scale
+                };
+                let low = root.degree(0, self.octave).min(MAX_NOTE - 12);
+                (low, low + 12)
+            }
+            column => (column.lowest(), column.highest()),
+        }
     }
 
     /// Show the panel's result, without adding an undo step.
@@ -573,15 +755,19 @@ impl App {
         };
         let base = Arc::clone(self.song());
         let track = self.cursor.track;
-        let generator = &base.tracks[track].phrases[&phrase].generators()[index];
+        let found = &base.tracks[track].phrases[&phrase];
+        let generator = &found.generators()[index];
         let Some(range) = generator.rows() else {
             return;
         };
+        // It generates if its column is empty without it.
+        let under = generator.under(found.steps());
         let part = Part {
             track,
             phrase,
             range,
             column: generator.column,
+            generate: empty_column(&under, range, generator.column),
         };
         let shape = generator.shape;
         self.shape = Some(ShapePanel {
@@ -640,7 +826,8 @@ impl App {
     /// Apply a shape to a range, on each of these tracks. A ramp's or random fill's ends are
     /// chosen again from what's there on the first, a wave or `Alternate` keeps the two values it
     /// moves between, a `List` keeps its list, and `Scale` the two it scales onto. Each track has
-    /// a seed of its own.
+    /// a seed of its own. Each track's column is judged as `S` judges it: an empty one is
+    /// generated on, notes of its own or the same command.
     pub(crate) fn shape_again(
         &mut self,
         range: StepRange,
@@ -648,27 +835,36 @@ impl App {
         column: ShapeColumn,
         shape: Shape,
     ) {
-        // Notes go through the scale as it is now.
-        let column = match column {
-            ShapeColumn::Note { .. } => ShapeColumn::Note { scale: self.scale },
-            column => column,
+        let song = Arc::clone(self.song());
+        let steps_on = |track: usize, phrase: u32| -> &[Step] {
+            song.tracks[track]
+                .phrases
+                .get(&phrase)
+                .map_or(&[][..], |p| p.steps())
         };
-        let places: Vec<(usize, u32, StepRange)> = (tracks.first..=tracks.last)
+        let places: Vec<(usize, u32, StepRange, ShapeColumn, bool)> = (tracks.first..=tracks.last)
             .filter_map(|track| {
                 let (phrase, range) = self.place_on(track, range)?;
-                Some((track, phrase, range))
+                let generate = empty_column(steps_on(track, phrase), range, column);
+                // Notes go through the scale as it is now.
+                let column = match column {
+                    ShapeColumn::Note { .. } => ShapeColumn::Note {
+                        scale: self.scale,
+                        writes: generate.then_some(self.note_velocity),
+                    },
+                    column => column,
+                };
+                Some((track, phrase, range, column, generate))
             })
             .collect();
-        let Some(&(track, phrase, first)) = places.first() else {
+        let Some(&(track, phrase, first, column, generate)) = places.first() else {
             return;
         };
-        let song = Arc::clone(self.song());
-        let steps = song.tracks[track]
-            .phrases
-            .get(&phrase)
-            .map_or(&[][..], |p| p.steps());
         let (from, to) = match shape.kind {
-            FillKind::Ramp | FillKind::Random => default_ends(steps, first, column),
+            FillKind::Ramp | FillKind::Random if generate => self.generated_ends(column),
+            FillKind::Ramp | FillKind::Random => {
+                default_ends(steps_on(track, phrase), first, column)
+            }
             _ => (shape.from, shape.to),
         };
         self.shape_seed = self.shape_seed.wrapping_add(1);
@@ -676,18 +872,25 @@ impl App {
         let mut actions: Vec<Action> = places
             .into_iter()
             .enumerate()
-            .map(|(nth, (track, phrase, range))| Action::Shape {
-                track,
-                phrase,
-                range,
-                column,
-                shape: Shape {
-                    from,
-                    to,
-                    seed: track_seed(seed, nth),
-                    ..shape
+            .map(
+                |(nth, (track, phrase, range, column, generate))| Action::Shape {
+                    track,
+                    phrase,
+                    range,
+                    column,
+                    shape: Shape {
+                        from,
+                        to,
+                        seed: track_seed(seed, nth),
+                        place: if generate {
+                            generating(shape.place, column)
+                        } else {
+                            shape.place
+                        },
+                        ..shape
+                    },
                 },
-            })
+            )
             .collect();
         let action = if actions.len() == 1 {
             actions.remove(0)
@@ -782,7 +985,8 @@ impl App {
         self.change_shape(|panel| {
             let column = panel.column;
             let open = panel.open_rows() as i16;
-            let fills = column.fills();
+            let fills = panel.fills();
+            let wheres = panel.wheres();
             let shape = &mut panel.shape;
             let bend = sign * if large { BEND_JUMP } else { BEND_NUDGE };
             let most = i16::from(MAX_BEND);
@@ -807,13 +1011,12 @@ impl App {
                     shape.run = moved(shape.run as i16, by, 1, MAX_RUN) as u16;
                 }
                 ShapeRow::Where => {
-                    let choices = panel.column.wheres();
                     let same = |choice: &Where| {
                         std::mem::discriminant(choice) == std::mem::discriminant(&shape.place)
                     };
-                    let at = choices.iter().position(same).unwrap_or(0);
-                    let step = if sign > 0 { 1 } else { choices.len() - 1 };
-                    shape.place = choices[(at + step) % choices.len()];
+                    let at = wheres.iter().position(same).unwrap_or(0);
+                    let step = if sign > 0 { 1 } else { wheres.len() - 1 };
+                    shape.place = wheres[(at + step) % wheres.len()];
                 }
                 ShapeRow::Amount => match shape.place {
                     Where::Every(every) => {
@@ -844,10 +1047,18 @@ impl App {
 
     /// Put the current row back to what it started as.
     fn reset_shape_row(&mut self) {
+        let Some(panel) = &self.shape else {
+            return;
+        };
+        let ends = self.generated_ends(panel.parts[0].column);
         self.change_shape(|panel| {
             let first = panel.parts[0];
-            let (from, to) = default_ends(panel.base_steps(&first), first.range, first.column);
-            let default_where = panel.column.default_where();
+            let (from, to) = if first.generate {
+                ends
+            } else {
+                default_ends(panel.base_steps(&first), first.range, first.column)
+            };
+            let default_where = panel.default_where();
             let shape = &mut panel.shape;
             match panel.row {
                 ShapeRow::From => shape.from = from,
@@ -893,7 +1104,7 @@ impl App {
         };
         let (title, items, position): (&'static str, Vec<Item>, usize) = match panel.row {
             ShapeRow::Fill => {
-                let fills = panel.column.fills();
+                let fills = panel.fills();
                 let position = fills
                     .iter()
                     .position(|kind| *kind == panel.shape.kind)
@@ -933,7 +1144,7 @@ impl App {
                 ("Rate", items, position)
             }
             ShapeRow::Where => {
-                let choices = panel.column.wheres();
+                let choices = panel.wheres();
                 let same = |choice: &Where| {
                     std::mem::discriminant(choice) == std::mem::discriminant(&panel.shape.place)
                 };

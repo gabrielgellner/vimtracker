@@ -424,6 +424,8 @@ pub struct App {
     pub(crate) replace_returns_to: Option<SelectionPlace>,
     /// The open shape panel.
     pub shape: Option<ShapePanel>,
+    /// A selection to shape once the command for its empty FX column is chosen, and its field.
+    pub(crate) shape_command: Option<(Selection, Field)>,
     /// The search for a setting under way.
     pub field_jump: Option<FieldJump>,
     /// An effect taken out of a slot with `dd`, for `p` to put somewhere.
@@ -608,6 +610,7 @@ impl App {
             adjustments: Adjustments::default(),
             replace_returns_to: None,
             shape: None,
+            shape_command: None,
             field_jump: None,
             taken_insert: None,
             shape_seed: 0,
