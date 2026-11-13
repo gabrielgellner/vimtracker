@@ -11,7 +11,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{Ladder, Shape, ShapeColumn, mix, targets};
+use super::render::{GenCell, Out, Shaped, chosen};
+use super::{Ladder, Shape, ShapeColumn, mix};
 use crate::constants::{DEFAULT_NOTE_VELOCITY, TICKS_PER_QUARTER, TICKS_PER_STEP};
 use crate::selection::StepRange;
 use crate::step::{ACCENT_VELOCITY, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note, Step, slid};
@@ -112,29 +113,59 @@ fn within(seed: u64, offset: usize, percent: u8) -> bool {
     mix(seed, offset) % 100 < u64::from(percent)
 }
 
+/// A riff's set of notes, held in place: the root twice, unless it's alone, and up to
+/// `MAX_ACID_NOTES - 1` others.
+pub(super) struct Riff {
+    notes: [u8; MAX_ACID_NOTES as usize + 1],
+    len: usize,
+}
+
+impl Riff {
+    pub(super) fn notes(&self) -> &[u8] {
+        &self.notes[..self.len]
+    }
+
+    fn push(&mut self, note: u8) {
+        self.notes[self.len] = note;
+        self.len += 1;
+    }
+}
+
 /// The riff's notes: `from`, its root, then up to `count - 1` others drawn between the two ends,
 /// along the ladder, so in key while the scale is on. The root is listed twice, so it's picked
 /// more often than the others, as most of Vitling's sets hold theirs two to four times.
-pub(super) fn riff(ladder: &Ladder, from: u8, to: u8, count: u8, seed: u64) -> Vec<u8> {
-    let root = usize::from(ladder.step(from));
-    let other = usize::from(ladder.step(to));
+pub(super) fn riff(ladder: &Ladder, from: u8, to: u8, count: u8, seed: u64) -> Riff {
+    let root = ladder.step(from);
+    let other = ladder.step(to);
     let (low, high) = (root.min(other), root.max(other));
-    let mut others: Vec<usize> = (low..=high).filter(|step| *step != root).collect();
+    // The ladder's steps other than the root, at most one for each note.
+    let mut others = [0u8; MAX_NOTE as usize + 1];
+    let mut len = 0;
+    for step in (low..=high).filter(|step| *step != root) {
+        others[len] = step;
+        len += 1;
+    }
     // Fisher and Yates, as far as it needs, from the seed.
-    let wanted = usize::from(count.clamp(1, MAX_ACID_NOTES) - 1).min(others.len());
+    let wanted = usize::from(count.clamp(1, MAX_ACID_NOTES) - 1).min(len);
     for index in 0..wanted {
-        let left = others.len() - index;
+        let left = len - index;
         let pick = index + (mix(seed ^ SET, index) % left as u64) as usize;
         others.swap(index, pick);
     }
-    others.truncate(wanted);
+    let others = &mut others[..wanted];
     others.sort_unstable();
-    let note = |step: usize| ladder.note(step as f64);
-    let mut set = vec![note(root)];
+    let note = |step: u8| ladder.note(f64::from(step));
+    let mut set = Riff {
+        notes: [0; MAX_ACID_NOTES as usize + 1],
+        len: 0,
+    };
+    set.push(note(root));
     if wanted > 0 {
         set.push(note(root));
     }
-    set.extend(others.into_iter().map(note));
+    for step in others {
+        set.push(note(*step));
+    }
     set
 }
 
@@ -161,57 +192,73 @@ fn plain(velocity: u8) -> u8 {
     }
 }
 
-/// The rows an `Acid` fill changes, each with its step as it leaves it. On a column with notes it
-/// plays on every row `Where` chooses; on an empty one, on those the density draws.
-pub(super) fn written(
+/// The cells of the rows an `Acid` fill changes: each a note with its velocity and gate. On a
+/// column with notes it plays on every row `Where` chooses; on an empty one, on those the density
+/// draws.
+pub(super) fn render<F: FnMut(usize, &Shaped)>(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     shape: &Shape,
-) -> Vec<(usize, Step)> {
+    out: &mut Out<'_, F>,
+) {
     let ShapeColumn::Note { scale, writes } = column else {
-        return Vec::new();
+        return;
     };
     let acid = shape.acid;
     let ladder = Ladder::new(scale);
     let set = riff(&ladder, shape.from, shape.to, acid.notes, shape.seed);
+    let set = set.notes();
     let density = f64::from(acid.density.min(100)) / 100.0;
     // The second die: the accents, slides and octaves, which a roll with `keep` changes alone.
     let flags = mix(shape.seed ^ FLAGS ^ acid.roll.rotate_left(29), 0);
-    targets(steps, range, column, shape.place, shape.seed)
-        .into_iter()
-        .filter_map(|row| {
-            let mut step = steps.get(row)?.clone();
-            let offset = row - range.first;
-            if writes.is_some() && unit(shape.seed ^ PLAYS, offset) >= chance(offset, density) {
-                return None;
-            }
-            let picked = set[(mix(shape.seed ^ PICK, offset) % set.len() as u64) as usize];
-            let mut pitch = match step.note {
-                Note::On(note) if acid.keep => note,
-                _ => picked,
-            };
-            if within(flags ^ OCTAVE, offset, acid.octave) {
-                pitch = octaved(pitch, mix(flags ^ UP, offset) & 1 == 0);
-            }
-            step.note = Note::On(pitch);
-            let accent = within(flags ^ ACCENT, offset, acid.accent);
-            let accented = step.velocity.is_none_or(|v| v >= ACCENT_VELOCITY);
-            step.velocity = match (writes, accent) {
-                (_, true) if accented && writes.is_none() => step.velocity,
-                (_, true) => Some(MAX_VELOCITY),
-                (Some(velocity), false) => Some(plain(velocity)),
-                (None, false) if accented => Some(DEFAULT_NOTE_VELOCITY),
-                (None, false) => step.velocity,
-            };
-            if within(flags ^ SLIDE, offset, acid.slide) {
-                step.gate = slid(step.gate, true);
-            } else if step.gate_kind() == GateKind::Hold {
-                step.gate = slid(step.gate, false);
-            }
-            Some((row, step))
-        })
-        .collect()
+    let rows = chosen(
+        steps,
+        range,
+        column,
+        shape.place,
+        shape.seed,
+        out.cells.len(),
+    );
+    for offset in rows.ones() {
+        let row = range.first + offset;
+        let Some(step) = steps.get(row) else {
+            continue;
+        };
+        if writes.is_some() && unit(shape.seed ^ PLAYS, offset) >= chance(offset, density) {
+            continue;
+        }
+        let picked = set[(mix(shape.seed ^ PICK, offset) % set.len() as u64) as usize];
+        let mut pitch = match step.note {
+            Note::On(note) if acid.keep => note,
+            _ => picked,
+        };
+        if within(flags ^ OCTAVE, offset, acid.octave) {
+            pitch = octaved(pitch, mix(flags ^ UP, offset) & 1 == 0);
+        }
+        let accent = within(flags ^ ACCENT, offset, acid.accent);
+        let accented = step.velocity.is_none_or(|v| v >= ACCENT_VELOCITY);
+        let velocity = match (writes, accent) {
+            (_, true) if accented && writes.is_none() => step.velocity,
+            (_, true) => Some(MAX_VELOCITY),
+            (Some(velocity), false) => Some(plain(velocity)),
+            (None, false) if accented => Some(DEFAULT_NOTE_VELOCITY),
+            (None, false) => step.velocity,
+        };
+        let gate = if within(flags ^ SLIDE, offset, acid.slide) {
+            slid(step.gate, true)
+        } else if step.gate_kind() == GateKind::Hold {
+            slid(step.gate, false)
+        } else {
+            step.gate
+        };
+        out.cells[offset] = GenCell::Note {
+            note: Note::On(pitch),
+            velocity,
+            gate,
+        };
+        (out.seen)(row, &Shaped::note(pitch));
+    }
 }
 
 #[cfg(test)]
@@ -267,7 +314,7 @@ mod tests {
     }
 
     fn run(steps: &[Step], column: ShapeColumn, shape: &Shape) -> Vec<(usize, Step)> {
-        written(steps, all(steps), column, shape)
+        crate::shape::written(steps, all(steps), column, shape)
     }
 
     fn pitch(step: &Step) -> u8 {

@@ -5,17 +5,71 @@
 //! the render as it was before `render_into`. `VT_BLESS=1` writes it again after an intended
 //! change to a fill.
 
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use vt_model::lfo::{Rate, Shape as Wave};
+use vt_model::constants::MAX_PHRASE_STEPS;
+use vt_model::lfo::Rate;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, FillKind, Follow, MAX_VALUES, Shape, ShapeColumn, Values, WAVES, WaveRate, Where,
-    written_from,
+    Acid, FillKind, Follow, GenCell, MAX_VALUES, Shape, ShapeColumn, Values, WAVES, WaveRate,
+    Where, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
+
+// The engine's `rt_guard`, as this test is a binary of its own: it counts the allocations on a
+// thread while it's armed, rather than panicking inside the allocator.
+thread_local! {
+    static ARMED: Cell<bool> = const { Cell::new(false) };
+    static VIOLATIONS: Cell<usize> = const { Cell::new(0) };
+}
+
+struct Guarded;
+
+#[global_allocator]
+static GUARD: Guarded = Guarded;
+
+fn note() {
+    let _ = ARMED.try_with(|armed| {
+        if armed.get() {
+            let _ = VIOLATIONS.try_with(|count| count.set(count.get() + 1));
+        }
+    });
+}
+
+unsafe impl GlobalAlloc for Guarded {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        note();
+        unsafe { System.alloc(layout) }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        note();
+        unsafe { System.dealloc(ptr, layout) }
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        note();
+        unsafe { System.realloc(ptr, layout, new_size) }
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        note();
+        unsafe { System.alloc_zeroed(layout) }
+    }
+}
+
+/// Run `f` with allocation forbidden on this thread, and say how many times it allocated anyway.
+fn forbidden<R>(f: impl FnOnce() -> R) -> (R, usize) {
+    let before = VIOLATIONS.with(Cell::get);
+    ARMED.with(|armed| armed.set(true));
+    let out = f();
+    ARMED.with(|armed| armed.set(false));
+    (out, VIOLATIONS.with(Cell::get) - before)
+}
 
 /// SplitMix64, so the cases are the same on every run.
 struct Dice(u64);
@@ -47,7 +101,12 @@ impl Dice {
 }
 
 const CUT: FxCommand = FxCommand::CUT;
-const COMMANDS: [FxCommand; 4] = [FxCommand::CUT, FxCommand::Del, FxCommand::VOL, FxCommand::Ret];
+const COMMANDS: [FxCommand; 4] = [
+    FxCommand::CUT,
+    FxCommand::Del,
+    FxCommand::VOL,
+    FxCommand::Ret,
+];
 const MARKS: [Mark; 3] = [Mark::Lock, Mark::Hold, Mark::Glide];
 const KINDS: [GateKind; 4] = [
     GateKind::Single,
@@ -215,7 +274,9 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         kind,
         wave: dice.pick(&WAVES),
         rate: if dice.chance(50) {
-            WaveRate::Time(Rate::Note(dice.pick(&[120, 240, 480, 960, 1920, 3840, 640])))
+            WaveRate::Time(Rate::Note(
+                dice.pick(&[120, 240, 480, 960, 1920, 3840, 640]),
+            ))
         } else {
             WaveRate::Cycles(1 + dice.below(9) as u16)
         },
@@ -327,20 +388,44 @@ fn hashes(
     found
 }
 
-fn written(case: &Case, column: ShapeColumn) -> Vec<(usize, Step)> {
-    written_from(
+/// The rows `render_into` writes, each with its step as its cell leaves it.
+fn rendered(case: &Case, column: ShapeColumn) -> Vec<(usize, Step)> {
+    let mut cells = vec![GenCell::Pitch(0); case.range.len()];
+    render_into(
         &case.steps,
         case.range,
         column,
         &case.shape,
         case.source.as_deref(),
-    )
+        &mut cells,
+    );
+    let written = cells
+        .into_iter()
+        .enumerate()
+        .filter(|(_, cell)| *cell != GenCell::Under)
+        .map(|(offset, cell)| {
+            let row = case.range.first + offset;
+            let mut step = case.steps[row].clone();
+            cell.apply(column, &mut step);
+            (row, step)
+        })
+        .collect();
+    // The edit thread's wrapper writes the same.
+    let wrapped = written_from(
+        &case.steps,
+        case.range,
+        column,
+        &case.shape,
+        case.source.as_deref(),
+    );
+    assert_eq!(written, wrapped);
+    written
 }
 
 #[test]
 fn every_fill_writes_what_it_wrote_before_on_every_column() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/renders.txt");
-    let found = hashes(written);
+    let found = hashes(rendered);
     // Every fill a column offers writes something over its cases, so each hash means something.
     for kind in FillKind::ALL {
         for (name, column) in columns(&mut Dice(0)) {
@@ -377,4 +462,59 @@ fn every_fill_writes_what_it_wrote_before_on_every_column() {
         changed.is_empty() && saved.len() == found.len(),
         "these write something else: {changed:?}; run with VT_BLESS=1 if that was intended"
     );
+}
+
+/// A cell stays small, as the engine keeps one for each row of a moving generator's span: a whole
+/// phrase of them is 128 KB. A `Follow` copying FX, with its three slots, is the largest.
+#[test]
+fn a_cell_is_at_most_32_bytes() {
+    assert!(size_of::<GenCell>() <= 32, "{}", size_of::<GenCell>());
+}
+
+/// The guard sees an allocation, which is the only way to trust a zero from it.
+#[test]
+fn the_guard_notices_an_allocation() {
+    let (made, count) = forbidden(|| vec![0u8; 64]);
+    assert!(!made.is_empty());
+    assert!(count > 0, "the guard didn't see an obvious allocation");
+}
+
+#[test]
+fn every_fill_renders_on_every_column_without_allocating() {
+    let mut dice = Dice(0xA110C);
+    let mut cells = vec![GenCell::Under; MAX_PHRASE_STEPS];
+    for kind in FillKind::ALL {
+        for (name, column) in columns(&mut dice) {
+            // The longest phrase there is, and short ones, each `Where` among them.
+            let cases: Vec<Case> = (0..8)
+                .map(|nth| {
+                    let mut case = case(&mut dice, kind, column);
+                    if nth < 2 {
+                        case.steps = steps(&mut dice, MAX_PHRASE_STEPS);
+                        case.range = StepRange::between(0, MAX_PHRASE_STEPS - 1);
+                    }
+                    if nth % 4 == 3 {
+                        case.shape.place = Where::Euclid {
+                            hits: 1 + dice.below(64) as u16,
+                            rotate: dice.below(64) as u16,
+                        };
+                    }
+                    case
+                })
+                .collect();
+            let ((), count) = forbidden(|| {
+                for case in &cases {
+                    render_into(
+                        &case.steps,
+                        case.range,
+                        column,
+                        &case.shape,
+                        case.source.as_deref(),
+                        &mut cells[..case.range.len()],
+                    );
+                }
+            });
+            assert_eq!(count, 0, "{} on {name} allocated", kind.name());
+        }
+    }
 }
