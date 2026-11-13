@@ -97,7 +97,10 @@ past the end of the list, as in Vim, so the last rows can sit in the middle or a
 Any other letter starts a search with itself: on Machine, `K` then `pl` finds `Plaits`.
 A name that starts with one of the keys above, such as `ladder` or `zap`, needs `/` first. A
 search looks through every category, ranks the best match first, shows each match's
-category beside it, and picks out the letters it matched. Digits then `Enter` choose by
+category beside it, and picks out the letters it matched. Each word of a search matches on
+its own, so `pi sc` finds `Pitch in scale`. A search looks through what each item means as
+well as its name, but a name comes first: in a Steps slot's modes, `note` finds `Note`
+before `Trig`, whose meaning says `note`. Digits then `Enter` choose by
 number, as for a chain or a phrase. The tracks and the FX commands open on their search
 instead, as they're usually found by name. `Esc` goes from the search to the list, keeping
 what it found so `j`, `k` and `zz` move through it, as `Esc` leaves Insert mode, and a second

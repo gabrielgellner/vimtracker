@@ -687,8 +687,13 @@ impl Picker {
             (self.rows, self.matched) = self.tree_rows();
         } else if self.is_searching() {
             let haystacks: Vec<String> = self.items.iter().map(Item::haystack).collect();
-            let haystacks: Vec<&str> = haystacks.iter().map(String::as_str).collect();
-            let (rows, matched) = rank_with_positions(&haystacks, &self.query)
+            let texts: Vec<(&str, &str)> = self
+                .items
+                .iter()
+                .zip(&haystacks)
+                .map(|(item, haystack)| (item.label.as_str(), haystack.as_str()))
+                .collect();
+            let (rows, matched) = rank_with_positions(&texts, &self.query)
                 .into_iter()
                 .map(|(item, positions)| (Row::Item(item), positions))
                 .unzip();
@@ -895,36 +900,68 @@ impl Picker {
 /// The positions of the labels that match, best first. The order they came in breaks ties, so a
 /// list in order of recent use keeps that order, and an empty search keeps every label.
 pub fn rank(labels: &[&str], needle: &str) -> Vec<usize> {
-    rank_with_positions(labels, needle)
+    let texts: Vec<(&str, &str)> = labels.iter().map(|label| (*label, *label)).collect();
+    rank_with_positions(&texts, needle)
         .into_iter()
         .map(|(at, _)| at)
         .collect()
 }
 
-/// [`rank`], with where in each label its matched letters are, counted in characters.
-pub fn rank_with_positions(labels: &[&str], needle: &str) -> Vec<(usize, Vec<u32>)> {
+/// [`rank`], for items found by more than their name: each is its name, then all the text a
+/// search looks through, which starts with the name, as an item's name, meaning and category do.
+/// Each word of the search matches on its own, its letters in order, so `pi sc` finds `Pitch in
+/// scale`. A name the search is, then one it starts, then one all its words are in, come before
+/// a match that needs the rest, so `note` takes `Note` before `Trig`, whose meaning says `note`.
+/// With where in each text its matched letters are, counted in characters.
+pub fn rank_with_positions(texts: &[(&str, &str)], needle: &str) -> Vec<(usize, Vec<u32>)> {
     if needle.trim().is_empty() {
-        return (0..labels.len()).map(|at| (at, Vec::new())).collect();
+        return (0..texts.len()).map(|at| (at, Vec::new())).collect();
     }
     let mut matcher = Matcher::new(Config::DEFAULT);
     let pattern = Pattern::parse(needle.trim(), CaseMatching::Ignore, Normalization::Smart);
+    let words = |text: &str| {
+        text.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+    };
+    let searched = words(needle);
     let mut buffer = Vec::new();
-    let mut scored: Vec<(u32, usize, Vec<u32>)> = labels
+    let mut found = |text: &str| {
+        let mut positions = Vec::new();
+        let score = pattern.indices(
+            Utf32Str::new(text, &mut buffer),
+            &mut matcher,
+            &mut positions,
+        )?;
+        positions.sort_unstable();
+        positions.dedup();
+        Some((score, positions))
+    };
+    // How good a match is, best first: the name itself, the start of the name, the name, the rest.
+    let mut scored: Vec<(u8, u32, usize, Vec<u32>)> = texts
         .iter()
         .enumerate()
-        .filter_map(|(at, label)| {
-            let haystack = Utf32Str::new(label, &mut buffer);
-            let mut positions = Vec::new();
-            let score = pattern.indices(haystack, &mut matcher, &mut positions)?;
-            positions.sort_unstable();
-            positions.dedup();
-            Some((score, at, positions))
+        .filter_map(|(at, (name, text))| {
+            if let Some((score, positions)) = found(name) {
+                let name = words(name);
+                let tier = if name == searched {
+                    0
+                } else if name.starts_with(&searched) {
+                    1
+                } else {
+                    2
+                };
+                return Some((tier, score, at, positions));
+            }
+            let (score, positions) = found(text)?;
+            Some((3, score, at, positions))
         })
         .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    scored.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)).then(a.2.cmp(&b.2)));
     scored
         .into_iter()
-        .map(|(_, at, positions)| (at, positions))
+        .map(|(_, _, at, positions)| (at, positions))
         .collect()
 }
 
