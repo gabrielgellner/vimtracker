@@ -682,8 +682,8 @@ fn the_track_page_types_lfo_settings() {
     press(&mut app, "-");
     assert_eq!(
         lfo(&app).destination,
-        Some(SettingId::modulator(MOD_SLOTS - 1, 3).unwrap()),
-        "the last for Mod 4 on a sample track: the last slot's deform"
+        SettingId::macro_at(7),
+        "the last for Mod 4 on a sample track: the last macro"
     );
 
     press(&mut app, "0j=");
@@ -743,8 +743,8 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.items().len(),
-        20,
-        "what a sample track has, its Sample, Slice, Start and Length, Pitch in scale, none, and Mod 6's three"
+        32,
+        "what a sample track has, its Sample, Slice, Start and Length, Pitch in scale, none, Mod 6's three, the accumulator's and arpeggio's four, and the eight macros"
     );
     assert_eq!(picker.selected, 0, "what it moves now");
     press(&mut app, "res");
