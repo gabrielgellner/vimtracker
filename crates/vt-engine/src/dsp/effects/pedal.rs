@@ -8,8 +8,11 @@
 //!   gain it gets, the feedback's 51k and `Drive`'s 500k over the 4.7k, is clipped by a pair of
 //!   1N914 diodes across that feedback, with its 51 pF taking off the highs as `Drive` goes up.
 //!   What's clipped is added to the clean sound, so the bass passes clean under clipped mids: the
-//!   Tube Screamer's mid hump. A 723 Hz low-pass, 1k and 220 nF, and the tone stage after it then
-//!   put back as much of the highs as `Tone` asks.
+//!   Tube Screamer's mid hump. A 723 Hz low-pass, 1k and 220 nF, then darkens it, and the tone
+//!   stage after it cuts or lifts the highs from there by as much as `Tone` asks, up to the 15 dB
+//!   its 220R and 1k give either way: at `80` it does nothing, so the highs fall away past the
+//!   mids, as both the circuit and Ableton Live's Pedal in its Overdrive mode have them (decision
+//!   266). `Amount`'s taper stays the circuit's log pot, as Pedal's Drive differs from it.
 //! - `Distortion` is an op-amp distortion's, as ElectroSmash's "ProCo RAT Analysis" lays out:
 //!   high gain, then clipping to ground, then a tone low-pass. Its gain, its clip's knee and offset,
 //!   and its level are fitted to Arturia's Dist OPAMP-21, after Tech 21's SansAmp, in its `Modern` mode,
@@ -52,13 +55,18 @@ const OVERDRIVE_DRIVE_POT: f32 = 500_000.0;
 const OVERDRIVE_FEEDBACK_CAPACITOR: f32 = 51e-12;
 /// The low-pass before its tone stage: 1k and 220 nF.
 const OVERDRIVE_TONE_HZ: f32 = 723.0;
-/// How much of the highs over that the tone stage puts back, from `Tone` at `00` to `FF`: none, to
-/// a little more than were there.
-const OVERDRIVE_MOST_TREBLE: f32 = 1.5;
+/// The tone stage, a treble cut and lift around an op-amp: its 220R and 220 nF to ground, from the
+/// tone pot's wiper, and the 1k in the op-amp's feedback. Turned fully up they lift the highs by
+/// 1 + 1k / 220R, 14.9 dB, from 593 Hz to 3.3 kHz; turned down they cut them as far; in the middle
+/// they do nothing (decision 266).
+const OVERDRIVE_TONE_SHUNT_RESISTOR: f32 = 220.0;
+const OVERDRIVE_TONE_SHUNT_CAPACITOR: f32 = 220e-9;
+const OVERDRIVE_TONE_FEEDBACK_RESISTOR: f32 = 1_000.0;
 /// Where its output's highs roll off.
 const OVERDRIVE_TOP_HZ: f32 = 12_000.0;
 /// Its `Level`, set so a 303 line at about -16 dBFS RMS, as the riff decision 130 fitted it on was,
-/// comes out as loud as it went in at `Amount`'s and `Tone`'s defaults.
+/// comes out as loud as it went in at `Amount`'s and `Tone`'s defaults: within 0.05 dB still with
+/// decision 266's darker tone stage, as most of a 303 line is under its mids.
 const OVERDRIVE_LEVEL: f32 = 0.43;
 
 /// `Distortion`'s gain before it clips, in dB, at `Amount` `00`, and how much more `FF` adds:
@@ -145,8 +153,9 @@ struct Channel {
     high_pass: [f32; 2],
     /// The Tube Screamer's feedback capacitor, at the higher rate.
     feedback: f32,
-    /// Its tone stage's low-pass and its output's.
+    /// Its 723 Hz low-pass, its tone stage's shelf and its output's low-pass.
     tone: f32,
+    shelf: f32,
     top: f32,
     /// `Distortion`'s tone low-pass.
     low_pass: Svf,
@@ -161,6 +170,7 @@ impl Channel {
             && self.high_pass.iter().all(|state| state.abs() < QUIET)
             && self.feedback.abs() < QUIET
             && self.tone.abs() < QUIET
+            && self.shelf.abs() < QUIET
             && self.top.abs() < QUIET
             && self.coupling.abs() < QUIET
     }
@@ -190,7 +200,9 @@ impl Channel {
             x + diode_pair(*held, diodes)
         });
         self.tone += (driven - self.tone) * worked.tone_low_pass;
-        let toned = self.tone + (driven - self.tone) * worked.treble;
+        // The shelf: under it as it was, over it times `treble`.
+        self.shelf += (self.tone - self.shelf) * worked.shelf;
+        let toned = self.shelf + (self.tone - self.shelf) * worked.treble;
         self.top += (toned - self.top) * worked.top;
         self.top * OVERDRIVE_LEVEL / VOLTS_AT_FULL_SCALE
     }
@@ -215,6 +227,7 @@ impl SameBits for Channel {
         // The output's first, as what's most likely to differ.
         self.coupling.same_bits(&other.coupling)
             && self.top.same_bits(&other.top)
+            && self.shelf.same_bits(&other.shelf)
             && self.tone.same_bits(&other.tone)
             && self.feedback.same_bits(&other.feedback)
             && self.high_pass.same_bits(&other.high_pass)
@@ -227,12 +240,14 @@ impl SameBits for Channel {
 #[derive(Debug, Clone, Copy)]
 struct Coefficients {
     /// The Tube Screamer's gain, its diodes' `k`, and its one-poles: the gain branch and feedback
-    /// at the higher rate, and its tone and output at the normal rate.
+    /// at the higher rate, and its tone low-pass, tone shelf and output at the normal rate, with
+    /// the shelf's gain over its corner.
     gain: f32,
     diodes: f32,
     gain_branch: f32,
     feedback: f32,
     tone_low_pass: f32,
+    shelf: f32,
     top: f32,
     treble: f32,
     /// `Distortion`'s gain going in, and its high-passes' one-pole.
@@ -250,8 +265,9 @@ impl Default for Coefficients {
             gain_branch: 0.0,
             feedback: 0.0,
             tone_low_pass: 0.0,
+            shelf: 0.0,
             top: 0.0,
-            treble: 0.0,
+            treble: 1.0,
             drive: 1.0,
             distortion_high_pass: 0.0,
             coupling: 0.0,
@@ -316,7 +332,15 @@ impl Pedal {
         worked.feedback = one_pole(feedback_hz.min(higher * 0.45), higher);
         worked.tone_low_pass = one_pole(OVERDRIVE_TONE_HZ, rate);
         worked.top = one_pole(OVERDRIVE_TOP_HZ.min(rate * 0.45), rate);
-        worked.treble = tone * OVERDRIVE_MOST_TREBLE;
+        // The tone stage: a first-order shelf whose zero and pole sit evenly either side of the
+        // middle of the 593 Hz to 3.3 kHz they span fully up, as far apart as its gain, which goes
+        // evenly in dB from the full cut at `00` to the full lift at `FF`, as Pedal's Treble does.
+        let most = 1.0 + OVERDRIVE_TONE_FEEDBACK_RESISTOR / OVERDRIVE_TONE_SHUNT_RESISTOR;
+        let lifted_hz =
+            1.0 / (TAU * OVERDRIVE_TONE_SHUNT_RESISTOR * OVERDRIVE_TONE_SHUNT_CAPACITOR);
+        let middle_hz = lifted_hz / most.sqrt();
+        worked.treble = most.powf(2.0 * tone - 1.0);
+        worked.shelf = one_pole((middle_hz * worked.treble.sqrt()).min(rate * 0.45), rate);
         // The op-amp distortion.
         worked.drive =
             10_f32.powf((DISTORTION_LEAST_GAIN_DB + amount * DISTORTION_GAIN_RANGE_DB) / 20.0);

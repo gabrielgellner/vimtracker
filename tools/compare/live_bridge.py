@@ -4,11 +4,14 @@ control surface script running inside Live (`live/VimtrackerBridge`, #364).
 Usage: live_bridge.py ping
        live_bridge.py params <device>
        live_bridge.py null
+       live_bridge.py remove
 
 `ping` asks whether Live is answering. `params` loads a device, such as `"Glue Compressor"`, and
 lists its parameters: their names, ranges, what they show and a list's items, which a spec's
 parameters are written with. `null` renders a sweep through the probe with no device, which should
-come back as it went, and says whether it did: the first thing to run once Live is open.
+come back as it went, and says whether it did: the first thing to run once Live is open. `remove`
+deletes the bridge's two tracks from the set and puts back the launch quantization it changed:
+the last thing to run, so the set is left as it was.
 
 A spec names a Live device as a reference:
 
@@ -337,6 +340,7 @@ def main() -> None:
     listing.add_argument("device")
     commands.add_parser("null", help="render a sweep through no device and check it comes back the same")
     commands.add_parser("reload", help="have the bridge read its code again, without restarting Live")
+    commands.add_parser("remove", help="delete the bridge's tracks and put the set back as it was")
     args = parser.parse_args()
     if args.command == "ping":
         answer = request("ping")
@@ -348,6 +352,12 @@ def main() -> None:
         print(f"the bridge read its code again: bridge {answer['bridge']}")
     elif args.command == "null":
         sys.exit(0 if null_check() else 1)
+    elif args.command == "remove":
+        answer = request("remove")
+        removed = ", ".join(answer["removed"]) or "no tracks"
+        print(f"removed {removed} from the set")
+        if answer.get("quantization") is not None:
+            print("and put its launch quantization back as it was")
 
 
 if __name__ == "__main__":

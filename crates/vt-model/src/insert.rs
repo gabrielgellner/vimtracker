@@ -52,7 +52,7 @@ pub enum DistortType {
     Crush,
     Down,
     /// A Tube Screamer's: the mids clipped softly by diodes in an op-amp's feedback and added back
-    /// to the clean sound, then a tone control.
+    /// to the clean sound, then its treble cut and lift, which does nothing at `Tone` `80`.
     Overdrive,
     /// An op-amp distortion's, as a RAT's or a SansAmp's: high gain and hard clipping, then a tone
     /// low-pass.
