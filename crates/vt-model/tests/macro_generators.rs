@@ -14,7 +14,8 @@ use vt_model::macros::{GenColumn, MacroMap, MacroTarget};
 use vt_model::project::{load_song, save_song};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Shape, ShapeColumn, Values, Walk, Where,
+    Acid, Bits, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Shape, ShapeColumn, Values, Walk,
+    Where,
 };
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
@@ -66,6 +67,7 @@ fn tresillo() -> Shape {
         follow: Follow::default(),
         walk: Walk::default(),
         pink: Pink::default(),
+        bits: Bits::default(),
     }
 }
 
