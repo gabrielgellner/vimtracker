@@ -6,11 +6,16 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ratatui::buffer::Buffer;
+use ratatui::crossterm::event::KeyCode;
 use ratatui::style::Color;
 use vt_engine::engine::Engine;
 use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
+use vt_engine::render::render_frames;
+use vt_model::action::Action;
+use vt_model::bank::{BankEntry, ContentHash};
 use vt_model::insert::Insert;
+use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::selection::Motion;
 use vt_model::settings::{FOUR_OP_SHARED, SettingId};
@@ -18,6 +23,7 @@ use vt_model::song::{Machine, Song, SynthVoice, Track, TrackKind};
 use vt_tui::app::App;
 use vt_tui::input::bindings::Cmd;
 use vt_tui::input::mode::Mode;
+use vt_tui::theme;
 use vt_tui::track_page::{Control, DeviceCursor, Outcome, Page, TrackPage};
 use vt_tui::views::status::column_name;
 
@@ -713,4 +719,141 @@ fn the_masters_limiter_is_a_toggle_after_its_level_and_switches_the_songs_with_u
         let mut places = devices[0].rows().flatten();
         assert!(!places.any(|place| place == Some(Control::Limiter)));
     }
+}
+
+/// How long the ramp a sampler tunes lasts, in frames: longer than anything here plays.
+const RAMP: usize = 192_000;
+
+/// A song of one sampler playing bank entry `01`, a ramp from silence up, with notes that start
+/// and stop at once, and its pool.
+fn ramp_song(rows: &[&str]) -> (Song, Arc<SamplePool>) {
+    let mut song = Song::new(1);
+    song.limiter = false;
+    let mut pool = SamplePool::default();
+    let ramp = (0..RAMP)
+        .map(|at| at as f32 / RAMP as f32)
+        .map(|value| [value, value])
+        .collect();
+    pool.insert("ramp.wav", SampleData { frames: ramp });
+    song.bank
+        .set(1, Some(BankEntry::of_file("ramp.wav", ContentHash(0x5A))));
+    let track = &mut song.tracks[0];
+    track.machine = Machine::Sampler;
+    track.set_setting(SettingId::SAMPLE, 1);
+    track.mods[0].adsr.attack_ms = 0;
+    track.mods[0].adsr.release_ms = 0;
+    let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
+    for (at, text) in rows.iter().enumerate() {
+        *phrase.step_mut(at).unwrap() = text.parse().unwrap();
+    }
+    (song, Arc::new(pool))
+}
+
+/// An app on the Sound page of a song.
+fn on_sound_page(song: Song, samples: Arc<SamplePool>) -> (App, Realtime) {
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, " 4");
+    (app, realtime)
+}
+
+/// What the Machine device shows from a setting's name to its frame, on the line it's on.
+fn machine_cell(app: &mut App, name: &str) -> String {
+    let lines = lines(&full_screen(app));
+    let (top, _) = titles(&lines)[0].clone();
+    let needle = format!("  {name} ");
+    let device = &lines[top + 1..top + 8];
+    let line = device
+        .iter()
+        .find(|line| line.contains(&needle))
+        .unwrap_or_else(|| panic!("no {name} in\n{}", device.join("\n")));
+    let at = line.find(&needle).unwrap() + 2;
+    line[at..].split('│').next().unwrap().trim_end().to_owned()
+}
+
+/// Where some text starts on the screen, by the cell.
+fn cell_of(buffer: &Buffer, text: &str) -> (u16, u16) {
+    lines(buffer)
+        .iter()
+        .enumerate()
+        .find_map(|(row, line)| {
+            let at = line.find(text)?;
+            Some((line[..at].chars().count() as u16, row as u16))
+        })
+        .unwrap_or_else(|| panic!("no {text} on screen"))
+}
+
+#[test]
+fn a_samplers_machine_shows_the_samples_tune_and_cents_and_whose_tune_it_is() {
+    let (mut song, samples) = ramp_song(&[]);
+    let mut sliced = song.bank.get(1).cloned().unwrap();
+    sliced.edit.points.reslice(&[0, 1000, 2000, 3000]);
+    sliced.edit.points.slices[2].over.tune = Some(3);
+    sliced.edit.play.cents = -20;
+    song.bank.set(1, Some(sliced));
+    song.tracks[0].set_setting(SettingId::SLICE, 2);
+    let (mut app, _realtime) = on_sound_page(song, samples);
+    // In the third column, after `Start` and `Length`, and the slice's own in the slices' colour.
+    assert_eq!(machine_cell(&mut app, "Tune"), "Tune      +3 st   slice 02");
+    assert_eq!(machine_cell(&mut app, "Cents"), "Cents     -20 ct");
+    let buffer = full_screen(&mut app);
+    let (tune, row) = cell_of(&buffer, "Tune      +3");
+    let (start, start_row) = cell_of(&buffer, "Start ");
+    assert!(tune > start && row == start_row, "beside Start");
+    let (x, y) = cell_of(&buffer, "slice 02");
+    assert_eq!(buffer[(x, y)].fg, theme::MAUVE);
+    // On a slice without its own, it's the sample's.
+    app.apply(&Action::SetTrackSetting {
+        track: 0,
+        setting: SettingId::SLICE,
+        value: 1,
+    });
+    assert_eq!(machine_cell(&mut app, "Tune"), "Tune      +0 st   sample");
+    // With no sample there's nothing to tune, and it's dim.
+    app.apply(&Action::SetTrackSetting {
+        track: 0,
+        setting: SettingId::SAMPLE,
+        value: 0,
+    });
+    assert_eq!(machine_cell(&mut app, "Tune"), "Tune      --");
+    let buffer = full_screen(&mut app);
+    let (x, y) = cell_of(&buffer, "Tune      --");
+    assert_eq!(buffer[(x + 10, y)].fg, theme::dim().fg.unwrap());
+}
+
+#[test]
+fn a_note_plays_relative_to_the_tune_the_sound_page_gives_its_sample() {
+    let render = |song: Song, samples: &Arc<SamplePool>| {
+        render_frames(
+            Arc::new(Published::new(Arc::new(song), Arc::clone(samples))),
+            48_000,
+            6000,
+        )
+    };
+    let (plain, samples) = ramp_song(&["C-3 -- --- --- ---"]);
+    let as_recorded = render(plain, &samples);
+    // An octave down on the Sound page, `C-4` plays as recorded, as `C-3` did.
+    let (song, samples) = ramp_song(&["C-4 -- --- --- ---"]);
+    let (mut app, _realtime) = on_sound_page(song, samples);
+    let track = app.song().tracks[0].clone();
+    app.track_page.move_to(Some(&track), 1, 2);
+    assert_eq!(app.track_control(), Control::Tune);
+    tap(&mut app, "i-12");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.song().bank.get(1).unwrap().edit.play.tune, -12);
+    let tuned = render(Song::clone(app.song()), &app.samples);
+    let at = 3000 * 2;
+    assert!(as_recorded[at] > 0.0);
+    assert!(
+        (tuned[at] - as_recorded[at]).abs() < as_recorded[at] * 0.01,
+        "{} and {}",
+        tuned[at],
+        as_recorded[at]
+    );
+    // Undone, `C-4` is an octave up again, reading the ramp twice as fast.
+    tap(&mut app, "u");
+    let undone = render(Song::clone(app.song()), &app.samples);
+    let ratio = undone[at] / as_recorded[at];
+    assert!((ratio - 2.0).abs() < 0.02, "{ratio}");
 }

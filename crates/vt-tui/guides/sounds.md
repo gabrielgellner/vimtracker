@@ -659,6 +659,42 @@ from where the sample starts playing, so on a reversed sample they count back fr
 its end. An LFO or an envelope can move them, read as each note starts, as an
 Elektron's sample start is. A sample's fade out is for a one-shot, as a looping note
 never reaches its end. `Tempo` loops in time with the song: see **Loop to tempo**.
+The Machine's last column, `Tune` and `Cents`, is the sample's own: see **Tuning a
+sample**.
+
+## Tuning a sample
+
+A sample's pitch comes in three layers, each for its own job, as an MPC's pads,
+the Digitakt's and the Octatrack's samples and Ableton's Simpler have them:
+
+| Layer | Where | For |
+|---|---|---|
+| Its `Tune`, `Cents` | The Machine, the sample page | Tuning it once |
+| The note | Each row | Playing it up and down |
+| The track's `Pitch` | Play, `PTCH`, a mod slot | Transposing, moving it |
+
+Tune a sample once, so `C-3` is in tune with the song: a kick tuned to the key, or
+a vocal chop a few cents flat brought up. The tune is kept with the sample in the
+bank, so it's in tune on whatever track plays it, and every note plays relative to
+it, as an MPC plays a tuned pad up and down: at `Tune -2 st`, `C-3` plays two
+semitones under the recording, and `D-3` as recorded. The track's `Pitch` then
+moves everything the track plays together, and a step's `PTCH` or an LFO moves it
+from there.
+
+`Tune` and `Cents` on the sampler's Machine, after `Start` and `Length`, are the
+same values as the sample page's `Tune` and `:sample tune 12 -20`. `=` and `-` move
+`Tune` a semitone and `+` and `_` an octave, up to 48 semitones either way; `Cents`
+a cent and ten, up to 99 either way. `i` types either, as `-5` or `+20`, `K` lists
+them, and `x` puts one back to none. Each change is one `u`. They're dim at none,
+and dim `--` on a track with no sample.
+
+On a sliced sample, `Tune` is the slice's own where the slice the track's `Slice` is
+on has one, from `:slice tune` or the sample page, and says `slice 03` after its
+value, in the slices' colour. Otherwise it's the sample's, which every slice
+without its own plays with, and says `sample`. `x` on a slice's own gives the slice
+the sample's tune again. A slice has no cents of its own, so `Cents` is always the
+sample's. Neither is the track's, so a step can't lock them: `PTCH` is the transpose
+a step locks.
 
 ## Loop to tempo
 

@@ -85,6 +85,10 @@ impl App {
             self.open_bank_picker();
             return;
         }
+        if matches!(control, Control::Tune | Control::Cents) {
+            self.open_tuning_picker(control);
+            return;
+        }
         if self.track_control().setting_on(&self.page_track()) == Some(SettingId::SLICE) {
             self.open_slice_picker();
             return;

@@ -12,6 +12,7 @@ mod mixer;
 mod modulation;
 mod pickers;
 mod sound;
+pub(crate) mod tuning;
 mod typing;
 
 pub use controls::{AccumulatorField, ArpField, Control, ModField};

@@ -23,6 +23,7 @@ use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
+use crate::track_page::tuning::tuning_shown;
 use crate::track_page::{AccumulatorField, ArpField, Control};
 use crate::tree::ChainColumn;
 use crate::views::phrase::{heard_note, playhead_step};
@@ -135,6 +136,9 @@ pub fn value_shown(app: &App) -> Option<String> {
     }
     if app.view == View::Track && app.track_control() == Control::Sample {
         return Some(sample_shown(app.song(), track.sample()));
+    }
+    if app.view == View::Track && matches!(app.track_control(), Control::Tune | Control::Cents) {
+        return Some(tuning_shown(app.song(), track, app.track_control()));
     }
     if app.view == View::Track && app.track_control() == Control::Limiter {
         let on = if app.song().limiter { "on" } else { "off" };
