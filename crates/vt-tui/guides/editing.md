@@ -97,6 +97,22 @@ nothing to shape there, like a velocity with no notes, is left alone.
 `00 00 10 10 20 20 30 30`, and a random fill holds each pick for that many rows.
 It counts the rows it changes, so on Velocity it's that many notes.
 
+`Random` has two more rows, after Mutable Instruments' Marbles, for where its values fall
+between the ends:
+
+| Row | Does |
+|---|---|
+| Spread | How far they stray, from one value to the two ends |
+| Bias | Which way they lean, `-100` low to `+100` high |
+
+`Spread` `0%` is one value, low a bell round it, `50%` any value as likely, as it starts, and
+high a bowl, until `100%` is the two ends alone. With a narrow Spread, Bias is where the values
+gather: `0%` with `+50` writes the value three quarters of the way up on every row. With a wide
+one, it's how often they're in the top half, so `100%` with `+40` gives the higher end seven
+rows in ten. `=` and `-` move Spread by one and
+Bias by five, and `+` and `_` by ten and twenty-five. A macro can turn both while it plays: a
+wide Spread for a fill, a narrow one for the verse.
+
 `Walk` wanders: it starts on From, and each row is a small step from the last,
 up or down, never past the ends. It's Max's `drunk`, a Brownian line, so a
 velocity drifts as a player's does and a melody moves like a hand on the keys.
@@ -215,6 +231,28 @@ in semitones. `=` and `-` move it by one, and `+` and `_` by an octave of them.
 `c3 d#3 g3`, and `Alternate` two notes, both written as they are. `Invert`
 turns a melody upside down within its range, in degrees with the scale on;
 `Reverse` plays it backwards and `Shuffle` deals the same notes in a new order.
+
+On notes, `Random` has two more rows, for lines that land on the notes that matter:
+
+| Row | Does |
+|---|---|
+| Steps | How many degrees it plays, the most important first |
+| Weights | How often each comes, a hex digit each from the root |
+
+`Steps` starts at all of them, and `Weights` at `F` for each, the most; `0`
+is never. `Steps` lets the degrees through in Marbles' order of importance: the root, then the fifth, the
+third, the seventh, the sixth, the second and the fourth. So in C major `Steps` 1 plays only
+Cs, 2 adds the Gs and 3 the Es, an arpeggio, and the panel names them: `3 of 7: C G E`. In a
+minor pentatonic it's the root, the fifth, the minor third, the seventh and the fourth. With
+the scale off it goes through the twelve semitones by how consonant each is with the root: C, G,
+F, A, E, D#, G#, A#, D, B, C# and F#.
+
+`Weights` is Vermona's meloDICER's row of faders, one for each degree. `i`, a hex digit for each
+from the root, and `Enter`: in C major, `F08F` keeps the second out and gives the third about
+half the root's chances, and the degrees after the digits typed keep theirs. With the scale off
+there's a digit for each semitone from the root. Spread and Bias still shape the notes let
+through, so a narrow Spread stays in the middle of the range, and one value on a degree left out
+lands on the nearest one let through, the lower of two as near.
 
 `Snap`, on the Note column only, moves each note to the nearest one in the
 scale, the lower of two as near, for a take played without it. It's the only

@@ -325,7 +325,7 @@ impl Track {
         let mut shape = generator.shape;
         let mut any = false;
         for (value, map, param) in held {
-            if param.exists_for(&shape, context.generates) {
+            if param.exists_for(&shape, context.column, context.generates) {
                 param.set_number(&mut shape, &context, map.number_at(value));
                 any = true;
             }
