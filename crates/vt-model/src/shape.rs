@@ -5,10 +5,12 @@
 
 mod acid;
 mod follow;
+pub mod params;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
+pub use params::{Context, GenParam, Starts};
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
