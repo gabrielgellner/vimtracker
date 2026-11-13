@@ -160,10 +160,17 @@ pub fn value_shown(app: &App) -> Option<String> {
     // from them does (decision 174).
     let control = app.track_control();
     let heard = app.track_as_heard(app.cursor.track)?;
+    // A setting a macro holds reads where the macro puts it, and says which and how far.
+    let heard = heard.with_macros();
     let (id, value) = control.value_on(&heard)?;
     let note = app.fader_note(app.cursor.track, control).unwrap_or("");
+    let held = match control {
+        Control::Macro(at) => format!(": holds {}", crate::macroing::holds(track, at)),
+        _ => crate::macroing::held_text(track, id)
+            .map_or_else(String::new, |held| format!(": {held}")),
+    };
     id.exists_on(track)
-        .then(|| format!("{}{note}", shown(id, value)))
+        .then(|| format!("{}{note}{held}", shown(id, value)))
 }
 
 /// A field of the row under the cursor in its setting's units, where it has them: the nudge, the
@@ -451,7 +458,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Mode::VisualField | Mode::VisualStep => theme::MAUVE,
             Mode::Insert => theme::GREEN,
             Mode::Command => theme::PEACH,
-            Mode::Help | Mode::Guide | Mode::Picker | Mode::Shape | Mode::Jump => theme::TEAL,
+            Mode::Help | Mode::Guide | Mode::Picker | Mode::Shape | Mode::Mapping | Mode::Jump => {
+                theme::TEAL
+            }
             Mode::Replace | Mode::Restore => theme::RED,
             Mode::Keys => theme::YELLOW,
         }))

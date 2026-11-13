@@ -45,6 +45,8 @@ pub const SCROLL_MARGIN: usize = 3;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pick {
     View(View),
+    /// Put the setting under the cursor on this macro, move it there, or take it off.
+    Macro(usize),
     Sample(PathBuf),
     /// Make a kit's sounds the ones `Space 5` lists first.
     Kit(PathBuf),

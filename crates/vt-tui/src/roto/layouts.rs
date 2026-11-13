@@ -1016,6 +1016,24 @@ const ARPEGGIO: DeviceLayout = stored(
     )],
 );
 
+/// The track's eight macros, knob 1 to 8 as numbered (decision 286).
+const MACROS: DeviceLayout = live(
+    "macros",
+    &[knobs(
+        "Macros",
+        [
+            s("macro1"),
+            s("macro2"),
+            s("macro3"),
+            s("macro4"),
+            s("macro5"),
+            s("macro6"),
+            s("macro7"),
+            s("macro8"),
+        ],
+    )],
+);
+
 // The effects: their own settings, with `Mix` and `Gain` on knobs 7 and 8. The effect and its type
 // or mode are chosen in the app.
 
@@ -1502,7 +1520,7 @@ const SPACE: DeviceLayout = live(
 );
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 99] = [
+pub const ALL: [&DeviceLayout; 100] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1572,6 +1590,7 @@ pub const ALL: [&DeviceLayout; 99] = [
     &TRACK,
     &ACCUMULATOR,
     &ARPEGGIO,
+    &MACROS,
     &EMPTY,
     &SHAPING,
     &CRUSH,
@@ -1728,6 +1747,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
+        Some(Control::Macro(_)) => &MACROS,
         _ => match track.kind {
             TrackKind::Sound => &OUTPUT,
             TrackKind::Group(_) => &GROUP_OUTPUT,
@@ -1763,6 +1783,11 @@ pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Co
     controls().find(|control| key(*control, track) == setting.key)
 }
 
+/// The macros' keys, by their place, as the registry has them.
+const MACRO_KEYS: [&str; vt_model::macros::MACROS] = [
+    "macro1", "macro2", "macro3", "macro4", "macro5", "macro6", "macro7", "macro8",
+];
+
 /// Steps' values' keys, by their place.
 const STEP_KEYS: [&str; STEPS] = [
     "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8", "step9", "step10",
@@ -1785,6 +1810,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
             .get(param)
             .map_or("setting", |found| found.key),
         Control::Insert(_) => "effect",
+        Control::Macro(at) => MACRO_KEYS[at.min(MACRO_KEYS.len() - 1)],
         Control::Mute => "mute",
         Control::Solo => "solo",
         Control::Base(which) => match which {

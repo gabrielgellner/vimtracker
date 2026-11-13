@@ -174,6 +174,11 @@ impl App {
             },
             Control::Arpeggio(_) => {}
             Control::Mod(slot, field) => self.type_mod(slot, field, text),
+            Control::Macro(at) => {
+                if let Ok(value) = u8::from_str_radix(text, 16) {
+                    self.set_macro(at, u16::from(value) << 8);
+                }
+            }
         }
     }
 

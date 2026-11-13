@@ -413,7 +413,7 @@ fn adjust_arpeggio(arpeggio: &mut Arpeggio, field: ArpField, up: bool) {
 }
 
 impl App {
-    pub(super) fn page_track(&self) -> Track {
+    pub(crate) fn page_track(&self) -> Track {
         self.song()
             .tracks
             .get(self.cursor.track)
@@ -702,6 +702,24 @@ impl App {
                 }
                 self.set_arpeggio(arpeggio);
             }
+            // A coarse step a turn, as a cutoff's, keeping any fine part the Roto left.
+            Control::Macro(at) => {
+                let size = if large { HEX_JUMP } else { 1 } * count.min(0x100) as i64;
+                let from = i64::from(track.macros[at].value);
+                let moved = (from + if up { size } else { -size } * 0x100).clamp(0, 0xFF00);
+                self.set_macro(at, moved as u16);
+            }
+        }
+    }
+
+    /// Turn one of the track's macros, and with it everything it holds.
+    pub(crate) fn set_macro(&mut self, at: usize, value: u16) {
+        if self.page_track().macros[at].value != value {
+            self.apply(&Action::SetMacro {
+                track: self.cursor.track,
+                at,
+                value,
+            });
         }
     }
 
@@ -802,6 +820,7 @@ impl App {
                     self.set_hex(control, value(&fresh));
                 }
             }
+            Control::Macro(at) => self.set_macro(at, 0),
             Control::Mute | Control::Solo => {
                 let live = self
                     .levels

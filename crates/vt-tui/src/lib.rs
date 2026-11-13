@@ -24,6 +24,7 @@ pub mod input;
 pub mod jumping;
 pub mod kitty;
 pub mod loading;
+pub mod macroing;
 pub mod marking;
 pub mod meter;
 pub mod picking;

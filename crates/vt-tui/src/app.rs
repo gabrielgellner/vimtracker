@@ -419,6 +419,8 @@ pub struct App {
     pub(crate) replace_returns_to: Option<SelectionPlace>,
     /// The open shape panel.
     pub shape: Option<ShapePanel>,
+    /// The open mapping view of a macro.
+    pub mapping: Option<crate::macroing::MappingView>,
     /// A selection to shape once the command for its empty FX column is chosen, and its field.
     pub(crate) shape_command: Option<(Selection, Field)>,
     /// The search for a setting under way.
@@ -606,6 +608,7 @@ impl App {
             adjustments: Adjustments::default(),
             replace_returns_to: None,
             shape: None,
+            mapping: None,
             shape_command: None,
             field_jump: None,
             taken_insert: None,

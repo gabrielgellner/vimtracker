@@ -556,6 +556,9 @@ pub fn draw_screen(
     if let Some(panel) = &app.shape {
         views::shape::draw(frame, view, app, panel);
     }
+    if let Some(mapping) = &app.mapping {
+        views::mapping::draw(frame, view, app, mapping);
+    }
     if let Some(picker) = &mut app.picker {
         views::picker::draw(frame, body, picker);
     }

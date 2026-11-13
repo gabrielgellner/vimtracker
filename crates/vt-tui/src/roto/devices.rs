@@ -430,6 +430,10 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             let id = control.setting_on(track)?;
             registry(id, track.setting(id), track.fine(id))
         }
+        Control::Macro(at) => {
+            let [coarse, fine] = track.macros[at].value.to_be_bytes();
+            registry(SettingId::macro_at(at)?, coarse, fine)
+        }
         // The sample's own, either side of none with a notch there, and nothing with no sample.
         Control::Tune | Control::Cents => {
             let set = tuning(song, track)?.value(control);

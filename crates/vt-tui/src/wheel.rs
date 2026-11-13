@@ -464,7 +464,7 @@ impl App {
             return false;
         }
         match self.mode {
-            Mode::Shape => true,
+            Mode::Shape | Mode::Mapping => true,
             Mode::OperatorPending => false,
             _ => matches!(
                 self.table.resolve(self.key_scope(), &[key]),

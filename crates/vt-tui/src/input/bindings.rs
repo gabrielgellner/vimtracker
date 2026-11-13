@@ -124,6 +124,12 @@ pub enum Cmd {
     /// Write what the track's Steps and LFO slots on `Pitch` moved the notes to into them, and
     /// switch those slots out.
     BakeMods,
+    /// On the track page, put the setting under the cursor on a macro, move it to another, or
+    /// take it off (decision 285).
+    MapMacro,
+    /// On the track page, open the mapping of the macro under the cursor, or of the one the
+    /// setting under the cursor is on.
+    MacroMapping,
     /// Choose this track's sample from a list.
     PickSample,
     /// Choose a kit from a list.
@@ -499,6 +505,16 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
         "Switch this effect or modulator out, or back in",
     ),
     ("/", Cmd::FieldJump, "Jump to a setting by its name"),
+    (
+        "M",
+        Cmd::MapMacro,
+        "Map this setting to a macro, or move it, or take it off",
+    ),
+    (
+        "g m",
+        Cmd::MacroMapping,
+        "This macro's mapping, or the one this setting is on",
+    ),
     (
         "g d",
         Cmd::OpenItem,

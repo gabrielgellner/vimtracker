@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use ratatui::crossterm::event::KeyCode;
+
 use vt_model::accumulator::{MOST_DEGREES, amount, amount_text, amount_value};
 use vt_model::action::{Action, FieldValue};
 use vt_model::bank::{BankEntry, PlayParams};
@@ -717,6 +719,15 @@ impl App {
             self.mode = Mode::Normal;
             return;
         };
+        // A digit chooses a macro at once, as `M5` does.
+        if picker.title == crate::macroing::MACRO_PICKER
+            && let KeyCode::Char(digit @ '1'..='8') = key.code
+        {
+            self.picker = None;
+            self.mode = self.mode_after_picker();
+            self.map_to_macro(usize::from(digit as u8 - b'1'));
+            return;
+        }
         match picker.key(key) {
             Outcome::Stay => {
                 self.refresh_preview();
@@ -744,6 +755,7 @@ impl App {
     fn choose(&mut self, pick: Pick) {
         match pick {
             Pick::View(view) => self.jump_to_view(view),
+            Pick::Macro(at) => self.map_to_macro(at),
             Pick::Use {
                 section,
                 track,
