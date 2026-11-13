@@ -1,10 +1,13 @@
 //! The Gen page: a device for each live generator of the phrase under the cursor, then `Empty`,
-//! stacked down the page as the FX page's slots are.
+//! stacked down the page as the FX page's slots are. Each has its preview at its right, the
+//! large panel the Sound page's filter has, of what it writes across its span, with the row
+//! playing as a dot the terminal places (`kitty/generators.rs`).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use vt_model::generator::{Generator, Span as Spanned};
 use vt_model::shape::params::Units;
 use vt_model::shape::{Context, GenParam, ShapeColumn};
 use vt_model::song::Track;
@@ -13,20 +16,23 @@ use crate::app::App;
 use crate::shaping::LiveGen;
 use crate::theme;
 use crate::track_page::{Control, DeviceSpec};
+use crate::views::phrase::{lane_playheads, playhead_step};
 use crate::views::widgets::bar::ValueBar;
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid};
+use crate::views::widgets::image;
+use crate::views::widgets::panel::GraphicPanel;
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
 use crate::views::widgets::table::take_top;
 
-use super::BAR_CELLS;
+use super::{BAR_CELLS, LARGE_PANEL_HEIGHT, LARGE_PANEL_WIDTH};
 
-/// The Gen page's cells: a name, a value as long as `9 of 16` or `First, C-3`, and the Sound
-/// page's bars.
-const GEN_CELLS: CellWidths = CellWidths {
-    value: 11,
-    ..CellWidths::SOUND
-};
+/// The room between the grid and the preview.
+const PANEL_GAP: u16 = 2;
+
+/// The Gen page's cells, the Sound page's, so three columns fit beside the preview: a value with
+/// a bar is brief, as `9` for hits, whose bar shows how many of how many.
+const GEN_CELLS: CellWidths = CellWidths::SOUND;
 
 /// What `Empty` says, under its title.
 const EMPTY_HINT: &str = "  make a column of this phrase live";
@@ -60,7 +66,13 @@ impl CellSource for GenCells<'_> {
         let here = control == self.app.track_control();
         let shape = &self.live.generator.shape;
         let text = setting::text(self.app, here, || {
-            Self::param(control).map_or_else(String::new, |param| param.shown(shape, &self.context))
+            Self::param(control).map_or_else(String::new, |param| {
+                if self.bar(control).is_some() {
+                    param.brief(shape, &self.context)
+                } else {
+                    param.shown(shape, &self.context)
+                }
+            })
         });
         let style = setting::style(self.app, here, false);
         Line::from(value_spans(self.app, control, text, style))
@@ -89,7 +101,7 @@ fn acts_on(live: &LiveGen) -> String {
         _ => crate::shaping::generator_label(generator),
     };
     match (generator.span, generator.rows()) {
-        (vt_model::generator::Span::Lane, Some(rows)) => {
+        (Spanned::Lane, Some(rows)) => {
             format!("{column} lane {:02X}", rows.len())
         }
         (_, Some(rows)) => format!("{column} {:02X}–{:02X}", rows.first, rows.last),
@@ -134,17 +146,37 @@ pub(super) fn playing_phrase(app: &App) -> Option<u32> {
     )
 }
 
-/// One generator as a device.
-fn draw_generator(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, focused: bool) {
+/// The row of its span a live generator is playing, counted from its first, while the phrase
+/// it's on is the one under the cursor and is playing: on a lane, where the lane is reading.
+pub(crate) fn playing_row(app: &App, generator: &Generator) -> Option<usize> {
+    let rows = generator.rows()?;
+    let step = match (generator.span, generator.column) {
+        (Spanned::Lane, ShapeColumn::Fx { slot, .. }) => {
+            let phrase = app.phrase_here()?;
+            lane_playheads(app, phrase)[slot]?
+        }
+        _ => playhead_step(app)?,
+    };
+    (rows.first..=rows.last)
+        .contains(&step)
+        .then(|| step - rows.first)
+}
+
+/// One generator as a device, giving back where its preview's picture is.
+fn draw_generator(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    device: &DeviceSpec,
+    focused: bool,
+) -> Option<(u16, u16)> {
     let Some(Control::Gen {
         phrase, generator, ..
     }) = device.title[0]
     else {
-        return;
+        return None;
     };
-    let Some(live) = app.live_generator(app.cursor.track, phrase, generator) else {
-        return;
-    };
+    let live = app.live_generator(app.cursor.track, phrase, generator)?;
     let cells = GenCells {
         app,
         live: &live,
@@ -155,9 +187,27 @@ fn draw_generator(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec,
         .after(Line::styled(format!("· {}", acts_on(&live)), theme::dim()))
         .focused(focused);
     frame.render_widget(widget, area);
+    let mut settings = Device::settings_area(area);
+    let mut preview = None;
+    let id = app.gen_images.get(generator).copied().flatten();
+    if let Some(id) = id {
+        let lines = image::rows(id, LARGE_PANEL_WIDTH, LARGE_PANEL_HEIGHT)
+            .into_iter()
+            .map(Line::from)
+            .collect();
+        let panel = GraphicPanel::new().boxed(lines, LARGE_PANEL_WIDTH as u16, None);
+        let at = Device::panel_area(area, panel.width());
+        settings.width =
+            at.x.saturating_sub(settings.x + PANEL_GAP)
+                .min(settings.width);
+        let whole = at.width >= panel.width() && at.height >= panel.height();
+        preview = whole.then(|| panel.inside_at(at));
+        frame.render_widget(panel, at);
+    }
     let rows = device.grid.iter().copied().map(Vec::from).collect();
     let grid = SettingsGrid::new(&cells, rows, GEN_CELLS);
-    frame.render_widget(grid, Device::settings_area(area));
+    frame.render_widget(grid, settings);
+    preview
 }
 
 /// `Empty`, which `K` makes another column live from.
@@ -176,8 +226,14 @@ fn draw_empty(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, foc
 }
 
 /// The Gen page: its devices stacked down the page, going by whole devices to keep the cursor's
-/// in view. A fixed track has no phrases, so it has none.
-pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
+/// in view. A fixed track has no phrases, so it has none. It gives back where each generator's
+/// preview is drawn, by its place in its phrase's list.
+pub(super) fn draw(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    track: &Track,
+) -> Vec<(usize, (u16, u16))> {
     let devices = app.track_page.devices(Some(track));
     if devices.is_empty() {
         let why = if track.is_sound() {
@@ -186,7 +242,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
             "A fixed track has no phrases, so it has no generators"
         };
         frame.render_widget(Paragraph::new(Line::styled(why, theme::dim())), area);
-        return;
+        return Vec::new();
     }
     let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
     let cursor = app
@@ -195,11 +251,18 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
         .map_or(0, |cursor| cursor.device);
     let first = (cursor + 1).saturating_sub(fit);
     let mut rest = area;
+    let mut previews = Vec::new();
     for (at, device) in devices.iter().enumerate().skip(first).take(fit) {
         let area = take_top(&mut rest, DEVICE_HEIGHT);
         match device.title[0] {
             Some(Control::NewGenerator(_)) => draw_empty(frame, area, app, device, at == cursor),
-            _ => draw_generator(frame, area, app, device, at == cursor),
+            Some(Control::Gen { generator, .. }) => {
+                if let Some(corner) = draw_generator(frame, area, app, device, at == cursor) {
+                    previews.push((generator, corner));
+                }
+            }
+            _ => {}
         }
     }
+    previews
 }

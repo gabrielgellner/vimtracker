@@ -566,6 +566,23 @@ impl GenParam {
         }
     }
 
+    /// Its value in four characters or fewer, for a cell with a bar beside it that shows the
+    /// rest: a count of rows or hits alone, as `9` for `9 of 16`; an interval with its sign; and
+    /// `About` as the note it turns about, the first one's while it's that.
+    pub fn brief(self, shape: &Shape, context: &Context) -> String {
+        let number = || self.number(shape, context);
+        match self.units() {
+            Units::Count | Units::Rows | Units::OfRows => {
+                number().map_or_else(String::new, |number| number.to_string())
+            }
+            Units::Interval => number().map_or_else(String::new, |number| format!("{number:+}")),
+            Units::Column if self == Self::Axis => {
+                number().map_or_else(|| "--".to_owned(), |note| context.column.show(note as u8))
+            }
+            _ => self.shown(shape, context),
+        }
+    }
+
     /// How its value is typed.
     pub fn typing(self, column: ShapeColumn) -> Typing {
         let hex = typed_in_hex(column);
@@ -1245,6 +1262,30 @@ mod tests {
                         assert_eq!(times, 1, "{} on {}", param.key(), kind.name());
                     }
                     assert_eq!(placed.len(), wanted.len(), "{}", kind.name());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_brief_value_fits_four_characters() {
+        let generated = Context {
+            generates: true,
+            ..context(note())
+        };
+        for kind in FillKind::ALL {
+            for place in note().wheres() {
+                let mut base = shape(kind);
+                base.place = place;
+                base.follow.invert = true;
+                base.follow.transpose = -48;
+                base.run = MAX_RUN;
+                for param in GenParam::of(&base, true) {
+                    if param.units() == Units::Named || param == GenParam::Values {
+                        continue;
+                    }
+                    let brief = param.brief(&base, &generated);
+                    assert!(brief.chars().count() <= 4, "{}: {brief}", param.key());
                 }
             }
         }
