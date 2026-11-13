@@ -10,7 +10,7 @@ there are no samples to find.
 | `turing-machine` | Music Thing's Turing Machine | A Steps slot's `Mutate` on `Pitch in scale` |
 | `deja-vu` | Mutable Instruments' Marbles | `Mutate` for new notes, `:order random` to replay old ones |
 | `euclid` | Euclidean rhythms | `S`'s `Euclid`, kept live, with `Rotate` |
-| `fugue` | Fugue Machine | One theme on four tracks, each at its own `Speed`, order and transpose |
+| `fugue` | Fugue Machine | One theme and three tracks following it live with `Follow`, each at its own `Speed` |
 | `kria` | monome's Kria | Triggers, pitches, octaves and lengths on loops of different lengths |
 | `metropolix` | Intellijel's Metropolix | Pulses and gates per row, `ACU`, `ARP` and a pendulum order |
 | `live-generators` | Elektron's Euclidean mode | Columns kept live with `L`, and what hand edits do to them |
@@ -234,18 +234,20 @@ melody with up to four playheads at once, each at its own speed and direction an
 its own, so a single line becomes a canon: the same tune against itself, faster, slower,
 backwards and in another key.
 
-**How the song does it.** Four tracks play the same eight-note theme, in A harmonic minor. Each
-has its own `Speed`, its own order and its own transpose in its chain:
+**How the song does it.** The theme, eight notes in A harmonic minor, is on `V1`. The other three
+tracks follow it with the shape panel's `Follow`, kept live: each writes the theme's notes into
+its own phrase, turned its own way, and plays them at its own `Speed`.
 
-| Track | Voice | Speed | Order | Transpose |
+| Track | Voice | Speed | Order | Follows `T01:00` |
 |---|---|---|---|---|
-| `V1` | `String` | `1/16` | `up-down` | `+12` |
-| `V2` | `FM` | `1/8` | `forward` | `+00` |
-| `V3` | `VA` | `1/4` | `forward` | `-24` |
-| `V4` | `Modal` | `1/8T` | `reverse` | `+07` |
+| `V1` | `FM` | `1/8` | `forward` | The theme itself |
+| `V2` | `String` | `1/16` | `up-down` | A fifth up: `Transpose +4` |
+| `V3` | `VA` | `1/4` | `forward` | Inverted, an octave down: `Invert On`, `Transpose -7` |
+| `V4` | `Modal` | `1/8T` | `forward` | Backwards, two rows late: `Reverse On`, `Rotate 2` |
 
-`V3` plays the theme as a bass line across two bars, while `V1` runs up and down it four times a
-bar. `V4`, a fifth up, the fugue's answer, goes round three times in two bars, backwards.
+With the scale on, `Transpose` counts the scale's degrees, so `+4` is a fifth in key and `-7` an
+octave. `V3` plays the theme upside down as a bass line across two bars, while `V2` runs up and
+down the answer four times a bar. `V4` goes round three times in two bars, backwards.
 [`song.ron`](songs/fugue/song.ron)
 
 ```text
@@ -255,32 +257,41 @@ bar. `V4`, a fifth up, the fugue's answer, goes round three times in two bars, b
 03  C-4 50        07  B-3 50
 ```
 
+Edit the theme on `V1` and the other three change with it, in the same undo step, so `u` takes
+the edit back from all four. Each track still owns its phrases: a follower keeps its own copy of
+the notes, and `Follow` writes it again whenever the theme changes. The followers' titles say
+`󰁨 Note←T01:00`, and the theme's says `Followed by 3`.
+
 **Build it.**
 
 1.  `:set scale=harmonic-minor`, `:set root=a` and `:bpm 92`.
-2.  Track 1: `K` `string` `Enter`, `:name V1`. `Space 3`, `:len 8`, and type the theme.
-3.  Copy it: `yip` copies the phrase. Then on each of tracks 2, 3 and 4: `W`, `:len 8`, `gg` and
-    `p`. Each track owns its phrases, so these are copies: an edit to one doesn't reach the
-    others, unlike Fugue Machine's single melody.
-4.  The voices and speeds: on each track, `Space 4`, its machine (`fm`, `va`, `modal`), its name,
-    and `/speed` `Enter`, then `=` for each step slower: twice for `1/8`, four times for `1/4`,
-    once for `1/8T`.
-5.  The orders: in the phrase view, `:order up-down` on track 1 and `:order reverse` on
-    track 4.
-6.  The transposes: `Space 2` for the chain view, `l` to `Trans`, then `+` on track 1 for an
-    octave up, `_` twice on track 3 for two down, and `7=` on track 4 for a fifth up.
+2.  Track 1: `K` `fm` `Enter`, `:name V1`. `Space 3`, `:len 8`, and type the theme.
+3.  Track 2: `W`, `:len 8`, then `0` `gg` `vG` `S` to shape its empty Note column, and `K`
+    `follow` `Enter`. `Source` starts on `T01:00`, the phrase beside it on the track before.
+    `j` `j` to `Transpose`, `i` `4` `Enter`, then `L` to keep it live.
+4.  Track 3: `W`, `:len 8`, `0` `gg` `vG` `S` `K` `follow` `Enter`. `Source` starts on `T01:00`
+    again, as the phrase beside it follows that one. `j` `j` `i` `-7` `Enter` for an octave down,
+    and `j` `=` to turn `Invert` on. `L`.
+5.  Track 4: the same up to `Enter`, then `j` `j` `j` `j` `=` to turn `Reverse` on, and `j` `=`
+    `=` for `Rotate` `2 rows late`. `L`.
+6.  The voices and speeds: on each track, `Space 4`, its machine (`string`, `va`, `modal`), its
+    name, and `/speed` `Enter`, then `=` for each step slower: twice for `1/8` on `V1`, four
+    times for `1/4` on `V3`, once for `1/8T` on `V4`. `V2` stays at `1/16`.
+7.  The order: in the phrase view, `:order up-down` on track 2.
 
-The finished song also shapes the voices: `String` `Decay` `90`; the `FM`'s `Index` `40`; plucky
+The finished song also shapes the voices: the `FM`'s `Index` `40`; `String` `Decay` `90`; plucky
 envelopes on `Mod 1` of the `FM` and the `VA` (a `Decay` of `400 ms` and `900 ms`, `Sustain` `40%`
-and `60%`); the `VA`'s `Cut` at `70`; the `Modal`'s `Decay` `90`; `V1` panned left and `V4`
+and `60%`); the `VA`'s `Cut` at `70`; the `Modal`'s `Decay` `90`; `V2` panned left and `V4`
 right, some delay and reverb, and the levels.
 
 **Try next.**
 
+*   Change a note of the theme while it plays, and hear all four voices take it.
+*   `gl` on `V4`'s notes, then `Rotate` `4` for a later entry, or `Invert` on with `About` on
+    another note, so it turns about that one.
 *   Another order on `V2`: `:order down-up`, `converge` or `pedal`.
-*   `V1` at `1/32`: twice as fast, eight times round in two bars.
 *   `V4` at `1/16T`: still triplets, twice as fast, and the canon tightens.
-*   Edit the theme on one track, then `yip` and paste it over the others again.
+*   `Space g a` on a voice freezes it: it keeps its notes as plain ones, and stops following.
 
 ## Kria
 
