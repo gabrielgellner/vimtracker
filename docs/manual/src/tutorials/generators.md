@@ -51,8 +51,7 @@ play.
 Start the program with no project, `just run`. Its eight tracks each play a sampler, with a
 phrase `00` of 16 rows in chain `00`. Three things come up in every song:
 
-*   **A synth voice.** `Space 4` opens the track page on its Sound page (`H` goes back to it
-    from the others). With the cursor on the machine, in the Machine device's title, `K` lists
+*   **A synth voice.** `Space 5` opens the track page on its Sound page. With the cursor on the machine, in the Machine device's title, `K` lists
     the machines: type part of a name, such as `acid`, and `Enter`. A name that starts with a
     key the list moves with, such as `kick` or `hat`, needs `/` first: `K` `/kick` `Enter`.
 *   **A name.** `:name BD` names the track, so the overview says what's what.
@@ -92,12 +91,12 @@ The song has a loop already kept, and `Mutate` at `20%`, so it wanders away from
 **Build it.**
 
 1.  `:set scale=minor` and `:bpm 118`. The root is C unless you choose another.
-2.  Track 1's machine: `Space 4`, `K`, `acid`, `Enter`. Then `:name TM`.
+2.  Track 1's machine: `Space 5`, `K`, `acid`, `Enter`. Then `:name TM`.
 3.  The rhythm: `Space 3`, then `Option-1` twice for a grid of a sixteenth. `i` for Insert,
     `;` for auto-jump and `z` for octave 2, then type
     `a Down a a Down a Down a a Down a a Down a a Down` and `Esc`. Each `a` writes a `C-2` and
     moves on; each `Down` leaves a rest.
-4.  The register: `Space 4`, then `L` for the Mod page. Put the cursor on `Mod 4`'s type, in the
+4.  The register: `Space 6` for the Mod page. Put the cursor on `Mod 4`'s type, in the
     title of the device at the top right, `LFO` (`l` goes along a title and on into the device
     beside it), and press `K`, `steps`, `Enter`.
 5.  Still in its title: `l` to its mode, `Trig`, and `K`, `note`, `Enter`. `l` `l` to its
@@ -156,7 +155,7 @@ every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu
 2.  Track 1: `K`, `string`, `Enter` on its machine, and `:name X1`.
 3.  `Space 3`, `:len 8`, and type the eight notes above in Insert.
 4.  `:order random`. The phrase's title says `Random`, and the playhead jumps.
-5.  `Space 4`, `L`, and make `Mod 4` a `Steps` slot as in the Turing Machine: `K` `steps`
+5.  `Space 6`, and make `Mod 4` a `Steps` slot as in the Turing Machine: `K` `steps`
     `Enter` on its type, `K` `note` `Enter` on its mode, `Pitch in scale` as its `Dest`,
     `Depth` `0C`, and `Mutate` `12%` (`+` once, `=` twice).
 6.  The drone: `W`, a `VA` (`K`, `va`, `Enter`), `:name Y1`. In the phrase view, `:len 2`, a
@@ -201,7 +200,7 @@ polyrhythm. [`song.ron`](songs/euclid/song.ron)
 **Build it.**
 
 1.  `:set scale=minor` and `:bpm 124`.
-2.  The kick: track 1, `Space 4`, `K` `/kick` `Enter`, `:name BD`. `Space 3`, then `vG` on the
+2.  The kick: track 1, `Space 5`, `K` `/kick` `Enter`, `:name BD`. `Space 3`, then `vG` on the
     Note column to select all 16 rows, and `S`. The panel's title says `Generate`, as there are
     no notes to reshape.
 3.  In the panel, `j` to `From` and `i` `c1` `Enter`, then `j` to `To` and `i` `c1` `Enter`, so
@@ -278,7 +277,7 @@ the notes, and `Follow` writes it again whenever the theme changes. The follower
     and `j` `=` to turn `Invert` on. `L`.
 5.  Track 4: the same up to `Enter`, then `j` `j` `j` `j` `=` to turn `Reverse` on, and `j` `=`
     `=` for `Rotate` `2 rows late`. `L`.
-6.  The voices and speeds: on each track, `Space 4`, its machine (`string`, `va`, `modal`), its
+6.  The voices and speeds: on each track, `Space 5`, its machine (`string`, `va`, `modal`), its
     name, and `/speed` `Enter`, then `=` for each step slower: twice for `1/8` on `V1`, four
     times for `1/4` on `V3`, once for `1/8T` on `V4`. `V2` stays at `1/16`.
 7.  The order: in the phrase view, `:order up-down` on track 2.
@@ -325,7 +324,7 @@ and hats in threes. [`song.ron`](songs/kria/song.ron)
 1.  `:set scale=minor-pentatonic`, `:set root=e` and `:bpm 120`.
 2.  Track 1: `K` `va` `Enter`, `:name KR`. In the phrase view, with a grid of a sixteenth, type
     the trigger loop, an `E-3` (`a` in octave 3) on each `x`.
-3.  The pitch loop: `Space 4`, `L`, `Mod 4` a `Steps` slot (`K` `steps` `Enter` on its type).
+3.  The pitch loop: `Space 6`, `Mod 4` a `Steps` slot (`K` `steps` `Enter` on its type).
     `=` once on its mode for `Free`, and `Pitch in scale` as its `Dest`. Its `Depth` stays `+FF`,
     so a value is that many semitones before the scale moves it: `03` is a minor third. `Length`
     `5` (`-` three times). Then `l` from the right-hand column goes into its box, on the first
@@ -465,7 +464,7 @@ The finished song also sets the `Acid`'s `Resonance` `B0` and `Env mod` `70`, th
 *   `gl` on FX 1, `Shape` `Saw` or `Smooth`, or `:lane 7` for a shorter drift: the wave fills the
     new lane.
 *   `Space g a` on any of them when you're done, to keep the values as plain ones.
-*   All three on track 3's bass at once: `Space 4`, then `L` to the Gen page, where each live
+*   All three on track 3's bass at once: `Space 8`, the Gen page, where each live
     column of the phrase under the cursor is a device, `Random  Euclid · Note 00–0F` and
     `Wave  All rows · FX1 FREQ lane 0C`. `jj$` on the note device lands on `Hits`, and `=` and `-` turn it
     as the line plays, each press its own undo step.
@@ -533,7 +532,7 @@ drummer's does, rather than jumping about as `Random` would. [`song.ron`](songs/
 **Build it.**
 
 1.  `:set scale=minor`, `:set root=a` and `:bpm 96`.
-2.  The tune, on track 1: `Space 4`, `K` `string` `Enter`, `:name LD`. `Space 3`, `:len 32`
+2.  The tune, on track 1: `Space 5`, `K` `string` `Enter`, `:name LD`. `Space 3`, `:len 32`
     for two bars, then `vG` on the Note column and `S`. On `Fill`, `K`, `/1/f`, `Enter`: its name
     starts with a digit, so `/` comes first. `From` `a2` and `To` `a4` (`i`, the note, `Enter`),
     `Where` `Every` with an `Amount` of 2, and `L`.
@@ -653,8 +652,8 @@ order, so three tracks of samples named `BD`, `SD` and `CH`, or nothing at all, 
     on all three for a new beat, or `S` across them again.
 *   `Y` `00` with the kick's density at `40`: four on the floor. Up from there, it fills in.
 *   `r` on the hats rolls their chaos again; `Chaos` `00` makes both bars the same.
-*   On the Gen page (`Space 4`, then `L` to Gen) the drum's device is titled `Grids  BD`, its
-    map, density and chaos ready to turn while it plays, and on the Roto its first knobs.
+*   On the Gen page, `Space 8`, the drum's device is titled `Grids  BD`, its map, density and
+    chaos ready to turn while it plays, and on the Roto its first knobs.
 
 ## Generators still to come
 

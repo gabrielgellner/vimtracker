@@ -4,7 +4,7 @@ From an empty project to a loop you can hear, in about two minutes.
 
 ## 1. Load a sound
 
-Press `Space 5` for your samples as a tree of folders. `j` and `k` move, and each
+Type `:sample` for your samples as a tree of folders. `j` and `k` move, and each
 sample plays as you reach it; `l` opens a folder, and `/` then `kick` searches the
 ones you've opened. Press `Enter` on a WAV, AIFF or FLAC file: it goes in the
 project's bank, and the current track plays it.

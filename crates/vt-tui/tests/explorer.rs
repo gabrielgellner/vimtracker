@@ -1,4 +1,4 @@
-//! The explorer, `Space 5` and `Space 8`: the sample and kit folders, the rows' icons, previews,
+//! The explorer, `:sample` and `:kit`: the sample and kit folders, the rows' icons, previews,
 //! and choosing from it.
 
 use std::path::PathBuf;
@@ -97,14 +97,14 @@ fn kit_folders() -> PathBuf {
 }
 
 #[test]
-fn space_8_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
+fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     let (mut app, _realtime) = app();
     let root = kit_folders();
     app.settings = Settings {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
     };
-    press(&mut app, " 8");
+    command(&mut app, "kit");
     assert_eq!(app.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Kits");
@@ -132,7 +132,7 @@ fn space_8_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     assert_eq!(shown.note, "2 sounds from Ableton Core Library");
     assert_eq!(shown.lines[1].name, "Snare 808");
 
-    // Enter makes it the kit Space 5 lists first, and adds nothing.
+    // Enter makes it the kit :sample lists first, and adds nothing.
     let depth = app.history.undo_depth();
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
@@ -178,7 +178,8 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
     };
-    press(&mut app, " 8jj");
+    command(&mut app, "kit");
+    press(&mut app, "jj");
     // The terminal is sent a waveform for each sound.
     let mut sent = Vec::new();
     let mut graphics = vt_tui::kitty::Graphics::new();
@@ -217,7 +218,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
 }
 
 #[test]
-fn space_5_explores_the_sample_folders_and_opens_on_the_tracks_own() {
+fn sample_explores_the_sample_folders_and_opens_on_the_tracks_own() {
     let (mut app, _realtime) = app();
     let library = folder();
     std::fs::create_dir_all(library.join("hats")).unwrap();
@@ -230,7 +231,7 @@ fn space_5_explores_the_sample_folders_and_opens_on_the_tracks_own() {
         kits: Vec::new(),
         samples: vec![library.display().to_string()],
     };
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     assert_eq!(
         explorer_rows(&app)[..3],
         ["v samples", "  > hats", "  > kicks"],
@@ -239,7 +240,7 @@ fn space_5_explores_the_sample_folders_and_opens_on_the_tracks_own() {
     press(&mut app, "jl/short");
     special(&mut app, KeyCode::Enter);
     assert!(sample_of(&app, 0).unwrap().ends_with("kicks/short.wav"));
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(
         picker.current().unwrap().label,
@@ -327,7 +328,7 @@ fn the_sample_explorer_opens_a_kit_like_a_folder_and_plays_and_chooses_its_sound
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
     };
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     assert_eq!(explorer_roots(&app)[0].1, "kits");
     assert_eq!(
         explorer_rows(&app)[..4],
@@ -393,7 +394,8 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
     };
-    press(&mut app, " 5jjl");
+    command(&mut app, "sample");
+    press(&mut app, "jjl");
     assert_eq!(
         explorer_rows(&app)[3..6],
         ["  v Layered", "    > BD", "      GH"],
@@ -432,7 +434,8 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
     press(&mut app, "u");
 
     // Enter on the sound itself chooses its own file, where l opens it.
-    press(&mut app, " 5jjl");
+    command(&mut app, "sample");
+    press(&mut app, "jjl");
     assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "BD");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
@@ -440,7 +443,8 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
     press(&mut app, "u");
 
     // A sound whose file has gone is listed, and says why as a missing file does.
-    press(&mut app, " 5jjlj");
+    command(&mut app, "sample");
+    press(&mut app, "jjlj");
     assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "GH");
     app.finish_loading();
     let shown = app.picker.as_ref().unwrap().preview.clone().unwrap();
@@ -511,7 +515,7 @@ fn the_explorer_shows_what_each_row_is_with_an_icon() {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
     };
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     assert_eq!(
         explorer_rows(&app)[..7],
         [
@@ -575,7 +579,7 @@ fn the_explorer_shows_what_each_row_is_with_an_icon() {
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
     assert!(sample_of(&app, 0).unwrap().ends_with("Fill 120 bpm.wav"));
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     assert_eq!(glyph_colour(&app, glyphs::LOOP), Some(vt_tui::theme::GREEN));
 }
 
@@ -593,7 +597,7 @@ fn the_sample_explorer_lists_the_kits_and_the_library_and_no_other_ron_files() {
         samples: Vec::new(),
     };
     app.library = Some(library.clone());
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     let meanings: Vec<String> = explorer_roots(&app)
         .into_iter()
         .map(|(_, meaning)| meaning)
@@ -638,7 +642,8 @@ fn sample_library(app: &mut App) -> PathBuf {
 fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate() {
     let (mut app, _realtime) = app();
     let library = sample_library(&mut app);
-    press(&mut app, " 5l");
+    command(&mut app, "sample");
+    press(&mut app, "l");
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.current().unwrap().label, "break.wav");
     let shown = picker.preview.as_deref().unwrap();
@@ -694,7 +699,8 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
 fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     let (mut app, _realtime) = app();
     let library = sample_library(&mut app);
-    press(&mut app, " 5l");
+    command(&mut app, "sample");
+    press(&mut app, "l");
     let on = vt_tui::glyphs::SWITCH_ON;
     let off = vt_tui::glyphs::SWITCH_OFF;
     let hint = |app: &App| {
@@ -788,7 +794,7 @@ fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
         app.tick();
         out[out.len() - 2].abs()
     };
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     assert_eq!(app.file_wanted, None, "a folder plays nothing");
     press(&mut app, "l");
     app.finish_loading();
@@ -824,9 +830,11 @@ fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
     }
     assert_eq!(realtime.engine().previews_sounding(), 0);
     // Turned off, it stays off the next time.
-    press(&mut app, " 5lA");
+    command(&mut app, "sample");
+    press(&mut app, "lA");
     special(&mut app, KeyCode::Esc);
-    press(&mut app, " 5l");
+    command(&mut app, "sample");
+    press(&mut app, "l");
     assert!(!app.picker.as_ref().unwrap().tree().unwrap().audition);
     assert_eq!(app.file_wanted, None);
     std::fs::remove_dir_all(&library).unwrap();

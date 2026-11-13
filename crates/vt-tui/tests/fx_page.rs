@@ -219,7 +219,7 @@ fn an_insert_set_on_the_page_is_heard() {
     tap(&mut app, ";");
     let plain = loudest(&mut realtime, 2000);
     assert!(plain > 0.0);
-    press(&mut app, " 4LL=lj");
+    press(&mut app, " 5LL=lj");
     press(&mut app, "iff");
     block(&mut realtime, &mut app);
     press(&mut app, " 3");
@@ -573,7 +573,7 @@ fn the_sound_follows_the_new_order() {
     with_a_sound(&mut app);
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
-    press(&mut app, " 4LL=dd}p");
+    press(&mut app, " 5LL=dd}p");
     block(&mut realtime, &mut app);
     press(&mut app, " 3k;");
     let _ = loudest(&mut realtime, 4000);
@@ -608,7 +608,7 @@ fn b_bypasses_a_slot_and_brings_it_back_with_undo() {
 fn zero_and_dollar_go_to_the_ends_of_a_slots_row() {
     use vt_tui::track_page::Control;
     let (mut app, _rt) = app();
-    press(&mut app, " 4LL");
+    press(&mut app, " 5LL");
     press(&mut app, "K");
     press(&mut app, "delay");
     special(&mut app, KeyCode::Enter);
@@ -651,7 +651,7 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
             .matches(",c=13,r=5,")
             .count()
     };
-    press(&mut app, " 4LL");
+    press(&mut app, " 5LL");
     assert_eq!(sync(&mut app, &mut graphics), 0, "no slot has a drawing");
     assert_eq!(app.slot_images, [None; vt_model::insert::INSERTS]);
     press(&mut app, "K");
@@ -703,7 +703,7 @@ fn a_compressors_type_shows_its_own_settings_and_console_and_glue_pick_their_swi
         other => panic!("{other:?}"),
     };
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LLK");
+    press(&mut app, " 5LLK");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
     assert_eq!(compressor(&app).kind, CompressorType::Clean);
@@ -800,7 +800,7 @@ fn a_compressors_makeup_is_its_last_setting_and_reads_in_db() {
         other => panic!("{other:?}"),
     };
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LLK");
+    press(&mut app, " 5LLK");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
     // On Console, Makeup heads the third column, after the attack under the type. It starts at
@@ -832,7 +832,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
         terminal.backend().buffer().clone()
     };
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LLK");
+    press(&mut app, " 5LLK");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
     // A limiter in the third slot.
@@ -947,7 +947,7 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
             .matches(",c=33,r=5,")
             .count()
     };
-    press(&mut app, " 4LLK");
+    press(&mut app, " 5LLK");
     press(&mut app, "EQ3");
     special(&mut app, KeyCode::Enter);
     assert_eq!(sync(&mut app, &mut graphics), 1);
@@ -1273,7 +1273,7 @@ fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
 fn the_fx_page_fades_a_slot_a_lock_bypasses_while_the_song_plays() {
     use vt_engine::track_state::LiveValues;
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LLK");
+    press(&mut app, " 5LLK");
     press(&mut app, "delay");
     special(&mut app, KeyCode::Enter);
     // Off the slot, so the cursor doesn't keep its colour.

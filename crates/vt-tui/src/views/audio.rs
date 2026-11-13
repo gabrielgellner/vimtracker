@@ -1,19 +1,19 @@
-//! The audio page: the output playing, its rate and buffer, how it's keeping up, whether
+//! The audio page, the project page's Audio sub-page: this machine's output playing, its rate and buffer, how it's keeping up, whether
 //! vimtracker drives the Roto-Control, and whether the mouse wheel turns the cursor's setting.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use crate::app::App;
 use crate::audio_page::{AudioRow, buffer_ms};
 use crate::theme;
-use crate::views::system;
 use crate::views::widgets::setting;
 use crate::views::widgets::table::{Columns, blank_row, take_top};
 use crate::views::widgets::toggle;
+use crate::views::{project, system};
 
 /// Room for a row's name.
 const NAME_WIDTH: u16 = 12;
@@ -74,12 +74,8 @@ fn switch_value(app: &App, row: AudioRow, here: bool) -> Line<'static> {
 }
 
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    let bold = Style::new().add_modifier(Modifier::BOLD);
     let mut rest = area;
-    frame.render_widget(
-        Paragraph::new(Line::styled("Audio", bold)),
-        take_top(&mut rest, 2),
-    );
+    frame.render_widget(Paragraph::new(project::title(app)), take_top(&mut rest, 2));
     // A row's name and then its value, which has the rest of the room.
     let columns = Columns::new([NAME_WIDTH, 0]).open_ended();
     let named = |name: &'static str, value: Line<'static>| {

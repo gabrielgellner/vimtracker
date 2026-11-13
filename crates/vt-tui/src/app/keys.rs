@@ -502,6 +502,8 @@ impl App {
                 }
                 self.jump_to_view(view);
             }
+            Cmd::ShowTrackPage(page) => self.show_track_page(page),
+            Cmd::ShowProject => self.show_project(),
             Cmd::Picker => self.open_view_picker(),
             Cmd::TrackPicker => self.open_track_picker(),
             Cmd::Help => {
@@ -517,8 +519,6 @@ impl App {
             Cmd::MapMacro | Cmd::MacroMapping => {
                 self.status = "M and gm map settings to macros, on the track page".to_owned();
             }
-            Cmd::PickSample => self.open_default_sample_picker(),
-            Cmd::PickKit => self.open_kit_picker(),
             Cmd::Replace => self.begin_replace(),
             Cmd::Substitute => self.substitute(),
             Cmd::EnterInsert => {

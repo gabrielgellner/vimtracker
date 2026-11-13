@@ -1,5 +1,6 @@
-//! What keys do on the project page: the song's own settings, its grooves, a row for the audio
-//! page, and the actions that save, render and open projects. Each row changes its value as its
+//! What keys do on the project page, `Space 9`: on its Song sub-page, the song's own settings,
+//! its grooves, a row for the Audio sub-page, and the actions that save, render and open
+//! projects, and `H` and `L` between its sub-pages. Each row changes its value as its
 //! `:` command does, through the same parser, so the two can't disagree.
 
 use ratatui::crossterm::event::KeyCode;
@@ -41,6 +42,11 @@ const VELOCITY_JUMP: i64 = 10;
 /// The longest value typed on the page other than a name.
 const LONGEST_TYPED: usize = 12;
 
+/// The project page's sub-pages, in order, moved between with `H` and `L`: the song's own
+/// settings, then the audio of the machine it plays on, which is kept in the config folder
+/// rather than the song (decision 297). Each is a view of its own, so each keeps its cursor.
+pub const PROJECT_PAGES: [View; 2] = [View::Project, View::Audio];
+
 /// One row's setting, or what it does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProjectControl {
@@ -66,7 +72,7 @@ pub enum ProjectControl {
     /// One step's push and velocity.
     Push(u8),
     Velocity(u8),
-    /// The output playing, which opens the audio page.
+    /// The output playing, which opens the Audio sub-page.
     Audio,
     Save,
     SaveAs,
@@ -317,6 +323,27 @@ impl App {
             self.project_field != before && self.project_control() == ProjectControl::Bpm;
     }
 
+    /// `Space 9`: the project page, on whichever of its sub-pages showed last, as a jump.
+    pub(crate) fn show_project(&mut self) {
+        let last = self
+            .recent_views
+            .iter()
+            .find(|view| PROJECT_PAGES.contains(view))
+            .copied()
+            .unwrap_or(View::Project);
+        self.jump_to_view(last);
+    }
+
+    /// `H` and `L` on the project page: the sub-page beside this one, or this one at either end.
+    pub(crate) fn show_project_page_beside(&mut self, next: bool) {
+        let at = PROJECT_PAGES
+            .iter()
+            .position(|view| *view == self.view)
+            .unwrap_or(0);
+        let to = if next { at + 1 } else { at.saturating_sub(1) };
+        self.show_view(PROJECT_PAGES[to.min(PROJECT_PAGES.len() - 1)]);
+    }
+
     /// Run a command on the project page. Returns false if it means the same as anywhere.
     pub(crate) fn run_project_page(&mut self, cmd: Cmd) -> bool {
         let count = self.count.take();
@@ -346,6 +373,9 @@ impl App {
             Cmd::ClearField => self.reset_project_control(),
             Cmd::PickValue => self.choose_project_control(),
             Cmd::EnterInsert => self.type_project_control(),
+            Cmd::PreviousPage | Cmd::NextPage => {
+                self.show_project_page_beside(cmd == Cmd::NextPage);
+            }
             _ => {
                 self.count = count;
                 return false;
@@ -515,7 +545,7 @@ impl App {
                 self.status = "Save as puts the project in another folder".to_owned();
             }
             ProjectControl::Audio => {
-                self.status = "Enter opens the audio page, to choose the device".to_owned();
+                self.status = "Enter or L opens the Audio page, to choose the device".to_owned();
             }
             ProjectControl::Save
             | ProjectControl::SaveAs

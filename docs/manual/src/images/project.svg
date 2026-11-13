@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 608" width="1080" height="608" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="15">
 <defs><path id="sf04db" d="M2048 -410H0V1638H2048Z"/></defs>
 <rect width="100%" height="100%" fill="#303446"/>
-<text x="0" y="14" fill="#c6d0f5" font-weight="bold" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Project</text>
+<text x="0" y="14" fill="#c6d0f5" font-weight="bold" textLength="126" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Project  Song </text>
+<text x="126" y="14" fill="#949cbb" textLength="198" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Audio · this machine </text>
 <text x="738" y="14" fill="#949cbb" textLength="225" lengthAdjust="spacingAndGlyphs" xml:space="preserve">CPU  0%  late 0  xruns 0 </text>
 <text x="0" y="52" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Name      </text>
 <text x="90" y="52" fill="#c6d0f5" textLength="882" lengthAdjust="spacingAndGlyphs" xml:space="preserve">dusty-breakdown                                                                                   </text>

@@ -203,7 +203,7 @@ fn a_live_grids_on_the_gen_page_is_named_by_its_part() {
     );
     keys(&mut app, "L");
     assert_eq!(rhythm(&app, 0), BEAT[1]);
-    keys(&mut app, " 4LLL");
+    keys(&mut app, " 8");
     assert_eq!(app.track_page.page, Page::Gen);
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Grids  SD · Note 00–0F"), "{text}");
