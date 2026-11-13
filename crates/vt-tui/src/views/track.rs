@@ -9,6 +9,7 @@ use vt_engine::engine::Transport;
 use vt_model::action::TrackControl;
 use vt_model::envelope::Hold;
 use vt_model::insert::Insert;
+use vt_model::macros::MacroTarget;
 use vt_model::modulation::{ModKind, depth_text, note_shape_slot};
 use vt_model::settings::{SettingId, gate_percent};
 use vt_model::song::{Song, SynthVoice, Track, TrackKind, reset_name};
@@ -177,6 +178,7 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
             }
         }
         Control::Insert(slot) => track.inserts[slot].name().to_owned(),
+        Control::Macro(at) => format!("{:04X}", track.macros[at].value),
         Control::InsertParam(slot, param) => {
             let insert = track.inserts[slot];
             match insert.params().get(param) {
@@ -398,7 +400,7 @@ impl CellSource for SlotCells<'_> {
         let then = self
             .app
             .reported_track()
-            .map(|track| track.inserts[slot])
+            .map(|track| track.with_macros().inserts[slot])
             .filter(|then| std::mem::discriminant(then) == std::mem::discriminant(&insert));
         let live = match (self.app.live, then) {
             (Some(live), Some(then)) => {
@@ -406,8 +408,19 @@ impl CellSource for SlotCells<'_> {
             }
             _ => set,
         };
-        Some(ValueBar::new(set, BAR_CELLS).playing(live))
+        Some(
+            ValueBar::new(set, BAR_CELLS)
+                .playing(live)
+                .range(macro_range(control, self.track)),
+        )
     }
+}
+
+/// The range a macro holding a setting can take it over, in coarse values, for its bar.
+pub(crate) fn macro_range(control: Control, track: &Track) -> Option<(u8, u8)> {
+    let id = control.setting_for_macro(track)?;
+    let (_, map) = track.macro_holding(MacroTarget::Setting(id))?;
+    Some(((map.min >> 8) as u8, (map.max >> 8) as u8))
 }
 
 /// A device's title controls, each in its own style: on a slot, its effect, `Empty` when there's
@@ -619,6 +632,9 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> Drawn {
         frame.render_widget(Paragraph::new("This track doesn't exist."), area);
         return Drawn::default();
     };
+    // Each setting a macro holds shows where the macro puts it.
+    let shown = track.with_macros();
+    let track = shown.as_ref();
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let tabs = Page::ALL.map(|page| {
         let text = format!(" {} ", page.name());

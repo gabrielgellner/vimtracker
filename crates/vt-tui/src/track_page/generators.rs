@@ -9,7 +9,7 @@
 use vt_model::action::Action;
 use vt_model::constants::FX_SLOTS;
 use vt_model::generator::Generator;
-use vt_model::grid::GRID_ROWS;
+use vt_model::grid::{GRID_ROWS, Grid};
 use vt_model::selection::Field;
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{Context, GenParam, Shape, ShapeColumn, is_empty};
@@ -48,23 +48,40 @@ pub fn order(generators: &[Generator]) -> Vec<usize> {
     order
 }
 
-/// The Gen page's devices for a phrase of a track: a device each for its live generators, then
-/// `Empty`. With no phrase there are none.
+/// The macros' places in their band: two rows of four, in order along each.
+const MACROS_GRID: [[Option<usize>; 2]; 4] = [
+    [Some(0), Some(4)],
+    [Some(1), Some(5)],
+    [Some(2), Some(6)],
+    [Some(3), Some(7)],
+];
+
+/// The track's eight macros as a full-width band, two rows of four, with nothing in its title
+/// (decision 285). Its own device, so it can sit on whichever page it belongs on.
+pub(crate) fn macros_device() -> DeviceSpec {
+    DeviceSpec::new(
+        "Macros",
+        [None; DEVICE_COLUMNS],
+        Grid::from_columns(&MACROS_GRID),
+        Control::Macro,
+    )
+}
+
+/// The Gen page's devices for a phrase of a track: the track's macros first, then a device each
+/// for its live generators, then `Empty`. With no phrase there are only the macros.
 pub(super) fn devices(track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
     let Some((id, found)) = phrase.and_then(|id| Some((id, track.phrases.get(&id)?))) else {
-        return Vec::new();
+        return vec![macros_device()];
     };
     let generators = found.generators();
-    let mut devices: Vec<DeviceSpec> = order(generators)
-        .into_iter()
-        .map(|at| {
-            let generator = &generators[at];
-            let generates = generator.rows().is_some_and(|rows| {
-                is_empty(&generator.under(found.steps()), rows, generator.column)
-            });
-            DeviceSpec::generator(id, at, generator, generates)
-        })
-        .collect();
+    let mut devices = vec![macros_device()];
+    devices.extend(order(generators).into_iter().map(|at| {
+        let generator = &generators[at];
+        let generates = generator
+            .rows()
+            .is_some_and(|rows| is_empty(&generator.under(found.steps()), rows, generator.column));
+        DeviceSpec::generator(id, at, generator, generates)
+    }));
     let mut title = [None; DEVICE_COLUMNS];
     title[0] = Some(Control::NewGenerator(id));
     devices.push(DeviceSpec {

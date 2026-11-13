@@ -4,9 +4,16 @@
 //! step locks and modulation moves, and it's absolute: at `00` each setting it holds is at its
 //! min and at `FF` at its max.
 
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
-use crate::settings::{Kind, Owner, SettingId};
+use crate::constants::UNITY_LEVEL;
+use crate::lfo::phase_value;
+use crate::modulation::{ModKind, Polarity, depth_of, depth_value};
+use crate::settings::{Effect, Kind, Owner, SettingId};
+use crate::song::{FilterMode, Track};
+use crate::speed::Speed;
 
 /// How many macros a track has.
 pub const MACROS: usize = 8;
@@ -153,6 +160,145 @@ pub fn valid_name(name: &str) -> bool {
             .all(|byte| byte.is_ascii_graphic() || byte == b' ')
 }
 
+impl Track {
+    /// Where a setting is on this track before any step sets it, with a coarse byte and a fine
+    /// one, whoever owns it: a voice keeps its own, an effect's setting is what's in its slot, or
+    /// its default while another effect is there, and a mod slot's depth and phase are what its
+    /// page has. The engine's held values start here, and a mapping is shown from it.
+    pub fn value_of(&self, id: SettingId) -> u16 {
+        let modulator = |slot: usize, at: usize| match at {
+            0 => depth_value(self.mods[slot].depth),
+            1 if self.mods[slot].kind == ModKind::Steps => self.mods[slot].steps.start_value(),
+            1 => phase_value(self.mods[slot].lfo.phase),
+            2 => u16::from(self.mods[slot].polarity().index()) << 8,
+            _ => depth_value(self.mods[slot].lfo.deform),
+        };
+        let whole = match id.owner() {
+            (Owner::Mod(n), at) => return modulator(n, at),
+            (Owner::Macro(at), _) => return self.macros[at].value,
+            // One its type hasn't is at its default, and does nothing until its type has it.
+            (Owner::ModOwn(n), at) => {
+                return self.mods[n]
+                    .own_value(at)
+                    .unwrap_or(u16::from(id.entry().default) << 8);
+            }
+            (Owner::Accumulation, at) => return self.accumulation.own_value(at),
+            (Owner::Arpeggio, at) => return self.arpeggio.own_value(at),
+            (Owner::Track, _) => match id {
+                SettingId::VOL => UNITY_LEVEL,
+                SettingId::LEVEL => self.level,
+                SettingId::PAN => self.pan,
+                SettingId::CUT => self.cutoff,
+                SettingId::RES => self.resonance,
+                SettingId::SEND_A => self.send_a,
+                SettingId::SEND_B => self.send_b,
+                SettingId::PITCH => self.pitch,
+                SettingId::VELOCITY_DELTA => self.velocity_delta,
+                SettingId::QUANTISE => self.quantise,
+                SettingId::FILTER_MODE => self.filter_mode.index(),
+                SettingId::GATE_LENGTH => self.gate_length(),
+                SettingId::GROOVE => self
+                    .groove
+                    .map_or(0, |groove| (groove.index() + 1).min(0xFF) as u8),
+                SettingId::SPEED => self.speed.index(),
+                SettingId::GLIDE => self.glide,
+                _ => id.entry().default,
+            },
+            (Owner::Bypass(slot), _) => u8::from(self.bypassed[slot]),
+            (Owner::Voice(_) | Owner::Sampler, _) => self.setting(id),
+            (Owner::Slot { slot, effect }, at) => {
+                let insert = self.inserts[slot];
+                // A distortion keeps every mode's settings, so one its mode doesn't show still
+                // reads.
+                if Effect::of(insert) == Some(effect) {
+                    insert.read(effect.params()[at].setting).unwrap_or(0)
+                } else {
+                    id.entry().default
+                }
+            }
+        };
+        u16::from(whole) << 8 | u16::from(self.fine(id))
+    }
+
+    /// Put a setting at a value, with a coarse byte and a fine one, wherever its owner keeps it,
+    /// as a macro would: for the pages to show what a macro gives what it holds. A groove, which
+    /// is chosen, and `Vol` and `LDLT`, which the track doesn't keep, are left alone.
+    pub fn set_value_of(&mut self, id: SettingId, value: u16) {
+        let [coarse, fine] = value.to_be_bytes();
+        let scaled = f32::from(value) / 256.0;
+        match id.owner() {
+            (Owner::Mod(n), 0) => self.mods[n].depth = depth_of(scaled).round() as i16,
+            (Owner::Mod(n), 1) if self.mods[n].kind == ModKind::Steps => {
+                let steps = &mut self.mods[n].steps;
+                steps.start = steps.start_of(scaled) as u8;
+            }
+            (Owner::Mod(n), 1) => {
+                self.mods[n].lfo.phase = (scaled / 255.0 * 360.0).round() as u16 % 360;
+            }
+            (Owner::Mod(n), 2) => {
+                self.mods[n].polarity = Some(Polarity::ALL[usize::from(coarse.min(1))]);
+            }
+            (Owner::Mod(n), _) => self.mods[n].lfo.deform = depth_of(scaled).round() as i16,
+            (Owner::Macro(at), _) => self.macros[at].value = value,
+            (Owner::ModOwn(n), at) => self.mods[n].set_own(at, scaled),
+            (Owner::Accumulation, at) => self.accumulation.set_own(at, scaled),
+            (Owner::Arpeggio, at) => self.arpeggio.set_own(at, scaled),
+            (Owner::Bypass(slot), _) => self.bypassed[slot] = coarse != 0,
+            (Owner::Voice(_) | Owner::Sampler, _) => {
+                self.set_setting(id, coarse);
+                self.set_fine(id, fine);
+            }
+            (Owner::Slot { slot, effect }, at) => {
+                let insert = self.inserts[slot];
+                if Effect::of(insert) == Some(effect) {
+                    self.inserts[slot] =
+                        insert.write(effect.params()[at].setting, f32::from(coarse));
+                }
+            }
+            (Owner::Track, _) => {
+                match id {
+                    SettingId::LEVEL => self.level = coarse,
+                    SettingId::PAN => self.pan = coarse,
+                    SettingId::CUT => self.cutoff = coarse,
+                    SettingId::RES => self.resonance = coarse,
+                    SettingId::SEND_A => self.send_a = coarse,
+                    SettingId::SEND_B => self.send_b = coarse,
+                    SettingId::PITCH => self.pitch = coarse,
+                    SettingId::VELOCITY_DELTA => self.velocity_delta = coarse,
+                    SettingId::QUANTISE => self.quantise = coarse,
+                    SettingId::FILTER_MODE => {
+                        self.filter_mode =
+                            FilterMode::ALL[usize::from(coarse).min(FilterMode::ALL.len() - 1)];
+                    }
+                    SettingId::GATE_LENGTH => self.gate_length = Some(coarse),
+                    SettingId::SPEED => {
+                        self.speed = Speed::ALL[usize::from(coarse).min(Speed::ALL.len() - 1)];
+                    }
+                    SettingId::GLIDE => self.glide = coarse,
+                    _ => return,
+                }
+                self.set_fine(id, fine);
+            }
+        }
+    }
+
+    /// The track as its macros have it, by hand: each setting a macro holds put where the macro's
+    /// turn puts it, for the pages to show. One whose macros hold nothing is the track itself.
+    pub fn with_macros(&self) -> Cow<'_, Track> {
+        if !self.has_macro_maps() {
+            return Cow::Borrowed(self);
+        }
+        let mut heard = self.clone();
+        for held in &self.macros {
+            let value = f32::from(held.value) / 256.0;
+            for map in &held.maps {
+                heard.set_value_of(map.target.setting(), map.at(value));
+            }
+        }
+        Cow::Owned(heard)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,6 +358,56 @@ mod tests {
         assert!(!valid_name(""));
         assert!(!valid_name("Thirteen long"));
         assert!(!valid_name("Café"));
+    }
+
+    #[test]
+    fn every_setting_a_macro_can_hold_is_put_where_it_reads_back() {
+        let mut track = Track::default();
+        track.inserts[1] = crate::insert::Insert::ALL[2];
+        track.mods[4].kind = ModKind::Steps;
+        // `Vol` and `LDLT` the track doesn't keep, as they're stages over its own, and a groove is
+        // chosen.
+        let unkept = [SettingId::VOL, SettingId::GATE_DELTA, SettingId::GROOVE];
+        let kept = |id: &SettingId| !unkept.contains(id);
+        for id in SettingId::for_macro(&track).into_iter().filter(kept) {
+            let kind = id.entry().kind;
+            let top = top_value(kind);
+            // A phase's top is a whole turn, so back at its start.
+            let ends = if kind.wraps() { top - 0x0100 } else { top };
+            for value in [0, top / 2, ends] {
+                let value = if kind.has_fine() {
+                    value
+                } else {
+                    value & 0xFF00
+                };
+                let mut set = track.clone();
+                set.set_value_of(id, value);
+                let back = set.value_of(id);
+                // Lists and whole steps land on a step, Steps' start in the middle of its share,
+                // and depths, phases and times near; and where it lands, it stays.
+                assert!(
+                    back.abs_diff(value) <= 0x1000,
+                    "{} at {value:04X} read back as {back:04X}",
+                    id.key()
+                );
+                set.set_value_of(id, back);
+                assert_eq!(set.value_of(id), back, "{} stays", id.key());
+            }
+        }
+    }
+
+    #[test]
+    fn a_track_with_its_macros_has_each_setting_where_its_macro_puts_it() {
+        let mut track = Track::default();
+        assert!(matches!(track.with_macros(), Cow::Borrowed(_)));
+        track.macros[1].value = 0xFF00;
+        track.macros[1].maps.push(MacroMap {
+            target: MacroTarget::Setting(SettingId::CUT),
+            min: 0x2000,
+            max: 0x6000,
+        });
+        assert_eq!(track.with_macros().cutoff, 0x60);
+        assert_eq!(track.cutoff, 0xFF, "the track keeps its own");
     }
 
     #[test]

@@ -481,6 +481,10 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             let id = control.setting_on(track)?;
             registry(id, track.setting(id), track.fine(id))
         }
+        Control::Macro(at) => {
+            let [coarse, fine] = track.macros[at].value.to_be_bytes();
+            registry(SettingId::macro_at(at)?, coarse, fine)
+        }
         // The sample's own, either side of none with a notch there, and nothing with no sample.
         Control::Tune | Control::Cents => {
             let set = tuning(song, track)?.value(control);
@@ -1019,8 +1023,10 @@ pub fn track_devices(track: &Track, phrase: Option<u32>) -> Vec<(Page, usize, De
         .flat_map(|page| {
             page.devices_on(track, phrase)
                 .into_iter()
-                // The Gen page's `Empty` makes a column live, which only the app does.
+                // The Gen page's `Empty` makes a column live, which only the app does. Its macros'
+                // band waits for its own layout, first on the list (#618).
                 .filter(|spec| !matches!(spec.title[0], Some(Control::NewGenerator(_))))
+                .filter(|spec| !matches!(spec.grid[0][0], Some(Control::Macro(_))))
                 .enumerate()
                 .map(move |(slot, spec)| (page, slot, spec))
                 .collect::<Vec<_>>()
