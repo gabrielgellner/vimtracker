@@ -1582,6 +1582,14 @@ Turing Machine is a Steps slot with `Mutate`, `Length` and `Depth` on three macr
 the accumulator's `Up` and `Down` and the arpeggio's `Rate` and `Octaves` too, but never another
 macro, nor an LFO's or Steps' `Rate` yet.
 
+**A live generator's settings,** `M` on one on the Gen page, as `Hits`: the macro holds that
+setting of the generator on that column in every phrase of the track, between numbers of its
+own, its bounds to start with. Turning the macro writes each of those columns again, one undo
+step, and the generator keeps its own setting underneath, so taking it off the macro gives it
+back. For now that's by hand: a `MAC` lock or an LFO on the macro moves its other settings but not
+a generator's, which the mapping view says, dim, with `by hand`. The fill, the `Where` and a
+`Follow`'s source aren't for macros, as they're what the generator is.
+
 **Playing a macro.** A step's `MAC1` to `MAC8` locks one for its note, and with it everything it
 holds, as `MAC3 80`. A mod slot's `Dest` lists the eight under `Macros`, so an LFO on a macro
 sweeps every setting it holds, each across its own range. A step's lock of a setting the macro

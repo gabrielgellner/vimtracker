@@ -331,7 +331,7 @@ impl App {
         };
         let name = self.gen_name(phrase, generator);
         if let Some(live) = self.live_generator(self.cursor.track, phrase, generator)
-            && live.generator.shape.varies()
+            && live.generator.heard().varies()
         {
             self.keep_variation(phrase, generator, &name);
             return;

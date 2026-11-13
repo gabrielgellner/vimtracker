@@ -320,8 +320,9 @@ impl Engine {
             // A setting a macro no longer holds goes back to the song's, and the macros put what
             // they hold where they have it again, as their maps may have changed (decision 284).
             for map in before.macros.iter().flat_map(|held| &held.maps) {
-                if track.macro_holding(map.target).is_none() {
-                    let id = map.target.setting();
+                if track.macro_holding(map.target).is_none()
+                    && let Some(id) = map.target.setting()
+                {
                     state.set_base(id, base_of(id, track));
                 }
             }

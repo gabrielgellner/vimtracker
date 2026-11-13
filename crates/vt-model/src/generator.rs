@@ -5,12 +5,13 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::constants::FX_SLOTS;
 use crate::song::Song;
 
 use crate::scale::Scale;
 use crate::selection::StepRange;
 use crate::shape::{
-    Context, FillKind, GenCell, Shape, ShapeColumn, Source, copy_fx, is_empty, open_rows,
+    Context, FillKind, GenCell, RowView, Shape, ShapeColumn, Source, copy_fx, is_empty, open_rows,
     render_into,
 };
 use crate::step::{FxCommand, FxSlot, Note, Step};
@@ -48,6 +49,11 @@ pub struct Generator {
     /// Its rows as it last left them, to tell what an edit changed. It's what's in the phrase, so
     /// it isn't saved.
     seen: Vec<Step>,
+    /// Its shape as its track's macros hold it by hand, which it renders from, if they hold any of
+    /// its settings: `shape` with those put where the macros' turns put them, `shape` itself
+    /// keeping its own underneath (decision 294). It's worked out again from the track as each
+    /// edit is made, so it isn't saved.
+    held: Option<Shape>,
 }
 
 /// Whether a column's rows are the notes, so a note coming or going is an edit to what it reads,
@@ -112,6 +118,38 @@ fn copy(column: ShapeColumn, owns: Owns, from: &Step, to: &mut Step) {
     }
 }
 
+/// Lay what's under a live generator's cell on a row over a view of the row, as its render puts
+/// it back before writing: the column's cell of the step under it, `under`, and with it a note's
+/// velocity and gate, and the row's FX, as much as the generator owns. The engine lays this first
+/// wherever it plays a render of its own, so a row the render leaves as [`GenCell::Under`] plays
+/// what's under the generator, as it would were the render written, not what the phrase has
+/// written there (#622).
+pub fn lay_under(generator: &Generator, under: &Step, view: &mut RowView) {
+    let owns = owns(&generator.shape);
+    let whole = owns != Owns::Cell;
+    let fx = |slot: usize| under.fx.get(slot).copied().unwrap_or_default();
+    match generator.column {
+        ShapeColumn::Note { writes, .. } => {
+            view.note = under.note;
+            if writes.is_some() || whole {
+                view.velocity = under.velocity;
+            }
+            if whole {
+                view.gate = under.gate;
+            }
+            if owns == Owns::NoteFx {
+                for slot in 0..FX_SLOTS {
+                    view.set_fx(slot, fx(slot));
+                }
+            }
+        }
+        ShapeColumn::Velocity => view.velocity = under.velocity,
+        ShapeColumn::Nudge => view.nudge = under.nudge,
+        ShapeColumn::Length => view.gate = under.gate,
+        ShapeColumn::Fx { slot, .. } => view.set_fx(slot, fx(slot)),
+    }
+}
+
 /// A column's cell on a step, alone on a step of its own.
 fn cell(column: ShapeColumn, owns: Owns, step: &Step) -> Step {
     let mut cell = Step::default();
@@ -153,6 +191,7 @@ impl Generator {
             first: 0,
             under: Vec::new(),
             seen: Vec::new(),
+            held: None,
         }
     }
 
@@ -207,6 +246,43 @@ impl Generator {
         })
     }
 
+    /// The shape it's heard with: its own, or as its track's macros hold it.
+    pub fn heard(&self) -> Shape {
+        self.held.unwrap_or(self.shape)
+    }
+
+    /// Whether its track's macros hold any of its settings, so its column is written from what
+    /// they give rather than its own.
+    pub fn is_held(&self) -> bool {
+        self.held.is_some()
+    }
+
+    /// Its shape as its track's macros hold it, if they hold any of its settings.
+    pub fn held(&self) -> Option<Shape> {
+        self.held
+    }
+
+    /// Be held by its track's macros as this shape, or let go with none, and write its column
+    /// again if that changes what it's heard with: true if it did.
+    pub(crate) fn hold(
+        &mut self,
+        steps: &mut [Step],
+        held: Option<Shape>,
+        source: Option<&[Step]>,
+    ) -> bool {
+        let held = held.filter(|held| *held != self.shape);
+        if held == self.held {
+            return false;
+        }
+        let before = self.heard();
+        self.held = held;
+        if self.heard() == before {
+            return false;
+        }
+        self.render(steps, source);
+        true
+    }
+
     /// The phrase it follows, if it's a `Follow`.
     pub fn source(&self) -> Option<Source> {
         (self.shape.kind == FillKind::Follow).then_some(self.shape.follow.source)
@@ -250,7 +326,8 @@ impl Generator {
             return;
         };
         let mut cells = vec![GenCell::Under; range.len()];
-        render_into(steps, range, self.column, &self.shape, source, &mut cells);
+        let shape = self.heard();
+        render_into(steps, range, self.column, &shape, source, &mut cells);
         for (step, cell) in steps.iter_mut().skip(range.first).zip(cells) {
             cell.apply(self.column, step);
         }
@@ -352,6 +429,7 @@ impl Generator {
             first: file.first,
             under: file.under,
             seen: Vec::new(),
+            held: None,
         };
         // What's under it is cut to the rows stored, as a phrase is never shorter than it was.
         let room = steps.len().saturating_sub(generator.first);

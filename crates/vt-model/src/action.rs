@@ -1473,8 +1473,80 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .filter_mode = *mode;
         }
     }
+    hold_generators(&mut next);
     follow_generators(song, &mut next);
     Ok(Arc::new(next))
+}
+
+/// A generator to hold, by its place in its phrase, as this shape, or to let go with none.
+type Hold = (usize, Option<Shape>);
+
+/// Have every live generator of a track whose macros hold any of its settings written from what
+/// they give, and every one they've let go of from its own again, as part of the edit (decision
+/// 294): so a turn of a macro, a mapping or a reshape of the generator is heard at once, as an
+/// edit, until the engine renders generators itself. A phrase nothing changes for is left as it
+/// is, shared with the version before.
+fn hold_generators(song: &mut Song) {
+    for index in 0..song.tracks.len() {
+        let track = &song.tracks[index];
+        let mapped = track.has_gen_maps();
+        let held = || {
+            track
+                .phrases
+                .values()
+                .any(|phrase| phrase.generators().iter().any(Generator::is_held))
+        };
+        if !mapped && !held() {
+            continue;
+        }
+        let due: Vec<(u32, Vec<Hold>)> = track
+            .phrases
+            .iter()
+            .filter_map(|(id, phrase)| {
+                let sources = sources_of(song, phrase);
+                let changes: Vec<Hold> = phrase
+                    .generators()
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, generator)| mapped || generator.is_held())
+                    .filter_map(|(at, generator)| {
+                        let source = generator
+                            .source()
+                            .and_then(|source| looked_up(&sources, source));
+                        let held = track
+                            .held_shape(generator, phrase.steps(), source)
+                            .filter(|held| *held != generator.shape);
+                        (held != generator.held()).then_some((at, held))
+                    })
+                    .collect();
+                (!changes.is_empty()).then_some((*id, changes))
+            })
+            .collect();
+        for (id, changes) in due {
+            let Some(found) = song.tracks[index].phrases.get(&id) else {
+                continue;
+            };
+            let sources = sources_of(song, found);
+            let looked: Vec<Option<Vec<Step>>> = changes
+                .iter()
+                .map(|(at, _)| {
+                    found.generators()[*at]
+                        .source()
+                        .and_then(|source| looked_up(&sources, source))
+                        .map(<[Step]>::to_vec)
+                })
+                .collect();
+            let phrase = Arc::make_mut(
+                song.tracks[index]
+                    .phrases
+                    .get_mut(&id)
+                    .expect("found above"),
+            );
+            for ((at, held), source) in changes.into_iter().zip(looked) {
+                phrase.hold_generator(at, held, source.as_deref());
+            }
+        }
+    }
 }
 
 /// The phrase a `Follow` shape reads, to copy it once, or none for any other shape.
