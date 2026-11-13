@@ -503,7 +503,7 @@ impl Engine {
     ) -> Option<Arpeggiating> {
         let carried = self.tracks[index].arp.filter(|_| tie);
         let value = value.or(carried.map(|arp| arp.value))?;
-        let settings = self.current.song.tracks.get(index)?.arpeggio;
+        let settings = self.tracks[index].heard_arpeggio(self.current.song.tracks.get(index)?);
         let cycle = Cycle::new(heard, value, settings.octaves, self.scale, transpose);
         if !cycle.moves() {
             return None;
@@ -566,8 +566,8 @@ impl Engine {
         let Some(owner) = self.current.song.tracks.get(index) else {
             return written;
         };
-        let settings = owner.accumulation;
         let state = &mut self.tracks[index];
+        let settings = state.heard_accumulation(owner);
         state.accumulators.enter(epoch);
         if let Some(amount) = amount.filter(|amount| *amount != 0) {
             state.accumulators.add(key, amount, settings);

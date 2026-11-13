@@ -1667,6 +1667,11 @@ const fn share(key: &'static str, name: &'static str, label: &'static str, defau
 /// How many settings the sampler has.
 pub const SAMPLER_SETTINGS: usize = SAMPLER.len();
 
+/// How many of a mod slot's type's own settings the registry holds, and of the accumulator's and
+/// the arpeggio's together.
+pub const MOD_OWN_SETTINGS: usize = 9;
+pub const PLAYED_SETTINGS: usize = ACCUMULATION.len() + ARPEGGIO.len();
+
 /// The sampler's own, which it keeps whatever it plays. `Length` isn't `LEN`, which is `Gate`'s.
 const SAMPLER: [Entry; 5] = [
     Entry {
@@ -1761,7 +1766,7 @@ const fn percentage(key: &'static str, name: &'static str) -> Entry {
 /// A mod slot's type's own settings that a macro or modulation can move, by what they are, so an
 /// ADSR's, an AHD's and an LPG's `Attack` are one: unlabelled, as steps can't lock them (decision
 /// 283). Each is on the slot only while its type has it.
-const MOD_OWN: [Entry; 9] = [
+const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
     time("attack", "Attack"),
     time("decay", "Decay"),
     percentage("sustain", "Sustain"),
