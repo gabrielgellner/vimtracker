@@ -242,8 +242,8 @@ impl Where {
 }
 
 /// `hits` spread as evenly as they go over `rows`, by Bjorklund's algorithm, so 3 in 8 is the
-/// tresillo `x..x..x.` and 5 in 8 the cinquillo `x.xx.xx.`, as Toussaint gives them.
-/// At most `MAX_PHRASE_STEPS` rows.
+/// tresillo `x..x..x.` and 5 in 8 the cinquillo `x.xx.xx.`, as Toussaint gives them. A render
+/// works it out in place, over at most `MAX_PHRASE_STEPS` rows.
 pub fn euclid(hits: usize, rows: usize) -> Vec<bool> {
     let pattern = render::euclid(hits, rows);
     (0..rows.min(MAX_PHRASE_STEPS))

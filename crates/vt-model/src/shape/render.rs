@@ -657,3 +657,62 @@ fn along_line(from: f64, to: f64, along: f64, top: f64) -> Shaped {
         whole: (from + moved.copysign(to - from)).clamp(0.0, top) as u8,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Bjorklund's algorithm as it was written before, with a `Vec` for each group.
+    fn grouped(hits: usize, rows: usize) -> Vec<bool> {
+        if hits >= rows {
+            return vec![true; rows];
+        }
+        if hits == 0 {
+            return vec![false; rows];
+        }
+        let mut groups: Vec<Vec<bool>> = vec![vec![true]; hits];
+        let mut rest: Vec<Vec<bool>> = vec![vec![false]; rows - hits];
+        while rest.len() > 1 {
+            let pairs = groups.len().min(rest.len());
+            let left = if groups.len() > pairs {
+                groups.split_off(pairs)
+            } else {
+                rest.split_off(pairs)
+            };
+            for (group, tail) in groups.iter_mut().zip(rest) {
+                group.extend(tail);
+            }
+            rest = left;
+        }
+        groups.into_iter().chain(rest).flatten().collect()
+    }
+
+    #[test]
+    fn euclid_in_place_spreads_the_hits_as_the_groups_did() {
+        for rows in (0..=130).chain([255, 256, 1000, MAX_PHRASE_STEPS]) {
+            for hits in
+                (0..=rows.min(70) + 1).chain([rows / 3, rows / 2 + 1, rows.saturating_sub(1), rows])
+            {
+                let pattern = euclid(hits, rows);
+                let bits: Vec<bool> = (0..pattern.len).map(|at| pattern.has(at)).collect();
+                assert_eq!(bits, grouped(hits, rows), "{hits} in {rows}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_bitset_goes_through_its_rows_either_way() {
+        let mut rows = Rows::new(MAX_PHRASE_STEPS);
+        let set = [0, 1, 63, 64, 65, 127, 1000, 4031, MAX_PHRASE_STEPS - 1];
+        for at in set {
+            rows.set(at);
+        }
+        rows.set(MAX_PHRASE_STEPS);
+        assert_eq!(rows.count(), set.len());
+        assert_eq!(rows.ones().collect::<Vec<_>>(), set);
+        let mut back: Vec<usize> = rows.ones_back().collect();
+        back.reverse();
+        assert_eq!(back, set);
+        assert!(rows.has(64) && !rows.has(66) && !rows.has(MAX_PHRASE_STEPS));
+    }
+}
