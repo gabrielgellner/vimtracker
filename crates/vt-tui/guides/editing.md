@@ -86,7 +86,7 @@ nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Wave`, `Alternate`, `List`, `Acid`, `Follow` or a transform |
+| Fill | `Ramp`, `Random`, `Walk`, `1/f`, `Wave`, `List`, `Acid`, `Follow` and more |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
@@ -96,6 +96,35 @@ nothing to shape there, like a velocity with no notes, is left alone.
 `r` picks a random fill's values anew. `Run` makes stairs: a ramp from `00` to `30` over 8 rows with `Run 2` gives
 `00 00 10 10 20 20 30 30`, and a random fill holds each pick for that many rows.
 It counts the rows it changes, so on Velocity it's that many notes.
+
+`Walk` wanders: it starts on From, and each row is a small step from the last,
+up or down, never past the ends. It's Max's `drunk`, a Brownian line, so a
+velocity drifts as a player's does and a melody moves like a hand on the keys.
+It shows these in place of Curve and S:
+
+| Row | Does |
+|---|---|
+| Step | The largest move from one row to the next, either way |
+| Edge | At an end, `Reflect` bounces back, and `Wrap` comes round from the other |
+
+A move can be anything from `Step` down to none, so with a Step of `10` a
+velocity goes up or down by at most `10` a note. Step starts at an eighth of
+the column's range, `10` on Velocity, and at 2 on notes and nudges: `=` and `-`
+move it by one, `+` and `_` by `10`, or 4 on a nudge, and `i` types it. With `Wrap`, a walk past
+To comes back in at From's end, which on notes is a leap.
+
+`1/f` is between `Random` and `Walk`: it wanders, but comes back. It sums a few
+random values, one new on every row and each of the others half as often as
+the one before, so a few rows hang together, a few bars further. It's the
+pink noise R. F. Voss and J. Clarke made melodies from in 1978, which their
+listeners liked better than random notes, which jump about, or a walk, which
+drifts off. `Depth` is how many values it sums, from 2 to 8, 4 to begin with:
+more gives longer shapes, rising and falling over more rows. At any depth it
+spreads as widely as `Random`, about one row in twelve on an end.
+
+`r` picks a walk's or a `1/f`'s moves anew, `~` swaps the ends, so a walk
+starts at the other, and `Run` holds each value for that many rows, as for
+`Random`.
 
 `Wave` swings between the ends, for movement like a pulse across a hat's
 velocities, and shows these in place of Curve and S:
@@ -177,7 +206,11 @@ as it's made; with it off, in semitones. `=` and `-` move an end a degree, or a
 semitone with the scale off, and `+` and `_` an octave.
 
 A `Ramp` walks a run up or down the scale, `Random` picks degrees between the
-ends, and `Wave` draws a contour. `List` repeats a motif typed as notes, like
+ends, and `Wave` draws a contour. `Walk`'s Step is in degrees with the scale on,
+so a Step of 1 moves by step through the scale and 2 adds thirds; with it off,
+in semitones. `=` and `-` move it by one, and `+` and `_` by an octave of them.
+`1/f` gives a line that wanders and comes back, more like a tune than
+`Random`'s. `List` repeats a motif typed as notes, like
 `c3 d#3 g3`, and `Alternate` two notes, both written as they are. `Invert`
 turns a melody upside down within its range, in degrees with the scale on;
 `Reverse` plays it backwards and `Shuffle` deals the same notes in a new order.
@@ -194,8 +227,8 @@ phrasing; a row with no length of its own, `··`, keeps it unless filled.
 
 The panel uses the track page's keys: `j` `k`, `-` `=` `_` `+` and Cmd with `h` `l` `j` `k` for them, `i` to type, `K`
 to choose from a list and `x` for the default. `Tab` still plays and pauses.
-`.` applies the same shape to another selection. A ramp or random fill takes that
-selection's own ends, `Wave`, `Alternate` and `Scale` keep theirs, `List` keeps
+`.` applies the same shape to another selection. A ramp, random fill, walk or
+`1/f` takes that selection's own ends, `Wave`, `Alternate` and `Scale` keep theirs, `List` keeps
 its list, and the other transforms rework that selection's own values.
 
 ### On an empty column
@@ -204,7 +237,8 @@ On a Note column with no notes in the rows selected, `S` writes notes of its
 own, and the panel's title says `Generate`. `Where` gives the rhythm, from
 `All rows`, `Every`, `Chance` and `Euclid`, and the fill the pitches: a `Ramp`
 from the scale's root an octave up, in the octave notes are typed in, or a
-`Random`, `Wave`, `Alternate` or `List`, in the scale's degrees while it's on.
+`Random`, `Walk`, `1/f`, `Wave`, `Alternate` or `List`, in the scale's degrees
+while it's on.
 Each note takes the velocity notes are typed with and the track's gate, and an
 `OFF` there stays. `Euclid` with 3 hits over 8 rows is a tresillo to start a
 line from.

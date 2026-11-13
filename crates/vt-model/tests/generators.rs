@@ -9,7 +9,9 @@ use vt_model::lfo::Shape as Wave;
 use vt_model::project::{load_song, save_song};
 use vt_model::scale::Scale;
 use vt_model::selection::StepRange;
-use vt_model::shape::{Acid, DEFAULT_RATE, FillKind, Follow, Shape, ShapeColumn, Values, Where};
+use vt_model::shape::{
+    Acid, DEFAULT_RATE, Edge, FillKind, Follow, Pink, Shape, ShapeColumn, Values, Walk, Where,
+};
 use vt_model::song::{Lane, Phrase, Song};
 use vt_model::step::{FxCommand, Note, Step};
 
@@ -74,6 +76,8 @@ fn ramp(from: u8, to: u8, place: Where) -> Shape {
         seed: 7,
         acid: Acid::default(),
         follow: Follow::default(),
+        walk: Walk::default(),
+        pink: Pink::default(),
     }
 }
 
@@ -684,4 +688,57 @@ fn a_shape_left_as_it_starts_saves_no_acid_settings() {
     );
     let text = ron::ser::to_string(&*live).unwrap();
     assert!(!text.contains("acid") && !text.contains("follow"), "{text}");
+    assert!(!text.contains("walk") && !text.contains("pink"), "{text}");
+}
+
+#[test]
+fn a_live_walk_and_1_f_rerender_on_new_notes_and_save_their_settings() {
+    let start = song_with(&[NOTE, EMPTY, NOTE, NOTE, EMPTY, NOTE, NOTE, NOTE]);
+    for (kind, walk, pink) in [
+        (
+            FillKind::Walk,
+            Walk {
+                step: 0x08,
+                edge: Edge::Wrap,
+            },
+            Pink::default(),
+        ),
+        (FillKind::Pink, Walk::default(), Pink { depth: 6 }),
+    ] {
+        let shape = Shape {
+            kind,
+            walk,
+            pink,
+            ..ramp(0x20, 0x60, Where::Notes)
+        };
+        let live = generate(&start, ShapeColumn::Velocity, all(8), shape);
+        // It starts from `From`, and a walk's every move is at most its step, going round the 65
+        // values as it wraps.
+        let moved: Vec<u8> = velocities(&live)
+            .iter()
+            .filter(|text| *text != "--")
+            .map(|text| u8::from_str_radix(text, 16).unwrap())
+            .collect();
+        assert_eq!(moved.len(), 6);
+        if kind == FillKind::Walk {
+            assert_eq!(moved[0], 0x20);
+            assert!(moved.windows(2).all(|pair| {
+                let apart = pair[0].abs_diff(pair[1]);
+                apart.min(65 - apart) <= 8
+            }));
+        }
+        assert!(moved.iter().all(|value| (0x20..=0x60).contains(value)));
+        // A note added between gets a value too, as the walk counts the notes it fills.
+        let added = set_note(&live, 1, Note::On(60));
+        assert_eq!(phrase(&added).generators().len(), 1);
+        assert_ne!(velocities(&added)[1], "--");
+        // Saved and opened again, it keeps its settings and its values.
+        let folder = std::env::temp_dir().join(format!("vt-walk-{}-{kind:?}", std::process::id()));
+        let _ = fs::remove_dir_all(&folder);
+        save_song(&folder, &added).unwrap();
+        let loaded = load_song(&folder).unwrap();
+        let _ = fs::remove_dir_all(&folder);
+        assert_eq!(phrase(&loaded), phrase(&added));
+        assert_eq!(phrase(&loaded).generators()[0].shape, shape);
+    }
 }
