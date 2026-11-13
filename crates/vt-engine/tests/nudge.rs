@@ -1,6 +1,8 @@
 //! A row's nudge: its note part landing up to just under half a step early or late, on top of
 //! where the groove lands its step, while its lanes stay on the grid.
 
+mod support;
+
 use std::sync::Arc;
 
 use vt_engine::published::Published;
@@ -291,4 +293,42 @@ fn nudges_never_change_how_long_a_loop_takes() {
         |song: &Song| render_loop(version(song, hits_pool()), RATE, RenderOptions::default()).len();
     assert_eq!(length(&nudged), length(&straight));
     assert_eq!(length(&nudged), 16 * STEP * 2);
+}
+
+/// Two tracks at a sixteenth with nudges every way: the furthest early and late, under a swing
+/// and a pushing groove, brought toward the grid by `QNT`, on a lane's step and with `DEL`.
+fn sixteenths_song() -> Song {
+    let first: Vec<&str> = (0..16)
+        .map(|step| match step % 8 {
+            1 => "C-3 40 -B",
+            2 => "D-3 7F +B",
+            3 => "--- -- +6 vol:80",
+            5 => "C-3 60 -5 del:02",
+            6 => "E-3 20 +3",
+            7 => "C-3 -- -1",
+            _ => "C-3 --",
+        })
+        .collect();
+    let second: Vec<&str> = (0..12)
+        .map(|step| match step % 3 {
+            1 => "G-3 50 -7",
+            2 => "C-4 -- +9 quantise:80",
+            _ => "C-3 70",
+        })
+        .collect();
+    let mut song = with_lane(song(&[&first, &second]), 3);
+    song.grooves = vec![Groove::pattern(&[0, -60, 30, -20])];
+    song.tracks[1].groove = Some(GrooveId::custom(0).unwrap());
+    song.groove = GrooveId::swing(62).unwrap();
+    song
+}
+
+#[test]
+fn a_song_at_a_sixteenth_renders_as_it_did_when_a_nudge_was_a_24th_of_a_step() {
+    let out = render_loop(
+        version(&sixteenths_song(), flat_pool()),
+        RATE,
+        RenderOptions::default(),
+    );
+    support::golden("nudges-sixteenths", &out);
 }
