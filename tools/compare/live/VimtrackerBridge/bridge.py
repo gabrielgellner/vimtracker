@@ -219,9 +219,13 @@ class Bridge:
             return self.render(request["path"], float(request["seconds"]))
         if command == "remove":
             return self.remove()
+        if command == "introspect":
+            return introspect()
+        if command == "tempo probe":
+            return tempo_probe(self, request["path"])
         raise Refused(
             f"no command called {command}; there are ping, load, parameters, set, render, reload, remove, "
-            "take, render take and probe take"
+            "introspect, take, render take and probe take"
         )
 
     def reload(self):
@@ -550,3 +554,74 @@ def settle(clip, name, value):
             setattr(clip, name, value)
     except Exception:
         pass
+
+
+def introspect():
+    """What Live's own classes offer scripts, read from the classes themselves, so nothing in the set
+    is touched: each class's public names, sorted. For finding out what this version of Live lets a
+    script do, such as warp markers or stem separation."""
+    import Live
+
+    found = {"modules": sorted(name for name in dir(Live) if not name.startswith("_"))}
+    for module_name, class_name in (
+        ("Song", "Song"),
+        ("Track", "Track"),
+        ("ClipSlot", "ClipSlot"),
+        ("Clip", "Clip"),
+        ("Application", "Application"),
+        ("Browser", "Browser"),
+        ("Sample", "Sample"),
+    ):
+        module = getattr(Live, module_name, None)
+        cls = getattr(module, class_name, None) if module is not None else None
+        if cls is not None:
+            found[class_name] = sorted(name for name in dir(cls) if not name.startswith("_"))
+    return found
+
+
+TEMPO_PROBE = "vt tempo probe"
+
+
+def tempo_probe(bridge, path, seconds=20.0):
+    """Load an audio file into a scratch track's first clip slot, let Live warp it, and read back
+    the tempo and beat grid its warp markers give; then delete the track. Only the scratch track
+    is touched."""
+    song = bridge.song()
+    song.create_audio_track(-1)
+    track = song.tracks[len(song.tracks) - 1]
+    track.name = TEMPO_PROBE
+    track.mute = True
+    slot = track.clip_slots[0]
+    slot.create_audio_clip(path)
+    clip = slot.clip
+
+    def wait():
+        try:
+            deadline = bridge.clock() + seconds
+            if not clip.warping:
+                clip.warping = True
+            while len(list(clip.warp_markers)) < 2 and bridge.clock() < deadline:
+                yield
+            markers = [(m.beat_time, m.sample_time) for m in clip.warp_markers]
+            answer = {
+                "file": clip.file_path,
+                "sample_rate": clip.sample_rate,
+                "length_samples": clip.sample_length,
+                "warping": clip.warping,
+                "warp_mode": int(clip.warp_mode),
+                "markers": markers[:64],
+                "marker_count": len(markers),
+                "song_tempo": song.tempo,
+            }
+            if len(markers) >= 2:
+                (b0, s0), (b1, s1) = markers[0], markers[-1]
+                if s1 > s0:
+                    answer["tempo"] = (b1 - b0) / (s1 - s0) * 60.0
+            return answer
+        finally:
+            for index, candidate in enumerate(song.tracks):
+                if candidate.name == TEMPO_PROBE:
+                    song.delete_track(index)
+                    break
+
+    return wait()
