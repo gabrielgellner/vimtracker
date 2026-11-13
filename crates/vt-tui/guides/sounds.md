@@ -1,7 +1,7 @@
 # Sounds, samples and kits
 
 A track makes one sound at a time, from its machine: a sample, or a synth. Everything
-else about its sound is on the track page, `Space 4`: see **The track page, envelopes
+else about its sound is on the track page, `Space 5`: see **The track page, envelopes
 and LFOs**.
 
 ## The synths
@@ -604,7 +604,7 @@ note on the track rings out, or lock it on a step for one hard hit.
 
 ## Choosing a sample
 
-Press `Space 5`, or type `:sample`, to choose a WAV, AIFF or FLAC file from a tree of
+Type `:sample` to choose a WAV, AIFF or FLAC file from a tree of
 folders: the last few you chose from, the project's folder, your kit folders, your
 sample folders, Ableton Live's sample library if it's installed, where you ran the
 program from and your home folder. It opens on the track's own sample.
@@ -742,7 +742,7 @@ next note rather than part way through.
 ## The bank
 
 The samples a project plays are its bank, numbered `01` to `FF`. A file joins it when
-it's first chosen, from `Space 5`, `:sample` or a kit, and a sampler's `Sample`, in its
+it's first chosen, from `:sample` or a kit, and a sampler's `Sample`, in its
 Machine device's title, says which entry it plays, `00` for none. A step's `SMP` plays
 another entry for its note, so one track can play a whole kit.
 
@@ -917,7 +917,7 @@ A kit fills tracks in one go. It is a file in a kit folder, such as
 ```
 
 A kit is a list of sounds to choose from, so it adds no tracks of its own. Use one
-with `:kit 909`, or choose it from `Space 8`, then `Space 5` on a track lists its
+with `:kit 909`, or choose it from `:kit`, then `:sample` on a track lists its
 sounds first, by label and name, under the kit's name. Choosing one puts it in the bank
 and on this track, and its label becomes the track's name.
 Paths are relative to the kit file, or absolute, or start with `~/`.
@@ -937,15 +937,15 @@ where it came from and what kind it is. For each sound:
 
 A sound joins the bank with its label, its name, its gain and its tune, which
 it keeps on whatever track plays it, and its track takes its choke group,
-whether `:kit 909 all` puts it there or `Space 5` chooses it. A sound already
+whether `:kit 909 all` puts it there or `:sample` chooses it. A sound already
 in the bank, the same file played the same way, isn't added twice, while one
 file tuned two ways, as a kit's toms can be, is two samples. A variant or a
-layer can be chosen in its sound's place from `Space 5`, opening the kit's file
+layer can be chosen in its sound's place from `:sample`, opening the kit's file
 there; otherwise they don't yet change what you hear.
 
 | Command | Does |
 |---|---|
-| `Space 8` or `:kit` | Choose a kit from the kit folders |
+| `:kit` | Choose a kit from the kit folders |
 | `:kit 909` | Choose sounds from that kit |
 | `:kit path/drums.ron` | Choose sounds from a kit file anywhere |
 | `:kit 909 all` | Put every sound on tracks from the first, in order |
@@ -970,7 +970,7 @@ Each is a list of folders, looked through in order, and a folder that isn't
 there is passed over. `:kit 909` opens the first `909.ron` found. Changes are
 read the next time the program starts.
 
-`Space 8` opens the kit folders as a tree, with the first one open, and opens on
+`:kit` opens the kit folders as a tree, with the first one open, and opens on
 the kit in use. Beside the list are the sounds of the kit under the cursor, each
 with its label, its name and its waveform. `Enter` uses the kit, as `:kit 909`
 does, and `L` puts its sounds on tracks, as `:kit 909 all` does. `:kit` takes a

@@ -33,6 +33,7 @@ use crate::guides::Guide;
 use crate::input::command::Line;
 use crate::input::keys::Key;
 use crate::input::mode::View;
+use crate::track_page::Page;
 
 mod tree;
 pub use tree::{Root, Tree};
@@ -46,10 +47,12 @@ pub const SCROLL_MARGIN: usize = 3;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pick {
     View(View),
+    /// Show the track page on one of its pages.
+    TrackPage(Page),
     /// Put the setting under the cursor on this macro, move it there, or take it off.
     Macro(usize),
     Sample(PathBuf),
-    /// Make a kit's sounds the ones `Space 5` lists first.
+    /// Make a kit's sounds the ones `:sample` lists first.
     Kit(PathBuf),
     /// Put a kit's sounds on tracks from the first.
     KitTracks(PathBuf),

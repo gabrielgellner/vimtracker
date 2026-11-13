@@ -1,3 +1,4 @@
+<!-- ANCHOR: top -->
 # Navigation
 
 These work in Normal mode. If `j` is writing notes, you are in Insert, so
@@ -46,16 +47,25 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | `Space 1` | Song view |
 | `Space 2` | Chain view |
 | `Space 3` | Phrase view |
-| `Space 4` | Track page: its Sound, Mod and FX pages |
-| `Space 5` | Choose this track's sample |
-| `Space 6` | Mixer |
-| `Space 7` | Audio: the device, its rate and buffer |
-| `Space 8` | Choose a kit |
-| `Space 9` | Project: tempo, grooves, scale, saving and rendering |
+| `Space 4` | Mixer |
+| `Space 5` | Track page: Sound, the machine, filter and output |
+| `Space 6` | Track page: Mod, the envelopes, LFOs and mod slots |
+| `Space 7` | Track page: FX, the effects |
+| `Space 8` | Track page: Gen, the phrase's live generators |
+| `Space 9` | Project: song settings, and this machine's audio |
 | `Space 0` | Sample page: this track's sample, big |
 | `Space Space`, `Space ff` | Pick a view. `Enter` flips back to the last one |
 | `Space fb` | Pick a track by number or name, like a buffer |
 | `C-o` `C-i` | Jump back or forward, as in Vim's jump list |
+
+`Space 5` to `Space 8` open the track page on one of its four pages, each where you
+left its cursor, and `H` and `L` still go between them. `Space 9` opens the project
+page on whichever of its two pages you saw last: Song, the song's own settings, and
+Audio, this machine's device, rate and buffer, which are kept with the machine rather
+than the song. `H` and `L` go between those too.
+
+The view picker, `Space Space`, lists every view with the key that opens it, the track
+page by its four pages, so it teaches the keys as it's used.
 
 The phrase view's title shows the chain the phrase is in, `Chain 02  00 03 03 07`,
 its phrases in order with this one in the cursor's colour, so `]p` and `[p` are
@@ -71,7 +81,7 @@ there's room.
 
 ## Lists
 
-`K`, `Space Space`, `Space 5` and the others open the same list, in a box over the page,
+`K`, `Space Space`, `:sample` and the others open the same list, in a box over the page,
 with a search line above it. It opens on what's chosen now, marked with a `•`. Long
 lists, such as `Dest` and the FX commands, keep their items in categories: dim headings with
 a count, which open and close. The one with what's chosen in it starts open, and the
@@ -108,14 +118,16 @@ what it found so `j`, `k` and `zz` move through it, as `Esc` leaves Insert mode,
 
 ## Files
 
-Samples, kits and projects are chosen in the same list as a tree of folders: `Space 5`,
-`Space 8`, and `:e`, `:w`, `:new`, `:sample` and `:render` with nothing after them. At
-the top are the places it starts from, each with why it's there: `recent` for the last
-few you chose from, then the project, your sample or kit folders, `here` for where the
-program was run from, and `home`. It opens on the current file, with its folders open.
-Only what fits is listed: samples and folders, kits and folders, or projects and
-folders, and hidden files are left out. Choosing a sample, a kit opens like a folder to
-its sounds.
+Samples, kits and projects are chosen in the same list as a tree of folders: `:sample`,
+`:kit`, `:e`, `:w`, `:new` and `:render` with nothing after them, and `Add a file` in
+the bank's list, which `K` opens on the Sound page's `Sample`. At the top are the places
+it starts from, each with why it's there: `recent` for the last few you chose from,
+then the project, your sample or kit folders, `here` for where the program was run
+from, and `home`. It opens on the current file, with its folders open. Only what fits is
+listed: samples and folders, kits and folders, or projects and folders, and hidden files
+are left out. Choosing a sample, a kit opens like a folder to its sounds.
+<!-- ANCHOR_END: top -->
+<!-- ANCHOR: rest -->
 
 Each row has an icon that says what it is. They are dim, the one already chosen is
 green, and a warning is red.
@@ -176,3 +188,4 @@ the last 100, with one run again moved to the end.
 
 Press `Space` or another prefix and wait: a popup lists what can come next.
 `Space k` lists every key, and `Space ?` opens these guides.
+<!-- ANCHOR_END: rest -->

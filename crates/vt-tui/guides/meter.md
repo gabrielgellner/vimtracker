@@ -69,11 +69,13 @@ way, so nothing over full reaches your gear.
 
 ## The audio page
 
-`Space 7` opens the audio page: which device plays, its rate and its buffer, then the
-latency and how well it's keeping up. `j` and `k` choose a row, `gg` and `G` the first or
-last, `=` and `-` step through its choices, as do Cmd with `l` and `h`, or
-`k` and `j`, `K` lists them, and `x` goes back
-to the system's own. A change takes effect at once: the transport stops, and the song,
+The audio page is the project page's second page, `Space 9` then `L`, titled `Audio ·
+this machine`, as what it sets is kept for this machine, in `audio.ron`, `wheel.ron` and
+`roto.ron` beside `settings.ron`, not in the song. It shows which device plays, its rate
+and its buffer, then the latency and how well it's keeping up. `H` goes back to the
+project's Song page. `j` and `k` choose a row, `gg` and `G` the first or last, `=` and `-`
+step through its choices, as do Cmd with `l` and `h`, or `k` and `j`, `K` lists them,
+and `x` goes back to the system's own. A change takes effect at once: the transport stops, and the song,
 undo, mutes and solos all stay. This machine remembers the choice for next time, in
 `~/.config/vimtracker/audio.ron`.
 

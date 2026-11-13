@@ -8,9 +8,10 @@ pub enum View {
     Phrase,
     Track,
     Mixer,
-    /// The audio output: its device, rate and buffer.
+    /// The project page's Audio sub-page: this machine's output, its device, rate and buffer.
     Audio,
-    /// The project's own settings, and saving, rendering and opening.
+    /// The project page's Song sub-page: the song's own settings, and saving, rendering and
+    /// opening.
     Project,
     /// The cursor's track's sample, as a big waveform.
     Sample,
@@ -24,8 +25,8 @@ impl View {
         Self::Song,
         Self::Track,
         Self::Mixer,
-        Self::Audio,
         Self::Project,
+        Self::Audio,
         Self::Sample,
     ];
 

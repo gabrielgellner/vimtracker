@@ -1,5 +1,7 @@
 //! The topic guides: markdown files in `guides/`, built into the program and opened with
 //! `Space ?`. Only the markdown they use is understood: headings, tables, fences, `code` and bold.
+//! A line that's an HTML comment, as the anchors the manual includes a guide in pieces by, isn't
+//! shown.
 
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -66,6 +68,9 @@ impl Guide {
         let mut paragraph: Vec<&str> = Vec::new();
         let mut fenced = false;
         for line in self.source.lines() {
+            if !fenced && line.starts_with("<!--") {
+                continue;
+            }
             if !fenced && line.starts_with('|') {
                 table.push(line);
                 continue;
@@ -265,7 +270,9 @@ mod tests {
             let source: Vec<String> = guide
                 .source
                 .lines()
-                .filter(|line| !line.starts_with('|') && !line.starts_with("```"))
+                .filter(|line| {
+                    !line.starts_with('|') && !line.starts_with("```") && !line.starts_with("<!--")
+                })
                 .flat_map(|line| words(line.trim_start_matches('#')))
                 .collect();
             for width in [ROOM, 96] {
@@ -324,6 +331,7 @@ mod tests {
                 let shown = text(&line);
                 assert!(!shown.contains('`'), "{}: {shown}", guide.title());
                 assert!(!shown.contains("**"), "{}: {shown}", guide.title());
+                assert!(!shown.contains("<!--"), "{}: {shown}", guide.title());
             }
         }
     }

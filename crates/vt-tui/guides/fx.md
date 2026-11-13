@@ -103,7 +103,7 @@ a slot's title, the `Type` of a `Distort`, `Chorus` or `Comp` and the `Mode` of 
 
 `ACC`, `SMP`, `SLI`, `STA`, `SLEN` and `PLY` are in **Sounds, samples and kits**.
 `LEV`, `VOL`, `SNA` and `SNB` are on the level scale in **Phrases and chains**.
-The others start from the values on the track page, `Space 4`, each time playback
+The others start from the values on the track page, `Space 5`, each time playback
 starts from the top. An LFO on that page keeps moving a value around wherever
 a step has put it. See **The track page, envelopes and LFOs**.
 

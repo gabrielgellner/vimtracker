@@ -86,7 +86,8 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
     assert_eq!(app.history.undo_depth(), depth);
     assert!(app.status.contains("2 sounds"), "{}", app.status);
 
-    press(&mut app, "WW 5");
+    press(&mut app, "WW");
+    command(&mut app, "sample");
     assert_eq!(app.mode, Mode::Picker);
     let labels: Vec<String> = app
         .picker
@@ -110,7 +111,7 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
     assert_eq!(sample_of(&app, 2), None);
     assert_eq!(app.song().tracks[2].name, "");
 
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     app.key(parse_sequence("C-n").unwrap()[0], Instant::now());
     special(&mut app, KeyCode::Enter);
     assert!(sample_of(&app, 2).unwrap().ends_with("hat.wav"));
@@ -252,7 +253,7 @@ fn a_kit_sound_is_a_bank_entry_with_its_gain_and_tune_and_its_track_takes_the_ch
     assert_eq!(track(&app, 0), (0, 0xE0, 0x80, None));
     command(&mut app, &format!("kit {}", hats.display()));
     let depth = app.history.undo_depth();
-    press(&mut app, " 5");
+    command(&mut app, "sample");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app, 0), (1, 0xE0, 0x80, Some(1)));
     assert_eq!(app.song().bank.get(1).unwrap().edit.play.tune, 3);

@@ -192,7 +192,7 @@ fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_
 fn the_mixer_folds_a_groups_strips_into_it() {
     use vt_tui::glyphs::{FOLDED, GROUP, ICON_SPACE};
     let (mut app, _realtime) = grouped();
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     let names = |app: &App| mixer_text_at(app, 160)[2].clone();
     let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
     // Folding from a track in it puts the cursor on its strip.
@@ -233,7 +233,7 @@ fn the_mixer_folds_a_groups_strips_into_it() {
 fn the_phrase_views_overview_shows_a_folded_group_as_a_column_of_its_own() {
     use vt_tui::glyphs::{FOLDED, ICON_SPACE};
     let (mut app, _realtime) = grouped();
-    press(&mut app, " 6lza0");
+    press(&mut app, " 4lza0");
     assert_eq!(app.cursor.track, 3);
     press(&mut app, " 3");
     let headings = drawn_lines(&drawn(&app, vt_tui::views::phrase::draw))[1].clone();
@@ -253,7 +253,7 @@ fn folds_are_not_saved_and_a_project_opens_with_its_groups_open() {
     let (mut app, _realtime) = grouped();
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
-    press(&mut app, " 6zM");
+    press(&mut app, " 4zM");
     assert!(app.folds.hides(app.song(), 0));
     assert!(!app.dirty, "a fold isn't a change to the song");
     command(&mut app, &format!("e {}", path.display()));
