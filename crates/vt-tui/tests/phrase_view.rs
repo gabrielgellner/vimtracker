@@ -717,7 +717,7 @@ fn the_status_line_shows_a_value_in_its_units() {
     assert_eq!(value_shown(&app), None, "not on this track");
     press(&mut app, "lll");
     assert_eq!(value_shown(&app), None, "an event has no units");
-    press(&mut app, " 4");
+    press(&mut app, " 5");
     let mut rows = Vec::new();
     for _ in 0..12 {
         rows.extend(value_shown(&app));

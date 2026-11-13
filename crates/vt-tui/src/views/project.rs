@@ -1,4 +1,5 @@
-//! The project page: its name and folder, how it plays and how notes go in, a groove drawn as its
+//! The project page's Song sub-page, and the title both its sub-pages share. The Song sub-page
+//! has the project's name and folder, how it plays and how notes go in, a groove drawn as its
 //! pushes, the audio output it plays through, and the actions that save, render and open projects.
 
 use ratatui::Frame;
@@ -12,8 +13,8 @@ use vt_model::groove::{FULL_VELOCITY, MAX_PUSH};
 use crate::app::App;
 use crate::config::home_folder;
 use crate::explorer::place_name;
-use crate::input::mode::Mode;
-use crate::project_page::{PROJECT_ROWS, ProjectControl};
+use crate::input::mode::{Mode, View};
+use crate::project_page::{PROJECT_PAGES, PROJECT_ROWS, ProjectControl};
 use crate::theme;
 use crate::views::status::grid_name;
 use crate::views::widgets::meter::{EIGHTHS, hanging_cell};
@@ -246,13 +247,35 @@ fn groove_rows(app: &App, columns: &Columns) -> Vec<Row<'static>> {
     ]
 }
 
-pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
+/// A sub-page's name in the project page's title. The Audio sub-page's says it's this machine's,
+/// as its settings are kept in the config folder (`audio.ron`, `wheel.ron` and `roto.ron`)
+/// rather than the song.
+fn page_name(view: View) -> &'static str {
+    match view {
+        View::Audio => "Audio · this machine",
+        _ => "Song",
+    }
+}
+
+/// The project page's title, on either sub-page: `Project`, then each sub-page's name, the one
+/// shown bold and the other dim, as the track page's pages are.
+pub fn title(app: &App) -> Line<'static> {
     let bold = Style::new().add_modifier(Modifier::BOLD);
+    let mut title = vec![Span::styled("Project ", bold)];
+    title.extend(PROJECT_PAGES.map(|view| {
+        let text = format!(" {} ", page_name(view));
+        if view == app.view {
+            Span::styled(text, bold)
+        } else {
+            Span::styled(text, theme::dim())
+        }
+    }));
+    Line::from(title)
+}
+
+pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let mut rest = area;
-    frame.render_widget(
-        Paragraph::new(Line::styled("Project", bold)),
-        take_top(&mut rest, 2),
-    );
+    frame.render_widget(Paragraph::new(title(app)), take_top(&mut rest, 2));
     let columns = columns();
     let mut rows = Vec::new();
     for controls in PROJECT_ROWS {

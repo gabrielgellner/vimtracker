@@ -16,7 +16,7 @@ use common::*;
 /// On `Cut`, the Filter's first setting.
 fn on_cut() -> (App, vt_engine::link::Realtime) {
     let (mut app, realtime) = tracks_of_different_lengths();
-    press(&mut app, " 4}j");
+    press(&mut app, " 5}j");
     assert_eq!(app.view, View::Track);
     assert_eq!(
         app.track_control(),

@@ -76,7 +76,7 @@ fn space_g_m_mutes_the_cursors_track_on_the_launch_grid_while_playing() {
     assert!(app.jam[0].mute_waiting);
     assert!(!app.levels[0].mute, "not until the line");
     assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} MUTE  ")));
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     assert!(
         screen_rows(&mut app)
             .iter()

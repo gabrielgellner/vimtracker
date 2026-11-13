@@ -11,6 +11,7 @@ use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::placing::Edge;
 use crate::sample_page::SampleKey;
+use crate::track_page::Page;
 
 /// An operator key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +92,10 @@ pub enum Cmd {
     Help,
     Guides,
     ShowView(View),
+    /// Show the track page on one of its pages.
+    ShowTrackPage(Page),
+    /// Show the project page, on whichever of its sub-pages showed last.
+    ShowProject,
     Picker,
     /// Choose a track to go to, like a buffer.
     TrackPicker,
@@ -132,10 +137,6 @@ pub enum Cmd {
     /// On the track page, open the mapping of the macro under the cursor, or of the one the
     /// setting under the cursor is on.
     MacroMapping,
-    /// Choose this track's sample from a list.
-    PickSample,
-    /// Choose a kit from a list.
-    PickKit,
     /// Add a section after this one.
     AddSection,
     /// Copy this section after itself.
@@ -144,7 +145,7 @@ pub enum Cmd {
     Launch,
     /// Add a section holding what each track is playing, and carry on in it.
     Capture,
-    /// Go to a part of the track page.
+    /// Go to a part of the track page, or of the project page.
     PreviousPage,
     NextPage,
     /// Search this page for a setting to jump to.
@@ -284,24 +285,36 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("Space 1", Cmd::ShowView(View::Song), "Song view"),
     ("Space 2", Cmd::ShowView(View::Chain), "Chain view"),
     ("Space 3", Cmd::ShowView(View::Phrase), "Phrase view"),
-    ("Space 4", Cmd::ShowView(View::Track), "Track page"),
-    ("Space 5", Cmd::PickSample, "Choose this track's sample"),
-    ("Space 6", Cmd::ShowView(View::Mixer), "Mixer"),
-    ("Space 8", Cmd::PickKit, "Choose a kit"),
+    ("Space 4", Cmd::ShowView(View::Mixer), "Mixer"),
     (
-        "Space 0",
-        Cmd::ShowView(View::Sample),
-        "Sample page: this track's sample, big",
+        "Space 5",
+        Cmd::ShowTrackPage(Page::Sound),
+        "Sound page: machine, filter, output",
+    ),
+    (
+        "Space 6",
+        Cmd::ShowTrackPage(Page::Mod),
+        "Mod page: envelopes, LFOs, mods",
     ),
     (
         "Space 7",
-        Cmd::ShowView(View::Audio),
-        "Audio: the device, rate and buffer",
+        Cmd::ShowTrackPage(Page::Fx),
+        "FX page: the track's effects",
+    ),
+    (
+        "Space 8",
+        Cmd::ShowTrackPage(Page::Gen),
+        "Gen page: the live generators",
     ),
     (
         "Space 9",
-        Cmd::ShowView(View::Project),
-        "Project: tempo, grooves, scale, saving and rendering",
+        Cmd::ShowProject,
+        "Project: song settings, and audio",
+    ),
+    (
+        "Space 0",
+        Cmd::ShowView(View::Sample),
+        "Sample page: the sample, big",
     ),
     ("Space Space", Cmd::Picker, "Open the view picker"),
     ("Space f f", Cmd::Picker, "Open the view picker"),
@@ -866,6 +879,8 @@ const SAMPLE_OBJECTS: &[(&str, Cmd, &str)] = &[
 ];
 
 const AUDIO: &[(&str, Cmd, &str)] = &[
+    ("H", Cmd::PreviousPage, "Previous page: Song, Audio"),
+    ("L", Cmd::NextPage, "Next page: Song, Audio"),
     ("j", Cmd::Move(Motion::Down), "Next setting"),
     ("k", Cmd::Move(Motion::Up), "Previous setting"),
     ("g g", Cmd::Move(Motion::First), "First setting"),
@@ -904,8 +919,10 @@ const PROJECT: &[(&str, Cmd, &str)] = &[
     (
         "Enter",
         Cmd::PickValue,
-        "Do this action, or open the audio page",
+        "Do this action, or open the Audio page",
     ),
+    ("H", Cmd::PreviousPage, "Previous page: Song, Audio"),
+    ("L", Cmd::NextPage, "Next page: Song, Audio"),
 ];
 
 const MIXER: &[(&str, Cmd, &str)] = &[

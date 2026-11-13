@@ -34,7 +34,7 @@ program from a script or an agent. It needs kitty, as the program does.
 cargo build --release
 just live start                 # or: just live start my-song
 just live keys enter            # kitty's key names, each pressed and let go
-just live text ' 4'             # text as it is: here the leader, then 4, the track page
+just live text ' 5'             # text as it is: here the leader, then 5, the Sound page
 just live screen                # print what's on screen
 just live stop
 ```

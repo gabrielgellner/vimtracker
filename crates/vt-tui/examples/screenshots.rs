@@ -116,7 +116,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-sound",
         rows: GATES,
-        keys: " 4jli60<Enter>ji90<Enter>k",
+        keys: " 5jli60<Enter>ji90<Enter>k",
         play: 0,
         voice: None,
         kick: true,
@@ -125,7 +125,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-fx",
         rows: LANE,
-        keys: " 4LLKComp<Enter>l==hji40}KEQ3<Enter>jjiD0li50}KLimit<Enter><Tab>",
+        keys: " 5LLKComp<Enter>l==hji40}KEQ3<Enter>jjiD0li50}KLimit<Enter><Tab>",
         play: 6,
         voice: Some(SynthVoice::VirtualAnalog),
         kick: false,
@@ -145,16 +145,28 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "track-return",
         rows: GATES,
-        keys: " 4WWWWWWgg0j<Tab>",
+        keys: " 5WWWWWWgg0j<Tab>",
         play: 8,
         voice: Some(SynthVoice::VirtualAnalog),
+        kick: false,
+        drums: false,
+    },
+    // `Space` and a wait: the popup of what can come next, the views' digits among it, on the
+    // author's screen, where it fits whole. The steps played are only the wait, as nothing is
+    // playing.
+    Shot {
+        name: "which-key",
+        rows: GATES,
+        keys: " ",
+        play: 4,
+        voice: None,
         kick: false,
         drums: false,
     },
     Shot {
         name: "track-mod",
         rows: GATES,
-        keys: " 4Lji20<Enter>ji300<Enter>ji400<Enter>lkki60<Enter>gglllK/cut<Enter>jjji+30<Enter><Tab>",
+        keys: " 5Lji20<Enter>ji300<Enter>ji400<Enter>lkki60<Enter>gglllK/cut<Enter>jjji+30<Enter><Tab>",
         play: 3,
         voice: None,
         kick: false,
@@ -387,7 +399,7 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     let now = play(&mut app, &mut realtime, shot.play, start);
     let size = match shot.name {
         "project" => (WIDTH, PROJECT_HEIGHT),
-        "sample" | "track-fx" | "track-sound" | "track-mod" | "track-return" => {
+        "sample" | "track-fx" | "track-sound" | "track-mod" | "track-return" | "which-key" => {
             (SAMPLE_WIDTH, SAMPLE_HEIGHT)
         }
         _ => (WIDTH, HEIGHT),
@@ -413,7 +425,7 @@ fn kick_file(path: &Path, gain: f32) -> std::io::Result<()> {
     writer.finalize().map_err(std::io::Error::other)
 }
 
-/// The sample explorer, `Space 5`, over a folder of samples with a kit, some loops and a sound
+/// The sample explorer, `:sample`, over a folder of samples with a kit, some loops and a sound
 /// whose file has gone, so each of its icons shows. The folder is made in the system's temporary
 /// folder and named from it as `~`, so the picture is the same wherever it's taken. It's this
 /// process's own, so two runs at once, as CI's on one machine, don't share it.

@@ -1,6 +1,6 @@
-//! The track page, `Space 4`: a track's Sound, Mod, FX and Gen pages. `TrackPage` is the page as a
-//! component, which page shows and where its cursor is, with the moves that need only the cursor's
-//! track; the edits, which change the song, are `App`'s. Each page's settings are in a file of its
+//! The track page, `Space 5` to `Space 8`: a track's Sound, Mod, FX and Gen pages. `TrackPage` is
+//! the page as a component, which page shows and where its cursor is, with the moves that need
+//! only the cursor's track; the edits, which change the song, are `App`'s. Each page's settings are in a file of its
 //! own (`sound`, `modulation`, `fx`), each gives its devices to `Page::devices` if it's a rack
 //! (`device`), and `editing`, `pickers` and `typing` change the setting under the cursor.
 
@@ -493,6 +493,19 @@ impl App {
     }
 
     /// Run a command on the track page. Returns false if it means the same as anywhere.
+    /// `Space 5` to `Space 8`: the track page on one of its pages, where its cursor was left, as a
+    /// jump `C-o` comes back from.
+    pub(crate) fn show_track_page(&mut self, page: Page) {
+        if self.view != View::Track || self.track_page.page != page {
+            self.record_jump();
+        }
+        self.track_page.show(page);
+        self.track_page.phrase = self.phrase_id();
+        let song = Arc::clone(self.song());
+        self.track_page.settle(song.tracks.get(self.cursor.track));
+        self.show_view(View::Track);
+    }
+
     pub(crate) fn run_track_page(&mut self, cmd: Cmd) -> bool {
         self.track_page.phrase = self.phrase_id();
         let song = Arc::clone(self.song());

@@ -1,3 +1,4 @@
+<!-- ANCHOR: top -->
 # Saving and rendering
 
 | Command | Does |
@@ -45,8 +46,19 @@ folder's.
 
 ## The project page
 
-`Space 9` shows the project's own settings in one place, each the same value as its
-command changes, with undo where the command has it:
+`Space 9` opens the project page, which has two pages, as the track page has four, and
+`H` and `L` go between them. It opens on the one you saw last.
+
+*   **Song** shows the project's own settings in one place, each the same value as its
+    command changes, with undo where the command has it.
+*   **Audio** is this machine's: the device, its rate and buffer, the mouse wheel and
+    the Roto-Control. Its title says `Audio · this machine`, as these are kept with the
+    machine, in `audio.ron`, `wheel.ron` and `roto.ron` beside `settings.ron`, rather
+    than in the song, so a song opened on another machine plays through that one's. See **The audio page** in the meter guide.
+<!-- ANCHOR_END: top -->
+<!-- ANCHOR: rest -->
+
+The Song page's rows:
 
 | Row | Is | Command |
 |---|---|---|
@@ -63,10 +75,10 @@ command changes, with undo where the command has it:
 | Edit | The groove drawn below, to change | |
 | Steps, Humanise | Its length, and its random timing | |
 | Push, Velocity | Each step's push and velocity | |
-| Audio | The device and rate | `Space 7` |
+| Audio | The device and rate | `Space 9`, `L` |
 
 `i` on Name edits it, and `C-r` there rolls a new one. `l` on BPM goes onto its fine
-part, the digits after the point. `Enter` on Audio opens the audio page. The limiter
+part, the digits after the point. `Enter` on Audio opens the Audio page. The limiter
 isn't here: it's on the master's Sound page, after its `Level`, and `:set limiter`
 switches it too.
 
@@ -196,3 +208,4 @@ and kits** has `kits import-ableton`.
 Unsaved work is written to `song.autosave.ron` every minute once the project
 has a folder. After a crash you are asked whether to restore it. `:w`, any
 quit, `:e!`, `:new!` and answering no all remove it.
+<!-- ANCHOR_END: rest -->

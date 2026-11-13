@@ -1,4 +1,5 @@
-//! The audio page: which output plays, at what rate, and with what buffer. A change takes effect
+//! The audio page, the project page's Audio sub-page (`Space 9`, then `L`): which output this
+//! machine plays through, at what rate, and with what buffer. A change takes effect
 //! as it's made, as Ableton's audio preferences do: the main loop opens the new output. Its last
 //! rows turn the mouse wheel on and off as a knob on the cursor's setting (`wheel`), and say
 //! which way it turns, and turn on the Roto-Control (`roto`), as Live's MIDI preferences choose
@@ -220,6 +221,10 @@ impl App {
         let count = self.count.take();
         let times = count.unwrap_or(1).max(1);
         let last = AudioRow::ALL.len() - 1;
+        if matches!(cmd, Cmd::PreviousPage | Cmd::NextPage) {
+            self.show_project_page_beside(cmd == Cmd::NextPage);
+            return true;
+        }
         if self.audio_row_here() == AudioRow::Roto && self.run_roto_row(cmd) {
             return true;
         }

@@ -150,7 +150,7 @@ pub fn sample_of(app: &App, track: usize) -> Option<String> {
 
 /// Choose a machine with `K` on the Sound page's Machine row, by typing its name.
 pub fn choose_machine(app: &mut App, name: &str) {
-    press(app, " 4gg");
+    press(app, " 5gg");
     press(app, "K");
     press(app, name);
     special(app, KeyCode::Enter);
@@ -336,7 +336,7 @@ pub fn catch_up(app: &mut App, realtime: &mut vt_engine::link::Realtime) {
 
 pub fn on_fx_page() -> (App, vt_engine::link::Realtime) {
     let (mut app, realtime) = app();
-    press(&mut app, " 4LL");
+    press(&mut app, " 5LL");
     (app, realtime)
 }
 
@@ -656,7 +656,7 @@ pub fn on_the_audio_page() -> (App, Realtime) {
     app.audio.device = "Speakers".to_owned();
     app.audio.buffer = Some(512);
     app.audio.running = true;
-    press(&mut app, " 7");
+    press(&mut app, " 9L");
     assert_eq!(app.view, View::Audio);
     assert!(app.audio.refresh, "it lists the devices afresh");
     (app, realtime)

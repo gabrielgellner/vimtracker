@@ -56,7 +56,7 @@ returns, `A` and `B`, and the master. A sound track plays the sampler or one of 
 synth voices, most of them ported from Mutable Instruments' Plaits, and `Acid`, after a
 TB-303.
 
-**The track pages**, on `Space 4`, are racks of devices, as Ableton Live's are, each a
+**The track pages**, on `Space 5` to `Space 8`, are racks of devices, as Ableton Live's are, each a
 frame with its name and what gives it its character in its title:
 
 - **Sound** has four: the Machine with the voice's own settings, the Filter, the Output,
