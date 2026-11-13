@@ -49,6 +49,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         pink: Pink::default(),
         bits: Bits::default(),
         grids: vt_model::shape::Grids::default(),
+        random: vt_model::shape::Random::default(),
         vary: 0,
     }
 }
@@ -332,7 +333,9 @@ fn a_held_setting_plays_what_writing_it_would_on_every_column() {
         (1, ShapeColumn::Velocity, GenParam::Hits),
         (1, ShapeColumn::Nudge { most: 11 }, GenParam::From),
         (1, ShapeColumn::Length, GenParam::To),
+        (1, ShapeColumn::Length, GenParam::Spread),
         (1, res(), GenParam::From),
+        (1, res(), GenParam::Bias),
     ];
     let (at_rest, _) = play(&song, &[], 32);
     for (track, column, param) in cases {

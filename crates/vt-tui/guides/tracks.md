@@ -1269,8 +1269,23 @@ Fade lists every fade, out, `Off` and in.
 **Reaching other slots.** A slot's `Dest` lists the depth, phase and deform of
 every slot after it, as `M5 Depth`, `M5 Phase` and `M5 Deform`, so `Mod 4` can bring in `Mod 5`'s depth,
 and an envelope in `Mod 2` can bring in an LFO's depth, or a later envelope's, with
-each note. It only goes one way, so `Mod 6` can't reach any other. `Rate` can't be
-moved, as LFOs work out where they are from the song's position.
+each note. It only goes one way, so `Mod 6` can't reach any other.
+
+**Moving the rate.** A later slot's `Dest` lists an LFO's `Rate` too, as `M5 Rate`, and
+`M` on it puts it on a macro, so an LFO can speed another up and slow it down, or a
+macro can. The LFO speeds up or slows down from where it is in its wave, with no jump,
+as Vital's and Surge's do. Up the macro or the modulation is faster, in the rate's own
+kind: a note division steps through the divisions and bars `=` goes through, from
+`64 bars` to `1/64`; steps go from `4096st` to `1st`, and hertz from `0.01hz` to
+`100hz`, both evenly. It counts by the song's ticks, so a synced LFO never drifts
+against the bar, however long the song.
+
+An LFO counts where it is from where it was at each change of its rate. Playing from
+the top, and each note that starts it, start it again where the song's position puts it
+at the rate it has then, so an LFO whose rate never moves is always exactly there,
+from anywhere in the song. Once its rate has moved, playing from the middle of the
+song puts it close to, but not exactly, where playing up to there would: a render
+from the top is exact.
 
 ## When an LFO restarts
 
@@ -1349,6 +1364,11 @@ or at `Pass` the steps are as they are.
 each step, for a fast burst. `Pass` moves on once each time round the track's chain,
 counted as `CND` counts passes, so `00 10 20 30` on `Cut` opens the filter over four
 times round and starts again with the chain. `=` is faster, as an LFO's is.
+
+A later slot's `Dest` lists Steps' `Rate` as `M5 Rate`, and a macro can hold it, as an
+LFO's: up is faster, through the divisions from `1 bar` to `1/64`, then `Tick`. Moved,
+Steps go on from the step they're on, faster or slower, rather than jumping to
+another. `Pass` isn't a speed, so a slot at `Pass` has no `Rate` to move.
 
 **The loop**, after the mode in the title:
 
@@ -1581,10 +1601,10 @@ mapped control out: turn its macro, or open its range with `gm`.
 
 **What a macro reaches:** the track's own settings, its machine's, its effects', its mod slots'
 depths, phases and deforms, and their types' own: an envelope's `Attack`, `Decay`, `Sustain` and
-`Release`, a drum's `Body`, a gate's `Colour`, and Steps' `Length`, `Mutate` and `Smooth`, so a
-Turing Machine is a Steps slot with `Mutate`, `Length` and `Depth` on three macros. It reaches
-the accumulator's `Up` and `Down` and the arpeggio's `Rate` and `Octaves` too, but never another
-macro, nor an LFO's or Steps' `Rate` yet.
+`Release`, a drum's `Body`, a gate's `Colour`, Steps' `Length`, `Mutate` and `Smooth`, and an
+LFO's and Steps' `Rate`, so a Turing Machine is a Steps slot with `Mutate`, `Length` and `Depth`
+on three macros. It reaches the accumulator's `Up` and `Down` and the arpeggio's `Rate` and
+`Octaves` too, but never another macro.
 
 **A live generator's settings,** `M` on one on the Gen page, as `Hits`: the macro holds that
 setting of the generator on that column in every phrase of the track, between numbers of its

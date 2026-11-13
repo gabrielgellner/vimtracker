@@ -1,7 +1,8 @@
 //! Steps, one of a mod slot's types (#235): up to sixteen values played in turn, in time or one a
 //! note, as the M8's tables, Bitwig's `Steps` and the Metropolix's mod lanes step through theirs.
-//! Like an LFO, where it is is worked out from the song's position or a count, never stepped
-//! along, so it can't drift and a render repeats.
+//! Like an LFO, where it is is worked out from the song's position or a count, and from where it
+//! was at each change of its rate on, by the song's ticks rather than the blocks, so it can't
+//! drift and a render repeats (decision 301).
 
 use std::fmt;
 use std::str::FromStr;
@@ -97,6 +98,29 @@ impl StepRate {
     /// Whether this is a rate that can be set.
     pub fn in_range(self) -> bool {
         Self::ALL.contains(&self)
+    }
+
+    /// Where it is on the registry's `00` to `FF` scale, with a coarse byte and a fine one, for
+    /// macros and modulation to move (decision 301): faster up the scale, as `=` is, stepping
+    /// evenly through the divisions from a bar at `00` to `1/64`, then `Tick` at `FF`. `Pass`
+    /// isn't a speed, so it has no place.
+    pub fn place(self) -> Option<u16> {
+        let timed = RATES - 1;
+        let at = Self::ALL[..timed].iter().position(|rate| *rate == self)?;
+        let along = 1.0 - at as f64 / (timed - 1) as f64;
+        Some((along * 255.0 * 256.0).round() as u16)
+    }
+
+    /// The rate at a place on the registry's scale, with any fine part as the fraction, the
+    /// inverse of [`StepRate::place`]: the nearest there. `Pass` stays as it is.
+    #[must_use]
+    pub fn placed(self, value: f32) -> Self {
+        if self == Self::Pass {
+            return self;
+        }
+        let timed = RATES - 1;
+        let along = (f64::from(value) / 255.0).clamp(0.0, 1.0);
+        Self::ALL[timed - 1 - (along * (timed - 1) as f64).round() as usize]
     }
 
     /// The next rate one way, `=` being faster, as it is for an LFO, stopping at either end. A
@@ -409,6 +433,27 @@ mod tests {
             looping,
             ..Steps::default()
         }
+    }
+
+    #[test]
+    fn a_rate_on_the_registrys_scale_steps_through_the_divisions_to_a_tick() {
+        let rate = |text: &str| text.parse::<StepRate>().unwrap();
+        assert_eq!(rate("1 bar").place(), Some(0));
+        assert_eq!(rate("tick").place(), Some(0xFF00));
+        assert_eq!(rate("pass").place(), None, "a pass isn't a speed");
+        assert_eq!(rate("pass").placed(255.0), rate("pass"));
+        let mut last = None;
+        for rate in StepRate::ALL.iter().rev().skip(1) {
+            let place = rate.place().unwrap();
+            assert_eq!(rate.placed(f32::from(place) / 256.0), *rate, "{rate}");
+            assert!(last.is_none_or(|last| place > last), "{rate} is faster");
+            last = Some(place);
+        }
+        assert_eq!(
+            rate("1/16").placed(300.0),
+            rate("tick"),
+            "kept to the scale"
+        );
     }
 
     fn walk(steps: &Steps, start: usize, count: i64) -> Vec<usize> {
