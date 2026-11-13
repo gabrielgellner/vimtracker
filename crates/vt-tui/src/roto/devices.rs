@@ -43,6 +43,7 @@ use ratatui::style::Color;
 
 use super::layouts::{self, Setting, Turn};
 use crate::theme;
+use crate::track_page::tuning::{tuning, tuning_most};
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page};
 use crate::views::track::toggle_on;
 
@@ -239,6 +240,8 @@ pub fn family(control: Control, track: &Track) -> Family {
         | Control::Safe => Family::Tone,
         Control::Base(TrackControl::Drive | TrackControl::Punch) => Family::Character,
         Control::GateLength
+        | Control::Tune
+        | Control::Cents
         | Control::Speed
         | Control::Groove
         | Control::Reset
@@ -426,6 +429,12 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
         Control::Setting(_) => {
             let id = control.setting_on(track)?;
             registry(id, track.setting(id), track.fine(id))
+        }
+        // The sample's own, either side of none with a notch there, and nothing with no sample.
+        Control::Tune | Control::Cents => {
+            let set = tuning(song, track)?.value(control);
+            let most = i16::from(tuning_most(control));
+            value((i16::from(set) + most) as u16, (2 * most) as u16, true)
         }
         Control::Base(which) => match which.setting() {
             Some(id) => {

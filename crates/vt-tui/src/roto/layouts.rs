@@ -173,8 +173,8 @@ const SAMPLER: DeviceLayout = live(
             GAP,
             s("start"),
             s("length"),
-            __,
-            __,
+            s("tune"),
+            s("cents"),
         ],
     )],
 );
@@ -1775,6 +1775,8 @@ pub fn key(control: Control, track: &Track) -> &'static str {
     match control {
         Control::Machine => "machine",
         Control::Sample => "sample",
+        Control::Tune => "tune",
+        Control::Cents => "cents",
         Control::Setting(_) => control
             .setting_on(track)
             .map_or("setting", |id| id.entry().key),

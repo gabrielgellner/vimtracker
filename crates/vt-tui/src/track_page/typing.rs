@@ -76,6 +76,7 @@ impl App {
         match control {
             Control::Mute | Control::Solo | Control::Limiter | Control::Safe => {}
             Control::Sample => {}
+            Control::Tune | Control::Cents => self.type_tuning(control, text),
             Control::Insert(_) => {}
             Control::InsertParam(slot, param) => {
                 if let Ok(value) = u8::from_str_radix(text, 16) {

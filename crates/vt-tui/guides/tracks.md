@@ -56,7 +56,7 @@ and its settings in up to four columns of three.
 
 | Device | Title | Settings, column by column |
 |---|---|---|
-| Machine | Machine, type | The machine's own |
+| Machine | Machine, type | The machine's own, and a sampler's sample's `Tune` `Cents` |
 | Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; |
@@ -67,7 +67,9 @@ plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `
 and `Chip`. Other synths have none. `K` lists whatever's under the cursor in a title, as
 on a setting, and `g d` on the sample opens the sample page. Each machine places its own
 settings: most go down the columns in order, the sampler has `Slice` and `Play` in
-one column and `Start` and `Length` in the next, `Acid`'s are in pairs as a
+one column, `Start` and `Length` in the next, and its sample's own `Tune` and `Cents`
+in the third, which tune the sample rather than the track (see **Tuning a sample** in
+**Sounds, samples and kits**), `Acid`'s are in pairs as a
 TB-303's knobs are, `Cutoff` and `Resonance`, `Env mod` and `Decay`, `Accent` and
 `Slide`, then `Drive` and `Drift`, and `Supersaw` has its stack's spread, `Saws`,
 `Detune` and `Warp`, down its first column, how it sounds, `Mix`, `Shape` and `Width`,
@@ -855,7 +857,9 @@ or moving through them with `=` and `-`, gives the track its own, and `x` follow
 the project again.
 
 `Pitch` moves every note on the track, a semitone a step either side of `80`,
-as `PTCH` on a step does for that step. `Choke` puts the track in a group, `1`
+as `PTCH` on a step does for that step. On a sampler it's on top of the sample's
+own `Tune`, in the Machine: tune the sample there once, and transpose with
+`Pitch`. `Choke` puts the track in a group, `1`
 to `16`, or `Off`: a note on it cuts off what's sounding on the other tracks in
 the group, as a closed hat cuts an open one. A kit sets both, with the level.
 

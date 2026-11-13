@@ -20,6 +20,7 @@ use crate::banking::sample_text;
 use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::theme;
+use crate::track_page::tuning::{tuning, tuning_text};
 use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page};
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
@@ -129,6 +130,11 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
             .kind
             .shown(u16::from(track.glide) << 8),
         Control::Sample => sample_text(song, track.sample()),
+        // With no sample, there's nothing to tune.
+        Control::Tune | Control::Cents => tuning(song, track).map_or_else(
+            || "--".to_owned(),
+            |tuning| tuning_text(control, tuning.value(control)),
+        ),
         Control::Mute | Control::Solo => String::new(),
         Control::Limiter => if song.limiter { "on" } else { "off" }.to_owned(),
         Control::Safe => if track.safe { "on" } else { "off" }.to_owned(),
