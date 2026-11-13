@@ -2142,7 +2142,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
         .collect();
     assert!(text.contains("╭ Kits ─"), "{text}");
     assert!(
-        text.contains("Enter use  L on tracks  H \u{f204}  hidden  P \u{f205}  preview"),
+        text.contains("Enter use  L on tracks  H \u{f204}   hidden  P \u{f205}   preview"),
         "{text}"
     );
     assert!(text.contains("│ 909"), "{text}");
@@ -7667,12 +7667,12 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     let line = hint(&app);
     assert!(
         line.contains(&format!(
-            "╰ Enter choose  H {off}  hidden  P {on}  preview  A {on}  audition ─"
+            "╰ Enter choose  H {off}   hidden  P {on}   preview  A {on}   audition ─"
         )),
         "both on, whole: {line}"
     );
-    // Each switch is green while it's on, and faint while it's off, two cells in its colour, the
-    // glyph and the plain space it's drawn over, then a space before its name.
+    // Each switch is green while it's on, and faint while it's off, three cells in its colour,
+    // the glyph and the plain spaces its picture covers, then a space before its name.
     let switch_colour = |app: &App, glyph: char, after: &str| {
         let backend = ratatui::backend::TestBackend::new(163, 42);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -7687,13 +7687,19 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
             .find(|&(x, y)| {
                 buffer[(x, y)].symbol() == glyph.to_string()
                     && (1..=after.len() as u16)
-                        .map(|i| buffer[(x + 2 + i, y)].symbol())
+                        .map(|i| buffer[(x + 3 + i, y)].symbol())
                         .collect::<String>()
                         == after
             })
             .unwrap();
-        assert_eq!(buffer[(x + 1, y)].symbol(), " ", "drawn over");
-        assert_eq!(buffer[(x + 1, y)].fg, buffer[(x, y)].fg);
+        for after in [1, 2] {
+            assert_eq!(
+                buffer[(x + after, y)].symbol(),
+                " ",
+                "covered by its picture"
+            );
+            assert_eq!(buffer[(x + after, y)].fg, buffer[(x, y)].fg);
+        }
         buffer[(x, y)].fg
     };
     assert_eq!(switch_colour(&app, on, "preview"), vt_tui::theme::GREEN);
@@ -7702,7 +7708,7 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     let line = hint(&app);
     assert!(
         line.contains(&format!(
-            "╰ Enter choose  H {off}  hidden  P {off}  preview  A {on}  audition ─╯"
+            "╰ Enter choose  H {off}   hidden  P {off}   preview  A {on}   audition ─╯"
         )),
         "{line}"
     );
@@ -7710,7 +7716,7 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     press(&mut app, "A");
     let line = hint(&app);
     assert!(
-        line.contains(&format!("P {off}  preview  A {off}  audition")),
+        line.contains(&format!("P {off}   preview  A {off}   audition")),
         "{line}"
     );
     assert_eq!(
@@ -7724,7 +7730,7 @@ fn the_sample_explorers_hint_shows_whether_h_p_and_a_are_on_with_switches() {
     let line = hint(&app);
     assert!(
         line.contains(&format!(
-            "H {on}  hidden  P {on}  preview  A {on}  audition"
+            "H {on}   hidden  P {on}   preview  A {on}   audition"
         )),
         "{line}"
     );
@@ -8078,7 +8084,7 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     // Choosing a folder shows nothing beside it, so only `H` has a switch.
     let text = picker_text(&app, 163, 42);
     assert!(
-        text.contains("╰ l open  Enter choose  H \u{f204}  hidden ─"),
+        text.contains("╰ l open  Enter choose  H \u{f204}   hidden ─"),
         "{text}"
     );
     assert_eq!(

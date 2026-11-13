@@ -707,9 +707,10 @@ built from, so a new page uses them rather than working out its layout again:
     cells.
 *   `image`: an image's placeholder rows, and the faint box round the track page's curves.
 *   `hint`: a window's hint along its border. `window_border`: the rounded border every window has.
-*   `toggle`: the switch glyph pair, `nf-fa-toggle_on` green and `nf-fa-toggle_off` faint, for
-    everything that's on or off (decision 140): a device's switch, a two-state setting's value on
-    the FX, Mod and sample pages, and a hint's switches.
+*   `toggle`: the switch glyph pair, `nf-fa-toggle_on` green and `nf-fa-toggle_off` faint, each
+    before two plain spaces, three cells, for everything that's on or off (decisions 140, 157 and
+    256): a device's switch, a two-state setting's value on the Sound, FX, Mod, sample and audio
+    pages, and a hint's switches. The terminal shows a picture over each (decision 256, below).
 *   `group`: a group's colour, from `theme::group`, the tracks it sums as runs such as `01-04 07`,
     the `G1` mark a grouped track carries, and whether a track's mute or solo is its own or its
     group's, for the mixer, the song view, the track page and the phrase and chain views.
@@ -869,10 +870,20 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     it, about 60 bytes, and `a=d` takes it off. `Graphics::place` does this after ratatui draws, so
     they go where the page is now, and only for what moved. While anything is drawn over the page,
     they're taken off and drawn as characters instead, as they are in a render.
+*   **Switches, `kitty/switches.rs`.** Every on/off switch is a picture of a pill, three characters
+    by one at the terminal's pixels, its knob right and filled while on, left and hollow while off
+    (decision 256). The views write the glyph and its spaces as ever; once ratatui has drawn a
+    frame, `Graphics::find_switches` finds each in the buffer, by its glyph and two plain spaces on
+    the same background, notes its look, on or off and the colour it was written in, and hides the
+    glyph by drawing it in its background's colour. `Graphics::place` stores each look's picture
+    the first time it's shown and places it over each switch under a placement id from its cell,
+    taking off those gone or changed, so nothing is sent while the switches stay as they are. A
+    switch under a window drawn over it is gone from the buffer, so its picture is taken off with
+    it. Tests and screenshots, which don't go through `find_switches`, keep the glyph.
 *   **Storing again after a screen clear.** ratatui clears the screen when the window changes size,
     and in kitty and Ghostty a clear frees an image placed directly, though not one shown through
-    placeholders. So `Graphics::use_window` retires the lines' and marks' images when the window's
-    size changes, and they're stored again under new ids. The panels' images are retired too, and
+    placeholders. So `Graphics::use_window` retires the lines', marks' and switches' images when
+    the window's size changes, and they're stored again under new ids. The panels' images are retired too, and
     whenever the character's size in pixels changes, so they're drawn again at the new pixels and
     none is left blank. Retired images are deleted with `a=d,d=I` at the start of the next frame.
 

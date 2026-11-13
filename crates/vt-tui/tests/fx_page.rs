@@ -249,10 +249,10 @@ fn the_cursors_device_has_a_brighter_frame_and_a_bypassed_one_goes_faint() {
     assert_eq!(buffer[(0, first)].fg, theme::OVERLAY2);
     assert_eq!(buffer[(0, second)].fg, theme::SURFACE1);
     assert_eq!(buffer[(149, first + 4)].fg, theme::OVERLAY2);
-    assert_eq!(buffer[(9, first)].symbol(), "D");
-    assert!(buffer[(9, first)].modifier.contains(Modifier::BOLD));
-    assert_eq!(buffer[(9, second)].symbol(), "D");
-    assert!(!buffer[(9, second)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(10, first)].symbol(), "D");
+    assert!(buffer[(10, first)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(10, second)].symbol(), "D");
+    assert!(!buffer[(10, second)].modifier.contains(Modifier::BOLD));
     assert_eq!(buffer[(3, first)].fg, theme::OVERLAY2, "the digit is dim");
     // Beyond the title, the top border keeps its frame's colour.
     assert_eq!(buffer[(40, first)].symbol(), "─");
@@ -265,7 +265,7 @@ fn the_cursors_device_has_a_brighter_frame_and_a_bypassed_one_goes_faint() {
     let amount_value = (13, first + 2);
     assert_eq!(buffer[(3, first + 2)].symbol(), "A");
     assert_eq!(buffer[(3, first + 2)].fg, theme::OVERLAY0);
-    assert_eq!(buffer[(9, first)].fg, theme::OVERLAY0);
+    assert_eq!(buffer[(10, first)].fg, theme::OVERLAY0);
     assert_eq!(buffer[amount_value].bg, theme::ROSEWATER, "the cursor");
     assert_eq!(buffer[(30, first + 2)].symbol(), "M");
     assert_eq!(buffer[(30, first + 2)].fg, theme::OVERLAY0);
@@ -1320,12 +1320,14 @@ fn a_slots_toggle_follows_b_and_a_lock_while_the_song_plays() {
     let switch = |app: &App| {
         let buffer = track_page_buffer(app);
         assert_eq!(buffer[(3, first)].symbol(), "1");
-        assert_eq!(
-            buffer[(7, first)].symbol(),
-            " ",
-            "a plain space, which the terminal draws it over"
-        );
-        assert_eq!(buffer[(9, first)].symbol(), "D");
+        for x in [7, 8] {
+            assert_eq!(
+                buffer[(x, first)].symbol(),
+                " ",
+                "plain spaces, which its picture covers"
+            );
+        }
+        assert_eq!(buffer[(10, first)].symbol(), "D");
         let (glyph, color, _) = glyph_at(&buffer, (6, first));
         (glyph, color)
     };
@@ -1336,7 +1338,8 @@ fn a_slots_toggle_follows_b_and_a_lock_while_the_song_plays() {
     let buffer = track_page_buffer(&app);
     assert_eq!(buffer[(6, second)].symbol(), " ");
     assert_eq!(buffer[(7, second)].symbol(), " ");
-    assert_eq!(buffer[(9, second)].symbol(), "E");
+    assert_eq!(buffer[(8, second)].symbol(), " ");
+    assert_eq!(buffer[(10, second)].symbol(), "E");
 
     // `b` flips it from anywhere in the slot, and back.
     press(&mut app, "b");
@@ -1432,11 +1435,11 @@ fn the_track_pages_cursor_goes_through_a_rack_on_its_own() {
 }
 
 #[test]
-fn a_toggle_takes_two_cells_and_nothing_moves_when_one_flips() {
+fn a_toggle_takes_three_cells_and_nothing_moves_when_one_flips() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = on_fx_page();
     // Glue, with its slot's switch in its title and Auto and Peak Clip in its grid, and the cursor
-    // on Auto, its colours over both the toggle's cells.
+    // on Auto, its colours over all the toggle's cells.
     press(&mut app, "K");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
