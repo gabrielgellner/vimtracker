@@ -844,7 +844,7 @@ fn the_fugues_three_voices_follow_its_theme_and_an_edit_to_it_reaches_them() {
     assert_eq!(notes(&edited, 1)[1], "C-5");
     assert_eq!(notes(&edited, 2)[1], "C-2");
     assert_eq!(notes(&edited, 3)[0], "F-4");
-    for track in 1..4 {
-        assert_eq!(edited.tracks[track].phrases[&0].generators().len(), 1);
+    for track in &edited.tracks[1..4] {
+        assert_eq!(track.phrases[&0].generators().len(), 1);
     }
 }

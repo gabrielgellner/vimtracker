@@ -43,8 +43,8 @@ fn canon(tracks: usize, rows: usize) -> Arc<Song> {
     song.tracks[0]
         .phrases
         .insert(0, Arc::new(Phrase::from_steps(steps(&THEME))));
-    for track in 1..tracks {
-        song.tracks[track]
+    for track in song.tracks.iter_mut().take(tracks).skip(1) {
+        track
             .phrases
             .insert(0, Arc::new(Phrase::from_steps(steps(&vec![EMPTY; rows]))));
     }

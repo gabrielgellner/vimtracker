@@ -257,13 +257,15 @@ writes again whenever it changes, and plays them at its own track's `Speed`.
 
 | Row | Does |
 |---|---|
-| Source | The phrase it follows, like `T02:05`: phrase `05` of track 2. `K` lists them |
-| Transpose | Up or down, in the scale's degrees while it's on, and semitones off |
+| Source | What it follows: `T02:05` is track 2's phrase `05`. `K` lists them |
+| Transpose | Up or down, in the scale's degrees, or semitones with it off |
 | Invert | Turns the notes upside down, about the source's first note |
-| About | With Invert on, the note it turns about: `First`, or one you choose |
+| About | With Invert on, the note it turns about: `First`, or one chosen |
 | Reverse | Plays the source backwards, its last row first |
 | Rotate | Comes in that many rows late, going round the source |
-| FX | Copies the source's FX columns too. Off, as a lock may mean something else here |
+| FX | Copies the source's FX columns too, off at first |
+
+FX starts off, as a lock may mean something else on another machine.
 
 `Source` starts on the phrase beside it on the nearest track before, or after
 if there's none, or on what that phrase follows, so each voice of a canon starts

@@ -282,7 +282,7 @@ mod tests {
             "OFF -- --- --- ---",
             "--- -- --- res:20 ---",
         ]);
-        let steps = rows(&vec!["A-4 30 --- pan:10 ---"; 3]);
+        let steps = rows(&["A-4 30 --- pan:10 ---"; 3]);
         let out = follow(&steps, OFF, Follow::default(), &source);
         assert_eq!(
             out,
