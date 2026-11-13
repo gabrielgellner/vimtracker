@@ -142,7 +142,7 @@ fn space_0_opens_the_page_on_the_tracks_sample_whole_with_the_cursor_on_its_star
 #[test]
 fn g_d_on_the_sound_pages_sample_row_opens_it_and_c_o_comes_back() {
     let (mut app, _realtime) = app();
-    keys(&mut app, "Space 4 l g d");
+    keys(&mut app, "Space 5 l g d");
     assert_eq!(app.view, View::Sample);
     assert_eq!(cursor(&app), 1000);
     keys(&mut app, "C-o");
@@ -940,7 +940,7 @@ fn a_track_with_no_sample_says_so() {
     draw(&mut app, &mut graphics, 163, 42);
     let (terminal, sent) = draw(&mut app, &mut graphics, 163, 42);
     assert!(sent.is_empty(), "{sent:?}");
-    assert!(row(&terminal, 2).contains("Track 01 plays no sample. Space 5 chooses one"));
+    assert!(row(&terminal, 2).contains("Track 01 plays no sample. :sample chooses one"));
 }
 
 #[test]
@@ -1026,7 +1026,7 @@ fn k_on_sli_lists_the_slices_with_their_starts_and_puts_the_one_chosen() {
     assert_eq!(slot.command, Some(FxCommand::Set(SettingId::SLICE)));
     assert_eq!(slot.coarse(), 2);
     // The Sound page's `Slice` lists them too, for the track's own.
-    keys(&mut app, "Space 4 g g j K j j j Enter");
+    keys(&mut app, "Space 5 g g j K j j j Enter");
     assert_eq!(app.song().tracks[0].setting(SettingId::SLICE), 3);
 }
 
@@ -2426,7 +2426,7 @@ fn first_entry(app: &App) -> BankEntry {
 
 /// The track page's Sound page, with the cursor on the Sampler device's `Tune` or `Cents`.
 fn on_tuning(app: &mut App, control: Control) {
-    keys(app, "Space 4");
+    keys(app, "Space 5");
     let track = app.song().tracks[0].clone();
     let row = if control == Control::Tune { 1 } else { 2 };
     app.track_page.move_to(Some(&track), row, 2);

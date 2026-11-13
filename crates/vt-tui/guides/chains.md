@@ -93,7 +93,7 @@ status line means only that there are unsaved changes.
 | `:track add 4` | Add 4 tracks |
 | `:track del` | Remove the last track, with its chains and phrases |
 | `:tvol C0` | Set this track's level in hex, shown as `TVol` |
-| `Space 4` | The track page: its sound, modulation and effects |
+| `Space 5` to `Space 8` | The track page: sound, modulation, effects, generators |
 | `Space m`, `:mute` | Mute or unmute this track |
 | `Space s`, `:solo` | Solo or unsolo this track |
 | `Space g m`, `Space g s` | The same, at the next line of the launch grid |

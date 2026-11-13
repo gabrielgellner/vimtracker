@@ -1,12 +1,12 @@
 # The track page, envelopes and LFOs
 
-Press `Space 4` for what a track holds apart from its steps, on four pages: Sound
+Press `Space 5` to `Space 8` for what a track holds apart from its steps, on four pages: Sound
 has its machine, filter, output and how it plays, with a bar beside each value showing where
 it sits between the lines at each end of its range (a centred one, like Pan or Trim, with a faint
 `┊` at its middle), and moving with whatever
 plays it, with a dim mark left where it's set once it's a cell or more away, Mod its six mod slots,
 envelopes and LFOs, its accumulator and arpeggio, FX its effects, and Gen the live
-columns of the phrase under the cursor. `H` and `L` go to the previous or next page, each with the cursor where you left it, or on its first setting the first time. FX columns belong
+columns of the phrase under the cursor, on `Space 5`, `Space 6`, `Space 7` and `Space 8` in that order. `H` and `L` go to the previous or next page, each with the cursor where you left it, or on its first setting the first time. FX columns belong
 to steps, and an LFO keeps moving on its own, like a filter drifting under a
 hat pattern.
 
@@ -1578,7 +1578,7 @@ holds still wins on its row, and modulation of that setting goes on top.
 
 ## The mixer
 
-Press `Space 6` for a strip for each track: its name, a meter of what it's playing
+Press `Space 4` for a strip for each track: its name, a meter of what it's playing
 with `L` and `R` bars, a fader beside them showing its `Level`, then its `Trim`,
 `Level`, `Pan`, `Send A`, `Send B`, mute and solo. It opens on `Level`. The meters are on the same scale as the main one,
 with `0` marked, and show the track after its level and pan. `h` and `l` move between

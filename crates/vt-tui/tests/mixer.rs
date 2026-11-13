@@ -13,7 +13,7 @@ use common::*;
 fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
     let (mut app, _rt) = app();
     let return_a = 2 + MAX_GROUPS;
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     // Past the groups, which are empty and so folded away.
     press(&mut app, "ll");
     press(&mut app, "jj");
@@ -39,7 +39,7 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     use vt_tui::views::status::column_name;
     let (mut app, _rt) = app();
     // With the empty groups shown.
-    press(&mut app, " 6zRjj");
+    press(&mut app, " 4zRjj");
     assert_eq!(column_name(&app), "Send A");
     press(&mut app, "ll");
     assert_eq!(app.cursor.track, 2);
@@ -108,7 +108,7 @@ fn mixer_line(app: &App, name: &str) -> String {
 fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     assert_eq!(app.view, View::Mixer);
     let depth = app.history.undo_depth();
     press(&mut app, "=");
@@ -149,7 +149,7 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
     special(&mut app, KeyCode::Esc);
     block(&mut realtime, &mut app);
     let _ = loudest(&mut realtime, 96_000);
-    press(&mut app, " 6Gk=");
+    press(&mut app, " 4Gk=");
     assert!(app.levels[0].mute);
     assert!(
         mixer_line(&app, "Mute").contains('M'),
@@ -160,7 +160,7 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
     assert!(app.levels[0].mute, "= only switches on");
     press(&mut app, " 3k;");
     assert_eq!(loudest(&mut realtime, 2000), 0.0, "muted");
-    press(&mut app, " 6-");
+    press(&mut app, " 4-");
     assert!(!app.levels[0].mute);
     press(&mut app, "K");
     assert!(app.levels[0].mute);
@@ -179,7 +179,7 @@ fn a_long_mixer_scrolls_to_keep_the_track_in_view() {
     let (mut app, _realtime) = app();
     command(&mut app, "track add 30");
     command(&mut app, "name bd");
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     assert!(
         mixer_text(&app)[2].contains("01 BD"),
         "{}",
@@ -216,7 +216,7 @@ fn a_groups_strip_names_it_and_its_tracks_and_its_tracks_are_marked() {
     command(&mut app, "track add 4");
     command(&mut app, "group 1 1-3");
     command(&mut app, "group 2 5");
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     let text = mixer_text_at(&app, 160);
     let (names, routing) = (&text[2], &text[3]);
     // G1's strip has its icon and name, and under it the tracks in it.
@@ -261,7 +261,7 @@ fn the_mixer_names_its_parts_over_their_strips_with_the_cursors_brighter() {
     command(&mut app, "track add 4");
     command(&mut app, "group 1 1-3");
     command(&mut app, "group 2 4");
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     // Drawn at the fullscreen kitty's size.
     let draw = |app: &App| {
         let backend = ratatui::backend::TestBackend::new(163, 42);
@@ -318,7 +318,7 @@ fn the_mixer_names_its_parts_over_their_strips_with_the_cursors_brighter() {
     let (mut app, _realtime) = self::app();
     command(&mut app, "track add 4");
     command(&mut app, "group 1 1-3");
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     let parts = line(&draw(&app), 1);
     assert!(parts.contains("──   Groups   ─ Returns"), "{parts}");
 }
@@ -330,7 +330,7 @@ fn a_tracks_mute_and_solo_from_its_group_show_apart_from_its_own() {
     command(&mut app, "track add 2");
     command(&mut app, "group 1 1-2");
     let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     app.levels[group].mute = true;
     app.levels[2].mute = true;
     let mutes = mixer_line(&app, "Mute");
@@ -401,7 +401,7 @@ fn the_mixer_draws_a_strip_per_track_with_a_meter_and_a_fader() {
         app.track_meters[0].update(Some(reading), 0.033);
     }
     command(&mut app, "track add 6");
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     let text = mixer_text(&app);
     assert!(text[2].starts_with("       01"), "{}", text[2]);
     assert!(text[2].contains("08"), "eight strips fit: {}", text[2]);
@@ -435,7 +435,7 @@ fn the_mixer_draws_a_strip_per_track_with_a_meter_and_a_fader() {
 fn the_mixer_has_a_trim_above_each_fader_and_opens_on_the_fader() {
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     assert_eq!(column_name(&app), "Level");
     press(&mut app, "k");
     assert_eq!(column_name(&app), "Trim");

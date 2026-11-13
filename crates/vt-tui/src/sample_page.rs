@@ -572,7 +572,7 @@ impl App {
         };
         let Some(entry) = self.song().bank.get(number) else {
             return Err(format!(
-                "Track {:02} plays no sample. Space 5 chooses one",
+                "Track {:02} plays no sample. :sample chooses one",
                 track + 1
             ));
         };

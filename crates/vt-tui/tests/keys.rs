@@ -438,7 +438,7 @@ fn cmd_with_the_movement_keys_changes_notes_and_selections() {
 #[test]
 fn cmd_with_the_movement_keys_changes_the_mixer() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     with_cmd(&mut app, "D-l");
     assert_eq!(app.song().tracks[0].level, 0xE1);
     with_cmd(&mut app, "D-j");
@@ -517,7 +517,7 @@ fn cmd_with_the_movement_keys_does_as_the_adjust_keys_on_every_page() {
     cmd_keys_do_as_their_adjust_keys(&mut app, "on the groove");
 
     // The mixer's Trim, Level and Pan.
-    press(&mut app, " 6");
+    press(&mut app, " 4");
     assert_eq!(app.view, View::Mixer);
     cmd_keys_do_as_their_adjust_keys(&mut app, "on Level");
     press(&mut app, "k");
@@ -526,7 +526,7 @@ fn cmd_with_the_movement_keys_does_as_the_adjust_keys_on_every_page() {
     cmd_keys_do_as_their_adjust_keys(&mut app, "on Pan");
 
     // The track page's Sound and Mod pages.
-    press(&mut app, " 4jjjjjjjj");
+    press(&mut app, " 5jjjjjjjj");
     assert_eq!(app.view, View::Track);
     cmd_keys_do_as_their_adjust_keys(&mut app, "on the Sound page");
     press(&mut app, "L0l");
@@ -637,7 +637,7 @@ fn an_unbound_key_with_cmd_does_nothing_but_its_release_lets_go() {
     special(&mut app, KeyCode::Esc);
 
     // A note held on the keyboard ends when its key is let go after Cmd goes down.
-    press(&mut app, " 4;a");
+    press(&mut app, " 5;a");
     let _ = loudest(&mut realtime, 4800);
     assert!(loudest(&mut realtime, 4800) > 0.01);
     app.key_event(command_a, KeyEventKind::Release, now);
@@ -664,7 +664,7 @@ fn a_press_of_the_held_key_is_the_terminal_repeating_it() {
     }
     writer.finalize().unwrap();
     command(&mut app, &format!("sample {}", path.display()));
-    press(&mut app, " 4;a");
+    press(&mut app, " 5;a");
     let _ = loudest(&mut realtime, 24_000);
     let held = loudest(&mut realtime, 2400);
     // kitty on macOS has sent a held `a`'s repeats as presses, with no release between.
@@ -912,4 +912,49 @@ fn the_transport_is_glyphs_with_the_waits_named() {
     // A launch cued on any track waits for the grid too.
     app.jam[2].cued = Some(Some(1));
     assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} LAUNCH  ")));
+}
+
+#[test]
+fn the_space_digits_show_the_mixer_each_track_page_and_the_project() {
+    use vt_tui::track_page::Page;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 4");
+    assert_eq!(app.view, View::Mixer);
+    for (digit, page) in [
+        ('5', Page::Sound),
+        ('6', Page::Mod),
+        ('7', Page::Fx),
+        ('8', Page::Gen),
+    ] {
+        press(&mut app, &format!(" {digit}"));
+        assert_eq!(app.mode, Mode::Normal, "no list opens");
+        assert_eq!((app.view, app.track_page.page), (View::Track, page));
+    }
+    // Each page keeps its cursor, and H and L still go between them.
+    press(&mut app, " 5j");
+    let sound = app.track_control();
+    press(&mut app, " 6 5");
+    assert_eq!(app.track_control(), sound);
+    // C-o comes back from one page to another.
+    app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
+    assert_eq!(app.track_page.page, Page::Mod);
+    press(&mut app, "H");
+    assert_eq!(app.track_page.page, Page::Sound);
+    assert_eq!(app.track_control(), sound);
+    press(&mut app, " 9");
+    assert_eq!(app.view, View::Project);
+    press(&mut app, " 0");
+    assert_eq!(app.view, View::Sample);
+}
+
+#[test]
+fn the_kit_and_sample_lists_open_from_their_commands() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "sample");
+    assert_eq!(app.mode, Mode::Picker);
+    special(&mut app, KeyCode::Esc);
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "kit");
+    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.picker.as_ref().unwrap().title, "Kits");
 }

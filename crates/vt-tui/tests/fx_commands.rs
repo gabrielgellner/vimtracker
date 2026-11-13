@@ -146,7 +146,7 @@ fn k_lists_commands_by_category_and_opens_searching() {
 fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     let (mut app, _realtime) = app();
     // Mod 4's Dest, the first LFO's, is on the Mod page, beside the envelopes.
-    press(&mut app, &format!(" 4L{}$", to_lfo(0)));
+    press(&mut app, &format!(" 5L{}$", to_lfo(0)));
     let list = |app: &mut App| {
         press(app, "K/");
         let labels: Vec<String> = app
@@ -210,7 +210,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
     use vt_model::settings::{Effect, SettingId};
     use vt_model::step::FxCommand;
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LL= 3");
+    press(&mut app, " 5LL= 3");
     let command = |app: &App, step: usize| app.phrase_here().unwrap().steps()[step].fx[0].command;
     let setting = |at| FxCommand::Set(SettingId::slot(0, Effect::Distort, at).unwrap());
 
@@ -270,7 +270,7 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
 #[test]
 fn the_phrase_view_names_a_slots_setting_in_a_wide_column() {
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LL= 3lllllK1amnt");
+    press(&mut app, " 5LL= 3lllllK1amnt");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "80");
     special(&mut app, KeyCode::Esc);
@@ -317,13 +317,13 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
             .any(|label| label.starts_with(&format!("{name}  ")))
     };
     // A sample track has no synth settings, in Dest or for a step.
-    let dest = labels(&mut app, &format!(" 4L{}$K/", to_lfo(0)));
+    let dest = labels(&mut app, &format!(" 5L{}$K/", to_lfo(0)));
     assert!(!on(&dest, "Har") && on(&dest, "Pitch"), "{dest:?}");
     let steps = labels(&mut app, " 3lllllK");
     assert!(!on(&steps, "HAR") && on(&steps, "CUT"), "{steps:?}");
 
     // On a synth they're there under their names on this voice.
-    press(&mut app, " 4H0Kfm");
+    press(&mut app, " 5H0Kfm");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].machine,
@@ -335,7 +335,7 @@ fn the_lists_only_hold_the_loaded_machines_settings_by_their_names() {
     assert!(on(&steps, "INDX"), "{steps:?}");
 
     // One chosen stays through a change of machine, and says what happened.
-    press(&mut app, " 4K/ratio");
+    press(&mut app, " 6K/ratio");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].mods[3].destination,
@@ -376,7 +376,7 @@ fn an_lfos_dest_list_only_reaches_the_lfos_after_it() {
             .iter()
             .any(|label| label.starts_with(&format!("{name}  ")))
     };
-    let first = labels(&mut app, &format!(" 4L{}$K/", to_lfo(0)));
+    let first = labels(&mut app, &format!(" 5L{}$K/", to_lfo(0)));
     assert!(
         has(&first, "M5 Depth") && has(&first, "M5 Phase") && has(&first, "M6 Phase"),
         "{first:?}"
@@ -420,7 +420,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     use vt_tui::input::picker::{Focus, Row};
     let (mut app, _realtime) = app();
     // Distort in slot 1, then Mod 4's Dest.
-    press(&mut app, &format!(" 4LL=H{}$K", to_lfo(0)));
+    press(&mut app, &format!(" 5LL=H{}$K", to_lfo(0)));
     let current = |app: &App| {
         app.picker
             .as_ref()
@@ -503,7 +503,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
 #[test]
 fn dests_window_draws_categories_as_dim_headings_with_counts() {
     let (mut app, _realtime) = app();
-    press(&mut app, &format!(" 4L{}$Kjl", to_lfo(0)));
+    press(&mut app, &format!(" 5L{}$Kjl", to_lfo(0)));
     let mut picker = app.picker.clone().unwrap();
     let backend = ratatui::backend::TestBackend::new(100, 24);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
@@ -546,7 +546,7 @@ fn dests_window_draws_categories_as_dim_headings_with_counts() {
 fn a_plain_list_opens_on_the_list_and_typing_searches() {
     // `K` then typing on Machine, and `/` goes to the search.
     let (mut app, _realtime) = app();
-    press(&mut app, " 4Kpl");
+    press(&mut app, " 5Kpl");
     assert_eq!(app.picker.as_ref().unwrap().query, "pl");
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);
@@ -1111,7 +1111,7 @@ fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
     use vt_model::step::FxCommand;
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
-    press(&mut app, " 4LLK");
+    press(&mut app, " 5LLK");
     press(&mut app, "delay");
     special(&mut app, KeyCode::Enter);
     press(&mut app, " 3");

@@ -4,7 +4,7 @@
 #
 #   scripts/live.sh start [args]   start it in a fresh folder, with these arguments
 #   scripts/live.sh keys a shift+semicolon escape ...   press keys, by kitty's names
-#   scripts/live.sh text 'Space 4'  type text as it is, with \r for Enter
+#   scripts/live.sh text ' 5'  type text as it is, with \r for Enter
 #   scripts/live.sh screen          print what's on screen
 #   scripts/live.sh shot out.png    save a picture of its window, kitty's images and all
 #   scripts/live.sh stop            close it

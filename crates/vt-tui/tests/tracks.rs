@@ -208,7 +208,7 @@ fn name_sets_and_clears_a_tracks_name_and_it_shows_in_the_phrase() {
 
 #[test]
 fn brackets_move_between_tracks_from_every_view() {
-    for view in [" 1", " 2", " 3", " 4", " 6"] {
+    for view in [" 1", " 2", " 3", " 5", " 4"] {
         let (mut app, _realtime) = app();
         press(&mut app, view);
         press(&mut app, "]b");

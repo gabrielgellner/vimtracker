@@ -392,7 +392,7 @@ impl App {
         let mut items = self.bank_items(|number| Pick::BankSample { track, number });
         items.push(
             Item::new("Add a file", Pick::Line(Line::Sample(None)))
-                .meaning("Space 5, from the kit and your folders"),
+                .meaning(":sample, from the kit and your folders"),
         );
         let at = self.bank_place(current);
         self.show_picker(Picker::new("Bank", items).opened_on(Some(at)));

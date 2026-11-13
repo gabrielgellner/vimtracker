@@ -387,7 +387,7 @@ fn main_loop(
             app.audio.running = false;
             app.audio.devices = audio::devices();
             app.status =
-                "The audio device changed or went away, so audio stopped. Space 7 chooses one"
+                "The audio device changed or went away, so audio stopped. Space 9 L chooses one"
                     .to_owned();
         }
         app.audio.latency_us = stats.latency.load(Ordering::Relaxed);

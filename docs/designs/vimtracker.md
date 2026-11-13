@@ -684,9 +684,11 @@ fields, and 33 files besides `app.rs` add an `impl App` block each, such as `tra
 `project_page.rs`, `audio_page.rs` and `sample_page.rs`.
 
 **Pages and modes** (`input/mode.rs`). A `View` is a page: the song view (`Space 1`), the chain view
-(`Space 2`), the phrase view (`Space 3`), the track page (`Space 4`) with its Sound, Mod, FX and Gen pages
-on `H` and `L`, the mixer (`Space 6`), the audio page (`Space 7`), the project page (`Space 9`) and the
-sample page (`Space 0`). `Space 5` and `Space 8` choose a sample and a kit in the picker. A `Mode` is
+(`Space 2`), the phrase view (`Space 3`), the mixer (`Space 4`), the track page with its Sound, Mod, FX
+and Gen pages on `Space 5` to `Space 8` and on `H` and `L` (`Cmd::ShowTrackPage`), the project page
+(`Space 9`, `Cmd::ShowProject`), which is two views, `View::Project` for the song's settings and
+`View::Audio` for this machine's, on `H` and `L` (`PROJECT_PAGES`, decision 297), and the sample page
+(`Space 0`). `:sample` and `:kit` choose a sample and a kit in the picker. A `Mode` is
 Normal, operator-pending, the two Visual modes, Insert, Replace, the command line, the shape panel,
 a jump, the keyboard playing, the picker, a guide or help. The chain, track, mixer and song modes
 only name Normal's keys on those pages, for the binding table.
