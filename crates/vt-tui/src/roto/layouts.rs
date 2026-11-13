@@ -1689,6 +1689,24 @@ const GEN_MULTIPLY: DeviceLayout = live(
         [s("factor"), s("masks"), __, __, __, __, __, __],
     )],
 );
+/// The values there as bits: each bit transform has one of the three, and the others' knobs are
+/// dark.
+const GEN_BITS: DeviceLayout = live(
+    "gen/bits",
+    &[knobs(
+        "Bits",
+        [
+            s("flip"),
+            s("keep"),
+            s("turn"),
+            GAP,
+            GAP,
+            GAP,
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
 /// A transform reworks what's there, with no settings of its own but its rows.
 const GEN_REWORK: DeviceLayout = live(
     "gen/rework",
@@ -1709,7 +1727,7 @@ const GEN_REWORK: DeviceLayout = live(
 
 /// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
 /// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 12] = [
+pub const GENERATORS: [&DeviceLayout; 13] = [
     &GEN_RAMP,
     &GEN_RANDOM,
     &GEN_WAVE,
@@ -1721,6 +1739,7 @@ pub const GENERATORS: [&DeviceLayout; 12] = [
     &GEN_WALK,
     &GEN_PINK,
     &GEN_MULTIPLY,
+    &GEN_BITS,
     &GEN_REWORK,
 ];
 
@@ -1738,6 +1757,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
         FillKind::Walk => &GEN_WALK,
         FillKind::Pink => &GEN_PINK,
         FillKind::Multiply => &GEN_MULTIPLY,
+        FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => &GEN_BITS,
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,
     }
 }

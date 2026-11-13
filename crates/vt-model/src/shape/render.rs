@@ -671,7 +671,10 @@ fn filled<F: FnMut(usize, &Shaped)>(
             | FillKind::Invert
             | FillKind::Shuffle
             | FillKind::Reverse
-            | FillKind::Snap => unreachable!("reworked above"),
+            | FillKind::Snap
+            | FillKind::InvertBits
+            | FillKind::MaskBits
+            | FillKind::RotateBits => unreachable!("reworked above"),
             FillKind::Multiply => unreachable!("rendered by `bits::render`"),
             FillKind::Acid => unreachable!("rendered by `acid::render`"),
             FillKind::Follow => unreachable!("read from what it follows"),
@@ -743,6 +746,16 @@ fn reworked<F: FnMut(usize, &Shaped)>(
                 along_line(from, to, curved(t, shape.curve, shape.s), top)
             }
             FillKind::Invert => Shaped::kept(lowest + highest - value, top),
+            kind if kind.on_bits() => {
+                // A value with a fine part is worked on its whole part, and loses the fine.
+                let whole = shape
+                    .bits
+                    .worked(kind, value.clamp(0.0, top) as u8, top as u8);
+                Shaped {
+                    exact: f64::from(whole),
+                    whole,
+                }
+            }
             _ => Shaped::kept(value, top),
         };
         out.put(offset, shaped);
