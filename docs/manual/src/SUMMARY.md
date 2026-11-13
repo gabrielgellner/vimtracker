@@ -12,6 +12,10 @@
 
 - [How a track plays: time, gates, lanes and routing](how-a-track-plays.md)
 
+# Tutorials
+
+- [Generative sequencers, recreated](tutorials/generators.md)
+
 # Reference
 
 - [Selecting and editing](guides/editing.md)
