@@ -2,14 +2,17 @@
 //! wave, two values in turn, or a short list of them in turn, or reworking the values already
 //! there. On the Note column, the steps are the scale's degrees while it's on, `Acid` writes a 303
 //! line, its notes, accents and slides together, and `Follow` mirrors another track's phrase.
+//! `Multiply` reworks the rhythm there rather than its values.
 
 mod acid;
+mod bits;
 mod follow;
 pub mod params;
 mod render;
 mod walk;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
+pub use bits::{Bits, MAX_FACTOR};
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use params::{Context, GEN_COLUMNS, GEN_ROWS, GenParam, Starts};
@@ -148,11 +151,13 @@ pub enum FillKind {
     Reverse,
     /// The notes there, each moved to the nearest in the scale.
     Snap,
+    /// The rhythm there, sixteen rows a number, multiplied, as Numeric Repetitor's is.
+    Multiply,
 }
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Ramp,
         Self::Random,
         Self::Walk,
@@ -167,6 +172,7 @@ impl FillKind {
         Self::Shuffle,
         Self::Reverse,
         Self::Snap,
+        Self::Multiply,
     ];
 
     /// The name on screen.
@@ -186,6 +192,7 @@ impl FillKind {
             Self::Shuffle => "Shuffle",
             Self::Reverse => "Reverse",
             Self::Snap => "Snap",
+            Self::Multiply => "Multiply",
         }
     }
 
@@ -206,6 +213,7 @@ impl FillKind {
             Self::Shuffle => "The values there, in a new order",
             Self::Reverse => "The values there, the other way",
             Self::Snap => "The notes there into the scale",
+            Self::Multiply => "The rhythm there, times a number",
         }
     }
 
@@ -213,8 +221,19 @@ impl FillKind {
     pub fn reworks(self) -> bool {
         matches!(
             self,
-            Self::Scale | Self::Invert | Self::Shuffle | Self::Reverse | Self::Snap
+            Self::Scale
+                | Self::Invert
+                | Self::Shuffle
+                | Self::Reverse
+                | Self::Snap
+                | Self::Multiply
         )
+    }
+
+    /// Whether it chooses its rows with a `Where`. A `Follow` writes every row from its source,
+    /// and `Multiply` reads and writes the rhythm itself.
+    pub fn has_where(self) -> bool {
+        !matches!(self, Self::Follow | Self::Multiply)
     }
 }
 
@@ -317,14 +336,18 @@ impl ShapeColumn {
         }
     }
 
-    /// The fills it offers: `Snap`, `Acid` and `Follow` only mean something for notes, and a
-    /// transform nothing for notes of its own, as there are none to rework.
+    /// The fills it offers: `Snap`, `Acid` and `Follow` only mean something for notes, `Multiply`
+    /// for notes and FX commands, whose rows are a rhythm, and a transform nothing for notes of
+    /// its own, as there are none to rework.
     pub fn fills(self) -> Vec<FillKind> {
         FillKind::ALL
             .into_iter()
             .filter(|kind| {
                 !matches!(kind, FillKind::Snap | FillKind::Acid | FillKind::Follow)
                     || matches!(self, Self::Note { .. })
+            })
+            .filter(|kind| {
+                *kind != FillKind::Multiply || matches!(self, Self::Note { .. } | Self::Fx { .. })
             })
             .filter(|kind| !(kind.reworks() && self.writes_notes()))
             .collect()
@@ -656,6 +679,9 @@ pub struct Shape {
     /// How many values a `1/f` fill sums. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Pink::is_default")]
     pub pink: Pink,
+    /// What `Multiply` multiplies by. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Bits::is_default")]
+    pub bits: Bits,
     /// How many passes each of its variations lasts, a new seed each time: `0` for none, the
     /// seed every pass, as written. Only a shape that [draws](Shape::draws) varies. Saved only
     /// once it's set.
@@ -682,7 +708,8 @@ impl Shape {
         let random_wave =
             self.kind == FillKind::Wave && matches!(self.wave, Wave::Random | Wave::Smooth);
         random_wave
-            || matches!(self.place, Where::Chance(_)) && self.kind != FillKind::Follow
+            || matches!(self.place, Where::Chance(_))
+                && !matches!(self.kind, FillKind::Follow | FillKind::Multiply)
             || matches!(
                 self.kind,
                 FillKind::Random
@@ -1008,6 +1035,7 @@ mod tests {
             follow: Follow::default(),
             walk: Walk::default(),
             pink: Pink::default(),
+            bits: Bits::default(),
             vary: 0,
         }
     }
@@ -1839,6 +1867,19 @@ mod tests {
         assert_eq!(named(&steps, CHROMATIC, snap), names, "with the scale off");
         assert!(CHROMATIC.fills().contains(&FillKind::Snap));
         assert!(!VEL.fills().contains(&FillKind::Snap));
+    }
+
+    #[test]
+    fn multiply_is_offered_where_the_rows_are_a_rhythm() {
+        let fx = ShapeColumn::Fx {
+            slot: 0,
+            command: FxCommand::RES,
+        };
+        assert!(CHROMATIC.fills().contains(&FillKind::Multiply));
+        assert!(fx.fills().contains(&FillKind::Multiply));
+        for column in [VEL, ShapeColumn::Nudge, ShapeColumn::Length] {
+            assert!(!column.fills().contains(&FillKind::Multiply));
+        }
     }
 
     #[test]

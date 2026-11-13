@@ -25,8 +25,8 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, DEFAULT_RATE, Edge, FillKind, Follow, Pink, Shape, ShapeColumn, Source, Values, Walk,
-    WaveRate, Where,
+    Acid, Bits, DEFAULT_RATE, Edge, FillKind, Follow, Pink, Shape, ShapeColumn, Source, Values,
+    Walk, WaveRate, Where,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
@@ -161,6 +161,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         follow: Follow::default(),
         walk: Walk::default(),
         pink: Pink::default(),
+        bits: Bits::default(),
         vary: 0,
     }
 }

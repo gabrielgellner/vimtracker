@@ -139,7 +139,9 @@ impl GenDrawing {
 mod tests {
     use super::*;
     use vt_model::generator::Span;
-    use vt_model::shape::{Acid, DEFAULT_RATE, FillKind, Follow, Pink, Shape, Values, Walk, Where};
+    use vt_model::shape::{
+        Acid, Bits, DEFAULT_RATE, FillKind, Follow, Pink, Shape, Values, Walk, Where,
+    };
     use vt_model::song::Phrase;
 
     #[test]
@@ -170,6 +172,7 @@ mod tests {
             follow: Follow::default(),
             walk: Walk::default(),
             pink: Pink::default(),
+            bits: Bits::default(),
             vary: 0,
         };
         let column = ShapeColumn::Note {

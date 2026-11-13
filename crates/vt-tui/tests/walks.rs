@@ -221,3 +221,10 @@ fn dot_walks_another_selection_from_its_own_ends() {
     assert_eq!(after[4], 0x00);
     assert_ne!(after[4..], [0x40; 4]);
 }
+
+#[test]
+fn pink_finds_1_f_by_its_meaning() {
+    let (mut app, _rt) = app_with(&[NOTE; 8]);
+    keys(&mut app, "lvGSKpink<Enter>");
+    assert_eq!(app.shape.as_ref().unwrap().shape.kind, FillKind::Pink);
+}

@@ -16,6 +16,7 @@ there are no samples to find.
 | `live-generators` | Elektron's Euclidean mode | Columns kept live with `L`, and what hand edits do to them |
 | `acid-lines` | Roland's TB-303 | `S`'s `Acid` fill: notes, accents and slides rolled together |
 | `walks` | Max's `drunk` and Voss's 1/f music | `S`'s `Walk` and `1/f` fills, kept live |
+| `euclid`, again | Noise Engineering's Numeric Repetitor | `S`'s `Multiply` on the kick's rhythm |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -97,7 +98,7 @@ The song has a loop already kept, and `Mutate` at `20%`, so it wanders away from
 4.  The register: `Space 4`, then `L` for the Mod page. Put the cursor on `Mod 4`'s type, in the
     title of the device at the top right, `LFO` (`l` goes along a title and on into the device
     beside it), and press `K`, `steps`, `Enter`.
-5.  Still in its title: `l` to its mode, `Trig`, and `=` twice for `Note`. `l` `l` to its
+5.  Still in its title: `l` to its mode, `Trig`, and `K`, `note`, `Enter`. `l` `l` to its
     `Dest`, `---`, and `K`, `scale`, `Enter` for `Pitch in scale`.
 6.  Its `Depth`, the third row on its left, `i` `0C` `Enter`, so a drawn value moves the note
     by up to an octave either way.
@@ -154,7 +155,7 @@ every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu
 3.  `Space 3`, `:len 8`, and type the eight notes above in Insert.
 4.  `:order random`. The phrase's title says `Random`, and the playhead jumps.
 5.  `Space 4`, `L`, and make `Mod 4` a `Steps` slot as in the Turing Machine: `K` `steps`
-    `Enter` on its type, `=` twice on its mode for `Note`, `Pitch in scale` as its `Dest`,
+    `Enter` on its type, `K` `note` `Enter` on its mode, `Pitch in scale` as its `Dest`,
     `Depth` `0C`, and `Mutate` `12%` (`+` once, `=` twice).
 6.  The drone: `W`, a `VA` (`K`, `va`, `Enter`), `:name Y1`. In the phrase view, `:len 2`, a
     `D-1` on row `00` and an `A-1` on row `01`, each with a gate of `SGL8`: in Insert on the gate
@@ -555,6 +556,33 @@ bass's filter, the delay and reverb sends, and the levels.
 *   `Fill` `Walk` on the tune, then `1/f` again, to hear brown against pink; `Random` is white.
 *   `Edge` `Wrap` on the bass: a walk past `A-2` comes back in at `A-1`.
 *   `Step` `20` on the hats for a rougher player, or `Run` 2 to hold each velocity for two.
+
+## Numeric Repetitor
+
+Noise Engineering's Numeric Repetitor reads a 16-step rhythm as a 16-bit number and multiplies
+it: one knob turns a single rhythm into a family of related ones, all of them still in step with
+it. Doubling moves the rhythm a step later, and an odd number always keeps the downbeat.
+
+**Try it on the `euclid` song.** Open it, and on the kick's phrase (track 1, `Space 3`):
+
+1.  `Space g a` turns the live `Euclid` into plain notes, `x..x..x..x..x...`.
+2.  `gg` `vG` on the Note column and `S`. On `Fill`, `K`, `multiply`, `Enter`. `Factor` starts
+    at 3: `xx.xx.xx.xx.xx..`, a gallop.
+3.  `L` keeps it live, so `gl` opens it again later.
+
+**Try next.** `gl` on the kick and `=` or `-` on `Factor` while it plays:
+
+| Factor | Kick |
+|---|---|
+| 1 | `x..x..x..x..x...`, as it was |
+| 2 | `.x..x..x..x..x..`, a row late |
+| 5 | `x.xx.xx.xx.xx.x.` |
+| 9 | `x...x..x..x..x.x` |
+| 11 | `xx...x..x..x..xx` |
+
+`Masks` `On` thins the rhythm before 2 and 3 multiply it, as the module does. On the bass,
+after `Space g a`, whose notes differ, a new note takes the pitch of the one before it, so the
+line keeps its shape while the rhythm changes.
 
 ## Generators still to come
 

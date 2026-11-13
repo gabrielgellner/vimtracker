@@ -11,7 +11,8 @@ use vt_model::project::{load_song, save_song};
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, DEFAULT_RATE, FillKind, Follow, Pink, Shape, ShapeColumn, Source, Values, Walk, Where,
+    Acid, Bits, DEFAULT_RATE, FillKind, Follow, Pink, Shape, ShapeColumn, Source, Values, Walk,
+    Where,
 };
 use vt_model::song::{Phrase, Song};
 use vt_model::step::{Note, Step};
@@ -80,6 +81,7 @@ fn following(source: Source, follow: Follow) -> Shape {
         follow: Follow { source, ..follow },
         walk: Walk::default(),
         pink: Pink::default(),
+        bits: Bits::default(),
         vary: 0,
     }
 }

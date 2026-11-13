@@ -497,7 +497,7 @@ mod tests {
     use vt_model::lfo::Shape as Wave;
     use vt_model::samples::SamplePool;
     use vt_model::settings::SettingId;
-    use vt_model::shape::{Acid, DEFAULT_RATE, Follow, Pink, Values, Walk, Where};
+    use vt_model::shape::{Acid, Bits, DEFAULT_RATE, Follow, Pink, Values, Walk, Where};
     use vt_model::song::{Lane, Machine, SynthVoice};
     use vt_model::step::FxCommand;
 
@@ -527,6 +527,7 @@ mod tests {
             follow: Follow::default(),
             walk: Walk::default(),
             pink: Pink::default(),
+            bits: Bits::default(),
             vary: 0,
         }
     }
