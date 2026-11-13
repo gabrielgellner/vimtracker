@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds eight of them out of what vimtracker already has, each as a
+let you steer. This chapter builds nine of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -15,6 +15,7 @@ there are no samples to find.
 | `metropolix` | Intellijel's Metropolix | Pulses and gates per row, `ACU`, `ARP` and a pendulum order |
 | `live-generators` | Elektron's Euclidean mode | Columns kept live with `L`, and what hand edits do to them |
 | `acid-lines` | Roland's TB-303 | `S`'s `Acid` fill: notes, accents and slides rolled together |
+| `walks` | Max's `drunk` and Voss's 1/f music | `S`'s `Walk` and `1/f` fills, kept live |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -500,6 +501,53 @@ off-beats. The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `
     it new pitches, accents and slides.
 *   `Space g a` keeps the one you like as plain notes, to tweak by hand.
 
+## Walks and 1/f
+
+Max's `drunk` object is the classic random
+walk: each number a small step from the last, so a line drifts the way a hand does over the
+keys. In 1978 R. F. Voss and J. Clarke made melodies from three kinds of noise and played them
+to listeners: white, each note random, sounded too random, and brown, a walk, too wandering. They
+liked 1/f, or pink, noise best, which wanders but keeps coming back, as many tunes do. Martin
+Gardner's column on their paper gave the dice method this fill uses: several dice, each thrown
+half as often as the one before, summed.
+
+**How the song does it.** Three live columns in A minor, over a kick:
+
+| Track | Column | Shape |
+|---|---|---|
+| `LD` | Note | `1/f` from `A-2` to `A-4` on every other row of two bars, `Depth` 4 |
+| `BS` | Note | `Walk` from `A-1` to `A-2`, `Step` 1, on `Euclid` 7 of 16 |
+| `HH` | Velocity | `Walk` from `30` to `70`, `Step` `10`, over 16 hats |
+
+The tune moves a few degrees at a time and now and then further, and comes back toward the
+middle; the bass walks up and down the scale a degree at most; the hats' velocity drifts, as a
+drummer's does, rather than jumping about as `Random` would. [`song.ron`](songs/walks/song.ron)
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 96`.
+2.  The tune, on track 1: `Space 4`, `K` `string` `Enter`, `:name LD`. `Space 3`, `:len 32`
+    for two bars, then `vG` on the Note column and `S`. On `Fill`, `K`, `/1/f`, `Enter`: its name
+    starts with a digit, so `/` comes first. `From` `a2` and `To` `a4` (`i`, the note, `Enter`),
+    `Where` `Every` with an `Amount` of 2, and `L`.
+3.  The bass: `W`, on its Sound page `K` `va` `Enter`, `:name BS`, and in the phrase view `vG`,
+    `S`, `Fill` `Walk` (`K` `walk` `Enter`), `From` `a1`, `To` `a2`, `Step` 1, `Where` `Euclid`
+    with 7 hits, and `L`.
+4.  The hats: `W`, on its Sound page `K` `/hat` `Enter`, `:name HH`, and in the phrase view a
+    `C-4` on all 16 rows. `l` to the Velocity column, `gg`, `vG`, `S`, `Fill` `Walk`, `From` `30`
+    and `To` `70` (`i`, two hex digits), leave `Step` at the `10` it starts at, and `L`.
+
+Then a `Kick` on every beat. The finished song also sets the string's `Decay` and `Bright`, the
+bass's filter, the delay and reverb sends, and the levels.
+
+**Try next.**
+
+*   `gl` on the tune, then `r` for another: each is new, but they all wander the same way.
+*   `Depth` 2 for a tune nearer `Random`, 8 for long rises and falls.
+*   `Fill` `Walk` on the tune, then `1/f` again, to hear brown against pink; `Random` is white.
+*   `Edge` `Wrap` on the bass: a walk past `A-2` comes back in at `A-1`.
+*   `Step` `20` on the hats for a rougher player, or `Run` 2 to hold each velocity for two.
+
 ## Generators still to come
 
 These are planned, each its own issue, and this chapter grows a section as each lands:
@@ -510,7 +558,6 @@ These are planned, each its own issue, and this chapter grows a section as each 
 | [#585](https://github.com/gabrielgellner/vimtracker/issues/585) | Marbles' shaped random values: Spread, Bias and weighted scale Steps |
 | [#586](https://github.com/gabrielgellner/vimtracker/issues/586) | Marbles' rhythm models as `Where` choices |
 | [#587](https://github.com/gabrielgellner/vimtracker/issues/587) | Variation: a Markov chain learned from the phrase's own notes |
-| [#588](https://github.com/gabrielgellner/vimtracker/issues/588) | Walk and 1/f fills: Brownian and pink melodies |
 | [#589](https://github.com/gabrielgellner/vimtracker/issues/589) | Cellular automata rhythms from Wolfram's elementary rules |
 | [#590](https://github.com/gabrielgellner/vimtracker/issues/590) | Tonnetz chord movement: P, L and R moves |
 | [#591](https://github.com/gabrielgellner/vimtracker/issues/591) | Per-attribute loop lengths after Kria |

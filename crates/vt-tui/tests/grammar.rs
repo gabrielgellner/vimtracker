@@ -1665,9 +1665,9 @@ fn the_panel_fills_with_a_wave_and_shows_only_its_settings() {
     keys(&mut app, "lvGS");
     let panel = |app: &App| app.shape.clone().unwrap();
     assert!(panel(&app).rows().contains(&GenParam::Curve));
-    // It opens on Fill, and `=` goes on past Random.
+    // It opens on Fill, and `=` goes on past Random, Walk and 1/f.
     assert_eq!(panel(&app).row, GenParam::Fill);
-    keys(&mut app, "==");
+    keys(&mut app, "====");
     assert_eq!(panel(&app).shape.kind, FillKind::Wave);
     let rows = panel(&app).rows();
     assert!(!rows.contains(&GenParam::Curve));
