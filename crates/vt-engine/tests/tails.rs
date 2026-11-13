@@ -37,8 +37,8 @@ fn version(song: Song) -> Arc<Published> {
 
 /// A note on each of the first `tracks`, on the first and ninth steps.
 fn notes(song: &mut Song, tracks: usize) {
-    for track in 0..tracks {
-        let phrase = Arc::make_mut(song.tracks[track].phrases.get_mut(&0).unwrap());
+    for track in song.tracks.iter_mut().take(tracks) {
+        let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
         for step in [0, 8] {
             *phrase.step_mut(step).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
         }
@@ -60,7 +60,10 @@ fn rests_after_playing(song: Song, seconds: f32, within: f32) -> Option<f32> {
     for block in 0..(within * RATE as f32) as usize / BLOCK {
         engine.process(&mut out);
         if rested && engine.bus_rested(MASTER_BUS) {
-            assert!(out.iter().all(|&sample| sample == 0.0), "it rests on silence");
+            assert!(
+                out.iter().all(|&sample| sample == 0.0),
+                "it rests on silence"
+            );
             return Some((block * BLOCK) as f32 / RATE as f32);
         }
         rested = engine.bus_rested(MASTER_BUS);
