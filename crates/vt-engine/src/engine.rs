@@ -10,7 +10,7 @@ use vt_model::song::{Song, trim_gain};
 
 use crate::dsp::memory::MemoryPool;
 use crate::dsp::smoother::{coefficient, fast_coefficient};
-use crate::gens::{GenHeard, GenPass, GenScratch};
+use crate::gens::{GenHeard, GenReport, GenScratch};
 use crate::mixer::Reading;
 use crate::preview::{Files, Previews};
 use crate::published::Published;
@@ -295,10 +295,11 @@ impl Engine {
         }
     }
 
-    /// Hand each pass heard of a track's generators that vary, since the last call, to `report`:
-    /// which pass and what seeds it played, for `Space g a` to keep (decision 293).
-    pub fn take_gen_passes(&mut self, track: usize, report: impl FnMut(GenPass)) {
-        self.gens.take_passes(track, report);
+    /// Hand what's been heard of every track's generators since the last call to `report`, by
+    /// track: each pass heard of one that varies and the seeds it played (decision 293), each row a
+    /// moving one played, and each that has come to rest (decision 300).
+    pub fn take_gen_reports(&mut self, report: impl FnMut(usize, GenReport)) {
+        self.gens.take_reports(report);
     }
 
     /// A track's live generators, on the phrase it last read a row of while one was held: which

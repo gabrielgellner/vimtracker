@@ -8,7 +8,7 @@ use vt_model::envelope::{Envelope, Lpg};
 use vt_model::groove::Groove;
 use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS, Setting};
 use vt_model::lfo::{LfoMode, MAX_DEFORM, deformed_wave, phase_of};
-use vt_model::macros::MACROS;
+use vt_model::macros::{MACROS, MacroTarget};
 use vt_model::modulation::{
     MAX_DEPTH, MOD_SLOTS, ModKind, ModSlot, Polarity, depth_of, note_shape_slot,
 };
@@ -1416,10 +1416,24 @@ impl TrackState {
     pub fn put_macros_again(&mut self, track: &Track) {
         self.wake();
         self.macro_heard = [None; MACROS];
+        // A generator's setting no macro holds now goes back to its shape.
+        self.gen_holds.forget_macros();
         let moves = std::array::from_fn(|at| {
             SettingId::macro_at(at).map_or(0.0, |id| self.offsets[id.index()])
         });
         self.put_macros(track, &moves);
+    }
+
+    /// Put each macro that has moved since the block began where it has its settings now, as a
+    /// row's `MAC` lock has just moved it, so the row is heard with it rather than from the next
+    /// block. Whether that moved a generator's setting, so the row is to be read again.
+    pub fn put_macros_now(&mut self, track: &Track) -> bool {
+        let before = self.gen_holds.changes();
+        let moves = std::array::from_fn(|at| {
+            SettingId::macro_at(at).map_or(0.0, |id| self.offsets[id.index()])
+        });
+        self.put_macros(track, &moves);
+        self.gen_holds.changes() != before
     }
 
     /// Put each macro's settings where it has them now, its held value and what modulation adds
@@ -1437,10 +1451,16 @@ impl TrackState {
                 continue;
             }
             self.macro_heard[at] = Some(value);
-            // A generator's setting is written into its column by hand, before stage (c).
             for map in &held.maps {
-                if let Some(id) = map.target.setting() {
-                    self.set_base(id, map.at(value));
+                match map.target {
+                    MacroTarget::Setting(id) => self.set_base(id, map.at(value)),
+                    // A generator's is held for the engine to render with as it reads each row,
+                    // so a lock, a glide or modulation reaches it (decision 300); at the macro's
+                    // turn, it's what the phrase holds, so nothing renders.
+                    MacroTarget::Gen { column, param } => {
+                        self.gen_holds
+                            .hold_by_macro(column, param, map.number_at(value));
+                    }
                 }
             }
         }

@@ -80,14 +80,10 @@ pub fn holds(track: &Track, at: usize) -> String {
 }
 
 /// What the status line says of a setting a macro holds: its macro, and where the macro takes it,
-/// in its units, and for a generator's, that it's by hand.
+/// in its units, and for a generator's `Wave` or `Rate`, that it's by hand.
 pub fn held_text(track: &Track, target: MacroTarget) -> Option<String> {
     let (at, map) = track.macro_holding(target)?;
-    let by_hand = if target.setting().is_none() {
-        ", by hand"
-    } else {
-        ""
-    };
+    let by_hand = if target.by_hand() { ", by hand" } else { "" };
     Some(format!(
         "on macro {} {}, {} to {}{by_hand}",
         at + 1,
@@ -324,8 +320,8 @@ impl App {
         let target = map.target;
         let held = &track.macros[view.at];
         let now = map.at(f32::from(held.value) / 256.0);
-        let by_hand = if target.setting().is_none() {
-            ", by hand: its locks and modulation reach it once the engine plays generators"
+        let by_hand = if target.by_hand() {
+            ", by hand: a turn writes it in, but locks and modulation don't reach a list setting"
         } else {
             ""
         };

@@ -288,9 +288,9 @@ fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
         generator.shape.place,
         vt_model::shape::Where::Euclid { hits: 3, rotate: 0 }
     );
-    // Its mapping says it's by hand.
+    // The engine holds `Hits` as it plays, so a lock or an LFO reaches it: it isn't by hand.
     press(&mut app, "gm");
-    assert!(app.status.contains("by hand"), "{}", app.status);
+    assert!(!app.status.contains("by hand"), "{}", app.status);
     let backend = ratatui::backend::TestBackend::new(150, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     let view = app.mapping.clone().unwrap();
@@ -307,7 +307,7 @@ fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
         })
         .collect();
     assert!(text.contains("Note Hits"), "{text}");
-    assert!(text.contains("by hand"), "{text}");
+    assert!(!text.contains("by hand"), "{text}");
 }
 
 #[test]

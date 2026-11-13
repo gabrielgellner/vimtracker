@@ -10,6 +10,7 @@ use vt_model::settings::{PlayMode, SettingId};
 use vt_model::song::{Machine, SynthVoice, Track};
 use vt_model::step::{ACCENT_VELOCITY, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Note};
 
+use crate::gens::Played;
 use crate::preview::{FILE_SAMPLES, LetGo};
 use crate::published::Span;
 use crate::voice::{Cut, NoteOn};
@@ -296,7 +297,7 @@ impl Engine {
                 count: place as i64,
                 position,
             };
-            let step = self.view_row(index, read, row, step, false);
+            let step = self.view_row(index, read, row, step, Played::Ahead);
             let Note::On(midi) = step.note else {
                 continue;
             };

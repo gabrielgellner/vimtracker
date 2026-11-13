@@ -8,6 +8,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS, TICKS_PER_STEP};
+use vt_model::generator::Span as GenSpan;
 use vt_model::selection::{Scope, StepRange};
 use vt_model::shape::{ShapeColumn, Source};
 use vt_model::song::{Phrase, Track};
@@ -282,6 +283,74 @@ fn live_cells(column: ShapeColumn) -> (usize, usize) {
     }
 }
 
+/// A live generator's cells on a step as the grid writes them, for the status line to say: a
+/// note, `7F`, `CUT40`; a note with its velocity and gate where `heard` differs from the step in
+/// those too, as an `Acid` line's accents and slides do.
+pub(crate) fn generator_cell_text(
+    step: &Step,
+    heard: &Step,
+    column: ShapeColumn,
+    track: Option<&Track>,
+) -> String {
+    let text = step_text(step, track);
+    let (start, end) = match column {
+        ShapeColumn::Note { .. } if step.velocity != heard.velocity || step.gate != heard.gate => {
+            (0, field_range(Field::GateLength).1)
+        }
+        ShapeColumn::Fx { slot, .. } => {
+            let (start, end) = slot_columns(slot);
+            (start, end - MARK_WIDTH)
+        }
+        column => live_cells(column),
+    };
+    let text = text.get(start..end.min(text.len())).unwrap_or("");
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Lay over a row's text what each live generator playing on it was last heard as there, where
+/// that isn't what's written: a generator on the phrase's rows while the playhead is on it, one
+/// on a lane while its lane's playhead is. Only the characters it changed are laid, so another's
+/// cells and the rest of the row stay.
+fn heard_over(
+    app: &App,
+    phrase: &Phrase,
+    index: usize,
+    playhead: Option<usize>,
+    lane_playheads: &[Option<usize>; FX_SLOTS],
+    text: &mut String,
+) {
+    let Some(id) = app.phrase_id() else {
+        return;
+    };
+    let Some(written) = phrase.steps().get(index) else {
+        return;
+    };
+    let as_written: Vec<char> = step_text(written, app.track_here()).chars().collect();
+    for (at, generator) in phrase.generators().iter().enumerate() {
+        let playing = match (generator.span, generator.column) {
+            (GenSpan::Lane, ShapeColumn::Fx { slot, .. }) => lane_playheads[slot] == Some(index),
+            _ => playhead == Some(index),
+        };
+        if !playing {
+            continue;
+        }
+        let Some((heard, _)) = app.heard_cell(app.cursor.track, id, at, index) else {
+            continue;
+        };
+        let heard: Vec<char> = step_text(&heard, app.track_here()).chars().collect();
+        let mut chars: Vec<char> = text.chars().collect();
+        if heard.len() != chars.len() || as_written.len() != chars.len() {
+            continue;
+        }
+        for (place, char) in heard.iter().enumerate() {
+            if *char != as_written[place] {
+                chars[place] = *char;
+            }
+        }
+        *text = chars.into_iter().collect();
+    }
+}
+
 /// Whether a step has a value in a live generator's column to mark: a note, a velocity, a nudge,
 /// a length of its own, or an FX command.
 fn live_value(step: &Step, column: ShapeColumn) -> bool {
@@ -385,6 +454,9 @@ struct Column<'a> {
     steps: &'a [Step],
     /// The row playing, and which of its pulses.
     playing: Option<(usize, usize)>,
+    /// The note the row playing was heard as, where a moving generator played another than
+    /// what's written (decision 300).
+    heard: Option<Note>,
     /// When each row starts, in the track's own steps, and how many ticks its step lasts.
     starts: Vec<usize>,
     ticks: u64,
@@ -415,10 +487,15 @@ fn column(app: &App, track: usize) -> Option<Column<'_>> {
     let moving = app.playing_place(track, chain);
     let place = moving.unwrap_or_else(|| app.step_on(track, app.cursor.track, app.section_step()));
     let position = owner.chain_position(chain, place, app.dealer(track))?;
-    let steps = owner.phrases.get(&position.phrase)?.loop_steps();
+    let held = owner.phrases.get(&position.phrase)?;
+    let steps = held.loop_steps();
+    let heard = moving
+        .and_then(|_| app.heard_step(track, position.phrase, held.start() + position.step))
+        .map(|step| step.note);
     Some(Column {
         steps,
         playing: moving.map(|_| (position.step, position.pulse)),
+        heard,
         starts: timeline::starts(steps),
         ticks: owner.speed.ticks(),
     })
@@ -478,7 +555,11 @@ fn column_spans(
                     span.contains(*track) && (first..=last).contains(&(row as isize))
                 })
             });
-            let written = shown.map(|row| column.steps[row].note);
+            // The row playing shows the note heard, where a moving generator played another.
+            let written = shown.map(|row| match column.heard {
+                Some(heard) if playing && column.playing.map(|(at, _)| at) == Some(row) => heard,
+                _ => column.steps[row].note,
+            });
             let note = written.map(|note| note.to_string());
             // Empty is faint, as on the grid, so where the other tracks play stands out.
             let look = if written == Some(Note::Empty) {
@@ -835,11 +916,19 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     if !lanes.is_empty() {
         details.push(lanes.join(" "));
     }
-    // Its live columns are named, in the shape panel's colour, as their cells are drawn.
+    // Its live columns are named, in the shape panel's colour, as their cells are drawn, each with
+    // `~` after it where what was heard of it isn't what's written (decision 300).
     let mut live_names: Vec<String> = phrase
         .generators()
         .iter()
-        .map(crate::shaping::generator_label)
+        .enumerate()
+        .map(|(at, generator)| {
+            let moving = app
+                .phrase_id()
+                .is_some_and(|id| app.generator_moving(app.cursor.track, id, at));
+            let name = crate::shaping::generator_label(generator);
+            if moving { format!("{name}~") } else { name }
+        })
         .collect();
     live_names.dedup();
     // How many phrases follow this one, live, on any track.
@@ -1047,6 +1136,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             if end <= text.len() {
                 text.replace_range(start..end, &format!("{}_", app.entry.text));
             }
+        }
+        // The row playing shows each moving generator's cells on it as they were heard, and a
+        // lane's generator the row its lane plays, as the grid otherwise shows what's written
+        // (decision 300).
+        if !typing {
+            heard_over(app, phrase, index, playhead, &lane_playheads, &mut text);
         }
         // The row playing shows the note heard where an accumulator moved it, as the note column
         // otherwise shows notes as written.

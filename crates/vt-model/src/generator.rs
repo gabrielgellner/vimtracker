@@ -213,6 +213,27 @@ impl Generator {
         }
     }
 
+    /// A row of its phrase as the engine played it with this cell of a render of its own: the
+    /// step as written, with what's under the generator put back in its column and the cell laid
+    /// over, as [`lay_under`] and [`RowView::lay`] lay it (decision 300). None past the steps.
+    pub fn heard_row(&self, steps: &[Step], row: usize, cell: GenCell) -> Option<Step> {
+        let mut step = steps.get(row)?.clone();
+        self.lay_heard(row, cell, &mut step);
+        Some(step)
+    }
+
+    /// Lay a cell it played on a row over that row's step, with what's under it put back first,
+    /// as [`Generator::heard_row`] does, so several generators' can be laid on one step.
+    pub fn lay_heard(&self, row: usize, cell: GenCell, step: &mut Step) {
+        if let Some(under) = row
+            .checked_sub(self.first)
+            .and_then(|at| self.under.get(at))
+        {
+            copy(self.column, owns(&self.shape), under, step);
+        }
+        cell.apply(self.column, step);
+    }
+
     /// Its phrase's steps as they'd be without it.
     pub fn under(&self, steps: &[Step]) -> Vec<Step> {
         let mut steps = steps.to_vec();

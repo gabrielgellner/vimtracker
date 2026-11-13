@@ -7,7 +7,7 @@ mod support;
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
-use vt_engine::gens::GenHeard;
+use vt_engine::gens::{GenHeard, GenReport};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop};
 use vt_model::action::{Action, edit};
@@ -441,7 +441,13 @@ fn play_pass(song: &Song, pass: usize) -> (Vec<f32>, Engine) {
 /// each played.
 fn passes_heard(engine: &mut Engine, track: usize) -> Vec<(i64, u64)> {
     let mut heard = Vec::new();
-    engine.take_gen_passes(track, |pass| heard.push((pass.pass, pass.seed)));
+    engine.take_gen_reports(|on, report| {
+        if let GenReport::Pass(pass) = report
+            && on == track
+        {
+            heard.push((pass.pass, pass.seed));
+        }
+    });
     heard
 }
 

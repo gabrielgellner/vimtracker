@@ -20,6 +20,7 @@ pub mod folding;
 pub mod glyphs;
 pub mod grammar;
 pub mod guides;
+pub mod heard;
 pub mod input;
 pub mod jumping;
 pub mod kitty;

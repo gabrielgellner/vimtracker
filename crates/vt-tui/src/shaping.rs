@@ -349,7 +349,7 @@ pub fn column_label(column: ShapeColumn) -> String {
 }
 
 /// Whether the cursor on a field is on a live generator's column.
-fn on_column(field: Field, column: ShapeColumn) -> bool {
+pub(crate) fn on_column(field: Field, column: ShapeColumn) -> bool {
     match (field, column) {
         (Field::Note, ShapeColumn::Note { .. })
         | (Field::Velocity, ShapeColumn::Velocity)
@@ -897,7 +897,8 @@ impl App {
         self.preview_shape();
     }
 
-    /// Apply the live generator under the cursor, leaving its values as plain ones.
+    /// Apply the live generator under the cursor, leaving its values as plain ones: as last heard
+    /// where something moved it as it played (decision 300).
     pub(crate) fn apply_generator_here(&mut self) {
         let Some((phrase, generator)) = self.generator_here() else {
             self.status = "No live column here to apply".to_owned();
@@ -906,12 +907,7 @@ impl App {
         let track = self.cursor.track;
         let name =
             generator_label(&self.song().tracks[track].phrases[&phrase].generators()[generator]);
-        self.apply(&Action::ApplyGenerator {
-            track,
-            phrase,
-            generator,
-        });
-        self.status = format!("{name} is applied, as plain values");
+        self.apply_generator(track, phrase, generator, &name);
     }
 
     /// Put back what was there before the panel opened.

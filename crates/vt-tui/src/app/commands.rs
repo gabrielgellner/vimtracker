@@ -362,6 +362,7 @@ impl App {
         // Another song's rows and generators aren't these.
         self.heard_pitches.clear();
         self.heard_passes.clear();
+        self.heard_rows.clear();
         self.folder = folder;
         self.folds = Folds::default();
         self.cursor = Cursor {

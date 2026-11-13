@@ -11,7 +11,7 @@ use vt_model::grid::Grid;
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
 use vt_model::settings::SettingId;
 use vt_model::song::Track;
-use vt_model::step::{MAX_NOTE, MIN_NOTE, Note};
+use vt_model::step::{MAX_NOTE, MIN_NOTE, Note, Step};
 use vt_model::steps::STEPS;
 
 use crate::app::App;
@@ -282,11 +282,13 @@ impl App {
         self.status = format!("Kept the {kept} {values} {name} drew: Mutate 0% now plays them");
     }
 
-    /// `Space g A`: write into the notes of the phrase here, or of the selection, the pitch the
-    /// track's Steps and LFO slots on `Pitch` moved each to the last time it was heard, and switch
-    /// those slots out, so it sounds the same, as one undo step (#569). The engine reports each
-    /// slot's move as each note starts (`NotePitch`), and this makes the edit. A move of part of a
-    /// semitone goes to the nearest note, as the Note column has no finer step.
+    /// `Space g A`: make the phrase here what was last heard, as one undo step: write into its
+    /// notes, or the selection's, the pitch the track's Steps and LFO slots on `Pitch` moved each
+    /// to the last time it was heard, and switch those slots out (#569); and apply each live
+    /// generator a macro or `Vary` moved, each row as it was heard and the rest as written
+    /// (decision 300). The engine reports each slot's move as each note starts (`NotePitch`), and
+    /// each generator's row as it plays. A move of part of a semitone goes to the nearest note, as
+    /// the Note column has no finer step.
     pub(crate) fn bake_pitch_mods(&mut self) {
         let selected = self.mode.is_visual().then(|| {
             let selection = self.current_selection();
@@ -300,9 +302,10 @@ impl App {
         };
         let song = Arc::clone(self.song());
         let owner = &song.tracks[track];
-        let Some(steps) = owner.phrases.get(&phrase).map(|phrase| phrase.steps()) else {
+        let Some(held) = owner.phrases.get(&phrase) else {
             return;
         };
+        let steps = held.steps();
         // Envelopes and Track slots on `Pitch` shape each note rather than choose it, so they
         // stay; a slot switched out moves nothing.
         let baked = |slot: &ModSlot| {
@@ -310,20 +313,42 @@ impl App {
                 && slot.destination == Some(SettingId::PITCH)
                 && !slot.bypassed
         };
-        if !owner.mods.iter().any(baked) {
-            self.status = "No Steps or LFO slot on Pitch to write into the notes".to_owned();
+        // The generators heard otherwise than written, applied whole, last first so each keeps
+        // its place in the list until it goes.
+        let moving: Vec<usize> = (0..held.generators().len())
+            .rev()
+            .filter(|at| self.heard_rows_of(track, phrase, *at).is_some())
+            .collect();
+        if moving.is_empty() && !owner.mods.iter().any(baked) {
+            self.status =
+                "No Steps or LFO slot on Pitch, and no generator moved, to write in".to_owned();
             return;
         }
         let (first, last) = selected.map_or((0, steps.len().saturating_sub(1)), |range| {
             (range.first, range.last.min(steps.len().saturating_sub(1)))
         });
-        let mut actions = Vec::new();
+        let mut actions: Vec<Action> = moving
+            .iter()
+            .map(|&generator| Action::ApplyGenerator {
+                track,
+                phrase,
+                generator,
+            })
+            .collect();
+        // Each row as heard, with every moving generator on it laid over.
+        let mut rows: std::collections::BTreeMap<usize, Step> = (0..steps.len())
+            .filter_map(|row| Some((row, self.heard_step(track, phrase, row)?)))
+            .collect();
         let mut moved = [false; MOD_SLOTS];
         let (mut heard, mut unheard) = (0, 0);
-        for (step, row) in steps.iter().enumerate().take(last + 1).skip(first) {
+        for (step, written) in steps.iter().enumerate().take(last + 1).skip(first) {
+            let row = rows.get(&step).unwrap_or(written);
             let Note::On(midi) = row.note else {
                 continue;
             };
+            if !owner.mods.iter().any(baked) {
+                continue;
+            }
             let Some(moves) = self.heard_pitches.get(&(track, phrase, step)) else {
                 unheard += 1;
                 continue;
@@ -339,24 +364,38 @@ impl App {
             let note = (f32::from(midi) + by)
                 .round()
                 .clamp(f32::from(MIN_NOTE), f32::from(MAX_NOTE)) as u8;
-            if note != midi {
-                actions.push(Action::SetNote {
+            if note == midi {
+                continue;
+            }
+            match rows.get_mut(&step) {
+                Some(row) => row.note = Note::On(note),
+                None => actions.push(Action::SetNote {
                     track,
                     phrase,
                     step,
                     note: Note::On(note),
-                });
+                }),
             }
         }
-        if heard == 0 {
-            self.status = "None of these notes has been heard yet: play them first".to_owned();
-            return;
-        }
         let slots: Vec<usize> = (0..MOD_SLOTS).filter(|at| moved[*at]).collect();
-        if slots.is_empty() {
-            self.status = "No Steps or LFO slot on Pitch moved these notes".to_owned();
-            return;
+        if moving.is_empty() {
+            if heard == 0 {
+                self.status = "None of these notes has been heard yet: play them first".to_owned();
+                return;
+            }
+            if slots.is_empty() {
+                self.status = "No Steps or LFO slot on Pitch moved these notes".to_owned();
+                return;
+            }
         }
+        actions.extend(std::mem::take(&mut rows).into_iter().map(|(step, value)| {
+            Action::SetStep {
+                track,
+                phrase,
+                step,
+                value,
+            }
+        }));
         for &slot in &slots {
             actions.push(Action::SetMod {
                 track,
@@ -368,17 +407,35 @@ impl App {
             });
         }
         self.apply(&Action::Batch(actions));
-        let names: Vec<String> = slots.iter().map(|at| format!("Mod {}", at + 1)).collect();
-        let (names, them) = match names.as_slice() {
-            [one] => (one.clone(), "it"),
-            [rest @ .., last] => (format!("{} and {last}", rest.join(", ")), "them"),
-            [] => unreachable!(),
-        };
-        let notes = if heard == 1 { "note" } else { "notes" };
-        let mut status =
-            format!("Wrote what {names} played into {heard} {notes}, and switched {them} out");
+        let mut said = Vec::new();
+        if !slots.is_empty() {
+            let names: Vec<String> = slots.iter().map(|at| format!("Mod {}", at + 1)).collect();
+            let (names, them) = match names.as_slice() {
+                [one] => (one.clone(), "it"),
+                [rest @ .., last] => (format!("{} and {last}", rest.join(", ")), "them"),
+                [] => unreachable!(),
+            };
+            let notes = if heard == 1 { "note" } else { "notes" };
+            said.push(format!(
+                "Wrote what {names} played into {heard} {notes}, and switched {them} out"
+            ));
+        }
+        if !moving.is_empty() {
+            let names: Vec<String> = moving
+                .iter()
+                .rev()
+                .map(|at| crate::shaping::generator_label(&held.generators()[*at]))
+                .collect();
+            let verb = if said.is_empty() {
+                "Applied"
+            } else {
+                "applied"
+            };
+            said.push(format!("{verb} {} as heard", names.join(", ")));
+        }
+        let mut status = said.join("; ");
         if unheard > 0 {
-            status.push_str(&format!("; {unheard} not heard yet stay as written"));
+            status.push_str(&format!("; {unheard} notes not heard yet stay as written"));
         }
         self.status = status;
     }

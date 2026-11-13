@@ -493,6 +493,17 @@ impl GenParam {
         }
     }
 
+    /// Whether the engine can hold it as it plays, so a macro's lock or modulation reaches it
+    /// (decision 300): not a list setting, whose choices are a `Vec` built as they're asked for,
+    /// nor a `List`'s values, which have no number. A macro on `Wave` or `Rate` writes its column
+    /// by hand instead (decision 294).
+    pub fn held_in_engine(self) -> bool {
+        !matches!(
+            self,
+            Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Source | Self::Values
+        )
+    }
+
     /// Whether a shape has it. A wave and `Alternate` have their own settings in place of a
     /// curve, a `List` has its values in place of the two ends, a transform but `Scale` works from
     /// the values there with no settings of its own, and a `Where`'s amount only comes with the

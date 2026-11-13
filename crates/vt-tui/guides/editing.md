@@ -437,6 +437,17 @@ leave. Notes generated on an empty column keep live the same way, with their
 velocities as its own too: turning `Rotate` moves the notes along, and `gl`
 opens it generating again.
 
+**While it moves.** A `MAC` lock, a glide or an LFO on a macro holding one of
+its settings moves it as it plays, and so does `Vary`; the grid still shows
+what's written, which is what you edit. The phrase's title marks the column
+with `~`, like `󰁨 Vel~`, once what was heard isn't what's written. The row
+playing draws what's heard there, as the overview does for every track, and a
+lane's live column the row its lane plays. On a cell heard otherwise, the
+status line says both, like `C-2 written; D#2 heard on pass 3`. `Space g a`
+then applies it as heard: each row as it was last heard, the rows not heard yet
+as written, and the status line counts both. `Space g A` does the same for
+every moving live column of the phrase, with the pitch the mod slots moved.
+
 On an FX column with a lane, a live column fills the lane's steps, whichever
 rows you selected, and follows the lane when `:lane`, `gs`, `ge` or `]l` move
 it; `:lane` alone applies it. Across tracks, each track gets a live column of

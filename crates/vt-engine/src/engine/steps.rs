@@ -16,7 +16,7 @@ use vt_model::step::{
     FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step,
 };
 
-use crate::gens::{Passes, RowAt};
+use crate::gens::{Passes, Played, RowAt};
 use crate::track_state::{
     Accumulating, Arpeggiating, Decided, DelayedNote, Epoch, Part, PendingStep, Retrigger, RowKey,
     TrackState, Worked,
@@ -130,19 +130,22 @@ impl Engine {
             count,
             position,
         };
-        Some((position, self.view_row(index, read, row, step, false)))
+        Some((
+            position,
+            self.view_row(index, read, row, step, Played::Ahead),
+        ))
     }
 
     /// A stored row of the phrase a track is reading as it's heard: as written, with the cells of
     /// any of its generators the engine is moving laid over, the row of a step or of a lane's. A
-    /// row `played`, rather than looked at before it plays, reports the passes heard on it.
+    /// row `played`, rather than looked at before it plays, reports what was heard on it.
     pub(super) fn view_row(
         &mut self,
         index: usize,
         read: Read,
         row: usize,
         step: &Step,
-        played: bool,
+        played: Played,
     ) -> RowView {
         let at = RowAt {
             track: index,
@@ -198,7 +201,7 @@ impl Engine {
                 Some((phrase, lane)) => {
                     let at = lane.step_at(count + self.tracks[index].lane_offsets[number]);
                     phrase.steps().get(at).and_then(|step| {
-                        self.view_row(index, read, at, step, false)
+                        self.view_row(index, read, at, step, Played::Ahead)
                             .fx(number)
                             .copied()
                     })
@@ -261,7 +264,7 @@ impl Engine {
         let Some(position) = owner.chain_position(chain, place, self.dealer(index)) else {
             return;
         };
-        let Some(step) = owner.step_at(position) else {
+        let Some(written) = owner.step_at(position) else {
             return;
         };
         let phrase = owner.phrases.get(&position.phrase);
@@ -272,7 +275,12 @@ impl Engine {
             position,
         };
         let row_at = phrase.map_or(0, |phrase| phrase.start()) + position.step;
-        let step = self.view_row(index, read, row_at, step, true);
+        let played = if position.pulse == 0 {
+            Played::Row
+        } else {
+            Played::Ahead
+        };
+        let step = self.view_row(index, read, row_at, written, played);
         // A row's later pulses repeat its note only on a `Multi`, and run only the note's own timing.
         let first = position.pulse == 0;
         let gate = step.gate_kind();
@@ -301,7 +309,7 @@ impl Engine {
                     let at = lane.step_at(count + self.tracks[index].lane_offsets[number]);
                     lane_steps[number] = Some(at);
                     phrase.steps().get(at).and_then(|step| {
-                        self.view_row(index, read, at, step, true)
+                        self.view_row(index, read, at, step, Played::Lane(number))
                             .fx(number)
                             .copied()
                     })
@@ -350,13 +358,7 @@ impl Engine {
         };
         let plays = decided.note;
         // What the row's note does on this pulse.
-        let event = match (step.note, gate) {
-            (Note::On(_), GateKind::Rest) if first => Note::Off,
-            (Note::On(_), GateKind::Rest) => Note::Empty,
-            (Note::On(midi), GateKind::Multi) => Note::On(midi),
-            (note, _) if first => note,
-            _ => Note::Empty,
-        };
+        let event = event_of(step.note, gate, first);
         let tying = first && self.tracks[index].tied && self.tracks[index].voice.active();
         // The last note's locks end where the step's first part lands, so a lane's lock on a step
         // whose note is nudged late lasts that note.
@@ -416,6 +418,16 @@ impl Engine {
                 FxCommand::Set(id) => self.tracks[index].set_value(id, slot.value, slot.mark),
             }
         }
+        // A `MAC` lock on the row reaches what its macro holds of the generators on the row itself,
+        // as it reaches any other setting: the macros are put now, and the row read again if that
+        // moved a generator, so its note is heard with it (decision 300).
+        let (step, gate, event) = if row && first && self.tracks[index].put_macros_now(owner) {
+            let step = self.view_row(index, read, row_at, written, played);
+            let gate = step.gate_kind();
+            (step, gate, event_of(step.note, gate, first))
+        } else {
+            (step, gate, event)
+        };
         if !row {
             if !self.tracks[index].sounding() {
                 self.tracks[index].settle();
@@ -786,5 +798,17 @@ fn passes(song: &Song, state: &TrackState, index: usize, read: Read) -> Passes {
                 (read.count + state.lane_offsets[number]).div_euclid(lane.length.max(1) as i64)
             })
         }),
+    }
+}
+
+/// What a row's note does on a pulse: a rest's ends the note on its first, a `Multi` plays on
+/// every one, and any other plays on its first alone.
+fn event_of(note: Note, gate: GateKind, first: bool) -> Note {
+    match (note, gate) {
+        (Note::On(_), GateKind::Rest) if first => Note::Off,
+        (Note::On(_), GateKind::Rest) => Note::Empty,
+        (Note::On(midi), GateKind::Multi) => Note::On(midi),
+        (note, _) if first => note,
+        _ => Note::Empty,
     }
 }
