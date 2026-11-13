@@ -211,6 +211,7 @@ mod tests {
             walk: Walk { step, edge },
             pink: Pink::default(),
             bits: Bits::default(),
+            grids: crate::shape::Grids::default(),
         }
     }
 

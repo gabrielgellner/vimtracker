@@ -12,9 +12,9 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Acid, Bits, Context, DEFAULT_RATE, FillKind, Follow, GenParam, MAX_VALUES, Pink, Shape,
-    ShapeColumn, Source, Starts, Values, Walk, Where, default_ends, default_step, is_empty,
-    open_rows, track_seed,
+    Acid, Bits, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids, MAX_VALUES,
+    Pink, Shape, ShapeColumn, Source, Starts, Values, Walk, Where, default_ends, default_step,
+    drum_parts, is_empty, open_rows, track_seed,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -39,6 +39,9 @@ pub struct Part {
     /// Whether its column was empty, so it's generated rather than reshaped: notes of its own on
     /// the Note column, or the chosen command on an FX column.
     pub generate: bool,
+    /// The part of Grids' beat it plays: the one its sound plays, or across tracks, the first
+    /// the others leave.
+    pub drum: DrumPart,
 }
 
 /// The rows a shape fills on a column it generates on. Where it would choose the notes or the
@@ -129,8 +132,9 @@ impl ShapePanel {
             .map_or(&[], |phrase| phrase.steps())
     }
 
-    /// The shape each part takes: the panel's, with the part's own seed, and on a column it
-    /// generates on, every row where the panel chooses the notes or commands there.
+    /// The shape each part takes: the panel's, with the part's own seed, on a column it
+    /// generates on, every row where the panel chooses the notes or commands there, and across
+    /// tracks, its own part of Grids' beat.
     pub fn shape_of(&self, nth: usize) -> Shape {
         let part = &self.parts[nth];
         Shape {
@@ -139,6 +143,10 @@ impl ShapePanel {
                 generating(self.shape.place, part.column)
             } else {
                 self.shape.place
+            },
+            grids: Grids {
+                part: self.shape.grids.part.or(Some(part.drum)),
+                ..self.shape.grids
             },
             ..self.shape
         }
@@ -486,6 +494,7 @@ impl App {
                     range,
                     column,
                     generate,
+                    drum: DrumPart::default(),
                 }),
                 Err(Refusal::Command(track)) => return Err(Refusal::Command(track)),
                 Err(Refusal::Reason(reason)) => {
@@ -494,12 +503,28 @@ impl App {
             }
         }
         if parts.is_empty() {
-            Err(Refusal::Reason(
+            return Err(Refusal::Reason(
                 refused.unwrap_or("There's nothing to shape here"),
-            ))
-        } else {
-            Ok(parts)
+            ));
         }
+        let tracks: Vec<usize> = parts.iter().map(|part| part.track).collect();
+        for (part, drum) in parts.iter_mut().zip(self.drums_of(&tracks)) {
+            part.drum = drum;
+        }
+        Ok(parts)
+    }
+
+    /// The part of Grids' beat a track's sound plays, if it says: an 808 voice's, or its name's.
+    fn drum_of(&self, track: usize) -> Option<DrumPart> {
+        let track = self.song().tracks.get(track)?;
+        DrumPart::of_sound(track.machine, &track.name)
+    }
+
+    /// The part each of these tracks plays, in order: its sound's, or the first the others leave.
+    fn drums_of(&self, tracks: &[usize]) -> Vec<DrumPart> {
+        let known: Vec<Option<DrumPart>> =
+            tracks.iter().map(|track| self.drum_of(*track)).collect();
+        drum_parts(&known)
     }
 
     /// Open the panel on the selection, and show its first result. An empty FX column lists the
@@ -556,6 +581,7 @@ impl App {
             .get(&first.phrase)
             .map_or(&[][..], |p| p.steps());
         let generates = parts.iter().all(|part| part.generate);
+        let alone = parts.len() == 1;
         // Across tracks, a Note column with notes on some offers what re-pitching them does.
         let column = match first.column {
             ShapeColumn::Note { scale, .. } if !generates => ShapeColumn::Note {
@@ -604,6 +630,11 @@ impl App {
                 },
                 pink: Pink::default(),
                 bits: Bits::default(),
+                // Across tracks, each takes its own part.
+                grids: Grids {
+                    part: alone.then_some(first.drum),
+                    ..Grids::default()
+                },
             },
             row: GenParam::Fill,
             typing: None,
@@ -840,6 +871,7 @@ impl App {
             range,
             column: generator.column,
             generate: is_empty(&under, range, generator.column),
+            drum: generator.shape.grids.part(),
         };
         let shape = generator.shape;
         let (sources, default_source) = match part.column {
@@ -953,6 +985,9 @@ impl App {
         };
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = song.seed.wrapping_add(self.shape_seed);
+        // Grids across tracks gives each its own part, as `S` does.
+        let tracks: Vec<usize> = places.iter().map(|place| place.0).collect();
+        let drums = self.drums_of(&tracks);
         let mut actions: Vec<Action> = places
             .into_iter()
             .enumerate()
@@ -970,6 +1005,13 @@ impl App {
                             generating(shape.place, column)
                         } else {
                             shape.place
+                        },
+                        grids: Grids {
+                            part: match shape.grids.part {
+                                Some(part) if tracks.len() == 1 => Some(part),
+                                _ => Some(drums[nth]),
+                            },
+                            ..shape.grids
                         },
                         ..shape
                     },
@@ -1066,6 +1108,7 @@ impl App {
             range: rows,
             column: generator.column,
             generate: generates,
+            drum: generator.shape.grids.part(),
         };
         let (sources, default_source) = match generator.column {
             ShapeColumn::Note { .. } => self.follow_sources(song, &[part]),
@@ -1087,6 +1130,7 @@ impl App {
             starts: Starts {
                 ends,
                 source: default_source,
+                part: self.drum_of(track),
             },
         })
     }
@@ -1139,6 +1183,7 @@ impl App {
         let starts = Starts {
             ends: self.shape_ends(panel),
             source: panel.default_source,
+            part: Some(panel.parts[0].drum),
         };
         self.change_shape(|panel| {
             let mut shape = panel.shape;
@@ -1161,7 +1206,8 @@ impl App {
         };
         let context = panel.context();
         let Some(choices) = panel.row.choices(&context) else {
-            self.status = "K chooses from a list on Fill, Shape, Rate, Where and Source".to_owned();
+            self.status =
+                "K chooses from a list on Fill, Shape, Rate, Where, Source and Part".to_owned();
             return;
         };
         let position = panel.row.chosen(&panel.shape, &context).unwrap_or(0);
