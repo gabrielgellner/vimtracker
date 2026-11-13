@@ -100,6 +100,7 @@ fn multiply_turns_four_on_the_floor_by_its_factor() {
     assert_eq!(rhythm(&app), "xx..xx..xx..xx..");
     let screen = drawn(&app);
     for expected in [
+        "Note: 8 of 16 rows",
         "Factor  3",
         "Masks   Off",
         "16 rows a number, row 1 its lowest bit",

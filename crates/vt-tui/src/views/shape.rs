@@ -80,11 +80,23 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         let steps = panel.base_steps(part);
         let shape = panel.shape_of(nth);
         let written = written_from(steps, part.range, part.column, &shape, source);
-        // A `Follow` writes every row, rests and all, so its count is of the notes.
+        // A `Follow` writes every row, rests and all, so its count is of the notes, and
+        // `Multiply`'s of the rhythm it leaves.
         filled += if shape.kind == FillKind::Follow {
             written
                 .iter()
                 .filter(|(_, step)| matches!(step.note, Note::On(_)))
+                .count()
+        } else if shape.kind == FillKind::Multiply {
+            written
+                .iter()
+                .filter(|(_, step)| match part.column {
+                    ShapeColumn::Fx { slot, command } => step
+                        .fx
+                        .get(slot)
+                        .is_some_and(|fx| fx.command == Some(command)),
+                    _ => matches!(step.note, Note::On(_)),
+                })
                 .count()
         } else {
             written.len()

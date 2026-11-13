@@ -58,14 +58,14 @@ dc3245cdef2b319d List on Note of its own, in key
 918022d726d34bef List on Note, in key
 b7e4fec82f941b23 List on Nudge
 93c4bef9a62d4bef List on Velocity
-e7e7d7234b0fda3b Multiply on FX, event
-a3cd4e9df63c0c60 Multiply on FX, fine
-9d4008e65b2568d7 Multiply on FX, last slot
+cc6fff711a20b727 Multiply on FX, event
+64f5840b21aeec43 Multiply on FX, fine
+b67ba9af4a0daaf2 Multiply on FX, last slot
 87e59c5569117b25 Multiply on Length
-e36c80973fc9b09f Multiply on Note of its own, chromatic
-f2a859ef5ab759d5 Multiply on Note of its own, in key
-24dbb106e3b355e5 Multiply on Note, chromatic
-4eff179b6b07199c Multiply on Note, in key
+1573bbeacecfeda0 Multiply on Note of its own, chromatic
+2cd0b3b78b32932f Multiply on Note of its own, in key
+c8dab80995d495ec Multiply on Note, chromatic
+c068a6cf398a533a Multiply on Note, in key
 87e59c5569117b25 Multiply on Nudge
 87e59c5569117b25 Multiply on Velocity
 608ddc153149a5ff Ramp on FX, event

@@ -79,7 +79,9 @@ fn free(column: ShapeColumn, step: &Step) -> bool {
 /// A `Multiply`'s cells for `range`, one for each row, the first in `cells[0]`. In each block of
 /// sixteen rows, a hit the product keeps stays as it is, a new one takes the note or command last
 /// before it in the block, and a hit it drops is cleared: a note with its velocity and gate, or
-/// the FX slot. It reworks notes and FX commands; on any other column it leaves the rows alone.
+/// the FX slot. Every other row gets its own, so a render laid over what an earlier one wrote, as
+/// the engine lays a moving generator's, leaves nothing of that one. It reworks notes and FX
+/// commands; on any other column it leaves the rows alone.
 pub(super) fn render(
     steps: &[Step],
     range: StepRange,
@@ -111,12 +113,12 @@ pub(super) fn render(
                     // Multiplying never sets a bit below the rhythm's lowest, so a new hit always
                     // has one before it.
                     let before = (0..at).rev().find(|other| rhythm & 1 << other != 0);
-                    match before.and_then(|other| step(start + other)) {
-                        Some(from) => copied(column, from),
-                        None => GenCell::Under,
-                    }
+                    copied(
+                        column,
+                        before.and_then(|other| step(start + other)).unwrap_or(here),
+                    )
                 }
-                _ => GenCell::Under,
+                _ => copied(column, here),
             };
         }
     }
@@ -258,11 +260,31 @@ mod tests {
             "................",
             "xxxxx",
         ] {
-            let steps = drawn(rhythm);
-            let range = StepRange::between(0, steps.len() - 1);
-            assert!(written(&steps, range, note(), &multiply(1, false)).is_empty());
-            assert!(written(&steps, range, note(), &multiply(1, true)).is_empty());
+            let mut steps = drawn(rhythm);
+            steps[1].note = Note::Off;
+            for masks in [false, true] {
+                assert_eq!(after(&steps, note(), &multiply(1, masks)), steps);
+            }
         }
+    }
+
+    #[test]
+    fn every_row_gets_its_own_unless_it_changes() {
+        // Laid over what factor 3 wrote, as the engine lays a moving render, factor 1 puts every
+        // row back.
+        let steps = drawn("x..x..x.........");
+        let range = StepRange::between(0, 15);
+        let mut laid = after(&steps, note(), &multiply(3, false));
+        let mut cells = [GenCell::Under; 16];
+        let one = Bits {
+            factor: 1,
+            masks: false,
+        };
+        render(&steps, range, note(), one, &mut cells);
+        for (step, cell) in laid.iter_mut().zip(cells) {
+            cell.apply(note(), step);
+        }
+        assert_eq!(laid, steps);
     }
 
     #[test]
