@@ -38,6 +38,16 @@ bb91324e58b75342 Follow on Note of its own, in key
 75ed11f10399c120 Follow on Note, in key
 87e59c5569117b25 Follow on Nudge
 87e59c5569117b25 Follow on Velocity
+4d19b251be00798a Invert bits on FX, event
+5c0cc1dc03b27552 Invert bits on FX, fine
+b614708b2d7868a4 Invert bits on FX, last slot
+562745e1b44a372c Invert bits on Length
+87e59c5569117b25 Invert bits on Note of its own, chromatic
+87e59c5569117b25 Invert bits on Note of its own, in key
+d270bfacf35c2c6b Invert bits on Note, chromatic
+b1ac5a0f3c90dc3b Invert bits on Note, in key
+2772f68b6bc1b7ca Invert bits on Nudge
+de6c38e3f2cdf973 Invert bits on Velocity
 ae85918437f6a507 Invert on FX, event
 6b5390a18dff9dac Invert on FX, fine
 8dcff7df85c1e85f Invert on FX, last slot
@@ -58,6 +68,16 @@ dc3245cdef2b319d List on Note of its own, in key
 918022d726d34bef List on Note, in key
 b7e4fec82f941b23 List on Nudge
 93c4bef9a62d4bef List on Velocity
+e4bd9007cbe9f92b Mask bits on FX, event
+084b8193950bad90 Mask bits on FX, fine
+d99dd3412a417df2 Mask bits on FX, last slot
+1508db1d65d1fff2 Mask bits on Length
+87e59c5569117b25 Mask bits on Note of its own, chromatic
+87e59c5569117b25 Mask bits on Note of its own, in key
+77c8e6b8fe8782a9 Mask bits on Note, chromatic
+2a927a3e238ba338 Mask bits on Note, in key
+80f9f315240f5cef Mask bits on Nudge
+3d66587c45050d48 Mask bits on Velocity
 cc6fff711a20b727 Multiply on FX, event
 64f5840b21aeec43 Multiply on FX, fine
 b67ba9af4a0daaf2 Multiply on FX, last slot
@@ -98,6 +118,16 @@ be8fda7cc1220b2f Random on Velocity
 9ca03b824ddb4521 Reverse on Note, in key
 d60f35bce144ec65 Reverse on Nudge
 968f1d564e512700 Reverse on Velocity
+711a9da5dbfc2486 Rotate bits on FX, event
+695c3d0734af45b1 Rotate bits on FX, fine
+f4948179fa3297a8 Rotate bits on FX, last slot
+03d6405048048858 Rotate bits on Length
+87e59c5569117b25 Rotate bits on Note of its own, chromatic
+87e59c5569117b25 Rotate bits on Note of its own, in key
+ee747c3fe806abea Rotate bits on Note, chromatic
+37f0a41c9f02f2a9 Rotate bits on Note, in key
+98ec79f4eed4a73d Rotate bits on Nudge
+7df11b2328c92401 Rotate bits on Velocity
 3714aad056a2fafd Scale on FX, event
 c0637824bb56c30d Scale on FX, fine
 7246e01e8e57a81e Scale on FX, last slot

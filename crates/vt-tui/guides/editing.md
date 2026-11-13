@@ -255,6 +255,34 @@ value. An `OFF` stays, and so does another command in the slot. It has no
 and 9–12 before it multiplies, and 3 rows 1, 2 and 13–16. Factor starts at 3:
 `=` and `-` move it by one, `+` and `_` by 4, and `i` types it.
 
+### Bits
+
+Three transforms treat each value there as a binary number and work on its
+bits, after Xaoc Devices' Leibniz, whose modules invert and mask a number's
+bits for odd quantizations and folds. A value has as many bits as its
+column's highest needs: 7 on Velocity, 8 on most FX commands and lengths, and
+5 on a nudge. They rework the rows `Where` chooses, as the other transforms do.
+
+| Fill | Row | Does |
+|---|---|---|
+| Invert bits | Flip | Flips the bits Flip has: `FF` flips them all |
+| Mask bits | Keep | Keeps only the bits Keep has |
+| Rotate bits | Turn | Turns them round, the highest back as the lowest |
+
+On Velocity, Flip `FF` makes `35` into `4A`, Keep `F0` steps the velocities
+in `10`s, and Turn 1 doubles each, the loudest coming round to quiet. Flip
+and Keep are typed as two hex digits with `i`, and `=` and `-` move them
+by one, `+` and `_` by `10`; Turn goes from 0 to 7. Flipping the same bits
+twice gives the values back. A value pushed past the column's highest stops
+there, as a nudge's 5 bits go to 31 but a nudge only to `+B`.
+
+On the Note column the number is the note's degree, counted up the scale from
+the lowest note while the scale is on, so every note that comes out is in the
+scale; with it off, it's semitones. In C major, C-3 is degree 28, `11100`, so
+Flip `01` makes it D-3 and Flip `03` F-3. With the scale off, C-3 is `30`, and
+Flip `0C` takes it up an octave. Small masks, such as `01` to `07`, keep a line
+near where it was.
+
 ### On an empty column
 
 On a Note column with no notes in the rows selected, `S` writes notes of its
