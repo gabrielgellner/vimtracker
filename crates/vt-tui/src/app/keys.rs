@@ -575,6 +575,8 @@ impl App {
             Cmd::WidenGrid => self.change_grid(true),
             Cmd::NextTrack => self.move_track(1),
             Cmd::PreviousTrack => self.move_track(-1),
+            Cmd::NextGroupTrack => self.move_to_group(1),
+            Cmd::PreviousGroupTrack => self.move_to_group(-1),
             Cmd::ToggleMute => {
                 let track = self.cursor.track;
                 if let Some(was) = self.levels.get(track).map(|live| live.mute) {

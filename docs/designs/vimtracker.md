@@ -854,10 +854,14 @@ view's furthest scroll go by.
 setting each, and a group none has set is folded while it's empty. `Folds::hides` is what the song
 view, the mixer and the phrase view's overview leave out: a folded group's tracks, and a folded
 group with none. Those views draw `Folds::shown` rather than every track, and the moves between
-tracks go through `Folds::step`, so they step over what's hidden. After each key,
-`App::keep_cursor_shown` puts a song view or mixer cursor left on a hidden track on what
-`Folds::stand_in` gives, its group or the next shown. Folds are view state: not in the song, not
-saved, and reset when another project opens.
+tracks go through `Folds::step` and `Folds::step_to_group`, so they step over what's hidden, in
+the view's `Order`: `Columns` in the song view and on the mixer, as drawn, and `Stops` elsewhere,
+a folded group in its first track's place, by `Folds::place`, which the overview sorts its
+columns by too. After each key, `App::keep_cursor_shown` puts a song view or mixer cursor left on
+a hidden track on what `Folds::stand_in` gives, its group or the next shown. Folds are view state,
+kept out of the undo history: the song's `view` (`vt_model::view::ViewState`) is read into
+`App::folds` when a song opens and written back by `song_to_save`, and `App::fold_group` sets one
+from code (decision 305).
 
 **Where it's going** (#320, the track page's cursor and moves done). Each page becomes a component that owns its state, keys
 and drawing, `TrackPage`, `ProjectPage`, `MixerPage`, `SamplePage`, `SongView` and the phrase and
