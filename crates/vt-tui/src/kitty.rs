@@ -37,17 +37,20 @@ use crate::views::sample::{
 };
 use crate::views::track::{
     DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH,
-    MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, SLOT_DRAWING_HEIGHT, WAVEFORM_HEIGHT, WAVEFORM_WIDTH,
-    filter_being_edited, heard_bypassed, machine_being_edited, mod_being_edited, slot_being_edited,
+    LARGE_PANEL_HEIGHT, LARGE_PANEL_WIDTH, MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, SLOT_DRAWING_HEIGHT,
+    WAVEFORM_HEIGHT, WAVEFORM_WIDTH, filter_being_edited, gen_playing_row, heard_bypassed,
+    machine_being_edited, mod_being_edited, slot_being_edited,
 };
 
 mod encoding;
+pub mod generators;
 mod panels;
 pub mod plot;
 mod switches;
 
 pub use encoding::{Picture, scope_png, spans_png, waveform_spans};
 use encoding::{indexed_png, png};
+use generators::GenDrawing;
 use panels::{Found, PanelImages, PanelKey, Shape};
 use plot::{LfoDrawing, Plot, Shade, TrackDrawing};
 use switches::Look;
@@ -559,7 +562,6 @@ pub fn dot_placement(
     now: LfoNow,
     diameter: usize,
 ) -> Placement {
-    let size = (MOD_PANEL_WIDTH * cell.0, MOD_PANEL_HEIGHT * cell.1);
     let (x, level) = if modulator.kind == ModKind::Track {
         let drawing = TrackDrawing::of(modulator);
         let x = f32::from(now.phase) / f32::from(u16::MAX);
@@ -581,6 +583,26 @@ pub fn dot_placement(
             signed.level_of(f32::from(now.value) / f32::from(i16::MAX)),
         )
     };
+    placed_dot(
+        cell,
+        corner,
+        (MOD_PANEL_WIDTH, MOD_PANEL_HEIGHT),
+        (x, level),
+        diameter,
+    )
+}
+
+/// Where a dot this many pixels across goes, centred on a point `(x, level)` from 0 to 1 of a
+/// picture this many characters across and down whose top left is at `corner`, and kept inside
+/// it.
+pub fn placed_dot(
+    cell: (usize, usize),
+    corner: (u16, u16),
+    (columns, rows): (usize, usize),
+    (x, level): (f32, f32),
+    diameter: usize,
+) -> Placement {
+    let size = (columns * cell.0, rows * cell.1);
     let (centre_x, centre_y) = plot::point_at(size, x, level);
     let half = diameter as f32 / 2.0;
     let left = (centre_x - half)
@@ -933,7 +955,7 @@ impl Graphics {
                 Page::Sound => {}
                 Page::Mod => self.sync_mod(app, &track, out)?,
                 Page::Fx => self.sync_fx(app, &track, out)?,
-                Page::Gen => {}
+                Page::Gen => self.sync_gen(app, &track, out)?,
             }
         }
         if app.view == View::Sample {
@@ -1029,6 +1051,9 @@ impl Graphics {
     /// slot's goes on its map at its last note. One switched
     /// out or going nowhere has none, and while the song is stopped none has.
     fn dots_wanted(&self, app: &App) -> [Option<(Shade, Placement)>; MOD_SLOTS] {
+        if app.view == View::Track && app.track_page.page == Page::Gen {
+            return self.gen_dots_wanted(app);
+        }
         let mut wanted = [None; MOD_SLOTS];
         let shown = app.view == View::Track
             && app.track_page.page == Page::Mod
@@ -1054,6 +1079,43 @@ impl Graphics {
             let shade = Shade::of(edited == Some(slot), false);
             let placement = dot_placement(self.cell, corner, modulator, now, diameter);
             wanted[slot] = Some((shade, placement));
+        }
+        wanted
+    }
+
+    /// Where the row playing goes on each live generator's preview on the Gen page, while the
+    /// phrase it shows is the one playing and nothing is drawn over the page. They take the
+    /// places the LFOs' dots have on the Mod page, a preview on screen each.
+    fn gen_dots_wanted(&self, app: &App) -> [Option<(Shade, Placement)>; MOD_SLOTS] {
+        let mut wanted = [None; MOD_SLOTS];
+        if overlaid(app, std::time::Instant::now()) {
+            return wanted;
+        }
+        let Some(phrase) = app.track_page.phrase.and_then(|phrase| {
+            app.song()
+                .tracks
+                .get(app.cursor.track)?
+                .phrases
+                .get(&phrase)
+        }) else {
+            return wanted;
+        };
+        let edited = app.gen_here().map(|(_, generator, _)| generator);
+        let diameter = dot_pixels(self.cell);
+        let size = (LARGE_PANEL_WIDTH, LARGE_PANEL_HEIGHT);
+        for (place, (at, corner)) in wanted.iter_mut().zip(&app.gen_panels_at) {
+            let Some(generator) = phrase.generators().get(*at) else {
+                continue;
+            };
+            let (Some(drawing), Some(row)) = (
+                GenDrawing::of(generator, phrase.steps()),
+                gen_playing_row(app, generator),
+            ) else {
+                continue;
+            };
+            let shade = Shade::of(edited == Some(*at), false);
+            let point = drawing.point(row);
+            *place = Some((shade, placed_dot(self.cell, *corner, size, point, diameter)));
         }
         wanted
     }
@@ -1324,6 +1386,37 @@ impl Graphics {
             )?);
         }
         app.slot_images = ids;
+        Ok(())
+    }
+
+    /// Send each live generator's preview on the Gen page, the cursor's focused, as its column's
+    /// values change.
+    fn sync_gen(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
+        let mut ids = Vec::new();
+        let phrase = app
+            .track_page
+            .phrase
+            .and_then(|phrase| track.phrases.get(&phrase));
+        let edited = app.gen_here().map(|(_, generator, _)| generator);
+        for (at, generator) in phrase
+            .iter()
+            .flat_map(|found| found.generators().iter().enumerate())
+        {
+            let Some(drawing) = phrase.and_then(|found| GenDrawing::of(generator, found.steps()))
+            else {
+                ids.push(None);
+                continue;
+            };
+            let shade = Shade::of(edited == Some(at), false);
+            ids.push(Some(self.panel(
+                out,
+                (PanelKey::Gen(at), shade),
+                Shape::Gen(drawing.clone()),
+                (LARGE_PANEL_WIDTH, LARGE_PANEL_HEIGHT),
+                |size| drawing.plot(size).png(shade.color()),
+            )?));
+        }
+        app.gen_images = ids;
         Ok(())
     }
 

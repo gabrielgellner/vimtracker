@@ -95,7 +95,6 @@ fn the_page_is_fourth_and_shows_the_phrase_under_the_cursor_with_a_device_a_gene
     assert!(text.contains("Phrase 00"), "{text}");
     assert!(text.contains("Ramp  Euclid · Note 00–07"), "{text}");
     assert!(text.contains("Hits"), "{text}");
-    assert!(text.contains("3 of 8"), "{text}");
     assert!(text.contains("make a column of this phrase live"), "{text}");
     assert_eq!(here(&app), Some(GenParam::Fill), "it starts on the fill");
 }
@@ -247,4 +246,70 @@ fn a_phrase_with_none_has_only_the_macros_and_empty() {
     assert!(matches!(app.track_control(), Control::NewGenerator(0)));
     keys(&mut app, "=");
     assert!(generators(&app).is_empty());
+}
+
+#[test]
+fn each_device_has_a_preview_sent_again_only_as_its_column_changes() {
+    use vt_tui::kitty::Graphics;
+    let (mut app, _rt) = on_gen_page();
+    let mut graphics = Graphics::new();
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        String::from_utf8(out)
+            .unwrap()
+            .matches(",c=49,r=5,")
+            .count()
+    };
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let first = app.gen_images[0].unwrap();
+    assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
+    // Moving the cursor off it shows it dim, which is sent once, and back costs nothing.
+    keys(&mut app, "}");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    keys(&mut app, "{");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.gen_images[0], Some(first));
+    // A turn of `Hits` changes the column, so it's drawn again.
+    keys(&mut app, "jj$=");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(app.gen_images[0], Some(first));
+    // On screen, its box is beside the grid, and its brief value is the hits alone.
+    let cells = screen_cells(&mut app).join("\n");
+    assert!(
+        cells.contains("▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒"),
+        "{cells}"
+    );
+    assert!(cells.contains("Hits      4 "), "{cells}");
+    assert_eq!(app.gen_panels_at.len(), 1);
+}
+
+#[test]
+fn the_row_playing_rides_the_preview_as_a_dot() {
+    use vt_engine::engine::Transport;
+    use vt_tui::kitty::Graphics;
+    let (mut app, _rt) = on_gen_page();
+    let mut graphics = Graphics::new();
+    let frame = |app: &mut App, graphics: &mut Graphics| {
+        graphics.sync(app, &mut Vec::new()).unwrap();
+        screen_cells(app);
+        let mut placed = Vec::new();
+        graphics.place(app, &mut placed).unwrap();
+        String::from_utf8_lossy(&placed).into_owned()
+    };
+    assert_eq!(frame(&mut app, &mut graphics), "", "stopped, no dot");
+    app.transport = Transport::Playing;
+    app.jam[0].chain = Some(0);
+    app.set_playhead(3);
+    let placed = frame(&mut app, &mut graphics);
+    assert_eq!(placed.matches("a=p,").count(), 1, "{placed:?}");
+    assert_eq!(
+        frame(&mut app, &mut graphics),
+        "",
+        "nothing moved, nothing placed"
+    );
+    app.set_playhead(4);
+    let placed = frame(&mut app, &mut graphics);
+    assert_eq!(placed.matches("a=p,").count(), 1, "moved by placing again");
+    assert!(!placed.contains("a=t,"), "with no new image");
 }

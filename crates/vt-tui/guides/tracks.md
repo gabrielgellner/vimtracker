@@ -1481,7 +1481,16 @@ them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
 for a lane. A `Where` that's its column's own is dim too. Its settings are the
 shape panel's, laid out by what they do: the fill's down the first two columns,
 and the `Where`'s, `Hits` and `Rotate` or an amount, at the foot of the last, so
-they stay put as the fill changes.
+they stay put as the fill changes. A value with a bar is brief, as `9` for hits,
+as its bar shows how many of how many; the status line says it in full, `Hits, 9
+of the 16 rows`.
+
+On its right is a picture of what it writes across its span: notes as short
+lines at their pitch, from the lowest to the highest there, a small piano roll;
+velocities and lengths as bars, and nudges up or down from the middle; and an FX
+column as a line through its values. While the phrase plays, a dot rides it on
+the row playing, or on a lane, where the lane is reading. It's drawn from the
+phrase as it is, so it changes as you turn a setting or edit a row.
 
 | Keys | Does |
 |---|---|

@@ -266,6 +266,12 @@ pub struct App {
     pub waveform_image: Option<u32>,
     /// The ids of the images of the FX page's slots, for those that have a drawing.
     pub slot_images: [Option<u32>; vt_model::insert::INSERTS],
+    /// The images of the Gen page's previews the terminal has, by each generator's place in its
+    /// phrase's list.
+    pub gen_images: Vec<Option<u32>>,
+    /// Where each preview the Gen page drew is, its generator's place and its picture's top left,
+    /// for the terminal to place the row playing on.
+    pub gen_panels_at: Vec<(usize, (u16, u16))>,
     /// Where the sample page is, and the ids of the images of its waveform and its overview.
     pub sample_page: crate::sample_page::SamplePage,
     pub sample_images: Option<(u32, u32)>,
@@ -507,6 +513,8 @@ impl App {
             filter_image: None,
             waveform_image: None,
             slot_images: [None; vt_model::insert::INSERTS],
+            gen_images: Vec::new(),
+            gen_panels_at: Vec::new(),
             sample_page: crate::sample_page::SamplePage::default(),
             sample_images: None,
             live: None,

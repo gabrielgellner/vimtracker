@@ -783,7 +783,10 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     the app gives `TrackPage::phrase` as each key comes: first the track's macros as one band,
     `macros_device`, `Control::Macro` two rows of four (decision 285), then a device each for its live generators,
     their title and grid from `vt-model`'s `GenParam::title` and `GenParam::grid`, as
-    `Control::Gen`, then `Empty`. A `DeviceSpec` is its
+    `Control::Gen`, then `Empty`. Each generator's preview is `kitty/generators.rs`'s
+    `GenDrawing`, its column's values across its span from the phrase's steps, sent again only as
+    they change, and the row playing is a dot placed on it as an LFO's is, in the same placements
+    (decision 280). A `DeviceSpec` is its
     identity, its title controls over the grid's first columns, its grid of `Control`s and its
     width, full or half, built by `DeviceSpec::new` from a model's `Grid` (`vt-model`'s
     `grid.rs`), as `Insert::grid` is. `rack_places` lays a page's devices out in the order they're

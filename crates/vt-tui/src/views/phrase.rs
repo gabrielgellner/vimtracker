@@ -247,7 +247,7 @@ pub(crate) fn heard_note(app: &App) -> Option<u8> {
 }
 
 /// Where each FX column with a lane of its own is reading, if this phrase is the one playing.
-fn lane_playheads(app: &App, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
+pub(crate) fn lane_playheads(app: &App, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
     let mut playheads = [None; FX_SLOTS];
     let Some(jam) = playhead_step(app).and(app.jam.get(app.cursor.track)) else {
         return playheads;

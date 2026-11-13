@@ -41,6 +41,8 @@ mod generators;
 mod modulation;
 mod sound;
 
+pub(crate) use generators::playing_row as gen_playing_row;
+
 pub use modulation::CyclesAt;
 pub(crate) use modulation::{MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, mod_being_edited};
 
@@ -603,8 +605,18 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     draw_finding_cycles(frame, area, app);
 }
 
-/// Draw the view, giving back where the Mod page's LFO cycles are, for their dots.
-pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> CyclesAt {
+/// Where the pictures that carry a dot are, as the track page drew them.
+#[derive(Debug, Clone, Default)]
+pub struct Drawn {
+    /// The Mod page's LFO cycles and Track maps, by slot.
+    pub cycles: CyclesAt,
+    /// The Gen page's previews, by their generator's place in its phrase's list.
+    pub previews: Vec<(usize, (u16, u16))>,
+}
+
+/// Draw the view, giving back where the Mod page's LFO cycles and the Gen page's previews are,
+/// for their dots.
+pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> Drawn {
     // While the keyboard plays the sound, the page sits in a box of that mode's colour.
     let area = if app.mode == Mode::Keys {
         let block = widgets::window_border()
@@ -618,7 +630,7 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> CyclesAt
     };
     let Some(track) = app.song().tracks.get(app.cursor.track) else {
         frame.render_widget(Paragraph::new("This track doesn't exist."), area);
-        return CyclesAt::default();
+        return Drawn::default();
     };
     // Each setting a macro holds shows where the macro puts it.
     let shown = track.with_macros();
@@ -669,8 +681,18 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> CyclesAt
     match app.track_page.page {
         Page::Sound => sound::draw(frame, rest, app, track),
         Page::Fx => draw_fx(frame, rest, app, track),
-        Page::Mod => return modulation::draw(frame, rest, app, track),
-        Page::Gen => generators::draw(frame, rest, app, track),
+        Page::Mod => {
+            return Drawn {
+                cycles: modulation::draw(frame, rest, app, track),
+                ..Drawn::default()
+            };
+        }
+        Page::Gen => {
+            return Drawn {
+                previews: generators::draw(frame, rest, app, track),
+                ..Drawn::default()
+            };
+        }
     }
-    CyclesAt::default()
+    Drawn::default()
 }
