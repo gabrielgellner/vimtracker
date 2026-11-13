@@ -22,7 +22,7 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
-use vt_model::shape::{DEFAULT_RATE, FillKind, Shape, ShapeColumn, Values, WaveRate, Where};
+use vt_model::shape::{Acid, DEFAULT_RATE, FillKind, Shape, ShapeColumn, Values, WaveRate, Where};
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Note, Step};
@@ -45,6 +45,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("kria", kria()),
         ("metropolix", metropolix()),
         ("live-generators", live_generators()),
+        ("acid-lines", acid_lines()),
     ]
 }
 
@@ -150,6 +151,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         values: Values::default(),
         place,
         seed: 1,
+        acid: Acid::default(),
     }
 }
 
@@ -694,6 +696,36 @@ fn live_generators() -> Song {
     set(&mut song, 2, "acid.envmod", 0x70);
     song.tracks[2].level = 0xC8;
     song.tracks[2].send_a = 0xA0;
+    song
+}
+
+/// An acid line from the shape panel's `Acid` fill: notes, accents and slides rolled together on
+/// an empty Note column, and kept live so `gl` and `r` can roll another.
+fn acid_lines() -> Song {
+    let mut song = song("acid-lines", 126, 0, ScaleKind::Minor, 4);
+    song.seed = 0xAC;
+    voice(&mut song, 0, "TB", SynthVoice::Acid, &[REST; 16]);
+    let mut riff = shape(FillKind::Acid, note("C-2"), note("C-3"), Where::AllRows);
+    riff.seed = 5;
+    let notes = empty_notes(&song);
+    let mut song = generate(song, 0, notes, 16, riff);
+    set(&mut song, 0, "acid.cutoff", 0x50);
+    set(&mut song, 0, "acid.resonance", 0xC0);
+    set(&mut song, 0, "acid.envmod", 0xA0);
+    set(&mut song, 0, "acid.decay", 0x58);
+    song.tracks[0].level = 0xC4;
+    song.tracks[0].send_a = 0xA0;
+    four_on_the_floor(&mut song, 1);
+    off_beat_hats(&mut song, 2);
+    voice(
+        &mut song,
+        3,
+        "SD",
+        SynthVoice::Snare,
+        &texts(&hits("....x.......x...", "G-2")),
+    );
+    song.tracks[3].level = 0xC8;
+    song.tracks[3].send_b = 0x98;
     song
 }
 

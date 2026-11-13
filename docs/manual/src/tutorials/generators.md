@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds seven of them out of what vimtracker already has, each as a
+let you steer. This chapter builds eight of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -14,6 +14,7 @@ there are no samples to find.
 | `kria` | monome's Kria | Triggers, pitches, octaves and lengths on loops of different lengths |
 | `metropolix` | Intellijel's Metropolix | Pulses and gates per row, `ACU`, `ARP` and a pendulum order |
 | `live-generators` | Elektron's Euclidean mode | Columns kept live with `L`, and what hand edits do to them |
+| `acid-lines` | Roland's TB-303 | `S`'s `Acid` fill: notes, accents and slides rolled together |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -61,8 +62,8 @@ cursor back on the Note column before you type notes.
 
 [Music Thing's Turing Machine](https://www.musicthing.co.uk/Turing-Machine/) is a looping random
 sequencer. A shift register of up to 16 bits goes round, and its one big knob is the chance that
-a bit is flipped as it comes round: fully left, the loop is locked; in the middle, it slowly
-changes; fully right, it never repeats. Run its voltage through a quantiser and it writes
+a bit is flipped as it comes round: at noon every bit is new, turned to the right less and less
+changes, and fully right the loop is locked. Run its voltage through a quantiser and it writes
 melodies that drift, a little at a time, until you hear one you want to keep and lock it.
 
 **How the song does it.** Track 1, an `Acid`, plays a written rhythm, every note a `C-2`. A
@@ -117,7 +118,7 @@ some delay, a shorter hat (`Decay` `30`), and the tracks' `Level`s.
 **Try next.**
 
 *   `Mutate` all the way up, then back down to `5%` once it's somewhere good: it barely moves.
-*   `Length` on the slot: 3 or 5 against the ten notes in the bar, and the loop no longer lines
+*   `Length` on the slot: 3 or 7 against the ten notes in the bar, and the loop no longer lines
     up with it, so a short register makes a long melody.
 *   Another scale: `:scale` and choose one. The register stays; every note moves into the new
     scale.
@@ -160,7 +161,8 @@ every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu
     `Shape` `Smooth`, `Rate` `2 bars` (each with `K`) and `Depth` `30`, and on the Sound page
     bring its filter's `Cut` down to `60` and `Res` up to `40`.
 7.  The T section: `W`, a `Hat` (`K` `/hat` `Enter`), `:name T1`, and a `C-4` on every row
-    (`Option-1` twice, `i`, `;`, then `a` sixteen times). Then `l` across to FX 1, `gg`, `vG`
+    (a grid of a sixteenth, `i`, auto-jump on, so the status line shows `Jump`, then `a`
+    sixteen times). Then `l` across to FX 1, `gg`, `vG`
     and `S`: the column is empty, so the panel first lists the commands. Choose `CHA` (`cha`,
     `Enter`), then on `Fill` choose `Random` with `K`, set `From` to `50` and `To` to `F0`
     (`i` and the value), and `Enter`. Each hat now has its own chance.
@@ -195,22 +197,22 @@ polyrhythm. [`song.ron`](songs/euclid/song.ron)
 **Build it.**
 
 1.  `:set scale=minor` and `:bpm 124`.
-2.  The kick: track 1, `K` `/kick` `Enter`, `:name BD`. `Space 3`, then `vG` on the Note
-    column to select all 16 rows, and `S`. The panel's title says `Generate`, as there are no
-    notes to reshape.
+2.  The kick: track 1, `Space 4`, `K` `/kick` `Enter`, `:name BD`. `Space 3`, then `vG` on the
+    Note column to select all 16 rows, and `S`. The panel's title says `Generate`, as there are
+    no notes to reshape.
 3.  In the panel, `j` to `From` and `i` `c1` `Enter`, then `j` to `To` and `i` `c1` `Enter`, so
     every hit is a `C-1`. `j` down to `Where`, `K`, `euclid`, `Enter`. `j` to `Hits`, which
     says `3 of 16`, and `=` twice for 5. The grid follows as you go.
-4.  `L` keeps it live. The phrase's title shows `󰁨 Note`, and its notes are drawn
-    in teal.
-5.  The snare: `W`, `K` `snare` `Enter`, `:name SD`, and the same with `g2` for both ends,
-    `Hits` 2 and `Rotate` (under `Hits`) `=` four times, then `L`.
-6.  The hats: `W`, `K` `/hat` `Enter`, `:name HH`. On the Sound page, `/speed` `Enter` and `=`
-    once for `1/8T`. In the phrase view, `:len 12`, then `vG`, `S`, both ends `c4`, `Euclid`
-    with 7 hits, and `L`.
-7.  The bass: `W`, `K` `acid` `Enter`, `:name BS`. `vG`, `S`, then on `Fill`, `K`,
-    `alternate`, `Enter`: the ends are now the two notes it goes between, `c2` and `c3`.
-    `Euclid` with 7 hits and `Rotate` 2, and `L`.
+4.  `L` keeps it live. The phrase's title shows `󰁨 Note`, and its notes are drawn in teal.
+5.  The snare: `W`, on its Sound page `K` `snare` `Enter`, `:name SD`, and in the phrase view
+    the same with `g2` for both ends, `Hits` 2 and `Rotate` (under `Hits`) `=` four times, then
+    `L`.
+6.  The hats: `W`, on its Sound page `K` `/hat` `Enter`, `:name HH`, and `/speed` `Enter` and
+    `=` once for `1/8T`. In the phrase view, `:len 12`, then `vG`, `S`, both ends `c4`,
+    `Euclid` with 7 hits, and `L`.
+7.  The bass: `W`, on its Sound page `K` `acid` `Enter`, `:name BS`. In the phrase view, `vG`,
+    `S`, then on `Fill`, `K`, `alternate`, `Enter`: the ends are now the two notes it goes
+    between, `c2` and `c3`. `Euclid` with 7 hits and `Rotate` 2, and `L`.
 
 The finished song also lengthens the kick (`Decay` `90`), shortens the snare (`Decay` `60`) and
 the hat (`Decay` `38`), sets the `Acid`'s `Cutoff` `50`, `Resonance` `90` and `Env mod` `90`,
@@ -376,9 +378,9 @@ Track 1                       Track 2, at 1/8
 4.  On the Mod page, the `Accumulator` device under `Mod 3`: `Up` and `Down` `4` (`i` `4`
     `Enter`), and `Limit` `Bounce` (`K`).
 5.  `:order up-down`.
-6.  Track 2: `W`, `K` `va` `Enter`, `:name AR`, `/speed` `Enter` and `=` twice for `1/8`. In the
-    phrase view, `:len 4`, the four notes with `SGL4`, and `ARP` on each (`K` `arp` `Enter`,
-    then `24`).
+6.  Track 2: `W`, and on its Sound page `K` `va` `Enter`, `:name AR`, and `/speed` `Enter`
+    and `=` twice for `1/8`. In the phrase view, `:len 4`, the four notes with `SGL4`, and
+    `ARP` on each (`K` `arp` `Enter`, then `24`).
 7.  Its `Arpeggio` device, beside the accumulator: `Rate` `1/32`, which on a track at `1/8` is a
     sixteenth, `Mode` `Up-down`, `Oct` `2` and `Retrig` `on`.
 
@@ -449,13 +451,50 @@ The finished song also sets the `Acid`'s `Resonance` `B0` and `Env mod` `70`, th
     new lane.
 *   `Space g a` on any of them when you're done, to keep the values as plain ones.
 
+## Acid lines
+
+The [TB-303](https://www.roland.com/global/products/rc_tb-303/)'s sequencer was so awkward to
+program that its lines came out half by accident, and that's the sound: a few notes round a
+root, some an octave up, a few accented, a few sliding into the next. Roland's software 303
+has a randomiser that rolls a whole line, or keeps the notes and rolls only the rest. David
+Whiting's [Endless Acid Banger](https://www.vitling.xyz/toys/acid-banger/) does it for ever, in a
+browser.
+
+**How the song does it.** Track 1, an `Acid` in C minor, has a line written by the shape panel's
+`Acid` fill on an empty Note column: four notes from `C-2` up to `C-3`, its root most often,
+half the rows playing, the beats more than the rest, with accents (`7F`) and slides (`HLD`)
+rolled at the same time. It's kept live, so `gl` and `r` roll another while it loops, under a
+kick, a snare and hats. [`song.ron`](songs/acid-lines/song.ron)
+
+**Build it.**
+
+1.  `:set scale=minor` and `:bpm 126`.
+2.  Track 1: `K` `acid` `Enter`, `:name TB`.
+3.  `Space 3`, `vG` on the Note column, and `S`. On `Fill`, `K`, `acid`, `Enter`.
+4.  `From` `c2` and `To` `c3` (`i`, the note, `Enter`). `Notes` is how many notes the riff has,
+    `Density` how many rows play, `Accent` and `Slide` the chance of each.
+5.  `r` until you like it, and `L` to keep it live.
+
+Then a `Kick` on every beat, a `Snare` (`G-2`) on rows `04` and `0C` and a `Hat` on the
+off-beats. The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `C0`, `Env mod`
+`A0` and `Decay` `58`, sends it to the delay, and sets the levels.
+
+**Try next.**
+
+*   `gl`, `r`, `L` while it plays: a new line every bar, until one sticks.
+*   `Pitches` `Keep` in the panel: `r` then rolls only the accents, slides and octaves, Roland's
+    second die, and the notes stay.
+*   `Density` up for a busier line, `Notes` 2 for a two-note pump, `Octave` up for more jumps.
+*   Write a line by hand first, then `S` with `Acid` on it: its rhythm stays, and the panel gives
+    it new pitches, accents and slides.
+*   `Space g a` keeps the one you like as plain notes, to tweak by hand.
+
 ## Generators still to come
 
 These are planned, each its own issue, and this chapter grows a section as each lands:
 
 | Issue | Generator |
 |---|---|
-| [#582](https://github.com/gabrielgellner/vimtracker/issues/582) | An acid riff generator in the shape panel: notes, accents and slides together |
 | [#584](https://github.com/gabrielgellner/vimtracker/issues/584) | Grids: drum patterns from a map, across a kit's tracks |
 | [#585](https://github.com/gabrielgellner/vimtracker/issues/585) | Marbles' shaped random values: Spread, Bias and weighted scale Steps |
 | [#586](https://github.com/gabrielgellner/vimtracker/issues/586) | Marbles' rhythm models as `Where` choices |
