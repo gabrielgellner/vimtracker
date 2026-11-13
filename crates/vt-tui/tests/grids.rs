@@ -119,10 +119,10 @@ fn grids_across_a_kits_tracks_writes_one_beat_each_its_own_part() {
     let screen = drawn(&app);
     for expected in [
         "Note on 3 tracks:",
-        "X          80",
-        "BD density 80",
-        "HH density 80",
-        "Rows       1/16",
+        "X       80",
+        "BD fill 80",
+        "HH fill 80",
+        "Rows    1/16",
         "Each track plays its own part",
     ] {
         assert!(screen.contains(expected), "{expected} in\n{screen}");
@@ -163,7 +163,7 @@ fn kept_live_each_track_has_a_generator_of_its_part_reopened_on_its_own() {
         [Fill, Part, Pitch, MapX, MapY, SnareDensity, Chaos, Rows]
     );
     let screen = drawn(&app);
-    assert!(screen.contains("Part       SD"), "{screen}");
+    assert!(screen.contains("Part    SD"), "{screen}");
     // Its density down to none: the snare goes quiet, and the others play on.
     keys(&mut app, "jjjjji00L");
     assert_eq!(rhythm(&app, 1), "................");
@@ -207,7 +207,7 @@ fn a_live_grids_on_the_gen_page_is_named_by_its_part() {
     assert_eq!(app.track_page.page, Page::Gen);
     let text = fx_page_text(&app).join("\n");
     assert!(text.contains("Grids  SD · Note 00–0F"), "{text}");
-    for setting in ["X", "Y", "Chaos", "SD density", "Note", "Rows"] {
+    for setting in ["X", "Y", "Chaos", "SD fill", "Note", "Rows"] {
         assert!(text.contains(setting), "{setting} in\n{text}");
     }
 }

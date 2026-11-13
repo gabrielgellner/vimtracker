@@ -298,7 +298,7 @@ outwards. A step whose level is over Grids' second threshold is accented, `7F`.
 | Part | Which part this track plays: `BD`, `SD` or `HH` |
 | Note | On an empty column, the note it writes |
 | X, Y | The place on the map, `00` to `FF` each way |
-| BD density | How many of the kick's hits play, and SD and HH the others' |
+| BD fill | The kick's density; SD fill and HH fill the others' |
 | Chaos | How far each step's level is raised at random |
 | Rows | A row a 16th, `1/16`, or a 32nd, `1/32` |
 

@@ -636,8 +636,9 @@ HH  XxX.X.x.X.X.X.x.  X.X.X.x.X.X.X.x.
 3.  Back on track 1, `gg` `vG` on the Note column, `W` `W` to reach track 3, and `S`. On `Fill`,
     `K` `/grids` `Enter`. The panel shows `Each track plays its own part`, and the three tracks
     take the kick's, the snare's and the hats' parts, as their machines say.
-4.  `j` to `X` and `i` `40`, `j` to `Y` and `i` `40`. Then `j` `j` `j` to `HH density` and
-    `i` `A0`, and `j` to `Chaos` and `i` `C0`. Two hex digits are kept as they're typed.
+4.  `j` to `X` and `i` `40`, `j` to `Y` and `i` `40`. Then `j` `j` `j` to `HH fill`, the hats'
+    density, and `i` `A0`, and `j` to `Chaos` and `i` `C0`. Two hex digits are kept as they're
+    typed.
 5.  `L` keeps it live, a generator on each track.
 6.  Track 4: `K` `acid` `Enter`, `:name BS`, and `A-1`s on `x..x..x...x.x...`.
 
