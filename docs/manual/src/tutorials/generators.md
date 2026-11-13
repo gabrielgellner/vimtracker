@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds nine of them out of what vimtracker already has, each as a
+let you steer. This chapter builds ten of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -17,6 +17,7 @@ there are no samples to find.
 | `acid-lines` | Roland's TB-303 | `S`'s `Acid` fill: notes, accents and slides rolled together |
 | `walks` | Max's `drunk` and Voss's 1/f music | `S`'s `Walk` and `1/f` fills, kept live |
 | `euclid`, again | Noise Engineering's Numeric Repetitor | `S`'s `Multiply` on the kick's rhythm |
+| `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -580,13 +581,63 @@ it. Doubling moves the rhythm a step later, and an odd number always keeps the d
 after `Space g a`, whose notes differ, a new note takes the pitch of the one before it, so the
 line keeps its shape while the rhythm changes.
 
+## Grids
+
+[Mutable Instruments' Grids](https://pichenettes.github.io/mutable-instruments-documentation/modules/grids/)
+plays a kick, a snare and a hat from a map of 25 drum patterns, made by hand from real beats.
+Two knobs, X and Y, move round the map, blending the four patterns nearest, so the beat changes
+smoothly from one style to the next. Each step of a pattern has a level, how much it belongs to
+it, and each drum has a density knob: turning it up adds the next most important hit first, so a
+sparse kick fills in from the downbeat outwards rather than at random. Chaos raises the levels at
+random, so weaker hits come and go.
+
+**How the song does it.** Tracks 1 to 3 are a `Kick`, a `Snare` and a `Hat`, each with one live
+`Grids` column over two bars, all at the same place on the map, `X` `40` and `Y` `40`. Each plays
+its own part of the pattern there: the kick's, the snare's or the hats', as its 808 voice says.
+The hats' density is higher, `A0`, and `Chaos` `C0` makes the two bars differ, the
+accents `X`: Track 4 is an
+`Acid` bass. [`song.ron`](songs/grids/song.ron)
+
+```text
+BD  X...x.X.X.x.x.X.  X...x.X.X.x.x.x.
+SD  ....X.X...x.X.x.  ..x.X.x...x.X.X.
+HH  XxX.X.x.X.X.X.x.  X.X.X.x.X.X.X.x.
+```
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 118`.
+2.  Tracks 1 to 3: the machines `kick`, `snare` and `hat` (`K` `/kick` `Enter` and so on), named
+    `BD`, `SD` and `HH`. On each, `Space 3`, `:len 32`, and one note on row `00` for its pitch:
+    `C-1`, `G-2` and `C-4`.
+3.  Back on track 1, `gg` `vG` on the Note column, `W` `W` to reach track 3, and `S`. On `Fill`,
+    `K` `/grids` `Enter`. The panel shows `Each track plays its own part`, and the three tracks
+    take the kick's, the snare's and the hats' parts, as their machines say.
+4.  `j` to `X` and `i` `40`, `j` to `Y` and `i` `40`. Then `j` `j` `j` to `HH density` and
+    `i` `A0`, and `j` to `Chaos` and `i` `C0`. Two hex digits are kept as they're typed.
+5.  `L` keeps it live, a generator on each track.
+6.  Track 4: `K` `acid` `Enter`, `:name BS`, and `A-1`s on `x..x..x...x.x...`.
+
+A note it plays keeps its pitch and a new one takes the first note's, which is why each track
+starts with one. The snare doesn't play on row `00`, so its `G-2` is gone from the grid, but the
+generator still has it, under its own notes. Tracks with names it can't tell take the parts in
+order, so three tracks of samples named `BD`, `SD` and `CH`, or nothing at all, work the same.
+
+**Try next.**
+
+*   `gl` on any drum and `+` or `_` on `X` or `Y`: that drum moves through the map alone. Do it
+    on all three for a new beat, or `S` across them again.
+*   `Y` `00` with the kick's density at `40`: four on the floor. Up from there, it fills in.
+*   `r` on the hats rolls their chaos again; `Chaos` `00` makes both bars the same.
+*   On the Gen page (`Space 4`, then `L` to Gen) the drum's device is titled `Grids  BD`, its
+    map, density and chaos ready to turn while it plays, and on the Roto its first knobs.
+
 ## Generators still to come
 
 These are planned, each its own issue, and this chapter grows a section as each lands:
 
 | Issue | Generator |
 |---|---|
-| [#584](https://github.com/gabrielgellner/vimtracker/issues/584) | Grids: drum patterns from a map, across a kit's tracks |
 | [#585](https://github.com/gabrielgellner/vimtracker/issues/585) | Marbles' shaped random values: Spread, Bias and weighted scale Steps |
 | [#586](https://github.com/gabrielgellner/vimtracker/issues/586) | Marbles' rhythm models as `Where` choices |
 | [#587](https://github.com/gabrielgellner/vimtracker/issues/587) | Variation: a Markov chain learned from the phrase's own notes |
