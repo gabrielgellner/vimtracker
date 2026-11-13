@@ -2158,6 +2158,165 @@ fn l_keeps_generated_notes_live_and_gl_reopens_them() {
     assert_eq!(generators(&app, 0).len(), 1);
 }
 
+/// Each row's note name without its octave, `--` for none, and whether it plays.
+fn pitch_classes(app: &App) -> Vec<String> {
+    steps(app).iter().map(|s| s[..2].to_owned()).collect()
+}
+
+#[test]
+fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() {
+    use vt_tui::shaping::ShapeRow;
+    let (mut app, _rt) = app_with(&[E; 16]);
+    app.note_velocity = 0x50;
+    let depth = app.history.undo_depth();
+    keys(&mut app, "vGSKacid<Enter>");
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.shape.kind, FillKind::Acid);
+    assert_eq!(
+        panel.rows(),
+        [
+            ShapeRow::Fill,
+            ShapeRow::From,
+            ShapeRow::To,
+            ShapeRow::Notes,
+            ShapeRow::Octave,
+            ShapeRow::Density,
+            ShapeRow::Accent,
+            ShapeRow::Slide,
+            ShapeRow::Pitches,
+            ShapeRow::Where,
+        ]
+    );
+    // A riff over the octave from C-3, an octave either way at most, plain notes at the typed
+    // velocity and accents at full.
+    let written = |app: &App| -> Vec<String> {
+        steps(app)
+            .into_iter()
+            .filter(|s| !s.starts_with("---"))
+            .collect()
+    };
+    let riff = written(&app);
+    assert!(riff.len() > 3, "{riff:?}");
+    for step in &riff {
+        let Ok(vt_model::step::Note::On(note)) = step[..3].parse() else {
+            panic!("{step}");
+        };
+        assert!((48..=84).contains(&note), "{step}");
+        assert!(step[4..6] == *"50" || step[4..6] == *"7F", "{step}");
+    }
+    // `r` rolls a new riff.
+    keys(&mut app, "r");
+    assert_ne!(written(&app), riff);
+    // Turn the slides up to every note, then keep the pitches: `r` rolls only the accents,
+    // slides and octaves, so each note keeps its name and row.
+    keys(&mut app, "jjjjjjj");
+    assert_eq!(app.shape.as_ref().unwrap().row, ShapeRow::Slide);
+    keys(&mut app, "i100<Enter>");
+    assert!(written(&app).iter().all(|step| step.contains("HLD")));
+    keys(&mut app, "j=");
+    assert!(app.shape.as_ref().unwrap().shape.acid.keep);
+    let kept = pitch_classes(&app);
+    let accents =
+        |app: &App| -> Vec<String> { written(app).iter().map(|s| s[4..6].to_owned()).collect() };
+    let mut rolled = false;
+    for _ in 0..6 {
+        let before = accents(&app);
+        keys(&mut app, "r");
+        assert_eq!(pitch_classes(&app), kept);
+        rolled |= accents(&app) != before;
+    }
+    assert!(rolled, "a roll changes the accents");
+    // Kept as one undo, and the panel's own steps added none.
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    keys(&mut app, "u");
+    assert!(steps(&app).iter().all(|s| s == E));
+}
+
+#[test]
+fn acid_kept_live_rolls_again_through_gl() {
+    let (mut app, _rt) = app_with(&[E; 16]);
+    keys(&mut app, "vGSKacid<Enter>L");
+    assert_eq!(generators(&app, 0).len(), 1);
+    assert_eq!(generators(&app, 0)[0].shape.kind, FillKind::Acid);
+    let first = steps(&app);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "gl");
+    assert_eq!(app.mode, Mode::Shape);
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.verb(), "Generate");
+    assert_eq!(panel.shape.kind, FillKind::Acid);
+    // It counts the rows as they'd be without it, so all 16 are open to it.
+    assert_eq!(panel.open_rows(), 16);
+    let notes = first.iter().filter(|s| !s.starts_with("---")).count();
+    let part = panel.parts[0];
+    let written = vt_model::shape::written(
+        panel.base_steps(&part),
+        part.range,
+        part.column,
+        &panel.shape_of(0),
+    );
+    assert_eq!(written.len(), notes);
+    keys(&mut app, "rL");
+    assert_ne!(steps(&app), first);
+    assert_eq!(generators(&app, 0).len(), 1);
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), first);
+}
+
+#[test]
+fn acid_on_notes_keeps_their_rhythm_and_with_keep_their_pitches() {
+    use vt_tui::shaping::ShapeRow;
+    let start = [
+        "C-3 40 --- --- ---",
+        E,
+        "D#3 40 --- --- ---",
+        "OFF -- --- --- ---",
+        "G-3 40 --- --- ---",
+        E,
+        "A#3 40 --- --- ---",
+        E,
+    ];
+    let (mut app, _rt) = app_with(&start);
+    keys(&mut app, "vGSKacid<Enter>");
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.verb(), "Reshape");
+    assert!(
+        !panel.rows().contains(&ShapeRow::Density),
+        "the rhythm is there"
+    );
+    let rhythm =
+        |app: &App| -> Vec<bool> { steps(app).iter().map(|s| s.starts_with("---")).collect() };
+    assert_eq!(
+        rhythm(&app),
+        [false, true, false, false, false, true, false, true]
+    );
+    assert_eq!(notes_of(&app)[3], "OFF");
+    // Keep the pitches: the ends and notes go, and with no octaves every note is as it was.
+    keys(&mut app, "jjjjjjj");
+    assert_eq!(app.shape.as_ref().unwrap().row, ShapeRow::Pitches);
+    keys(&mut app, "=");
+    assert_eq!(
+        app.shape.as_ref().unwrap().rows(),
+        [
+            ShapeRow::Fill,
+            ShapeRow::Octave,
+            ShapeRow::Accent,
+            ShapeRow::Slide,
+            ShapeRow::Pitches,
+            ShapeRow::Where,
+        ]
+    );
+    keys(&mut app, "kkki0<Enter>");
+    assert_eq!(app.shape.as_ref().unwrap().shape.acid.octave, 0);
+    let notes: Vec<String> = start.iter().map(|s| s[..3].to_owned()).collect();
+    for _ in 0..4 {
+        keys(&mut app, "r");
+        assert_eq!(notes_of(&app), notes);
+    }
+}
+
 #[test]
 fn dot_applies_the_same_shape_with_ends_from_what_is_there() {
     let (mut app, _rt) = app_with(&[

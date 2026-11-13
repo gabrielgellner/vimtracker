@@ -9,7 +9,7 @@ use vt_model::lfo::Shape as Wave;
 use vt_model::project::{load_song, save_song};
 use vt_model::scale::Scale;
 use vt_model::selection::StepRange;
-use vt_model::shape::{DEFAULT_RATE, FillKind, Shape, ShapeColumn, Values, Where};
+use vt_model::shape::{Acid, DEFAULT_RATE, FillKind, Shape, ShapeColumn, Values, Where};
 use vt_model::song::{Lane, Phrase, Song};
 use vt_model::step::{FxCommand, Note, Step};
 
@@ -72,6 +72,7 @@ fn ramp(from: u8, to: u8, place: Where) -> Shape {
         values: Values::default(),
         place,
         seed: 7,
+        acid: Acid::default(),
     }
 }
 
@@ -537,4 +538,148 @@ fn live_notes_of_its_own_own_their_velocities_and_save() {
     let edited = set_velocity(&Arc::new(loaded), 1, 0x10);
     assert!(phrase(&edited).generators().is_empty());
     assert_eq!(velocities(&edited)[1], "10");
+}
+
+fn acid(seed: u64, settings: Acid) -> Shape {
+    Shape {
+        kind: FillKind::Acid,
+        seed,
+        acid: settings,
+        ..ramp(36, 48, Where::AllRows)
+    }
+}
+
+/// Each row's note, velocity and gate kind.
+fn cells(song: &Song) -> Vec<String> {
+    texts(song)
+        .iter()
+        .map(|text| text[..10].to_owned())
+        .collect()
+}
+
+#[test]
+fn a_live_acid_riff_rerenders_owns_its_accents_and_slides_and_saves() {
+    let start = song_with(&[EMPTY; 16]);
+    let writing = ShapeColumn::Note {
+        scale: Scale::default(),
+        writes: Some(0x50),
+    };
+    let busy = Acid {
+        accent: 50,
+        slide: 50,
+        ..Acid::default()
+    };
+    let live = generate(&start, writing, all(16), acid(1, busy));
+    let played = |song: &Song| cells(song).iter().filter(|c| !c.starts_with("---")).count();
+    assert!(played(&live) > 3, "{:?}", cells(&live));
+    assert!(cells(&live).iter().any(|cell| cell.contains("7F")));
+    assert!(cells(&live).iter().any(|cell| cell.contains("HLD")));
+    // Another seed is another riff, and the rows it leaves are empty again, velocity, gate and all.
+    let rerolled = reshape(&live, 0, acid(2, busy));
+    assert_ne!(cells(&rerolled), cells(&live));
+    for (now, text) in texts(&rerolled).iter().enumerate() {
+        if text.starts_with("---") {
+            assert_eq!(text, &texts(&start)[now]);
+        }
+    }
+    // With the pitches kept, a roll changes only the accents and slides.
+    let kept = Acid {
+        keep: true,
+        octave: 0,
+        ..busy
+    };
+    let before = reshape(&live, 0, acid(2, kept));
+    let after = reshape(&before, 0, acid(2, Acid { roll: 7, ..kept }));
+    let notes =
+        |song: &Song| -> Vec<String> { texts(song).iter().map(|t| t[..3].to_owned()).collect() };
+    assert_eq!(notes(&after), notes(&before));
+    assert_ne!(cells(&after), cells(&before));
+    // Saved with its settings, and opened again still live.
+    let folder = std::env::temp_dir().join(format!("vt-acid-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&folder);
+    save_song(&folder, &after).unwrap();
+    let text = fs::read_to_string(folder.join("song.ron")).unwrap();
+    assert!(text.contains("acid"), "{text}");
+    let loaded = Arc::new(load_song(&folder).unwrap());
+    let _ = fs::remove_dir_all(&folder);
+    assert_eq!(phrase(&loaded), phrase(&after));
+    assert_eq!(phrase(&loaded).generators()[0].shape.acid.roll, 7);
+    // An accent and a slide are its own, so taking one off by hand applies it.
+    let row = cells(&loaded)
+        .iter()
+        .position(|cell| cell.contains("HLD"))
+        .unwrap();
+    let edited = edit(
+        &loaded,
+        &Action::SetField {
+            track: 0,
+            phrase: 0,
+            step: row,
+            value: FieldValue::Gate(None),
+        },
+    )
+    .unwrap();
+    assert!(phrase(&edited).generators().is_empty());
+    assert!(!cells(&edited)[row].contains("HLD"));
+}
+
+#[test]
+fn reshaping_acid_into_another_fill_gives_back_the_velocities_and_gates() {
+    let start = song_with(&[
+        "C-3 40 --- --- ---",
+        "D-3 40 MLT2 --- ---",
+        "E-3 40 --- --- ---",
+        "F-3 40 --- --- ---",
+    ]);
+    let note = ShapeColumn::Note {
+        scale: Scale::default(),
+        writes: None,
+    };
+    let every = Acid {
+        accent: 100,
+        slide: 100,
+        ..Acid::default()
+    };
+    let live = generate(
+        &start,
+        note,
+        all(4),
+        Shape {
+            place: Where::Notes,
+            ..acid(1, every)
+        },
+    );
+    assert!(cells(&live).iter().all(|cell| cell.contains("7F HLD")));
+    let ramped = reshape(&live, 0, ramp(48, 51, Where::Notes));
+    assert_eq!(
+        cells(&ramped),
+        ["C-2 40 ---", "C#2 40 MLT", "D-2 40 ---", "D#2 40 ---"]
+    );
+    // And back: it takes what's there now as what's under its accents and slides.
+    let again = reshape(
+        &ramped,
+        0,
+        Shape {
+            place: Where::Notes,
+            ..acid(1, every)
+        },
+    );
+    assert_eq!(cells(&again), cells(&live));
+    // A velocity typed while it's a ramp isn't its own, so it stays.
+    let typed = set_velocity(&ramped, 0, 0x22);
+    assert_eq!(phrase(&typed).generators().len(), 1);
+    let back = reshape(&typed, 0, ramp(48, 51, Where::Notes));
+    assert_eq!(velocities(&back)[0], "22");
+}
+
+#[test]
+fn a_shape_left_as_it_starts_saves_no_acid_settings() {
+    let start = song_with(&[NOTE; 4]);
+    let live = generate(
+        &start,
+        ShapeColumn::Velocity,
+        all(4),
+        ramp(0, 0x40, Where::Notes),
+    );
+    assert!(!ron::ser::to_string(&*live).unwrap().contains("acid"));
 }
