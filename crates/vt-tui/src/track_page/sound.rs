@@ -100,19 +100,30 @@ const PLAY: [&[Control]; 3] = [
 ];
 
 /// The machine's device: the machine in its title, and its type after it, the sample a sampler
-/// plays or a synth's setting that gives it its character, then its settings in its own grid.
+/// plays or a synth's setting that gives it its character, then its settings in its own grid. A
+/// sampler's has the sample's own `Tune` and `Cents` down the column after its own, which aren't
+/// the track's settings but the sample's (decision 264).
 fn machine(machine: Machine) -> DeviceSpec {
     let kind = match machine {
         Machine::Sampler => Some(Control::Sample),
         Machine::Plaits(_) => machine.type_param().map(Control::Setting),
     };
-    DeviceSpec::new(
+    let mut device = DeviceSpec::new(
         "Machine",
         [Some(Control::Machine), kind, None, None],
         machine.grid(),
         Control::Setting,
-    )
+    );
+    if machine == Machine::Sampler {
+        device.grid[0][SAMPLE_TUNING_COLUMN] = Some(Control::Tune);
+        device.grid[1][SAMPLE_TUNING_COLUMN] = Some(Control::Cents);
+    }
+    device
 }
+
+/// The column of a sampler's Machine that has the sample's `Tune` and `Cents`, after `Start` and
+/// `Length`'s.
+const SAMPLE_TUNING_COLUMN: usize = 2;
 
 /// A device of the track's own settings, with these title controls over its first columns and
 /// these columns of settings, each from the top.
