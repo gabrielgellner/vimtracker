@@ -8,6 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::generator::{Generator, Span as Spanned};
+use vt_model::macros::{GenColumn, MacroTarget};
 use vt_model::shape::params::Units;
 use vt_model::shape::{Context, GenParam, ShapeColumn};
 use vt_model::song::Track;
@@ -153,7 +154,8 @@ impl CellSource for GenCells<'_> {
 
     fn value(&self, control: Control) -> Line<'static> {
         let here = control == self.app.track_control();
-        let shape = &self.live.generator.shape;
+        // As it's heard, with what any macro holding its settings gives them (decision 294).
+        let shape = &self.live.generator.heard();
         let text = setting::text(self.app, here, || {
             Self::param(control).map_or_else(String::new, |param| {
                 if self.bar(control).is_some() {
@@ -173,11 +175,29 @@ impl CellSource for GenCells<'_> {
             return None;
         }
         let (low, high) = param.bounds(&self.context)?;
-        let number = param.number(&self.live.generator.shape, &self.context)?;
-        let share = (number - low) as f64 / (high - low).max(1) as f64;
-        let set = (share * 255.0).round().clamp(0.0, 255.0) as u8;
+        let number = param.number(&self.live.generator.heard(), &self.context)?;
+        let place = |number: i32| {
+            let share = (number - low) as f64 / (high - low).max(1) as f64;
+            (share * 255.0).round().clamp(0.0, 255.0) as u8
+        };
         let centred = matches!(param.units(), Units::Bend | Units::Interval);
-        Some(ValueBar::new(set, BAR_CELLS).centred(centred))
+        // A macro holding it draws its range behind the fill.
+        let target = MacroTarget::Gen {
+            column: GenColumn::of(self.live.generator.column),
+            param,
+        };
+        let range = self
+            .app
+            .song()
+            .tracks
+            .get(self.app.cursor.track)
+            .and_then(|track| track.macro_holding(target))
+            .map(|(_, map)| (place(map.number_at(0.0)), place(map.number_at(255.0))));
+        Some(
+            ValueBar::new(place(number), BAR_CELLS)
+                .centred(centred)
+                .range(range),
+        )
     }
 }
 

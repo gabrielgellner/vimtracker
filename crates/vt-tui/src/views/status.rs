@@ -176,7 +176,7 @@ pub fn value_shown(app: &App) -> Option<String> {
     let note = app.fader_note(app.cursor.track, control).unwrap_or("");
     let held = match control {
         Control::Macro(at) => format!(": holds {}", crate::macroing::holds(track, at)),
-        _ => crate::macroing::held_text(track, id)
+        _ => crate::macroing::held_text(track, vt_model::macros::MacroTarget::Setting(id))
             .map_or_else(String::new, |held| format!(": {held}")),
     };
     id.exists_on(track)
@@ -604,13 +604,25 @@ fn gen_shown(app: &App, phrase: u32, generator: usize, param: GenParam) -> Strin
         return String::new();
     };
     let context = live.context();
-    let shape = &live.generator.shape;
-    match (param, shape.place) {
+    // As it's heard, and which macro holds it, by hand (decision 294).
+    let shape = &live.generator.heard();
+    let shown = match (param, shape.place) {
         (GenParam::Hits, Where::Euclid { hits, .. }) => {
             let open = context.open;
             format!("{} of the {open} rows", usize::from(hits).min(open))
         }
         _ => param.shown(shape, &context),
+    };
+    let target = vt_model::macros::MacroTarget::Gen {
+        column: vt_model::macros::GenColumn::of(live.generator.column),
+        param,
+    };
+    let held = app
+        .track_here()
+        .and_then(|track| crate::macroing::held_text(track, target));
+    match held {
+        Some(held) => format!("{shown}: {held}"),
+        None => shown,
     }
 }
 

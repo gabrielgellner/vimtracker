@@ -120,6 +120,13 @@ impl RowView {
         self.fx.get(slot)?.as_ref()
     }
 
+    /// Put an FX slot there, if the step has it.
+    pub(crate) fn set_fx(&mut self, slot: usize, fx: FxSlot) {
+        if let Some(Some(cell)) = self.fx.get_mut(slot) {
+            *cell = fx;
+        }
+    }
+
     /// How many steps the row lasts.
     pub fn pulses(&self) -> usize {
         usize::from(self.gate.map_or(1, |gate| gate.pulses))

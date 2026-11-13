@@ -514,7 +514,10 @@ Song                               song.ron, refused unless format_version is FO
     and labelled `MAC1` to `MAC8`, so a step locks it and a mod slot moves it. The registry also
     holds, unlabelled, the settings only macros and modulation reach (decision 283): each mod
     slot's type's own (`Owner::ModOwn`, read and written by `ModSlot::own_value` and `set_own` on
-    the registry's scale), and the accumulator's and the arpeggio's.
+    the registry's scale), and the accumulator's and the arpeggio's. A `MacroTarget::Gen` holds a
+    live generator's setting by its column, in every phrase of the track (decision 294): a
+    `Generator` renders from a `held` shape, never saved, that `edit` works out again from the
+    track's macros after each action (`hold_generators`, `Track::held_shape`).
 *   **Grooves and time.** Tempo is in thousandths of a BPM. The project has a groove, a track can have
     its own, and a step's `GRV` can choose one. A groove is up to 16 pushes, each step's velocity and
     a humanise, and swing is a groove of two steps. A track's `speed` is a note division, its
