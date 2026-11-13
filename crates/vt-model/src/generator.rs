@@ -144,7 +144,7 @@ pub fn lay_under(generator: &Generator, under: &Step, view: &mut RowView) {
             }
         }
         ShapeColumn::Velocity => view.velocity = under.velocity,
-        ShapeColumn::Nudge => view.nudge = under.nudge,
+        ShapeColumn::Nudge { .. } => view.nudge = under.nudge,
         ShapeColumn::Length => view.gate = under.gate,
         ShapeColumn::Fx { slot, .. } => view.set_fx(slot, fx(slot)),
     }
