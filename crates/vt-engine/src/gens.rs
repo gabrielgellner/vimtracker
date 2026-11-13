@@ -24,7 +24,7 @@ use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
 
 /// How many columns a generator can be on: Note, Velocity, Nudge, Length and each FX column.
-const GEN_COLUMNS: usize = 4 + FX_SLOTS;
+const COLUMNS: usize = 4 + FX_SLOTS;
 
 /// How many settings a generator has, every fill's together.
 const PARAMS: usize = GenParam::ALL.len();
@@ -59,7 +59,7 @@ fn held_in_engine(param: GenParam) -> bool {
 /// as an absolute macro would hold them. None is the shape's own.
 #[derive(Debug, Clone)]
 pub struct GenHolds {
-    held: [[Option<i32>; PARAMS]; GEN_COLUMNS],
+    held: [[Option<i32>; PARAMS]; COLUMNS],
     /// Whether any is held, without which no row needs a generator's cells laid over it.
     any: bool,
 }
@@ -67,7 +67,7 @@ pub struct GenHolds {
 impl Default for GenHolds {
     fn default() -> Self {
         Self {
-            held: [[None; PARAMS]; GEN_COLUMNS],
+            held: [[None; PARAMS]; COLUMNS],
             any: false,
         }
     }
