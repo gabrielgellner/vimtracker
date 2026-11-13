@@ -4,17 +4,27 @@
 //! row later and an odd factor keeps the downbeat; what carries past the sixteenth row is lost, as
 //! the product is kept to sixteen bits. A longer span is worked a block of sixteen rows at a time.
 //!
-//! It's worked out from the rows alone, without allocating, so a live generator can run it again
-//! on every pass.
+//! The bit transforms are after Xaoc Devices' Leibniz, whose Lipsk inverts any of a number's
+//! eight bits and whose Gera masks them: each value there is a number of as many bits as its
+//! column's highest needs, 7 on Velocity, and `Invert bits` flips those `flip` has, `Mask bits`
+//! keeps only those `keep` has, and `Rotate bits` turns them round by `turn`, the highest coming
+//! back in as the lowest. On the Note column the number is the note's place along the scale's
+//! degrees while it's on, so what comes out is in the scale too. A value pushed past its column's
+//! highest stops there.
+//!
+//! They're worked out from the rows alone, without allocating, so a live generator can run them
+//! again on every pass.
 
 use serde::{Deserialize, Serialize};
 
-use super::{GenCell, ShapeColumn};
+use super::{FillKind, GenCell, ShapeColumn};
 use crate::selection::StepRange;
 use crate::step::{FxSlot, Note, Step};
 
 /// The most a rhythm is multiplied by.
 pub const MAX_FACTOR: u8 = 16;
+/// The most a value's bits are turned by: one fewer than a byte has.
+pub const MAX_TURN: u8 = 7;
 /// How many rows are one number.
 const BLOCK: usize = 16;
 /// What Numeric Repetitor keeps of a rhythm before multiplying it by 2 and by 3, the first row the
@@ -31,6 +41,11 @@ pub struct Bits {
     pub factor: u8,
     /// Whether factors 2 and 3 first keep only some rows, as Numeric Repetitor's do.
     pub masks: bool,
+    /// The bits `Invert bits` flips, and those `Mask bits` keeps.
+    pub flip: u8,
+    pub keep: u8,
+    /// How many places `Rotate bits` turns a value's bits, toward the highest.
+    pub turn: u8,
 }
 
 impl Default for Bits {
@@ -38,6 +53,9 @@ impl Default for Bits {
         Self {
             factor: 3,
             masks: false,
+            flip: 0xFF,
+            keep: 0xF0,
+            turn: 1,
         }
     }
 }
@@ -57,6 +75,29 @@ impl Bits {
         };
         (u32::from(masked) * u32::from(self.factor.clamp(1, MAX_FACTOR))) as u16
     }
+
+    /// A value from 0 to `top` with its bits reworked by a bit transform, kept to `top`. It has
+    /// as many bits as `top` needs, so on Velocity flipping all of them is `7F` less the value.
+    pub fn worked(self, kind: FillKind, value: u8, top: u8) -> u8 {
+        let width = width(top);
+        let all = (u16::MAX >> (16 - width)) as u8;
+        let value = value & all;
+        let worked = match kind {
+            FillKind::InvertBits => value ^ self.flip,
+            FillKind::MaskBits => value & self.keep,
+            FillKind::RotateBits => match u32::from(self.turn) % width {
+                0 => value,
+                turn => (value << turn) | (value >> (width - turn)),
+            },
+            _ => value,
+        };
+        (worked & all).min(top)
+    }
+}
+
+/// How many bits a column's values take, from 0 to `top`: 7 for a velocity, 5 for a nudge.
+pub fn width(top: u8) -> u32 {
+    (u8::BITS - top.leading_zeros()).max(1)
 }
 
 /// Whether a row is a hit of a column's rhythm: a note, or its FX command.
@@ -152,10 +193,11 @@ fn copied(column: ShapeColumn, from: &Step) -> GenCell {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::scale::Scale;
-    use crate::shape::written;
-    use crate::shape::{Acid, DEFAULT_RATE, FillKind, Follow, Pink, Shape, Values, Walk, Where};
-    use crate::step::FxCommand;
+    use crate::scale::{Scale, ScaleKind};
+    use crate::shape::{
+        Acid, DEFAULT_RATE, FillKind, Follow, Pink, Shape, Values, Walk, Where, values, written,
+    };
+    use crate::step::{FxCommand, MAX_NOTE, MIN_NOTE};
 
     fn multiply(factor: u8, masks: bool) -> Shape {
         Shape {
@@ -175,7 +217,11 @@ mod tests {
             follow: Follow::default(),
             walk: Walk::default(),
             pink: Pink::default(),
-            bits: Bits { factor, masks },
+            bits: Bits {
+                factor,
+                masks,
+                ..Bits::default()
+            },
             grids: crate::shape::Grids::default(),
         }
     }
@@ -232,6 +278,7 @@ mod tests {
         let plain = |factor| Bits {
             factor,
             masks: false,
+            ..Bits::default()
         };
         // Four on the floor, rows 1, 5, 9 and 13: 0x1111.
         assert_eq!(plain(3).product(0x1111), 0x3333);
@@ -247,6 +294,7 @@ mod tests {
         let masked = |factor| Bits {
             factor,
             masks: true,
+            ..Bits::default()
         };
         assert_eq!(masked(2).product(0xFFFF), 0x1E1E);
         assert_eq!(masked(3).product(0xFFFF), (0xF003u32 * 3) as u16);
@@ -280,6 +328,7 @@ mod tests {
         let one = Bits {
             factor: 1,
             masks: false,
+            ..Bits::default()
         };
         render(&steps, range, note(), one, &mut cells);
         for (step, cell) in laid.iter_mut().zip(cells) {
@@ -362,5 +411,145 @@ mod tests {
         let steps = drawn("x..x..x.........");
         let range = StepRange::between(0, 15);
         assert!(written(&steps, range, ShapeColumn::Velocity, &multiply(3, false)).is_empty());
+    }
+
+    fn bits(flip: u8, keep: u8, turn: u8) -> Bits {
+        Bits {
+            flip,
+            keep,
+            turn,
+            ..Bits::default()
+        }
+    }
+
+    #[test]
+    fn bit_transforms_are_the_hand_worked_ones() {
+        let (invert, mask, rotate) = (
+            FillKind::InvertBits,
+            FillKind::MaskBits,
+            FillKind::RotateBits,
+        );
+        let start = Bits::default();
+        // A velocity has 7 bits: `35` is `0110101`.
+        assert_eq!(start.worked(invert, 0x35, 0x7F), 0x4A);
+        assert_eq!(start.worked(invert, 0x00, 0x7F), 0x7F);
+        assert_eq!(bits(0x0F, 0, 0).worked(invert, 0x35, 0x7F), 0x3A);
+        assert_eq!(start.worked(mask, 0x35, 0x7F), 0x30);
+        assert_eq!(bits(0, 0x55, 0).worked(mask, 0x7F, 0x7F), 0x55);
+        assert_eq!(start.worked(rotate, 0x35, 0x7F), 0x6A);
+        assert_eq!(
+            start.worked(rotate, 0x41, 0x7F),
+            0x03,
+            "the highest comes round"
+        );
+        assert_eq!(
+            bits(0, 0, 7).worked(rotate, 0x41, 0x7F),
+            0x41,
+            "all the way round"
+        );
+        // A byte has eight.
+        assert_eq!(start.worked(rotate, 0x81, 0xFF), 0x03);
+        assert_eq!(start.worked(invert, 0x10, 0xFF), 0xEF);
+        // A nudge has five, from 0 to 22, and past the top it stops there.
+        assert_eq!(start.worked(invert, 0, 22), 22);
+        assert_eq!(start.worked(invert, 20, 22), 11);
+    }
+
+    #[test]
+    fn inverting_twice_and_turning_all_the_way_round_change_nothing() {
+        for top in [0x7F, 0xFF] {
+            let width = width(top) as u8;
+            for value in 0..=top {
+                for flip in 0..=u8::MAX {
+                    let twice = bits(flip, 0, 0);
+                    let once = twice.worked(FillKind::InvertBits, value, top);
+                    assert_eq!(twice.worked(FillKind::InvertBits, once, top), value);
+                }
+                for turn in 0..=MAX_TURN {
+                    let there = bits(0, 0, turn).worked(FillKind::RotateBits, value, top);
+                    let back = bits(0, 0, (width - turn % width) % width);
+                    assert_eq!(back.worked(FillKind::RotateBits, there, top), value);
+                }
+            }
+        }
+    }
+
+    fn bit_shape(kind: FillKind, bits: Bits) -> Shape {
+        Shape {
+            kind,
+            bits,
+            ..multiply(1, false)
+        }
+    }
+
+    fn on_notes(steps: &[Step], column: ShapeColumn, shape: &Shape) -> Vec<u8> {
+        let range = StepRange::between(0, steps.len() - 1);
+        values(steps, range, column, shape)
+            .into_iter()
+            .map(|(_, note)| note)
+            .collect()
+    }
+
+    #[test]
+    fn on_notes_the_bits_are_the_degrees_so_the_scale_is_kept() {
+        let scale = Scale {
+            on: true,
+            root: 0,
+            kind: ScaleKind::Major,
+        };
+        let major = ShapeColumn::Note {
+            scale,
+            writes: None,
+        };
+        let c3 = vec![Step {
+            note: Note::On(60),
+            ..Step::default()
+        }];
+        // C-3 is the 29th degree up from C-1, 28 or `11100`: flipping `01` gives D-3, and `03`
+        // F-3.
+        let flip = |flip| bit_shape(FillKind::InvertBits, bits(flip, 0, 0));
+        assert_eq!(on_notes(&c3, major, &flip(0x01)), [62]);
+        assert_eq!(on_notes(&c3, major, &flip(0x03)), [65]);
+        // With the scale off it's every semitone, so C-3 is 48, `30`, and `0C` is an octave up.
+        let chromatic = ShapeColumn::Note {
+            scale: Scale::default(),
+            writes: None,
+        };
+        assert_eq!(on_notes(&c3, chromatic, &flip(0x0C)), [72]);
+        // Every note of the scale, through every transform, comes out in the scale.
+        let notes: Vec<Step> = (MIN_NOTE..=MAX_NOTE)
+            .filter(|note| scale.contains(*note))
+            .map(|note| Step {
+                note: Note::On(note),
+                ..Step::default()
+            })
+            .collect();
+        for kind in [
+            FillKind::InvertBits,
+            FillKind::MaskBits,
+            FillKind::RotateBits,
+        ] {
+            for byte in (0..=u8::MAX).step_by(5) {
+                let shape = bit_shape(kind, bits(byte, byte, byte % 8));
+                let out = on_notes(&notes, major, &shape);
+                assert_eq!(out.len(), notes.len());
+                assert!(
+                    out.iter().all(|note| scale.contains(*note)),
+                    "{kind:?} {byte:02X}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_bit_transform_works_on_the_rows_where_chooses() {
+        let mut steps = drawn("x.xx");
+        for (step, velocity) in steps.iter_mut().zip([0x35, 0, 0x41, 0x7F]) {
+            step.velocity = Some(velocity);
+        }
+        let shape = bit_shape(FillKind::RotateBits, Bits::default());
+        let range = StepRange::between(0, 3);
+        let out: Vec<(usize, u8)> = values(&steps, range, ShapeColumn::Velocity, &shape);
+        assert_eq!(out, [(0, 0x6A), (2, 0x03), (3, 0x7F)]);
     }
 }

@@ -1017,6 +1017,25 @@ const ARPEGGIO: DeviceLayout = stored(
     )],
 );
 
+/// The track's eight macros, knob 1 to 8 as they're numbered, each named by its macro (decision
+/// 286).
+const MACROS: DeviceLayout = live(
+    "macros",
+    &[knobs(
+        "Macros",
+        [
+            s("macro1"),
+            s("macro2"),
+            s("macro3"),
+            s("macro4"),
+            s("macro5"),
+            s("macro6"),
+            s("macro7"),
+            s("macro8"),
+        ],
+    )],
+);
+
 // The effects: their own settings, with `Mix` and `Gain` on knobs 7 and 8. The effect and its type
 // or mode are chosen in the app.
 
@@ -1709,6 +1728,24 @@ const GEN_GRIDS: DeviceLayout = live(
         ],
     )],
 );
+/// The values there as bits: each bit transform has one of the three, and the others' knobs are
+/// dark.
+const GEN_BITS: DeviceLayout = live(
+    "gen/bits",
+    &[knobs(
+        "Bits",
+        [
+            s("flip"),
+            s("keep"),
+            s("turn"),
+            GAP,
+            GAP,
+            GAP,
+            s(WHERE_FIRST),
+            s(WHERE_SECOND),
+        ],
+    )],
+);
 /// A transform reworks what's there, with no settings of its own but its rows.
 const GEN_REWORK: DeviceLayout = live(
     "gen/rework",
@@ -1729,7 +1766,7 @@ const GEN_REWORK: DeviceLayout = live(
 
 /// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
 /// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 13] = [
+pub const GENERATORS: [&DeviceLayout; 14] = [
     &GEN_RAMP,
     &GEN_RANDOM,
     &GEN_WAVE,
@@ -1742,6 +1779,7 @@ pub const GENERATORS: [&DeviceLayout; 13] = [
     &GEN_PINK,
     &GEN_MULTIPLY,
     &GEN_GRIDS,
+    &GEN_BITS,
     &GEN_REWORK,
 ];
 
@@ -1760,12 +1798,13 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
         FillKind::Pink => &GEN_PINK,
         FillKind::Multiply => &GEN_MULTIPLY,
         FillKind::Grids => &GEN_GRIDS,
+        FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => &GEN_BITS,
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,
     }
 }
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 99] = [
+pub const ALL: [&DeviceLayout; 100] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1835,6 +1874,7 @@ pub const ALL: [&DeviceLayout; 99] = [
     &TRACK,
     &ACCUMULATOR,
     &ARPEGGIO,
+    &MACROS,
     &EMPTY,
     &SHAPING,
     &CRUSH,
@@ -1991,6 +2031,7 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         },
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
+        Some(Control::Macro(_)) => &MACROS,
         Some(Control::Gen {
             phrase, generator, ..
         }) => generator_layout(

@@ -2,8 +2,9 @@
 //! wave, two values in turn, or a short list of them in turn, or reworking the values already
 //! there. On the Note column, the steps are the scale's degrees while it's on, `Acid` writes a 303
 //! line, its notes, accents and slides together, and `Follow` mirrors another track's phrase.
-//! `Multiply` reworks the rhythm there rather than its values, and `Grids` writes a drum part from
-//! a map of real patterns, one part a track across a kit's.
+//! `Multiply` reworks the rhythm there rather than its values, the bit transforms each value's
+//! bits, and `Grids` writes a drum part from a map of real patterns, one part a track across a
+//! kit's.
 
 mod acid;
 mod bits;
@@ -14,7 +15,7 @@ mod render;
 mod walk;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
-pub use bits::{Bits, MAX_FACTOR};
+pub use bits::{Bits, MAX_FACTOR, MAX_TURN};
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
@@ -158,11 +159,17 @@ pub enum FillKind {
     Snap,
     /// The rhythm there, sixteen rows a number, multiplied, as Numeric Repetitor's is.
     Multiply,
+    /// The values there as bits, some of them flipped, as Xaoc's Leibniz Lipsk does.
+    InvertBits,
+    /// The values there as bits, only some of them kept, as Leibniz's Gera does.
+    MaskBits,
+    /// The values there as bits, turned round.
+    RotateBits,
 }
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 19] = [
         Self::Ramp,
         Self::Random,
         Self::Walk,
@@ -179,6 +186,9 @@ impl FillKind {
         Self::Reverse,
         Self::Snap,
         Self::Multiply,
+        Self::InvertBits,
+        Self::MaskBits,
+        Self::RotateBits,
     ];
 
     /// The name on screen.
@@ -200,6 +210,9 @@ impl FillKind {
             Self::Reverse => "Reverse",
             Self::Snap => "Snap",
             Self::Multiply => "Multiply",
+            Self::InvertBits => "Invert bits",
+            Self::MaskBits => "Mask bits",
+            Self::RotateBits => "Rotate bits",
         }
     }
 
@@ -222,6 +235,9 @@ impl FillKind {
             Self::Reverse => "The values there, the other way",
             Self::Snap => "The notes there into the scale",
             Self::Multiply => "The rhythm there, times a number",
+            Self::InvertBits => "The values there, some bits flipped",
+            Self::MaskBits => "The values there, some bits kept",
+            Self::RotateBits => "The values there, their bits turned",
         }
     }
 
@@ -235,7 +251,15 @@ impl FillKind {
                 | Self::Reverse
                 | Self::Snap
                 | Self::Multiply
+                | Self::InvertBits
+                | Self::MaskBits
+                | Self::RotateBits
         )
+    }
+
+    /// Whether it works on each value's bits.
+    pub fn on_bits(self) -> bool {
+        matches!(self, Self::InvertBits | Self::MaskBits | Self::RotateBits)
     }
 
     /// Whether it chooses its rows with a `Where`. A `Follow` writes every row from its source,
@@ -689,7 +713,8 @@ pub struct Shape {
     /// How many values a `1/f` fill sums. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Pink::is_default")]
     pub pink: Pink,
-    /// What `Multiply` multiplies by. Saved only once it's changed.
+    /// What `Multiply` multiplies by, and what the bit transforms flip, keep and turn by. Saved
+    /// only once it's changed.
     #[serde(default, skip_serializing_if = "Bits::is_default")]
     pub bits: Bits,
     /// Where a `Grids` fill reads its map, and the part it plays. Saved only once it's changed.

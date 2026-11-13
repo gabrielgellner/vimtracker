@@ -17,6 +17,7 @@ there are no samples to find.
 | `acid-lines` | Roland's TB-303 | `S`'s `Acid` fill: notes, accents and slides rolled together |
 | `walks` | Max's `drunk` and Voss's 1/f music | `S`'s `Walk` and `1/f` fills, kept live |
 | `euclid`, again | Noise Engineering's Numeric Repetitor | `S`'s `Multiply` on the kick's rhythm |
+| `walks`, again | Xaoc Devices' Leibniz | `S`'s bit transforms on the tune and the hats |
 | `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
@@ -581,6 +582,30 @@ it. Doubling moves the rhythm a step later, and an odd number always keeps the d
 after `Space g a`, whose notes differ, a new note takes the pitch of the one before it, so the
 line keeps its shape while the rhythm changes.
 
+## Leibniz
+
+Xaoc Devices' Leibniz subsystem turns a voltage into an 8-bit number and back, and its modules
+work on the bits in between: Lipsk inverts any of them, Gera masks them off. Xaoc encourage
+misusing them, and on a melody or a velocity they give odd folds and quantizations that no
+other knob reaches.
+
+**Try it on the `walks` song.** Open it, and on the tune's phrase (track 1, `Space 3`):
+
+1.  `Space g a` turns the live `1/f` into plain notes.
+2.  `gg` `vG` on the Note column and `S`. On `Fill`, `K`, `flipped`, `Enter`, for `Invert
+    bits`. `j` to `Flip`, and `i` `01`: each note swaps with its neighbour degree in A minor, a
+    tune that moves the same way but never on the same notes.
+3.  `i` `03` swaps them in fours, and `04` throws every other group up or down four degrees.
+    Every note is still in the scale.
+4.  `L` keeps it live, so `gl` opens it again.
+
+**Try next.**
+
+*   On the hats' Velocity, after `Space g a`, `Mask bits` with `Keep` `F0` steps the walk's
+    drift into steps of `10`, and `E0` into steps of `20`, a drum machine's few accent levels.
+*   `Rotate bits` on the hats turns a soft velocity loud and a loud one soft: `Turn` 1 doubles
+    each, and the loudest come round to quiet.
+
 ## Grids
 
 [Mutable Instruments' Grids](https://pichenettes.github.io/mutable-instruments-documentation/modules/grids/)
@@ -594,9 +619,8 @@ random, so weaker hits come and go.
 **How the song does it.** Tracks 1 to 3 are a `Kick`, a `Snare` and a `Hat`, each with one live
 `Grids` column over two bars, all at the same place on the map, `X` `40` and `Y` `40`. Each plays
 its own part of the pattern there: the kick's, the snare's or the hats', as its 808 voice says.
-The hats' density is higher, `A0`, and `Chaos` `C0` makes the two bars differ, the
-accents `X`: Track 4 is an
-`Acid` bass. [`song.ron`](songs/grids/song.ron)
+The hats' density is higher, `A0`, and `Chaos` `C0` makes the two bars differ. Track 4 is an
+`Acid` bass. [`song.ron`](songs/grids/song.ron) The beat, its accents `X`:
 
 ```text
 BD  X...x.X.X.x.x.X.  X...x.X.X.x.x.x.

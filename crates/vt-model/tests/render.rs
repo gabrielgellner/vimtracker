@@ -326,6 +326,9 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
     shape.bits = Bits {
         factor: more.below(u64::from(MAX_FACTOR) + 2) as u8,
         masks: more.chance(40),
+        flip: more.byte(),
+        keep: more.byte(),
+        turn: more.below(10) as u8,
     };
     shape.grids = Grids {
         x: more.byte(),

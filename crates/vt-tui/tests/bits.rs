@@ -1,4 +1,4 @@
-//! The shape panel's `Multiply`, by keys.
+//! The shape panel's `Multiply` and bit transforms, by keys.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -144,4 +144,56 @@ fn multiply_is_only_offered_on_a_rhythm() {
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Generate");
     assert!(!panel.context().fills().contains(&FillKind::Multiply));
+}
+
+/// Each row's velocity.
+fn velocities(app: &App) -> Vec<String> {
+    let id = app.phrase_id().unwrap();
+    app.song().tracks[0].phrases[&id]
+        .steps()
+        .iter()
+        .map(|step| step.to_string()[4..6].to_owned())
+        .collect()
+}
+
+#[test]
+fn the_bit_transforms_flip_keep_and_turn_a_columns_bits() {
+    let (mut app, _rt) = app_with(&[
+        "C-3 35 --- --- ---",
+        "C-3 00 --- --- ---",
+        "C-3 41 --- --- ---",
+    ]);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "lvjjSKflipped<Enter>");
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.shape.kind, FillKind::InvertBits);
+    assert_eq!(
+        panel.rows(),
+        [GenParam::Fill, GenParam::Flip, GenParam::Where]
+    );
+    // Flipping all seven of a velocity's bits.
+    assert_eq!(velocities(&app), ["4A", "7F", "3E"]);
+    let screen = drawn(&app);
+    for expected in [
+        "Fill    Invert bits",
+        "Flip    FF",
+        "The values there, as bits",
+    ] {
+        assert!(screen.contains(expected), "{expected} in\n{screen}");
+    }
+    // `i` types the bits in hex.
+    keys(&mut app, "ji0f");
+    assert_eq!(velocities(&app), ["3A", "0F", "4E"]);
+    // `Mask bits` keeps some, and `Rotate bits` turns them.
+    keys(&mut app, "k=");
+    assert_eq!(app.shape.as_ref().unwrap().shape.kind, FillKind::MaskBits);
+    assert_eq!(velocities(&app), ["30", "00", "40"]);
+    keys(&mut app, "=");
+    assert_eq!(app.shape.as_ref().unwrap().shape.kind, FillKind::RotateBits);
+    assert_eq!(velocities(&app), ["6A", "00", "03"]);
+    keys(&mut app, "j=");
+    assert!(drawn(&app).contains("Turn    2 bits"));
+    assert_eq!(velocities(&app), ["55", "00", "06"]);
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.history.undo_depth(), depth + 1);
 }

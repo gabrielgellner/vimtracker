@@ -15,8 +15,8 @@ use crate::step::Step;
 
 use super::{
     Acid, Bits, DEFAULT_RATE, DrumPart, EUCLID_HITS, Edge, FillKind, Grids, MAX_ACID_NOTES,
-    MAX_BEND, MAX_DEPTH, MAX_FACTOR, MAX_TRANSPOSE, MIN_DEPTH, Pink, Shape, ShapeColumn, Source,
-    Values, WAVES, WaveRate, Where, default_step, first_note,
+    MAX_BEND, MAX_DEPTH, MAX_FACTOR, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Pink, Shape, ShapeColumn,
+    Source, Values, WAVES, WaveRate, Where, default_step, first_note,
 };
 
 /// How far a small and a large step move a curve.
@@ -211,6 +211,8 @@ pub enum Units {
     Byte,
     /// One of a list, by name.
     Named,
+    /// A byte's bits, in hex, as a mask of them.
+    Bits,
 }
 
 /// A generator's setting. [`GenParam::ALL`] is every one, in the order the shape panel lists
@@ -259,6 +261,10 @@ pub enum GenParam {
     HatDensity,
     Chaos,
     Rows,
+    /// The bits `Invert bits` flips and `Mask bits` keeps, and how far `Rotate bits` turns them.
+    Flip,
+    Keep,
+    Turn,
     /// How a ramp bends, early or late, and how it eases at both ends.
     Curve,
     S,
@@ -281,7 +287,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 42] = [
+    pub const ALL: [Self; 45] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -312,6 +318,9 @@ impl GenParam {
         Self::HatDensity,
         Self::Chaos,
         Self::Rows,
+        Self::Flip,
+        Self::Keep,
+        Self::Turn,
         Self::Curve,
         Self::S,
         Self::Wave,
@@ -359,6 +368,9 @@ impl GenParam {
             Self::HatDensity => "hh",
             Self::Chaos => "chaos",
             Self::Rows => "rows",
+            Self::Flip => "flip",
+            Self::Keep => "keep",
+            Self::Turn => "turn",
             Self::Curve => "curve",
             Self::S => "s",
             Self::Wave => "wave",
@@ -413,6 +425,9 @@ impl GenParam {
             Self::HatDensity => "HH density",
             Self::Chaos => "Chaos",
             Self::Rows => "Rows",
+            Self::Flip => "Flip",
+            Self::Keep => "Keep",
+            Self::Turn => "Turn",
             Self::Curve => "Curve",
             Self::S => "S",
             Self::Wave => "Shape",
@@ -434,7 +449,10 @@ impl GenParam {
             Self::Curve | Self::S => Units::Bend,
             Self::Transpose => Units::Interval,
             Self::Phase => Units::Degrees,
-            Self::Notes | Self::Run | Self::Rotate | Self::Depth | Self::Factor => Units::Count,
+            Self::Notes | Self::Run | Self::Rotate | Self::Depth | Self::Factor | Self::Turn => {
+                Units::Count
+            }
+            Self::Flip | Self::Keep => Units::Bits,
             Self::Step => Units::Step,
             Self::Every | Self::Late => Units::Rows,
             Self::Hits => Units::OfRows,
@@ -471,7 +489,7 @@ impl GenParam {
     /// choose. A `Follow` writes every row from its source, so it has no `Where`, and turns
     /// about a note only while it inverts. `Walk` has its `Step` and `Edge`, and `1/f` its
     /// `Depth`. `Multiply` reads the rhythm itself, so it has its `Factor` and `Masks` and no
-    /// `Where`. `Grids` makes its own rhythm, so it has no `Where` either; it has the density of
+    /// `Where`; each bit transform has its one setting. `Grids` makes its own rhythm, so it has no `Where` either; it has the density of
     /// its own part alone, or while the panel shapes several tracks, each taking its own part,
     /// every part's and no `Part`; and its `Note` only where it `generates`, as a hit takes the
     /// note there or the first one.
@@ -517,6 +535,9 @@ impl GenParam {
             Self::KickDensity => density(DrumPart::Kick),
             Self::SnareDensity => density(DrumPart::Snare),
             Self::HatDensity => density(DrumPart::Hats),
+            Self::Flip => kind == FillKind::InvertBits,
+            Self::Keep => kind == FillKind::MaskBits,
+            Self::Turn => kind == FillKind::RotateBits,
             Self::Curve | Self::S => {
                 matches!(kind, FillKind::Ramp | FillKind::Random | FillKind::Scale)
             }
@@ -603,6 +624,9 @@ impl GenParam {
             FillKind::Scale => [[Some(From), Some(To), Some(Curve)], [Some(S), None, None]],
             FillKind::Multiply => [[Some(Factor), Some(Masks), None], none],
             FillKind::Grids => unreachable!("laid out above"),
+            FillKind::InvertBits => [[Some(Flip), None, None], none],
+            FillKind::MaskBits => [[Some(Keep), None, None], none],
+            FillKind::RotateBits => [[Some(Turn), None, None], none],
             FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => {
                 [none, none]
             }
@@ -755,6 +779,12 @@ impl GenParam {
             | Self::Chaos => format!("{:02X}", self.grids_value(shape.grids).unwrap_or(0)),
             Self::Rows if shape.grids.fine => "1/32".to_owned(),
             Self::Rows => "1/16".to_owned(),
+            Self::Flip => format!("{:02X}", shape.bits.flip),
+            Self::Keep => format!("{:02X}", shape.bits.keep),
+            Self::Turn => match shape.bits.turn {
+                1 => "1 bit".to_owned(),
+                turn => format!("{turn} bits"),
+            },
         }
     }
 
@@ -799,7 +829,9 @@ impl GenParam {
             | Self::KickDensity
             | Self::SnareDensity
             | Self::HatDensity
-            | Self::Chaos => Typing::Hex,
+            | Self::Chaos
+            | Self::Flip
+            | Self::Keep => Typing::Hex,
             Self::From | Self::To | Self::Step if hex => Typing::Hex,
             Self::From | Self::To => Typing::Named { list: false },
             Self::Values if hex => Typing::HexList,
@@ -990,6 +1022,12 @@ impl GenParam {
                 }
             }
             Self::Rows => shape.grids.fine = !shape.grids.fine,
+            Self::Flip => shape.bits.flip = moved_byte(shape.bits.flip, by(1, HEX_JUMP)),
+            Self::Keep => shape.bits.keep = moved_byte(shape.bits.keep, by(1, HEX_JUMP)),
+            Self::Turn => {
+                let turns = i32::from(MAX_TURN) + 1;
+                shape.bits.turn = (i32::from(shape.bits.turn) + by(1, 4)).rem_euclid(turns) as u8;
+            }
         }
         Ok(())
     }
@@ -1057,6 +1095,9 @@ impl GenParam {
                 }
             }
             Self::Rows => shape.grids.fine = Grids::default().fine,
+            Self::Flip => shape.bits.flip = Bits::default().flip,
+            Self::Keep => shape.bits.keep = Bits::default().keep,
+            Self::Turn => shape.bits.turn = Bits::default().turn,
             Self::Hits => {
                 if let Where::Euclid { rotate, .. } = shape.place {
                     shape.place = Where::Euclid {
@@ -1200,6 +1241,18 @@ impl GenParam {
                 Ok(factor) if (1..=MAX_FACTOR).contains(&factor) => shape.bits.factor = factor,
                 _ => return Err("Factor runs from 1 to 16"),
             },
+            Self::Flip | Self::Keep => {
+                let bits = u8::from_str_radix(text, 16).map_err(|_| "Bits are two hex digits")?;
+                if self == Self::Flip {
+                    shape.bits.flip = bits;
+                } else {
+                    shape.bits.keep = bits;
+                }
+            }
+            Self::Turn => match text.parse::<u8>() {
+                Ok(turn) if turn <= MAX_TURN => shape.bits.turn = turn,
+                _ => return Err("Turn runs from 0 to 7"),
+            },
             Self::Fill
             | Self::Wave
             | Self::Where
@@ -1257,6 +1310,8 @@ impl GenParam {
             Self::Late => (0, context.source_rows() as i32 - 1),
             Self::Invert | Self::Reverse | Self::CopyFx | Self::Edge | Self::Masks => (0, 1),
             Self::Factor => (1, i32::from(MAX_FACTOR)),
+            Self::Flip | Self::Keep => (0, i32::from(u8::MAX)),
+            Self::Turn => (0, i32::from(MAX_TURN)),
             Self::Step => (1, i32::from(longest_step(column))),
             Self::Depth => (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH)),
             Self::Phase => (0, 359),
@@ -1302,6 +1357,9 @@ impl GenParam {
             | Self::HatDensity
             | Self::Chaos => i32::from(self.grids_value(shape.grids)?),
             Self::Rows => i32::from(shape.grids.fine),
+            Self::Flip => i32::from(shape.bits.flip),
+            Self::Keep => i32::from(shape.bits.keep),
+            Self::Turn => i32::from(shape.bits.turn),
             Self::Phase => i32::from(shape.phase),
             Self::Values => return None,
             Self::Run => i32::from(shape.run),
@@ -1416,6 +1474,9 @@ impl GenParam {
                 }
             }
             Self::Rows => shape.grids.fine = number != 0,
+            Self::Flip => shape.bits.flip = number as u8,
+            Self::Keep => shape.bits.keep = number as u8,
+            Self::Turn => shape.bits.turn = number as u8,
         }
     }
 }
@@ -1438,6 +1499,11 @@ fn bend(value: i8) -> String {
 fn bent(value: i8, by: i32) -> i8 {
     let most = i32::from(MAX_BEND);
     moved(i32::from(value), by, -most, most) as i8
+}
+
+/// A byte moved and kept within a byte.
+fn moved_byte(value: u8, by: i32) -> u8 {
+    moved(i32::from(value), by, 0, i32::from(u8::MAX)) as u8
 }
 
 /// A value moved and kept from `low` to `high`.
@@ -1592,6 +1658,9 @@ mod tests {
             [Fill, Factor, Masks],
             "Multiply reads the rhythm itself, so it has no Where"
         );
+        assert_eq!(of(FillKind::InvertBits, false), [Fill, Flip, Where]);
+        assert_eq!(of(FillKind::MaskBits, false), [Fill, Keep, Where]);
+        assert_eq!(of(FillKind::RotateBits, false), [Fill, Turn, Where]);
         assert_eq!(
             of(FillKind::Acid, true),
             [

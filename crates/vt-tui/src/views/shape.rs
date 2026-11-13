@@ -160,6 +160,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         FillKind::Grids if panel.shape.grids.part.is_none() => "Each track plays its own part",
         FillKind::Grids if panel.shape.grids.chaos > 0 => "r rolls the chaos",
         FillKind::Grids => "A density adds the strongest hits first",
+        FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => match panel.column {
+            ShapeColumn::Note { scale, .. } if scale.on => "Bits of each degree, kept in the scale",
+            _ => "The values there, as bits",
+        },
         _ => "~ swap the ends",
     };
     lines.push(Line::styled(hint, theme::dim()));
