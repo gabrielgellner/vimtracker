@@ -9,15 +9,17 @@ use vt_model::condition::{Condition, Situation};
 use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_STEP};
 use vt_model::groove::{FULL_VELOCITY, Groove, GrooveId, MAX_PUSH};
 use vt_model::settings::SettingId;
-use vt_model::song::{ChainPosition, Phrase};
+use vt_model::shape::RowView;
+use vt_model::song::{ChainPosition, Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{
     FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step,
 };
 
+use crate::gens::{Passes, RowAt};
 use crate::track_state::{
     Accumulating, Arpeggiating, Decided, DelayedNote, Epoch, Part, PendingStep, Retrigger, RowKey,
-    Worked,
+    TrackState, Worked,
 };
 
 use super::Engine;
@@ -100,26 +102,61 @@ impl Engine {
 
     /// How far a row's nudge moves its note part, in ticks: as far as it's written, brought
     /// toward the grid by the track's `QNT`, which is read before the row plays, as `GRV` is.
-    fn row_nudge(&self, index: usize, running: i64) -> i64 {
-        let Some(row @ (_, step, _)) = self.row_ahead(index, running) else {
+    fn row_nudge(&mut self, index: usize, running: i64) -> i64 {
+        let Some(row @ (_, view)) = self.row_ahead(index, running) else {
             return 0;
         };
-        if step.nudge == 0 {
+        if view.nudge == 0 {
             return 0;
         }
-        let written = i64::from(step.nudge) * NUDGE_TICKS as i64;
+        let written = i64::from(view.nudge) * NUDGE_TICKS as i64;
         let chosen = self.chosen_ahead(index, running, Some(row), SettingId::QUANTISE);
         self.tracks[index].quantised(written, chosen)
     }
 
     /// The row a track plays at this count of its steps, looked at before it plays: where it is
-    /// in its chain, the step and its phrase.
-    fn row_ahead(&self, index: usize, running: i64) -> Option<(ChainPosition, &Step, &Phrase)> {
+    /// in its chain, and the row as it's heard.
+    fn row_ahead(&mut self, index: usize, running: i64) -> Option<(ChainPosition, RowView)> {
         let (chain, place) = self.track_place(index, running)?;
-        let owner = self.current.song.tracks.get(index)?;
+        let current = Arc::clone(&self.current);
+        let owner = current.song.tracks.get(index)?;
         let position = owner.chain_position(chain, place, self.dealer(index))?;
         let phrase = owner.phrases.get(&position.phrase)?;
-        Some((position, owner.step_at(position)?, phrase))
+        let step = owner.step_at(position)?;
+        let count = running - self.tracks[index].started;
+        let row = phrase.start() + position.step;
+        let read = Read {
+            chain,
+            count,
+            position,
+        };
+        Some((position, self.view_row(index, read, row, step)))
+    }
+
+    /// A stored row of the phrase a track is reading as it's heard: as written, with the cells of
+    /// any of its generators the engine is moving laid over, the row of a step or of a lane's.
+    pub(super) fn view_row(
+        &mut self,
+        index: usize,
+        read: Read,
+        row: usize,
+        step: &Step,
+    ) -> RowView {
+        let at = RowAt {
+            track: index,
+            phrase: read.position.phrase,
+            row,
+        };
+        let (current, state) = (&self.current, &self.tracks[index]);
+        let passes = || passes(&current.song, state, index, read);
+        self.gens.view(
+            &current.song,
+            &current.unders,
+            &state.gen_holds,
+            at,
+            step,
+            passes,
+        )
     }
 
     /// What a row chooses of a setting read before it plays, as `GRV`, `RATE` and `QNT` are: one
@@ -127,39 +164,57 @@ impl Engine {
     /// what the track holds, which a note on the row's first pulse ends any lock of, as playing it
     /// will.
     fn chosen_ahead(
-        &self,
+        &mut self,
         index: usize,
         running: i64,
-        row: Option<(ChainPosition, &Step, &Phrase)>,
+        row: Option<(ChainPosition, RowView)>,
         id: SettingId,
     ) -> u8 {
-        let state = &self.tracks[index];
-        let Some((position, step, phrase)) = row else {
-            return state.held_choice(id, false);
+        let Some((position, view)) = row else {
+            return self.tracks[index].held_choice(id, false);
         };
         let first = position.pulse == 0;
-        let count = running - state.started;
-        let chosen = (0..FX_SLOTS)
-            .rev()
-            .filter_map(|number| match phrase.lane(number) {
-                Some(lane) => {
-                    let at = lane.step_at(count + state.lane_offsets[number]);
-                    phrase.steps().get(at)?.fx.get(number)
+        let count = running - self.tracks[index].started;
+        let current = Arc::clone(&self.current);
+        let chain = self
+            .track_place(index, running)
+            .map_or(0, |(chain, _)| chain);
+        let phrase = current
+            .song
+            .tracks
+            .get(index)
+            .and_then(|owner| owner.phrases.get(&position.phrase));
+        let read = Read {
+            chain,
+            count,
+            position,
+        };
+        let mut chosen = None;
+        for number in (0..FX_SLOTS).rev() {
+            let slot = match phrase.and_then(|phrase| Some((phrase, phrase.lane(number)?))) {
+                Some((phrase, lane)) => {
+                    let at = lane.step_at(count + self.tracks[index].lane_offsets[number]);
+                    phrase
+                        .steps()
+                        .get(at)
+                        .and_then(|step| self.view_row(index, read, at, step).fx(number).copied())
                 }
-                None if first => step.fx.get(number),
+                None if first => view.fx(number).copied(),
                 None => None,
-            })
-            .find(|slot| slot.command == Some(FxCommand::Set(id)))
-            .map(|slot| slot.coarse());
-        let note = first && matches!(step.note, Note::On(_)) && step.gate_kind() != GateKind::Rest;
-        chosen.unwrap_or_else(|| state.held_choice(id, note))
+            };
+            if let Some(slot) = slot.filter(|slot| slot.command == Some(FxCommand::Set(id))) {
+                chosen = Some(slot.coarse());
+                break;
+            }
+        }
+        let note = first && matches!(view.note, Note::On(_)) && view.gate_kind() != GateKind::Rest;
+        chosen.unwrap_or_else(|| self.tracks[index].held_choice(id, note))
     }
 
     /// The groove a track's step plays with and how long it is, in ticks, worked out before it's
     /// played, as each says when the step lands: a `GRV` or `RATE` on its row or in a lane at it,
     /// or else what the track holds (`chosen_ahead`). A `GRV` of `00` is the project's.
-    fn step_choices(&self, index: usize, running: i64) -> (Groove, u64) {
-        let song = &self.current.song;
+    fn step_choices(&mut self, index: usize, running: i64) -> (Groove, u64) {
         // With no `GRV` or `RATE` in the song, there's no row to look on, and the track holds its
         // own.
         let row = if self.current.groove_steps || self.current.speed_steps {
@@ -167,12 +222,14 @@ impl Engine {
         } else {
             None
         };
-        let choose = |id: SettingId| self.chosen_ahead(index, running, row, id);
-        let groove = match usize::from(choose(SettingId::GROOVE)).checked_sub(1) {
+        let groove = self.chosen_ahead(index, running, row, SettingId::GROOVE);
+        let speed = self.chosen_ahead(index, running, row, SettingId::SPEED);
+        let song = &self.current.song;
+        let groove = match usize::from(groove).checked_sub(1) {
             Some(at) => GrooveId::from_index(at).unwrap_or(GrooveId::STRAIGHT),
             None => song.groove,
         };
-        let speed = Speed::from_index(usize::from(choose(SettingId::SPEED)));
+        let speed = Speed::from_index(usize::from(speed));
         (song.groove(groove), speed.ticks())
     }
 
@@ -203,6 +260,15 @@ impl Engine {
         let Some(step) = owner.step_at(position) else {
             return;
         };
+        let phrase = owner.phrases.get(&position.phrase);
+        let count = pending.count;
+        let read = Read {
+            chain,
+            count,
+            position,
+        };
+        let row_at = phrase.map_or(0, |phrase| phrase.start()) + position.step;
+        let step = self.view_row(index, read, row_at, step);
         // A row's later pulses repeat its note only on a `Multi`, and run only the note's own timing.
         let first = position.pulse == 0;
         let gate = step.gate_kind();
@@ -222,21 +288,22 @@ impl Engine {
                     )
         };
         // Each FX column reads its own lane's step if it has one, and the note's row if not.
-        let phrase = owner.phrases.get(&position.phrase);
-        let count = pending.count;
         let mut lane_steps = [None; FX_SLOTS];
         let mut fx = [FxSlot::default(); FX_SLOTS];
-        for (number, read) in fx.iter_mut().enumerate() {
+        for (number, slot) in fx.iter_mut().enumerate() {
             let lane = phrase.and_then(|phrase| Some((phrase, phrase.lane(number)?)));
             let found = match lane {
                 Some((phrase, lane)) => {
                     let at = lane.step_at(count + self.tracks[index].lane_offsets[number]);
                     lane_steps[number] = Some(at);
-                    phrase.steps().get(at).and_then(|step| step.fx.get(number))
+                    phrase
+                        .steps()
+                        .get(at)
+                        .and_then(|step| self.view_row(index, read, at, step).fx(number).copied())
                 }
-                None => step.fx.get(number).filter(|slot| row_fx(slot)),
+                None => step.fx(number).copied().filter(|slot| row_fx(slot)),
             };
-            *read = found.copied().unwrap_or_default();
+            *slot = found.unwrap_or_default();
         }
         let mut delay_units = None;
         let mut kill_units = None;
@@ -635,18 +702,7 @@ impl Engine {
         let Some(owner) = self.current.song.tracks.get(index) else {
             return 0;
         };
-        let Some(entries) = owner.chains.get(&chain).map(|chain| &chain.entries) else {
-            return 0;
-        };
-        let length = owner.chain_steps(chain).max(1) as i64;
-        let times = |entries: &[vt_model::song::ChainEntry]| {
-            entries
-                .iter()
-                .filter(|entry| entry.phrase == position.phrase)
-                .count() as i64
-        };
-        let before = times(entries.get(..position.slot).unwrap_or_default());
-        pending.count.div_euclid(length) * times(entries) + before
+        phrase_pass(owner, chain, pending.count, position)
     }
 
     /// How many times round its own loop a lane has been since the track's chain started.
@@ -679,5 +735,51 @@ fn retrigger_factor(digit: u8) -> f32 {
         0 => 1.0,
         1..=7 => 1.0 - f32::from(digit) * 0.1,
         _ => 1.0 + f32::from(digit - 7) * 0.1,
+    }
+}
+
+/// Where a track is reading a row: its chain, the count of its steps since that started, and the
+/// place in it.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Read {
+    pub chain: u32,
+    pub count: i64,
+    pub position: ChainPosition,
+}
+
+/// How many times a track has played its phrase before, since its chain started, at a count of its
+/// steps: once each time round the chain for each time the phrase is in it. It's worked out from
+/// where the track is, never counted along, so playing from a step hears the pass playing there
+/// from the top would.
+fn phrase_pass(owner: &Track, chain: u32, count: i64, position: ChainPosition) -> i64 {
+    let Some(entries) = owner.chains.get(&chain).map(|chain| &chain.entries) else {
+        return 0;
+    };
+    let length = owner.chain_steps(chain).max(1) as i64;
+    let times = |entries: &[vt_model::song::ChainEntry]| {
+        entries
+            .iter()
+            .filter(|entry| entry.phrase == position.phrase)
+            .count() as i64
+    };
+    let before = times(entries.get(..position.slot).unwrap_or_default());
+    count.div_euclid(length) * times(entries) + before
+}
+
+/// The pass a row is read on, for its phrase's generators: of the phrase, and of each FX column's
+/// lane, as many times round its own loop as the lane has been.
+fn passes(song: &Song, state: &TrackState, index: usize, read: Read) -> Passes {
+    let Some(owner) = song.tracks.get(index) else {
+        return Passes::default();
+    };
+    let phrase = owner.phrases.get(&read.position.phrase);
+    Passes {
+        rows: phrase_pass(owner, read.chain, read.count, read.position),
+        lanes: std::array::from_fn(|number| {
+            let lane = phrase.and_then(|phrase| phrase.lane(number));
+            lane.map_or(0, |lane| {
+                (read.count + state.lane_offsets[number]).div_euclid(lane.length.max(1) as i64)
+            })
+        }),
     }
 }
