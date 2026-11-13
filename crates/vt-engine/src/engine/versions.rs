@@ -13,6 +13,7 @@ use vt_model::settings::{PlayMode, SettingId};
 use vt_model::song::{Song, Track};
 
 use crate::dsp::memory::{Memory, MemoryCount};
+use crate::gens::GenScratch;
 use crate::published::{Bank, Published, Span};
 use crate::track_state::base_of;
 use crate::voice::{NoteOn, Voice};
@@ -51,6 +52,12 @@ impl Engine {
     /// no longer exists is silent, and a removed track's voices fade.
     pub fn swap(&mut self, version: Arc<Published>) -> Arc<Published> {
         let old = std::mem::replace(&mut self.current, version);
+        // The new version's scratch for generators is the engine's now, and the one it had goes
+        // back with the old version, to be dropped on the edit thread.
+        let mut scratch = GenScratch::default();
+        self.current.scratch.exchange(&mut scratch);
+        std::mem::swap(&mut self.gens, &mut scratch);
+        old.scratch.exchange(&mut scratch);
         // What any track plays with may have changed.
         for track in self.tracks.iter_mut() {
             track.wake();

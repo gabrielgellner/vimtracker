@@ -14,6 +14,7 @@ use crate::preview::{FILE_SAMPLES, LetGo};
 use crate::published::Span;
 use crate::voice::{Cut, NoteOn};
 
+use super::steps::Read;
 use super::{Engine, PLAYHEADS, Playhead, Transport};
 
 impl Engine {
@@ -285,6 +286,17 @@ impl Engine {
             let Some(step) = owner.step_at(position) else {
                 continue;
             };
+            let row = owner
+                .phrases
+                .get(&position.phrase)
+                .map_or(0, |phrase| phrase.start())
+                + position.step;
+            let read = Read {
+                chain: *chain,
+                count: place as i64,
+                position,
+            };
+            let step = self.view_row(index, read, row, step);
             let Note::On(midi) = step.note else {
                 continue;
             };
