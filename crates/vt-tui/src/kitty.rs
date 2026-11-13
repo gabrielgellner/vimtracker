@@ -2191,7 +2191,7 @@ mod tests {
             let mut buffer = Buffer::empty(Rect::new(0, 0, 20, 2));
             buffer.set_style(buffer.area, theme::screen());
             for (x, on) in switches {
-                buffer.set_span(*x, 1, &toggle::span(*on), 2);
+                buffer.set_span(*x, 1, &toggle::span(*on), 3);
             }
             buffer
         };

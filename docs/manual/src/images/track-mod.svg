@@ -10,16 +10,16 @@
 <text x="0" y="52" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="52" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 1</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 52.896484)" fill="#a6d189"/>
-<text x="108" y="52" fill="#c6d0f5" textLength="198" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Exp  --  → Vol </text>
-<text x="306" y="52" fill="#51576d" textLength="360" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────╮</text>
+<text x="117" y="52" fill="#c6d0f5" textLength="198" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Exp  --  → Vol </text>
+<text x="315" y="52" fill="#51576d" textLength="351" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────╮</text>
 <text x="684" y="52" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="52" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 4</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 52.896484)" fill="#a6d189"/>
-<text x="801" y="52" fill="#c6d0f5" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">LFO</text>
-<text x="846" y="52" fill="#c6d0f5" font-weight="bold" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Free</text>
-<text x="900" y="52" fill="#c6d0f5" font-weight="bold" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Bi</text>
-<text x="936" y="52" fill="#949cbb" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">→ ---</text>
-<text x="990" y="52" fill="#949cbb" textLength="360" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────╮</text>
+<text x="810" y="52" fill="#c6d0f5" font-weight="bold" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">LFO</text>
+<text x="855" y="52" fill="#c6d0f5" font-weight="bold" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Free</text>
+<text x="909" y="52" fill="#c6d0f5" font-weight="bold" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Bi</text>
+<text x="945" y="52" fill="#949cbb" font-weight="bold" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">→ ---</text>
+<text x="999" y="52" fill="#949cbb" textLength="351" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────╮</text>
 <text x="0" y="71" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="405" y="71" fill="#737994" textLength="234" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌────────────────────────┐</text>
 <text x="657" y="71" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -63,7 +63,9 @@
 <text x="657" y="128" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="684" y="128" fill="#949cbb" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="711" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Rate      </text>
-<text x="801" y="128" fill="#c6d0f5" textLength="288" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4                             </text>
+<text x="801" y="128" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4        </text>
+<text x="900" y="128" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Fade      </text>
+<text x="990" y="128" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Off        </text>
 <text x="1089" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="128" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="128" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│   6 </text>
@@ -118,14 +120,14 @@
 <text x="0" y="223" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="223" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 2</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 223.89648)" fill="#a6d189"/>
-<text x="108" y="223" fill="#c6d0f5" textLength="207" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Exp  Uni  → Cut </text>
-<text x="315" y="223" fill="#51576d" textLength="351" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────╮</text>
+<text x="117" y="223" fill="#c6d0f5" textLength="207" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Exp  Uni  → Cut </text>
+<text x="324" y="223" fill="#51576d" textLength="342" lengthAdjust="spacingAndGlyphs" xml:space="preserve">─────────────────────────────────────╮</text>
 <text x="684" y="223" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="223" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 5</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 223.89648)" fill="#a6d189"/>
-<text x="792" y="223" fill="#c6d0f5" textLength="144" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> LFO  Free  Bi  </text>
-<text x="936" y="223" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">→ ---</text>
-<text x="990" y="223" fill="#51576d" textLength="360" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────╮</text>
+<text x="801" y="223" fill="#c6d0f5" textLength="144" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> LFO  Free  Bi  </text>
+<text x="945" y="223" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">→ ---</text>
+<text x="999" y="223" fill="#51576d" textLength="351" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────╮</text>
 <rect x="1395" y="209" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="209" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="209" width="18" height="19" fill="#292c3c"/>
@@ -179,7 +181,9 @@
 <text x="657" y="299" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="684" y="299" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="711" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Rate      </text>
-<text x="801" y="299" fill="#c6d0f5" textLength="288" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4                             </text>
+<text x="801" y="299" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4        </text>
+<text x="900" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Fade      </text>
+<text x="990" y="299" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Off        </text>
 <text x="1089" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="299" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -234,15 +238,15 @@
 <text x="0" y="394" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="27" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 3</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 90 394.89648)" fill="#a6d189"/>
-<text x="108" y="394" fill="#c6d0f5" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Exp  Uni  </text>
-<text x="261" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">→ ---</text>
-<text x="315" y="394" fill="#51576d" textLength="351" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────╮</text>
+<text x="117" y="394" fill="#c6d0f5" textLength="153" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ADSR  Exp  Uni  </text>
+<text x="270" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">→ ---</text>
+<text x="324" y="394" fill="#51576d" textLength="342" lengthAdjust="spacingAndGlyphs" xml:space="preserve">─────────────────────────────────────╮</text>
 <text x="684" y="394" fill="#51576d" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭─</text>
 <text x="711" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Mod 6</text>
 <use href="#sf205" transform="matrix(0.0087890625 0 0 -0.0087890625 774 394.89648)" fill="#a6d189"/>
-<text x="792" y="394" fill="#c6d0f5" textLength="144" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> LFO  Free  Bi  </text>
-<text x="936" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">→ ---</text>
-<text x="990" y="394" fill="#51576d" textLength="360" lengthAdjust="spacingAndGlyphs" xml:space="preserve">───────────────────────────────────────╮</text>
+<text x="801" y="394" fill="#c6d0f5" textLength="144" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> LFO  Free  Bi  </text>
+<text x="945" y="394" fill="#949cbb" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">→ ---</text>
+<text x="999" y="394" fill="#51576d" textLength="351" lengthAdjust="spacingAndGlyphs" xml:space="preserve">──────────────────────────────────────╮</text>
 <rect x="1395" y="380" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="380" width="18" height="19" fill="#292c3c"/>
 <rect x="1449" y="380" width="18" height="19" fill="#292c3c"/>
@@ -296,7 +300,9 @@
 <text x="657" y="470" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="684" y="470" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="711" y="470" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Rate      </text>
-<text x="801" y="470" fill="#c6d0f5" textLength="288" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4                             </text>
+<text x="801" y="470" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">1/4        </text>
+<text x="900" y="470" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Fade      </text>
+<text x="990" y="470" fill="#c6d0f5" textLength="99" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Off        </text>
 <text x="1089" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="470" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>

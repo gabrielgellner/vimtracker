@@ -150,8 +150,8 @@ impl Widget for Device {
             .border_style(Style::new().fg(frame))
             .render(area, buf);
         let mut title = vec![Span::raw(" "), Span::styled(self.identity, theme::dim())];
-        // A switch is two cells, its glyph and the space it's drawn over, which is the first
-        // column of the gap after it, and the room for one is as wide.
+        // A switch is three cells, its glyph and the two spaces its picture covers, the last of
+        // which is the first column of the gap after it, and the room for one is as wide.
         let switch = match self.switch {
             Some(Switch::Toggle(on)) => Some(toggle::span(on)),
             Some(Switch::Room) => Some(Span::raw(" ".repeat(toggle::WIDTH))),

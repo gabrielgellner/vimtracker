@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1467 798" width="1467" height="798" font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="15">
-<defs><path id="sf04db" d="M2048 -410H0V1638H2048Z"/><path id="sf147d" d="M2048 614 1846 513 1740 407 1638 513 1538 205 1432 513 1332 -309 1230 513 1124 306 1024 513 922 100 818 513 716 -410 616 513 510 -102 408 513 308 407 202 513 0 614 202 715 308 821 408 715 510 1330 616 715 716 1638 818 715 922 1128 1024 715 1124 922 1230 715 1332 1537 1432 715 1538 1023 1638 715 1740 821 1846 715Z"/></defs>
+<defs><path id="sf204" d="M1366 1070H682Q590 1070 506.0 1033.5Q422 997 361.0 936.0Q300 875 264.0 791.0Q228 707 228.0 614.5Q228 522 264.0 438.0Q300 354 361.0 293.0Q422 232 506.0 196.0Q590 160 682 160H1366Q1458 160 1542.0 196.0Q1626 232 1687.0 293.0Q1748 354 1784.0 438.0Q1820 522 1820.0 614.5Q1820 707 1784.0 791.0Q1748 875 1687.0 936.0Q1626 997 1542.0 1033.5Q1458 1070 1366 1070ZM1366 -68H682Q544 -68 417.5 -14.0Q291 40 200.0 131.5Q109 223 54.5 349.5Q0 476 0.0 614.5Q0 753 54.5 879.5Q109 1006 200.0 1097.0Q291 1188 417.5 1242.0Q544 1296 682 1296H1366Q1504 1296 1630.5 1242.0Q1757 1188 1848.0 1097.0Q1939 1006 1993.5 879.5Q2048 753 2048.0 614.5Q2048 476 1993.5 349.5Q1939 223 1848.0 131.5Q1757 40 1630.5 -14.0Q1504 -68 1366 -68ZM854.0 319.0Q775 274 682.5 274.0Q590 274 511.0 319.0Q432 364 387.0 443.0Q342 522 342.0 614.5Q342 707 387.0 786.0Q432 865 511.0 910.5Q590 956 682.5 956.0Q775 956 854.0 910.5Q933 865 978.5 786.0Q1024 707 1024.0 614.5Q1024 522 978.5 443.0Q933 364 854.0 319.0Z"/><path id="sf04db" d="M2048 -410H0V1638H2048Z"/><path id="sf147d" d="M2048 614 1846 513 1740 407 1638 513 1538 205 1432 513 1332 -309 1230 513 1124 306 1024 513 922 100 818 513 716 -410 616 513 510 -102 408 513 308 407 202 513 0 614 202 715 308 821 408 715 510 1330 616 715 716 1638 818 715 922 1128 1024 715 1124 922 1230 715 1332 1537 1432 715 1538 1023 1638 715 1740 821 1846 715Z"/></defs>
 <rect width="100%" height="100%" fill="#303446"/>
 <use href="#sf147d" transform="matrix(0.0043945313 0 0 -0.0043945313 0 12.198242)" fill="#949cbb"/>
 <text x="18" y="14" fill="#c6d0f5" font-weight="bold" textLength="144" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Track 01  Sound </text>
@@ -93,10 +93,14 @@
 <text x="162" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="171" y="261" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█████████</text>
 <text x="252" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="288" y="261" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Low cut   </text>
+<text x="288" y="261" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Punch     </text>
 <text x="378" y="261" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00   </text>
 <text x="423" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="513" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="549" y="261" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Low cut   </text>
+<text x="639" y="261" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00   </text>
+<text x="684" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="774" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="864" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="261" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -117,11 +121,13 @@
 <text x="135" y="299" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>
 <text x="162" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="252" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="288" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">High cut  </text>
-<text x="378" y="299" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">FF   </text>
-<text x="423" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
-<text x="432" y="299" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█████████</text>
-<text x="513" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="288" y="299" fill="#949cbb" textLength="117" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Safe         </text>
+<use href="#sf204" transform="matrix(0.0087890625 0 0 -0.0087890625 378 299.89648)" fill="#949cbb"/>
+<text x="549" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">High cut  </text>
+<text x="639" y="299" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">FF   </text>
+<text x="684" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="693" y="299" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█████████</text>
+<text x="774" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="864" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="299" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -176,8 +182,7 @@
 <text x="171" y="432" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    │    </text>
 <text x="252" y="432" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="288" y="432" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Send A    </text>
-<text x="378" y="432" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>
-<text x="396" y="432" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>
+<text x="378" y="432" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00   </text>
 <text x="423" y="432" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="513" y="432" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="864" y="432" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -202,8 +207,7 @@
 <text x="171" y="470" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">███████▉ </text>
 <text x="252" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="288" y="470" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Send B    </text>
-<text x="378" y="470" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>
-<text x="396" y="470" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>
+<text x="378" y="470" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00   </text>
 <text x="423" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
 <text x="513" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="864" y="470" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -281,6 +285,12 @@
 <text x="0" y="641" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="27" y="641" fill="#949cbb" textLength="117" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Glide     Off</text>
 <text x="288" y="641" fill="#949cbb" textLength="162" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Groove    Straight</text>
+<text x="549" y="641" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Velocity  </text>
+<text x="639" y="641" fill="#c6d0f5" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">80</text>
+<text x="657" y="641" fill="#949cbb" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">00</text>
+<text x="684" y="641" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="693" y="641" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    │    </text>
+<text x="774" y="641" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="1341" y="641" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="1395" y="627" width="18" height="19" fill="#292c3c"/>
 <rect x="1422" y="627" width="18" height="19" fill="#292c3c"/>

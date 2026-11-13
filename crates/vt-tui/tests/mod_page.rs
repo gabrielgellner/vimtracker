@@ -415,18 +415,18 @@ fn each_slots_type_mode_and_destination_are_in_its_title() {
     title(&app, 6, true, "LFO  Free  Bi  → --- ─");
 
     // Going nowhere, it's dim, as an empty slot's title is, its arrow too; set, it's the
-    // value's own colour. `Mod 1`'s title is on the page's third row, its arrow 28 in after its
-    // curve and its polarity's `--`, and `Mod 3`'s two bands down, its arrow 29 in after its `Uni`.
+    // value's own colour. `Mod 1`'s title is on the page's third row, its arrow 29 in after its
+    // curve and its polarity's `--`, and `Mod 3`'s two bands down, its arrow 30 in after its `Uni`.
     let buffer = track_page_buffer(&app);
     let dim = vt_tui::theme::dim().fg.unwrap();
-    assert_eq!(buffer[(28, 2)].symbol(), "→");
-    assert_eq!(buffer[(30, 2)].symbol(), "V");
-    assert_ne!(buffer[(30, 2)].fg, dim, "Mod 1's Vol");
+    assert_eq!(buffer[(29, 2)].symbol(), "→");
+    assert_eq!(buffer[(31, 2)].symbol(), "V");
+    assert_ne!(buffer[(31, 2)].fg, dim, "Mod 1's Vol");
     let below = 2 + 9 * 2;
-    assert_eq!(buffer[(29, below)].symbol(), "→");
-    assert_eq!(buffer[(31, below)].symbol(), "-");
-    assert_eq!(buffer[(31, below)].fg, dim, "Mod 3's ---");
-    assert_eq!(buffer[(29, below)].fg, dim, "and its arrow");
+    assert_eq!(buffer[(30, below)].symbol(), "→");
+    assert_eq!(buffer[(32, below)].symbol(), "-");
+    assert_eq!(buffer[(32, below)].fg, dim, "Mod 3's ---");
+    assert_eq!(buffer[(30, below)].fg, dim, "and its arrow");
 }
 
 #[test]
@@ -532,7 +532,7 @@ fn the_default_mod_page_shows_six_slots_as_three_envelopes_beside_three_lfos() {
     press(&mut app, " 4L");
     let lines = screen_cells(&mut app);
     let text = lines.join("\n");
-    let switch = vt_tui::views::widgets::toggle::glyph(true);
+    let switch = vt_tui::views::widgets::toggle::text(true);
     for (slot, controls) in [
         (1, "ADSR  Exp  --  → Vol"),
         (2, "ADSR  Exp  Uni  → Cut"),
@@ -541,7 +541,7 @@ fn the_default_mod_page_shows_six_slots_as_three_envelopes_beside_three_lfos() {
         (5, "LFO  Free  Bi  → ---"),
         (6, "LFO  Free  Bi  → ---"),
     ] {
-        let wanted = format!("╭─ Mod {slot}  {switch}  {controls} ─");
+        let wanted = format!("╭─ Mod {slot}  {switch} {controls} ─");
         assert_eq!(text.matches(&wanted).count(), 1, "{wanted} in\n{text}");
     }
     // The note's own shape has no depth to set, and the filter's envelope has one.
@@ -632,10 +632,10 @@ fn b_switches_a_modulator_out_and_back_with_its_toggle_in_the_title() {
     let buffer = track_page_buffer(&app);
     assert_eq!(glyph_at(&buffer, lfo_switch).0, SWITCH_OFF);
     assert_eq!(buffer[lfo_switch].fg, theme::OVERLAY0);
-    assert_eq!(buffer[(89, 2)].symbol(), "L");
-    assert_eq!(buffer[(89, 2)].fg, theme::OVERLAY0);
-    assert_eq!(buffer[(106, 2)].symbol(), "-");
-    assert_eq!(buffer[(106, 2)].fg, theme::OVERLAY0);
+    assert_eq!(buffer[(90, 2)].symbol(), "L");
+    assert_eq!(buffer[(90, 2)].fg, theme::OVERLAY0);
+    assert_eq!(buffer[(107, 2)].symbol(), "-");
+    assert_eq!(buffer[(107, 2)].fg, theme::OVERLAY0);
     assert_eq!(buffer[(79, 4)].symbol(), "S");
     assert_eq!(buffer[(79, 4)].fg, theme::OVERLAY0);
     assert_eq!(buffer[(89, 6)].bg, theme::ROSEWATER, "the cursor");
@@ -1257,10 +1257,10 @@ fn three_lfos_dots_move_by_placing_alone_at_about_60_bytes_each() {
 }
 
 #[test]
-fn a_modulators_toggles_take_two_cells_and_nothing_moves_when_one_flips() {
+fn a_modulators_toggles_take_three_cells_and_nothing_moves_when_one_flips() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4L");
-    // On Mod 1's Reset, which is on, its colours over both the toggle's cells.
+    // On Mod 1's Reset, which is on, its colours over all the toggle's cells.
     press(&mut app, "jjjl");
     assert_eq!(app.track_control(), Control::Mod(0, ModField::Reset));
     let before = track_page_buffer(&app);
