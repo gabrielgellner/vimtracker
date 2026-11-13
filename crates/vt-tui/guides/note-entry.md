@@ -181,7 +181,7 @@ Press `l` in Normal mode to move to another column, then `i`:
 | Column | In Insert |
 |---|---|
 | Velocity | Two hex digits up to `7F`, such as `40`. Auto-jump moves on |
-| Nudge | A digit to `B`, after `-` if early, such as `-3`, or two to `2F` on a slow track. `0` is on the grid |
+| Nudge | A digit to `B`, after `-` if early, such as `-3`, or two on a slow track |
 | Gate | A gate and its pulses, such as `HLD3`, or a digit alone |
 | Length | The gate's length, two hex digits: `80` is half the last pulse |
 | FX | A label, `Enter`, then a value, like `CUT` `Enter` `40`. See **FX commands** |
@@ -234,7 +234,7 @@ nudges go past `F` shows two digits, so `-03` there is the same `-3`.
 |---|---|
 | `=` `-` | Nudge it a 24th later or earlier |
 | `+` `_` | Four 24ths, a sixth of a sixteenth |
-| `i` | `-` for early, then the 24ths, one digit or two as the track shows them; digits alone are late |
+| `i` | `-` for early, then the 24ths in as many digits as the column shows |
 | `x` | Back on the grid |
 
 A `RATE` lock that changes a step's speed keeps its nudge's time, as the nudge
