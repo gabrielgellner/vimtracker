@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::accent_slide::{HeldFlag, Written};
+use crate::accent_slide::{HeldFlag, Moved, Written};
 use crate::analysing::Analyst;
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
 use crate::config::Settings;
@@ -378,10 +378,13 @@ pub struct App {
     /// The keys holding notes, on the keyboard or in Insert, in the order they went down, so
     /// they play a chord.
     held_notes: Vec<HeldNote>,
-    /// The keys holding an accent or slide in Insert, for the notes played while they're down.
+    /// The keys holding an accent, slide or octave in Insert, for the notes played while they're
+    /// down.
     pub(crate) held_flags: Vec<HeldFlag>,
-    /// Where the last note played in Insert went, for an accent or slide tapped after it.
+    /// Where the last note played in Insert went, for an accent, slide or octave tapped after it.
     pub(crate) last_written: Option<Written>,
+    /// The note a tapped octave key last moved, so the same key tapped again puts it back.
+    pub(crate) octave_moved: Option<Moved>,
     /// What the key that's down started that lasts while it's held.
     momentary: Option<Held>,
     /// What the press being handled started, for [`App::press`] to tie to its key.
@@ -588,6 +591,7 @@ impl App {
             held_notes: Vec::new(),
             held_flags: Vec::new(),
             last_written: None,
+            octave_moved: None,
             momentary: None,
             started: None,
             entry: Entry::default(),

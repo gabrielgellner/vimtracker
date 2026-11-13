@@ -171,6 +171,9 @@ pub enum Cmd {
     Accent,
     /// Likewise, slide from the note into the next row's, with `HLD` on its gate.
     Slide,
+    /// Likewise, move the note an octave up, or down, as a 303's UP and DOWN keys do.
+    OctaveUp,
+    OctaveDown,
     /// A key of the sample page's own.
     Sample(SampleKey),
 }
@@ -1025,7 +1028,8 @@ const VISUAL: &[(&str, Cmd, &str)] = &[
 
 /// Keys for Insert on the Note column, beside the note keys, which are its own and aren't listed
 /// here. As a 303 has its ACCENT and SLIDE keys past the top of its keyboard, these are past
-/// ours: `'` is a stress mark, and `/` a slide in guitar tab.
+/// ours: `'` is a stress mark, and `/` a slide in guitar tab. `k` and `,` are its UP and DOWN,
+/// one above the other, and `o` above `l` widens the grid, as `Option-2` above `Option-1` does.
 const INSERT_NOTE: &[(&str, Cmd, &str)] = &[
     (
         "'",
@@ -1037,6 +1041,18 @@ const INSERT_NOTE: &[(&str, Cmd, &str)] = &[
         Cmd::Slide,
         "Note column: slide from the note just written; held, the notes played",
     ),
+    (
+        "k",
+        Cmd::OctaveUp,
+        "Note column: the note just written an octave up; held, the notes played",
+    ),
+    (
+        ",",
+        Cmd::OctaveDown,
+        "Note column: the note just written an octave down; held, the notes played",
+    ),
+    ("o", Cmd::WidenGrid, "Note column: wider grid, as M-2"),
+    ("l", Cmd::NarrowGrid, "Note column: narrower grid, as M-1"),
 ];
 
 /// A doubled operator key acts on the current step.
@@ -1196,7 +1212,8 @@ impl Default for Table {
     }
 }
 
-/// The notes Insert mode's keys play, as semitones above the current octave's C.
+/// The notes Insert mode's keys play, as semitones above the current octave's C: a piano's
+/// octave, the home row its white keys and the row above its black, as in Ableton.
 pub fn note_key(key: char) -> Option<u8> {
     Some(match key {
         'a' => 0,
@@ -1211,16 +1228,14 @@ pub fn note_key(key: char) -> Option<u8> {
         'h' => 9,
         'u' => 10,
         'j' => 11,
-        'k' => 12,
-        'o' => 13,
-        'l' => 14,
         _ => return None,
     })
 }
 
-/// The home row's place along a scale, with `a` on the root.
+/// A key's place along a scale, with `a` on the root: the home row counts up through the first
+/// seven notes and the row above through the next, as Push's In Key Sequential layout does.
 pub fn degree_key(key: char) -> Option<usize> {
-    "asdfghjkl".chars().position(|degree| degree == key)
+    "asdfghjqwertyu".chars().position(|degree| degree == key)
 }
 
 #[cfg(test)]
@@ -1285,9 +1300,16 @@ mod tests {
 
     #[test]
     fn note_keys_run_chromatically() {
-        let notes: Vec<u8> = "awsedftgyhujkol".chars().filter_map(note_key).collect();
-        assert_eq!(notes, (0..15).collect::<Vec<u8>>());
-        // As in Ableton, the keyboard stops at `l`, and `;` toggles auto-jump.
-        assert_eq!("zxcvqrinmbp;'/".chars().filter_map(note_key).count(), 0);
+        let notes: Vec<u8> = "awsedftgyhuj".chars().filter_map(note_key).collect();
+        assert_eq!(notes, (0..12).collect::<Vec<u8>>());
+        // The keyboard is one octave, C to B, and the keys past it do other things.
+        assert_eq!("kolzxcvqrinmbp;',/".chars().filter_map(note_key).count(), 0);
+    }
+
+    #[test]
+    fn scale_degrees_run_along_the_home_row_then_the_row_above() {
+        let degrees: Vec<usize> = "asdfghjqwertyu".chars().filter_map(degree_key).collect();
+        assert_eq!(degrees, (0..14).collect::<Vec<usize>>());
+        assert_eq!("kol;',/zxcvi".chars().filter_map(degree_key).count(), 0);
     }
 }

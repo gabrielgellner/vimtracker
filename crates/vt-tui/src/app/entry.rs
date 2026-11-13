@@ -15,7 +15,7 @@ use vt_model::step::{
     MAX_VELOCITY, Mark, Note, Step,
 };
 
-use crate::input::bindings::Cmd;
+use crate::input::bindings::{Cmd, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 
@@ -170,6 +170,13 @@ impl App {
             self.hold_flag(key, flag);
             return;
         }
+        if self.mode == Mode::Insert {
+            match self.table.resolve(Mode::Insert, &[key]) {
+                Resolved::Command(Cmd::WidenGrid) => return self.change_grid(true),
+                Resolved::Command(Cmd::NarrowGrid) => return self.change_grid(false),
+                _ => {}
+            }
+        }
         match key.code {
             KeyCode::Esc => self.mode = Mode::Normal,
             KeyCode::Backspace => {
@@ -191,14 +198,15 @@ impl App {
             KeyCode::Char(c) if !key.ctrl => {
                 // While recording, a note goes in where the track is playing, and the cursor
                 // stays.
-                if let Some(midi) = self.played_key(c)
+                let played = self.played_key(c).map(|midi| self.flagged_note(midi));
+                if let Some(midi) = played
                     && self.recording.is_some()
                     && self.mode == Mode::Insert
                 {
                     self.record_note(key, midi);
                     let velocity = self.flagged_velocity(self.note_velocity);
                     self.hold_note(key, midi, velocity);
-                } else if let Some(midi) = self.played_key(c) {
+                } else if let Some(midi) = played {
                     let on_step = self
                         .phrase_here()
                         .cloned()
@@ -211,6 +219,7 @@ impl App {
                     let phrase = self.write_played_note(midi);
                     self.hold_note(key, midi, velocity);
                     self.advance();
+                    self.octave_moved = None;
                     self.last_written = phrase.map(|phrase| Written {
                         track,
                         phrase,

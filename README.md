@@ -97,9 +97,10 @@ just run my-song          # the same, built from this checkout
     the folder you ran from, for the current track, with each kit opening like a folder to its
     sounds. `:sample path` takes a file, or a folder to browse.
 2.  `Space 3` opens the phrase view. `i` starts Insert, and the keyboard plays as in Ableton:
-    `a` to `l` are white keys, `w` to `o` black keys, `z` and `x` change octave, `c` and `v` set
-    the velocity written, and the arrows move without writing. A note stays where it's written,
-    and `;` turns on auto-jump, which moves on by the grid. `Esc` leaves Insert.
+    `a` to `j` are white keys, `w` to `u` black keys, `z` and `x` change octave, `k` and `,` move
+    one note an octave, `c` and `v` set the velocity written, and the arrows move without
+    writing. A note stays where it's written, and `;` turns on auto-jump, which moves on by the
+    grid. `Esc` leaves Insert.
 3.  `Tab` plays and pauses. `Shift-Tab` plays from the start, and `Space c` from the cursor.
 4.  `l` moves to the next field. `K` lists the FX commands, or type a label, `Enter`, then two hex
     digits, such as `CUT` `Enter` `40`.

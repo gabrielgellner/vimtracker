@@ -22,8 +22,8 @@ fn insert_mode_writes_notes_where_the_cursor_is() {
     tap(&mut app, "a");
     assert_eq!(notes(&app)[0], Note::On(60));
     assert_eq!(app.cursor.step, 0, "it stays, to play another in");
-    tap(&mut app, "k");
-    assert_eq!(notes(&app)[0], Note::On(72));
+    tap(&mut app, "s");
+    assert_eq!(notes(&app)[0], Note::On(62));
     special(&mut app, KeyCode::Backspace);
     assert_eq!(notes(&app)[0], Note::Empty, "Backspace clears it there");
     assert_eq!(app.cursor.step, 0);
@@ -39,10 +39,10 @@ fn semicolon_turns_auto_jump_on_and_entering_moves_on_by_the_grid() {
     assert!(app.auto_jump);
     assert_eq!(app.history.undo_depth(), depth, "it isn't an edit to undo");
     assert!(app.dirty, "but it is saved");
-    tap(&mut app, "ak1");
+    tap(&mut app, "aj1");
     let written = notes(&app);
     assert_eq!(written[0], Note::On(60));
-    assert_eq!(written[4], Note::On(72));
+    assert_eq!(written[4], Note::On(71));
     assert_eq!(written[8], Note::Off);
     assert_eq!(app.cursor.step, 12);
     // Back to the last entry, and clear it.
@@ -187,10 +187,10 @@ fn the_ableton_layout_plays_and_c_and_v_set_the_velocity_written() {
     assert_eq!(notes(&app)[0], Note::On(60));
     tap(&mut app, "w");
     assert_eq!(notes(&app)[0], Note::On(61));
-    tap(&mut app, "k");
+    tap(&mut app, "j");
+    assert_eq!(notes(&app)[0], Note::On(71), "up to `j`, a piano's octave");
+    tap(&mut app, "xa");
     assert_eq!(notes(&app)[0], Note::On(72));
-    tap(&mut app, "xl");
-    assert_eq!(notes(&app)[0], Note::On(86), "up to `l`, as in Ableton");
     tap(&mut app, "zz");
     assert_eq!(app.octave, 2);
 
@@ -727,13 +727,157 @@ fn a_note_recorded_with_a_flag_held_is_written_with_it() {
     tap_at(&mut app, at, "'");
     assert_eq!(app.status, "While recording, hold ' as you play a note");
     assert_eq!(rows_of(&app, 1), rows);
+
+    // The octave keys likewise.
+    play_to(&mut app, &mut rt, &mut at, 10.0);
+    hold_at(&mut app, at, 'k');
+    hold_at(&mut app, at, 's');
+    play_to(&mut app, &mut rt, &mut at, 10.5);
+    let_go_of_at(&mut app, at, 's');
+    let_go_of_at(&mut app, at, 'k');
+    assert_eq!(rows_of(&app, 1)[2].note, Note::On(74));
+    tap_at(&mut app, at, ",");
+    assert_eq!(app.status, "While recording, hold , as you play a note");
 }
 
 #[test]
-fn space_k_lists_the_accent_and_slide_keys() {
+fn a_tapped_octave_key_moves_the_note_just_written_and_again_puts_it_back() {
+    let (mut app, _rt) = app();
+    command(&mut app, "set skip=4");
+    app.auto_jump = true;
+    tap(&mut app, "ia");
+    let depth = app.history.undo_depth();
+    tap(&mut app, "k");
+    assert_eq!(notes(&app)[0], Note::On(72), "the row just written");
+    assert_eq!(app.status, "Octave up");
+    assert_eq!(app.history.undo_depth(), depth + 1, "one change to undo");
+    assert_eq!(app.cursor.step, 4, "the cursor stays");
+    assert_eq!(app.octave, 3, "the octave written in is as it was");
+    tap(&mut app, "k");
+    assert_eq!(
+        notes(&app)[0],
+        Note::On(60),
+        "the same key again puts it back"
+    );
+    assert_eq!(app.status, "Octave as played");
+
+    // Down, and up from there, is back where it was played too.
+    tap(&mut app, ",");
+    assert_eq!(notes(&app)[0], Note::On(48));
+    assert_eq!(app.status, "Octave down");
+    tap(&mut app, ",");
+    assert_eq!(notes(&app)[0], Note::On(60));
+    tap(&mut app, ",k");
+    assert_eq!(notes(&app)[0], Note::On(60));
+    tap(&mut app, "kk");
+    assert_eq!(notes(&app)[0], Note::On(60));
+
+    // Undone, the note is as it was before, and the key starts again from there.
+    tap(&mut app, "k");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "u");
+    assert_eq!(notes(&app)[0], Note::On(60));
+    press(&mut app, "gg");
+    tap(&mut app, "ik");
+    assert_eq!(notes(&app)[0], Note::On(72), "after an undo, up again");
+
+    // With the cursor moved off, it's the cursor's row, as for an accent.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "gg");
+    tap(&mut app, "is");
+    special(&mut app, KeyCode::Left);
+    tap(&mut app, "k");
+    assert_eq!(notes(&app)[0], Note::On(74));
+    tap(&mut app, "k");
+    assert_eq!(notes(&app)[0], Note::On(62));
+
+    // A row with no note has nothing to move, and a note at the end of the range stays.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "j");
+    tap(&mut app, "i,");
+    assert_eq!(app.status, "No note here to move");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "gg");
+    tap(&mut app, "i");
+    tap(&mut app, "zzzz");
+    assert_eq!(app.octave, -1);
+    tap(&mut app, "a");
+    special(&mut app, KeyCode::Left);
+    tap(&mut app, ",");
+    assert_eq!(notes(&app)[0], Note::On(12));
+    assert_eq!(app.status, "No octave below this note");
+}
+
+#[test]
+fn notes_played_with_an_octave_key_held_go_in_an_octave_up_or_down() {
+    let (mut app, _rt) = app();
+    entering_steps_down(&mut app);
+    tap(&mut app, "ia");
+    hold(&mut app, 'k');
+    tap(&mut app, "sd");
+    // Its repeats do nothing.
+    app.key_repeated(Key::char('k'), Instant::now());
+    let_go_of(&mut app, 'k');
+    assert_eq!(app.status, "Octave up");
+    hold(&mut app, ',');
+    tap(&mut app, "f");
+    let_go_of(&mut app, ',');
+    assert_eq!(app.status, "Octave down");
+    assert_eq!(
+        written_notes(&app),
+        [60, 74, 76, 53].map(Note::On),
+        "letting go moves nothing"
+    );
+    assert_eq!(app.octave, 3, "the sticky octave is as it was");
+
+    // With an accent held too, and with both octave keys, neither way.
+    hold(&mut app, '\'');
+    hold(&mut app, 'k');
+    tap(&mut app, "g");
+    assert_eq!(app.status, "Accent on, octave up");
+    hold(&mut app, ',');
+    tap(&mut app, "h");
+    let_go_of(&mut app, ',');
+    let_go_of(&mut app, 'k');
+    let_go_of(&mut app, '\'');
+    let rows = rows_here(&app);
+    assert_eq!(rows[4].note, Note::On(79));
+    assert_eq!(rows[4].velocity, Some(0x7F));
+    assert_eq!(rows[5].note, Note::On(69));
+
+    // A tap after them moves the note just written, as played.
+    tap(&mut app, "k");
+    assert_eq!(rows_here(&app)[5].note, Note::On(81));
+}
+
+#[test]
+fn o_and_l_widen_and_narrow_the_grid_on_the_note_column() {
+    let (mut app, _rt) = app();
+    assert_eq!(app.song().skip, 4);
+    tap(&mut app, "i");
+    tap(&mut app, "o");
+    assert_eq!(app.song().skip, 8, "o, above l, is wider");
+    tap(&mut app, "ll");
+    assert_eq!(app.song().skip, 2);
+    assert_eq!(app.mode, Mode::Insert);
+    assert!(written_notes(&app).is_empty(), "neither is a note");
+    // On another column, they're typed, as an FX label is.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "lllll");
+    tap(&mut app, "ilen");
+    assert_eq!(app.song().skip, 2);
+    assert_eq!(app.entry.text.to_lowercase(), "len");
+}
+
+#[test]
+fn space_k_lists_the_accent_slide_octave_and_grid_keys() {
     let (app, _rt) = app();
     let rows = app.help_rows();
     let insert = rows.iter().position(|row| row == "Insert").unwrap();
-    assert!(rows[insert + 1].trim_start().starts_with("'"), "{rows:?}");
-    assert!(rows[insert + 2].trim_start().starts_with("/"), "{rows:?}");
+    for (row, key) in ["'", "/", "k", ",", "o", "l"].iter().enumerate() {
+        assert!(
+            rows[insert + 1 + row].trim_start().starts_with(key),
+            "{rows:?}"
+        );
+    }
 }

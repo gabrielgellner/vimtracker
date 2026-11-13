@@ -102,8 +102,8 @@
 <text x="648" y="128" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="128" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="128" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="114" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="128" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭──────────────────────────────────────────╮</text>
+<rect x="891" y="114" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="128" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭──────────────────────────────────────────────────────────────╮</text>
 <text x="72" y="147" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="81" y="147" fill="#949cbb" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">G-3</text>
 <rect x="243" y="133" width="342" height="19" fill="#292c3c"/>
@@ -111,8 +111,8 @@
 <text x="648" y="147" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="147" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="147" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="133" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="147" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│i      Inspect the cursor's row beside the│</text>
+<rect x="891" y="133" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="147" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│i      Inspect the cursor's row beside the overview, or stop  │</text>
 <text x="0" y="166" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 3 </text>
 <text x="27" y="166" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 03</text>
 <text x="72" y="166" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -127,8 +127,8 @@
 <rect x="477" y="152" width="108" height="19" fill="#292c3c"/>
 <text x="477" y="166" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
 <text x="585" y="166" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
-<rect x="1071" y="152" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="166" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│p d    Double this phrase                 │</text>
+<rect x="891" y="152" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="166" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│p d    Double this phrase                                     │</text>
 <text x="0" y="185" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 4 </text>
 <text x="27" y="185" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 04</text>
 <text x="72" y="185" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -149,8 +149,8 @@
 <text x="648" y="185" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="185" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="185" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="171" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="185" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│g a    Apply the live column here, leaving│</text>
+<rect x="891" y="171" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="185" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│g a    Apply the live column here, leaving plain values       │</text>
 <text x="72" y="204" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <rect x="81" y="206" width="162" height="1" fill="#51576d"/>
 <rect x="243" y="190" width="342" height="19" fill="#292c3c"/>
@@ -159,8 +159,8 @@
 <text x="648" y="204" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="204" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="204" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="190" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="204" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│g A    Write the pitch the mod slots playe│</text>
+<rect x="891" y="190" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="204" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│g A    Write the pitch the mod slots played into the notes    │</text>
 <text x="0" y="223" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 5 </text>
 <text x="27" y="223" fill="#e5c890" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 05</text>
 <text x="72" y="223" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -181,8 +181,8 @@
 <text x="648" y="223" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="223" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="223" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="209" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="223" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│r      Record notes played in Insert, whil│</text>
+<rect x="891" y="209" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="223" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│r      Record notes played in Insert, while playing           │</text>
 <text x="0" y="242" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 6 </text>
 <text x="27" y="242" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 06</text>
 <text x="72" y="242" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -203,8 +203,8 @@
 <text x="648" y="242" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="242" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="242" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="228" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="242" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│c      Play from the cursor               │</text>
+<rect x="891" y="228" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="242" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│c      Play from the cursor                                   │</text>
 <text x="0" y="261" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 7 </text>
 <text x="27" y="261" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 07</text>
 <text x="72" y="261" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -225,8 +225,8 @@
 <text x="648" y="261" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="261" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="261" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="247" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="261" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│q q    Quit                               │</text>
+<rect x="891" y="247" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="261" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│q q    Quit                                                   │</text>
 <text x="0" y="280" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 8 </text>
 <text x="27" y="280" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 08</text>
 <text x="72" y="280" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -260,8 +260,8 @@
 <text x="648" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="280" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="266" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="280" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│m      Mute or unmute; held, until let go │</text>
+<rect x="891" y="266" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="280" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│m      Mute or unmute; held, until let go                     │</text>
 <text x="0" y="299" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 9 </text>
 <text x="27" y="299" fill="#e5c890" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 09</text>
 <text x="72" y="299" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -282,8 +282,8 @@
 <text x="648" y="299" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="299" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="299" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="285" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="299" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│s      Solo or unsolo; held, until let go │</text>
+<rect x="891" y="285" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="299" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│s      Solo or unsolo; held, until let go                     │</text>
 <text x="0" y="318" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">10 </text>
 <text x="27" y="318" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0A</text>
 <text x="72" y="318" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -304,8 +304,8 @@
 <text x="648" y="318" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="318" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="318" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="304" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="318" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│g m    Mute or unmute on the launch grid, │</text>
+<rect x="891" y="304" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="318" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│g m    Mute or unmute on the launch grid, or take it back     │</text>
 <text x="0" y="337" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">11 </text>
 <text x="27" y="337" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0B</text>
 <text x="72" y="337" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -326,8 +326,8 @@
 <text x="648" y="337" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="337" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="337" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="323" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="337" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│g s    Solo or unsolo on the launch grid, │</text>
+<rect x="891" y="323" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="337" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│g s    Solo or unsolo on the launch grid, or take it back     │</text>
 <text x="0" y="356" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">12 </text>
 <text x="27" y="356" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0C</text>
 <text x="72" y="356" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -361,8 +361,8 @@
 <text x="648" y="356" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="693" y="356" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
 <text x="738" y="356" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="342" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="356" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│M      Clear all mutes and solos          │</text>
+<rect x="891" y="342" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="356" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│M      Clear all mutes and solos                              │</text>
 <text x="0" y="375" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">13 </text>
 <text x="27" y="375" fill="#e5c890" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0D</text>
 <text x="72" y="375" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -380,8 +380,8 @@
 <text x="477" y="375" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
 <text x="585" y="375" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="375" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="361" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="375" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│l      Fill on or off; held, until let go │</text>
+<rect x="891" y="361" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="375" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│l      Fill on or off; held, until let go                     │</text>
 <text x="0" y="394" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">14 </text>
 <text x="27" y="394" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0E</text>
 <text x="72" y="394" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -399,8 +399,8 @@
 <text x="477" y="394" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
 <text x="585" y="394" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="394" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="380" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="394" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│A      Realign every track on the launch g│</text>
+<rect x="891" y="380" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="394" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│A      Realign every track on the launch grid, or take it back│</text>
 <text x="0" y="413" fill="#737994" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">15 </text>
 <text x="27" y="413" fill="#b5bfe2" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> 0F</text>
 <text x="72" y="413" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
@@ -418,45 +418,45 @@
 <text x="477" y="413" fill="#737994" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">···   ··    </text>
 <text x="585" y="413" fill="#51576d" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="603" y="413" fill="#737994" textLength="36" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> ---</text>
-<rect x="1071" y="399" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="413" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│a      Realign this track on the launch gr│</text>
+<rect x="891" y="399" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="413" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│a      Realign this track on the launch grid, or take it back │</text>
 <text x="0" y="432" fill="#51576d" textLength="594" lengthAdjust="spacingAndGlyphs" xml:space="preserve">        ╰────────────────────────────────────────────────────────╯</text>
-<rect x="1071" y="418" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="432" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│e      Give this track's faders back to th│</text>
-<rect x="1071" y="437" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="451" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│E      Give every track's faders back to t│</text>
-<rect x="1071" y="456" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="470" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│1      Song view                          │</text>
-<rect x="1071" y="475" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="489" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│2      Chain view                         │</text>
-<rect x="1071" y="494" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="508" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│3      Phrase view                        │</text>
-<rect x="1071" y="513" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="527" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│4      Mixer                              │</text>
-<rect x="1071" y="532" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="546" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│5      Sound page: machine, filter, output│</text>
-<rect x="1071" y="551" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="565" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│6      Mod page: envelopes, LFOs, mods    │</text>
-<rect x="1071" y="570" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="584" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│7      FX page: the track's effects       │</text>
-<rect x="1071" y="589" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="603" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│8      Gen page: the live generators      │</text>
-<rect x="1071" y="608" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="622" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│9      Project: song settings, and audio  │</text>
-<rect x="1071" y="627" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="641" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│0      Sample page: the sample, big       │</text>
-<rect x="1071" y="646" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="660" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Space  Open the view picker               │</text>
-<rect x="1071" y="665" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="679" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│f f    Open the view picker               │</text>
-<rect x="1071" y="684" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="698" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│f b    Open the track picker              │</text>
-<rect x="1071" y="703" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="717" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│?      Open a guide                       │</text>
-<rect x="1071" y="722" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="736" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│k      Show every key                     │</text>
-<rect x="1071" y="741" width="396" height="19" fill="#292c3c"/>
-<text x="1071" y="755" fill="#c6d0f5" textLength="396" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╰──────────────────────────────────────────╯</text>
+<rect x="891" y="418" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="432" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│e      Give this track's faders back to the steps' automation │</text>
+<rect x="891" y="437" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="451" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│E      Give every track's faders back to the steps' automation│</text>
+<rect x="891" y="456" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="470" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│1      Song view                                              │</text>
+<rect x="891" y="475" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="489" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│2      Chain view                                             │</text>
+<rect x="891" y="494" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="508" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│3      Phrase view                                            │</text>
+<rect x="891" y="513" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="527" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│4      Mixer                                                  │</text>
+<rect x="891" y="532" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="546" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│5      Sound page: machine, filter, output                    │</text>
+<rect x="891" y="551" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="565" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│6      Mod page: envelopes, LFOs, mods                        │</text>
+<rect x="891" y="570" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="584" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│7      FX page: the track's effects                           │</text>
+<rect x="891" y="589" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="603" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│8      Gen page: the live generators                          │</text>
+<rect x="891" y="608" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="622" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│9      Project: song settings, and audio                      │</text>
+<rect x="891" y="627" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="641" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│0      Sample page: the sample, big                           │</text>
+<rect x="891" y="646" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="660" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Space  Open the view picker                                   │</text>
+<rect x="891" y="665" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="679" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│f f    Open the view picker                                   │</text>
+<rect x="891" y="684" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="698" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│f b    Open the track picker                                  │</text>
+<rect x="891" y="703" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="717" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│?      Open a guide                                           │</text>
+<rect x="891" y="722" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="736" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│k      Show every key                                         │</text>
+<rect x="891" y="741" width="576" height="19" fill="#292c3c"/>
+<text x="891" y="755" fill="#c6d0f5" textLength="576" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╰──────────────────────────────────────────────────────────────╯</text>
 <rect x="0" y="760" width="72" height="19" fill="#8caaee"/>
 <text x="0" y="774" fill="#303446" font-weight="bold" textLength="72" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> NORMAL </text>
 <rect x="72" y="760" width="54" height="19" fill="#51576d"/>
