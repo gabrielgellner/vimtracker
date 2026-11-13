@@ -4,8 +4,10 @@
 //! notes, accents and slides together.
 
 mod acid;
+pub mod params;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
+pub use params::{Context, GenParam};
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};

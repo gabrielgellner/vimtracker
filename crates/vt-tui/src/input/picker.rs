@@ -19,11 +19,10 @@ use vt_model::arpeggio::Arpeggio;
 use vt_model::bank::PlayParams;
 use vt_model::groove::GrooveId;
 use vt_model::insert::Insert;
-use vt_model::lfo::Shape as Wave;
 use vt_model::modulation::ModSlot;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::settings::SettingId;
-use vt_model::shape::{FillKind, WaveRate, Where};
+use vt_model::shape::params::Choice;
 use vt_model::song::{FilterMode, FilterType, Machine};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind};
@@ -170,14 +169,9 @@ pub enum Pick {
     },
     /// The kind of scale.
     Scale(ScaleKind),
-    /// What the shape panel fills with.
-    ShapeFill(FillKind),
-    /// The wave the shape panel follows.
-    ShapeWave(Wave),
-    /// The length of the shape panel's wave.
-    ShapeRate(WaveRate),
-    /// Which rows the shape panel fills.
-    ShapeWhere(Where),
+    /// A choice for the shape panel's setting: its fill, its wave and the wave's length, or
+    /// which rows it fills.
+    ShapeChoice(Choice),
     /// The command the shape panel writes on an FX column with none.
     ShapeCommand(FxCommand),
     Use {

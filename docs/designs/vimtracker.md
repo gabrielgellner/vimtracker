@@ -1185,6 +1185,12 @@ A generator is a pure function of its parameters, its target and a seed. The sha
 chooses what to write or reworks what's there, and a `Shape` holds every setting of both, the seed included, as plain
 data. A generator that can still be changed is that panel kept live (decision 178), so there's one interface for both.
 
+**Its settings are declared once,** in `vt-model`'s `shape/params.rs` (decision 278): a `GenParam` for each, with the key a
+mapping stores it by, its name, its units, which shapes have it (`exists_for`), and how it's shown, stepped, typed, put back,
+chosen from a list and read as a number within its bounds, each a pure function of the `Shape` and a `Context` (the column,
+the rows it could change, whether it generates). The shape panel's rows are these, and the Gen page, the Roto and macros
+read the same table, as a machine's grid and Roto layout read the registry.
+
 **Shape panel.** Built ahead of live generators, by the author's decision: Visual `S` opens a panel whose result is a
 preview with no undo step, `Enter` keeps it as one undo and leaves plain values, and `Esc` restores what was there.
 Selecting and pressing `S` again reshapes, from the values now there, and `.` repeats the last `Shape` on another
