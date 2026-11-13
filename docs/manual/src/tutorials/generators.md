@@ -504,6 +504,10 @@ off-beats. The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `
 *   Write a line by hand first, then `S` with `Acid` on it: its rhythm stays, and the panel gives
     it new pitches, accents and slides.
 *   `Space g a` keeps the one you like as plain notes, to tweak by hand.
+*   On the Gen page, `Vary` `Each pass` (`K` on it, after `Pitches` in the title): a new line
+    every time round, as Endless Acid Banger plays, and the first pass is the one written. `Every
+    4 passes` holds each for four bars. When one sticks, `Space g a` keeps it, the line just heard,
+    and `Vary` goes back to `Once`.
 
 ## Walks and 1/f
 

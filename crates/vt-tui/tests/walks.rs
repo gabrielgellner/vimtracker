@@ -104,6 +104,7 @@ fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
             GenParam::Edge,
             GenParam::Run,
             GenParam::Where,
+            GenParam::Vary,
         ]
     );
     // On Velocity a step starts at `10`, an eighth of the range, so it can be heard.
@@ -153,6 +154,7 @@ fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
             GenParam::Depth,
             GenParam::Run,
             GenParam::Where,
+            GenParam::Vary,
         ]
     );
     assert_eq!(panel.shape.pink.depth, 4);

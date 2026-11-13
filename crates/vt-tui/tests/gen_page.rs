@@ -172,6 +172,57 @@ fn r_rolls_a_random_fill_again() {
     assert_ne!(generators(&app)[0].shape.seed, seed);
 }
 
+/// `Vary` sits last in a drawing fill's title, `K` lists how long each variation lasts, and
+/// `Space g a` keeps the pass last heard as its seed, `Vary` back to `Once`, as one undo step.
+#[test]
+fn space_g_a_keeps_the_variation_heard_of_a_generator_that_varies() {
+    use vt_engine::link::Command;
+    let (mut app, mut realtime) = on_gen_page();
+    keys(&mut app, "Krandom<Enter>ll");
+    assert_eq!(here(&app), Some(GenParam::Vary));
+    let text = fx_page_text(&app).join("\n");
+    assert!(text.contains("Random  Euclid  Once · Note 00–07"), "{text}");
+    keys(&mut app, "K");
+    let names: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .items()
+        .iter()
+        .map(|item| item.label.clone())
+        .collect();
+    assert_eq!(names[..2], ["Once", "Each pass"]);
+    keys(&mut app, "each<Enter>");
+    let varying = generators(&app)[0].shape;
+    assert_eq!(varying.vary, 1);
+    let written = notes(&app);
+    // Nothing's been heard, so there's nothing to keep.
+    keys(&mut app, " ga");
+    assert_eq!(generators(&app)[0].shape, varying);
+    assert!(app.status.contains("hasn't been heard"), "{}", app.status);
+
+    // Two and a half times round its eight rows, once the callback has the song as it is.
+    for _ in 0..4 {
+        block(&mut realtime, &mut app);
+    }
+    app.handle.send(Command::PlayFrom { step: 0 });
+    let pass = 8 * 6000;
+    for _ in 0..(pass * 5 / 2) / 256 {
+        block(&mut realtime, &mut app);
+    }
+    let depth = app.history.undo_depth();
+    keys(&mut app, " ga");
+    let kept = generators(&app)[0].shape;
+    assert_eq!(kept.vary, 0, "Vary is Once");
+    assert_eq!(kept.seed, varying.on_pass(2).seed, "the third pass's seed");
+    assert_ne!(notes(&app), written, "the phrase holds the pass heard");
+    assert_eq!(generators(&app).len(), 1, "still live");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert!(app.status.contains("pass 3"), "{}", app.status);
+    keys(&mut app, "u");
+    assert_eq!(generators(&app)[0].shape, varying);
+}
+
 #[test]
 fn space_g_a_applies_it_and_dd_takes_it_away() {
     let (mut app, _rt) = on_gen_page();

@@ -46,6 +46,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         follow: Follow::default(),
         walk: Walk::default(),
         pink: Pink::default(),
+        vary: 0,
     }
 }
 
@@ -396,4 +397,132 @@ fn a_generators_pass_is_where_the_song_is_not_how_it_got_there() {
     let pass = |engine: &Engine| heard(engine, 0)[0].pass;
     assert_eq!(pass(&from_top), 8);
     assert_eq!(pass(&engine), 8);
+}
+
+/// The nine-pass song with its velocities drawn at random, a new seed every `vary` passes.
+fn varying(vary: u8) -> Song {
+    let song = nine_passes();
+    let mut shape = shape(FillKind::Random, 0x20, 0x7F, Where::AllRows);
+    shape.vary = vary;
+    reshape(&song, shape)
+}
+
+fn reshape(song: &Song, shape: Shape) -> Song {
+    apply(
+        song.clone(),
+        &Action::Reshape {
+            track: 0,
+            phrase: 0,
+            generator: 0,
+            shape,
+        },
+    )
+}
+
+/// The song with its generator's shape as a pass plays it written in, and `Vary` off.
+fn kept(song: &Song, pass: i64) -> Song {
+    let mut shape = written(song, 0, ShapeColumn::Velocity).on_pass(pass);
+    shape.vary = 0;
+    reshape(song, shape)
+}
+
+/// Play a song's `pass` of its 16-row phrase alone, from its first row.
+fn play_pass(song: &Song, pass: usize) -> (Vec<f32>, Engine) {
+    let mut engine = Engine::new(RATE, version(song));
+    engine.play_from(pass * 16);
+    let mut out = vec![0.0; 16 * STEP * 2];
+    engine.process(&mut out);
+    (out, engine)
+}
+
+/// The passes heard of a track's generators that vary, in the order they were, with the seed
+/// each played.
+fn passes_heard(engine: &mut Engine, track: usize) -> Vec<(i64, u64)> {
+    let mut heard = Vec::new();
+    engine.take_gen_passes(track, |pass| heard.push((pass.pass, pass.seed)));
+    heard
+}
+
+/// With `Vary` on, each pass plays a seed of its own, the first the one written: pass 0 is what's
+/// written, sample for sample with nothing rendered, and every later pass plays, sample for
+/// sample, what writing its seed in would.
+#[test]
+fn a_generator_that_varies_plays_each_pass_as_its_seed_written_would() {
+    let song = varying(1);
+    let (first, engine) = play_pass(&song, 0);
+    assert!(
+        first == play_pass(&kept(&song, 0), 0).0,
+        "pass 0 is as written"
+    );
+    assert!(heard(&engine, 0).iter().all(|run| run.renders == 0));
+    for pass in [1, 2, 8] {
+        let (heard_out, engine) = play_pass(&song, pass);
+        let (written_out, _) = play_pass(&kept(&song, pass as i64), pass);
+        assert!(heard_out == written_out, "pass {pass} plays its seed");
+        let (as_written, _) = play_pass(&kept(&song, 0), pass);
+        assert!(heard_out != as_written, "and not the written one");
+        let run = heard(&engine, 0)[0];
+        assert_eq!((run.pass, run.renders), (pass as i64, 1));
+        assert!(run.moving);
+    }
+    // A render repeats.
+    assert!(play_pass(&song, 2).0 == play_pass(&song, 2).0);
+}
+
+/// Play a song from the top a block of 256 frames at a time, as the callback does, taking the
+/// passes heard after each, as the callback reports them.
+fn play_reporting(song: &Song, steps: usize) -> (Vec<(i64, u64)>, Engine) {
+    let mut engine = Engine::new(RATE, version(song));
+    engine.play_from(0);
+    let mut out = [0.0; 512];
+    let mut reported = Vec::new();
+    for _ in 0..steps * STEP / 256 {
+        engine.process(&mut out);
+        reported.extend(passes_heard(&mut engine, 0));
+    }
+    (reported, engine)
+}
+
+/// A generator that varies renders once a pass, not once a row, and every `vary` passes only
+/// when the seed changes; each pass it's heard on is reported once, with the seed it played.
+#[test]
+fn a_generator_that_varies_renders_once_a_pass_and_reports_each() {
+    let song = varying(1);
+    let (reported, mut engine) = play_reporting(&song, 3 * 16 + 2);
+    assert_eq!(heard(&engine, 0)[0].renders, 3, "passes 1, 2 and 3");
+    let shape = written(&song, 0, ShapeColumn::Velocity);
+    let seeds: Vec<(i64, u64)> = (0..4)
+        .map(|pass| (pass, shape.on_pass(pass).seed))
+        .collect();
+    assert_eq!(reported, seeds);
+    assert_eq!(passes_heard(&mut engine, 0), [], "each only once");
+    let fours = varying(4);
+    let (reported, engine) = play_reporting(&fours, 8 * 16 + 2);
+    assert_eq!(
+        heard(&engine, 0)[0].renders,
+        2,
+        "passes 4 to 7 share a seed, and 8 has the next"
+    );
+    let shape = written(&fours, 0, ShapeColumn::Velocity);
+    let seeds: Vec<u64> = reported.into_iter().map(|(_, seed)| seed).collect();
+    assert_eq!(seeds.len(), 9);
+    assert!(seeds[..4].iter().all(|seed| *seed == shape.seed));
+    assert!(seeds[4..8].iter().all(|seed| *seed == seeds[4]));
+    assert_ne!(seeds[8], seeds[4]);
+}
+
+/// Played from the ninth pass, a generator that varies plays and reports what it does there
+/// playing from the top.
+#[test]
+fn a_generator_that_varies_hears_the_pass_where_the_song_is() {
+    let song = varying(1);
+    let (_, mut from_top) = play(&song, &[], 8 * 16 + 4);
+    let mut engine = Engine::new(RATE, version(&song));
+    engine.play_from(8 * 16);
+    let mut out = vec![0.0; 4 * STEP * 2];
+    engine.process(&mut out);
+    let last = |engine: &mut Engine| passes_heard(engine, 0).last().copied();
+    let here = last(&mut engine);
+    assert_eq!(here.map(|(pass, _)| pass), Some(8));
+    assert_eq!(last(&mut from_top), here);
 }

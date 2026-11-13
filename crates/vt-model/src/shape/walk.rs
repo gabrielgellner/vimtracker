@@ -209,6 +209,7 @@ mod tests {
             follow: Follow::default(),
             walk: Walk { step, edge },
             pink: Pink::default(),
+            vary: 0,
         }
     }
 

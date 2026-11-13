@@ -600,6 +600,7 @@ impl App {
                     ..Walk::default()
                 },
                 pink: Pink::default(),
+                vary: 0,
             },
             row: GenParam::Fill,
             typing: None,

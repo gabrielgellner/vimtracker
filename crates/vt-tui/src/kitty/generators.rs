@@ -170,6 +170,7 @@ mod tests {
             follow: Follow::default(),
             walk: Walk::default(),
             pink: Pink::default(),
+            vary: 0,
         };
         let column = ShapeColumn::Note {
             scale: vt_model::scale::Scale::default(),

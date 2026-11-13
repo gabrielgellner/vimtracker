@@ -1476,8 +1476,9 @@ A fixed track has no phrases, so its page is empty.
 Each live column is a device, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
 them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
-`Where`, then where it acts, dim: `Ramp  Euclid · Note 00–0F`, or `FX1 CUT lane 0C`
-for a lane. A `Where` that's its column's own is dim too. Its settings are the
+`Where`, then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
+Note 00–0F`, or `FX1 CUT lane 0C` for a lane. A `Where` that's its column's own is
+dim too, and so is a `Vary` of `Once`. Its settings are the
 shape panel's, laid out by what they do: the fill's down the first two columns,
 and the `Where`'s, `Hits` and `Rotate` or an amount, at the foot of the last, so
 they stay put as the fill changes. A value with a bar is brief, as `9` for hits,
@@ -1498,9 +1499,27 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 | `K` | List a setting's choices; switch one that's off or on |
 | `x` | Back to where it starts |
 | `r` | Roll the generator again, from anywhere in it, as in the panel |
-| `Space g a` | Apply it, leaving its values as plain ones |
+| `Space g a` | Apply it, leaving its values as plain ones; with `Vary` on, keep the pass just heard |
 | `dd` | Take it away, putting back what was under it |
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
+
+**A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,
+`1/f`, `Acid`, `Shuffle`, a `Wave` of `Random` or `Smooth`, or any fill on rows
+chosen by `Chance`, has `Vary`: `Once`, as it's always been, the same every time
+round; `Each pass`, a new roll each time the phrase comes round; or `Every 2
+passes`, 4 or 8, so each variation plays that many times before the next, the way
+an Elektron's `1:4` condition keeps to the bars. Each pass's seed comes from the
+generator's own and which pass it is, so the first pass plays what's written, a
+render plays the same again, and playing from bar 33 hears what playing to it
+would. With `Acid`'s `Pitches` on `Keep`, it varies only the accents, slides and
+octaves, as `r` would. The phrase shows what's written, the first pass; what plays
+after it is the engine's.
+
+When you hear one you like, `Space g a` keeps it: the pass just heard becomes the
+generator's seed and `Vary` goes back to `Once`, so that variation plays every pass
+and the phrase holds it, still live to turn, as one undo step. Before it's been
+heard varying, it says so. It's the Turing Machine's lock, as `Space g a` on a Steps
+slot's `Mutate` is.
 
 **Making a column live.** The last device, `Empty`, has `K` list the columns of
 the phrase with nothing live on them. Choosing one makes it live over the phrase's

@@ -80,6 +80,7 @@ fn following(source: Source, follow: Follow) -> Shape {
         follow: Follow { source, ..follow },
         walk: Walk::default(),
         pink: Pink::default(),
+        vary: 0,
     }
 }
 

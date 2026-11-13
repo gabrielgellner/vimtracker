@@ -304,6 +304,7 @@ mod tests {
             follow: crate::shape::Follow::default(),
             walk: Walk::default(),
             pink: Pink::default(),
+            vary: 0,
         }
     }
 

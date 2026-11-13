@@ -296,7 +296,7 @@ impl Engine {
                 count: place as i64,
                 position,
             };
-            let step = self.view_row(index, read, row, step);
+            let step = self.view_row(index, read, row, step, false);
             let Note::On(midi) = step.note else {
                 continue;
             };

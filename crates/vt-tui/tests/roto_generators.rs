@@ -36,6 +36,7 @@ fn shape(kind: FillKind, place: Where) -> Shape {
         follow: Follow::default(),
         walk: Walk::default(),
         pink: Pink::default(),
+        vary: 0,
     }
 }
 

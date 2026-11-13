@@ -309,6 +309,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         },
         walk: Walk::default(),
         pink: Pink::default(),
+        vary: 0,
     };
     // Settings added since are drawn from the seed, so the other draws, and the other fills'
     // hashes, stay as they were.

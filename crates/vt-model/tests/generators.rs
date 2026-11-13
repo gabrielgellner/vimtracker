@@ -78,6 +78,7 @@ fn ramp(from: u8, to: u8, place: Where) -> Shape {
         follow: Follow::default(),
         walk: Walk::default(),
         pink: Pink::default(),
+        vary: 0,
     }
 }
 
