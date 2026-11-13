@@ -14,8 +14,8 @@ pub struct Switch {
 }
 
 /// The hint, dim, then each switch's key, its switch, green when it's on and faint when it isn't,
-/// and its name. The gaps are two spaces, and the switch, two cells wide, has a space either side,
-/// so the sample explorer's fits under its list with the preview off.
+/// and its name. The gaps are two spaces, and the switch, three cells wide, has a space either
+/// side, so the sample explorer's fits under its list with the preview off.
 pub fn hint_line(hint: &str, switches: &[Switch]) -> Line<'static> {
     let mut spans = vec![Span::styled(format!(" {hint}"), theme::dim())];
     for switch in switches {

@@ -428,8 +428,11 @@ fn main_loop(
                 wrote: false,
             };
             graphics.sync(app, &mut out)?;
-            let drawn =
-                terminal.draw(|frame| draw_screen(frame, app, Some(stats), Instant::now()))?;
+            let drawn = terminal.draw(|frame| {
+                draw_screen(frame, app, Some(stats), Instant::now());
+                // The switches are pictures placed over their glyphs, which are hidden first.
+                graphics.find_switches(frame.buffer_mut());
+            })?;
             let changed = *drawn.buffer != shown;
             if changed {
                 shown.clone_from(drawn.buffer);

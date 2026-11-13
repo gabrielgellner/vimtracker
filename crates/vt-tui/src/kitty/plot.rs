@@ -31,7 +31,7 @@ const LINE_PIXELS: f32 = 2.0;
 const POINTS_PER_PIXEL: usize = 2;
 /// How finely a pixel's share of the line is kept: the line's colour at 1/8 to 8/8, which are
 /// its palette's entries 1 to 8.
-const STEPS: u8 = 8;
+pub(super) const STEPS: u8 = 8;
 /// The palette entries of a gridline and of a fainter one, after the line's.
 const GRID: u8 = STEPS + 1;
 const FAINTER: u8 = STEPS + 2;
