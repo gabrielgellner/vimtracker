@@ -535,8 +535,14 @@ fn setting_of(
             "{key} switches out slot {}, which the spec's effects leave empty",
             slot + 1
         ))),
-        (Owner::Mod(_), _) => Err(wrong(format!(
+        (Owner::Mod(_) | Owner::ModOwn(_), _) => Err(wrong(format!(
             "{key} is a mod slot's, which a probe doesn't run yet"
+        ))),
+        (Owner::Macro(_), _) => Err(wrong(format!(
+            "{key} is a macro, which a probe doesn't run yet"
+        ))),
+        (Owner::Accumulation | Owner::Arpeggio, _) => Err(wrong(format!(
+            "{key} works on a song's steps, which a probe has none of"
         ))),
         (Owner::Track, _) if !TRACK_SETTINGS.contains(&id) => Err(wrong(format!(
             "{key} works on a song's steps, which a probe has none of; a probe sets {}",
@@ -633,7 +639,14 @@ fn set_on(track: &mut Track, id: SettingId, value: u8) {
             SettingId::GLIDE => track.glide = value,
             _ => {}
         },
-        (Owner::Mod(_), _) => {}
+        (
+            Owner::Mod(_)
+            | Owner::ModOwn(_)
+            | Owner::Macro(_)
+            | Owner::Accumulation
+            | Owner::Arpeggio,
+            _,
+        ) => {}
     }
 }
 
