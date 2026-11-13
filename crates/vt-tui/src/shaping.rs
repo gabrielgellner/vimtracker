@@ -282,6 +282,28 @@ fn settle(shape: &mut Shape, sources: &[Source], start: Option<Source>) {
     }
 }
 
+/// Read a song's live generator, one of a track's phrase's by its place in its list, with what
+/// its settings act on, from the song alone, as the Roto and the page's text do: `None` if
+/// there's no such generator. A `Follow`'s sources aren't listed here, so its `Source` has no
+/// choices; the app's own edits list them ([`App::live_generator`]).
+pub fn with_live<R>(
+    song: &Song,
+    track: &Track,
+    phrase: u32,
+    index: usize,
+    read: impl FnOnce(&Generator, &Context) -> R,
+) -> Option<R> {
+    let found = track.phrases.get(&phrase)?;
+    let generator = found.generators().get(index)?;
+    let under = generator.under(found.steps());
+    let source = generator
+        .source()
+        .and_then(|source| song.source_phrase(source))
+        .map(|followed| followed.loop_steps());
+    let context = generator.context(&under, &[], source)?;
+    Some(read(generator, &context))
+}
+
 /// A live generator's setting as the Gen page shows it, from the song alone, or nothing if
 /// there's no such generator.
 pub fn live_shown(
@@ -291,22 +313,10 @@ pub fn live_shown(
     index: usize,
     param: GenParam,
 ) -> String {
-    let Some(found) = track.phrases.get(&phrase) else {
-        return String::new();
-    };
-    let Some(generator) = found.generators().get(index) else {
-        return String::new();
-    };
-    let under = generator.under(found.steps());
-    let source = generator
-        .source()
-        .and_then(|source| song.source_phrase(source))
-        .map(|followed| followed.loop_steps());
-    generator
-        .context(&under, &[], source)
-        .map_or_else(String::new, |context| {
-            param.shown(&generator.shape, &context)
-        })
+    with_live(song, track, phrase, index, |generator, context| {
+        param.shown(&generator.shape, context)
+    })
+    .unwrap_or_default()
 }
 
 /// A live generator's name in the phrase's heading: its column, and for a `Follow` what it
