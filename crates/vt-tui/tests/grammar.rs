@@ -2365,12 +2365,15 @@ fn a_gates_length_is_filled_on_notes_and_copied_with_its_cell() {
     check(&[A, E, A], "llllvjjr60", &[filled, E, filled]);
     check(&[short, A], "llllvyjp", &[short, short]);
     check(&[short, A], "lllvyjp", &[short, short]);
-    // `K` on it chooses the gate, which keeps the length.
+    // `K` on the gate chooses the gate, which keeps the length.
     let (mut app, _rt) = app_with(&[short]);
-    keys(&mut app, "llllK");
+    keys(&mut app, "lllK");
     assert_eq!(app.mode, Mode::Picker);
     keys(&mut app, "/hld<Enter>");
     assert_eq!(steps(&app), ["C-3 40 HLD2 40 cut:20 --- ---"]);
+    // And on the length, a length, which keeps the gate.
+    keys(&mut app, "lK/C0<Enter>");
+    assert_eq!(steps(&app), ["C-3 40 HLD2 C0 cut:20 --- ---"]);
 }
 
 #[test]

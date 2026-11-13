@@ -14,8 +14,8 @@ use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot};
 use vt_model::order::Order;
 use vt_model::sample::load_sample;
 use vt_model::scale::{Scale, ScaleKind};
-use vt_model::settings::SettingId;
-use vt_model::song::Machine;
+use vt_model::settings::{SettingId, gate_percent};
+use vt_model::song::{FULL_GATE, Machine};
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark};
 
 use crate::app::{App, Entry, Field};
@@ -30,6 +30,18 @@ use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
 use crate::views::picker::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
 use crate::views::widgets::group;
+
+/// The lengths `K` lists on a gate cell's length, as shares of its last pulse: from a click, through
+/// a 303's half, to all of it.
+const LENGTHS: [(u8, &str); 7] = [
+    (0x08, "a click, for ticks and plucks"),
+    (0x20, "very short, a stab"),
+    (0x40, "short, staccato"),
+    (0x80, "half, as a 303's gate closes"),
+    (0xC0, "long, with a gap before the next"),
+    (0xE6, "nearly legato, a breath before the next"),
+    (0xFF, "the whole pulse, held until something ends it"),
+];
 
 /// A row for a kit's sound: its label, and its name beside it, or its name alone if it has no
 /// label. Moving onto it plays it and shows its waveform, as a file's row does.
@@ -386,7 +398,8 @@ impl App {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                 self.open_fx_picker(slot, "");
             }
-            Field::Gate | Field::GateLength => self.open_gate_picker(),
+            Field::Gate => self.open_gate_picker(),
+            Field::GateLength => self.open_length_picker(),
             Field::Note | Field::Velocity | Field::Nudge => {
                 self.status = "K chooses on the gate and FX columns".to_owned();
             }
@@ -414,6 +427,44 @@ impl App {
         let current = self.current_gate().unwrap_or_default();
         let gate = kind.map(|kind| Gate { kind, ..current });
         self.set_field(FieldValue::Gate(gate));
+    }
+
+    /// List some useful lengths for the gate cell, from a click to all of the pulse, each with its
+    /// share of the last pulse and what it's for, with the cell's own marked, or the nearest shown.
+    fn open_length_picker(&mut self) {
+        let track = self
+            .song()
+            .tracks
+            .get(self.cursor.track)
+            .map_or(FULL_GATE, |track| track.gate_length());
+        let empty = Item::new("--", Pick::Length(None))
+            .meaning(format!("The track's Gate, now {}%", gate_percent(track)));
+        let items = std::iter::once(empty)
+            .chain(LENGTHS.iter().map(|(length, meaning)| {
+                Item::new(format!("{length:02X}"), Pick::Length(Some(*length)))
+                    .meaning(format!("{}%, {meaning}", gate_percent(*length)))
+            }))
+            .collect();
+        let current = self.current_gate().and_then(|gate| gate.length);
+        let exact = match current {
+            None => Some(0),
+            Some(current) => LENGTHS
+                .iter()
+                .position(|(length, _)| *length == current)
+                .map(|position| position + 1),
+        };
+        let nearest = current.and_then(|current| {
+            LENGTHS
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, (length, _))| length.abs_diff(current))
+                .map(|(position, _)| position + 1)
+        });
+        let picker = Picker::new("Lengths", items);
+        self.show_picker(match exact {
+            Some(_) => picker.opened_on(exact),
+            None => picker.revealing(nearest),
+        });
     }
 
     /// List the FX commands this track has, in categories as `Dest` is: the filter, output, the
@@ -738,6 +789,7 @@ impl App {
             Pick::Completion(_) => {}
             Pick::FxCommand { slot, command } => self.pick_fx_command(slot, command),
             Pick::Gate(kind) => self.pick_gate(kind),
+            Pick::Length(length) => self.set_length(length),
             Pick::Condition { slot, value } => self.pick_condition(slot, value),
             Pick::Amount { slot, value } => self.pick_amount(slot, value),
             Pick::Accumulation {

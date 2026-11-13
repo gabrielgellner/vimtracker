@@ -116,6 +116,10 @@ what they start in it. `z a` collapses the view to a line a row, and opens it ag
 
 ![The list of gates](images/gate-list.svg)
 
+`K` on the dim length after it chooses a length from a list instead, from a click
+at `08`, through a 303's half at `80`, to the whole pulse at `FF`, or `--` for the
+track's `Gate`.
+
 ## A tie glides as long as `Glide` says
 
 A `HLD` ties its note into the next row's, which carries the same note on at a new
