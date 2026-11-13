@@ -1433,8 +1433,11 @@ impl TrackState {
                 continue;
             }
             self.macro_heard[at] = Some(value);
+            // A generator's setting is written into its column by hand, before stage (c).
             for map in &held.maps {
-                self.set_base(map.target.setting(), map.at(value));
+                if let Some(id) = map.target.setting() {
+                    self.set_base(id, map.at(value));
+                }
             }
         }
     }

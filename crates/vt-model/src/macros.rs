@@ -9,11 +9,14 @@ use std::borrow::Cow;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::UNITY_LEVEL;
+use crate::generator::Generator;
 use crate::lfo::phase_value;
 use crate::modulation::{ModKind, Polarity, depth_of, depth_value};
 use crate::settings::{Effect, Kind, Owner, SettingId};
+use crate::shape::{GenParam, Shape, ShapeColumn};
 use crate::song::{FilterMode, Track};
 use crate::speed::Speed;
+use crate::step::Step;
 
 /// How many macros a track has.
 pub const MACROS: usize = 8;
@@ -51,27 +54,115 @@ pub struct MacroMap {
 }
 
 /// What a mapping reaches. Keyed by what it is rather than where, so a mapping saved with a sound
-/// takes hold of the same setting wherever it's loaded. Generator settings will join it, keyed by
-/// their column, when macros reach them (the design's §4.5).
+/// takes hold of the same setting wherever it's loaded, and a generator's by its column, so it
+/// takes hold of whichever phrase's generator is on that column (the design's §4.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MacroTarget {
     /// A setting of the registry: the track's own, its machine's, an effect's, a mod slot's, the
     /// accumulator's or the arpeggio's. Never a macro.
     Setting(SettingId),
+    /// A setting of the live generator on a column, in every phrase of the track with one there
+    /// (decision 294). Its ends are numbers in the setting's own, as [`GenParam::number`] gives
+    /// them, set off by [`GEN_ZERO`]. By hand for now: a turn writes the column again.
+    Gen {
+        column: GenColumn,
+        #[serde(with = "param_key")]
+        param: GenParam,
+    },
 }
 
-impl MacroTarget {
-    /// Whether a macro can reach it: anything in the registry but another macro.
-    pub fn mappable(self) -> bool {
-        match self {
-            Self::Setting(id) => !matches!(id.owner().0, Owner::Macro(_)),
+/// What a generator setting's number is set off by in a mapping's ends, so a negative one, as a
+/// `Curve` below none or a `Transpose` down, fits.
+pub const GEN_ZERO: i32 = 0x8000;
+
+/// A generator's column, as a mapping keys it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum GenColumn {
+    Note,
+    Velocity,
+    Nudge,
+    Length,
+    Fx(usize),
+}
+
+impl GenColumn {
+    /// The column a generator fills.
+    pub fn of(column: ShapeColumn) -> Self {
+        match column {
+            ShapeColumn::Note { .. } => Self::Note,
+            ShapeColumn::Velocity => Self::Velocity,
+            ShapeColumn::Nudge => Self::Nudge,
+            ShapeColumn::Length => Self::Length,
+            ShapeColumn::Fx { slot, .. } => Self::Fx(slot),
         }
     }
 
-    /// The setting it is.
-    pub fn setting(self) -> SettingId {
+    /// Its name, as the phrase view heads it: `Note`, `Vel`, `FX1`.
+    pub fn name(self) -> String {
         match self {
-            Self::Setting(id) => id,
+            Self::Note => "Note".to_owned(),
+            Self::Velocity => "Vel".to_owned(),
+            Self::Nudge => "Nudge".to_owned(),
+            Self::Length => "Len".to_owned(),
+            Self::Fx(slot) => format!("FX{}", slot + 1),
+        }
+    }
+}
+
+/// A generator setting stored by its key, which never changes.
+mod param_key {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    use crate::shape::GenParam;
+
+    pub fn serialize<S: Serializer>(param: &GenParam, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(param.key())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<GenParam, D::Error> {
+        let key = String::deserialize(deserializer)?;
+        GenParam::by_key(&key).ok_or_else(|| {
+            serde::de::Error::custom(format!("there's no generator setting called {key}"))
+        })
+    }
+}
+
+impl MacroTarget {
+    /// Whether a macro can reach it: anything in the registry but another macro, and any
+    /// generator setting that's a number, which a `List`'s values aren't.
+    pub fn mappable(self) -> bool {
+        match self {
+            Self::Setting(id) => !matches!(id.owner().0, Owner::Macro(_)),
+            // The fill and the `Where` are what the generator is, which the app builds, and a
+            // `Follow`'s source is a phrase; the rest are numbers to turn.
+            Self::Gen { param, .. } => !matches!(
+                param,
+                GenParam::Values | GenParam::Fill | GenParam::Where | GenParam::Source
+            ),
+        }
+    }
+
+    /// The setting of the registry it is, if it's one.
+    pub fn setting(self) -> Option<SettingId> {
+        match self {
+            Self::Setting(id) => Some(id),
+            Self::Gen { .. } => None,
+        }
+    }
+
+    /// Its name on a track: a setting's, or a generator's by its column, as `Note Hits`.
+    pub fn name_on(self, track: &Track) -> String {
+        match self {
+            Self::Setting(id) => id.name_on(track),
+            Self::Gen { column, param } => format!("{} {}", column.name(), param.name()),
+        }
+    }
+
+    /// Its plain name, for a macro named after it.
+    pub fn name(self) -> String {
+        match self {
+            Self::Setting(id) => id.name().to_owned(),
+            Self::Gen { param, .. } => param.name().to_owned(),
         }
     }
 }
@@ -84,37 +175,63 @@ pub fn top_value(kind: Kind) -> u16 {
 
 impl MacroMap {
     /// A mapping over a setting's whole range, from its bottom to its top, as a new mapping
-    /// starts, as Live's do.
+    /// starts, as Live's do. A generator's has its range from its bounds, with
+    /// [`MacroMap::numbers`].
     pub fn whole(target: MacroTarget) -> Self {
-        let MacroTarget::Setting(id) = target;
+        let top = target.setting().map_or(0, |id| top_value(id.entry().kind));
         Self {
             target,
             min: 0,
-            max: top_value(id.entry().kind),
+            max: top,
         }
     }
 
-    /// Whether its ends are values its setting takes.
+    /// A mapping onto a generator's setting, from one number to another in its own.
+    pub fn numbers(target: MacroTarget, (low, high): (i32, i32)) -> Self {
+        let end = |number: i32| (number + GEN_ZERO).clamp(0, i32::from(u16::MAX)) as u16;
+        Self {
+            target,
+            min: end(low),
+            max: end(high),
+        }
+    }
+
+    /// Whether its ends are values its setting takes. A generator's are kept to its bounds as
+    /// they're used, as those hang on the phrase it's in.
     pub fn in_range(&self) -> bool {
-        let top = top_value(self.target.setting().entry().kind);
-        self.target.mappable() && self.min <= top && self.max <= top
+        let fits = match self.target {
+            MacroTarget::Setting(id) => {
+                let top = top_value(id.entry().kind);
+                self.min <= top && self.max <= top
+            }
+            MacroTarget::Gen { .. } => true,
+        };
+        self.target.mappable() && fits
     }
 
     /// What it puts its setting at with its macro at `value`, on the `00` to `FF` scale with any
     /// fine part as the fraction: from `min` at `00` to `max` at `FF`, in a straight line, and to
-    /// a whole step for a setting with no fine part, as a list's or the level scale's.
+    /// a whole step for a setting with no fine part, as a list's or the level scale's. A
+    /// generator's is its number set off by [`GEN_ZERO`], to the nearest whole one.
     pub fn at(&self, value: f32) -> u16 {
-        let kind = self.target.setting().entry().kind;
         let along = (value / 255.0).clamp(0.0, 1.0);
         let (min, max) = (f32::from(self.min), f32::from(self.max));
-        let to = (min + (max - min) * along)
-            .round()
-            .clamp(0.0, f32::from(top_value(kind)));
+        let to = min + (max - min) * along;
+        let Some(id) = self.target.setting() else {
+            return to.round() as u16;
+        };
+        let kind = id.entry().kind;
+        let to = to.round().clamp(0.0, f32::from(top_value(kind)));
         if kind.has_fine() {
             to as u16
         } else {
             ((to / 256.0).round() as u16) << 8
         }
+    }
+
+    /// The number it puts a generator's setting at with its macro at `value`.
+    pub fn number_at(&self, value: f32) -> i32 {
+        i32::from(self.at(value)) - GEN_ZERO
     }
 
     /// Where a macro would put its setting at this value, inverted: the macro's value, on the
@@ -138,11 +255,9 @@ impl Macro {
 
     /// Its name as shown: its own, or its first mapping's setting's, or none if it holds nothing.
     pub fn shown_name(&self) -> Option<String> {
-        self.name.clone().or_else(|| {
-            self.maps
-                .first()
-                .map(|map| map.target.setting().name().to_owned())
-        })
+        self.name
+            .clone()
+            .or_else(|| self.maps.first().map(|map| map.target.name()))
     }
 
     /// The place among its maps of the one reaching this.
@@ -161,6 +276,55 @@ pub fn valid_name(name: &str) -> bool {
 }
 
 impl Track {
+    /// Whether any of its macros holds a generator's setting.
+    pub fn has_gen_maps(&self) -> bool {
+        self.macros
+            .iter()
+            .flat_map(|held| &held.maps)
+            .any(|map| matches!(map.target, MacroTarget::Gen { .. }))
+    }
+
+    /// The shape a live generator of one of its phrases is heard with by hand (decision 294): its
+    /// own, with each setting a macro holds on its column put where the macro's turn puts it, kept
+    /// to the setting's bounds in that phrase. None if no macro holds any of its settings, or
+    /// only ones its shape hasn't. `steps` are the phrase's, and `source` the loop a `Follow`
+    /// reads.
+    pub fn held_shape(
+        &self,
+        generator: &Generator,
+        steps: &[Step],
+        source: Option<&[Step]>,
+    ) -> Option<Shape> {
+        let column = GenColumn::of(generator.column);
+        let held: Vec<(f32, &MacroMap, GenParam)> = self
+            .macros
+            .iter()
+            .flat_map(|held| {
+                let value = f32::from(held.value) / 256.0;
+                held.maps.iter().filter_map(move |map| match map.target {
+                    MacroTarget::Gen { column: on, param } if on == column => {
+                        Some((value, map, param))
+                    }
+                    _ => None,
+                })
+            })
+            .collect();
+        if held.is_empty() {
+            return None;
+        }
+        let under = generator.under(steps);
+        let context = generator.context(&under, &[], source)?;
+        let mut shape = generator.shape;
+        let mut any = false;
+        for (value, map, param) in held {
+            if param.exists_for(&shape, context.generates) {
+                param.set_number(&mut shape, &context, map.number_at(value));
+                any = true;
+            }
+        }
+        any.then_some(shape)
+    }
+
     /// Where a setting is on this track before any step sets it, with a coarse byte and a fine
     /// one, whoever owns it: a voice keeps its own, an effect's setting is what's in its slot, or
     /// its default while another effect is there, and a mod slot's depth and phase are what its
@@ -292,7 +456,9 @@ impl Track {
         for held in &self.macros {
             let value = f32::from(held.value) / 256.0;
             for map in &held.maps {
-                heard.set_value_of(map.target.setting(), map.at(value));
+                if let Some(id) = map.target.setting() {
+                    heard.set_value_of(id, map.at(value));
+                }
             }
         }
         Cow::Owned(heard)

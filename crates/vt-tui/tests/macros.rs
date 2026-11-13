@@ -210,3 +210,102 @@ fn the_macros_band_turns_a_macro_and_colon_macro_names_it() {
     press(&mut app, "gm");
     assert_eq!(app.mode, Mode::Mapping);
 }
+
+/// Eight empty rows with a tresillo of notes kept live on them, then the Gen page, on its `Hits`.
+fn on_hits() -> (App, vt_engine::link::Realtime) {
+    use std::sync::Arc;
+    let mut song = vt_model::song::Song::new(1);
+    let steps: Vec<vt_model::step::Step> = (0..8)
+        .map(|_| "--- -- --- --- ---".parse().unwrap())
+        .collect();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(vt_model::song::Phrase::from_steps(steps)));
+    let samples = Arc::new(vt_model::samples::SamplePool::default());
+    let version = Arc::new(vt_engine::published::Published::new(
+        Arc::new(song.clone()),
+        Arc::clone(&samples),
+    ));
+    let (handle, realtime) =
+        vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, "vGSjjjjjj===");
+    special(&mut app, KeyCode::Char('L'));
+    press(&mut app, " 4LLL}kjj$");
+    assert!(matches!(
+        app.track_control(),
+        Control::Gen {
+            param: vt_model::shape::GenParam::Hits,
+            ..
+        }
+    ));
+    (app, realtime)
+}
+
+/// How many of the phrase's rows have a note.
+fn notes(app: &App) -> usize {
+    app.song().tracks[0].phrases[&0]
+        .steps()
+        .iter()
+        .filter(|step| matches!(step.note, vt_model::step::Note::On(_)))
+        .count()
+}
+
+#[test]
+fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
+    let (mut app, _realtime) = on_hits();
+    assert_eq!(notes(&app), 3);
+    press(&mut app, "M2");
+    let target = MacroTarget::Gen {
+        column: vt_model::macros::GenColumn::Note,
+        param: vt_model::shape::GenParam::Hits,
+    };
+    let (at, map) = app.song().tracks[0].macro_holding(target).unwrap();
+    let map = *map;
+    assert_eq!(at, 1);
+    assert_eq!(
+        (map.number_at(0.0), map.number_at(255.0)),
+        (0, 8),
+        "its bounds"
+    );
+    assert_eq!(
+        notes(&app),
+        3,
+        "the macro turned to where Hits is, so nothing jumps"
+    );
+    // Its own turn is refused, and the band turns it.
+    press(&mut app, "=");
+    assert!(app.status.contains("is on macro 2"), "{}", app.status);
+    press(&mut app, "gg0l");
+    assert_eq!(app.track_control(), Control::Macro(1));
+    press(&mut app, "iFF");
+    assert_eq!(notes(&app), 8);
+    press(&mut app, "i00");
+    assert_eq!(notes(&app), 0);
+    // The generator keeps its own underneath.
+    let generator = &app.song().tracks[0].phrases[&0].generators()[0];
+    assert_eq!(
+        generator.shape.place,
+        vt_model::shape::Where::Euclid { hits: 3, rotate: 0 }
+    );
+    // Its mapping says it's by hand.
+    press(&mut app, "gm");
+    assert!(app.status.contains("by hand"), "{}", app.status);
+    let backend = ratatui::backend::TestBackend::new(150, 40);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    let view = app.mapping.clone().unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::mapping::draw(frame, frame.area(), &app, &view))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let text: String = (0..40)
+        .map(|y| {
+            (0..150)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                + "\n"
+        })
+        .collect();
+    assert!(text.contains("Note Hits"), "{text}");
+    assert!(text.contains("by hand"), "{text}");
+}

@@ -48,6 +48,11 @@ pub struct Generator {
     /// Its rows as it last left them, to tell what an edit changed. It's what's in the phrase, so
     /// it isn't saved.
     seen: Vec<Step>,
+    /// Its shape as its track's macros hold it by hand, which it renders from, if they hold any of
+    /// its settings: `shape` with those put where the macros' turns put them, `shape` itself
+    /// keeping its own underneath (decision 294). It's worked out again from the track as each
+    /// edit is made, so it isn't saved.
+    held: Option<Shape>,
 }
 
 /// Whether a column's rows are the notes, so a note coming or going is an edit to what it reads,
@@ -151,6 +156,7 @@ impl Generator {
             first: 0,
             under: Vec::new(),
             seen: Vec::new(),
+            held: None,
         }
     }
 
@@ -205,6 +211,43 @@ impl Generator {
         })
     }
 
+    /// The shape it's heard with: its own, or as its track's macros hold it.
+    pub fn heard(&self) -> Shape {
+        self.held.unwrap_or(self.shape)
+    }
+
+    /// Whether its track's macros hold any of its settings, so its column is written from what
+    /// they give rather than its own.
+    pub fn is_held(&self) -> bool {
+        self.held.is_some()
+    }
+
+    /// Its shape as its track's macros hold it, if they hold any of its settings.
+    pub fn held(&self) -> Option<Shape> {
+        self.held
+    }
+
+    /// Be held by its track's macros as this shape, or let go with none, and write its column
+    /// again if that changes what it's heard with: true if it did.
+    pub(crate) fn hold(
+        &mut self,
+        steps: &mut [Step],
+        held: Option<Shape>,
+        source: Option<&[Step]>,
+    ) -> bool {
+        let held = held.filter(|held| *held != self.shape);
+        if held == self.held {
+            return false;
+        }
+        let before = self.heard();
+        self.held = held;
+        if self.heard() == before {
+            return false;
+        }
+        self.render(steps, source);
+        true
+    }
+
     /// The phrase it follows, if it's a `Follow`.
     pub fn source(&self) -> Option<Source> {
         (self.shape.kind == FillKind::Follow).then_some(self.shape.follow.source)
@@ -248,7 +291,8 @@ impl Generator {
             return;
         };
         let mut cells = vec![GenCell::Under; range.len()];
-        render_into(steps, range, self.column, &self.shape, source, &mut cells);
+        let shape = self.heard();
+        render_into(steps, range, self.column, &shape, source, &mut cells);
         for (step, cell) in steps.iter_mut().skip(range.first).zip(cells) {
             cell.apply(self.column, step);
         }
@@ -350,6 +394,7 @@ impl Generator {
             first: file.first,
             under: file.under,
             seen: Vec::new(),
+            held: None,
         };
         // What's under it is cut to the rows stored, as a phrase is never shorter than it was.
         let room = steps.len().saturating_sub(generator.first);
