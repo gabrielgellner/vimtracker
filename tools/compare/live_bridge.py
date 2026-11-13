@@ -341,6 +341,9 @@ def main() -> None:
     commands.add_parser("null", help="render a sweep through no device and check it comes back the same")
     commands.add_parser("reload", help="have the bridge read its code again, without restarting Live")
     commands.add_parser("remove", help="delete the bridge's tracks and put the set back as it was")
+    commands.add_parser("introspect", help="list what Live's classes offer scripts, touching nothing in the set")
+    tempo = commands.add_parser("tempo", help="load an audio file into a scratch track, read Live's warp markers, delete the track")
+    tempo.add_argument("path")
     args = parser.parse_args()
     if args.command == "ping":
         answer = request("ping")
@@ -358,6 +361,12 @@ def main() -> None:
         print(f"removed {removed} from the set")
         if answer.get("quantization") is not None:
             print("and put its launch quantization back as it was")
+    elif args.command == "tempo":
+        answer = request("tempo probe", path=str(Path(args.path).resolve()))
+        print(json.dumps(answer, indent=1))
+    elif args.command == "introspect":
+        for name, members in request("introspect").items():
+            print(f"{name}: {', '.join(members) if isinstance(members, list) else members}")
 
 
 if __name__ == "__main__":
