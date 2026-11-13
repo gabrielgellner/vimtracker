@@ -543,6 +543,12 @@ steps are worked out so a groove or a nudge can play them early (`lead` and `gro
 flags that let the engine skip looking for nudges, `GRV`, `RATE` and other speeds in a song that has
 none.
 
+For live generators it carries the steps under each one, which a moving generator renders from,
+and a `GenScratch`, room made ahead for every track's runs and cells, which the engine takes as it
+swaps the version in and leaves in the old one going back, so it's dropped on the edit thread
+(decision 289). The engine reads every row through a `RowView`, the step as written with any moving
+generator's cells laid over; at rest nothing renders, and the row is the step (decision 288).
+
 A `Playable` is one bank entry ready to play: its `SampleId` and frames, a `Span` for each slice in
 `SLI`'s order, or one for the whole entry, the whole entry's span for the sample page, its start
 and end, and the slice number each mark's letter names. A `Span` is in the pool's frames at the
@@ -562,7 +568,7 @@ in `SampleEdit` changes only how a span is worked out, and the engine plays span
 a slice's settings cost the voice nothing; and `SLI 'a` is looked up rather than searched for.
 `vt-engine` names nothing from `vt_model::bank`.
 
-**Decisions:** 94, 97, 98, 105 and 111.
+**Decisions:** 94, 97, 98, 105, 111, 288 and 289.
 
 ### The engine's block
 
@@ -1280,6 +1286,12 @@ it last left them, so no edit path needs to know about generators. Then each `Fo
 writes its source's loop again, followers after the phrases they follow. The pass that finds the changed phrases by
 pointer gathers the followers too, so there's no index of followers to keep in step. A song saved with them reads in an
 older build as plain values, so the format is unchanged.
+
+**In the engine** (decisions 287 to 289): the edit thread's render is `shape::render_into`, which
+fills a buffer of `GenCell`s and allocates nothing. The engine renders a generator itself only
+while something holds one of its settings at another number than its shape's
+(`Engine::hold_generator`, which macros will set), keeping the render beside the shape it heard so
+it renders again only when that changes, and lays its cells over each row it reads.
 
 ### Saving and loading
 
