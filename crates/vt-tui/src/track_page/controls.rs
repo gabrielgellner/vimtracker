@@ -171,6 +171,7 @@ impl Control {
             Self::Base(TrackControl::HighCut) => "High cut",
             Self::Base(TrackControl::Pitch) => "Pitch",
             Self::Base(TrackControl::VelocityDelta) => "Velocity",
+            Self::Base(TrackControl::Quantise) => "Quantise",
             Self::Choke => "Choke",
             Self::Group => "Group",
             Self::GateLength => "Gate",
@@ -296,6 +297,7 @@ impl Control {
             Self::Base(TrackControl::VelocityDelta) => {
                 base(SettingId::VELOCITY_DELTA, track.velocity_delta)
             }
+            Self::Base(TrackControl::Quantise) => base(SettingId::QUANTISE, track.quantise),
             Self::GateLength => Some((SettingId::GATE_LENGTH, u16::from(track.gate_length()) << 8)),
             Self::Speed => Some((SettingId::SPEED, u16::from(track.speed.index()) << 8)),
             Self::Glide => Some((SettingId::GLIDE, u16::from(track.glide) << 8)),
@@ -348,7 +350,9 @@ impl Control {
             Self::Base(TrackControl::SendA | TrackControl::SendB) => {
                 track.is_sound() || track.is_group()
             }
-            Self::Base(TrackControl::Pitch | TrackControl::VelocityDelta)
+            Self::Base(
+                TrackControl::Pitch | TrackControl::VelocityDelta | TrackControl::Quantise,
+            )
             | Self::Choke
             | Self::Group
             | Self::GateLength

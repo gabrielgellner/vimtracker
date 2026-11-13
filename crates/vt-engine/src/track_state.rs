@@ -14,7 +14,7 @@ use vt_model::playable::Playable;
 use vt_model::scale::Scale;
 use vt_model::settings::{
     Effect, FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, Owner, PlayMode, SAMPLER_SETTINGS,
-    SettingId, gate_delta, gate_share, glide_ms, moved_velocity,
+    SettingId, gate_delta, gate_share, glide_ms, moved_velocity, quantised_nudge,
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::step::{FxSlot, Mark, slice_letter};
@@ -1070,6 +1070,7 @@ pub fn base_of(id: SettingId, track: &Track) -> u16 {
             SettingId::SEND_B => track.send_b,
             SettingId::PITCH => track.pitch,
             SettingId::VELOCITY_DELTA => track.velocity_delta,
+            SettingId::QUANTISE => track.quantise,
             SettingId::FILTER_MODE => track.filter_mode.index(),
             SettingId::GATE_LENGTH => track.gate_length(),
             SettingId::GROOVE => track
@@ -1842,6 +1843,13 @@ impl TrackState {
         let moved =
             self.held_velocity_delta + self.offsets[SettingId::VELOCITY_DELTA.index()] * 255.0;
         moved_velocity(own, moved)
+    }
+
+    /// A row's nudge as it plays, in ticks, from the nudge written and the `QNT` the row chose
+    /// before it played, moved by what modulation adds.
+    pub fn quantised(&self, written: i64, chosen: u8) -> i64 {
+        let value = f32::from(chosen) + self.offsets[SettingId::QUANTISE.index()] * 255.0;
+        quantised_nudge(written, value)
     }
 
     /// What a step chooses of a setting read before it plays, as `GRV` and `RATE` are, on its

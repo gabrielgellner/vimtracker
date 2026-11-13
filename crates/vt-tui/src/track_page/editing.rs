@@ -560,6 +560,7 @@ impl App {
                     TrackControl::HighCut => track.high_cut,
                     TrackControl::Pitch => track.pitch,
                     TrackControl::VelocityDelta => track.velocity_delta,
+                    TrackControl::Quantise => track.quantise,
                 };
                 self.set_hex(control, change(value));
             }
@@ -794,6 +795,7 @@ impl App {
                     TrackControl::HighCut => track.high_cut,
                     TrackControl::Pitch => track.pitch,
                     TrackControl::VelocityDelta => track.velocity_delta,
+                    TrackControl::Quantise => track.quantise,
                 };
                 if value(&track) != value(&fresh) {
                     self.set_hex(control, value(&fresh));

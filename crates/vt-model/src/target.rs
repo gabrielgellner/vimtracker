@@ -9,7 +9,7 @@ use crate::song::{Machine, Track, TrackKind};
 use crate::step::FxCommand;
 
 /// What each of the track's own settings does, in the table's order.
-const TRACK_MEANINGS: [&str; 15] = [
+const TRACK_MEANINGS: [&str; 16] = [
     "Volume",
     "Pan",
     "Filter cutoff",
@@ -25,11 +25,12 @@ const TRACK_MEANINGS: [&str; 15] = [
     "Glide: how long a tied note takes to reach the next",
     "Velocity, up or down from the note's own",
     "Level: the fader, under Volume",
+    "Quantise: how far the rows' nudges are brought to the grid",
 ];
 
 /// The track's own settings in the order lists show them: the filter, then output, then pitch,
 /// velocity, gate, time and glide.
-const TRACK_ORDER: [SettingId; 15] = [
+const TRACK_ORDER: [SettingId; 16] = [
     SettingId::CUT,
     SettingId::RES,
     SettingId::FILTER_MODE,
@@ -44,6 +45,7 @@ const TRACK_ORDER: [SettingId; 15] = [
     SettingId::GATE_DELTA,
     SettingId::GROOVE,
     SettingId::SPEED,
+    SettingId::QUANTISE,
     SettingId::GLIDE,
 ];
 
@@ -347,6 +349,25 @@ mod tests {
         };
         assert!(
             !SettingId::VELOCITY_DELTA.exists_on(&group),
+            "a group plays no notes"
+        );
+    }
+
+    #[test]
+    fn quantise_is_locked_by_steps_and_moved_by_modulation() {
+        let track = Track::default();
+        let quantise = FxCommand::Set(SettingId::QUANTISE);
+        assert!(FxCommand::on_track(&track).contains(&quantise));
+        assert_eq!(quantise.name(), "QNT");
+        for offered in [SettingId::for_mod(&track, 3), SettingId::for_mod(&track, 0)] {
+            assert!(offered.contains(&SettingId::QUANTISE));
+        }
+        let group = Track {
+            kind: TrackKind::Group(1),
+            ..Track::default()
+        };
+        assert!(
+            !SettingId::QUANTISE.exists_on(&group),
             "a group plays no notes"
         );
     }

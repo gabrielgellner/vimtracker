@@ -482,6 +482,11 @@ pub struct Track {
     /// own, by [`velocity_delta`](crate::settings::velocity_delta), with `80` as none.
     #[serde(default = "centre", skip_serializing_if = "is_centre")]
     pub velocity_delta: u8,
+    /// Where held `QNT` starts: how far its rows' nudges are brought toward the grid as they play,
+    /// by [`quantised_nudge`](crate::settings::quantised_nudge), from none at `00` to all at `FF`.
+    /// The nudges written stay as they are.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub quantise: u8,
     /// The choke group it's in, if any, from 1 to `CHOKE_GROUPS`: a note on it cuts off what's
     /// sounding on the other tracks in the group, as a closed hat cuts an open one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -809,6 +814,7 @@ impl Default for Track {
             send_b: 0,
             pitch: centre(),
             velocity_delta: centre(),
+            quantise: 0,
             choke: None,
             group: None,
             gate_length: None,
@@ -2685,6 +2691,20 @@ mod tests {
         let text = ron::to_string(&track).unwrap();
         assert!(text.contains("punch:96"), "{text}");
         assert_eq!(ron::from_str::<Track>(&text).unwrap().punch, 0x60);
+    }
+
+    #[test]
+    fn a_tracks_quantise_saves_and_loads_and_none_is_left_out() {
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        assert_eq!(track.quantise, 0);
+        assert!(!ron::to_string(&track).unwrap().contains("quantise"));
+        let track = Track {
+            quantise: 0x80,
+            ..Track::default()
+        };
+        let text = ron::to_string(&track).unwrap();
+        assert!(text.contains("quantise:128"), "{text}");
+        assert_eq!(ron::from_str::<Track>(&text).unwrap().quantise, 0x80);
     }
 
     #[test]

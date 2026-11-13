@@ -19,11 +19,13 @@ use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
 use vt_model::settings::{PlayMode, SettingId};
 use vt_model::song::{
-    ChainPosition, Launch, Machine, Section, SectionStart, Song, SynthVoice, Track, trim_gain,
+    ChainPosition, Launch, Machine, Phrase, Section, SectionStart, Song, SynthVoice, Track,
+    trim_gain,
 };
 use vt_model::speed::Speed;
 use vt_model::step::{
     ACCENT_VELOCITY, FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note,
+    Step,
 };
 
 use crate::dsp::memory::{Memory, MemoryCount, MemoryPool};
@@ -2274,7 +2276,7 @@ impl Engine {
         // Grid, then groove, then nudge. A track's notes play in order, so a row's note part
         // never lands before the last row's.
         let row_at = if nudges {
-            let nudge = self.row_nudge(index, place);
+            let nudge = self.row_nudge(index, running);
             let earliest = (lead * TICKS_PER_STEP / ticks) as i64;
             let at = self.landing(grid, (push + nudge).max(-earliest), ticks);
             self.tracks[index]
@@ -2317,61 +2319,76 @@ impl Engine {
         }
     }
 
-    /// How far a row's nudge moves its note part, in ticks.
-    fn row_nudge(&self, index: usize, place: Option<(u32, usize)>) -> i64 {
-        let Some((chain, place)) = place else {
+    /// How far a row's nudge moves its note part, in ticks: as far as it's written, brought
+    /// toward the grid by the track's `QNT`, which is read before the row plays, as `GRV` is.
+    fn row_nudge(&self, index: usize, running: i64) -> i64 {
+        let Some(row @ (_, step, _)) = self.row_ahead(index, running) else {
             return 0;
         };
-        let Some(owner) = self.current.song.tracks.get(index) else {
+        if step.nudge == 0 {
             return 0;
+        }
+        let written = i64::from(step.nudge) * NUDGE_TICKS as i64;
+        let chosen = self.chosen_ahead(index, running, Some(row), SettingId::QUANTISE);
+        self.tracks[index].quantised(written, chosen)
+    }
+
+    /// The row a track plays at this count of its steps, looked at before it plays: where it is
+    /// in its chain, the step and its phrase.
+    fn row_ahead(&self, index: usize, running: i64) -> Option<(ChainPosition, &Step, &Phrase)> {
+        let (chain, place) = self.track_place(index, running)?;
+        let owner = self.current.song.tracks.get(index)?;
+        let position = owner.chain_position(chain, place, self.dealer(index))?;
+        let phrase = owner.phrases.get(&position.phrase)?;
+        Some((position, owner.step_at(position)?, phrase))
+    }
+
+    /// What a row chooses of a setting read before it plays, as `GRV`, `RATE` and `QNT` are: one
+    /// on its row or in a lane at it, the last column's winning as they run left to right, or else
+    /// what the track holds, which a note on the row's first pulse ends any lock of, as playing it
+    /// will.
+    fn chosen_ahead(
+        &self,
+        index: usize,
+        running: i64,
+        row: Option<(ChainPosition, &Step, &Phrase)>,
+        id: SettingId,
+    ) -> u8 {
+        let state = &self.tracks[index];
+        let Some((position, step, phrase)) = row else {
+            return state.held_choice(id, false);
         };
-        owner
-            .chain_position(chain, place, self.dealer(index))
-            .and_then(|position| owner.step_at(position))
-            .map_or(0, |step| i64::from(step.nudge) * NUDGE_TICKS as i64)
+        let first = position.pulse == 0;
+        let count = running - state.started;
+        let chosen = (0..FX_SLOTS)
+            .rev()
+            .filter_map(|number| match phrase.lane(number) {
+                Some(lane) => {
+                    let at = lane.step_at(count + state.lane_offsets[number]);
+                    phrase.steps().get(at)?.fx.get(number)
+                }
+                None if first => step.fx.get(number),
+                None => None,
+            })
+            .find(|slot| slot.command == Some(FxCommand::Set(id)))
+            .map(|slot| slot.coarse());
+        let note = first && matches!(step.note, Note::On(_)) && step.gate_kind() != GateKind::Rest;
+        chosen.unwrap_or_else(|| state.held_choice(id, note))
     }
 
     /// The groove a track's step plays with and how long it is, in ticks, worked out before it's
     /// played, as each says when the step lands: a `GRV` or `RATE` on its row or in a lane at it,
-    /// or else what the track holds, which a note on the row's first pulse ends any lock of, as
-    /// playing it will. A `GRV` of `00` is the project's.
+    /// or else what the track holds (`chosen_ahead`). A `GRV` of `00` is the project's.
     fn step_choices(&self, index: usize, running: i64) -> (Groove, u64) {
         let song = &self.current.song;
-        let state = &self.tracks[index];
         // With no `GRV` or `RATE` in the song, there's no row to look on, and the track holds its
         // own.
-        let row = self
-            .track_place(index, running)
-            .filter(|_| self.current.groove_steps || self.current.speed_steps)
-            .and_then(|(chain, place)| {
-                let owner = song.tracks.get(index)?;
-                let position = owner.chain_position(chain, place, self.dealer(index))?;
-                let phrase = owner.phrases.get(&position.phrase)?;
-                Some((position, owner.step_at(position)?, phrase))
-            });
-        let choose = |id: SettingId| match row {
-            Some((position, step, phrase)) => {
-                let first = position.pulse == 0;
-                let count = running - state.started;
-                // The last column's wins, as they run left to right.
-                let chosen = (0..FX_SLOTS)
-                    .rev()
-                    .filter_map(|number| match phrase.lane(number) {
-                        Some(lane) => {
-                            let at = lane.step_at(count + state.lane_offsets[number]);
-                            phrase.steps().get(at)?.fx.get(number)
-                        }
-                        None if first => step.fx.get(number),
-                        None => None,
-                    })
-                    .find(|slot| slot.command == Some(FxCommand::Set(id)))
-                    .map(|slot| slot.coarse());
-                let note =
-                    first && matches!(step.note, Note::On(_)) && step.gate_kind() != GateKind::Rest;
-                chosen.unwrap_or_else(|| state.held_choice(id, note))
-            }
-            None => state.held_choice(id, false),
+        let row = if self.current.groove_steps || self.current.speed_steps {
+            self.row_ahead(index, running)
+        } else {
+            None
         };
+        let choose = |id: SettingId| self.chosen_ahead(index, running, row, id);
         let groove = match usize::from(choose(SettingId::GROOVE)).checked_sub(1) {
             Some(at) => GrooveId::from_index(at).unwrap_or(GrooveId::STRAIGHT),
             None => song.groove,

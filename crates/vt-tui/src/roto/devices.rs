@@ -217,6 +217,8 @@ pub fn family(control: Control, track: &Track) -> Family {
         return match (entry.kind, entry.key) {
             (_, "res" | "resonance" | "lowcut" | "highcut") => Family::Tone,
             (_, "mix") => Family::Level,
+            // How near the grid the rows' nudges play is their timing.
+            (_, "quantise") => Family::Time,
             // A compressor's ratio and times chosen from its own list are a ratio and times,
             // as the ones that sweep are.
             (Kind::Stepped { .. }, key) if key.ends_with("ratio") => Family::Level,
@@ -434,6 +436,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                     TrackControl::SendA => track.send_a,
                     TrackControl::SendB => track.send_b,
                     TrackControl::VelocityDelta => track.velocity_delta,
+                    TrackControl::Quantise => track.quantise,
                     _ => track.pitch,
                 };
                 registry(id, coarse, track.fine(id))

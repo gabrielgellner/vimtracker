@@ -93,6 +93,7 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
         Control::Base(TrackControl::Punch) => level(track.punch),
         Control::Base(TrackControl::LowCut) => level(track.low_cut),
         Control::Base(TrackControl::HighCut) => level(track.high_cut),
+        Control::Base(TrackControl::Quantise) => level(track.quantise),
         _ => None,
     }
 }

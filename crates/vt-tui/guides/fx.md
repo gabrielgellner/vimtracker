@@ -52,6 +52,7 @@ a step apart. A list's value can't glide, so `~` goes between lock and hold.
 | `VDLT` | Velocity up or down from a note's own: `80` none, `90` adds `10` |
 | `GRV` | The step's groove: `00` the project's, `01` Straight |
 | `RATE` | The step's speed: `00` 1/32, `02` 1/16, `04` 1/8, `06` 1/4 |
+| `QNT` | Nudges brought to the grid: `00` none, `80` half, `FF` all |
 | `GLD` | How long a tie glides into the next note: `00` off, `80` about 60 ms |
 | `1BYP` | Switch slot 1 out, `01`, or back in, `00`. `2BYP` to `4BYP` the others |
 | `DEP4` | Mod 4's depth: `80` is none, as on the Mod page. `DEP5` `DEP6` too |
@@ -362,6 +363,14 @@ the note there is nudged. See **Note entry**.
 worked out before the step lands, so `GRV 01`, Straight, on a fill's rows plays
 them straight. Held with `h`, it stays until another `GRV` changes it, and `00`
 is the project's. `K` lists them by name.
+
+`QNT` brings the rows' nudges toward the grid as they play, leaving them written as
+they are: `00` plays them as written, `80` halves each and `FF` plays every row on
+the grid, so a take recorded loose can be tightened, or loosened again, without
+losing what was played. Like `GRV`, it's read before the row lands, so a lock on
+a row moves that row's own note, and a lane of it can tighten every other step. A
+mod slot's `Dest` lists it too. It starts from the track's `Quantise`, on the Sound
+page's Play device, which the Roto has as a knob.
 
 ## Speed
 

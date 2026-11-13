@@ -59,7 +59,8 @@ and its settings in up to four columns of three.
 | Machine | Machine, type | The machine's own |
 | Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
 | Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
-| Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; `Choke` `Velocity` |
+| Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; |
+| | | `Choke` `Velocity` `Quantise` |
 
 A machine's type is the setting that changes its character: the sample the sampler
 plays, `Acid`'s `Wave`, `Supersaw`'s `Stack`, 6-op's `Patch`, and the chord of `Chord`
@@ -873,6 +874,14 @@ to `7F`. It's where held `VDLT` starts, so a step's `VDLT` or a lane's replaces 
 and an LFO on `VDLT` moves around it, and on the Roto it's the Play device's last
 knob, for playing dynamics live. The notes keep what's written. On `Acid` it only
 moves notes across the accent at `70`. See **FX commands**.
+
+`Quantise`, under it, brings every row's nudge toward the grid as it plays, from
+`00`, `0 %`, which plays them as written, to `FF`, `100 %`, which plays every row
+on the grid; `80` halves them. The nudges stay as they're written, so a
+recorded take can be tightened live and loosened again. It's where held `QNT`
+starts, so a step's `QNT` or a lane's replaces it and an LFO on `QNT` moves around
+it, and on the Roto it's the first knob of the Play device's second page. See
+**Nudging a note off the grid** in **Note entry**.
 
 `Speed` is how long each of the track's steps is, from `1/32` to `1/4` with the
 triplets between, so one track can play eighths or triplets against the others'

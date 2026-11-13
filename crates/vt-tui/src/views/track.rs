@@ -110,6 +110,7 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
         Control::Base(TrackControl::HighCut) => hex(track.high_cut),
         Control::Base(TrackControl::Pitch) => hex(track.pitch),
         Control::Base(TrackControl::VelocityDelta) => hex(track.velocity_delta),
+        Control::Base(TrackControl::Quantise) => hex(track.quantise),
         Control::Group => track
             .group
             .map_or_else(|| "Off".to_owned(), |group| format!("G{group}")),
