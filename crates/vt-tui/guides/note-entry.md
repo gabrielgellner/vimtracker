@@ -1,13 +1,14 @@
 # Note entry
 
 Put the cursor on the Note column, as the status line shows, and press `i`.
-The grid's frame and the cursor turn green, and the keyboard is now a piano,
-laid out as in Ableton:
+The grid's frame and the cursor turn green, and the keyboard is now an octave
+of a piano, laid out as in Ableton, with the keys past it for the octave, the
+grid, accent and slide:
 
 ```
- w e   t y u   o        black keys
-a s d f g h j k l   '   white keys, a is C, then accent
-z x c v           /     octave and velocity, then slide
+ w e   t y u   o        black keys; wider grid
+a s d f g h j k l   '   white keys, C to B; octave up, narrower grid, accent
+z x c v        ,   /    octave and velocity; octave down, slide
 ```
 
 So in Insert, `j` is a note. **Each note plays and is written, and the cursor
@@ -27,11 +28,13 @@ let go, so a chord is heard, though a row holds one note.
 
 | Keys | Does |
 |---|---|
-| `z` `x` | Octave down or up. The status line shows it as `Oct` |
+| `z` `x` | Octave down or up, for every note after. The status line shows it as `Oct` |
+| `k` `,` | The note just written an octave up or down, or held, the notes played |
 | `c` `v` | Lower or raise the velocity written. The status line shows `Vel` |
 | `1` | Note off |
 | `'` | Accent the note just written, or held, the notes played |
 | `/` | Slide from the note just written, or held, the notes played |
+| `o` `l` | Wider or narrower grid, as `Option-2` and `Option-1` |
 | `;` | Auto-jump on or off. The status line shows `Jump` |
 | `Backspace` | Clear this note. With auto-jump, back a grid step first |
 | `Tab` | Play or pause, and stay in Insert |
@@ -67,6 +70,33 @@ on, and `u` takes each back as it does a note.
 While recording, hold them as you play: a tap has no row to go on, as a note
 goes in only once its row starts.
 
+## Octaves
+
+There are two ways to change the octave, and they differ in how long it lasts.
+
+- **Sticky:** `z` and `x` move the whole keyboard down or up an octave, and
+  every note after goes in there until you press them again. The status line
+  shows it as `Oct`.
+- **One-shot:** `k` and `,` move one note, or the notes played while one is
+  held, up or down an octave, as a 303's UP and DOWN keys do. `Oct` stays as it
+  is, so the next note goes in where it would have.
+
+`k` and `,` work as `'` and `/` do:
+
+- **After a note.** Tap `k` and the note just written goes up an octave; tap
+  it again and it's back where you played it. `,` is the same down. With
+  auto-jump that's the row the cursor just left; if you've moved since, it's the
+  cursor's row.
+- **With a note.** Hold `k` and every note you play while it's down goes in an
+  octave up, a run of them too. Letting go then changes nothing more. `,` goes
+  down, and with both held, neither.
+
+They go with accent and slide, so `'` and `k` held write an accented note an
+octave up. The status line says `Octave up`, `Octave down` or `Octave as played`,
+and `u` takes each back as it does a note. A note already at the top or bottom of
+the range stays, and says so. While recording, hold them as you play, as for an
+accent.
+
 ## Moving without writing a note
 
 The arrows move and write nothing, and you stay in Insert.
@@ -82,8 +112,10 @@ on step 2 and press `a` then `Right` over and over: steps 2, 6, A and E.
 
 The distance is the grid, shown as `Grid` on the status line. As in Ableton,
 `Option-1` makes it narrower and `Option-2` wider, halving or doubling it from
-`1/16` up to a bar, in Insert and Normal. `:set skip=8` sets it to any number of
-steps. Anything half typed in another column is dropped when you move.
+`1/16` up to a bar, in Insert and Normal. On the Note column in Insert, `l` and
+`o` do the same, past the keyboard's end: `o` is above `l`, so up is wider.
+`:set skip=8` sets it to any number of steps. Anything half typed in another
+column is dropped when you move.
 
 ## Recording while it plays
 
@@ -124,14 +156,21 @@ and isn't undone.
 
 ## Scales
 
-Set a scale and the home row plays it, with `a` on the root, going up through
-the scale from `a` to `l`. The row above is silent, so every key is in key. The
-grid still shows real note names.
+Set a scale and the keyboard is no longer a piano but a layout of the scale's
+degrees, so every key is in key. As in Push's In Key Sequential layout, the
+home row counts up the scale from the root, and the row above goes on counting
+where it stops:
 
 ```
- a s d f g h j k l
- 1 2 3 4 5 6 7 1 2       scale degrees, in a seven-note scale
+q w e r t y u      degrees 8 to 14
+a s d f g h j      degrees 1 to 7, the root first
 ```
+
+In a seven-note scale the row above is the home row an octave up. A scale with
+fewer notes, such as a pentatonic, runs past the octave on the home row, and the
+row above takes it on from there. The octave keys, the grid keys, accent and
+slide are as they are without a scale, and the other keys are silent. The grid
+still shows real note names.
 
 | Keys | Does |
 |---|---|

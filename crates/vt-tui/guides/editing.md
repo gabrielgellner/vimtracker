@@ -467,7 +467,7 @@ change made with keys.
 `K` on an FX column lists the commands by group, searching as it opens. If the
 slot is empty, type the value next. If it has one, it stays.
 
-`r` then `k` changes a note to high C. On other columns it takes a whole value:
+`r` then `j` changes a note to B. On other columns it takes a whole value:
 `r40` for a velocity, or `rCUT`, `Enter`, `40` for an FX slot. A
 note keeps its velocity, `.` repeats the replace, and `Esc`
 cancels it. The cursor and `REPLACE` on the status line turn red while it

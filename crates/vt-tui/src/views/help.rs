@@ -25,8 +25,10 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, app: &App, now: Instant) {
         .iter()
         .map(|(keys, description)| Line::raw(format!("{keys:<6} {description}")))
         .collect();
+    // As wide as its longest row, so no description is cut off.
+    let widest = lines.iter().map(Line::width).max().unwrap_or(0);
     let height = (lines.len() as u16 + 2).min(area.height);
-    let width = 44.min(area.width);
+    let width = (widest as u16 + 2).min(area.width);
     let popup = Rect {
         x: area.right() - width,
         y: area.bottom() - height,
