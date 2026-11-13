@@ -38,6 +38,16 @@ bb91324e58b75342 Follow on Note of its own, in key
 75ed11f10399c120 Follow on Note, in key
 87e59c5569117b25 Follow on Nudge
 87e59c5569117b25 Follow on Velocity
+87e59c5569117b25 Grids on FX, event
+87e59c5569117b25 Grids on FX, fine
+87e59c5569117b25 Grids on FX, last slot
+87e59c5569117b25 Grids on Length
+6053d9f4c4740bff Grids on Note of its own, chromatic
+c5eb96fb5e5cdcb0 Grids on Note of its own, in key
+a9db85f429e48c41 Grids on Note, chromatic
+518954887a60a4c6 Grids on Note, in key
+87e59c5569117b25 Grids on Nudge
+87e59c5569117b25 Grids on Velocity
 4d19b251be00798a Invert bits on FX, event
 5c0cc1dc03b27552 Invert bits on FX, fine
 b614708b2d7868a4 Invert bits on FX, last slot

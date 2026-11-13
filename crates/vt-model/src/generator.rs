@@ -85,6 +85,8 @@ fn owns(shape: &Shape) -> Owns {
         FillKind::Follow => Owns::Note,
         // A note it adds or clears takes or leaves its velocity and gate.
         FillKind::Multiply => Owns::Note,
+        // Its accents are velocities, and a note it adds or clears takes or leaves its gate.
+        FillKind::Grids => Owns::Note,
         _ => Owns::Cell,
     }
 }
