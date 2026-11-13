@@ -179,6 +179,7 @@ impl App {
                 self.status = format!("Launches start {}", launch.when());
             }
             Line::Label(label) => self.label_chain(label),
+            Line::MacroName(name) => self.name_macro(&name),
             Line::TrackLevel(level) => self.apply(&Action::SetTrackLevel {
                 track: self.cursor.track,
                 level,

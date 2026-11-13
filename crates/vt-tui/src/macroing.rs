@@ -1,0 +1,505 @@
+//! Macros on the track page (decision 285, `docs/designs/generators-page.md` §4.3): `M` puts the
+//! setting under the cursor on one of the track's eight macros, or moves it, or takes it off; `gm`
+//! opens a macro's mapping, each setting it holds with its range; `:macro` names one; and a
+//! setting a macro holds refuses a turn of its own, as Live greys a mapped control out.
+
+use ratatui::crossterm::event::KeyCode;
+use vt_model::action::Action;
+use vt_model::macros::{MACROS, Macro, MacroMap, MacroTarget, top_value, valid_name};
+use vt_model::settings::{Kind, SettingId};
+use vt_model::song::Track;
+
+use crate::app::App;
+use crate::input::bindings::Cmd;
+use crate::input::keys::Key;
+use crate::input::mode::Mode;
+use crate::input::picker::{Item, Pick, Picker};
+
+/// The macro picker's title, which `M` opens and a digit chooses in at once.
+pub const MACRO_PICKER: &str = "Map to a macro";
+
+/// How far a large step moves an end of a range, in coarse steps.
+const RANGE_JUMP: i32 = 0x10;
+
+/// The open mapping view: which macro, which of its mappings the cursor's on, and which end.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MappingView {
+    pub at: usize,
+    pub row: usize,
+    /// Whether the cursor's on `Max` rather than `Min`.
+    pub max: bool,
+    /// Whether `d` was pressed, waiting for a second to unmap.
+    pub deleting: bool,
+    /// The hex digits typed so far after `i`, if it's typing.
+    pub typing: Option<String>,
+}
+
+/// An end of a mapping as the view shows it: a list's choice by name, and anything else as its
+/// coarse hex, as the track page shows it.
+pub fn end_text(id: SettingId, value: u16) -> String {
+    match id.entry().kind {
+        Kind::Stepped { choices, .. } => choices
+            .get(usize::from(value >> 8))
+            .map_or_else(String::new, |choice| (*choice).to_owned()),
+        Kind::Continuous { .. } => format!("{:02X}", value >> 8),
+    }
+}
+
+/// A macro's name as the band and the lists show it: its own or its first mapping's, or
+/// `Macro 3` while it holds nothing.
+pub fn macro_name(held: &Macro, at: usize) -> String {
+    held.shown_name()
+        .unwrap_or_else(|| format!("Macro {}", at + 1))
+}
+
+/// What a macro holds, for the picker and the status line: its settings by name on this track,
+/// or that it holds nothing yet.
+pub fn holds(track: &Track, at: usize) -> String {
+    let maps = &track.macros[at].maps;
+    if maps.is_empty() {
+        return "nothing yet".to_owned();
+    }
+    maps.iter()
+        .map(|map| map.target.setting().name_on(track))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// What the status line says of a setting a macro holds: its macro, and where the macro takes it,
+/// in its units.
+pub fn held_text(track: &Track, id: SettingId) -> Option<String> {
+    let (at, map) = track.macro_holding(MacroTarget::Setting(id))?;
+    let kind = id.entry().kind;
+    Some(format!(
+        "on macro {} {}, {} to {}",
+        at + 1,
+        macro_name(&track.macros[at], at),
+        kind.shown(map.min),
+        kind.shown(map.max)
+    ))
+}
+
+impl App {
+    /// The setting under the cursor on the track page, if it's one a macro can hold.
+    fn setting_here(&self) -> Option<SettingId> {
+        let track = self.song().tracks.get(self.cursor.track)?;
+        let id = self.track_control().setting_for_macro(track)?;
+        MacroTarget::Setting(id).mappable().then_some(id)
+    }
+
+    /// The macro holding the setting under the cursor, and its mapping there, if one does.
+    pub(crate) fn macro_here(&self) -> Option<(SettingId, usize, MacroMap)> {
+        let id = self.setting_here()?;
+        let track = self.song().tracks.get(self.cursor.track)?;
+        let (at, map) = track.macro_holding(MacroTarget::Setting(id))?;
+        Some((id, at, *map))
+    }
+
+    /// Whether a command would turn a setting a macro holds, which is refused, saying where to
+    /// turn it instead.
+    pub(crate) fn refuses_turn(&mut self, cmd: Cmd) -> bool {
+        let turns = matches!(
+            cmd,
+            Cmd::Increase
+                | Cmd::Decrease
+                | Cmd::IncreaseLarge
+                | Cmd::DecreaseLarge
+                | Cmd::ClearField
+                | Cmd::PickValue
+                | Cmd::EnterInsert
+        );
+        let Some((id, at, _)) = self.macro_here().filter(|_| turns) else {
+            return false;
+        };
+        let name = self.track_control().name_on(&self.page_track());
+        self.status = format!(
+            "{name} is on macro {}: turn it there, or gm for its range",
+            at + 1
+        );
+        let _ = id;
+        true
+    }
+
+    /// `M`: list the eight macros, each with what it holds, to put the setting under the cursor
+    /// on one, opened on the one it's on already.
+    pub(crate) fn open_macro_picker(&mut self) {
+        let Some(id) = self.setting_here() else {
+            self.status = match self.track_control() {
+                crate::track_page::Control::Macro(_) => {
+                    "A macro can't hold a macro: M maps the settings around it".to_owned()
+                }
+                _ => "M maps a setting to a macro, and this isn't one a macro reaches".to_owned(),
+            };
+            return;
+        };
+        let track = self.page_track();
+        let on = track
+            .macro_holding(MacroTarget::Setting(id))
+            .map(|(at, _)| at);
+        let items = (0..MACROS)
+            .map(|at| {
+                let label = format!("{} {}", at + 1, macro_name(&track.macros[at], at));
+                let mut meaning = holds(&track, at);
+                if on == Some(at) {
+                    meaning = format!("{meaning}; Enter takes it off");
+                }
+                Item::new(label, Pick::Macro(at)).meaning(meaning)
+            })
+            .collect();
+        self.show_picker(Picker::new(MACRO_PICKER, items).opened_on(on));
+        self.status = format!(
+            "Enter maps {} to the macro chosen, from bottom to top to start with; a digit chooses at once",
+            id.name_on(&track)
+        );
+    }
+
+    /// Put the setting under the cursor on a macro, from its bottom to its top, or take it off
+    /// the macro it's on, or move it to this one with its range, as one undo step. The first
+    /// mapping of a macro holding nothing turns the macro to where the setting is, so nothing
+    /// jumps.
+    pub(crate) fn map_to_macro(&mut self, at: usize) {
+        let Some(id) = self.setting_here() else {
+            return;
+        };
+        let track = self.page_track();
+        let target = MacroTarget::Setting(id);
+        let name = id.name_on(&track);
+        let index = self.cursor.track;
+        let held = &track.macros[at];
+        match track.macro_holding(target) {
+            Some((on, _)) if on == at => {
+                self.apply(&Action::UnmapMacro {
+                    track: index,
+                    target,
+                });
+                self.status = format!("{name} is off macro {}, and back to its own", at + 1);
+            }
+            Some((on, map)) => {
+                self.apply(&Action::MapMacro {
+                    track: index,
+                    at,
+                    map: *map,
+                });
+                self.status = format!(
+                    "{name} moved from macro {} to macro {}, {}",
+                    on + 1,
+                    at + 1,
+                    macro_name(&self.page_track().macros[at], at)
+                );
+            }
+            None => {
+                let map = MacroMap::whole(target);
+                let mut actions = vec![Action::MapMacro {
+                    track: index,
+                    at,
+                    map,
+                }];
+                if held.maps.is_empty() {
+                    actions.push(Action::SetMacro {
+                        track: index,
+                        at,
+                        value: map.macro_for(track.value_of(id)),
+                    });
+                }
+                let first = held.maps.is_empty();
+                self.apply(&Action::Batch(actions));
+                let now = self.page_track();
+                self.status = if first {
+                    format!(
+                        "{name} is on macro {}, {}, from its bottom to its top: gm for its range",
+                        at + 1,
+                        macro_name(&now.macros[at], at)
+                    )
+                } else {
+                    format!(
+                        "{name} is on macro {}, {}, and jumps to where the macro is: gm for its range",
+                        at + 1,
+                        macro_name(&now.macros[at], at)
+                    )
+                };
+            }
+        }
+    }
+
+    /// `gm`: open the mapping of the macro under the cursor, or of the one the setting under the
+    /// cursor is on, on its row.
+    pub(crate) fn open_mapping(&mut self) {
+        let track = self.page_track();
+        let (at, row) = match self.track_control() {
+            crate::track_page::Control::Macro(at) => (at, 0),
+            _ => match self.macro_here() {
+                Some((id, at, _)) => (
+                    at,
+                    track.macros[at]
+                        .map_of(MacroTarget::Setting(id))
+                        .unwrap_or(0),
+                ),
+                None => {
+                    self.status =
+                        "This isn't on a macro: M maps it to one, and gm on a macro opens it"
+                            .to_owned();
+                    return;
+                }
+            },
+        };
+        if track.macros[at].maps.is_empty() {
+            self.status = format!("Macro {} holds nothing yet: M on a setting maps it", at + 1);
+            return;
+        }
+        self.mapping = Some(MappingView {
+            at,
+            row,
+            ..MappingView::default()
+        });
+        self.mode = Mode::Mapping;
+        self.say_mapping();
+    }
+
+    /// The mapping under the mapping view's cursor, with its place, if the view is open on one.
+    fn mapping_row(&self) -> Option<(usize, MacroMap)> {
+        let view = self.mapping.as_ref()?;
+        let maps = &self.page_track().macros[view.at].maps;
+        let row = view.row.min(maps.len().checked_sub(1)?);
+        Some((row, maps[row]))
+    }
+
+    /// Say on the status line what the mapping under the cursor does.
+    fn say_mapping(&mut self) {
+        let Some(view) = self.mapping.clone() else {
+            return;
+        };
+        let Some((_, map)) = self.mapping_row() else {
+            return;
+        };
+        let track = self.page_track();
+        let id = map.target.setting();
+        let kind = id.entry().kind;
+        let held = &track.macros[view.at];
+        let now = map.at(f32::from(held.value) / 256.0);
+        self.status = format!(
+            "At 00 the macro sets {} to {}, at FF to {}; it's at {:02X}, so {} is {}",
+            id.name_on(&track),
+            kind.shown(map.min),
+            kind.shown(map.max),
+            held.value >> 8,
+            id.name(),
+            kind.shown(now)
+        );
+    }
+
+    /// Put the mapping under the cursor's range at these ends.
+    fn set_range(&mut self, map: MacroMap) {
+        let Some(view) = self.mapping.clone() else {
+            return;
+        };
+        self.apply(&Action::MapMacro {
+            track: self.cursor.track,
+            at: view.at,
+            map,
+        });
+        self.say_mapping();
+    }
+
+    /// Move the end of the range under the cursor by so many coarse steps.
+    fn move_end(&mut self, by: i32) {
+        let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row()) else {
+            return;
+        };
+        let top = i32::from(top_value(map.target.setting().entry().kind));
+        let end = if view.max { map.max } else { map.min };
+        let moved = (i32::from(end >> 8 << 8) + by * 0x100).clamp(0, top) as u16;
+        let map = if view.max {
+            MacroMap { max: moved, ..map }
+        } else {
+            MacroMap { min: moved, ..map }
+        };
+        self.set_range(map);
+    }
+
+    /// A key in the mapping view: `j` and `k` go between its settings, `h` and `l` between their
+    /// `Min` and `Max`, `=` `-` `+` and `_` move an end, `i` types one in hex, `~` swaps them,
+    /// `dd` unmaps, `u` takes the last change back, and `Esc` closes it.
+    pub(crate) fn mapping_key(&mut self, key: Key) {
+        let key = match (key.command, crate::input::bindings::adjusting_key(key)) {
+            (true, Some(plain)) => plain,
+            _ => key,
+        };
+        let Some(view) = self.mapping.clone() else {
+            self.mode = Mode::Normal;
+            return;
+        };
+        if let Some(typed) = view.typing.clone() {
+            self.mapping_typing(key.code, typed);
+            return;
+        }
+        let count = self.page_track().macros[view.at].maps.len();
+        let deleting = view.deleting;
+        if let Some(view) = self.mapping.as_mut() {
+            view.deleting = false;
+        }
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.mapping = None;
+                self.mode = Mode::Normal;
+                self.status.clear();
+            }
+            KeyCode::Char('j') | KeyCode::Down => self.mapping_move(|row| (row + 1).min(count - 1)),
+            KeyCode::Char('k') | KeyCode::Up => self.mapping_move(|row| row.saturating_sub(1)),
+            KeyCode::Char('h') | KeyCode::Left => self.mapping_end(false),
+            KeyCode::Char('l') | KeyCode::Right => self.mapping_end(true),
+            KeyCode::Char('=') => self.move_end(1),
+            KeyCode::Char('-') => self.move_end(-1),
+            KeyCode::Char('+') => self.move_end(RANGE_JUMP),
+            KeyCode::Char('_') => self.move_end(-RANGE_JUMP),
+            KeyCode::Char('~') => {
+                if let Some((_, map)) = self.mapping_row() {
+                    self.set_range(MacroMap {
+                        min: map.max,
+                        max: map.min,
+                        ..map
+                    });
+                }
+            }
+            KeyCode::Char('i') => {
+                if let Some(view) = self.mapping.as_mut() {
+                    view.typing = Some(String::new());
+                }
+                self.status = "Two hex digits for this end".to_owned();
+            }
+            KeyCode::Char('d') if deleting => self.unmap_row(),
+            KeyCode::Char('d') => {
+                if let Some(view) = self.mapping.as_mut() {
+                    view.deleting = true;
+                }
+            }
+            KeyCode::Char('u') => {
+                self.run(Cmd::Undo);
+                self.keep_mapping_open();
+            }
+            _ => {}
+        }
+    }
+
+    /// Hex digits typed after `i`, the end set at the second, or `Esc` to give up.
+    fn mapping_typing(&mut self, code: KeyCode, mut typed: String) {
+        let done = |app: &mut Self| {
+            if let Some(view) = app.mapping.as_mut() {
+                view.typing = None;
+            }
+        };
+        match code {
+            KeyCode::Esc => {
+                done(self);
+                self.say_mapping();
+            }
+            KeyCode::Char(c) if c.is_ascii_hexdigit() => {
+                typed.push(c.to_ascii_uppercase());
+                if typed.len() < 2 {
+                    if let Some(view) = self.mapping.as_mut() {
+                        view.typing = Some(typed.clone());
+                    }
+                    self.status = format!("{typed}_");
+                    return;
+                }
+                done(self);
+                let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row())
+                else {
+                    return;
+                };
+                let top = top_value(map.target.setting().entry().kind);
+                let value = (u16::from(u8::from_str_radix(&typed, 16).unwrap_or(0)) << 8).min(top);
+                self.set_range(if view.max {
+                    MacroMap { max: value, ..map }
+                } else {
+                    MacroMap { min: value, ..map }
+                });
+            }
+            _ => {}
+        }
+    }
+
+    fn mapping_move(&mut self, to: impl Fn(usize) -> usize) {
+        if let Some(view) = self.mapping.as_mut() {
+            view.row = to(view.row);
+        }
+        self.say_mapping();
+    }
+
+    fn mapping_end(&mut self, max: bool) {
+        if let Some(view) = self.mapping.as_mut() {
+            view.max = max;
+        }
+        self.say_mapping();
+    }
+
+    /// `dd`: take the setting under the cursor off the macro, closing the view once it holds
+    /// nothing.
+    fn unmap_row(&mut self) {
+        let Some((_, map)) = self.mapping_row() else {
+            return;
+        };
+        let track = self.page_track();
+        let id = map.target.setting();
+        self.apply(&Action::UnmapMacro {
+            track: self.cursor.track,
+            target: map.target,
+        });
+        self.keep_mapping_open();
+        if self.mapping.is_some() {
+            self.status = format!("{} is off the macro: u brings it back", id.name_on(&track));
+        } else {
+            self.status = format!(
+                "{} is off the macro, which holds nothing now: u brings it back",
+                id.name_on(&track)
+            );
+        }
+    }
+
+    /// Keep the view's cursor on a mapping after a change, closing it if the macro holds none.
+    fn keep_mapping_open(&mut self) {
+        let Some(view) = self.mapping.as_mut() else {
+            return;
+        };
+        let count = self
+            .history
+            .current()
+            .tracks
+            .get(self.cursor.track)
+            .map_or(0, |track| track.macros[view.at].maps.len());
+        if count == 0 {
+            self.mapping = None;
+            self.mode = Mode::Normal;
+        } else {
+            view.row = view.row.min(count - 1);
+            self.mode = Mode::Mapping;
+        }
+    }
+
+    /// `:macro Name`: name the macro under the cursor, the mapping view's or the one the setting
+    /// under the cursor is on; `:macro` alone gives it back its first mapping's name.
+    pub(crate) fn name_macro(&mut self, name: &str) {
+        let at = match (&self.mapping, self.track_control()) {
+            (Some(view), _) => Some(view.at),
+            (None, crate::track_page::Control::Macro(at)) => Some(at),
+            (None, _) => self.macro_here().map(|(_, at, _)| at),
+        };
+        let Some(at) =
+            at.filter(|_| self.view == crate::input::mode::View::Track || self.mapping.is_some())
+        else {
+            self.status = ":macro names the macro under the cursor, on the track page".to_owned();
+            return;
+        };
+        let name = name.trim();
+        if !name.is_empty() && !valid_name(name) {
+            self.status = "A macro's name is up to 12 plain characters".to_owned();
+            return;
+        }
+        self.apply(&Action::NameMacro {
+            track: self.cursor.track,
+            at,
+            name: (!name.is_empty()).then(|| name.to_owned()),
+        });
+        let held = &self.page_track().macros[at];
+        self.status = format!("Macro {} is {}", at + 1, macro_name(held, at));
+    }
+}

@@ -514,13 +514,21 @@ impl App {
             Outcome::Passed => {}
         }
         let fine = self.track_page.fine;
+        if self.refuses_turn(cmd) {
+            return true;
+        }
         match cmd {
             Cmd::FieldJump => self.open_field_jump(),
+            Cmd::MapMacro => self.open_macro_picker(),
+            Cmd::MacroMapping => self.open_mapping(),
             Cmd::Audition => {
                 self.mode = Mode::Keys;
                 self.status = "a w s e d f play, < > change octave, ; stops".to_owned();
             }
-            _ if self.track_page.page == Page::Gen && self.run_gen_page(cmd, times) => {}
+            // The macros' band, first on the Gen page, turns as the other pages' settings do.
+            _ if self.track_page.page == Page::Gen
+                && !matches!(self.track_control(), Control::Macro(_))
+                && self.run_gen_page(cmd, times) => {}
             Cmd::RollGenerator | Cmd::ReopenGenerator => {
                 self.status = "r and Enter work on a generator, on the Gen page".to_owned();
             }

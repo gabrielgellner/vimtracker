@@ -6,6 +6,7 @@ pub mod curve;
 pub mod guide;
 pub mod help;
 pub mod inspector;
+pub mod mapping;
 pub mod meter;
 pub mod mixer;
 pub mod phrase;

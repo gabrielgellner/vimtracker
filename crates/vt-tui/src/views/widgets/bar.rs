@@ -19,6 +19,8 @@ pub const BAR_ENDS: u16 = 2;
 /// A centred bar's middle, faint like its ends, so a mark off it shows which way and how far.
 /// Dashed, so it can't be taken for the dim mark of a setting.
 const CENTRE_TICK: &str = "┊";
+/// A cell of the range a macro can take a value over, where the fill doesn't reach.
+const RANGE: &str = "░";
 /// The characters for a cell partly full, from one eighth to seven.
 const EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 
@@ -33,6 +35,8 @@ pub struct ValueBar {
     centred: bool,
     /// The cells between the ends.
     cells: usize,
+    /// How far a macro holding it can take it, drawn faint behind the fill (decision 285).
+    range: Option<(u8, u8)>,
 }
 
 impl ValueBar {
@@ -43,7 +47,23 @@ impl ValueBar {
             live: set,
             centred: false,
             cells,
+            range: None,
         }
+    }
+
+    /// The same bar with the range a macro can take it over, from one end to the other, which
+    /// way round they are.
+    #[must_use]
+    pub fn range(self, range: Option<(u8, u8)>) -> Self {
+        Self { range, ..self }
+    }
+
+    /// Whether a cell of the bar is in the range a macro can take it over.
+    fn in_range(&self, cell: usize) -> bool {
+        self.range.is_some_and(|(from, to)| {
+            let (low, high) = (from.min(to), from.max(to));
+            (bar_cell(low, self.cells)..=bar_cell(high, self.cells)).contains(&cell)
+        })
     }
 
     /// The same bar showing what's playing, with a dim mark for what's set if that differs.
@@ -87,7 +107,7 @@ impl ValueBar {
         let bright = Style::new().fg(theme::MAUVE);
         let bar = self.text(self.live);
         let apart = self.eighths(self.set).abs_diff(self.eighths(self.live)) >= 8;
-        if !apart && !self.centred {
+        if !apart && !self.centred && self.range.is_none() {
             return vec![Span::styled(bar, bright)];
         }
         let mark = apart.then(|| bar_cell(self.set, self.cells));
@@ -100,6 +120,7 @@ impl ValueBar {
                 }
                 ' ' if Some(cell) == mark => Span::styled("│", theme::faint()),
                 ' ' if Some(cell) == centre => Span::styled(CENTRE_TICK, theme::faint()),
+                ' ' if self.in_range(cell) => Span::styled(RANGE, theme::faint()),
                 _ => Span::styled(shown.to_string(), bright),
             })
             .collect()
@@ -189,6 +210,18 @@ mod tests {
         ValueBar::new(0x80, 9).centred(true).render(area, &mut buf);
         assert_eq!(buf[(5, 0)].symbol(), "│");
         assert_eq!(buf[(5, 0)].fg, theme::MAUVE);
+    }
+
+    #[test]
+    fn a_bar_a_macro_holds_draws_its_range_faint_behind_the_fill() {
+        let area = Rect::new(0, 0, 11, 1);
+        let mut buf = Buffer::empty(area);
+        ValueBar::new(0x40, 9)
+            .range(Some((0xC0, 0x20)))
+            .render(area, &mut buf);
+        let text: String = (0..11).map(|x| buf[(x, 0)].symbol()).collect();
+        assert_eq!(text, "▕██▎░░░░  ▏");
+        assert_eq!(buf[(4, 0)].fg, theme::OVERLAY0);
     }
 
     #[test]

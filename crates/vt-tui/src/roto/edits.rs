@@ -189,6 +189,15 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 },
             )
         }
+        // A turn of a macro, coarse and fine together, one undo step.
+        Control::Macro(macro_at) => {
+            let to = whole(position, 0xFF00) as u16;
+            changed(to, track.macros[macro_at].value, |value| Action::SetMacro {
+                track: at,
+                at: macro_at,
+                value,
+            })
+        }
         // The sample's own, as an edit of its bank entry, as the keys make.
         Control::Tune | Control::Cents => {
             let tuning = tuning(song, track)?;

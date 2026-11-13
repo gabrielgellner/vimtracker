@@ -775,13 +775,19 @@ is the control under the cursor on the track page or the mixer, whose own cursor
     track and the fixed tracks' Outputs, `modulation.rs` the Mod page's devices, and
     `fx.rs` the slots; `controls.rs` has `Control`, what each setting is called and holds on a
     track.
+*   **Macros on the page** (`macroing.rs`, decision 285). `M` maps the setting under the cursor,
+    `Control::setting_for_macro`, through a picker; `gm` opens `App::mapping`, a `MappingView` in
+    `Mode::Mapping`, drawn by `views/mapping.rs`. A setting a macro holds refuses a turn in
+    `run_track_page`, and the pages draw `Track::with_macros`, a copy with each mapped setting
+    where its macro's turn puts it, never edited.
 *   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s: the FX
     page a slot each (`DeviceSpec::slot`), and the Mod page each mod slot of the left column, then
     the one three after it beside it, `Mod 1`, `Mod 4`, `Mod 2` and so on, each with its type's
     grid and a title of its type, its mode and its destination, then the accumulator and the
     arpeggio (decisions 151 and 165). The Gen page's (`generators.rs`, decision 279) hang on a
     phrase as well as the track, so `Page::devices_on` takes the phrase under the cursor, which
-    the app gives `TrackPage::phrase` as each key comes: a device each for its live generators,
+    the app gives `TrackPage::phrase` as each key comes: first the track's macros as one band,
+    `macros_device`, `Control::Macro` two rows of four (decision 285), then a device each for its live generators,
     their title and grid from `vt-model`'s `GenParam::title` and `GenParam::grid`, as
     `Control::Gen`, then `Empty`. Each generator's preview is `kitty/generators.rs`'s
     `GenDrawing`, its column's values across its span from the phrase's steps, sent again only as
