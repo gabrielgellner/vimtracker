@@ -1484,13 +1484,13 @@ they stay put as the fill changes.
 
 | Keys | Does |
 |---|---|
-| `=` `-` `+` `_` | Turn it, writing the column again, an undo step a press |
+| `=` `-` `+` `_` | Turn it, writing the column again, one undo a press |
 | `i` | Type a value: a note, a number, or hex on an FX column |
-| `K` | List the fill, `Where`, shape, rate or source; switch one that's off or on |
+| `K` | List a setting's choices; switch one that's off or on |
 | `x` | Back to where it starts |
 | `r` | Roll the generator again, from anywhere in it, as in the panel |
 | `Space g a` | Apply it, leaving its values as plain ones |
-| `dd` | Take it away, putting back what was under it; `u` brings it back |
+| `dd` | Take it away, putting back what was under it |
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
 
 **Making a column live.** The last device, `Empty`, has `K` list the columns of
