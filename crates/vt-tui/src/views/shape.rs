@@ -69,6 +69,21 @@ fn value(panel: &ShapePanel, row: ShapeRow) -> String {
         ShapeRow::Slide => format!("{}%", shape.acid.slide),
         ShapeRow::Pitches if shape.acid.keep => "Keep".to_owned(),
         ShapeRow::Pitches => "Roll".to_owned(),
+        ShapeRow::Step => match panel.column {
+            ShapeColumn::Note { scale, .. } => {
+                let unit = match (scale.on, shape.walk.step) {
+                    (true, 1) => "degree",
+                    (true, _) => "degrees",
+                    (false, 1) => "semitone",
+                    (false, _) => "semitones",
+                };
+                format!("{} {unit}", shape.walk.step)
+            }
+            ShapeColumn::Nudge => shape.walk.step.to_string(),
+            _ => format!("{:02X}", shape.walk.step),
+        },
+        ShapeRow::Edge => shape.walk.edge.name().to_owned(),
+        ShapeRow::Depth => shape.pink.depth.to_string(),
     }
 }
 
@@ -153,7 +168,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         lines.push(Line::from(line));
     }
     let hint = match panel.shape.kind {
-        FillKind::Random if app.mode == Mode::Shape => "~ swap  r reroll",
+        FillKind::Random | FillKind::Walk | FillKind::Pink if app.mode == Mode::Shape => {
+            "~ swap  r reroll"
+        }
         FillKind::Wave if panel.shape.wave == Wave::Smooth && app.mode == Mode::Shape => {
             "~ swap  r reroll"
         }

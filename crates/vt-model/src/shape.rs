@@ -1,12 +1,14 @@
-//! Filling a column across a selection with a shaped ramp, random values, a wave, two values in
-//! turn, or a short list of them in turn, or reworking the values already there. On the Note
-//! column, the steps are the scale's degrees while it's on, and `Acid` writes a 303 line, its
-//! notes, accents and slides together.
+//! Filling a column across a selection with a shaped ramp, random values, a walk, pink noise, a
+//! wave, two values in turn, or a short list of them in turn, or reworking the values already
+//! there. On the Note column, the steps are the scale's degrees while it's on, and `Acid` writes a
+//! 303 line, its notes, accents and slides together.
 
 mod acid;
+mod walk;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
 use serde::{Deserialize, Serialize};
+pub use walk::{Edge, MAX_DEPTH, MIN_DEPTH, Pink, Walk, default_step};
 
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
 use crate::lfo::{Rate, Shape as Wave, wave};
@@ -116,6 +118,10 @@ pub enum FillKind {
     Ramp,
     /// Anywhere between the two values, new on each row.
     Random,
+    /// From the first value, each a small step from the last, between the two: Brownian.
+    Walk,
+    /// Between the two values, wandering more than `Random` and less than `Walk`: pink, or 1/f.
+    Pink,
     /// Swinging between the two values, by where each row falls in the wave's cycle.
     Wave,
     /// One value then the other, on the rows it fills, however they're spaced.
@@ -139,9 +145,11 @@ pub enum FillKind {
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 13] = [
         Self::Ramp,
         Self::Random,
+        Self::Walk,
+        Self::Pink,
         Self::Wave,
         Self::Alternate,
         Self::List,
@@ -158,6 +166,8 @@ impl FillKind {
         match self {
             Self::Ramp => "Ramp",
             Self::Random => "Random",
+            Self::Walk => "Walk",
+            Self::Pink => "1/f",
             Self::Wave => "Wave",
             Self::Alternate => "Alternate",
             Self::List => "List",
@@ -175,6 +185,8 @@ impl FillKind {
         match self {
             Self::Ramp => "From one value to the other",
             Self::Random => "Anywhere between the two",
+            Self::Walk => "A small step at a time",
+            Self::Pink => "Pink, between random and a walk",
             Self::Wave => "Swinging between the two",
             Self::Alternate => "One value, then the other",
             Self::List => "A few values in turn",
@@ -654,6 +666,12 @@ pub struct Shape {
     /// What an `Acid` fill writes besides its pitches. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Acid::is_default")]
     pub acid: Acid,
+    /// How far a `Walk` moves and what it does at the ends. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Walk::is_default")]
+    pub walk: Walk,
+    /// How many values a `1/f` fill sums. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Pink::is_default")]
+    pub pink: Pink,
 }
 
 /// Bias: bends `t` toward 1 for `a` above 0.5.
@@ -927,6 +945,9 @@ fn filled(
         exact: value,
         whole: value as u8,
     };
+    // A walk and a 1/f fill count turns among the rows they fill, a turn a run.
+    let mut walker =
+        walk::Walker::new(shape.walk, shape.seed, from as i32, low as i32, high as i32);
     rows.iter()
         .enumerate()
         .map(|(index, &row)| {
@@ -938,6 +959,17 @@ fn filled(
                 FillKind::Random => {
                     let span = high - low + 1;
                     whole((low + mix(shape.seed, held(index) - range.first) % span) as f64)
+                }
+                FillKind::Walk => whole(f64::from(walker.at(index / run))),
+                FillKind::Pink => {
+                    let t = walk::pink(shape.pink, shape.seed, index / run);
+                    let along = ((t * (high - low + 1) as f64) as u64).min(high - low);
+                    // From the first value, so `~` turns it upside down.
+                    whole(if from <= to {
+                        low + along
+                    } else {
+                        high - along
+                    } as f64)
                 }
                 FillKind::Wave => {
                     let offset = held(index) - range.first;
@@ -1163,6 +1195,8 @@ mod tests {
             place: Where::Notes,
             seed: 1,
             acid: Acid::default(),
+            walk: Walk::default(),
+            pink: Pink::default(),
         }
     }
 

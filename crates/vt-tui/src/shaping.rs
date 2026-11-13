@@ -1,5 +1,5 @@
-//! The shape panel: fill a selected column with a ramp, random values, a wave, two values in turn
-//! or a short list of them, or rework the values there, heard while it's adjusted.
+//! The shape panel: fill a selected column with a ramp, random values, a walk, a wave, two values
+//! in turn or a short list of them, or rework the values there, heard while it's adjusted.
 
 use std::sync::Arc;
 
@@ -10,8 +10,9 @@ use vt_model::lfo::{Shape as Wave, note_rates};
 use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::{
-    Acid, DEFAULT_RATE, EUCLID_HITS, FillKind, MAX_ACID_NOTES, MAX_BEND, MAX_VALUES, Shape,
-    ShapeColumn, Values, WAVES, WaveRate, Where, default_ends, open_rows, track_seed,
+    Acid, DEFAULT_RATE, EUCLID_HITS, Edge, FillKind, MAX_ACID_NOTES, MAX_BEND, MAX_DEPTH,
+    MAX_VALUES, MIN_DEPTH, Pink, Shape, ShapeColumn, Values, WAVES, Walk, WaveRate, Where,
+    default_ends, default_step, open_rows, track_seed,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -42,6 +43,8 @@ const EUCLID_JUMP: i16 = 4;
 const RATE_TEXT: usize = 8;
 /// The counts of cycles across the selection that `K` on `Rate` lists after the times.
 const LISTED_CYCLES: [u16; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
+/// The longest `Step` a walk of notes takes: two octaves of semitones, or of degrees.
+const MAX_NOTE_STEP: u8 = 24;
 
 /// A row of the panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,6 +71,10 @@ pub enum ShapeRow {
     Accent,
     Slide,
     Pitches,
+    /// A `Walk`'s largest move and what it does at the ends, and how many values a `1/f` sums.
+    Step,
+    Edge,
+    Depth,
 }
 
 impl ShapeRow {
@@ -94,6 +101,9 @@ impl ShapeRow {
             Self::Accent => "Accent",
             Self::Slide => "Slide",
             Self::Pitches => "Pitches",
+            Self::Step => "Step",
+            Self::Edge => "Edge",
+            Self::Depth => "Depth",
         }
     }
 }
@@ -159,7 +169,8 @@ impl ShapePanel {
     /// a transform but `Scale` works from the values there with no settings of its own,
     /// and `Amount` only means something for some choices of rows, as `Hits` and `Rotate` do for
     /// a Euclidean one. `Acid` has its riff's settings, its `Density` only where it writes notes
-    /// of its own, and keeping the pitches there leaves it no ends or notes to choose.
+    /// of its own, and keeping the pitches there leaves it no ends or notes to choose. `Walk` has
+    /// its `Step` and `Edge`, and `1/f` its `Depth`.
     pub fn rows(&self) -> Vec<ShapeRow> {
         let mut rows = vec![ShapeRow::Fill];
         if self.shape.kind == FillKind::Acid {
@@ -182,6 +193,14 @@ impl ShapePanel {
                 ShapeRow::S,
                 ShapeRow::Run,
             ],
+            FillKind::Walk => &[
+                ShapeRow::From,
+                ShapeRow::To,
+                ShapeRow::Step,
+                ShapeRow::Edge,
+                ShapeRow::Run,
+            ],
+            FillKind::Pink => &[ShapeRow::From, ShapeRow::To, ShapeRow::Depth, ShapeRow::Run],
             FillKind::Scale => &[ShapeRow::From, ShapeRow::To, ShapeRow::Curve, ShapeRow::S],
             FillKind::Wave => &[
                 ShapeRow::From,
@@ -452,6 +471,28 @@ fn stepped(column: ShapeColumn, value: u8, sign: i16, large: bool) -> u8 {
     ) as u8
 }
 
+/// A walk's `Step` moved a small or a large step: on notes by one or an octave, of degrees while
+/// the scale is on; on a nudge by one or four 24ths; anything else by one or `10` in hex. It
+/// runs from 1 to two octaves of notes, or to the column's whole range.
+fn walk_step(column: ShapeColumn, step: u8, sign: i16, large: bool) -> u8 {
+    let jump = match column {
+        ShapeColumn::Note { scale, .. } if scale.on => scale.kind.intervals().len() as i16,
+        ShapeColumn::Note { .. } => 12,
+        ShapeColumn::Nudge => 4,
+        _ => HEX_JUMP,
+    };
+    let by = sign * if large { jump } else { 1 };
+    moved(i16::from(step), by, 1, i16::from(longest_step(column))) as u8
+}
+
+/// The longest `Step` a walk takes on a column.
+fn longest_step(column: ShapeColumn) -> u8 {
+    match column {
+        ShapeColumn::Note { .. } => MAX_NOTE_STEP,
+        column => column.highest() - column.lowest(),
+    }
+}
+
 /// Whether a column's values are typed as two hex digits, rather than as notes or nudges.
 fn typed_in_hex(column: ShapeColumn) -> bool {
     !matches!(column, ShapeColumn::Note { .. } | ShapeColumn::Nudge)
@@ -656,6 +697,11 @@ impl App {
                 place,
                 seed: base.seed.wrapping_add(self.shape_seed),
                 acid: Acid::default(),
+                walk: Walk {
+                    step: default_step(column),
+                    ..Walk::default()
+                },
+                pink: Pink::default(),
             },
             row: ShapeRow::Fill,
             typing: None,
@@ -869,8 +915,8 @@ impl App {
         }
     }
 
-    /// Apply a shape to a range, on each of these tracks. A ramp's or random fill's ends are
-    /// chosen again from what's there on the first, a wave or `Alternate` keeps the two values it
+    /// Apply a shape to a range, on each of these tracks. A ramp's, random fill's, walk's or 1/f
+    /// fill's ends are chosen again from what's there on the first, a wave or `Alternate` keeps the two values it
     /// moves between, a `List` keeps its list, and `Scale` the two it scales onto. Each track has
     /// a seed of its own. Each track's column is judged as `S` judges it: an empty one is
     /// generated on, notes of its own or the same command.
@@ -906,12 +952,16 @@ impl App {
         let Some(&(track, phrase, first, column, generate)) = places.first() else {
             return;
         };
-        let (from, to) = match shape.kind {
-            FillKind::Ramp | FillKind::Random if generate => self.generated_ends(column),
-            FillKind::Ramp | FillKind::Random => {
-                default_ends(steps_on(track, phrase), first, column)
-            }
-            _ => (shape.from, shape.to),
+        let fresh = matches!(
+            shape.kind,
+            FillKind::Ramp | FillKind::Random | FillKind::Walk | FillKind::Pink
+        );
+        let (from, to) = if !fresh {
+            (shape.from, shape.to)
+        } else if generate {
+            self.generated_ends(column)
+        } else {
+            default_ends(steps_on(track, phrase), first, column)
         };
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = song.seed.wrapping_add(self.shape_seed);
@@ -1093,6 +1143,15 @@ impl App {
                     }
                 }
                 ShapeRow::Pitches => shape.acid.keep = !shape.acid.keep,
+                ShapeRow::Step => {
+                    shape.walk.step = walk_step(column, shape.walk.step, sign, large);
+                }
+                ShapeRow::Edge => shape.walk.edge = shape.walk.edge.other(),
+                ShapeRow::Depth => {
+                    let by = sign * if large { 2 } else { 1 };
+                    let (low, high) = (i16::from(MIN_DEPTH), i16::from(MAX_DEPTH));
+                    shape.pink.depth = moved(i16::from(shape.pink.depth), by, low, high) as u8;
+                }
                 ShapeRow::Hits | ShapeRow::Rotate => {
                     if let Where::Euclid { hits, rotate } = shape.place {
                         let by = sign * if large { EUCLID_JUMP } else { 1 };
@@ -1154,6 +1213,9 @@ impl App {
                     }
                 }
                 ShapeRow::Pitches => shape.acid.keep = false,
+                ShapeRow::Step => shape.walk.step = default_step(panel.column),
+                ShapeRow::Edge => shape.walk.edge = Edge::default(),
+                ShapeRow::Depth => shape.pink.depth = Pink::default().depth,
                 ShapeRow::Hits | ShapeRow::Rotate => {
                     if let Where::Euclid { hits, rotate } = shape.place {
                         shape.place = if panel.row == ShapeRow::Hits {
@@ -1260,7 +1322,7 @@ impl App {
         };
         if matches!(panel.row, ShapeRow::Fill | ShapeRow::Wave | ShapeRow::Where) {
             self.open_shape_picker();
-        } else if panel.row == ShapeRow::Pitches {
+        } else if matches!(panel.row, ShapeRow::Pitches | ShapeRow::Edge) {
             self.adjust_shape(1, false);
         } else if let Some(panel) = &mut self.shape {
             panel.typing = Some(String::new());
@@ -1273,7 +1335,8 @@ impl App {
         };
         let in_hex = typed_in_hex(panel.column);
         let end = matches!(panel.row, ShapeRow::From | ShapeRow::To);
-        let hex = end && in_hex;
+        // A walk's step is typed as its column's values are, in hex or as a number.
+        let hex = (end || panel.row == ShapeRow::Step) && in_hex;
         // A note's name or a nudge, alone or in a list, ended with Enter.
         let named = (end || panel.row == ShapeRow::Values) && !in_hex;
         let signed = matches!(panel.row, ShapeRow::Curve | ShapeRow::S);
@@ -1403,6 +1466,27 @@ impl App {
                         _ => refused = Some("A chance runs from 0 to 100"),
                     }
                 }
+                ShapeRow::Step => {
+                    let typed = if typed_in_hex(column) {
+                        u8::from_str_radix(&text, 16)
+                    } else {
+                        text.parse::<u8>()
+                    };
+                    let longest = longest_step(column);
+                    match typed {
+                        Ok(step) if step > 0 => shape.walk.step = step.min(longest),
+                        _ if typed_in_hex(column) => {
+                            refused = Some("Step is a hex value above 00");
+                        }
+                        _ => refused = Some("Step is a whole number above 0"),
+                    }
+                }
+                ShapeRow::Depth => match text.parse::<u8>() {
+                    Ok(depth) if (MIN_DEPTH..=MAX_DEPTH).contains(&depth) => {
+                        shape.pink.depth = depth;
+                    }
+                    _ => refused = Some("Depth runs from 2 to 8"),
+                },
                 ShapeRow::Run => match text.parse::<i16>() {
                     Ok(run) if run > 0 => shape.run = run.min(MAX_RUN) as u16,
                     _ => refused = Some("Run is a whole number above 0"),
@@ -1418,7 +1502,11 @@ impl App {
                         _ => refused = Some("Values are hex values like 70 40 55, up to 8 of them"),
                     }
                 }
-                ShapeRow::Fill | ShapeRow::Wave | ShapeRow::Where | ShapeRow::Pitches => {}
+                ShapeRow::Fill
+                | ShapeRow::Wave
+                | ShapeRow::Where
+                | ShapeRow::Pitches
+                | ShapeRow::Edge => {}
             }
         });
         if let Some(reason) = refused {

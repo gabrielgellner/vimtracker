@@ -22,7 +22,9 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
-use vt_model::shape::{Acid, DEFAULT_RATE, FillKind, Shape, ShapeColumn, Values, WaveRate, Where};
+use vt_model::shape::{
+    Acid, DEFAULT_RATE, Edge, FillKind, Pink, Shape, ShapeColumn, Values, Walk, WaveRate, Where,
+};
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Note, Step};
@@ -46,6 +48,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("metropolix", metropolix()),
         ("live-generators", live_generators()),
         ("acid-lines", acid_lines()),
+        ("walks", walks()),
     ]
 }
 
@@ -152,6 +155,8 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         place,
         seed: 1,
         acid: Acid::default(),
+        walk: Walk::default(),
+        pink: Pink::default(),
     }
 }
 
@@ -726,6 +731,61 @@ fn acid_lines() -> Song {
     );
     song.tracks[3].level = 0xC8;
     song.tracks[3].send_b = 0x98;
+    song
+}
+
+/// Wandering lines from the shape panel's `Walk` and `1/f` fills, each kept live: a `1/f` tune,
+/// a bass that walks a degree at a time, and hats whose velocity walks.
+fn walks() -> Song {
+    let mut song = song("walks", 96, 9, ScaleKind::Minor, 4);
+    song.seed = 0x1F;
+    voice(&mut song, 0, "LD", SynthVoice::String, &[REST; 32]);
+    set(&mut song, 0, "string.decay", 0xA0);
+    set(&mut song, 0, "string.bright", 0x60);
+    song.tracks[0].level = 0xC0;
+    song.tracks[0].send_a = 0x90;
+    song.tracks[0].send_b = 0xA8;
+    voice(&mut song, 1, "BS", SynthVoice::VirtualAnalog, &[REST; 16]);
+    song.tracks[1].cutoff = 0x58;
+    song.tracks[1].resonance = 0x30;
+    song.tracks[1].level = 0xC8;
+    voice(
+        &mut song,
+        2,
+        "HH",
+        SynthVoice::Hat,
+        &texts(&hits(&"x".repeat(16), "C-4")),
+    );
+    set(&mut song, 2, "hat.decay", 0x2C);
+    song.tracks[2].level = 0xCC;
+    four_on_the_floor(&mut song, 3);
+    // The tune: `1/f` on every other row of two bars, between A-2 and A-4.
+    let mut tune = shape(FillKind::Pink, note("A-2"), note("A-4"), Where::Every(2));
+    tune.seed = 4;
+    let notes = empty_notes(&song);
+    let mut song = generate(song, 0, notes, 32, tune);
+    // The bass: a walk of a degree at most a note, on a Euclidean 7 of 16.
+    let mut bass = shape(
+        FillKind::Walk,
+        note("A-1"),
+        note("A-2"),
+        Where::Euclid { hits: 7, rotate: 0 },
+    );
+    bass.walk = Walk {
+        step: 1,
+        edge: Edge::Reflect,
+    };
+    bass.seed = 2;
+    let notes = empty_notes(&song);
+    song = generate(song, 1, notes, 16, bass);
+    // The hats' velocity, a step of up to `10` a hat between `30` and `70`.
+    let mut hats = shape(FillKind::Walk, 0x30, 0x70, Where::Notes);
+    hats.walk = Walk {
+        step: 0x10,
+        edge: Edge::Reflect,
+    };
+    hats.seed = 6;
+    song = generate(song, 2, ShapeColumn::Velocity, 16, hats);
     song
 }
 
