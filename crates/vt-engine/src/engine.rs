@@ -10,6 +10,7 @@ use vt_model::song::{Song, trim_gain};
 
 use crate::dsp::memory::MemoryPool;
 use crate::dsp::smoother::{coefficient, fast_coefficient};
+use crate::gens::{GenHeard, GenScratch};
 use crate::mixer::Reading;
 use crate::preview::{Files, Previews};
 use crate::published::Published;
@@ -186,6 +187,8 @@ pub struct Engine {
     resting: bool,
     /// Which buses the last run left out, for tests.
     rested: RestingBuses,
+    /// What moving generators render into, taken from the version playing.
+    gens: GenScratch,
 }
 
 impl Engine {
@@ -237,7 +240,9 @@ impl Engine {
             stopwatch: Stopwatch::default(),
             resting: true,
             rested: RestingBuses::default(),
+            gens: GenScratch::default(),
         };
+        engine.current.scratch.exchange(&mut engine.gens);
         engine.follow_levels();
         engine.reset_tracks();
         engine.find_listened();
@@ -268,6 +273,32 @@ impl Engine {
     /// The current version.
     pub fn current(&self) -> &Arc<Published> {
         &self.current
+    }
+
+    /// Hold a setting of the generators on a track's column at a number, as heard, or give it back
+    /// to their shapes with none: each of them on that column, on whichever of the track's phrases,
+    /// is rendered again from its shape with it set, within its bounds, and heard so from the next
+    /// row read. A list setting, such as the fill or the `Where`, is left to the shape. It's what
+    /// a macro holding a generator's setting will move (#623), and it outlasts versions.
+    pub fn hold_generator(
+        &mut self,
+        track: usize,
+        column: vt_model::shape::ShapeColumn,
+        param: vt_model::shape::GenParam,
+        number: Option<i32>,
+    ) {
+        if let Some(state) = self.tracks.get_mut(track) {
+            state.gen_holds.hold(column, param, number);
+            if !state.gen_holds.any() {
+                self.gens.rest(track);
+            }
+        }
+    }
+
+    /// A track's live generators, on the phrase it last read a row of while one was held: which
+    /// pass each was read on, how often it has rendered, and whether it's moving.
+    pub fn generators_heard(&self, track: usize) -> impl Iterator<Item = GenHeard> + '_ {
+        self.gens.heard(track)
     }
 
     /// The place last fired, or the next to fire if none has yet.
