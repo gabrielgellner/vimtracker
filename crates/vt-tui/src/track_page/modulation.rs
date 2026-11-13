@@ -186,25 +186,6 @@ fn arpeggio_device() -> DeviceSpec {
     .half()
 }
 
-/// The macros' places in their band: two rows of four, in order along each.
-const MACROS_GRID: [[Option<usize>; 2]; 4] = [
-    [Some(0), Some(4)],
-    [Some(1), Some(5)],
-    [Some(2), Some(6)],
-    [Some(3), Some(7)],
-];
-
-/// The track's eight macros as a full-width band, two rows of four, with nothing in its title
-/// (decision 285). Its own device, so it can sit on whichever page it belongs on.
-pub(crate) fn macros_device() -> DeviceSpec {
-    DeviceSpec::new(
-        "Macros",
-        [None; DEVICE_COLUMNS],
-        Grid::from_columns(&MACROS_GRID),
-        Control::Macro,
-    )
-}
-
 /// How many bands of two the slots take, a column of them on either side.
 const SLOT_BANDS: usize = MOD_SLOTS / 2;
 

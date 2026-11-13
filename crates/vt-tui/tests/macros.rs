@@ -187,24 +187,26 @@ fn the_page_shows_where_the_macro_puts_a_setting_and_its_range_on_its_bar() {
 fn the_macros_band_turns_a_macro_and_colon_macro_names_it() {
     let (mut app, _realtime) = on_cut();
     press(&mut app, "M1");
-    // The Mod page, then down past the slots to the band.
-    press(&mut app, "L");
-    press(&mut app, "G");
-    while !matches!(app.track_control(), Control::Macro(_)) {
-        press(&mut app, "}");
-    }
-    press(&mut app, "0k");
+    // The Gen page, its first band the macros.
+    press(&mut app, "LLL");
+    assert_eq!(app.track_page.page, vt_tui::track_page::Page::Gen);
+    press(&mut app, "gg0");
     assert_eq!(app.track_control(), Control::Macro(0));
     press(&mut app, "iFF");
     assert_eq!(app.song().tracks[0].macros[0].value, 0xFF00);
+    press(&mut app, "-");
+    assert_eq!(app.song().tracks[0].macros[0].value, 0xFE00);
     command(&mut app, "macro Bite");
     assert_eq!(app.song().tracks[0].macros[0].name.as_deref(), Some("Bite"));
     let text = page_text(&app).join("\n");
     assert!(text.contains("Bite"), "{text}");
-    assert!(text.contains("╭─ Macros"), "{text}");
+    assert!(text.contains("Macros"), "{text}");
+    assert!(text.contains("Bite → Cut"), "what it holds: {text}");
     command(&mut app, "macro");
     assert_eq!(app.song().tracks[0].macros[0].name, None);
-    // gm on the band opens its mapping.
+    // gm on the band opens its mapping, and M refuses a macro.
+    press(&mut app, "M");
+    assert!(app.status.contains("can't hold a macro"), "{}", app.status);
     press(&mut app, "gm");
     assert_eq!(app.mode, Mode::Mapping);
 }

@@ -1471,9 +1471,10 @@ others. See **FX commands**.
 The fourth page, after FX, shows the live columns of the phrase under the cursor,
 the one `gl` reopens, as devices you turn as you would a filter. Its title names
 the phrase, `Phrase 00`, and adds `▶ 02`, dim, while the track is playing another.
-A fixed track has no phrases, so its page is empty.
+A fixed track has no phrases, so its page has only the macros. Its first band is the
+track's eight macros (see **Macros**), then the live columns.
 
-Each live column is a device, in the phrase view's order: Note, Velocity, Nudge,
+Each live column is a device, under the macros, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
 them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
 `Where`, then where it acts, dim: `Ramp  Euclid · Note 00–0F`, or `FX1 CUT lane 0C`

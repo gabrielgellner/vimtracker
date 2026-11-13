@@ -708,7 +708,8 @@ impl App {
             Control::Macro(at) => {
                 let size = if large { HEX_JUMP } else { 1 } * count.min(0x100) as i64;
                 let from = i64::from(track.macros[at].value);
-                let moved = (from + if up { size } else { -size } * 0x100).clamp(0, 0xFF00);
+                let by = if up { size } else { -size } * 0x100;
+                let moved = (from + by).clamp(0, 0xFF00);
                 self.set_macro(at, moved as u16);
             }
         }

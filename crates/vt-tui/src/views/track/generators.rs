@@ -10,6 +10,7 @@ use vt_model::shape::{Context, GenParam, ShapeColumn};
 use vt_model::song::Track;
 
 use crate::app::App;
+use crate::macroing::{holds, macro_name};
 use crate::shaping::LiveGen;
 use crate::theme;
 use crate::track_page::{Control, DeviceSpec};
@@ -27,6 +28,94 @@ const GEN_CELLS: CellWidths = CellWidths {
     value: 11,
     ..CellWidths::SOUND
 };
+
+/// The macros' cells: a name as long as the Roto's, four digits and the Sound page's bars.
+const MACRO_CELLS: CellWidths = CellWidths {
+    name: 13,
+    value: 5,
+    bar_cells: BAR_CELLS,
+    gap: 3,
+};
+
+/// The macros' band's cells: each macro's name, where it's heard, which a lock or modulation may
+/// move from where it's set, and its bar, filled to what's heard with a mark where it's set.
+struct MacroCells<'a> {
+    app: &'a App,
+    track: &'a Track,
+}
+
+impl MacroCells<'_> {
+    /// Where a macro is set, and where it's heard, from the engine's report of this track.
+    fn values(&self, at: usize) -> (u16, u16) {
+        let set = self.track.macros[at].value;
+        let heard = match (self.app.live, self.app.reported_track()) {
+            (Some(live), Some(then)) => {
+                let moved = i32::from(live.macros[at]) - i32::from(then.macros[at].value);
+                (i32::from(set) + moved).clamp(0, 0xFF00) as u16
+            }
+            _ => set,
+        };
+        (set, heard)
+    }
+}
+
+impl CellSource for MacroCells<'_> {
+    type Id = Control;
+
+    fn name(&self, control: Control, room: u16) -> Line<'static> {
+        let labels = jump_label(self.app, control);
+        let Control::Macro(at) = control else {
+            return Line::default();
+        };
+        let name = macro_name(&self.track.macros[at], at);
+        name_line(self.app, &name, &labels, room)
+    }
+
+    fn value(&self, control: Control) -> Line<'static> {
+        let Control::Macro(at) = control else {
+            return Line::default();
+        };
+        let here = control == self.app.track_control();
+        let (_, heard) = self.values(at);
+        let text = setting::text(self.app, here, || format!("{heard:04X}"));
+        let empty = self.track.macros[at].maps.is_empty();
+        let style = setting::style(self.app, here, empty);
+        Line::from(value_spans(self.app, control, text, style))
+    }
+
+    fn bar(&self, control: Control) -> Option<ValueBar> {
+        let Control::Macro(at) = control else {
+            return None;
+        };
+        let (set, heard) = self.values(at);
+        Some(ValueBar::new((set >> 8) as u8, MACRO_CELLS.bar_cells).playing((heard >> 8) as u8))
+    }
+}
+
+/// The macros' band: the eight in two rows of four, and under them what the cursor's holds.
+fn draw_macros(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    track: &Track,
+    device: &DeviceSpec,
+    focused: bool,
+) {
+    frame.render_widget(Device::new(device.identity.clone()).focused(focused), area);
+    let cells = MacroCells { app, track };
+    let rows = device.grid.iter().copied().map(Vec::from).collect();
+    let mut settings = Device::settings_area(area);
+    frame.render_widget(SettingsGrid::new(&cells, rows, MACRO_CELLS), settings);
+    if let Control::Macro(at) = app.track_control() {
+        take_top(&mut settings, 2 * ROW_STEP);
+        let line = format!(
+            "{} → {}",
+            macro_name(&track.macros[at], at),
+            holds(track, at)
+        );
+        frame.render_widget(Line::styled(line, theme::dim()), take_top(&mut settings, 1));
+    }
+}
 
 /// What `Empty` says, under its title.
 const EMPTY_HINT: &str = "  make a column of this phrase live";
@@ -179,15 +268,8 @@ fn draw_empty(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, foc
 /// in view. A fixed track has no phrases, so it has none.
 pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
     let devices = app.track_page.devices(Some(track));
-    if devices.is_empty() {
-        let why = if track.is_sound() {
-            "There's no phrase here: put one in the chain to make its columns live"
-        } else {
-            "A fixed track has no phrases, so it has no generators"
-        };
-        frame.render_widget(Paragraph::new(Line::styled(why, theme::dim())), area);
-        return;
-    }
+    // The macros alone, with no phrase for generators, say why under them.
+    let alone = devices.len() == 1;
     let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
     let cursor = app
         .track_page
@@ -197,9 +279,22 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
     let mut rest = area;
     for (at, device) in devices.iter().enumerate().skip(first).take(fit) {
         let area = take_top(&mut rest, DEVICE_HEIGHT);
-        match device.title[0] {
-            Some(Control::NewGenerator(_)) => draw_empty(frame, area, app, device, at == cursor),
+        match (device.title[0], device.grid[0][0]) {
+            (_, Some(Control::Macro(_))) => {
+                draw_macros(frame, area, app, track, device, at == cursor);
+            }
+            (Some(Control::NewGenerator(_)), _) => {
+                draw_empty(frame, area, app, device, at == cursor);
+            }
             _ => draw_generator(frame, area, app, device, at == cursor),
         }
+    }
+    if alone {
+        let why = if track.is_sound() {
+            "There's no phrase here: put one in the chain to make its columns live"
+        } else {
+            "A fixed track has no phrases, so it has no generators"
+        };
+        frame.render_widget(Paragraph::new(Line::styled(why, theme::dim())), rest);
     }
 }

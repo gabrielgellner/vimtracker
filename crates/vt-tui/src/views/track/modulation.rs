@@ -42,15 +42,6 @@ const ARPEGGIO_CELLS: CellWidths = CellWidths {
     ..CellWidths::COMPACT
 };
 
-/// The macros' cells: a name as long as the Roto's, four digits and a bar. That's 30 columns a
-/// cell, four to a row.
-const MACRO_CELLS: CellWidths = CellWidths {
-    name: 13,
-    value: 5,
-    bar_cells: 9,
-    gap: 3,
-};
-
 /// Which mod slot the cursor is on, if any.
 pub(crate) fn mod_being_edited(app: &App) -> Option<usize> {
     match app.track_control() {
@@ -79,13 +70,7 @@ impl CellSource for ModCells<'_> {
 
     fn name(&self, control: Control, room: u16) -> Line<'static> {
         let labels = jump_label(self.app, control);
-        match control {
-            Control::Macro(at) => {
-                let name = crate::macroing::macro_name(&self.track.macros[at], at);
-                name_line(self.app, &name, &labels, room)
-            }
-            _ => name_line(self.app, control.label(), &labels, room),
-        }
+        name_line(self.app, control.label(), &labels, room)
     }
 
     fn value(&self, control: Control) -> Line<'static> {
@@ -99,14 +84,9 @@ impl CellSource for ModCells<'_> {
         )
     }
 
-    /// A modulator's settings have no bars: the panel beside them shows what they shape. A
-    /// macro has one, as a knob.
-    fn bar(&self, control: Control) -> Option<ValueBar> {
-        let Control::Macro(at) = control else {
-            return None;
-        };
-        let set = (self.track.macros[at].value >> 8) as u8;
-        Some(ValueBar::new(set, MACRO_CELLS.bar_cells))
+    /// A modulator's settings have no bars: the panel beside them shows what they shape.
+    fn bar(&self, _control: Control) -> Option<ValueBar> {
+        None
     }
 }
 
@@ -281,7 +261,6 @@ fn draw_device(
     }
     let widths = match device.grid[0][0] {
         Some(Control::Arpeggio(_)) => ARPEGGIO_CELLS,
-        Some(Control::Macro(_)) => MACRO_CELLS,
         _ => CellWidths::COMPACT,
     };
     // Steps' values are drawn in the panel, not as a cell.

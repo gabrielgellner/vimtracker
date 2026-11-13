@@ -73,6 +73,9 @@ fn on_gen_page() -> (App, Realtime) {
     assert_eq!(generators(&app).len(), 1);
     keys(&mut app, " 4LLL");
     assert_eq!(app.track_page.page, Page::Gen);
+    // Past the macros' band, first on the page, to the generator's title.
+    assert_eq!(app.track_control(), Control::Macro(0));
+    keys(&mut app, "}k");
     (app, realtime)
 }
 
@@ -235,11 +238,13 @@ fn empty_makes_another_column_live() {
 }
 
 #[test]
-fn a_phrase_with_none_has_only_empty() {
+fn a_phrase_with_none_has_only_the_macros_and_empty() {
     let (mut app, _rt) = app_with(&[E; 8]);
     keys(&mut app, " 4LLL");
+    assert_eq!(app.track_control(), Control::Macro(0));
+    assert_eq!(app.track_page.devices(app.track_here()).len(), 2);
+    keys(&mut app, "}");
     assert!(matches!(app.track_control(), Control::NewGenerator(0)));
-    assert_eq!(app.track_page.devices(app.track_here()).len(), 1);
     keys(&mut app, "=");
     assert!(generators(&app).is_empty());
 }
