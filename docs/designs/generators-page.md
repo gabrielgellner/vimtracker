@@ -726,7 +726,9 @@ That's `Mutate`'s rule too: the song holds the written values, and the engine ho
 
 ### 7.2 What moves into vt-engine
 
-Nothing moves; the render is shared.
+Nothing moves; the render is shared. (Built in #621 as decision 287 says, which notes where it
+differs from this: a cell is 32 bytes, as a `Follow` copying FX carries three slots, and the riff
+holds `MAX_ACID_NOTES + 1`.)
 
 * **In `vt-model`:** the render becomes `shape::render_into`, which fills a caller's fixed buffer of
   cells and allocates nothing. `Generator::render` and `shape::written`, on the edit thread, become
