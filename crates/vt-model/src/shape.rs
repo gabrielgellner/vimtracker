@@ -252,9 +252,12 @@ pub fn euclid(hits: usize, rows: usize) -> Vec<bool> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShapeColumn {
     /// The notes, re-pitched where they are, through the song's scale as it was when the panel
-    /// opened: in its degrees while it's on, and in semitones while it's off.
+    /// opened: in its degrees while it's on, and in semitones while it's off. With `writes`, it's
+    /// a column that had no notes: it writes notes of its own on the rows without one, with that
+    /// velocity and the track's gate.
     Note {
         scale: Scale,
+        writes: Option<u8>,
     },
     Velocity,
     /// A note's nudge, held as `0` for the earliest to `22` for the latest, so it's a plain range.
@@ -287,20 +290,37 @@ impl ShapeColumn {
         }
     }
 
-    /// Which rows it fills unless told otherwise: the ones already holding such a value.
+    /// Which rows it fills unless told otherwise: the ones already holding such a value, or every
+    /// row for notes of its own.
     pub fn default_where(self) -> Where {
         match self {
+            Self::Note {
+                writes: Some(_), ..
+            } => Where::AllRows,
             Self::Fx { .. } => Where::Commands,
             _ => Where::Notes,
         }
     }
 
-    /// The fills it offers: `Snap` only means something for notes.
+    /// The fills it offers: `Snap` only means something for notes, and a transform nothing for
+    /// notes of its own, as there are none to rework.
     pub fn fills(self) -> Vec<FillKind> {
         FillKind::ALL
             .into_iter()
             .filter(|kind| *kind != FillKind::Snap || matches!(self, Self::Note { .. }))
+            .filter(|kind| !(kind.reworks() && self.writes_notes()))
             .collect()
+    }
+
+    /// Whether it writes notes of its own, on a column that had none.
+    pub fn writes_notes(self) -> bool {
+        matches!(
+            self,
+            Self::Note {
+                writes: Some(_),
+                ..
+            }
+        )
     }
 
     /// A value as the panel shows it: a note's name, a nudge with its sign as the grid shows it,
@@ -348,6 +368,10 @@ impl ShapeColumn {
     /// only narrow them, as they do for the notes themselves.
     pub fn wheres(self) -> Vec<Where> {
         match self {
+            // Notes of its own go on rows without one, so the rows are only a rhythm.
+            Self::Note {
+                writes: Some(_), ..
+            } => vec![Where::AllRows, Where::Every(4), Where::Chance(50), EUCLID],
             Self::Note { .. } | Self::Velocity | Self::Nudge | Self::Length => {
                 vec![Where::Notes, Where::Every(4), Where::Chance(50), EUCLID]
             }
@@ -395,9 +419,13 @@ impl ShapeColumn {
         }
     }
 
-    /// Whether a step could take a value at all. A row holding another command keeps it.
+    /// Whether a step could take a value at all. A row holding another command keeps it, and notes
+    /// of its own go round an `OFF`.
     fn can_take(self, step: &Step) -> bool {
         match self {
+            Self::Note {
+                writes: Some(_), ..
+            } => step.note == Note::Empty,
             Self::Note { .. } | Self::Velocity | Self::Nudge | Self::Length => {
                 matches!(step.note, Note::On(_))
             }
@@ -417,7 +445,12 @@ impl ShapeColumn {
     pub fn write_exact(self, step: &mut Step, value: u16) {
         let whole = (value >> 8) as u8;
         match self {
-            Self::Note { .. } => step.note = Note::On(whole.clamp(MIN_NOTE, MAX_NOTE)),
+            Self::Note { writes, .. } => {
+                step.note = Note::On(whole.clamp(MIN_NOTE, MAX_NOTE));
+                if writes.is_some() {
+                    step.velocity = writes;
+                }
+            }
             Self::Velocity => step.velocity = Some(whole),
             Self::Nudge => step.nudge = whole.min(NUDGES) as i8 - MAX_NUDGE,
             Self::Length => {
@@ -749,7 +782,7 @@ fn shaped(
     shape: &Shape,
 ) -> Vec<(usize, Shaped)> {
     let rows = targets(steps, range, column, shape.place, shape.seed);
-    let ShapeColumn::Note { scale } = column else {
+    let ShapeColumn::Note { scale, .. } = column else {
         let top = f64::from(column.highest());
         return filled(steps, &rows, range, shape, top, |step| {
             column.exact(step).map(|value| f64::from(value) / 256.0)
@@ -1701,6 +1734,7 @@ mod tests {
                 root,
                 kind,
             },
+            writes: None,
         }
     }
 
@@ -1710,6 +1744,7 @@ mod tests {
             root: 0,
             kind: crate::scale::ScaleKind::Major,
         },
+        writes: None,
     };
 
     /// The notes written, by name.
@@ -1721,6 +1756,61 @@ mod tests {
     }
 
     const C3: u8 = MIDDLE_C;
+
+    #[test]
+    fn notes_of_its_own_take_their_rhythm_from_where_and_land_in_key() {
+        let ShapeColumn::Note { scale, .. } = in_key(crate::scale::ScaleKind::Major, 0) else {
+            unreachable!()
+        };
+        let writing = ShapeColumn::Note {
+            scale,
+            writes: Some(0x50),
+        };
+        assert_eq!(writing.default_where(), Where::AllRows);
+        assert!(!writing.wheres().contains(&Where::Notes));
+        assert!(writing.fills().iter().all(|kind| !kind.reworks()));
+        let empty = rows(&["--- -- --- --- ---"; 8]);
+        let rows_of = |place: Where| -> Vec<usize> {
+            let shape = Shape {
+                place,
+                ..ramp(C3, C3 + 12, 0, 0)
+            };
+            values(&empty, all(&empty), writing, &shape)
+                .iter()
+                .map(|(row, _)| *row)
+                .collect()
+        };
+        assert_eq!(rows_of(Where::AllRows), [0, 1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(rows_of(Where::Every(4)), [0, 4]);
+        assert_eq!(rows_of(Where::Euclid { hits: 3, rotate: 0 }), [0, 3, 6]);
+        let all_rows = Shape {
+            place: Where::AllRows,
+            ..ramp(C3, C3 + 12, 0, 0)
+        };
+        assert_eq!(
+            named(&empty, writing, all_rows),
+            ["C-3", "D-3", "E-3", "F-3", "G-3", "A-3", "B-3", "C-4"]
+        );
+        // Each is written with its velocity, and an `OFF` is gone round.
+        let mut steps = rows(&[
+            "--- -- --- --- ---",
+            "OFF -- --- --- ---",
+            "--- -- --- --- ---",
+        ]);
+        let range = all(&steps);
+        for (row, value) in exact_values(&steps, range, writing, &all_rows) {
+            writing.write_exact(&mut steps[row], value);
+        }
+        let texts: Vec<String> = steps.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            texts,
+            [
+                "C-3 50 --- --- ---",
+                "OFF -- --- --- ---",
+                "C-4 50 --- --- ---"
+            ]
+        );
+    }
 
     #[test]
     fn a_ramp_of_notes_walks_the_scale_or_semitones_with_it_off() {
@@ -1743,7 +1833,7 @@ mod tests {
     #[test]
     fn random_notes_are_seeded_and_all_in_the_scale() {
         let minor = in_key(crate::scale::ScaleKind::Minor, 9);
-        let ShapeColumn::Note { scale } = minor else {
+        let ShapeColumn::Note { scale, .. } = minor else {
             unreachable!()
         };
         let random = |seed| Shape {

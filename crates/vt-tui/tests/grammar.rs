@@ -1926,13 +1926,236 @@ fn shape_refuses_what_it_cannot_fill() {
     };
     let notes = ["C-3 -- --- --- ---"; 3];
     assert!(reason(&notes, "lllvGS").contains("length"));
-    let rests = [E; 3];
-    assert!(reason(&rests, "vGS").contains("no notes"));
     assert!(reason(&notes, "VGS").contains("one column"));
     assert!(reason(&notes, "lvllGS").contains("one column"));
     assert!(reason(&notes, "lvS").contains("2 rows"));
-    assert!(reason(&notes, "lllllvGS").contains("FX command"));
+    // A velocity, nudge or length still needs notes; only the Note and FX columns generate.
     assert!(reason(&[E, E], "lvGS").contains("no notes"));
+    assert!(reason(&[E, E], "llvGS").contains("no notes"));
+}
+
+/// Each row's note and velocity, like `C-3 50`.
+fn notes_and_velocities(app: &App) -> Vec<String> {
+    steps(app).iter().map(|s| s[..6].to_owned()).collect()
+}
+
+#[test]
+fn s_on_an_empty_note_column_writes_notes_in_key_with_the_rhythm_where_picks() {
+    use vt_model::shape::{ShapeColumn, Where};
+    let start = [E; 8];
+    let (mut app, _rt) = app_with(&start);
+    app.scale.on = true;
+    app.note_velocity = 0x50;
+    let depth = app.history.undo_depth();
+    keys(&mut app, "vGS");
+    assert_eq!(app.mode, Mode::Shape);
+    let panel = app.shape.clone().unwrap();
+    assert!(panel.generates());
+    assert_eq!(panel.verb(), "Generate");
+    assert!(matches!(
+        panel.column,
+        ShapeColumn::Note {
+            writes: Some(0x50),
+            ..
+        }
+    ));
+    // Every row, a run up the scale an octave from the root, at the typed velocity.
+    assert_eq!(panel.shape.place, Where::AllRows);
+    assert_eq!(panel.wheres()[0], Where::AllRows);
+    assert!(!panel.wheres().contains(&Where::Notes));
+    assert!(panel.fills().iter().all(|kind| !kind.reworks()));
+    assert_eq!(
+        notes_and_velocities(&app),
+        [
+            "C-3 50", "D-3 50", "E-3 50", "F-3 50", "G-3 50", "A-3 50", "B-3 50", "C-4 50"
+        ]
+    );
+    // Every 4 rows.
+    keys(&mut app, "jjjjjj=");
+    assert!(matches!(
+        app.shape.as_ref().unwrap().shape.place,
+        Where::Every(4)
+    ));
+    assert_eq!(
+        notes_of(&app),
+        ["C-3", "---", "---", "---", "C-4", "---", "---", "---"]
+    );
+    // A tresillo, from Euclid.
+    keys(&mut app, "==");
+    assert!(matches!(
+        app.shape.as_ref().unwrap().shape.place,
+        Where::Euclid { .. }
+    ));
+    assert_eq!(
+        notes_of(&app),
+        ["C-3", "---", "---", "G-3", "---", "---", "C-4", "---"]
+    );
+    // A random fill stays in key, and the same seed picks the same.
+    keys(&mut app, "kkkkkkKrandom<Enter>");
+    let picked = notes_of(&app);
+    let scale = app.scale;
+    for note in picked.iter().filter(|note| *note != "---") {
+        let Ok(vt_model::step::Note::On(midi)) = note.parse() else {
+            panic!("{note}");
+        };
+        assert!(scale.contains(midi), "{note} is out of key");
+    }
+    keys(&mut app, "=-");
+    assert_eq!(notes_of(&app), picked);
+    // One undo for Enter.
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), start);
+    // `.` generates again on an empty column: three notes, from the tresillo.
+    keys(&mut app, ".");
+    let written = notes_of(&app).iter().filter(|note| *note != "---").count();
+    assert_eq!(written, 3);
+    keys(&mut app, "u");
+    // Esc puts everything back.
+    keys(&mut app, "vGS<Esc>");
+    assert_eq!(steps(&app), start);
+    assert_eq!(app.history.undo_depth(), depth);
+}
+
+#[test]
+fn s_on_a_note_column_with_notes_still_re_pitches_them_and_writes_none() {
+    let start = ["C-3 40 --- --- ---", E, E, "D-3 20 --- --- ---"];
+    let (mut app, _rt) = app_with(&start);
+    keys(&mut app, "vGS");
+    let panel = app.shape.clone().unwrap();
+    assert!(!panel.generates());
+    assert_eq!(panel.verb(), "Reshape");
+    assert_eq!(panel.shape.place, vt_model::shape::Where::Notes);
+    assert!(panel.fills().contains(&FillKind::Reverse));
+    keys(&mut app, "jic3<Enter>jie3<Enter>");
+    assert_eq!(
+        notes_and_velocities(&app),
+        ["C-3 40", "--- --", "--- --", "E-3 20"]
+    );
+}
+
+#[test]
+fn s_on_an_empty_fx_column_chooses_a_command_then_writes_it() {
+    let start = [E; 4];
+    let (mut app, _rt) = app_with(&start);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "lllllvjjjS");
+    // The command comes first, from the K list.
+    assert_eq!(app.mode, Mode::Picker);
+    assert!(app.shape.is_none());
+    // Esc gives up, with nothing changed.
+    keys(&mut app, "<Esc><Esc>");
+    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(steps(&app), start);
+    keys(&mut app, "vjjjScut<Enter>");
+    assert_eq!(app.mode, Mode::Shape, "{}", app.status);
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.verb(), "Generate");
+    assert_eq!(panel.shape.place, vt_model::shape::Where::AllRows);
+    assert!(!panel.wheres().contains(&vt_model::shape::Where::Commands));
+    keys(&mut app, "ji00ji30");
+    assert_eq!(
+        steps(&app),
+        [
+            "--- -- cut:00 --- ---",
+            "--- -- cut:10 --- ---",
+            "--- -- cut:20 --- ---",
+            "--- -- cut:30 --- ---",
+        ]
+    );
+    keys(&mut app, "<Enter>");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    keys(&mut app, "u");
+    assert_eq!(steps(&app), start);
+    // With a command already there, it reshapes that one, as ever.
+    let (mut app, _rt) = app_with(&["C-3 40 cut:00 --- ---", E, "C-3 40 cut:40 --- ---"]);
+    keys(&mut app, "lllllvjjS");
+    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.shape.as_ref().unwrap().verb(), "Reshape");
+}
+
+#[test]
+fn s_across_tracks_generates_on_each_empty_column_and_reshapes_the_rest() {
+    let rows = [N; 4];
+    let (mut app, _rt) = tracks_with(&[&rows, &[GONE; 4], &rows]);
+    keys(&mut app, "vjjjWWS");
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.parts.len(), 3);
+    assert_eq!(
+        panel.parts.iter().map(|p| p.generate).collect::<Vec<_>>(),
+        [false, true, false]
+    );
+    assert_eq!(panel.verb(), "Generate and reshape");
+    // Notes, as the first track has them: the empty track takes every row.
+    assert_eq!(panel.shape.place, vt_model::shape::Where::Notes);
+    keys(&mut app, "jic3<Enter>jic4<Enter>");
+    let pitches = |app: &App, track: usize| -> Vec<String> {
+        track_steps(app, track)
+            .iter()
+            .map(|s| s[..3].to_owned())
+            .collect()
+    };
+    assert_eq!(pitches(&app, 0), ["C-3", "E-3", "G#3", "C-4"]);
+    assert_eq!(pitches(&app, 1), ["C-3", "E-3", "G#3", "C-4"]);
+    assert_eq!(track_steps(&app, 0)[1], "E-3 40 cut:20 --- ---");
+    let depth = app.history.undo_depth();
+    keys(&mut app, "<Enter>");
+    assert_eq!(
+        app.history.undo_depth(),
+        depth + 1,
+        "one undo for all three"
+    );
+
+    // An FX column: the empty track takes the command chosen, the other keeps its own.
+    let (mut app, _rt) = tracks_with(&[&[N, N], &[GONE, GONE]]);
+    keys(&mut app, "lllllvjWSres<Enter>");
+    assert_eq!(app.mode, Mode::Shape, "{}", app.status);
+    keys(&mut app, "ji00ji40<Enter>");
+    assert!(
+        track_steps(&app, 0)[1].contains("cut:40"),
+        "{:?}",
+        track_steps(&app, 0)
+    );
+    assert!(
+        track_steps(&app, 1)[1].contains("res:40"),
+        "{:?}",
+        track_steps(&app, 1)
+    );
+}
+
+#[test]
+fn l_keeps_generated_notes_live_and_gl_reopens_them() {
+    use vt_model::shape::Where;
+    let (mut app, _rt) = app_with(&[E; 8]);
+    keys(&mut app, "vGSjjjjjj===L");
+    assert_eq!(generators(&app, 0).len(), 1);
+    assert_eq!(
+        notes_of(&app),
+        ["C-3", "---", "---", "F#3", "---", "---", "C-4", "---"]
+    );
+    let depth = app.history.undo_depth();
+    // `gl` reopens it generating, and turning its Rotate moves the notes, velocities and all.
+    keys(&mut app, "jjgl");
+    assert_eq!(app.mode, Mode::Shape);
+    let panel = app.shape.clone().unwrap();
+    assert_eq!(panel.verb(), "Generate");
+    assert_eq!(panel.shape.place, Where::Euclid { hits: 3, rotate: 0 });
+    keys(&mut app, "jjjjjjjj=L");
+    assert_eq!(
+        notes_and_velocities(&app),
+        [
+            "--- --", "C-3 64", "--- --", "--- --", "F#3 64", "--- --", "--- --", "C-4 64"
+        ]
+    );
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    // It owns the velocities it wrote too, so a hand edit to one applies it.
+    keys(&mut app, "ggjlr10");
+    assert!(generators(&app, 0).is_empty());
+    assert_eq!(notes_and_velocities(&app)[1], "C-3 10");
+    assert!(app.status.contains("plain values"), "{}", app.status);
+    keys(&mut app, "u");
+    assert_eq!(generators(&app, 0).len(), 1);
 }
 
 #[test]

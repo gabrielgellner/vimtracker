@@ -53,11 +53,16 @@ fn on_notes(column: ShapeColumn) -> bool {
     )
 }
 
-/// Copy a column's cell from one step to another: a note, a velocity, a nudge, a whole gate cell,
-/// or an FX slot.
+/// Copy a column's cell from one step to another: a note, with its velocity for notes of its own,
+/// a velocity, a nudge, a whole gate cell, or an FX slot.
 fn copy(column: ShapeColumn, from: &Step, to: &mut Step) {
     match column {
-        ShapeColumn::Note { .. } => to.note = from.note,
+        ShapeColumn::Note { writes, .. } => {
+            to.note = from.note;
+            if writes.is_some() {
+                to.velocity = from.velocity;
+            }
+        }
         ShapeColumn::Velocity => to.velocity = from.velocity,
         ShapeColumn::Nudge => to.nudge = from.nudge,
         ShapeColumn::Length => to.gate = from.gate,
@@ -82,7 +87,9 @@ fn cell(column: ShapeColumn, step: &Step) -> Step {
 /// Whether two steps hold the same cell in a column.
 fn same(column: ShapeColumn, a: &Step, b: &Step) -> bool {
     match column {
-        ShapeColumn::Note { .. } => a.note == b.note,
+        ShapeColumn::Note { writes, .. } => {
+            a.note == b.note && (writes.is_none() || a.velocity == b.velocity)
+        }
         ShapeColumn::Velocity => a.velocity == b.velocity,
         ShapeColumn::Nudge => a.nudge == b.nudge,
         ShapeColumn::Length => a.gate == b.gate,
@@ -287,17 +294,25 @@ impl GeneratorFile {
 /// A column as saved, with an FX command by its key, as the steps name it.
 #[derive(Serialize, Deserialize)]
 enum ColumnFile {
-    Note { scale: Scale },
+    Note {
+        scale: Scale,
+        /// The velocity of notes of its own, on a column that had none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        writes: Option<u8>,
+    },
     Velocity,
     Nudge,
     Length,
-    Fx { slot: usize, command: String },
+    Fx {
+        slot: usize,
+        command: String,
+    },
 }
 
 impl From<ShapeColumn> for ColumnFile {
     fn from(column: ShapeColumn) -> Self {
         match column {
-            ShapeColumn::Note { scale } => Self::Note { scale },
+            ShapeColumn::Note { scale, writes } => Self::Note { scale, writes },
             ShapeColumn::Velocity => Self::Velocity,
             ShapeColumn::Nudge => Self::Nudge,
             ShapeColumn::Length => Self::Length,
@@ -312,7 +327,7 @@ impl From<ShapeColumn> for ColumnFile {
 impl From<ColumnFile> for ShapeColumn {
     fn from(column: ColumnFile) -> Self {
         match column {
-            ColumnFile::Note { scale } => Self::Note { scale },
+            ColumnFile::Note { scale, writes } => Self::Note { scale, writes },
             ColumnFile::Velocity => Self::Velocity,
             ColumnFile::Nudge => Self::Nudge,
             ColumnFile::Length => Self::Length,
