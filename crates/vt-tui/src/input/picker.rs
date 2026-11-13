@@ -137,6 +137,12 @@ pub enum Pick {
         setting: crate::sample_settings::SampleSetting,
         value: Option<i32>,
     },
+    /// A value for the Sampler device's `Tune` or `Cents` on the cursor's track, or none for a
+    /// slice's tune to play as its sample's.
+    Tuning {
+        control: crate::track_page::Control,
+        value: Option<i8>,
+    },
     /// Go to this track.
     Track(usize),
     /// What makes a track's sound.

@@ -36,8 +36,13 @@ fn what(spec: &DeviceSpec, track: &Track) -> String {
 
 /// Whether a control should have a knob on this track: every setting it has, but a filter's
 /// `Mode` when its type has no modes.
-fn has_knob(control: Control, track: &Track) -> bool {
-    control.exists_on(track) && !(control == Control::FilterMode && !track.filter.has_modes())
+/// Whether a control has a knob: a filter's `Mode` only for a type with modes, and a sampler's
+/// `Tune` and `Cents` only while it plays a sample.
+fn has_knob(control: Control, track: &Track, song: &Song) -> bool {
+    let tuning = matches!(control, Control::Tune | Control::Cents);
+    control.exists_on(track)
+        && !(control == Control::FilterMode && !track.filter.has_modes())
+        && !(tuning && song.bank.get(track.sample()).is_none())
 }
 
 fn is_toggle(control: Control, track: &Track, song: &Song) -> bool {
@@ -126,7 +131,7 @@ fn every_setting_is_placed_exactly_once_by_a_key_its_device_has() {
                 assert_eq!(shown.iter().filter(|c| *c == control).count(), 1);
                 assert_eq!(
                     knob(*control, track, &song).is_some(),
-                    has_knob(*control, track),
+                    has_knob(*control, track, &song),
                     "{control:?} in {}",
                     what(&spec, track)
                 );
@@ -643,6 +648,41 @@ fn an_lfos_deform_is_a_knob_with_a_centre_notch_that_sets_it() {
     assert_eq!(value_text(deform, &next.tracks[0], &next), "+FF");
     let next = edit(&song, &turned(deform, 0, &song, 0).unwrap()).unwrap();
     assert_eq!(next.tracks[0].mods[3].lfo.deform, -0xFF);
+}
+
+#[test]
+fn a_samplers_tune_and_cents_are_the_last_knobs_with_a_notch_and_tune_the_sample() {
+    use vt_model::action::edit;
+    use vt_model::bank::{BankEntry, ContentHash};
+    use vt_model::settings::SettingId;
+    use vt_model::song::Machine;
+    use vt_roto::live::{KNOB_TOP, position_at};
+    use vt_tui::roto::edits::{turned, value_text};
+    let mut song = Song::new(1);
+    song.tracks[0].machine = Machine::Sampler;
+    let spec = &Page::Sound.devices(&song.tracks[0])[0];
+    let layout = layout_of(spec, &song.tracks[0]);
+    assert_eq!(&first_knobs(layout)[6..], ["tune", "cents"]);
+    // No sample, nothing to tune.
+    let device = live_device(Page::Sound, 0, spec, &song.tracks[0], &song, false);
+    assert!(device.controls[6].is_none());
+    song.bank
+        .set(1, Some(BankEntry::of_file("kick.wav", ContentHash(1))));
+    song.tracks[0].set_setting(SettingId::SAMPLE, 1);
+    let song = std::sync::Arc::new(song);
+    let track = &song.tracks[0];
+    let device = live_device(Page::Sound, 0, spec, track, &song, false);
+    let tune = device.controls[6].as_ref().unwrap();
+    assert_eq!(
+        (tune.name.as_str(), tune.feel.clone()),
+        ("Tune", Feel::CentreNotch)
+    );
+    assert_eq!(tune.position, position_at(0.5), "none, in the middle");
+    let next = edit(&song, &turned(Control::Tune, 0, &song, KNOB_TOP).unwrap()).unwrap();
+    assert_eq!(next.bank.get(1).unwrap().edit.play.tune, 48);
+    assert_eq!(value_text(Control::Tune, &next.tracks[0], &next), "+48 st");
+    let next = edit(&next, &turned(Control::Cents, 0, &next, 0).unwrap()).unwrap();
+    assert_eq!(next.bank.get(1).unwrap().edit.play.cents, -99);
 }
 
 #[test]

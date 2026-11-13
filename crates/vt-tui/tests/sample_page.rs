@@ -31,6 +31,7 @@ use vt_tui::kitty::Graphics;
 use vt_tui::run::draw_screen;
 use vt_tui::sample_settings::SampleSetting;
 use vt_tui::sample_wave::{END_COLOR, LOOP_COLOR, SLICE_COLOR, START_COLOR};
+use vt_tui::track_page::Control;
 use vt_tui::views::status::value_shown;
 
 const RATE: u32 = 48_000;
@@ -2416,4 +2417,163 @@ fn with_the_focus_on_the_settings_the_cursors_line_is_set_back() {
     keys(&mut app, "Esc");
     let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
     assert_eq!(sent.matches("a=t,").count(), 1, "the line as it was");
+}
+
+/// The first sample's bank entry.
+fn first_entry(app: &App) -> BankEntry {
+    app.song().bank.get(1).unwrap().clone()
+}
+
+/// The track page's Sound page, with the cursor on the Sampler device's `Tune` or `Cents`.
+fn on_tuning(app: &mut App, control: Control) {
+    keys(app, "Space 4");
+    let track = app.song().tracks[0].clone();
+    let row = if control == Control::Tune { 1 } else { 2 };
+    app.track_page.move_to(Some(&track), row, 2);
+    assert_eq!(app.track_control(), control);
+}
+
+/// The sample page, with the focus on its `Tune` and its cursor at a frame.
+fn on_sample_tune(app: &mut App, frame: u64) {
+    keys(app, "Space 0");
+    put_cursor(app, frame);
+    app.sample_page.setting = Some(SampleSetting::Tune);
+}
+
+#[test]
+fn the_sound_pages_tune_changes_the_sample_as_the_sample_pages_does_a_step_an_undo() {
+    let (mut app, _realtime) = app();
+    let start = first_entry(&app);
+    on_tuning(&mut app, Control::Tune);
+    let depth = app.history.undo_depth();
+    keys(&mut app, "= = +");
+    assert_eq!(app.history.undo_depth(), depth + 3, "one undo step each");
+    let by_sound = first_entry(&app);
+    assert_eq!(by_sound.edit.play.tune, 14);
+    assert!(
+        app.status.contains("tune +14 st: u to undo"),
+        "{}",
+        app.status
+    );
+    keys(&mut app, "u u u");
+    assert_eq!(first_entry(&app), start);
+    on_sample_tune(&mut app, 30_000);
+    keys(&mut app, "= = +");
+    assert_eq!(
+        first_entry(&app),
+        by_sound,
+        "the sample page's Tune is the same"
+    );
+    // `x` puts it back to none, `i` types it, and `K` lists it.
+    on_tuning(&mut app, Control::Tune);
+    keys(&mut app, "x");
+    assert_eq!(first_entry(&app), start);
+    keys(&mut app, "i - 5 Enter");
+    assert_eq!(first_entry(&app).edit.play.tune, -5);
+    keys(&mut app, "i 9 9 Enter");
+    assert!(app.status.contains("from -48 to +48"), "{}", app.status);
+    keys(&mut app, "K j Enter");
+    assert_eq!(first_entry(&app).edit.play.tune, -4);
+    // Cents are the sample's, on top of its tune, as `:sample tune` sets them.
+    on_tuning(&mut app, Control::Cents);
+    keys(&mut app, "+ -");
+    assert_eq!(first_entry(&app).edit.play.cents, 9);
+    command(&mut app, "sample tune -4 20");
+    assert_eq!(value_shown(&app).as_deref(), Some("+20 ct, the sample's"));
+}
+
+#[test]
+fn the_sound_pages_tune_is_a_slices_own_where_it_has_one_and_the_samples_otherwise() {
+    let (mut app, _realtime) = app();
+    command(&mut app, "slice 4");
+    let tune = |app: &App| {
+        let entry = first_entry(app);
+        let own: Vec<Option<i8>> = entry
+            .edit
+            .points
+            .slices
+            .iter()
+            .map(|slice| slice.over.tune)
+            .collect();
+        (entry.edit.play.tune, own)
+    };
+    // Slice 02 has its own tune; the track plays it.
+    app.apply(&Action::SetTrackSetting {
+        track: 0,
+        setting: SettingId::SLICE,
+        value: 2,
+    });
+    on_tuning(&mut app, Control::Tune);
+    command(&mut app, "slice tune 3");
+    assert_eq!(tune(&app), (0, vec![None, None, Some(3), None]));
+    let start = first_entry(&app);
+    keys(&mut app, "=");
+    let by_sound = first_entry(&app);
+    assert_eq!(tune(&app), (0, vec![None, None, Some(4), None]));
+    assert!(
+        app.status.starts_with("Slice 02 tune +4 st"),
+        "{}",
+        app.status
+    );
+    let shown = value_shown(&app).unwrap();
+    assert!(shown.contains("slice 02's own"), "{shown}");
+    keys(&mut app, "u");
+    assert_eq!(first_entry(&app), start);
+    on_sample_tune(&mut app, QUARTERS[2] + 100);
+    keys(&mut app, "=");
+    assert_eq!(
+        first_entry(&app),
+        by_sound,
+        "as the sample page changes slice 02"
+    );
+    // `x` gives the slice the sample's again, and from then on Tune is the sample's.
+    on_tuning(&mut app, Control::Tune);
+    keys(&mut app, "x");
+    assert_eq!(tune(&app), (0, vec![None; 4]));
+    keys(&mut app, "=");
+    assert_eq!(tune(&app), (1, vec![None; 4]));
+    // On a slice without its own, it's the sample's, for every slice that plays as it.
+    command(&mut app, "slice tune -7");
+    app.apply(&Action::SetTrackSetting {
+        track: 0,
+        setting: SettingId::SLICE,
+        value: 1,
+    });
+    keys(&mut app, "+");
+    assert_eq!(tune(&app), (13, vec![None, None, Some(-7), None]));
+    let shown = value_shown(&app).unwrap();
+    assert!(shown.contains("the sample's, for its slices"), "{shown}");
+    // A slice has no cents of its own, so they're always the sample's.
+    app.apply(&Action::SetTrackSetting {
+        track: 0,
+        setting: SettingId::SLICE,
+        value: 2,
+    });
+    on_tuning(&mut app, Control::Cents);
+    keys(&mut app, "=");
+    assert_eq!(first_entry(&app).edit.play.cents, 1);
+    assert_eq!(tune(&app), (13, vec![None, None, Some(-7), None]));
+}
+
+#[test]
+fn with_no_sample_the_sound_pages_tune_is_dim_and_changes_nothing() {
+    let (mut app, _realtime) = app();
+    app.apply(&Action::SetTrackSetting {
+        track: 0,
+        setting: SettingId::SAMPLE,
+        value: 0,
+    });
+    on_tuning(&mut app, Control::Tune);
+    let before = Song::clone(app.song());
+    let depth = app.history.undo_depth();
+    for key in ["=", "x", "K"] {
+        keys(&mut app, key);
+        assert!(
+            app.status.contains("plays no sample to tune"),
+            "{}",
+            app.status
+        );
+    }
+    assert_eq!(**app.song(), before);
+    assert_eq!(app.history.undo_depth(), depth);
 }

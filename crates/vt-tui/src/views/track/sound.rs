@@ -19,6 +19,7 @@ use crate::app::App;
 use crate::automating::{as_heard, fader_of};
 use crate::glyphs;
 use crate::theme;
+use crate::track_page::tuning::{TuneOf, Tuning, tuning};
 use crate::track_page::{Control, DEVICE_COLUMNS, DeviceSpec, Page};
 use crate::views::widgets::bar::{ValueBar, moved_since};
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
@@ -39,6 +40,8 @@ use super::{
 /// coarse digits alone.
 const VALUE_WIDTH: usize = 4;
 const COARSE_WIDTH: usize = 2;
+/// How wide `Tune`'s value is before whose it is, as `-48 st` and two spaces.
+const TUNE_WIDTH: usize = 8;
 
 /// What a control with a bar is playing with right now.
 fn live_value(control: Control, live: &LiveValues) -> Option<u8> {
@@ -101,12 +104,35 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
 /// A setting's value's style on the Sound page: as any page's, but the group a track is in is in
 /// its colour, as on the mixer, and a fader the steps drive is in the playing colour.
 fn value_style(app: &App, track: &Track, control: Control, here: bool) -> Style {
-    let style = setting::style(app, here, at_default(control, track));
+    let style = setting::style(
+        app,
+        here,
+        at_default(control, track) || untuned(app, track, control),
+    );
     match group::style(app.song(), app.cursor.track) {
         Some(tint) if control == Control::Group && !here => tint,
         _ if !here && app.follows_steps(app.cursor.track, control) => theme::automated(),
         _ => style,
     }
+}
+
+/// Whether a sampler's `Tune` or `Cents` is dim: with no sample to tune, or the sample's own left
+/// at none.
+fn untuned(app: &App, track: &Track, control: Control) -> bool {
+    matches!(control, Control::Tune | Control::Cents)
+        && tuning(app.song(), track).is_none_or(|tuning| tuning.at_rest(control))
+}
+
+/// Whose `Tune` is, after its value where a bar would be, on a sample with slices: the slice's
+/// own, `slice 03`, in the slices' colour, or the sample's, dim.
+fn tune_owner(app: &App, track: &Track) -> Option<Span<'static>> {
+    let tuning = tuning(app.song(), track).filter(Tuning::sliced)?;
+    Some(match tuning.of {
+        TuneOf::Slice(slice) => {
+            Span::styled(format!("slice {slice:02X}"), Style::new().fg(theme::MAUVE))
+        }
+        TuneOf::Sample => Span::styled("sample", theme::dim()),
+    })
 }
 
 /// What a Sound device's cells show, read from the track.
@@ -160,6 +186,13 @@ impl CellSource for SoundCells<'_> {
         if let Some(id) = fine {
             let fine = setting::text(app, on_fine, || format!("{:02X}", track.fine(id)));
             spans.push(Span::styled(fine, setting::style(app, on_fine, true)));
+        }
+        if control == Control::Tune
+            && let Some(owner) = tune_owner(app, track)
+        {
+            let width: usize = spans.iter().map(Span::width).sum();
+            spans.push(Span::raw(" ".repeat(TUNE_WIDTH.saturating_sub(width))));
+            spans.push(owner);
         }
         if slice {
             let room = VALUE_WIDTH + 1;

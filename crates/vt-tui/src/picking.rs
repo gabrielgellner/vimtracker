@@ -796,6 +796,7 @@ impl App {
             Pick::Mark(letter) => self.jump_to_mark(letter),
             Pick::SampleSetting(setting) => self.pick_sample_setting(setting),
             Pick::SampleValue { setting, value } => self.pick_sample_value(setting, value),
+            Pick::Tuning { control, value } => self.set_tuning(control, value),
             Pick::Track(track) => self.go_to_track(track),
             Pick::Audio(choice) => self.pick_audio(choice),
             // The list above the command line takes its own choices, so none comes here.

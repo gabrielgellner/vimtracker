@@ -27,6 +27,7 @@ use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
 use vt_model::tracking::Source;
 use vt_roto::live::{share_of, step_at};
 
+use crate::track_page::tuning::{tuning, tuning_most};
 use crate::track_page::{AccumulatorField, ArpField, Control, ModField};
 use crate::views::track::{toggle_on, value};
 
@@ -178,6 +179,17 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                     fine,
                 },
             )
+        }
+        // The sample's own, as an edit of its bank entry, as the keys make.
+        Control::Tune | Control::Cents => {
+            let tuning = tuning(song, track)?;
+            let most = i32::from(tuning_most(control));
+            let to = whole(position, (2 * most) as u32) as i32 - most;
+            let entry = tuning.with(control, Some(to as i8));
+            (entry != *tuning.entry).then_some(Action::SetBankEntry {
+                number: tuning.number,
+                entry: Some(entry),
+            })
         }
         Control::Base(which) => {
             let coarse = match which {
