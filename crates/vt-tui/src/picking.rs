@@ -869,6 +869,7 @@ impl App {
             Pick::ShapeWave(wave) => self.pick_shape_wave(wave),
             Pick::ShapeRate(rate) => self.pick_shape_rate(rate),
             Pick::ShapeWhere(place) => self.pick_shape_where(place),
+            Pick::ShapeSource(source) => self.pick_shape_source(source),
             Pick::ShapeCommand(command) => self.pick_shape_command(command),
             Pick::Guide(guide) => {
                 self.guide = Some(guide);

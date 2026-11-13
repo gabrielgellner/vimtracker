@@ -1205,7 +1205,7 @@ selection. A selection across tracks shapes each track's column with the same se
 **Sweep.** A sweep covers one column, Note, Velocity, Nudge, gate length or FX, across at least two rows (decision 171 for the note's columns). A multi-column, gate-pulses or instrument-column
 selection is refused with a message. `From` and `To` default to the first and last values selected, or if those match the lowest and
 highest, or if those match the column's range, so a fade doesn't need swapping and a selection needn't end on a value. An FX column uses the
-first command selected, and rows holding another command keep it. A `Fill` of `Random` picks from the range instead, `Wave` follows an LFO's shape (`Smooth` too), rate and phase by where each row falls in time, or makes a whole number of cycles across the selection, and `Alternate` gives the rows it changes each value in turn, for `Run` rows at a time, as `List` does with up to eight values in place of `From` and `To` (decision 96); `Ramp`, `Random` and `Wave` hold each value for `Run` rows too (decision 170). Four transforms rework the values already in the rows instead: `Scale` maps them from their own lowest and highest onto `From` and `To` along the curve, `Invert` flips them within that range, `Shuffle` deals them out again from the seed, and `Reverse` turns their order round (decision 169). On the Note column, `Acid` writes a 303 line, its notes, accents and slides together: a small set of notes from `From`, an octave's chance, and on an empty column a rhythm weighted toward the strong beats, with a second seed so a roll can keep the pitches (decision 273). `Where` chooses the
+first command selected, and rows holding another command keep it. A `Fill` of `Random` picks from the range instead, `Wave` follows an LFO's shape (`Smooth` too), rate and phase by where each row falls in time, or makes a whole number of cycles across the selection, and `Alternate` gives the rows it changes each value in turn, for `Run` rows at a time, as `List` does with up to eight values in place of `From` and `To` (decision 96); `Ramp`, `Random` and `Wave` hold each value for `Run` rows too (decision 170). Four transforms rework the values already in the rows instead: `Scale` maps them from their own lowest and highest onto `From` and `To` along the curve, `Invert` flips them within that range, `Shuffle` deals them out again from the seed, and `Reverse` turns their order round (decision 169). On the Note column, `Acid` writes a 303 line, its notes, accents and slides together: a small set of notes from `From`, an octave's chance, and on an empty column a rhythm weighted toward the strong beats, with a second seed so a roll can keep the pitches (decision 273), and `Follow` mirrors another track's phrase, transposed, inverted, reversed or rotated on the way, for a canon (decision 276). `Where` chooses the
 rows, as in Polyend's Fill tool: notes, no notes, those with the command, all, every n, a percent chance, or a Euclidean spread of `Hits` among the rows it can change, turned by `Rotate` (decision 168). A velocity only ever goes on a note.
 
 **Curve.** `f(t)` applies bias then gain, where `t` runs by row position from 0 at the first row filled to 1 at the last, and the
@@ -1239,11 +1239,17 @@ FX column whose `Where` is Notes or No notes.
     the same column applies the old one, then starts from the values it left.
 *   Undo restores the live state, because it is part of the phrase. Cloning copies it, and each clone renders on its own.
 *   Live cells are marked in the grid, and the phrase's heading names its live columns.
+*   A live `Follow` reads another phrase, its source, usually on another track, and owns its notes, velocities and gates
+    (and FX, if asked). An edit to the source rewrites every follower in the same edit, so it's one undo step, and along
+    phrases that follow followers. Following a phrase that reads the follower, directly or through others, is refused.
+    Taking the source away, with its track, applies its followers.
 
-**Built** as above (decisions 180 and 181). `generator.rs` holds a `Generator`, kept in the phrase's `generators`; after
-every edit, `edit` lets each live generator of each phrase the edit changed follow it, comparing its rows with how it last
-left them, so no edit path needs to know about generators. A song saved with them reads in an older build as plain
-values, so the format is unchanged.
+**Built** as above (decisions 180, 181 and 276). `generator.rs` holds a `Generator`, kept in the phrase's `generators`;
+after every edit, `edit` lets each live generator of each phrase the edit changed follow it, comparing its rows with how
+it last left them, so no edit path needs to know about generators. Then each `Follow` of a phrase the edit changed
+writes its source's loop again, followers after the phrases they follow. The pass that finds the changed phrases by
+pointer gathers the followers too, so there's no index of followers to keep in step. A song saved with them reads in an
+older build as plain values, so the format is unchanged.
 
 ### Saving and loading
 

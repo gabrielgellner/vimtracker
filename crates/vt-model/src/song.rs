@@ -27,7 +27,7 @@ use crate::selection::{Extent, StepRange};
 use crate::settings::{
     FOUR_OP_EACH, FOUR_OP_SHARED, Owner, SAMPLER_SETTINGS, SettingId, voice_entries,
 };
-use crate::shape::{Shape, ShapeColumn};
+use crate::shape::{Shape, ShapeColumn, Source};
 use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Step};
 
@@ -1894,9 +1894,9 @@ impl Phrase {
     }
 
     /// Make a generator live, from the values on its rows now. One on the same column whose rows
-    /// overlap is applied first, so this one starts from the values it left. Returns false if it
-    /// has no rows here.
-    pub fn add_generator(&mut self, mut generator: Generator) -> bool {
+    /// overlap is applied first, so this one starts from the values it left. A `Follow` writes
+    /// from `source`, the loop of the phrase it follows. Returns false if it has no rows here.
+    pub fn add_generator(&mut self, mut generator: Generator, source: Option<&[Step]>) -> bool {
         let Some(range) = self.span_rows(&generator) else {
             return false;
         };
@@ -1906,18 +1906,33 @@ impl Phrase {
                     .rows()
                     .is_none_or(|rows| rows.last < range.first || rows.first > range.last)
         });
-        generator.start(&mut self.steps, range);
+        generator.start(&mut self.steps, range, source);
         self.generators.push(generator);
         true
     }
 
-    /// Give a live generator a new shape, and write it. Returns false if there's no such one.
-    pub fn reshape_generator(&mut self, index: usize, shape: Shape) -> bool {
+    /// Give a live generator a new shape, and write it, a `Follow` from `source`. Returns false if
+    /// there's no such one.
+    pub fn reshape_generator(
+        &mut self,
+        index: usize,
+        shape: Shape,
+        source: Option<&[Step]>,
+    ) -> bool {
         let Some(generator) = self.generators.get_mut(index) else {
             return false;
         };
-        generator.reshape(&mut self.steps, shape);
+        generator.reshape(&mut self.steps, shape, source);
         true
+    }
+
+    /// Write a live `Follow` again from its source's loop, which an edit changed: true if that
+    /// changed its rows.
+    pub fn refollow(&mut self, index: usize, source: &[Step]) -> bool {
+        let steps = &mut self.steps;
+        self.generators
+            .get_mut(index)
+            .is_some_and(|generator| generator.refollow(steps, source))
     }
 
     /// Apply a live generator: its values stay, as plain ones.
@@ -1927,7 +1942,8 @@ impl Phrase {
 
     /// Follow an edit to the phrase: a live generator whose cells the edit changed by hand is
     /// applied, and the rest rerender where the edit changed what they read or moved their lane.
-    pub fn follow_generators(&mut self) {
+    /// A `Follow` rerenders from the loop `sources` gives for what it follows.
+    pub fn follow_generators<'a>(&mut self, sources: impl Fn(Source) -> Option<&'a [Step]>) {
         let ranges: Vec<Option<StepRange>> = self
             .generators
             .iter()
@@ -1935,8 +1951,10 @@ impl Phrase {
             .collect();
         let steps = &mut self.steps;
         let mut ranges = ranges.into_iter();
-        self.generators
-            .retain_mut(|generator| generator.follow(steps, ranges.next().flatten()));
+        self.generators.retain_mut(|generator| {
+            let source = generator.source().and_then(&sources);
+            generator.follow(steps, ranges.next().flatten(), source)
+        });
     }
 
     /// An FX column's own lane, if it has one. One without follows the phrase's loop.
@@ -2422,6 +2440,30 @@ impl Song {
     /// How many tracks play sounds. They come first, and then the fixed tracks.
     pub fn sound_tracks(&self) -> usize {
         self.tracks.len().saturating_sub(FIXED_TRACKS)
+    }
+
+    /// A sound track's phrase, as a `Follow` names it, if there is one. A fixed track has no notes
+    /// to follow, and moves along when sound tracks come or go.
+    pub fn source_phrase(&self, source: Source) -> Option<&Arc<Phrase>> {
+        (source.track < self.sound_tracks())
+            .then(|| self.tracks[source.track].phrases.get(&source.phrase))
+            .flatten()
+    }
+
+    /// The phrases following one, each with the place of its generator that follows it.
+    pub fn followers(&self, source: Source) -> Vec<(Source, usize)> {
+        let mut found = Vec::new();
+        for (track, owner) in self.tracks.iter().enumerate().take(self.sound_tracks()) {
+            for (id, phrase) in &owner.phrases {
+                for (index, generator) in phrase.generators().iter().enumerate() {
+                    if generator.source() == Some(source) {
+                        let here = Source { track, phrase: *id };
+                        found.push((here, index));
+                    }
+                }
+            }
+        }
+        found
     }
 
     /// Where a fixed track is among all the tracks.

@@ -12,7 +12,7 @@ use crate::constants::{
     MAX_PROJECT_NAME_CHARS, MAX_SOUND_TRACKS, MAX_TRACK_RESET, MAX_TRANSPOSE, MIN_MILLIBPM,
     MIN_TRANSPOSE,
 };
-use crate::generator::{Generator, Span};
+use crate::generator::{Generator, Span, reads};
 use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
 use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
@@ -25,7 +25,7 @@ use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
 };
 use crate::settings::SettingId;
-use crate::shape::{Shape, ShapeColumn, written};
+use crate::shape::{FillKind, Shape, ShapeColumn, Source, written_from};
 use crate::song::{
     Chain, ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section,
     SectionStart, Song, Track, lowest_unused,
@@ -609,6 +609,12 @@ pub enum EditError {
     NoGenerator { phrase: u32, generator: usize },
     #[error("a live generator on a lane needs an FX column with a lane")]
     NoLane,
+    #[error("there's no phrase {0} to follow")]
+    NoSource(Source),
+    #[error("a phrase can't follow itself")]
+    FollowsItself,
+    #[error("{0} follows this phrase already, directly or through others, so this can't follow it")]
+    FollowCycle(Source),
     #[error("tempo must be from 20 to 400 BPM")]
     Tempo,
     #[error("a project can have at most {MAX_SOUND_TRACKS} tracks")]
@@ -721,7 +727,10 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get(phrase)
                 .cloned()
                 .ok_or(EditError::NoPhrase(*phrase))?;
-            for (row, step) in written(found.steps(), *range, *column, shape) {
+            // Once, as plain notes, a phrase may copy its own loop.
+            let source = followed(&next, shape)?;
+            let source = source.as_ref().map(|source| source.loop_steps());
+            for (row, step) in written_from(found.steps(), *range, *column, shape, source) {
                 *step_mut(&mut next, *track, *phrase, row)? = step;
             }
         }
@@ -732,8 +741,10 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             span,
             shape,
         } => {
+            let source = followed_live(&next, shape, *track, *phrase)?;
+            let source = source.as_ref().map(|source| source.loop_steps());
             let generator = Generator::new(*column, *span, *shape);
-            if !phrase_mut(&mut next, *track, *phrase)?.add_generator(generator) {
+            if !phrase_mut(&mut next, *track, *phrase)?.add_generator(generator, source) {
                 return Err(EditError::NoLane);
             }
         }
@@ -743,7 +754,11 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             generator,
             shape,
         } => {
-            if !phrase_mut(&mut next, *track, *phrase)?.reshape_generator(*generator, *shape) {
+            let source = followed_live(&next, shape, *track, *phrase)?;
+            let source = source.as_ref().map(|source| source.loop_steps());
+            if !phrase_mut(&mut next, *track, *phrase)?
+                .reshape_generator(*generator, *shape, source)
+            {
                 return Err(EditError::NoGenerator {
                     phrase: *phrase,
                     generator: *generator,
@@ -1444,22 +1459,196 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
     Ok(Arc::new(next))
 }
 
+/// The phrase a `Follow` shape reads, to copy it once, or none for any other shape.
+fn followed(song: &Song, shape: &Shape) -> Result<Option<Arc<Phrase>>, EditError> {
+    if shape.kind != FillKind::Follow {
+        return Ok(None);
+    }
+    let source = shape.follow.source;
+    let found = song
+        .source_phrase(source)
+        .ok_or(EditError::NoSource(source))?;
+    Ok(Some(Arc::clone(found)))
+}
+
+/// The phrase a live `Follow` on a phrase reads, refused if it's that phrase or reads it, itself
+/// or through what it follows, so no edit goes round a cycle.
+fn followed_live(
+    song: &Song,
+    shape: &Shape,
+    track: usize,
+    phrase: u32,
+) -> Result<Option<Arc<Phrase>>, EditError> {
+    let found = followed(song, shape)?;
+    let here = Source { track, phrase };
+    let source = shape.follow.source;
+    if found.is_some() && source == here {
+        return Err(EditError::FollowsItself);
+    }
+    if found.is_some() && reads(song, source, here) {
+        return Err(EditError::FollowCycle(source));
+    }
+    Ok(found)
+}
+
 /// Let the live generators of every phrase an edit changed follow it: one whose cells it changed
-/// by hand is applied, and one whose notes it changed rerenders, as part of the same edit.
+/// by hand is applied, and one whose notes it changed rerenders, as part of the same edit. Then
+/// every `Follow` of a phrase it changed, on whichever track, writes it again, and so on along
+/// phrases that follow those, so a source and all its followers are one edit and one undo; a
+/// `Follow` whose source has gone, with its track, is applied.
+///
+/// Every phrase is passed over by pointer to find the ones the edit changed, so the phrases that
+/// follow another are gathered in the same pass rather than kept in an index, which every way of
+/// changing a song would have to keep in step.
 fn follow_generators(before: &Song, after: &mut Song) {
-    for (index, track) in after.tracks.iter_mut().enumerate() {
+    let mut changed: Vec<Source> = Vec::new();
+    let mut followers: Vec<Source> = Vec::new();
+    for (index, track) in after.tracks.iter().enumerate() {
         let old = before.tracks.get(index);
-        for (id, phrase) in &mut track.phrases {
-            if phrase.generators().is_empty()
-                || old
-                    .and_then(|old| old.phrases.get(id))
-                    .is_some_and(|old| Arc::ptr_eq(old, phrase))
-            {
-                continue;
+        for (id, phrase) in &track.phrases {
+            let here = Source {
+                track: index,
+                phrase: *id,
+            };
+            let kept = old
+                .and_then(|old| old.phrases.get(id))
+                .is_some_and(|old| Arc::ptr_eq(old, phrase));
+            if !kept {
+                changed.push(here);
             }
-            Arc::make_mut(phrase).follow_generators();
+            if phrase.generators().iter().any(|g| g.source().is_some()) {
+                followers.push(here);
+            }
         }
     }
+    // A track gone takes its phrases with it, which counts as changing them.
+    let sound = before.sound_tracks();
+    for (index, track) in before.tracks.iter().enumerate().take(sound) {
+        for id in track.phrases.keys() {
+            let here = Source {
+                track: index,
+                phrase: *id,
+            };
+            if after.source_phrase(here).is_none() && !changed.contains(&here) {
+                changed.push(here);
+            }
+        }
+    }
+    for here in changed.clone() {
+        let Some(phrase) = after
+            .tracks
+            .get(here.track)
+            .and_then(|track| track.phrases.get(&here.phrase))
+        else {
+            continue;
+        };
+        if phrase.generators().is_empty() {
+            continue;
+        }
+        let sources = sources_of(after, phrase);
+        let phrase = after.tracks[here.track]
+            .phrases
+            .get_mut(&here.phrase)
+            .expect("found above");
+        Arc::make_mut(phrase).follow_generators(|source| looked_up(&sources, source));
+    }
+    if followers.is_empty() {
+        return;
+    }
+    // Each follower after the followers it follows, so a change goes all the way along.
+    let mut done = vec![false; followers.len()];
+    loop {
+        let mut moved = false;
+        for nth in 0..followers.len() {
+            if done[nth] {
+                continue;
+            }
+            let here = followers[nth];
+            let reading: Vec<Source> = after.tracks[here.track]
+                .phrases
+                .get(&here.phrase)
+                .map(|phrase| {
+                    phrase
+                        .generators()
+                        .iter()
+                        .filter_map(Generator::source)
+                        .collect()
+                })
+                .unwrap_or_default();
+            let waiting = followers
+                .iter()
+                .zip(&done)
+                .any(|(other, finished)| !finished && *other != here && reading.contains(other));
+            if waiting {
+                continue;
+            }
+            done[nth] = true;
+            moved = true;
+            if refollow(after, here, &changed) && !changed.contains(&here) {
+                changed.push(here);
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+}
+
+/// The phrases a phrase's live `Follow`s read, as they are now.
+fn sources_of(song: &Song, phrase: &Phrase) -> Vec<(Source, Arc<Phrase>)> {
+    phrase
+        .generators()
+        .iter()
+        .filter_map(Generator::source)
+        .filter_map(|source| Some((source, Arc::clone(song.source_phrase(source)?))))
+        .collect()
+}
+
+fn looked_up(sources: &[(Source, Arc<Phrase>)], source: Source) -> Option<&[Step]> {
+    sources
+        .iter()
+        .find(|(found, _)| *found == source)
+        .map(|(_, phrase)| phrase.loop_steps())
+}
+
+/// Write a phrase's `Follow`s again where the phrase they follow changed, and apply those whose
+/// phrase has gone: true if that changed the phrase.
+fn refollow(song: &mut Song, here: Source, changed: &[Source]) -> bool {
+    let Some(phrase) = song.tracks[here.track].phrases.get(&here.phrase) else {
+        return false;
+    };
+    let sources = sources_of(song, phrase);
+    let due: Vec<(usize, Option<Source>)> = phrase
+        .generators()
+        .iter()
+        .enumerate()
+        .filter_map(|(index, generator)| {
+            let source = generator.source()?;
+            let gone = looked_up(&sources, source).is_none();
+            (gone || changed.contains(&source)).then_some((index, (!gone).then_some(source)))
+        })
+        .collect();
+    if due.is_empty() {
+        return false;
+    }
+    let phrase = Arc::make_mut(
+        song.tracks[here.track]
+            .phrases
+            .get_mut(&here.phrase)
+            .expect("found above"),
+    );
+    let mut wrote = false;
+    // From the last, so applying one leaves the places of those before it as they were. Applying
+    // leaves the steps as they are.
+    for (index, source) in due.into_iter().rev() {
+        match source.and_then(|source| looked_up(&sources, source)) {
+            Some(steps) => wrote |= phrase.refollow(index, steps),
+            None => {
+                phrase.apply_generator(index);
+            }
+        }
+    }
+    wrote
 }
 
 fn check_transpose(entry: &ChainEntry) -> Result<(), EditError> {
