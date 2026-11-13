@@ -617,6 +617,12 @@ impl App {
         }
     }
 
+    /// The phrase whose live generators are the Roto's track's last devices: the one level with
+    /// the cursor on that track, as the Gen page shows the cursor's own.
+    fn roto_phrase(&self, at: usize) -> Option<u32> {
+        self.phrase_beside(at).map(|(phrase, _)| phrase)
+    }
+
     /// The devices PLUGIN mode shows, from the song as it is.
     fn roto_devices(&self) -> Vec<LiveDevice> {
         let tracks = &self.song().tracks;
@@ -630,7 +636,12 @@ impl App {
         };
         // The Output device's faders follow the steps while they drive them.
         let heard = as_heard(track, &self.faders(at));
-        devices::live_devices(&heard, self.song(), self.roto.stored_on_roto)
+        devices::live_devices(
+            &heard,
+            self.roto_phrase(at),
+            self.song(),
+            self.roto.stored_on_roto,
+        )
     }
 
     /// A track as the Roto shows it, with its faders where the steps have them while they drive
@@ -829,10 +840,10 @@ impl App {
         let at = self.roto.track;
         let index = self.roto.view.index_of(button);
         let device = usize::from(self.roto.view.selected_index());
-        let control =
-            self.song().tracks.get(at).and_then(|track| {
-                devices::button_at(track, device, index, self.roto.stored_on_roto)
-            });
+        let phrase = self.roto_phrase(at);
+        let control = self.song().tracks.get(at).and_then(|track| {
+            devices::button_at(track, phrase, device, index, self.roto.stored_on_roto)
+        });
         if let Some(control) = control {
             let position = if on { 0 } else { KNOB_TOP };
             if let Some(action) = edits::turned(control, at, self.song(), position) {
@@ -900,8 +911,14 @@ impl App {
         let track = self.song().tracks.get(at)?;
         let index = self.roto.view.index_of(knob);
         let device = usize::from(self.roto.view.selected_index());
-        devices::control_at(track, device, index, self.roto.stored_on_roto)
-            .map(|control| (control, at))
+        devices::control_at(
+            track,
+            self.roto_phrase(at),
+            device,
+            index,
+            self.roto.stored_on_roto,
+        )
+        .map(|control| (control, at))
     }
 
     /// Each knob's last move of the frame as an edit of its own setting, on the Roto's track

@@ -63,7 +63,7 @@ fn every_knobs_name_fits_the_rotos_twelve_characters_uncut() {
                 }
             }
         }
-        for device in live_devices(track, &song, false) {
+        for device in live_devices(track, None, &song, false) {
             assert!(device.name.as_str().chars().count() <= 12);
             assert!(!device.name.is_empty());
         }
@@ -75,7 +75,7 @@ fn every_knobs_name_fits_the_rotos_twelve_characters_uncut() {
 fn every_position_is_on_the_knob_and_every_device_a_macro_of_its_pages() {
     let song = every_kind_of_device();
     for track in &song.tracks {
-        for device in live_devices(track, &song, false) {
+        for device in live_devices(track, None, &song, false) {
             assert!(
                 (1..=vt_roto::live::MAX_PAGES).contains(&device.pages()),
                 "{}",
@@ -303,7 +303,7 @@ fn the_roto_is_off_until_turned_on_on_the_audio_page() {
 fn turned_on_the_roto_shows_the_tracks_devices_live_and_stores_nothing() {
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
     app.set_roto(true);
-    let devices = live_devices(&app.song().tracks[0], app.song(), false);
+    let devices = live_devices(&app.song().tracks[0], None, app.song(), false);
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.knob(1).is_some_and(|knob| knob.learned.is_some())
     }));
@@ -781,7 +781,7 @@ fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
             messages.push(ports.with(|fake| fake.choose_plugin(1)));
         }
         ports.from_roto(messages);
-        let lfo = live_devices(&app.song().tracks[0], app.song(), false)[9].clone();
+        let lfo = live_devices(&app.song().tracks[0], None, app.song(), false)[9].clone();
         let first = lfo.control(1).unwrap().name.clone();
         assert!(tick_until(&mut app, &ports, |fake| {
             fake.shown == Some((9, 0)) && fake.knob(1).is_some_and(|knob| knob.name == first)
@@ -860,14 +860,14 @@ fn every_knob_left_where_it_is_edits_nothing_and_each_end_is_an_edit_that_holds(
     let song = std::sync::Arc::new(every_kind_of_device());
     let mut checked = 0;
     for (at, track) in song.tracks.iter().enumerate() {
-        for (device, (_, _, spec)) in track_devices(track).into_iter().enumerate() {
+        for (device, (_, _, spec)) in track_devices(track, None).into_iter().enumerate() {
             let knobs = placement(&spec, track, false).knobs;
             for (place, control) in knobs.into_iter().enumerate() {
                 let Some((control, _)) = control else {
                     continue;
                 };
                 assert_eq!(
-                    control_at(track, device, place as u16 + 1, false),
+                    control_at(track, None, device, place as u16 + 1, false),
                     Some(control)
                 );
                 let Some(shown) = knob(control, track, &song) else {
@@ -1048,7 +1048,7 @@ fn without_vimtrackers_setups_a_devices_buttons_are_two_step_knobs() {
         assert!(fake.serial_changes.is_empty());
     });
     // The envelope's reset is on its seventh knob, after its curve, as two steps.
-    let envelope = live_devices(&app.song().tracks[0], app.song(), false)
+    let envelope = live_devices(&app.song().tracks[0], None, app.song(), false)
         .into_iter()
         .find(|device| device.name.as_str() == "M1 ADSR")
         .unwrap();

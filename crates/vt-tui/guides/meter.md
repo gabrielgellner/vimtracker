@@ -152,8 +152,9 @@ In its PLUGIN mode the Roto shows one track's devices: the Sound page's (the mac
 `Filter`, `Output` and `Play`), then the FX slots, then the Mod page's (the six mod
 slots, named by number and type as `M1 ADSR`, `M2 AHD`, `M3 Drum`, `M4 LFO` and `M5 LPG`, then
 `Accumulator` and
-`Arpeggio`). Its buttons work as they do for Live and
-Bitwig:
+`Arpeggio`), then the live columns of the phrase level with the cursor on that track,
+as the Gen page has them, named by column and fill as `Note Ramp`. Its buttons work as
+they do for Live and Bitwig:
 
 *   **FUNC** shows the tracks on the buttons, eight at a time, with the arrows paging
     through them to the groups, the returns and the master. A button chooses which
@@ -183,6 +184,10 @@ not like the screen, the same way for every device:
 *   The Roto plays and tweaks; the app builds: choose a machine, an effect, an effect's
     type or a mod slot's type with `K` in the app. Each would swap the device's whole
     layout under your hand, as a mod slot's layout is its type's.
+*   A live column's knobs are its fill's settings in the order they shape the line, its
+    rows' (`Hits` and `Rotate`, or an `Every`'s or a `Chance`'s amount) on knobs 7 and 8.
+    Its fill, its rows' kind and a `Follow`'s source are chosen in the app, and a list's
+    values are typed there. `Acid`'s `Pitches` is a knob of two steps, `Roll` and `Keep`.
 
 Off/on settings are on the buttons, under the knob they go with, such as Glue's `Auto`
 under `Makeup`, a filter's `Safe` under `Res` and a mod slot's polarity under `Depth`, lit for `Bi`: a press switches it, `u` undoes it, and its light is on while it is. The
