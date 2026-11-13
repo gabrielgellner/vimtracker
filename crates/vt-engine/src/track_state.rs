@@ -29,6 +29,7 @@ use crate::dsp::filter::{Channel, Coefficients, Ramp, Trim, safe_resonance};
 use crate::dsp::memory::MemoryPool;
 use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
+use crate::gens::GenHolds;
 use crate::mixer::Reading;
 use crate::rng::Pcg32;
 use crate::timing::SlotTimes;
@@ -1012,6 +1013,8 @@ pub struct TrackState {
     /// How many times round its chain the track is, as the step it last played counts, which a
     /// Steps slot at `Pass` moves on by.
     pub chain_pass: i64,
+    /// The numbers the engine holds its generators' settings at, rather than their shapes'.
+    pub gen_holds: GenHolds,
     /// Where the track's last note started its modulation, for an LFO's fade and its hold, or
     /// none since playing started.
     noted: Option<LfoStart>,
@@ -1287,6 +1290,7 @@ impl TrackState {
             filter_countdown: 0,
             slots: [SlotRun::default(); MOD_SLOTS],
             chain_pass: 0,
+            gen_holds: GenHolds::default(),
             noted: None,
             new_note: false,
             fresh_voice: false,

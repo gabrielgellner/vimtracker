@@ -15,8 +15,8 @@ use vt_model::lfo::Rate;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, Edge, FillKind, Follow, GenCell, MAX_DEPTH, MAX_VALUES, Pink, Shape, ShapeColumn, Values,
-    WAVES, Walk, WaveRate, Where, render_into, written_from,
+    Acid, Edge, FillKind, Follow, GenCell, MAX_DEPTH, MAX_VALUES, Pink, RowView, Shape,
+    ShapeColumn, Values, WAVES, Walk, WaveRate, Where, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -401,7 +401,8 @@ fn hashes(
     found
 }
 
-/// The rows `render_into` writes, each with its step as its cell leaves it.
+/// The rows `render_into` writes, each with its step as its cell leaves it, which is also the row
+/// as the engine reads it with the cell laid over.
 fn rendered(case: &Case, column: ShapeColumn) -> Vec<(usize, Step)> {
     let mut cells = vec![GenCell::Pitch(0); case.range.len()];
     render_into(
@@ -420,6 +421,10 @@ fn rendered(case: &Case, column: ShapeColumn) -> Vec<(usize, Step)> {
             let row = case.range.first + offset;
             let mut step = case.steps[row].clone();
             cell.apply(column, &mut step);
+            // The engine's view of the row, with the cell laid over it, is the step it writes.
+            let mut view = RowView::of(&case.steps[row]);
+            view.lay(column, cell);
+            assert_eq!(view, RowView::of(&step), "{cell:?} laid on row {row}");
             (row, step)
         })
         .collect();
