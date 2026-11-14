@@ -2625,6 +2625,7 @@ name = "vt-engine"
 version = "0.2.0"
 dependencies = [
  "hound",
+ "realfft",
  "rtrb",
  "thiserror 2.0.21",
  "vt-model",
