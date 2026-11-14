@@ -200,10 +200,11 @@ impl Engine {
             if (groups..=master_track).contains(&index) {
                 continue;
             }
-            let route = self.group_of(index).map(|group| group - groups);
+            // Its group is looked up only if it's soloed or playing, as nothing else needs it.
+            let route = || self.group_of(index).map(|group| group - groups);
             let track = &self.tracks[index];
-            if let Some(group) = route
-                && track.solo
+            if track.solo
+                && let Some(group) = route()
             {
                 lit[group] = true;
             }
@@ -217,7 +218,7 @@ impl Engine {
                 track.feeds.settle();
             } else {
                 playing[count] = index;
-                routes[count] = route;
+                routes[count] = route();
                 count += 1;
             }
         }
