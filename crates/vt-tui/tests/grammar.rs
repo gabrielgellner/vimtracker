@@ -2188,6 +2188,8 @@ fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() 
             GenParam::From,
             GenParam::To,
             GenParam::Notes,
+            GenParam::Spread,
+            GenParam::Bias,
             GenParam::Octave,
             GenParam::Density,
             GenParam::Accent,
@@ -2219,7 +2221,7 @@ fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() 
     assert_ne!(written(&app), riff);
     // Turn the slides up to every note, then keep the pitches: `r` rolls only the accents,
     // slides and octaves, so each note keeps its name and row.
-    keys(&mut app, "jjjjjjj");
+    keys(&mut app, "jjjjjjjjj");
     assert_eq!(app.shape.as_ref().unwrap().row, GenParam::Slide);
     keys(&mut app, "i100<Enter>");
     assert!(written(&app).iter().all(|step| step.contains("HLD")));
@@ -2304,7 +2306,7 @@ fn acid_on_notes_keeps_their_rhythm_and_with_keep_their_pitches() {
     );
     assert_eq!(notes_of(&app)[3], "OFF");
     // Keep the pitches: the ends and notes go, and with no octaves every note is as it was.
-    keys(&mut app, "jjjjjjj");
+    keys(&mut app, "jjjjjjjjj");
     assert_eq!(app.shape.as_ref().unwrap().row, GenParam::Pitches);
     keys(&mut app, "=");
     assert_eq!(

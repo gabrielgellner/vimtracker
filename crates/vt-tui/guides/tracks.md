@@ -242,7 +242,7 @@ The FX page has 4 slots, which the sound goes through in order after the filters
 before `Level` and `Pan`. An empty slot does nothing and costs nothing.
 
 Each slot is a device: a frame with the slot's number, its switch, its effect and the effect's
-type in its title, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`,
+type in its title, and for `Beads` its quality too, its settings in three rows of up to four, and, for `Comp`, `Limit` and `EQ3`,
 a box on the right with its curve or how far it's turning down. The switch is a small pill, its
 knob right and green while the slot is in, and left and faint while it's bypassed. A setting
 that's off or on, such as a Comp's `Auto`, shows the same switch rather than a word. The device
@@ -668,6 +668,78 @@ track's seed, so a render is the same each time. Clouds' fourth mode, its
 spectral one, isn't here yet.
 <!-- ANCHOR_END: before-clouds -->
 <!-- ANCHOR: before-folded -->
+
+`Beads` is Mutable Instruments' Beads as the module plays: it records the
+sound all the time, with what it feeds back, onto one of four kinds of tape
+or memory, and plays it back as grains or as a delay, then through its own
+reverb. Its `Mode` and its `Quality` are in the slot's title, picked with
+`K`:
+
+* `Granular`, the module's own sound: grains read the recording. These are
+  `Grains`' grains, which are Beads'.
+* `Delay` is the module with `Size` all the way up: taps read the recording
+  at a delay `Density` sets. Frozen, a slice of what it holds loops.
+
+A change of mode takes the module's time, about two seconds: the wet sound
+holds a moment, fades out, and fades back in as the other.
+
+| Setting | Does |
+|---|---|
+| `Time` | Where grains start, from just now to the oldest |
+| `Size` | How long each grain is. Below `55` they play backwards |
+| `Shape` | The envelope, from square through decay and bell to swell |
+| `Pitch` | How far each grain is shifted, in semitones, two octaves |
+| `Random` | How far each grain's time, size and shape stray at random |
+| `Freeze` | On, it stops recording, so it plays what's held |
+| `Density` | How often grains start, or how long the delay is |
+| `Clock` | `Free`, by itself, or `Steps`, following the song's steps |
+| `Feedback` | How much of what comes out is recorded again |
+| `Reverb` | How much of Beads' own reverb comes out |
+| `Blend` | From `00`, the sound alone, to `FF`, all Beads |
+
+`Time`, `Size` and `Shape` are the module's knobs, and `Random` is its
+attenuverters with nothing patched: each grain strays from them by as much,
+and the more they stray, or the more at random grains come, the wider they
+spread across the sides. `Size` and `Shape` run as `Grains`' do.
+
+With `Clock` on `Free`, `Density` is the module's: no grains at `80`, evenly
+below it and at random above, faster towards either end, up to about 130 a
+second. On `Steps`, the song's steps are its clock, as a clock into the
+module's `SEED`: below `80` a grain on every step, then every second, third,
+fourth and on to every sixteenth, a bar, towards `80`; above it, each step
+has a chance of a grain, which grows to every step at `FF`. Grains start on
+the step.
+
+In `Delay`, `Density` sets the repeats' time. On `Free` it's the whole
+recording at `80`, shorter towards either end, down to a few ms, and above
+`80` a second, uneven tap comes in. On `Steps`, it's a share of a step: a
+sixteenth, an eighth, a quarter, a half or a whole one below `80`, and
+others, a third, a sixth and so on, above. `Time` then multiplies the
+repeats' time by 1 to 16, `Shape` puts an envelope on each repeat, none at
+`00`, `Pitch` shifts them as a tape echo with rotating heads does, and
+`Size` is their tone: a low-pass below `80`, a high-pass above, open at `80`.
+Frozen, `Time` picks which slice of what's held loops.
+
+`Quality` is the module's four, each a longer and dirtier recording:
+
+| Quality | Records | Holds |
+|---|---|---|
+| `Hi-fi` | 16 bits at 48 kHz | 4 s |
+| `Cold digital` | 12 bits at 32 kHz | 8 s |
+| `Sunny tape` | 12 bits at 24 kHz | 10.7 s |
+| `Scorched cassette` | 8-bit mu-law at 24 kHz, with wow and flutter | 16 s |
+
+Each also feeds back its own way, from a clean limit at `Hi-fi` to a tape's
+saturation at the others, and the dirtier ones' reverb is darker and rings
+longer, as the module's does. `Scorched cassette` codes the dry sound too,
+and its wow and flutter move all of it. Changing `Quality` starts a new
+recording, so steps don't lock it, nor `Mode`.
+
+`Beads`, `Grains` and `Tape` are related: `Grains` is Beads' granular mode
+on its own, with a `Spread` of its own, and `Tape` has Beads' wow and
+flutter. Its grains' places, its random intervals and its chances come from
+the track's seed, so a render is the same each time. The module's third mode,
+a wavetable synth for when nothing's patched in, isn't here.
 
 `Warps` crosses the sound with a second one, after Mutable Instruments'
 Warps. The track's own sound is the carrier. The modulator is another
@@ -1624,7 +1696,8 @@ dim too, and so is a `Vary` of `Once`. Its settings are the
 shape panel's, laid out by what they do: the fill's down the first two columns,
 and the `Where`'s, `Hits` and `Rotate` or an amount, at the foot of the third, so
 they stay put as the fill changes. A `Follow`, which has no `Where`, has its
-`Mutation` and the kinds it may make in the third column and the fourth. A value with a bar is brief, as `9` for hits,
+`Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
+whose three are full, its riff's `Spread` and `Bias` in the fourth. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 
@@ -1840,7 +1913,9 @@ finds `Euclid`.
 
 Each is the part of that song's track that plays it, with its macros turned to where the song
 has them; the generators tutorial has a section on each. `Deja vu` is the Turing Machine with
-Marbles' knob, up for more memory, and `Kria`'s length loop comes with its lane of 4 on FX 1.
+the left half of Marbles' knob, up for more memory; the right half, the loop played out of
+order, is the phrase's `:order random`, which a patch doesn't hold. `Kria`'s length loop comes
+with its lane of 4 on FX 1.
 
 **What's saved** goes by the macros, as they're the patch's knobs: each macro that holds
 something, with its name, value, mappings and ranges; every mod slot a macro maps to, the slots

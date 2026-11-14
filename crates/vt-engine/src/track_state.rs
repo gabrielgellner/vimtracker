@@ -26,7 +26,7 @@ use vt_model::steps::{MAX_STEP, STEPS, StepRate, Steps, StepsMode, smoothed};
 use crate::dsp::blocks::sides::same_sides;
 use crate::dsp::distort::{BYPASS_FADE_MS, InsertState};
 use crate::dsp::filter::{Channel, Coefficients, Ramp, Trim, safe_resonance};
-use crate::dsp::memory::MemoryPool;
+use crate::dsp::memory::{MemoryPool, SongPlace};
 use crate::dsp::smoother::Smoothed;
 use crate::dsp::virtual_analog::Settings;
 use crate::gens::GenHolds;
@@ -478,6 +478,17 @@ pub struct SongTime {
     pub frames_per_tick: f64,
     /// Frames rendered in all, playing or not.
     pub rendered: u64,
+}
+
+impl SongTime {
+    /// Where the song is, for the slots' effects that keep time with it.
+    pub fn place(&self, stopped: bool) -> SongPlace {
+        SongPlace {
+            tick: self.tick,
+            playing: !stopped,
+            frames_per_tick: self.frames_per_tick,
+        }
+    }
 }
 
 /// What a track is playing with right now, after step commands and modulation, on the same `00` to
@@ -1316,7 +1327,7 @@ fn accumulator_rng(seed: u64, index: usize) -> Pcg32 {
     )
 }
 
-/// The generator for what a track's slot draws at random, Clouds' grains, on streams after every
+/// The generator for what a track's slot draws at random, Clouds' and Beads' grains, on streams after every
 /// track's `Random` accumulators.
 fn effect_rng(seed: u64, index: usize, slot: usize) -> Pcg32 {
     Pcg32::new(
@@ -1984,7 +1995,7 @@ impl TrackState {
                 resolved = resolved.write(setting, value);
             }
             self.resolved[slot] = resolved;
-            self.inserts[slot].hold(resolved, memory, now.frames_per_tick, now.rendered);
+            self.inserts[slot].hold(resolved, memory, now.place(stopped), now.rendered);
             if std::mem::take(&mut self.struck[slot]) {
                 self.inserts[slot].strike();
             }
@@ -2035,8 +2046,9 @@ impl TrackState {
     /// moves on, and so do a reverb's or a plate's wobbles, which go by the frame.
     pub fn keep_resting(&mut self, now: SongTime) {
         self.shared_at = now.rendered;
+        let stopped = self.rest.is_none_or(|rest| rest.stopped);
         for insert in &mut self.inserts {
-            insert.keep_time(now.rendered);
+            insert.keep_time(now.rendered, now.place(stopped));
         }
     }
 

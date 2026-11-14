@@ -336,6 +336,9 @@ impl Handle {
         for _ in self.held.clouds..needed.clouds {
             self.unsent.push(Memory::clouds(self.rate));
         }
+        for _ in self.held.beads..needed.beads {
+            self.unsent.push(Memory::beads(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
@@ -355,6 +358,7 @@ impl Handle {
             rotary: self.held.rotary.saturating_sub(needed.rotary),
             space: self.held.space.saturating_sub(needed.space),
             clouds: self.held.clouds.saturating_sub(needed.clouds),
+            beads: self.held.beads.saturating_sub(needed.beads),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -660,6 +664,8 @@ mod tests {
     const SPACE: Insert = Insert::Space(vt_model::insert::Space::DEFAULT);
     /// Clouds, which takes its recording from the pool.
     const CLOUDS: Insert = Insert::Clouds(vt_model::insert::Clouds::DEFAULT);
+    /// Beads, which takes its recording from the pool.
+    const BEADS: Insert = Insert::Beads(vt_model::insert::Beads::DEFAULT);
 
     const BLOCK: usize = 256;
 
@@ -846,6 +852,8 @@ mod tests {
                 next.tracks[round % 8].inserts = [GRAINS, PITCH, GRAINS, PITCH];
             } else if round % 64 == 47 {
                 next.tracks[round % 8].inserts = [CLOUDS, PITCH, CLOUDS, GRAINS];
+            } else if round % 64 == 55 {
+                next.tracks[round % 8].inserts = [BEADS, GRAINS, BEADS, CLOUDS];
             } else if round % 128 == 63 {
                 next.tracks[round % 8].inserts = [WARPS, GRAINS, WARPS, GRAINS];
             } else if round % 256 == 127 {
@@ -882,7 +890,7 @@ mod tests {
         more.tracks[1].inserts = [LIMIT, FLANGER, TAPE, Insert::Empty];
         more.tracks[2].inserts = [PLATE, ROTARY, CLOUDS, Insert::Empty];
         more.tracks[3].inserts = [Insert::Empty, PITCH, SPRING, SPACE];
-        more.tracks[4].inserts = [Insert::Empty, Insert::Empty, STUTTER, GRAINS];
+        more.tracks[4].inserts = [Insert::Empty, BEADS, STUTTER, GRAINS];
         more.tracks[5].inserts = [WARPS, COMB, RESO, SHIFT];
         handle.publish(published(more, &pool));
         assert_eq!(
@@ -906,6 +914,7 @@ mod tests {
                 rotary: needed.rotary + 1,
                 stutter: needed.stutter + 1,
                 clouds: needed.clouds + 1,
+                beads: needed.beads + 1,
             }
         );
         blocks(&mut rt, 1);
@@ -920,7 +929,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 18);
+        assert_eq!(freed, 19);
     }
 
     #[test]
@@ -975,6 +984,40 @@ mod tests {
             });
             next.tracks[0].inserts = [clouds, Insert::Empty, clouds, Insert::Empty];
             next.tracks[1].inserts = [CLOUDS; INSERTS];
+            next
+        };
+        let engine = Engine::new(48_000, published(changing(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 1..200 {
+            handle.publish(published(changing(round), &pool));
+            violations += blocks(&mut rt, 2);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
+    #[test]
+    fn beads_changing_mode_quality_clock_and_freeze_never_allocates_in_the_callback() {
+        use vt_model::insert::{Beads, BeadsMode};
+        let pool = samples();
+        let changing = |round: usize| {
+            let mut next = song(2, 16);
+            let beads = Insert::Beads(Beads {
+                mode: BeadsMode::ALL[round % 2],
+                quality: (round / 2 % 4) as u8,
+                clock: (round / 3 % 2) as u8,
+                freeze: (round / 5 % 2) as u8,
+                time: (round * 37 % 256) as u8,
+                size: (round * 91 % 256) as u8,
+                density: (round * 53 % 256) as u8,
+                random: (round * 29 % 256) as u8,
+                feedback: 0xC0,
+                ..Beads::DEFAULT
+            });
+            next.tracks[0].inserts = [beads, Insert::Empty, beads, Insert::Empty];
+            next.tracks[1].inserts = [BEADS; INSERTS];
             next
         };
         let engine = Engine::new(48_000, published(changing(0), &pool));

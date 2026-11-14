@@ -2,6 +2,7 @@
 //! slot's state and plays whichever effect it has, and [`memory`] keeps the long buffers some
 //! effects take. The table Warps reads is in `effects/tables/`.
 
+pub mod beads;
 pub mod chorus;
 pub mod clouds;
 pub mod delay;
