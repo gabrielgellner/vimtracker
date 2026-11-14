@@ -16,7 +16,10 @@ use crate::settings::{Entry, Kind, Units};
 /// A setting the effect doesn't have reads as `0` and writes as nothing. [`Insert::write`] only
 /// writes one it has, within its range.
 macro_rules! effect_settings {
-    ($($field:ident $(: $choices:ident)? => $setting:ident $(via ($place:path, $kept:path))?),+ $(,)?) => {
+    (
+        $($field:ident $(: $choices:ident)? => $setting:ident $(via ($place:path, $kept:path))?),+
+        $(,)?
+    ) => {
         /// A setting's value, on the scale a step gives. One it doesn't have reads as nothing.
         pub(super) fn read(self, setting: $crate::insert::Setting) -> u8 {
             match setting {
@@ -39,9 +42,9 @@ macro_rules! effect_settings {
             settings
         }
     };
-    (@read $kept:expr) => { $kept };
-    (@read $kept:expr, via $place:path) => { $place($kept) };
-    (@read $kept:expr, $choices:ident) => { $kept as u8 };
+    (@read $stored:expr) => { $stored };
+    (@read $stored:expr, via $place:path) => { $place($stored) };
+    (@read $stored:expr, $choices:ident) => { $stored as u8 };
     (@write $value:expr) => { $value };
     (@write $value:expr, via $kept:path) => { $kept($value) };
     (@write $value:expr, $choices:ident) => {
