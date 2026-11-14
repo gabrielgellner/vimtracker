@@ -72,6 +72,9 @@ fn parse_song(text: &str, path: &Path) -> Result<Song, ProjectError> {
     }
     let mut song: Song = ron::from_str(text).map_err(|e| parse(&e))?;
     song.ensure_fixed_tracks();
+    // Generators' held shapes aren't saved: work them out once, as an edit would, so a song is
+    // heard as held from the moment it loads. Its columns are already what that writes.
+    crate::action::hold_generators(&mut song);
     Ok(song)
 }
 
