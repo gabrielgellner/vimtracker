@@ -25,6 +25,7 @@ use vt_tui::input::mode::{Mode, View};
 
 mod common;
 use common::*;
+use vt_tui::kitty::{PanelIds, PanelKey};
 
 /// Go to a track that's shown with `W` or `B`, as many times as there are shown tracks between,
 /// as they step over the folded ones.
@@ -1335,7 +1336,7 @@ fn the_track_page_draws_each_envelopes_shape() {
     let mut graphics = Graphics::new();
     // The page as the author's screen has room for it, beside the meter.
     let page = |app: &mut App, graphics: &mut Graphics| {
-        graphics.sync(app, &mut Vec::new()).unwrap();
+        app.send_pictures(graphics, &mut Vec::new()).unwrap();
         let backend = ratatui::backend::TestBackend::new(150, 40);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
@@ -1356,7 +1357,7 @@ fn the_track_page_draws_each_envelopes_shape() {
         true,
         "ADSR  Exp  --  → Vol ─"
     )));
-    let first = app.track_page.mod_images.unwrap()[0];
+    let first = app.track_page.images.get(PanelKey::Mod(0)).unwrap();
     assert_eq!(drawn[image].fg, id_color(first));
 
     // Changing a value sends a new image, which the placeholders point to.
@@ -1792,9 +1793,14 @@ fn page_text(app: &App) -> String {
 #[test]
 fn envelopes_drawn_as_images_leave_placeholders_with_their_positions() {
     let (mut app, _realtime) = app();
-    app.track_page.mod_images = Some([
-        0x01_02_03, 0x04_05_06, 0x07_08_09, 0x0A_0B_0C, 0x0D_0E_0F, 0x10_11_12,
-    ]);
+    app.track_page.images = PanelIds::from_iter(
+        [
+            0x01_02_03, 0x04_05_06, 0x07_08_09, 0x0A_0B_0C, 0x0D_0E_0F, 0x10_11_12,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(slot, id)| (PanelKey::Mod(slot), id)),
+    );
     press(&mut app, " 5L");
     // As much of the page as the author's screen has room for, beside the meter.
     let buffer = {
@@ -1844,7 +1850,7 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         let out = String::from_utf8(out).unwrap();
         (out.matches(",c=24,r=5,").count(), out)
     };
@@ -1853,27 +1859,27 @@ fn a_changed_envelope_image_gets_a_new_id_and_moving_the_cursor_sends_nothing() 
     press(&mut app, " 5L");
     // The envelopes' shapes and the LFOs' cycles, all at the half size.
     assert_eq!(sync(&mut app, &mut graphics).0, MOD_SLOTS);
-    let first = app.track_page.mod_images.unwrap();
+    let first = mod_images(&app);
     assert_ne!(first[0], first[1]);
     assert_eq!(sync(&mut app, &mut graphics).0, 0, "nothing has changed");
 
     // Each envelope's other look is sent once, and after that the cursor only swaps between them.
     press(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics).0, 2);
-    let moved = app.track_page.mod_images.unwrap();
+    let moved = mod_images(&app);
     assert!(moved[0] != first[0] && moved[1] != first[1]);
     press(&mut app, "{");
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
-    assert_eq!(app.track_page.mod_images.unwrap(), first);
+    assert_eq!(mod_images(&app), first);
     press(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
-    assert_eq!(app.track_page.mod_images.unwrap(), moved);
+    assert_eq!(mod_images(&app), moved);
 
     // A change makes a new image, and the old one is forgotten only after the screen moves on.
     press(&mut app, "j=");
     let (sent, out) = sync(&mut app, &mut graphics);
     assert_eq!(sent, 1);
-    let changed = app.track_page.mod_images.unwrap();
+    let changed = mod_images(&app);
     assert_ne!(changed[1], moved[1]);
     assert_eq!(changed[0], moved[0]);
     let forget = format!("a=d,d=I,i={},q=2", moved[1]);
@@ -1913,30 +1919,30 @@ fn the_filter_curve_follows_its_settings_and_the_cursor() {
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         String::from_utf8(out).unwrap().matches(",c=49,").count()
     };
     press(&mut app, " 5");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    let plain = app.track_page.filter_image.unwrap();
+    let plain = app.track_page.images.get(PanelKey::Filter).unwrap();
     assert_eq!(sync(&mut app, &mut graphics), 0);
 
     // In the Filter it's picked out, once.
     press(&mut app, "}");
     assert_eq!(column_name(&app), "Filter");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    let picked = app.track_page.filter_image.unwrap();
+    let picked = app.track_page.images.get(PanelKey::Filter).unwrap();
     assert_ne!(picked, plain);
     press(&mut app, "k");
     assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.track_page.filter_image.unwrap(), plain);
+    assert_eq!(app.track_page.images.get(PanelKey::Filter).unwrap(), plain);
 
     // A new setting draws it again.
     press(&mut app, "jj");
     assert_eq!(column_name(&app), "Cut");
     press(&mut app, "-");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    assert_ne!(app.track_page.filter_image.unwrap(), picked);
+    assert_ne!(app.track_page.images.get(PanelKey::Filter).unwrap(), picked);
     assert_eq!(sync(&mut app, &mut graphics), 0);
 
     // And so does a new mode.
@@ -1955,13 +1961,13 @@ fn the_filter_curve_moves_with_what_plays() {
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         let out = String::from_utf8(out).unwrap();
         (out.matches(",c=49,").count(), out.matches("a=d,").count())
     };
     press(&mut app, " 5");
     sync(&mut app, &mut graphics);
-    let still = app.track_page.filter_image.unwrap();
+    let still = app.track_page.images.get(PanelKey::Filter).unwrap();
     let track = app.song().tracks[0].clone();
     let live = |cutoff, resonance| LiveValues {
         level: track.level,
@@ -1986,23 +1992,29 @@ fn the_filter_curve_moves_with_what_plays() {
     // Each new value draws it once, and it holds while the value does.
     app.services.live = Some(live(0x40, track.resonance));
     assert_eq!(sync(&mut app, &mut graphics).0, 1);
-    let moved = app.track_page.filter_image.unwrap();
+    let moved = app.track_page.images.get(PanelKey::Filter).unwrap();
     assert_ne!(moved, still);
     // Holding, it sends nothing new, and the image it replaced is forgotten.
     assert_eq!(sync(&mut app, &mut graphics), (0, 1));
     assert_eq!(sync(&mut app, &mut graphics), (0, 0));
     app.services.live = Some(live(0x40, 0xC0));
     assert_eq!(sync(&mut app, &mut graphics).0, 1);
-    assert_ne!(app.track_page.filter_image.unwrap(), moved);
+    assert_ne!(app.track_page.images.get(PanelKey::Filter).unwrap(), moved);
 
     // Back on the setting the next frame, as an LFO moves it, it keeps the last for a frame, so
     // it's sent at most every other frame, and then it's drawn from the setting again.
-    let resonant = app.track_page.filter_image.unwrap();
+    let resonant = app.track_page.images.get(PanelKey::Filter).unwrap();
     app.services.live = Some(live(track.cutoff, track.resonance));
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
-    assert_eq!(app.track_page.filter_image.unwrap(), resonant);
+    assert_eq!(
+        app.track_page.images.get(PanelKey::Filter).unwrap(),
+        resonant
+    );
     assert_eq!(sync(&mut app, &mut graphics).0, 1);
-    assert_ne!(app.track_page.filter_image.unwrap(), resonant);
+    assert_ne!(
+        app.track_page.images.get(PanelKey::Filter).unwrap(),
+        resonant
+    );
 }
 
 fn jump_labels(app: &App) -> Vec<String> {
@@ -2431,7 +2443,7 @@ fn a_samplers_thumbnail_is_sent_once_and_again_only_for_a_change() {
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         String::from_utf8(out)
             .unwrap()
             .matches(",c=49,r=5,")
@@ -2440,14 +2452,14 @@ fn a_samplers_thumbnail_is_sent_once_and_again_only_for_a_change() {
     press(&mut app, " 5");
     // The filter's curve and the thumbnail, picked out as the cursor's in the Machine.
     assert_eq!(sync(&mut app, &mut graphics), 2);
-    let picked = app.track_page.waveform_image.unwrap();
-    assert_ne!(Some(picked), app.track_page.filter_image);
+    let picked = app.track_page.images.get(PanelKey::Waveform).unwrap();
+    assert_ne!(Some(picked), app.track_page.images.get(PanelKey::Filter));
     assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
     // Moving about the Machine sends nothing.
     press(&mut app, "j");
     assert_eq!(column_name(&app), "Slice");
     assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.track_page.waveform_image, Some(picked));
+    assert_eq!(app.track_page.images.get(PanelKey::Waveform), Some(picked));
 
     // Out of it, it's dim, once, and back in, it's the one already sent.
     press(&mut app, "}");
@@ -2456,11 +2468,11 @@ fn a_samplers_thumbnail_is_sent_once_and_again_only_for_a_change() {
         2,
         "the filter's is picked out too"
     );
-    let plain = app.track_page.waveform_image.unwrap();
+    let plain = app.track_page.images.get(PanelKey::Waveform).unwrap();
     assert_ne!(plain, picked);
     press(&mut app, "{");
     assert_eq!(sync(&mut app, &mut graphics), 0, "each shade has been sent");
-    assert_eq!(app.track_page.waveform_image, Some(picked));
+    assert_eq!(app.track_page.images.get(PanelKey::Waveform), Some(picked));
 
     // A new start draws it again, once.
     press(&mut app, "l");
@@ -2469,16 +2481,16 @@ fn a_samplers_thumbnail_is_sent_once_and_again_only_for_a_change() {
     assert_eq!(sync(&mut app, &mut graphics), 0);
     press(&mut app, "=");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    assert_ne!(app.track_page.waveform_image, Some(picked));
+    assert_ne!(app.track_page.images.get(PanelKey::Waveform), Some(picked));
     assert_eq!(sync(&mut app, &mut graphics), 0);
 
     // Another track's sample is drawn for it, and one with no sample has none.
     app.services.cursor.track = 1;
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    assert_ne!(app.track_page.waveform_image, Some(plain));
+    assert_ne!(app.track_page.images.get(PanelKey::Waveform), Some(plain));
     app.services.cursor.track = 2;
     sync(&mut app, &mut graphics);
-    assert_eq!(app.track_page.waveform_image, None);
+    assert_eq!(app.track_page.images.get(PanelKey::Waveform), None);
 }
 
 #[test]
@@ -2487,18 +2499,18 @@ fn the_filter_curve_and_the_envelopes_are_smooth_at_their_sizes() {
     let mut graphics = vt_tui::kitty::Graphics::new();
     press(&mut app, " 5");
     let mut out = Vec::new();
-    graphics.sync(&mut app, &mut out).unwrap();
+    app.send_pictures(&mut graphics, &mut out).unwrap();
     let sent = vt_tui::screenshot::sent_images(&out);
     // The filter's curve is the large panel's 49 by 5 characters, at their pixels, in a palette
     // with an alpha for each of its entries: the line at eighths, and the gridlines.
     assert!(String::from_utf8(out).unwrap().contains(",c=49,r=5,"));
-    let filter = &sent[&app.track_page.filter_image.unwrap()];
+    let filter = &sent[&app.track_page.images.get(PanelKey::Filter).unwrap()];
     assert_eq!(png_size(filter), (735, 195));
     assert_eq!(png_chunk(filter, b"tRNS").len(), 11);
     // The envelopes and the LFOs' cycles are the half size, 24 by 5.
     press(&mut app, "L");
     let mut out = Vec::new();
-    graphics.sync(&mut app, &mut out).unwrap();
+    app.send_pictures(&mut graphics, &mut out).unwrap();
     assert_eq!(
         String::from_utf8(out.clone())
             .unwrap()
@@ -2507,7 +2519,7 @@ fn the_filter_curve_and_the_envelopes_are_smooth_at_their_sizes() {
         6
     );
     let sent = vt_tui::screenshot::sent_images(&out);
-    for id in app.track_page.mod_images.unwrap() {
+    for id in mod_images(&app) {
         assert_eq!(png_size(&sent[&id]), (360, 195));
         assert!(sent[&id].len() < 6000, "{}", sent[&id].len());
     }

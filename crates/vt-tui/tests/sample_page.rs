@@ -727,12 +727,12 @@ fn draw_in(
         width: width * cell.0,
         height: height * cell.1,
     });
-    graphics.sync(app, &mut sent).unwrap();
+    app.send_pictures(graphics, &mut sent).unwrap();
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
         .draw(|frame| draw_screen(frame, app, None, Instant::now()))
         .unwrap();
-    graphics.place(app, &mut sent).unwrap();
+    app.place_pictures(graphics, &mut sent).unwrap();
     (terminal, String::from_utf8_lossy(&sent).into_owned())
 }
 

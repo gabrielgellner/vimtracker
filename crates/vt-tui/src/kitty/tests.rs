@@ -1,5 +1,19 @@
+use std::io::Read;
+
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use ratatui::buffer::Buffer;
+
 use super::encoding::{adler32, crc32};
+use super::protocol::{CHUNK, QUERY_ID, answer};
+use super::switches::Look;
 use super::*;
+use crate::theme;
+use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
+use crate::views::picker::{
+    PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH, PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH,
+};
+use crate::views::sample::MarkKind;
 
 type Chunks = Vec<(String, Vec<u8>)>;
 

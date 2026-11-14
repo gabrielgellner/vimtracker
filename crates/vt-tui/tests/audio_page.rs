@@ -239,7 +239,7 @@ fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         String::from_utf8(out)
             .unwrap()
             .matches(",c=12,r=3,")
@@ -267,7 +267,7 @@ fn the_scope_sends_a_picture_only_when_it_changes_and_draws_above_the_meter() {
         block(&mut realtime, &mut app);
         let before = app.scope_image;
         let mut out = Vec::new();
-        graphics.sync(&mut app, &mut out).unwrap();
+        app.send_pictures(&mut graphics, &mut out).unwrap();
         let out = String::from_utf8(out).unwrap();
         let shown = app.scope_image.unwrap();
         assert!(

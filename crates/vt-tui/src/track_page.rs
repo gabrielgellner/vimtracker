@@ -4,9 +4,10 @@
 //! [`Services`], and its drawing, in `views::track`, given a [`Ctx`]. Each page's settings are in a
 //! file of its own (`sound`, `modulation`, `fx`), each gives its devices to `Page::devices` if it's
 //! a rack (`device`), and `editing`, `typing` and `tuning` change the setting under the cursor, as
-//! functions over the services that the mixer shares; `pickers`, which open the program's
-//! picker, and the Gen page's `generators`, which reshape through the program's shape panel, are
-//! still `App`'s.
+//! functions over the services that the mixer shares; `pictures` says which pictures the page
+//! wants the terminal to have and where their dots go, as data for `Graphics`; `pickers`, which
+//! open the program's picker, and the Gen page's `generators`, which reshape through the program's
+//! shape panel, are still `App`'s.
 
 mod controls;
 mod device;
@@ -15,6 +16,7 @@ mod fx;
 mod generators;
 mod modulation;
 mod pickers;
+mod pictures;
 mod sound;
 pub(crate) mod tuning;
 mod typing;
@@ -30,7 +32,6 @@ pub(crate) use modulation::modulator_bypassed;
 use std::sync::Arc;
 
 use vt_model::insert::INSERTS;
-use vt_model::modulation::MOD_SLOTS;
 use vt_model::selection::Motion;
 use vt_model::song::Track;
 use vt_model::steps::STEPS;
@@ -38,6 +39,8 @@ use vt_model::steps::STEPS;
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
+use crate::kitty::PanelIds;
+use crate::kitty::slots::SlotDrawing;
 use crate::meter::{FLOOR_DB, Held, ReductionHistory};
 use crate::page::{Ctx, CtxMut};
 use crate::services::Services;
@@ -177,25 +180,15 @@ pub struct TrackPage {
     /// Whether the FX page is zoomed in on the cursor's slot, `z i`, rather than showing the rack
     /// (decision 329). It's kept while other pages show, as the FX page's own.
     pub zoomed: bool,
-    /// The terminal's images of the Mod page's slots, an envelope's shape or an LFO's cycle each,
-    /// by slot.
-    pub mod_images: Option<[u32; MOD_SLOTS]>,
+    /// The ids of the terminal's images of the pictures the page last wanted, by panel: the
+    /// filter's curve and a sampler's thumbnail, the Mod page's slots, the FX page's slots or its
+    /// zoomed one, the Gen page's previews by each generator's place in its phrase's list.
+    pub images: PanelIds,
+    /// What's said under the zoomed slot's box, a delay's or a reverb's time scale, and the
+    /// drawing it was worked out for.
+    pub(crate) zoom_caption: Option<(SlotDrawing, Option<String>)>,
     /// Where each LFO's cycle was last drawn, for the terminal to place its dot on.
     pub lfo_cycles_at: CyclesAt,
-    /// The id of the image of the filter's curve, likewise.
-    pub filter_image: Option<u32>,
-    /// The id of the image of the waveform of the sample the cursor's track plays, if it has one.
-    pub waveform_image: Option<u32>,
-    /// The ids of the images of the FX page's slots, for those that have a drawing.
-    pub slot_images: [Option<u32>; INSERTS],
-    /// The id of the image of the zoomed slot's drawing, while the FX page is zoomed on one that
-    /// has one.
-    pub zoom_image: Option<u32>,
-    /// What's said under the zoomed slot's box: a delay's or a reverb's time scale.
-    pub zoom_caption: Option<String>,
-    /// The images of the Gen page's previews the terminal has, by each generator's place in its
-    /// phrase's list.
-    pub gen_images: Vec<Option<u32>>,
     /// Where each preview the Gen page drew is, its generator's place and its picture's top left,
     /// for the terminal to place the row playing on.
     pub gen_panels_at: Vec<(usize, (u16, u16))>,
@@ -224,14 +217,9 @@ impl Default for TrackPage {
             kept: Default::default(),
             phrase: None,
             zoomed: false,
-            mod_images: None,
-            lfo_cycles_at: Default::default(),
-            filter_image: None,
-            waveform_image: None,
-            slot_images: [None; INSERTS],
-            zoom_image: None,
+            images: PanelIds::default(),
             zoom_caption: None,
-            gen_images: Vec::new(),
+            lfo_cycles_at: Default::default(),
             gen_panels_at: Vec::new(),
             taken_insert: None,
             slot_reduction: [Held::new(0.0); INSERTS],

@@ -97,7 +97,7 @@ one dot in the same format as its drawings, then asks for the primary device att
 of its own, up to the attributes, so nothing is left over for crossterm to read. An `OK` for id 31
 before the attributes is a yes, and anything else, or no answer in 2 seconds, is a no.
 
-What `kitty.rs` uses of the protocol:
+What `kitty/protocol.rs` uses of the protocol:
 
 | Part | Used as |
 |---|---|
