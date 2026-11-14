@@ -1290,7 +1290,7 @@ fn w_to_a_new_folder_saves_a_copy_that_isnt_read_only_to_carry_on_in() {
 }
 
 #[test]
-fn set_readonly_and_noreadonly_switch_it_and_the_status_line_and_title_say_ro() {
+fn set_readonly_and_readwrite_switch_it_and_the_status_line_and_title_say_ro() {
     use vt_model::project::load_song;
     let (mut app, _rt) = app();
     let path = folder();
@@ -1298,6 +1298,8 @@ fn set_readonly_and_noreadonly_switch_it_and_the_status_line_and_title_say_ro() 
     assert!(!status_line(&app).contains("[RO]"));
     for (line, on) in [
         ("set readonly", true),
+        ("set readwrite", false),
+        ("set ro", true),
         ("set noreadonly", false),
         ("set ro", true),
     ] {
@@ -1320,7 +1322,19 @@ fn set_readonly_and_noreadonly_switch_it_and_the_status_line_and_title_say_ro() 
     assert!(app.read_only);
     command(&mut app, "w");
     assert!(app.dirty, "now it refuses");
-    command(&mut app, "set noro");
+    // Unsaved, :e, :new and :q offer a copy, as :w won't write over it.
+    for (line, or) in [
+        ("e", ":e! to discard them"),
+        ("new", ":new! to discard them"),
+        ("q", ":q! to quit anyway"),
+    ] {
+        command(&mut app, line);
+        assert_eq!(
+            app.status,
+            format!("Unsaved changes to a read-only song: :w path to save a copy, or {or}")
+        );
+    }
+    command(&mut app, "set rw");
     command(&mut app, "w");
     assert!(!app.dirty, "{}", app.status);
     assert!(!load_song(&path).unwrap().read_only);

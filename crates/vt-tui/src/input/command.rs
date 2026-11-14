@@ -587,7 +587,7 @@ pub enum LineError {
     #[error(":group name takes 1 to {GROUP_NAME_CHARS} letters or digits, or nothing to clear it")]
     GroupName,
     #[error(
-        ":set takes skip=n, limiter=on or off, scale=dorian, on or off, root=d, or readonly or noreadonly"
+        ":set takes skip=n, limiter=on or off, scale=dorian, on or off, root=d, or readonly or readwrite"
     )]
     Set,
     #[error(":scale takes fit, or nothing to choose from a list")]
@@ -850,12 +850,16 @@ pub const SETTINGS: [Setting; 4] = [
     },
 ];
 
-/// A `:set` option switched on by its name and off by `no` and its name, as Vim's are, with a
-/// short name that does the same: `:set readonly`, `:set noro`.
+/// A `:set` option switched on by its name and off by its opposite's, each with a short name that
+/// does the same: `:set readonly` or `:set ro`, and `:set readwrite` or `:set rw`. Vim's `no`
+/// before the name, `:set noro`, switches it off too, quietly, for Vim's hands.
 #[derive(Debug, Clone, Copy)]
 pub struct Switch {
     pub name: &'static str,
     pub short: &'static str,
+    /// The opposite's name and short name, which switch it off.
+    pub opposite: &'static str,
+    pub opposite_short: &'static str,
     /// What switching it on and off does.
     pub on: &'static str,
     pub off: &'static str,
@@ -863,15 +867,19 @@ pub struct Switch {
 }
 
 impl Switch {
-    /// What a word does with this option: `name` or `short` switch it on, and either after `no` off.
+    /// What a word does with this option: `name` or `short` switch it on, and the opposite's
+    /// names, or either of its own after `no`, off.
     fn read(&self, word: &str) -> Option<Line> {
         let named = |word: &str| word == self.name || word == self.short;
         if named(word) {
             Some((self.line)(true))
+        } else if word == self.opposite
+            || word == self.opposite_short
+            || word.strip_prefix("no").is_some_and(named)
+        {
+            Some((self.line)(false))
         } else {
-            word.strip_prefix("no")
-                .filter(|rest| named(rest))
-                .map(|_| (self.line)(false))
+            None
         }
     }
 }
@@ -880,6 +888,8 @@ impl Switch {
 pub const SWITCHES: [Switch; 1] = [Switch {
     name: "readonly",
     short: "ro",
+    opposite: "readwrite",
+    opposite_short: "rw",
     on: "Make the song read-only, so :w won't write over it",
     off: "Let :w write over the song again",
     line: Line::ReadOnly,
@@ -1591,6 +1601,8 @@ mod tests {
         for (word, on) in [
             ("readonly", true),
             ("ro", true),
+            ("readwrite", false),
+            ("rw", false),
             ("noreadonly", false),
             ("noro", false),
         ] {
@@ -1602,6 +1614,7 @@ mod tests {
         }
         assert_eq!(parse("set noreadonlyx"), Err(LineError::Set));
         assert_eq!(parse("set no"), Err(LineError::Set));
+        assert_eq!(parse("set norw"), Err(LineError::Set));
         assert_eq!(parse("track add 0"), Err(LineError::Track));
         assert_eq!(parse("name bd"), Ok(Line::Name(Some("BD".into()))));
         assert_eq!(parse("name"), Ok(Line::Name(None)));

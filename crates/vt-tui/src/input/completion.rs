@@ -220,7 +220,7 @@ pub fn complete(line: &str, places: Places) -> Completions {
                     .chain(SWITCHES.iter().flat_map(|switch| {
                         [
                             (switch.name.to_owned(), switch.on),
-                            (format!("no{}", switch.name), switch.off),
+                            (switch.opposite.to_owned(), switch.off),
                         ]
                     }))
                     .filter(|(word, _)| starts_with(word, argument))
@@ -744,15 +744,17 @@ mod tests {
             let key = format!("{}=", setting.key);
             assert!(texts(&found).contains(&key.as_str()), "{}", setting.key);
         }
-        // A switch completes as itself and with `no` before it, and each parses.
+        // A switch completes as itself and its opposite, not as Vim's quiet `no` form, and each
+        // parses.
         for switch in &SWITCHES {
             let found = complete("set ", nowhere());
-            for word in [switch.name.to_owned(), format!("no{}", switch.name)] {
-                assert!(texts(&found).contains(&word.as_str()), "{word}");
+            for word in [switch.name, switch.opposite] {
+                assert!(texts(&found).contains(&word), "{word}");
                 assert!(parse(&format!("set {word}")).is_ok(), "{word} parses");
             }
-            let found = complete("set nor", nowhere());
-            assert_eq!(texts(&found), [format!("no{}", switch.name)]);
+            let found = complete(&format!("set {}", switch.opposite), nowhere());
+            assert_eq!(texts(&found), [switch.opposite]);
+            assert!(texts(&complete("set no", nowhere())).is_empty());
         }
         // Every word a command or a setting completes makes a line that parses.
         let mut checked = 0;
