@@ -118,7 +118,7 @@ impl App {
 
     fn adjust_song(&mut self, by: i64, large: bool) {
         let section = self.services.cursor.section;
-        let Some(here) = self.section_here().cloned() else {
+        let Some(here) = self.services.section_here().cloned() else {
             return;
         };
         match self.song_track() {
@@ -154,7 +154,7 @@ impl App {
     }
 
     fn switch_start(&mut self) {
-        let Some(here) = self.section_here() else {
+        let Some(here) = self.services.section_here() else {
             return;
         };
         let start = match here.start {
@@ -171,7 +171,7 @@ impl App {
     /// there.
     fn clear_song_field(&mut self) {
         let section = self.services.cursor.section;
-        let Some(here) = self.section_here().cloned() else {
+        let Some(here) = self.services.section_here().cloned() else {
             return;
         };
         match self.song_track() {
@@ -273,7 +273,12 @@ impl App {
 
     /// The chain under the cursor, on a track's column.
     fn cell_chain(&self, track: usize) -> Option<u32> {
-        self.section_here()?.chains.get(track).copied().flatten()
+        self.services
+            .section_here()?
+            .chains
+            .get(track)
+            .copied()
+            .flatten()
     }
 
     /// The label of the chain under the cursor, or nothing.
@@ -370,6 +375,7 @@ impl App {
         };
         let section = self.services.cursor.section;
         let chain = self
+            .services
             .section_here()
             .and_then(|here| here.chains.get(track).copied().flatten());
         self.record_jump();
@@ -403,6 +409,7 @@ impl App {
             return;
         };
         let chain = self
+            .services
             .section_here()
             .and_then(|here| here.chains.get(track).copied().flatten());
         self.services.handle.send(Command::Launch { track, chain });

@@ -45,7 +45,7 @@ fn keys(app: &mut App, text: &str) {
 }
 
 fn steps(app: &App) -> Vec<String> {
-    let id = app.phrase_id().unwrap();
+    let id = app.services.phrase_id().unwrap();
     app.song().tracks[0].phrases[&id]
         .steps()
         .iter()

@@ -495,7 +495,7 @@ impl App {
 
     /// `K` on `Empty`: the columns of the phrase with no generator, to make one live.
     fn open_column_picker(&mut self) {
-        let Some(phrase) = self.phrase_here() else {
+        let Some(phrase) = self.services.phrase_here() else {
             self.services.status = "This track has no phrase here to make live".to_owned();
             return;
         };
@@ -520,7 +520,7 @@ impl App {
         if !self.make_live(field, command) {
             return;
         }
-        let Some(phrase) = self.phrase_here() else {
+        let Some(phrase) = self.services.phrase_here() else {
             return;
         };
         let generators = phrase.generators();

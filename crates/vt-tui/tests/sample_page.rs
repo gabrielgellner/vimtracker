@@ -1042,7 +1042,7 @@ fn k_on_sli_lists_the_slices_with_their_starts_and_puts_the_one_chosen() {
         ["00  0.021 s", "01  0.484 s", "02  0.948 s", "03  1.411 s"]
     );
     keys(&mut app, "j Enter");
-    let slot = app.phrase_here().unwrap().steps()[0].fx[1];
+    let slot = app.services.phrase_here().unwrap().steps()[0].fx[1];
     assert_eq!(slot.command, Some(FxCommand::Set(SettingId::SLICE)));
     assert_eq!(slot.coarse(), 2);
     // The Sound page's `Slice` lists them too, for the track's own.
@@ -1098,7 +1098,7 @@ fn slicing_again_moves_the_steps_locks_with_their_sound_and_one_u_takes_both_bac
         depth + 1,
         "one undo step"
     );
-    let lock = |app: &App| app.phrase_here().unwrap().steps()[0].fx[1].coarse();
+    let lock = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[1].coarse();
     assert_eq!(lock(&app), 6);
     keys(&mut app, "u");
     assert_eq!(lock(&app), 3);
@@ -1528,7 +1528,7 @@ fn k_on_sli_locks_by_a_letter_which_the_grid_shows_and_follows_its_slice() {
     );
     // It opens on the slice locked now, and `g g` goes to the first letter.
     keys(&mut app, "g g Enter");
-    let slot = app.phrase_here().unwrap().steps()[0].fx[1];
+    let slot = app.services.phrase_here().unwrap().steps()[0].fx[1];
     assert_eq!(slot.slice_mark(), Some('a'));
     let shown = value_shown(&app).unwrap_or_default();
     assert!(shown.contains("'a names 02 of 4"), "{shown}");
@@ -1552,7 +1552,7 @@ fn k_on_sli_locks_by_a_letter_which_the_grid_shows_and_follows_its_slice() {
     // With the letter gone, the step keeps it, and the track's own `Slice` plays.
     command(&mut app, "delmarks a");
     assert_eq!(
-        app.phrase_here().unwrap().steps()[0].fx[1].slice_mark(),
+        app.services.phrase_here().unwrap().steps()[0].fx[1].slice_mark(),
         Some('a')
     );
     let shown = value_shown(&app).unwrap_or_default();
@@ -1562,7 +1562,7 @@ fn k_on_sli_locks_by_a_letter_which_the_grid_shows_and_follows_its_slice() {
     );
     // Two digits typed over it lock by number again.
     keys(&mut app, "r 0 3");
-    let slot = app.phrase_here().unwrap().steps()[0].fx[1];
+    let slot = app.services.phrase_here().unwrap().steps()[0].fx[1];
     assert_eq!((slot.slice_mark(), slot.coarse()), (None, 3));
 }
 

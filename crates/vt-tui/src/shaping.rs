@@ -899,7 +899,7 @@ impl App {
 
     /// A column of the phrase under the cursor over its loop, as `vG` selects it.
     fn loop_selection(&self, field: Field) -> Selection {
-        let extent = self.extent();
+        let extent = self.services.extent();
         let track = self.services.cursor.track;
         Selection {
             range: StepRange::between(extent.start, extent.start + extent.length.max(1) - 1),
@@ -921,10 +921,12 @@ impl App {
     ) -> Result<Action, String> {
         let track = self.services.cursor.track;
         let phrase = self
+            .services
             .phrase_id()
             .ok_or("This track has no phrase here for the patch's generators")?;
         if let Some(generator) = live {
             let column = self
+                .services
                 .phrase_here()
                 .and_then(|found| found.generators().get(generator))
                 .map(|found| found.column)
@@ -1092,9 +1094,10 @@ impl App {
     /// The live generator under the cursor: its phrase, and its place in the phrase's list. On the
     /// cursor's column, it's the one covering the cursor's row, or else the nearest.
     pub(crate) fn generator_here(&self) -> Option<(u32, usize)> {
-        let phrase = self.phrase_id()?;
+        let phrase = self.services.phrase_id()?;
         let step = self.services.cursor.step;
-        self.phrase_here()?
+        self.services
+            .phrase_here()?
             .generators()
             .iter()
             .enumerate()

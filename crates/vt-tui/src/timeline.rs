@@ -142,7 +142,7 @@ impl App {
     /// How many lines each stored row of the cursor's phrase takes on screen.
     pub(crate) fn row_line_counts(&self) -> Vec<usize> {
         let timeline = self.timeline_on();
-        self.phrase_here().map_or_else(Vec::new, |phrase| {
+        self.services.phrase_here().map_or_else(Vec::new, |phrase| {
             (0..phrase.steps().len())
                 .map(|index| row_lines(phrase, index, timeline))
                 .collect()

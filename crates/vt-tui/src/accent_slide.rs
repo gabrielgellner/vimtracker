@@ -209,7 +209,7 @@ impl App {
             }
             _ => Some((
                 self.services.cursor.track,
-                self.phrase_id()?,
+                self.services.phrase_id()?,
                 self.services.cursor.step,
             )),
         }

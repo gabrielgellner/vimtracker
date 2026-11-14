@@ -11,7 +11,7 @@ use super::{App, Momentary};
 
 impl App {
     pub(super) fn double(&mut self) {
-        if let Some(phrase) = self.phrase_id() {
+        if let Some(phrase) = self.services.phrase_id() {
             self.services.apply(&Action::Double {
                 track: self.services.cursor.track,
                 phrase,
@@ -21,23 +21,23 @@ impl App {
 
     /// The phrase under the cursor and where its loop starts.
     pub(super) fn loop_place(&self) -> (Option<u32>, usize) {
-        (self.phrase_id(), self.extent().start)
+        (self.services.phrase_id(), self.services.extent().start)
     }
 
     /// After the loop has moved, keep the cursor and the view on the same row numbers, so the
     /// notes scroll under them.
     pub(super) fn keep_row(&mut self, before: (Option<u32>, usize)) {
         let (phrase, old) = before;
-        if phrase != self.phrase_id() {
+        if phrase != self.services.phrase_id() {
             return;
         }
-        let by = self.extent().start as isize - old as isize;
+        let by = self.services.extent().start as isize - old as isize;
         self.services.cursor.step = self.services.cursor.step.saturating_add_signed(by);
         self.top = self.top.saturating_add_signed(by);
     }
 
     pub(super) fn slide_loop(&mut self, by: isize) {
-        if let Some(phrase) = self.phrase_id() {
+        if let Some(phrase) = self.services.phrase_id() {
             let before = self.loop_place();
             self.services.apply(&Action::SlideLoop {
                 track: self.services.cursor.track,
@@ -52,10 +52,10 @@ impl App {
     /// Rotate the loop's steps. The cursor stays on its row. Going all the way round changes
     /// nothing, so it doesn't leave an undo step.
     pub(super) fn rotate_loop(&mut self, by: isize) {
-        let length = self.extent().length as isize;
+        let length = self.services.extent().length as isize;
         if length > 0
             && by.rem_euclid(length) != 0
-            && let Some(phrase) = self.phrase_id()
+            && let Some(phrase) = self.services.phrase_id()
         {
             self.services.apply(&Action::RotateLoop {
                 track: self.services.cursor.track,
@@ -78,13 +78,14 @@ impl App {
     /// on the notes, so a column only comes apart from them with `:lane`.
     pub(super) fn lane_slot(&self) -> Option<usize> {
         let slot = self.fx_column()?;
-        self.phrase_here()?.lane(slot).map(|_| slot)
+        self.services.phrase_here()?.lane(slot).map(|_| slot)
     }
 
     /// The cursor's FX column's lane as it is, or the phrase's loop if it has none.
     pub(super) fn lane_here(&self, slot: usize) -> Lane {
-        let extent = self.extent();
-        self.phrase_here()
+        let extent = self.services.extent();
+        self.services
+            .phrase_here()
             .and_then(|phrase| phrase.lane(slot))
             .unwrap_or(Lane {
                 start: extent.start,
@@ -94,10 +95,10 @@ impl App {
 
     /// Give the cursor's FX column a lane, or none to follow the phrase's loop again.
     pub(super) fn set_lane(&mut self, slot: usize, lane: Option<Lane>) {
-        let Some(phrase) = self.phrase_id() else {
+        let Some(phrase) = self.services.phrase_id() else {
             return;
         };
-        if self.phrase_here().and_then(|p| p.lane(slot)) == lane {
+        if self.services.phrase_here().and_then(|p| p.lane(slot)) == lane {
             return;
         }
         self.services.apply(&Action::SetLane {
@@ -121,9 +122,9 @@ impl App {
             self.set_lane(slot, Some(Lane { start, length }));
             return;
         }
-        let by = self.extent().row(self.services.cursor.step);
+        let by = self.services.extent().row(self.services.cursor.step);
         if by != 0
-            && let Some(phrase) = self.phrase_id()
+            && let Some(phrase) = self.services.phrase_id()
         {
             self.services.apply(&Action::SlideLoop {
                 track: self.services.cursor.track,
@@ -148,13 +149,13 @@ impl App {
             self.set_lane(slot, Some(Lane { start, length }));
             return;
         }
-        let extent = self.extent();
+        let extent = self.services.extent();
         let Ok(row) = usize::try_from(extent.row(self.services.cursor.step)) else {
             self.services.status = "The loop can't end above its start".to_owned();
             return;
         };
         let length = row + 1;
-        if let Some(phrase) = self.phrase_id()
+        if let Some(phrase) = self.services.phrase_id()
             && length != extent.length
         {
             self.services.apply(&Action::SetLength {
@@ -173,6 +174,7 @@ impl App {
             return;
         }
         let Some(step) = self
+            .services
             .phrase_here()
             .and_then(|phrase| phrase.steps().get(self.services.cursor.step))
         else {

@@ -731,7 +731,7 @@ where they were written and are borrowed across folders; #260 may move shared sh
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
 `mixer_page`, `sample_page` and the project page's fields), `App::modes`, the picker, the command
-line, help, the jump list and the keys' own state: 99 fields, and 49 files
+line, help, the jump list and the keys' own state: 99 fields, and 48 files
 besides `app.rs` add an `impl App` block each, such as `track_page.rs`, `banking.rs`, `slicing.rs`,
 `shaping.rs`, `picking.rs`, `recording.rs` (live recording, `Space r`), `project_page.rs`,
 `audio_page.rs` and `sample_page.rs`.
@@ -743,7 +743,10 @@ the sample pool and its `Analyst`, this
 machine's `Settings`, the Roto, and the engine's `Handle` with everything it last reported (the
 transport and playheads, where each track is and what it's launched onto, the live mutes and solos,
 the live values, the faders, the live generators' rows as heard, and the meters and the scope).
-`App::song` reads the song through it. **`Modes`** (`app.rs`) is what spans the pages as keys are
+`App::song` reads the song through it, and the cursor's place in the song is its reads too
+(`Services::track_here`, `phrase_id`, `phrase_here`, `section_here`, `extent` and `section_step`,
+given the view), with `Services::move_track` and `go_to_track_at` moving it across tracks.
+**`Modes`** (`app.rs`) is what spans the pages as keys are
 typed: the view, the mode, what Insert has typed, a field jump under way and the count. A page
 reads and changes the program through two borrows, in `page.rs`: `CtxMut`, which a page's keys are
 run with, is the services, lent mutably apart from the page, so a key can change the page and
@@ -855,10 +858,15 @@ cursor where it's seen and runs one of its own keys, given a `CtxMut`, and `Trac
 the page (`views/track.rs` and `views/track/`), giving back where its pictures with dots are;
 `views::track::draw` draws the program's own from an `App`, as the tests do.
 `App::run_track_page` hands each key to `TrackPage::run`, the page and the services borrowed apart,
-and runs what's passed back itself, the edits, which change
-the song: `editing.rs` (`=`, `-`, the fine digits and `x`), `pickers.rs` (`K`) and `typing.rs`
-(`i`), with `b`, `dd` and `p` in `fx.rs`. They're shared with the mixer, which turns the same
-controls. `App::track_control` is the control under the cursor on the track page or the mixer.
+runs what spans the pages itself (`/`, `M`, `gm`, the Keys mode, the Gen page's keys, `K` and `i`),
+and hands the edits to `TrackPage::edit`, given the control under the cursor (`App::track_control`,
+the track page's or the mixer's) and the `Services`: `b`, `dd` and `p` are the page's own methods,
+in `fx.rs`, as what `dd` took is the page's, and the rest are functions over the services that
+the mixer shares, as it turns the same controls: `editing.rs` (`=`, `-`, the fine digits and `x`),
+`tuning.rs` (`Tune` and `Cents`) and `typing.rs`'s `commit_control` (what `i` typed). What stays
+`App`'s: `pickers.rs` (`K`), which opens the program's picker, typing's keys into
+`App::modes`' entry, and `generators.rs`, which works through the live generators' sources and
+the shape panel.
 
 *   **Each page's settings in its own file:** `sound.rs` has the Sound page's devices on a sound
     track and the fixed tracks' Outputs, `modulation.rs` the Mod page's devices, and
@@ -915,12 +923,12 @@ kept on a track that hasn't it and kept while other views show; the track it's o
 cursor, and nothing else is the mixer's own, as which strips show follows from the cursor and the
 folds each time it's drawn, and the tracks' meters are the Roto's too. `MixerPage::row_here`
 and `control` are given the cursor's track, as `TrackPage`'s are. `MixerPage::run` runs its own
-keys, `j`, `k`, `gg` and `G` down and up a strip, returning an `Outcome`, given a `CtxMut`, and
-`MixerPage::draw` draws it (`views/mixer.rs`) through a `Ctx`. `App::run_mixer` hands each key to
-it, as the track page's are, and does the rest itself: `h` and `l` move the program's cursor, and
-`0` and `$` go to the strip `MixerPage::end_track` finds, through `App::move_track` and
-`App::go_to_track_at`, which keep the cursor's place in the section; an edit goes to
-`App::run_track_page`.
+keys, `j`, `k`, `gg` and `G` down and up a strip, and `h`, `l`, `0` and `$` across the strips,
+moving the program's cursor through `Services::move_track` and `go_to_track_at`, which keep its
+place in the section, `0` and `$` to the strip `MixerPage::end_track` finds, returning an
+`Outcome`, given a `CtxMut`; `MixerPage::draw` draws it (`views/mixer.rs`) through a `Ctx`.
+`App::run_mixer` hands each key to it, and a key it passes back to `App::run_track_page`, whose
+edits the mixer shares.
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 The guides (`guides.rs`) are the Markdown files in `crates/vt-tui/guides/`, built into the program
@@ -958,10 +966,12 @@ views among them, with `fn run(&mut self, cmd, times, ctx: &mut CtxMut) -> Outco
 pages, the current view, the modes and popups that span pages (the picker, the command line and
 help) and the jump list, and the feature files become methods on the page or service they belong
 to. It goes a page per PR, the track page first, with keys, drawing and screenshots unchanged.
-`TrackPage` and `MixerPage` have their state, their own keys and their drawing, and run their keys
-with a `CtxMut`, which can apply actions and move the cursor; their edits are still `impl App`
-blocks, which the two share, and move onto the pages, or onto functions over a `CtxMut`, next, with
-the mixer's moves across tracks. `Graphics::sync` still reads the pages through `App` (#728);
+`TrackPage` and `MixerPage` have their state, their own keys, their edits and their drawing: the
+edits are `TrackPage::edit`, the page's methods and functions over the `Services`, and the
+mixer's moves across tracks are its own keys. `App` still dispatches to them, in
+`run_track_page` and `run_mixer`, and keeps the track page's pickers, typing and Gen page, which
+open its picker, edit `Modes` and work through the shape panel. `Graphics::sync` still reads the
+pages through `App` (#728);
 `SamplePage` is half there too: it keeps its own cursor, zoom, scroll,
 selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
 in `placing.rs` and `sample_settings.rs` for editing its points and settings.
