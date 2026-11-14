@@ -299,7 +299,7 @@ impl App {
     /// One tick of the wheel, owed to the cursor's setting as the key that adjusts it by the
     /// finest step, or by the large one, and made at the next frame.
     fn turn_wheel(&mut self, up: bool, large: bool, now: Instant) {
-        self.now = now;
+        self.services.now = now;
         if self
             .wheel
             .gesture
@@ -323,7 +323,7 @@ impl App {
         if !self.wheel_adjusts(key) {
             return;
         }
-        let (depth, adjusted) = (self.history.undo_depth(), self.adjustments.steps());
+        let (depth, adjusted) = (self.services.history.undo_depth(), self.adjustments.steps());
         let gesture = self
             .wheel
             .gesture
@@ -379,7 +379,7 @@ impl App {
             self.step_onto_fine(finer, true);
         }
         self.count = (count > 1).then_some(count as usize);
-        self.press(key, self.now);
+        self.press(key, self.services.now);
         self.count = None;
         if let Some(finer) = finer {
             self.step_onto_fine(finer, false);
@@ -394,8 +394,8 @@ impl App {
         let Some(gesture) = self.wheel.gesture.take() else {
             return;
         };
-        if self.history.undo_depth() > gesture.depth + 1 {
-            self.history.squash_to(gesture.depth);
+        if self.services.history.undo_depth() > gesture.depth + 1 {
+            self.services.history.squash_to(gesture.depth);
         }
         if self.mode.is_visual() {
             self.adjustments.join_from(gesture.adjusted);
@@ -418,7 +418,7 @@ impl App {
     /// Turns the value with the fingers or against them, keeping the choice for this machine.
     pub fn set_wheel_reversed(&mut self, reversed: bool) {
         self.wheel.setting.reversed = reversed;
-        self.status = if reversed {
+        self.services.status = if reversed {
             "The wheel turns against the fingers"
         } else {
             "The wheel turns with the fingers"
@@ -432,7 +432,7 @@ impl App {
         if let Some(path) = self.wheel.setting_path.clone()
             && let Err(error) = self.wheel.setting.save_to(&path)
         {
-            self.status = format!("{}: couldn't be saved: {error}", path.display());
+            self.services.status = format!("{}: couldn't be saved: {error}", path.display());
         }
     }
 
@@ -448,7 +448,7 @@ impl App {
         }
         self.end_wheel_gesture();
         self.wheel.setting.on = on;
-        self.status = if on {
+        self.services.status = if on {
             "Wheel on: scrolling turns the setting under the cursor, and Shift-drag selects text"
         } else {
             "Wheel off: the terminal has its mouse back"

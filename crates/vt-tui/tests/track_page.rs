@@ -201,7 +201,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
         "{}",
         title_line(&app, "Machine")
     );
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "K");
     // The sampler at the top, on its own, and every voice folded under its kind.
     let picker = app.picker.as_ref().unwrap();
@@ -220,7 +220,7 @@ fn k_on_machine_chooses_a_voice_and_shows_its_settings() {
         app.song().tracks[0].machine,
         Machine::Plaits(SynthVoice::VirtualAnalog)
     );
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     let text = track_text(&app);
     // The machine in its title, with no type after it, its three settings down a column, and
     // `Drift` beside `Detune`, at the top of the next.
@@ -567,7 +567,7 @@ fn the_page_draws_bars_from_live_values_and_leaves_the_numbers_alone() {
     press(&mut app, " 5");
     let cut = |app: &App| from_name(app, "Cut");
     assert!(cut(&app).contains("FF00 ▕█████████▏"), "{}", cut(&app));
-    app.live = Some(vt_engine::track_state::LiveValues {
+    app.services.live = Some(vt_engine::track_state::LiveValues {
         level: 0xE0,
         pan: 0x80,
         cutoff: 0x40,
@@ -701,7 +701,11 @@ fn the_track_page_types_lfo_settings() {
     assert_eq!(lfo(&app).lfo.rate, Rate::Hertz(250));
     typed(&mut app, "fast");
     assert_eq!(lfo(&app).lfo.rate, Rate::Hertz(250));
-    assert!(app.status.contains("1/8d"), "{}", app.status);
+    assert!(
+        app.services.status.contains("1/8d"),
+        "{}",
+        app.services.status
+    );
 
     press(&mut app, "j");
     typed(&mut app, "-40");
@@ -737,7 +741,11 @@ fn k_chooses_an_lfos_destination_from_a_list() {
     let (mut app, _realtime) = on_track_page();
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Normal, "not on a Dest");
-    assert!(app.status.contains("Dest"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Dest"),
+        "{}",
+        app.services.status
+    );
 
     // The second LFO's Dest, Mod 5's, on the next track.
     press(&mut app, "W");
@@ -937,7 +945,11 @@ fn the_track_page_sets_the_filters_mode_for_its_type() {
     special(&mut app, KeyCode::Enter);
     assert!(title_line(&app, "Filter").contains("--"));
     press(&mut app, "l=");
-    assert!(app.status.contains("no modes"), "{}", app.status);
+    assert!(
+        app.services.status.contains("no modes"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "K");
     assert_ne!(app.mode, Mode::Picker);
     press(&mut app, "hK");
@@ -988,7 +1000,11 @@ fn the_track_page_sets_pitch_and_a_choke_group() {
     assert_eq!(track(&app).choke, Some(16), "16 is the last");
     typed(&mut app, "17");
     assert_eq!(track(&app).choke, Some(16));
-    assert!(app.status.contains("1 to 16"), "{}", app.status);
+    assert!(
+        app.services.status.contains("1 to 16"),
+        "{}",
+        app.services.status
+    );
     assert!(from_name(&app, "Choke").starts_with("Choke     16 "));
     typed(&mut app, "off");
     assert_eq!(track(&app).choke, None);
@@ -1088,7 +1104,11 @@ fn the_track_page_sets_how_long_notes_last() {
     assert_eq!(gate(&app), Some(0x80));
     typed(&mut app, "0");
     assert_eq!(gate(&app), Some(0x80));
-    assert!(app.status.contains("1 to 100"), "{}", app.status);
+    assert!(
+        app.services.status.contains("1 to 100"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "200-");
     assert_eq!(gate(&app), Some(gate_value(1)), "1% is the least");
     press(&mut app, "x");
@@ -1241,7 +1261,11 @@ fn the_track_page_sets_envelopes() {
     assert_eq!(env(&app, 0).adsr.attack_ms, 75);
     typed(&mut app, "9000");
     assert_eq!(env(&app, 0).adsr.attack_ms, 75);
-    assert!(app.status.contains("8000"), "{}", app.status);
+    assert!(
+        app.services.status.contains("8000"),
+        "{}",
+        app.services.status
+    );
     typed(&mut app, "8000");
     assert_eq!(env(&app, 0).adsr.attack_ms, 8000);
     press(&mut app, "=");
@@ -1257,7 +1281,11 @@ fn the_track_page_sets_envelopes() {
     assert_eq!(env(&app, 0).adsr.sustain, 40);
     typed(&mut app, "101");
     assert_eq!(env(&app, 0).adsr.sustain, 40);
-    assert!(app.status.contains("percent"), "{}", app.status);
+    assert!(
+        app.services.status.contains("percent"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "+");
     assert_eq!(env(&app, 0).adsr.sustain, 50);
     press(&mut app, "hjj");
@@ -1366,7 +1394,11 @@ fn every_list_setting_on_the_track_page_has_a_picker() {
     press(&mut app, "j");
     press(&mut app, "K");
     assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("Dest"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Dest"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "kklk");
     choose(&mut app, "trig");
     assert_eq!(lfo(&app).lfo.mode, LfoMode::Trig);
@@ -1469,9 +1501,9 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
     assert_eq!(lfo(&app), default_mod(3));
 
     // Already there, it leaves no undo step.
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "x");
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
 }
 
 #[test]
@@ -1944,21 +1976,21 @@ fn the_filter_curve_moves_with_what_plays() {
     };
 
     // Each new value draws it once, and it holds while the value does.
-    app.live = Some(live(0x40, track.resonance));
+    app.services.live = Some(live(0x40, track.resonance));
     assert_eq!(sync(&mut app, &mut graphics).0, 1);
     let moved = app.track_page.filter_image.unwrap();
     assert_ne!(moved, still);
     // Holding, it sends nothing new, and the image it replaced is forgotten.
     assert_eq!(sync(&mut app, &mut graphics), (0, 1));
     assert_eq!(sync(&mut app, &mut graphics), (0, 0));
-    app.live = Some(live(0x40, 0xC0));
+    app.services.live = Some(live(0x40, 0xC0));
     assert_eq!(sync(&mut app, &mut graphics).0, 1);
     assert_ne!(app.track_page.filter_image.unwrap(), moved);
 
     // Back on the setting the next frame, as an LFO moves it, it keeps the last for a frame, so
     // it's sent at most every other frame, and then it's drawn from the setting again.
     let resonant = app.track_page.filter_image.unwrap();
-    app.live = Some(live(track.cutoff, track.resonance));
+    app.services.live = Some(live(track.cutoff, track.resonance));
     assert_eq!(sync(&mut app, &mut graphics).0, 0);
     assert_eq!(app.track_page.filter_image.unwrap(), resonant);
     assert_eq!(sync(&mut app, &mut graphics).0, 1);
@@ -2564,7 +2596,11 @@ fn a_tracks_reset_on_the_page_is_typed_in_steps_or_bars() {
     );
     typed(&mut app, "0");
     assert_eq!(reset(&app), Some(64), "0 isn't a reset");
-    assert!(app.status.contains("1 to 1024"), "{}", app.status);
+    assert!(
+        app.services.status.contains("1 to 1024"),
+        "{}",
+        app.services.status
+    );
     typed(&mut app, "off");
     assert_eq!(reset(&app), None);
     press(&mut app, "u");
@@ -2622,7 +2658,11 @@ fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
     press(&mut app, "i40");
     special(&mut app, KeyCode::Enter);
     assert_eq!(accumulation(&app).down, 3);
-    assert!(app.status.contains("from 1 to 28"), "{}", app.status);
+    assert!(
+        app.services.status.contains("from 1 to 28"),
+        "{}",
+        app.services.status
+    );
 
     // The others are lists, which `K` shows with what each does.
     press(&mut app, "j");
@@ -2787,7 +2827,11 @@ fn the_mod_page_sets_the_arpeggio_and_says_what_each_setting_does() {
     press(&mut app, "i5");
     special(&mut app, KeyCode::Enter);
     assert_eq!(arpeggio(&app).octaves, 2);
-    assert!(app.status.contains("from 1 to 4"), "{}", app.status);
+    assert!(
+        app.services.status.contains("from 1 to 4"),
+        "{}",
+        app.services.status
+    );
 
     // Retrig is on or off.
     press(&mut app, "j=");
@@ -2955,7 +2999,11 @@ fn the_track_page_sets_how_long_a_tie_glides() {
     assert!(line(&app).contains("60 ms"), "{}", line(&app));
     typed(&mut app, "5000");
     assert_eq!(glide(&app), glide_value(60.0));
-    assert!(app.status.contains("up to 2000"), "{}", app.status);
+    assert!(
+        app.services.status.contains("up to 2000"),
+        "{}",
+        app.services.status
+    );
     typed(&mut app, "off");
     assert_eq!(glide(&app), 0);
     press(&mut app, "300=");
@@ -3038,7 +3086,11 @@ fn the_track_page_puts_a_track_in_a_group_and_a_group_has_its_own_page() {
     assert_eq!(group(&app), Some(2));
     typed(&mut app, "5");
     assert_eq!(group(&app), Some(2));
-    assert!(app.status.contains("1 to 4"), "{}", app.status);
+    assert!(
+        app.services.status.contains("1 to 4"),
+        "{}",
+        app.services.status
+    );
     typed(&mut app, "off");
     assert_eq!(group(&app), None);
     press(&mut app, "u");
@@ -3095,8 +3147,8 @@ fn a_groups_page_lists_its_tracks_with_their_mutes_and_solos() {
     };
     assert_eq!(tracks(&app), ["02", "03", "04"]);
     // Each with its own mute or solo.
-    app.levels[2].mute = true;
-    app.levels[3].solo = true;
+    app.services.levels[2].mute = true;
+    app.services.levels[3].solo = true;
     let glyph = |glyph: char| format!("03 {glyph}");
     assert_eq!(
         tracks(&app),
@@ -3106,8 +3158,8 @@ fn a_groups_page_lists_its_tracks_with_their_mutes_and_solos() {
             format!("04 {}", vt_tui::glyphs::SOLO)
         ]
     );
-    app.levels[2].mute = false;
-    app.levels[3].solo = false;
+    app.services.levels[2].mute = false;
+    app.services.levels[3].solo = false;
     // It follows the song: a track that joins, or leaves, as the cursor stays on the group.
     command(&mut app, "group 1 6");
     assert_eq!(tracks(&app), ["02", "03", "04", "06"]);
@@ -3142,7 +3194,7 @@ fn a_returns_sends_in_lists_what_sends_to_it_and_follows_the_song() {
     let return_b = app.song().fixed_track(TrackKind::ReturnB).unwrap();
     let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
     let send = |app: &mut App, track: usize, control: TrackControl, value: u8| {
-        app.apply(&Action::SetTrackBase {
+        app.services.apply(&Action::SetTrackBase {
             track,
             control,
             value,
@@ -3249,11 +3301,11 @@ fn the_trim_sits_above_the_level_and_reads_in_db() {
     press(&mut app, "}");
     assert_eq!(app.track_control(), Control::Trim);
     assert_eq!(value_shown(&app).as_deref(), Some("+0.0 dB"));
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "=");
     assert_eq!(trim(&app), 0x81);
     assert_eq!(value_shown(&app).as_deref(), Some("+0.25 dB"));
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     press(&mut app, "+");
     assert_eq!(trim(&app), 0x91, "a large step is 4 dB");
     // Unlike a level, it runs to FF.
@@ -3469,7 +3521,7 @@ fn each_page_keeps_its_own_cursor_and_starts_on_its_first_setting() {
 /// Two tracks, the first with a Distort in its first slot.
 fn app_with_distort() -> (App, Realtime) {
     let (mut app, realtime) = app();
-    app.apply(&Action::SetInsert {
+    app.services.apply(&Action::SetInsert {
         track: 0,
         slot: 0,
         insert: vt_model::insert::Insert::ALL[1],
@@ -3526,7 +3578,7 @@ fn four_op_has_a_device_for_each_operator_and_the_page_goes_down_to_them() {
 fn a_tracks_role_is_its_machines_until_its_told_and_k_lists_them() {
     let (mut app, _rt) = app();
     let track = |app: &App| app.song().tracks[0].clone();
-    app.apply(&Action::SetTrackMachine {
+    app.services.apply(&Action::SetTrackMachine {
         track: 0,
         machine: Machine::Plaits(SynthVoice::Acid),
     });

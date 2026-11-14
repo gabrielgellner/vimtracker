@@ -102,19 +102,22 @@ impl App {
                 }
             }
             Control::Choke if text.eq_ignore_ascii_case("off") => {
-                self.apply(&Action::SetTrackChoke {
+                self.services.apply(&Action::SetTrackChoke {
                     track: self.cursor.track,
                     choke: None,
                 });
             }
             Control::Choke => match text.parse::<u8>() {
                 Ok(group) if (1..=CHOKE_GROUPS).contains(&group) => {
-                    self.apply(&Action::SetTrackChoke {
+                    self.services.apply(&Action::SetTrackChoke {
                         track: self.cursor.track,
                         choke: Some(group),
                     });
                 }
-                _ => self.status = format!("Choke is a group from 1 to {CHOKE_GROUPS}, or off"),
+                _ => {
+                    self.services.status =
+                        format!("Choke is a group from 1 to {CHOKE_GROUPS}, or off")
+                }
             },
             Control::Group if text.eq_ignore_ascii_case("off") => self.set_group_here(None),
             Control::Group => {
@@ -123,17 +126,20 @@ impl App {
                     Ok(group) if (1..=MAX_GROUPS).contains(&usize::from(group)) => {
                         self.set_group_here(Some(group));
                     }
-                    _ => self.status = format!("Group is a group from 1 to {MAX_GROUPS}, or off"),
+                    _ => {
+                        self.services.status =
+                            format!("Group is a group from 1 to {MAX_GROUPS}, or off")
+                    }
                 }
             }
             Control::GateLength => match text.trim_end_matches('%').trim().parse::<u8>() {
                 Ok(percent) if (1..=100).contains(&percent) => {
-                    self.apply(&Action::SetTrackGateLength {
+                    self.services.apply(&Action::SetTrackGateLength {
                         track: self.cursor.track,
                         gate_length: Some(gate_value(percent)),
                     });
                 }
-                _ => self.status = "Gate is a percent from 1 to 100".to_owned(),
+                _ => self.services.status = "Gate is a percent from 1 to 100".to_owned(),
             },
             Control::Glide if text.eq_ignore_ascii_case("off") => self.set_glide(0),
             Control::Glide => match text
@@ -145,13 +151,14 @@ impl App {
             {
                 Some(ms) => self.set_glide(glide_value(ms)),
                 None => {
-                    self.status = format!("Glide is a time in ms up to {LONGEST_GLIDE_MS}, or off");
+                    self.services.status =
+                        format!("Glide is a time in ms up to {LONGEST_GLIDE_MS}, or off");
                 }
             },
             Control::Reset => match reset_named(text) {
                 Some(reset) => self.set_reset(reset),
                 None => {
-                    self.status = format!(
+                    self.services.status = format!(
                         "Reset is a number of steps from 1 to {MAX_TRACK_RESET}, of bars like 2bar, or off"
                     );
                 }
@@ -169,7 +176,7 @@ impl App {
                         });
                     }
                     _ => {
-                        self.status =
+                        self.services.status =
                             format!("A limit is a number of degrees from 1 to {MOST_DEGREES}");
                     }
                 }
@@ -182,7 +189,7 @@ impl App {
                         ..track.arpeggio
                     });
                 }
-                _ => self.status = format!("Octaves is a number from 1 to {MOST_OCTAVES}"),
+                _ => self.services.status = format!("Octaves is a number from 1 to {MOST_OCTAVES}"),
             },
             Control::Arpeggio(_) => {}
             Control::Mod(slot, field) => self.type_mod(slot, field, text),
@@ -409,7 +416,7 @@ impl App {
         };
         match changed {
             Some(modulator) => self.set_mod(slot, modulator),
-            None => self.status = why,
+            None => self.services.status = why,
         }
     }
 }

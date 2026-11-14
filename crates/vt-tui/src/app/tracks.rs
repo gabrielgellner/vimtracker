@@ -19,16 +19,16 @@ impl App {
     pub(crate) fn fit_levels(&mut self) {
         // Those of the fixed tracks stay with them, and the engine clears any no longer used.
         let tracks = self.song().tracks.len();
-        let was = self.levels.len();
+        let was = self.services.levels.len();
         let (from, to) = (
             was.saturating_sub(FIXED_TRACKS),
             tracks.saturating_sub(FIXED_TRACKS),
         );
         if tracks > was {
             let added = std::iter::repeat_n(TrackLive::default(), tracks - was);
-            self.levels.splice(from..from, added);
+            self.services.levels.splice(from..from, added);
         } else {
-            self.levels.drain(to..from);
+            self.services.levels.drain(to..from);
         }
     }
 
@@ -59,7 +59,7 @@ impl App {
             .and_then(|s| s.chains.get(track).copied().flatten())
             .and_then(|chain| {
                 let place = self.step_on(track, from, section_step);
-                song.tracks[track].chain_position(chain, place, self.dealer(track))
+                song.tracks[track].chain_position(chain, place, self.services.dealer(track))
             });
         match position {
             Some(position) => {
@@ -79,7 +79,7 @@ impl App {
             .get(self.cursor.track)
             .is_some_and(|track| track.kind == TrackKind::Master);
         if master {
-            self.status = "The master can't be muted or soloed".to_owned();
+            self.services.status = "The master can't be muted or soloed".to_owned();
         }
         !master
     }
@@ -94,11 +94,11 @@ impl App {
     /// Mutes a track, or unmutes it, as the keys do: not an undo step, as it's how the song
     /// plays that it changes, but saved with the song.
     pub(crate) fn switch_mute(&mut self, track: usize) {
-        if let Some(live) = self.levels.get_mut(track) {
+        if let Some(live) = self.services.levels.get_mut(track) {
             live.mute = !live.mute;
             let mute = live.mute;
-            self.handle.send(Command::SetMute { track, mute });
-            self.dirty = true;
+            self.services.handle.send(Command::SetMute { track, mute });
+            self.services.dirty = true;
         }
     }
 
@@ -120,7 +120,7 @@ impl App {
             return;
         }
         let track = self.cursor.track;
-        let Some(live) = self.levels.get(track).copied() else {
+        let Some(live) = self.services.levels.get(track).copied() else {
             return;
         };
         let name = format!("Track {:02}", track + 1);
@@ -129,7 +129,7 @@ impl App {
         } else {
             (live.mute, if live.mute { "unmutes" } else { "mutes" })
         };
-        if self.transport != Transport::Playing {
+        if self.services.transport != Transport::Playing {
             if solo {
                 self.switch_solo(track);
             } else {
@@ -141,7 +141,7 @@ impl App {
                 (true, false) => "soloed",
                 (true, true) => "unsoloed",
             };
-            self.status = format!("{name} {done} at once, as nothing's playing");
+            self.services.status = format!("{name} {done} at once, as nothing's playing");
             return;
         }
         let command = if solo {
@@ -149,17 +149,17 @@ impl App {
         } else {
             Command::MuteOnGrid { track }
         };
-        if !self.handle.send(command) {
+        if !self.services.handle.send(command) {
             return;
         }
-        let jam = self.jam.get(track).copied().unwrap_or_default();
+        let jam = self.services.jam.get(track).copied().unwrap_or_default();
         let (waiting, what, key) = if solo {
             (jam.solo_waiting, "solo", "s")
         } else {
             (jam.mute_waiting, "mute", "m")
         };
         // The engine decides, and the status line shows it waiting from its next report.
-        self.status = if waiting {
+        self.services.status = if waiting {
             format!("{name}'s {what} switch taken back")
         } else {
             let when = self.grid_when();
@@ -171,15 +171,15 @@ impl App {
     /// realign waiting for it. It moves where playback is rather than the song, so it isn't an
     /// undo step.
     pub(crate) fn realign(&mut self) {
-        if self.transport != Transport::Playing {
-            self.status = "Realign works while playing".to_owned();
+        if self.services.transport != Transport::Playing {
+            self.services.status = "Realign works while playing".to_owned();
             return;
         }
-        if !self.handle.send(Command::Realign) {
+        if !self.services.handle.send(Command::Realign) {
             return;
         }
         // The engine decides, and the transport shows it from its next report.
-        self.status = if self.realigning {
+        self.services.status = if self.services.realigning {
             "Realign taken back".to_owned()
         } else {
             let when = self.grid_when();
@@ -195,19 +195,19 @@ impl App {
             return;
         };
         if !owner.is_sound() {
-            self.status = format!("{} plays no chain to realign", owner.kind.title());
+            self.services.status = format!("{} plays no chain to realign", owner.kind.title());
             return;
         }
-        if self.transport != Transport::Playing {
-            self.status = "Realign works while playing".to_owned();
+        if self.services.transport != Transport::Playing {
+            self.services.status = "Realign works while playing".to_owned();
             return;
         }
-        if !self.handle.send(Command::RealignTrack { track }) {
+        if !self.services.handle.send(Command::RealignTrack { track }) {
             return;
         }
         let name = format!("Track {:02}", track + 1);
         // The engine decides, and the transport shows it from its next report.
-        self.status = if self.realigning_tracks[track] {
+        self.services.status = if self.services.realigning_tracks[track] {
             format!("{name}'s realign taken back")
         } else {
             let when = self.grid_when();
@@ -226,7 +226,7 @@ impl App {
         let tracks = match self.tracks_to_rotate(every) {
             Ok(tracks) => tracks,
             Err(why) => {
-                self.status = why;
+                self.services.status = why;
                 return;
             }
         };
@@ -244,14 +244,14 @@ impl App {
             .map(|(&track, &speed)| Action::SetTrackSpeed { track, speed })
             .collect();
         if changes.is_empty() {
-            self.status = format!(
+            self.services.status = format!(
                 "Rotating changes nothing: these tracks are all at {}",
                 speeds[0]
             );
             return;
         }
-        self.apply(&Action::Batch(changes));
-        self.status = format!("Speeds rotated: {}", speeds_said(&tracks, &turned));
+        self.services.apply(&Action::Batch(changes));
+        self.services.status = format!("Speeds rotated: {}", speeds_said(&tracks, &turned));
     }
 
     /// The tracks a rotation goes round, in order: those selected, every track that plays sounds,
@@ -299,8 +299,8 @@ impl App {
     /// Turn fill on or off, saying which.
     pub(crate) fn set_fill(&mut self, on: bool) {
         self.fill = on;
-        self.handle.send(Command::SetFill { on });
-        self.status = if on { "Fill on" } else { "Fill off" }.to_owned();
+        self.services.handle.send(Command::SetFill { on });
+        self.services.status = if on { "Fill on" } else { "Fill off" }.to_owned();
     }
 
     pub(crate) fn toggle_solo(&mut self) {
@@ -312,18 +312,18 @@ impl App {
 
     /// Solos a track, or takes its solo off, as the keys do.
     pub(crate) fn switch_solo(&mut self, track: usize) {
-        if let Some(live) = self.levels.get_mut(track) {
+        if let Some(live) = self.services.levels.get_mut(track) {
             live.solo = !live.solo;
             let solo = live.solo;
-            self.handle.send(Command::SetSolo { track, solo });
-            self.dirty = true;
+            self.services.handle.send(Command::SetSolo { track, solo });
+            self.services.dirty = true;
         }
     }
 
     pub(super) fn clear_live(&mut self) {
-        self.levels.fill(TrackLive::default());
+        self.services.levels.fill(TrackLive::default());
         self.send_live();
-        self.dirty = true;
+        self.services.dirty = true;
     }
 
     /// Put tracks in a group, or take them out of any, as one undo step: those numbered from the
@@ -335,19 +335,20 @@ impl App {
             None => (self.cursor.track, self.cursor.track),
         };
         if last >= sounds {
-            self.status = match tracks {
+            self.services.status = match tracks {
                 Some(_) => format!("There are {sounds} tracks that play sounds"),
                 None => "Only tracks that play sounds go in a group".to_owned(),
             };
             return;
         }
-        self.apply(&Action::SetTrackGroup { first, last, group });
+        self.services
+            .apply(&Action::SetTrackGroup { first, last, group });
         let which = if first == last {
             format!("Track {:02}", first + 1)
         } else {
             format!("Tracks {:02}-{:02}", first + 1, last + 1)
         };
-        self.status = match group {
+        self.services.status = match group {
             Some(group) => format!("{which} in group {group}"),
             None => format!("{which} in no group"),
         };
@@ -361,10 +362,10 @@ impl App {
             return;
         }
         if name.as_deref().is_some_and(|name| !is_name(name)) {
-            self.status = LineError::Name.to_string();
+            self.services.status = LineError::Name.to_string();
             return;
         }
-        self.apply(&Action::SetTrackName {
+        self.services.apply(&Action::SetTrackName {
             track: self.cursor.track,
             name: name.unwrap_or_default(),
         });
@@ -382,15 +383,15 @@ impl App {
         let Some((number, track)) =
             number.and_then(|number| Some((number, song.fixed_track(TrackKind::Group(number))?)))
         else {
-            self.status = "This track is in no group".to_owned();
+            self.services.status = "This track is in no group".to_owned();
             return;
         };
         let name = name.unwrap_or_default();
-        self.apply(&Action::SetTrackName {
+        self.services.apply(&Action::SetTrackName {
             track,
             name: name.clone(),
         });
-        self.status = if name.is_empty() {
+        self.services.status = if name.is_empty() {
             format!("Group {number} unnamed")
         } else {
             format!("Group {number} named {name}")

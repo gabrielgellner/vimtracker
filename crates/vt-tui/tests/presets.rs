@@ -20,7 +20,7 @@ use common::*;
 fn presets_app() -> (App, vt_engine::link::Realtime, PathBuf) {
     let (mut app, realtime) = app();
     let presets = folder().join("presets");
-    app.settings = Settings {
+    app.services.settings = Settings {
         presets: presets.display().to_string(),
         ..Settings::none()
     };
@@ -30,7 +30,7 @@ fn presets_app() -> (App, vt_engine::link::Realtime, PathBuf) {
 /// Make track 1 an acid with its cutoff down, a delay in its second slot and a named macro, and
 /// its level, pan and name its own.
 fn acid_on_first(app: &mut App) {
-    app.apply(&Action::Batch(vec![
+    app.services.apply(&Action::Batch(vec![
         Action::SetTrackMachine {
             track: 0,
             machine: Machine::Plaits(SynthVoice::Acid),
@@ -55,7 +55,7 @@ fn acid_on_first(app: &mut App) {
     track.macros[0].name = Some("Bite".to_owned());
     track.set_fine(SettingId::slot(1, Effect::Delay, 1).unwrap(), 0x40);
     let track = track.clone();
-    app.apply(&Action::LoadSound {
+    app.services.apply(&Action::LoadSound {
         track: 0,
         preset: Box::new(vt_model::preset::SoundPreset::of(&track, None)),
         sample: 0,
@@ -68,9 +68,10 @@ fn a_sound_saved_loads_on_another_track_as_one_undo_step_keeping_its_place() {
     acid_on_first(&mut app);
     command(&mut app, "preset save bass/Acid Bite");
     let file = presets.join("sounds/bass/Acid Bite.ron");
-    assert!(file.is_file(), "{}", app.status);
+    assert!(file.is_file(), "{}", app.services.status);
     assert!(
-        app.status
+        app.services
+            .status
             .starts_with("Saved track 01's sound as bass/Acid Bite")
     );
     let text = std::fs::read_to_string(&file).unwrap();
@@ -79,12 +80,20 @@ fn a_sound_saved_loads_on_another_track_as_one_undo_step_keeping_its_place() {
 
     // A name that's taken is refused, and `!` writes over it.
     command(&mut app, "preset save bass/Acid Bite");
-    assert!(app.status.contains(":preset! save"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":preset! save"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "preset! save bass/Acid Bite");
-    assert!(app.status.starts_with("Saved"), "{}", app.status);
+    assert!(
+        app.services.status.starts_with("Saved"),
+        "{}",
+        app.services.status
+    );
 
     // On track 2, with a level, pan and name of its own.
-    app.apply(&Action::Batch(vec![
+    app.services.apply(&Action::Batch(vec![
         Action::SetTrackLevel {
             track: 1,
             level: 0x99,
@@ -97,14 +106,14 @@ fn a_sound_saved_loads_on_another_track_as_one_undo_step_keeping_its_place() {
     app.cursor.track = 1;
     assert_eq!(app.cursor.track, 1);
     let phrases = app.song().tracks[1].phrases.clone();
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     command(&mut app, "preset load bass/Acid Bite");
     let loaded = &app.song().tracks[1];
     assert_eq!(
         loaded.machine,
         Machine::Plaits(SynthVoice::Acid),
         "{}",
-        app.status
+        app.services.status
     );
     assert_eq!(loaded.cutoff, 0x40);
     assert_eq!(loaded.inserts[1], Insert::RETURN_DELAY);
@@ -115,23 +124,31 @@ fn a_sound_saved_loads_on_another_track_as_one_undo_step_keeping_its_place() {
     assert_eq!(loaded.macros[0].name.as_deref(), Some("Bite"));
     assert_eq!((loaded.level, loaded.name.as_str()), (0x99, "ZZ"));
     assert_eq!(loaded.phrases, phrases);
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo step"
+    );
     assert!(
-        app.status.starts_with("Track 02 plays Acid Bite"),
+        app.services.status.starts_with("Track 02 plays Acid Bite"),
         "{}",
-        app.status
+        app.services.status
     );
     press(&mut app, "u");
     assert_eq!(app.song().tracks[1].machine, Machine::Sampler);
 
     // A name it doesn't have is said.
     command(&mut app, "preset load bass/Nothing");
-    assert!(app.status.contains("no sound preset called bass/Nothing"));
+    assert!(
+        app.services
+            .status
+            .contains("no sound preset called bass/Nothing")
+    );
     command(&mut app, "preset save ../up");
     assert!(
-        app.status.starts_with("A preset's name is"),
+        app.services.status.starts_with("A preset's name is"),
         "{}",
-        app.status
+        app.services.status
     );
 }
 
@@ -141,12 +158,16 @@ fn a_sampled_sound_plays_the_same_file_in_another_song() {
     with_a_sound(&mut app);
     let file = file_of(app.song(), 0).unwrap();
     command(&mut app, "preset save Tone");
-    assert!(presets.join("sounds/Tone.ron").is_file(), "{}", app.status);
+    assert!(
+        presets.join("sounds/Tone.ron").is_file(),
+        "{}",
+        app.services.status
+    );
 
     let (mut other, _realtime) = vt_tui_app_with(&presets);
     other.cursor.track = 1;
     command(&mut other, "preset load Tone");
-    let played = file_of(other.song(), 1).unwrap_or_else(|| panic!("{}", other.status));
+    let played = file_of(other.song(), 1).unwrap_or_else(|| panic!("{}", other.services.status));
     assert_eq!(
         Path::new(&played).canonicalize().unwrap(),
         Path::new(&file).canonicalize().unwrap()
@@ -164,20 +185,21 @@ fn a_sampled_sound_plays_the_same_file_in_another_song() {
     // With its file gone, it says which and loads nothing.
     std::fs::remove_file(&file).unwrap();
     let (mut third, _realtime) = vt_tui_app_with(&presets);
-    let depth = third.history.undo_depth();
+    let depth = third.services.history.undo_depth();
     command(&mut third, "preset load Tone");
     assert!(
-        third.status.starts_with("Tone can't load") && third.status.contains("tone.wav"),
+        third.services.status.starts_with("Tone can't load")
+            && third.services.status.contains("tone.wav"),
         "{}",
-        third.status
+        third.services.status
     );
-    assert_eq!(third.history.undo_depth(), depth);
+    assert_eq!(third.services.history.undo_depth(), depth);
 }
 
 /// Another app, a song of its own, with the same presets folder.
 fn vt_tui_app_with(presets: &Path) -> (App, vt_engine::link::Realtime) {
     let (mut app, realtime) = app();
-    app.settings = Settings {
+    app.services.settings = Settings {
         presets: presets.display().to_string(),
         ..Settings::none()
     };
@@ -195,12 +217,14 @@ fn an_effect_saved_from_one_slot_loads_into_another() {
     assert!(
         presets.join("effects/Dub Delay.ron").is_file(),
         "{}",
-        app.status
+        app.services.status
     );
     assert!(
-        app.status.starts_with("Saved track 01's FX 2 as Dub Delay"),
+        app.services
+            .status
+            .starts_with("Saved track 01's FX 2 as Dub Delay"),
         "{}",
-        app.status
+        app.services.status
     );
 
     // Into the last slot, from the browser.
@@ -210,7 +234,7 @@ fn an_effect_saved_from_one_slot_loads_into_another() {
     assert_eq!(app.picker.as_ref().unwrap().title, "Effect presets");
     let rows = explorer_rows(&app);
     assert!(rows.iter().any(|row| row.contains("Dub Delay")), "{rows:?}");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     let at = rows
         .iter()
         .position(|row| row.contains("Dub Delay"))
@@ -225,17 +249,26 @@ fn an_effect_saved_from_one_slot_loads_into_another() {
     }
     special(&mut app, KeyCode::Enter);
     let track = &app.song().tracks[0];
-    assert_eq!(track.inserts[3], Insert::RETURN_DELAY, "{}", app.status);
+    assert_eq!(
+        track.inserts[3],
+        Insert::RETURN_DELAY,
+        "{}",
+        app.services.status
+    );
     assert_eq!(
         track.fine(SettingId::slot(3, Effect::Delay, 1).unwrap()),
         0x40
     );
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
 
     // An empty slot has nothing to save.
     press(&mut app, "{");
     command(&mut app, "preset save Nothing");
-    assert!(app.status.contains("is empty"), "{}", app.status);
+    assert!(
+        app.services.status.contains("is empty"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -258,7 +291,7 @@ fn k_on_the_machine_lists_the_presets_and_the_browser_loads_one() {
     // Typing finds it, and Enter opens the browser on the presets folder's sounds.
     press(&mut app, "/load");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Picker, "{}", app.status);
+    assert_eq!(app.mode, Mode::Picker, "{}", app.services.status);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Sound presets");
     let rows = explorer_rows(&app);
@@ -289,14 +322,19 @@ fn with_no_presets_yet_or_no_folder_it_says_so() {
     let (mut app, _realtime, _presets) = presets_app();
     command(&mut app, "preset");
     assert!(
-        app.status
+        app.services
+            .status
             .starts_with("No sound presets yet: :preset save name"),
         "{}",
-        app.status
+        app.services.status
     );
-    app.settings = Settings::none();
+    app.services.settings = Settings::none();
     command(&mut app, "preset save X");
-    assert!(app.status.contains("no presets folder"), "{}", app.status);
+    assert!(
+        app.services.status.contains("no presets folder"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -307,8 +345,10 @@ fn a_fixed_track_has_no_sound_preset() {
     assert_eq!(app.cursor.track, master);
     command(&mut app, "preset save X");
     assert!(
-        app.status.starts_with("Only a track that plays sounds"),
+        app.services
+            .status
+            .starts_with("Only a track that plays sounds"),
         "{}",
-        app.status
+        app.services.status
     );
 }

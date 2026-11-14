@@ -28,14 +28,14 @@ impl App {
                 let kept = self.command_history.add(&text);
                 match command::parse(&text) {
                     Ok(line) => self.line(line),
-                    Err(error) => self.status = error.to_string(),
+                    Err(error) => self.services.status = error.to_string(),
                 }
                 // Sections selected for the command are done with, as Vim's `:'<,'>` ends Visual.
                 self.section_anchor = None;
                 if let Err(error) = kept
-                    && self.status.is_empty()
+                    && self.services.status.is_empty()
                 {
-                    self.status = format!("Couldn't keep the command history: {error}");
+                    self.services.status = format!("Couldn't keep the command history: {error}");
                 }
             }
             KeyCode::Tab => self.complete(false),
@@ -101,9 +101,10 @@ impl App {
     /// Where completion looks: the settings' kit folders, the presets of what `:preset` acts on
     /// here, and the home folder for `~`.
     fn complete_line(&self) -> crate::input::completion::Completions {
-        let kit_folders = self.settings.kit_folders();
+        let kit_folders = self.services.settings.kit_folders();
         let presets = self.presets_here();
         let patches = self
+            .services
             .settings
             .preset_folder()
             .map(|folder| folder.join(vt_model::preset::PresetKind::Patch.folder()));

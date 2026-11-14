@@ -69,7 +69,7 @@ impl App {
     /// The folder of the presets `:preset` lists here, `sounds` or `effects`, for completion.
     pub(crate) fn presets_here(&self) -> Option<PathBuf> {
         let kind = self.preset_target().kind();
-        Some(self.settings.preset_folder()?.join(kind.folder()))
+        Some(self.services.settings.preset_folder()?.join(kind.folder()))
     }
 
     /// Whether the cursor's track plays sounds, saying why not if it doesn't, for a sound preset.
@@ -83,16 +83,16 @@ impl App {
             .get(track)
             .is_some_and(vt_model::song::Track::is_sound);
         if !sound {
-            self.status = NOT_SOUND.to_owned();
+            self.services.status = NOT_SOUND.to_owned();
         }
         sound
     }
 
     /// The presets folder, or none, saying so.
     pub(crate) fn presets_folder(&mut self) -> Option<PathBuf> {
-        let folder = self.settings.preset_folder();
+        let folder = self.services.settings.preset_folder();
         if folder.is_none() {
-            self.status = NO_FOLDER.to_owned();
+            self.services.status = NO_FOLDER.to_owned();
         }
         folder
     }
@@ -120,7 +120,7 @@ impl App {
         let folder = folder.join(kind.folder());
         if !folder.is_dir() {
             let home = home_folder();
-            self.status = format!(
+            self.services.status = format!(
                 "No {} presets yet: :preset save name saves {} in {}",
                 kind.noun(),
                 target.said(),
@@ -146,7 +146,7 @@ impl App {
         let path = match preset_path(&folder, target.kind(), name) {
             Ok(path) => path,
             Err(error) => {
-                self.status = error.to_string();
+                self.services.status = error.to_string();
                 return;
             }
         };
@@ -158,7 +158,8 @@ impl App {
             }
             Target::Effect { track, slot } => {
                 let Some(preset) = EffectPreset::of(&self.song().tracks[track], slot) else {
-                    self.status = format!("FX {} is empty, so there's nothing to save", slot + 1);
+                    self.services.status =
+                        format!("FX {} is empty, so there's nothing to save", slot + 1);
                     return;
                 };
                 save(&path, &preset, force)
@@ -170,19 +171,19 @@ impl App {
                     self.note_place(Purpose::Preset(target.kind()), saved_in);
                 }
                 let home = home_folder();
-                self.status = format!(
+                self.services.status = format!(
                     "Saved {} as {name}, in {}",
                     target.said(),
                     place_name(&folder.join(target.kind().folder()), home.as_deref())
                 );
             }
             Err(PresetError::Taken(_)) => {
-                self.status = format!(
+                self.services.status = format!(
                     "There's a {} preset called {name} already: :preset! save {name} writes over it",
                     target.kind().noun()
                 );
             }
-            Err(error) => self.status = error.to_string(),
+            Err(error) => self.services.status = error.to_string(),
         }
     }
 
@@ -192,7 +193,8 @@ impl App {
         let number = self.song().tracks.get(track)?.sample();
         let mut entry = self.song().bank.get(number)?.clone();
         for source in entry.sources_mut() {
-            let resolved = vt_model::project::resolve_sample(self.folder.as_deref(), &source.path);
+            let resolved =
+                vt_model::project::resolve_sample(self.services.folder.as_deref(), &source.path);
             let full = resolved.canonicalize().unwrap_or(resolved);
             source.path = full.display().to_string();
         }
@@ -208,13 +210,13 @@ impl App {
         let path = match preset_path(&folder, target.kind(), name) {
             Ok(path) => path,
             Err(error) => {
-                self.status = error.to_string();
+                self.services.status = error.to_string();
                 return;
             }
         };
         if !path.is_file() {
             let home = home_folder();
-            self.status = format!(
+            self.services.status = format!(
                 "There's no {} preset called {name} in {}",
                 target.kind().noun(),
                 place_name(&folder.join(target.kind().folder()), home.as_deref())
@@ -240,7 +242,7 @@ impl App {
                 self.load_effect_preset(track, slot, path, &name);
             }
             (PresetKind::Effect, Target::Sound(_)) => {
-                self.status =
+                self.services.status =
                     "An effect preset loads into an FX slot: put the cursor on one on the FX page"
                         .to_owned();
             }
@@ -258,7 +260,7 @@ impl App {
         let preset = match load_sound(path) {
             Ok(preset) => preset,
             Err(error) => {
-                self.status = error.to_string();
+                self.services.status = error.to_string();
                 return;
             }
         };
@@ -271,7 +273,7 @@ impl App {
                     number
                 }
                 Err(error) => {
-                    self.status = format!("{name} can't load: {error}");
+                    self.services.status = format!("{name} can't load: {error}");
                     return;
                 }
             },
@@ -281,10 +283,10 @@ impl App {
             preset: Box::new(preset),
             sample,
         });
-        self.status.clear();
-        self.apply(&Action::Batch(actions));
-        if self.status.is_empty() {
-            self.status = format!(
+        self.services.status.clear();
+        self.services.apply(&Action::Batch(actions));
+        if self.services.status.is_empty() {
+            self.services.status = format!(
                 "Track {:02} plays {name}, keeping its phrases, level and sends: u undoes it",
                 track + 1
             );
@@ -295,26 +297,26 @@ impl App {
         let preset = match load_effect(path) {
             Ok(preset) => preset,
             Err(error) => {
-                self.status = error.to_string();
+                self.services.status = error.to_string();
                 return;
             }
         };
         let fine = match preset.fine_in(slot) {
             Ok(fine) => fine,
             Err(error) => {
-                self.status = error;
+                self.services.status = error;
                 return;
             }
         };
-        self.status.clear();
-        self.apply(&Action::LoadEffect {
+        self.services.status.clear();
+        self.services.apply(&Action::LoadEffect {
             track,
             slot,
             insert: preset.effect,
             fine,
         });
-        if self.status.is_empty() {
-            self.status = format!(
+        if self.services.status.is_empty() {
+            self.services.status = format!(
                 "FX {} of track {:02} is {name}, a {}: u undoes it",
                 slot + 1,
                 track + 1,

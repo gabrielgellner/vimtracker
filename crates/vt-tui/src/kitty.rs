@@ -1008,10 +1008,10 @@ pub(crate) fn rgb(color: Color) -> [u8; 3] {
 fn thumbnail(app: &App, track: &Track) -> Option<Thumbnail> {
     let entry = app.song().bank.get(track.sample())?;
     let source = entry.source()?;
-    let analysis = Arc::clone(app.samples.analysis(source.hash)?);
-    let frames = app.samples.id_of(&source.path).and_then(|id| {
-        let data = app.samples.shared(id)?;
-        Some((Arc::clone(data), app.samples.rates(id)))
+    let analysis = Arc::clone(app.services.samples.analysis(source.hash)?);
+    let frames = app.services.samples.id_of(&source.path).and_then(|id| {
+        let data = app.services.samples.shared(id)?;
+        Some((Arc::clone(data), app.services.samples.rates(id)))
     });
     Some(Thumbnail::of(entry, analysis, frames, track))
 }
@@ -1317,7 +1317,9 @@ impl Graphics {
         let shown = app.view == View::Track
             && app.track_page.page == Page::Mod
             && !overlaid(app, std::time::Instant::now());
-        let (Some(track), Some(live)) = (app.song().tracks.get(app.cursor.track), app.live) else {
+        let (Some(track), Some(live)) =
+            (app.song().tracks.get(app.cursor.track), app.services.live)
+        else {
             return wanted;
         };
         if !shown {
@@ -1556,9 +1558,12 @@ impl Graphics {
     /// Send the Sound page's filter curve, if the terminal lacks it.
     fn sync_sound(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
         // It shows what's playing, as a value's bar does.
-        let (cutoff, resonance) = app.live.map_or((track.cutoff, track.resonance), |live| {
-            (live.cutoff, live.resonance)
-        });
+        let (cutoff, resonance) = app
+            .services
+            .live
+            .map_or((track.cutoff, track.resonance), |live| {
+                (live.cutoff, live.resonance)
+            });
         let settings = (
             track.filter,
             track.filter.plays(track.filter_mode),
@@ -1570,7 +1575,7 @@ impl Graphics {
             track.high_cut,
         );
         let shade = Shade::of(filter_being_edited(&app.track_page, &app.ctx()), false);
-        let rate = app.rate;
+        let rate = app.services.rate;
         let id = self.panel(
             out,
             (PanelKey::Filter, shade),
@@ -1637,12 +1642,13 @@ impl Graphics {
                 .device_cursor(Some(track))
                 .map_or(0, |cursor| cursor.device)
                 .min(INSERTS - 1);
-            let tempo = (app.rate, app.song().millibpm);
-            let shown = SlotDrawing::zoomed(track.inserts[slot], app.live.as_ref(), slot, tempo);
+            let tempo = (app.services.rate, app.song().millibpm);
+            let shown =
+                SlotDrawing::zoomed(track.inserts[slot], app.services.live.as_ref(), slot, tempo);
             // The caption is worked out again only when the drawing changes, as a reverb's tail
             // takes a few milliseconds.
             if self.zoom_caption.as_ref().map(|(of, _)| of) != shown.as_ref() {
-                self.zoom_caption = shown.map(|shown| (shown, shown.caption(app.rate)));
+                self.zoom_caption = shown.map(|shown| (shown, shown.caption(app.services.rate)));
             }
             app.track_page.zoom_caption = self
                 .zoom_caption
@@ -1651,7 +1657,7 @@ impl Graphics {
             if let Some(shown) = shown {
                 // The zoomed slot always has the cursor.
                 let shade = Shade::of(true, heard_bypassed(&app.ctx(), track, slot));
-                let rate = app.rate;
+                let rate = app.services.rate;
                 app.track_page.zoom_image = Some(self.panel(
                     out,
                     (PanelKey::Zoom, shade),
@@ -1665,7 +1671,7 @@ impl Graphics {
         }
         for (slot, insert) in track.inserts.iter().enumerate() {
             // It shows what's playing, as a value's bar does.
-            let live = app.live.map(|live| live.inserts[slot]);
+            let live = app.services.live.map(|live| live.inserts[slot]);
             let Some(shown) = SlotDrawing::of(*insert, live) else {
                 continue;
             };
@@ -1673,7 +1679,7 @@ impl Graphics {
                 edited == Some(slot),
                 heard_bypassed(&app.ctx(), track, slot),
             );
-            let rate = app.rate;
+            let rate = app.services.rate;
             ids[slot] = Some(self.panel(
                 out,
                 (PanelKey::Slot(slot), shade),
@@ -1751,7 +1757,7 @@ impl Graphics {
     /// Send the scope's picture, if it has changed since the last one sent. A steady note, or
     /// silence, sends nothing.
     fn sync_scope(&mut self, app: &mut App, out: &mut impl Write) -> io::Result<()> {
-        let spans = app.scope.spans(
+        let spans = app.services.scope.spans(
             SCOPE_WIDTH * CELL_DOTS_ACROSS,
             SCOPE_HEIGHT * CELL_DOTS_DOWN,
         );

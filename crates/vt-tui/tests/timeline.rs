@@ -187,7 +187,7 @@ fn the_view_scrolls_by_the_lines_rows_take() {
 fn the_playheads_follow_the_timeline() {
     let (mut app, _realtime) = timeline_song(&UNEVEN, 16, vt_model::speed::Speed::Sixteenth);
     on_the_row_being_edited(&mut app);
-    app.transport = Transport::Playing;
+    app.services.transport = Transport::Playing;
     // Step 5 is row 02's third pulse, on line 5, and the drums' row 05.
     app.set_playhead(5);
     let buffer = screen(&app);
@@ -202,7 +202,11 @@ fn z_i_collapses_the_timeline_to_a_line_a_row_and_opens_it_again() {
     assert!(app.timeline_on(), "the timeline is the default");
     press(&mut app, "zi");
     assert!(!app.timeline_on());
-    assert!(app.status.contains("z i"), "{}", app.status);
+    assert!(
+        app.services.status.contains("z i"),
+        "{}",
+        app.services.status
+    );
     let buffer = screen(&app);
     for row in 0..7 {
         assert_eq!(row_number_at(&buffer, row + 2), format!(" {row:02}"));

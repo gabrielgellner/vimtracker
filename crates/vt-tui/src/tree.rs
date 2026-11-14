@@ -113,7 +113,7 @@ impl App {
 
     fn jump_back(&mut self) {
         if self.jump_index == 0 {
-            self.status = "Nothing to jump back to".to_owned();
+            self.services.status = "Nothing to jump back to".to_owned();
             return;
         }
         if self.jump_index == self.jumps.len() {
@@ -126,7 +126,7 @@ impl App {
 
     fn jump_forward(&mut self) {
         if self.jump_index + 1 >= self.jumps.len() {
-            self.status = "Nothing to jump forward to".to_owned();
+            self.services.status = "Nothing to jump forward to".to_owned();
             return;
         }
         self.jump_index += 1;
@@ -142,12 +142,13 @@ impl App {
                 self.jump_to_view(View::Sample);
             }
             View::Track => {
-                self.status =
+                self.services.status =
                     "g d opens the sample page from the sample, in the Machine's title".to_owned();
             }
             View::Phrase => {
                 if !self.open_slice_of_step() {
-                    self.status = "g d opens the sample page from an SLI's value".to_owned();
+                    self.services.status =
+                        "g d opens the sample page from an SLI's value".to_owned();
                 }
             }
             View::Mixer | View::Audio | View::Project | View::Sample => {}
@@ -156,7 +157,7 @@ impl App {
 
     fn open_row(&mut self) {
         let Some(chain) = self.chain_id() else {
-            self.status = "This track has no chain".to_owned();
+            self.services.status = "This track has no chain".to_owned();
             return;
         };
         let slot = self.cursor.slot;
@@ -170,7 +171,7 @@ impl App {
             let phrase = self
                 .track_here()
                 .map_or(0, |track| lowest_unused(&track.phrases));
-            self.apply(&Action::InsertChainEntry {
+            self.services.apply(&Action::InsertChainEntry {
                 track: self.cursor.track,
                 chain,
                 at: slot,
@@ -179,7 +180,7 @@ impl App {
                     transpose: 0,
                 },
             });
-            self.status = format!("New phrase {phrase:02X}");
+            self.services.status = format!("New phrase {phrase:02X}");
         }
         self.view = View::Phrase;
         self.note_view(View::Phrase);
@@ -225,26 +226,27 @@ impl App {
         };
         let uses = self.phrase_uses(phrase).len();
         if uses > 1 {
-            self.status = format!("Phrase {phrase:02X} is used {uses} times: gc makes a copy here");
+            self.services.status =
+                format!("Phrase {phrase:02X} is used {uses} times: gc makes a copy here");
         }
     }
 
     /// `gc`: copy the phrase at the cursor's slot to a new ID, and point this slot at the copy.
     fn clone_phrase(&mut self) {
         let (Some(chain), Some(old)) = (self.chain_id(), self.phrase_id()) else {
-            self.status = "There is no phrase here to clone".to_owned();
+            self.services.status = "There is no phrase here to clone".to_owned();
             return;
         };
         let new = self
             .track_here()
             .map_or(0, |track| lowest_unused(&track.phrases));
-        self.apply(&Action::ClonePhrase {
+        self.services.apply(&Action::ClonePhrase {
             track: self.cursor.track,
             chain,
             slot: self.cursor.slot,
             new,
         });
-        self.status = if self.chain_uses() > 1 {
+        self.services.status = if self.chain_uses() > 1 {
             format!(
                 "Cloned {old:02X} to {new:02X}. This chain is shared, so all its uses change: gC copies it"
             )
@@ -258,7 +260,7 @@ impl App {
     /// the slot's place (decision 307). Each bloom draws a seed of its own, as `S` does.
     pub(crate) fn grow_bloom(&mut self, branches: Option<u8>, mutation: Option<u8>, path: Path) {
         let (Some(chain), Some(trunk)) = (self.chain_id(), self.phrase_id()) else {
-            self.status = "There is no phrase here to grow branches from".to_owned();
+            self.services.status = "There is no phrase here to grow branches from".to_owned();
             return;
         };
         self.shape_seed = self.shape_seed.wrapping_add(1);
@@ -271,7 +273,7 @@ impl App {
             ..first
         };
         let before = Arc::clone(self.song());
-        self.apply(&Action::Bloom {
+        self.services.apply(&Action::Bloom {
             track: self.cursor.track,
             chain,
             slot: self.cursor.slot,
@@ -293,7 +295,7 @@ impl App {
         } else {
             ""
         };
-        self.status = format!(
+        self.services.status = format!(
             "{trunk:02X} grew {} {}, {}, each a mutation of the one before, played {path}{shared}",
             grown.len(),
             if grown.len() == 1 {
@@ -309,7 +311,7 @@ impl App {
     pub(crate) fn open_bloom_picker(&mut self) {
         self.count = None;
         if self.phrase_id().is_none() {
-            self.status = "There is no phrase here to grow branches from".to_owned();
+            self.services.status = "There is no phrase here to grow branches from".to_owned();
             return;
         }
         let branches = Bloom::default().branches;
@@ -341,22 +343,23 @@ impl App {
     /// `gC`: copy this track's chain and all its phrases, and point this track at the copy.
     pub(crate) fn clone_chain(&mut self) {
         let Some(old) = self.chain_id() else {
-            self.status = "This track has no chain".to_owned();
+            self.services.status = "This track has no chain".to_owned();
             return;
         };
-        self.apply(&Action::CloneChain {
+        self.services.apply(&Action::CloneChain {
             section: self.cursor.section,
             track: self.cursor.track,
         });
         if let Some(new) = self.chain_id() {
-            self.status = format!("Copied chain {old:02X} and its phrases to chain {new:02X}");
+            self.services.status =
+                format!("Copied chain {old:02X} and its phrases to chain {new:02X}");
         }
     }
 
     /// `grr`: list where the phrase at the cursor plays.
     fn list_uses(&mut self) {
         let Some(phrase) = self.phrase_id() else {
-            self.status = "There is no phrase here".to_owned();
+            self.services.status = "There is no phrase here".to_owned();
             return;
         };
         let track = self.cursor.track;
@@ -451,7 +454,7 @@ impl App {
                 ChainEntry { phrase, ..entry }
             }
         };
-        self.apply(&Action::SetChainEntry {
+        self.services.apply(&Action::SetChainEntry {
             track: self.cursor.track,
             chain,
             slot: self.cursor.slot,
@@ -462,7 +465,8 @@ impl App {
     /// Put this row's transpose back to 0. A row always plays a phrase, so `dd` is for removing it.
     fn reset_row(&mut self) {
         if self.chain_column != ChainColumn::Transpose {
-            self.status = "x resets Transpose. A row needs a phrase, so dd removes it".to_owned();
+            self.services.status =
+                "x resets Transpose. A row needs a phrase, so dd removes it".to_owned();
             return;
         }
         if let (Some(chain), Some(entry)) = (
@@ -470,7 +474,7 @@ impl App {
             self.chain_entries().get(self.cursor.slot).copied(),
         ) && entry.transpose != 0
         {
-            self.apply(&Action::SetChainEntry {
+            self.services.apply(&Action::SetChainEntry {
                 track: self.cursor.track,
                 chain,
                 slot: self.cursor.slot,
@@ -485,11 +489,11 @@ impl App {
     /// List the phrases to choose from for this row, with the one it plays highlighted.
     fn open_phrase_picker(&mut self) {
         if self.chain_column != ChainColumn::Phrase {
-            self.status = "K chooses a phrase on the Phrase column".to_owned();
+            self.services.status = "K chooses a phrase on the Phrase column".to_owned();
             return;
         }
         let Some(_) = self.chain_id() else {
-            self.status = "This track has no chain".to_owned();
+            self.services.status = "This track has no chain".to_owned();
             return;
         };
         let current = self.chain_entries().get(self.cursor.slot).map(|e| e.phrase);
@@ -539,7 +543,7 @@ impl App {
                 },
             },
         };
-        self.apply(&action);
+        self.services.apply(&action);
     }
 
     /// Run a command in the chain view. Returns false if it means the same as anywhere.
@@ -573,7 +577,7 @@ impl App {
                     (chain, self.chain_entries().get(self.cursor.slot).copied())
                 {
                     self.yanked_row = Some(entry);
-                    self.apply(&Action::RemoveChainEntry {
+                    self.services.apply(&Action::RemoveChainEntry {
                         track: self.cursor.track,
                         chain,
                         at: self.cursor.slot,
@@ -584,13 +588,13 @@ impl App {
             Cmd::CopyRow => {
                 if let Some(entry) = self.chain_entries().get(self.cursor.slot).copied() {
                     self.yanked_row = Some(entry);
-                    self.status = format!("Copied phrase {:02X}", entry.phrase);
+                    self.services.status = format!("Copied phrase {:02X}", entry.phrase);
                 }
             }
             Cmd::Paste => match (chain, self.yanked_row) {
                 (Some(chain), Some(entry)) => {
                     let at = (self.cursor.slot + 1).min(rows);
-                    self.apply(&Action::InsertChainEntry {
+                    self.services.apply(&Action::InsertChainEntry {
                         track: self.cursor.track,
                         chain,
                         at,
@@ -598,11 +602,11 @@ impl App {
                     });
                     self.cursor.slot = at;
                 }
-                _ => self.status = "No chain row copied yet".to_owned(),
+                _ => self.services.status = "No chain row copied yet".to_owned(),
             },
             Cmd::EnterInsert => {
                 if self.chain_column == ChainColumn::Transpose && self.cursor.slot >= rows {
-                    self.status = "Add a phrase to this row first".to_owned();
+                    self.services.status = "Add a phrase to this row first".to_owned();
                 } else {
                     self.entry = Entry::default();
                     self.mode = Mode::Insert;
@@ -676,7 +680,8 @@ impl App {
             }
             ChainColumn::Transpose => {
                 let Ok(transpose) = text.parse::<i8>() else {
-                    self.status = format!("Transpose goes from {MIN_TRANSPOSE} to {MAX_TRANSPOSE}");
+                    self.services.status =
+                        format!("Transpose goes from {MIN_TRANSPOSE} to {MAX_TRANSPOSE}");
                     return;
                 };
                 let Some(entry) = existing else {
@@ -690,12 +695,12 @@ impl App {
                 }
             }
         };
-        self.apply(&action);
+        self.services.apply(&action);
     }
 
     /// `:chain n`: point this track at a chain, creating it if needed.
     pub(crate) fn set_track_chain(&mut self, chain: u32) {
-        self.apply(&Action::SetTrackChain {
+        self.services.apply(&Action::SetTrackChain {
             section: self.cursor.section,
             track: self.cursor.track,
             chain,

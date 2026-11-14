@@ -243,8 +243,8 @@ pub(crate) fn playhead_step(app: &App) -> Option<usize> {
 pub(crate) fn playhead_place(app: &App) -> Option<(usize, usize)> {
     let owner = app.track_here()?;
     let chain = (*app.section_here()?.chains.get(app.cursor.track)?)?;
-    let playhead = app.playing_place(app.cursor.track, chain)?;
-    let position = owner.chain_position(chain, playhead, app.dealer(app.cursor.track))?;
+    let playhead = app.services.playing_place(app.cursor.track, chain)?;
+    let position = owner.chain_position(chain, playhead, app.services.dealer(app.cursor.track))?;
     let start = owner.phrases.get(&position.phrase)?.start();
     (position.slot == app.cursor.slot && Some(position.phrase) == app.phrase_id())
         .then_some((start + position.step, position.pulse))
@@ -253,16 +253,16 @@ pub(crate) fn playhead_place(app: &App) -> Option<(usize, usize)> {
 /// The note the cursor's track's row playing was heard at, before its chain's transpose, where an
 /// accumulator or an `RND` moved it.
 pub(crate) fn heard_note(app: &App) -> Option<u8> {
-    app.places.get(app.cursor.track)?.accumulated
+    app.services.places.get(app.cursor.track)?.accumulated
 }
 
 /// Where each FX column with a lane of its own is reading, if this phrase is the one playing.
 pub(crate) fn lane_playheads(app: &App, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
     let mut playheads = [None; FX_SLOTS];
-    let Some(jam) = playhead_step(app).and(app.jam.get(app.cursor.track)) else {
+    let Some(jam) = playhead_step(app).and(app.services.jam.get(app.cursor.track)) else {
         return playheads;
     };
-    let count = app.places[app.cursor.track].count - jam.started;
+    let count = app.services.places[app.cursor.track].count - jam.started;
     for (slot, playhead) in playheads.iter_mut().enumerate() {
         *playhead = phrase
             .lane(slot)
@@ -500,9 +500,9 @@ fn column(app: &App, track: usize) -> Option<Column<'_>> {
     }
     let owner = app.song().tracks.get(track)?;
     let chain = (*app.section_here()?.chains.get(track)?)?;
-    let moving = app.playing_place(track, chain);
+    let moving = app.services.playing_place(track, chain);
     let place = moving.unwrap_or_else(|| app.step_on(track, app.cursor.track, app.section_step()));
-    let position = owner.chain_position(chain, place, app.dealer(track))?;
+    let position = owner.chain_position(chain, place, app.services.dealer(track))?;
     let held = owner.phrases.get(&position.phrase)?;
     let steps = held.loop_steps();
     let heard = moving
@@ -1221,6 +1221,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         // A row its `CHA` or `CND` skipped this time is faint under the playhead, so the logic
         // can be followed.
         let skipped = app
+            .services
             .places
             .get(app.cursor.track)
             .is_some_and(|place| place.skipped);

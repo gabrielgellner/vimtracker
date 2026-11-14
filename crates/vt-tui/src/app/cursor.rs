@@ -74,11 +74,11 @@ impl App {
     }
 
     pub(crate) fn after_history(&mut self) {
-        self.dirty = true;
+        self.services.dirty = true;
         self.fit_levels();
         self.cursor.track = self.cursor.track.min(self.song().tracks.len() - 1);
         self.clamp_cursor();
-        self.publish();
+        self.services.publish();
     }
 
     pub(crate) fn slots(&self) -> usize {

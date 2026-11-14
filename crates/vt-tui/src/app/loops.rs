@@ -12,7 +12,7 @@ use super::{App, Momentary};
 impl App {
     pub(super) fn double(&mut self) {
         if let Some(phrase) = self.phrase_id() {
-            self.apply(&Action::Double {
+            self.services.apply(&Action::Double {
                 track: self.cursor.track,
                 phrase,
             });
@@ -39,7 +39,7 @@ impl App {
     pub(super) fn slide_loop(&mut self, by: isize) {
         if let Some(phrase) = self.phrase_id() {
             let before = self.loop_place();
-            self.apply(&Action::SlideLoop {
+            self.services.apply(&Action::SlideLoop {
                 track: self.cursor.track,
                 phrase,
                 by,
@@ -57,7 +57,7 @@ impl App {
             && by.rem_euclid(length) != 0
             && let Some(phrase) = self.phrase_id()
         {
-            self.apply(&Action::RotateLoop {
+            self.services.apply(&Action::RotateLoop {
                 track: self.cursor.track,
                 phrase,
                 by,
@@ -100,13 +100,13 @@ impl App {
         if self.phrase_here().and_then(|p| p.lane(slot)) == lane {
             return;
         }
-        self.apply(&Action::SetLane {
+        self.services.apply(&Action::SetLane {
             track: self.cursor.track,
             phrase,
             slot,
             lane,
         });
-        self.status = match lane {
+        self.services.status = match lane {
             Some(lane) => format!("FX {} loops on its own, {} steps", slot + 1, lane.length),
             None => format!("FX {} follows the phrase's loop", slot + 1),
         };
@@ -125,7 +125,7 @@ impl App {
         if by != 0
             && let Some(phrase) = self.phrase_id()
         {
-            self.apply(&Action::SlideLoop {
+            self.services.apply(&Action::SlideLoop {
                 track: self.cursor.track,
                 phrase,
                 by,
@@ -139,7 +139,7 @@ impl App {
         if let Some(slot) = self.lane_slot() {
             let start = self.lane_here(slot).start;
             let Some(length) = (self.cursor.step + 1).checked_sub(start).filter(|l| *l > 0) else {
-                self.status = "A lane can't end above its start".to_owned();
+                self.services.status = "A lane can't end above its start".to_owned();
                 return;
             };
             self.set_lane(slot, Some(Lane { start, length }));
@@ -147,14 +147,14 @@ impl App {
         }
         let extent = self.extent();
         let Ok(row) = usize::try_from(extent.row(self.cursor.step)) else {
-            self.status = "The loop can't end above its start".to_owned();
+            self.services.status = "The loop can't end above its start".to_owned();
             return;
         };
         let length = row + 1;
         if let Some(phrase) = self.phrase_id()
             && length != extent.length
         {
-            self.apply(&Action::SetLength {
+            self.services.apply(&Action::SetLength {
                 track: self.cursor.track,
                 phrase,
                 length,
@@ -165,8 +165,8 @@ impl App {
     /// Hear the note on a row outside the loop. Other tracks have nothing to play with it, since
     /// only the loop has a place in the section.
     pub(super) fn audition_outside_loop(&mut self) {
-        if self.transport == Transport::Playing {
-            self.status = "Audition works while stopped or paused".to_owned();
+        if self.services.transport == Transport::Playing {
+            self.services.status = "Audition works while stopped or paused".to_owned();
             return;
         }
         let Some(step) = self
@@ -185,7 +185,7 @@ impl App {
             .map_or(0, |entry| entry.transpose);
         let note = (i16::from(midi) + i16::from(transpose))
             .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
-        self.handle.send(Command::HoldPreview {
+        self.services.handle.send(Command::HoldPreview {
             track: self.cursor.track,
             note,
             velocity,

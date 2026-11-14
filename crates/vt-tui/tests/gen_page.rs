@@ -113,12 +113,12 @@ fn a_turn_rewrites_the_column_as_one_undo_step() {
         "{}",
         status_line(&app)
     );
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "=");
     let shape = generators(&app)[0].shape;
     assert_eq!(shape.place, Where::Euclid { hits: 4, rotate: 0 });
     assert_eq!(notes(&app).iter().filter(|note| *note != "---").count(), 4);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     keys(&mut app, "u");
     assert_eq!(notes(&app).iter().filter(|note| *note != "---").count(), 3);
     // `x` puts it back, and on the rotation, `=` turns the pattern round.
@@ -188,10 +188,10 @@ fn an_acid_riffs_spread_and_bias_are_in_the_fourth_column() {
     assert_eq!(here(&app), Some(GenParam::Spread));
     keys(&mut app, "j");
     assert_eq!(here(&app), Some(GenParam::Bias));
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "k_____");
     assert_eq!(generators(&app)[0].shape.random.spread, 0);
-    assert_eq!(app.history.undo_depth(), depth + 5);
+    assert_eq!(app.services.history.undo_depth(), depth + 5);
 }
 
 /// An `Acid`'s loops are a device of their own under it, `Loops`, whose title says how long the
@@ -237,19 +237,23 @@ fn an_acids_loops_are_a_device_of_their_own_and_space_g_a_keeps_the_pass_heard()
     for _ in 0..4 {
         block(&mut realtime, &mut app);
     }
-    app.handle.send(Command::PlayFrom { step: 0 });
+    app.services.handle.send(Command::PlayFrom { step: 0 });
     let pass = 8 * 6000;
     for _ in 0..(pass * 5 / 2) / 256 {
         block(&mut realtime, &mut app);
     }
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, " ga");
     let kept = generators(&app)[0].shape;
     assert_eq!(kept.acid.at, 16, "the third pass began 16 rows on");
     assert_eq!(kept.acid.loops, looping.acid.loops, "still looping");
     assert_ne!(notes(&app), written, "the phrase holds the pass heard");
-    assert_eq!(app.history.undo_depth(), depth + 1);
-    assert!(app.status.contains("its loops go on"), "{}", app.status);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+    assert!(
+        app.services.status.contains("its loops go on"),
+        "{}",
+        app.services.status
+    );
 }
 
 /// `Vary` sits last in a drawing fill's title, `K` lists how long each variation lasts, and
@@ -279,26 +283,34 @@ fn space_g_a_keeps_the_variation_heard_of_a_generator_that_varies() {
     // Nothing's been heard, so there's nothing to keep.
     keys(&mut app, " ga");
     assert_eq!(generators(&app)[0].shape, varying);
-    assert!(app.status.contains("hasn't been heard"), "{}", app.status);
+    assert!(
+        app.services.status.contains("hasn't been heard"),
+        "{}",
+        app.services.status
+    );
 
     // Two and a half times round its eight rows, once the callback has the song as it is.
     for _ in 0..4 {
         block(&mut realtime, &mut app);
     }
-    app.handle.send(Command::PlayFrom { step: 0 });
+    app.services.handle.send(Command::PlayFrom { step: 0 });
     let pass = 8 * 6000;
     for _ in 0..(pass * 5 / 2) / 256 {
         block(&mut realtime, &mut app);
     }
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, " ga");
     let kept = generators(&app)[0].shape;
     assert_eq!(kept.vary, 0, "Vary is Once");
     assert_eq!(kept.seed, varying.on_pass(2).seed, "the third pass's seed");
     assert_ne!(notes(&app), written, "the phrase holds the pass heard");
     assert_eq!(generators(&app).len(), 1, "still live");
-    assert_eq!(app.history.undo_depth(), depth + 1);
-    assert!(app.status.contains("pass 3"), "{}", app.status);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+    assert!(
+        app.services.status.contains("pass 3"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     assert_eq!(generators(&app)[0].shape, varying);
 }
@@ -310,7 +322,11 @@ fn space_g_a_applies_it_and_dd_takes_it_away() {
     keys(&mut app, " ga");
     assert!(generators(&app).is_empty());
     assert_eq!(notes(&app), written, "its values stay, as plain ones");
-    assert!(app.status.contains("applied"), "{}", app.status);
+    assert!(
+        app.services.status.contains("applied"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     assert_eq!(generators(&app).len(), 1);
     keys(&mut app, "dd");
@@ -351,7 +367,7 @@ fn empty_makes_another_column_live() {
     // Notes of its own own their velocities too, so the nudges are the column to try.
     keys(&mut app, "nudge<Enter>");
     let live = generators(&app);
-    assert_eq!(live.len(), 2, "{}", app.status);
+    assert_eq!(live.len(), 2, "{}", app.services.status);
     // Its device comes after Note's, and the cursor is on it.
     assert_eq!(
         app.track_page
@@ -426,8 +442,8 @@ fn the_row_playing_rides_the_preview_as_a_dot() {
         String::from_utf8_lossy(&placed).into_owned()
     };
     assert_eq!(frame(&mut app, &mut graphics), "", "stopped, no dot");
-    app.transport = Transport::Playing;
-    app.jam[0].chain = Some(0);
+    app.services.transport = Transport::Playing;
+    app.services.jam[0].chain = Some(0);
     app.set_playhead(3);
     let placed = frame(&mut app, &mut graphics);
     assert_eq!(placed.matches("a=p,").count(), 1, "{placed:?}");

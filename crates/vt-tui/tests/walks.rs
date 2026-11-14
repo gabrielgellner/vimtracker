@@ -90,7 +90,7 @@ fn drawn(app: &App) -> Vec<String> {
 #[test]
 fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
     let (mut app, _rt) = app_with(&[NOTE; 16]);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "lvGSKwalk<Enter>");
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Walk);
@@ -160,13 +160,13 @@ fn walk_steps_the_velocities_from_from_and_1_f_sums_its_depth() {
     assert_eq!(panel.shape.pink.depth, 4);
     assert!(velocities(&app).iter().all(|v| (0x20..=0x60).contains(v)));
     keys(&mut app, "jjji9<Enter>");
-    assert_eq!(app.status, "Depth runs from 2 to 8");
+    assert_eq!(app.services.status, "Depth runs from 2 to 8");
     keys(&mut app, "i6<Enter>++");
     assert_eq!(app.shape.as_ref().unwrap().shape.pink.depth, 8);
     keys(&mut app, "_");
     assert_eq!(app.shape.as_ref().unwrap().shape.pink.depth, 6);
     keys(&mut app, "<Enter>");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
 }
 
 #[test]

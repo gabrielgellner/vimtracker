@@ -31,7 +31,7 @@ fn app_on(song: Song) -> (App, vt_engine::link::Realtime, PathBuf) {
         vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     let presets = folder().join("presets");
-    app.settings = Settings {
+    app.services.settings = Settings {
         presets: presets.display().to_string(),
         ..Settings::none()
     };
@@ -55,12 +55,13 @@ fn the_turing_machine_saved_as_a_patch_goes_onto_another_track_keeping_its_sound
     let (mut app, _realtime, presets) = turing_machine();
     command(&mut app, "patch save Turing");
     let file = presets.join("patches/Turing.ron");
-    assert!(file.is_file(), "{}", app.status);
+    assert!(file.is_file(), "{}", app.services.status);
     assert!(
-        app.status
+        app.services
+            .status
             .starts_with("Saved track 01's patch as Turing, 1 slot, 3 macros"),
         "{}",
-        app.status
+        app.services.status
     );
     let text = std::fs::read_to_string(&file).unwrap();
     assert!(text.contains("kind: Steps"), "{text}");
@@ -73,18 +74,26 @@ fn the_turing_machine_saved_as_a_patch_goes_onto_another_track_keeping_its_sound
 
     // A name that's taken is refused, and `!` writes over it.
     command(&mut app, "patch save Turing");
-    assert!(app.status.contains(":patch! save Turing"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":patch! save Turing"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "patch! save Turing");
-    assert!(app.status.starts_with("Saved"), "{}", app.status);
+    assert!(
+        app.services.status.starts_with("Saved"),
+        "{}",
+        app.services.status
+    );
 
     // On the kick, whose first two slots shape its note and cutoff.
     app.cursor.track = 1;
     let before = app.song().tracks[1].clone();
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     command(&mut app, "patch load Turing");
     let after = &app.song().tracks[1];
     assert_eq!(
-        app.status,
+        app.services.status,
         "Track 02 has Turing in mod slot 3 and macros 1, 2 and 3, keeping its sound: u undoes it"
     );
     assert_eq!(after.mods[2].kind, ModKind::Steps);
@@ -109,7 +118,11 @@ fn the_turing_machine_saved_as_a_patch_goes_onto_another_track_keeping_its_sound
     assert_eq!(after.settings, before.settings);
     assert_eq!(after.mods[..2], before.mods[..2]);
     assert_eq!(after.phrases, before.phrases);
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo step"
+    );
     press(&mut app, "u");
     assert_eq!(app.song().tracks[1], before);
 }
@@ -132,7 +145,7 @@ fn too_few_free_is_refused_saying_how_many_and_bang_puts_it_over_the_last() {
         song.tracks[1].macros[at].maps = vec![MacroMap::whole(MacroTarget::Setting(id))];
     }
     let track = song.tracks[1].clone();
-    app.apply(&vt_model::action::Action::LoadSound {
+    app.services.apply(&vt_model::action::Action::LoadSound {
         track: 1,
         preset: Box::new(vt_model::preset::SoundPreset::of(&track, None)),
         sample: 0,
@@ -141,14 +154,14 @@ fn too_few_free_is_refused_saying_how_many_and_bang_puts_it_over_the_last() {
     let before = app.song().tracks[1].clone();
     command(&mut app, "patch load Turing");
     assert_eq!(
-        app.status,
+        app.services.status,
         "Turing needs 1 free mod slot and 3 free macros; track 02 has 4 free slots and 2 free macros: :patch! puts it over the last ones"
     );
     assert_eq!(app.song().tracks[1], before, "nothing is added");
 
     command(&mut app, "patch! load Turing");
     assert_eq!(
-        app.status,
+        app.services.status,
         "Track 02 has Turing in mod slot 3 and macros 6, 7 and 8, over macro 6, keeping its sound: u undoes it"
     );
     let after = &app.song().tracks[1];
@@ -162,7 +175,7 @@ fn the_browser_and_k_add_a_patch() {
     let (mut app, _realtime, presets) = turing_machine();
     // Before any is saved, the browser lists the shipped ones, under `Factory`.
     command(&mut app, "patch");
-    assert_eq!(app.mode, Mode::Picker, "{}", app.status);
+    assert_eq!(app.mode, Mode::Picker, "{}", app.services.status);
     let rows = explorer_rows(&app);
     assert_eq!(rows[..2], ["v built in", "    Turing Machine"], "{rows:?}");
     special(&mut app, KeyCode::Esc);
@@ -183,7 +196,7 @@ fn the_browser_and_k_add_a_patch() {
     );
     press(&mut app, "/add a p");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Picker, "{}", app.status);
+    assert_eq!(app.mode, Mode::Picker, "{}", app.services.status);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Patches");
     let rows = explorer_rows(&app);
@@ -196,9 +209,9 @@ fn the_browser_and_k_add_a_patch() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[2].mods[2].kind, ModKind::Steps);
     assert!(
-        app.status.starts_with("Track 03 has Turing"),
+        app.services.status.starts_with("Track 03 has Turing"),
         "{}",
-        app.status
+        app.services.status
     );
 
     // Save is there too, typing the command for the name.
@@ -256,18 +269,19 @@ fn a_live_generator_a_macro_holds_goes_onto_the_phrase_under_the_cursor() {
     assert_eq!(notes_first, 3);
     command(&mut app, "patch save Euclid");
     assert!(
-        app.status.contains("Note generator, 1 macro"),
+        app.services.status.contains("Note generator, 1 macro"),
         "{}",
-        app.status
+        app.services.status
     );
 
     app.cursor.track = 1;
     command(&mut app, "patch load Euclid");
     assert!(
-        app.status
+        app.services
+            .status
             .starts_with("Track 02 has Euclid in macro 1 and live Note on phrase 00"),
         "{}",
-        app.status
+        app.services.status
     );
     let track = &app.song().tracks[1];
     let generator = &track.phrases[&0].generators()[0];
@@ -401,9 +415,11 @@ fn a_lock_a_patchs_generator_writes_plays_on_the_slot_its_slot_went_to() {
     assert_eq!(cutoff_heard(app.song(), 0), 0xC0, "slot 4 opens it by +40");
     command(&mut app, "patch save Lock");
     assert!(
-        app.status.contains("FX1 generator, 1 slot, 1 macro"),
+        app.services
+            .status
+            .contains("FX1 generator, 1 slot, 1 macro"),
         "{}",
-        app.status
+        app.services.status
     );
 
     // The second track's first two slots shape its note and cutoff, so slot 4 lands in `Mod 3`
@@ -412,10 +428,11 @@ fn a_lock_a_patchs_generator_writes_plays_on_the_slot_its_slot_went_to() {
     assert_eq!(cutoff_heard(app.song(), 1), 0x80);
     command(&mut app, "patch load Lock");
     assert!(
-        app.status
+        app.services
+            .status
             .starts_with("Track 02 has Lock in mod slot 3, macro 1 and live FX1 on phrase 00"),
         "{}",
-        app.status
+        app.services.status
     );
     let track = &app.song().tracks[1];
     assert_eq!(track.mods[2].destination, Some(SettingId::CUT));
@@ -447,17 +464,17 @@ fn bang_puts_a_patch_over_the_last_slot_and_its_lock_follows_leaving_the_tracks_
 
     command(&mut app, "patch load Lock");
     assert!(
-        app.status.contains(":patch! puts it over"),
+        app.services.status.contains(":patch! puts it over"),
         "{}",
-        app.status
+        app.services.status
     );
     command(&mut app, "patch! load Lock");
     assert!(
-        app.status.starts_with(
+        app.services.status.starts_with(
             "Track 02 has Lock in mod slot 6, macro 1 and live FX1 on phrase 00, over mod slot 6"
         ),
         "{}",
-        app.status
+        app.services.status
     );
     let track = &app.song().tracks[1];
     assert_eq!(track.mods[5].destination, Some(SettingId::CUT));
@@ -518,9 +535,11 @@ fn every_shipped_patch_goes_onto_a_fresh_track_and_plays() {
         let (mut app, _realtime, presets) = app_on(fresh_track());
         command(&mut app, &format!("patch load {name}"));
         assert!(
-            app.status.starts_with(&format!("Track 01 has {name} in")),
+            app.services
+                .status
+                .starts_with(&format!("Track 01 has {name} in")),
             "{name}: {}",
-            app.status
+            app.services.status
         );
         assert!(
             !presets.exists(),
@@ -559,7 +578,7 @@ fn the_browser_adds_a_shipped_patch_and_kria_brings_its_lane() {
     );
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.status,
+        app.services.status,
         "Track 01 has Kria in mod slots 3 and 4, macros 1 and 2 and live FX1 on phrase 00, keeping its sound: u undoes it"
     );
     let track = &app.song().tracks[0];
@@ -655,16 +674,22 @@ fn a_patch_of_the_users_own_comes_before_a_shipped_one_of_the_same_name() {
     app.cursor.track = 1;
     command(&mut app, "patch load Euclid");
     assert!(
-        app.status
+        app.services
+            .status
             .starts_with("Track 02 has Euclid in mod slot 3 and macros 1, 2 and 3"),
         "the user's own, a Turing Machine: {}",
-        app.status
+        app.services.status
     );
     command(&mut app, "patch load Nothing");
     assert!(
-        app.status.starts_with("There's no patch called Nothing in")
-            && app.status.ends_with("nor one that comes with vimtracker"),
+        app.services
+            .status
+            .starts_with("There's no patch called Nothing in")
+            && app
+                .services
+                .status
+                .ends_with("nor one that comes with vimtracker"),
         "{}",
-        app.status
+        app.services.status
     );
 }

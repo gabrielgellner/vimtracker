@@ -470,7 +470,8 @@ fn the_output_meter_reads_the_cursors_track_after_its_trim_as_it_plays() {
         let (handle, mut realtime) = connect(Engine::new(48_000, version));
         let mut app = App::new(song, None, samples, handle, 48_000);
         press(&mut app, " 5");
-        app.handle
+        app.services
+            .handle
             .send(vt_engine::link::Command::PlayFrom { step: 0 });
         let mut out = vec![0.0; 2048 * 2];
         realtime.process(&mut out);
@@ -516,7 +517,8 @@ fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
     let (handle, mut realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     press(&mut app, " 5");
-    app.handle
+    app.services
+        .handle
         .send(vt_engine::link::Command::PlayFrom { step: 0 });
     let mut graphics = Graphics::new();
     let frames = 4 * 1000 / FRAME_MS as usize;
@@ -683,11 +685,15 @@ fn the_masters_limiter_is_a_toggle_after_its_level_and_switches_the_songs_with_u
     assert_eq!(column_name(&app), "Limiter");
     assert_eq!(value_shown(&app).as_deref(), Some("on"));
     // `K` switches it, as one undo step, and the status line says what off means.
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "K");
     assert!(!app.song().limiter);
-    assert_eq!(app.history.undo_depth(), depth + 1);
-    assert!(app.status.starts_with("Limiter off"), "{}", app.status);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+    assert!(
+        app.services.status.starts_with("Limiter off"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(value_shown(&app).as_deref(), Some("off"));
     press(&mut app, "h");
     assert_eq!(
@@ -699,9 +705,9 @@ fn the_masters_limiter_is_a_toggle_after_its_level_and_switches_the_songs_with_u
     assert!(app.song().limiter, "undone");
     press(&mut app, "-");
     assert!(!app.song().limiter, "- takes it off");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "-");
-    assert_eq!(app.history.undo_depth(), depth, "already off");
+    assert_eq!(app.services.history.undo_depth(), depth, "already off");
     press(&mut app, "=");
     assert!(app.song().limiter, "= puts it on");
     press(&mut app, "i");
@@ -805,14 +811,14 @@ fn a_samplers_machine_shows_the_samples_tune_and_cents_and_whose_tune_it_is() {
     let (x, y) = cell_of(&buffer, "slice 02");
     assert_eq!(buffer[(x, y)].fg, theme::MAUVE);
     // On a slice without its own, it's the sample's.
-    app.apply(&Action::SetTrackSetting {
+    app.services.apply(&Action::SetTrackSetting {
         track: 0,
         setting: SettingId::SLICE,
         value: 1,
     });
     assert_eq!(machine_cell(&mut app, "Tune"), "Tune      +0 st   sample");
     // With no sample there's nothing to tune, and it's dim.
-    app.apply(&Action::SetTrackSetting {
+    app.services.apply(&Action::SetTrackSetting {
         track: 0,
         setting: SettingId::SAMPLE,
         value: 0,
@@ -843,7 +849,7 @@ fn a_note_plays_relative_to_the_tune_the_sound_page_gives_its_sample() {
     tap(&mut app, "i-12");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().bank.get(1).unwrap().edit.play.tune, -12);
-    let tuned = render(Song::clone(app.song()), &app.samples);
+    let tuned = render(Song::clone(app.song()), &app.services.samples);
     let at = 3000 * 2;
     assert!(as_recorded[at] > 0.0);
     assert!(
@@ -854,7 +860,7 @@ fn a_note_plays_relative_to_the_tune_the_sound_page_gives_its_sample() {
     );
     // Undone, `C-4` is an octave up again, reading the ramp twice as fast.
     tap(&mut app, "u");
-    let undone = render(Song::clone(app.song()), &app.samples);
+    let undone = render(Song::clone(app.song()), &app.services.samples);
     let ratio = undone[at] / as_recorded[at];
     assert!((ratio - 2.0).abs() < 0.02, "{ratio}");
 }

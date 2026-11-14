@@ -91,17 +91,18 @@ impl App {
     pub(crate) fn toggle_recording(&mut self) {
         if self.recording.is_some() {
             self.stop_recording();
-            self.status = "Recording off".to_owned();
+            self.services.status = "Recording off".to_owned();
         } else if self.view != View::Phrase {
-            self.status = "Recording arms in the phrase view".to_owned();
-        } else if self.transport != Transport::Playing {
-            self.status = "Recording arms while playing".to_owned();
+            self.services.status = "Recording arms in the phrase view".to_owned();
+        } else if self.services.transport != Transport::Playing {
+            self.services.status = "Recording arms while playing".to_owned();
         } else {
             self.recording = Some(Recording {
                 last: self.heard_song(),
                 ..Recording::default()
             });
-            self.status = "Recording: notes played in Insert go in at the playhead".to_owned();
+            self.services.status =
+                "Recording: notes played in Insert go in at the playhead".to_owned();
         }
     }
 
@@ -110,7 +111,7 @@ impl App {
         let Some(mut recording) = self.recording.take() else {
             return;
         };
-        let playing = self.transport == Transport::Playing;
+        let playing = self.services.transport == Transport::Playing;
         for take in std::mem::take(&mut recording.takes) {
             let now = if playing {
                 self.heard_steps(take.track)
@@ -127,13 +128,14 @@ impl App {
         let track = self.cursor.track;
         let now = self.heard_steps(track);
         let Some(row) = self.row_to_record(track, now) else {
-            self.status = "This track isn't playing".to_owned();
+            self.services.status = "This track isn't playing".to_owned();
             return;
         };
         let velocity = self.flagged_velocity(self.note_velocity);
         let slide = self.flagged_slide();
         self.use_flags();
         let ticks = self
+            .services
             .places
             .get(track)
             .map_or(TICKS_PER_STEP, |place| u64::from(place.ticks.max(1)));
@@ -209,7 +211,7 @@ impl App {
         let mut rows = Vec::new();
         let mut speeds = Vec::new();
         for &track in tracks {
-            let now = self.carried_by(self.places[track], Duration::ZERO);
+            let now = self.carried_by(self.services.places[track], Duration::ZERO);
             let Some((phrase, stored)) = self.next_row(track, now) else {
                 continue;
             };
@@ -229,7 +231,7 @@ impl App {
                     .filter(free)
                     .find(|&c| step.fx[c].command.is_none())
             });
-            speeds.push(rate.map_or(self.places[track].speed, |column| {
+            speeds.push(rate.map_or(self.services.places[track].speed, |column| {
                 Speed::from_index(usize::from(step.fx[column].coarse()))
             }));
             rows.push(Next {
@@ -241,7 +243,8 @@ impl App {
             });
         }
         if rows.len() < 2 {
-            self.status = "Rotating while recording needs two of these tracks playing".to_owned();
+            self.services.status =
+                "Rotating while recording needs two of these tracks playing".to_owned();
             return;
         }
         let turned = rotated(&speeds, times);
@@ -269,15 +272,15 @@ impl App {
         }
         if !changes.is_empty() {
             let before = Arc::clone(self.song());
-            let was = self.history.undo_depth();
-            self.apply(&Action::Batch(changes));
+            let was = self.services.history.undo_depth();
+            self.services.apply(&Action::Batch(changes));
             if !Arc::ptr_eq(&before, self.song()) {
                 let depth = self
                     .recording
                     .as_ref()
                     .and_then(|recording| recording.depth);
                 match depth {
-                    Some(start) if start <= was => self.history.squash_to(start),
+                    Some(start) if start <= was => self.services.history.squash_to(start),
                     _ => {
                         if let Some(recording) = self.recording.as_mut() {
                             recording.depth = Some(was);
@@ -287,11 +290,11 @@ impl App {
             }
         }
         let tracks: Vec<usize> = rows.iter().map(|row| row.track).collect();
-        self.status = format!("RATE recorded: {}", speeds_said(&tracks, &turned));
+        self.services.status = format!("RATE recorded: {}", speeds_said(&tracks, &turned));
         if !full.is_empty() {
-            self.status = format!(
+            self.services.status = format!(
                 "{}; no FX column free on the next row of {}",
-                self.status,
+                self.services.status,
                 full.join(", ")
             );
         }
@@ -300,7 +303,7 @@ impl App {
     /// The row a track plays next after this point in its own steps, as its phrase and stored
     /// step, found in its own chain as [`row_to_record`](Self::row_to_record) finds a row.
     fn next_row(&self, track: usize, now: f64) -> Option<(u32, usize)> {
-        let jam = self.jam.get(track)?;
+        let jam = self.services.jam.get(track)?;
         let chain = jam.chain?;
         let song = self.song();
         let owner = song.tracks.get(track)?;
@@ -311,7 +314,7 @@ impl App {
         let from = (now - jam.started as f64).max(0.0);
         let into = from.rem_euclid(length as f64) as usize;
         let lap = from.div_euclid(length as f64) as usize;
-        let dealer = self.dealer(track);
+        let dealer = self.services.dealer(track);
         let at = |place: usize| owner.chain_position(chain, lap * length + place, dealer);
         let position = at(into)?;
         let next = into.saturating_sub(position.pulse) + owner.step_at(position)?.pulses();
@@ -327,7 +330,7 @@ impl App {
         if self.recording.is_none() {
             return;
         }
-        if self.transport != Transport::Playing || self.view != View::Phrase {
+        if self.services.transport != Transport::Playing || self.view != View::Phrase {
             self.stop_recording();
             return;
         }
@@ -370,8 +373,8 @@ impl App {
     /// the clock since, less the output's latency.
     fn heard_song(&self) -> f64 {
         let place = TrackPlace {
-            count: self.playhead as i64,
-            progress: self.progress,
+            count: self.services.playhead as i64,
+            progress: self.services.progress,
             ticks: TICKS_PER_STEP as u32,
             speed: Speed::Sixteenth,
             skipped: false,
@@ -383,7 +386,7 @@ impl App {
     /// Where a track is as it's heard, in steps of its own running count, which the engine
     /// reports, as long as its speed makes them.
     fn heard_steps(&self, track: usize) -> f64 {
-        self.carried_on(self.places.get(track).copied().unwrap_or_default())
+        self.carried_on(self.services.places.get(track).copied().unwrap_or_default())
     }
 
     /// Where a place the engine last reported has got to at the frame or key being handled, less
@@ -396,8 +399,9 @@ impl App {
     /// this long: the output's latency for where it's heard, none for where the engine is.
     fn carried_by(&self, place: TrackPlace, latency: Duration) -> f64 {
         let elapsed = self
+            .services
             .now
-            .saturating_duration_since(self.report_at)
+            .saturating_duration_since(self.services.report_at)
             .min(MOST_ELAPSED);
         let steps_per_quarter = TICKS_PER_QUARTER as f64 / f64::from(place.ticks.max(1));
         let steps_per_second = f64::from(self.song().millibpm) / 60_000.0 * steps_per_quarter;
@@ -410,7 +414,7 @@ impl App {
     /// found in the track's own chain, and the groove counts the track's own steps, as playing
     /// does. Everything here is in the track's steps, which its pushes and nudges are shares of.
     fn row_to_record(&self, track: usize, now: f64) -> Option<Row> {
-        let jam = self.jam.get(track)?;
+        let jam = self.services.jam.get(track)?;
         let chain = jam.chain?;
         let song = self.song();
         let owner = song.tracks.get(track)?;
@@ -422,7 +426,7 @@ impl App {
         let into = (now - jam.started as f64).rem_euclid(length as f64);
         // Every time round the chain counts, as which one deals a dealt order.
         let lap = ((now - jam.started as f64).div_euclid(length as f64)).max(0.0) as usize;
-        let dealer = self.dealer(track);
+        let dealer = self.services.dealer(track);
         let at = |place: f64| owner.chain_position(chain, lap * length + place as usize, dealer);
         let position = at(into)?;
         let start = (into as usize).saturating_sub(position.pulse) as f64;
@@ -490,8 +494,8 @@ impl App {
             length: Some(length),
         });
         let before = Arc::clone(self.song());
-        let was = self.history.undo_depth();
-        self.apply(&Action::SetStep {
+        let was = self.services.history.undo_depth();
+        self.services.apply(&Action::SetStep {
             track: take.track,
             phrase: take.phrase,
             step: take.step,
@@ -501,7 +505,7 @@ impl App {
             return;
         }
         match *depth {
-            Some(start) if start <= was => self.history.squash_to(start),
+            Some(start) if start <= was => self.services.history.squash_to(start),
             _ => *depth = Some(was),
         }
     }

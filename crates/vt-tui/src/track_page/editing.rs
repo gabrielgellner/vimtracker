@@ -431,14 +431,15 @@ impl App {
     /// The cursor's track as it's heard, with its faders where the steps have them while they
     /// drive them.
     pub(super) fn page_track_as_heard(&self) -> Track {
-        self.track_as_heard(self.cursor.track)
+        self.services
+            .track_as_heard(self.cursor.track)
             .map(std::borrow::Cow::into_owned)
             .unwrap_or_default()
     }
 
     /// Put the track in a group, or take it out of any.
     pub(super) fn set_group_here(&mut self, group: Option<u8>) {
-        self.apply(&Action::SetTrackGroup {
+        self.services.apply(&Action::SetTrackGroup {
             first: self.cursor.track,
             last: self.cursor.track,
             group,
@@ -447,7 +448,7 @@ impl App {
 
     /// Replace one of the track's mod slots, as one undo step.
     pub(super) fn set_mod(&mut self, slot: usize, modulator: ModSlot) {
-        self.apply(&Action::SetMod {
+        self.services.apply(&Action::SetMod {
             track: self.cursor.track,
             slot,
             modulator,
@@ -456,7 +457,7 @@ impl App {
 
     /// Set how many of the song's steps the track's chain plays before starting again, or none.
     pub(super) fn set_reset(&mut self, reset: Option<u16>) {
-        self.apply(&Action::SetTrackReset {
+        self.services.apply(&Action::SetTrackReset {
             track: self.cursor.track,
             reset,
         });
@@ -464,7 +465,7 @@ impl App {
 
     /// Set how long the track's ties glide into the next note.
     pub(super) fn set_glide(&mut self, glide: u8) {
-        self.apply(&Action::SetTrackGlide {
+        self.services.apply(&Action::SetTrackGlide {
             track: self.cursor.track,
             glide,
         });
@@ -478,7 +479,7 @@ impl App {
             return;
         }
         if let Some(setting) = tracks.get(track).and_then(|t| control.setting_on(t)) {
-            self.apply(&Action::SetTrackSetting {
+            self.services.apply(&Action::SetTrackSetting {
                 track,
                 setting,
                 value,
@@ -486,16 +487,18 @@ impl App {
             return;
         }
         match control {
-            Control::Base(control) => self.apply(&Action::SetTrackBase {
+            Control::Base(control) => self.services.apply(&Action::SetTrackBase {
                 track,
                 control,
                 value,
             }),
-            Control::Level => self.apply(&Action::SetTrackLevel {
+            Control::Level => self.services.apply(&Action::SetTrackLevel {
                 track,
                 level: value,
             }),
-            Control::Trim => self.apply(&Action::SetTrackTrim { track, trim: value }),
+            Control::Trim => self
+                .services
+                .apply(&Action::SetTrackTrim { track, trim: value }),
             _ => {}
         }
     }
@@ -518,6 +521,7 @@ impl App {
             Control::Gen { .. } | Control::NewGenerator(_) => {}
             Control::Mute | Control::Solo => {
                 let live = self
+                    .services
                     .levels
                     .get(self.cursor.track)
                     .copied()
@@ -543,7 +547,7 @@ impl App {
             }
             Control::Machine => {
                 let machine = next_in(&Machine::ALL, track.machine, up);
-                self.apply(&Action::SetTrackMachine {
+                self.services.apply(&Action::SetTrackMachine {
                     track: self.cursor.track,
                     machine,
                 });
@@ -551,7 +555,7 @@ impl App {
             Control::Sample => {
                 let size = if large { HEX_JUMP as usize } else { 1 };
                 let sample = self.next_sample(track.sample(), up, size * count);
-                self.apply(&Action::SetTrackSample {
+                self.services.apply(&Action::SetTrackSample {
                     track: self.cursor.track,
                     sample,
                 });
@@ -598,7 +602,7 @@ impl App {
             Control::FilterType => {
                 // One way at a time, as a large step would skip through a short list.
                 let filter = next_in(&FilterType::ALL, track.filter, up);
-                self.apply(&Action::SetFilterType {
+                self.services.apply(&Action::SetFilterType {
                     track: self.cursor.track,
                     filter,
                 });
@@ -606,11 +610,11 @@ impl App {
             Control::FilterMode => {
                 let modes = track.filter.modes();
                 if modes.is_empty() {
-                    self.status = no_modes(track.filter);
+                    self.services.status = no_modes(track.filter);
                     return;
                 }
                 let mode = next_in(modes, track.filter.plays(track.filter_mode), up);
-                self.apply(&Action::SetFilterMode {
+                self.services.apply(&Action::SetFilterMode {
                     track: self.cursor.track,
                     mode,
                 });
@@ -619,7 +623,7 @@ impl App {
                 let from = i64::from(track.choke.unwrap_or(0));
                 let moved = (from + if up { 1 } else { -1 } * count.min(0x100) as i64)
                     .clamp(0, i64::from(CHOKE_GROUPS)) as u8;
-                self.apply(&Action::SetTrackChoke {
+                self.services.apply(&Action::SetTrackChoke {
                     track: self.cursor.track,
                     choke: (moved > 0).then_some(moved),
                 });
@@ -635,7 +639,7 @@ impl App {
                 let by = size * count.min(100) as i32;
                 let from = i32::from(gate_percent(track.gate_length()));
                 let moved = from + if up { by } else { -by };
-                self.apply(&Action::SetTrackGateLength {
+                self.services.apply(&Action::SetTrackGateLength {
                     track: self.cursor.track,
                     gate_length: Some(gate_value(moved.clamp(1, 100) as u8)),
                 });
@@ -664,7 +668,7 @@ impl App {
             }
             Control::Role => {
                 let role = next_in(&Role::ALL, track.role, up);
-                self.apply(&Action::SetTrackRole {
+                self.services.apply(&Action::SetTrackRole {
                     track: self.cursor.track,
                     role,
                 });
@@ -673,7 +677,7 @@ impl App {
                 // One way at a time, stopping at either end, as the list runs short to long.
                 let at = usize::from(track.speed.index());
                 let speed = Speed::from_index(if up { at + 1 } else { at.saturating_sub(1) });
-                self.apply(&Action::SetTrackSpeed {
+                self.services.apply(&Action::SetTrackSpeed {
                     track: self.cursor.track,
                     speed,
                 });
@@ -692,7 +696,7 @@ impl App {
                 }
             }
             Control::Mod(slot, ModField::Type) => {
-                self.status = format!(
+                self.services.status = format!(
                     "K picks Mod {}'s type, as a type changes what the device is",
                     slot + 1
                 );
@@ -732,7 +736,7 @@ impl App {
     /// Turn one of the track's macros, and with it everything it holds.
     pub(crate) fn set_macro(&mut self, at: usize, value: u16) {
         if self.page_track().macros[at].value != value {
-            self.apply(&Action::SetMacro {
+            self.services.apply(&Action::SetMacro {
                 track: self.cursor.track,
                 at,
                 value,
@@ -742,7 +746,7 @@ impl App {
 
     pub(super) fn set_accumulation(&mut self, accumulation: Accumulation) {
         if accumulation != self.page_track().accumulation {
-            self.apply(&Action::SetAccumulation {
+            self.services.apply(&Action::SetAccumulation {
                 track: self.cursor.track,
                 accumulation,
             });
@@ -751,7 +755,7 @@ impl App {
 
     pub(super) fn set_arpeggio(&mut self, arpeggio: Arpeggio) {
         if arpeggio != self.page_track().arpeggio {
-            self.apply(&Action::SetArpeggio {
+            self.services.apply(&Action::SetArpeggio {
                 track: self.cursor.track,
                 arpeggio,
             });
@@ -797,13 +801,13 @@ impl App {
             setting: id,
             fine,
         });
-        self.apply(&Action::Batch(actions));
+        self.services.apply(&Action::Batch(actions));
     }
 
     /// Set the fine part of the setting under the cursor.
     pub(super) fn set_fine_here(&mut self, fine: u8) {
         if let Some(setting) = self.track_control().fine_on(&self.page_track()) {
-            self.apply(&Action::SetTrackFine {
+            self.services.apply(&Action::SetTrackFine {
                 track: self.cursor.track,
                 setting,
                 fine,
@@ -841,6 +845,7 @@ impl App {
             Control::Macro(at) => self.set_macro(at, 0),
             Control::Mute | Control::Solo => {
                 let live = self
+                    .services
                     .levels
                     .get(self.cursor.track)
                     .copied()
@@ -865,14 +870,14 @@ impl App {
             }
             Control::Machine => {
                 if track.machine != fresh.machine {
-                    self.apply(&Action::SetTrackMachine {
+                    self.services.apply(&Action::SetTrackMachine {
                         track: self.cursor.track,
                         machine: fresh.machine,
                     });
                 }
             }
             Control::Sample if track.sample() != 0 => {
-                self.apply(&Action::SetTrackSample {
+                self.services.apply(&Action::SetTrackSample {
                     track: self.cursor.track,
                     sample: 0,
                 });
@@ -899,7 +904,7 @@ impl App {
             Control::Groove if track.groove.is_some() => self.set_track_groove(None),
             Control::Groove => {}
             Control::Choke if track.choke.is_some() => {
-                self.apply(&Action::SetTrackChoke {
+                self.services.apply(&Action::SetTrackChoke {
                     track: self.cursor.track,
                     choke: None,
                 });
@@ -908,14 +913,14 @@ impl App {
             Control::Group if track.group.is_some() => self.set_group_here(None),
             Control::Group => {}
             Control::Role if !track.role.is_auto() => {
-                self.apply(&Action::SetTrackRole {
+                self.services.apply(&Action::SetTrackRole {
                     track: self.cursor.track,
                     role: Role::Auto,
                 });
             }
             Control::Role => {}
             Control::GateLength if track.gate_length.is_some() => {
-                self.apply(&Action::SetTrackGateLength {
+                self.services.apply(&Action::SetTrackGateLength {
                     track: self.cursor.track,
                     gate_length: None,
                 });
@@ -924,7 +929,7 @@ impl App {
             Control::Glide if track.glide != fresh.glide => self.set_glide(fresh.glide),
             Control::Glide => {}
             Control::Speed if track.speed != fresh.speed => {
-                self.apply(&Action::SetTrackSpeed {
+                self.services.apply(&Action::SetTrackSpeed {
                     track: self.cursor.track,
                     speed: fresh.speed,
                 });
@@ -934,7 +939,7 @@ impl App {
             Control::Reset => {}
             Control::FilterType => {
                 if track.filter != fresh.filter {
-                    self.apply(&Action::SetFilterType {
+                    self.services.apply(&Action::SetFilterType {
                         track: self.cursor.track,
                         filter: fresh.filter,
                     });
@@ -942,7 +947,7 @@ impl App {
             }
             Control::FilterMode => {
                 if track.filter_mode != fresh.filter_mode {
-                    self.apply(&Action::SetFilterMode {
+                    self.services.apply(&Action::SetFilterMode {
                         track: self.cursor.track,
                         mode: fresh.filter_mode,
                     });
@@ -1037,7 +1042,7 @@ impl App {
 
     /// Switch the track filter's `Safe` on or off.
     fn set_safe(&mut self, on: bool) {
-        self.apply(&Action::SetTrackSafe {
+        self.services.apply(&Action::SetTrackSafe {
             track: self.cursor.track,
             on,
         });

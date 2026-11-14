@@ -18,7 +18,7 @@ fn commands_change_tempo_and_length() {
     assert_eq!(app.song().millibpm, 137_630);
     command(&mut app, "bpm 900");
     assert_eq!(app.song().millibpm, 137_630);
-    assert!(!app.status.is_empty());
+    assert!(!app.services.status.is_empty());
     for _ in 0..10 {
         press(&mut app, "j");
     }
@@ -62,7 +62,7 @@ fn tab_completes_a_command_name_in_place() {
     tap_special(&mut app, KeyCode::Tab);
     assert_eq!(app.command_line, "set scale=dorian");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.status, "Scale C Dorian", "it parses and runs");
+    assert_eq!(app.services.status, "Scale C Dorian", "it parses and runs");
     assert!(app.scale.on);
 }
 
@@ -158,7 +158,7 @@ fn paths_and_kits_complete_from_the_disk() {
     assert_eq!(menu(&app).0, ["kick.wav", "kits/"], "the list shows names");
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![root.join("kits").display().to_string()],
         samples: Vec::new(),
         presets: String::new(),

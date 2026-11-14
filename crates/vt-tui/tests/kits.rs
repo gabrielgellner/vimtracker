@@ -26,18 +26,30 @@ fn a_kit_with_a_bad_sound_changes_nothing_and_names_it() {
     .unwrap();
     command(&mut app, &format!("kit {} all", kit.display()));
     assert_eq!(sample_of(&app, 0), None);
-    assert!(!app.dirty);
-    assert!(app.status.contains("broken"), "{}", app.status);
+    assert!(!app.services.dirty);
+    assert!(
+        app.services.status.contains("broken"),
+        "{}",
+        app.services.status
+    );
 
     std::fs::write(&kit, r#"(sounds: [(path: "drums/gone.wav")])"#).unwrap();
     command(&mut app, &format!("kit {} all", kit.display()));
     assert_eq!(sample_of(&app, 0), None);
-    assert!(app.status.contains("gone"), "{}", app.status);
+    assert!(
+        app.services.status.contains("gone"),
+        "{}",
+        app.services.status
+    );
 
     std::fs::write(&kit, "not a kit").unwrap();
     command(&mut app, &format!("kit {} all", kit.display()));
     assert_eq!(sample_of(&app, 0), None);
-    assert!(app.status.contains("909.ron"), "{}", app.status);
+    assert!(
+        app.services.status.contains("909.ron"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -79,12 +91,16 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
     )
     .unwrap();
     let tracks = app.song().tracks.len();
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     command(&mut app, &format!("kit {}", named.display()));
     assert_eq!(app.song().tracks.len(), tracks);
     assert_eq!(sample_of(&app, 0), None);
-    assert_eq!(app.history.undo_depth(), depth);
-    assert!(app.status.contains("2 sounds"), "{}", app.status);
+    assert_eq!(app.services.history.undo_depth(), depth);
+    assert!(
+        app.services.status.contains("2 sounds"),
+        "{}",
+        app.services.status
+    );
 
     press(&mut app, "WW");
     command(&mut app, "sample");
@@ -106,7 +122,7 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
     assert!(sample_of(&app, 2).unwrap().ends_with("snare.wav"));
     assert_eq!(app.song().tracks[2].name, "SD");
     assert_eq!(sample_of(&app, 0), None, "only this track");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     press(&mut app, "u");
     assert_eq!(sample_of(&app, 2), None);
     assert_eq!(app.song().tracks[2].name, "");
@@ -133,16 +149,18 @@ fn a_kit_with_all_fills_tracks_and_a_bad_one_keeps_the_last() {
 #[test]
 fn a_missing_kit_says_so_and_a_missing_kit_folder_isnt_listed() {
     let (mut app, _realtime) = app();
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec!["/nowhere/kits".to_owned(), "/nowhere/else".to_owned()],
         samples: Vec::new(),
         presets: String::new(),
     };
     command(&mut app, "kit nothing-here");
     assert!(
-        app.status.contains("/nowhere/kits/nothing-here.ron"),
+        app.services
+            .status
+            .contains("/nowhere/kits/nothing-here.ron"),
         "{}",
-        app.status
+        app.services.status
     );
     command(&mut app, "kit");
     assert_eq!(app.mode, Mode::Picker);
@@ -174,7 +192,7 @@ fn kits_come_from_every_folder_in_the_settings_and_the_first_wins() {
     std::fs::create_dir_all(&shadowed).unwrap();
     std::fs::write(shadowed.join("909.ron"), "(sounds: [])").unwrap();
     let folders = [first.parent().unwrap(), &shadowed, second.parent().unwrap()];
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: folders.iter().map(|f| f.display().to_string()).collect(),
         samples: Vec::new(),
         presets: String::new(),
@@ -182,15 +200,15 @@ fn kits_come_from_every_folder_in_the_settings_and_the_first_wins() {
 
     command(&mut app, "kit 808");
     assert!(
-        app.status.starts_with("Kit 808: 3 sounds"),
+        app.services.status.starts_with("Kit 808: 3 sounds"),
         "{}",
-        app.status
+        app.services.status
     );
     command(&mut app, "kit 909");
     assert!(
-        app.status.starts_with("Kit 909: 3 sounds"),
+        app.services.status.starts_with("Kit 909: 3 sounds"),
         "{}",
-        app.status
+        app.services.status
     );
     // The explorer starts from each kit folder, in order, on the kit in use.
     command(&mut app, "kit");
@@ -254,13 +272,13 @@ fn a_kit_sound_is_a_bank_entry_with_its_gain_and_tune_and_its_track_takes_the_ch
     assert!(app.song().bank.is_empty());
     assert_eq!(track(&app, 0), (0, 0xE0, 0x80, None));
     command(&mut app, &format!("kit {}", hats.display()));
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     command(&mut app, "sample");
     special(&mut app, KeyCode::Enter);
     assert_eq!(track(&app, 0), (1, 0xE0, 0x80, Some(1)));
     assert_eq!(app.song().bank.get(1).unwrap().edit.play.tune, 3);
     assert_eq!(app.song().tracks[0].name, "CH");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     press(&mut app, "u");
     assert_eq!(track(&app, 0), (0, 0xE0, 0x80, None));
     assert_eq!(sample_of(&app, 0), None);
@@ -289,7 +307,7 @@ fn a_kit_fills_the_bank_once_and_a_file_tuned_twice_is_two_entries() {
         "the same file played the same way is one entry"
     );
     assert_eq!(app.song().bank.len(), 2);
-    assert_eq!(app.samples.len(), 1, "and the file is loaded once");
+    assert_eq!(app.services.samples.len(), 1, "and the file is loaded once");
 
     // Loading it again adds nothing.
     command(&mut app, &format!("kit {} all", toms.display()));
@@ -300,7 +318,11 @@ fn a_kit_fills_the_bank_once_and_a_file_tuned_twice_is_two_entries() {
     press(&mut app, "W");
     command(&mut app, &format!("sample {}", kick.display()));
     assert_eq!(app.song().bank.len(), 2);
-    assert!(app.status.contains("from the bank"), "{}", app.status);
+    assert!(
+        app.services.status.contains("from the bank"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -310,10 +332,15 @@ fn a_kit_fills_tracks_from_the_first_as_one_undo_step() {
     command(&mut app, &format!("kit {} all", kit.display()));
     assert!(sample_of(&app, 0).unwrap().ends_with("snare.wav"));
     assert!(sample_of(&app, 1).unwrap().ends_with("kick.wav"));
-    assert_eq!(app.status, "Kit 909: 3 tracks");
+    assert_eq!(app.services.status, "Kit 909: 3 tracks");
     assert_eq!(app.song().sound_tracks(), 3, "it added the track it needed");
-    assert_eq!(app.levels.len(), 3 + FIXED_TRACKS);
-    assert!(app.samples.id_of(&sample_of(&app, 1).unwrap()).is_some());
+    assert_eq!(app.services.levels.len(), 3 + FIXED_TRACKS);
+    assert!(
+        app.services
+            .samples
+            .id_of(&sample_of(&app, 1).unwrap())
+            .is_some()
+    );
 
     press(&mut app, "u");
     assert_eq!(sample_of(&app, 0), None);
@@ -345,12 +372,16 @@ fn a_kit_warns_only_when_it_changes_a_tracks_sample() {
     let (mut app, _realtime) = app();
     let kit = labelled_kit();
     command(&mut app, &format!("kit {} all", kit.display()));
-    assert!(!app.status.contains("Replaced"), "{}", app.status);
+    assert!(
+        !app.services.status.contains("Replaced"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, &format!("kit {} all", kit.display()));
     assert!(
-        !app.status.contains("Replaced"),
+        !app.services.status.contains("Replaced"),
         "the same again: {}",
-        app.status
+        app.services.status
     );
     std::fs::write(
         &kit,
@@ -358,7 +389,11 @@ fn a_kit_warns_only_when_it_changes_a_tracks_sample() {
     )
     .unwrap();
     command(&mut app, &format!("kit {} all", kit.display()));
-    assert!(app.status.contains("Replaced 01"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Replaced 01"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -374,7 +409,11 @@ fn a_kit_refuses_a_bad_name_and_changes_nothing() {
     ] {
         std::fs::write(&kit, text).unwrap();
         command(&mut app, &format!("kit {} all", kit.display()));
-        assert!(app.status.contains(expected), "{}", app.status);
-        assert!(!app.dirty);
+        assert!(
+            app.services.status.contains(expected),
+            "{}",
+            app.services.status
+        );
+        assert!(!app.services.dirty);
     }
 }

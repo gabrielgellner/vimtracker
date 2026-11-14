@@ -225,7 +225,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     app.library = crate::ableton::default_samples();
     if let Some(path) = Settings::path() {
         let (settings, note) = Settings::load(&path);
-        app.settings = settings;
+        app.services.settings = settings;
         if let Some(note) = note
             && status.is_empty()
         {
@@ -262,16 +262,16 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     }
     // Off unless it was turned on here before, so Live keeps the Roto otherwise.
     if let Some(path) = crate::roto::RotoSetting::path() {
-        app.roto.setting = crate::roto::RotoSetting::load_from(&path);
-        app.roto.setting_path = Some(path);
+        app.services.roto.setting = crate::roto::RotoSetting::load_from(&path);
+        app.services.roto.setting_path = Some(path);
     }
     // Its devices with buttons are vimtracker's own setups stored on it, written over its serial
     // port when they're missing or changed, with their versions kept in the cache folder.
-    app.roto.serial = Some(crate::roto::system_serial());
-    app.roto.versions_path = vt_model::analysis::program_cache_folder()
+    app.services.roto.serial = Some(crate::roto::system_serial());
+    app.services.roto.versions_path = vt_model::analysis::program_cache_folder()
         .map(|folder| folder.join(crate::roto::VERSIONS_FILE));
     // Only one vimtracker on this machine has the Roto at a time: the one holding this lock.
-    app.roto.lock_path = vt_model::analysis::program_cache_folder()
+    app.services.roto.lock_path = vt_model::analysis::program_cache_folder()
         .map(|folder| folder.join(crate::roto::LOCK_FILE));
     app.start_roto_if_on();
     // Off unless it was turned on here before, so the terminal keeps its mouse otherwise.
@@ -281,7 +281,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     }
     // So the value follows the fingers whichever way the system scrolls.
     app.wheel.natural = crate::wheel::natural_scrolling();
-    app.status = status;
+    app.services.status = status;
     app.offer_restore();
     let mut graphics = Graphics::new();
 
@@ -407,7 +407,7 @@ fn main_loop(
             *stream = None;
             app.audio.running = false;
             app.audio.devices = audio::devices();
-            app.status =
+            app.services.status =
                 "The audio device changed or went away, so audio stopped. Space 9 L chooses one"
                     .to_owned();
         }
@@ -426,7 +426,7 @@ fn main_loop(
                 Ok(playing) => *stream = Some(playing),
                 Err(error) => {
                     app.audio.running = false;
-                    app.status = format!("Couldn't play through that: {error}");
+                    app.services.status = format!("Couldn't play through that: {error}");
                 }
             }
         }
@@ -440,7 +440,8 @@ fn main_loop(
             app.slowdown.power = audio::PowerState::now();
         }
         app.autosave_if_due(Instant::now());
-        woken |= app.transport == Transport::Playing || !Arc::ptr_eq(app.song(), &shown_song);
+        woken |=
+            app.services.transport == Transport::Playing || !Arc::ptr_eq(app.song(), &shown_song);
         if redraws.due(woken) {
             // The sample page's waveform is drawn at one pixel for each of the screen's.
             if let Ok(size) = terminal::window_size() {
@@ -492,7 +493,7 @@ fn switch_audio(
     let output = Output::open(choice)?;
     let rate = output.rate();
     let mut pool = SamplePool::default();
-    let errors = project::load_samples(app.folder.as_deref(), app.song(), rate, &mut pool);
+    let errors = project::load_samples(app.services.folder.as_deref(), app.song(), rate, &mut pool);
     let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::clone(app.song()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(rate, version));
@@ -509,13 +510,13 @@ fn switch_audio(
     app.audio.running = true;
     app.audio.choice = choice.clone();
     app.audio.devices = audio::devices();
-    app.status = match (note, errors.first()) {
+    app.services.status = match (note, errors.first()) {
         (Some(note), _) => note,
         (None, Some(error)) => error.to_string(),
         (None, None) => format!("Playing through {} at {rate} Hz", app.audio.device),
     };
     if let Err(error) = choice.save() {
-        app.status = format!("Playing, but the choice couldn't be kept: {error}");
+        app.services.status = format!("Playing, but the choice couldn't be kept: {error}");
     }
     Ok(Streams {
         output: stream,
@@ -627,7 +628,7 @@ pub fn draw_screen(
         if let (Some(area), Some(id)) = (scope, app.scope_image) {
             views::meter::draw_scope(frame, area, id);
         }
-        views::meter::draw(frame, meter, &app.meter, app.song().limiter);
+        views::meter::draw(frame, meter, &app.services.meter, app.song().limiter);
     }
     views::status::draw(frame, status, app);
     views::help::draw_popup(frame, body, app, now);

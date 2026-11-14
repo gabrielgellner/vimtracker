@@ -141,7 +141,7 @@ impl App {
         pool: &mut SamplePool,
     ) -> Result<Banked, String> {
         let stored = self.store_sample(file).map_err(|error| error.to_string())?;
-        let resolved = project::resolve_sample(self.folder.as_deref(), &stored);
+        let resolved = project::resolve_sample(self.services.folder.as_deref(), &stored);
         let bytes =
             fs::read(&resolved).map_err(|error| format!("{}: {error}", resolved.display()))?;
         let hash = ContentHash::of(&bytes);
@@ -165,7 +165,7 @@ impl App {
             });
         }
         let id = pool
-            .load(&stored, &resolved, self.rate)
+            .load(&stored, &resolved, self.services.rate)
             .map_err(|error| error.to_string())?;
         let loaded = pool.get(id).map_or(0, |sample| sample.frames.len() as u64);
         let mut from_file = seeding::seed(&resolved, &bytes, pool.rates(id).file_frame(loaded));
@@ -204,11 +204,11 @@ impl App {
             return;
         }
         let mut bank = self.song().bank.clone();
-        let mut pool = SamplePool::clone(&self.samples);
+        let mut pool = SamplePool::clone(&self.services.samples);
         let banked = match self.bank_file(file, seed, &mut bank, &mut pool) {
             Ok(found) => found,
             Err(error) => {
-                self.status = error;
+                self.services.status = error;
                 return;
             }
         };
@@ -218,7 +218,7 @@ impl App {
             seeded,
             problems,
         } = banked;
-        self.samples = Arc::new(pool);
+        self.services.samples = Arc::new(pool);
         let track = self.cursor.track;
         let mut actions = Vec::new();
         if new {
@@ -232,16 +232,16 @@ impl App {
             sample: number,
         });
         actions.extend(more);
-        self.apply(&Action::Batch(actions));
+        self.services.apply(&Action::Batch(actions));
         let banked = self.song().bank.get(number).is_some();
         let seeded = seeded.filter(|_| banked);
         if let Some((entry, _)) = &seeded {
-            self.apply(&Action::SetBankEntry {
+            self.services.apply(&Action::SetBankEntry {
                 number,
                 entry: Some(entry.clone()),
             });
         }
-        if !self.status.is_empty() {
+        if !self.services.status.is_empty() {
             return;
         }
         let added = if new {
@@ -260,7 +260,7 @@ impl App {
         for problem in problems {
             said = format!("{said}. {}", capitalised(&problem));
         }
-        self.status = said;
+        self.services.status = said;
     }
 
     /// Find a sound preset's bank entry in the bank, or load its file to add it: the number it's at,
@@ -282,13 +282,13 @@ impl App {
             return Ok((number, None));
         }
         let number = self.song().bank.free().ok_or_else(|| FULL.to_owned())?;
-        let mut pool = SamplePool::clone(&self.samples);
+        let mut pool = SamplePool::clone(&self.services.samples);
         for source in entry.sources() {
-            let resolved = project::resolve_sample(self.folder.as_deref(), &source.path);
-            pool.load(&source.path, &resolved, self.rate)
+            let resolved = project::resolve_sample(self.services.folder.as_deref(), &source.path);
+            pool.load(&source.path, &resolved, self.services.rate)
                 .map_err(|error| error.to_string())?;
         }
-        self.samples = Arc::new(pool);
+        self.services.samples = Arc::new(pool);
         let add = Action::SetBankEntry {
             number,
             entry: Some(entry),
@@ -304,7 +304,7 @@ impl App {
         sounds: impl IntoIterator<Item = (&'a Path, Seed)>,
     ) -> Result<KitBanked, String> {
         let mut bank = self.song().bank.clone();
-        let mut pool = SamplePool::clone(&self.samples);
+        let mut pool = SamplePool::clone(&self.services.samples);
         let mut banked = KitBanked {
             numbers: Vec::new(),
             adds: Vec::new(),
@@ -348,16 +348,16 @@ impl App {
     fn finish_kit(&mut self, seeds: Vec<Action>, problems: &[String]) {
         let seeded = seeds.len();
         if seeded > 0 {
-            self.apply(&Action::Batch(seeds));
+            self.services.apply(&Action::Batch(seeds));
             let which = if seeded == 1 {
                 "1 sound with points from its file".to_owned()
             } else {
                 format!("{seeded} sounds with points from their files")
             };
-            self.status = format!("{}, {which}: u leaves them out", self.status);
+            self.services.status = format!("{}, {which}: u leaves them out", self.services.status);
         }
         for problem in problems {
-            self.status = format!("{}. {problem}", self.status);
+            self.services.status = format!("{}. {problem}", self.services.status);
         }
     }
 
@@ -367,12 +367,12 @@ impl App {
     pub fn load_kit(&mut self, path: &Path) {
         let kit = match load_kit(path) {
             Ok(kit) if kit.sounds.is_empty() => {
-                self.status = format!("{} has no sounds", path.display());
+                self.services.status = format!("{} has no sounds", path.display());
                 return;
             }
             Ok(kit) => kit,
             Err(error) => {
-                self.status = error.to_string();
+                self.services.status = error.to_string();
                 return;
             }
         };
@@ -391,7 +391,7 @@ impl App {
         let banked = match self.bank_kit_sounds(seeds) {
             Ok(banked) => banked,
             Err(error) => {
-                self.status = error;
+                self.services.status = error;
                 return;
             }
         };
@@ -425,18 +425,18 @@ impl App {
             ..
         } = banked;
         let seeded = !seeds.is_empty();
-        self.samples = Arc::new(pool);
+        self.services.samples = Arc::new(pool);
         adds.push(Action::LoadKit(sounds));
-        self.apply(&Action::Batch(adds));
+        self.services.apply(&Action::Batch(adds));
         self.fit_levels();
         self.kit_file = Some(path.to_path_buf());
-        self.status = format!("Kit {}: {count} tracks", kit.name);
+        self.services.status = format!("Kit {}: {count} tracks", kit.name);
         self.finish_kit(seeds, &[]);
         if !replaced.is_empty() {
             let undo = if seeded { "u again" } else { "u" };
-            self.status = format!(
+            self.services.status = format!(
                 "{}. Replaced {}: {undo} to undo",
-                self.status,
+                self.services.status,
                 replaced.join(" ")
             );
         }
@@ -455,14 +455,14 @@ impl App {
         let kit = match load_kit(path) {
             Ok(kit) => kit,
             Err(error) => {
-                self.status = error.to_string();
+                self.services.status = error.to_string();
                 return;
             }
         };
         let first = self.song().sound_tracks();
         let count = chosen.len();
         if first + count > MAX_SOUND_TRACKS {
-            self.status = format!(
+            self.services.status = format!(
                 "{count} more tracks would be over the {MAX_SOUND_TRACKS} a project can have"
             );
             return;
@@ -478,7 +478,7 @@ impl App {
         let banked = match self.bank_kit_sounds(seeds) {
             Ok(banked) => banked,
             Err(error) => {
-                self.status = error;
+                self.services.status = error;
                 return;
             }
         };
@@ -527,10 +527,10 @@ impl App {
                 });
             }
         }
-        let depth = self.history.undo_depth();
-        self.samples = Arc::new(pool);
-        self.apply(&Action::Batch(adds));
-        if self.history.undo_depth() == depth {
+        let depth = self.services.history.undo_depth();
+        self.services.samples = Arc::new(pool);
+        self.services.apply(&Action::Batch(adds));
+        if self.services.history.undo_depth() == depth {
             return;
         }
         self.fit_levels();
@@ -546,7 +546,7 @@ impl App {
             1 => format!("track {:02}", first + 1),
             _ => format!("tracks {:02}-{:02}", first + 1, first + count),
         };
-        self.status = match group {
+        self.services.status = match group {
             Some(number) => format!("Kit {}: {tracks} in G{number}, folded", kit.name),
             None => format!(
                 "Kit {}: {tracks} in no group, as all {MAX_GROUPS} have tracks",
@@ -570,7 +570,7 @@ impl App {
             .filter(|number| !used.contains(number))
             .collect();
         if unused.is_empty() {
-            self.status = "Every sample in the bank is played".to_owned();
+            self.services.status = "Every sample in the bank is played".to_owned();
             return;
         }
         let count = unused.len();
@@ -581,9 +581,9 @@ impl App {
                 entry: None,
             })
             .collect();
-        self.apply(&Action::Batch(actions));
+        self.services.apply(&Action::Batch(actions));
         let noun = if count == 1 { "sample" } else { "samples" };
-        self.status = format!("Removed {count} {noun} nothing plays: u to undo");
+        self.services.status = format!("Removed {count} {noun} nothing plays: u to undo");
     }
 
     /// The bank as a list: `Off`, then each entry with its file beside it and its waveform shown,
@@ -601,7 +601,7 @@ impl App {
                 Item::new(format!("{number:02X}  {}", entry.title()), pick(number)).meaning(file);
             match source {
                 Some(source) => item.preview(Preview::Sample(project::resolve_sample(
-                    self.folder.as_deref(),
+                    self.services.folder.as_deref(),
                     &source.path,
                 ))),
                 None => item,

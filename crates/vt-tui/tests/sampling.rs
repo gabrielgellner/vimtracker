@@ -96,9 +96,13 @@ fn files(folder: &Path) -> Vec<PathBuf> {
 fn space_r_armed_records_the_master_from_the_song_start_to_a_bar_into_a_new_entry() {
     let folder = folder("bar");
     let (mut app, mut rt) = project(&folder);
-    let undo = app.history.undo_depth();
+    let undo = app.services.history.undo_depth();
     tap(&mut app, " R");
-    assert!(app.status.contains("as the song starts"), "{}", app.status);
+    assert!(
+        app.services.status.contains("as the song starts"),
+        "{}",
+        app.services.status
+    );
     let number = app.sampling.live.as_ref().unwrap().number;
     assert_eq!(number, 1);
     let entry = app.song().bank.get(number).unwrap();
@@ -111,18 +115,34 @@ fn space_r_armed_records_the_master_from_the_song_start_to_a_bar_into_a_new_entr
     );
     play(&mut app);
     run(&mut app, &mut rt, BAR + STEP);
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
     let line = status_line(&app);
     assert!(
         line.contains(vt_tui::glyphs::RECORD) && line.contains(" 01 "),
         "{line}"
     );
     tap(&mut app, " R");
-    assert!(app.status.contains("on the next bar"), "{}", app.status);
+    assert!(
+        app.services.status.contains("on the next bar"),
+        "{}",
+        app.services.status
+    );
     run(&mut app, &mut rt, BAR + STEP * 3);
-    assert!(app.sampling.live.is_none(), "it ended: {}", app.status);
-    assert!(app.status.starts_with("Recorded 01"), "{}", app.status);
-    assert!(app.status.contains("4.00 s in mono"), "{}", app.status);
+    assert!(
+        app.sampling.live.is_none(),
+        "it ended: {}",
+        app.services.status
+    );
+    assert!(
+        app.services.status.starts_with("Recorded 01"),
+        "{}",
+        app.services.status
+    );
+    assert!(
+        app.services.status.contains("4.00 s in mono"),
+        "{}",
+        app.services.status
+    );
     // On the project's samples/ in mono, with the margins either side.
     let written = files(&folder);
     assert_eq!(written.len(), 1, "{written:?}");
@@ -139,7 +159,7 @@ fn space_r_armed_records_the_master_from_the_song_start_to_a_bar_into_a_new_entr
     assert!(entry.source().unwrap().hash.is_known());
     assert!(entry.source().unwrap().path.starts_with("samples/"));
     // The whole recording is one undo step.
-    assert_eq!(app.history.undo_depth(), undo + 1);
+    assert_eq!(app.services.history.undo_depth(), undo + 1);
     tap(&mut app, "u");
     assert!(app.song().bank.get(number).is_none());
     let redo = vt_tui::input::keys::parse_sequence("C-r").unwrap()[0];
@@ -164,7 +184,11 @@ fn a_recording_taken_back_leaves_no_entry_and_no_file() {
     run(&mut app, &mut rt, STEP);
     assert!(app.song().bank.is_empty());
     assert!(files(&folder).is_empty());
-    assert!(app.status.contains("taken back"), "{}", app.status);
+    assert!(
+        app.services.status.contains("taken back"),
+        "{}",
+        app.services.status
+    );
     fs::remove_dir_all(&folder).unwrap();
 }
 
@@ -177,7 +201,7 @@ fn recordings_the_saved_song_doesnt_play_are_removed_on_quitting() {
         run(&mut app, &mut rt, STEP);
         tap(&mut app, " R");
         run(&mut app, &mut rt, STEP * 4);
-        assert!(app.sampling.live.is_none(), "{}", app.status);
+        assert!(app.sampling.live.is_none(), "{}", app.services.status);
         if app.song().bank.len() == 1 {
             command(&mut app, "w");
         }
@@ -200,7 +224,11 @@ fn the_input_records_once_one_is_open_and_a_silent_right_side_makes_it_mono() {
     let folder = folder("input");
     let (mut app, mut rt) = project(&folder);
     command(&mut app, "record input now");
-    assert!(app.status.contains("No input is open"), "{}", app.status);
+    assert!(
+        app.services.status.contains("No input is open"),
+        "{}",
+        app.services.status
+    );
     assert!(app.sampling.live.is_none());
     // A fake input in place of a device, with sound on its left side only.
     let (mut input, heard) = rtrb::RingBuffer::new(vt_model::constants::INPUT_QUEUE);
@@ -221,8 +249,12 @@ fn the_input_records_once_one_is_open_and_a_silent_right_side_makes_it_mono() {
         rt.process(&mut block);
         app.tick();
     }
-    assert!(app.sampling.live.is_none(), "{}", app.status);
-    assert!(app.status.contains("in mono"), "{}", app.status);
+    assert!(app.sampling.live.is_none(), "{}", app.services.status);
+    assert!(
+        app.services.status.contains("in mono"),
+        "{}",
+        app.services.status
+    );
     let written = files(&folder);
     let wav = hound::WavReader::open(&written[0]).unwrap();
     assert_eq!(wav.spec().channels, 1);
@@ -247,7 +279,7 @@ fn r_on_the_sample_page_records_and_shows_the_recording_once_it_stops() {
     assert!(shown.starts_with("Recording into 01"), "{shown}");
     tap(&mut app, "R");
     run(&mut app, &mut rt, STEP * 4);
-    assert!(app.sampling.live.is_none(), "{}", app.status);
+    assert!(app.sampling.live.is_none(), "{}", app.services.status);
     app.finish_analysis();
     let shown = app.sample_shown().unwrap();
     assert_eq!(shown.number, number);
@@ -269,8 +301,8 @@ fn a_pattern_plays_the_recording_before_it_has_stopped() {
     song.tracks[1]
         .phrases
         .insert(0, Arc::new(Phrase::from_steps(steps)));
-    app.history.commit(Arc::new(song));
-    app.publish();
+    app.services.history.commit(Arc::new(song));
+    app.services.publish();
     command(&mut app, "record master now");
     play(&mut app);
     let mut heard = false;

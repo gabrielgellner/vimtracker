@@ -119,7 +119,7 @@ impl App {
     pub(crate) fn toggle_timeline(&mut self) {
         self.count = None;
         self.rows_collapsed = !self.rows_collapsed;
-        self.status = if self.rows_collapsed {
+        self.services.status = if self.rows_collapsed {
             "Rows: a line each, beside the other tracks' rows. z i lays them out in time"
         } else {
             "Timeline: a line for each pulse, beside the other tracks in time. z i collapses it"
@@ -131,7 +131,7 @@ impl App {
     pub(crate) fn toggle_inspector(&mut self) {
         self.count = None;
         self.inspector = !self.inspector;
-        self.status = if self.inspector {
+        self.services.status = if self.inspector {
             "Row inspector: the cursor's row in words, while there's room. Space i hides it"
         } else {
             "Row inspector hidden. Space i shows it"

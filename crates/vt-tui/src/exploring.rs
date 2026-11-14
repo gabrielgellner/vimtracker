@@ -192,20 +192,22 @@ impl App {
             .iter()
             .map(|folder| (folder.clone(), "recent"))
             .collect();
-        let project = self.folder.clone();
+        let project = self.services.folder.clone();
         match purpose {
             // The kits open like folders to their sounds, and the library is the one they play
             // from, which is large, so it comes last.
             Purpose::Sample => {
                 found.extend(project.map(|folder| (folder, "project")));
                 found.extend(
-                    self.settings
+                    self.services
+                        .settings
                         .kit_folders()
                         .into_iter()
                         .map(|folder| (folder, "kits")),
                 );
                 found.extend(
-                    self.settings
+                    self.services
+                        .settings
                         .sample_folders()
                         .into_iter()
                         .map(|folder| (folder, "samples")),
@@ -214,7 +216,8 @@ impl App {
             }
             Purpose::Kit => {
                 found.extend(
-                    self.settings
+                    self.services
+                        .settings
                         .kit_folders()
                         .into_iter()
                         .map(|folder| (folder, "kits")),
@@ -227,7 +230,8 @@ impl App {
             }
             Purpose::Render => found.extend(project.map(|folder| (folder, "project"))),
             Purpose::Preset(kind) => found.extend(
-                self.settings
+                self.services
+                    .settings
                     .preset_folder()
                     .map(|folder| (folder.join(kind.folder()), kind.folder())),
             ),
@@ -283,13 +287,13 @@ impl App {
     /// `:e` with no folder: choose a project to open, beside this one. Forced, as `:e!`, the
     /// project chosen throws away unsaved changes.
     pub(crate) fn open_project_explorer(&mut self, force: bool) {
-        if self.dirty && !force {
-            self.status = self.unsaved(":e! to discard them");
+        if self.services.dirty && !force {
+            self.services.status = self.unsaved(":e! to discard them");
             return;
         }
         self.opening_discards = force;
         let roots = self.places(Purpose::Project);
-        let on = self.folder.clone();
+        let on = self.services.folder.clone();
         self.open_explorer(Purpose::Project, roots, on.as_deref());
     }
 
@@ -308,8 +312,8 @@ impl App {
         let roots = self.places(purpose);
         // A project is saved beside this one, and a render goes in it.
         let on = match purpose {
-            Purpose::Save => self.folder.as_deref().and_then(Path::parent),
-            _ => self.folder.as_deref(),
+            Purpose::Save => self.services.folder.as_deref().and_then(Path::parent),
+            _ => self.services.folder.as_deref(),
         }
         .map(Path::to_path_buf);
         self.open_explorer(purpose, roots, on.as_deref());
@@ -383,13 +387,13 @@ impl App {
         self.command_line = format!("{} {folder}/{name}{}", naming.command, naming.after);
         self.command_menu = None;
         self.mode = Mode::Command;
-        self.status = "Type a name, or C-r for another, then Enter".to_owned();
+        self.services.status = "Type a name, or C-r for another, then Enter".to_owned();
     }
 
     /// Remember a folder something was chosen in, for the top of the explorer next time.
     pub(crate) fn note_place(&mut self, purpose: Purpose, folder: &Path) {
         if let Err(error) = self.recent_places.add(purpose, folder) {
-            self.status = format!("Couldn't keep the recent places: {error}");
+            self.services.status = format!("Couldn't keep the recent places: {error}");
         }
     }
 
@@ -480,6 +484,7 @@ impl App {
                 self.note_heard(&path, loaded.heard);
                 let track = self.cursor.track;
                 if self
+                    .services
                     .handle
                     .play_file(track, Arc::clone(&loaded.sample), None)
                 {
@@ -507,7 +512,7 @@ impl App {
     /// Stop the file the explorer is playing, if it is.
     pub(crate) fn stop_file(&mut self) {
         if self.file_playing.take().is_some() {
-            self.handle.send(Command::StopFile);
+            self.services.handle.send(Command::StopFile);
         }
     }
 
@@ -527,7 +532,7 @@ impl App {
             .get(self.cursor.track)
             .and_then(|track| song.bank.get(track.sample()))
             .and_then(BankEntry::source)
-            .map(|source| project::resolve_sample(self.folder.as_deref(), &source.path));
+            .map(|source| project::resolve_sample(self.services.folder.as_deref(), &source.path));
         let same = |path: &Path| {
             sample.as_deref().is_some_and(|sample| {
                 path.file_name() == sample.file_name()

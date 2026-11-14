@@ -140,7 +140,10 @@ fn z_i_zooms_in_on_the_cursors_slot_under_a_strip_of_them_all_and_z_o_goes_back(
     assert!(!app.fx_zoomed());
     assert!(!status_line(&app).starts_with(" ZOOM "));
     press(&mut app, "zi");
-    assert_eq!(app.status, "z i zooms in on an effect, on the FX page");
+    assert_eq!(
+        app.services.status,
+        "z i zooms in on an effect, on the FX page"
+    );
     press(&mut app, "L");
     assert!(app.fx_zoomed());
 }
@@ -153,7 +156,7 @@ fn the_zoomed_meter_and_its_two_bars_show_how_far_it_turned_down() {
     special(&mut app, KeyCode::Enter);
     press(&mut app, "zi");
     // 12 dB is half the meter's 24: its top eight rows.
-    app.live = Some(LiveValues {
+    app.services.live = Some(LiveValues {
         reduction: [12.0, 0.0, 0.0, 0.0],
         ..LiveValues::default()
     });
@@ -170,7 +173,7 @@ fn the_zoomed_meter_and_its_two_bars_show_how_far_it_turned_down() {
 
     // The history fills as the frames come in: a second at 120 BPM is a quarter of its two bars.
     // With no audio running there are no reports, so the last values stay.
-    app.live = Some(LiveValues {
+    app.services.live = Some(LiveValues {
         reduction: [6.0, 0.0, 0.0, 0.0],
         ..LiveValues::default()
     });
@@ -306,21 +309,21 @@ fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_
         sent
     };
     press(&mut app, "gg}");
-    app.live = Some(live(60.0, (0.0, 0.1)));
+    app.services.live = Some(live(60.0, (0.0, 0.1)));
     twice(&mut app);
     let at_c = app.track_page.zoom_image.unwrap();
-    app.live = Some(live(67.0, (0.0, 0.1)));
+    app.services.live = Some(live(67.0, (0.0, 0.1)));
     assert_eq!(twice(&mut app).len(), 1);
     assert_ne!(app.track_page.zoom_image.unwrap(), at_c);
     // The gate's follows how far it's open, but not a step finer than it's drawn.
     press(&mut app, "{");
-    app.live = Some(live(67.0, (0.0, 0.25)));
+    app.services.live = Some(live(67.0, (0.0, 0.25)));
     twice(&mut app);
     let closed = app.track_page.zoom_image.unwrap();
-    app.live = Some(live(67.0, (0.0, 0.25 + 1e-4)));
+    app.services.live = Some(live(67.0, (0.0, 0.25 + 1e-4)));
     assert!(twice(&mut app).is_empty());
     assert_eq!(app.track_page.zoom_image, Some(closed));
-    app.live = Some(live(67.0, (1.0, 0.6)));
+    app.services.live = Some(live(67.0, (1.0, 0.6)));
     assert_eq!(twice(&mut app).len(), 1);
     assert_ne!(app.track_page.zoom_image, Some(closed));
 }

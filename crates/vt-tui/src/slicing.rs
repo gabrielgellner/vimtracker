@@ -169,14 +169,14 @@ impl App {
     pub(crate) fn change_slices(&mut self, change: SliceChange, range: Option<SliceRange>) {
         let number = self.track_sample_number();
         let Some(entry) = self.song().bank.get(number).cloned() else {
-            self.status = format!(
+            self.services.status = format!(
                 "Track {:02} plays no sample to slice: K on Sample chooses one",
                 self.cursor.track + 1
             );
             return;
         };
         let Some((rate, length)) = self.file_of(&entry) else {
-            self.status = "Its file isn't loaded, so its length isn't known".to_owned();
+            self.services.status = "Its file isn't loaded, so its length isn't known".to_owned();
             return;
         };
         let name = sample_text(self.song(), number);
@@ -188,7 +188,7 @@ impl App {
             Some(range) => match self.range_frames(&entry, range, length) {
                 Ok(within) => within,
                 Err(why) => {
-                    self.status = why;
+                    self.services.status = why;
                     return;
                 }
             },
@@ -207,13 +207,13 @@ impl App {
         let (inside, said) = match change {
             SliceChange::Clear if range.is_none() => {
                 if had == 0 {
-                    self.status = format!("{name} has no slices");
+                    self.services.status = format!("{name} has no slices");
                 } else {
-                    self.apply(&Action::SetSlices {
+                    self.services.apply(&Action::SetSlices {
                         number,
                         starts: Vec::new(),
                     });
-                    self.status = format!("{name} plays as one again: u to undo");
+                    self.services.status = format!("{name} plays as one again: u to undo");
                 }
                 return;
             }
@@ -248,7 +248,7 @@ impl App {
             }
             SliceChange::Transients | SliceChange::Silence => {
                 let Some(analysis) = self.entry_analysis(&entry) else {
-                    self.status =
+                    self.services.status =
                         format!("{name} can't be analysed: its file is missing or has changed");
                     return;
                 };
@@ -260,7 +260,7 @@ impl App {
                     self.silence_starts(&entry, &analysis, &within)
                 };
                 if starts.is_empty() {
-                    self.status = if transients {
+                    self.services.status = if transients {
                         format!(
                             "No sound found in {name}{place} at Sens {sens}%: a higher Sens, \
                              from K on the sample page, finds more"
@@ -285,7 +285,7 @@ impl App {
         };
         let starts = entry.edit.points.restarted(within, &inside, length);
         if starts.len() > MAX_SLICES {
-            self.status = format!(
+            self.services.status = format!(
                 "That's {} slices, more than {MAX_SLICES}: a range, or a lower Sens, makes fewer",
                 starts.len()
             );
@@ -299,11 +299,11 @@ impl App {
             .map(|slice| slice.start)
             .collect();
         if now == starts {
-            self.status = format!("{name} is sliced so already");
+            self.services.status = format!("{name} is sliced so already");
             return;
         }
         let total = starts.len();
-        self.apply(&Action::SetSlices { number, starts });
+        self.services.apply(&Action::SetSlices { number, starts });
         let followed = if had > 0 {
             ", and SLI locks follow their sound"
         } else {
@@ -314,7 +314,7 @@ impl App {
         } else {
             format!(", {total} in all")
         };
-        self.status = format!("{name}{place} in {said}{all}{followed}: u to undo");
+        self.services.status = format!("{name}{place} in {said}{all}{followed}: u to undo");
     }
 
     /// A slice's own setting, for the slice here, or for every slice starting in a stretch of
@@ -330,7 +330,7 @@ impl App {
         let number = self.track_sample_number();
         let name = sample_text(self.song(), number);
         if entry.edit.points.slices.is_empty() {
-            self.status = format!("{name} has no slices: :slice 16 cuts it into 16");
+            self.services.status = format!("{name} has no slices: :slice 16 cuts it into 16");
             return;
         }
         let slices = &entry.edit.points.slices;
@@ -341,18 +341,18 @@ impl App {
             None => vec![self.slice_here(number, &entry)],
         };
         let (Some(first), Some(last)) = (targets.first().copied(), targets.last().copied()) else {
-            self.status = format!("No slice of {name} starts in that range");
+            self.services.status = format!("No slice of {name} starts in that range");
             return;
         };
         let mut said = String::new();
         for at in targets {
             said = set_own(&mut entry.edit.points.slices[at].over, change, rate, length);
         }
-        self.apply(&Action::SetBankEntry {
+        self.services.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
-        self.status = if first == last {
+        self.services.status = if first == last {
             format!("{name}: slice {first:02X} plays {said}")
         } else {
             format!("{name}: slices {first:02X} to {last:02X} play {said}")
@@ -673,7 +673,7 @@ impl App {
                 let frames = points.slice_frames(slice, shown.length());
                 self.sample_page.show_frame(frames.start, shown.length());
                 let count = points.slice_count();
-                self.status = if slice >= count {
+                self.services.status = if slice >= count {
                     format!(
                         "Slice {slice:02X} is past the last, {:02X}, so it plays that",
                         count - 1
@@ -682,7 +682,7 @@ impl App {
                     format!("{}: slice {slice:02X}", sample_text(self.song(), number))
                 };
             }
-            Err(why) => self.status = why,
+            Err(why) => self.services.status = why,
         }
         true
     }

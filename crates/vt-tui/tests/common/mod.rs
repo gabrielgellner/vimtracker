@@ -610,7 +610,7 @@ pub fn song_text(app: &App) -> Vec<String> {
 /// Have each track report the chain of the row being edited, for setting a playhead by hand.
 pub fn on_the_row_being_edited(app: &mut App) {
     let chains = app.section_here().unwrap().chains.clone();
-    for (jam, chain) in app.jam.iter_mut().zip(chains) {
+    for (jam, chain) in app.services.jam.iter_mut().zip(chains) {
         jam.chain = chain;
     }
 }

@@ -26,6 +26,7 @@ use crate::input::bindings::{Cmd, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker};
+use crate::services::Services;
 
 /// The title of the list offering a beat after a kit's sounds are loaded as tracks.
 pub const KIT_BEAT_PICKER: &str = "Start a beat";
@@ -529,6 +530,22 @@ enum Refusal {
     Command(usize),
 }
 
+impl Services {
+    /// Say so if an edit applied a live generator, as it changed one of its cells by hand.
+    pub(crate) fn say_applied(&mut self, next: &Arc<Song>) {
+        if let Some(source) = unfollowed(self.song(), next).first() {
+            self.status = format!(
+                "{source} is gone, so what followed it is plain notes now. u brings it back"
+            );
+        } else if let Some(column) = applied(self.song(), next).first() {
+            self.status = format!(
+                "{} was live: it's plain values now. u makes it live again",
+                column_label(*column)
+            );
+        }
+    }
+}
+
 impl App {
     /// The column a track's rows can fill, and whether it's empty so it's generated, or why they
     /// can't. An empty FX column takes the command chosen for it, if one is.
@@ -740,8 +757,8 @@ impl App {
         if actions.is_empty() {
             return;
         }
-        self.apply(&Action::Batch(actions));
-        self.status =
+        self.services.apply(&Action::Batch(actions));
+        self.services.status =
             "A beat from Grids' map: S on its notes changes it, u takes it off".to_owned();
     }
 
@@ -764,7 +781,7 @@ impl App {
         let panel = match self.new_panel(selection, field, command) {
             Ok(panel) => panel,
             Err(Refusal::Reason(reason)) => {
-                self.status = reason.to_owned();
+                self.services.status = reason.to_owned();
                 return;
             }
             Err(Refusal::Command(track)) => {
@@ -773,7 +790,8 @@ impl App {
                 self.shape_command = Some((selection, field));
                 let (_, items) = self.fx_command_items(track, Pick::ShapeCommand);
                 self.show_picker(Picker::new("FX commands", items).searching(""));
-                self.status = "Choose the command to write on the empty FX column".to_owned();
+                self.services.status =
+                    "Choose the command to write on the empty FX column".to_owned();
                 return;
             }
         };
@@ -861,20 +879,21 @@ impl App {
         let panel = match self.new_panel(selection, field, command) {
             Ok(panel) => panel,
             Err(Refusal::Reason(reason)) => {
-                self.status = reason.to_owned();
+                self.services.status = reason.to_owned();
                 return false;
             }
             Err(Refusal::Command(track)) => {
                 let (_, items) =
                     self.fx_command_items(track, |command| Pick::GenCommand { field, command });
                 self.show_picker(Picker::new("FX commands", items).searching(""));
-                self.status = "Choose the command to write on the empty FX column".to_owned();
+                self.services.status =
+                    "Choose the command to write on the empty FX column".to_owned();
                 return false;
             }
         };
-        self.apply(&panel.live_action());
+        self.services.apply(&panel.live_action());
         let name = column_label(panel.parts[0].column);
-        self.status = format!("{name} is live: turn it here, Enter opens the panel on it");
+        self.services.status = format!("{name} is live: turn it here, Enter opens the panel on it");
         true
     }
 
@@ -995,8 +1014,8 @@ impl App {
             return;
         };
         if let Ok(next) = edit(&panel.base, &panel.action()) {
-            self.history.replace_current(next);
-            self.publish();
+            self.services.history.replace_current(next);
+            self.services.publish();
         }
     }
 
@@ -1004,7 +1023,7 @@ impl App {
     /// and kept as plain values is applied.
     fn keep_shape(&mut self, live: bool) {
         if let Some(why) = self.shape.as_ref().and_then(ShapePanel::too_few_notes) {
-            self.status = why;
+            self.services.status = why;
             return;
         }
         let Some(panel) = self.shape.take() else {
@@ -1029,19 +1048,21 @@ impl App {
             None => shown,
             Some(Ok(result)) => result,
             Some(Err(error)) => {
-                self.status = error.to_string();
+                self.services.status = error.to_string();
                 shown
             }
         };
-        self.history.replace_current(Arc::clone(&panel.base));
+        self.services
+            .history
+            .replace_current(Arc::clone(&panel.base));
         if *result != *panel.base {
             if panel.live.is_none() {
-                self.say_applied(&result);
+                self.services.say_applied(&result);
             }
-            self.history.commit(result);
-            self.dirty = true;
+            self.services.history.commit(result);
+            self.services.dirty = true;
         }
-        self.publish();
+        self.services.publish();
         self.remember_shape(&panel);
         let mut name = column_label(part.column);
         if panel.shape.kind == FillKind::Follow {
@@ -1050,7 +1071,7 @@ impl App {
         match (panel.live, live) {
             (None, true) => {
                 let lane = panel.on_lane(&part);
-                self.status = match panel.parts.len() {
+                self.services.status = match panel.parts.len() {
                     1 if lane => format!(
                         "{name} is live on its lane: gl opens it again, Space g a applies it"
                     ),
@@ -1060,25 +1081,11 @@ impl App {
                     ),
                 };
             }
-            (Some(_), true) => self.status = format!("{name} stays live"),
+            (Some(_), true) => self.services.status = format!("{name} stays live"),
             (Some(_), false) => {
-                self.status = format!("{name} is applied, as plain values");
+                self.services.status = format!("{name} is applied, as plain values");
             }
             (None, false) => {}
-        }
-    }
-
-    /// Say so if an edit applied a live generator, as it changed one of its cells by hand.
-    pub(crate) fn say_applied(&mut self, next: &Arc<Song>) {
-        if let Some(source) = unfollowed(self.song(), next).first() {
-            self.status = format!(
-                "{source} is gone, so what followed it is plain notes now. u brings it back"
-            );
-        } else if let Some(column) = applied(self.song(), next).first() {
-            self.status = format!(
-                "{} was live: it's plain values now. u makes it live again",
-                column_label(*column)
-            );
         }
     }
 
@@ -1108,7 +1115,7 @@ impl App {
     /// Open the panel again on the live generator under the cursor, on its saved shape.
     pub(crate) fn reopen_generator(&mut self) {
         let Some((phrase, index)) = self.generator_here() else {
-            self.status =
+            self.services.status =
                 "No live column here. Select rows, press S, then L to keep it live".to_owned();
             return;
         };
@@ -1159,7 +1166,7 @@ impl App {
     /// where something moved it as it played (decision 300).
     pub(crate) fn apply_generator_here(&mut self) {
         let Some((phrase, generator)) = self.generator_here() else {
-            self.status = "No live column here to apply".to_owned();
+            self.services.status = "No live column here to apply".to_owned();
             return;
         };
         let track = self.cursor.track;
@@ -1174,8 +1181,8 @@ impl App {
             return;
         };
         self.mode = Mode::Normal;
-        self.history.replace_current(panel.base);
-        self.publish();
+        self.services.history.replace_current(panel.base);
+        self.services.publish();
     }
 
     /// The mode a picker goes back to.
@@ -1303,7 +1310,7 @@ impl App {
         } else {
             Action::Batch(actions)
         };
-        self.apply(&action);
+        self.services.apply(&action);
     }
 
     /// Handle a key while the panel is open.
@@ -1441,7 +1448,7 @@ impl App {
         };
         let mut shape = panel.shape;
         if let Err(reason) = panel.row.step(&mut shape, &panel.context(), sign, large) {
-            self.status = reason.to_owned();
+            self.services.status = reason.to_owned();
             return;
         }
         self.change_shape(|panel| panel.shape = shape);
@@ -1489,7 +1496,7 @@ impl App {
         };
         let context = panel.context();
         let Some(choices) = panel.row.choices(&context) else {
-            self.status =
+            self.services.status =
                 "K chooses from a list on Fill, Shape, Rate, Where, Source and Part".to_owned();
             return;
         };
@@ -1611,7 +1618,7 @@ impl App {
             panel.shape = shape;
         });
         if let Some(reason) = refused {
-            self.status = reason.to_owned();
+            self.services.status = reason.to_owned();
         }
     }
 }

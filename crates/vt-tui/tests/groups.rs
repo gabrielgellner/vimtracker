@@ -26,9 +26,9 @@ fn group_puts_tracks_in_a_group_or_none_as_one_undo_step() {
     command(&mut app, "group 1 1-3");
     assert_eq!(groups(&app), [Some(1), Some(1), Some(1), None]);
     assert!(
-        app.status.contains("Tracks 01-03 in group 1"),
+        app.services.status.contains("Tracks 01-03 in group 1"),
         "{}",
-        app.status
+        app.services.status
     );
     press(&mut app, "u");
     assert_eq!(groups(&app), [None; 4], "one undo takes them all out");
@@ -48,9 +48,9 @@ fn group_puts_tracks_in_a_group_or_none_as_one_undo_step() {
     command(&mut app, "group off");
     assert_eq!(groups(&app), [None; 4]);
     assert!(
-        app.status.contains("Track 01 in no group"),
+        app.services.status.contains("Track 01 in no group"),
         "{}",
-        app.status
+        app.services.status
     );
 
     let sounds = app.song().sound_tracks();
@@ -61,12 +61,16 @@ fn group_puts_tracks_in_a_group_or_none_as_one_undo_step() {
         "past the last track, nothing changes"
     );
     assert!(
-        app.status.contains(&format!("{sounds} tracks")),
+        app.services.status.contains(&format!("{sounds} tracks")),
         "{}",
-        app.status
+        app.services.status
     );
     command(&mut app, "group 5 1");
-    assert!(app.status.contains(":group takes"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":group takes"),
+        "{}",
+        app.services.status
+    );
 
     // A group can't join a group. The track picker reaches it, empty and folded away.
     let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
@@ -75,7 +79,11 @@ fn group_puts_tracks_in_a_group_or_none_as_one_undo_step() {
     assert_eq!(app.cursor.track, group);
     command(&mut app, "group 2");
     assert_eq!(app.song().tracks[group].group, None);
-    assert!(app.status.contains("Only tracks"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Only tracks"),
+        "{}",
+        app.services.status
+    );
 }
 
 /// The colour of the first cell of some text on a line, from a column on.
@@ -152,7 +160,11 @@ fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_
     press(&mut app, "za");
     let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
     assert_eq!(app.song_column, 3 + g1);
-    assert!(app.status.contains("G1 folded: 01-03"), "{}", app.status);
+    assert!(
+        app.services.status.contains("G1 folded: 01-03"),
+        "{}",
+        app.services.status
+    );
     let text = heading(&app);
     assert!(!text.contains("01") && !text.contains("03"), "{text}");
     assert!(
@@ -189,7 +201,11 @@ fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_
     // `z a` on a track in no group says so.
     press(&mut app, "0lll");
     press(&mut app, "za");
-    assert!(app.status.contains("isn't in a group"), "{}", app.status);
+    assert!(
+        app.services.status.contains("isn't in a group"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -272,7 +288,11 @@ fn w_and_b_make_a_folded_group_one_stop_in_its_tracks_place() {
     press(&mut app, "za");
     assert_eq!(app.cursor.track, g1);
     assert!(app.folds.hides(app.song(), 1));
-    assert!(app.status.contains("G1 folded: 01-03"), "{}", app.status);
+    assert!(
+        app.services.status.contains("G1 folded: 01-03"),
+        "{}",
+        app.services.status
+    );
     // The group comes where its tracks would, then the track after them, and not again later.
     let forward = [g1, 3, 4, 5, 6, 7, g2, a, a + 1, a + 2];
     assert_eq!(stops(&mut app, "W"), forward);
@@ -293,7 +313,11 @@ fn w_and_b_make_a_folded_group_one_stop_in_its_tracks_place() {
     press(&mut app, " fbG1");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "za");
-    assert!(app.status.contains("G1 open"), "{}", app.status);
+    assert!(
+        app.services.status.contains("G1 open"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(app.cursor.track, g1);
     press(&mut app, " fb01");
     special(&mut app, KeyCode::Enter);
@@ -337,7 +361,11 @@ fn bracket_g_goes_to_the_next_or_previous_group_folded_or_open() {
     assert_eq!(app.cursor.track, g2);
     press(&mut app, "]g");
     assert_eq!(app.cursor.track, g2, "G3 and G4 are folded away");
-    assert!(app.status.contains("No group after"), "{}", app.status);
+    assert!(
+        app.services.status.contains("No group after"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "[g");
     assert_eq!(app.cursor.track, g1);
     // Folded, a group is where its tracks are.
@@ -368,13 +396,13 @@ fn folds_are_saved_with_the_song_and_undo_leaves_them() {
     assert!(!saved().contains("view:"), "no view until a fold is set");
     command(&mut app, "group 2 4");
     command(&mut app, "w");
-    assert!(!app.dirty);
+    assert!(!app.services.dirty);
     press(&mut app, " 4lza");
     assert!(app.folds.hides(app.song(), 0));
-    assert!(app.dirty, "a fold is kept with the song");
+    assert!(app.services.dirty, "a fold is kept with the song");
     // Undo takes back the change before it, and leaves the fold.
     press(&mut app, "u");
-    assert_eq!(app.song().tracks[3].group, None, "{}", app.status);
+    assert_eq!(app.song().tracks[3].group, None, "{}", app.services.status);
     assert!(app.folds.hides(app.song(), 0));
     app.key(
         Key {
@@ -395,7 +423,7 @@ fn folds_are_saved_with_the_song_and_undo_leaves_them() {
     assert!(app.folds.hides(app.song(), 0) && !app.folds.hides(app.song(), 4));
     let g3 = app.song().fixed_track(TrackKind::Group(3)).unwrap();
     assert!(app.folds.hides(app.song(), g3), "an empty group still is");
-    assert!(!app.dirty);
+    assert!(!app.services.dirty);
     press(&mut app, "u");
     assert!(app.folds.hides(app.song(), 0));
     // An opened group is kept too, so the empty groups `zR` showed come back with it.
@@ -412,13 +440,18 @@ fn group_name_names_the_cursors_group_with_up_to_five_characters() {
     let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
     command(&mut app, "group name drums");
     assert_eq!(app.song().tracks[g1].name, "DRUMS", "from a track in it");
-    assert!(app.status.contains("Group 1 named DRUMS"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Group 1 named DRUMS"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "group name drumss");
     assert!(
-        app.status
+        app.services
+            .status
             .contains(":group name takes 1 to 5 letters or digits"),
         "{}",
-        app.status
+        app.services.status
     );
     assert_eq!(app.song().tracks[g1].name, "DRUMS", "six are refused");
     app.cursor.track = g1;
@@ -432,7 +465,11 @@ fn group_name_names_the_cursors_group_with_up_to_five_characters() {
     assert_eq!(app.song().tracks[g1].name, "DRUMS", "each is an undo step");
     app.cursor.track = 3;
     command(&mut app, "group name perc");
-    assert!(app.status.contains("in no group"), "{}", app.status);
+    assert!(
+        app.services.status.contains("in no group"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -442,12 +479,16 @@ fn name_on_a_groups_own_track_takes_five_characters_and_a_sound_track_two() {
     app.cursor.track = g1;
     command(&mut app, "name drums");
     assert_eq!(app.song().tracks[g1].name, "DRUMS");
-    assert!(app.status.contains("Group 1 named DRUMS"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Group 1 named DRUMS"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "name drumss");
     assert!(
-        app.status.contains(":name takes two characters"),
+        app.services.status.contains(":name takes two characters"),
         "{}",
-        app.status
+        app.services.status
     );
     assert_eq!(app.song().tracks[g1].name, "DRUMS", "six are refused");
     command(&mut app, "name");
@@ -459,11 +500,11 @@ fn name_on_a_groups_own_track_takes_five_characters_and_a_sound_track_two() {
     assert_eq!(app.song().tracks[0].name, "BD");
     command(&mut app, "name kick");
     assert!(
-        app.status.contains(":name takes two characters"),
+        app.services.status.contains(":name takes two characters"),
         "{}",
-        app.status
+        app.services.status
     );
-    assert_eq!(app.song().tracks[0].name, "BD", "{}", app.status);
+    assert_eq!(app.song().tracks[0].name, "BD", "{}", app.services.status);
     assert_eq!(app.song().tracks[g1].name, "G1");
 }
 

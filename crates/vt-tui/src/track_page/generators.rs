@@ -224,11 +224,11 @@ impl App {
         change(self, param, &mut shape, &live.context());
         live.settle(&mut shape);
         if let Some(why) = live.refusal(&shape) {
-            self.status = why;
+            self.services.status = why;
             return;
         }
         if shape != live.generator.shape {
-            self.apply(&Action::Reshape {
+            self.services.apply(&Action::Reshape {
                 track,
                 phrase,
                 generator,
@@ -243,7 +243,7 @@ impl App {
         self.reshape_here(|app, param, shape, context| {
             for _ in 0..count {
                 if let Err(why) = param.step(shape, context, sign, large) {
-                    app.status = why.to_owned();
+                    app.services.status = why.to_owned();
                     return;
                 }
             }
@@ -265,7 +265,7 @@ impl App {
     /// `r`: roll the generator's seed again, from anywhere in its device, as the panel does.
     pub(super) fn roll_gen(&mut self) {
         if self.gen_here().is_none() {
-            self.status = "r rolls a generator again: go to one first".to_owned();
+            self.services.status = "r rolls a generator again: go to one first".to_owned();
             return;
         }
         self.reshape_here(|app, _, shape, _| app.roll(shape));
@@ -290,7 +290,8 @@ impl App {
             return;
         }
         let Some(choices) = param.choices(&context) else {
-            self.status = format!("{} isn't a list: = and - turn it, i types it", param.name());
+            self.services.status =
+                format!("{} isn't a list: = and - turn it, i types it", param.name());
             return;
         };
         let position = param.chosen(&live.generator.shape, &context).unwrap_or(0);
@@ -324,11 +325,11 @@ impl App {
         choice.apply(&mut shape);
         live.settle(&mut shape);
         if let Some(why) = live.refusal(&shape) {
-            self.status = why;
+            self.services.status = why;
             return;
         }
         if shape != live.generator.shape {
-            self.apply(&Action::Reshape {
+            self.services.apply(&Action::Reshape {
                 track,
                 phrase,
                 generator,
@@ -359,7 +360,7 @@ impl App {
     pub(super) fn type_gen(&mut self, text: &str) {
         self.reshape_here(|app, param, shape, context| {
             if let Err(why) = param.typed(shape, context, text) {
-                app.status = why.to_owned();
+                app.services.status = why.to_owned();
             }
         });
     }
@@ -379,7 +380,7 @@ impl App {
     /// that evolves is applied as last heard, as one a macro moves is.
     pub(super) fn apply_gen(&mut self) {
         let Some((phrase, generator, _)) = self.gen_here() else {
-            self.status = "Space g a applies a generator: go to one first".to_owned();
+            self.services.status = "Space g a applies a generator: go to one first".to_owned();
             return;
         };
         let name = self.gen_name(phrase, generator);
@@ -407,12 +408,13 @@ impl App {
             return;
         };
         let heard = self
+            .services
             .heard_passes
             .get(&(track, phrase, generator))
             .filter(|heard| heard.column == live.generator.column)
             .copied();
         let Some(heard) = heard else {
-            self.status = format!(
+            self.services.status = format!(
                 "{name} hasn't been heard varying yet: play it, then Space g a keeps the pass heard"
             );
             return;
@@ -428,13 +430,13 @@ impl App {
             shape.acid.at = at;
         }
         live.settle(&mut shape);
-        self.apply(&Action::Reshape {
+        self.services.apply(&Action::Reshape {
             track,
             phrase,
             generator,
             shape,
         });
-        self.status = if heard.ring.is_some() {
+        self.services.status = if heard.ring.is_some() {
             format!(
                 "Kept {name}'s loop as pass {} began it: Change at 0 holds it",
                 heard.pass + 1
@@ -455,22 +457,24 @@ impl App {
     /// `dd`: take the generator away, putting back what was under it.
     pub(super) fn remove_gen(&mut self) {
         let Some((phrase, generator, _)) = self.gen_here() else {
-            self.status = "dd takes a generator away: go to one first".to_owned();
+            self.services.status = "dd takes a generator away: go to one first".to_owned();
             return;
         };
         let name = self.gen_name(phrase, generator);
-        self.apply(&Action::RemoveGenerator {
+        self.services.apply(&Action::RemoveGenerator {
             track: self.cursor.track,
             phrase,
             generator,
         });
-        self.status = format!("{name} is gone, and what was under it is back. u brings it back");
+        self.services.status =
+            format!("{name} is gone, and what was under it is back. u brings it back");
     }
 
     /// `Enter`: open the shape panel on the generator, in the phrase view, as `gl` does there.
     pub(super) fn open_gen_panel(&mut self) {
         let Some((phrase, generator, _)) = self.gen_here() else {
-            self.status = "Enter opens the shape panel on a generator: go to one first".to_owned();
+            self.services.status =
+                "Enter opens the shape panel on a generator: go to one first".to_owned();
             return;
         };
         let found = self.song().tracks[self.cursor.track]
@@ -490,7 +494,7 @@ impl App {
     /// `K` on `Empty`: the columns of the phrase with no generator, to make one live.
     fn open_column_picker(&mut self) {
         let Some(phrase) = self.phrase_here() else {
-            self.status = "This track has no phrase here to make live".to_owned();
+            self.services.status = "This track has no phrase here to make live".to_owned();
             return;
         };
         let generators = phrase.generators();
@@ -502,7 +506,7 @@ impl App {
             })
             .collect();
         if items.is_empty() {
-            self.status = "Every column of this phrase is live".to_owned();
+            self.services.status = "Every column of this phrase is live".to_owned();
             return;
         }
         self.show_picker(Picker::new("Make live", items));
@@ -543,7 +547,9 @@ impl App {
             Cmd::RemoveRow => self.remove_gen(),
             Cmd::RollGenerator => self.roll_gen(),
             Cmd::ReopenGenerator => self.open_gen_panel(),
-            Cmd::Paste => self.status = "p puts an effect in a slot, on the FX page".to_owned(),
+            Cmd::Paste => {
+                self.services.status = "p puts an effect in a slot, on the FX page".to_owned()
+            }
             _ => return false,
         }
         true

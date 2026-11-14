@@ -110,10 +110,10 @@ fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
     assert_eq!(app.view, View::Mixer);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].level, 0xE1);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     press(&mut app, "u");
     assert_eq!(app.song().tracks[0].level, 0xE0);
 
@@ -150,27 +150,27 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
     block(&mut realtime, &mut app);
     let _ = loudest(&mut realtime, 96_000);
     press(&mut app, " 4Gk=");
-    assert!(app.levels[0].mute);
+    assert!(app.services.levels[0].mute);
     assert!(
         mixer_line(&app, "Mute").contains('M'),
         "{}",
         mixer_line(&app, "Mute")
     );
     press(&mut app, "=");
-    assert!(app.levels[0].mute, "= only switches on");
+    assert!(app.services.levels[0].mute, "= only switches on");
     press(&mut app, " 3k;");
     assert_eq!(loudest(&mut realtime, 2000), 0.0, "muted");
     press(&mut app, " 4-");
-    assert!(!app.levels[0].mute);
+    assert!(!app.services.levels[0].mute);
     press(&mut app, "K");
-    assert!(app.levels[0].mute);
+    assert!(app.services.levels[0].mute);
     press(&mut app, "x");
-    assert!(!app.levels[0].mute);
+    assert!(!app.services.levels[0].mute);
     press(&mut app, "j=");
-    assert!(app.levels[0].solo);
+    assert!(app.services.levels[0].solo);
     assert!(mixer_line(&app, "Solo").contains(vt_tui::glyphs::SOLO));
     press(&mut app, "i");
-    assert!(!app.levels[0].solo);
+    assert!(!app.services.levels[0].solo);
     assert_eq!(app.mode, Mode::Normal, "it switches rather than typing");
 }
 
@@ -331,8 +331,8 @@ fn a_tracks_mute_and_solo_from_its_group_show_apart_from_its_own() {
     command(&mut app, "group 1 1-2");
     let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
     press(&mut app, " 4");
-    app.levels[group].mute = true;
-    app.levels[2].mute = true;
+    app.services.levels[group].mute = true;
+    app.services.levels[2].mute = true;
     let mutes = mixer_line(&app, "Mute");
     let shown: Vec<&str> = mutes.split_whitespace().skip(1).collect();
     let mute = MUTE.to_string();
@@ -344,8 +344,8 @@ fn a_tracks_mute_and_solo_from_its_group_show_apart_from_its_own() {
     // The track's own in the active colour, its group's in the group's.
     let (blue, green) = (vt_tui::theme::group(1), vt_tui::theme::GREEN);
     assert_eq!(mixer_colors(&app, "Mute", MUTE), [blue, blue, green, green]);
-    app.levels[group].mute = false;
-    app.levels[group].solo = true;
+    app.services.levels[group].mute = false;
+    app.services.levels[group].solo = true;
     assert_eq!(mixer_colors(&app, "Solo", SOLO), [blue, blue, green]);
     assert!(mixer_colors(&app, "Mute", MUTE) == [green], "only 03's own");
 }
@@ -380,11 +380,11 @@ fn the_mixers_meters_show_only_the_track_that_is_playing() {
     let _ = loudest(&mut realtime, 2000);
     app.tick();
     assert!(
-        app.track_meters[0].top() > FLOOR_DB,
+        app.services.track_meters[0].top() > FLOOR_DB,
         "{}",
-        app.track_meters[0].top()
+        app.services.track_meters[0].top()
     );
-    assert_eq!(app.track_meters[1].top(), FLOOR_DB);
+    assert_eq!(app.services.track_meters[1].top(), FLOOR_DB);
 }
 
 #[test]
@@ -398,7 +398,7 @@ fn the_mixer_draws_a_strip_per_track_with_a_meter_and_a_fader() {
         frames: 100,
     };
     for _ in 0..50 {
-        app.track_meters[0].update(Some(reading), 0.033);
+        app.services.track_meters[0].update(Some(reading), 0.033);
     }
     command(&mut app, "track add 6");
     press(&mut app, " 4");

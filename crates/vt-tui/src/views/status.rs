@@ -170,7 +170,7 @@ pub fn value_shown(app: &App) -> Option<String> {
     // A fader the steps drive reads where they have it, and says so, as one a hand has taken over
     // from them does (decision 174).
     let control = app.track_control();
-    let heard = app.track_as_heard(app.cursor.track)?;
+    let heard = app.services.track_as_heard(app.cursor.track)?;
     // A setting a macro holds reads where the macro puts it, and says which and how far.
     let heard = heard.with_macros();
     let (id, value) = control.value_on(&heard)?;
@@ -425,13 +425,13 @@ pub(crate) fn grid_name(skip: u32) -> String {
 /// while it's on, and a realign, a cued launch, a mute or solo armed for the grid and a loop are
 /// named, with the glyph for waiting, until the launch grid comes round.
 pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
-    let (glyph, style) = match app.transport {
+    let (glyph, style) = match app.services.transport {
         Transport::Playing => (glyphs::PLAY, theme::active()),
         Transport::Paused => (glyphs::PAUSE, theme::dim()),
         Transport::Stopped => (glyphs::STOP, theme::dim()),
     };
     let mut spans = vec![Span::raw(" "), Span::styled(glyph.to_string(), style)];
-    if app.transport == Transport::Playing && app.recording() {
+    if app.services.transport == Transport::Playing && app.recording() {
         spans.push(Span::raw(" "));
         spans.push(Span::styled(
             glyphs::RECORD.to_string(),
@@ -458,16 +458,16 @@ pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
     if app.fill {
         spans.push(Span::raw(" FILL"));
     }
-    let realigning = app.realigning || app.realigning_tracks.contains(&true);
-    let cued = app.jam.iter().any(|jam| jam.cued.is_some());
-    let muting = app.jam.iter().any(|jam| jam.mute_waiting);
-    let soloing = app.jam.iter().any(|jam| jam.solo_waiting);
+    let realigning = app.services.realigning || app.services.realigning_tracks.contains(&true);
+    let cued = app.services.jam.iter().any(|jam| jam.cued.is_some());
+    let muting = app.services.jam.iter().any(|jam| jam.mute_waiting);
+    let soloing = app.services.jam.iter().any(|jam| jam.solo_waiting);
     for (waiting, name) in [
         (realigning, "REALIGN"),
         (cued, "LAUNCH"),
         (muting, "MUTE"),
         (soloing, "SOLO"),
-        (app.loop_waiting, "LOOP"),
+        (app.services.loop_waiting, "LOOP"),
     ] {
         if waiting {
             spans.push(Span::raw(" "));
@@ -540,7 +540,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let keys: Vec<String> = app.pending().iter().map(Key::to_string).collect();
         format!("  {}", keys.join(" "))
     };
-    let dirty = if app.dirty { " *" } else { "" };
+    let dirty = if app.services.dirty { " *" } else { "" };
     // After the changes' mark, as Vim's status line puts `[RO]` after `[+]`.
     let read_only = if app.read_only { " [RO]" } else { "" };
     let typed = if app.entry.text.is_empty() {
@@ -634,20 +634,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         format!(":{}", app.command_line)
     } else if let Some(jump) = &app.field_jump {
         format!("/{}", jump.query)
-    } else if app.status.is_empty()
+    } else if app.services.status.is_empty()
         && let Some(hint) = app
             .sample_mode_hint()
             .or_else(|| app.audio_page_hint())
             .or_else(|| app.fx_zoom_hint())
     {
         hint
-    } else if app.status.is_empty()
+    } else if app.services.status.is_empty()
         && let Some(total) = app.adjusted_total()
     {
         // What the changes kept on the selection add up to stays in sight as it moves.
         total
     } else {
-        app.status.clone()
+        app.services.status.clone()
     };
     frame.render_widget(
         Paragraph::new(vec![Line::from(status), Line::raw(message)]),

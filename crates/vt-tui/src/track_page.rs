@@ -36,7 +36,7 @@ use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::meter::{FLOOR_DB, Held, ReductionHistory};
-use crate::page::Ctx;
+use crate::page::{Ctx, CtxMut};
 use crate::views::track::CyclesAt;
 use device::{device_beside, rack_column};
 
@@ -389,7 +389,7 @@ impl TrackPage {
     /// goes where it's seen, but for `{` and `}`, which go on from where it was kept so they come
     /// back to it, and on the mixer, whose cursor this isn't. Then it's one of the page's own
     /// keys, [`TrackPage::key`], or passed back.
-    pub fn run(&mut self, cmd: Cmd, times: usize, ctx: &Ctx) -> Outcome {
+    pub fn run(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
         let track = ctx.track_here();
         let braces = matches!(cmd, Cmd::Move(Motion::NextBeat | Motion::PreviousBeat));
         if !braces && ctx.view() != View::Mixer {
@@ -608,14 +608,12 @@ impl App {
         let kept = self.track_page.clone();
         let count = self.count.take();
         let times = count.unwrap_or(1).max(1);
-        // The page runs it on a copy of itself, as it reads the rest of the program it's in.
-        let mut page = kept.clone();
-        let outcome = page.run(cmd, times, &self.ctx());
-        self.track_page = page;
+        let (page, mut ctx) = self.track_page_ctx();
+        let outcome = page.run(cmd, times, &mut ctx);
         match outcome {
             Outcome::Done => return true,
             Outcome::Refused(why) => {
-                self.status = why.to_owned();
+                self.services.status = why.to_owned();
                 return true;
             }
             Outcome::Passed => {}
@@ -630,29 +628,30 @@ impl App {
             Cmd::MacroMapping => self.open_mapping(),
             Cmd::Audition => {
                 self.mode = Mode::Keys;
-                self.status = "a w s e d f play, < > change octave, ; stops".to_owned();
+                self.services.status = "a w s e d f play, < > change octave, ; stops".to_owned();
             }
             // The macros' band, first on the Gen page, turns as the other pages' settings do.
             _ if self.track_page.page == Page::Gen
                 && !matches!(self.track_control(), Control::Macro(_))
                 && self.run_gen_page(cmd, times) => {}
             Cmd::RollGenerator | Cmd::ReopenGenerator => {
-                self.status = "r and Enter work on a generator, on the Gen page".to_owned();
+                self.services.status =
+                    "r and Enter work on a generator, on the Gen page".to_owned();
             }
             Cmd::RemoveRow | Cmd::Paste if self.track_page.page != Page::Fx => {
-                self.status = "dd and p move effects, on the FX page".to_owned();
+                self.services.status = "dd and p move effects, on the FX page".to_owned();
             }
             Cmd::Bypass => match self.track_page.page {
                 Page::Fx => self.toggle_bypass(),
                 Page::Mod => self.toggle_modulator(),
                 Page::Sound | Page::Gen => {
-                    self.status =
+                    self.services.status =
                         "b switches an effect or a modulator, on the FX and Mod pages".to_owned();
                 }
             },
             Cmd::ApplyGenerator if self.track_page.page == Page::Mod => self.keep_drift(),
             Cmd::ApplyGenerator => {
-                self.status =
+                self.services.status =
                     "Space g a keeps a Steps slot's drift on the Mod page, or applies a generator \
                      on the Gen page"
                         .to_owned();

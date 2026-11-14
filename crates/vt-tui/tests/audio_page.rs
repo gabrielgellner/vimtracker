@@ -163,7 +163,7 @@ fn a_leaf_before_the_cpu_figure_shows_while_the_audio_thread_is_slowed() {
 fn the_audio_page_says_what_the_leaf_means_on_the_status_line() {
     use vt_tui::glyphs::LEAF;
     let (mut app, _realtime) = on_the_audio_page();
-    app.status.clear();
+    app.services.status.clear();
     let message = |app: &mut App| screen_rows(app)[41].trim_end().to_owned();
     assert_eq!(message(&mut app), "", "nothing to say at full speed");
     slowed_for_a_while(&mut app, 3600);
@@ -178,9 +178,9 @@ fn the_audio_page_says_what_the_leaf_means_on_the_status_line() {
         "the page's own figure has the leaf too: {rows:#?}"
     );
     // A message comes first, and other pages don't say it.
-    app.status = "Playing through Speakers at 48000 Hz".to_owned();
+    app.services.status = "Playing through Speakers at 48000 Hz".to_owned();
     assert_eq!(message(&mut app), "Playing through Speakers at 48000 Hz");
-    app.status.clear();
+    app.services.status.clear();
     press(&mut app, " 3");
     assert_eq!(message(&mut app), "");
 }
@@ -196,10 +196,10 @@ fn a_new_engine_keeps_the_song_its_undo_and_the_mutes() {
     let version = Arc::new(Published::new(Arc::clone(&song), Arc::clone(&samples)));
     let (handle, _fresh) = connect(Engine::new(44_100, version));
     app.reconnect(handle, samples, 44_100);
-    assert_eq!(app.rate, 44_100);
+    assert_eq!(app.services.rate, 44_100);
     assert!(Arc::ptr_eq(&song, app.song()));
-    assert!(app.levels[0].mute, "still muted");
-    assert_eq!(app.transport, Transport::Stopped);
+    assert!(app.services.levels[0].mute, "still muted");
+    assert_eq!(app.services.transport, Transport::Stopped);
     press(&mut app, "u");
     assert_eq!(
         notes(&app)[0],

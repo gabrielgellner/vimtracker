@@ -35,7 +35,7 @@ fn added_tracks_save_load_and_play() {
     let (mut app, mut rt) = app();
     command(&mut app, "track add 3");
     assert_eq!(app.song().sound_tracks(), 5);
-    assert_eq!(app.levels.len(), 5 + FIXED_TRACKS);
+    assert_eq!(app.services.levels.len(), 5 + FIXED_TRACKS);
     press(&mut app, "WWWW");
     assert_eq!(app.cursor.track, 4);
     press(&mut app, "ia");
@@ -61,10 +61,10 @@ fn only_the_last_track_can_be_removed_and_one_stays() {
     assert_eq!(app.phrase_id(), Some(0));
     command(&mut app, "track del");
     assert_eq!(app.song().sound_tracks(), 1);
-    assert!(app.status.contains("at least one"));
+    assert!(app.services.status.contains("at least one"));
     press(&mut app, "uj");
     assert_eq!(app.song().sound_tracks(), 2);
-    assert_eq!(app.levels.len(), 2 + FIXED_TRACKS);
+    assert_eq!(app.services.levels.len(), 2 + FIXED_TRACKS);
 }
 
 #[test]
@@ -90,12 +90,18 @@ fn a_fixed_tracks_mute_stays_with_it_as_tracks_come_and_go() {
     press(&mut app, "WW");
     assert_eq!(app.song().tracks[app.cursor.track].name, "A");
     press(&mut app, " m");
-    assert!(app.levels[return_a].mute);
+    assert!(app.services.levels[return_a].mute);
     command(&mut app, "track add");
-    assert!(app.levels[return_a + 1].mute, "return A is here now");
-    assert!(!app.levels[2].mute, "and the new track isn't muted");
+    assert!(
+        app.services.levels[return_a + 1].mute,
+        "return A is here now"
+    );
+    assert!(
+        !app.services.levels[2].mute,
+        "and the new track isn't muted"
+    );
     command(&mut app, "track del");
-    assert!(app.levels[return_a].mute);
+    assert!(app.services.levels[return_a].mute);
 }
 
 #[test]
@@ -104,10 +110,14 @@ fn the_master_cant_be_muted_or_soloed() {
     let master = 4 + MAX_GROUPS;
     press(&mut app, &"W".repeat(master));
     press(&mut app, " m");
-    assert!(!app.levels[master].mute);
-    assert!(app.status.contains("master"), "{}", app.status);
+    assert!(!app.services.levels[master].mute);
+    assert!(
+        app.services.status.contains("master"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, " s");
-    assert!(!app.levels[master].solo);
+    assert!(!app.services.levels[master].solo);
 }
 
 #[test]
@@ -117,26 +127,26 @@ fn track_count_is_limited_to_the_constant() {
     assert_eq!(app.song().sound_tracks(), 64);
     command(&mut app, "track add");
     assert_eq!(app.song().sound_tracks(), 64);
-    assert!(app.status.contains("at most"));
+    assert!(app.services.status.contains("at most"));
 }
 
 #[test]
 fn mute_isnt_in_undo_history_but_is_saved() {
     let (mut app, _rt) = app();
     tap(&mut app, " m");
-    assert!(app.levels[0].mute);
+    assert!(app.services.levels[0].mute);
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "u");
     assert_eq!(notes(&app)[0], Note::Empty);
-    assert!(app.levels[0].mute, "undo must not change a mute");
+    assert!(app.services.levels[0].mute, "undo must not change a mute");
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
     let (mut other, _rt2) = self::app();
     command(&mut other, &format!("e {}", path.display()));
-    assert!(other.levels[0].mute);
+    assert!(other.services.levels[0].mute);
     press(&mut other, " M");
-    assert!(!other.levels[0].mute);
+    assert!(!other.services.levels[0].mute);
 }
 
 #[test]
@@ -184,12 +194,12 @@ fn tvol_sets_this_tracks_level_and_can_be_undone() {
     command(&mut app, "tvol C0");
     assert_eq!(app.song().tracks[0].level, 0xE0);
     assert_eq!(app.song().tracks[1].level, 0xC0);
-    assert!(app.dirty);
+    assert!(app.services.dirty);
     press(&mut app, "u");
     assert_eq!(app.song().tracks[1].level, 0xE0);
     command(&mut app, "tvol loud");
     assert_eq!(app.song().tracks[1].level, 0xE0);
-    assert!(app.status.contains(":tvol"));
+    assert!(app.services.status.contains(":tvol"));
 }
 
 #[test]
@@ -201,7 +211,7 @@ fn name_sets_and_clears_a_tracks_name_and_it_shows_in_the_phrase() {
     let top: String = (0..40).map(|x| buffer[(x, 0)].symbol()).collect();
     assert!(top.contains("BD"), "{top}");
     command(&mut app, "name 1A");
-    assert_eq!(app.song().tracks[0].name, "BD", "{}", app.status);
+    assert_eq!(app.song().tracks[0].name, "BD", "{}", app.services.status);
     command(&mut app, "name");
     assert_eq!(app.song().tracks[0].name, "");
 }

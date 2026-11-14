@@ -209,7 +209,7 @@ impl App {
             return;
         }
         let Control::Mod(slot, field) = self.track_control() else {
-            self.status =
+            self.services.status =
                 "K chooses from a list on Machine, Voice, Patch, File, Type, Mode, Groove, Speed, Dest, Shape, Rate and Reset"
                     .to_owned();
             return;
@@ -256,7 +256,7 @@ impl App {
             .get(param)
             .filter(|p| !p.choices.is_empty())
         else {
-            self.status = "This is a value: = and - change it, and i types it".to_owned();
+            self.services.status = "This is a value: = and - change it, and i types it".to_owned();
             return;
         };
         let items = found
@@ -302,7 +302,7 @@ impl App {
         };
         let (title, items): (&str, Vec<Item>) = match field {
             AccumulatorField::Up | AccumulatorField::Down => {
-                self.status = format!(
+                self.services.status = format!(
                     "A limit is a number of degrees from 1 to {MOST_DEGREES}: i types it, = and - move it"
                 );
                 return;
@@ -356,7 +356,7 @@ impl App {
         let pick = |arpeggio| Pick::Arpeggio { track, arpeggio };
         let (title, items): (&str, Vec<Item>) = match field {
             ArpField::Octaves => {
-                self.status = format!(
+                self.services.status = format!(
                     "Octaves is a number from 1 to {MOST_OCTAVES}: i types it, = and - move it"
                 );
                 return;
@@ -436,7 +436,7 @@ impl App {
         let page = self.page_track();
         let modes = page.filter.modes();
         if modes.is_empty() {
-            self.status = no_modes(page.filter);
+            self.services.status = no_modes(page.filter);
             return;
         }
         let items = modes
@@ -703,7 +703,7 @@ impl App {
                 ("LFO fade", fades.to_vec())
             }
             _ => {
-                self.status =
+                self.services.status =
                     "K chooses from a list on Type, Mode, Loop, Polarity, Dest, Shape, Rate, Fade and Reset"
                         .to_owned();
                 return;

@@ -47,7 +47,7 @@ fn value(app: &App, control: ProjectControl) -> String {
     let on_off = |on: bool| if on { "on" } else { "off" }.to_owned();
     match control {
         ProjectControl::Name => app.project_name(),
-        ProjectControl::Folder => app.folder.as_deref().map_or_else(
+        ProjectControl::Folder => app.services.folder.as_deref().map_or_else(
             || "Not saved yet".to_owned(),
             |folder| kept_end(place_name(folder, home_folder().as_deref())),
         ),
@@ -74,7 +74,7 @@ fn value(app: &App, control: ProjectControl) -> String {
         ProjectControl::AutoJump => on_off(app.auto_jump),
         ProjectControl::ReadOnly => on_off(app.read_only),
         ProjectControl::Audio if app.audio.device.is_empty() => "None".to_owned(),
-        ProjectControl::Audio => format!("{}, {} Hz", app.audio.device, app.rate),
+        ProjectControl::Audio => format!("{}, {} Hz", app.audio.device, app.services.rate),
         ProjectControl::Save
         | ProjectControl::SaveAs
         | ProjectControl::Render
@@ -96,8 +96,8 @@ fn fine(millibpm: u32) -> String {
 /// What a setting says dim after its value, if anything.
 fn after(app: &App, control: ProjectControl) -> Option<String> {
     match control {
-        ProjectControl::Folder if app.folder.is_none() => None,
-        ProjectControl::Folder if app.dirty => Some("unsaved changes".to_owned()),
+        ProjectControl::Folder if app.services.folder.is_none() => None,
+        ProjectControl::Folder if app.services.dirty => Some("unsaved changes".to_owned()),
         ProjectControl::Folder => Some("saved".to_owned()),
         ProjectControl::ReadOnly if app.read_only => {
             Some(":w refuses, so Save as makes a copy to change".to_owned())
@@ -142,7 +142,7 @@ fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static
         let on_value = is_here && !on_fine;
         let text = setting::text(&app.ctx(), on_value, || value(app, *control));
         let default = *control == ProjectControl::Root && !app.scale.on
-            || *control == ProjectControl::Folder && app.folder.is_none();
+            || *control == ProjectControl::Folder && app.services.folder.is_none();
         let style = setting::style(&app.ctx(), on_value, default);
         // An action is its own name, so the cursor is on that rather than a value beside it, and
         // what it does is in the value's place.

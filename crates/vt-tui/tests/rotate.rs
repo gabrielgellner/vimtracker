@@ -39,7 +39,11 @@ fn speeds(app: &App) -> Vec<Speed> {
 fn space_o_rotates_the_groups_speeds_and_as_many_presses_as_tracks_bring_them_back() {
     let (mut app, _rt) = at_speeds([Sixteenth, Eighth, Quarter, EighthTriplet]);
     press(&mut app, " o");
-    assert!(app.status.contains("in no group"), "{}", app.status);
+    assert!(
+        app.services.status.contains("in no group"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(speeds(&app), [Sixteenth, Eighth, Quarter, EighthTriplet]);
 
     command(&mut app, "group 1 1-3");
@@ -49,7 +53,10 @@ fn space_o_rotates_the_groups_speeds_and_as_many_presses_as_tracks_bring_them_ba
         [Eighth, Quarter, Sixteenth, EighthTriplet],
         "each takes the next one's, the last the first's, and the fourth isn't in the group"
     );
-    assert_eq!(app.status, "Speeds rotated: 01 1/8, 02 1/4, 03 1/16");
+    assert_eq!(
+        app.services.status,
+        "Speeds rotated: 01 1/8, 02 1/4, 03 1/16"
+    );
     press(&mut app, " o o");
     assert_eq!(speeds(&app), [Sixteenth, Eighth, Quarter, EighthTriplet]);
 
@@ -90,15 +97,23 @@ fn space_o_rotates_the_tracks_selected_and_space_capital_o_every_track() {
     // All at one speed, there's nothing to change.
     let (mut app, _rt) = at_speeds([Eighth; 4]);
     press(&mut app, " O");
-    assert!(app.status.contains("changes nothing"), "{}", app.status);
+    assert!(
+        app.services.status.contains("changes nothing"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "u");
-    assert!(app.status.contains("Nothing to undo"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Nothing to undo"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
 fn rotating_while_recording_writes_held_rates_on_each_tracks_next_row() {
     let (mut app, mut rt) = recording_app(vec![Step::default(); 4]);
-    app.apply(&Action::SetTrackSpeed {
+    app.services.apply(&Action::SetTrackSpeed {
         track: 1,
         speed: Eighth,
     });
@@ -119,7 +134,7 @@ fn rotating_while_recording_writes_held_rates_on_each_tracks_next_row() {
         rate(&app, 0, 3),
         Some((Eighth, Mark::Hold)),
         "{}",
-        app.status
+        app.services.status
     );
     assert_eq!(rate(&app, 1, 2), Some((Sixteenth, Mark::Hold)));
     assert_eq!(
@@ -127,12 +142,16 @@ fn rotating_while_recording_writes_held_rates_on_each_tracks_next_row() {
         (Sixteenth, Eighth),
         "the tracks' own speeds stay for the pass's start"
     );
-    assert!(app.status.starts_with("RATE recorded"), "{}", app.status);
+    assert!(
+        app.services.status.starts_with("RATE recorded"),
+        "{}",
+        app.services.status
+    );
 
     // Heard from there: the first track plays eighths from its row 3.
     play_to(&mut app, &mut rt, &mut at, 4.5);
-    assert_eq!(app.places[0].speed, Eighth);
-    assert_eq!(app.places[1].speed, Sixteenth);
+    assert_eq!(app.services.places[0].speed, Eighth);
+    assert_eq!(app.services.places[1].speed, Sixteenth);
 
     // A second press turns them on from what the rows now hold, on the rows after.
     press(&mut app, " O");

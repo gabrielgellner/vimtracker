@@ -104,11 +104,11 @@ impl App {
     /// How the entry plays, worked out as the edit thread works it out for the engine, and the
     /// rates its file was loaded at, or why it can't be played.
     fn playable(&mut self, shown: &Shown) -> Option<(Playable, vt_model::samples::Rates)> {
-        let found = Playable::of(&shown.entry, &self.samples).zip(shown.frames.as_ref());
+        let found = Playable::of(&shown.entry, &self.services.samples).zip(shown.frames.as_ref());
         match found {
             Some((playable, (_, rates))) => Some((playable, *rates)),
             None => {
-                self.status = format!(
+                self.services.status = format!(
                     "{} isn't loaded, so it can't be played",
                     shown.entry.title()
                 );
@@ -121,11 +121,11 @@ impl App {
     fn hear(&mut self, shown: &Shown, playable: &Playable, span: Span) -> bool {
         let track = self.cursor.track;
         let Some(frames) = playable.sound.loaded().map(std::sync::Arc::clone) else {
-            self.status = format!("{} is still recording", shown.entry.title());
+            self.services.status = format!("{} is still recording", shown.entry.title());
             return false;
         };
-        if !self.handle.play_file(track, frames, Some(span)) {
-            self.status =
+        if !self.services.handle.play_file(track, frames, Some(span)) {
+            self.services.status =
                 "Audio has stopped, so nothing plays. Space 9 L chooses a device".to_owned();
             return false;
         }
@@ -138,7 +138,7 @@ impl App {
         // It plays through the track, so its mute and the solos silence it as they do the track's
         // notes. The page shows neither, so it says so rather than playing in silence.
         if let Some(why) = self.why_silent(track) {
-            self.status = why;
+            self.services.status = why;
         }
         true
     }
@@ -146,15 +146,17 @@ impl App {
     /// Why a track plays what it's given in silence, if it does: it's muted, or another track is
     /// soloed, as the engine has it.
     fn why_silent(&self, track: usize) -> Option<String> {
-        let sounds = self.song().sound_tracks().min(self.levels.len());
-        let live = self.levels.get(track)?;
+        let sounds = self.song().sound_tracks().min(self.services.levels.len());
+        let live = self.services.levels.get(track)?;
         if live.mute {
             return Some(format!(
                 "Track {:02} is muted, so it plays silently. Space m unmutes it",
                 track + 1
             ));
         }
-        let soloed = self.levels[..sounds].iter().position(|other| other.solo);
+        let soloed = self.services.levels[..sounds]
+            .iter()
+            .position(|other| other.solo);
         match soloed {
             Some(other) if !live.solo => Some(format!(
                 "Track {:02} is soloed, so Track {:02} plays silently. Space M clears the solos",
@@ -168,7 +170,7 @@ impl App {
     /// Esc on the sample page: let go of what it's playing.
     pub(crate) fn stop_sample_audition(&mut self) {
         if self.sample_page.heard.is_some() {
-            self.handle.send(Command::StopFile);
+            self.services.handle.send(Command::StopFile);
         }
     }
 
@@ -176,7 +178,7 @@ impl App {
     /// line says `PADS` while it's on, and what the keys play under it.
     pub(crate) fn start_pads(&mut self) {
         self.mode = Mode::Keys;
-        self.status.clear();
+        self.services.status.clear();
     }
 
     /// What the keys mode's keys play, and how to leave it, for under the status line while it's
@@ -210,10 +212,10 @@ impl App {
         match (key.code, shown) {
             (KeyCode::Esc, _) if self.pending.is_empty() => {
                 self.mode = Mode::Normal;
-                self.status.clear();
+                self.services.status.clear();
             }
             (KeyCode::Char(c @ ('<' | '>')), Ok(shown)) if plain => {
-                self.status.clear();
+                self.services.status.clear();
                 let from = self.sample_page.pads_from;
                 let last = shown.slice_count().saturating_sub(1) / PADS * PADS;
                 self.sample_page.pads_from = if c == '>' {
@@ -243,7 +245,7 @@ impl App {
     fn play_pad(&mut self, shown: &Shown, number: usize) {
         let count = shown.slice_count();
         if number >= count {
-            self.status = match count {
+            self.services.status = match count {
                 1 => format!("No slice {number:02X}: the sample is one slice, 00, until :slice"),
                 _ => format!(
                     "No slice {number:02X}: the sample has {count}, 00 to {:02X}",
@@ -266,7 +268,8 @@ impl App {
             return Vec::new();
         };
         let heard = self.sample_page.heard == Some((shown.number, shown.analysis.hash));
-        self.playheads
+        self.services
+            .playheads
             .iter()
             .flatten()
             .filter(|head| match head.entry {

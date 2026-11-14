@@ -243,7 +243,7 @@ impl App {
     /// Mark the song changed if the folds are, as they're saved with it.
     pub(crate) fn folds_changed(&mut self, was: Folds) {
         if self.folds != was {
-            self.dirty = true;
+            self.services.dirty = true;
         }
     }
 
@@ -252,7 +252,7 @@ impl App {
     pub(crate) fn toggle_fold(&mut self) {
         self.count = None;
         let Some(track) = self.folding_track() else {
-            self.status =
+            self.services.status =
                 "z a folds a group from its column, or from one of its tracks'".to_owned();
             return;
         };
@@ -262,7 +262,7 @@ impl App {
                 TrackKind::Sound => format!("Track {:02}", track + 1),
                 kind => kind.title(),
             };
-            self.status = format!("{name} isn't in a group to fold");
+            self.services.status = format!("{name} isn't in a group to fold");
             return;
         };
         let was = self.folds;
@@ -273,7 +273,7 @@ impl App {
         let members: Vec<usize> = song
             .fixed_track(TrackKind::Group(number))
             .map_or_else(Vec::new, |at| song.group_members(at).collect());
-        self.status = match (closed, members.is_empty()) {
+        self.services.status = match (closed, members.is_empty()) {
             (true, true) => format!("G{number} is empty, and folded away. zR shows it"),
             (true, false) => format!(
                 "G{number} folded: {} put away in it. z a opens it",
@@ -290,7 +290,7 @@ impl App {
         self.folds.set_all(closed);
         self.folds_changed(was);
         self.stand_on_shown();
-        self.status = if closed {
+        self.services.status = if closed {
             "Every group folded, and the empty ones put away. zR opens them".to_owned()
         } else {
             "Every group open, the empty ones too. zM folds them".to_owned()
@@ -314,8 +314,8 @@ impl App {
                 self.song_column = COLUMNS_BEFORE_TRACKS + group;
             }
             Some(group) => self.go_to_track_at(group),
-            None if by > 0 => self.status = "No group after this track".to_owned(),
-            None => self.status = "No group before this track".to_owned(),
+            None if by > 0 => self.services.status = "No group after this track".to_owned(),
+            None => self.services.status = "No group before this track".to_owned(),
         }
     }
 

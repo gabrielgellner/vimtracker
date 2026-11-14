@@ -220,18 +220,18 @@ impl App {
     /// settings stay as they are, and it keeps running underneath.
     pub(super) fn toggle_modulator(&mut self) {
         let Control::Mod(slot, _) = self.track_control() else {
-            self.status = "b switches a mod slot, and this has no switch".to_owned();
+            self.services.status = "b switches a mod slot, and this has no switch".to_owned();
             return;
         };
         let mut modulator = self.page_track().mods[slot];
         modulator.bypassed = !modulator.bypassed;
-        self.apply(&Action::SetMod {
+        self.services.apply(&Action::SetMod {
             track: self.cursor.track,
             slot,
             modulator,
         });
         let name = format!("Mod {}", slot + 1);
-        self.status = if modulator.bypassed {
+        self.services.status = if modulator.bypassed {
             format!("Switched {name} out: b brings it back")
         } else {
             format!("{name} is back in")
@@ -244,13 +244,14 @@ impl App {
     /// render plays it again. Only steps drawn change, so a value written since keeps its own.
     pub(crate) fn keep_drift(&mut self) {
         let Control::Mod(slot, _) = self.track_control() else {
-            self.status = "Space g a keeps a Steps slot's drift: this isn't a mod slot".to_owned();
+            self.services.status =
+                "Space g a keeps a Steps slot's drift: this isn't a mod slot".to_owned();
             return;
         };
         let name = format!("Mod {}", slot + 1);
         let mut modulator = self.page_track().mods[slot];
         if modulator.kind != ModKind::Steps {
-            self.status = format!(
+            self.services.status = format!(
                 "Space g a keeps a Steps slot's drift: {name} is {}",
                 modulator.kind.name()
             );
@@ -262,6 +263,7 @@ impl App {
             .reported_track()
             .is_some_and(|track| track.mods[slot].kind == ModKind::Steps);
         let drawn = self
+            .services
             .live
             .filter(|_| reported)
             .map(|live| live.drawn[slot])
@@ -275,12 +277,14 @@ impl App {
             }
         }
         if kept == 0 {
-            self.status = format!("{name} has drawn nothing to keep: Mutate draws as it plays");
+            self.services.status =
+                format!("{name} has drawn nothing to keep: Mutate draws as it plays");
             return;
         }
         self.set_mod(slot, modulator);
         let values = if kept == 1 { "value" } else { "values" };
-        self.status = format!("Kept the {kept} {values} {name} drew: Mutate 0% now plays them");
+        self.services.status =
+            format!("Kept the {kept} {values} {name} drew: Mutate 0% now plays them");
     }
 
     /// `Space g A`: make the phrase here what was last heard, as one undo step: write into its
@@ -299,7 +303,7 @@ impl App {
         });
         let track = self.cursor.track;
         let Some(phrase) = self.phrase_id() else {
-            self.status = "No phrase here to write the pitch into".to_owned();
+            self.services.status = "No phrase here to write the pitch into".to_owned();
             return;
         };
         let song = Arc::clone(self.song());
@@ -346,7 +350,7 @@ impl App {
                     !varying(heard.as_ref().unwrap_or(written)).is_empty()
                 });
         if moving.is_empty() && !owner.mods.iter().any(baked) && !any_varying {
-            self.status =
+            self.services.status =
                 "No Steps or LFO slot on Pitch, RND on a note, or generator moved, to write in"
                     .to_owned();
             return;
@@ -374,7 +378,7 @@ impl App {
             if !owner.mods.iter().any(baked) && rnds.is_empty() {
                 continue;
             }
-            let Some(pitch) = self.heard_pitches.get(&(track, phrase, step)) else {
+            let Some(pitch) = self.services.heard_pitches.get(&(track, phrase, step)) else {
                 unheard += 1;
                 continue;
             };
@@ -418,11 +422,12 @@ impl App {
         let slots: Vec<usize> = (0..MOD_SLOTS).filter(|at| moved[*at]).collect();
         if moving.is_empty() {
             if heard == 0 {
-                self.status = "None of these notes has been heard yet: play them first".to_owned();
+                self.services.status =
+                    "None of these notes has been heard yet: play them first".to_owned();
                 return;
             }
             if slots.is_empty() && varied == 0 {
-                self.status = "No Steps or LFO slot on Pitch moved these notes".to_owned();
+                self.services.status = "No Steps or LFO slot on Pitch moved these notes".to_owned();
                 return;
             }
         }
@@ -444,7 +449,7 @@ impl App {
                 },
             });
         }
-        self.apply(&Action::Batch(actions));
+        self.services.apply(&Action::Batch(actions));
         let mut said = Vec::new();
         if !slots.is_empty() {
             let names: Vec<String> = slots.iter().map(|at| format!("Mod {}", at + 1)).collect();
@@ -482,6 +487,6 @@ impl App {
         if unheard > 0 {
             status.push_str(&format!("; {unheard} notes not heard yet stay as written"));
         }
-        self.status = status;
+        self.services.status = status;
     }
 }

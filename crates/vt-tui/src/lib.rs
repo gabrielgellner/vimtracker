@@ -47,6 +47,7 @@ pub mod sample_wave;
 pub mod sampling;
 pub mod scope;
 pub mod screenshot;
+pub mod services;
 pub mod shaping;
 pub mod slicing;
 pub mod song_view;

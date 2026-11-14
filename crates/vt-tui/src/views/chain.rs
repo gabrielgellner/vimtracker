@@ -51,12 +51,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         Line::styled("Slot    Phrase  Trans  Steps", bold),
     ];
     let playing = app
+        .services
         .playing_place(app.cursor.track, chain)
         .and_then(|playhead| {
             song.tracks[app.cursor.track].chain_position(
                 chain,
                 playhead,
-                app.dealer(app.cursor.track),
+                app.services.dealer(app.cursor.track),
             )
         })
         .map(|position| position.slot);

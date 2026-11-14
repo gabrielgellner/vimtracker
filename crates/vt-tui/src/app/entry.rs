@@ -117,9 +117,9 @@ impl App {
     /// Set the scale, which isn't an edit to undo, and say what it now does.
     pub(crate) fn set_scale(&mut self, scale: Scale) {
         self.scale = scale;
-        self.handle.send(Command::SetScale { scale });
-        self.dirty = true;
-        self.status = if scale.on {
+        self.services.handle.send(Command::SetScale { scale });
+        self.services.dirty = true;
+        self.services.status = if scale.on {
             format!("Scale {} {}", scale.root_name(), scale.kind.name())
         } else {
             "Scale off".to_owned()
@@ -137,11 +137,11 @@ impl App {
     /// Move this phrase's notes to the nearest in the scale.
     pub(super) fn fit_to_scale(&mut self) {
         if !self.scale.on {
-            self.status = "The scale is off".to_owned();
+            self.services.status = "The scale is off".to_owned();
             return;
         }
         if let Some(phrase) = self.phrase_id() {
-            self.apply(&Action::FitToScale {
+            self.services.apply(&Action::FitToScale {
                 track: self.cursor.track,
                 phrase,
                 scale: self.scale,
@@ -160,7 +160,7 @@ impl App {
             GRID_SIZES.iter().rfind(|size| **size < skip)
         };
         if let Some(next) = next {
-            self.apply(&Action::SetSkipSize(*next));
+            self.services.apply(&Action::SetSkipSize(*next));
         }
     }
 
@@ -250,7 +250,7 @@ impl App {
     /// change, and say which phrase it went in.
     fn write_played_note(&mut self, midi: u8) -> Option<u32> {
         let Some(id) = self.phrase_id() else {
-            self.status = "This track has no phrase here".to_owned();
+            self.services.status = "This track has no phrase here".to_owned();
             return None;
         };
         let current = self.phrase_here();
@@ -261,7 +261,7 @@ impl App {
         } else {
             step.gate
         };
-        self.apply(&Action::SetStep {
+        self.services.apply(&Action::SetStep {
             track: self.cursor.track,
             phrase: id,
             step: self.cursor.step,
@@ -294,7 +294,7 @@ impl App {
         let Some(step) = current.and_then(|p| p.steps().get(self.cursor.step).cloned()) else {
             return;
         };
-        self.apply(&Action::SetStep {
+        self.services.apply(&Action::SetStep {
             track: self.cursor.track,
             phrase: id,
             step: self.cursor.step,
@@ -311,7 +311,8 @@ impl App {
         if let Some(command) = self.entry.command
             && let Field::FxValue(slot) = self.cursor.field
         {
-            self.status = format!("{} needs a value, so nothing was written", command.name());
+            self.services.status =
+                format!("{} needs a value, so nothing was written", command.name());
             self.cursor.field = Field::FxCommand(slot);
         }
         self.entry = Entry::default();
@@ -322,7 +323,7 @@ impl App {
         let Some(phrase) = self.phrase_id() else {
             return;
         };
-        self.apply(&Action::SetField {
+        self.services.apply(&Action::SetField {
             track: self.cursor.track,
             phrase,
             step: self.cursor.step,
@@ -371,17 +372,18 @@ impl App {
                 // A condition's value is one of a list, and anything else is refused.
                 let command = self.entry.command.or(current.command);
                 if command == Some(FxCommand::Cnd) && Condition::from_value(value).is_none() {
-                    self.status = format!("CND {value:02X} isn't a condition: K lists them");
+                    self.services.status =
+                        format!("CND {value:02X} isn't a condition: K lists them");
                     return;
                 }
                 if command == Some(FxCommand::Acu) && amount(value).is_none() {
-                    self.status = format!(
+                    self.services.status = format!(
                         "ACU {value:02X} is past {MOST_DEGREES}: 01 to 1C go up, FF to E4 down, and K lists them"
                     );
                     return;
                 }
                 let Some(command) = self.entry.command.take().or(current.command) else {
-                    self.status = "Type an FX command first".to_owned();
+                    self.services.status = "Type an FX command first".to_owned();
                     return;
                 };
                 // Typed over the same setting, the coarse digits change and the fine part stays.
@@ -419,7 +421,7 @@ impl App {
             KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
                 let current = self.current_slot(slot).unwrap_or_default();
                 if !current.command.is_some_and(FxCommand::has_fine) {
-                    self.status = "Only a setting that sweeps has a fine part".to_owned();
+                    self.services.status = "Only a setting that sweeps has a fine part".to_owned();
                     return;
                 }
                 self.entry.text.push(c.to_ascii_uppercase());
@@ -495,7 +497,7 @@ impl App {
                         self.cursor.field = Field::FxValue(slot);
                     }
                     None => {
-                        self.status = format!("{name} isn't a label on this track");
+                        self.services.status = format!("{name} isn't a label on this track");
                         self.open_fx_picker(slot, &name.to_lowercase());
                     }
                 }
@@ -519,7 +521,7 @@ impl App {
             KeyCode::Char(c @ '0'..='9') if !key.ctrl && self.entry.text.len() != 1 => {
                 let pulses = c as u8 - b'0';
                 if pulses > MAX_PULSES {
-                    self.status = format!("A row lasts 0 to {MAX_PULSES} pulses");
+                    self.services.status = format!("A row lasts 0 to {MAX_PULSES} pulses");
                     self.entry.text.clear();
                     return;
                 }
@@ -531,7 +533,8 @@ impl App {
                     name => match GateKind::from_name(name) {
                         Some(kind) => kind,
                         None => {
-                            self.status = format!("{name} isn't a gate: SGL, MLT, HLD or RST");
+                            self.services.status =
+                                format!("{name} isn't a gate: SGL, MLT, HLD or RST");
                             return;
                         }
                     },
@@ -549,7 +552,8 @@ impl App {
             {
                 self.entry.text.push(c.to_ascii_uppercase());
                 if self.entry.text.len() == 3 && GateKind::from_name(&self.entry.text).is_none() {
-                    self.status = format!("{} isn't a gate: SGL, MLT, HLD or RST", self.entry.text);
+                    self.services.status =
+                        format!("{} isn't a gate: SGL, MLT, HLD or RST", self.entry.text);
                     self.entry.text.clear();
                 }
             }
@@ -626,7 +630,8 @@ impl App {
                     } else {
                         "just under half its step"
                     };
-                    self.status = format!("A nudge on this track goes up to {most:X}, {how}");
+                    self.services.status =
+                        format!("A nudge on this track goes up to {most:X}, {how}");
                     return;
                 }
                 let amount = amount as i8;
@@ -689,8 +694,8 @@ impl App {
     /// undo.
     pub(crate) fn toggle_auto_jump(&mut self) {
         self.auto_jump = !self.auto_jump;
-        self.dirty = true;
-        self.status = if self.auto_jump {
+        self.services.dirty = true;
+        self.services.status = if self.auto_jump {
             "Auto-jump on: each entry moves on by the grid".to_owned()
         } else {
             "Auto-jump off: entering stays put".to_owned()
@@ -699,10 +704,10 @@ impl App {
 
     fn write_note(&mut self, note: Note) {
         let Some(phrase) = self.phrase_id() else {
-            self.status = "This track has no phrase here".to_owned();
+            self.services.status = "This track has no phrase here".to_owned();
             return;
         };
-        self.apply(&Action::SetNote {
+        self.services.apply(&Action::SetNote {
             track: self.cursor.track,
             phrase,
             step: self.cursor.step,

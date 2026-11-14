@@ -317,7 +317,7 @@ every message each way):
     `-inf dB`, `+0.0 dB` and `+6.0 dB` shown; stepped one at a time, it follows each step. A knob
     turned, let go and touched again didn't jump or push against the hand.
 
-**Knobs edit the song** through `App::apply`, as keys do (`roto/edits.rs`, the way back from
+**Knobs edit the song** through `Services::apply`, as keys do (`roto/edits.rs`, the way back from
 `roto/devices.rs`). Each knob's last move of a frame is one action, on the Roto's track and device
 whatever the cursor is on. A position becomes the value the mapping puts there: a list's step,
 a value's share of its range with its fine digits, an envelope's time by `=`'s steps, and an
@@ -479,7 +479,7 @@ changes what it shows (`vt-roto`'s `mix::MixView`, with the song as strips from 
     mode then shows the devices of, as Live's selected track is both modes'.
 *   **The default** (CC 64 with a knob's number) puts its fader where a new track has it.
 
-**Edits and lights.** A knob's move is the edit its key makes, through `App::apply`, one undo
+**Edits and lights.** A knob's move is the edit its key makes, through `Services::apply`, one undo
 step from touch to let-go, as in PLUGIN mode (§4.2), on its own track whatever the cursor is on.
 Mutes and solos are the keys' `Space m` and `Space s`: live, not undo steps, and saved with the
 song. A mute button is lit while its track is muted, as both scripts light it, and an empty slot
@@ -526,7 +526,7 @@ output had stopped; with it playing, it worked.
 ## 5. Edits, feedback and rates
 
 **The same path as keys.** A knob's move becomes the same `Action` its key would, through
-`App::apply`, so it's one undo step and the engine hears it as any edit: `SetTrackLevel` for a
+`Services::apply`, so it's one undo step and the engine hears it as any edit: `SetTrackLevel` for a
 fader, `SetInsert` for an FX setting, `SetTrackSetting` for a machine's, and so on. Moves are
 gathered each frame and only each knob's last is applied, so a fast turn is one edit a frame, not
 one a CC. **A gesture is one undo step**: the Roto says when a knob is touched and let go, so the
@@ -582,7 +582,7 @@ seem not to reach what was playing: they reached the copy that wasn't being hear
  midir's input callback  --bytes-->   Splitter -> SysEx or CC              App::tick, once a frame:
                                       Session: handshake, versions  -->    Link::poll() -> Events
                                       ControlDecoder: 14-bit knobs  -->      -> RotoView -> Actions
-                                      watches the ports every 1 s            -> App::apply
+                                      watches the ports every 1 s            -> Services::apply
                                       sends, 5 ms between SysEx    <--     Link::send, send_ccs
                                                                            (what RotoView changed)
 ```

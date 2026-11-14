@@ -138,7 +138,10 @@ impl App {
                     .map(|size| {
                         let size = *size;
                         (
-                            format!("{size} frames, {:.1} ms", buffer_ms(size, self.rate)),
+                            format!(
+                                "{size} frames, {:.1} ms",
+                                buffer_ms(size, self.services.rate)
+                            ),
                             AudioChoice {
                                 buffer: Some(size),
                                 ..choice.clone()
@@ -157,10 +160,10 @@ impl App {
                     },
                 );
                 let inputs = self.audio.inputs.iter().map(|found| {
-                    let rate = if found.rates.contains(&self.rate) {
+                    let rate = if found.rates.contains(&self.services.rate) {
                         String::new()
                     } else {
-                        format!(", not at {} Hz", self.rate)
+                        format!(", not at {} Hz", self.services.rate)
                     };
                     let default = if found.default {
                         ", the system's default"
@@ -188,7 +191,7 @@ impl App {
                     .position(|found| found.id == device.id)
             }),
             AudioRow::Rate => {
-                device.and_then(|device| device.rates.iter().position(|r| *r == self.rate))
+                device.and_then(|device| device.rates.iter().position(|r| *r == self.services.rate))
             }
             AudioRow::Buffer => device.and_then(|device| {
                 let size = self.audio.buffer.or(choice.buffer)?;
@@ -212,7 +215,7 @@ impl App {
     /// off, `K`, `i` and Enter switch it, and `x` puts it back off, as it starts. Returns false
     /// for a key that means nothing there.
     fn run_roto_row(&mut self, cmd: Cmd) -> bool {
-        let on = self.roto.setting.on;
+        let on = self.services.roto.setting.on;
         let wanted = match cmd {
             Cmd::Increase | Cmd::IncreaseLarge => true,
             Cmd::Decrease | Cmd::DecreaseLarge | Cmd::ClearField => false,
@@ -287,7 +290,7 @@ impl App {
                 let up = matches!(cmd, Cmd::Increase | Cmd::IncreaseLarge);
                 let (options, current) = self.audio_options(self.audio_row_here());
                 if options.is_empty() {
-                    self.status = "This device doesn't say what it takes".to_owned();
+                    self.services.status = "This device doesn't say what it takes".to_owned();
                     return true;
                 }
                 let at = match (current, up) {
@@ -337,7 +340,7 @@ impl App {
         let row = self.audio_row_here();
         let (options, current) = self.audio_options(row);
         if options.is_empty() {
-            self.status = "There's nothing to choose here".to_owned();
+            self.services.status = "There's nothing to choose here".to_owned();
             return;
         }
         let items = options

@@ -23,7 +23,7 @@ fn quit_refuses_unsaved_changes() {
     special(&mut app, KeyCode::Esc);
     press(&mut app, " qq");
     assert!(!app.should_quit);
-    assert!(app.status.contains("Unsaved"));
+    assert!(app.services.status.contains("Unsaved"));
     command(&mut app, "q!");
     assert!(app.should_quit);
 }
@@ -34,20 +34,20 @@ fn saving_needs_a_folder_then_round_trips() {
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     command(&mut app, "w");
-    assert!(app.dirty);
+    assert!(app.services.dirty);
     assert_eq!(app.mode, Mode::Picker, "the explorer chooses where");
     assert_eq!(app.picker.as_ref().unwrap().title, "Save in");
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.naming, None, "nothing waits for a name");
     let path = folder();
     command(&mut app, &format!("w {}", path.display()));
-    assert!(!app.dirty, "{}", app.status);
-    assert_eq!(app.folder.as_deref(), Some(path.as_path()));
+    assert!(!app.services.dirty, "{}", app.services.status);
+    assert_eq!(app.services.folder.as_deref(), Some(path.as_path()));
 
     let (mut other, _rt2) = self::app();
     command(&mut other, &format!("e {}", path.display()));
     assert_eq!(notes(&other)[0], Note::On(60));
-    assert!(!other.dirty);
+    assert!(!other.services.dirty);
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn opening_refuses_unsaved_changes() {
     special(&mut app, KeyCode::Esc);
     let path = folder();
     command(&mut app, &format!("new {}", path.display()));
-    assert!(app.status.contains("Unsaved"));
+    assert!(app.services.status.contains("Unsaved"));
     assert!(!path.exists());
 }
 
@@ -107,7 +107,11 @@ fn groove_commands_set_the_project_and_the_cursors_track_and_undo() {
         groove("Swing 66"),
         "only a swing groove's percent"
     );
-    assert!(app.status.contains("52, 54"), "{}", app.status);
+    assert!(
+        app.services.status.contains("52, 54"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "groove mpc-58");
     assert_eq!(app.song().groove, groove("MPC 58"));
     command(&mut app, "tgroove pull");
@@ -143,13 +147,21 @@ fn render_writes_what_is_in_memory_with_live_mutes() {
     let path = std::env::temp_dir().join(format!("vt-app-render-{}.wav", std::process::id()));
     let _ = std::fs::remove_file(&path);
     command(&mut app, &format!("render {} --rows 4", path.display()));
-    assert!(app.status.contains("Rendered"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Rendered"),
+        "{}",
+        app.services.status
+    );
     let reader = hound::WavReader::open(&path).unwrap();
     assert_eq!(reader.len(), 24_000 * 2);
     std::fs::remove_file(&path).unwrap();
-    assert!(!app.dirty, "rendering isn't an edit");
+    assert!(!app.services.dirty, "rendering isn't an edit");
     command(&mut app, "render /no/such/folder/x.wav");
-    assert!(app.status.contains("Couldn't write"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Couldn't write"),
+        "{}",
+        app.services.status
+    );
 }
 
 mod autosave {
@@ -222,8 +234,8 @@ mod autosave {
         let start = Instant::now();
         app.autosave_if_due(start);
         app.autosave_if_due(later(start, 61));
-        assert!(app.dirty);
-        assert!(app.status.is_empty(), "{}", app.status);
+        assert!(app.services.dirty);
+        assert!(app.services.status.is_empty(), "{}", app.services.status);
     }
 
     /// A folder as a crash would leave it: a saved song, and newer work beside it.
@@ -258,7 +270,7 @@ mod autosave {
             app.song().tracks[0].phrases[&0].steps()[0].note,
             Note::On(60)
         );
-        assert!(app.dirty);
+        assert!(app.services.dirty);
         command(&mut app, "w");
         let saved = project::load_song(&path).unwrap();
         assert_eq!(saved.tracks[0].phrases[&0].steps()[0].note, Note::On(60));
@@ -278,7 +290,7 @@ mod autosave {
             app.song().tracks[0].phrases[&0].steps()[0].note,
             Note::Empty
         );
-        assert!(!app.dirty);
+        assert!(!app.services.dirty);
         std::fs::remove_dir_all(&path).unwrap();
     }
 
@@ -291,7 +303,11 @@ mod autosave {
         command(&mut app, &format!("e {}", path.display()));
         press(&mut app, "y");
         assert_eq!(app.mode, Mode::Normal);
-        assert!(app.status.contains("kept"), "{}", app.status);
+        assert!(
+            app.services.status.contains("kept"),
+            "{}",
+            app.services.status
+        );
         assert!(path.join(AUTOSAVE).exists());
         std::fs::remove_dir_all(&path).unwrap();
     }
@@ -326,13 +342,21 @@ fn render_stems_writes_a_named_file_per_track() {
     special(&mut app, KeyCode::Esc);
     let out = folder().join("stems");
     command(&mut app, &format!("render {} --stems", out.display()));
-    assert!(app.status.contains("2 stems"), "{}", app.status);
+    assert!(
+        app.services.status.contains("2 stems"),
+        "{}",
+        app.services.status
+    );
     assert!(out.join("01-BD.wav").exists());
     assert!(out.join("02.wav").exists());
     command(&mut app, "mute");
     let quieter = folder().join("stems");
     command(&mut app, &format!("render {} --stems", quieter.display()));
-    assert!(app.status.contains("1 stem to"), "{}", app.status);
+    assert!(
+        app.services.status.contains("1 stem to"),
+        "{}",
+        app.services.status
+    );
     assert!(!quieter.join("01-BD.wav").exists());
 }
 
@@ -354,7 +378,10 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
     let root = projects();
     let (mut app, _realtime) = app();
     command(&mut app, &format!("e {}", root.join("one").display()));
-    assert_eq!(app.folder.as_deref(), Some(root.join("one").as_path()));
+    assert_eq!(
+        app.services.folder.as_deref(),
+        Some(root.join("one").as_path())
+    );
     command(&mut app, "e");
     assert_eq!(app.mode, Mode::Picker);
     assert_eq!(app.picker.as_ref().unwrap().title, "Open a project");
@@ -373,7 +400,10 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
     assert_eq!(shown.details, ["Saved just now"]);
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.folder.as_deref(), Some(root.join("two").as_path()));
+    assert_eq!(
+        app.services.folder.as_deref(),
+        Some(root.join("two").as_path())
+    );
     assert_eq!(app.song().millibpm, 137_630);
     assert_eq!(
         app.recent_places.of(vt_tui::explorer::Purpose::Project),
@@ -385,7 +415,11 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
     special(&mut app, KeyCode::Esc);
     command(&mut app, "e");
     assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("Unsaved"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Unsaved"),
+        "{}",
+        app.services.status
+    );
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -396,29 +430,32 @@ fn e_bang_opens_a_project_and_discards_unsaved_changes() {
     let one = root.join("one");
     command(&mut app, &format!("e {}", one.display()));
     command(&mut app, "bpm 90");
-    assert!(app.dirty);
+    assert!(app.services.dirty);
     vt_model::project::write_autosave(&one, app.song()).unwrap();
 
     // :e refuses, and says how to go on.
     command(&mut app, &format!("e {}", root.join("two").display()));
     assert_eq!(
-        app.status,
+        app.services.status,
         "Unsaved changes: :w to save, or :e! to discard them"
     );
-    assert_eq!(app.folder.as_deref(), Some(one.as_path()));
+    assert_eq!(app.services.folder.as_deref(), Some(one.as_path()));
 
     // :e! opens it, and the changes' autosave goes with them.
     command(&mut app, &format!("e! {}", root.join("two").display()));
-    assert_eq!(app.folder.as_deref(), Some(root.join("two").as_path()));
+    assert_eq!(
+        app.services.folder.as_deref(),
+        Some(root.join("two").as_path())
+    );
     assert_eq!(app.song().millibpm, 137_630);
-    assert!(!app.dirty);
+    assert!(!app.services.dirty);
     assert!(!one.join("song.autosave.ron").exists());
 
     // On this project's own folder, it goes back to how it was saved.
     command(&mut app, "bpm 90");
     command(&mut app, &format!("e! {}", root.join("two").display()));
     assert_eq!(app.song().millibpm, 137_630);
-    assert!(!app.dirty);
+    assert!(!app.services.dirty);
     assert_eq!(app.mode, Mode::Normal, "with nothing to restore");
     std::fs::remove_dir_all(&root).unwrap();
 }
@@ -435,17 +472,27 @@ fn e_bang_with_no_folder_opens_what_the_explorer_chooses_without_refusing() {
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.folder.as_deref(), Some(root.join("two").as_path()));
+    assert_eq!(
+        app.services.folder.as_deref(),
+        Some(root.join("two").as_path())
+    );
     assert_eq!(app.song().millibpm, 137_630);
-    assert!(!app.dirty);
+    assert!(!app.services.dirty);
 
     // An :e! explorer closed unused leaves later opening to refuse as before.
     command(&mut app, "e!");
     special(&mut app, KeyCode::Esc);
     command(&mut app, "bpm 90");
     command(&mut app, &format!("e {}", root.join("one").display()));
-    assert!(app.status.contains(":e!"), "{}", app.status);
-    assert_eq!(app.folder.as_deref(), Some(root.join("two").as_path()));
+    assert!(
+        app.services.status.contains(":e!"),
+        "{}",
+        app.services.status
+    );
+    assert_eq!(
+        app.services.folder.as_deref(),
+        Some(root.join("two").as_path())
+    );
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -457,7 +504,7 @@ fn new_bang_starts_a_project_and_discards_unsaved_changes() {
     let path = folder();
     command(&mut app, "new");
     assert_eq!(
-        app.status,
+        app.services.status,
         "Unsaved changes: :w to save, or :new! to discard them"
     );
     assert_ne!(app.mode, Mode::Picker);
@@ -477,8 +524,8 @@ fn new_bang_starts_a_project_and_discards_unsaved_changes() {
     special(&mut app, KeyCode::Esc);
 
     command(&mut app, &format!("new! {}", path.display()));
-    assert_eq!(app.folder.as_deref(), Some(path.as_path()));
-    assert!(!app.dirty);
+    assert_eq!(app.services.folder.as_deref(), Some(path.as_path()));
+    assert!(!app.services.dirty);
     assert!(
         !notes(&app).iter().any(|note| matches!(note, Note::On(_))),
         "a fresh song"
@@ -512,10 +559,17 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     // The project's random name is filled in after the folder, so Enter saves it.
     let name = app.project_name();
     assert_eq!(app.command_line, format!("w {shown}/{name}"));
-    assert!(app.status.contains("name"), "{}", app.status);
+    assert!(
+        app.services.status.contains("name"),
+        "{}",
+        app.services.status
+    );
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.folder.as_deref(), Some(root.join(&name).as_path()));
-    assert!(!app.dirty, "{}", app.status);
+    assert_eq!(
+        app.services.folder.as_deref(),
+        Some(root.join(&name).as_path())
+    );
+    assert!(!app.services.dirty, "{}", app.services.status);
     assert_eq!(app.project_name(), name, "the folder's name now");
 
     // :new does the same, with a new name, which can be typed over.
@@ -530,7 +584,11 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     }
     press(&mut app, "fresh");
     special(&mut app, KeyCode::Enter);
-    assert!(root.join("fresh/song.ron").is_file(), "{}", app.status);
+    assert!(
+        root.join("fresh/song.ron").is_file(),
+        "{}",
+        app.services.status
+    );
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -593,8 +651,13 @@ fn ctrl_r_rolls_a_new_name_on_a_name_line() {
     assert_ne!(app.command_line, first, "each press rolls again");
     assert_eq!(app.mode, Mode::Command);
     special(&mut app, KeyCode::Enter);
-    let saved = app.folder.clone().unwrap();
-    assert_eq!(saved.parent(), Some(root.as_path()), "{}", app.status);
+    let saved = app.services.folder.clone().unwrap();
+    assert_eq!(
+        saved.parent(),
+        Some(root.as_path()),
+        "{}",
+        app.services.status
+    );
 
     // A render's extension and flags stay.
     command(&mut app, "render --tail");
@@ -642,7 +705,11 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
     let shown = vt_tui::explorer::place_name(&root.join("one"), Some(&home));
     assert_eq!(app.command_line, format!("render {shown}/one.wav --tail"));
     special(&mut app, KeyCode::Enter);
-    assert!(root.join("one/one.wav").is_file(), "{}", app.status);
+    assert!(
+        root.join("one/one.wav").is_file(),
+        "{}",
+        app.services.status
+    );
     // Another render is numbered, rather than written over the first.
     command(&mut app, "render");
     press(&mut app, "k");
@@ -707,10 +774,18 @@ fn the_project_page_sets_the_tempo_and_its_fine_part_as_bpm_does_with_undo() {
     tap(&mut app, "i9");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().millibpm, 137_635);
-    assert!(app.status.contains("20 to 400"), "{}", app.status);
+    assert!(
+        app.services.status.contains("20 to 400"),
+        "{}",
+        app.services.status
+    );
     tap(&mut app, "ifast");
     special(&mut app, KeyCode::Enter);
-    assert!(app.status.contains(":bpm takes"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":bpm takes"),
+        "{}",
+        app.services.status
+    );
     tap(&mut app, "x");
     assert_eq!(
         app.song().millibpm,
@@ -861,7 +936,7 @@ fn the_project_page_sets_the_scale_its_root_and_auto_jump() {
     assert!(!app.auto_jump);
     tap(&mut app, "=");
     assert!(app.auto_jump);
-    assert!(app.dirty, "it's kept with the song");
+    assert!(app.services.dirty, "it's kept with the song");
     tap(&mut app, "K");
     assert!(!app.auto_jump);
 }
@@ -883,7 +958,7 @@ fn the_project_page_names_the_project_and_the_window_title_says_it() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.project_name(), "Verse Ideas");
     assert_eq!(app.window_title(), "vimtracker: Verse Ideas");
-    assert!(app.dirty);
+    assert!(app.services.dirty);
     tap(&mut app, "u");
     assert_eq!(app.project_name(), random, "renaming is an undo step");
     // C-r while typing rolls a new name.
@@ -900,14 +975,19 @@ fn the_project_page_names_the_project_and_the_window_title_says_it() {
     tap(&mut app, "a/b");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.project_name(), rolled);
-    assert!(app.status.contains("no /"), "{}", app.status);
+    assert!(
+        app.services.status.contains("no /"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
 fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_after() {
     let root = projects();
     let (mut app, _realtime) = app();
-    app.apply(&vt_model::action::Action::SetSongName("verse".to_owned()));
+    app.services
+        .apply(&vt_model::action::Action::SetSongName("verse".to_owned()));
     // Saving starts with its name.
     app.recent_places
         .add(vt_tui::explorer::Purpose::Save, &root)
@@ -917,11 +997,18 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     special(&mut app, KeyCode::Enter);
     assert!(app.command_line.ends_with("/verse"), "{}", app.command_line);
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.folder.as_deref(), Some(root.join("verse").as_path()));
+    assert_eq!(
+        app.services.folder.as_deref(),
+        Some(root.join("verse").as_path())
+    );
     // Renaming keeps the folder, and Save as starts with the new name.
-    app.apply(&vt_model::action::Action::SetSongName("chorus".to_owned()));
+    app.services
+        .apply(&vt_model::action::Action::SetSongName("chorus".to_owned()));
     command(&mut app, "w");
-    assert_eq!(app.folder.as_deref(), Some(root.join("verse").as_path()));
+    assert_eq!(
+        app.services.folder.as_deref(),
+        Some(root.join("verse").as_path())
+    );
     let (mut other, _other_realtime) = self::app();
     command(&mut other, &format!("e {}", root.join("verse").display()));
     assert_eq!(
@@ -932,7 +1019,8 @@ fn saving_a_project_somewhere_new_names_it_after_the_folder_and_keeps_the_name_a
     // A copy of the same name in the same place is numbered.
     command(&mut other, "w");
     let (mut copy, _copy_realtime) = self::app();
-    copy.apply(&vt_model::action::Action::SetSongName("one".to_owned()));
+    copy.services
+        .apply(&vt_model::action::Action::SetSongName("one".to_owned()));
     copy.recent_places
         .add(vt_tui::explorer::Purpose::Save, &root)
         .unwrap();
@@ -996,7 +1084,11 @@ fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page(
     project_cursor_on(&mut app, ProjectControl::Open);
     special(&mut app, KeyCode::Enter);
     assert_ne!(app.mode, Mode::Picker);
-    assert!(app.status.contains("Unsaved"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Unsaved"),
+        "{}",
+        app.services.status
+    );
 
     project_cursor_on(&mut app, ProjectControl::Audio);
     special(&mut app, KeyCode::Enter);
@@ -1102,7 +1194,11 @@ fn changing_a_groove_that_comes_with_it_makes_one_of_the_projects_own() {
     assert_eq!(app.song().groove, custom, "the project plays the copy");
     assert_eq!(app.song().grooves[0].pushes(), &[0, 78]);
     assert_eq!(app.groove_shown, Some(custom));
-    assert!(app.status.contains("copied to Custom 1"), "{}", app.status);
+    assert!(
+        app.services.status.contains("copied to Custom 1"),
+        "{}",
+        app.services.status
+    );
     tap(&mut app, "u");
     assert_eq!(
         app.song().groove,
@@ -1124,11 +1220,19 @@ fn changing_a_groove_that_comes_with_it_makes_one_of_the_projects_own() {
     tap(&mut app, "i200");
     special(&mut app, KeyCode::Enter);
     assert_eq!(own(&app).push(1), 0, "past half a step is refused");
-    assert!(app.status.contains("-120 to 120"), "{}", app.status);
+    assert!(
+        app.services.status.contains("-120 to 120"),
+        "{}",
+        app.services.status
+    );
     // The first step stays on the grid.
     tap(&mut app, "0=");
     assert_eq!(own(&app).push(0), 0);
-    assert!(app.status.contains("first step"), "{}", app.status);
+    assert!(
+        app.services.status.contains("first step"),
+        "{}",
+        app.services.status
+    );
 
     project_cursor_on(&mut app, ProjectControl::GrooveSteps);
     tap(&mut app, "i16");
@@ -1206,7 +1310,7 @@ fn a_read_only_project() -> (App, Realtime, PathBuf) {
     vt_model::project::save_song(&path, &song).unwrap();
     let (mut app, realtime) = app();
     command(&mut app, &format!("e {}", path.display()));
-    assert!(app.read_only, "{}", app.status);
+    assert!(app.read_only, "{}", app.services.status);
     (app, realtime, path)
 }
 
@@ -1221,10 +1325,10 @@ fn w_refuses_a_read_only_song_and_w_bang_writes_over_it_keeping_it_read_only() {
     special(&mut app, KeyCode::Esc);
     command(&mut app, "w");
     assert_eq!(
-        app.status,
+        app.services.status,
         "This song is read-only: :w path saves a copy, :w! writes over it"
     );
-    assert!(app.dirty);
+    assert!(app.services.dirty);
     assert_eq!(
         std::fs::read_to_string(path.join("song.ron")).unwrap(),
         before,
@@ -1232,18 +1336,30 @@ fn w_refuses_a_read_only_song_and_w_bang_writes_over_it_keeping_it_read_only() {
     );
     // Naming its own folder is the same.
     command(&mut app, &format!("w {}", path.display()));
-    assert!(app.status.contains("read-only"), "{}", app.status);
-    assert!(app.dirty);
+    assert!(
+        app.services.status.contains("read-only"),
+        "{}",
+        app.services.status
+    );
+    assert!(app.services.dirty);
     // The project page's Save is :w, and refuses too.
     tap(&mut app, " 9");
     project_cursor_on(&mut app, ProjectControl::Save);
     special(&mut app, KeyCode::Enter);
-    assert!(app.status.contains("read-only"), "{}", app.status);
-    assert!(app.dirty);
+    assert!(
+        app.services.status.contains("read-only"),
+        "{}",
+        app.services.status
+    );
+    assert!(app.services.dirty);
 
     command(&mut app, "w!");
-    assert!(!app.dirty, "{}", app.status);
-    assert!(app.status.contains("stays read-only"), "{}", app.status);
+    assert!(!app.services.dirty, "{}", app.services.status);
+    assert!(
+        app.services.status.contains("stays read-only"),
+        "{}",
+        app.services.status
+    );
     let saved = load_song(&path).unwrap();
     assert_eq!(saved.tracks[0].phrases[&0].steps()[0].note, Note::On(60));
     assert!(saved.read_only, ":w! keeps it parked");
@@ -1260,8 +1376,8 @@ fn w_to_a_new_folder_saves_a_copy_that_isnt_read_only_to_carry_on_in() {
     special(&mut app, KeyCode::Esc);
     let copy = folder();
     command(&mut app, &format!("w {}", copy.display()));
-    assert!(!app.dirty, "{}", app.status);
-    assert_eq!(app.folder.as_deref(), Some(copy.as_path()));
+    assert!(!app.services.dirty, "{}", app.services.status);
+    assert_eq!(app.services.folder.as_deref(), Some(copy.as_path()));
     assert!(!app.read_only, "the copy is the user's own");
     assert!(!app.window_title().contains("[RO]"));
     assert!(!load_song(&copy).unwrap().read_only);
@@ -1275,7 +1391,7 @@ fn w_to_a_new_folder_saves_a_copy_that_isnt_read_only_to_carry_on_in() {
     press(&mut app, "jis");
     special(&mut app, KeyCode::Esc);
     command(&mut app, "w");
-    assert!(!app.dirty, "{}", app.status);
+    assert!(!app.services.dirty, "{}", app.services.status);
     assert_eq!(
         load_song(&copy).unwrap().tracks[0].phrases[&0].steps()[1].note,
         Note::On(62)
@@ -1305,7 +1421,7 @@ fn set_readonly_and_readwrite_switch_it_and_the_status_line_and_title_say_ro() {
     ] {
         command(&mut app, line);
         assert_eq!(app.read_only, on, "{line}");
-        assert!(app.dirty, "{line} marks the song changed");
+        assert!(app.services.dirty, "{line} marks the song changed");
     }
     assert!(
         status_line(&app).contains(" * [RO]"),
@@ -1321,7 +1437,7 @@ fn set_readonly_and_readwrite_switch_it_and_the_status_line_and_title_say_ro() {
     tap(&mut app, "u");
     assert!(app.read_only);
     command(&mut app, "w");
-    assert!(app.dirty, "now it refuses");
+    assert!(app.services.dirty, "now it refuses");
     // Unsaved, :e, :new and :q offer a copy, as :w won't write over it.
     for (line, or) in [
         ("e", ":e! to discard them"),
@@ -1330,20 +1446,20 @@ fn set_readonly_and_readwrite_switch_it_and_the_status_line_and_title_say_ro() {
     ] {
         command(&mut app, line);
         assert_eq!(
-            app.status,
+            app.services.status,
             format!("Unsaved changes to a read-only song: :w path to save a copy, or {or}")
         );
     }
     command(&mut app, "set rw");
     command(&mut app, "w");
-    assert!(!app.dirty, "{}", app.status);
+    assert!(!app.services.dirty, "{}", app.services.status);
     assert!(!load_song(&path).unwrap().read_only);
     command(&mut app, "set ro");
     command(&mut app, "w!");
     assert!(load_song(&path).unwrap().read_only, "saved with the song");
     // Switching it to what it is already changes nothing.
     command(&mut app, "set ro");
-    assert!(!app.dirty);
+    assert!(!app.services.dirty);
     std::fs::remove_dir_all(&path).unwrap();
 }
 
@@ -1361,7 +1477,7 @@ fn a_read_only_song_autosaves_and_restoring_never_writes_over_it() {
     assert!(
         path.join("song.autosave.ron").exists(),
         "work isn't lost: {}",
-        app.status
+        app.services.status
     );
     assert_eq!(
         std::fs::read_to_string(path.join("song.ron")).unwrap(),
@@ -1373,9 +1489,13 @@ fn a_read_only_song_autosaves_and_restoring_never_writes_over_it() {
     command(&mut other, &format!("e {}", path.display()));
     assert_eq!(other.mode, Mode::Restore);
     press(&mut other, "y");
-    assert!(other.dirty);
+    assert!(other.services.dirty);
     assert!(other.read_only);
-    assert!(other.status.contains("read-only"), "{}", other.status);
+    assert!(
+        other.services.status.contains("read-only"),
+        "{}",
+        other.services.status
+    );
     assert_eq!(
         other.song().tracks[0].phrases[&0].steps()[0].note,
         Note::On(60)
@@ -1409,7 +1529,7 @@ fn the_project_page_shows_and_switches_read_only() {
     assert_eq!(row(&app).as_deref(), Some("Read-only off"));
     tap(&mut app, "=");
     assert!(app.read_only);
-    assert!(app.dirty);
+    assert!(app.services.dirty);
     assert_eq!(
         row(&app).as_deref(),
         Some("Read-only on  :w refuses, so Save as makes a copy to change")

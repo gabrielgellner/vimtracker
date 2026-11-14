@@ -67,7 +67,10 @@ fn the_sample_explorer_lists_and_loads_aiff_and_flac() {
     );
     press(&mut app, "/tom");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.status, "Track 01 plays 01 tom, loaded into the bank");
+    assert_eq!(
+        app.services.status,
+        "Track 01 plays 01 tom, loaded into the bank"
+    );
     let chosen = sample_of(&app, 0).unwrap();
     assert!(chosen.ends_with("tom.flac"), "{chosen}");
     std::fs::remove_dir_all(&folder).unwrap();
@@ -100,7 +103,7 @@ fn kit_folders() -> PathBuf {
 fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     let (mut app, _realtime) = app();
     let root = kit_folders();
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
@@ -134,15 +137,17 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     assert_eq!(shown.lines[1].name, "Snare 808");
 
     // Enter makes it the kit :sample lists first, and adds nothing.
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.kit.len(), 2);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
     assert!(
-        app.status.starts_with("Kit 808 Core Kit: 2 sounds"),
+        app.services
+            .status
+            .starts_with("Kit 808 Core Kit: 2 sounds"),
         "{}",
-        app.status
+        app.services.status
     );
     assert_eq!(
         app.recent_places.of(vt_tui::explorer::Purpose::Kit),
@@ -166,7 +171,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     assert!(sample_of(&app, 0).unwrap().ends_with("kick.wav"));
     assert!(sample_of(&app, 1).unwrap().ends_with("snare.wav"));
     assert_eq!(app.song().tracks[1].name, "SD");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     press(&mut app, "u");
     assert_eq!(sample_of(&app, 0), None);
 }
@@ -175,7 +180,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
 fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
     let (mut app, _realtime) = app();
     let root = kit_folders();
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
@@ -229,7 +234,7 @@ fn sample_explores_the_sample_folders_and_opens_on_the_tracks_own() {
     wav(&library.join("hats/open.wav"));
     wav(&library.join("kicks/deep.wav"));
     wav(&library.join("kicks/short.wav"));
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: Vec::new(),
         samples: vec![library.display().to_string()],
         presets: String::new(),
@@ -267,7 +272,7 @@ fn the_sample_explorer_starts_from_the_project_the_settings_here_and_home() {
     wav(&library.join("hats/closed.wav"));
     let project = folder();
     command(&mut app, &format!("w {}", project.display()));
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: Vec::new(),
         samples: vec![library.display().to_string(), "/nowhere/samples".to_owned()],
         presets: String::new(),
@@ -298,7 +303,7 @@ fn kits_in_folders_are_found_in_the_explorer_and_named_by_their_path() {
         .unwrap()
         .replace("drums/", "../../drums/");
     std::fs::write(deeper.join("808 Core Kit.ron"), text).unwrap();
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
@@ -322,14 +327,14 @@ fn kits_in_folders_are_found_in_the_explorer_and_named_by_their_path() {
     );
     special(&mut app, KeyCode::Esc);
     command(&mut app, "kit Ableton/Drum Machines/808 Core Kit all");
-    assert_eq!(app.status, "Kit 808 Core Kit: 3 tracks");
+    assert_eq!(app.services.status, "Kit 808 Core Kit: 3 tracks");
 }
 
 #[test]
 fn the_sample_explorer_opens_a_kit_like_a_folder_and_plays_and_chooses_its_sounds() {
     let (mut app, _realtime) = app();
     let root = kit_folders();
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
@@ -396,7 +401,7 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
         ])"#,
     )
     .unwrap();
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
@@ -460,7 +465,11 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
     assert!(shown.note.contains("gone.wav"), "{}", shown.note);
     special(&mut app, KeyCode::Enter);
     assert_eq!(sample_of(&app, 0), None);
-    assert!(app.status.contains("gone.wav"), "{}", app.status);
+    assert!(
+        app.services.status.contains("gone.wav"),
+        "{}",
+        app.services.status
+    );
 }
 
 /// The icon of the first row shown with this name.
@@ -519,7 +528,7 @@ fn the_explorer_shows_what_each_row_is_with_an_icon() {
         ])"#,
     )
     .unwrap();
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
@@ -601,7 +610,7 @@ fn the_sample_explorer_lists_the_kits_and_the_library_and_no_other_ron_files() {
     wav(&library.join("Loops/break.wav"));
     let project = folder();
     command(&mut app, &format!("w {}", project.display()));
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
@@ -641,7 +650,7 @@ fn sample_library(app: &mut App) -> PathBuf {
     std::fs::create_dir_all(library.join("loops")).unwrap();
     long_wav(&library.join("loops/break.wav"), 2.5);
     long_wav(&library.join("loops/fill.wav"), 0.5);
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: Vec::new(),
         samples: vec![library.display().to_string()],
         presets: String::new(),

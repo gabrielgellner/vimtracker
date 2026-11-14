@@ -22,7 +22,11 @@ fn cuj_5_reuse_and_vary_a_phrase() {
     assert_eq!(app.cursor.slot, 1);
     press(&mut app, "gd");
     assert_eq!(app.view, View::Phrase);
-    assert!(app.status.contains("used 2 times"), "{}", app.status);
+    assert!(
+        app.services.status.contains("used 2 times"),
+        "{}",
+        app.services.status
+    );
     // The clone stays here. An edit reaches only the clone.
     press(&mut app, "gc");
     assert_eq!(app.phrase_id(), Some(1));
@@ -71,7 +75,11 @@ fn the_chain_view_edits_rows_and_keeps_one() {
     let (mut app, _realtime) = app();
     press(&mut app, " 2");
     press(&mut app, "dd");
-    assert!(app.status.contains("at least one"), "{}", app.status);
+    assert!(
+        app.services.status.contains("at least one"),
+        "{}",
+        app.services.status
+    );
     // Typing a phrase on the empty row adds it, and a new ID is created.
     press(&mut app, "ji1f");
     special(&mut app, KeyCode::Enter);
@@ -86,7 +94,11 @@ fn the_chain_view_edits_rows_and_keeps_one() {
     press(&mut app, "i60");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.chain_entries()[1].transpose, -12);
-    assert!(app.status.contains("48"), "{}", app.status);
+    assert!(
+        app.services.status.contains("48"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "99-");
     assert_eq!(app.chain_entries()[1].transpose, -48);
     // Removing the row copies it, so it can be pasted back.
@@ -132,7 +144,11 @@ fn a_shared_chain_warns_on_clone_and_gc_big_separates_it() {
     press(&mut app, " 1gc 3");
     assert_eq!(app.chain_uses(), 2);
     press(&mut app, "gc");
-    assert!(app.status.contains("shared"), "{}", app.status);
+    assert!(
+        app.services.status.contains("shared"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "gC");
     assert_eq!(app.chain_uses(), 1);
     assert_ne!(app.chain_id(), Some(0));
@@ -176,7 +192,11 @@ fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
     // Transpose isn't a list, and moves by octaves.
     press(&mut app, "lK");
     assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("Phrase"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Phrase"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "+");
     assert_eq!(row(&app, 1).transpose, 12);
     press(&mut app, "=");
@@ -199,7 +219,11 @@ fn zero_and_dollar_pick_the_chain_columns() {
 fn x_in_a_chain_only_resets_transpose() {
     let (mut app, _realtime) = app();
     press(&mut app, " 2x");
-    assert!(app.status.contains("dd"), "{}", app.status);
+    assert!(
+        app.services.status.contains("dd"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(app.chain_entries().len(), 1);
     press(&mut app, "l+x");
     assert_eq!(app.chain_entries()[0].transpose, 0);
@@ -214,7 +238,7 @@ fn bloom_grows_branches_from_this_phrase_and_writes_their_path_into_the_chain() 
     special(&mut app, KeyCode::Esc);
     press(&mut app, "jjjjid");
     special(&mut app, KeyCode::Esc);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     command(&mut app, "bloom 3 1 trunk");
     let phrases: Vec<(u32, i8)> = app
         .chain_entries()
@@ -223,18 +247,26 @@ fn bloom_grows_branches_from_this_phrase_and_writes_their_path_into_the_chain() 
         .collect();
     assert_eq!(phrases, [(0, 0), (1, 0), (0, 0), (2, 0), (0, 0), (3, 0)]);
     assert!(
-        app.status.contains("00 grew 3 branches, 01 02 03"),
+        app.services.status.contains("00 grew 3 branches, 01 02 03"),
         "{}",
-        app.status
+        app.services.status
     );
-    assert!(app.status.contains("played trunk"), "{}", app.status);
+    assert!(
+        app.services.status.contains("played trunk"),
+        "{}",
+        app.services.status
+    );
     let track = &app.song().tracks[0];
     for branch in 1..=3 {
         let generator = &track.phrases[&branch].generators()[0];
         assert_eq!(generator.source().unwrap().phrase, branch - 1);
         assert_eq!(generator.shape.follow.mutation, 1);
     }
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo step"
+    );
     press(&mut app, "u");
     assert_eq!(app.chain_entries().len(), 1);
     assert_eq!(app.song().tracks[0].phrases.len(), 1);
@@ -263,8 +295,16 @@ fn bloom_alone_lists_the_paths_and_refuses_what_it_cant_grow() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.chain_entries().len(), 4, "three branches, forward");
     command(&mut app, "bloom 8");
-    assert!(app.status.contains(":bloom takes"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":bloom takes"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "bloom 2 sideways");
-    assert!(app.status.contains(":bloom takes"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":bloom takes"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(app.chain_entries().len(), 4);
 }

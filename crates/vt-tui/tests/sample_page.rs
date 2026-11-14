@@ -150,7 +150,11 @@ fn g_d_on_the_sound_pages_sample_row_opens_it_and_c_o_comes_back() {
     // Elsewhere on the Sound page, it says where it works.
     keys(&mut app, "j g d");
     assert_eq!(app.view, View::Track);
-    assert!(app.status.contains("Machine's title"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Machine's title"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -449,7 +453,11 @@ const QUARTERS: [u64; 4] = [1000, 23_250, 45_500, 67_750];
 fn j_k_and_a_count_g_go_by_real_slices_and_brackets_stop_at_each() {
     let (mut app, _realtime) = on_page();
     command(&mut app, "slice 4");
-    assert!(app.status.contains("4 slices of 0.464 s"), "{}", app.status);
+    assert!(
+        app.services.status.contains("4 slices of 0.464 s"),
+        "{}",
+        app.services.status
+    );
     let starts: Vec<u64> = app
         .song()
         .bank
@@ -538,9 +546,9 @@ fn the_ruler_numbers_each_slice_and_the_settings_row_counts_them() {
     command(&mut app, "slice gain -3");
     command(&mut app, "slice pan -25");
     assert!(
-        app.status.contains("slice 01 plays panned 25 L"),
+        app.services.status.contains("slice 01 plays panned 25 L"),
         "{}",
-        app.status
+        app.services.status
     );
     let (terminal, _) = draw(&mut app, &mut graphics, 163, 42);
     let slice_row = (0..42)
@@ -595,7 +603,11 @@ fn brackets_go_from_point_to_point() {
     assert_eq!(cursor(&app), 90_000);
     keys(&mut app, "] ]");
     assert_eq!(cursor(&app), 90_000);
-    assert!(app.status.contains("No point"), "{}", app.status);
+    assert!(
+        app.services.status.contains("No point"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "[ [");
     assert_eq!(cursor(&app), 72_000);
     keys(&mut app, "3 [ [");
@@ -934,7 +946,11 @@ fn a_track_with_no_sample_says_so() {
     let mut app = App::new(song, None, samples, handle, RATE);
     keys(&mut app, "Space 0 l");
     assert_eq!(app.view, View::Sample);
-    assert!(app.status.contains("plays no sample"), "{}", app.status);
+    assert!(
+        app.services.status.contains("plays no sample"),
+        "{}",
+        app.services.status
+    );
     let mut graphics = Graphics::new();
     // The first frame has the scope's picture, until the page is drawn with no room for it.
     draw(&mut app, &mut graphics, 163, 42);
@@ -959,7 +975,7 @@ fn every_key_on_the_page_is_listed() {
 
 /// Put a step's text on the first track's first phrase, with the cursor on its second FX value.
 fn step_with(app: &mut App, step: usize, text: &str) {
-    app.apply(&Action::SetStep {
+    app.services.apply(&Action::SetStep {
         track: 0,
         phrase: 0,
         step,
@@ -985,7 +1001,7 @@ fn g_d_on_a_steps_sli_opens_the_page_on_its_slice_and_c_o_comes_back() {
     // Under an `SMP` of its own, it's that sample's slice, and `Space 0` is the track's again.
     let mut sliced = app.song().bank.get(2).unwrap().clone();
     sliced.edit.points.reslice(&[0, 48_000]);
-    app.apply(&Action::SetBankEntry {
+    app.services.apply(&Action::SetBankEntry {
         number: 2,
         entry: Some(sliced),
     });
@@ -1000,7 +1016,11 @@ fn g_d_on_a_steps_sli_opens_the_page_on_its_slice_and_c_o_comes_back() {
     app.cursor.field = Field::Note;
     keys(&mut app, "g d");
     assert_eq!(app.view, View::Phrase);
-    assert!(app.status.contains("SLI"), "{}", app.status);
+    assert!(
+        app.services.status.contains("SLI"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -1034,12 +1054,20 @@ fn k_on_sli_lists_the_slices_with_their_starts_and_puts_the_one_chosen() {
 fn a_slices_own_settings_need_slices_and_a_count_has_a_limit() {
     let (mut app, _realtime) = app();
     command(&mut app, "slice gain -3");
-    assert!(app.status.contains("has no slices"), "{}", app.status);
+    assert!(
+        app.services.status.contains("has no slices"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "slice 1000");
-    assert!(app.status.contains(":slice takes"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":slice takes"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "slice 4");
     // Off the sample page, it's the slice the track's `Slice` is on.
-    app.apply(&Action::SetTrackSetting {
+    app.services.apply(&Action::SetTrackSetting {
         track: 0,
         setting: SettingId::SLICE,
         value: 3,
@@ -1058,10 +1086,18 @@ fn slicing_again_moves_the_steps_locks_with_their_sound_and_one_u_takes_both_bac
     let (mut app, _realtime) = app();
     command(&mut app, "slice 4");
     step_with(&mut app, 0, "C-3 -- --- sampler.slice:03 ---");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     command(&mut app, "slice 8");
-    assert!(app.status.contains("SLI locks follow"), "{}", app.status);
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    assert!(
+        app.services.status.contains("SLI locks follow"),
+        "{}",
+        app.services.status
+    );
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo step"
+    );
     let lock = |app: &App| app.phrase_here().unwrap().steps()[0].fx[1].coarse();
     assert_eq!(lock(&app), 6);
     keys(&mut app, "u");
@@ -1338,17 +1374,33 @@ fn marked(app: &App) -> Vec<(char, usize)> {
 fn mark_names_a_slice_and_quote_goes_to_it_as_a_jump() {
     let (mut app, _realtime) = on_page();
     command(&mut app, "mark a");
-    assert!(app.status.contains("has no slices"), "{}", app.status);
+    assert!(
+        app.services.status.contains("has no slices"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "slice 4");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     command(&mut app, "mark a 2");
-    assert!(app.status.contains("'a names slice 02"), "{}", app.status);
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    assert!(
+        app.services.status.contains("'a names slice 02"),
+        "{}",
+        app.services.status
+    );
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo step"
+    );
     // With no number, the slice the cursor's in.
     keys(&mut app, "G");
     command(&mut app, "mark b");
     command(&mut app, "mark c 9");
-    assert!(app.status.contains("slices 00 to 03"), "{}", app.status);
+    assert!(
+        app.services.status.contains("slices 00 to 03"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(marked(&app), [('a', 2), ('b', 3)]);
     // `'a` goes to its slice's start, and `C-o` back to where the cursor was.
     keys(&mut app, "g g");
@@ -1357,7 +1409,11 @@ fn mark_names_a_slice_and_quote_goes_to_it_as_a_jump() {
     keys(&mut app, "C-o");
     assert_eq!((app.view, cursor(&app)), (View::Sample, 0));
     keys(&mut app, "' z");
-    assert!(app.status.contains("is named z"), "{}", app.status);
+    assert!(
+        app.services.status.contains("is named z"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(cursor(&app), 0, "a letter naming nothing goes nowhere");
     // `]'` and `['` go by the named slices, with counts, as jumps.
     keys(&mut app, "] '");
@@ -1365,7 +1421,11 @@ fn mark_names_a_slice_and_quote_goes_to_it_as_a_jump() {
     keys(&mut app, "] '");
     assert_eq!(cursor(&app), QUARTERS[3]);
     keys(&mut app, "] '");
-    assert!(app.status.contains("further"), "{}", app.status);
+    assert!(
+        app.services.status.contains("further"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "[ '");
     assert_eq!(cursor(&app), QUARTERS[2]);
     keys(&mut app, "g g 2 ] '");
@@ -1374,7 +1434,11 @@ fn mark_names_a_slice_and_quote_goes_to_it_as_a_jump() {
     assert_eq!(cursor(&app), 0);
     // A letter moves to the slice it's put on, and `u` puts it back.
     command(&mut app, "mark a 1");
-    assert!(app.status.contains("not 02"), "{}", app.status);
+    assert!(
+        app.services.status.contains("not 02"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     assert_eq!(marked(&app), [('a', 2), ('b', 3)]);
     // From elsewhere, `'a` from `:marks` opens the page on it.
@@ -1403,14 +1467,22 @@ fn delmarks_takes_letters_off_and_slicing_moves_them() {
         command(&mut app, &format!("mark {letter} {slice}"));
     }
     command(&mut app, "delmarks a-b x");
-    assert!(app.status.contains("Took 'a 'b 'x off"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Took 'a 'b 'x off"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(marked(&app), [('c', 2)]);
     keys(&mut app, "u");
     assert_eq!(marked(&app).len(), 4);
     command(&mut app, "delmarks!");
     assert!(marked(&app).is_empty());
     command(&mut app, "delmarks!");
-    assert!(app.status.contains("No such marks"), "{}", app.status);
+    assert!(
+        app.services.status.contains("No such marks"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     // Slicing into 8 keeps each old start, so each mark follows its sound.
     command(&mut app, "slice 8");
@@ -1418,7 +1490,11 @@ fn delmarks_takes_letters_off_and_slicing_moves_them() {
     command(&mut app, "slice clear");
     assert!(marked(&app).is_empty(), "clearing drops them");
     command(&mut app, "marks");
-    assert!(app.status.contains("No slice"), "{}", app.status);
+    assert!(
+        app.services.status.contains("No slice"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -1467,7 +1543,7 @@ fn k_on_sli_locks_by_a_letter_which_the_grid_shows_and_follows_its_slice() {
         grid.join("\n")
     );
     // Slices added before it leave the step as it is, and the letter names the same sound.
-    app.apply(&Action::SplitSlice {
+    app.services.apply(&Action::SplitSlice {
         number: 1,
         at: 10_000,
     });
@@ -1635,7 +1711,11 @@ fn space_c_plays_from_the_cursor_to_the_end_and_tab_stays_the_songs() {
     assert_eq!(realtime.engine().previews_sounding(), 0);
     keys(&mut app, "Tab");
     play(&mut realtime, &mut app, 100);
-    assert_eq!(app.transport, Transport::Playing, "Tab plays the song");
+    assert_eq!(
+        app.services.transport,
+        Transport::Playing,
+        "Tab plays the song"
+    );
 }
 
 #[test]
@@ -1662,7 +1742,11 @@ fn the_keys_mode_plays_slices_in_order_from_the_home_row_and_moves_the_cursor() 
     keys(&mut app, "> f");
     assert_eq!(cursor(&app), shown.slice(19).start);
     keys(&mut app, "g");
-    assert!(app.status.contains("No slice 14"), "{}", app.status);
+    assert!(
+        app.services.status.contains("No slice 14"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "< <");
     assert_eq!(app.sample_page.pads_from, 0);
     // Other keys work on the page as they do, and Esc leaves.
@@ -1754,15 +1838,15 @@ fn each_playhead_is_a_green_line_placed_at_its_pixel_and_nothing_is_sent_while_n
     // The track's note of the entry, and what the page played, each have a line. A note of
     // another entry doesn't.
     app.sample_page.heard = app.sample_page.shown;
-    app.playheads[0] = Some(Playhead {
+    app.services.playheads[0] = Some(Playhead {
         entry: Some(1),
         frame: FIT * 10,
     });
-    app.playheads[1] = Some(Playhead {
+    app.services.playheads[1] = Some(Playhead {
         entry: Some(2),
         frame: FIT * 20,
     });
-    app.playheads[2] = Some(Playhead {
+    app.services.playheads[2] = Some(Playhead {
         entry: None,
         frame: FIT * 30 + 400,
     });
@@ -1774,7 +1858,7 @@ fn each_playhead_is_a_green_line_placed_at_its_pixel_and_nothing_is_sent_while_n
         "{sent:?}"
     );
     // Moving one places only it again, a pixel along.
-    app.playheads[0] = Some(Playhead {
+    app.services.playheads[0] = Some(Playhead {
         entry: Some(1),
         frame: FIT * 10 + 200,
     });
@@ -1783,7 +1867,7 @@ fn each_playhead_is_a_green_line_placed_at_its_pixel_and_nothing_is_sent_while_n
     assert_eq!(placements(&sent, &id), BTreeMap::from([(1, 31)]));
     assert!(sent.len() < 100, "{} bytes: {sent:?}", sent.len());
     // When it stops, its lines are taken off, and then nothing more is sent.
-    app.playheads = [None; PLAYHEADS];
+    app.services.playheads = [None; PLAYHEADS];
     let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
     assert_eq!(sent.matches(&format!("a=d,d=i,i={id},")).count(), 2);
     let (_, sent) = draw(&mut app, &mut graphics, 163, 42);
@@ -1793,7 +1877,7 @@ fn each_playhead_is_a_green_line_placed_at_its_pixel_and_nothing_is_sent_while_n
 #[test]
 fn as_its_column_a_playhead_is_its_columns_background() {
     let (mut app, _realtime) = on_page();
-    app.playheads[0] = Some(Playhead {
+    app.services.playheads[0] = Some(Playhead {
         entry: Some(1),
         frame: FIT * 10 + 5,
     });
@@ -1843,9 +1927,11 @@ fn enter_j_and_x_split_join_and_unsplit_with_ids_and_letters_following_and_each_
     keys(&mut app, "Enter");
     assert!(slices(&app).is_empty());
     assert!(
-        app.status.contains("between the start and the end"),
+        app.services
+            .status
+            .contains("between the start and the end"),
         "{}",
-        app.status
+        app.services.status
     );
     command(&mut app, "slice 4");
     keys(&mut app, "j m a");
@@ -1862,11 +1948,19 @@ fn enter_j_and_x_split_join_and_unsplit_with_ids_and_letters_following_and_each_
     ];
     assert_eq!(slices(&app), split);
     assert_eq!(marked(&app), [('a', 1)]);
-    assert!(app.status.contains("Slice 02 of 5"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Slice 02 of 5"),
+        "{}",
+        app.services.status
+    );
     // Again on a slice's start, there's one there already.
     keys(&mut app, "Enter");
     assert_eq!(slices(&app).len(), 5);
-    assert!(app.status.contains("already starts"), "{}", app.status);
+    assert!(
+        app.services.status.contains("already starts"),
+        "{}",
+        app.services.status
+    );
     // J joins the slice under the cursor with the next, which takes its letters with it.
     put_cursor(&mut app, 50_000);
     keys(&mut app, "m b");
@@ -2007,7 +2101,11 @@ fn g_s_g_e_g_l_and_g_upper_l_put_the_points_at_the_cursor_and_x_takes_them_back(
     assert_eq!(points(&app).end, Some(80_000));
     put_cursor(&mut app, 50_000);
     keys(&mut app, "g l g L");
-    assert!(app.status.contains("after its start"), "{}", app.status);
+    assert!(
+        app.services.status.contains("after its start"),
+        "{}",
+        app.services.status
+    );
     put_cursor(&mut app, 60_000);
     keys(&mut app, "g L");
     let looped = points(&app).loop_.unwrap();
@@ -2076,7 +2174,11 @@ fn snap_and_reverse_are_toggles_that_flip_with_their_settings() {
     assert!(app.song().bank.get(1).unwrap().edit.play.snap_zero);
     let (glyph, _, background) = toggle(&mut app, &mut graphics, 33, "Snap ");
     assert_eq!((glyph, background), (SWITCH_ON, theme::ROSEWATER));
-    assert!(app.status.contains("on"), "{}", app.status);
+    assert!(
+        app.services.status.contains("on"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "Esc");
     assert_eq!(toggle(&mut app, &mut graphics, 33, "Snap "), on);
 }
@@ -2126,7 +2228,11 @@ fn enter_while_it_plays_splits_at_the_playhead() {
     put_cursor(&mut app, 10_000);
     keys(&mut app, "Enter");
     assert_eq!(slices(&app)[3].0, QUARTERS[2] + 1000, "{:?}", slices(&app));
-    assert!(app.status.contains("playhead"), "{}", app.status);
+    assert!(
+        app.services.status.contains("playhead"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(cursor(&app), 10_000, "the cursor stays where it was");
     // Tapped again further on.
     play(&mut realtime, &mut app, 2000);
@@ -2155,9 +2261,9 @@ fn the_settings_rows_change_a_slices_own_and_the_gain_and_reverse_keys_work_from
     keys(&mut app, "j 3 <");
     assert_eq!(over(&app, 1).gain_db, Some(-3.0));
     assert!(
-        app.status.contains("Slice 01 gain -3.0 dB"),
+        app.services.status.contains("Slice 01 gain -3.0 dB"),
         "{}",
-        app.status
+        app.services.status
     );
     keys(&mut app, "~");
     assert_eq!(over(&app, 1).reverse, Some(true));
@@ -2293,13 +2399,21 @@ fn semicolon_and_space_c_are_heard_from_a_file_loaded_at_another_rate() {
         keys(&mut app, audition);
         let heard = loudness(&mut realtime, &mut app, 4800);
         // A sine at half of full scale is about 0.35, less the track's level and the note's.
-        assert!(heard > 0.05, "{audition} is heard: {heard} {}", app.status);
+        assert!(
+            heard > 0.05,
+            "{audition} is heard: {heard} {}",
+            app.services.status
+        );
         let shown = app.sample_shown().unwrap();
         assert!(
             !app.sample_playheads(&shown).is_empty(),
             "{audition}'s playhead"
         );
-        assert!(app.status.is_empty(), "{audition}: {}", app.status);
+        assert!(
+            app.services.status.is_empty(),
+            "{audition}: {}",
+            app.services.status
+        );
         keys(&mut app, "Esc");
         loudness(&mut realtime, &mut app, RATE as usize / 2);
     }
@@ -2311,7 +2425,7 @@ fn an_audition_a_mute_or_a_solo_silences_says_so() {
     let (mut app, mut realtime) = on_page();
     keys(&mut app, ";");
     assert!(loudness(&mut realtime, &mut app, 4800) > 0.05);
-    assert!(app.status.is_empty(), "{}", app.status);
+    assert!(app.services.status.is_empty(), "{}", app.services.status);
     keys(&mut app, "Esc");
     // It plays through the track, so the track's mute silences it, and the page says so.
     keys(&mut app, "Space m");
@@ -2319,7 +2433,7 @@ fn an_audition_a_mute_or_a_solo_silences_says_so() {
     keys(&mut app, ";");
     assert!(loudness(&mut realtime, &mut app, 4800) < 1e-6, "muted");
     assert_eq!(
-        app.status,
+        app.services.status,
         "Track 01 is muted, so it plays silently. Space m unmutes it"
     );
     // Another track soloed silences it too.
@@ -2331,7 +2445,7 @@ fn an_audition_a_mute_or_a_solo_silences_says_so() {
     keys(&mut app, "Space c");
     assert!(loudness(&mut realtime, &mut app, 4800) < 1e-6, "soloed out");
     assert_eq!(
-        app.status,
+        app.services.status,
         "Track 02 is soloed, so Track 01 plays silently. Space M clears the solos"
     );
     keys(&mut app, "Esc Space M");
@@ -2341,7 +2455,7 @@ fn an_audition_a_mute_or_a_solo_silences_says_so() {
         loudness(&mut realtime, &mut app, 4800) > 0.05,
         "heard again"
     );
-    assert!(app.status.is_empty(), "{}", app.status);
+    assert!(app.services.status.is_empty(), "{}", app.services.status);
 }
 
 /// The status line's badge and the line under it.
@@ -2386,9 +2500,11 @@ fn each_mode_of_the_page_names_itself_on_the_badge_and_esc_leaves_it() {
     keys(&mut app, "h");
     assert_eq!(cursor(&app), before, "h goes along the settings");
     assert!(
-        app.status.contains("is the first setting. Esc goes back"),
+        app.services
+            .status
+            .contains("is the first setting. Esc goes back"),
         "{}",
-        app.status
+        app.services.status
     );
     keys(&mut app, "Esc");
     let (badge, hint) = status_lines(&mut app);
@@ -2445,15 +2561,19 @@ fn the_sound_pages_tune_changes_the_sample_as_the_sample_pages_does_a_step_an_un
     let (mut app, _realtime) = app();
     let start = first_entry(&app);
     on_tuning(&mut app, Control::Tune);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "= = +");
-    assert_eq!(app.history.undo_depth(), depth + 3, "one undo step each");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 3,
+        "one undo step each"
+    );
     let by_sound = first_entry(&app);
     assert_eq!(by_sound.edit.play.tune, 14);
     assert!(
-        app.status.contains("tune +14 st: u to undo"),
+        app.services.status.contains("tune +14 st: u to undo"),
         "{}",
-        app.status
+        app.services.status
     );
     keys(&mut app, "u u u");
     assert_eq!(first_entry(&app), start);
@@ -2471,7 +2591,11 @@ fn the_sound_pages_tune_changes_the_sample_as_the_sample_pages_does_a_step_an_un
     keys(&mut app, "i - 5 Enter");
     assert_eq!(first_entry(&app).edit.play.tune, -5);
     keys(&mut app, "i 9 9 Enter");
-    assert!(app.status.contains("from -48 to +48"), "{}", app.status);
+    assert!(
+        app.services.status.contains("from -48 to +48"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "K j Enter");
     assert_eq!(first_entry(&app).edit.play.tune, -4);
     // Cents are the sample's, on top of its tune, as `:sample tune` sets them.
@@ -2498,7 +2622,7 @@ fn the_sound_pages_tune_is_a_slices_own_where_it_has_one_and_the_samples_otherwi
         (entry.edit.play.tune, own)
     };
     // Slice 02 has its own tune; the track plays it.
-    app.apply(&Action::SetTrackSetting {
+    app.services.apply(&Action::SetTrackSetting {
         track: 0,
         setting: SettingId::SLICE,
         value: 2,
@@ -2511,9 +2635,9 @@ fn the_sound_pages_tune_is_a_slices_own_where_it_has_one_and_the_samples_otherwi
     let by_sound = first_entry(&app);
     assert_eq!(tune(&app), (0, vec![None, None, Some(4), None]));
     assert!(
-        app.status.starts_with("Slice 02 tune +4 st"),
+        app.services.status.starts_with("Slice 02 tune +4 st"),
         "{}",
-        app.status
+        app.services.status
     );
     let shown = value_shown(&app).unwrap();
     assert!(shown.contains("slice 02's own"), "{shown}");
@@ -2534,7 +2658,7 @@ fn the_sound_pages_tune_is_a_slices_own_where_it_has_one_and_the_samples_otherwi
     assert_eq!(tune(&app), (1, vec![None; 4]));
     // On a slice without its own, it's the sample's, for every slice that plays as it.
     command(&mut app, "slice tune -7");
-    app.apply(&Action::SetTrackSetting {
+    app.services.apply(&Action::SetTrackSetting {
         track: 0,
         setting: SettingId::SLICE,
         value: 1,
@@ -2544,7 +2668,7 @@ fn the_sound_pages_tune_is_a_slices_own_where_it_has_one_and_the_samples_otherwi
     let shown = value_shown(&app).unwrap();
     assert!(shown.contains("the sample's, for its slices"), "{shown}");
     // A slice has no cents of its own, so they're always the sample's.
-    app.apply(&Action::SetTrackSetting {
+    app.services.apply(&Action::SetTrackSetting {
         track: 0,
         setting: SettingId::SLICE,
         value: 2,
@@ -2558,22 +2682,22 @@ fn the_sound_pages_tune_is_a_slices_own_where_it_has_one_and_the_samples_otherwi
 #[test]
 fn with_no_sample_the_sound_pages_tune_is_dim_and_changes_nothing() {
     let (mut app, _realtime) = app();
-    app.apply(&Action::SetTrackSetting {
+    app.services.apply(&Action::SetTrackSetting {
         track: 0,
         setting: SettingId::SAMPLE,
         value: 0,
     });
     on_tuning(&mut app, Control::Tune);
     let before = Song::clone(app.song());
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     for key in ["=", "x", "K"] {
         keys(&mut app, key);
         assert!(
-            app.status.contains("plays no sample to tune"),
+            app.services.status.contains("plays no sample to tune"),
             "{}",
-            app.status
+            app.services.status
         );
     }
     assert_eq!(**app.song(), before);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
 }

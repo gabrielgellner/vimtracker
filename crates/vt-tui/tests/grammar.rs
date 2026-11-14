@@ -161,7 +161,11 @@ fn it_isnt_a_target_yet() {
     let (mut app, _rt) = app_with(&[A]);
     keys(&mut app, "dit");
     assert_eq!(steps(&app), [A]);
-    assert!(app.status.contains("isn't bound"), "{}", app.status);
+    assert!(
+        app.services.status.contains("isn't bound"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(app.mode, Mode::Normal);
 }
 
@@ -291,7 +295,11 @@ fn gm_refuses_a_column_type_mismatch() {
     let (mut app, _rt) = app_with(&[A, B]);
     keys(&mut app, "y1kjlgm");
     assert_eq!(steps(&app), [A, B]);
-    assert!(app.status.contains("don't match"), "{}", app.status);
+    assert!(
+        app.services.status.contains("don't match"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -310,9 +318,9 @@ fn a_cut_alone_leaves_register_zero_empty() {
     let (mut app, _rt) = app_with(&[A, E]);
     keys(&mut app, "ddj\"0p");
     assert!(
-        app.status.contains("Nothing in register 0"),
+        app.services.status.contains("Nothing in register 0"),
         "{}",
-        app.status
+        app.services.status
     );
 }
 
@@ -320,7 +328,11 @@ fn a_cut_alone_leaves_register_zero_empty() {
 fn other_digits_arent_registers() {
     let (mut app, _rt) = app_with(&[A]);
     keys(&mut app, "\"1");
-    assert!(app.status.contains("a to z"), "{}", app.status);
+    assert!(
+        app.services.status.contains("a to z"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -328,7 +340,11 @@ fn paste_refuses_a_column_type_mismatch() {
     let (mut app, _rt) = app_with(&[A, B]);
     keys(&mut app, "y1kjlp");
     assert_eq!(steps(&app), [A, B]);
-    assert!(app.status.contains("don't match"), "{}", app.status);
+    assert!(
+        app.services.status.contains("don't match"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -342,7 +358,7 @@ fn named_registers_keep_separate_contents() {
     check(&[A, B, E, E], "\"ayyjyyjj\"ap", &[A, B, E, A]);
     let (mut app, _rt) = app_with(&[A]);
     keys(&mut app, "\"zp");
-    assert!(app.status.contains("Nothing in register z"));
+    assert!(app.services.status.contains("Nothing in register z"));
 }
 
 #[test]
@@ -363,7 +379,7 @@ fn dot_repeats_each_kind_of_change_at_the_cursor() {
     check(&[A, B, C], "dj", &[NOTE_GONE_A, NOTE_GONE_B, C]);
     let (mut app, _rt) = app_with(&[A]);
     keys(&mut app, ".");
-    assert!(app.status.contains("Nothing to repeat"));
+    assert!(app.services.status.contains("Nothing to repeat"));
 }
 
 #[test]
@@ -577,7 +593,11 @@ fn an_invalid_command_is_refused() {
     let (mut app, _rt) = app_with(&[A]);
     keys(&mut app, "llllliXYZ<Enter>");
     assert_eq!(steps(&app), [A]);
-    assert!(app.status.contains("isn't a label"), "{}", app.status);
+    assert!(
+        app.services.status.contains("isn't a label"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(app.picker.as_ref().unwrap().query, "xyz");
     keys(&mut app, "<Esc>");
     assert_eq!(steps(&app), [A]);
@@ -590,7 +610,7 @@ fn esc_after_a_command_writes_nothing() {
     keys(&mut app, "llllliVOL<Enter><Esc>");
     assert_eq!(steps(&app), [A]);
     assert_eq!(app.cursor.field, Field::FxCommand(0));
-    assert!(app.status.contains("needs a value"));
+    assert!(app.services.status.contains("needs a value"));
 }
 
 #[test]
@@ -598,7 +618,7 @@ fn a_value_needs_a_command() {
     let (mut app, _rt) = app_with(&[E]);
     keys(&mut app, "lllllli40");
     assert_eq!(steps(&app), [E]);
-    assert!(app.status.contains("FX command first"));
+    assert!(app.services.status.contains("FX command first"));
 }
 
 #[test]
@@ -882,7 +902,11 @@ fn r_needs_a_command_before_an_fx_value() {
     let (mut app, _rt) = app_with(&[E]);
     keys(&mut app, "llllllr");
     assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("FX command"), "{}", app.status);
+    assert!(
+        app.services.status.contains("FX command"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -988,7 +1012,11 @@ fn s_on_an_fx_value_keeps_its_command_for_the_new_value() {
     assert_eq!(steps(&app)[0], "C-3 70 --- pan:20 cut:30");
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(app.cursor.field, Field::FxCommand(0));
-    assert!(app.status.contains("VOL needs a value"), "{}", app.status);
+    assert!(
+        app.services.status.contains("VOL needs a value"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     assert_eq!(steps(&app)[0], FULL);
 }
@@ -1095,7 +1123,11 @@ fn visual_r_puts_a_velocity_only_on_notes() {
     let (mut app, _rt) = app_with(&[E, E]);
     keys(&mut app, "lvjr");
     assert_eq!(app.mode, Mode::VisualField, "nothing to replace");
-    assert!(app.status.contains("no notes"), "{}", app.status);
+    assert!(
+        app.services.status.contains("no notes"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -1163,13 +1195,13 @@ fn rotating_leaves_steps_outside_the_loop_alone() {
 #[test]
 fn rotating_all_the_way_round_leaves_no_undo_step() {
     let (mut app, _rt) = app_with(&[A, E]);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "2]r");
     assert_eq!(steps(&app), [A, E]);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
     keys(&mut app, "3[r");
     assert_eq!(steps(&app), [E, A]);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
 }
 
 #[test]
@@ -1219,15 +1251,19 @@ fn ge_counts_from_the_loop_start() {
 fn ge_refuses_above_the_start_and_leaves_no_undo_when_nothing_changes() {
     let (mut app, _rt) = app_with(&[E, E, E, E]);
     keys(&mut app, ":len 2<Enter>]l");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     app.cursor.step = 0;
     keys(&mut app, "ge");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 2);
-    assert!(app.status.contains("above its start"), "{}", app.status);
+    assert!(
+        app.services.status.contains("above its start"),
+        "{}",
+        app.services.status
+    );
     app.cursor.step = 2;
     keys(&mut app, "ge");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 2);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
 }
 
 #[test]
@@ -1378,14 +1414,14 @@ fn vel(app: &App) -> Vec<String> {
 #[test]
 fn s_opens_on_the_first_and_last_values_and_previews_a_ramp() {
     let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "lvGS");
     assert_eq!(app.mode, Mode::Shape);
     let shape = app.shape.as_ref().unwrap().shape;
     assert_eq!((shape.from, shape.to), (0x10, 0x40));
     // Heard straight away, only on notes, and spaced by row. Nothing is in the undo list yet.
     assert_eq!(vel(&app), ["10", "20", "--", "40"]);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
 }
 
 #[test]
@@ -1396,7 +1432,7 @@ fn enter_keeps_a_shape_as_one_undo_and_esc_puts_it_back() {
     assert_eq!(app.mode, Mode::Normal);
     assert!(app.shape.is_none());
     assert_eq!(vel(&app), ["21", "2B", "--", "40"]);
-    assert!(app.dirty);
+    assert!(app.services.dirty);
     assert_eq!(app.cursor.step, 0);
     keys(&mut app, "u");
     assert_eq!(steps(&app), start);
@@ -1404,12 +1440,12 @@ fn enter_keeps_a_shape_as_one_undo_and_esc_puts_it_back() {
     assert_eq!(vel(&app), ["21", "2B", "--", "40"]);
 
     let (mut app, _rt) = app_of(&start);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "lvGS+++<Esc>");
     assert_eq!(steps(&app), start);
     assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.history.undo_depth(), depth);
-    assert!(!app.dirty);
+    assert_eq!(app.services.history.undo_depth(), depth);
+    assert!(!app.services.dirty);
 }
 
 #[test]
@@ -1467,7 +1503,11 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
 
     keys(&mut app, "jK");
     assert_eq!(app.mode, Mode::Shape, "K isn't a list on From");
-    assert!(app.status.contains("Fill"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Fill"),
+        "{}",
+        app.services.status
+    );
 
     // Where, from Commands to All rows, writes the command on the empty rows.
     keys(&mut app, "jjjjjKall<Enter>");
@@ -1562,7 +1602,7 @@ fn a_euclidean_where_spreads_its_hits_among_the_notes_and_rotates() {
     keys(&mut app, "kKnotes<Enter>");
     assert!(!panel(&app).rows().contains(&GenParam::Hits));
     keys(&mut app, "<Enter>");
-    assert_eq!(app.history.undo_depth(), 1);
+    assert_eq!(app.services.history.undo_depth(), 1);
 }
 
 #[test]
@@ -1605,7 +1645,7 @@ fn the_transforms_rework_the_values_there_as_one_undo() {
     keys(&mut app, "ji40ji60");
     assert_eq!(vel(&app), ["40", "--", "4B", "60"]);
     keys(&mut app, "<Enter>");
-    assert_eq!(app.history.undo_depth(), 1);
+    assert_eq!(app.services.history.undo_depth(), 1);
     keys(&mut app, "u");
     assert_eq!(steps(&app), start);
 }
@@ -1625,7 +1665,11 @@ fn a_ramp_holds_for_its_run_and_a_wave_takes_a_rate_in_cycles() {
     keys(&mut app, "jjjKsmooth<Enter>");
     assert_eq!(panel(&app).shape.wave.name(), "Smooth");
     keys(&mut app, "ji0<Enter>");
-    assert!(app.status.contains("x3"), "{}", app.status);
+    assert!(
+        app.services.status.contains("x3"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "ix2<Enter>");
     assert_eq!(panel(&app).shape.rate.to_string(), "x2");
     keys(&mut app, "=");
@@ -1635,7 +1679,7 @@ fn a_ramp_holds_for_its_run_and_a_wave_takes_a_rate_in_cycles() {
     keys(&mut app, "x");
     assert_eq!(panel(&app).shape.rate.to_string(), "1/2");
     keys(&mut app, "<Enter>");
-    assert_eq!(app.history.undo_depth(), 1);
+    assert_eq!(app.services.history.undo_depth(), 1);
 }
 
 #[test]
@@ -1707,7 +1751,7 @@ fn the_panel_fills_with_a_wave_and_shows_only_its_settings() {
 
     keys(&mut app, "<Enter>");
     assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.history.undo_depth(), 1);
+    assert_eq!(app.services.history.undo_depth(), 1);
 }
 
 #[test]
@@ -1787,7 +1831,11 @@ fn a_list_fill_types_its_values_and_goes_round_them() {
     keys(&mut app, "j");
     assert_eq!(panel(&app).row, GenParam::Values);
     keys(&mut app, "=");
-    assert!(app.status.contains("Type the values"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Type the values"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(list(&app), "10 40");
     keys(&mut app, "i704055");
     assert_eq!(panel(&app).typing.as_deref(), Some("70 40 55"));
@@ -1797,7 +1845,11 @@ fn a_list_fill_types_its_values_and_goes_round_them() {
     keys(&mut app, "i7 4<BS>40<Enter>");
     assert_eq!(list(&app), "07 40");
     keys(&mut app, "i<Enter>");
-    assert!(app.status.contains("hex values"), "{}", app.status);
+    assert!(
+        app.services.status.contains("hex values"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(list(&app), "07 40", "nothing typed keeps the list");
     keys(&mut app, "i1020304050607071727<Enter>");
     assert_eq!(list(&app), "10 20 30 40 50 60 70 71", "eight at most");
@@ -1815,7 +1867,7 @@ fn a_list_fill_types_its_values_and_goes_round_them() {
     assert_eq!(list(&app), "10 40", "the default is the two ends");
     keys(&mut app, "i704055<Enter><Enter>");
     assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.history.undo_depth(), 1);
+    assert_eq!(app.services.history.undo_depth(), 1);
 
     // `.` keeps the list, as Alternate keeps its values.
     keys(&mut app, "u");
@@ -1858,7 +1910,11 @@ fn shape_on_the_note_column_re_pitches_in_degrees_and_snaps() {
     keys(&mut app, "_");
     assert_eq!(panel(&app).shape.to, 59);
     keys(&mut app, "ih3<Enter>");
-    assert!(app.status.contains("C#3"), "{}", app.status);
+    assert!(
+        app.services.status.contains("C#3"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "x");
     assert_eq!(panel(&app).shape.to, 61);
 
@@ -1867,7 +1923,7 @@ fn shape_on_the_note_column_re_pitches_in_degrees_and_snaps() {
     assert_eq!(panel(&app).shape.kind, vt_model::shape::FillKind::Snap);
     assert_eq!(notes_of(&app), ["C-3", "C-3", "---", "OFF", "C-3", "C-3"]);
     keys(&mut app, "<Enter>");
-    assert_eq!(app.history.undo_depth(), 1);
+    assert_eq!(app.services.history.undo_depth(), 1);
 
     // A motif is typed as notes.
     keys(&mut app, "u");
@@ -1876,7 +1932,11 @@ fn shape_on_the_note_column_re_pitches_in_degrees_and_snaps() {
     keys(&mut app, "ic3 d#3 g3<Enter>");
     assert_eq!(notes_of(&app), ["C-3", "D#3", "---", "OFF", "G-3", "C-3"]);
     keys(&mut app, "ic3 q3<Enter>");
-    assert!(app.status.contains("C-3"), "{}", app.status);
+    assert!(
+        app.services.status.contains("C-3"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "<Esc>");
     assert_eq!(steps(&app), start);
 }
@@ -1926,7 +1986,7 @@ fn shape_refuses_what_it_cannot_fill() {
         let (mut app, _rt) = app_with(rows);
         keys(&mut app, typed);
         assert_ne!(app.mode, Mode::Shape, "{typed}");
-        app.status.clone()
+        app.services.status.clone()
     };
     let notes = ["C-3 -- --- --- ---"; 3];
     assert!(reason(&notes, "lllvGS").contains("length"));
@@ -1950,7 +2010,7 @@ fn s_on_an_empty_note_column_writes_notes_in_key_with_the_rhythm_where_picks() {
     let (mut app, _rt) = app_with(&start);
     app.scale.on = true;
     app.note_velocity = 0x50;
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vGS");
     assert_eq!(app.mode, Mode::Shape);
     let panel = app.shape.clone().unwrap();
@@ -2008,7 +2068,7 @@ fn s_on_an_empty_note_column_writes_notes_in_key_with_the_rhythm_where_picks() {
     assert_eq!(notes_of(&app), picked);
     // One undo for Enter.
     keys(&mut app, "<Enter>");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     keys(&mut app, "u");
     assert_eq!(steps(&app), start);
     // `.` generates again on an empty column: three notes, from the tresillo.
@@ -2019,7 +2079,7 @@ fn s_on_an_empty_note_column_writes_notes_in_key_with_the_rhythm_where_picks() {
     // Esc puts everything back.
     keys(&mut app, "vGS<Esc>");
     assert_eq!(steps(&app), start);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
 }
 
 #[test]
@@ -2043,7 +2103,7 @@ fn s_on_a_note_column_with_notes_still_re_pitches_them_and_writes_none() {
 fn s_on_an_empty_fx_column_chooses_a_command_then_writes_it() {
     let start = [E; 4];
     let (mut app, _rt) = app_with(&start);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "lllllvjjjS");
     // The command comes first, from the K list.
     assert_eq!(app.mode, Mode::Picker);
@@ -2053,7 +2113,7 @@ fn s_on_an_empty_fx_column_chooses_a_command_then_writes_it() {
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(steps(&app), start);
     keys(&mut app, "vjjjScut<Enter>");
-    assert_eq!(app.mode, Mode::Shape, "{}", app.status);
+    assert_eq!(app.mode, Mode::Shape, "{}", app.services.status);
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Generate");
     assert_eq!(panel.shape.place, vt_model::shape::Where::AllRows);
@@ -2074,7 +2134,7 @@ fn s_on_an_empty_fx_column_chooses_a_command_then_writes_it() {
         ]
     );
     keys(&mut app, "<Enter>");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     keys(&mut app, "u");
     assert_eq!(steps(&app), start);
     // With a command already there, it reshapes that one, as ever.
@@ -2108,10 +2168,10 @@ fn s_across_tracks_generates_on_each_empty_column_and_reshapes_the_rest() {
     assert_eq!(pitches(&app, 0), ["C-3", "E-3", "G#3", "C-4"]);
     assert_eq!(pitches(&app, 1), ["C-3", "E-3", "G#3", "C-4"]);
     assert_eq!(track_steps(&app, 0)[1], "E-3 40 cut:20 --- ---");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "<Enter>");
     assert_eq!(
-        app.history.undo_depth(),
+        app.services.history.undo_depth(),
         depth + 1,
         "one undo for all three"
     );
@@ -2119,7 +2179,7 @@ fn s_across_tracks_generates_on_each_empty_column_and_reshapes_the_rest() {
     // An FX column: the empty track takes the command chosen, the other keeps its own.
     let (mut app, _rt) = tracks_with(&[&[N, N], &[GONE, GONE]]);
     keys(&mut app, "lllllvjWSres<Enter>");
-    assert_eq!(app.mode, Mode::Shape, "{}", app.status);
+    assert_eq!(app.mode, Mode::Shape, "{}", app.services.status);
     keys(&mut app, "ji00ji40<Enter>");
     assert!(
         track_steps(&app, 0)[1].contains("cut:40"),
@@ -2143,7 +2203,7 @@ fn l_keeps_generated_notes_live_and_gl_reopens_them() {
         notes_of(&app),
         ["C-3", "---", "---", "F#3", "---", "---", "C-4", "---"]
     );
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     // `gl` reopens it generating, and turning its Rotate moves the notes, velocities and all.
     keys(&mut app, "jjgl");
     assert_eq!(app.mode, Mode::Shape);
@@ -2157,12 +2217,16 @@ fn l_keeps_generated_notes_live_and_gl_reopens_them() {
             "--- --", "C-3 64", "--- --", "--- --", "F#3 64", "--- --", "--- --", "C-4 64"
         ]
     );
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     // It owns the velocities it wrote too, so a hand edit to one applies it.
     keys(&mut app, "ggjlr10");
     assert!(generators(&app, 0).is_empty());
     assert_eq!(notes_and_velocities(&app)[1], "C-3 10");
-    assert!(app.status.contains("plain values"), "{}", app.status);
+    assert!(
+        app.services.status.contains("plain values"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     assert_eq!(generators(&app, 0).len(), 1);
 }
@@ -2177,7 +2241,7 @@ fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() 
     use vt_model::shape::GenParam;
     let (mut app, _rt) = app_with(&[E; 16]);
     app.note_velocity = 0x50;
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vGSKacid<Enter>");
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Acid);
@@ -2245,7 +2309,7 @@ fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() 
     assert!(rolled, "a roll changes the accents");
     // Kept as one undo, and the panel's own steps added none.
     keys(&mut app, "<Enter>");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     keys(&mut app, "u");
     assert!(steps(&app).iter().all(|s| s == E));
 }
@@ -2257,7 +2321,7 @@ fn acid_kept_live_rolls_again_through_gl() {
     assert_eq!(generators(&app, 0).len(), 1);
     assert_eq!(generators(&app, 0)[0].shape.kind, FillKind::Acid);
     let first = steps(&app);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "gl");
     assert_eq!(app.mode, Mode::Shape);
     let panel = app.shape.clone().unwrap();
@@ -2277,7 +2341,7 @@ fn acid_kept_live_rolls_again_through_gl() {
     keys(&mut app, "rL");
     assert_ne!(steps(&app), first);
     assert_eq!(generators(&app, 0).len(), 1);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     keys(&mut app, "u");
     assert_eq!(steps(&app), first);
 }
@@ -2351,7 +2415,7 @@ fn follow_keeps_a_track_in_step_with_another_as_one_undo() {
     use vt_model::shape::GenParam;
     use vt_model::shape::Source;
     let (mut app, _rt) = tracks_with(&[&THEME, &[E; 4], &[E; 4]]);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "WvjjjSKfollow<Enter>");
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Follow);
@@ -2395,13 +2459,17 @@ fn follow_keeps_a_track_in_step_with_another_as_one_undo() {
     );
     keys(&mut app, "L");
     assert_eq!(generators(&app, 1).len(), 1);
-    assert_eq!(app.history.undo_depth(), depth + 1);
-    assert!(app.status.contains("Note←T01:00 is live"), "{}", app.status);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+    assert!(
+        app.services.status.contains("Note←T01:00 is live"),
+        "{}",
+        app.services.status
+    );
     // Raising the theme's first note raises the answer's in the same undo step.
     keys(&mut app, "B=");
     assert_eq!(track_steps(&app, 0)[0], "C#3 50 --- --- ---");
     assert_eq!(track_steps(&app, 1)[1], "G#3 50 --- --- ---");
-    assert_eq!(app.history.undo_depth(), depth + 2);
+    assert_eq!(app.services.history.undo_depth(), depth + 2);
     keys(&mut app, "u");
     assert_eq!(track_steps(&app, 0), THEME);
     assert_eq!(track_steps(&app, 1)[1], "G-3 50 --- --- ---");
@@ -2468,7 +2536,11 @@ fn removing_the_track_a_follower_reads_applies_it_and_says_so() {
     assert_eq!(app.song().sound_tracks(), 1);
     assert!(generators(&app, 0).is_empty());
     assert_eq!(track_steps(&app, 0), THEME);
-    assert!(app.status.contains("T02:00 is gone"), "{}", app.status);
+    assert!(
+        app.services.status.contains("T02:00 is gone"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     assert_eq!(generators(&app, 0).len(), 1);
 }
@@ -2541,7 +2613,11 @@ fn tilde_refuses_anything_but_a_value_and_says_why() {
         let (mut app, _rt) = app_with(&[start]);
         keys(&mut app, typed);
         assert_eq!(steps(&app), [start], "after {typed:?}");
-        assert!(app.status.contains("No value to mark"), "{}", app.status);
+        assert!(
+            app.services.status.contains("No value to mark"),
+            "{}",
+            app.services.status
+        );
     }
 }
 
@@ -2655,12 +2731,12 @@ const GONE: &str = "--- -- --- --- ---";
 #[test]
 fn a_selection_reaches_other_tracks_and_clears_them_as_one_undo() {
     let (mut app, _rt) = tracks_with(&[&[N, N, N], &[N, N, N], &[N, N, N]]);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "VjWd");
     assert_eq!(track_steps(&app, 0), [GONE, GONE, N]);
     assert_eq!(track_steps(&app, 1), [GONE, GONE, N]);
     assert_eq!(track_steps(&app, 2), [N, N, N], "the third wasn't reached");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     assert_eq!(app.cursor.track, 0, "it lands on the first track");
     keys(&mut app, "u");
     assert_eq!(track_steps(&app, 1), [N, N, N]);
@@ -2708,7 +2784,7 @@ fn rows_count_from_each_phrases_own_loop_start() {
     let mut slid = Song::clone(app.song());
     Arc::make_mut(slid.tracks[1].phrases.get_mut(&0).unwrap()).set_len(2);
     Arc::make_mut(slid.tracks[1].phrases.get_mut(&0).unwrap()).slide(1);
-    let samples = Arc::clone(&app.samples);
+    let samples = Arc::clone(&app.services.samples);
     let version = Arc::new(Published::new(Arc::new(slid.clone()), Arc::clone(&samples)));
     let (handle, _rt2) = connect(Engine::new(48_000, version));
     app = App::new(slid, None, samples, handle, 48_000);
@@ -2766,7 +2842,7 @@ fn shape_across_tracks_gives_each_the_same_settings_and_a_seed_of_its_own() {
             .map(|s| s[4..6].to_owned())
             .collect()
     };
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     // A ramp from 00 to 70 on both tracks; the third has no notes, so it's passed over.
     keys(&mut app, "lvGWWSji00ji70");
     assert_eq!(app.mode, Mode::Shape);
@@ -2778,7 +2854,11 @@ fn shape_across_tracks_gives_each_the_same_settings_and_a_seed_of_its_own() {
     // A random fill picks for each track on its own.
     keys(&mut app, "kkKrandom<Enter><Enter>");
     assert_ne!(velocities(&app, 0), velocities(&app, 1));
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo for both");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo for both"
+    );
     keys(&mut app, "u");
     assert_eq!(track_steps(&app, 0), rows);
     assert_eq!(track_steps(&app, 1), rows);
@@ -2786,7 +2866,7 @@ fn shape_across_tracks_gives_each_the_same_settings_and_a_seed_of_its_own() {
     keys(&mut app, ".");
     assert_ne!(track_steps(&app, 0), rows);
     assert_ne!(track_steps(&app, 1), rows);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
 }
 
 #[test]
@@ -2807,7 +2887,11 @@ fn shape_across_tracks_takes_each_tracks_own_fx_command_and_refuses_when_none_ha
     let (mut app, _rt) = tracks_with(&[&[GONE, GONE], &[GONE, GONE]]);
     keys(&mut app, "lvjWS");
     assert_ne!(app.mode, Mode::Shape);
-    assert!(app.status.contains("no notes"), "{}", app.status);
+    assert!(
+        app.services.status.contains("no notes"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -2824,10 +2908,18 @@ fn a_gate_is_typed_as_its_name_and_pulses() {
 fn a_bad_gate_is_refused() {
     let (mut app, _rt) = app_with(&[E]);
     keys(&mut app, "llliXYZ");
-    assert!(app.status.contains("isn't a gate"), "{}", app.status);
+    assert!(
+        app.services.status.contains("isn't a gate"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "9<Esc>");
     assert_eq!(steps(&app), [E]);
-    assert!(app.status.contains("0 to 8"), "{}", app.status);
+    assert!(
+        app.services.status.contains("0 to 8"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -3048,7 +3140,11 @@ fn a_nudge_is_typed_as_a_sign_and_a_digit_and_cleared_on_its_own() {
     let (mut app, _rt) = app_with(&[A]);
     keys(&mut app, "lliC");
     assert_eq!(steps(&app), [A]);
-    assert!(app.status.contains("up to B"), "{}", app.status);
+    assert!(
+        app.services.status.contains("up to B"),
+        "{}",
+        app.services.status
+    );
     // `x` on the velocity leaves the nudge, as each is its own.
     check(&[nudged], "lx", &["C-3 -- -2 cut:20 --- ---"]);
     // `r` takes one, and `.` puts it on another row.
@@ -3078,7 +3174,7 @@ fn at_speed(speed: Speed, start: &[&str], typed: &str) -> (Vec<String>, String) 
     let (handle, _rt) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     keys(&mut app, typed);
-    (steps(&app), app.status.clone())
+    (steps(&app), app.services.status.clone())
 }
 
 #[test]
@@ -3131,7 +3227,7 @@ fn with_cmd(app: &mut App, name: &str) {
 #[test]
 fn a_selection_stays_through_repeated_adjusts_across_two_tracks() {
     let (mut app, _rt) = tracks_with(&[&[N, N], &[N, N], &[N, N]]);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vjW");
     for key in ["+", "+", "-"] {
         keys(&mut app, key);
@@ -3142,24 +3238,24 @@ fn a_selection_stays_through_repeated_adjusts_across_two_tracks() {
     assert_eq!(track_steps(&app, 1), [up, up]);
     assert_eq!(track_steps(&app, 2), [N, N], "the third wasn't reached");
     assert_eq!(
-        app.history.undo_depth(),
+        app.services.history.undo_depth(),
         depth + 3,
         "each press is its own undo step"
     );
-    assert_eq!(app.status, "+23 semitones");
+    assert_eq!(app.services.status, "+23 semitones");
     // `>` and `<`, `C-a` and `C-x` keep it too, and count.
     keys(&mut app, "<<^a");
     assert_eq!(app.mode, Mode::VisualField);
-    assert_eq!(app.status, "+22 semitones");
+    assert_eq!(app.services.status, "+22 semitones");
 }
 
 #[test]
 fn the_running_total_counts_each_columns_own_steps() {
     let (mut app, _rt) = app_with(&[N, N]);
     keys(&mut app, "lvj--");
-    assert_eq!(app.status, "-2 steps");
+    assert_eq!(app.services.status, "-2 steps");
     keys(&mut app, "+");
-    assert_eq!(app.status, "+1 large step, -2 steps");
+    assert_eq!(app.services.status, "+1 large step, -2 steps");
     assert_eq!(steps(&app), ["C-3 4E cut:20 --- ---"; 2]);
     // It stays in sight as the selection moves, and goes with it.
     keys(&mut app, "k");
@@ -3169,15 +3265,15 @@ fn the_running_total_counts_each_columns_own_steps() {
     );
     keys(&mut app, "<Esc>");
     assert_eq!(app.adjusted_total(), None);
-    assert!(app.status.is_empty(), "{}", app.status);
+    assert!(app.services.status.is_empty(), "{}", app.services.status);
     // A new selection starts from nothing, and presses that come back to where they were say so.
     keys(&mut app, "v=-");
-    assert_eq!(app.status, "0 steps");
+    assert_eq!(app.services.status, "0 steps");
     // On notes, with the scale on, `=` and `-` move through it in degrees, `+` in semitones.
     let (mut app, _rt) = app_with(&[N]);
     app.scale.on = true;
     keys(&mut app, "v==+");
-    assert_eq!(app.status, "+12 semitones, +2 degrees");
+    assert_eq!(app.services.status, "+12 semitones, +2 degrees");
 }
 
 #[test]
@@ -3190,18 +3286,18 @@ fn undo_while_selected_takes_back_one_press_and_keeps_the_selection() {
     assert_eq!(track_steps(&app, 1), [octave]);
     assert_eq!(app.mode, Mode::VisualField, "still selected");
     assert_eq!(app.current_selection().tracks.count(), 2);
-    assert_eq!(app.status, "+12 semitones");
+    assert_eq!(app.services.status, "+12 semitones");
     keys(&mut app, "u");
     assert_eq!(track_steps(&app, 1), [N]);
     assert_eq!(app.adjusted_total(), None, "nothing moved now");
     keys(&mut app, "^r");
     assert_eq!(track_steps(&app, 1), [octave]);
-    assert_eq!(app.status, "+12 semitones");
+    assert_eq!(app.services.status, "+12 semitones");
     // Another press goes on from there, on the same selection.
     keys(&mut app, "-");
     assert_eq!(track_steps(&app, 0), ["B-3 40 cut:20 --- ---"]);
     assert_eq!(track_steps(&app, 1), ["B-3 40 cut:20 --- ---"]);
-    assert_eq!(app.status, "+11 semitones");
+    assert_eq!(app.services.status, "+11 semitones");
 }
 
 #[test]
@@ -3220,7 +3316,7 @@ fn undo_past_the_selections_own_changes_keeps_it_and_redo_comes_back_in_step() {
         "that change wasn't the selection's"
     );
     keys(&mut app, "^r");
-    assert_eq!(app.status, "+12 semitones");
+    assert_eq!(app.services.status, "+12 semitones");
 }
 
 #[test]
@@ -3248,7 +3344,7 @@ fn dot_on_a_selection_repeats_a_press_and_keeps_it() {
     keys(&mut app, "gv.");
     assert_eq!(app.mode, Mode::VisualField);
     assert_eq!(steps(&app), ["C-5 40 cut:20 --- ---"; 2]);
-    assert_eq!(app.status, "+12 semitones");
+    assert_eq!(app.services.status, "+12 semitones");
 }
 
 #[test]
@@ -3260,11 +3356,11 @@ fn cmd_with_the_movement_keys_keeps_the_selection_as_the_keys_they_stand_for() {
     with_cmd(&mut app, "D-h");
     assert_eq!(app.mode, Mode::VisualField);
     assert_eq!(steps(&app), ["B-4 40 cut:20 --- ---"; 2], "as + + -");
-    assert_eq!(app.status, "+23 semitones");
+    assert_eq!(app.services.status, "+23 semitones");
     with_cmd(&mut app, "D-l");
     with_cmd(&mut app, "D-j");
     assert_eq!(steps(&app), ["C-4 40 cut:20 --- ---"; 2], "as = and _");
-    assert_eq!(app.status, "+12 semitones");
+    assert_eq!(app.services.status, "+12 semitones");
 }
 
 #[test]
@@ -3310,8 +3406,12 @@ fn l_keeps_a_shape_live_as_one_undo_and_gl_turns_its_rotate() {
     let (mut app, _rt) = live_tresillo();
     assert_eq!(app.mode, Mode::Normal);
     assert_eq!(generators(&app, 0).len(), 1);
-    assert!(app.status.contains("live"), "{}", app.status);
-    let depth = app.history.undo_depth();
+    assert!(
+        app.services.status.contains("live"),
+        "{}",
+        app.services.status
+    );
+    let depth = app.services.history.undo_depth();
     // `gl` from another row of the column opens the panel on its saved shape.
     keys(&mut app, "jjjgl");
     assert_eq!(app.mode, Mode::Shape);
@@ -3321,9 +3421,9 @@ fn l_keeps_a_shape_live_as_one_undo_and_gl_turns_its_rotate() {
     // Down to Rotate, and round by one, heard as it's turned.
     keys(&mut app, "jjjjjj=");
     assert_eq!(vel(&app), ["40", "7F", "40", "40", "7F", "40", "40", "7F"]);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
     keys(&mut app, "L");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     assert_eq!(generators(&app, 0).len(), 1);
     assert_eq!(
         generators(&app, 0)[0].shape.place,
@@ -3332,7 +3432,7 @@ fn l_keeps_a_shape_live_as_one_undo_and_gl_turns_its_rotate() {
     // `Esc` leaves it as it was.
     keys(&mut app, "gljjjjjj=<Esc>");
     assert_eq!(vel(&app), ["40", "7F", "40", "40", "7F", "40", "40", "7F"]);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     keys(&mut app, "u");
     assert_eq!(vel(&app), ["7F", "40", "40", "7F", "40", "40", "7F", "40"]);
     assert_eq!(generators(&app, 0).len(), 1);
@@ -3340,10 +3440,18 @@ fn l_keeps_a_shape_live_as_one_undo_and_gl_turns_its_rotate() {
     keys(&mut app, "gljjjjjj==<Enter>");
     assert!(generators(&app, 0).is_empty());
     assert_eq!(vel(&app), ["7F", "40", "7F", "40", "40", "7F", "40", "40"]);
-    assert!(app.status.contains("applied"), "{}", app.status);
+    assert!(
+        app.services.status.contains("applied"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "gl");
     assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("No live column"), "{}", app.status);
+    assert!(
+        app.services.status.contains("No live column"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -3352,7 +3460,11 @@ fn a_hand_edit_to_a_live_column_applies_it_says_so_and_u_brings_it_back() {
     keys(&mut app, "jr10");
     assert!(generators(&app, 0).is_empty());
     assert_eq!(vel(&app), ["7F", "10", "40", "7F", "40", "40", "7F", "40"]);
-    assert!(app.status.contains("plain values"), "{}", app.status);
+    assert!(
+        app.services.status.contains("plain values"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     assert_eq!(generators(&app, 0).len(), 1);
     assert_eq!(vel(&app), ["7F", "40", "40", "7F", "40", "40", "7F", "40"]);
@@ -3366,12 +3478,12 @@ fn a_note_added_under_a_live_velocity_column_gets_a_generated_velocity() {
     let (mut app, _rt) = app_with(&["C-3 40 --- --- ---", E, "C-3 40 --- --- ---", E]);
     keys(&mut app, "lvGSji00ji40L");
     assert_eq!(vel(&app), ["00", "--", "40", "--"]);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "hjia<Esc>");
     assert_eq!(generators(&app, 0).len(), 1);
     assert_eq!(vel(&app), ["00", "20", "40", "--"]);
     assert_eq!(
-        app.history.undo_depth(),
+        app.services.history.undo_depth(),
         depth + 1,
         "the note and its velocity"
     );
@@ -3383,19 +3495,27 @@ fn a_note_added_under_a_live_velocity_column_gets_a_generated_velocity() {
 #[test]
 fn space_g_a_and_gen_apply_apply_the_live_column_here() {
     let (mut app, _rt) = live_tresillo();
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, " ga");
     assert!(generators(&app, 0).is_empty());
     assert_eq!(vel(&app), ["7F", "40", "40", "7F", "40", "40", "7F", "40"]);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     keys(&mut app, "u:gen apply<Enter>");
     assert!(generators(&app, 0).is_empty());
     keys(&mut app, ":gen<Enter>");
-    assert!(app.status.contains("apply"), "{}", app.status);
+    assert!(
+        app.services.status.contains("apply"),
+        "{}",
+        app.services.status
+    );
     // On another column there's nothing to apply.
     keys(&mut app, "uh ga");
     assert_eq!(generators(&app, 0).len(), 1);
-    assert!(app.status.contains("No live column"), "{}", app.status);
+    assert!(
+        app.services.status.contains("No live column"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -3406,7 +3526,11 @@ fn across_tracks_l_keeps_one_generator_per_track_each_with_its_own_seed() {
     let (one, two) = (generators(&app, 0), generators(&app, 1));
     assert_eq!((one.len(), two.len()), (1, 1));
     assert_ne!(one[0].shape.seed, two[0].shape.seed);
-    assert!(app.status.contains("2 tracks"), "{}", app.status);
+    assert!(
+        app.services.status.contains("2 tracks"),
+        "{}",
+        app.services.status
+    );
     // Each is reopened and applied on its own.
     let first = track_steps(&app, 0);
     keys(&mut app, "Wglr");
@@ -3424,7 +3548,11 @@ fn l_on_an_fx_column_with_a_lane_keeps_it_live_on_the_lane() {
     keys(&mut app, "lllll:lane 3<Enter>vjjSjji40jjjjKall<Enter>L");
     let live = generators(&app, 0);
     assert_eq!(live[0].span, vt_model::generator::Span::Lane);
-    assert!(app.status.contains("lane"), "{}", app.status);
+    assert!(
+        app.services.status.contains("lane"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, ":lane 5<Enter>");
     assert_eq!(
         generators(&app, 0)[0].rows(),

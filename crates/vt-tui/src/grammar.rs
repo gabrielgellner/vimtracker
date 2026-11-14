@@ -257,7 +257,7 @@ impl App {
 
     fn show_adjusted(&mut self) {
         if let Some(total) = self.adjustments.total() {
-            self.status = total;
+            self.services.status = total;
         }
     }
 
@@ -317,9 +317,9 @@ impl App {
                 self.last_selection = Some(self.current_selection());
                 if self
                     .adjusted_total()
-                    .is_some_and(|total| total == self.status)
+                    .is_some_and(|total| total == self.services.status)
                 {
-                    self.status.clear();
+                    self.services.status.clear();
                 }
                 self.adjustments = Adjustments::default();
             }
@@ -331,7 +331,7 @@ impl App {
             if self.view == View::Sample {
                 self.stop_sample_audition();
                 if self.sample_page.anchor.is_some() || self.sample_page.setting.is_some() {
-                    self.status.clear();
+                    self.services.status.clear();
                 }
                 self.sample_page.end_selection();
                 self.sample_page.setting = None;
@@ -349,7 +349,7 @@ impl App {
             {
                 self.register = Some(c);
             } else {
-                self.status = "Registers are a to z, and 0 for the last copy".to_owned();
+                self.services.status = "Registers are a to z, and 0 for the last copy".to_owned();
             }
             return;
         }
@@ -378,7 +378,7 @@ impl App {
             Resolved::Prefix => {}
             Resolved::Unbound => {
                 let keys: Vec<String> = self.pending.iter().map(Key::to_string).collect();
-                self.status = format!("{} isn't bound here", keys.join(" "));
+                self.services.status = format!("{} isn't bound here", keys.join(" "));
                 self.reset_pending();
                 if self.mode == Mode::OperatorPending {
                     self.mode = Mode::Normal;
@@ -387,7 +387,7 @@ impl App {
             Resolved::Command(cmd) => {
                 self.pending.clear();
                 self.pending_since = None;
-                self.status.clear();
+                self.services.status.clear();
                 self.run(cmd);
             }
         }
@@ -602,7 +602,7 @@ impl App {
         } else {
             let chain = (*self.section_here()?.chains.get(track)?)?;
             song.tracks[track]
-                .chain_position(chain, self.section_step(), self.dealer(track))?
+                .chain_position(chain, self.section_step(), self.services.dealer(track))?
                 .phrase
         };
         Some((id, song.tracks.get(track)?.phrases.get(&id)?.start()))
@@ -638,8 +638,8 @@ impl App {
         }
         match actions.len() {
             0 => {}
-            1 => self.apply(&actions[0]),
-            _ => self.apply(&Action::Batch(actions)),
+            1 => self.services.apply(&actions[0]),
+            _ => self.services.apply(&Action::Batch(actions)),
         }
     }
 
@@ -732,7 +732,7 @@ impl App {
                 .find_map(|step| first_value(step, scope))
         });
         let Some(first) = first else {
-            self.status = "No value to mark here, as events have no marks".to_owned();
+            self.services.status = "No value to mark here, as events have no marks".to_owned();
             return;
         };
         let mark = first.mark.next();
@@ -798,7 +798,7 @@ impl App {
         if let Field::FxValue(slot) = self.cursor.field
             && self.current_slot(slot).and_then(|s| s.command).is_none()
         {
-            self.status = "Type an FX command first".to_owned();
+            self.services.status = "Type an FX command first".to_owned();
             return;
         }
         if let Field::FxFine(slot) = self.cursor.field
@@ -807,7 +807,7 @@ impl App {
                 .and_then(|s| s.command)
                 .is_some_and(FxCommand::has_fine)
         {
-            self.status = "Only a setting that sweeps has a fine part".to_owned();
+            self.services.status = "Only a setting that sweeps has a fine part".to_owned();
             return;
         }
         self.entry = Entry::default();
@@ -840,7 +840,7 @@ impl App {
             }
         };
         let Some(first) = (selection.range.first..=selection.range.last).find(takes) else {
-            self.status = match field {
+            self.services.status = match field {
                 Field::FxValue(_) => "Type an FX command first",
                 Field::FxFine(_) => "Only a setting that sweeps has a fine part",
                 _ => "There are no notes in the selection",
@@ -856,7 +856,7 @@ impl App {
         self.cursor.field = field;
         self.entry = Entry::default();
         self.replacing = Some(field);
-        self.replacing_selection = Some((selection, self.history.undo_depth()));
+        self.replacing_selection = Some((selection, self.services.history.undo_depth()));
         self.mode = Mode::Replace;
     }
 
@@ -901,7 +901,7 @@ impl App {
         let mut steps = 1;
         if let Some((selection, depth)) = self.replacing_selection.take() {
             self.fill(selection.range, selection.tracks, field, &value);
-            self.history.squash_to(depth);
+            self.services.history.squash_to(depth);
             self.cursor.step = selection.range.first;
             steps = selection.range.len();
             if let Some(place) = self.replace_returns_to.take() {
@@ -1000,7 +1000,7 @@ impl App {
             Change::ClearField => {
                 let (range, scope) = self.resolve_cover(Cover::Cursor);
                 if let Some(phrase) = self.phrase_id() {
-                    self.apply(&Action::Clear {
+                    self.services.apply(&Action::Clear {
                         track: self.cursor.track,
                         phrase,
                         range,
@@ -1088,7 +1088,7 @@ impl App {
                         }
                     }
                 };
-                self.apply(&action);
+                self.services.apply(&action);
             }
             Change::Paste {
                 register,
@@ -1098,7 +1098,7 @@ impl App {
             } => {
                 let name = register.unwrap_or('"');
                 let Some(block) = self.registers.get(&name).cloned() else {
-                    self.status = format!("Nothing in register {name}");
+                    self.services.status = format!("Nothing in register {name}");
                     return;
                 };
                 if let Some(phrase) = self.phrase_id() {
@@ -1140,9 +1140,9 @@ impl App {
                         }
                     }
                     if actions.len() == 1 {
-                        self.apply(&actions[0]);
+                        self.services.apply(&actions[0]);
                     } else {
-                        self.apply(&Action::Batch(actions));
+                        self.services.apply(&Action::Batch(actions));
                     }
                     if *advance && !Arc::ptr_eq(&before, self.song()) {
                         self.move_step(length.min(isize::MAX as usize) as isize);
@@ -1155,7 +1155,7 @@ impl App {
     /// `.`: repeat the last change, on the selection in Visual modes.
     fn repeat(&mut self) {
         let Some(change) = self.last_change.clone() else {
-            self.status = "Nothing to repeat".to_owned();
+            self.services.status = "Nothing to repeat".to_owned();
             return;
         };
         self.count = None;
@@ -1289,7 +1289,7 @@ impl App {
 
     fn reselect(&mut self) {
         let Some(selection) = self.last_selection else {
-            self.status = "No earlier selection".to_owned();
+            self.services.status = "No earlier selection".to_owned();
             return;
         };
         self.anchor = Some((selection.range.first, selection.scope));

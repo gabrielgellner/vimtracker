@@ -47,7 +47,7 @@ impl App {
 
     /// A key pressed.
     pub fn key(&mut self, key: Key, now: Instant) {
-        self.now = now;
+        self.services.now = now;
         // Any key ends a turn of the wheel, as its own undo step.
         self.end_wheel_gesture();
         // A real second press comes after a release, so a press of the key that's down is the
@@ -65,7 +65,7 @@ impl App {
     /// A key the terminal repeats while it's held. A transport key acts once however long it's
     /// held, and a note on the keyboard is already held; anything else repeats as a press.
     pub fn key_repeated(&mut self, key: Key, now: Instant) {
-        self.now = now;
+        self.services.now = now;
         self.end_wheel_gesture();
         if (self.repeats_ignored && self.key_down == Some(key.physical()))
             || self.holds_note(key)
@@ -81,7 +81,7 @@ impl App {
     /// A key let go: its held note ends, leaving any others held, and so does what it started
     /// that lasts while it's held.
     pub fn key_released(&mut self, key: Key, now: Instant) {
-        self.now = now;
+        self.services.now = now;
         if self.key_down == Some(key.physical()) {
             self.key_down = None;
             self.repeats_ignored = false;
@@ -114,36 +114,46 @@ impl App {
         match held.what {
             Momentary::Mute { track, was } | Momentary::Solo { track, was } => {
                 let mute = matches!(held.what, Momentary::Mute { .. });
-                match self.levels.get_mut(track) {
+                match self.services.levels.get_mut(track) {
                     Some(live) if long => {
                         if mute {
                             live.mute = was;
-                            self.handle.send(Command::SetMute { track, mute: was });
+                            self.services
+                                .handle
+                                .send(Command::SetMute { track, mute: was });
                         } else {
                             live.solo = was;
-                            self.handle.send(Command::SetSolo { track, solo: was });
+                            self.services
+                                .handle
+                                .send(Command::SetSolo { track, solo: was });
                         }
                     }
                     // A save while it was down kept how it was before.
-                    Some(_) => self.dirty = true,
+                    Some(_) => self.services.dirty = true,
                     None => {}
                 }
             }
             Momentary::Fill { was } if long => self.set_fill(was),
             Momentary::Fill { .. } => {}
             Momentary::Audition => {
-                self.handle.send(Command::EndAudition { held: long });
+                self.services
+                    .handle
+                    .send(Command::EndAudition { held: long });
             }
             Momentary::AuditionNote { track, note } if long => {
-                self.handle.send(Command::ReleasePreview { track, note });
+                self.services
+                    .handle
+                    .send(Command::ReleasePreview { track, note });
             }
             Momentary::AuditionNote { track, note } => {
-                self.handle.send(Command::FinishPreview { track, note });
+                self.services
+                    .handle
+                    .send(Command::FinishPreview { track, note });
             }
             // Only what it played itself, so a later one carries on.
             Momentary::SampleAudition { hearing } => {
                 if long && hearing == self.sample_page.hearings {
-                    self.handle.send(Command::StopFile);
+                    self.services.handle.send(Command::StopFile);
                 }
             }
         }
@@ -165,7 +175,7 @@ impl App {
             .iter()
             .any(|other| other.track == held.track && other.note == held.note);
         if !shared {
-            self.handle.send(Command::ReleasePreview {
+            self.services.handle.send(Command::ReleasePreview {
                 track: held.track,
                 note: held.note,
             });
@@ -183,7 +193,7 @@ impl App {
     /// note ends now, what it started that lasts while it's held ends as if it was let go now,
     /// and the next press of it is a press.
     pub fn focus_lost(&mut self, now: Instant) {
-        self.now = now;
+        self.services.now = now;
         self.key_down = None;
         self.repeats_ignored = false;
         self.let_go_of_held_notes();
@@ -201,7 +211,7 @@ impl App {
             note,
         });
         self.repeats_ignored = true;
-        self.handle.send(Command::HoldPreview {
+        self.services.handle.send(Command::HoldPreview {
             track,
             note,
             velocity,
@@ -280,7 +290,7 @@ impl App {
         match key.code {
             KeyCode::Esc | KeyCode::Char(';') if self.pending.is_empty() => {
                 self.mode = Mode::Normal;
-                self.status.clear();
+                self.services.status.clear();
             }
             KeyCode::Char('<') if plain => self.octave = (self.octave - 1).max(LOWEST_OCTAVE),
             KeyCode::Char('>') if plain => self.octave = (self.octave + 1).min(HIGHEST_OCTAVE),
@@ -354,7 +364,7 @@ impl App {
         if view == View::Sample
             && let Err(why) = self.sample_page_here()
         {
-            self.status = why;
+            self.services.status = why;
         }
     }
 
@@ -404,8 +414,8 @@ impl App {
     /// Hear a row, unless playback is using the tracks, for as long as the key is down if it's
     /// held.
     pub(crate) fn audition(&mut self, section_step: usize) {
-        if self.transport == Transport::Playing {
-            self.status = "Audition works while stopped or paused".to_owned();
+        if self.services.transport == Transport::Playing {
+            self.services.status = "Audition works while stopped or paused".to_owned();
         } else {
             self.audition_track(self.cursor.section, section_step);
         }
@@ -413,7 +423,7 @@ impl App {
 
     /// Hear a row of a section, for as long as the key is down if it's held.
     pub(crate) fn audition_section(&mut self, section: usize, section_step: usize) {
-        self.handle.send(Command::Audition {
+        self.services.handle.send(Command::Audition {
             section,
             section_step,
             track: None,
@@ -424,7 +434,7 @@ impl App {
     /// Hear the row the cursor's track is on at a step of its own, with the row each other track
     /// plays then, for as long as the key is down if it's held.
     pub(crate) fn audition_track(&mut self, section: usize, step: usize) {
-        self.handle.send(Command::Audition {
+        self.services.handle.send(Command::Audition {
             section,
             section_step: step,
             track: Some(self.cursor.track),
@@ -518,7 +528,8 @@ impl App {
             Cmd::ApplyGenerator => self.apply_generator_here(),
             Cmd::BakeMods => self.bake_pitch_mods(),
             Cmd::MapMacro | Cmd::MacroMapping => {
-                self.status = "M and gm map settings to macros, on the track page".to_owned();
+                self.services.status =
+                    "M and gm map settings to macros, on the track page".to_owned();
             }
             Cmd::Replace => self.begin_replace(),
             Cmd::Substitute => self.substitute(),
@@ -542,7 +553,7 @@ impl App {
                 let step = self.section_step();
                 // The song view plays from the row, so tracks stand where the song has them.
                 let track = (self.view != View::Song).then_some(self.cursor.track);
-                self.handle.send(Command::PlaySection {
+                self.services.handle.send(Command::PlaySection {
                     section: self.cursor.section,
                     step,
                     track,
@@ -550,7 +561,7 @@ impl App {
                 self.repeats_ignored = true;
             }
             Cmd::PlayFromStart => {
-                self.handle.send(Command::PlayFrom { step: 0 });
+                self.services.handle.send(Command::PlayFrom { step: 0 });
                 self.repeats_ignored = true;
             }
             Cmd::Audition => {
@@ -562,7 +573,7 @@ impl App {
                 }
             }
             Cmd::PauseOrResume => {
-                self.handle.send(Command::PauseOrResume);
+                self.services.handle.send(Command::PauseOrResume);
                 self.repeats_ignored = true;
             }
             Cmd::Quit => self.quit(false),
@@ -579,18 +590,18 @@ impl App {
             Cmd::PreviousGroupTrack => self.move_to_group(-1),
             Cmd::ToggleMute => {
                 let track = self.cursor.track;
-                if let Some(was) = self.levels.get(track).map(|live| live.mute) {
+                if let Some(was) = self.services.levels.get(track).map(|live| live.mute) {
                     self.toggle_mute();
-                    if self.levels[track].mute != was {
+                    if self.services.levels[track].mute != was {
                         self.started = Some(Momentary::Mute { track, was });
                     }
                 }
             }
             Cmd::ToggleSolo => {
                 let track = self.cursor.track;
-                if let Some(was) = self.levels.get(track).map(|live| live.solo) {
+                if let Some(was) = self.services.levels.get(track).map(|live| live.solo) {
                     self.toggle_solo();
-                    if self.levels[track].solo != was {
+                    if self.services.levels[track].solo != was {
                         self.started = Some(Momentary::Solo { track, was });
                     }
                 }
@@ -635,26 +646,26 @@ impl App {
             Cmd::ToggleSampling => self.toggle_sampling(),
             Cmd::Undo => {
                 let before = self.loop_place();
-                if self.history.undo().is_some() {
+                if self.services.history.undo().is_some() {
                     self.keep_row(before);
                     self.after_history();
                     if self.mode.is_visual() {
                         self.undid_while_selecting(true);
                     }
                 } else {
-                    self.status = "Nothing to undo".to_owned();
+                    self.services.status = "Nothing to undo".to_owned();
                 }
             }
             Cmd::Redo => {
                 let before = self.loop_place();
-                if self.history.redo().is_some() {
+                if self.services.history.redo().is_some() {
                     self.keep_row(before);
                     self.after_history();
                     if self.mode.is_visual() {
                         self.undid_while_selecting(false);
                     }
                 } else {
-                    self.status = "Nothing to redo".to_owned();
+                    self.services.status = "Nothing to redo".to_owned();
                 }
             }
             _ => {}

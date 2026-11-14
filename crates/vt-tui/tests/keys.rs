@@ -33,30 +33,30 @@ fn the_transport_keys_play_pause_and_restart() {
     // Space c plays from the cursor, and restarts there.
     space_c(&mut app);
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.playhead, 3);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.playhead, 3);
 
     // Tab pauses, and carries on from there even if the cursor moves.
     hit(&mut app, &mut rt, tab);
-    assert_eq!(app.transport, Transport::Paused);
+    assert_eq!(app.services.transport, Transport::Paused);
     press(&mut app, "jj");
     hit(&mut app, &mut rt, tab);
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.playhead, 3);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.playhead, 3);
 
     // Shift-Tab plays from the start, playing or paused.
     hit(&mut app, &mut rt, back_tab);
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.playhead, 0);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.playhead, 0);
     hit(&mut app, &mut rt, tab);
-    assert_eq!(app.transport, Transport::Paused);
+    assert_eq!(app.services.transport, Transport::Paused);
     hit(&mut app, &mut rt, back_tab);
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.playhead, 0);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.playhead, 0);
 
     // Enter is only for confirming.
     hit(&mut app, &mut rt, Key::new(KeyCode::Enter));
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
     assert_eq!(app.mode, Mode::Normal);
 }
 
@@ -68,10 +68,10 @@ fn ctrl_i_jumps_forward_and_tab_still_plays() {
     // nothing.
     app.key(parse_sequence("C-i").unwrap()[0], now);
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Stopped);
+    assert_eq!(app.services.transport, Transport::Stopped);
     app.key(Key::new(KeyCode::Tab), now + Duration::from_millis(1000));
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn enter_does_not_play_from_any_mode() {
     press(&mut app, "i");
     app.key(enter, Instant::now() + Duration::from_millis(1000));
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Stopped);
+    assert_eq!(app.services.transport, Transport::Stopped);
     assert_eq!(app.mode, Mode::Insert);
 }
 
@@ -98,7 +98,7 @@ fn a_held_transport_key_is_ignored_while_it_repeats() {
     app.key(tab, now);
     block(&mut rt, &mut app);
     assert_eq!(
-        app.transport,
+        app.services.transport,
         Transport::Playing,
         "only the first press counts"
     );
@@ -108,7 +108,7 @@ fn a_held_transport_key_is_ignored_while_it_repeats() {
     app.key(tab, now);
     app.key_repeated(tab, now);
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Paused);
+    assert_eq!(app.services.transport, Transport::Paused);
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn quick_taps_of_tab_all_count() {
         app.key(tab, now);
         app.key_released(tab, Instant::now());
         block(&mut rt, &mut app);
-        assert_eq!(app.transport, expected);
+        assert_eq!(app.services.transport, expected);
         expected = if expected == Transport::Playing {
             Transport::Paused
         } else {
@@ -139,10 +139,13 @@ fn shift_tab_let_go_after_shift_still_counts_as_let_go() {
     for _ in 0..100 {
         block(&mut rt, &mut app);
     }
-    assert!(app.playhead > 0);
+    assert!(app.services.playhead > 0);
     app.key(Key::new(KeyCode::BackTab), now);
     block(&mut rt, &mut app);
-    assert_eq!(app.playhead, 0, "the next Shift-Tab plays from the start");
+    assert_eq!(
+        app.services.playhead, 0,
+        "the next Shift-Tab plays from the start"
+    );
 }
 
 #[test]
@@ -155,7 +158,7 @@ fn repeats_after_a_leader_transport_key_dont_reach_normal_keys() {
         app.key_repeated(Key::char('c'), now);
     }
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
     assert!(app.pending().is_empty());
 }
 
@@ -191,7 +194,7 @@ fn keys_from_the_terminal_reach_the_app_as_their_characters() {
         KeyModifiers::SHIFT,
     );
     send(&mut app, KeyCode::CapsLock, KeyModifiers::NONE);
-    assert!(app.status.is_empty(), "{}", app.status);
+    assert!(app.services.status.is_empty(), "{}", app.services.status);
     // Shift-; as kitty's remote control sends it, with no shifted key.
     send(&mut app, KeyCode::Char(';'), KeyModifiers::SHIFT);
     assert_eq!(app.mode, Mode::Command);
@@ -213,7 +216,7 @@ fn the_leader_waits_and_an_unbound_key_cancels_it() {
     assert_eq!(app.pending().len(), 1);
     press(&mut app, "z");
     assert!(app.pending().is_empty());
-    assert!(app.status.contains("isn't bound"));
+    assert!(app.services.status.contains("isn't bound"));
     press(&mut app, " ");
     special(&mut app, KeyCode::Esc);
     assert!(app.pending().is_empty());
@@ -226,21 +229,21 @@ fn tab_plays_and_pauses_from_insert_and_keeps_writing() {
     let start = Instant::now();
     app.key(Key::new(KeyCode::Tab), start);
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
     assert_eq!(app.mode, Mode::Insert);
     press(&mut app, "a");
     assert_eq!(notes(&app)[0], Note::On(60));
     app.key(Key::new(KeyCode::Tab), start + Duration::from_millis(1000));
     app.key_released(Key::new(KeyCode::Tab), Instant::now());
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Paused);
+    assert_eq!(app.services.transport, Transport::Paused);
     assert_eq!(app.mode, Mode::Insert);
     app.key(
         Key::new(KeyCode::BackTab),
         start + Duration::from_millis(2000),
     );
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
     assert_eq!(app.mode, Mode::Insert);
 }
 
@@ -263,7 +266,7 @@ fn semicolon_auditions_in_every_view_and_changes_nothing() {
         "the phrase view auditions a row"
     );
     assert!(Arc::ptr_eq(&version, app.song()));
-    assert_eq!(app.transport, Transport::Stopped);
+    assert_eq!(app.services.transport, Transport::Stopped);
 
     press(&mut app, "j");
     tap(&mut app, ";");
@@ -348,29 +351,32 @@ fn a_held_mute_or_solo_goes_back_when_let_go_and_a_tap_stays() {
     press(&mut app, " ");
     let now = Instant::now();
     app.key(Key::char('m'), now);
-    assert!(app.levels[0].mute, "it mutes at once");
+    assert!(app.services.levels[0].mute, "it mutes at once");
     app.key_repeated(Key::char('m'), now + Duration::from_millis(500));
-    assert!(app.levels[0].mute, "a repeat doesn't switch it back");
+    assert!(
+        app.services.levels[0].mute,
+        "a repeat doesn't switch it back"
+    );
     app.key_released(Key::char('m'), now + Duration::from_millis(600));
-    assert!(!app.levels[0].mute, "held, it goes back");
+    assert!(!app.services.levels[0].mute, "held, it goes back");
 
     press(&mut app, " ");
     hold_for(&mut app, 'm', 100);
-    assert!(app.levels[0].mute, "tapped, it stays");
+    assert!(app.services.levels[0].mute, "tapped, it stays");
     // Held from muted, it unmutes until it's let go.
     press(&mut app, " ");
     hold_for(&mut app, 'm', 400);
-    assert!(app.levels[0].mute);
+    assert!(app.services.levels[0].mute);
 
     press(&mut app, " ");
     let now = Instant::now();
     app.key(Key::char('s'), now);
-    assert!(app.levels[0].solo);
+    assert!(app.services.levels[0].solo);
     app.key_released(Key::char('s'), now + Duration::from_millis(400));
-    assert!(!app.levels[0].solo, "a held solo goes back too");
+    assert!(!app.services.levels[0].solo, "a held solo goes back too");
     press(&mut app, " ");
     hold_for(&mut app, 's', 100);
-    assert!(app.levels[0].solo);
+    assert!(app.services.levels[0].solo);
 }
 
 #[test]
@@ -384,11 +390,11 @@ fn a_save_while_a_mute_key_is_down_keeps_it_as_it_was() {
     command(&mut app, "w");
     let saved = vt_model::project::load_song(&path).unwrap();
     assert!(!saved.tracks[0].mute, "it may yet go back");
-    assert!(!app.dirty);
+    assert!(!app.services.dirty);
     // Let go as a tap, it stays muted, and the song has changed since the save.
     app.key_released(Key::char('m'), now + Duration::from_millis(100));
-    assert!(app.levels[0].mute);
-    assert!(app.dirty);
+    assert!(app.services.levels[0].mute);
+    assert!(app.services.dirty);
     command(&mut app, "w");
     assert!(vt_model::project::load_song(&path).unwrap().tracks[0].mute);
     std::fs::remove_dir_all(&path).unwrap();
@@ -401,10 +407,13 @@ fn losing_focus_lets_go_of_a_held_mute() {
     let now = Instant::now();
     app.key(Key::char('m'), now);
     app.focus_lost(now + Duration::from_millis(400));
-    assert!(!app.levels[0].mute, "held past the hold time, it goes back");
+    assert!(
+        !app.services.levels[0].mute,
+        "held past the hold time, it goes back"
+    );
     // Its release, if it comes after all, does nothing more.
     app.key_released(Key::char('m'), now + Duration::from_millis(500));
-    assert!(!app.levels[0].mute);
+    assert!(!app.services.levels[0].mute);
 }
 
 #[test]
@@ -412,9 +421,13 @@ fn semicolon_while_playing_says_why_it_did_nothing() {
     let (mut app, mut rt) = app();
     special(&mut app, KeyCode::Tab);
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
     press(&mut app, ";");
-    assert!(app.status.contains("stopped"), "{}", app.status);
+    assert!(
+        app.services.status.contains("stopped"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -913,7 +926,7 @@ fn the_transport_is_glyphs_with_the_waits_named() {
     block(&mut rt, &mut app);
     assert!(status_line(&app).contains(&format!(" {PLAY}  120 BPM")));
     // A launch cued on any track waits for the grid too.
-    app.jam[2].cued = Some(Some(1));
+    app.services.jam[2].cued = Some(Some(1));
     assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} LAUNCH  ")));
 }
 

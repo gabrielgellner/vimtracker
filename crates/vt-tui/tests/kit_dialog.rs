@@ -32,7 +32,7 @@ fn kit_in_folder(app: &mut App) -> PathBuf {
         ])"#,
     )
     .unwrap();
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![kit.parent().unwrap().display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
@@ -94,7 +94,7 @@ fn marked_sounds_load_as_new_tracks_after_the_last_in_a_folded_group_as_one_undo
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.marked_count(), 2);
     assert_eq!(picker.current().unwrap().label, "OH");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
 
     // Two tracks were added after the two there, each with one sound named by its label.
@@ -114,15 +114,19 @@ fn marked_sounds_load_as_new_tracks_after_the_last_in_a_folded_group_as_one_undo
     assert_eq!(group_of(&app, 2), Some((1, "909".to_owned())));
     assert_eq!(group_of(&app, 3), Some((1, "909".to_owned())));
     assert!(app.folds.is_closed(app.song(), 1));
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
-    assert_eq!(app.status, "Kit 909: tracks 03-04 in G1, folded");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo step"
+    );
+    assert_eq!(app.services.status, "Kit 909: tracks 03-04 in G1, folded");
 
     // The beat is offered, and Esc leaves the tracks empty.
     assert_eq!(app.picker.as_ref().unwrap().title, KIT_BEAT_PICKER);
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.mode, Mode::Normal);
     assert!(!has_notes(&app, 2) && !has_notes(&app, 3));
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
 
     // u takes the tracks, the group's name and the bank entries off together.
     press(&mut app, "u");
@@ -232,7 +236,7 @@ fn a_marks_them_all_and_the_beat_plays_on_the_kick_snare_and_first_hat() {
     press(&mut app, "a");
     assert_eq!(app.picker.as_ref().unwrap().marked_count(), 0);
     press(&mut app, "a");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
     assert_eq!(names(&app), ["", "", "BD", "SD", "CH", "OH", "PD"]);
     assert_eq!(
@@ -277,7 +281,7 @@ fn a_marks_them_all_and_the_beat_plays_on_the_kick_snare_and_first_hat() {
         "each plays its own part"
     );
     assert_eq!(
-        app.history.undo_depth(),
+        app.services.history.undo_depth(),
         depth + 2,
         "the beat is a step of its own"
     );
@@ -298,7 +302,7 @@ fn enter_with_nothing_marked_loads_the_sound_under_the_cursor() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(names(&app), ["", "", "PD"]);
     assert_eq!(group_of(&app, 2), Some((1, "909".to_owned())));
-    assert_eq!(app.status, "Kit 909: track 03 in G1, folded");
+    assert_eq!(app.services.status, "Kit 909: track 03 in G1, folded");
     // A pad isn't a drum, so no beat is offered.
     assert_eq!(app.mode, Mode::Normal);
 
@@ -370,7 +374,7 @@ fn with_every_group_taken_the_tracks_go_in_none() {
     assert_eq!(app.song().tracks[added].name, "BD");
     assert_eq!(app.song().tracks[added].group, None);
     assert_eq!(
-        app.status,
+        app.services.status,
         format!("Kit 909: track 05 in no group, as all {MAX_GROUPS} have tracks")
     );
     special(&mut app, KeyCode::Esc);
@@ -384,7 +388,7 @@ fn the_kit_in_the_dialog_still_puts_its_sounds_on_tracks_from_the_first_with_l()
     press(&mut app, "jL");
     assert_eq!(names(&app), ["BD", "SD", "CH", "OH", "PD"]);
     assert_eq!(app.song().tracks[0].group, None);
-    assert_eq!(app.status, "Kit 909: 5 tracks");
+    assert_eq!(app.services.status, "Kit 909: 5 tracks");
 }
 
 #[test]

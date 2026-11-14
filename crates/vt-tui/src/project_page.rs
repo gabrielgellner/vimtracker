@@ -392,7 +392,7 @@ impl App {
     fn project_line(&mut self, text: &str) {
         match parse(text) {
             Ok(line) => self.line(line),
-            Err(error) => self.status = error.to_string(),
+            Err(error) => self.services.status = error.to_string(),
         }
     }
 
@@ -548,20 +548,22 @@ impl App {
                 }
             }
             ProjectControl::Name => {
-                self.status = "i renames the project, and C-r there rolls a new name".to_owned();
+                self.services.status =
+                    "i renames the project, and C-r there rolls a new name".to_owned();
             }
             ProjectControl::Folder => {
-                self.status = "Save as puts the project in another folder".to_owned();
+                self.services.status = "Save as puts the project in another folder".to_owned();
             }
             ProjectControl::Audio => {
-                self.status = "Enter or L opens the Audio page, to choose the device".to_owned();
+                self.services.status =
+                    "Enter or L opens the Audio page, to choose the device".to_owned();
             }
             ProjectControl::Save
             | ProjectControl::SaveAs
             | ProjectControl::Render
             | ProjectControl::Open
             | ProjectControl::New => {
-                self.status = "Enter does this".to_owned();
+                self.services.status = "Enter does this".to_owned();
             }
         }
     }
@@ -622,7 +624,8 @@ impl App {
             ProjectControl::AutoJump if self.auto_jump => self.toggle_auto_jump(),
             ProjectControl::ReadOnly if self.read_only => self.line(Line::ReadOnly(false)),
             ProjectControl::Name => {
-                self.status = "i renames the project, and C-r there rolls a new name".to_owned();
+                self.services.status =
+                    "i renames the project, and C-r there rolls a new name".to_owned();
             }
             _ => {}
         }
@@ -726,7 +729,7 @@ impl App {
             | ProjectControl::Humanise
             | ProjectControl::Push(_)
             | ProjectControl::Velocity(_) => {
-                self.status =
+                self.services.status =
                     "K lists the choices on Groove, Edit, Launch, Scale, Root and Grid; i types the rest"
                         .to_owned();
                 return;
@@ -755,7 +758,7 @@ impl App {
         );
         if control.is_choice() || !typed {
             if control == ProjectControl::Folder {
-                self.status = "Save as puts the project in another folder".to_owned();
+                self.services.status = "Save as puts the project in another folder".to_owned();
                 return;
             }
             self.choose_project_control();
@@ -779,6 +782,7 @@ impl App {
             }
             KeyCode::Char('r') if key.ctrl && control == ProjectControl::Name => {
                 let taken = self
+                    .services
                     .folder
                     .as_deref()
                     .and_then(std::path::Path::parent)
@@ -816,21 +820,24 @@ impl App {
         match control {
             ProjectControl::Name if text == self.project_name() => {}
             ProjectControl::Name if is_project_name(text) => {
-                self.apply(&Action::SetSongName(text.to_owned()));
-                self.status = match &self.folder {
+                self.services.apply(&Action::SetSongName(text.to_owned()));
+                self.services.status = match &self.services.folder {
                     Some(_) => format!("Named {text}: Save as puts it in a folder of that name"),
                     None => format!("Named {text}"),
                 };
             }
             ProjectControl::Name => {
-                self.status = format!(
+                self.services.status = format!(
                     "A name is up to {MAX_PROJECT_NAME_CHARS} characters, with no / and not starting with a dot"
                 );
             }
             ProjectControl::Bpm if self.project_fine => {
                 match with_fraction(self.song().millibpm, text) {
                     Some(millibpm) => self.line(Line::Bpm(millibpm)),
-                    None => self.status = "The fine part is the digits after the point".to_owned(),
+                    None => {
+                        self.services.status =
+                            "The fine part is the digits after the point".to_owned()
+                    }
                 }
             }
             ProjectControl::Bpm => self.project_line(&format!("bpm {text}")),
@@ -841,7 +848,7 @@ impl App {
             ProjectControl::Grid => self.project_line(&format!("set skip={text}")),
             ProjectControl::Root => match parse_root(text) {
                 Some(root) => self.set_scale(Scale { root, ..self.scale }),
-                None => self.status = "A root is a note, such as d or f#".to_owned(),
+                None => self.services.status = "A root is a note, such as d or f#".to_owned(),
             },
             _ => {}
         }
@@ -880,7 +887,7 @@ impl App {
         match shaped {
             Some(shaped) => self.shape_groove(control, shaped),
             None => {
-                self.status = match control {
+                self.services.status = match control {
                     ProjectControl::GrooveSteps => {
                         format!("A groove has 1 to {MAX_GROOVE_STEPS} steps")
                     }
@@ -901,7 +908,7 @@ impl App {
     fn shape_groove(&mut self, control: ProjectControl, shaped: Groove) {
         let (id, groove) = self.shown_groove();
         if control == ProjectControl::Push(0) {
-            self.status =
+            self.services.status =
                 "The first step stays on the grid: the others are pushed from it".to_owned();
             return;
         }
@@ -909,7 +916,7 @@ impl App {
             return;
         }
         if let Some(custom) = id.custom_number() {
-            self.apply(&Action::SetCustomGroove {
+            self.services.apply(&Action::SetCustomGroove {
                 custom,
                 groove: shaped,
             });
@@ -917,23 +924,23 @@ impl App {
         }
         let custom = self.song().grooves.len();
         let Some(copy) = GrooveId::custom(custom) else {
-            self.status = format!(
+            self.services.status = format!(
                 "The project's {CUSTOM_GROOVES} grooves are all made: change one of them instead"
             );
             return;
         };
-        let depth = self.history.undo_depth();
-        self.apply(&Action::SetCustomGroove {
+        let depth = self.services.history.undo_depth();
+        self.services.apply(&Action::SetCustomGroove {
             custom,
             groove: shaped,
         });
         let plays = self.song().groove == id;
         if plays {
-            self.apply(&Action::SetGroove(copy));
-            self.history.squash_to(depth);
+            self.services.apply(&Action::SetGroove(copy));
+            self.services.history.squash_to(depth);
         }
         self.groove_shown = Some(copy);
-        self.status = if plays {
+        self.services.status = if plays {
             format!("{id} copied to {copy} to change it, which the project now plays")
         } else {
             format!("{id} copied to {copy} to change it")

@@ -25,7 +25,7 @@ fn space_r_arms_recording_only_while_playing_and_stopping_or_leaving_disarms() {
     let (mut app, mut rt) = recording_app(vec![Step::default(); 4]);
     press(&mut app, " r");
     assert!(!app.recording());
-    assert_eq!(app.status, "Recording arms while playing");
+    assert_eq!(app.services.status, "Recording arms while playing");
 
     let mut at = play_from_the_top(&mut app, &mut rt);
     press_at(&mut app, at, " r");
@@ -47,7 +47,7 @@ fn space_r_arms_recording_only_while_playing_and_stopping_or_leaving_disarms() {
     app.key(tab, time_at(at));
     app.key_released(tab, time_at(at));
     play_to(&mut app, &mut rt, &mut at, 1.0);
-    assert_eq!(app.transport, Transport::Paused);
+    assert_eq!(app.services.transport, Transport::Paused);
     assert!(!app.recording());
 
     // So does leaving the phrase view.
@@ -191,7 +191,7 @@ fn recording_overwrites_only_the_note_velocity_and_gate_and_a_pass_is_one_undo()
         .map(|text| text.parse().unwrap())
         .collect();
     let (mut app, mut rt) = recording_app(rows.clone());
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     let mut at = play_from_the_top(&mut app, &mut rt);
     press_at(&mut app, at, " r");
     tap_at(&mut app, at, "i");
@@ -218,7 +218,11 @@ fn recording_overwrites_only_the_note_velocity_and_gate_and_a_pass_is_one_undo()
     assert_eq!(written[1].fx, rows[1].fx, "its FX stay");
     assert_eq!(written[1].length(), Some(0x80));
     assert_eq!(written[3].note, Note::On(64));
-    assert_eq!(app.history.undo_depth(), depth + 1, "one step for the pass");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one step for the pass"
+    );
 
     special_at(&mut app, at, KeyCode::Esc);
     press_at(&mut app, at, " r");

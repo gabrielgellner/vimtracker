@@ -10,7 +10,7 @@ use vt_model::song::Track;
 
 use crate::app::App;
 use crate::input::bindings::Cmd;
-use crate::page::Ctx;
+use crate::page::{Ctx, CtxMut};
 use crate::track_page::{Control, Outcome};
 
 /// The mixer's columns.
@@ -106,13 +106,13 @@ impl MixerPage {
 
     /// Run a key as the program gives it to the page, on the cursor's track: one of the page's
     /// own keys, [`MixerPage::key`], or passed back.
-    pub fn run(&mut self, cmd: Cmd, times: usize, ctx: &Ctx) -> Outcome {
+    pub fn run(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
         self.key(cmd, times, ctx.track_here())
     }
 
     /// `0` and `$`: the first or last strip shown that has the row the cursor is on, for the
     /// program's cursor to go to, with that row kept for it. A folded strip is stepped over.
-    pub fn end_track(&mut self, last: bool, ctx: &Ctx) -> Option<usize> {
+    pub fn end_track(&mut self, last: bool, ctx: &CtxMut) -> Option<usize> {
         let row = self.row_here(ctx.track_here());
         let tracks = &ctx.song().tracks;
         let mut shown = ctx
@@ -133,20 +133,16 @@ impl App {
     /// on the track page.
     pub(crate) fn run_mixer(&mut self, cmd: Cmd) -> bool {
         let times = self.count.unwrap_or(1).max(1);
-        // The page runs it on a copy of itself, as it reads the rest of the program it's in.
-        let mut page = self.mixer_page;
-        let outcome = page.run(cmd, times, &self.ctx());
-        self.mixer_page = page;
+        let (page, mut ctx) = self.mixer_page_ctx();
+        let outcome = page.run(cmd, times, &mut ctx);
         if outcome == Outcome::Passed {
             match cmd {
                 Cmd::Move(Motion::Right) => self.move_track(times as isize),
                 Cmd::Move(Motion::Left) => self.move_track(-(times as isize)),
                 Cmd::Move(Motion::RowStart | Motion::RowEnd) => {
-                    let mut page = self.mixer_page;
-                    let found = page.end_track(cmd == Cmd::Move(Motion::RowEnd), &self.ctx());
-                    if let Some(to) = found {
+                    let (page, ctx) = self.mixer_page_ctx();
+                    if let Some(to) = page.end_track(cmd == Cmd::Move(Motion::RowEnd), &ctx) {
                         self.go_to_track_at(to);
-                        self.mixer_page = page;
                     }
                 }
                 _ => return self.run_track_page(cmd),
