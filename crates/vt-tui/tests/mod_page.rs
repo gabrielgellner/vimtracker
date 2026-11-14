@@ -2475,6 +2475,84 @@ fn space_g_capital_a_writes_the_pass_just_heard_of_a_drift_and_only_the_selectio
     assert!(app.song().tracks[0].mods[3].bypassed);
 }
 
+/// `C-3`, `E-3` and `G-3` on rows 0, 4 and 8 of 16 as `melody` has them, each with an `RND` on its
+/// note, and on row 8 a second `RND` beside a `CUT` lock, which isn't on the note; no mod slot.
+fn varied_melody() -> (App, Realtime) {
+    use vt_engine::engine::Engine;
+    use vt_engine::link::connect;
+    use vt_engine::published::Published;
+    let mut song = vt_model::song::Song::new(1);
+    song.sample_on(0, "sine");
+    song.scale = vt_model::scale::Scale {
+        on: true,
+        root: 0,
+        kind: vt_model::scale::ScaleKind::Major,
+    };
+    let phrase = std::sync::Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+    for (row, text) in [
+        (0, "C-3 -- rnd:F3 --- ---"),
+        (4, "E-3 -- --- rnd:F3 ---"),
+        (8, "G-3 -- rnd:F3 cut:40 rnd:F3"),
+    ] {
+        *phrase.step_mut(row).unwrap() = text.parse().unwrap();
+    }
+    let samples = sine_pool();
+    let version = std::sync::Arc::new(Published::new(
+        std::sync::Arc::new(song.clone()),
+        std::sync::Arc::clone(&samples),
+    ));
+    let (handle, realtime) = connect(Engine::new(48_000, version));
+    (App::new(song, None, samples, handle, 48_000), realtime)
+}
+
+#[test]
+fn space_g_capital_a_writes_what_rnd_played_into_the_notes_and_takes_them_out() {
+    use vt_model::step::FxCommand;
+    let (mut app, mut realtime) = varied_melody();
+    let before = app.song().as_ref().clone();
+    press(&mut app, " gA");
+    assert_eq!(
+        app.status,
+        "None of these notes has been heard yet: play them first"
+    );
+    hear(&mut app, &mut realtime, LAP);
+    press(&mut app, " gA");
+    let baked = app.song().as_ref().clone();
+    let notes = melody_notes(&baked);
+    // `RND F3` always moves its note, by 1 to 3 degrees of C major.
+    for (note, written) in notes.iter().zip([60, 64, 67]) {
+        let note = i32::from(note.expect("still a note"));
+        assert!(note != written && (note - written).abs() <= 5, "{note}");
+    }
+    let rows = baked.tracks[0].phrases[&0].steps();
+    let rnds = |row: usize| {
+        rows[row]
+            .fx
+            .iter()
+            .filter(|slot| slot.command == Some(FxCommand::Rnd))
+            .count()
+    };
+    assert_eq!((rnds(0), rnds(4)), (0, 0), "the note's RNDs are taken out");
+    assert_eq!(rnds(8), 1, "the one beside the CUT stays");
+    assert_eq!(
+        app.status,
+        "Wrote what RND played into 3 notes, and took their RNDs out"
+    );
+    // The first time round sounds as it did, but for the `CUT`'s, which still varies.
+    let mut unvaried = before.clone();
+    let mut kept = baked.clone();
+    for song in [&mut unvaried, &mut kept] {
+        let phrase = std::sync::Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+        phrase.step_mut(8).unwrap().fx[2] = vt_model::step::FxSlot::default();
+    }
+    let (was, now) = (rendered(&unvaried, LAP), rendered(&kept, LAP));
+    assert!(was.iter().any(|sample| *sample != 0.0));
+    let apart = most_apart(&was, &now);
+    assert!(apart < 1e-3, "{apart}");
+    press(&mut app, "u");
+    assert_eq!(app.song().as_ref(), &before);
+}
+
 #[test]
 fn space_g_capital_a_leaves_envelopes_on_pitch_alone() {
     let (mut app, _realtime) = app();
@@ -2486,7 +2564,7 @@ fn space_g_capital_a_leaves_envelopes_on_pitch_alone() {
     press(&mut app, " gA");
     assert_eq!(
         app.status,
-        "No Steps or LFO slot on Pitch, and no generator moved, to write in"
+        "No Steps or LFO slot on Pitch, RND on a note, or generator moved, to write in"
     );
 }
 
