@@ -1,5 +1,5 @@
-//! A track's speed: how long each of its steps is, from a 32nd to a quarter with the triplets
-//! between, set on the track or on a step with `RATE`. Its rows, pulses, groove, nudge, timing
+//! A track's speed: how long each of its steps is, from a 32nd to a whole note with the triplets
+//! and dotted values between, set on the track or on a step with `RATE`. Its rows, pulses, groove, nudge, timing
 //! commands and lengths all follow its steps, while sections, resets and renders count the
 //! song's sixteenths.
 
@@ -13,6 +13,7 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Phrase, Section, SectionStart, Song};
 use vt_model::speed::Speed;
+use vt_model::step::MOST_NUDGE;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, and 25 per tick.
@@ -175,11 +176,61 @@ fn an_early_groove_on_a_quarter_works_its_steps_out_that_far_ahead() {
 }
 
 #[test]
+fn an_early_groove_on_a_whole_note_works_its_steps_out_that_far_ahead() {
+    // Half a whole note early and its furthest nudge besides: 3190 ticks, 26 and more of a 32nd
+    // track's steps worked out before the one heard has landed, each of them heard where it's due.
+    let pushed = with_own(
+        song(&[
+            (Speed::Whole, &["C-3 --", "C-3 -- -7F"]),
+            (Speed::ThirtySecond, &["C-3 -- +5"; 64]),
+        ]),
+        Groove::pattern(&[0, -120]),
+    );
+    let published = Published::new(Arc::new(pushed.clone()), hits_pool());
+    assert_eq!(published.lead, 1920 + 1270);
+    let whole = step_frames(Speed::Whole);
+    assert_eq!(hits(&pushed, 2 * whole, 0), [0, whole - 3190 * TICK]);
+    let thirty_seconds = hits(&pushed, 2 * whole, 1);
+    let expected: Vec<usize> = (0..64)
+        .map(|step| step * STEP / 2 + 5 * NUDGE - if step % 2 == 1 { STEP / 4 } else { 0 })
+        .collect();
+    assert_eq!(thirty_seconds, expected);
+}
+
+#[test]
+fn slow_and_dotted_speeds_line_up_with_the_songs_sixteenths() {
+    // A dotted eighth's steps fall on every third sixteenth, round its four rows and on, and a
+    // half note's on every eighth.
+    let played = song(&[
+        (Speed::DottedEighth, &["C-3 --"; 4]),
+        (Speed::Half, &["C-3 --"; 2]),
+    ]);
+    let thirds: Vec<usize> = (0..6).map(|step| 3 * step * STEP).collect();
+    assert_eq!(hits(&played, 16 * STEP, 0), thirds);
+    assert_eq!(hits(&played, 16 * STEP, 1), [0, 8 * STEP]);
+    // A section lasts its longest chain: two half notes are 16 sixteenths, two dotted
+    // sixteenths three.
+    let out = render_loop(
+        version(&played, hits_pool()),
+        RATE,
+        RenderOptions::default(),
+    );
+    assert_eq!(out.len(), 16 * STEP * 2);
+    let dotted = song(&[(Speed::DottedSixteenth, &["C-3 --"; 2])]);
+    let out = render_loop(
+        version(&dotted, hits_pool()),
+        RATE,
+        RenderOptions::default(),
+    );
+    assert_eq!(out.len(), 3 * STEP * 2);
+}
+
+#[test]
 fn a_rate_lock_plays_its_note_at_that_speed_until_the_next_note() {
-    // `04` is an eighth. The next note ends the lock, so it's a sixteenth again.
+    // `05` is an eighth. The next note ends the lock, so it's a sixteenth again.
     let locked = song(&[(
         Speed::Sixteenth,
-        &["C-3 -- speed:04", "C-3 --", "C-3 --", "C-3 --"],
+        &["C-3 -- speed:05", "C-3 --", "C-3 --", "C-3 --"],
     )]);
     assert_eq!(
         hits(&locked, 5 * STEP, 0),
@@ -188,13 +239,13 @@ fn a_rate_lock_plays_its_note_at_that_speed_until_the_next_note() {
     // With no note after it, the rows after go at its speed too.
     let held_on = song(&[(
         Speed::Sixteenth,
-        &["C-3 -- speed:04", "--- --", "C-3 --", "C-3 --"],
+        &["C-3 -- speed:05", "--- --", "C-3 --", "C-3 --"],
     )]);
     assert_eq!(hits(&held_on, 6 * STEP, 0), [0, 4 * STEP, 5 * STEP]);
     // A hold keeps it.
     let held = song(&[(
         Speed::Sixteenth,
-        &["C-3 -- speed:04h", "C-3 --", "C-3 --", "C-3 --"],
+        &["C-3 -- speed:05h", "C-3 --", "C-3 --", "C-3 --"],
     )]);
     assert_eq!(hits(&held, 8 * STEP, 0), [0, 2 * STEP, 4 * STEP, 6 * STEP]);
 }
@@ -205,7 +256,7 @@ fn a_step_at_a_new_speed_waits_for_that_speeds_grid() {
     // eighths' grid.
     let locked = song(&[(
         Speed::Sixteenth,
-        &["C-3 --", "C-3 -- speed:04h", "C-3 --", "C-3 --"],
+        &["C-3 --", "C-3 -- speed:05h", "C-3 --", "C-3 --"],
     )]);
     assert_eq!(hits(&locked, 6 * STEP, 0), [0, STEP, 2 * STEP, 4 * STEP]);
     // From a triplet back to a sixteenth, the triplet's second step lasts to the next sixteenth.
@@ -344,12 +395,21 @@ fn a_nudge_goes_just_under_half_its_tracks_step() {
             2 * usize::from(most.unsigned_abs()) * NUDGE < step,
             "{speed}"
         );
-        assert!(
-            2 * (usize::from(most.unsigned_abs()) + 1) * NUDGE >= step,
-            "{speed}"
-        );
+        // Every speed but a whole note's goes as far as that; its nudge stops at `7F`, its byte's
+        // most, a third of its step.
+        if speed == Speed::Whole {
+            assert_eq!(most, MOST_NUDGE);
+            assert_eq!(3 * (usize::from(most.unsigned_abs()) + 1) * NUDGE, step);
+        } else {
+            assert!(
+                2 * (usize::from(most.unsigned_abs()) + 1) * NUDGE >= step,
+                "{speed}"
+            );
+        }
         // The furthest any track goes, written on this one, plays as far as this one's goes.
-        let played = song(&[(speed, &["C-3 --", "C-3 -- +2F", "C-3 -- -2F", "--- --"])]);
+        let late = format!("C-3 -- +{MOST_NUDGE:X}");
+        let early = format!("C-3 -- -{MOST_NUDGE:X}");
+        let played = song(&[(speed, &["C-3 --", &late, &early, "--- --"])]);
         let most = usize::from(most.unsigned_abs()) * NUDGE;
         assert_eq!(
             hits(&played, 4 * step, 0),
@@ -364,7 +424,7 @@ fn a_rate_lock_keeps_a_nudges_time_and_keeps_it_to_the_new_steps_range() {
     // A sixteenth's `+8` under a lock to an eighth is still 8 24ths of a sixteenth late.
     let slower = song(&[(
         Speed::Sixteenth,
-        &["C-3 --", "C-3 -- +8 speed:04", "C-3 --"],
+        &["C-3 --", "C-3 -- +8 speed:05", "C-3 --"],
     )]);
     // The eighth starts on the second sixteenth, so it lasts to the next eighth.
     assert_eq!(hits(&slower, 3 * STEP, 0), [0, STEP + 8 * NUDGE, 2 * STEP]);

@@ -6,7 +6,8 @@
 //! bits, and `Grids` writes a drum part from a map of real patterns, one part a track across a
 //! kit's. `Variation` writes something like the notes there, from a Markov chain learned from them.
 //! `Divisions` writes a rhythm from a chance for each note division, straight and triplet, to
-//! strike, after Vermona's randomRHYTHM, its triplets nudged between the rows.
+//! strike, after Vermona's randomRHYTHM, its triplets nudged between the rows. `Ring` writes a
+//! rhythm and a melody together from one shift register, after the Wiard Noise Ring.
 
 mod acid;
 mod bits;
@@ -18,6 +19,7 @@ pub mod params;
 mod random;
 mod render;
 mod rhythm;
+mod ring;
 mod variation;
 mod walk;
 mod world;
@@ -37,6 +39,7 @@ pub use random::{
     degree_name,
 };
 pub use render::{GenCell, RowView, render_into};
+pub use ring::{Kept, MAX_RING, Ring};
 use serde::{Deserialize, Serialize};
 pub use variation::{
     MAX_LEARNED, MAX_ORDER, MIN_NOTES as VARIATION_NOTES, Variation, notes as variation_notes,
@@ -193,6 +196,9 @@ pub enum FillKind {
     /// A rhythm from a chance for each note division to strike, straight and triplet, after
     /// Vermona's randomRHYTHM.
     Divisions,
+    /// A rhythm and a melody from one shift register going round, a row playing on its newest
+    /// bit at the pitch of its byte, after the Wiard Noise Ring.
+    Ring,
     /// Another phrase's notes, with their velocities and gates, turned on the way as a canon's
     /// voices are.
     Follow,
@@ -221,7 +227,7 @@ pub enum FillKind {
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 22] = [
         Self::Ramp,
         Self::Random,
         Self::Walk,
@@ -232,6 +238,7 @@ impl FillKind {
         Self::Acid,
         Self::Grids,
         Self::Divisions,
+        Self::Ring,
         Self::Follow,
         Self::Variation,
         Self::Scale,
@@ -258,6 +265,7 @@ impl FillKind {
             Self::Acid => "Acid",
             Self::Grids => "Grids",
             Self::Divisions => "Divisions",
+            Self::Ring => "Ring",
             Self::Follow => "Follow",
             Self::Variation => "Variation",
             Self::Scale => "Scale",
@@ -285,6 +293,7 @@ impl FillKind {
             Self::Acid => "A 303 line, with accents and slides",
             Self::Grids => "A drum part from Grids' map",
             Self::Divisions => "A chance for each note division",
+            Self::Ring => "A noise ring's rhythm and pitch",
             Self::Follow => "Another track's phrase, kept in step",
             Self::Variation => "Something like the notes there",
             Self::Scale => "The values there onto the two",
@@ -323,12 +332,17 @@ impl FillKind {
     }
 
     /// Whether it chooses its rows with a `Where`. A `Follow` writes every row from its source,
-    /// `Multiply` reads and writes the rhythm itself, `Grids` and `Divisions` make one of their
-    /// own, and a `Variation` learns one with the notes.
+    /// `Multiply` reads and writes the rhythm itself, `Grids`, `Divisions` and `Ring` make one of
+    /// their own, and a `Variation` learns one with the notes.
     pub fn has_where(self) -> bool {
         !matches!(
             self,
-            Self::Follow | Self::Multiply | Self::Grids | Self::Divisions | Self::Variation
+            Self::Follow
+                | Self::Multiply
+                | Self::Grids
+                | Self::Divisions
+                | Self::Ring
+                | Self::Variation
         )
     }
 }
@@ -495,8 +509,8 @@ impl ShapeColumn {
         }
     }
 
-    /// The fills it offers: `Snap`, `Acid`, `Grids`, `Divisions`, `Follow` and `Variation` only
-    /// mean something for notes, `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform
+    /// The fills it offers: `Snap`, `Acid`, `Grids`, `Divisions`, `Ring`, `Follow` and `Variation`
+    /// only mean something for notes, `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform
     /// or a `Variation` nothing for notes of its own, as there are none to rework or learn from.
     pub fn fills(self) -> Vec<FillKind> {
         FillKind::ALL
@@ -508,6 +522,7 @@ impl ShapeColumn {
                         | FillKind::Acid
                         | FillKind::Grids
                         | FillKind::Divisions
+                        | FillKind::Ring
                         | FillKind::Follow
                         | FillKind::Variation
                 ) || matches!(self, Self::Note { .. })
@@ -571,8 +586,8 @@ impl ShapeColumn {
                     b'+' => (1, &text[1..]),
                     _ => (1, text),
                 };
-                let size = u8::from_str_radix(digits, 16).ok()?.min(most.max(0) as u8) as i8;
-                Some((sign * size + most) as u8)
+                let size = u8::from_str_radix(digits, 16).ok()?.min(most.max(0) as u8);
+                Some((sign * i16::from(size) + i16::from(most)) as u8)
             }
             _ => u8::from_str_radix(text, 16)
                 .ok()
@@ -625,7 +640,9 @@ impl ShapeColumn {
                 _ => None,
             },
             Self::Velocity => note.then(|| step.velocity.unwrap_or(MAX_VELOCITY)),
-            Self::Nudge { most } => note.then(|| (step.nudge.clamp(-most, most) + most) as u8),
+            Self::Nudge { most } => {
+                note.then(|| (i16::from(step.nudge.clamp(-most, most)) + i16::from(most)) as u8)
+            }
             Self::Length => step.length().filter(|_| note),
             Self::Fx { slot, command } => step
                 .fx
@@ -873,6 +890,10 @@ pub struct Shape {
     /// A `Divisions` fill's chances, its channel and its bar. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Divisions::is_default")]
     pub divisions: Divisions,
+    /// A `Ring` fill's `Change`, `Chance` and `Length`, the register it kept and the pass it
+    /// plays. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Ring::is_default")]
+    pub ring: Ring,
     /// How a `Random` fill spreads and leans its values, and on notes which degrees it lets
     /// through and how often each comes. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Random::is_default")]
@@ -925,6 +946,7 @@ impl Shape {
             vary: 0,
             variation: Variation::default(),
             divisions: Divisions::default(),
+            ring: Ring::default(),
         }
     }
 
@@ -951,9 +973,10 @@ impl Shape {
             )
     }
 
-    /// Whether it plays a variation of its own on some passes, so the engine renders it.
+    /// Whether it plays a variation of its own on some passes, so the engine renders it: by its
+    /// `Vary`, or a `Ring`, whose register runs on from pass to pass.
     pub fn varies(&self) -> bool {
-        self.vary > 0 && self.draws()
+        self.vary > 0 && self.draws() || self.kind == FillKind::Ring
     }
 
     /// The shape a pass of its phrase plays, counted from 0: itself unless it [varies], and
@@ -961,10 +984,16 @@ impl Shape {
     /// it is, as `r` would roll it (with `Acid`'s pitches kept, only the second die). The first
     /// is the seed as written, so what's written is what the first pass plays, and since it's
     /// worked out from the pass alone, a render repeats and playing from anywhere hears what
-    /// playing to there would.
+    /// playing to there would. A `Ring` has no `Vary`: it plays the pass itself, its register
+    /// running on from the last.
     ///
     /// [varies]: Shape::varies
     pub fn on_pass(&self, pass: i64) -> Shape {
+        if self.kind == FillKind::Ring {
+            let mut shape = *self;
+            shape.ring.pass = pass.clamp(0, i64::from(u32::MAX)) as u32;
+            return shape;
+        }
         if !self.varies() {
             return *self;
         }
@@ -1287,6 +1316,7 @@ mod tests {
             vary: 0,
             variation: crate::shape::Variation::default(),
             divisions: Divisions::default(),
+            ring: Ring::default(),
         }
     }
 
@@ -2172,6 +2202,21 @@ mod tests {
         slow.write(&mut step, 0);
         assert_eq!(step.nudge, -47);
         assert_eq!(nudge.value(&step), Some(0), "kept to a sixteenth's range");
+
+        // On a track at a whole note, `7F` either way, the whole of the column's byte.
+        let whole = ShapeColumn::Nudge { most: 127 };
+        assert_eq!(whole.highest(), 254);
+        assert_eq!(whole.show(0), "-7F");
+        assert_eq!(whole.show(254), "+7F");
+        assert_eq!(whole.parse("-7f"), Some(0));
+        assert_eq!(whole.parse("+FF"), Some(254), "kept at 7F");
+        let mut step = steps[2].clone();
+        step.nudge = 127;
+        assert_eq!(whole.value(&step), Some(254));
+        whole.write(&mut step, 0);
+        assert_eq!(step.nudge, -127);
+        whole.write(&mut step, 254);
+        assert_eq!(step.nudge, 127);
 
         // A length fills every note, and a transform leaves `--` as it is.
         let length = ShapeColumn::Length;

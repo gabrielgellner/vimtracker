@@ -310,6 +310,7 @@ fn level() -> vt_model::shape::Shape {
         vary: 0,
         variation: Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
+        ring: vt_model::shape::Ring::default(),
     }
 }
 
@@ -596,13 +597,17 @@ fn the_shipped_patches_are_found_by_their_tags_and_cant_be_tagged() {
     assert_eq!(hint(&app), Some("Enter add"), "T can't tag their group");
     press(&mut app, "/#rhythm");
     let rows = explorer_rows(&app);
-    assert_eq!(rows, ["v built in", "    Euclid"], "{rows:?}");
+    assert_eq!(
+        rows,
+        ["v built in", "    Euclid", "    Noise Ring"],
+        "{rows:?}"
+    );
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);
     command(&mut app, "patch");
     press(&mut app, "/#generative");
     let rows = explorer_rows(&app);
-    assert_eq!(rows.len(), 10, "all nine: {rows:?}");
+    assert_eq!(rows.len(), 11, "all ten: {rows:?}");
     special(&mut app, KeyCode::Esc);
     let tags: Vec<String> = app
         .picker

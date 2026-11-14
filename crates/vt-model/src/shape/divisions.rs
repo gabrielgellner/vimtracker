@@ -12,6 +12,10 @@
 //! on the odd ones; at `1/16` the eighth and quarter triplets take the odd rows, which the
 //! sixteenths would too, so a row with two strikes plays the one on the row, or else the earlier.
 //!
+//! The track's steps are its clock, as the module counts the clock it's given: on a track at
+//! another speed, its bar is as many of the track's steps, so at `1/2` it plays the rhythm eight
+//! times as slow, and a triplet's nudge is a third of the track's row, as far as its nudges go.
+//!
 //! The module's two channels are two tracks: each plays its own channel's dice, `A` or `B`, and a
 //! third can play `A+B`, the strikes of both, as the module's combined output does.
 
@@ -20,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use super::{GenCell, ShapeColumn, mix};
 use crate::constants::{DEFAULT_NOTE_VELOCITY, NUDGE_TICKS, TICKS_PER_QUARTER, TICKS_PER_STEP};
 use crate::selection::StepRange;
-use crate::step::{Note, Step};
+use crate::step::{Note, Step, most_nudge};
 
 /// How many divisions there are, each with its chance.
 pub const DIVISIONS: usize = 6;
@@ -189,12 +193,6 @@ impl Bar {
         (self.ticks() / self.row_ticks()) as usize
     }
 
-    /// The earliest a strike is nudged, in 24ths of a sixteenth: a triplet's third of a row, `-8`
-    /// on rows of sixteenths and `-4` on 32nds.
-    pub fn earliest(self) -> i8 {
-        -((self.row_ticks() / 3 / NUDGE_TICKS) as i8)
-    }
-
     /// The bar for a track at this many ticks a step: 32nds at `1/32`, and sixteenths otherwise.
     pub fn for_step(ticks: u64) -> Self {
         if ticks < TICKS_PER_STEP {
@@ -217,6 +215,10 @@ pub struct Divisions {
     /// its own.
     pub channel: Option<Channel>,
     pub bar: Bar,
+    /// How long the track's step was when the panel opened, in ticks, where that isn't the bar's
+    /// row, as at `1/8`: its rows play that long, so a triplet's nudge is a third of it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ticks: Option<u16>,
 }
 
 impl Default for Divisions {
@@ -227,6 +229,7 @@ impl Default for Divisions {
             chances: [[75, 25, 10, 0, 0, 0], [0, 50, 0, 0, 25, 0]],
             channel: Some(Channel::A),
             bar: Bar::Four,
+            ticks: None,
         }
     }
 }
@@ -241,6 +244,47 @@ pub struct Strike {
 impl Divisions {
     pub fn is_default(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// For a track whose step is this many ticks: 32nds at `1/32`, and sixteenths otherwise, its
+    /// rows playing as long as the track's.
+    pub fn for_step(self, ticks: u64) -> Self {
+        Self {
+            bar: Bar::for_step(ticks),
+            ..self
+        }
+        .played_at(ticks)
+    }
+
+    /// The same, with another bar, its rows still playing as long as the track's.
+    pub fn with_bar(self, bar: Bar) -> Self {
+        let played = self.played();
+        Self { bar, ..self }.played_at(played)
+    }
+
+    fn played_at(self, ticks: u64) -> Self {
+        let ticks = (ticks != self.bar.row_ticks()).then(|| ticks.min(u64::from(u16::MAX)) as u16);
+        Self { ticks, ..self }
+    }
+
+    /// How long one of its rows plays, in ticks: the track's step.
+    pub fn played(&self) -> u64 {
+        self.ticks.map_or(self.bar.row_ticks(), u64::from)
+    }
+
+    /// A strike so many ticks off its row in the bar, as a nudge: as far again on the track's own
+    /// row, in 24ths of a sixteenth, to the nearest, and no further than the track's nudges go.
+    fn nudge(&self, ticks: i64) -> i8 {
+        let played = self.played();
+        let scaled = ticks.unsigned_abs() * played / self.bar.row_ticks();
+        let size = ((scaled + NUDGE_TICKS / 2) / NUDGE_TICKS).min(most_nudge(played) as u64) as i8;
+        if ticks < 0 { -size } else { size }
+    }
+
+    /// The earliest a strike is nudged, in 24ths of a sixteenth: a triplet's third of a row, `-8`
+    /// on a track at `1/16`, `-4` at `1/32` and -64, `-40` as the grid shows it, at `1/2`.
+    pub fn earliest(&self) -> i8 {
+        self.nudge(-((self.bar.row_ticks() / 3) as i64))
     }
 
     /// The channel it plays, `A` if it's yet to be given one.
@@ -315,7 +359,7 @@ impl Divisions {
                 }
             }
         }
-        found.map(|ticks| (ticks / NUDGE_TICKS as i64) as i8)
+        found.map(|ticks| self.nudge(ticks))
     }
 
     /// Every strike over a span of `rows`, in order.
@@ -447,6 +491,7 @@ mod tests {
             vary: 0,
             variation: crate::shape::Variation::default(),
             divisions,
+            ring: crate::shape::Ring::default(),
         }
     }
 
@@ -467,6 +512,7 @@ mod tests {
             chances: [set, [0; DIVISIONS]],
             channel: Some(Channel::A),
             bar,
+            ticks: None,
         }
     }
 
@@ -548,8 +594,8 @@ mod tests {
         // sixteenth.
         let coarse = only(Bar::Four, &[(Division::QuarterTriplet, 100)]);
         assert_eq!(placed(coarse, 1, 8), [(0, 0), (3, -8), (5, 8)]);
-        assert_eq!(Bar::Four.earliest(), -8);
-        assert_eq!(Bar::FourFine.earliest(), -4);
+        assert_eq!(only(Bar::Four, &[]).earliest(), -8);
+        assert_eq!(only(Bar::FourFine, &[]).earliest(), -4);
         // Every division at once has a row for each of its ticks at 1/32, so none is lost.
         let all = only(
             Bar::FourFine,
@@ -651,6 +697,7 @@ mod tests {
             chances,
             channel: None,
             bar: Bar::FourFine,
+            ticks: None,
         };
         let (a, b, both) = (panel.for_track(0), panel.for_track(1), panel.for_track(2));
         assert_eq!(
@@ -702,6 +749,29 @@ mod tests {
         );
         assert_ne!(pass(1), pass(0));
         assert_eq!(pass(1), pass(1));
+    }
+
+    #[test]
+    fn on_a_slower_track_a_triplets_nudge_is_a_third_of_its_row() {
+        let triplets = |ticks: u64| {
+            let divisions = only(Bar::Four, &[(Division::QuarterTriplet, 100)]).for_step(ticks);
+            (placed(divisions, 1, 8), divisions.earliest())
+        };
+        assert_eq!(triplets(240), (vec![(0, 0), (3, -8), (5, 8)], -8));
+        // At 1/8 a row is 480 ticks, and a third of it 16 nudges; at 1/2, 64.
+        assert_eq!(triplets(480), (vec![(0, 0), (3, -16), (5, 16)], -16));
+        assert_eq!(triplets(1920), (vec![(0, 0), (3, -64), (5, 64)], -64));
+        // At 1/1 a third of the row, 128, is past the most a nudge goes, so it stops at 7F.
+        assert_eq!(triplets(3840), (vec![(0, 0), (3, -127), (5, 127)], -127));
+        // Only a track at 1/16 or 1/32, whose rows are the bar's, keeps nothing more.
+        assert_eq!(Divisions::default().for_step(240).ticks, None);
+        assert_eq!(Divisions::default().for_step(120).bar, Bar::FourFine);
+        assert_eq!(Divisions::default().for_step(120).ticks, None);
+        assert_eq!(Divisions::default().for_step(1920).ticks, Some(1920));
+        // Another bar keeps its rows as long as the track's.
+        let fine = Divisions::default().for_step(240).with_bar(Bar::FourFine);
+        assert_eq!((fine.played(), fine.ticks), (240, Some(240)));
+        assert_eq!(fine.with_bar(Bar::Four).ticks, None);
     }
 
     #[test]

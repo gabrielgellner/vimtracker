@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds eighteen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds nineteen of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -21,6 +21,7 @@ there are no samples to find.
 | `walks`, again | Xaoc Devices' Leibniz | `S`'s bit transforms on the tune and the hats |
 | `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
 | `random-rhythm` | Vermona's randomRHYTHM | `S`'s `Divisions`: a chance per division, triplets nudged between the rows |
+| `noise-ring` | The Wiard Noise Ring, Malekko's Richter Noise Ring | `S`'s `Ring`: rhythm and pitch from one shift register, running on each pass |
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
 | `marbles-t` | Mutable Instruments' Marbles' T | `S`'s `Complementary`, `Markov`, `3 states` and `Clusters` rows |
 | `world-rhythms` | Noise Engineering's Zularic Repetitor | `S`'s `Rhythm` rows: a clave, a bell and their drums, a part a track, with children |
@@ -351,12 +352,13 @@ its own phrase, turned its own way, and plays them at its own `Speed`.
 |---|---|---|---|---|
 | `V1` | `FM` | `1/8` | `forward` | The theme itself |
 | `V2` | `String` | `1/16` | `up-down` | A fifth up: `Transpose +4` |
-| `V3` | `VA` | `1/4` | `forward` | Inverted, an octave down: `Invert On`, `Transpose -7` |
+| `V3` | `VA` | `1/2` | `forward` | Inverted, an octave down: `Invert On`, `Transpose -7` |
 | `V4` | `Modal` | `1/8T` | `forward` | Backwards, two rows late: `Reverse On`, `Rotate 2` |
 
 With the scale on, `Transpose` counts the scale's degrees, so `+4` is a fifth in key and `-7` an
-octave. `V3` plays the theme upside down as a bass line across two bars, while `V2` runs up and
-down the answer four times a bar. `V4` goes round three times in two bars, backwards.
+octave. `V3` is the canon's slow voice, its augmentation: the theme upside down as a bass line
+in half notes, a quarter of the theme's speed, across four bars, while `V2` runs up and down the
+answer four times a bar. `V4` goes round three times in two bars, backwards.
 [`song.ron`](songs/fugue/song.ron)
 
 ```text
@@ -384,8 +386,8 @@ the notes, and `Follow` writes it again whenever the theme changes. The follower
 5.  Track 4: the same up to `Enter`, then `j` `j` `j` `j` `=` to turn `Reverse` on, and `j` `=`
     `=` for `Rotate` `2 rows late`. `L`.
 6.  The voices and speeds: on each track, `Space 5`, its machine (`string`, `va`, `modal`), its
-    name, and `/speed` `Enter`, then `=` for each step slower: twice for `1/8` on `V1`, four
-    times for `1/4` on `V3`, once for `1/8T` on `V4`. `V2` stays at `1/16`.
+    name, and `/speed` `Enter`, then `=` for each step slower: three times for `1/8` on `V1`,
+    eight times for `1/2` on `V3`, once for `1/8T` on `V4`. `V2` stays at `1/16`.
 7.  The order: in the phrase view, `:order up-down` on track 2.
 
 The finished song also shapes the voices: the `FM`'s `Index` `40`; `String` `Decay` `90`; plucky
@@ -400,6 +402,9 @@ right, some delay and reverb, and the levels.
     another note, so it turns about that one.
 *   Another order on `V2`: `:order down-up`, `converge` or `pedal`.
 *   `V4` at `1/16T`: still triplets, twice as fast, and the canon tightens.
+*   `V3` at `1/1`, a whole note a row, and the slow voice takes eight bars; or at `1/4D`, a
+    dotted quarter, three eighths a row, so its notes fall across the beats and meet the bar again
+    every three bars.
 *   `Space g a` on a voice freezes it: it keeps its notes as plain ones, and stops following.
 
 ## Kria
@@ -505,7 +510,7 @@ Track 1                       Track 2, at 1/8
     `Enter`), and `Limit` `Bounce` (`K`).
 5.  `:order up-down`.
 6.  Track 2: `W`, and on its Sound page `K` `va` `Enter`, `:name AR`, and `/speed` `Enter`
-    and `=` twice for `1/8`. In the phrase view, `:len 4`, the four notes with `SGL4`, and
+    and `=` three times for `1/8`. In the phrase view, `:len 4`, the four notes with `SGL4`, and
     `ARP` on each (`K` `arp` `Enter`, then `24`).
 7.  Its `Arpeggio` device, beside the accumulator: `Rate` `1/32`, which on a track at `1/8` is a
     sixteenth, `Mode` `Up-down`, `Oct` `2` and `Retrig` `on`.
@@ -933,6 +938,72 @@ chances as its own.
     so its figure drifts across the bar and comes back every three bars.
 *   The hats are a generator of their own, so `gl` on the kick changes the kick alone, and the
     hats keep its old chances. `S` across the three again sets them together.
+
+## Noise Ring
+
+Grant Richter's Wiard 1210 Noise Ring, of the Buchla 266's line and in Eurorack as Malekko's
+Richter Noise Ring, is an 8-bit shift register going round. Each clock a bit comes out of one
+end and goes back in at the other, unless `Change` replaces it with a new bit, which `Chance`
+makes a 1 or a 0. Its outputs are the register itself: each bit as a gate, and the byte as a
+stepped voltage. Patch a gate to a drum and the voltage to a quantiser, and the rhythm and the
+melody come from the same bits, so they move together: a note is the one before it with its
+bits moved along. It's the Turing Machine's cousin, but where the Turing Machine's loop only
+chooses pitches over a rhythm you play it, the Noise Ring's is both.
+
+`Ring` is this, a row a clock: a row plays if the bit just taken in is a 1, at the pitch of the
+register's byte, from `From` to `To` through the scale. `Change` and `Chance` are the module's two
+knobs, and `Length` is the Turing Machine's switch, how many bits go round, 8 as the module has.
+
+**How the song does it.** Track 1, a `Modal` bell, has a live `Ring` over 16 rows from `D-3` to
+`D-5` in D dorian: `Change` `15%`, so one bit in seven is new as it comes round, `Chance` `55%`, a
+little over half of them 1s, `Length` 8. Kept live, the register runs on from pass to pass, so
+each bar plays where the last one left it, drifting a bit at a time. Track 2, a `VA` bass, has a
+second ring from `D-1` to `D-2`, locked at `Change` `0%`, its `Length` 5: five bits go round the
+bar of 16, so the figure comes in a row earlier each bar and is back where it started on the
+sixth. A kick and hats keep time. [`song.ron`](songs/noise-ring/song.ron)
+
+```text
+    00  01  02  03  04  05  06  07  08  09  0A  0B  0C  0D  0E  0F
+NR  G-4 B-3 --- D-4 --- D-5 --- B-4 G-4 B-3 G-4 B-3 --- D-4 --- D-5
+BS  D-2 --- --- E-1 G-1 D-2 --- --- E-1 G-1 D-2 --- --- E-1 G-1 D-2
+```
+
+That's the first bar, as the phrases hold it. The bell's second half is its first again with one
+bit new, and the next bar, `C-5 B-4 G-4 B-3 --- D-4 --- D-5`, twice, is the same bits moved on.
+A falling run, as `C-5 B-4 G-4 B-3`, is a run of 1s at the top of the byte moving out of it a row
+at a time.
+
+**Build it.**
+
+1.  `:set scale=dorian`, `:set root=d` and `:bpm 112`.
+2.  Track 1: `K` `modal` `Enter`, `:name NR`.
+3.  `Space 3`, `vG` on the Note column, and `S`. On `Fill`, `K` `/ring` `Enter`. The panel shows
+    `From`, `To`, `Change` `10%`, `Chance` `50%` and `Length` `8`.
+4.  `From` `d3` and `To` `d5` (`i`, the note, `Enter`), `Change` `i` `15` `Enter` and `Chance`
+    `i` `55` `Enter`. `r` rolls a new ring until you like the bar, and `L` keeps it live.
+5.  Track 2: `W`, `K` `va` `Enter`, `:name BS`, then in the phrase view `vG`, `S`, `Fill` `Ring`,
+    `From` `d1`, `To` `d2`, `Change` `0`, `Chance` `60` and `Length` `5`, and `L`.
+
+Then a `Kick` on every beat and a `Hat` on the off-beats. The finished song also sets the bass's
+filter, the bell's delay and reverb sends, and the levels.
+
+**Play it.** `Tab`, and `Space 8` on track 1 for the Gen page: the ring's device has `From` and
+`To`, then `Change`, `Chance` and `Length`.
+
+*   `Change` up to `40%` while it plays: the bar changes more each time round, and at `100%`
+    every row is new. Down to `0%` it locks on whatever loop it has reached.
+*   When a bar comes round that you like, `Space g a` keeps the register as that pass began: it
+    plays first from then on, and the ring runs on from there. `Change` to `0%` then holds that
+    loop, the Turing Machine's lock. `r` lets go of it for a new ring.
+*   `Chance` is the density: down to `25%` and the bell plays a few notes a bar, up to `80%` and
+    most rows play, the new 1s joining the ones there.
+*   `Length` 16 for a loop as long as the bar, or 3 for a riff of three bits, its byte the same
+    three going round, so a short ring is a repeating arpeggio.
+*   The bass's `Length` 4, and it lines up with the bar; 7 and it takes seven bars to come back.
+
+**As a patch.** The bell's ring is the shipped patch `Noise Ring`, with `Change`, `Chance` and
+`Length` on macros, the module's two knobs and the Turing Machine's switch; add it with
+`:patch` on any track and turn them on the Gen page or the Roto.
 
 ## Marbles' X
 

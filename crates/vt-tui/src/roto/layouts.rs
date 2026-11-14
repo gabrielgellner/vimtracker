@@ -1865,6 +1865,25 @@ const GEN_DIVISIONS: DeviceLayout = live(
         ),
     ],
 );
+/// A noise ring: its ends, then the module's two knobs, `Change` and `Chance`, and the loop's
+/// `Length`; its register makes its rhythm, so it has no `Where`, and it runs on from pass to pass
+/// by itself, so it has no `Vary`.
+const GEN_RING: DeviceLayout = live(
+    "gen/ring",
+    &[knobs(
+        "Ring",
+        [
+            s("from"),
+            s("to"),
+            s("change"),
+            s("ones"),
+            s("length"),
+            __,
+            __,
+            __,
+        ],
+    )],
+);
 /// A Markov chain learned from the notes there: how closely it copies them and how far it strays;
 /// it learns its rows with its notes, so it has no `Where`.
 const GEN_VARIATION: DeviceLayout = live(
@@ -1921,7 +1940,7 @@ const GEN_REWORK: DeviceLayout = live(
 
 /// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
 /// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 16] = [
+pub const GENERATORS: [&DeviceLayout; 17] = [
     &GEN_RAMP,
     &GEN_RANDOM,
     &GEN_WAVE,
@@ -1935,6 +1954,7 @@ pub const GENERATORS: [&DeviceLayout; 16] = [
     &GEN_MULTIPLY,
     &GEN_GRIDS,
     &GEN_DIVISIONS,
+    &GEN_RING,
     &GEN_VARIATION,
     &GEN_BITS,
     &GEN_REWORK,
@@ -1956,6 +1976,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
         FillKind::Multiply => &GEN_MULTIPLY,
         FillKind::Grids => &GEN_GRIDS,
         FillKind::Divisions => &GEN_DIVISIONS,
+        FillKind::Ring => &GEN_RING,
         FillKind::Variation => &GEN_VARIATION,
         FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => &GEN_BITS,
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,

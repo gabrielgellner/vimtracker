@@ -86,7 +86,7 @@ nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Walk`, `Wave`, `Acid`, `Grids`, `Divisions` and more |
+| Fill | `Ramp`, `Random`, `Walk`, `Wave`, `Acid`, `Grids`, `Divisions`, `Ring` and more |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
@@ -330,7 +330,7 @@ way notes are forced into the scale: playing never does. A note outside the
 scale shows in the panel in the grid's colour for one.
 
 On Nudge, the ends run as far as the track's nudges go, `-B` to `+B` at `1/16`
-and `-2F` to `+2F` at `1/4`, in 24ths of a sixteenth, so `Random` between `-3`
+`-2F` to `+2F` at `1/4` and `-7F` to `+7F` at `1/1`, in 24ths of a sixteenth, so `Random` between `-3`
 and `+3` is a humanise you can see, and a `Ramp` rushes or drags into a fill. A
 live one keeps the range it opened with. On a gate's length, a `Wave` or `List` of lengths shapes the
 phrasing; a row with no length of its own, `··`, keeps it unless filled.
@@ -460,6 +460,11 @@ either way. At `1/16` the eighth and quarter triplets take the odd rows, nudged
 row, and the panel says `16ths and triplets need 32nds to fit`. The panel
 starts `Bar` in 32nds on a `1/32` track.
 
+The track's steps are its clock, as the module counts the clock it's given. On a
+track at another speed the bar is as many of its rows, so at `1/2` the rhythm
+plays eight times as slow, and a triplet is nudged a third of the track's row:
+`10` at `1/8`, `40` at `1/2`, and `7F` at `1/1`, as far as a nudge goes.
+
 Select three tracks, `vGWW`, and `S`: the first plays channel `A`, the second
 `B`, with B's chances, and the third `A+B`, every row either of the others
 strikes, as the module's combined output. The panel shows both channels'
@@ -474,6 +479,43 @@ nudges; a row it doesn't strike is cleared, and an `OFF` stays. Kept live with
 `L`, its title on the Gen page is its channel and bar, like
 `Divisions  A  4/4 32nds`. With `A+B`, the twelve chances fill the device, so
 its `Note` is set in the panel, with `gl`.
+
+### A noise ring
+
+`Ring`, on the Note column only, writes a rhythm and a melody together from one
+shift register, after the Wiard Noise Ring and Malekko's Richter Noise Ring.
+The register is clocked once a row: it takes a bit in, and the row plays if
+that bit is a 1, at a pitch from the register's last eight bits read as a byte,
+from `From` to `To` along the scale's degrees while it's on. So a note and the
+notes after it are the same bits moved along, and the melody and the rhythm move
+together.
+
+| Row | Does |
+|---|---|
+| From, To | The lowest byte plays From and the highest To. `~` swaps them |
+| Change | The chance a bit coming round is replaced by a new one, `0%` to `100%` |
+| Chance | The chance a new bit is a 1: how many rows play |
+| Length | How many bits go round, from 1 to 16; the module has 8 |
+
+At `Change` `0%` the loop locks: the same `Length` bits go round, so the rhythm
+and its pitches repeat every `Length` rows. Turned up, more of the bits are new
+as they come round, until at `100%` every row is drawn afresh. `Chance` is the
+density either way, as a new ring starts with bits drawn by it too, and raising
+it only adds notes. A `Length` that doesn't go into the rows, such as 5 over 16,
+comes in a row earlier each pass.
+
+A row that plays over a note there keeps its velocity and gate and takes the
+ring's pitch; a new one takes the first note's, or the velocity notes are typed
+with on an empty column. A row that doesn't play is cleared, and an `OFF` stays.
+`r` rolls a new ring.
+
+Kept live with `L`, the register runs on from pass to pass, so each time round
+the phrase plays where the last pass left it, as the module does, not the bar
+written again; there's no `Vary`, as it varies by itself. Each pass is worked out
+from the seed and its number, so playing from bar 33 hears what playing to it
+would. On the Gen page, `Space g a` keeps the register as the pass just heard
+began: that pass then plays first, the ring runs on from there, and `Change`
+down to `0%` holds its loop, the Turing Machine's lock.
 
 ### On an empty column
 

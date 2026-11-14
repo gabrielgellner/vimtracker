@@ -94,6 +94,8 @@ fn owns(shape: &Shape) -> Owns {
         FillKind::Variation => Owns::Note,
         // A strike is a note at its nudge, so a row's nudge is its as well.
         FillKind::Divisions => Owns::Timed,
+        // A row plays or rests by the register, so its note, velocity and gate are the ring's.
+        FillKind::Ring => Owns::Note,
         _ => Owns::Cell,
     }
 }

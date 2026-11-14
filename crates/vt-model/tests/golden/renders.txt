@@ -228,6 +228,16 @@ fdf1f37da22eb490 Random, a named rhythm's rows on Note, in key
 9ca03b824ddb4521 Reverse on Note, in key
 d60f35bce144ec65 Reverse on Nudge
 968f1d564e512700 Reverse on Velocity
+87e59c5569117b25 Ring on FX, event
+87e59c5569117b25 Ring on FX, fine
+87e59c5569117b25 Ring on FX, last slot
+87e59c5569117b25 Ring on Length
+bb18f5b852997861 Ring on Note of its own, chromatic
+562820c0f78c0624 Ring on Note of its own, in key
+fd9adfc02bfd0d37 Ring on Note, chromatic
+33fb232f2b6a4fba Ring on Note, in key
+87e59c5569117b25 Ring on Nudge
+87e59c5569117b25 Ring on Velocity
 711a9da5dbfc2486 Rotate bits on FX, event
 695c3d0734af45b1 Rotate bits on FX, fine
 f4948179fa3297a8 Rotate bits on FX, last slot

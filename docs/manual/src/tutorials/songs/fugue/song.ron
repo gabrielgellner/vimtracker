@@ -36,6 +36,7 @@
             send_a: 0,
             send_b: 160,
             pitch: 128,
+            speed: Eighth,
             mods: ((
                 kind: Adsr,
                 destination: Some("vol"),
@@ -255,7 +256,7 @@
             send_a: 0,
             send_b: 0,
             pitch: 128,
-            speed: Quarter,
+            speed: Half,
             mods: ((
                 kind: Adsr,
                 destination: Some("vol"),

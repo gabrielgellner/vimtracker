@@ -12,7 +12,7 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Acid, Bar, Bits, Channel, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids,
+    Acid, Bits, Channel, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids,
     MAX_VALUES, Pink, Random, Shape, ShapeColumn, Source, Starts, VARIATION_NOTES, Values, WEIGHTS,
     Walk, Where, default_ends, default_step, divisions_seed, drum_parts, is_empty, on_track,
     open_rows, track_seed, variation_notes,
@@ -395,6 +395,7 @@ fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Sh
         vary: 0,
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
+        ring: vt_model::shape::Ring::default(),
     }
 }
 
@@ -796,10 +797,12 @@ impl App {
         let mut shape = starting_shape(column, (from, to), place);
         shape.seed = base.seed.wrapping_add(self.shape_seed);
         // Across tracks, each takes its own part, and its own channel; a track at `1/32` reads
-        // its rows as 32nds.
+        // its rows as 32nds, and `Divisions` plays its rows as long as the track's step.
         shape.grids.part = alone.then_some(first.drum);
         shape.divisions.channel = alone.then_some(Channel::A);
-        shape.divisions.bar = Bar::for_step(base.tracks[first.track].speed.ticks());
+        shape.divisions = shape
+            .divisions
+            .for_step(base.tracks[first.track].speed.ticks());
         Ok(ShapePanel {
             selection,
             parts,
@@ -1305,7 +1308,8 @@ impl App {
     }
 
     /// Roll a shape's seed again, as `r` does: with `Acid`'s pitches kept, only its second die,
-    /// the accents, slides and octaves.
+    /// the accents, slides and octaves; and a `Ring` starts again from its new seed, letting go of
+    /// a register it kept.
     pub(crate) fn roll(&mut self, shape: &mut Shape) {
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = self.shape_seed;
@@ -1313,6 +1317,7 @@ impl App {
             shape.acid.roll = shape.acid.roll.wrapping_add(seed).wrapping_add(1);
         } else {
             shape.seed = self.song().seed.wrapping_add(seed);
+            shape.ring.kept = None;
         }
     }
 
