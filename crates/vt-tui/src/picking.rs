@@ -28,7 +28,7 @@ use crate::input::bindings::Cmd;
 use crate::input::command::Line;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
-use crate::input::picker::{Item, Outcome, Pick, Picker, Preview, PreviewLine, Shown};
+use crate::input::picker::{Item, KitChoice, Outcome, Pick, Picker, Preview, PreviewLine, Shown};
 use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
 use crate::track_page::Page;
@@ -57,7 +57,7 @@ pub(crate) fn kit_item(entry: &KitEntry) -> Item {
     };
     Item::new(
         label,
-        Pick::KitSound {
+        Pick::KitSound(KitChoice {
             path: entry.path.clone(),
             label: entry.label.clone(),
             name: entry.name.clone(),
@@ -67,7 +67,7 @@ pub(crate) fn kit_item(entry: &KitEntry) -> Item {
                 ..PlayParams::default()
             },
             choke: entry.choke,
-        },
+        }),
     )
     .meaning(meaning)
     .preview(Preview::Sample(entry.path.clone()))
@@ -812,13 +812,13 @@ impl App {
                     force,
                 });
             }
-            Pick::KitSound {
+            Pick::KitSound(KitChoice {
                 path,
                 label,
                 name,
                 play,
                 choke,
-            } => {
+            }) => {
                 let track = self.cursor.track;
                 let mut more = vec![Action::SetTrackChoke { track, choke }];
                 if !label.is_empty() {
@@ -929,6 +929,11 @@ impl App {
                 self.note_place_of(Purpose::Kit, &path);
                 self.load_kit(&path);
             }
+            Pick::KitLoad { kit, sounds } => {
+                self.note_place_of(Purpose::Kit, &kit);
+                self.load_kit_tracks(&kit, &sounds);
+            }
+            Pick::KitBeat(tracks) => self.write_kit_beat(&tracks),
         }
     }
 

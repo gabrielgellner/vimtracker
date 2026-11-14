@@ -86,17 +86,23 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
         format!(" {} ", picker.title),
         Style::new().add_modifier(Modifier::BOLD),
     )];
-    // The explorer's count would only be what's been read so far.
+    // The explorer's count would only be what's been read so far, but the kit dialog counts
+    // the sounds marked.
     if !explorer {
         title.push(Span::styled(
             format!("{}/{} ", picker.matching(), picker.items().len()),
+            theme::dim(),
+        ));
+    } else if picker.marked_count() > 0 {
+        title.push(Span::styled(
+            format!("{} marked ", picker.marked_count()),
             theme::dim(),
         ));
     }
     let mut block = widgets::window_border()
         .style(theme::window())
         .title(Line::from(title));
-    if let Some(hint) = picker.hint {
+    if let Some(hint) = picker.shown_hint() {
         block = block.title_bottom(self::hint(picker, hint));
     }
     let inner = block.inner(window);
@@ -353,8 +359,17 @@ fn tree_spans(picker: &Picker, row: usize, index: usize, width: usize) -> Vec<Sp
 /// An explorer row's icon, which says what it is: a folder open or closed, a project, a kit, a
 /// kit's sound, a sample or a loop. It's dim, but green on the item already chosen, as what's
 /// current in a list is, and a warning in the error colour on a file that's gone or won't read.
+/// A sound the kit dialog has marked to load is a pad with a tick, green.
 fn icon_span(picker: &Picker, index: usize) -> Span<'static> {
     let icon = picker.icon(index).unwrap_or(Icon::Folder);
+    if picker.is_marked(index) {
+        let glyph = if icon == Icon::KitSoundLayered {
+            glyphs::KIT_SOUND_LAYERED_MARKED
+        } else {
+            glyphs::KIT_SOUND_MARKED
+        };
+        return Span::styled(glyph.to_string(), theme::active());
+    }
     let glyph = match icon {
         Icon::Folder if picker.folder_open(index) == Some(true) => glyphs::FOLDER_OPEN,
         Icon::Folder => glyphs::FOLDER,

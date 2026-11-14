@@ -945,7 +945,7 @@ there; otherwise they don't yet change what you hear.
 
 | Command | Does |
 |---|---|
-| `:kit` | Choose a kit from the kit folders |
+| `:kit` | Choose a kit from the kit folders, or load its sounds as tracks |
 | `:kit 909` | Choose sounds from that kit |
 | `:kit path/drums.ron` | Choose sounds from a kit file anywhere |
 | `:kit 909 all` | Put every sound on tracks from the first, in order |
@@ -953,6 +953,40 @@ there; otherwise they don't yet change what you hear.
 `all` puts each sound in the bank, keeps a track's other settings, leaves later
 tracks alone, and adds tracks if it has more sounds than you have. If it replaces a different sample, the
 status line says which, and `u` undoes the whole load.
+
+### Starting from a kit
+
+`:kit` is also the quick way to start a project from a kit, as Ableton's Extract
+Chains turns a drum rack's pads into tracks. `l` opens a kit to its sounds, and you
+mark the ones you want: `Space` or `x` marks the sound under the cursor, or takes its
+mark off, and goes on to the next, so `4x` marks four, and `a` marks every sound in
+the kit, or takes the marks off if they're all marked. A marked sound's pad has a tick,
+and the title says how many are marked. Marks stay in one kit, so marking a sound in
+another starts again there, and a sound whose file has gone can't be marked.
+
+`Enter` loads the marked sounds, or the one under the cursor if none are, as new
+tracks after the last, so nothing is written over. Each track plays one sound and is
+named by its label, such as `BD`, with its choke group, and the sound joins the bank
+with its gain and tune, as choosing it from `:sample` gives. The new tracks go in the
+first group with no tracks, named after the kit, by its first word up to three
+characters, so `909 Core Kit` makes `909`, and the group is folded (see **Folding
+a group** in **The track page, envelopes and LFOs**). One `u` undoes the whole load.
+If every group already has tracks, they go in none, and the status line says so.
+
+If the new tracks have a kick, a snare or a hat, by their labels as `S` with `Grids`
+reads them, a list offers to start a beat. `Enter` on `Grids` writes a beat from
+Grids' map on the first kick, snare and hat, each its own part, as `S` with `Grids`
+across them would, and `Esc` or `None` leaves the tracks empty. The beat is a `u` of
+its own, and `S` on its notes changes it.
+
+| Keys | Does |
+|---|---|
+| `l` on a kit | Open it to its sounds |
+| `Space` `x` | Mark this sound, or take its mark off, and go to the next |
+| `a` | Mark every sound in this kit, or take the marks off |
+| `Enter` | Load the marked sounds, or this one, as new tracks in a new folded group |
+| `Enter` on a kit | Use it, for `:sample` to list first |
+| `L` on a kit | Put every sound on tracks from the first, as `all` does |
 
 ## Kit and sample folders
 
