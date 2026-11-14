@@ -19,14 +19,12 @@ use crate::theme;
 use crate::track_page::{
     Control, DeviceSpec, DeviceWidth, ModField, Page, TrackPage, modulator_bypassed, rack_places,
 };
-use crate::views::widgets::bar::ValueBar;
 use crate::views::widgets::device::{Device, rack_areas};
-use crate::views::widgets::grid::{CellSource, CellWidths, SettingsGrid, faded};
+use crate::views::widgets::grid::{CellWidths, SettingsGrid, faded};
 use crate::views::widgets::image;
 use crate::views::widgets::panel::GraphicPanel;
-use crate::views::widgets::setting::{self, Focus, name_line, value_spans};
 
-use super::{at_default, value, value_line};
+use super::TrackCells;
 
 /// The size of an envelope's shape and an LFO's cycle, in characters: the graphic panel's half
 /// size, for half-width devices, which is 360 by 195 pixels at the author's 15 by 39.
@@ -54,80 +52,6 @@ pub(crate) fn mod_being_edited(page: &TrackPage, ctx: &Ctx) -> Option<usize> {
 /// top left, for the terminal to place its dot over: none for a slot of another type or one that
 /// isn't drawn.
 pub type CyclesAt = [Option<(u16, u16)>; MOD_SLOTS];
-
-/// What comes before a slot's destination in its title, so `LFO  Trig  → Cut` doesn't read as
-/// "Trig Cut".
-const TO: &str = "→ ";
-
-/// What the Mod page's cells show for a modulator's settings.
-struct ModCells<'a> {
-    page: &'a TrackPage,
-    ctx: &'a Ctx<'a>,
-    track: &'a Track,
-}
-
-impl CellSource for ModCells<'_> {
-    type Id = Control;
-
-    fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let look = self.ctx.look_on(control, Focus::Off);
-        name_line(&look, control.label_on(self.track), room)
-    }
-
-    fn value(&self, control: Control) -> Line<'static> {
-        let here = control == self.page.control_here(self.ctx);
-        value_line(
-            self.ctx,
-            self.track,
-            control,
-            here,
-            at_default(control, self.track),
-        )
-    }
-
-    /// A modulator's settings have no bars: the panel beside them shows what they shape.
-    fn bar(&self, _control: Control) -> Option<ValueBar> {
-        None
-    }
-}
-
-/// Whether a control is a destination that's set to nothing, `---`, which dims it as an empty
-/// slot's `Empty` is dim.
-fn goes_nowhere(control: Control, track: &Track) -> bool {
-    match control {
-        Control::Mod(slot, ModField::Destination) => track.mods[slot].destination.is_none(),
-        _ => false,
-    }
-}
-
-/// A slot's title controls, each in its own style: its type, its mode, and its destination after
-/// an arrow in the destination's style.
-fn title_controls(
-    page: &TrackPage,
-    ctx: &Ctx,
-    track: &Track,
-    device: &DeviceSpec,
-) -> Vec<Line<'static>> {
-    let current = page.control_here(ctx);
-    device
-        .title
-        .iter()
-        .flatten()
-        .map(|control| {
-            let here = *control == current;
-            let look = ctx.look_on(*control, Focus::at(here, false));
-            let text = setting::text(&look, || value(*control, track, ctx.song()));
-            let nowhere = goes_nowhere(*control, track);
-            let style = setting::style(&look, nowhere);
-            let mut spans = value_spans(&look, text, style);
-            if matches!(control, Control::Mod(_, ModField::Destination)) {
-                let arrow = setting::resting(nowhere);
-                spans.insert(0, Span::styled(TO, arrow));
-            }
-            Line::from(spans)
-        })
-        .collect()
-}
 
 /// A modulator's panel: an envelope's shape or an LFO's cycle, in a box, once its image has been
 /// sent.
@@ -217,7 +141,7 @@ fn draw_device(
     let bypassed = device.switchable
         && device.title[0].and_then(|control| modulator_bypassed(control, track)) == Some(true);
     let fade = bypassed.then(|| theme::cursor(ctx.mode()));
-    let mut controls = title_controls(page, ctx, track, device);
+    let mut controls = TrackCells::new(page, ctx, track).titles(device);
     if let Some(keep) = fade {
         controls = controls.into_iter().map(|line| faded(line, keep)).collect();
     }
@@ -283,7 +207,7 @@ fn draw_device(
                 .collect()
         })
         .collect();
-    let source = ModCells { page, ctx, track };
+    let source = TrackCells::new(page, ctx, track);
     let grid = SettingsGrid::new(&source, rows, widths).faded(fade);
     frame.render_widget(grid, settings);
     cycle_at

@@ -9,9 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::generator::{Generator, Span as Spanned};
 use vt_model::grid::GRID_COLUMNS;
-use vt_model::macros::{GenColumn, MacroTarget};
-use vt_model::shape::params::Units;
-use vt_model::shape::{Context, GenParam, ShapeColumn};
+use vt_model::shape::ShapeColumn;
 use vt_model::song::Track;
 
 use crate::app::App;
@@ -21,15 +19,14 @@ use crate::shaping::LiveGen;
 use crate::theme;
 use crate::track_page::{Control, DeviceSpec, TrackPage};
 use crate::views::phrase::{lane_playheads, playhead_step};
-use crate::views::widgets::bar::ValueBar;
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
-use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid};
+use crate::views::widgets::grid::{CellWidths, ROW_STEP, SettingsGrid};
 use crate::views::widgets::image;
 use crate::views::widgets::panel::GraphicPanel;
-use crate::views::widgets::setting::{self, Focus, name_line, value_spans};
+use crate::views::widgets::setting::{self, Focus};
 use crate::views::widgets::table::take_top;
 
-use super::{BAR_CELLS, LARGE_PANEL_HEIGHT, LARGE_PANEL_WIDTH};
+use super::{BAR_CELLS, LARGE_PANEL_HEIGHT, LARGE_PANEL_WIDTH, TrackCells};
 
 /// The room between the grid and the preview.
 const PANEL_GAP: u16 = 2;
@@ -54,63 +51,6 @@ const MACRO_CELLS: CellWidths = CellWidths {
     gap: 3,
 };
 
-/// The macros' band's cells: each macro's name, where it's heard, which a lock or modulation may
-/// move from where it's set, and its bar, filled to what's heard with a mark where it's set.
-struct MacroCells<'a> {
-    page: &'a TrackPage,
-    ctx: &'a Ctx<'a>,
-    track: &'a Track,
-}
-
-impl MacroCells<'_> {
-    /// Where a macro is set, and where it's heard, from the engine's report of this track.
-    fn values(&self, at: usize) -> (u16, u16) {
-        let set = self.track.macros[at].value;
-        let heard = match (self.ctx.live(), self.ctx.reported_track()) {
-            (Some(live), Some(then)) => {
-                let moved = i32::from(live.macros[at]) - i32::from(then.macros[at].value);
-                (i32::from(set) + moved).clamp(0, 0xFF00) as u16
-            }
-            _ => set,
-        };
-        (set, heard)
-    }
-}
-
-impl CellSource for MacroCells<'_> {
-    type Id = Control;
-
-    fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let look = self.ctx.look_on(control, Focus::Off);
-        let Control::Macro(at) = control else {
-            return Line::default();
-        };
-        let name = macro_name(&self.track.macros[at], at);
-        name_line(&look, &name, room)
-    }
-
-    fn value(&self, control: Control) -> Line<'static> {
-        let Control::Macro(at) = control else {
-            return Line::default();
-        };
-        let here = control == self.page.control_here(self.ctx);
-        let look = self.ctx.look_on(control, Focus::at(here, false));
-        let (_, heard) = self.values(at);
-        let text = setting::text(&look, || format!("{heard:04X}"));
-        let empty = self.track.macros[at].maps.is_empty();
-        let style = setting::style(&look, empty);
-        Line::from(value_spans(&look, text, style))
-    }
-
-    fn bar(&self, control: Control) -> Option<ValueBar> {
-        let Control::Macro(at) = control else {
-            return None;
-        };
-        let (set, heard) = self.values(at);
-        Some(ValueBar::new((set >> 8) as u8, MACRO_CELLS.bar_cells).playing((heard >> 8) as u8))
-    }
-}
-
 /// The macros' band: the eight in two rows of four, and under them what the cursor's holds.
 fn draw_macros(
     frame: &mut Frame,
@@ -122,7 +62,7 @@ fn draw_macros(
     focused: bool,
 ) {
     frame.render_widget(Device::new(device.identity.clone()).focused(focused), area);
-    let cells = MacroCells { page, ctx, track };
+    let cells = TrackCells::new(page, ctx, track);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
     let mut settings = Device::settings_area(area);
     frame.render_widget(SettingsGrid::new(&cells, rows, MACRO_CELLS), settings);
@@ -140,84 +80,6 @@ fn draw_macros(
 /// What `Empty` says, under its title.
 const EMPTY_HINT: &str = "  make a column of this phrase live";
 
-/// A generator's cells, read from its shape through the declared table, with bars this many
-/// cells long.
-struct GenCells<'a> {
-    page: &'a TrackPage,
-    ctx: &'a Ctx<'a>,
-    live: &'a LiveGen,
-    context: Context<'a>,
-    bar_cells: usize,
-}
-
-impl GenCells<'_> {
-    fn param(control: Control) -> Option<GenParam> {
-        match control {
-            Control::Gen { param, .. } => Some(param),
-            _ => None,
-        }
-    }
-}
-
-impl CellSource for GenCells<'_> {
-    type Id = Control;
-
-    fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let look = self.ctx.look_on(control, Focus::Off);
-        let name = Self::param(control).map_or("", GenParam::name);
-        name_line(&look, name, room)
-    }
-
-    fn value(&self, control: Control) -> Line<'static> {
-        let here = control == self.page.control_here(self.ctx);
-        let look = self.ctx.look_on(control, Focus::at(here, false));
-        // As it's heard, with what any macro holding its settings gives them (decision 294).
-        let shape = &self.live.generator.heard();
-        let text = setting::text(&look, || {
-            Self::param(control).map_or_else(String::new, |param| {
-                if self.bar(control).is_some() {
-                    param.brief(shape, &self.context)
-                } else {
-                    param.shown(shape, &self.context)
-                }
-            })
-        });
-        let style = setting::style(&look, false);
-        Line::from(value_spans(&look, text, style))
-    }
-
-    fn bar(&self, control: Control) -> Option<ValueBar> {
-        let param = Self::param(control)?;
-        if matches!(param.units(), Units::Named) {
-            return None;
-        }
-        let (low, high) = param.bounds(&self.context)?;
-        let number = param.number(&self.live.generator.heard(), &self.context)?;
-        let place = |number: i32| {
-            let share = (number - low) as f64 / (high - low).max(1) as f64;
-            (share * 255.0).round().clamp(0.0, 255.0) as u8
-        };
-        let centred = matches!(param.units(), Units::Bend | Units::Interval);
-        // A macro holding it draws its range behind the fill.
-        let target = MacroTarget::Gen {
-            column: GenColumn::of(self.live.generator.column),
-            param,
-        };
-        let range = self
-            .ctx
-            .song()
-            .tracks
-            .get(self.ctx.cursor().track)
-            .and_then(|track| track.macro_holding(target))
-            .map(|(_, map)| (place(map.number_at(0.0)), place(map.number_at(255.0))));
-        Some(
-            ValueBar::new(place(number), self.bar_cells)
-                .centred(centred)
-                .range(range),
-        )
-    }
-}
-
 /// Where a generator acts, for the end of its title, dim: its column and its rows, as `Note
 /// 00–0F`, or an FX column's command and its lane, as `FX1 CUT lane 0C`.
 fn acts_on(live: &LiveGen) -> String {
@@ -233,38 +95,6 @@ fn acts_on(live: &LiveGen) -> String {
         (_, Some(rows)) => format!("{column} {:02X}–{:02X}", rows.first, rows.last),
         (_, None) => column,
     }
-}
-
-/// A generator's title: its fill and its `Where` or its source, `Acid`'s `Pitches`, and `Vary`,
-/// each in its own style, a `Where` that's its column's own and a `Vary` of `Once` dim.
-fn title_controls(
-    page: &TrackPage,
-    ctx: &Ctx,
-    cells: &GenCells,
-    device: &DeviceSpec,
-) -> Vec<Line<'static>> {
-    let current = page.control_here(ctx);
-    device
-        .title
-        .iter()
-        .flatten()
-        .map(|control| {
-            let here = *control == current;
-            let shape = &cells.live.generator.shape;
-            let param = GenCells::param(*control);
-            let look = ctx.look_on(*control, Focus::at(here, false));
-            let text = setting::text(&look, || {
-                param.map_or_else(String::new, |param| param.shown(shape, &cells.context))
-            });
-            let default = match param {
-                Some(GenParam::Where) => shape.place == cells.context.default_where(),
-                Some(GenParam::Vary) => shape.vary == 0,
-                _ => false,
-            };
-            let style = setting::style(&look, default);
-            Line::from(value_spans(&look, text, style))
-        })
-        .collect()
 }
 
 /// The phrase the cursor's track is playing, if it's playing one, which the page's title names
@@ -303,6 +133,7 @@ fn draw_generator(
     area: Rect,
     page: &TrackPage,
     ctx: &Ctx,
+    track: &Track,
     device: &DeviceSpec,
     focused: bool,
 ) -> Option<(u16, u16)> {
@@ -318,15 +149,9 @@ fn draw_generator(
         .iter()
         .any(|row| row.get(GRID_COLUMNS - 1).is_some_and(Option::is_some));
     let widths = if four { GEN_FOUR_CELLS } else { GEN_CELLS };
-    let cells = GenCells {
-        page,
-        ctx,
-        live: &live,
-        context: live.context(),
-        bar_cells: widths.bar_cells,
-    };
+    let cells = TrackCells::new(page, ctx, track).of_generator(&live);
     let widget = Device::new(String::new())
-        .controls(title_controls(page, ctx, &cells, device))
+        .controls(cells.titles(device))
         .after(Line::styled(format!("· {}", acts_on(&live)), theme::dim()))
         .focused(focused);
     frame.render_widget(widget, area);
@@ -361,6 +186,7 @@ fn draw_loops(
     area: Rect,
     page: &TrackPage,
     ctx: &Ctx,
+    track: &Track,
     device: &DeviceSpec,
     focused: bool,
 ) {
@@ -386,13 +212,7 @@ fn draw_loops(
         .after(Line::styled(after, theme::dim()))
         .focused(focused);
     frame.render_widget(widget, area);
-    let cells = GenCells {
-        page,
-        ctx,
-        live: &live,
-        context: live.context(),
-        bar_cells: GEN_CELLS.bar_cells,
-    };
+    let cells = TrackCells::new(page, ctx, track).of_generator(&live);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
     let grid = SettingsGrid::new(&cells, rows, GEN_CELLS);
     frame.render_widget(grid, Device::settings_area(area));
@@ -457,9 +277,13 @@ pub(super) fn draw(
             (Some(Control::NewGenerator(_)), _) => {
                 draw_empty(frame, area, page, ctx, device, at == cursor);
             }
-            _ if device.is_loops() => draw_loops(frame, area, page, ctx, device, at == cursor),
+            _ if device.is_loops() => {
+                draw_loops(frame, area, page, ctx, track, device, at == cursor);
+            }
             (Some(Control::Gen { generator, .. }), _) => {
-                if let Some(corner) = draw_generator(frame, area, page, ctx, device, at == cursor) {
+                let focused = at == cursor;
+                if let Some(corner) = draw_generator(frame, area, page, ctx, track, device, focused)
+                {
                     previews.push((generator, corner));
                 }
             }
