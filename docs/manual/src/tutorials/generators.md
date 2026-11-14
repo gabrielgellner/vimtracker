@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds eighteen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds twenty of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -24,9 +24,11 @@ there are no samples to find.
 | `noise-ring` | The Wiard Noise Ring, Malekko's Richter Noise Ring | `S`'s `Ring`: rhythm and pitch from one shift register, running on each pass |
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
 | `marbles-t` | Mutable Instruments' Marbles' T | `S`'s `Complementary`, `Markov`, `3 states` and `Clusters` rows |
+| `world-rhythms` | Noise Engineering's Zularic Repetitor | `S`'s `Rhythm` rows: a clave, a bell and their drums, a part a track, with children |
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 | `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
+| `clock-multiplier` | 4ms' Shuffling Clock Multiplier | `Space o` rotating a group's speeds, and a live `CHA 00` column as `Skip` |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -1129,6 +1131,80 @@ filter, the sends and the levels.
 *   On the Gen page, `Space 8`, each `Amount` is a cell to turn while it plays, and on the Roto
     knob 7.
 
+## Zularic Repetitor
+
+Noise Engineering's Zularic Repetitor plays rhythms from around the world, an idea it took from
+William Sethares' book *Rhythm and Transforms*. You pick a pattern, and its outputs play the
+pattern's parts, with *children*: offshoots in which each beat of the pattern plays only by
+chance, so a part varies round the pattern without losing it. Here that's a `Where`, `Rhythm`:
+`Rhythm` picks the pattern, `Part` which of its three parts a track plays, `Bell`, `Low drum` or
+`High drum`, and `Child` the chance each of the part's hits plays, `100%` the pattern as written.
+
+The patterns are vimtracker's own, transcribed from Godfried Toussaint's papers on the clave and
+bell timelines and from the sources each names, not taken from the module: the son and rumba
+claves, the bossa nova, gahu, shiko, soukous and samba bells, the tresillo and the cinquillo, the
+12/8 bembé bell and the motorik beat. A pattern plays a pulse a row, from the selection's first
+row. The 16-pulse ones are a bar on a `1/16` track, the tresillo and the cinquillo half of one,
+and the bembé's twelve pulses are a bar's triplet eighths, so it wants a track at `1/8T`, where
+twelve rows are a bar, its four beats on the song's.
+
+**How the song does it.** Five tracks in A minor at 100 BPM, each a live generator writing notes of
+its own. The first three are the son: one `S` across them gave each the next part of `Son clave`,
+the clave's bell, the bass's tumbao on the two offbeats of each tresillo, and the conga's open
+tones at the end of each half, the conga a child at `80%`. The last two are at `1/8T`, twelve
+rows: the bembé's bell, a child at `75%` that `Vary` makes anew each pass, and its four beats on
+a kick. [`song.ron`](songs/world-rhythms/song.ron)
+
+| Track | Rhythm | Part | Child | Fill |
+|---|---|---|---|---|
+| `CL` | `Son clave` | `Bell` | `100%` | `E-5` on every row it plays |
+| `BS` | `Son clave` | `Low drum` | `100%` | `Alternate`, `A-1` and `E-2` |
+| `CG` | `Son clave` | `High drum` | `80%` | `Alternate`, `E-3` and `A-3` |
+| `BL` | `Bembé` | `Bell` | `75%`, `Vary` `Each pass` | `C-4` |
+| `BD` | `Bembé` | `Low drum` | `100%` | `C-1` |
+
+```text
+CL  x..x..x...x.x...
+BS  ...x..x....x..x.
+CG  ......xx.......x
+BL  ..x.xx...x..        the bell, x.x.xx.x.x.x, a child
+BD  x..x..x..x..
+```
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 100`.
+2.  Tracks 1 to 5: the machines `modal`, `va`, `modal`, `hat` and `kick` (`K`, the name, `Enter`),
+    named `CL`, `BS`, `CG`, `BL` and `BD` with `:name`. On tracks 4 and 5, `/speed` `Enter` and
+    `+` once, to `1/8T`, then `Space 3` and `:len 12`.
+3.  The son: on track 1, `Space 3`, `vG` on the Note column, `W` `W` to reach track 3, and `S`.
+    `From` and `To` `e5` (`i`, the note, `Enter`). `j` down to `Where`, `K` `/rhythm` `Enter`: it
+    starts on `Son clave`, and the panel says `Each track plays the next part`. `L`.
+4.  On track 2, `gl` on one of its notes reopens its own generator: `Fill` `Alternate`, `From`
+    `a1`, `To` `e2`, and `L`. On track 3, the same with `e3` and `a3`, then `Child` `80` and `L`.
+5.  The bembé: track 4, `vG`, `W`, `S`, `Where` `Rhythm`, then `Rhythm`, `K` `/bemb` `Enter`. On a
+    `1/16` track the panel would say `Its 12 rows make a bar on a 1/8T track`. `From` and `To`
+    `c4`, `L`.
+6.  On track 4, `gl`: `Child` `75` and `Vary` `Each pass`, and `L`. On track 5, `gl`: `From` and
+    `To` `c1`, and `L`.
+
+A child draws from the seed, so yours drop other hits than the song's; `r` in the panel draws
+again. The finished song also sets the voices' decays, the bass's filter, the sends and the
+levels.
+
+**Try next.**
+
+*   `gl` on the clave and `Rhythm` `Rumba clave`: its third stroke moves a row later. The bass and
+    conga are generators of their own, so they keep the son's parts; `S` across all three again
+    sets them together, `Rumba clave`'s drums being its beat and offbeats.
+*   On the conga, `Child` `100%` gives back its four open tones, and `40%` leaves fewer, which
+    ones hanging on the seed.
+*   `Vary` `Each pass` on the conga too, and it plays a new child each bar round the bembé's.
+*   `Rhythm` `Motorik` across the first three tracks makes its hats, kick and snare, Neu!'s beat,
+    if the voices are a hat, a kick and a snare.
+*   On the Gen page, `Space 8`, `Child` is a cell at the foot of the third column, and on the
+    Roto knob 7; a macro or an LFO on it thins a part and fills it in again as it plays.
+
 ## Variations of your own phrase
 
 Write a line, then ask for another one like it. A Markov chain does that by
@@ -1295,6 +1371,56 @@ and a `Hat` on the off-beats. The finished song also makes the `VA` a pluck (`Mo
     eight bars, so the last branch is always new.
 *   Map a macro to `Mutation` on the Gen page with `M`, and one knob turns every branch at once.
 *   `Space g a` on a branch keeps it as plain notes, to edit by hand; it stops following.
+
+## Shuffling Clock Multiplier
+
+[4ms' Shuffling Clock Multiplier](https://4mscompany.com/) takes one clock and gives eight
+outputs at one to eight times its rate. `Shuffle` pushes some of their pulses early and `Slip`
+pushes them late; `Skip` drops beats in a pattern, so an output plays more of a pattern than a
+clock; and a voltage at its `Rotate` jack passes the multiplications round the outputs, so each
+output takes the next one's rate and the drums they play trade places.
+
+Each track here has its own clock already, its `Speed`, and a groove does what `Shuffle` and
+`Slip` do. Rotate is `Space o`, which passes the speeds round a group's tracks, and Skip is a live
+column of `CHA 00`, a chance that never comes up, on the rows a seeded `Chance` picks.
+
+**How the song does it.** Tracks 1 to 3, in group 1, are three clocks in A minor: a `Modal` bell at
+`1/16`, a plucked `VA` at `1/8` and a `VA` bass at `1/8T`, eight rows each. A kick keeps the beat,
+and a hat plays every sixteenth, its FX column a live `Chance` of `CHA 00` at `35%` that drops
+five of them, the same five every bar. The hat's first macro, `Skip`, holds that amount.
+[`song.ron`](songs/clock-multiplier/song.ron)
+
+```text
+    00  01  02  03  04  05  06  07  08  09  0A  0B  0C  0D  0E  0F
+HH  X   x   .   x   X   x   x   .   X   .   .   x   X   x   .   x       . is CHA 00
+```
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 118`.
+2.  Track 1: `K` `modal` `Enter`, `:name BL`, and eight rows of a tune, such as
+    `A-4 C-5 E-5 --- G-4 E-5 D-5 ---`, with `:len 8` on the Note column for a phrase of eight.
+3.  Track 2: a `VA`, `:name PL`, eight rows such as `A-3 E-3 C-4 G-3 A-3 D-4 E-3 C-4`, and
+    `/speed` `Enter`, then `K` to choose `1/8` from the list.
+4.  Track 3: a `VA`, `:name BS`, eight rows of bass on `A-1`, `E-1` and `G-1`, at `1/8T`.
+5.  `:group 1 1-3` puts the three in group 1.
+6.  A `Kick` on every beat, and on track 5 a `Hat` on every row. In the hat's phrase, `l` to its
+    first FX column, `vG` and `S`, and choose `CHA`. Set `From` and `To` to `00`, `Where` to
+    `Chance` and its `Amount` to `35%`, then `L`.
+7.  `Space 8` on the hat, `M` on the generator's `Amount`, and `:macro Skip` to name it.
+
+**Play it.**
+
+*   `Space o` on any of the first three tracks: the bell takes the eighths, the pluck the
+    triplets and the bass the sixteenths. Again, and they move on; a third time, and they're
+    back. Each press is heard from each track's next step, and `u` takes one back.
+*   `Space r`, then `Space o` on a bar line and again two bars later: the turns go in as held
+    `RATE`s on the rows where you pressed, so the loop plays them back each time round.
+*   Turn `Skip` up while it plays: the hat drops more steps, keeping the ones already gone, until at
+    `100%` it's silent; down to `0%` it's a clock again. `r` on the Gen page draws other steps.
+*   `Where` on `Euclid` with `Hits` as the amount spreads the dropped steps evenly instead.
+*   Give the group a groove of its own, `Swing 62` on each track's `Groove`, for the SCM's
+    `Shuffle`.
 
 ## Generators still to come
 

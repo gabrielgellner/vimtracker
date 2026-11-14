@@ -18,6 +18,7 @@ use vt_model::shape::{
     open_rows, track_seed, variation_notes,
 };
 use vt_model::song::{Song, Track};
+use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
 
 use crate::app::{App, Selection, TrackSpan};
@@ -190,6 +191,12 @@ impl ShapePanel {
             },
             ..self.shape
         }
+    }
+
+    /// The speed of the first track it shapes.
+    pub fn speed(&self) -> Option<Speed> {
+        let first = self.parts.first()?;
+        Some(self.base.tracks.get(first.track)?.speed)
     }
 
     /// Why a `Variation` has nothing to learn from, if every part has too few notes.

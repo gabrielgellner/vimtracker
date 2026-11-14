@@ -1,5 +1,5 @@
 //! Tracks: moving between them, levels, mutes and solos, at once or on the launch grid,
-//! realigning them, and groups.
+//! realigning them, rotating their speeds, and groups.
 
 use std::sync::Arc;
 
@@ -9,6 +9,7 @@ use vt_model::action::Action;
 use vt_model::constants::FIXED_TRACKS;
 use vt_model::label::is_name;
 use vt_model::song::{Launch, TrackKind};
+use vt_model::speed::Speed;
 
 use super::{App, TrackLive};
 use crate::input::command::LineError;
@@ -214,6 +215,87 @@ impl App {
         };
     }
 
+    /// Rotate the speeds round the tracks selected, the cursor's group or, `every`, every track
+    /// that plays sounds: each takes the next one's `Speed` and the last the first's, as the 4ms
+    /// Shuffling Clock Multiplier's Rotate passes its outputs' multiplications along (decision
+    /// 328). A count rotates that many times, so as many presses as tracks bring them back. It's
+    /// one undo step. While recording, the speeds go in as held `RATE`s on the next row each track
+    /// plays instead, so the pass plays the rotation back where it fell.
+    pub(crate) fn rotate_speeds(&mut self, every: bool) {
+        let times = self.count.take().unwrap_or(1);
+        let tracks = match self.tracks_to_rotate(every) {
+            Ok(tracks) => tracks,
+            Err(why) => {
+                self.status = why;
+                return;
+            }
+        };
+        if self.recording() {
+            self.record_rotation(&tracks, times);
+            return;
+        }
+        let song = Arc::clone(self.song());
+        let speeds: Vec<Speed> = tracks.iter().map(|&t| song.tracks[t].speed).collect();
+        let turned = rotated(&speeds, times);
+        let changes: Vec<Action> = tracks
+            .iter()
+            .zip(&turned)
+            .filter(|&(&track, &speed)| song.tracks[track].speed != speed)
+            .map(|(&track, &speed)| Action::SetTrackSpeed { track, speed })
+            .collect();
+        if changes.is_empty() {
+            self.status = format!(
+                "Rotating changes nothing: these tracks are all at {}",
+                speeds[0]
+            );
+            return;
+        }
+        self.apply(&Action::Batch(changes));
+        self.status = format!("Speeds rotated: {}", speeds_said(&tracks, &turned));
+    }
+
+    /// The tracks a rotation goes round, in order: those selected, every track that plays sounds,
+    /// or those in the cursor's group, or why there aren't two of them.
+    fn tracks_to_rotate(&mut self, every: bool) -> Result<Vec<usize>, String> {
+        let song = Arc::clone(self.song());
+        let sounds = |track: &usize| song.tracks.get(*track).is_some_and(|t| t.is_sound());
+        let tracks: Vec<usize> = if self.mode.is_visual() {
+            let selection = self.current_selection();
+            self.leave_selection(selection);
+            (selection.tracks.first..=selection.tracks.last)
+                .filter(sounds)
+                .collect()
+        } else if every {
+            (0..song.tracks.len()).filter(sounds).collect()
+        } else {
+            let here = &song.tracks[self.cursor.track];
+            let group = match here.kind {
+                TrackKind::Group(number) => Some(number),
+                _ => here.group,
+            };
+            let Some(group) = group else {
+                return Err(format!(
+                    "Track {:02} is in no group: select tracks with v and W, or Space O rotates \
+                     every track",
+                    self.cursor.track + 1
+                ));
+            };
+            let tracks: Vec<usize> = (0..song.tracks.len())
+                .filter(|track| sounds(track) && song.tracks[*track].group == Some(group))
+                .collect();
+            if tracks.len() < 2 {
+                return Err(format!(
+                    "Group {group} needs two tracks or more to rotate their speeds"
+                ));
+            }
+            tracks
+        };
+        if tracks.len() < 2 {
+            return Err("Rotating needs two tracks or more: reach them with W".to_owned());
+        }
+        Ok(tracks)
+    }
+
     /// Turn fill on or off, saying which.
     pub(crate) fn set_fill(&mut self, on: bool) {
         self.fill = on;
@@ -313,5 +395,46 @@ impl App {
         } else {
             format!("Group {number} named {name}")
         };
+    }
+}
+
+/// Speeds rotated this many times: each takes the one after it, and the last the first's.
+pub(crate) fn rotated(speeds: &[Speed], times: usize) -> Vec<Speed> {
+    let mut turned = speeds.to_vec();
+    if !speeds.is_empty() {
+        turned.rotate_left(times % speeds.len());
+    }
+    turned
+}
+
+/// Tracks and their speeds as the status line says them, `01 1/8, 02 1/16`, or how many tracks
+/// when there are more than fit.
+pub(crate) fn speeds_said(tracks: &[usize], speeds: &[Speed]) -> String {
+    const MOST_SAID: usize = 8;
+    if tracks.len() > MOST_SAID {
+        return format!("{} tracks, each at the next one's", tracks.len());
+    }
+    let said: Vec<String> = tracks
+        .iter()
+        .zip(speeds)
+        .map(|(track, speed)| format!("{:02} {speed}", track + 1))
+        .collect();
+    said.join(", ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn as_many_rotations_as_speeds_bring_them_back() {
+        let speeds = [Speed::Sixteenth, Speed::Eighth, Speed::EighthTriplet];
+        assert_eq!(
+            rotated(&speeds, 1),
+            [Speed::Eighth, Speed::EighthTriplet, Speed::Sixteenth]
+        );
+        assert_eq!(rotated(&speeds, 2), rotated(&rotated(&speeds, 1), 1));
+        assert_eq!(rotated(&speeds, 3), speeds);
+        assert_eq!(rotated(&speeds, 4), rotated(&speeds, 1));
     }
 }

@@ -36,8 +36,8 @@ use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
     Acid, Bar, Bits, DEFAULT_RATE, Divisions, DrumPart, Edge, FillKind, Follow, GenParam, Grids,
-    Mutations, Pink, Random, Ring, Shape, ShapeColumn, Source, Values, Walk, WaveRate, Where,
-    divisions_seed, on_track, track_seed,
+    Mutations, Pink, Random, Ring, Role, Shape, ShapeColumn, Source, Values, Walk, WaveRate, Where,
+    World, divisions_seed, on_track, track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -69,9 +69,11 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("noise-ring", noise_ring()),
         ("marbles", marbles()),
         ("marbles-t", marbles_t()),
+        ("world-rhythms", world_rhythms()),
         ("variations", variations()),
         ("rene", rene()),
         ("bloom", bloom()),
+        ("clock-multiplier", clock_multiplier()),
     ];
     songs
         .into_iter()
@@ -1253,6 +1255,77 @@ fn marbles_t() -> Song {
     song
 }
 
+/// Named rhythms, after Noise Engineering's Zularic Repetitor (decision 327), each a live
+/// generator's `Where` writing notes of its own: the son clave's three parts across three tracks,
+/// the clave, the bass's tumbao and the conga's open tones, the conga a child; and the 12/8 bembé
+/// bell and its four beats on two tracks at `1/8T`, twelve rows a bar, the bell a child that
+/// varies each pass.
+fn world_rhythms() -> Song {
+    let mut song = song("world-rhythms", 100, 9, ScaleKind::Minor, 5);
+    song.seed = 0x5A;
+    let sixteen = vec![REST; 16];
+    let twelve = vec![REST; 12];
+    voice(&mut song, 0, "CL", SynthVoice::Modal, &sixteen);
+    set(&mut song, 0, "modal.decay", 0x30);
+    song.tracks[0].level = 0xA8;
+    song.tracks[0].send_b = 0x60;
+    voice(&mut song, 1, "BS", SynthVoice::VirtualAnalog, &sixteen);
+    song.tracks[1].cutoff = 0x40;
+    song.tracks[1].resonance = 0x28;
+    song.tracks[1].level = 0xD0;
+    voice(&mut song, 2, "CG", SynthVoice::Modal, &sixteen);
+    song.tracks[2].level = 0xC0;
+    song.tracks[2].send_b = 0x50;
+    voice(&mut song, 3, "BL", SynthVoice::Hat, &twelve);
+    set(&mut song, 3, "hat.decay", 0x30);
+    song.tracks[3].level = 0x98;
+    voice(&mut song, 4, "BD", SynthVoice::Kick, &twelve);
+    set(&mut song, 4, "kick.decay", 0x60);
+    song.tracks[4].level = 0xD8;
+    for track in &mut song.tracks[3..] {
+        track.speed = Speed::EighthTriplet;
+    }
+    let notes = empty_notes(&song);
+    // The son: `S` across the first three tracks, each the next part, then each fill its own.
+    let son = Where::Rhythm {
+        rhythm: World::SonClave,
+        part: Role::Bell,
+        child: 100,
+    };
+    let mut trio = shape(FillKind::Ramp, note("E-5"), note("E-5"), son);
+    trio.seed = 4;
+    song = generate(song, 0, notes, 16, on_track(&trio, 0));
+    let mut bass = on_track(&trio, 1);
+    bass.kind = FillKind::Alternate;
+    (bass.from, bass.to) = (note("A-1"), note("E-2"));
+    song = generate(song, 1, notes, 16, bass);
+    let mut conga = on_track(&trio, 2);
+    conga.kind = FillKind::Alternate;
+    (conga.from, conga.to) = (note("E-3"), note("A-3"));
+    if let Where::Rhythm { child, .. } = &mut conga.place {
+        *child = 80;
+    }
+    song = generate(song, 2, notes, 16, conga);
+    // The bembé at `1/8T`: its bell a child at 75%, a new one each pass, and its four beats.
+    let bembe = Where::Rhythm {
+        rhythm: World::Bembe,
+        part: Role::Bell,
+        child: 75,
+    };
+    let mut pair = shape(FillKind::Ramp, note("C-4"), note("C-4"), bembe);
+    pair.seed = 3;
+    pair.vary = 1;
+    song = generate(song, 3, notes, 12, on_track(&pair, 0));
+    let mut beats = on_track(&pair, 1);
+    (beats.from, beats.to) = (note("C-1"), note("C-1"));
+    beats.vary = 0;
+    if let Where::Rhythm { child, .. } = &mut beats.place {
+        *child = 100;
+    }
+    song = generate(song, 4, notes, 12, beats);
+    song
+}
+
 /// An `Acid` line written by hand, and a live `Variation` of it at order 2, a new one every four
 /// passes: something like the line, learned from its own notes, accents and slides alone.
 fn variations() -> Song {
@@ -1439,6 +1512,106 @@ fn bloom() -> Song {
     song.tracks[1].level = 0xB4;
     four_on_the_floor(&mut song, 2);
     off_beat_hats(&mut song, 3);
+    song
+}
+
+/// The 4ms Shuffling Clock Multiplier's Rotate and Skip (decision 328): three tracks in group 1,
+/// each its own clock, at `1/16`, `1/8` and `1/8T`, which `Space o` turns round; and a hat on every
+/// sixteenth whose live column of `CHA 00` on the rows a `Chance` picks drops a seeded pattern of
+/// them, its amount on the hat's `Skip` macro.
+fn clock_multiplier() -> Song {
+    let mut song = song("clock-multiplier", 118, 9, ScaleKind::Minor, 5);
+    song.seed = 0x5C;
+    let tracks: [(&str, SynthVoice, Speed, [&str; 8]); 3] = [
+        (
+            "BL",
+            SynthVoice::Modal,
+            Speed::Sixteenth,
+            [
+                "A-4 64 --- --- ---",
+                "C-5 50 --- --- ---",
+                "E-5 64 --- --- ---",
+                REST,
+                "G-4 50 --- --- ---",
+                "E-5 64 --- --- ---",
+                "D-5 50 --- --- ---",
+                REST,
+            ],
+        ),
+        (
+            "PL",
+            SynthVoice::VirtualAnalog,
+            Speed::Eighth,
+            [
+                "A-3 64 --- --- ---",
+                "E-3 50 --- --- ---",
+                "C-4 64 --- --- ---",
+                "G-3 50 --- --- ---",
+                "A-3 64 --- --- ---",
+                "D-4 50 --- --- ---",
+                "E-3 64 --- --- ---",
+                "C-4 50 --- --- ---",
+            ],
+        ),
+        (
+            "BS",
+            SynthVoice::VirtualAnalog,
+            Speed::EighthTriplet,
+            [
+                "A-1 64 --- --- ---",
+                REST,
+                "A-2 50 --- --- ---",
+                "E-1 64 --- --- ---",
+                REST,
+                "G-1 64 --- --- ---",
+                "A-1 50 --- --- ---",
+                REST,
+            ],
+        ),
+    ];
+    for (track, (name, sound, speed, rows)) in tracks.into_iter().enumerate() {
+        voice(&mut song, track, name, sound, &rows);
+        song.tracks[track].speed = speed;
+        song.tracks[track].group = Some(1);
+    }
+    set(&mut song, 0, "modal.decay", 0x80);
+    song.tracks[0].level = 0xC0;
+    song.tracks[0].send_b = 0xA0;
+    song.tracks[0].pan = 0xA0;
+    song.tracks[1].cutoff = 0x78;
+    pluck(&mut song, 1, 260, 20, 120);
+    song.tracks[1].level = 0xB8;
+    song.tracks[1].send_a = 0x90;
+    song.tracks[1].pan = 0x60;
+    song.tracks[2].cutoff = 0x48;
+    song.tracks[2].resonance = 0x30;
+    song.tracks[2].level = 0xC8;
+    four_on_the_floor(&mut song, 3);
+    voice(
+        &mut song,
+        4,
+        "HH",
+        SynthVoice::Hat,
+        &texts(&hits("XxxxXxxxXxxxXxxx", "C-4")),
+    );
+    set(&mut song, 4, "hat.decay", 0x28);
+    song.tracks[4].level = 0xB0;
+    // The skip: `CHA 00`, never playing, on about a third of the hat's rows, the same each pass.
+    let mut skip = shape(FillKind::Ramp, 0, 0, Where::Chance(35));
+    skip.seed = 0x5C;
+    let cha = ShapeColumn::Fx {
+        slot: 0,
+        command: FxCommand::Cha,
+    };
+    song = generate(song, 4, cha, 16, skip);
+    gen_knob(
+        &mut song.tracks[4],
+        0,
+        "Skip",
+        (GenColumn::Fx(0), GenParam::Chance),
+        (0, 100),
+        35,
+    );
     song
 }
 
@@ -1878,6 +2051,38 @@ fn marbles_t_hat_and_percussion_take_every_row_between_them() {
     }
     assert!(between(&turned));
     assert!(plays(&turned, 0).iter().filter(|hit| **hit).count() < 8);
+}
+
+/// In `world-rhythms`, the clave, bass and conga are the son's three parts as written, the conga a
+/// child of its open tones, and the bembé's bell a child of its twelve pulses over its four
+/// beats, as the chapter's table shows.
+#[test]
+fn world_rhythms_parts_are_their_patterns_and_the_children_play_some_of_them() {
+    let song = load_song(&songs_folder().join("world-rhythms")).unwrap();
+    let plays = |track: usize| -> String {
+        song.tracks[track].phrases[&0]
+            .steps()
+            .iter()
+            .map(|step| match step.note {
+                Note::On(_) => 'x',
+                _ => '.',
+            })
+            .collect()
+    };
+    assert_eq!(plays(0), "x..x..x...x.x...");
+    assert_eq!(plays(1), "...x..x....x..x.");
+    assert_eq!(plays(4), "x..x..x..x..");
+    let within = |child: String, mother: &str| {
+        let fewer = child.matches('x').count() < mother.matches('x').count();
+        let inside = child
+            .chars()
+            .zip(mother.chars())
+            .all(|(a, b)| a == '.' || b == 'x');
+        fewer && inside && child.contains('x')
+    };
+    assert!(within(plays(2), "......xx......xx"), "{}", plays(2));
+    assert!(within(plays(3), "x.x.xx.x.x.x"), "{}", plays(3));
+    assert_eq!(song.tracks[3].speed, Speed::EighthTriplet);
 }
 
 /// The variation is something like the line under it, and order 3 at temperature 0 gives the
