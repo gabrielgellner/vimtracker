@@ -11,11 +11,10 @@
 //!
 //! Live, the register runs on from pass to pass, so each pass plays where the last one left it.
 //! Each pass is worked out from the seed and its number alone, so playing from anywhere hears what
-//! playing to there would: a bit is the one that came round `Length`, `2 × Length` rows before, as
-//! far back as the first that `Change`'s die replaced, so each of the 16 the register holds as a
-//! pass starts takes a look back along its own place in the loop, a round at a time, about `100 /
-//! Change` rounds of `Length` rows however long the song has played, rather than every row since
-//! the top.
+//! playing to there would: a bit is the one taken in `Length` rows before, or `2 × Length`, back to
+//! the newest that `Change`'s die replaced, so each of the 16 the register holds as a pass starts
+//! takes a look back along its own place in the loop, a round at a time, about `100 / Change`
+//! rounds of `Length` rows however long the song has played, rather than every row since the top.
 
 use serde::{Deserialize, Serialize};
 
@@ -154,7 +153,10 @@ impl Ring {
     pub fn kept_on(&self, seed: u64, rows: usize) -> Kept {
         Kept {
             bits: self.register(seed, rows),
-            pass: self.kept.map_or(0, |kept| kept.pass) + self.pass,
+            pass: self
+                .kept
+                .map_or(0, |kept| kept.pass)
+                .saturating_add(self.pass),
         }
     }
 
