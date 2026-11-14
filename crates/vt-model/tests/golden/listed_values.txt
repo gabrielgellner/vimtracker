@@ -1,0 +1,36 @@
+filter mode 0 12 dB
+filter mode 1 24 dB
+filter mode 2 LP24
+filter mode 3 LP12
+filter mode 4 BP24
+filter mode 5 HP12
+filter mode 6 HP24
+filter mode 7 N24
+filter mode 8 Full
+filter mode 9 -3 oct
+filter mode 10 -2 oct
+filter mode 11 -1 oct
+filter mode 12 LP18
+filter mode 13 LP6
+filter mode 14 BP12
+filter mode 15 HP6
+filter mode 16 HP18
+filter mode 17 N12
+filter mode 18 PH18
+filter mode 19 HP12+LP6
+filter mode 20 HP18+LP6
+filter mode 21 N12+LP6
+filter mode 22 PH18+LP6
+filter mode 23 Fat24
+speed 0 1/32
+speed 1 1/16T
+speed 2 1/16
+speed 3 1/8T
+speed 4 1/16D
+speed 5 1/8
+speed 6 1/4T
+speed 7 1/8D
+speed 8 1/4
+speed 9 1/4D
+speed 10 1/2
+speed 11 1/1
