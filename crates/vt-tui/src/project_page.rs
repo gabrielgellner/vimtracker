@@ -771,7 +771,7 @@ impl App {
         }
         self.modes.entry = Entry::default();
         if control == ProjectControl::Name {
-            self.modes.entry.text = self.project_name();
+            self.modes.entry.text = self.project_name().into();
         }
         self.modes.mode = Mode::Insert;
     }
@@ -792,14 +792,14 @@ impl App {
                     .as_deref()
                     .and_then(std::path::Path::parent)
                     .map_or_else(std::collections::HashSet::new, crate::exploring::taken_in);
-                self.modes.entry.text = self.names.fresh(|name| taken.contains(name));
+                self.modes.entry.text = self.names.fresh(|name| taken.contains(name)).into();
             }
             KeyCode::Char('u') if key.ctrl => self.modes.entry.text.clear(),
             KeyCode::Backspace => {
                 self.modes.entry.text.pop();
             }
             KeyCode::Enter => {
-                let text = std::mem::take(&mut self.modes.entry.text);
+                let text = self.modes.entry.text.take();
                 self.modes.mode = Mode::Normal;
                 self.commit_project_control(control, text.trim());
             }

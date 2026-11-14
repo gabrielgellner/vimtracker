@@ -1187,7 +1187,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         {
             let (start, end) = field_range(app.services.cursor.field);
             if end <= text.len() {
-                let typed = format!("{}_", app.modes.entry.text);
+                let typed = app.modes.entry.text.shown();
                 text.replace_range(start..end, &format!("{typed:<width$}", width = end - start));
             }
         }
@@ -1207,7 +1207,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         {
             let (start, end) = field_range(app.services.cursor.field);
             if end <= text.len() {
-                let typed = format!("{}_", app.modes.entry.text);
+                let typed = app.modes.entry.text.shown();
                 text.replace_range(start..end, &format!("{typed:<width$}", width = end - start));
             }
         }

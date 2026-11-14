@@ -754,6 +754,14 @@ apply an action at once, and the modes to read; `Ctx`, which a page is drawn wit
 reads through `App`, as drawing is given `&App` and some of what's drawn, such as a live
 generator's sources, is `App`'s to work out.
 
+**`TypedValue`** (`input/typed.rs`) is what's typed into a value: Insert's in `Modes`, the shape
+panel's row and the mapping view's end. `TypedValue::key` takes a key by a `Rule`, a shape
+setting's `Typing` or plain text up to a length, and says whether it's still typing, committed or
+given up: two hex digits commit as the second is typed, in this one place for the phrase grid, the
+song view, the track page, the shape panel and the mapping view, and the rest on `Enter`. A caller
+with keys of its own, such as `Backspace` clearing an empty cell, handles them before it.
+`TypedValue::shown` is the text with a `_` where the next character goes, as the pages draw it.
+
 **Pages and modes** (`input/mode.rs`). A `View` is a page: the song view (`Space 1`), the chain view
 (`Space 2`), the phrase view (`Space 3`), the mixer (`Space 4`), the track page with its Sound, Mod, FX
 and Gen pages on `Space 5` to `Space 8` and on `H` and `L` (`Cmd::ShowTrackPage`), the project page
