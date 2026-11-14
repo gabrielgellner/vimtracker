@@ -1195,3 +1195,236 @@ fn the_project_page_has_the_songs_settings_then_this_machines_audio_on_h_and_l()
     app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
     assert_eq!(app.view, View::Phrase);
 }
+
+/// A saved project made read-only, as the tutorial's songs are, opened in a fresh app.
+fn a_read_only_project() -> (App, Realtime, PathBuf) {
+    let path = folder();
+    let song = Song {
+        read_only: true,
+        ..Song::new(2)
+    };
+    vt_model::project::save_song(&path, &song).unwrap();
+    let (mut app, realtime) = app();
+    command(&mut app, &format!("e {}", path.display()));
+    assert!(app.read_only, "{}", app.status);
+    (app, realtime, path)
+}
+
+#[test]
+fn w_refuses_a_read_only_song_and_w_bang_writes_over_it_keeping_it_read_only() {
+    use vt_model::project::load_song;
+    use vt_tui::project_page::ProjectControl;
+    let (mut app, _rt, path) = a_read_only_project();
+    let before = std::fs::read_to_string(path.join("song.ron")).unwrap();
+    assert!(before.contains("read_only: true"), "{before}");
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "w");
+    assert_eq!(
+        app.status,
+        "This song is read-only: :w path saves a copy, :w! writes over it"
+    );
+    assert!(app.dirty);
+    assert_eq!(
+        std::fs::read_to_string(path.join("song.ron")).unwrap(),
+        before,
+        "the file is untouched"
+    );
+    // Naming its own folder is the same.
+    command(&mut app, &format!("w {}", path.display()));
+    assert!(app.status.contains("read-only"), "{}", app.status);
+    assert!(app.dirty);
+    // The project page's Save is :w, and refuses too.
+    tap(&mut app, " 9");
+    project_cursor_on(&mut app, ProjectControl::Save);
+    special(&mut app, KeyCode::Enter);
+    assert!(app.status.contains("read-only"), "{}", app.status);
+    assert!(app.dirty);
+
+    command(&mut app, "w!");
+    assert!(!app.dirty, "{}", app.status);
+    assert!(app.status.contains("stays read-only"), "{}", app.status);
+    let saved = load_song(&path).unwrap();
+    assert_eq!(saved.tracks[0].phrases[&0].steps()[0].note, Note::On(60));
+    assert!(saved.read_only, ":w! keeps it parked");
+    assert!(app.read_only);
+    std::fs::remove_dir_all(&path).unwrap();
+}
+
+#[test]
+fn w_to_a_new_folder_saves_a_copy_that_isnt_read_only_to_carry_on_in() {
+    use vt_model::project::load_song;
+    let (mut app, _rt, path) = a_read_only_project();
+    let before = std::fs::read_to_string(path.join("song.ron")).unwrap();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    let copy = folder();
+    command(&mut app, &format!("w {}", copy.display()));
+    assert!(!app.dirty, "{}", app.status);
+    assert_eq!(app.folder.as_deref(), Some(copy.as_path()));
+    assert!(!app.read_only, "the copy is the user's own");
+    assert!(!app.window_title().contains("[RO]"));
+    assert!(!load_song(&copy).unwrap().read_only);
+    assert!(
+        !std::fs::read_to_string(copy.join("song.ron"))
+            .unwrap()
+            .contains("read_only"),
+        "left out when off"
+    );
+    // And :w carries on there.
+    press(&mut app, "jis");
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "w");
+    assert!(!app.dirty, "{}", app.status);
+    assert_eq!(
+        load_song(&copy).unwrap().tracks[0].phrases[&0].steps()[1].note,
+        Note::On(62)
+    );
+    assert_eq!(
+        std::fs::read_to_string(path.join("song.ron")).unwrap(),
+        before,
+        "the read-only one is untouched"
+    );
+    std::fs::remove_dir_all(&path).unwrap();
+    std::fs::remove_dir_all(&copy).unwrap();
+}
+
+#[test]
+fn set_readonly_and_readwrite_switch_it_and_the_status_line_and_title_say_ro() {
+    use vt_model::project::load_song;
+    let (mut app, _rt) = app();
+    let path = folder();
+    command(&mut app, &format!("w {}", path.display()));
+    assert!(!status_line(&app).contains("[RO]"));
+    for (line, on) in [
+        ("set readonly", true),
+        ("set readwrite", false),
+        ("set ro", true),
+        ("set noreadonly", false),
+        ("set ro", true),
+    ] {
+        command(&mut app, line);
+        assert_eq!(app.read_only, on, "{line}");
+        assert!(app.dirty, "{line} marks the song changed");
+    }
+    assert!(
+        status_line(&app).contains(" * [RO]"),
+        "{}",
+        status_line(&app)
+    );
+    assert!(
+        app.window_title().ends_with(" [RO]"),
+        "{}",
+        app.window_title()
+    );
+    // It isn't an edit to undo.
+    tap(&mut app, "u");
+    assert!(app.read_only);
+    command(&mut app, "w");
+    assert!(app.dirty, "now it refuses");
+    // Unsaved, :e, :new and :q offer a copy, as :w won't write over it.
+    for (line, or) in [
+        ("e", ":e! to discard them"),
+        ("new", ":new! to discard them"),
+        ("q", ":q! to quit anyway"),
+    ] {
+        command(&mut app, line);
+        assert_eq!(
+            app.status,
+            format!("Unsaved changes to a read-only song: :w path to save a copy, or {or}")
+        );
+    }
+    command(&mut app, "set rw");
+    command(&mut app, "w");
+    assert!(!app.dirty, "{}", app.status);
+    assert!(!load_song(&path).unwrap().read_only);
+    command(&mut app, "set ro");
+    command(&mut app, "w!");
+    assert!(load_song(&path).unwrap().read_only, "saved with the song");
+    // Switching it to what it is already changes nothing.
+    command(&mut app, "set ro");
+    assert!(!app.dirty);
+    std::fs::remove_dir_all(&path).unwrap();
+}
+
+#[test]
+fn a_read_only_song_autosaves_and_restoring_never_writes_over_it() {
+    use std::time::Duration;
+    use vt_model::project::load_song;
+    let (mut app, _rt, path) = a_read_only_project();
+    let before = std::fs::read_to_string(path.join("song.ron")).unwrap();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    let start = Instant::now();
+    app.autosave_if_due(start);
+    app.autosave_if_due(start + Duration::from_secs(61));
+    assert!(
+        path.join("song.autosave.ron").exists(),
+        "work isn't lost: {}",
+        app.status
+    );
+    assert_eq!(
+        std::fs::read_to_string(path.join("song.ron")).unwrap(),
+        before
+    );
+
+    // As after a crash: opened again, the work is offered back, unsaved.
+    let (mut other, _rt2) = self::app();
+    command(&mut other, &format!("e {}", path.display()));
+    assert_eq!(other.mode, Mode::Restore);
+    press(&mut other, "y");
+    assert!(other.dirty);
+    assert!(other.read_only);
+    assert!(other.status.contains("read-only"), "{}", other.status);
+    assert_eq!(
+        other.song().tracks[0].phrases[&0].steps()[0].note,
+        Note::On(60)
+    );
+    assert_eq!(
+        std::fs::read_to_string(path.join("song.ron")).unwrap(),
+        before,
+        "restoring leaves the file alone"
+    );
+    command(&mut other, "w");
+    assert_eq!(
+        std::fs::read_to_string(path.join("song.ron")).unwrap(),
+        before,
+        "and so does :w"
+    );
+    assert!(load_song(&path).unwrap().read_only);
+    std::fs::remove_dir_all(&path).unwrap();
+}
+
+#[test]
+fn the_project_page_shows_and_switches_read_only() {
+    use vt_tui::project_page::ProjectControl;
+    let (mut app, _rt) = on_the_project_page();
+    project_cursor_on(&mut app, ProjectControl::ReadOnly);
+    let row = |app: &App| {
+        project_page_lines(app)
+            .into_iter()
+            .find(|line| line.starts_with("Read-only"))
+            .map(|line| line.trim_end().to_owned())
+    };
+    assert_eq!(row(&app).as_deref(), Some("Read-only off"));
+    tap(&mut app, "=");
+    assert!(app.read_only);
+    assert!(app.dirty);
+    assert_eq!(
+        row(&app).as_deref(),
+        Some("Read-only on  :w refuses, so Save as makes a copy to change")
+    );
+    tap(&mut app, "-");
+    assert!(!app.read_only);
+    tap(&mut app, "K");
+    assert!(app.read_only, "K switches it");
+    tap(&mut app, "i");
+    assert!(!app.read_only, "and i, as it isn't typed");
+    special(&mut app, KeyCode::Enter);
+    assert!(app.read_only, "and Enter");
+    tap(&mut app, "x");
+    assert!(
+        !app.read_only,
+        "x puts it back off, as a new project has it"
+    );
+}

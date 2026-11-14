@@ -11,7 +11,7 @@ use vt_model::bank::BankEntry;
 use vt_model::names::numbered;
 use vt_model::project;
 
-use crate::app::{App, UNSAVED_OPEN};
+use crate::app::App;
 use crate::config::home_folder;
 use crate::explorer::{Purpose, place_name};
 use crate::input::command;
@@ -283,7 +283,7 @@ impl App {
     /// project chosen throws away unsaved changes.
     pub(crate) fn open_project_explorer(&mut self, force: bool) {
         if self.dirty && !force {
-            self.status = UNSAVED_OPEN.to_owned();
+            self.status = self.unsaved(":e! to discard them");
             return;
         }
         self.opening_discards = force;

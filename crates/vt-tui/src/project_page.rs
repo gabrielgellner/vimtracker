@@ -53,6 +53,8 @@ pub enum ProjectControl {
     Name,
     /// Where it's saved, and whether there are changes since. It only shows.
     Folder,
+    /// Whether `:w` refuses to write over it, as `:set readonly` sets (decision 313).
+    ReadOnly,
     Bpm,
     /// The groove every track plays with unless it has its own.
     Groove,
@@ -104,9 +106,10 @@ const VELOCITIES: [ProjectControl; MAX_GROOVE_STEPS] = {
 /// The page's rows, top to bottom: how it plays on the left, and how notes go in on the right,
 /// then the groove drawn and changed. The limiter isn't here: it's after the master's `Level`, on
 /// the master's Sound page, where it's heard.
-pub const PROJECT_ROWS: [&[ProjectControl]; 17] = [
+pub const PROJECT_ROWS: [&[ProjectControl]; 18] = [
     &[ProjectControl::Name],
     &[ProjectControl::Folder],
+    &[ProjectControl::ReadOnly],
     &[ProjectControl::Bpm, ProjectControl::Scale],
     &[ProjectControl::Groove, ProjectControl::Root],
     &[ProjectControl::Launch, ProjectControl::Grid],
@@ -130,6 +133,7 @@ impl ProjectControl {
         match self {
             Self::Name => "Name",
             Self::Folder => "Folder",
+            Self::ReadOnly => "Read-only",
             Self::Bpm => "BPM",
             Self::Groove => "Groove",
             Self::Launch => "Launch",
@@ -538,6 +542,11 @@ impl App {
                     self.toggle_auto_jump();
                 }
             }
+            ProjectControl::ReadOnly => {
+                if self.read_only != up {
+                    self.line(Line::ReadOnly(up));
+                }
+            }
             ProjectControl::Name => {
                 self.status = "i renames the project, and C-r there rolls a new name".to_owned();
             }
@@ -611,6 +620,7 @@ impl App {
                 self.line(Line::SetSkip(BEAT_STEPS as u32));
             }
             ProjectControl::AutoJump if self.auto_jump => self.toggle_auto_jump(),
+            ProjectControl::ReadOnly if self.read_only => self.line(Line::ReadOnly(false)),
             ProjectControl::Name => {
                 self.status = "i renames the project, and C-r there rolls a new name".to_owned();
             }
@@ -675,8 +685,14 @@ impl App {
                 ("The groove to draw and change", Some(shown.index()))
             }
             ProjectControl::AutoJump => return self.toggle_auto_jump(),
+            ProjectControl::ReadOnly => return self.line(Line::ReadOnly(!self.read_only)),
             ProjectControl::Audio => return self.jump_to_view(View::Audio),
-            ProjectControl::Save => return self.line(Line::Write(None)),
+            ProjectControl::Save => {
+                return self.line(Line::Write {
+                    path: None,
+                    force: false,
+                });
+            }
             ProjectControl::SaveAs => {
                 return self.open_naming_explorer(Purpose::Save, "w", String::new());
             }

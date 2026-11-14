@@ -1,7 +1,9 @@
 //! The generators tutorial's songs, in `docs/manual/src/tutorials/songs`: each is built here
 //! through the model, as the chapter builds it by keys, and kept on disk as a project folder the
 //! manual links to and the program opens. A test checks each file is what its builder makes, so a
-//! change to the song format can't leave them stale, and another plays every one.
+//! change to the song format can't leave them stale, and another plays every one. Each is
+//! read-only, so a `:w` in the program can't change the repository's copy by accident (decision
+//! 313): `:w` and a folder saves a copy to carry on in.
 //!
 //! After a change to the format or to a builder, `just tutorial-songs` writes them again.
 
@@ -42,9 +44,9 @@ fn songs_folder() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/manual/src/tutorials/songs")
 }
 
-/// Every song, by its folder's name, in the chapter's order.
+/// Every song, by its folder's name, in the chapter's order, each read-only.
 fn songs() -> Vec<(&'static str, Song)> {
-    vec![
+    let songs = vec![
         ("turing-machine", turing_machine()),
         ("deja-vu", deja_vu()),
         ("euclid", euclid()),
@@ -59,7 +61,17 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("variations", variations()),
         ("rene", rene()),
         ("bloom", bloom()),
-    ]
+    ];
+    songs
+        .into_iter()
+        .map(|(name, song)| {
+            let song = Song {
+                read_only: true,
+                ..song
+            };
+            (name, song)
+        })
+        .collect()
 }
 
 // Building blocks.
@@ -1193,7 +1205,7 @@ fn each_tutorial_song_on_disk_is_what_its_builder_makes() {
 }
 
 #[test]
-fn every_tutorial_song_loads_plays_and_stays_below_full_scale() {
+fn every_tutorial_song_is_read_only_loads_plays_and_stays_below_full_scale() {
     let mut names: Vec<String> = std::fs::read_dir(songs_folder())
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
@@ -1202,6 +1214,7 @@ fn every_tutorial_song_loads_plays_and_stays_below_full_scale() {
     assert_eq!(names.len(), songs().len(), "a folder for each song");
     for name in names {
         let song = load_song(&songs_folder().join(&name)).unwrap();
+        assert!(song.read_only, "{name} is read-only, so :w can't change it");
         assert!(
             song.bank.is_empty(),
             "{name} plays synths only, so it needs no samples"

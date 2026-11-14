@@ -135,9 +135,8 @@ const PLAYHEADS_KEPT: Duration = Duration::from_millis(250);
 /// so only a few are ever waiting; these are for when it has stopped.
 const SENT_KEPT: usize = 64;
 
-/// Why `:e` and `:new` refused, and the ways on.
-pub(crate) const UNSAVED_OPEN: &str = "Unsaved changes: :w to save, or :e! to discard them";
-const UNSAVED_NEW: &str = "Unsaved changes: :w to save, or :new! to discard them";
+/// What `:w` says to a read-only song in its own folder (decision 313).
+const READ_ONLY: &str = "This song is read-only: :w path saves a copy, :w! writes over it";
 
 /// What a key started that lasts while it's down, and is undone or ended when it's let go.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -372,6 +371,8 @@ pub struct App {
     pub scale: Scale,
     /// Whether entering in Insert moves on by the grid, likewise.
     pub auto_jump: bool,
+    /// Whether the song is read-only, so `:w` to its own folder refuses (decision 313), likewise.
+    pub read_only: bool,
     /// Whether fill is on, for `CND`'s `FILL` and `!FILL`. It's a live control, never saved.
     pub fill: bool,
     /// Whether a realign is waiting for the launch grid, as the engine last said.
@@ -490,6 +491,16 @@ const KEYS_NOTES: &str = "awsedf";
 /// The longest a typed label is: a slot's digit and 4 letters.
 const LONGEST_LABEL: usize = 5;
 impl App {
+    /// Why `:e`, `:new` or `:q` refused unsaved changes, and the ways on: `or` is the forced
+    /// command and what it does. A read-only song's `:w` refuses too, so it's offered `:w path`.
+    pub(crate) fn unsaved(&self, or: &str) -> String {
+        if self.read_only {
+            format!("Unsaved changes to a read-only song: :w path to save a copy, or {or}")
+        } else {
+            format!("Unsaved changes: :w to save, or {or}")
+        }
+    }
+
     /// Start with a song, its project folder if it has one, and a connection to the engine.
     pub fn new(
         song: Song,
@@ -501,6 +512,7 @@ impl App {
         let levels = live_from(&song);
         let scale = song.scale;
         let auto_jump = song.auto_jump;
+        let read_only = song.read_only;
         let folds = Folds::from_view(&song.view);
         let mut names = Names::from_clock();
         let mut song = song;
@@ -598,6 +610,7 @@ impl App {
             levels,
             scale,
             auto_jump,
+            read_only,
             fill: false,
             realigning: false,
             realigning_tracks: [false; MAX_TRACKS],
@@ -712,6 +725,7 @@ impl App {
         let mut song = Song::clone(self.song());
         song.scale = self.scale;
         song.auto_jump = self.auto_jump;
+        song.read_only = self.read_only;
         song.view = self.folds.view();
         for (track, live) in song.tracks.iter_mut().zip(&self.levels) {
             track.mute = live.mute;
@@ -1040,11 +1054,13 @@ impl App {
         Some((work, glyphs::spinner(elapsed)))
     }
 
-    /// The terminal window's title: `vimtracker` and the project's name. kitty's
+    /// The terminal window's title: `vimtracker` and the project's name, then `[RO]` if it's
+    /// read-only, as Vim marks a read-only buffer. kitty's
     /// `--when-focus-on title:vimtracker` matches it, so its `Cmd` shortcuts can be left to this
     /// window alone.
     pub fn window_title(&self) -> String {
-        format!("vimtracker: {}", self.project_name())
+        let read_only = if self.read_only { " [RO]" } else { "" };
+        format!("vimtracker: {}{read_only}", self.project_name())
     }
 
     /// Run an action and make the result current. A fader it moves that the steps drive is

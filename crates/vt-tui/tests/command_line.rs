@@ -104,9 +104,13 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     // Esc closes the list and keeps what's typed.
     press(&mut app, " ");
     tap_special(&mut app, KeyCode::Tab);
-    assert_eq!(menu(&app).0.len(), 4);
+    assert_eq!(
+        menu(&app).0.len(),
+        6,
+        "the settings, and readonly and readwrite"
+    );
     tap(&mut app, "r");
-    assert_eq!(menu(&app).0, ["root="]);
+    assert_eq!(menu(&app).0, ["root=", "readonly", "readwrite"]);
     special(&mut app, KeyCode::Esc);
     assert!(app.command_menu.is_none());
     assert_eq!(

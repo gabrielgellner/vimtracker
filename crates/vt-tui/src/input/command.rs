@@ -83,8 +83,12 @@ fn patch(argument: &str, force: bool) -> Result<Line, LineError> {
 /// A parsed command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Line {
-    /// Save, or save to a new folder. With no folder yet, the explorer chooses one.
-    Write(Option<PathBuf>),
+    /// Save, or save to a new folder. With no folder yet, the explorer chooses one. Forced, it
+    /// writes over a read-only song in its own folder (decision 313).
+    Write {
+        path: Option<PathBuf>,
+        force: bool,
+    },
     /// Open a project, or choose one in the explorer. Forced, it throws away unsaved changes.
     Edit {
         path: Option<PathBuf>,
@@ -165,6 +169,8 @@ pub enum Line {
     GenApply,
     SetSkip(u32),
     SetLimiter(bool),
+    /// Make the song read-only, so `:w` to its own folder refuses, or let it be written again.
+    ReadOnly(bool),
     SetScale(ScaleKind),
     SetRoot(u8),
     ScaleOn(bool),
@@ -580,7 +586,9 @@ pub enum LineError {
     Group,
     #[error(":group name takes 1 to {GROUP_NAME_CHARS} letters or digits, or nothing to clear it")]
     GroupName,
-    #[error(":set takes skip=n, limiter=on or off, scale=dorian, on or off, or root=d")]
+    #[error(
+        ":set takes skip=n, limiter=on or off, scale=dorian, on or off, root=d, or readonly or readwrite"
+    )]
     Set,
     #[error(":scale takes fit, or nothing to choose from a list")]
     Scale,
@@ -842,18 +850,79 @@ pub const SETTINGS: [Setting; 4] = [
     },
 ];
 
+/// A `:set` option switched on by its name and off by its opposite's, each with a short name that
+/// does the same: `:set readonly` or `:set ro`, and `:set readwrite` or `:set rw`. Vim's `no`
+/// before the name, `:set noro`, switches it off too, quietly, for Vim's hands.
+#[derive(Debug, Clone, Copy)]
+pub struct Switch {
+    pub name: &'static str,
+    pub short: &'static str,
+    /// The opposite's name and short name, which switch it off.
+    pub opposite: &'static str,
+    pub opposite_short: &'static str,
+    /// What switching it on and off does.
+    pub on: &'static str,
+    pub off: &'static str,
+    line: fn(bool) -> Line,
+}
+
+impl Switch {
+    /// What a word does with this option: `name` or `short` switch it on, and the opposite's
+    /// names, or either of its own after `no`, off.
+    fn read(&self, word: &str) -> Option<Line> {
+        let named = |word: &str| word == self.name || word == self.short;
+        if named(word) {
+            Some((self.line)(true))
+        } else if word == self.opposite
+            || word == self.opposite_short
+            || word.strip_prefix("no").is_some_and(named)
+        {
+            Some((self.line)(false))
+        } else {
+            None
+        }
+    }
+}
+
+/// Every option `:set` switches by name, which the parser reads and Tab completes.
+pub const SWITCHES: [Switch; 1] = [Switch {
+    name: "readonly",
+    short: "ro",
+    opposite: "readwrite",
+    opposite_short: "rw",
+    on: "Make the song read-only, so :w won't write over it",
+    off: "Let :w write over the song again",
+    line: Line::ReadOnly,
+}];
+
 /// A path that can be left out.
 fn optional_path(argument: &str) -> Option<PathBuf> {
     (!argument.is_empty()).then(|| path(argument))
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 47] = [
+pub const COMMANDS: [Command; 48] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
         takes: Takes::Folder,
-        parse: |argument| Ok(Line::Write(optional_path(argument))),
+        parse: |argument| {
+            Ok(Line::Write {
+                path: optional_path(argument),
+                force: false,
+            })
+        },
+    },
+    Command {
+        name: "w!",
+        meaning: "Save, even over a read-only song",
+        takes: Takes::Folder,
+        parse: |argument| {
+            Ok(Line::Write {
+                path: optional_path(argument),
+                force: true,
+            })
+        },
     },
     Command {
         name: "e",
@@ -1003,9 +1072,12 @@ pub const COMMANDS: [Command; 47] = [
     },
     Command {
         name: "set",
-        meaning: "Set skip, limiter, scale or root",
+        meaning: "Set skip, limiter, scale, root or readonly",
         takes: Takes::Setting,
         parse: |argument| {
+            if let Some(line) = SWITCHES.iter().find_map(|switch| switch.read(argument)) {
+                return Ok(line);
+            }
             let (key, value) = argument.split_once('=').ok_or(LineError::Set)?;
             let setting = SETTINGS.iter().find(|setting| setting.key == key);
             setting
@@ -1383,8 +1455,27 @@ mod tests {
 
     #[test]
     fn commands_parse() {
-        assert_eq!(parse("w"), Ok(Line::Write(None)));
-        assert_eq!(parse("w a/b"), Ok(Line::Write(Some("a/b".into()))));
+        assert_eq!(
+            parse("w"),
+            Ok(Line::Write {
+                path: None,
+                force: false
+            })
+        );
+        assert_eq!(
+            parse("w a/b"),
+            Ok(Line::Write {
+                path: Some("a/b".into()),
+                force: false
+            })
+        );
+        assert_eq!(
+            parse("w!"),
+            Ok(Line::Write {
+                path: None,
+                force: true
+            })
+        );
         assert_eq!(parse("q!"), Ok(Line::Quit { force: true }));
         assert_eq!(parse("len 32"), Ok(Line::Len(32)));
         assert_eq!(parse("seed 42"), Ok(Line::Seed(42)));
@@ -1506,6 +1597,24 @@ mod tests {
         assert_eq!(parse("set limiter=on"), Ok(Line::SetLimiter(true)));
         assert_eq!(parse("set limiter=2"), Err(LineError::Set));
         assert_eq!(parse("set other=1"), Err(LineError::Set));
+        // Read-only is switched by name, as Vim's `readonly` is.
+        for (word, on) in [
+            ("readonly", true),
+            ("ro", true),
+            ("readwrite", false),
+            ("rw", false),
+            ("noreadonly", false),
+            ("noro", false),
+        ] {
+            assert_eq!(
+                parse(&format!("set {word}")),
+                Ok(Line::ReadOnly(on)),
+                "{word}"
+            );
+        }
+        assert_eq!(parse("set noreadonlyx"), Err(LineError::Set));
+        assert_eq!(parse("set no"), Err(LineError::Set));
+        assert_eq!(parse("set norw"), Err(LineError::Set));
         assert_eq!(parse("track add 0"), Err(LineError::Track));
         assert_eq!(parse("name bd"), Ok(Line::Name(Some("BD".into()))));
         assert_eq!(parse("name"), Ok(Line::Name(None)));

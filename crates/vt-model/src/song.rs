@@ -2329,6 +2329,11 @@ pub struct Song {
     /// the song is open and writes it in when saving (decision 305).
     #[serde(default, skip_serializing_if = "ViewState::is_empty")]
     pub view: ViewState,
+    /// Whether the song is parked, as Vim's `readonly`: `:w` to its own folder refuses, and `:w!`
+    /// or a copy saved elsewhere are the ways to keep a change (decision 313). Left out when off.
+    /// Not undone, and the app keeps it while the song is open and writes it in when saving.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub read_only: bool,
 }
 
 impl Song {
@@ -2350,6 +2355,7 @@ impl Song {
             tracks: Vec::new(),
             sections: vec![Section::default()],
             view: ViewState::default(),
+            read_only: false,
         };
         song.ensure_fixed_tracks();
         for _ in 0..tracks.max(1) {

@@ -10,7 +10,9 @@ use vt_model::sample::is_sample_file;
 use vt_model::scale::{ROOTS, ScaleKind};
 
 use crate::config::expand_from;
-use crate::input::command::{self, COMMANDS, KIT_ALL, PRESET_WORDS, RENDER_FLAGS, SETTINGS, Takes};
+use crate::input::command::{
+    self, COMMANDS, KIT_ALL, PRESET_WORDS, RENDER_FLAGS, SETTINGS, SWITCHES, Takes,
+};
 use crate::input::picker::{Item, Pick, Picker};
 
 /// Where completion looks for files: the kit folders, and the home folder `~` stands for.
@@ -214,10 +216,15 @@ pub fn complete(line: &str, places: Places) -> Completions {
                 title: "Settings",
                 candidates: SETTINGS
                     .iter()
-                    .filter(|setting| starts_with(setting.key, argument))
-                    .map(|setting| {
-                        Candidate::word(&format!("{}=", setting.key)).meaning(setting.meaning)
-                    })
+                    .map(|setting| (format!("{}=", setting.key), setting.meaning))
+                    .chain(SWITCHES.iter().flat_map(|switch| {
+                        [
+                            (switch.name.to_owned(), switch.on),
+                            (switch.opposite.to_owned(), switch.off),
+                        ]
+                    }))
+                    .filter(|(word, _)| starts_with(word, argument))
+                    .map(|(word, meaning)| Candidate::word(&word).meaning(meaning))
                     .collect(),
             },
         },
@@ -736,6 +743,18 @@ mod tests {
             let found = complete("set ", nowhere());
             let key = format!("{}=", setting.key);
             assert!(texts(&found).contains(&key.as_str()), "{}", setting.key);
+        }
+        // A switch completes as itself and its opposite, not as Vim's quiet `no` form, and each
+        // parses.
+        for switch in &SWITCHES {
+            let found = complete("set ", nowhere());
+            for word in [switch.name, switch.opposite] {
+                assert!(texts(&found).contains(&word), "{word}");
+                assert!(parse(&format!("set {word}")).is_ok(), "{word} parses");
+            }
+            let found = complete(&format!("set {}", switch.opposite), nowhere());
+            assert_eq!(texts(&found), [switch.opposite]);
+            assert!(texts(&complete("set no", nowhere())).is_empty());
         }
         // Every word a command or a setting completes makes a line that parses.
         let mut checked = 0;

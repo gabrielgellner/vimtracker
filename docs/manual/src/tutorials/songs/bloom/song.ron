@@ -1170,4 +1170,5 @@
             reset: None,
         ),
     ],
+    read_only: true,
 )
