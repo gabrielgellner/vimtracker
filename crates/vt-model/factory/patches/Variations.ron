@@ -1,0 +1,54 @@
+(
+    format: 1,
+    patch: (
+        macros: [
+            (
+                name: Some("Order"),
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "order",
+                        ),
+                        min: 32769,
+                        max: 32771,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Temperature"),
+                value: 32640,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "temperature",
+                        ),
+                        min: 32768,
+                        max: 32868,
+                    ),
+                ],
+            ),
+        ],
+        generators: [
+            (
+                column: Note,
+                shape: (
+                    from: 0,
+                    to: 0,
+                    curve: 0,
+                    s: 0,
+                    kind: Variation,
+                    wave: Sine,
+                    rate: Time(Note(1920)),
+                    phase: 0,
+                    run: 1,
+                    values: [],
+                    place: AllRows,
+                    seed: 3,
+                    vary: 4,
+                ),
+            ),
+        ],
+    ),
+)

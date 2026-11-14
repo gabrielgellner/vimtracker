@@ -24,7 +24,7 @@ take *args:
     cargo build --release -q -p vt-tui --bin vimtracker --example take_song
     cd tools/compare && uv run take.py "$@"
 
-# Write the generators tutorial's songs again from their builders, after a change to the song format
+# Write the generators tutorial's songs and the shipped patches again from their builders, after a change to the song format
 tutorial-songs:
     VT_BLESS=1 cargo test -q -p vt-engine --test tutorial_songs each_tutorial_song
 

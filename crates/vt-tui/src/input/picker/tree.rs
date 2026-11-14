@@ -10,11 +10,20 @@ use crate::explorer::{self, Icon, Purpose};
 use super::{Item, KitChoice, Outcome, Pick, Picker, Row};
 
 /// The top of the explorer's tree: a folder it starts from, with why it's there dim beside it, or
-/// items given up front under a name, such as the kit's sounds.
+/// items given up front under a name, such as the kit's sounds or the shipped patches, drawn
+/// with an icon of their own and what they are dim beside them.
 #[derive(Debug, Clone)]
 pub enum Root {
-    Place { path: PathBuf, meaning: String },
-    Group { label: String, items: Vec<Item> },
+    Place {
+        path: PathBuf,
+        meaning: String,
+    },
+    Group {
+        label: String,
+        meaning: String,
+        icon: Icon,
+        items: Vec<Item>,
+    },
 }
 
 /// A file or folder in the explorer's tree, beside its item.
@@ -263,14 +272,19 @@ impl Picker {
                         },
                     )
                 }
-                Root::Group { label, items } => {
+                Root::Group {
+                    label,
+                    meaning,
+                    icon,
+                    items,
+                } => {
                     let group = self.push(
-                        Item::new(label, Pick::Folder(PathBuf::new())),
+                        Item::new(label, Pick::Folder(PathBuf::new())).meaning(meaning),
                         Node {
                             path: None,
                             parent: None,
                             depth: 0,
-                            icon: Icon::Kit,
+                            icon,
                             folder: Some(Folder {
                                 open: true,
                                 children: Some(Vec::new()),
@@ -285,6 +299,7 @@ impl Picker {
                                 Pick::KitSound(sound) => {
                                     explorer::kit_sound_icon(&sound.path, false)
                                 }
+                                Pick::FactoryPatch(_) => Icon::Patch,
                                 _ => Icon::KitSound,
                             };
                             self.push(

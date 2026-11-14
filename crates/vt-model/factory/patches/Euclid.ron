@@ -1,0 +1,57 @@
+(
+    format: 1,
+    patch: (
+        macros: [
+            (
+                name: Some("Hits"),
+                value: 28560,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "hits",
+                        ),
+                        min: 32768,
+                        max: 32784,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Rotate"),
+                value: 8704,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "rotate",
+                        ),
+                        min: 32768,
+                        max: 32783,
+                    ),
+                ],
+            ),
+        ],
+        generators: [
+            (
+                column: Note,
+                shape: (
+                    from: 48,
+                    to: 60,
+                    curve: 0,
+                    s: 0,
+                    kind: Alternate,
+                    wave: Sine,
+                    rate: Time(Note(1920)),
+                    phase: 0,
+                    run: 1,
+                    values: [],
+                    place: Euclid(
+                        hits: 7,
+                        rotate: 2,
+                    ),
+                    seed: 1,
+                ),
+            ),
+        ],
+    ),
+)

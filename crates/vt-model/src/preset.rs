@@ -8,10 +8,13 @@
 //! and the eight macros. Loading one replaces both, which makes it a whole device with its knobs.
 //! A patch is also a preset of its own (decision 311), in `patches/`, which adds its parts to a
 //! track and keeps the track's sound; it's the same [`Patch`], holding only the parts its macros
-//! move, with the live generators they reach ([`patch`]).
+//! move, with the live generators they reach ([`patch`]). Some patches come with the program,
+//! made from the generators tutorial's songs ([`factory`]).
 
+mod factory;
 mod patch;
 
+pub use factory::{FACTORY, FACTORY_PATCHES, factory_patch};
 pub use patch::{PatchGen, PatchPreset, Placement, Short, load_patch};
 
 use std::collections::BTreeMap;

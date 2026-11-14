@@ -688,6 +688,11 @@ would leave no way to add a Turing Machine to a track whose sound you like, whic
 part than a patch; `metropolix` is in its rows (gates, `ACU`, `ARP`) and its order, so at most its
 arpeggio makes a small `Arp` patch (`Rate`, `Mode`, `Oct`).
 
+**Shipped** by decision 318, built into the program under `Factory`: these six, with `Drunk walk`,
+`Marbles X` and `Variations` added; `Kria`'s `Octave rate` left out, and its length loop carried
+with its lane but no macro, as a lane's length isn't a setting to turn; and no `Arp`, as an
+arpeggio does nothing on a track without `ARP`s in its rows.
+
 ---
 
 ## 6. The Roto

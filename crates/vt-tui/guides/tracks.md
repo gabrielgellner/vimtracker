@@ -1771,12 +1771,30 @@ Effect Rack presets go in front of whatever instrument is there. A Steps slot wi
 `Length` and `Range` on it is a Turing Machine you can put on an `Acid`, a `VA` or a kick. Patches
 are kept in the presets folder's `patches`, beside `sounds` and `effects`.
 
+**Shipped patches** come with vimtracker, made from the generators tutorial's songs, and are listed
+under `Factory` after your own, so `:patch` has some from the start. They're built into the
+program rather than written into your folder, so they can't be changed or written over; a patch
+of yours with the same name comes first, and `:patch save` always saves one of yours.
+
+| Patch | What it is | Its macros |
+|---|---|---|
+| `Turing Machine` | A Steps slot on `Pitch in scale`, drifting | `Change`, `Length`, `Range` |
+| `Deja vu` | The same with Marbles' knob: up is more memory | `Deja vu`, `Spread` |
+| `Euclid` | `C-2` and `C-3` in turn on Euclid 7 of 16 | `Hits`, `Rotate` |
+| `Kria` | A pitch loop of 5, an octave loop of 3, and a lane of 4 note lengths on FX 1 | `Pitch loop`, `Octave loop` |
+| `Accents` | Velocity `7F` on Euclid 5 of the notes | `Hits`, `Rotate` |
+| `Acid line` | The `Acid` fill from `C-2` to `C-3` | `Density`, `Notes`, `Octave`, `Accent`, `Slide` |
+| `Drunk walk` | A `Walk` on Euclid 7 of 16, from `A-1` to `A-2` | `Step`, `Hits` |
+| `Marbles X` | Marbles' `Random` on every other row, from `D-3` to `D-5` | `Spread`, `Bias`, `Steps` |
+| `Variations` | A `Variation` of the line already there | `Order`, `Temperature` |
+
 **What's saved** goes by the macros, as they're the patch's knobs: each macro that holds
 something, with its name, value, mappings and ranges; every mod slot a macro maps to, the slots
 those go to in turn, and any slot going to one of them, as an LFO on a macro or on a slot's
 `Depth`; the accumulator and the arpeggio if any of that reaches them; and the live generators of
-the phrase under the cursor that a macro holds by its column, with their shapes, and any slot or
-macro an FX one locks, as `DEP4`, so the lock has its slot wherever the patch goes. Never the
+the phrase under the cursor that a macro holds by its column, with their shapes and, for one on
+a lane, the lane's length, and any slot or macro an FX one locks, as `DEP4`, so the lock has its
+slot wherever the patch goes. Never the
 machine, the filter, the output or the effects: a macro mapped to one of those keeps the mapping
 by the setting's name, and on a track without that setting it does nothing. A track whose macros
 hold nothing has no patch to save; a sound preset (`:preset save`) keeps the whole track instead.
@@ -1800,7 +1818,8 @@ macros hold comes off any of the track's own macros, as a setting is on one macr
 generators go onto the phrase under the cursor over its loop, as `S` would: an empty Note column
 is written, notes there are reshaped, and a column already live takes the new shape. An FX
 generator goes on the first FX column live with its command or holding it, else the first empty
-one. One that locks a slot's or macro's setting by its number, as `DEP4` or `MAC2`, locks the
+one, and one that filled a lane gives an empty column a lane as long from the loop's first row,
+as `Kria`'s lane of 4. One that locks a slot's or macro's setting by its number, as `DEP4` or `MAC2`, locks the
 slot or macro where it went: a generator saved writing `DEP4` writes `DEP3` on a track where
 that slot went into `Mod 3`. Locks already on the track's own rows stay as they are. The status line
 says where everything went.
@@ -1812,7 +1831,8 @@ anything that reached a slot or macro it replaced lets go of it.
 `K` on a mod slot's type, in the title of its device on the Mod page, lists `Add a patch` and
 `Save as a patch` after the types, and `K` on a macro of the Gen page's band lists the two alone.
 The patches' list shows what each needs beside its name, as `1 slot, 3 macros` or
-`Note generator, 2 macros`.
+`Note generator, 2 macros`, your own first and then `Factory`'s. `Tab` after `:patch load`
+completes both.
 
 ## The mixer
 
