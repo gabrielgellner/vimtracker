@@ -66,7 +66,7 @@ fn keys(app: &mut App, text: &str) {
 }
 
 fn steps(app: &App) -> Vec<String> {
-    let id = app.phrase_id().unwrap();
+    let id = app.services.phrase_id().unwrap();
     app.song().tracks[0].phrases[&id]
         .steps()
         .iter()
@@ -772,10 +772,10 @@ fn playing_from_outside_the_loop_starts_at_its_first_step() {
     let (mut app, _rt) = app_with(&[E; 8]);
     keys(&mut app, ":len 4<Enter>2]l");
     keys(&mut app, "j");
-    assert_eq!(app.section_step(), 1);
+    assert_eq!(app.services.section_step(app.modes.view), 1);
     keys(&mut app, "gg");
     keys(&mut app, "k");
-    assert_eq!(app.section_step(), 0);
+    assert_eq!(app.services.section_step(app.modes.view), 0);
 }
 
 #[test]

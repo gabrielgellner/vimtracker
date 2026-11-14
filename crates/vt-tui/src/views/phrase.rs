@@ -243,8 +243,12 @@ pub(crate) fn playhead_step(app: &App) -> Option<usize> {
 /// Which step of this phrase the playhead is on, and which of the step's pulses, if it is on this
 /// phrase.
 pub(crate) fn playhead_place(app: &App) -> Option<(usize, usize)> {
-    let owner = app.track_here()?;
-    let chain = (*app.section_here()?.chains.get(app.services.cursor.track)?)?;
+    let owner = app.services.track_here()?;
+    let chain = (*app
+        .services
+        .section_here()?
+        .chains
+        .get(app.services.cursor.track)?)?;
     let playhead = app
         .services
         .playing_place(app.services.cursor.track, chain)?;
@@ -254,7 +258,7 @@ pub(crate) fn playhead_place(app: &App) -> Option<(usize, usize)> {
         app.services.dealer(app.services.cursor.track),
     )?;
     let start = owner.phrases.get(&position.phrase)?.start();
-    (position.slot == app.services.cursor.slot && Some(position.phrase) == app.phrase_id())
+    (position.slot == app.services.cursor.slot && Some(position.phrase) == app.services.phrase_id())
         .then_some((start + position.step, position.pulse))
 }
 
@@ -339,13 +343,15 @@ fn heard_over(
     lane_playheads: &[Option<usize>; FX_SLOTS],
     text: &mut String,
 ) {
-    let Some(id) = app.phrase_id() else {
+    let Some(id) = app.services.phrase_id() else {
         return;
     };
     let Some(written) = phrase.steps().get(index) else {
         return;
     };
-    let as_written: Vec<char> = step_text(written, app.track_here()).chars().collect();
+    let as_written: Vec<char> = step_text(written, app.services.track_here())
+        .chars()
+        .collect();
     for (at, generator) in phrase.generators().iter().enumerate() {
         let playing = match (generator.span, generator.column) {
             (GenSpan::Lane, ShapeColumn::Fx { slot, .. }) => lane_playheads[slot] == Some(index),
@@ -357,7 +363,9 @@ fn heard_over(
         let Some((heard, _)) = app.heard_cell(app.services.cursor.track, id, at, index) else {
             continue;
         };
-        let heard: Vec<char> = step_text(&heard, app.track_here()).chars().collect();
+        let heard: Vec<char> = step_text(&heard, app.services.track_here())
+            .chars()
+            .collect();
         let mut chars: Vec<char> = text.chars().collect();
         if heard.len() != chars.len() || as_written.len() != chars.len() {
             continue;
@@ -510,10 +518,15 @@ fn column(app: &App, track: usize) -> Option<Column<'_>> {
         return None;
     }
     let owner = app.song().tracks.get(track)?;
-    let chain = (*app.section_here()?.chains.get(track)?)?;
+    let chain = (*app.services.section_here()?.chains.get(track)?)?;
     let moving = app.services.playing_place(track, chain);
-    let place =
-        moving.unwrap_or_else(|| app.step_on(track, app.services.cursor.track, app.section_step()));
+    let place = moving.unwrap_or_else(|| {
+        app.services.step_on(
+            track,
+            app.services.cursor.track,
+            app.services.section_step(app.modes.view),
+        )
+    });
     let position = owner.chain_position(chain, place, app.services.dealer(track))?;
     let held = owner.phrases.get(&position.phrase)?;
     let steps = held.loop_steps();
@@ -829,7 +842,7 @@ fn continuation(
 
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    let Some(phrase) = app.phrase_here() else {
+    let Some(phrase) = app.services.phrase_here() else {
         frame.render_widget(Paragraph::new("This track has no phrase here."), area);
         return;
     };
@@ -840,7 +853,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .or(app.replacing_selection.map(|(selection, _)| selection))
         .or(app.shape.as_ref().map(|panel| panel.selection));
     let across = selection.map(|s| {
-        let start = app.extent().start as isize;
+        let start = app.services.extent().start as isize;
         (
             s.tracks,
             s.range.first as isize - start,
@@ -861,7 +874,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let body_width = phrase
         .steps()
         .iter()
-        .map(|step| step_text(step, app.track_here()).len())
+        .map(|step| step_text(step, app.services.track_here()).len())
         .max()
         .unwrap_or(0);
     let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
@@ -880,6 +893,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let columns: Vec<_> = others.iter().map(|track| column(app, *track)).collect();
     // How long a line is, in ticks: one of this track's steps.
     let ticks = app
+        .services
         .track_here()
         .map_or(TICKS_PER_STEP, |track| track.speed.ticks());
     // A short phrase still has rows for the longer tracks beside it, a line each past its end.
@@ -955,6 +969,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .enumerate()
         .map(|(at, generator)| {
             let moving = app
+                .services
                 .phrase_id()
                 .is_some_and(|id| app.generator_moving(app.services.cursor.track, id, at));
             let name = crate::shaping::generator_label(generator);
@@ -963,7 +978,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .collect();
     live_names.dedup();
     // How many phrases follow this one, live, on any track.
-    let followers = app.phrase_id().map_or(0, |id| {
+    let followers = app.services.phrase_id().map_or(0, |id| {
         app.song()
             .followers(Source {
                 track: app.services.cursor.track,
@@ -981,7 +996,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // or kind as a glyph before it and whether it's muted or soloed after; its chain, with the
     // phrases along it; then what's said about this one.
     let mut title = vec![];
-    if let Some(track) = app.track_here() {
+    if let Some(track) = app.services.track_here() {
         title.push(Span::styled(
             format!("{} ", glyphs::track(track)),
             theme::dim(),
@@ -1135,7 +1150,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 Span::styled(format!(" {marker}"), theme::active()),
                 Span::styled(side, edge),
             ];
-            let width = step_text(step, app.track_here()).len();
+            let width = step_text(step, app.services.track_here()).len();
             let lit = playhead == Some(index);
             spans.extend(continuation(
                 step,
@@ -1164,7 +1179,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             && matches!(app.modes.mode, Mode::Insert | Mode::Replace);
         let pending = pending_step(app, step, typing);
         let step = pending.as_ref().unwrap_or(step);
-        let mut text = step_text(step, app.track_here());
+        let mut text = step_text(step, app.services.track_here());
         // A label being typed shows in its command's place, and the first digit of a value in its.
         if typing
             && let Field::FxCommand(_) = app.services.cursor.field
@@ -1339,7 +1354,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         // A lock for a voice or an effect this track doesn't have now stays, grey with no colour
         // and brighter than an empty cell, so it isn't typed over. It plays again when its owner is
         // back.
-        if let Some(track) = app.track_here() {
+        if let Some(track) = app.services.track_here() {
             for (slot, fx) in step.fx.iter().enumerate() {
                 if fx.command.is_some_and(|command| !command.exists_on(track)) {
                     let (start, end) = slot_columns(slot);

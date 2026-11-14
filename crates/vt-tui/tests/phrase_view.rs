@@ -872,7 +872,7 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
     press(&mut app, "2");
     special(&mut app, KeyCode::Esc);
     assert_eq!(
-        app.phrase_here().unwrap().steps()[1].to_string(),
+        app.services.phrase_here().unwrap().steps()[1].to_string(),
         "C-3 40 -2 --- --- ---"
     );
 

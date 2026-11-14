@@ -157,7 +157,7 @@ impl App {
                 return;
             }
         };
-        let phrase = self.phrase_here().map(|phrase| &**phrase);
+        let phrase = self.services.phrase_here().map(|phrase| &**phrase);
         let Some(preset) = PatchPreset::of(&self.song().tracks[track], phrase) else {
             self.services.status = format!(
                 "No macro of track {:02} holds anything, so there's no patch to save: M on a setting maps one",
@@ -299,6 +299,7 @@ impl App {
         taken: &mut Vec<usize>,
     ) -> Result<(Field, Option<FxCommand>, Option<usize>), String> {
         let phrase = self
+            .services
             .phrase_here()
             .ok_or("this track has no phrase here for its generators")?;
         let live = phrase.generators();
@@ -369,7 +370,7 @@ impl App {
             return vec![action];
         };
         let lane = Lane {
-            start: self.extent().start,
+            start: self.services.extent().start,
             length,
         };
         vec![
@@ -416,6 +417,7 @@ impl App {
                 })
                 .collect();
             let phrase = self
+                .services
                 .phrase_id()
                 .map_or_else(String::new, |phrase| format!(" on phrase {phrase:02X}"));
             went.push(format!("live {}{phrase}", columns.join(" ")));

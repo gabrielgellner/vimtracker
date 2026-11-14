@@ -19,7 +19,14 @@ use vt_model::tracking::Source;
 
 use crate::app::{App, Entry};
 use crate::input::mode::Mode;
+use crate::services::Services;
 
+use super::editing::{
+    set_accumulation, set_arpeggio, set_fine_here, set_glide, set_group_here, set_hex, set_macro,
+    set_mod, set_reset,
+};
+use super::fx::set_insert;
+use super::tuning::type_tuning;
 use super::{AccumulatorField, ArpField, Control, ModField};
 
 /// The longest a generator's value can be typed: a list of eight notes and the spaces between.
@@ -57,7 +64,7 @@ impl App {
                 let text = std::mem::take(&mut self.modes.entry.text);
                 self.modes.mode = Mode::Normal;
                 if !text.is_empty() {
-                    self.commit_control(control, &text);
+                    self.commit_typed(control, &text);
                 }
             }
             KeyCode::Char(c) if hex && c.is_ascii_hexdigit() => {
@@ -67,10 +74,10 @@ impl App {
                     self.modes.mode = Mode::Normal;
                     if self.track_page.fine {
                         if let Ok(fine) = u8::from_str_radix(&text, 16) {
-                            self.set_fine_here(fine);
+                            set_fine_here(&mut self.services, control, fine);
                         }
                     } else {
-                        self.commit_control(control, &text);
+                        self.commit_typed(control, &text);
                     }
                 }
             }
@@ -81,342 +88,351 @@ impl App {
         }
     }
 
-    fn commit_control(&mut self, control: Control, text: &str) {
-        let track = self.page_track();
+    /// Write what was typed into the setting: a generator's into its shape, and the rest as the
+    /// track page's settings take it.
+    fn commit_typed(&mut self, control: Control, text: &str) {
         match control {
             Control::Gen { .. } => self.type_gen(text),
-            Control::NewGenerator(_) => {}
-            Control::Mute | Control::Solo | Control::Limiter | Control::Safe => {}
-            Control::Sample => {}
-            Control::Tune | Control::Cents => self.type_tuning(control, text),
-            Control::Insert(_) => {}
-            Control::InsertParam(slot, param) => {
-                if let Ok(value) = u8::from_str_radix(text, 16) {
-                    let insert = track.inserts[slot];
-                    self.set_insert(slot, insert.with_value(param, value));
-                }
+            _ => commit_control(&mut self.services, control, text),
+        }
+    }
+}
+
+/// Write what was typed into one of the track's settings.
+fn commit_control(services: &mut Services, control: Control, text: &str) {
+    let track = services.page_track();
+    match control {
+        // A generator's are typed into its shape, by `App::commit_typed`.
+        Control::Gen { .. } | Control::NewGenerator(_) => {}
+        Control::Mute | Control::Solo | Control::Limiter | Control::Safe => {}
+        Control::Sample => {}
+        Control::Tune | Control::Cents => type_tuning(services, control, text),
+        Control::Insert(_) => {}
+        Control::InsertParam(slot, param) => {
+            if let Ok(value) = u8::from_str_radix(text, 16) {
+                let insert = track.inserts[slot];
+                set_insert(services, slot, insert.with_value(param, value));
             }
-            Control::Base(_) | Control::Level | Control::Trim | Control::Setting(_) => {
-                if let Ok(value) = u8::from_str_radix(text, 16) {
-                    self.set_hex(control, value);
-                }
+        }
+        Control::Base(_) | Control::Level | Control::Trim | Control::Setting(_) => {
+            if let Ok(value) = u8::from_str_radix(text, 16) {
+                set_hex(services, control, value);
             }
-            Control::Choke if text.eq_ignore_ascii_case("off") => {
-                self.services.apply(&Action::SetTrackChoke {
-                    track: self.services.cursor.track,
-                    choke: None,
+        }
+        Control::Choke if text.eq_ignore_ascii_case("off") => {
+            services.apply(&Action::SetTrackChoke {
+                track: services.cursor.track,
+                choke: None,
+            });
+        }
+        Control::Choke => match text.parse::<u8>() {
+            Ok(group) if (1..=CHOKE_GROUPS).contains(&group) => {
+                services.apply(&Action::SetTrackChoke {
+                    track: services.cursor.track,
+                    choke: Some(group),
                 });
             }
-            Control::Choke => match text.parse::<u8>() {
-                Ok(group) if (1..=CHOKE_GROUPS).contains(&group) => {
-                    self.services.apply(&Action::SetTrackChoke {
-                        track: self.services.cursor.track,
-                        choke: Some(group),
-                    });
+            _ => services.status = format!("Choke is a group from 1 to {CHOKE_GROUPS}, or off"),
+        },
+        Control::Group if text.eq_ignore_ascii_case("off") => set_group_here(services, None),
+        Control::Group => {
+            let number = text.trim_start_matches(['G', 'g']).parse::<u8>();
+            match number {
+                Ok(group) if (1..=MAX_GROUPS).contains(&usize::from(group)) => {
+                    set_group_here(services, Some(group));
                 }
-                _ => {
-                    self.services.status =
-                        format!("Choke is a group from 1 to {CHOKE_GROUPS}, or off")
-                }
-            },
-            Control::Group if text.eq_ignore_ascii_case("off") => self.set_group_here(None),
-            Control::Group => {
-                let number = text.trim_start_matches(['G', 'g']).parse::<u8>();
-                match number {
-                    Ok(group) if (1..=MAX_GROUPS).contains(&usize::from(group)) => {
-                        self.set_group_here(Some(group));
-                    }
-                    _ => {
-                        self.services.status =
-                            format!("Group is a group from 1 to {MAX_GROUPS}, or off")
-                    }
-                }
+                _ => services.status = format!("Group is a group from 1 to {MAX_GROUPS}, or off"),
             }
-            Control::GateLength => match text.trim_end_matches('%').trim().parse::<u8>() {
-                Ok(percent) if (1..=100).contains(&percent) => {
-                    self.services.apply(&Action::SetTrackGateLength {
-                        track: self.services.cursor.track,
-                        gate_length: Some(gate_value(percent)),
-                    });
-                }
-                _ => self.services.status = "Gate is a percent from 1 to 100".to_owned(),
-            },
-            Control::Glide if text.eq_ignore_ascii_case("off") => self.set_glide(0),
-            Control::Glide => match text
-                .trim_end_matches("ms")
-                .trim()
-                .parse::<f32>()
-                .ok()
-                .filter(|ms| (0.0..=LONGEST_GLIDE_MS).contains(ms))
-            {
-                Some(ms) => self.set_glide(glide_value(ms)),
-                None => {
-                    self.services.status =
-                        format!("Glide is a time in ms up to {LONGEST_GLIDE_MS}, or off");
-                }
-            },
-            Control::Reset => match reset_named(text) {
-                Some(reset) => self.set_reset(reset),
-                None => {
-                    self.services.status = format!(
-                        "Reset is a number of steps from 1 to {MAX_TRACK_RESET}, of bars like 2bar, or off"
-                    );
-                }
-            },
-            Control::Groove | Control::Speed | Control::Role => {}
-            Control::FilterType | Control::FilterMode | Control::Machine => {}
-            Control::Accumulator(field @ (AccumulatorField::Up | AccumulatorField::Down)) => {
-                match text.trim().parse::<u8>() {
-                    Ok(limit) if (1..=MOST_DEGREES).contains(&limit) => {
-                        let now = track.accumulation;
-                        self.set_accumulation(if field == AccumulatorField::Up {
+        }
+        Control::GateLength => match text.trim_end_matches('%').trim().parse::<u8>() {
+            Ok(percent) if (1..=100).contains(&percent) => {
+                services.apply(&Action::SetTrackGateLength {
+                    track: services.cursor.track,
+                    gate_length: Some(gate_value(percent)),
+                });
+            }
+            _ => services.status = "Gate is a percent from 1 to 100".to_owned(),
+        },
+        Control::Glide if text.eq_ignore_ascii_case("off") => set_glide(services, 0),
+        Control::Glide => match text
+            .trim_end_matches("ms")
+            .trim()
+            .parse::<f32>()
+            .ok()
+            .filter(|ms| (0.0..=LONGEST_GLIDE_MS).contains(ms))
+        {
+            Some(ms) => set_glide(services, glide_value(ms)),
+            None => {
+                services.status = format!("Glide is a time in ms up to {LONGEST_GLIDE_MS}, or off");
+            }
+        },
+        Control::Reset => match reset_named(text) {
+            Some(reset) => set_reset(services, reset),
+            None => {
+                services.status = format!(
+                    "Reset is a number of steps from 1 to {MAX_TRACK_RESET}, of bars like 2bar, or off"
+                );
+            }
+        },
+        Control::Groove | Control::Speed | Control::Role => {}
+        Control::FilterType | Control::FilterMode | Control::Machine => {}
+        Control::Accumulator(field @ (AccumulatorField::Up | AccumulatorField::Down)) => {
+            match text.trim().parse::<u8>() {
+                Ok(limit) if (1..=MOST_DEGREES).contains(&limit) => {
+                    let now = track.accumulation;
+                    set_accumulation(
+                        services,
+                        if field == AccumulatorField::Up {
                             Accumulation { up: limit, ..now }
                         } else {
                             Accumulation { down: limit, ..now }
-                        });
-                    }
-                    _ => {
-                        self.services.status =
-                            format!("A limit is a number of degrees from 1 to {MOST_DEGREES}");
-                    }
+                        },
+                    );
+                }
+                _ => {
+                    services.status =
+                        format!("A limit is a number of degrees from 1 to {MOST_DEGREES}");
                 }
             }
-            Control::Accumulator(_) => {}
-            Control::Arpeggio(ArpField::Octaves) => match text.trim().parse::<u8>() {
-                Ok(octaves) if (1..=MOST_OCTAVES).contains(&octaves) => {
-                    self.set_arpeggio(Arpeggio {
+        }
+        Control::Accumulator(_) => {}
+        Control::Arpeggio(ArpField::Octaves) => match text.trim().parse::<u8>() {
+            Ok(octaves) if (1..=MOST_OCTAVES).contains(&octaves) => {
+                set_arpeggio(
+                    services,
+                    Arpeggio {
                         octaves,
                         ..track.arpeggio
-                    });
-                }
-                _ => self.services.status = format!("Octaves is a number from 1 to {MOST_OCTAVES}"),
-            },
-            Control::Arpeggio(_) => {}
-            Control::Mod(slot, field) => self.type_mod(slot, field, text),
-            Control::Macro(at) => {
-                if let Ok(value) = u8::from_str_radix(text, 16) {
-                    self.set_macro(at, u16::from(value) << 8);
-                }
+                    },
+                );
+            }
+            _ => services.status = format!("Octaves is a number from 1 to {MOST_OCTAVES}"),
+        },
+        Control::Arpeggio(_) => {}
+        Control::Mod(slot, field) => type_mod(services, slot, field, text),
+        Control::Macro(at) => {
+            if let Ok(value) = u8::from_str_radix(text, 16) {
+                set_macro(services, at, u16::from(value) << 8);
             }
         }
     }
+}
 
-    /// Set a mod slot's setting from what was typed: a depth in signed hex, an envelope's time,
-    /// sustain or hold, an LFO's rate or phase, Steps' own, or where Track's map starts and ends, a
-    /// note's name or hex as its source has them. The rest are lists, chosen with `K`.
-    fn type_mod(&mut self, slot: usize, field: ModField, text: &str) {
-        let current = self.page_track().mods[slot];
-        let (adsr, ahd, drum, lpg, lfo) = (
-            current.adsr,
-            current.ahd,
-            current.drum,
-            current.lpg,
-            current.lfo,
-        );
-        let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
-        let with_adsr = |adsr: Adsr| ModSlot { adsr, ..current };
-        let with_ahd = |ahd: Ahd| ModSlot { ahd, ..current };
-        let with_drum = |drum: Drum| ModSlot { drum, ..current };
-        let with_lpg = |lpg: Lpg| ModSlot { lpg, ..current };
-        let lpg_kind = current.kind == ModKind::Lpg;
-        let with_lfo = |lfo: Lfo| ModSlot { lfo, ..current };
-        let steps = current.steps;
-        let with_steps = |steps: Steps| ModSlot { steps, ..current };
-        let ahd_kind = current.kind == ModKind::Ahd;
-        let times = format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}");
-        let (changed, why) = match field {
-            ModField::Depth => (
-                parse_depth(text).map(|depth| ModSlot { depth, ..current }),
-                "Depth is hex from -FF to +FF".to_owned(),
-            ),
-            ModField::Attack if lpg_kind => (
-                ms.map(|attack_ms| with_lpg(Lpg { attack_ms, ..lpg })),
-                times,
-            ),
-            ModField::Decay if lpg_kind => {
-                (ms.map(|decay_ms| with_lpg(Lpg { decay_ms, ..lpg })), times)
-            }
-            ModField::Colour => (
-                u8::from_str_radix(text.trim(), 16)
-                    .ok()
-                    .map(|colour| with_lpg(Lpg { colour, ..lpg })),
-                "Colour is hex from 00 to FF".to_owned(),
-            ),
-            ModField::Attack if ahd_kind => (
-                ms.map(|attack_ms| with_ahd(Ahd { attack_ms, ..ahd })),
-                times,
-            ),
-            ModField::Attack => (
-                ms.map(|attack_ms| with_adsr(Adsr { attack_ms, ..adsr })),
-                times,
-            ),
-            ModField::Decay if ahd_kind => {
-                (ms.map(|decay_ms| with_ahd(Ahd { decay_ms, ..ahd })), times)
-            }
-            ModField::Decay if current.kind == ModKind::Drum => (
-                ms.map(|decay_ms| with_drum(Drum { decay_ms, ..drum })),
-                times,
-            ),
-            ModField::Peak => (ms.map(|peak_ms| with_drum(Drum { peak_ms, ..drum })), times),
-            ModField::Body => (
-                text.trim_end_matches('%')
-                    .parse::<u8>()
-                    .ok()
-                    .filter(|body| *body <= 100)
-                    .map(|body| with_drum(Drum { body, ..drum })),
-                "Body is a percent from 0 to 100".to_owned(),
-            ),
-            ModField::Ratchet => (
-                text.trim()
-                    .parse::<u8>()
-                    .ok()
-                    .filter(|ratchet| (1..=MAX_RATCHET).contains(ratchet))
-                    .map(|ratchet| with_drum(Drum { ratchet, ..drum })),
-                format!("Ratchet is how many strikes, from 1 to {MAX_RATCHET}"),
-            ),
-            ModField::Decay => (
-                ms.map(|decay_ms| with_adsr(Adsr { decay_ms, ..adsr })),
-                times,
-            ),
-            ModField::Hold => {
-                let hold = if text.trim().eq_ignore_ascii_case("note") {
-                    Some(Hold::Note)
-                } else {
-                    let ms = text
-                        .trim()
-                        .trim_end_matches("ms")
-                        .trim()
-                        .parse::<u16>()
-                        .ok();
-                    ms.filter(|ms| *ms <= MAX_HOLD_MS).map(Hold::Ms)
-                };
-                (
-                    hold.map(|hold| with_ahd(Ahd { hold, ..ahd })),
-                    format!("Hold is milliseconds from 0 to {MAX_HOLD_MS}, or note"),
-                )
-            }
-            ModField::Release => (
-                ms.map(|release_ms| with_adsr(Adsr { release_ms, ..adsr })),
-                format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}"),
-            ),
-            ModField::Sustain => (
-                text.trim_end_matches('%')
-                    .parse::<u8>()
-                    .ok()
-                    .filter(|sustain| *sustain <= 100)
-                    .map(|sustain| with_adsr(Adsr { sustain, ..adsr })),
-                "Sustain is a percent from 0 to 100".to_owned(),
-            ),
-            ModField::Rate if current.kind == ModKind::Steps => match text.parse::<StepRate>() {
-                Ok(rate) => (Some(with_steps(Steps { rate, ..steps })), String::new()),
-                Err(error) => (None, error.to_string()),
-            },
-            ModField::Rate => match text.parse::<Rate>() {
-                Ok(rate) => (Some(with_lfo(Lfo { rate, ..lfo })), String::new()),
-                Err(error) => (None, error.to_string()),
-            },
-            ModField::Length => (
-                text.trim()
-                    .parse::<u8>()
-                    .ok()
-                    .filter(|length| (1..=STEPS as u8).contains(length))
-                    .map(|length| with_steps(Steps { length, ..steps })),
-                format!("Length is how many steps, from 1 to {STEPS}"),
-            ),
-            ModField::Start => (
-                text.trim()
-                    .parse::<u8>()
-                    .ok()
-                    .filter(|start| (1..=STEPS as u8).contains(start))
-                    .map(|start| {
-                        with_steps(Steps {
-                            start: start - 1,
-                            ..steps
-                        })
-                    }),
-                format!("Start is a step, from 1 to {STEPS}"),
-            ),
-            ModField::Mutate => (
-                text.trim()
-                    .trim_end_matches('%')
-                    .parse::<u8>()
-                    .ok()
-                    .filter(|mutate| *mutate <= MAX_MUTATE)
-                    .map(|mutate| with_steps(Steps { mutate, ..steps })),
-                format!("Mutate is a percent from 0 to {MAX_MUTATE}"),
-            ),
-            ModField::Smooth => (
-                parse_depth(text).map(|smooth| with_steps(Steps { smooth, ..steps })),
-                "Smooth is hex from -FF to +FF".to_owned(),
-            ),
-            ModField::Step(at) => (
-                parse_depth(text).map(|value| {
-                    let mut values = steps.values;
-                    values[usize::from(at)] = value;
-                    with_steps(Steps { values, ..steps })
-                }),
-                "A step is hex from -FF to +FF".to_owned(),
-            ),
-            ModField::Phase => (
-                text.parse::<u16>()
-                    .ok()
-                    .filter(|phase| *phase < 360)
-                    .map(|phase| with_lfo(Lfo { phase, ..lfo })),
-                "Phase is degrees from 0 to 359".to_owned(),
-            ),
-            ModField::Deform => (
-                parse_depth(text).map(|deform| with_lfo(Lfo { deform, ..lfo })),
-                "Deform is hex from -FF to +FF".to_owned(),
-            ),
-            ModField::Fade => match text.parse::<Fade>() {
-                Ok(fade) => (Some(with_lfo(Lfo { fade, ..lfo })), String::new()),
-                Err(error) => (None, error.to_string()),
-            },
-            ModField::Low | ModField::High => {
-                let source = current.track.source;
-                let (lowest, highest) = source.span();
-                let value = match source {
-                    Source::Note => text
-                        .trim()
-                        .parse::<Note>()
-                        .ok()
-                        .and_then(|note| match note {
-                            Note::On(midi) => Some(midi),
-                            _ => None,
-                        }),
-                    Source::Velocity | Source::Random => u8::from_str_radix(text.trim(), 16).ok(),
-                };
-                let changed = value
-                    .filter(|value| (lowest..=highest).contains(value))
-                    .map(|value| {
-                        let mut track = current.track;
-                        let bounds = track.bounds_mut();
-                        if field == ModField::Low {
-                            bounds.low = value;
-                        } else {
-                            bounds.high = value;
-                        }
-                        ModSlot { track, ..current }
-                    });
-                let what = Control::Mod(slot, field).label();
-                let (lowest, highest) = (source.text(lowest), source.text(highest));
-                let why = match source {
-                    Source::Note => format!("{what} is a note from {lowest} to {highest}"),
-                    _ => format!("{what} is hex from {lowest} to {highest}"),
-                };
-                (changed, why)
-            }
-            ModField::Type
-            | ModField::Mode
-            | ModField::Polarity
-            | ModField::Destination
-            | ModField::Reset
-            | ModField::Loop
-            | ModField::Shape => return,
-        };
-        match changed {
-            Some(modulator) => self.set_mod(slot, modulator),
-            None => self.services.status = why,
+/// Set a mod slot's setting from what was typed: a depth in signed hex, an envelope's time,
+/// sustain or hold, an LFO's rate or phase, Steps' own, or where Track's map starts and ends, a
+/// note's name or hex as its source has them. The rest are lists, chosen with `K`.
+fn type_mod(services: &mut Services, slot: usize, field: ModField, text: &str) {
+    let current = services.page_track().mods[slot];
+    let (adsr, ahd, drum, lpg, lfo) = (
+        current.adsr,
+        current.ahd,
+        current.drum,
+        current.lpg,
+        current.lfo,
+    );
+    let ms = text.parse::<u16>().ok().filter(|ms| *ms <= MAX_ENVELOPE_MS);
+    let with_adsr = |adsr: Adsr| ModSlot { adsr, ..current };
+    let with_ahd = |ahd: Ahd| ModSlot { ahd, ..current };
+    let with_drum = |drum: Drum| ModSlot { drum, ..current };
+    let with_lpg = |lpg: Lpg| ModSlot { lpg, ..current };
+    let lpg_kind = current.kind == ModKind::Lpg;
+    let with_lfo = |lfo: Lfo| ModSlot { lfo, ..current };
+    let steps = current.steps;
+    let with_steps = |steps: Steps| ModSlot { steps, ..current };
+    let ahd_kind = current.kind == ModKind::Ahd;
+    let times = format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}");
+    let (changed, why) = match field {
+        ModField::Depth => (
+            parse_depth(text).map(|depth| ModSlot { depth, ..current }),
+            "Depth is hex from -FF to +FF".to_owned(),
+        ),
+        ModField::Attack if lpg_kind => (
+            ms.map(|attack_ms| with_lpg(Lpg { attack_ms, ..lpg })),
+            times,
+        ),
+        ModField::Decay if lpg_kind => {
+            (ms.map(|decay_ms| with_lpg(Lpg { decay_ms, ..lpg })), times)
         }
+        ModField::Colour => (
+            u8::from_str_radix(text.trim(), 16)
+                .ok()
+                .map(|colour| with_lpg(Lpg { colour, ..lpg })),
+            "Colour is hex from 00 to FF".to_owned(),
+        ),
+        ModField::Attack if ahd_kind => (
+            ms.map(|attack_ms| with_ahd(Ahd { attack_ms, ..ahd })),
+            times,
+        ),
+        ModField::Attack => (
+            ms.map(|attack_ms| with_adsr(Adsr { attack_ms, ..adsr })),
+            times,
+        ),
+        ModField::Decay if ahd_kind => {
+            (ms.map(|decay_ms| with_ahd(Ahd { decay_ms, ..ahd })), times)
+        }
+        ModField::Decay if current.kind == ModKind::Drum => (
+            ms.map(|decay_ms| with_drum(Drum { decay_ms, ..drum })),
+            times,
+        ),
+        ModField::Peak => (ms.map(|peak_ms| with_drum(Drum { peak_ms, ..drum })), times),
+        ModField::Body => (
+            text.trim_end_matches('%')
+                .parse::<u8>()
+                .ok()
+                .filter(|body| *body <= 100)
+                .map(|body| with_drum(Drum { body, ..drum })),
+            "Body is a percent from 0 to 100".to_owned(),
+        ),
+        ModField::Ratchet => (
+            text.trim()
+                .parse::<u8>()
+                .ok()
+                .filter(|ratchet| (1..=MAX_RATCHET).contains(ratchet))
+                .map(|ratchet| with_drum(Drum { ratchet, ..drum })),
+            format!("Ratchet is how many strikes, from 1 to {MAX_RATCHET}"),
+        ),
+        ModField::Decay => (
+            ms.map(|decay_ms| with_adsr(Adsr { decay_ms, ..adsr })),
+            times,
+        ),
+        ModField::Hold => {
+            let hold = if text.trim().eq_ignore_ascii_case("note") {
+                Some(Hold::Note)
+            } else {
+                let ms = text
+                    .trim()
+                    .trim_end_matches("ms")
+                    .trim()
+                    .parse::<u16>()
+                    .ok();
+                ms.filter(|ms| *ms <= MAX_HOLD_MS).map(Hold::Ms)
+            };
+            (
+                hold.map(|hold| with_ahd(Ahd { hold, ..ahd })),
+                format!("Hold is milliseconds from 0 to {MAX_HOLD_MS}, or note"),
+            )
+        }
+        ModField::Release => (
+            ms.map(|release_ms| with_adsr(Adsr { release_ms, ..adsr })),
+            format!("Times are milliseconds from 0 to {MAX_ENVELOPE_MS}"),
+        ),
+        ModField::Sustain => (
+            text.trim_end_matches('%')
+                .parse::<u8>()
+                .ok()
+                .filter(|sustain| *sustain <= 100)
+                .map(|sustain| with_adsr(Adsr { sustain, ..adsr })),
+            "Sustain is a percent from 0 to 100".to_owned(),
+        ),
+        ModField::Rate if current.kind == ModKind::Steps => match text.parse::<StepRate>() {
+            Ok(rate) => (Some(with_steps(Steps { rate, ..steps })), String::new()),
+            Err(error) => (None, error.to_string()),
+        },
+        ModField::Rate => match text.parse::<Rate>() {
+            Ok(rate) => (Some(with_lfo(Lfo { rate, ..lfo })), String::new()),
+            Err(error) => (None, error.to_string()),
+        },
+        ModField::Length => (
+            text.trim()
+                .parse::<u8>()
+                .ok()
+                .filter(|length| (1..=STEPS as u8).contains(length))
+                .map(|length| with_steps(Steps { length, ..steps })),
+            format!("Length is how many steps, from 1 to {STEPS}"),
+        ),
+        ModField::Start => (
+            text.trim()
+                .parse::<u8>()
+                .ok()
+                .filter(|start| (1..=STEPS as u8).contains(start))
+                .map(|start| {
+                    with_steps(Steps {
+                        start: start - 1,
+                        ..steps
+                    })
+                }),
+            format!("Start is a step, from 1 to {STEPS}"),
+        ),
+        ModField::Mutate => (
+            text.trim()
+                .trim_end_matches('%')
+                .parse::<u8>()
+                .ok()
+                .filter(|mutate| *mutate <= MAX_MUTATE)
+                .map(|mutate| with_steps(Steps { mutate, ..steps })),
+            format!("Mutate is a percent from 0 to {MAX_MUTATE}"),
+        ),
+        ModField::Smooth => (
+            parse_depth(text).map(|smooth| with_steps(Steps { smooth, ..steps })),
+            "Smooth is hex from -FF to +FF".to_owned(),
+        ),
+        ModField::Step(at) => (
+            parse_depth(text).map(|value| {
+                let mut values = steps.values;
+                values[usize::from(at)] = value;
+                with_steps(Steps { values, ..steps })
+            }),
+            "A step is hex from -FF to +FF".to_owned(),
+        ),
+        ModField::Phase => (
+            text.parse::<u16>()
+                .ok()
+                .filter(|phase| *phase < 360)
+                .map(|phase| with_lfo(Lfo { phase, ..lfo })),
+            "Phase is degrees from 0 to 359".to_owned(),
+        ),
+        ModField::Deform => (
+            parse_depth(text).map(|deform| with_lfo(Lfo { deform, ..lfo })),
+            "Deform is hex from -FF to +FF".to_owned(),
+        ),
+        ModField::Fade => match text.parse::<Fade>() {
+            Ok(fade) => (Some(with_lfo(Lfo { fade, ..lfo })), String::new()),
+            Err(error) => (None, error.to_string()),
+        },
+        ModField::Low | ModField::High => {
+            let source = current.track.source;
+            let (lowest, highest) = source.span();
+            let value = match source {
+                Source::Note => text
+                    .trim()
+                    .parse::<Note>()
+                    .ok()
+                    .and_then(|note| match note {
+                        Note::On(midi) => Some(midi),
+                        _ => None,
+                    }),
+                Source::Velocity | Source::Random => u8::from_str_radix(text.trim(), 16).ok(),
+            };
+            let changed = value
+                .filter(|value| (lowest..=highest).contains(value))
+                .map(|value| {
+                    let mut track = current.track;
+                    let bounds = track.bounds_mut();
+                    if field == ModField::Low {
+                        bounds.low = value;
+                    } else {
+                        bounds.high = value;
+                    }
+                    ModSlot { track, ..current }
+                });
+            let what = Control::Mod(slot, field).label();
+            let (lowest, highest) = (source.text(lowest), source.text(highest));
+            let why = match source {
+                Source::Note => format!("{what} is a note from {lowest} to {highest}"),
+                _ => format!("{what} is hex from {lowest} to {highest}"),
+            };
+            (changed, why)
+        }
+        ModField::Type
+        | ModField::Mode
+        | ModField::Polarity
+        | ModField::Destination
+        | ModField::Reset
+        | ModField::Loop
+        | ModField::Shape => return,
+    };
+    match changed {
+        Some(modulator) => set_mod(services, slot, modulator),
+        None => services.status = why,
     }
 }

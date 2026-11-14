@@ -16,6 +16,9 @@ use vt_model::steps::STEPS;
 use vt_model::variation::{Varies, varies_at};
 
 use crate::app::App;
+use crate::services::Services;
+
+use super::editing::set_mod;
 
 use super::{AccumulatorField, ArpField, Control, DEVICE_COLUMNS, DeviceSpec, ModField};
 
@@ -216,28 +219,6 @@ pub(crate) fn modulator_bypassed(control: Control, track: &Track) -> Option<bool
 }
 
 impl App {
-    /// `b`: switch the cursor's mod slot out, to hear the track without it, or back in. Its
-    /// settings stay as they are, and it keeps running underneath.
-    pub(super) fn toggle_modulator(&mut self) {
-        let Control::Mod(slot, _) = self.track_control() else {
-            self.services.status = "b switches a mod slot, and this has no switch".to_owned();
-            return;
-        };
-        let mut modulator = self.page_track().mods[slot];
-        modulator.bypassed = !modulator.bypassed;
-        self.services.apply(&Action::SetMod {
-            track: self.services.cursor.track,
-            slot,
-            modulator,
-        });
-        let name = format!("Mod {}", slot + 1);
-        self.services.status = if modulator.bypassed {
-            format!("Switched {name} out: b brings it back")
-        } else {
-            format!("{name} is back in")
-        };
-    }
-
     /// `Space g a` on a Steps slot: keep what its `Mutate` has drawn as its values, as one undo
     /// step, so the loop heard stays when `Mutate` goes back to none (#530). The engine reports the
     /// draws, as it hears them, and this makes the edit, so the song says what was heard and a
@@ -249,7 +230,7 @@ impl App {
             return;
         };
         let name = format!("Mod {}", slot + 1);
-        let mut modulator = self.page_track().mods[slot];
+        let mut modulator = self.services.page_track().mods[slot];
         if modulator.kind != ModKind::Steps {
             self.services.status = format!(
                 "Space g a keeps a Steps slot's drift: {name} is {}",
@@ -281,7 +262,7 @@ impl App {
                 format!("{name} has drawn nothing to keep: Mutate draws as it plays");
             return;
         }
-        self.set_mod(slot, modulator);
+        set_mod(&mut self.services, slot, modulator);
         let values = if kept == 1 { "value" } else { "values" };
         self.services.status =
             format!("Kept the {kept} {values} {name} drew: Mutate 0% now plays them");
@@ -302,7 +283,7 @@ impl App {
             selection.range
         });
         let track = self.services.cursor.track;
-        let Some(phrase) = self.phrase_id() else {
+        let Some(phrase) = self.services.phrase_id() else {
             self.services.status = "No phrase here to write the pitch into".to_owned();
             return;
         };
@@ -489,4 +470,26 @@ impl App {
         }
         self.services.status = status;
     }
+}
+
+/// `b`: switch the cursor's mod slot out, to hear the track without it, or back in. Its
+/// settings stay as they are, and it keeps running underneath.
+pub(super) fn toggle_modulator(services: &mut Services, control: Control) {
+    let Control::Mod(slot, _) = control else {
+        services.status = "b switches a mod slot, and this has no switch".to_owned();
+        return;
+    };
+    let mut modulator = services.page_track().mods[slot];
+    modulator.bypassed = !modulator.bypassed;
+    services.apply(&Action::SetMod {
+        track: services.cursor.track,
+        slot,
+        modulator,
+    });
+    let name = format!("Mod {}", slot + 1);
+    services.status = if modulator.bypassed {
+        format!("Switched {name} out: b brings it back")
+    } else {
+        format!("{name} is back in")
+    };
 }

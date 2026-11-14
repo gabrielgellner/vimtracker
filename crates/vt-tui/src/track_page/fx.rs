@@ -8,8 +8,9 @@ use vt_model::song::Track;
 
 use crate::app::App;
 
-use super::{Control, DEVICE_COLUMNS, DEVICE_ROWS, DeviceSpec, Page};
+use super::{Control, DEVICE_COLUMNS, DEVICE_ROWS, DeviceSpec, Page, TrackPage};
 use crate::input::mode::View;
+use crate::services::Services;
 
 /// The FX page's devices: a slot each, top to bottom.
 pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
@@ -64,34 +65,34 @@ impl App {
         self.fx_zoomed().then(|| {
             format!(
                 "Slot {} zoomed in: {{ }} another slot, z o every slot",
-                self.fx_slot() + 1
+                self.track_page.fx_slot(self.services.track_here()) + 1
             )
         })
     }
+}
 
+impl TrackPage {
     /// The slot the cursor is in, on the FX page.
-    fn fx_slot(&self) -> usize {
-        self.track_page
-            .device_cursor(self.track_here())
-            .map_or(0, |cursor| cursor.device)
+    fn fx_slot(&self, track: Option<&Track>) -> usize {
+        self.device_cursor(track).map_or(0, |cursor| cursor.device)
     }
 
     /// `b`: switch this slot out to hear the track without it, or back in.
-    pub(super) fn toggle_bypass(&mut self) {
-        let slot = self.fx_slot();
-        let track = self.page_track();
+    pub(super) fn toggle_bypass(&self, services: &mut Services) {
+        let slot = self.fx_slot(services.track_here());
+        let track = services.page_track();
         let insert = track.inserts[slot];
         if insert == Insert::Empty {
-            self.services.status = "There's nothing in this slot to bypass".to_owned();
+            services.status = "There's nothing in this slot to bypass".to_owned();
             return;
         }
         let bypassed = !track.bypassed[slot];
-        self.services.apply(&Action::SetBypass {
-            track: self.services.cursor.track,
+        services.apply(&Action::SetBypass {
+            track: services.cursor.track,
             slot,
             bypassed,
         });
-        self.services.status = if bypassed {
+        services.status = if bypassed {
             format!("Bypassed {}: b brings it back", insert.name())
         } else {
             format!("{} is back in", insert.name())
@@ -99,40 +100,45 @@ impl App {
     }
 
     /// `dd`: take the effect out of this slot, for `p` to put somewhere.
-    pub(super) fn take_insert(&mut self) {
-        let slot = self.fx_slot();
-        let insert = self.page_track().inserts[slot];
+    pub(super) fn take_insert(&mut self, services: &mut Services) {
+        let slot = self.fx_slot(services.track_here());
+        let insert = services.page_track().inserts[slot];
         if insert == Insert::Empty {
-            self.services.status = "There's nothing in this slot to take".to_owned();
+            services.status = "There's nothing in this slot to take".to_owned();
             return;
         }
-        self.set_insert(slot, Insert::Empty);
-        self.track_page.taken_insert = Some(TakenInsert {
+        set_insert(services, slot, Insert::Empty);
+        self.taken_insert = Some(TakenInsert {
             insert,
-            track: self.services.cursor.track,
+            track: services.cursor.track,
             slot,
-            undo_depth: self.services.history.undo_depth(),
+            undo_depth: services.history.undo_depth(),
         });
-        self.move_control(slot * DEVICE_ROWS, 0);
-        self.services.status = format!("Took {}: p puts it in a slot", insert.name());
+        let song = Arc::clone(services.song());
+        self.move_to(
+            song.tracks.get(services.cursor.track),
+            slot * DEVICE_ROWS,
+            0,
+        );
+        services.status = format!("Took {}: p puts it in a slot", insert.name());
     }
 
     /// `p`: put what was taken into this slot. What's there goes where it came from, if that's still
     /// empty, so two slots swap. Straight after `dd`, the whole move is one undo step.
-    pub(super) fn put_insert(&mut self) {
-        let Some(taken) = self.track_page.taken_insert.take() else {
-            self.services.status = "dd takes an effect out of a slot first".to_owned();
+    pub(super) fn put_insert(&mut self, services: &mut Services) {
+        let Some(taken) = self.taken_insert.take() else {
+            services.status = "dd takes an effect out of a slot first".to_owned();
             return;
         };
-        let (track, slot) = (self.services.cursor.track, self.fx_slot());
-        let displaced = self.page_track().inserts[slot];
+        let (track, slot) = (services.cursor.track, self.fx_slot(services.track_here()));
+        let displaced = services.page_track().inserts[slot];
         let mut actions = vec![Action::SetInsert {
             track,
             slot,
             insert: taken.insert,
         }];
         let source_empty = (taken.track, taken.slot) != (track, slot)
-            && self
+            && services
                 .song()
                 .tracks
                 .get(taken.track)
@@ -146,7 +152,7 @@ impl App {
                 });
             } else {
                 // There's nowhere for it to go, so it's the next one to put.
-                self.track_page.taken_insert = Some(TakenInsert {
+                self.taken_insert = Some(TakenInsert {
                     insert: displaced,
                     track,
                     slot,
@@ -154,27 +160,27 @@ impl App {
                 });
             }
         }
-        let mut next = Arc::clone(self.song());
+        let mut next = Arc::clone(services.song());
         for action in &actions {
             if let Ok(edited) = edit(&next, action) {
                 next = edited;
             }
         }
-        if taken.undo_depth == self.services.history.undo_depth() {
-            self.services.history.replace_current(next);
+        if taken.undo_depth == services.history.undo_depth() {
+            services.history.replace_current(next);
         } else {
-            self.services.history.commit(next);
+            services.history.commit(next);
         }
-        self.services.dirty = true;
-        self.services.publish();
-        self.services.status = format!("Put {} in slot {}", taken.insert.name(), slot + 1);
+        services.dirty = true;
+        services.publish();
+        services.status = format!("Put {} in slot {}", taken.insert.name(), slot + 1);
     }
+}
 
-    pub(super) fn set_insert(&mut self, slot: usize, insert: Insert) {
-        self.services.apply(&Action::SetInsert {
-            track: self.services.cursor.track,
-            slot,
-            insert,
-        });
-    }
+pub(super) fn set_insert(services: &mut Services, slot: usize, insert: Insert) {
+    services.apply(&Action::SetInsert {
+        track: services.cursor.track,
+        slot,
+        insert,
+    });
 }

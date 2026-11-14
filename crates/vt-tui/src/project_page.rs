@@ -602,7 +602,12 @@ impl App {
             ProjectControl::Launch if song.launch != Launch::default() => {
                 self.line(Line::Launch(Some(Launch::default())));
             }
-            ProjectControl::Reset if self.section_here().is_some_and(|s| s.reset.is_some()) => {
+            ProjectControl::Reset
+                if self
+                    .services
+                    .section_here()
+                    .is_some_and(|s| s.reset.is_some()) =>
+            {
                 self.line(Line::Reset(None));
             }
             ProjectControl::Seed if song.seed != 0 => self.line(Line::Seed(0)),

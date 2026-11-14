@@ -484,6 +484,7 @@ impl App {
     /// The bank entry the step under the cursor plays.
     fn step_entry(&self) -> u8 {
         let step = self
+            .services
             .phrase_here()
             .and_then(|phrase| phrase.steps().get(self.services.cursor.step));
         entry_of_step(step, self.track_sample_number())
