@@ -507,6 +507,78 @@ pub fn filtering<F: Fn(f32) -> f32, G: Fn(f32) -> f32>(
     plot
 }
 
+/// How far down a delay's repeats and a reverb's tail are drawn, in dB: as far as a reverb's
+/// decay time measures.
+pub const TIME_RANGE_DB: f32 = 60.0;
+
+/// Where a level, as a gain, is up a time plot, from 0 at -60 dB to 1 at 0 dB and over.
+fn time_level(gain: f32) -> f32 {
+    (1.0 + 20.0 * gain.max(1e-9).log10() / TIME_RANGE_DB).clamp(0.0, 1.0)
+}
+
+/// A delay's repeats over `span` seconds across, each a line up from the middle, as loud as it is
+/// on the left, and down from it, as loud as it is on the right, from nothing at -60 dB in the
+/// middle to 0 dB at the top and bottom: a ping-pong's cross from side to side and a straight
+/// one's stand both ways. The sound itself, with `Mix`, is the first at the left. Fainter dotted
+/// lines down it mark the beats, `beat` seconds apart, so the repeats can be read against them.
+pub fn repeats(sounds: &[(f32, [f32; 2])], beat: f32, span: f32, size: (usize, usize)) -> Plot {
+    let mut plot = Plot::new(size.0, size.1);
+    plot.across(0.5, Mark::Grid);
+    let span = span.max(1e-3);
+    if beat > 0.0 {
+        let mut at = beat;
+        while at < span {
+            plot.down(at / span, Mark::Fainter);
+            at += beat;
+        }
+    }
+    for &(seconds, [left, right]) in sounds {
+        let x = seconds / span;
+        let up = 0.5 + 0.5 * time_level(left);
+        let down = 0.5 - 0.5 * time_level(right);
+        if up > 0.5 || down < 0.5 {
+            let points = [plot.at(x, up), plot.at(x, down)];
+            plot.line(&points);
+        }
+    }
+    plot
+}
+
+/// A reverb's tail over `span` seconds across, from 0 dB at the top to -60 dB at the bottom:
+/// nothing until its pre-delay, `pre`, then falling in a straight line, `seconds[0]` to fall all
+/// the way at its lows, with a dotted line falling as its highs do, in `seconds[1]`. Dotted lines
+/// across at -20 and -40 dB, as the compressor's, and fainter ones down it every `every` seconds.
+pub fn tail(pre: f32, seconds: [f32; 2], span: f32, every: f32, size: (usize, usize)) -> Plot {
+    let mut plot = Plot::new(size.0, size.1);
+    let span = span.max(1e-3);
+    for db in DYNAMICS_GRID_DB {
+        plot.across(1.0 + db / TIME_RANGE_DB, Mark::Grid);
+    }
+    if every > 0.0 {
+        let mut at = every;
+        while at < span {
+            plot.down(at / span, Mark::Fainter);
+            at += every;
+        }
+    }
+    let start = pre / span;
+    // Where a fall `seconds` long reaches the bottom, or the right edge on its way.
+    let fall = |seconds: f32| {
+        let end = (pre + seconds) / span;
+        if end <= 1.0 {
+            (end, 0.0)
+        } else {
+            (1.0, 1.0 - (1.0 - start) / (end - start))
+        }
+    };
+    let highs = fall(seconds[1]);
+    plot.dotted((start, 1.0), highs, Mark::Grid);
+    let lows = fall(seconds[0]);
+    let points = [(0.0, 0.0), (start, 0.0), (start, 1.0), lows].map(|(x, level)| plot.at(x, level));
+    plot.line(&points);
+    plot
+}
+
 /// How far either side of a jump in a wave its two points are, as a share of the cycle, so the
 /// jump is drawn straight up or down.
 const JUMP: f32 = 1e-4;
@@ -961,6 +1033,70 @@ mod tests {
                 "{harmonic}: {highest} against {y}"
             );
         }
+    }
+
+    #[test]
+    fn a_delays_repeats_stand_up_for_the_left_and_down_for_the_right_as_loud_as_each_is() {
+        let (width, height) = (600, 200);
+        // The sound at full level both sides, a repeat on the left 20 dB down, and one on the
+        // right 40 dB down.
+        let sounds = [(0.0, [1.0, 1.0]), (0.5, [0.1, 0.0]), (1.0, [0.0, 0.01])];
+        let plot = repeats(&sounds, 0.25, 1.5, (width, height));
+        let column = |x: f32| plot.at(x, 0.5).0 as usize;
+        let covered = |x: usize| -> Vec<usize> {
+            (0..height)
+                .filter(|y| plot.cover[y * width + x] > 0)
+                .collect()
+        };
+        let reach = |x: f32| {
+            let rows = covered(column(x));
+            (*rows.first().unwrap() as f32, *rows.last().unwrap() as f32)
+        };
+        let (_, middle) = plot.at(0.0, 0.5);
+        // The sound reaches the top and the bottom.
+        let (top, bottom) = reach(0.0);
+        assert!(
+            top <= 1.0 && bottom >= height as f32 - 2.0,
+            "{top} {bottom}"
+        );
+        // -20 dB is two thirds of the way up the top half, and -40 a third of the way down.
+        let (top, bottom) = reach(0.5 / 1.5);
+        let (_, expected) = plot.at(0.0, 0.5 + 0.5 * (2.0 / 3.0));
+        assert!(
+            (top - expected).abs() < 2.0 && (bottom - middle).abs() < 2.0,
+            "{top} {bottom}"
+        );
+        let (top, bottom) = reach(1.0 / 1.5);
+        let (_, expected) = plot.at(0.0, 0.5 - 0.5 / 3.0);
+        assert!(
+            (bottom - expected).abs() < 2.0 && (top - middle).abs() < 2.0,
+            "{top} {bottom}"
+        );
+        // The beats are fainter lines down it.
+        let (beat, _) = plot.at(0.25 / 1.5, 0.0);
+        assert!((0..height).any(|y| plot.marks[y * width + beat as usize] == FAINTER));
+    }
+
+    #[test]
+    fn a_reverbs_tail_falls_60_db_in_its_decay_time_after_its_pre_delay() {
+        let (width, height) = (600, 200);
+        let plot = tail(0.5, [2.0, 1.0], 3.0, 1.0, (width, height));
+        // Before the pre-delay it's at the bottom, then it's at the top, and halfway through its
+        // fall it's halfway down.
+        let x = |seconds: f32| plot.at(seconds / 3.0, 0.0).0 as usize;
+        let first = |column: usize| (0..height).find(|y| plot.cover[y * width + column] > 0);
+        assert!(first(x(0.25)).unwrap() >= height - 3);
+        let (_, halfway) = plot.at(0.0, 0.5);
+        assert!((first(x(1.5)).unwrap() as f32 - halfway).abs() < 2.0);
+        // Past its decay time there's nothing.
+        assert_eq!(first(x(2.8)), None);
+        // The highs' dotted line is half way down after half a second.
+        let (_, half) = plot.at(0.0, 0.5);
+        assert!(
+            (0..height)
+                .filter(|y| (*y as f32 - half).abs() < 3.0)
+                .any(|y| plot.marks[y * width + x(1.0)] == GRID)
+        );
     }
 
     #[test]

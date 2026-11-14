@@ -656,7 +656,7 @@ mod tests {
                 .map(|formant| hertz_of(formant.note + shift));
             for hertz in across(36).chain(peaks) {
                 let measured = measured_db(&mut state, hertz, 0.3, RATE, &Keys::default());
-                let curve = response(settings, note, RATE)(hertz);
+                let curve = super::response(settings, note, RATE)(hertz);
                 assert!(
                     agrees(curve, measured),
                     "{settings:?} at {hertz} Hz: {curve} dB against {measured}"

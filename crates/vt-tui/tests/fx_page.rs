@@ -488,6 +488,8 @@ fn the_fx_pages_bars_follow_what_plays() {
         },
         inserts: Default::default(),
         reduction: Default::default(),
+        openings: Default::default(),
+        note: 60.0,
         bypassed: Default::default(),
         after_trim: Default::default(),
         mods: Default::default(),
