@@ -30,9 +30,10 @@ use std::f32::consts::PI;
 use vt_model::insert::{Vowel as Settings, vowel_blend};
 
 use crate::dsp::blocks::flush::flush;
+use crate::dsp::blocks::response::{Gain, svf, warped};
 use crate::dsp::blocks::sides::Sides;
 use crate::dsp::blocks::smoother::Smoothed;
-use crate::dsp::effects::resonator::{Limiter, semitones};
+use crate::dsp::effects::resonator::{Limiter, QUIET_GAIN, semitones};
 use crate::dsp::filters::filter::Svf;
 
 /// How many formants a voice has, and how many vowels and voices there are, as Plaits has them.
@@ -341,30 +342,62 @@ impl Formants {
     }
 
     /// The formants for some settings and a note.
-    fn worked_out(&self, [vowel, size, resonance, track, note]: [f32; 5]) -> Bank {
-        let rate = self.rate as f32;
-        let shift = track * (note - 60.0);
-        let q = formant_q(resonance);
-        let k = 1.0 / q;
-        let formants = formants(vowel, size);
-        // Matched to pink noise: what the formants together pass of it, against all there is.
-        let passed: f32 = formants.iter().map(|f| f.level * f.level).sum::<f32>() * band_power(q);
-        let level = LEVEL * (HEARD / passed).sqrt();
-        let mut bank = Bank::default();
-        for (at, formant) in formants.iter().enumerate() {
-            let hertz =
-                (440.0 * semitones(formant.note + shift - 69.0)).clamp(LOWEST_HZ, HIGHEST * rate);
-            bank.g[at] = (PI * hertz / rate).tan();
-            bank.k[at] = k;
-            bank.gain[at] = formant.level * k * level;
-        }
-        bank
+    fn worked_out(&self, values: [f32; 5]) -> Bank {
+        bank(values, self.rate)
     }
 
     /// How far its limiter is turning down now, as a gain, for its tests.
     #[cfg(test)]
     fn limiting(&self) -> f32 {
         self.limiter.gain()
+    }
+}
+
+/// The formants for `Vowel`, `Size` and `Res` on the `00` to `FF` scale, `Track` from 0 to 1 and a
+/// note, at a rate.
+fn bank([vowel, size, resonance, track, note]: [f32; 5], rate: u32) -> Bank {
+    let rate = rate as f32;
+    let shift = track * (note - 60.0);
+    let q = formant_q(resonance);
+    let k = 1.0 / q;
+    let formants = formants(vowel, size);
+    // Matched to pink noise: what the formants together pass of it, against all there is.
+    let passed: f32 = formants.iter().map(|f| f.level * f.level).sum::<f32>() * band_power(q);
+    let level = LEVEL * (HEARD / passed).sqrt();
+    let mut bank = Bank::default();
+    for (at, formant) in formants.iter().enumerate() {
+        let hertz =
+            (440.0 * semitones(formant.note + shift - 69.0)).clamp(LOWEST_HZ, HIGHEST * rate);
+        bank.g[at] = (PI * hertz / rate).tan();
+        bank.k[at] = k;
+        bank.gain[at] = formant.level * k * level;
+    }
+    bank
+}
+
+/// How much a `Vowel` slot leaves a quiet sine at each frequency, in Hz, in dB, once it's settled
+/// on its settings and the track's `note`: its five formants' band-passes, from the tuning and gains it
+/// plays with, added as it adds them, turned down by the limiter's quiet 0.8, and mixed with the
+/// sound by `Mix`, before `Gain`. For drawing its curve on the FX page's zoom (decision 333).
+pub fn response(settings: Settings, note: f32, rate: u32) -> impl Fn(f32) -> f32 {
+    let values = [
+        f32::from(settings.vowel),
+        f32::from(settings.size),
+        f32::from(settings.resonance),
+        f32::from(settings.track) / 255.0,
+        note,
+    ];
+    let bank = bank(values, rate);
+    let mix = f64::from(settings.mix) / 255.0;
+    move |hertz| {
+        let along = warped(f64::from(hertz) / f64::from(rate));
+        let wet = (0..FORMANTS).fold(Gain::ZERO, |sum, at| {
+            let [_, band, _] = svf(along / f64::from(bank.g[at]), f64::from(bank.k[at]));
+            sum.plus(band.scale(f64::from(bank.gain[at])))
+        });
+        wet.scale(f64::from(QUIET_GAIN) * mix)
+            .plus(Gain::real(1.0 - mix))
+            .db()
     }
 }
 
@@ -589,6 +622,47 @@ mod tests {
         }
         // Most formants stand out at full `Res`: at least the first two of every vowel.
         assert!(checked >= 2 * VOWELS * VOICES, "{checked}");
+    }
+
+    #[test]
+    fn its_curve_is_what_a_sweep_through_the_slot_measures() {
+        use vt_model::insert::Insert;
+
+        use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
+        use crate::track_state::Keys;
+        let cases = [
+            (Settings::DEFAULT, 60.0),
+            // `I` in a deep voice, ringing, half wet.
+            (
+                Settings {
+                    mix: 0x80,
+                    ..at(0x80, 0xE0, 0xFF)
+                },
+                60.0,
+            ),
+            // Between `O` and `U`, broad, following a high note all the way.
+            (
+                Settings {
+                    track: 0xFF,
+                    ..at(0xE0, 0x20, 0x00)
+                },
+                79.0,
+            ),
+        ];
+        for (settings, note) in cases {
+            let mut state = slot(Insert::Vowel(settings), note, RATE);
+            let shift = f32::from(settings.track) / 255.0 * (note - 60.0);
+            let peaks = formants(f32::from(settings.vowel), f32::from(settings.size))
+                .map(|formant| hertz_of(formant.note + shift));
+            for hertz in across(36).chain(peaks) {
+                let measured = measured_db(&mut state, hertz, 0.3, RATE, &Keys::default());
+                let curve = response(settings, note, RATE)(hertz);
+                assert!(
+                    agrees(curve, measured),
+                    "{settings:?} at {hertz} Hz: {curve} dB against {measured}"
+                );
+            }
+        }
     }
 
     #[test]

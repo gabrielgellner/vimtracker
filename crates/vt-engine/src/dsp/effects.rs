@@ -22,5 +22,7 @@ pub mod rotary;
 pub mod space;
 pub mod spring;
 pub mod stutter;
+#[cfg(test)]
+pub(crate) mod sweep;
 pub mod tape;
 pub mod warps;

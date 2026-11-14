@@ -6,7 +6,8 @@ reached with `k` (question 1), and two-state settings as the bypass switch's gly
 panel, is #374 and decision 139; the bypass switch is #375; bigger, smooth graphics are #376. The
 study is kept as it was written, so its "now" is the page before #374. Steps 1 to 3 are built
 (decisions 139 to 141), with four slots (decision 138); step 4, option C's big device as a zoom
-on top of the rack, `z i`, is built too (#377, decision 329).
+on top of the rack, `z i`, is built too (#377, decision 329), and draws the filter effects' curves
+(#705, decision 333).
 
 A design study for the user's request of 2026-11-10: a bypass toggle, three rows of settings, a
 bigger and smoother compressor graphic with a border, and a rethought FX page in Ableton's device

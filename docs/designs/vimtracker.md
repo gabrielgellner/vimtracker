@@ -372,7 +372,9 @@ an LFO is in its wave, or where a Track slot's last note is on its map (`LiveVal
 and a value each, which `TrackState::modulate` keeps as it works the slots out, and none while
 stopped), for the Mod page's dots, and which step each
 running as Steps plays (`LiveValues::steps`), which its panel lights, and what each one's `Mutate`
-has drawn (`LiveValues::drawn`), which `Space g a` keeps as its values (decision 269). `Handle::latest` merges every
+has drawn (`LiveValues::drawn`), which `Space g a` keeps as its values (decision 269), and, for
+the FX page's zoom, the note the slots follow (`LiveValues::note`) and how far each low-pass gate is
+open (`LiveValues::openings`), which the filter effects' curves are drawn at (decision 333). `Handle::latest` merges every
 report since the last frame, so a meter doesn't miss a peak. The scope's sound comes through a ring of its own, which drops what doesn't
 fit, and jam changes through another. What each mod slot moved each row's note by on `Pitch`, as it was heard (`NotePitch`, from
 `TrackState::modulate` once the note has started), comes through a third, `NOTE_PITCH_QUEUE` long, which the app keeps by row for
@@ -927,7 +929,9 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     lines, one cycle of an LFO from its `Phase`, drawn from the engine's own `lfo::wave`, and a
     Track slot's map across its source's span. Zoomed in on one slot (`z i`, decision 329), the
     FX page draws its compressor's or distortion's curve 42 by 16 and its EQ's 140 by 16, the
-    zoomed slot's alone. Gain reduction, in the rack and zoomed, and its last two bars are text,
+    zoomed slot's alone, and the filter effects' 140 by 16 from the engine's response functions
+    (`lpg`, `resonator`, `comb` and `vowel`'s `response`, decision 333), with a point at each peak
+    `plot::peaks` finds so a narrow one is drawn to its top. Gain reduction, in the rack and zoomed, and its last two bars are text,
     so pumping moves every frame without a picture. The
     scope and the pickers' waveforms stay solid dots.
 *   **Placed dots.** An LFO's dot is a small image of its own, stored once in each of two shades

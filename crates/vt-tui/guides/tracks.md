@@ -299,10 +299,21 @@ the page's width, with its settings in the same places and bars nearly twice as 
 | `Limit` | Its gain reduction meter and the last two bars |
 | `EQ3` | Its curve, across the whole width |
 | `Distort` | Its transfer curve |
+| `LPG` | Its curve as far as it's open, and open all the way |
+| `Reso`, `Comb` | Its curve at the note playing |
+| `Vowel` | Its curve |
 
 A `Comp`'s curve is square and 16 rows tall, and its meter as tall, 0 to 24 dB, with the last two
 bars of how far it turned down beside them. A `Distort`'s transfer curve, on `Soft`, `Hard`,
 `Fold`, `Sine` and `Crush`, is what each level coming in goes out as, with `Mix` in it.
+
+The filter effects' curves are what each lets through of a quiet sound at each frequency, from
+20 Hz to 20 kHz and -36 dB to +24 dB, as the Sound page's filter curve is, with `Mix` in them. A
+`Reso`'s and a `Comb`'s peaks sit on the note the track is playing, with `Tune`, and its
+harmonics, with a dashed line at that note, so the curve moves as the notes do; its narrowest peaks
+are drawn to their tops. An `LPG`'s moves as what it
+hears opens and closes it, with a dashed line at its cutoff; the dotted curve under it is where it
+goes opened all the way, so what lies between is how far it moves.
 
 The last two bars are a sweep, as an oscilloscope's: it writes from left to right as the song's
 tempo goes, with a gap after the newest, and starts again at the left after two bars, so a beat's

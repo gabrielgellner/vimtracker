@@ -253,3 +253,65 @@ fn zoomed_in_only_its_slot_is_drawn_bigger_and_a_shaping_distortion_has_its_curv
     assert!(app.slot_images[0].is_some() && app.slot_images[1].is_some());
     assert_eq!(app.zoom_image, None);
 }
+
+#[test]
+fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_is_open() {
+    use std::collections::HashMap;
+    let synced = |app: &mut App, graphics: &mut vt_tui::kitty::Graphics| -> HashMap<u32, Vec<u8>> {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        vt_tui::screenshot::sent_images(&out)
+    };
+    let (mut app, _realtime) = on_fx_page();
+    for effect in ["LPG", "Reso", "Comb", "Vowel"] {
+        press(&mut app, "K");
+        press(&mut app, effect);
+        special(&mut app, KeyCode::Enter);
+        press(&mut app, "}");
+    }
+    press(&mut app, "gg");
+    let mut graphics = vt_tui::kitty::Graphics::new();
+    synced(&mut app, &mut graphics);
+    press(&mut app, "zi");
+    // Each is a frequency curve the device's width, as the EQ's is, sent once.
+    for slot in 0..4 {
+        let sent = synced(&mut app, &mut graphics);
+        assert_eq!(sent.len(), 1, "slot {slot}");
+        assert_eq!(png_size(&sent[&app.zoom_image.unwrap()]), (2100, 624));
+        assert!(synced(&mut app, &mut graphics).is_empty(), "slot {slot}");
+        press(&mut app, "}");
+    }
+    // What the slots play with, as the engine reports it.
+    let inserts = app.song().tracks[0].inserts;
+    let live = |note: f32, opening: (f32, f32)| LiveValues {
+        inserts: inserts.map(|insert| std::array::from_fn(|param| insert.value(param))),
+        openings: [Some(opening), None, None, None],
+        note,
+        ..LiveValues::default()
+    };
+    // The resonator's follows the note the track plays. A change so soon after the last is sent a
+    // frame later, so each is given two.
+    let mut twice = |app: &mut App| {
+        let mut sent = synced(app, &mut graphics);
+        sent.extend(synced(app, &mut graphics));
+        sent
+    };
+    press(&mut app, "gg}");
+    app.live = Some(live(60.0, (0.0, 0.1)));
+    twice(&mut app);
+    let at_c = app.zoom_image.unwrap();
+    app.live = Some(live(67.0, (0.0, 0.1)));
+    assert_eq!(twice(&mut app).len(), 1);
+    assert_ne!(app.zoom_image.unwrap(), at_c);
+    // The gate's follows how far it's open, but not a step finer than it's drawn.
+    press(&mut app, "{");
+    app.live = Some(live(67.0, (0.0, 0.25)));
+    twice(&mut app);
+    let closed = app.zoom_image.unwrap();
+    app.live = Some(live(67.0, (0.0, 0.25 + 1e-4)));
+    assert!(twice(&mut app).is_empty());
+    assert_eq!(app.zoom_image, Some(closed));
+    app.live = Some(live(67.0, (1.0, 0.6)));
+    assert_eq!(twice(&mut app).len(), 1);
+    assert_ne!(app.zoom_image, Some(closed));
+}

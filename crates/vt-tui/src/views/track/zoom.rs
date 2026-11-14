@@ -298,7 +298,9 @@ fn zoom_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
             history(meter(curve(panel, ZOOM_CURVE_WIDTH)), HISTORY_BESIDE_CURVE)
         }
         Insert::Limit(_) => history(meter(panel), HISTORY_ALONE),
-        Insert::Eq(_) => curve(panel, ZOOM_EQ_WIDTH),
+        Insert::Eq(_) | Insert::Lpg(_) | Insert::Reso(_) | Insert::Comb(_) | Insert::Vowel(_) => {
+            curve(panel, ZOOM_EQ_WIDTH)
+        }
         Insert::Distort(_) => curve(panel, ZOOM_CURVE_WIDTH),
         _ => panel,
     }

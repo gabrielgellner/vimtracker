@@ -13,11 +13,16 @@ use base64::engine::general_purpose::STANDARD;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
-use vt_engine::dsp::distort::transfer;
+use vt_engine::dsp::distort::{DEFAULT_NOTE, transfer};
+use vt_engine::dsp::effects::resonator;
+use vt_engine::dsp::filters::{comb, lpg, vowel};
 use vt_engine::engine::PLAYHEADS;
-use vt_engine::track_state::LfoNow;
+use vt_engine::track_state::{LfoNow, LiveValues};
 use vt_model::bank::{ContentHash, Points};
-use vt_model::insert::{Compressor, Distort, Equaliser, INSERTS, Insert, MAX_PARAMS};
+use vt_model::insert::{
+    Comb, Compressor, Distort, Equaliser, GateMode, INSERTS, Insert, LowPassGate, MAX_PARAMS,
+    Resonator, Vowel, shift_semitones,
+};
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
 use vt_model::song::{FilterMode, FilterType, Machine, Track};
 
@@ -55,7 +60,7 @@ pub use encoding::{Picture, scope_png, spans_png, waveform_spans};
 use encoding::{indexed_png, png};
 use generators::GenDrawing;
 use panels::{Found, PanelImages, PanelKey, Shape};
-use plot::{LfoDrawing, MappingDrawing, Plot, Shade, TrackDrawing};
+use plot::{Filtering, LfoDrawing, MappingDrawing, Plot, Shade, TrackDrawing};
 use switches::Look;
 
 /// The character that stands for a piece of an image.
@@ -700,6 +705,53 @@ pub(crate) enum SlotDrawing {
     Eq(Equaliser),
     /// A distortion's transfer curve, which only the FX page's zoom draws (decision 329).
     Distort(Distort),
+    /// The filter effects' curves, which only the zoom draws too (decision 333): a low-pass gate's
+    /// as far as it's open now, and a resonator's, comb's or vowel filter's at the note the track
+    /// is playing.
+    Lpg(LowPassGate, Opening),
+    Reso(Resonator, Cents),
+    Comb(Comb, Cents),
+    Vowel(Vowel, Cents),
+}
+
+/// How many steps a low-pass gate's level and cutoff are drawn in, from 0 to 1 each, so a gate
+/// that has all but stopped moving isn't drawn again: 1/1024 of its cutoff is a hundredth of an
+/// octave.
+const OPENING_STEPS: f32 = 1024.0;
+
+/// A low-pass gate's level and cutoff, from 0 to `OPENING_STEPS` each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Opening([u16; 2]);
+
+impl Opening {
+    fn of((level, cutoff): (f32, f32)) -> Self {
+        let step = |value: f32| (value.clamp(0.0, 1.0) * OPENING_STEPS).round() as u16;
+        Self([step(level), step(cutoff)])
+    }
+
+    fn level_and_cutoff(self) -> (f32, f32) {
+        let [level, cutoff] = self.0.map(|step| f32::from(step) / OPENING_STEPS);
+        (level, cutoff)
+    }
+}
+
+/// A note in hundredths of a semitone, as a MIDI note, so it can be compared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Cents(i32);
+
+impl Cents {
+    fn of(note: f32) -> Self {
+        Self((note * 100.0).round() as i32)
+    }
+
+    fn note(self) -> f32 {
+        self.0 as f32 / 100.0
+    }
+
+    /// Its frequency, `semitones` up, in Hz.
+    fn hertz(self, semitones: f32) -> f32 {
+        440.0 * ((self.note() + semitones - 69.0) / 12.0).exp2()
+    }
 }
 
 /// An effect as it's playing with these values, which a step or an LFO can move from what's set.
@@ -733,12 +785,25 @@ impl SlotDrawing {
         }
     }
 
-    /// The drawing for an effect playing with these values zoomed in on, if it has one: the
-    /// rack's, or a distortion's transfer curve for a type that shapes each sample alone.
-    fn zoomed(insert: Insert, live: Option<[u8; MAX_PARAMS]>) -> Option<Self> {
-        match playing(insert, live) {
+    /// The drawing for the effect in a slot zoomed in on, if it has one, as it's playing: the
+    /// rack's, a distortion's transfer curve for a type that shapes each sample alone, or a filter
+    /// effect's curve, at the note the track's slots follow and, for a low-pass gate, as far as
+    /// it's open. Before the engine says, it's at middle C, and a gate where it rests.
+    fn zoomed(insert: Insert, live: Option<&LiveValues>, slot: usize) -> Option<Self> {
+        let values = live.map(|live| live.inserts[slot]);
+        let note = Cents::of(live.map_or(DEFAULT_NOTE, |live| live.note));
+        match playing(insert, values) {
             Insert::Distort(settings) => transfer(settings, 0.0).map(|_| Self::Distort(settings)),
-            _ => Self::of(insert, live),
+            Insert::Lpg(settings) => {
+                let opening = live
+                    .and_then(|live| live.openings[slot])
+                    .unwrap_or_else(|| lpg::resting(settings));
+                Some(Self::Lpg(settings, Opening::of(opening)))
+            }
+            Insert::Reso(settings) => Some(Self::Reso(settings, note)),
+            Insert::Comb(settings) => Some(Self::Comb(settings, note)),
+            Insert::Vowel(settings) => Some(Self::Vowel(settings, note)),
+            _ => Self::of(insert, values),
         }
     }
 
@@ -746,16 +811,20 @@ impl SlotDrawing {
     fn width(self) -> usize {
         match self {
             Self::Compressor(_) | Self::Distort(_) => DYNAMICS_CURVE_WIDTH,
-            Self::Eq(_) => EQ_CURVE_WIDTH,
+            Self::Eq(_) | Self::Lpg(..) | Self::Reso(..) | Self::Comb(..) | Self::Vowel(..) => {
+                EQ_CURVE_WIDTH
+            }
         }
     }
 
     /// How many characters across and down it is zoomed in on: a square for a curve of a level
-    /// in against a level out, and the whole width for an EQ's.
+    /// in against a level out, and the whole width for one over frequency.
     fn zoomed_size(self) -> (usize, usize) {
         let width = match self {
             Self::Compressor(_) | Self::Distort(_) => ZOOM_CURVE_WIDTH,
-            Self::Eq(_) => ZOOM_EQ_WIDTH,
+            Self::Eq(_) | Self::Lpg(..) | Self::Reso(..) | Self::Comb(..) | Self::Vowel(..) => {
+                ZOOM_EQ_WIDTH
+            }
         };
         (width, ZOOM_PANEL_HEIGHT)
     }
@@ -766,7 +835,54 @@ impl SlotDrawing {
             Self::Eq(settings) => plot::eq(settings, rate, size),
             Self::Compressor(settings) => plot::compressor(settings, size),
             Self::Distort(settings) => plot::distort(settings, size),
+            Self::Lpg(settings, opening) => {
+                let (level, cutoff) = opening.level_and_cutoff();
+                let filtering = Filtering {
+                    db_at: lpg::response(settings, (level, cutoff), rate),
+                    // Its cutoff on the track filter's scale, as the plot's is, unless it's a VCA.
+                    marked: (settings.mode != GateMode::Vca).then(|| plot::frequency_at(cutoff)),
+                    opened: Some(lpg::response(settings, lpg::opened(settings), rate)),
+                };
+                plot::filtering(filtering, size)
+            }
+            Self::Reso(settings, note) => {
+                let tune = shift_semitones(f32::from(settings.tune));
+                plot::filtering(
+                    tuned(
+                        resonator::response(settings, note.note(), rate),
+                        note.hertz(tune),
+                    ),
+                    size,
+                )
+            }
+            Self::Comb(settings, note) => {
+                let tune = shift_semitones(f32::from(settings.tune));
+                plot::filtering(
+                    tuned(
+                        comb::response(settings, note.note(), rate),
+                        note.hertz(tune),
+                    ),
+                    size,
+                )
+            }
+            Self::Vowel(settings, note) => {
+                let filtering = Filtering {
+                    db_at: vowel::response(settings, note.note(), rate),
+                    marked: None,
+                    opened: None::<fn(f32) -> f32>,
+                };
+                plot::filtering(filtering, size)
+            }
         }
+    }
+}
+
+/// A curve tuned to a note, with its dashed line at the note's frequency.
+fn tuned<F: Fn(f32) -> f32>(db_at: F, hertz: f32) -> Filtering<F, fn(f32) -> f32> {
+    Filtering {
+        db_at,
+        marked: Some(hertz),
+        opened: None,
     }
 }
 
@@ -1407,8 +1523,7 @@ impl Graphics {
                 .device_cursor(Some(track))
                 .map_or(0, |cursor| cursor.device)
                 .min(INSERTS - 1);
-            let live = app.live.map(|live| live.inserts[slot]);
-            if let Some(shown) = SlotDrawing::zoomed(track.inserts[slot], live) {
+            if let Some(shown) = SlotDrawing::zoomed(track.inserts[slot], app.live.as_ref(), slot) {
                 // The zoomed slot always has the cursor.
                 let shade = Shade::of(true, heard_bypassed(app, track, slot));
                 let rate = app.rate;
