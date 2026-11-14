@@ -77,7 +77,10 @@ fn every_generator_puts_each_setting_on_one_knob_and_the_app_keeps_what_it_is() 
     ];
     for kind in FillKind::ALL {
         for place in wheres {
-            let song = song_with(shape(kind, place));
+            let mut shape = shape(kind, place);
+            // A `Follow` mutating, as a Bloom branch does, has its kinds of mutation and `Vary`.
+            shape.follow.mutation = 2;
+            let song = song_with(shape);
             let track = &song.tracks[0];
             let devices = track_devices(track, Some(0));
             let (page, _, spec) = devices.last().unwrap();

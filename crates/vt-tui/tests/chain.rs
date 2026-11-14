@@ -204,3 +204,67 @@ fn x_in_a_chain_only_resets_transpose() {
     press(&mut app, "l+x");
     assert_eq!(app.chain_entries()[0].transpose, 0);
 }
+
+/// `:bloom` grows branches from the phrase here, each following the one before it, and writes
+/// their path in the row's place, as one undo step (decision 307).
+#[test]
+fn bloom_grows_branches_from_this_phrase_and_writes_their_path_into_the_chain() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, "jjjjid");
+    special(&mut app, KeyCode::Esc);
+    let depth = app.history.undo_depth();
+    command(&mut app, "bloom 3 1 trunk");
+    let phrases: Vec<(u32, i8)> = app
+        .chain_entries()
+        .iter()
+        .map(|entry| (entry.phrase, entry.transpose))
+        .collect();
+    assert_eq!(phrases, [(0, 0), (1, 0), (0, 0), (2, 0), (0, 0), (3, 0)]);
+    assert!(
+        app.status.contains("00 grew 3 branches, 01 02 03"),
+        "{}",
+        app.status
+    );
+    assert!(app.status.contains("played trunk"), "{}", app.status);
+    let track = &app.song().tracks[0];
+    for branch in 1..=3 {
+        let generator = &track.phrases[&branch].generators()[0];
+        assert_eq!(generator.source().unwrap().phrase, branch - 1);
+        assert_eq!(generator.shape.follow.mutation, 1);
+    }
+    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    press(&mut app, "u");
+    assert_eq!(app.chain_entries().len(), 1);
+    assert_eq!(app.song().tracks[0].phrases.len(), 1);
+    // The trunk's notes reach every branch, in one edit.
+    command(&mut app, "bloom 2");
+    assert_eq!(app.chain_entries().len(), 3);
+    press(&mut app, "ggig");
+    special(&mut app, KeyCode::Esc);
+    let track = &app.song().tracks[0];
+    let firsts = (1..=2)
+        .filter(|branch| track.phrases[branch].steps()[0].note == Note::On(67))
+        .count();
+    assert!(firsts >= 1, "a branch plays the trunk's new G");
+}
+
+#[test]
+fn bloom_alone_lists_the_paths_and_refuses_what_it_cant_grow() {
+    let (mut app, _realtime) = app();
+    press(&mut app, "ia");
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "bloom");
+    let picker = app.picker.as_ref().unwrap();
+    let items: Vec<String> = picker.shown().map(listed).collect();
+    assert_eq!(items.len(), 5);
+    assert_eq!(items[1], "trunk  The trunk before each branch: T 1 T 2 T 3");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.chain_entries().len(), 4, "three branches, forward");
+    command(&mut app, "bloom 8");
+    assert!(app.status.contains(":bloom takes"), "{}", app.status);
+    command(&mut app, "bloom 2 sideways");
+    assert!(app.status.contains(":bloom takes"), "{}", app.status);
+    assert_eq!(app.chain_entries().len(), 4);
+}

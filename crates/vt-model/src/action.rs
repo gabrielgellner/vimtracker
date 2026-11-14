@@ -7,6 +7,7 @@ use thiserror::Error;
 use crate::accumulator::{Accumulation, MOST_DEGREES, MOST_LOOPS};
 use crate::arpeggio::{Arpeggio, MOST_OCTAVES};
 use crate::bank::{BankEntry, Points};
+use crate::bloom::{Bloom, LAST_PHRASE, MAX_BRANCHES};
 use crate::constants::{
     DEFAULT_PHRASE_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_LEVEL, MAX_MILLIBPM,
     MAX_PROJECT_NAME_CHARS, MAX_SOUND_TRACKS, MAX_TRACK_RESET, MAX_TRANSPOSE, MIN_MILLIBPM,
@@ -500,6 +501,18 @@ pub enum Action {
         section: usize,
         track: usize,
     },
+    /// Grow branches from the phrase in a chain row, after Qu-Bit's Bloom: each a new phrase, a
+    /// copy of it whose Note column is a live `Follow` of the branch before, mutating as it
+    /// copies; and put the path through the trunk and its branches in the row's place, each with
+    /// its transpose (decision 307).
+    Bloom {
+        track: usize,
+        chain: u32,
+        slot: usize,
+        /// The scale the branches' notes move in.
+        scale: Scale,
+        bloom: Bloom,
+    },
     /// Point a track at a chain. A chain that doesn't exist yet gets a new phrase.
     SetTrackChain {
         section: usize,
@@ -619,6 +632,10 @@ pub enum EditError {
     NoSource(Source),
     #[error("a phrase can't follow itself")]
     FollowsItself,
+    #[error("a bloom grows from 1 to {MAX_BRANCHES} branches")]
+    Branches,
+    #[error("the track has no phrase IDs left for {0} branches")]
+    NoPhrasesLeft(u8),
     #[error("{0} follows this phrase already, directly or through others, so this can't follow it")]
     FollowCycle(Source),
     #[error("tempo must be from 20 to 400 BPM")]
@@ -1417,6 +1434,64 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
             let new = lowest_unused(&owner.chains);
             owner.chains.insert(new, Arc::new(copy));
             next.sections[*section].chains[*track] = Some(new);
+        }
+        Action::Bloom {
+            track,
+            chain,
+            slot,
+            scale,
+            bloom,
+        } => {
+            if !(1..=MAX_BRANCHES).contains(&bloom.branches) {
+                return Err(EditError::Branches);
+            }
+            let entry = *chain_mut(&mut next, *track, *chain)?
+                .entries
+                .get(*slot)
+                .ok_or(EditError::NoRow {
+                    chain: *chain,
+                    slot: *slot,
+                })?;
+            let owner = track_mut(&mut next, *track)?;
+            let trunk = owner
+                .phrases
+                .get(&entry.phrase)
+                .cloned()
+                .ok_or(EditError::NoPhrase(entry.phrase))?;
+            let rows = StepRange::between(trunk.start(), trunk.start() + trunk.len() - 1);
+            let column = ShapeColumn::Note {
+                scale: *scale,
+                writes: None,
+            };
+            let mut grown = vec![entry.phrase];
+            for nth in 1..=usize::from(bloom.branches) {
+                let id = lowest_unused(&owner.phrases);
+                if id > LAST_PHRASE {
+                    return Err(EditError::NoPhrasesLeft(bloom.branches));
+                }
+                let before = grown[nth - 1];
+                let source = Source {
+                    track: *track,
+                    phrase: before,
+                };
+                let generator = Generator::new(column, Span::rows(rows), bloom.branch(source, nth));
+                let read = Arc::clone(&owner.phrases[&before]);
+                let mut branch = Phrase::clone(&trunk);
+                branch.add_generator(generator, Some(read.loop_steps()));
+                owner.phrases.insert(id, Arc::new(branch));
+                grown.push(id);
+            }
+            let path = bloom
+                .path
+                .places(usize::from(bloom.branches), bloom.seed)
+                .into_iter()
+                .map(|place| ChainEntry {
+                    phrase: grown[place],
+                    transpose: entry.transpose,
+                });
+            chain_mut(&mut next, *track, *chain)?
+                .entries
+                .splice(*slot..=*slot, path);
         }
         Action::SetTrackChain {
             section,

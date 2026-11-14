@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds thirteen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds fourteen of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -22,6 +22,7 @@ there are no samples to find.
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
+| `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -876,6 +877,64 @@ the reverb, and sets the `Acid`'s `Cutoff` `48`, `Resonance` `A0` and `Env mod` 
     the rest.
 *   `:order` alone lists every order, each snake and Cartesian with what it plays in a phrase of
     16.
+
+## Bloom
+
+[Qu-Bit's Bloom](https://www.qubitelectronix.com/) calls itself a fractal sequencer.
+You write a sequence, the trunk, and its `Branches` knob grows up to seven more, each a
+variation built from the one before it, its `Mutation` knob setting how much each changes. So
+the first branch is nearly the trunk and the seventh has wandered off, and `Path` chooses the
+route through them: in order, back to the trunk between each, or around and back.
+
+**How the song does it.** Track 1, a plucked `VA` in D dorian, has a bar written by hand, the
+trunk, phrase `00`. `:bloom 4 2 trunk` grew four branches from it, phrases `01` to `04`, each a
+copy of the trunk whose Note column follows the branch before it live, with `Mutation` at two
+changes: a note moved a degree or two, a few rows played backwards, a ratchet, a note dropped or
+added. Its chain plays the trunk before each branch, `00 01 00 02 00 03 00 04`: eight bars that
+stray further each time and come home between. An `Acid` bass, a kick and hats keep it steady.
+[`song.ron`](songs/bloom/song.ron)
+
+```text
+The trunk, phrase 00                        Branch 4, phrase 04
+00 D-3 7F  04 ---     08 G-3 7F  0C ---      00 ---     04 E-3 64  08 G-3 7F  0C ---
+01 ---     05 C-4 50  09 ---     0D D-3 50   01 D-3 7F  05 C-4 50  09 ---     0D D-3 50
+02 A-3 50  06 A-3 64  0A E-3 50  0E C-3 64   02 F-3 50  06 ---     0A G-3 50  0E C-3 64
+03 F-3 64  07 ---     0B F-3 64  0F ---      03 F-3 64  07 ---     0B F-3 64  0F D-3 64
+```
+
+By the fourth branch the first note has moved a row late, the `A-3`s have gone, an `E-3` and a
+last `D-3` have come in, and the `D-3` on row `0D` is ratcheted with `RET 02`, three hits in
+its step, which it took from branch 2.
+
+Each branch is still a live column, so an edit to the trunk grows all four again, in one undo
+step: change the trunk's `G-3` on row `08` and every branch plays the new note, except where its
+own changes fall. The branches' titles say `󰁨 Note←T01:00`, `󰁨 Note←T01:01` and so on, and the
+trunk's `Followed by 1`.
+
+**Build it.**
+
+1.  `:set scale=dorian`, `:set root=d` and `:bpm 116`.
+2.  Track 1: `K` `va` `Enter`, `:name BL`, and the trunk above in the phrase view.
+3.  `:bloom 4 2 trunk`: four branches, two changes each, the trunk before each. The status line
+    names the new phrases, and `Space 2`, the chain view, shows the path. Your branches differ
+    from the song's, as each bloom draws its own seed: `u` and `:bloom 4 2 trunk` again for
+    others, until you like them.
+
+Then, on tracks 2 to 4, an `Acid` bass on `D-1` (`X..x..x...x..x..`), a `Kick` on every beat
+and a `Hat` on the off-beats. The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay`
+`220 ms` and `Sustain` `25%`, with `Cut` `88`) sent to the delay and the reverb.
+
+**Try next.**
+
+*   `:bloom` alone, on the trunk's row of a new chain, lists the paths: `pendulum` goes out to the
+    last branch and back, and `shuffle` plays the branches in an order of its own.
+*   `gl` on a branch's notes, or `Space 8` for the Gen page, then `Mutation` up to `6`: that
+    branch strays further, and the ones after it with it. Turn `Shift` on and the branch moves
+    up or down the scale as a whole, as Bloom's `Root` would.
+*   On the Gen page, `Vary` `Each pass` on branch `04`: it mutates again every time round the
+    eight bars, so the last branch is always new.
+*   Map a macro to `Mutation` on the Gen page with `M`, and one knob turns every branch at once.
+*   `Space g a` on a branch keeps it as plain notes, to edit by hand; it stops following.
 
 ## Generators still to come
 
