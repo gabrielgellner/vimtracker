@@ -15,6 +15,7 @@ use vt_engine::render::{RenderOptions, render_loop};
 use vt_model::accumulator::{Accumulation, AtLimit};
 use vt_model::action::{Action, edit};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio};
+use vt_model::bloom::{Bloom, Path};
 use vt_model::generator::Span;
 use vt_model::lfo::Shape as Wave;
 use vt_model::modulation::ModKind;
@@ -25,8 +26,8 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, DrumPart, Edge, FillKind, Follow, Grids, Pink, Random, Shape,
-    ShapeColumn, Source, Values, Walk, WaveRate, Where, track_seed,
+    Acid, Bits, DEFAULT_RATE, DrumPart, Edge, FillKind, Follow, Grids, Mutations, Pink, Random,
+    Shape, ShapeColumn, Source, Values, Walk, WaveRate, Where, track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
@@ -56,6 +57,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("marbles", marbles()),
         ("variations", variations()),
         ("rene", rene()),
+        ("bloom", bloom()),
     ]
 }
 
@@ -1067,6 +1069,73 @@ fn rene() -> Song {
     song
 }
 
+/// Bloom's trunk, a bar in D dorian.
+const BLOOM_TRUNK: [&str; 16] = [
+    "D-3 7F --- --- ---",
+    REST,
+    "A-3 50 --- --- ---",
+    "F-3 64 --- --- ---",
+    REST,
+    "C-4 50 --- --- ---",
+    "A-3 64 --- --- ---",
+    REST,
+    "G-3 7F --- --- ---",
+    REST,
+    "E-3 50 --- --- ---",
+    "F-3 64 --- --- ---",
+    REST,
+    "D-3 50 --- --- ---",
+    "C-3 64 --- --- ---",
+    REST,
+];
+
+/// Qu-Bit's Bloom: a trunk of a bar on the first track and four branches grown from it with
+/// `:bloom 4 2 trunk`, each a new phrase following the one before it live, with two changes; the
+/// chain plays the trunk before each branch, eight bars that stray and come home. A bass, a kick
+/// and hats under it.
+fn bloom() -> Song {
+    let mut song = song("bloom", 116, 2, ScaleKind::Dorian, 4);
+    song.seed = 0xB1;
+    voice(&mut song, 0, "BL", SynthVoice::VirtualAnalog, &BLOOM_TRUNK);
+    let scale = song.scale;
+    let mut song = apply(
+        song,
+        &Action::Bloom {
+            track: 0,
+            chain: 0,
+            slot: 0,
+            scale,
+            bloom: Bloom {
+                branches: 4,
+                mutation: 2,
+                mutate: Mutations::default(),
+                path: Path::Trunk,
+                seed: 0xB1,
+            },
+        },
+    );
+    let lead = &mut song.tracks[0];
+    lead.cutoff = 0x88;
+    lead.level = 0xC8;
+    lead.send_a = 0xA8;
+    lead.send_b = 0x90;
+    pluck(&mut song, 0, 220, 25, 120);
+    voice(
+        &mut song,
+        1,
+        "BS",
+        SynthVoice::Acid,
+        &texts(&hits("X..x..x...x..x..", "D-1")),
+    );
+    set(&mut song, 1, "acid.cutoff", 0x40);
+    set(&mut song, 1, "acid.resonance", 0x90);
+    set(&mut song, 1, "acid.envmod", 0x70);
+    song.tracks[1].level = 0xB4;
+    four_on_the_floor(&mut song, 2);
+    off_beat_hats(&mut song, 3);
+    song
+}
+
 // The tests.
 
 /// What `save_song` writes for a song, read back as text.
@@ -1218,5 +1287,49 @@ fn the_fugues_three_voices_follow_its_theme_and_an_edit_to_it_reaches_them() {
     assert_eq!(notes(&edited, 3)[0], "F-4");
     for track in &edited.tracks[1..4] {
         assert_eq!(track.phrases[&0].generators().len(), 1);
+    }
+}
+
+/// The chapter's Bloom: each branch follows the one before it and strays further from the trunk,
+/// the chain plays the trunk before each, and an edit to the trunk reaches every branch.
+#[test]
+fn the_blooms_branches_stray_further_and_an_edit_to_the_trunk_reaches_them() {
+    let song = Arc::new(load_song(&songs_folder().join("bloom")).unwrap());
+    let rows = |song: &Song, phrase: u32| -> Vec<String> {
+        song.tracks[0].phrases[&phrase]
+            .steps()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    };
+    let apart = |a: &[String], b: &[String]| a.iter().zip(b).filter(|(a, b)| a != b).count();
+    let chain: Vec<u32> = song.tracks[0].chains[&0]
+        .entries
+        .iter()
+        .map(|entry| entry.phrase)
+        .collect();
+    assert_eq!(chain, [0, 1, 0, 2, 0, 3, 0, 4]);
+    let trunk = rows(&song, 0);
+    let mut strayed = Vec::new();
+    for branch in 1..=4 {
+        let generator = &song.tracks[0].phrases[&branch].generators()[0];
+        assert_eq!(generator.source().unwrap().phrase, branch - 1);
+        assert!(apart(&rows(&song, branch), &rows(&song, branch - 1)) <= 2 * 4);
+        strayed.push(apart(&rows(&song, branch), &trunk));
+    }
+    assert!(strayed[3] > strayed[0], "{strayed:?}");
+    // The trunk's G-3 on row 8 down to an F-3: every branch plays it.
+    let edited = edit(
+        &song,
+        &Action::SetNote {
+            track: 0,
+            phrase: 0,
+            step: 8,
+            note: Note::On(note("F-3")),
+        },
+    )
+    .unwrap();
+    for branch in 1..=4 {
+        assert_eq!(&rows(&edited, branch)[8][..3], "F-3", "branch {branch}");
     }
 }

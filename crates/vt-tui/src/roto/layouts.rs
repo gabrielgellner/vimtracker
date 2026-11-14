@@ -1527,8 +1527,8 @@ const SPACE: DeviceLayout = live(
 // `where2` Euclid's `Rotate`. The fill and the `Where`, and a `Follow`'s source, are what the
 // device is, so they're chosen in the app (the generators study, `generators-page.md` §6). A
 // generator has no off/on settings of its own, so it's live, and `Acid`'s `Pitches` is a
-// two-step knob. `Vary` is knob 6, beside the `Where`, on every fill but `Follow`, which draws
-// nothing; `Wave` and `Acid` have it on a second page. A setting the shape hasn't now, as `Hits`
+// two-step knob. `Vary` is knob 6, beside the `Where`, on every fill; `Wave`, `Acid` and
+// `Follow`, which draws only once it mutates, have it on a second page. A setting the shape hasn't now, as `Hits`
 // without Euclid or `Vary` on a ramp, leaves its knob dark.
 
 /// Knob 7 and 8's keys: what the `Where` has, whichever it is.
@@ -1648,22 +1648,39 @@ const GEN_ACID: DeviceLayout = live(
         knobs("Range", [s("from"), s("to"), __, __, __, s("vary"), __, __]),
     ],
 );
-/// A canon's moves; it writes every row, so it has no `Where`.
+/// A canon's moves; it writes every row, so it has no `Where`. Then its mutations, a Bloom
+/// branch's, on a page of their own, with `Vary` on knob 6 as elsewhere, as it draws once it
+/// mutates (decision 307).
 const GEN_FOLLOW: DeviceLayout = live(
     "gen/follow",
-    &[knobs(
-        "Follow",
-        [
-            s("transpose"),
-            s("invert"),
-            s("axis"),
-            s("reverse"),
-            s("late"),
-            s("fx"),
-            __,
-            __,
-        ],
-    )],
+    &[
+        knobs(
+            "Follow",
+            [
+                s("transpose"),
+                s("invert"),
+                s("axis"),
+                s("reverse"),
+                s("late"),
+                s("fx"),
+                __,
+                __,
+            ],
+        ),
+        knobs(
+            "Mutation",
+            [
+                s("mutation"),
+                s("repitch"),
+                s("shift"),
+                s("retro"),
+                s("ratchet"),
+                s("vary"),
+                s("drop"),
+                __,
+            ],
+        ),
+    ],
 );
 const GEN_SCALE: DeviceLayout = live(
     "gen/scale",

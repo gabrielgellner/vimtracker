@@ -200,6 +200,16 @@ impl App {
             },
             Line::Order(Some(order)) => self.set_order(order),
             Line::Order(None) => self.open_order_picker(),
+            Line::Bloom {
+                branches: None,
+                mutation: None,
+                path: None,
+            } => self.open_bloom_picker(),
+            Line::Bloom {
+                branches,
+                mutation,
+                path,
+            } => self.grow_bloom(branches, mutation, path.unwrap_or_default()),
             Line::Len(length) => {
                 if let Some(phrase) = self.phrase_id() {
                     self.apply(&Action::SetLength {

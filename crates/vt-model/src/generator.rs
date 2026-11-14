@@ -73,7 +73,7 @@ enum Owns {
     /// A note's velocity and gate as well as its pitch, as `Acid` writes its accents and slides
     /// there, and `Follow` copies them.
     Note,
-    /// Those and the row's FX, for a `Follow` copying them too.
+    /// Those and the row's FX, for a `Follow` copying them too, or ratcheting some rows.
     NoteFx,
 }
 
@@ -81,7 +81,7 @@ enum Owns {
 fn owns(shape: &Shape) -> Owns {
     match shape.kind {
         FillKind::Acid => Owns::Note,
-        FillKind::Follow if shape.follow.fx => Owns::NoteFx,
+        FillKind::Follow if shape.follow.fx || shape.follow.ratchets() => Owns::NoteFx,
         FillKind::Follow => Owns::Note,
         // A note it adds or clears takes or leaves its velocity and gate.
         FillKind::Multiply => Owns::Note,

@@ -28,6 +28,16 @@ df776ee82666f89d Alternate on Note, chromatic
 bbb5560ad9af8f76 Alternate on Note, in key
 c181f8d57a08f1ec Alternate on Nudge
 1a809c4fbe6871fe Alternate on Velocity
+87e59c5569117b25 Follow mutated on FX, event
+87e59c5569117b25 Follow mutated on FX, fine
+87e59c5569117b25 Follow mutated on FX, last slot
+87e59c5569117b25 Follow mutated on Length
+d32cb99e18070ccf Follow mutated on Note of its own, chromatic
+a9d36388a0f2d454 Follow mutated on Note of its own, in key
+1fd87d308a84c3ff Follow mutated on Note, chromatic
+95098c87b9a85c36 Follow mutated on Note, in key
+87e59c5569117b25 Follow mutated on Nudge
+87e59c5569117b25 Follow mutated on Velocity
 87e59c5569117b25 Follow on FX, event
 87e59c5569117b25 Follow on FX, fine
 87e59c5569117b25 Follow on FX, last slot

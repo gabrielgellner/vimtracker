@@ -5,11 +5,13 @@ use vt_model::scale::{ScaleKind, parse_root};
 
 use thiserror::Error;
 use vt_model::bank::{MAX_CENTS, MAX_SLICES, MIN_NORMALIZE, MOST_PAN, MOST_STEPS, is_mark};
+use vt_model::bloom::{MAX_BRANCHES, PATH_WORDS, Path};
 use vt_model::constants::{MAX_GROUPS, MAX_LABEL_CHARS};
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::kit::MAX_TUNE;
 use vt_model::label::is_name;
 use vt_model::order::Order;
+use vt_model::shape::MAX_MUTATION;
 use vt_model::song::{LAUNCH_WORDS, Launch};
 
 /// A parsed command.
@@ -73,6 +75,13 @@ pub enum Line {
     Lane(Option<usize>),
     /// Play this phrase's rows in an order, or choose one from a list.
     Order(Option<Order>),
+    /// Grow branches from this phrase, after Qu-Bit's Bloom, with as many branches, as much
+    /// mutation and the path given, or with none given choose a path from a list.
+    Bloom {
+        branches: Option<u8>,
+        mutation: Option<u8>,
+        path: Option<Path>,
+    },
     TrackAdd(usize),
     TrackDel,
     /// Put tracks in a group, from 1 to `MAX_GROUPS`, or take them out of any: those numbered
@@ -455,6 +464,10 @@ pub enum LineError {
         ":order takes forward, reverse, up-down, up-down-inc, down-up, down-up-inc, odd-even, converge, diverge, pedal, shuffle, random, snake and a snake or its number 1 to 8, or cartesian and its X and Y rates 1 to 16 with X and Y lengths 1 to 8 if you like, or nothing to choose"
     )]
     Order,
+    #[error(
+        ":bloom takes a number of branches from 1 to {MAX_BRANCHES}, then a mutation from 0 to {MAX_MUTATION}, and a path: forward, trunk, pendulum, ping-pong or shuffle"
+    )]
+    Bloom,
     #[error(":bank takes clean, or nothing to list the bank")]
     Bank,
     #[error(
@@ -583,6 +596,32 @@ fn group(argument: &str) -> Result<Line, LineError> {
         return Err(LineError::Group);
     }
     Ok(Line::Group { group, tracks })
+}
+
+/// Read `:bloom`'s arguments, in any order: the first number the branches, the second the
+/// mutation, and a path's word. With none, a path is chosen from a list.
+fn bloom(argument: &str) -> Result<Line, LineError> {
+    let (mut branches, mut mutation, mut path) = (None, None, None);
+    for word in argument.split_whitespace() {
+        match (word.parse::<u8>(), Path::named(word)) {
+            (Ok(count), _) if branches.is_none() => {
+                if !(1..=MAX_BRANCHES).contains(&count) {
+                    return Err(LineError::Bloom);
+                }
+                branches = Some(count);
+            }
+            (Ok(changes), _) if mutation.is_none() && changes <= MAX_MUTATION => {
+                mutation = Some(changes);
+            }
+            (_, Some(named)) if path.is_none() => path = Some(named),
+            _ => return Err(LineError::Bloom),
+        }
+    }
+    Ok(Line::Bloom {
+        branches,
+        mutation,
+        path,
+    })
 }
 
 /// `:render`'s flags, which its parser reads and Tab completes. `--split` renders stems of each
@@ -714,7 +753,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 42] = [
+pub const COMMANDS: [Command; 43] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -970,6 +1009,12 @@ pub const COMMANDS: [Command; 42] = [
                 .map(|order| Line::Order(Some(order)))
                 .ok_or(LineError::Order),
         },
+    },
+    Command {
+        name: "bloom",
+        meaning: "Grow branches from this phrase, each a mutation of the one before",
+        takes: Takes::Words(&PATH_WORDS),
+        parse: bloom,
     },
     Command {
         name: "reset",

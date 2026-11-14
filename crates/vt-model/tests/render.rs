@@ -16,8 +16,8 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
     Acid, Bits, DrumPart, Edge, FillKind, Follow, GenCell, Grids, MAX_DEPTH, MAX_FACTOR,
-    MAX_VALUES, MAX_WEIGHT, Pink, Random, RowView, Shape, ShapeColumn, Values, Variation, WAVES,
-    Walk, WaveRate, Where, render_into, written_from,
+    MAX_MUTATION, MAX_VALUES, MAX_WEIGHT, Mutations, Pink, Random, RowView, Shape, ShapeColumn,
+    Values, Variation, WAVES, Walk, WaveRate, Where, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -307,6 +307,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
             reverse: dice.chance(40),
             rotate: dice.below(40) as u16,
             fx: dice.chance(50),
+            ..Follow::default()
         },
         walk: Walk::default(),
         pink: Pink::default(),
@@ -356,7 +357,24 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
 /// of its own (decision 302), so its own line, with them as they start, stays as it was.
 type Variant = (&'static str, FillKind, fn(&mut Shape));
 
-const VARIANTS: [Variant; 1] = [("Random shaped", FillKind::Random, shaped_random)];
+const VARIANTS: [Variant; 2] = [
+    ("Random shaped", FillKind::Random, shaped_random),
+    ("Follow mutated", FillKind::Follow, mutated_follow),
+];
+
+/// A `Follow`'s mutations (decision 307), drawn from its seed: up to the most, each kind on or
+/// off, as a Bloom branch's are.
+fn mutated_follow(shape: &mut Shape) {
+    let mut more = Dice(shape.seed ^ 0xB10F);
+    shape.follow.mutation = more.below(u64::from(MAX_MUTATION) + 1) as u8;
+    shape.follow.mutate = Mutations {
+        repitch: more.chance(60),
+        shift: more.chance(40),
+        retro: more.chance(50),
+        ratchet: more.chance(50),
+        drop: more.chance(60),
+    };
+}
 
 /// A `Random`'s spread, bias, steps and weights, drawn from its seed, some at their ends.
 fn shaped_random(shape: &mut Shape) {

@@ -153,6 +153,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         FillKind::Shuffle if app.mode == Mode::Shape => "r deals again",
         FillKind::Acid if panel.shape.acid.keep => "r rolls the accents, slides and octaves",
         FillKind::Acid => "r rolls a new riff  ~ swap the ends",
+        FillKind::Follow if panel.shape.follow.mutates() && app.mode == Mode::Shape => {
+            "r other changes  L keeps it in step"
+        }
         FillKind::Follow => "L keeps it in step with its source",
         FillKind::List => "~ reverse the list",
         FillKind::Snap => match panel.column {

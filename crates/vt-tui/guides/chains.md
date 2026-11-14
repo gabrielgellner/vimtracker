@@ -83,6 +83,11 @@ status line means only that there are unsaved changes.
 | `gc` | Copy this phrase, and use the copy here |
 | `gC` | Copy this chain and all its phrases |
 | `grr` | List where this track plays this phrase |
+| `:bloom` | Grow branches from this phrase, each a mutation of the one before |
+
+`:bloom` puts the path through the phrase and its new branches in this row's
+place, so a chain of one phrase becomes a few bars that wander from it and come
+back: see **Selecting and editing** for the paths and what a branch changes.
 
 ## Tracks
 

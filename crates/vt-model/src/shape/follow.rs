@@ -3,10 +3,12 @@
 //! selected, looping a source shorter than them and cutting off a longer one, with the canon's
 //! moves on the way: `Reverse` (retrograde), `Rotate` (a delayed entry), `Invert` and `Transpose`.
 //! Each track still owns its phrases: a follower holds a copy, which its live generator rewrites
-//! whenever the source changes.
+//! whenever the source changes. With `Mutation` it then changes so many rows of its copy, as a
+//! Bloom branch does (`mutation.rs`).
 
 use serde::{Deserialize, Serialize};
 
+use super::mutation::{Mutations, mutate};
 use super::{GenCell, Ladder, ShapeColumn};
 use crate::selection::StepRange;
 use crate::step::{FxSlot, Note, Step};
@@ -50,11 +52,32 @@ pub struct Follow {
     /// Copies the source's FX columns too. Off, as a lock may mean something else on another
     /// machine.
     pub fx: bool,
+    /// How many changes it makes to what it copies, drawn from the shape's seed: none, a plain
+    /// copy, as it starts. Saved only once it's set.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub mutation: u8,
+    /// Which kinds of change those are. Saved only once it's changed.
+    #[serde(skip_serializing_if = "Mutations::is_default")]
+    pub mutate: Mutations,
+}
+
+fn is_zero(value: &u8) -> bool {
+    *value == 0
 }
 
 impl Follow {
     pub fn is_default(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// Whether it changes what it copies.
+    pub fn mutates(&self) -> bool {
+        self.mutation > 0 && self.mutate.any()
+    }
+
+    /// Whether it ratchets some rows, so it owns their FX even where it doesn't copy them.
+    pub fn ratchets(&self) -> bool {
+        self.mutates() && self.mutate.ratchet
     }
 }
 
@@ -75,12 +98,14 @@ pub(crate) fn copy_fx(from: &Step, to: &mut Step) {
 
 /// The cells of the rows a `Follow` fill writes, every row of the range: the source's note,
 /// velocity and gate on that row once the source is turned round and rotated, with its pitch
-/// inverted and transposed, and with `fx` its FX. A source with no rows writes nothing.
+/// inverted and transposed, and with `fx` its FX; then, if it mutates, so many of them changed,
+/// drawn from `seed`. A source with no rows writes nothing.
 pub(super) fn render(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
     follow: &Follow,
+    seed: u64,
     source: &[Step],
     cells: &mut [GenCell],
 ) {
@@ -135,6 +160,17 @@ pub(super) fn render(
             }
         };
     }
+    if follow.mutates() {
+        mutate(
+            steps,
+            range.first,
+            &ladder,
+            follow.mutation,
+            follow.mutate,
+            seed,
+            cells,
+        );
+    }
 }
 
 #[cfg(test)]
@@ -183,7 +219,7 @@ mod tests {
     fn follow(steps: &[Step], scale: Scale, follow: Follow, source: &[Step]) -> Vec<String> {
         let range = StepRange::between(0, steps.len() - 1);
         let mut cells = vec![GenCell::Under; range.len()];
-        render(steps, range, column(scale), &follow, source, &mut cells);
+        render(steps, range, column(scale), &follow, 0, source, &mut cells);
         steps
             .iter()
             .zip(cells)

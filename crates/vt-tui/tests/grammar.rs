@@ -2355,6 +2355,7 @@ fn follow_keeps_a_track_in_step_with_another_as_one_undo() {
             GenParam::Reverse,
             GenParam::Late,
             GenParam::CopyFx,
+            GenParam::Mutation,
         ]
     );
     // It starts on the phrase beside it on the track before, and can follow the third's too.

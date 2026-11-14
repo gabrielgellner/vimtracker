@@ -16,9 +16,10 @@ use crate::step::Step;
 
 use super::{
     Acid, Bits, DEFAULT_RATE, Degrees, DrumPart, EUCLID_HITS, Edge, FillKind, Grids,
-    MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH, MAX_FACTOR, MAX_ORDER, MAX_SPREAD,
-    MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Pink, Random, Shape, ShapeColumn, Source, VARIES, Values,
-    Variation, WAVES, WaveRate, Where, default_step, degree_count, degree_name, first_note,
+    MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_ORDER, MAX_SPREAD,
+    MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Mutations, Pink, Random, Shape, ShapeColumn, Source,
+    VARIES, Values, Variation, WAVES, WaveRate, Where, default_step, degree_count, degree_name,
+    first_note,
 };
 
 /// How far a small and a large step move a curve.
@@ -47,7 +48,7 @@ const MAX_NOTE_STEP: u8 = 24;
 const FACTOR_JUMP: i32 = 4;
 
 /// How many columns and rows a generator's settings take on the Gen page.
-pub const GEN_COLUMNS: usize = 3;
+pub const GEN_COLUMNS: usize = 4;
 pub const GEN_ROWS: usize = 3;
 /// How many settings a generator's title on the Gen page has room for.
 pub const GEN_TITLE: usize = 4;
@@ -253,6 +254,15 @@ pub enum GenParam {
     Reverse,
     Late,
     CopyFx,
+    /// A `Follow` that mutates, as a Bloom branch does: how many changes it makes to what it
+    /// copies, and which kinds it may make (a note moved in the scale, the line shifted, a span
+    /// backwards, a ratchet, a note dropped or added).
+    Mutation,
+    Repitch,
+    Shift,
+    Retro,
+    Ratchet,
+    DropAdd,
     /// A `Walk`'s largest move and what it does at the ends, and how many values a `1/f` sums.
     Step,
     Edge,
@@ -312,7 +322,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 52] = [
+    pub const ALL: [Self; 58] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -329,6 +339,12 @@ impl GenParam {
         Self::Reverse,
         Self::Late,
         Self::CopyFx,
+        Self::Mutation,
+        Self::Repitch,
+        Self::Shift,
+        Self::Retro,
+        Self::Ratchet,
+        Self::DropAdd,
         Self::Step,
         Self::Edge,
         Self::Depth,
@@ -386,6 +402,12 @@ impl GenParam {
             Self::Reverse => "reverse",
             Self::Late => "late",
             Self::CopyFx => "fx",
+            Self::Mutation => "mutation",
+            Self::Repitch => "repitch",
+            Self::Shift => "shift",
+            Self::Retro => "retro",
+            Self::Ratchet => "ratchet",
+            Self::DropAdd => "drop",
             Self::Step => "step",
             Self::Edge => "edge",
             Self::Depth => "depth",
@@ -450,6 +472,12 @@ impl GenParam {
             Self::Reverse => "Reverse",
             Self::Late => "Rotate",
             Self::CopyFx => "FX",
+            Self::Mutation => "Mutation",
+            Self::Repitch => "Repitch",
+            Self::Shift => "Shift",
+            Self::Retro => "Retro",
+            Self::Ratchet => "Ratchet",
+            Self::DropAdd => "Drop/add",
             Self::Step => "Step",
             Self::Edge => "Edge",
             Self::Depth => "Depth",
@@ -502,7 +530,8 @@ impl GenParam {
             | Self::Factor
             | Self::Turn
             | Self::Steps
-            | Self::Order => Units::Count,
+            | Self::Order
+            | Self::Mutation => Units::Count,
             Self::Weights => Units::Weights,
             Self::Flip | Self::Keep => Units::Bits,
             Self::Step => Units::Step,
@@ -530,6 +559,11 @@ impl GenParam {
             | Self::Invert
             | Self::Reverse
             | Self::CopyFx
+            | Self::Repitch
+            | Self::Shift
+            | Self::Retro
+            | Self::Ratchet
+            | Self::DropAdd
             | Self::Edge
             | Self::Masks
             | Self::Part
@@ -560,8 +594,8 @@ impl GenParam {
     /// the values there with no settings of its own, and a `Where`'s amount only comes with the
     /// choices that have one. `Acid` has its riff's settings, its `Density` only where it
     /// `generates` notes of its own, and keeping the pitches there leaves it no ends or notes to
-    /// choose. A `Follow` writes every row from its source, so it has no `Where`, and turns
-    /// about a note only while it inverts. `Walk` has its `Step` and `Edge`, and `1/f` its
+    /// choose. A `Follow` writes every row from its source, so it has no `Where`, turns about a
+    /// note only while it inverts, and has its kinds of mutation only while it mutates. `Walk` has its `Step` and `Edge`, and `1/f` its
     /// `Depth`. `Multiply` reads the rhythm itself, so it has its `Factor` and `Masks` and no
     /// `Where`; each bit transform has its one setting. `Grids` makes its own rhythm, so it has
     /// no `Where` either; it has the density of its own part alone, or while the panel shapes
@@ -587,8 +621,12 @@ impl GenParam {
             | Self::Invert
             | Self::Reverse
             | Self::Late
-            | Self::CopyFx => follow,
+            | Self::CopyFx
+            | Self::Mutation => follow,
             Self::Axis => follow && shape.follow.invert,
+            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
+                follow && shape.follow.mutation > 0
+            }
             Self::From | Self::To => {
                 riff || matches!(
                     kind,
@@ -671,11 +709,12 @@ impl GenParam {
     }
 
     /// Where a shape's other settings sit on the Gen page, in columns of rows, top to bottom (the
-    /// study's §3.2): the fill's own in the first two, and its `Where`'s at the foot of the last,
+    /// study's §3.2): the fill's own in the first two, and its `Where`'s at the foot of the third,
     /// so they stay put as the fill changes, with `Acid`'s `Density` or a random fill's `Weights`
     /// above them. A random fill's curve does nothing, so it isn't placed, and only the settings
     /// the shape has on its `column` are. `Grids` has the map and chaos first, then its part's
-    /// density, and has no `Where`.
+    /// density, and has no `Where`. A `Follow` has none either, so its `Mutation` and the kinds
+    /// it may make take the third column and the fourth, which only it uses.
     pub fn grid(
         shape: &Shape,
         column: ShapeColumn,
@@ -691,11 +730,13 @@ impl GenParam {
                     [Some(MapX), Some(MapY), Some(Chaos)],
                     [Some(Self::density_of(part)), Some(Pitch), Some(Rows)],
                     none,
+                    none,
                 ],
                 None => [
                     [Some(MapX), Some(MapY), Some(Chaos)],
                     [Some(KickDensity), Some(SnareDensity), Some(HatDensity)],
                     [Some(Pitch), Some(Rows), None],
+                    none,
                 ],
             };
             return grid.map(|column| column.map(has));
@@ -745,12 +786,22 @@ impl GenParam {
             super::Where::Euclid { .. } => [None, Some(Hits), Some(Rotate)],
             _ => none,
         };
+        let mut more = none;
         match shape.kind {
             FillKind::Acid => last[0] = Some(Density),
             FillKind::Random => last[0] = Some(Weights),
+            FillKind::Follow => {
+                last = [Some(Mutation), Some(Repitch), Some(Shift)];
+                more = [Some(Retro), Some(Ratchet), Some(DropAdd)];
+            }
             _ => {}
         }
-        [fill[0].map(has), fill[1].map(has), last.map(has)]
+        [
+            fill[0].map(has),
+            fill[1].map(has),
+            last.map(has),
+            more.map(has),
+        ]
     }
 
     /// A part's density.
@@ -779,6 +830,24 @@ impl GenParam {
     fn grids_value(self, grids: Grids) -> Option<u8> {
         let mut grids = grids;
         self.grids_byte(&mut grids).map(|value| *value)
+    }
+
+    /// A kind of mutation a `Follow` may make, as its switch.
+    fn mutation_kind_mut(self, mutations: &mut Mutations) -> Option<&mut bool> {
+        Some(match self {
+            Self::Repitch => &mut mutations.repitch,
+            Self::Shift => &mut mutations.shift,
+            Self::Retro => &mut mutations.retro,
+            Self::Ratchet => &mut mutations.ratchet,
+            Self::DropAdd => &mut mutations.drop,
+            _ => return None,
+        })
+    }
+
+    /// The same, read.
+    fn mutation_kind(self, mutations: Mutations) -> Option<bool> {
+        let mut mutations = mutations;
+        self.mutation_kind_mut(&mut mutations).map(|on| *on)
     }
 
     /// The settings a shape has on a column, in order.
@@ -859,6 +928,14 @@ impl GenParam {
                 rows => format!("{rows} rows late"),
             },
             Self::CopyFx => on_off(shape.follow.fx),
+            Self::Mutation => match shape.follow.mutation {
+                0 => "Off".to_owned(),
+                1 => "1 change".to_owned(),
+                changes => format!("{changes} changes"),
+            },
+            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
+                on_off(self.mutation_kind(shape.follow.mutate).unwrap_or(false))
+            }
             Self::Step => {
                 let step = shape.walk.step;
                 match column {
@@ -942,6 +1019,11 @@ impl GenParam {
             | Self::Invert
             | Self::Reverse
             | Self::CopyFx
+            | Self::Repitch
+            | Self::Shift
+            | Self::Retro
+            | Self::Ratchet
+            | Self::DropAdd
             | Self::Edge
             | Self::Masks
             | Self::Rows => Typing::Toggled,
@@ -1111,6 +1193,16 @@ impl GenParam {
                     (i32::from(shape.follow.rotate) + by(1, EUCLID_JUMP)).rem_euclid(rows) as u16;
             }
             Self::CopyFx => shape.follow.fx = !shape.follow.fx,
+            Self::Mutation => {
+                let most = i32::from(MAX_MUTATION);
+                let changes = moved(i32::from(shape.follow.mutation), by(1, 4), 0, most);
+                shape.follow.mutation = changes as u8;
+            }
+            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
+                if let Some(on) = self.mutation_kind_mut(&mut shape.follow.mutate) {
+                    *on = !*on;
+                }
+            }
             // On notes by one or an octave, of degrees while the scale is on; on a nudge by one
             // or four 24ths of a sixteenth; anything else by one or `10` in hex.
             Self::Step => {
@@ -1234,6 +1326,15 @@ impl GenParam {
             Self::Reverse => shape.follow.reverse = false,
             Self::Late => shape.follow.rotate = 0,
             Self::CopyFx => shape.follow.fx = false,
+            Self::Mutation => shape.follow.mutation = 0,
+            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
+                let start = self.mutation_kind(Mutations::default());
+                if let (Some(on), Some(start)) =
+                    (self.mutation_kind_mut(&mut shape.follow.mutate), start)
+                {
+                    *on = start;
+                }
+            }
             Self::Step => shape.walk.step = default_step(context.column),
             Self::Edge => shape.walk.edge = Edge::default(),
             Self::Depth => shape.pink.depth = Pink::default().depth,
@@ -1384,6 +1485,10 @@ impl GenParam {
                 Ok(rows) => shape.follow.rotate = rows % context.source_rows() as u16,
                 Err(_) => return Err("Rotate is a whole number of rows"),
             },
+            Self::Mutation => match text.parse::<u8>() {
+                Ok(changes) if changes <= MAX_MUTATION => shape.follow.mutation = changes,
+                _ => return Err("Mutation runs from 0 to 32 changes"),
+            },
             // In hex on a column whose values are, and as a number on notes and nudges.
             Self::Step => {
                 let hex = typed_in_hex(column);
@@ -1467,6 +1572,11 @@ impl GenParam {
             | Self::Invert
             | Self::Reverse
             | Self::CopyFx
+            | Self::Repitch
+            | Self::Shift
+            | Self::Retro
+            | Self::Ratchet
+            | Self::DropAdd
             | Self::Edge
             | Self::Masks
             | Self::Part
@@ -1516,6 +1626,8 @@ impl GenParam {
             Self::Transpose => (-i32::from(MAX_TRANSPOSE), i32::from(MAX_TRANSPOSE)),
             Self::Late => (0, context.source_rows() as i32 - 1),
             Self::Invert | Self::Reverse | Self::CopyFx | Self::Edge | Self::Masks => (0, 1),
+            Self::Mutation => (0, i32::from(MAX_MUTATION)),
+            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => (0, 1),
             Self::Factor => (1, i32::from(MAX_FACTOR)),
             Self::Flip | Self::Keep => (0, i32::from(u8::MAX)),
             Self::Turn => (0, i32::from(MAX_TURN)),
@@ -1561,6 +1673,10 @@ impl GenParam {
             Self::Invert => i32::from(shape.follow.invert),
             Self::Reverse => i32::from(shape.follow.reverse),
             Self::CopyFx => i32::from(shape.follow.fx),
+            Self::Mutation => i32::from(shape.follow.mutation),
+            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
+                i32::from(self.mutation_kind(shape.follow.mutate)?)
+            }
             Self::Step => i32::from(shape.walk.step),
             Self::Edge => i32::from(shape.walk.edge == Edge::Wrap),
             Self::Depth => i32::from(shape.pink.depth),
@@ -1678,6 +1794,12 @@ impl GenParam {
             Self::Invert => shape.follow.invert = number != 0,
             Self::Reverse => shape.follow.reverse = number != 0,
             Self::CopyFx => shape.follow.fx = number != 0,
+            Self::Mutation => shape.follow.mutation = number as u8,
+            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
+                if let Some(on) = self.mutation_kind_mut(&mut shape.follow.mutate) {
+                    *on = number != 0;
+                }
+            }
             Self::Step => shape.walk.step = number as u8,
             Self::Edge => {
                 shape.walk.edge = if number != 0 {
@@ -1972,11 +2094,65 @@ mod tests {
         let mut follow = shape(FillKind::Follow);
         assert_eq!(
             GenParam::of(&follow, note(), false),
-            [Fill, Source, Transpose, Invert, Reverse, Late, CopyFx],
+            [
+                Fill, Source, Transpose, Invert, Reverse, Late, CopyFx, Mutation
+            ],
             "a Follow writes every row, so it has no Where"
         );
         follow.follow.invert = true;
         assert!(GenParam::of(&follow, note(), false).contains(&Axis));
+        // Mutating, it has the kinds it may make, and draws from its seed, so it varies.
+        follow.follow.mutation = 2;
+        assert!(
+            GenParam::of(&follow, note(), false)
+                .ends_with(&[Mutation, Repitch, Shift, Retro, Ratchet, DropAdd, Vary])
+        );
+        follow.follow.mutate = crate::shape::Mutations {
+            repitch: false,
+            shift: false,
+            retro: false,
+            ratchet: false,
+            drop: false,
+        };
+        assert!(
+            !GenParam::of(&follow, note(), false).contains(&Vary),
+            "with no kind allowed it copies, drawing nothing"
+        );
+    }
+
+    /// `Mutation` counts changes, and each kind is a switch that `x` puts back as it starts.
+    #[test]
+    fn a_follows_mutation_counts_changes_and_its_kinds_switch() {
+        let mut follow = shape(FillKind::Follow);
+        let notes = context(note());
+        assert_eq!(GenParam::Mutation.shown(&follow, &notes), "Off");
+        GenParam::Mutation
+            .step(&mut follow, &notes, 1, false)
+            .unwrap();
+        assert_eq!(GenParam::Mutation.shown(&follow, &notes), "1 change");
+        GenParam::Mutation
+            .step(&mut follow, &notes, 1, true)
+            .unwrap();
+        assert_eq!(GenParam::Mutation.shown(&follow, &notes), "5 changes");
+        GenParam::Mutation
+            .typed(&mut follow, &notes, "40")
+            .unwrap_err();
+        GenParam::Mutation.typed(&mut follow, &notes, "32").unwrap();
+        GenParam::Mutation
+            .step(&mut follow, &notes, 1, true)
+            .unwrap();
+        assert_eq!(follow.follow.mutation, crate::shape::MAX_MUTATION);
+        assert_eq!(GenParam::Shift.shown(&follow, &notes), "Off");
+        GenParam::Shift.step(&mut follow, &notes, 1, false).unwrap();
+        assert!(follow.follow.mutate.shift);
+        GenParam::Ratchet.set_number(&mut follow, &notes, 0);
+        assert!(!follow.follow.mutate.ratchet);
+        assert_eq!(GenParam::Ratchet.number(&follow, &notes), Some(0));
+        for kind in [GenParam::Shift, GenParam::Ratchet] {
+            kind.reset(&mut follow, &notes, Starts::default());
+        }
+        assert!(follow.follow.mutate.is_default());
+        assert_eq!(GenParam::by_key("drop"), Some(GenParam::DropAdd));
     }
 
     /// `Vary` lists its choices, goes round them, and as a number is their place, set and read
@@ -2091,6 +2267,7 @@ mod tests {
                     let mut base = shape(kind);
                     base.place = place;
                     base.follow.invert = true;
+                    base.follow.mutation = 2;
                     let placed: Vec<GenParam> = GenParam::title(&base)
                         .into_iter()
                         .chain(
@@ -2126,6 +2303,7 @@ mod tests {
                 let mut base = shape(kind);
                 base.place = place;
                 base.follow.invert = true;
+                base.follow.mutation = 2;
                 base.follow.transpose = -48;
                 base.run = MAX_RUN;
                 for param in GenParam::of(&base, note(), true) {
@@ -2290,6 +2468,7 @@ mod tests {
                 [Some(From), Some(To), Some(Run)],
                 [Some(Spread), Some(Bias), Some(Steps)],
                 [Some(Weights), None, None],
+                [None, None, None],
             ]
         );
         let notes = context(ShapeColumn::Note {
