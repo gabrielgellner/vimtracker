@@ -15,7 +15,7 @@ mod factory;
 mod patch;
 
 pub use factory::{FACTORY, FACTORY_PATCHES, factory_patch};
-pub use patch::{PatchGen, PatchPreset, Placement, Short, load_patch};
+pub use patch::{PatchGen, PatchPreset, Placement, Short};
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -30,7 +30,7 @@ use crate::bank::BankEntry;
 use crate::insert::{INSERTS, Insert};
 use crate::macros::{MACROS, Macro};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mod};
-use crate::settings::{Effect, Owner, SettingId};
+use crate::settings::{Owner, SettingId};
 use crate::song::{FilterMode, FilterType, Machine, Track};
 
 /// The format presets are written in. A preset from a later format isn't read; one from this
@@ -68,6 +68,15 @@ impl PresetKind {
             Self::Sound => "sound",
             Self::Effect => "effect",
             Self::Patch => "patch",
+        }
+    }
+
+    /// Give a preset of this kind its own tags, as [`set_tags`] does.
+    pub fn set_tags(self, path: &Path, tags: Vec<String>) -> Result<(), PresetError> {
+        match self {
+            Self::Sound => set_tags::<SoundPreset>(path, tags),
+            Self::Effect => set_tags::<EffectPreset>(path, tags),
+            Self::Patch => set_tags::<PatchPreset>(path, tags),
         }
     }
 }
@@ -235,6 +244,52 @@ pub struct Sound {
     pub sample: Option<BankEntry>,
 }
 
+/// The fields a sound holds just as the track has them, named once so saving and loading copy the
+/// same ones; the settings, their fine parts and the sample are each sifted on the way.
+macro_rules! copied {
+    ($($field:ident),* $(,)?) => {
+        impl Sound {
+            /// A track's sound with these settings, fine parts and sample.
+            fn copied(
+                track: &Track,
+                settings: BTreeMap<SettingId, u8>,
+                fine: BTreeMap<SettingId, u8>,
+                sample: Option<BankEntry>,
+            ) -> Self {
+                Self {
+                    settings,
+                    fine,
+                    sample,
+                    $($field: track.$field,)*
+                }
+            }
+
+            /// Give a track these fields of the sound.
+            fn copy_to(&self, track: &mut Track) {
+                $(track.$field = self.$field;)*
+            }
+        }
+    };
+}
+
+copied!(
+    machine,
+    cutoff,
+    resonance,
+    filter,
+    filter_mode,
+    drive,
+    punch,
+    safe,
+    low_cut,
+    high_cut,
+    pitch,
+    glide,
+    gate_length,
+    velocity_delta,
+    inserts,
+);
+
 /// What plays a sound rather than what it is: the mod slots, the accumulator, the arpeggio and
 /// the macros, as the study's §5.2 has a patch. In a sound preset it holds every slot and macro in
 /// order, numbered as the track's; on its own (decision 311) it holds only the parts its macros
@@ -311,26 +366,7 @@ impl SoundPreset {
                 .collect()
         };
         let sample = sample.filter(|_| machine == Machine::Sampler);
-        let sound = Sound {
-            machine,
-            settings: kept(&track.settings),
-            fine: kept(&track.fine),
-            cutoff: track.cutoff,
-            resonance: track.resonance,
-            filter: track.filter,
-            filter_mode: track.filter_mode,
-            drive: track.drive,
-            punch: track.punch,
-            safe: track.safe,
-            low_cut: track.low_cut,
-            high_cut: track.high_cut,
-            pitch: track.pitch,
-            glide: track.glide,
-            gate_length: track.gate_length,
-            velocity_delta: track.velocity_delta,
-            inserts: track.inserts,
-            sample,
-        };
+        let sound = Sound::copied(track, kept(&track.settings), kept(&track.fine), sample);
         let patch = Patch {
             mods: track.mods.to_vec(),
             accumulation: track.accumulation,
@@ -352,23 +388,9 @@ impl SoundPreset {
     pub fn apply(&self, track: &mut Track, sample: u8) {
         let sound = &self.sound;
         let machine = sound.machine;
-        track.machine = machine;
+        sound.copy_to(track);
         track.settings.retain(|id, _| !holds(machine, *id));
         track.fine.retain(|id, _| !holds(machine, *id));
-        track.cutoff = sound.cutoff;
-        track.resonance = sound.resonance;
-        track.filter = sound.filter;
-        track.filter_mode = sound.filter_mode;
-        track.drive = sound.drive;
-        track.punch = sound.punch;
-        track.safe = sound.safe;
-        track.low_cut = sound.low_cut;
-        track.high_cut = sound.high_cut;
-        track.pitch = sound.pitch;
-        track.glide = sound.glide;
-        track.gate_length = sound.gate_length;
-        track.velocity_delta = sound.velocity_delta;
-        track.inserts = sound.inserts;
         track.bypassed = [false; INSERTS];
         for (id, value) in &sound.settings {
             if holds(machine, *id) && *id != SettingId::SAMPLE {
@@ -396,10 +418,14 @@ impl SoundPreset {
         track.arpeggio = patch.arpeggio;
         track.macros = std::array::from_fn(|at| patch.macros.get(at).cloned().unwrap_or_default());
     }
+}
 
-    /// What it is, for a list: its machine, then what's in its slots and how many macros hold
-    /// something, as `Acid · Distort Delay · 3 macros`.
-    pub fn summary(&self) -> String {
+impl Preset for SoundPreset {
+    const KIND: PresetKind = PresetKind::Sound;
+
+    /// Its machine, then what's in its slots and how many macros hold something, as
+    /// `Acid · Distort Delay · 3 macros`.
+    fn summary(&self) -> String {
         let mut parts = vec![self.sound.machine.name().to_owned()];
         let effects: Vec<&str> = self
             .sound
@@ -420,14 +446,14 @@ impl SoundPreset {
         parts.join(" · ")
     }
 
-    /// The tags it always has: `sound`, and its machine's.
-    pub fn fixed_tags(&self) -> Vec<String> {
-        let mut tags = vec![PresetKind::Sound.noun().to_owned()];
+    /// `sound`, and its machine's.
+    fn fixed_tags(&self) -> Vec<String> {
+        let mut tags = vec![Self::KIND.noun().to_owned()];
         tags.extend(crate::tag::machine_tags(self.sound.machine));
         tags
     }
 
-    /// Check what it holds fits a track, beyond what reading it checks.
+    /// That it has no more mod slots or macros than a track.
     fn check(&self) -> Result<(), String> {
         if self.patch.mods.len() > MOD_SLOTS {
             return Err(format!(
@@ -443,6 +469,10 @@ impl SoundPreset {
         }
         Ok(())
     }
+
+    fn tags(&mut self) -> &mut Vec<String> {
+        &mut self.tags
+    }
 }
 
 impl EffectPreset {
@@ -450,7 +480,7 @@ impl EffectPreset {
     /// empty.
     pub fn of(track: &Track, slot: usize) -> Option<Self> {
         let effect = *track.inserts.get(slot)?;
-        let kind = Effect::of(effect)?;
+        let kind = effect.kind()?;
         let fine = track
             .fine
             .iter()
@@ -472,7 +502,7 @@ impl EffectPreset {
     /// The fine parts of its settings as they'd be in a slot, or the first key its effect doesn't
     /// have.
     pub fn fine_in(&self, slot: usize) -> Result<BTreeMap<SettingId, u8>, String> {
-        let Some(effect) = Effect::of(self.effect) else {
+        let Some(effect) = self.effect.kind() else {
             return Ok(BTreeMap::new());
         };
         self.fine
@@ -488,18 +518,51 @@ impl EffectPreset {
             })
             .collect()
     }
+}
 
-    /// What it is, for a list: the effect's name.
-    pub fn summary(&self) -> String {
+impl Preset for EffectPreset {
+    const KIND: PresetKind = PresetKind::Effect;
+
+    /// The effect's name.
+    fn summary(&self) -> String {
         self.effect.name().to_owned()
     }
 
-    /// The tags it always has: `effect`, and its effect's name.
-    pub fn fixed_tags(&self) -> Vec<String> {
-        let mut tags = vec![PresetKind::Effect.noun().to_owned()];
+    /// `effect`, and its effect's name.
+    fn fixed_tags(&self) -> Vec<String> {
+        let mut tags = vec![Self::KIND.noun().to_owned()];
         tags.extend(crate::tag::tag_name(self.effect.name()));
         tags
     }
+
+    /// That its effect has each setting it has a fine part for.
+    fn check(&self) -> Result<(), String> {
+        self.fine_in(0).map(|_| ())
+    }
+
+    fn tags(&mut self) -> &mut Vec<String> {
+        &mut self.tags
+    }
+}
+
+/// What the three kinds of preset share: a file of [`PRESET_FORMAT`] in its kind's folder, said
+/// in a list by its summary and its tags, and checked on reading for what the reading can't
+/// check.
+pub trait Preset: Serialize + for<'de> Deserialize<'de> {
+    /// Its kind, which is its folder and the first of its fixed tags.
+    const KIND: PresetKind;
+
+    /// What it is, for a list.
+    fn summary(&self) -> String;
+
+    /// The tags it always has, from what it is, before its own.
+    fn fixed_tags(&self) -> Vec<String>;
+
+    /// Check what it holds fits a track, beyond what reading it checks.
+    fn check(&self) -> Result<(), String>;
+
+    /// Its own tags (decision 315).
+    fn tags(&mut self) -> &mut Vec<String>;
 }
 
 /// Only the format, so a later one gives a clear message rather than a field error.
@@ -508,8 +571,9 @@ struct FormatProbe {
     format: u32,
 }
 
-/// Read a preset's text, checking its format first.
-fn parse<T: for<'de> Deserialize<'de>>(text: &str, path: &Path) -> Result<T, PresetError> {
+/// A preset from its file's text, checking its format first and what it holds after, `path`
+/// naming it in what's said if it won't read.
+pub(crate) fn read<P: Preset>(text: &str, path: &Path) -> Result<P, PresetError> {
     let parse_error = |error: &dyn std::fmt::Display| PresetError::Parse {
         path: path.display().to_string(),
         detail: error.to_string(),
@@ -521,13 +585,7 @@ fn parse<T: for<'de> Deserialize<'de>>(text: &str, path: &Path) -> Result<T, Pre
             found: probe.format,
         });
     }
-    ron::from_str(text).map_err(|e| parse_error(&e))
-}
-
-/// Read a sound preset.
-pub fn load_sound(path: &Path) -> Result<SoundPreset, PresetError> {
-    let text = fs::read_to_string(path).map_err(io_at(path))?;
-    let preset: SoundPreset = parse(&text, path)?;
+    let preset: P = ron::from_str(text).map_err(|e| parse_error(&e))?;
     preset.check().map_err(|detail| PresetError::Holds {
         path: path.display().to_string(),
         detail,
@@ -535,45 +593,17 @@ pub fn load_sound(path: &Path) -> Result<SoundPreset, PresetError> {
     Ok(preset)
 }
 
-/// Read an effect preset.
-pub fn load_effect(path: &Path) -> Result<EffectPreset, PresetError> {
+/// Read a preset, as `load::<SoundPreset>(path)`.
+pub fn load<P: Preset>(path: &Path) -> Result<P, PresetError> {
     let text = fs::read_to_string(path).map_err(io_at(path))?;
-    let preset: EffectPreset = parse(&text, path)?;
-    preset.fine_in(0).map_err(|detail| PresetError::Holds {
-        path: path.display().to_string(),
-        detail,
-    })?;
-    Ok(preset)
+    read(&text, path)
 }
 
-/// Give a preset of this kind its own tags, writing its file again with nothing else changed.
-pub fn set_tags(path: &Path, kind: PresetKind, tags: Vec<String>) -> Result<(), PresetError> {
-    match kind {
-        PresetKind::Sound => save(
-            path,
-            &SoundPreset {
-                tags,
-                ..load_sound(path)?
-            },
-            true,
-        ),
-        PresetKind::Effect => save(
-            path,
-            &EffectPreset {
-                tags,
-                ..load_effect(path)?
-            },
-            true,
-        ),
-        PresetKind::Patch => save(
-            path,
-            &PatchPreset {
-                tags,
-                ..load_patch(path)?
-            },
-            true,
-        ),
-    }
+/// Give a preset its own tags, writing its file again with nothing else changed.
+pub fn set_tags<P: Preset>(path: &Path, tags: Vec<String>) -> Result<(), PresetError> {
+    let mut preset: P = load(path)?;
+    *preset.tags() = tags;
+    save(path, &preset, true)
 }
 
 /// Write a preset, making its folders. One that's there already is written over only if asked,
@@ -602,6 +632,7 @@ pub fn save<T: Serialize>(path: &Path, preset: &T, overwrite: bool) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::insert::EffectKind;
     use crate::macros::{MacroMap, MacroTarget};
     use crate::song::{Song, SynthVoice};
 
@@ -637,7 +668,7 @@ mod tests {
         track.send_a = 0x50;
         track.name = "AB".to_owned();
         track.inserts[1] = Insert::RETURN_DELAY;
-        let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
+        let feedback = SettingId::slot(1, EffectKind::Delay, 1).unwrap();
         track.set_fine(feedback, 0x40);
         track.macros[0] = Macro {
             name: Some("Bite".to_owned()),
@@ -677,7 +708,7 @@ mod tests {
         assert_eq!((other.cutoff, other.fine(SettingId::CUT)), (0x40, 0x80));
         assert_eq!(other.inserts[1], Insert::RETURN_DELAY);
         assert_eq!(
-            other.fine(SettingId::slot(1, Effect::Delay, 1).unwrap()),
+            other.fine(SettingId::slot(1, EffectKind::Delay, 1).unwrap()),
             0x40
         );
         assert_eq!(other.macros, acid().macros);
@@ -696,12 +727,12 @@ mod tests {
         let path = preset_path(&root, PresetKind::Sound, "bass/Acid Bite").unwrap();
         let preset = SoundPreset::of(&acid(), None);
         save(&path, &preset, false).unwrap();
-        assert_eq!(load_sound(&path).unwrap(), preset);
+        assert_eq!(load::<SoundPreset>(&path).unwrap(), preset);
         let text = fs::read_to_string(&path).unwrap();
         assert!(text.contains("format: 1"), "{text}");
         assert!(!text.contains("level"), "{text}");
         assert!(text.contains("curve: 40"), "the mapping's curve: {text}");
-        let map = load_sound(&path).unwrap().patch.macros[0].maps[0];
+        let map = load::<SoundPreset>(&path).unwrap().patch.macros[0].maps[0];
         assert_eq!((map.curve, map.s), (40, -20));
         assert!(matches!(
             save(&path, &preset, false),
@@ -721,13 +752,8 @@ mod tests {
             !fs::read_to_string(&path).unwrap().contains("tags"),
             "none, left out"
         );
-        set_tags(
-            &path,
-            PresetKind::Sound,
-            vec!["bass".into(), "squelch".into()],
-        )
-        .unwrap();
-        let tagged = load_sound(&path).unwrap();
+        set_tags::<SoundPreset>(&path, vec!["bass".into(), "squelch".into()]).unwrap();
+        let tagged = load::<SoundPreset>(&path).unwrap();
         assert_eq!(tagged.tags, ["bass", "squelch"]);
         assert_eq!(tagged.sound, preset.sound, "nothing else changed");
         assert_eq!(tagged.fixed_tags(), ["sound", "synth", "analog", "acid"]);
@@ -755,17 +781,17 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         let path = root.join("x.ron");
         fs::write(&path, "(format: 1, sound: (machine: Sampler, wobble: 3))").unwrap();
-        let error = load_sound(&path).unwrap_err().to_string();
+        let error = load::<SoundPreset>(&path).unwrap_err().to_string();
         assert!(error.contains("wobble"), "{error}");
         fs::write(
             &path,
             r#"(format: 1, sound: (settings: {"acid.wobble": 3}))"#,
         )
         .unwrap();
-        let error = load_sound(&path).unwrap_err().to_string();
+        let error = load::<SoundPreset>(&path).unwrap_err().to_string();
         assert!(error.contains("acid.wobble"), "{error}");
         fs::write(&path, "(format: 2, sound: (), later: true)").unwrap();
-        let error = load_sound(&path).unwrap_err().to_string();
+        let error = load::<SoundPreset>(&path).unwrap_err().to_string();
         assert!(error.contains("format 2"), "{error}");
         fs::remove_dir_all(&root).unwrap();
     }
@@ -774,12 +800,12 @@ mod tests {
     fn an_effect_loads_into_any_slot() {
         let preset = EffectPreset::of(&acid(), 1).unwrap();
         assert_eq!(preset.effect, Insert::RETURN_DELAY);
-        let key = Effect::Delay.params()[1].key;
+        let key = EffectKind::Delay.params()[1].key;
         assert_eq!(preset.fine.get(key), Some(&0x40));
         let fine = preset.fine_in(3).unwrap();
         assert_eq!(
             fine.into_iter().collect::<Vec<_>>(),
-            [(SettingId::slot(3, Effect::Delay, 1).unwrap(), 0x40)]
+            [(SettingId::slot(3, EffectKind::Delay, 1).unwrap(), 0x40)]
         );
         assert!(EffectPreset::of(&acid(), 0).is_none(), "an empty slot");
         let wrong = EffectPreset {

@@ -26,7 +26,7 @@ use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid};
 use crate::views::widgets::image;
 use crate::views::widgets::panel::GraphicPanel;
-use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
+use crate::views::widgets::setting::{self, Focus, name_line, value_spans};
 use crate::views::widgets::table::take_top;
 
 use super::{BAR_CELLS, LARGE_PANEL_HEIGHT, LARGE_PANEL_WIDTH};
@@ -81,12 +81,12 @@ impl CellSource for MacroCells<'_> {
     type Id = Control;
 
     fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let labels = jump_label(self.ctx, control);
+        let look = self.ctx.look_on(control, Focus::Off);
         let Control::Macro(at) = control else {
             return Line::default();
         };
         let name = macro_name(&self.track.macros[at], at);
-        name_line(self.ctx, &name, &labels, room)
+        name_line(&look, &name, room)
     }
 
     fn value(&self, control: Control) -> Line<'static> {
@@ -94,11 +94,12 @@ impl CellSource for MacroCells<'_> {
             return Line::default();
         };
         let here = control == self.page.control_here(self.ctx);
+        let look = self.ctx.look_on(control, Focus::at(here, false));
         let (_, heard) = self.values(at);
-        let text = setting::text(self.ctx, here, || format!("{heard:04X}"));
+        let text = setting::text(&look, || format!("{heard:04X}"));
         let empty = self.track.macros[at].maps.is_empty();
-        let style = setting::style(self.ctx, here, empty);
-        Line::from(value_spans(self.ctx, control, text, style))
+        let style = setting::style(&look, empty);
+        Line::from(value_spans(&look, text, style))
     }
 
     fn bar(&self, control: Control) -> Option<ValueBar> {
@@ -162,16 +163,17 @@ impl CellSource for GenCells<'_> {
     type Id = Control;
 
     fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let labels = jump_label(self.ctx, control);
+        let look = self.ctx.look_on(control, Focus::Off);
         let name = Self::param(control).map_or("", GenParam::name);
-        name_line(self.ctx, name, &labels, room)
+        name_line(&look, name, room)
     }
 
     fn value(&self, control: Control) -> Line<'static> {
         let here = control == self.page.control_here(self.ctx);
+        let look = self.ctx.look_on(control, Focus::at(here, false));
         // As it's heard, with what any macro holding its settings gives them (decision 294).
         let shape = &self.live.generator.heard();
-        let text = setting::text(self.ctx, here, || {
+        let text = setting::text(&look, || {
             Self::param(control).map_or_else(String::new, |param| {
                 if self.bar(control).is_some() {
                     param.brief(shape, &self.context)
@@ -180,8 +182,8 @@ impl CellSource for GenCells<'_> {
                 }
             })
         });
-        let style = setting::style(self.ctx, here, false);
-        Line::from(value_spans(self.ctx, control, text, style))
+        let style = setting::style(&look, false);
+        Line::from(value_spans(&look, text, style))
     }
 
     fn bar(&self, control: Control) -> Option<ValueBar> {
@@ -250,7 +252,8 @@ fn title_controls(
             let here = *control == current;
             let shape = &cells.live.generator.shape;
             let param = GenCells::param(*control);
-            let text = setting::text(ctx, here, || {
+            let look = ctx.look_on(*control, Focus::at(here, false));
+            let text = setting::text(&look, || {
                 param.map_or_else(String::new, |param| param.shown(shape, &cells.context))
             });
             let default = match param {
@@ -258,8 +261,8 @@ fn title_controls(
                 Some(GenParam::Vary) => shape.vary == 0,
                 _ => false,
             };
-            let style = setting::style(ctx, here, default);
-            Line::from(value_spans(ctx, *control, text, style))
+            let style = setting::style(&look, default);
+            Line::from(value_spans(&look, text, style))
         })
         .collect()
 }
@@ -412,8 +415,9 @@ fn draw_empty(
     focused: bool,
 ) {
     let here = device.title[0] == Some(page.control_here(ctx));
-    let text = setting::text(ctx, here, || "Empty".to_owned());
-    let style = setting::style(ctx, here, true);
+    let look = ctx.look(Focus::at(here, false));
+    let text = setting::text(&look, || "Empty".to_owned());
+    let style = setting::style(&look, true);
     let widget = Device::new(String::new())
         .controls(vec![Line::styled(text, style)])
         .focused(focused);

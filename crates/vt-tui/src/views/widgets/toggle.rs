@@ -57,4 +57,21 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn a_toggle_is_green_on_and_faint_off_in_all_three_cells() {
+        use ratatui::text::Line;
+
+        use crate::views::widgets::pin::{assert_drawn, drawn};
+        let line = Line::from(vec![span(true), span(false)]);
+        assert_drawn(
+            &drawn(line, 6, 1),
+            &[
+                "\u{f205}  \u{f204}  ",
+                "aaabbb",
+                "a fg GREEN",
+                "b fg OVERLAY0",
+            ],
+        );
+    }
 }

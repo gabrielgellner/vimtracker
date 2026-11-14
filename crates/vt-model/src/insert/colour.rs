@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::constants::UNITY_LEVEL;
 
 use super::{
-    AMOUNT_PARAM, GAIN_PARAM, MIX_PARAM, OFF_ON, Param, Setting, WET_MIX_PARAM, from_middle,
-    hex_param, is_zero, unity_gain,
+    AMOUNT_PARAM, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, Setting, Units, WET_MIX_PARAM,
+    from_middle, hex_param, is_zero, unity_gain,
 };
 
 /// What a distortion does to the sound. The waveshapers come first; the guitar pedals after them
@@ -70,9 +70,12 @@ pub(super) const TYPE_PARAM: Param = Param {
     // Choosing a mode chooses a sound, so steps don't lock it.
     label: None,
     setting: Setting::Type,
-    choices: &DISTORT_TYPE_NAMES,
-    wraps: true,
+    kind: Kind::Stepped {
+        choices: &DISTORT_TYPE_NAMES,
+        wraps: true,
+    },
     default: 0,
+    place: Place::Type,
 };
 
 /// `Crush`'s bit depth, as a place among the depths it chooses between.
@@ -81,19 +84,26 @@ const BITS_PARAM: Param = Param {
     key: "bits",
     label: Some("BITS"),
     setting: Setting::Bits,
-    choices: &BIT_NAMES,
-    wraps: false,
+    kind: Kind::Stepped {
+        choices: &BIT_NAMES,
+        wraps: false,
+    },
     // 9 bits.
     default: 7,
+    place: Place::Own,
 };
 const RATE_PARAM: Param = Param {
     name: "Rate",
     key: "rate",
     label: Some("RATE"),
     setting: Setting::Rate,
-    choices: &[],
-    wraps: false,
+    kind: Kind::Continuous {
+        top: 0xFF,
+        middle: false,
+        units: Units::Percent,
+    },
     default: 0x40,
+    place: Place::Own,
 };
 /// Whether `Crush` squeezes the sound by its log before it rounds and opens it out after, so
 /// quiet sounds keep finer steps, as an 8-bit sampler's mu-law does.
@@ -102,9 +112,12 @@ const MU_LAW_PARAM: Param = Param {
     key: "mulaw",
     label: Some("MULW"),
     setting: Setting::MuLaw,
-    choices: &OFF_ON,
-    wraps: true,
+    kind: Kind::Stepped {
+        choices: &OFF_ON,
+        wraps: true,
+    },
     default: 0,
+    place: Place::Own,
 };
 /// Whether `Down` holds at a whole number of times the note's frequency, so what it folds back
 /// lands on the note's harmonics.
@@ -113,9 +126,12 @@ const FOLLOW_PARAM: Param = Param {
     key: "track",
     label: Some("TRCK"),
     setting: Setting::FollowNote,
-    choices: &OFF_ON,
-    wraps: true,
+    kind: Kind::Stepped {
+        choices: &OFF_ON,
+        wraps: true,
+    },
     default: 0,
+    place: Place::Own,
 };
 /// A pedal's tone control: from dark at `00` to bright at `FF`.
 const PEDAL_TONE_PARAM: Param = Param {
@@ -123,9 +139,13 @@ const PEDAL_TONE_PARAM: Param = Param {
     key: "tone",
     label: Some("TONE"),
     setting: Setting::Tone,
-    choices: &[],
-    wraps: false,
+    kind: Kind::Continuous {
+        top: 0xFF,
+        middle: true,
+        units: Units::Percent,
+    },
     default: 0x80,
+    place: Place::Own,
 };
 /// Every setting a distortion has in any of its modes, in the order songs number them. Each mode
 /// shows only its own.
@@ -206,6 +226,41 @@ impl Distort {
         mu_law: 0,
         track: 0,
     };
+
+    /// A setting's value: a place for `Type` and `Bits`. One it doesn't have reads as nothing.
+    pub(super) fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::Type => self.kind as u8,
+            Setting::Amount => self.amount,
+            Setting::Bits => self.bits - LEAST_BITS,
+            Setting::Rate => self.rate,
+            Setting::MuLaw => self.mu_law,
+            Setting::FollowNote => self.track,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            Setting::Tone => self.tone,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, on the scale `read` gives, within its range.
+    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut distort = self;
+        match setting {
+            Setting::Type => distort.kind = DistortType::ALL[usize::from(value)],
+            Setting::Amount => distort.amount = value,
+            Setting::Bits => distort.bits = value + LEAST_BITS,
+            Setting::Rate => distort.rate = value,
+            Setting::MuLaw => distort.mu_law = value,
+            Setting::FollowNote => distort.track = value,
+            Setting::Mix => distort.mix = value,
+            Setting::Gain => distort.gain = value,
+            Setting::Tone => distort.tone = value,
+            _ => {}
+        }
+        distort
+    }
 }
 
 impl Default for Distort {
@@ -243,9 +298,11 @@ pub(crate) const TAPE_PARAMS: [Param; 8] = [
         "DRIV",
         Setting::TapeDrive,
         Tape::DEFAULT.drive,
-    ),
-    hex_param("Tone", "tone", "TONE", Setting::Tone, Tape::DEFAULT.tone),
-    hex_param("Bias", "bias", "BIAS", Setting::Bias, Tape::DEFAULT.bias),
+    )
+    .units(Units::TapeDrive)
+    .centred(),
+    hex_param("Tone", "tone", "TONE", Setting::Tone, Tape::DEFAULT.tone).centred(),
+    hex_param("Bias", "bias", "BIAS", Setting::Bias, Tape::DEFAULT.bias).centred(),
     hex_param("Bump", "bump", "BUMP", Setting::Bump, Tape::DEFAULT.bump),
     hex_param("Wow", "wow", "WOW", Setting::Wow, Tape::DEFAULT.wow),
     hex_param(
@@ -382,21 +439,24 @@ pub(crate) const EXCITER_PARAMS: [Param; 6] = [
         "TONE",
         Setting::ExciterTone,
         Exciter::DEFAULT.tone,
-    ),
+    )
+    .units(Units::ExciterTone),
     hex_param(
         "Attack",
         "attack",
         "ATK",
         Setting::ExciterAttack,
         Exciter::DEFAULT.attack,
-    ),
+    )
+    .units(Units::ExciterAttack),
     hex_param(
         "Release",
         "release",
         "REL",
         Setting::ExciterRelease,
         Exciter::DEFAULT.release,
-    ),
+    )
+    .units(Units::ExciterRelease),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];

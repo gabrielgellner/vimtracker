@@ -27,7 +27,7 @@ use crate::views::track::value;
 use crate::views::widgets::group::{self, Switched};
 use crate::views::widgets::meter::{EIGHTHS, level_cell};
 use crate::views::widgets::role;
-use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
+use crate::views::widgets::setting::{self, Focus, name_line, value_spans};
 use crate::views::widgets::table::{Cells, Columns, fitted, take_top};
 
 /// Room for the names of the settings, at the left. Beside the meters it holds the scale's mark,
@@ -347,8 +347,8 @@ fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
     let current = page.control_here(ctx);
     for control in MIXER {
         let mut cells = columns.row();
-        let labels = jump_label(ctx, control);
-        cells.span(name_line(ctx, control.label(), &labels, LABEL_WIDTH), 2);
+        let name = ctx.look_on(control, Focus::Off);
+        cells.span(name_line(&name, control.label(), LABEL_WIDTH), 2);
         strips.fill(&mut cells, |index| {
             // A fader the steps drive shows where they have it.
             let heard = ctx.track_as_heard(index);
@@ -358,6 +358,7 @@ fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
             let taken = ctx.taken_over(index, control);
             let here = index == ctx.cursor().track;
             let selected = here && control == current;
+            let look = ctx.look_on(control, Focus::at(selected, false));
             // A mute or solo that's on is its glyph: in the active colour for the track's own, and
             // in its group's colour for its group's.
             let switched = match control {
@@ -377,7 +378,7 @@ fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
                 _ if waiting => glyphs::WAITING.to_string(),
                 (_, Some((Switched::Off, _))) => "-".to_owned(),
                 (_, Some((_, glyph))) => glyph.to_string(),
-                _ => setting::text(ctx, selected, || value(control, track, song)),
+                _ => setting::text(&look, || value(control, track, song)),
             };
             let style = match switched {
                 _ if selected => theme::cursor(ctx.mode()),
@@ -390,7 +391,7 @@ fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
             };
             // A jump's labels go on the cursor's track, which it stays on.
             let mut line = if here {
-                Line::from(value_spans(ctx, control, text, style))
+                Line::from(value_spans(&look, text, style))
             } else {
                 Line::styled(text, style)
             };

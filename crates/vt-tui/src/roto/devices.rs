@@ -818,11 +818,11 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             let insert = track.inserts[slot];
             let found = insert.params().get(param)?;
             let set = insert.value(param);
-            if found.choices.is_empty() {
+            if found.choices().is_empty() {
                 let (id, _) = control.value_on(track)?;
                 registry(id, set, 0)
             } else {
-                list(names(found.choices), usize::from(set))
+                list(names(found.choices()), usize::from(set))
             }
         }
         // The mixer's, which no device has, and the off/on settings, which are switches.
@@ -1164,7 +1164,7 @@ pub fn every_kind_of_device() -> Vec<(Song, usize, Page, usize)> {
     for insert in Insert::ALL {
         let types = insert
             .type_param()
-            .map_or(1, |at| insert.params()[at].choices.len());
+            .map_or(1, |at| insert.params()[at].choices().len());
         for kind in 0..types {
             let mut song = base.clone();
             song.tracks[0].inserts[0] = match insert.type_param() {

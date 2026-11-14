@@ -12,8 +12,8 @@ use vt_model::constants::FX_SLOTS;
 use vt_model::generator::Span;
 use vt_model::macros::GenColumn;
 use vt_model::preset::{
-    FACTORY, FACTORY_PATCHES, Patch, PatchGen, PatchPreset, Placement, PresetError, PresetKind,
-    Short, factory_patch, is_preset_name, load_patch, preset_name, preset_path, save,
+    FACTORY, FACTORY_PATCHES, Patch, PatchGen, PatchPreset, Placement, Preset, PresetError,
+    PresetKind, Short, factory_patch, is_preset_name, load, preset_name, preset_path, save,
 };
 use vt_model::selection::Field;
 use vt_model::shape::ShapeColumn;
@@ -217,7 +217,7 @@ impl App {
 
     /// Add the patch in this file to the cursor's track, as [`App::add_loaded_patch`] does.
     pub(crate) fn add_patch(&mut self, path: &Path, over: bool) {
-        match load_patch(path) {
+        match load::<PatchPreset>(path) {
             Ok(preset) => self.add_loaded_patch(&preset_name(path), &preset.patch, over),
             Err(error) => self.services.status = error.to_string(),
         }

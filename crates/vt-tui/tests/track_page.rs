@@ -3399,8 +3399,8 @@ fn every_slot_envelope_and_lfo_fits_on_the_authors_screen() {
 
 #[test]
 fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
+    use vt_model::insert::EffectKind;
     use vt_model::insert::{INSERTS, Insert};
-    use vt_model::settings::Effect;
     use vt_model::step::FxCommand;
     use vt_tui::track_page::{Control, ModField};
     let (mut app, _realtime) = app();
@@ -3438,7 +3438,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     press(&mut app, "K/");
     press(&mut app, "feedback");
     special(&mut app, KeyCode::Enter);
-    let feedback = SettingId::slot(INSERTS - 1, Effect::Delay, 1).unwrap();
+    let feedback = SettingId::slot(INSERTS - 1, EffectKind::Delay, 1).unwrap();
     assert_eq!(
         app.song().tracks[0].mods[MOD_SLOTS - 1].destination,
         Some(feedback)

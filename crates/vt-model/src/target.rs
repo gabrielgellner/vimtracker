@@ -5,7 +5,7 @@
 use crate::insert::{INSERTS, Insert};
 use crate::macros::MACROS;
 use crate::modulation::{MOD_SLOTS, ModKind, note_shape_slot};
-use crate::settings::{Effect, Owner, SettingId, voice_entries};
+use crate::settings::{Owner, SettingId, voice_entries};
 use crate::song::{Machine, Track, TrackKind};
 use crate::step::FxCommand;
 
@@ -68,7 +68,7 @@ impl SettingId {
             (Owner::Track, _) => track.is_sound(),
             (Owner::Voice(voice), _) => track.voice() == Some(voice),
             (Owner::Slot { slot, effect }, at) => track.inserts.get(slot).is_some_and(|insert| {
-                Effect::of(*insert) == Some(effect)
+                insert.kind() == Some(effect)
                     && insert
                         .params()
                         .iter()
@@ -172,7 +172,7 @@ impl SettingId {
     /// What it's listed with on this track: a slot's bypass goes with the effect in the slot.
     pub fn group_on(self, track: &Track) -> String {
         match self.owner().0 {
-            Owner::Bypass(slot) => Effect::of(track.inserts[slot]).map_or_else(
+            Owner::Bypass(slot) => track.inserts[slot].kind().map_or_else(
                 || self.group(),
                 |effect| {
                     SettingId::slot(slot, effect, 0).map_or_else(|| self.group(), SettingId::group)
@@ -197,7 +197,7 @@ impl SettingId {
             settings.extend((0..).map_while(Self::sampler));
         }
         for slot in 0..INSERTS {
-            if let Some(effect) = Effect::of(track.inserts[slot]) {
+            if let Some(effect) = track.inserts[slot].kind() {
                 settings.extend(
                     (0..effect.params().len())
                         .filter_map(|at| Self::slot(slot, effect, at))
@@ -338,6 +338,7 @@ impl FxCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::insert::EffectKind;
     use crate::insert::{DistortType, Insert};
     use crate::song::{Machine, Song, SynthVoice};
 
@@ -360,7 +361,7 @@ mod tests {
         assert_eq!(offered.len(), own + 4 + 11 + 1);
         assert_eq!(
             offered[own + 4],
-            SettingId::slot(1, Effect::Delay, 0).unwrap()
+            SettingId::slot(1, EffectKind::Delay, 0).unwrap()
         );
         assert_eq!(
             offered[own + 4 + 11],
@@ -448,7 +449,7 @@ mod tests {
         assert!(!ratio.exists_on(&track));
         assert_eq!(ratio.name_on(&track), "Ratio ---");
 
-        let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
+        let feedback = SettingId::slot(1, EffectKind::Delay, 1).unwrap();
         assert_eq!(feedback.name_on(&track), "2 ---");
         track.inserts[1] = Insert::ALL[2];
         assert_eq!(feedback.name_on(&track), "2 Feedback");
@@ -460,8 +461,8 @@ mod tests {
     fn a_distorts_modes_each_have_their_own_setting() {
         let mut track = Track::default();
         track.inserts[0] = Insert::ALL[1];
-        let amount = SettingId::slot(0, Effect::Distort, 1).unwrap();
-        let bits = SettingId::slot(0, Effect::Distort, 2).unwrap();
+        let amount = SettingId::slot(0, EffectKind::Distort, 1).unwrap();
+        let bits = SettingId::slot(0, EffectKind::Distort, 2).unwrap();
         assert_eq!(
             (amount.name_on(&track), bits.name_on(&track)),
             ("1 Amount".into(), "1 ---".into())
@@ -474,7 +475,7 @@ mod tests {
         let offered = FxCommand::on_track(&track);
         assert!(offered.contains(&FxCommand::Set(bits)));
         assert!(!offered.contains(&FxCommand::Set(amount)));
-        let kind = SettingId::slot(0, Effect::Distort, 0).unwrap();
+        let kind = SettingId::slot(0, EffectKind::Distort, 0).unwrap();
         assert!(!kind.lockable(), "a mode isn't locked from a step");
         assert_eq!(FxCommand::typed("1type", &track), None);
     }
@@ -629,7 +630,7 @@ mod tests {
     #[test]
     fn a_saved_destination_keeps_its_key_in_a_song() {
         let mut song = Song::new(1);
-        let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
+        let feedback = SettingId::slot(1, EffectKind::Delay, 1).unwrap();
         song.tracks[0].mods[3].destination = Some(feedback);
         let text = ron::to_string(&song).unwrap();
         assert!(text.contains("2.delay.feedback"), "{text}");

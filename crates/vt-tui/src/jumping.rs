@@ -29,6 +29,17 @@ impl FieldJump {
             .map(|(_, label)| *label)
     }
 
+    /// The label on a setting as text, or nothing: one of `LABELS`, as a cell draws it.
+    pub fn label_text(&self, control: Control) -> &'static str {
+        self.label(control)
+            .and_then(|label| {
+                LABELS
+                    .find(label)
+                    .map(|at| &LABELS[at..at + label.len_utf8()])
+            })
+            .unwrap_or("")
+    }
+
     fn control(&self, label: char) -> Option<Control> {
         self.labels
             .iter()

@@ -8,12 +8,11 @@ use vt_model::accumulator::{Adds, AtLimit, Moves};
 use vt_model::arpeggio::{ArpMode, ArpRate};
 use vt_model::bank::Warp;
 use vt_model::envelope::Curve;
-use vt_model::insert::{DistortType, Insert};
+use vt_model::insert::{DistortType, EffectKind, Insert};
 use vt_model::lfo::{LfoMode, Shape};
 use vt_model::listed::{Listed, choices_of};
 use vt_model::modulation::{ModKind, Polarity};
 use vt_model::scale::ScaleKind;
-use vt_model::settings::Effect;
 use vt_model::shape::{
     Bar, CellStart, Channel, Division, DrumPart, FillKind, Moves as TonnetzMoves, Role,
     TonnetzVoice, World,
@@ -59,7 +58,7 @@ fn every_list_is_its_types_own_and_names_each_once() {
     check(&DistortType::ALL);
     check(&Division::ALL);
     check(&DrumPart::ALL);
-    check(&Effect::ALL);
+    check(&EffectKind::ALL);
     check(&FillKind::ALL);
     check(&FilterMode::ALL);
     check(&FilterType::ALL);
@@ -91,7 +90,7 @@ fn a_list_says_what_its_type_says() {
         assert_eq!(Listed::meaning(machine), machine.meaning());
         assert_eq!(Listed::category(machine), machine.category());
     }
-    for effect in Effect::ALL {
+    for effect in EffectKind::ALL {
         assert_eq!(Listed::key(effect), effect.key());
         assert_eq!(Listed::meaning(effect), "");
     }
