@@ -352,7 +352,9 @@ impl App {
     /// become its own, and `Vary` goes back to `Once`, so the pass heard plays every pass and the
     /// phrase holds it, as the Turing Machine's lock keeps the loop it has drifted to (decision
     /// 293). The engine reports each pass as it's first heard; one reported from another
-    /// generator, on another column, isn't kept.
+    /// generator, on another column, isn't kept. A `Ring` keeps its register as that pass began,
+    /// so the pass heard plays first and the ring runs on from there, holding that loop once
+    /// `Change` is down (decision 324).
     fn keep_variation(&mut self, phrase: u32, generator: usize, name: &str) {
         let track = self.cursor.track;
         let Some(live) = self.live_generator(track, phrase, generator) else {
@@ -373,6 +375,9 @@ impl App {
         shape.seed = heard.seed;
         shape.acid.roll = heard.roll;
         shape.vary = 0;
+        if let Some(kept) = heard.ring {
+            shape.ring.kept = Some(kept);
+        }
         live.settle(&mut shape);
         self.apply(&Action::Reshape {
             track,
@@ -380,10 +385,17 @@ impl App {
             generator,
             shape,
         });
-        self.status = format!(
-            "Kept {name} as pass {} played it: Vary is Once now",
-            heard.pass + 1
-        );
+        self.status = if heard.ring.is_some() {
+            format!(
+                "Kept {name}'s loop as pass {} began it: Change at 0 holds it",
+                heard.pass + 1
+            )
+        } else {
+            format!(
+                "Kept {name} as pass {} played it: Vary is Once now",
+                heard.pass + 1
+            )
+        };
     }
 
     /// `dd`: take the generator away, putting back what was under it.

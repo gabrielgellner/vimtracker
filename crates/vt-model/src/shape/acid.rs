@@ -380,6 +380,7 @@ mod tests {
             vary: 0,
             variation: crate::shape::Variation::default(),
             divisions: crate::shape::Divisions::default(),
+            ring: crate::shape::Ring::default(),
         }
     }
 

@@ -13,7 +13,7 @@ use super::{PatchPreset, PresetError, patch::read_patch};
 pub const FACTORY: &str = "Factory";
 
 /// Each shipped patch by name, with its file's text, in the tutorial's order.
-pub const FACTORY_PATCHES: [(&str, &str); 9] = [
+pub const FACTORY_PATCHES: [(&str, &str); 10] = [
     (
         "Turing Machine",
         include_str!("../../factory/patches/Turing Machine.ron"),
@@ -29,6 +29,10 @@ pub const FACTORY_PATCHES: [(&str, &str); 9] = [
     (
         "Drunk walk",
         include_str!("../../factory/patches/Drunk walk.ron"),
+    ),
+    (
+        "Noise Ring",
+        include_str!("../../factory/patches/Noise Ring.ron"),
     ),
     (
         "Marbles X",

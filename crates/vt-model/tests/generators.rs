@@ -84,6 +84,7 @@ fn ramp(from: u8, to: u8, place: Where) -> Shape {
         vary: 0,
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
+        ring: vt_model::shape::Ring::default(),
     }
 }
 

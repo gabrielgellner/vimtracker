@@ -17,9 +17,9 @@ use crate::step::Step;
 use super::{
     Acid, Bar, Bits, Channel, DEFAULT_RATE, Degrees, Division, Divisions, DrumPart, EUCLID_HITS,
     Edge, FillKind, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH, MAX_FACTOR, MAX_MUTATION,
-    MAX_ORDER, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Mutations, Pink, Random, Shape,
-    ShapeColumn, Source, VARIES, Values, Variation, WAVES, WaveRate, Where, default_step,
-    degree_count, degree_name, first_note,
+    MAX_ORDER, MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Mutations, Pink, Random,
+    Ring, Shape, ShapeColumn, Source, VARIES, Values, Variation, WAVES, WaveRate, Where,
+    default_step, degree_count, degree_name, first_note,
 };
 use super::{CLUSTERS, MARKOV, SHARE, STATES};
 
@@ -315,6 +315,11 @@ pub enum GenParam {
     QuarterTripletsB,
     EighthTripletsB,
     SixteenthTripletsB,
+    /// A `Ring` fill's own: how likely a bit coming round is replaced, how likely a new bit is a
+    /// 1, and how many bits go round.
+    Change,
+    Ones,
+    RingLength,
     /// A `Variation`'s own: how many rows before each row its next hangs on, and how far from
     /// the likeliest it may stray.
     Order,
@@ -356,7 +361,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 77] = [
+    pub const ALL: [Self; 80] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -411,6 +416,9 @@ impl GenParam {
         Self::QuarterTripletsB,
         Self::EighthTripletsB,
         Self::SixteenthTripletsB,
+        Self::Change,
+        Self::Ones,
+        Self::RingLength,
         Self::Order,
         Self::Temperature,
         Self::Flip,
@@ -493,6 +501,9 @@ impl GenParam {
             Self::QuarterTripletsB => "b4t",
             Self::EighthTripletsB => "b8t",
             Self::SixteenthTripletsB => "b16t",
+            Self::Change => "change",
+            Self::Ones => "ones",
+            Self::RingLength => "length",
             Self::Order => "order",
             Self::Temperature => "temperature",
             Self::Flip => "flip",
@@ -582,6 +593,9 @@ impl GenParam {
             Self::QuarterTripletsB => "B 1/4T",
             Self::EighthTripletsB => "B 1/8T",
             Self::SixteenthTripletsB => "B 1/16T",
+            Self::Change => "Change",
+            Self::Ones => "Chance",
+            Self::RingLength => "Length",
             Self::Order => "Order",
             Self::Temperature => "Temp",
             Self::Flip => "Flip",
@@ -622,6 +636,7 @@ impl GenParam {
             | Self::Factor
             | Self::Turn
             | Self::Steps
+            | Self::RingLength
             | Self::Order
             | Self::Mutation => Units::Count,
             Self::Weights => Units::Weights,
@@ -640,6 +655,8 @@ impl GenParam {
             | Self::Share
             | Self::Spread
             | Self::Temperature
+            | Self::Change
+            | Self::Ones
             | Self::Quarters
             | Self::Eighths
             | Self::Sixteenths
@@ -718,8 +735,10 @@ impl GenParam {
     /// it has its `Order` and `Temperature` and no `Where`. `Divisions` makes its own rhythm too:
     /// it has its bar and its own channel's chances, and channel `B`'s as well where it plays
     /// `A+B`, or while the panel shapes several tracks, each taking its own channel, when it has
-    /// no `Channel`; and its `Note` where it `generates`, as `Grids` has. Only a shape that draws
-    /// from its seed has `Vary`.
+    /// no `Channel`; and its `Note` where it `generates`, as `Grids` has. A `Ring` makes its own
+    /// rhythm from its register, so it has its ends, `Change`, `Chance` and `Length` and no
+    /// `Where`. Only a shape that draws from its seed has `Vary`, which a `Ring` hasn't, as it
+    /// runs on from pass to pass by itself.
     pub fn exists_for(self, shape: &Shape, column: ShapeColumn, generates: bool) -> bool {
         let kind = shape.kind;
         let grids = kind == FillKind::Grids;
@@ -748,7 +767,8 @@ impl GenParam {
             Self::From | Self::To => {
                 riff || matches!(
                     kind,
-                    FillKind::Ramp
+                    FillKind::Ring
+                        | FillKind::Ramp
                         | FillKind::Random
                         | FillKind::Walk
                         | FillKind::Pink
@@ -787,6 +807,7 @@ impl GenParam {
             Self::KickDensity => density(DrumPart::Kick),
             Self::SnareDensity => density(DrumPart::Snare),
             Self::HatDensity => density(DrumPart::Hats),
+            Self::Change | Self::Ones | Self::RingLength => kind == FillKind::Ring,
             Self::Order | Self::Temperature => kind == FillKind::Variation,
             Self::Flip => kind == FillKind::InvertBits,
             Self::Keep => kind == FillKind::MaskBits,
@@ -820,12 +841,14 @@ impl GenParam {
     /// The settings in a generator's title on the Gen page, the ones that change what it is: its
     /// fill, then its `Where`, or for a `Follow`, the phrase it follows, and for `Acid`, its
     /// `Pitches`, as the second die is a mode of the riff's, `Multiply` its fill alone and `Grids`
-    /// its part, which drum it is, and a `Variation` its fill alone; and last, for a shape that draws from its seed, `Vary`, what
+    /// its part, which drum it is, and a `Variation` and a `Ring` their fill alone; and last, for a shape that draws from its seed, `Vary`, what
     /// it is from pass to pass.
     pub fn title(shape: &Shape) -> [Option<Self>; GEN_TITLE] {
         let mut title = match shape.kind {
             FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None, None],
-            FillKind::Multiply | FillKind::Variation => [Some(Self::Fill), None, None, None],
+            FillKind::Multiply | FillKind::Variation | FillKind::Ring => {
+                [Some(Self::Fill), None, None, None]
+            }
             FillKind::Grids => [Some(Self::Fill), Some(Self::Part), None, None],
             FillKind::Divisions => [Some(Self::Fill), Some(Self::Channel), Some(Self::Bar), None],
             FillKind::Acid => [
@@ -935,6 +958,10 @@ impl GenParam {
             FillKind::Scale => [[Some(From), Some(To), Some(Curve)], [Some(S), None, None]],
             FillKind::Multiply => [[Some(Factor), Some(Masks), None], none],
             FillKind::Variation => [[Some(Order), Some(Temperature), None], none],
+            FillKind::Ring => [
+                [Some(From), Some(To), None],
+                [Some(Change), Some(Ones), Some(RingLength)],
+            ],
             FillKind::Grids | FillKind::Divisions => unreachable!("laid out above"),
             FillKind::InvertBits => [[Some(Flip), None, None], none],
             FillKind::MaskBits => [[Some(Keep), None, None], none],
@@ -1225,6 +1252,9 @@ impl GenParam {
             }
             Self::Order => shape.variation.order.to_string(),
             Self::Temperature => format!("{}%", shape.variation.temperature),
+            Self::Change => format!("{}%", shape.ring.change),
+            Self::Ones => format!("{}%", shape.ring.chance),
+            Self::RingLength => shape.ring.length.to_string(),
             Self::Flip => format!("{:02X}", shape.bits.flip),
             Self::Keep => format!("{:02X}", shape.bits.keep),
             Self::Turn => match shape.bits.turn {
@@ -1557,6 +1587,19 @@ impl GenParam {
                 let temperature = i32::from(shape.variation.temperature);
                 shape.variation.temperature = moved(temperature, by(1, CHANCE_JUMP), 0, 100) as u8;
             }
+            Self::Change => {
+                let change = i32::from(shape.ring.change);
+                shape.ring.change = moved(change, by(1, CHANCE_JUMP), 0, 100) as u8;
+            }
+            Self::Ones => {
+                let chance = i32::from(shape.ring.chance);
+                shape.ring.chance = moved(chance, by(1, CHANCE_JUMP), 0, 100) as u8;
+            }
+            Self::RingLength => {
+                let length = i32::from(shape.ring.length);
+                let most = i32::from(MAX_RING);
+                shape.ring.length = moved(length, by(1, EUCLID_JUMP), 1, most) as u8;
+            }
             Self::Flip => shape.bits.flip = moved_byte(shape.bits.flip, by(1, HEX_JUMP)),
             Self::Keep => shape.bits.keep = moved_byte(shape.bits.keep, by(1, HEX_JUMP)),
             Self::Turn => {
@@ -1665,6 +1708,9 @@ impl GenParam {
             }
             Self::Order => shape.variation.order = Variation::default().order,
             Self::Temperature => shape.variation.temperature = Variation::default().temperature,
+            Self::Change => shape.ring.change = Ring::default().change,
+            Self::Ones => shape.ring.chance = Ring::default().chance,
+            Self::RingLength => shape.ring.length = Ring::default().length,
             Self::Flip => shape.bits.flip = Bits::default().flip,
             Self::Keep => shape.bits.keep = Bits::default().keep,
             Self::Turn => shape.bits.turn = Bits::default().turn,
@@ -1890,6 +1936,18 @@ impl GenParam {
                 Ok(typed) => shape.variation.temperature = typed.min(100) as u8,
                 Err(_) => return Err("Temp runs from 0 to 100"),
             },
+            Self::Change => match text.parse::<u16>() {
+                Ok(typed) => shape.ring.change = typed.min(100) as u8,
+                Err(_) => return Err("Change runs from 0 to 100"),
+            },
+            Self::Ones => match text.parse::<u16>() {
+                Ok(typed) => shape.ring.chance = typed.min(100) as u8,
+                Err(_) => return Err("Chance runs from 0 to 100"),
+            },
+            Self::RingLength => match text.parse::<u8>() {
+                Ok(length) if (1..=MAX_RING).contains(&length) => shape.ring.length = length,
+                _ => return Err("Length runs from 1 to 16"),
+            },
             Self::Quarters
             | Self::Eighths
             | Self::Sixteenths
@@ -1994,7 +2052,8 @@ impl GenParam {
             Self::Flip | Self::Keep => (0, i32::from(u8::MAX)),
             Self::Turn => (0, i32::from(MAX_TURN)),
             Self::Order => (1, i32::from(MAX_ORDER)),
-            Self::Temperature => (0, 100),
+            Self::Temperature | Self::Change | Self::Ones => (0, 100),
+            Self::RingLength => (1, i32::from(MAX_RING)),
             Self::Step => (1, i32::from(longest_step(column))),
             Self::Depth => (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH)),
             Self::Spread => (0, i32::from(MAX_SPREAD)),
@@ -2079,6 +2138,9 @@ impl GenParam {
             Self::Turn => i32::from(shape.bits.turn),
             Self::Order => i32::from(shape.variation.order),
             Self::Temperature => i32::from(shape.variation.temperature),
+            Self::Change => i32::from(shape.ring.change),
+            Self::Ones => i32::from(shape.ring.chance),
+            Self::RingLength => i32::from(shape.ring.length),
             Self::Phase => i32::from(shape.phase),
             Self::Values => return None,
             Self::Run => i32::from(shape.run),
@@ -2248,6 +2310,9 @@ impl GenParam {
             Self::Turn => shape.bits.turn = number as u8,
             Self::Order => shape.variation.order = number as u8,
             Self::Temperature => shape.variation.temperature = number as u8,
+            Self::Change => shape.ring.change = number as u8,
+            Self::Ones => shape.ring.chance = number as u8,
+            Self::RingLength => shape.ring.length = number as u8,
             Self::Vary => shape.vary = VARIES[number as usize],
         }
     }
@@ -2408,6 +2473,7 @@ mod tests {
             vary: 0,
             variation: crate::shape::Variation::default(),
             divisions: crate::shape::Divisions::default(),
+            ring: crate::shape::Ring::default(),
         }
     }
 
@@ -2729,6 +2795,59 @@ mod tests {
             !context(ShapeColumn::Velocity)
                 .fills()
                 .contains(&FillKind::Divisions)
+        );
+    }
+
+    /// A `Ring` has its ends, `Change` and `Chance` from 0 to 100% and `Length` from 1 to 16, and
+    /// no `Where` or `Vary`, as it makes its rhythm and runs on from pass to pass by itself.
+    #[test]
+    fn a_rings_change_chance_and_length() {
+        use GenParam::*;
+        let notes = context(note());
+        let mut ring = shape(FillKind::Ring);
+        assert_eq!(
+            GenParam::of(&ring, note(), true),
+            [Fill, From, To, Change, Ones, RingLength]
+        );
+        assert_eq!(GenParam::title(&ring), [Some(Fill), None, None, None]);
+        assert_eq!(
+            GenParam::grid(&ring, note(), true)[1],
+            [Some(Change), Some(Ones), Some(RingLength)]
+        );
+        assert_eq!(
+            (Change.name(), Ones.name(), RingLength.name()),
+            ("Change", "Chance", "Length")
+        );
+        assert_eq!(
+            (Change.key(), Ones.key(), RingLength.key()),
+            ("change", "ones", "length")
+        );
+        assert_eq!(Change.shown(&ring, &notes), "10%");
+        assert_eq!(Ones.shown(&ring, &notes), "50%");
+        assert_eq!(RingLength.shown(&ring, &notes), "8");
+        for _ in 0..12 {
+            Change.step(&mut ring, &notes, 1, true).unwrap();
+            RingLength.step(&mut ring, &notes, 1, true).unwrap();
+        }
+        assert_eq!((ring.ring.change, ring.ring.length), (100, 16));
+        Ones.typed(&mut ring, &notes, "250").unwrap();
+        assert_eq!(ring.ring.chance, 100);
+        assert!(RingLength.typed(&mut ring, &notes, "17").is_err());
+        assert_eq!(RingLength.bounds(&notes), Some((1, 16)));
+        assert_eq!(Ones.bounds(&notes), Some((0, 100)));
+        RingLength.set_number(&mut ring, &notes, 3);
+        assert_eq!(RingLength.number(&ring, &notes), Some(3));
+        for param in [Change, Ones, RingLength] {
+            assert!(param.held_in_engine());
+            param.reset(&mut ring, &notes, Starts::default());
+        }
+        assert!(ring.ring.is_default());
+        // It writes notes, so only a Note column offers it.
+        assert!(notes.fills().contains(&FillKind::Ring));
+        assert!(
+            !context(ShapeColumn::Velocity)
+                .fills()
+                .contains(&FillKind::Ring)
         );
     }
 

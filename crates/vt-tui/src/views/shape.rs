@@ -80,11 +80,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         let steps = panel.base_steps(part);
         let shape = panel.shape_of(nth);
         let written = written_from(steps, part.range, part.column, &shape, source);
-        // A `Follow`, `Grids`, `Divisions` and a `Variation` write every row, rests and all, so
-        // their count is of the notes, and `Multiply`'s of the rhythm it leaves.
+        // A `Follow`, `Grids`, `Divisions`, `Ring` and a `Variation` write every row, rests and
+        // all, so their count is of the notes, and `Multiply`'s of the rhythm it leaves.
         filled += if matches!(
             shape.kind,
-            FillKind::Follow | FillKind::Grids | FillKind::Divisions | FillKind::Variation
+            FillKind::Follow
+                | FillKind::Grids
+                | FillKind::Divisions
+                | FillKind::Ring
+                | FillKind::Variation
         ) {
             written
                 .iter()
@@ -178,6 +182,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         }
         FillKind::Divisions if app.mode == Mode::Shape => "r rolls the dice  a chance only adds",
         FillKind::Divisions => "A chance only adds strikes",
+        FillKind::Ring if panel.shape.ring.kept.is_some() => "Its loop kept  r starts a new one",
+        FillKind::Ring if app.mode == Mode::Shape => "r a new ring  L runs it on each pass",
+        FillKind::Ring => "Bit 0 plays, the byte is the pitch",
         FillKind::Variation => match &too_few {
             Some(why) => why.as_str(),
             None if app.mode == Mode::Shape => "r another  Order 3 copies closely",
