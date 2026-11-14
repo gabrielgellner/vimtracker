@@ -130,6 +130,13 @@ impl Playing {
         self.to(frame + 1);
         i64::from(self.engine.live(0).mods[3].expect("the LFO runs").phase)
     }
+
+    /// What Mod 4 gives, from -1 to 1, as worked out at a frame on the grid.
+    fn value_at(&mut self, frame: usize) -> f32 {
+        self.to(frame + 1);
+        let now = self.engine.live(0).mods[3].expect("the LFO runs");
+        f32::from(now.value) / f32::from(i16::MAX)
+    }
 }
 
 /// How far apart two places in a turn are, the short way round.
@@ -337,6 +344,80 @@ fn a_resting_track_keeps_its_lfo_going_at_the_rate_it_was_moved_to() {
     assert_eq!(rested, phases(false));
     // Seven steps at `1/16` from where it was a step in, and a quarter turn at `1/4`.
     assert!(apart(rested[0], TURN / 4) < 600, "{}", rested[0]);
+}
+
+#[test]
+fn an_attractor_turned_faster_goes_on_from_where_it_is_and_a_render_repeats() {
+    let pool = flat();
+    for shape in [Shape::Lorenz, Shape::Rossler] {
+        let mut song = song(&[]);
+        song.tracks[0].mods[3] = ModSlot::lfo(
+            Some(SettingId::CUT),
+            Lfo {
+                shape,
+                rate: Rate::Note(960),
+                ..Lfo::default()
+            },
+        )
+        .with_depth(0x40);
+        rate_on_macro(
+            &mut song,
+            3,
+            Rate::Note(960).place(),
+            Rate::Note(240).place(),
+        );
+        let mut playing = Playing::new(&song, &pool);
+        let mut last = playing.value_at(0);
+        let mut moves = Vec::new();
+        for at in 1..4000 {
+            if at == 2000 {
+                song.tracks[0].macros[0].value = 0xFF00;
+                playing.engine.swap(version(&song, &pool));
+            }
+            let value = playing.value_at(at * UPDATE);
+            moves.push((value - last).abs());
+            last = value;
+        }
+        // Four times as far a working out at `1/16` as at `1/4`, and never a jump at the turn.
+        let (before, after) = (&moves[..1990], &moves[2010..]);
+        let sum = |moves: &[f32]| moves.iter().sum::<f32>();
+        let ratio = sum(after) / sum(before);
+        assert!((3.0..5.0).contains(&ratio), "{shape:?} {ratio}");
+        let most = after.iter().copied().fold(0.0, f32::max);
+        assert!(
+            moves[1990..2010].iter().all(|by| *by <= most),
+            "{shape:?} no jump"
+        );
+
+        // An LFO on its rate, heard in blocks of 512 and of 37 frames, twice.
+        let mut moved = song.clone();
+        moved.tracks[0].macros[0].maps.clear();
+        moved.tracks[0].mods[2] = ModSlot::lfo(
+            Some(rate_of(3)),
+            Lfo {
+                shape: Shape::Sine,
+                rate: Rate::Note(3840),
+                ..Lfo::default()
+            },
+        )
+        .with_depth(0x30);
+        let render = |block: usize| {
+            let mut engine = Engine::new(RATE, version(&moved, &tone()));
+            engine.play_from(0);
+            let mut out = Vec::new();
+            let mut buffer = vec![0.0; block * 2];
+            let frames = 2 * BAR;
+            while out.len() < frames * 2 {
+                let run = block.min(frames - out.len() / 2);
+                engine.process(&mut buffer[..run * 2]);
+                out.extend_from_slice(&buffer[..run * 2]);
+            }
+            out
+        };
+        let whole = render(512);
+        assert!(whole == render(512), "{shape:?} a render repeats");
+        assert!(whole == render(37), "{shape:?} whatever the blocks");
+    }
 }
 
 /// Five tracks, each with LFOs on `Cut`, `Send A` and `Vol` in one of the five modes at a note, a

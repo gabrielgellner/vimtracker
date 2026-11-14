@@ -27,6 +27,8 @@ use super::{AccumulatorField, ArpField, Control, ModField};
 const PHASE_NUDGE: i32 = 15;
 
 const PHASE_JUMP: i32 = 90;
+/// An attractor's large step, from one axis to the next: `x` at 0°, `y` at 120° and `z` at 240°.
+const AXIS_JUMP: i32 = 120;
 
 /// How far a large step moves `Gate`, in percent.
 const GATE_JUMP: i32 = 10;
@@ -164,7 +166,12 @@ fn adjust_mod(
         ModField::Rate if large => lfo.rate = lfo.rate.jumped(up),
         ModField::Rate => lfo.rate = lfo.rate.nudged(up),
         ModField::Phase => {
-            let size = if large { PHASE_JUMP } else { PHASE_NUDGE };
+            // An attractor's large step goes from one axis to the next.
+            let size = match (large, lfo.shape.is_attractor()) {
+                (true, true) => AXIS_JUMP,
+                (true, false) => PHASE_JUMP,
+                (false, _) => PHASE_NUDGE,
+            };
             let by = if up { size } else { -size };
             lfo.phase = (i32::from(lfo.phase) + by).rem_euclid(360) as u16;
         }

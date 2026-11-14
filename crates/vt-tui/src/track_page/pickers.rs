@@ -667,7 +667,16 @@ impl App {
             ModField::Shape => {
                 let shapes = Shape::ALL.map(|shape| {
                     let lfo = Lfo { shape, ..lfo };
-                    Item::new(shape.name(), pick(ModSlot { lfo, ..modulator }))
+                    let item = Item::new(shape.name(), pick(ModSlot { lfo, ..modulator }));
+                    // The attractors say what they are, and Rössler's name is found without its
+                    // umlaut.
+                    match shape {
+                        Shape::Lorenz => {
+                            item.meaning("chaos round two wings, never quite repeating")
+                        }
+                        Shape::Rossler => item.meaning("Rossler's chaos round one loop"),
+                        _ => item,
+                    }
                 });
                 ("LFO shape", shapes.to_vec())
             }

@@ -266,6 +266,9 @@ pub struct App {
     pub waveform_image: Option<u32>,
     /// The ids of the images of the FX page's slots, for those that have a drawing.
     pub slot_images: [Option<u32>; vt_model::insert::INSERTS],
+    /// The id of the image of the zoomed slot's drawing, while the FX page is zoomed on one that
+    /// has one.
+    pub zoom_image: Option<u32>,
     /// The images of the Gen page's previews the terminal has, by each generator's place in its
     /// phrase's list.
     pub gen_images: Vec<Option<u32>>,
@@ -352,6 +355,9 @@ pub struct App {
     /// How far each FX slot of the cursor's track has turned down lately, in dB, for the mark its
     /// gain reduction meter holds at the deepest.
     pub slot_reduction: [crate::meter::Held; vt_model::insert::INSERTS],
+    /// What each FX slot of the cursor's track turned down over the last two bars, for the FX
+    /// page's zoom.
+    pub reduction_history: crate::meter::ReductionHistory,
     /// The cursor's track's level right after its trim, each side's in dB, for the meter in its
     /// Output device: where it is now and the highest it was lately.
     pub after_trim: [crate::meter::Held; 2],
@@ -550,6 +556,7 @@ impl App {
             filter_image: None,
             waveform_image: None,
             slot_images: [None; vt_model::insert::INSERTS],
+            zoom_image: None,
             gen_images: Vec::new(),
             mapping_image: None,
             gen_panels_at: Vec::new(),
@@ -607,6 +614,7 @@ impl App {
             recording: None,
             meter: Meter::default(),
             slot_reduction: [crate::meter::Held::new(0.0); vt_model::insert::INSERTS],
+            reduction_history: crate::meter::ReductionHistory::default(),
             after_trim: [crate::meter::Held::new(crate::meter::FLOOR_DB); 2],
             scope: crate::scope::Scope::new(rate),
             scope_image: None,
@@ -1013,9 +1021,15 @@ impl App {
             // Audio has stopped, so nothing is playing.
             self.playheads = [None; PLAYHEADS];
         }
-        for (slot, held) in self.slot_reduction.iter_mut().enumerate() {
-            held.update(self.live.map_or(0.0, |live| live.reduction[slot]), seconds);
+        let reduction = self
+            .live
+            .map_or([0.0; vt_model::insert::INSERTS], |live| live.reduction);
+        for (held, now) in self.slot_reduction.iter_mut().zip(reduction) {
+            held.update(now, seconds);
         }
+        let bpm = f64::from(self.song().millibpm) / 1000.0;
+        self.reduction_history
+            .update(track, reduction, seconds, bpm);
         // Only what was reported this frame, for this track, so it falls once nothing is.
         let trimmed = report
             .filter(|report| report.watched == track)

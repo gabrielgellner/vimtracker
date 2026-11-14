@@ -925,7 +925,10 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     panel, 49 by 5 characters, with frequency gridlines, a 0 dB line and a dashed mark at `Cut`.
     The Mod page's panels are the half size, 24 by 5: an envelope over its baseline and stage
     lines, one cycle of an LFO from its `Phase`, drawn from the engine's own `lfo::wave`, and a
-    Track slot's map across its source's span. The
+    Track slot's map across its source's span. Zoomed in on one slot (`z i`, decision 329), the
+    FX page draws its compressor's or distortion's curve 42 by 16 and its EQ's 140 by 16, the
+    zoomed slot's alone. Gain reduction, in the rack and zoomed, and its last two bars are text,
+    so pumping moves every frame without a picture. The
     scope and the pickers' waveforms stay solid dots.
 *   **Placed dots.** An LFO's dot is a small image of its own, stored once in each of two shades
     and placed with pixel offsets across and down (`Placement`'s `X=` and `Y=`) where
@@ -1152,7 +1155,7 @@ sample plays. Elektron's per-track idea is kept, and its `SPD` and `MULT` are no
     steps (`7st`) for lengths that slide against the bar, or hertz (`2.5hz`), which ignores the tempo. `+` is always faster.
 *   **Depth:** how far it swings either way, in hex in the destination's units, so `Cut 80` and `Depth +40` moves between
     `40` and `C0`. Negative flips the shape. **Phase:** where in the cycle it starts, in degrees.
-*   **Shape:** `Sine`, `Tri`, `Saw` (falls), `Ramp` (rises), `Square`, `Random` (a new value each cycle, from the seed) or `Smooth` (the same values, eased from one to the next).
+*   **Shape:** `Sine`, `Tri`, `Saw` (falls), `Ramp` (rises), `Square`, `Random` (a new value each cycle, from the seed) or `Smooth` (the same values, eased from one to the next), or a strange attractor, `Lorenz` or `Rössler`, about a turn a cycle and never quite repeating, whose `Deform` is its chaotic parameter and whose `Phase` is the axis heard (decision 330).
 *   **Mode** (decision 202): `Free` runs from the song's position, and playing from the top is its only restart.
     `Trig`, `One` and `Half` restart it at each note on the track, `One` and `Half` then staying at the end of one
     cycle or half of one; `Hold` runs free and holds the wave's value at the track's last note, worked out from

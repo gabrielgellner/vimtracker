@@ -40,11 +40,13 @@ use crate::views::widgets::{group, role};
 mod generators;
 mod modulation;
 mod sound;
+mod zoom;
 
 pub(crate) use generators::playing_row as gen_playing_row;
 
 pub use modulation::CyclesAt;
 pub(crate) use modulation::{MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, mod_being_edited};
+pub(crate) use zoom::{ZOOM_CURVE_WIDTH, ZOOM_EQ_WIDTH, ZOOM_PANEL_HEIGHT};
 
 /// The size of the Sound page's large panels, in characters: the filter's curve, a sampler's
 /// thumbnail and the Output's meter, each beside a grid of two columns. At the author's 15 by 39
@@ -262,6 +264,13 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Mutate => format!("{}%", steps.mutate),
         ModField::Smooth => depth_text(steps.smooth),
         ModField::Step(at) => depth_text(steps.values[usize::from(at)]),
+        // An attractor's is the axis heard, named where it's one alone.
+        ModField::Phase if lfo.shape.is_attractor() => match lfo.phase {
+            0 => "x".to_owned(),
+            120 => "y".to_owned(),
+            240 => "z".to_owned(),
+            phase => format!("{phase}°"),
+        },
         ModField::Phase => format!("{}°", lfo.phase),
         ModField::Deform => depth_text(lfo.deform),
         ModField::Fade => lfo.fade.to_string(),
@@ -371,10 +380,12 @@ pub(crate) fn heard_bypassed(app: &App, track: &Track, slot: usize) -> bool {
     }
 }
 
-/// What the FX page's cells show for a slot's settings, read from what's in the slot.
+/// What the FX page's cells show for a slot's settings, read from what's in the slot, with bars
+/// this many cells long.
 struct SlotCells<'a> {
     app: &'a App,
     track: &'a Track,
+    bar_cells: usize,
 }
 
 impl CellSource for SlotCells<'_> {
@@ -412,7 +423,7 @@ impl CellSource for SlotCells<'_> {
             _ => set,
         };
         Some(
-            ValueBar::new(set, BAR_CELLS)
+            ValueBar::new(set, self.bar_cells)
                 .playing(live)
                 .range(macro_range(control, self.track)),
         )
@@ -452,8 +463,37 @@ fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'st
 /// effect's grid, or a hint if it's empty, and its graphic panel. A bypassed slot's contents are
 /// faint but for the cursor and its images.
 fn draw_slot(frame: &mut Frame, area: Rect, app: &App, track: &Track, device: &DeviceSpec) {
-    let Some(Control::Insert(slot)) = device.title[0] else {
+    let Some(slot) = slot_frame(frame, area, app, track, device) else {
         return;
+    };
+    slot_grid(
+        frame,
+        Device::settings_area(area),
+        (app, track),
+        device,
+        CellWidths::FX,
+    );
+    if track.inserts[slot] == Insert::Empty {
+        return;
+    }
+    let panel = slot_panel(app, track, slot);
+    if !panel.is_empty() {
+        let at = Device::panel_area(area, panel.width());
+        frame.render_widget(panel, at);
+    }
+}
+
+/// A slot's frame and its title, with its bypass's toggle, as the rack and the zoom both draw it,
+/// giving back which slot it is.
+fn slot_frame(
+    frame: &mut Frame,
+    area: Rect,
+    app: &App,
+    track: &Track,
+    device: &DeviceSpec,
+) -> Option<usize> {
+    let Some(Control::Insert(slot)) = device.title[0] else {
+        return None;
     };
     let cursor = theme::cursor(app.mode);
     let fade = heard_bypassed(app, track, slot).then_some(cursor);
@@ -471,7 +511,21 @@ fn draw_slot(frame: &mut Frame, area: Rect, app: &App, track: &Track, device: &D
         .controls(controls)
         .focused(slot_being_edited(app) == Some(slot));
     frame.render_widget(frame_widget, area);
-    let settings = Device::settings_area(area);
+    Some(slot)
+}
+
+/// A slot's settings in its effect's grid, in cells of these widths, or a hint if it's empty,
+/// faint while it's bypassed but for the cursor.
+fn slot_grid(
+    frame: &mut Frame,
+    settings: Rect,
+    (app, track): (&App, &Track),
+    device: &DeviceSpec,
+    widths: CellWidths,
+) {
+    let Some(Control::Insert(slot)) = device.title[0] else {
+        return;
+    };
     if track.inserts[slot] == Insert::Empty {
         let hint = Line::from(vec![
             Span::raw("K"),
@@ -482,21 +536,26 @@ fn draw_slot(frame: &mut Frame, area: Rect, app: &App, track: &Track, device: &D
         frame.render_widget(hint, take_top(&mut row, 1));
         return;
     }
+    let fade = heard_bypassed(app, track, slot).then_some(theme::cursor(app.mode));
     let rows = device.grid.iter().copied().map(Vec::from).collect();
-    let source = SlotCells { app, track };
-    let grid = SettingsGrid::new(&source, rows, CellWidths::FX).faded(fade);
+    let source = SlotCells {
+        app,
+        track,
+        bar_cells: widths.bar_cells,
+    };
+    let grid = SettingsGrid::new(&source, rows, widths).faded(fade);
     frame.render_widget(grid, settings);
-    let panel = slot_panel(app, track, slot);
-    if !panel.is_empty() {
-        let at = Device::panel_area(area, panel.width());
-        frame.render_widget(panel, at);
-    }
 }
 
 /// The FX page: a device for each slot, stacked down the page. Each is as tall whatever it holds,
 /// so four fill the rows inside the keyboard's box. Where fewer fit, the page goes by whole devices
-/// to keep the cursor's in view.
+/// to keep the cursor's in view. Zoomed, it's the cursor's slot alone, bigger, under a strip of
+/// them all.
 fn draw_fx(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
+    if app.track_page.zoomed {
+        zoom::draw(frame, area, app, track);
+        return;
+    }
     let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
     let cursor = app
         .track_page
@@ -510,12 +569,25 @@ fn draw_fx(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
     }
 }
 
+/// How tall a gain reduction meter is in rows, and how many dB it covers top to bottom.
+#[derive(Debug, Clone, Copy)]
+struct MeterScale {
+    rows: usize,
+    db: f32,
+}
+
+/// The rack's: half a dB an eighth.
+const RACK_METER: MeterScale = MeterScale {
+    rows: SLOT_DRAWING_HEIGHT,
+    db: REDUCTION_METER_DB,
+};
+
 /// Where a gain reduction meter's held mark goes for the deepest it has turned down lately, if it
 /// has: the row that depth ends in, and a faint line at that row's top or bottom, whichever is
-/// nearer, so it's within a quarter of a row, 1 dB.
-fn held_mark(held: f32) -> Option<(usize, char)> {
-    let rows = SLOT_DRAWING_HEIGHT;
-    let eighths = ((held / REDUCTION_METER_DB).clamp(0.0, 1.0) * (rows * 8) as f32).round();
+/// nearer, so it's within a quarter of a row, 1 dB in the rack's.
+fn held_mark(held: f32, scale: MeterScale) -> Option<(usize, char)> {
+    let rows = scale.rows;
+    let eighths = ((held / scale.db).clamp(0.0, 1.0) * (rows * 8) as f32).round();
     let eighths = eighths as usize;
     let row = eighths.checked_sub(1)? / 8;
     let into = eighths - row * 8;
@@ -526,10 +598,16 @@ fn held_mark(held: f32) -> Option<(usize, char)> {
 /// more, as the main meter's does, with a faint mark where it went deepest lately, while it isn't
 /// as deep now. An empty one that holds nothing shows a faint mark at the top, so it's seen to be
 /// there.
-fn reduction_cell(db: f32, held: f32, row: usize, color: Color) -> Span<'static> {
-    let filled = hanging_eighths(db / REDUCTION_METER_DB, row, SLOT_DRAWING_HEIGHT);
+fn reduction_cell(
+    db: f32,
+    held: f32,
+    row: usize,
+    scale: MeterScale,
+    color: Color,
+) -> Span<'static> {
+    let filled = hanging_eighths(db / scale.db, row, scale.rows);
     if filled == 0 {
-        let mark = match held_mark(held) {
+        let mark = match held_mark(held, scale) {
             Some((at, mark)) => (at == row).then_some(mark),
             None => (row == 0).then_some('▔'),
         };
@@ -568,7 +646,10 @@ fn slot_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
     let fade = |line: Line<'static>| if bypassed { faded(line, cursor) } else { line };
     let meter = || {
         let lines = (0..SLOT_DRAWING_HEIGHT)
-            .map(|row| fade(Line::from(reduction_cell(reduction, held, row, color))))
+            .map(|row| {
+                let cell = reduction_cell(reduction, held, row, RACK_METER, color);
+                fade(Line::from(cell))
+            })
             .collect();
         (lines, REDUCTION_METER_WIDTH as u16, Some(REDUCTION_CAPTION))
     };

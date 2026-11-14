@@ -111,7 +111,7 @@ fn each_kind_of_setting_has_its_feel() {
     };
     // A list of up to 16, each named.
     assert_eq!(steps(Control::FilterType, &track), FilterType::ALL.len());
-    assert_eq!(steps(Control::Mod(3, ModField::Shape), &track), 7);
+    assert_eq!(steps(Control::Mod(3, ModField::Shape), &track), 9);
     assert_eq!(steps(Control::Mod(3, ModField::Mode), &track), 5);
     assert_eq!(steps(Control::Arpeggio(ArpField::Mode), &track), 5);
     // Of 17 to 24, stepped all the same, with names for the first 16 as the Roto shows them.
