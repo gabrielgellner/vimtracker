@@ -388,21 +388,32 @@ impl App {
             }
             // The pass heard is what the row plays from now on, so its `RND`s on the note go,
             // whether or not they moved it this time.
-            let mut row = row.clone();
             if !rnds.is_empty() {
                 by += f32::from(pitch.varied);
                 varied += 1;
-                for column in rnds {
-                    row.fx[column] = FxSlot::default();
-                }
             }
             let note = (f32::from(midi) + by)
                 .round()
                 .clamp(f32::from(MIN_NOTE), f32::from(MAX_NOTE)) as u8;
-            row.note = Note::On(note);
-            if row != *rows.get(&step).unwrap_or(written) {
-                rows.insert(step, row);
+            // A row with nothing but its note to change changes only its note, so a live column
+            // elsewhere on it stays live.
+            if rnds.is_empty() && !rows.contains_key(&step) {
+                if note != midi {
+                    actions.push(Action::SetNote {
+                        track,
+                        phrase,
+                        step,
+                        note: Note::On(note),
+                    });
+                }
+                continue;
             }
+            let mut row = row.clone();
+            row.note = Note::On(note);
+            for column in rnds {
+                row.fx[column] = FxSlot::default();
+            }
+            rows.insert(step, row);
         }
         let slots: Vec<usize> = (0..MOD_SLOTS).filter(|at| moved[*at]).collect();
         if moving.is_empty() {
