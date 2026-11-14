@@ -2652,7 +2652,10 @@ impl SettingId {
         if at < MODS_START {
             let within = at - SLOTS_START;
             let (slot, within) = (within / SLOT_SIZE, within % SLOT_SIZE);
-            for effect in Effect::ALL.into_iter().filter(|effect| *effect != Effect::Echo) {
+            for effect in Effect::ALL
+                .into_iter()
+                .filter(|effect| *effect != Effect::Echo)
+            {
                 let start = effect_start(effect);
                 if within < start + effect.params().len() {
                     return (Owner::Slot { slot, effect }, within - start);
