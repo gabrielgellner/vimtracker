@@ -1677,8 +1677,8 @@ beside them:
 |---|---|
 | `j` `k` | The next or previous setting |
 | `h` `l` | Across its `Min`, `Max`, `Curve` and `S` |
-| `=` `-` `+` `_` | Move an end a step, or `10`; a bend `5`, or `25` |
-| `i` | Type it: an end as two hex digits, a bend from `-100` to `100` then `Enter` |
+| `=` `-` `+` `_` | Move an end a step or `10`, a bend `5` or `25` |
+| `i` | Type it: an end in two hex digits, a bend `-100` to `100` and `Enter` |
 | `x` | Put `Curve` or `S` back to straight, `0` |
 | `~` | Swap `Min` and `Max`, so the setting goes the other way |
 | `dd` | Take the setting off the macro |
