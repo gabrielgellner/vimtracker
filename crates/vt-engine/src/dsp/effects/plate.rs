@@ -34,6 +34,7 @@
 use vt_model::insert::{Plate as Settings, plate_size};
 
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::tail::{self, Complex, TAIL_HZ, Tail};
 
 /// The rate the paper's lengths are written for.
 const TUNING_RATE: f32 = 29_761.0;
@@ -79,6 +80,53 @@ const PRE_PER_FRAME: f32 = LONGEST_PRE;
 const TAP_GAIN: f32 = 0.6;
 /// How loud what comes out is. Tuned so it's near the reverb's at both their defaults.
 const WET: f32 = 0.7;
+
+/// How a plate's tail dies away at its settings and a rate, for a drawing. Its tank's two halves
+/// are one loop, kept by `Decay` twice in each half and darkened once, through four all-passes
+/// that keep all of it but hold each frequency back by their own amount, so the tail is the
+/// loop's as `tail::loop_seconds` works it out. The first all-passes' wobble moves them by a
+/// few frames in hundreds, so it's left out.
+pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
+    let stretch = f64::from(plate_size(f32::from(settings.size)) * rate as f32 / TUNING_RATE);
+    let decay = f64::from(f32::from(settings.decay) / 255.0 * MOST_DECAY);
+    let damping = f64::from(damping_at(settings.damp, rate));
+    let second = (decay + 0.15).clamp(f64::from(SECOND_DIFFUSION.0), f64::from(SECOND_DIFFUSION.1));
+    let response = |omega: f64| {
+        let allpass = |frames: f64, diffusion: f64| {
+            let delayed = Complex::read(omega, frames);
+            delayed
+                .add(Complex(diffusion, 0.0))
+                .over(Complex::ONE.add(delayed.scale(diffusion)))
+        };
+        let damped = Complex(damping, 0.0)
+            .over(Complex::ONE.add(Complex::delay(omega, 1.0).scale(damping - 1.0)));
+        TANK_LENGTHS.iter().fold(Complex::ONE, |round, half| {
+            let [first, before, after_damping, after] =
+                half.map(|length| f64::from(length) * stretch);
+            round
+                .times(allpass(first, -f64::from(DECAY_DIFFUSION)))
+                .times(Complex::read(omega, before))
+                .times(Complex::read(omega, after))
+                .times(damped)
+                .times(allpass(after_damping, second))
+                .scale(decay * decay)
+        })
+    };
+    let seconds = TAIL_HZ
+        .map(|hertz| tail::loop_seconds(hertz, rate, |omega| tail::kept_and_held(omega, response)));
+    Some(Tail {
+        pre: f32::from(settings.pre) / 255.0 * LONGEST_PRE,
+        seconds,
+    })
+}
+
+/// The damping one-pole's coefficient at a rate, for `Damp`, from its coefficient at the tuning
+/// rate.
+fn damping_at(damp: u8, rate: u32) -> f32 {
+    let at_tuning_rate = 1.0 - f32::from(damp) / 255.0 * (1.0 - MOST_DAMPING);
+    // Over the scale every length is stretched by, so it rounds as it always has.
+    1.0 - (1.0 - at_tuning_rate).powf(1.0 / (rate as f32 / TUNING_RATE))
+}
 
 /// Where in the tank a tap reads: which half, which of its four lines, how far back at the tuning
 /// rate, and whether it's added or taken away.
@@ -270,8 +318,7 @@ impl Plate {
         self.keep_time(frames);
         self.pre_frames.target = f32::from(settings.pre) / 255.0 * LONGEST_PRE * self.rate as f32;
         self.decay.target = f32::from(settings.decay) / 255.0 * MOST_DECAY;
-        let at_tuning_rate = 1.0 - f32::from(settings.damp) / 255.0 * (1.0 - MOST_DAMPING);
-        self.damping.target = 1.0 - (1.0 - at_tuning_rate).powf(1.0 / self.scale);
+        self.damping.target = damping_at(settings.damp, self.rate);
         self.bandwidth.target = if settings.high_cut == 0xFF {
             1.0
         } else {
@@ -742,6 +789,66 @@ mod tests {
         plate.clear();
         for _ in 0..RATE {
             assert_eq!(plate.process([0.0, 0.0]), [0.0, 0.0]);
+        }
+    }
+
+    #[test]
+    fn its_tail_falls_as_fast_as_a_click_through_it_measures() {
+        // Each frequency's modes fall at their own rate, and the tail is what a band of them
+        // measures. The wobble mixes the modes a little as they go round, which isn't worked
+        // out, and a big plate has only some hundreds of modes in the band at its lows, so how
+        // they fall differs a little from the many it's worked out from. Seen: within 11%.
+        use crate::dsp::effects::tail::measure;
+        let cases = [
+            (0x40, 0x00, 0x80, 48_000),
+            (0x80, 0x00, 0x80, 48_000),
+            (0xC0, 0x00, 0x80, 48_000),
+            (0x80, 0x80, 0x00, 48_000),
+            (0xC0, 0xFF, 0xFF, 48_000),
+            (0xE0, 0x40, 0x80, 48_000),
+            (0x80, 0x40, 0xC0, 44_100),
+            (0x80, 0x40, 0xC0, 48_000),
+            (0x80, 0x40, 0x40, 96_000),
+        ];
+        for (decay, damp, size, rate) in cases {
+            let settings = Settings {
+                decay,
+                damp,
+                size,
+                ..Settings::DEFAULT
+            };
+            let said = tail(settings, rate).unwrap();
+            let mut plate = plate(settings, rate);
+            let ratios = measure::ratios(said, |x| plate.process([x, x]), rate);
+            for (ratio, hertz) in ratios.iter().zip(TAIL_HZ) {
+                assert!(
+                    (ratio - 1.0).abs() < 0.15,
+                    "{decay:02X} {damp:02X} {size:02X} at {rate}, {hertz} Hz: {said:?} measured {ratio}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn its_tail_starts_after_its_pre_delay() {
+        use crate::dsp::effects::tail::measure;
+        for pre in [0x00, 0x80, 0xFF] {
+            let settings = Settings {
+                pre,
+                ..Settings::DEFAULT
+            };
+            let said = tail(settings, RATE).unwrap();
+            let response: Vec<f32> = impulse(&mut plate(settings, RATE), RATE as usize / 2)
+                .iter()
+                .map(|frame| frame[0])
+                .collect();
+            // Then its taps, the nearest some milliseconds into the tank.
+            let heard = measure::onset(&response, RATE);
+            assert!(
+                heard >= said.pre - 1.0 / RATE as f32 && heard < said.pre + 0.05,
+                "{pre:02X}: {heard} against {}",
+                said.pre
+            );
         }
     }
 }

@@ -41,6 +41,7 @@ use vt_model::insert::Space as Settings;
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::tail::Tail;
 use crate::rng::Pcg32;
 
 /// The rate Galactic's lengths and filters are tuned at.
@@ -80,6 +81,80 @@ const BLOCK: u32 = 32;
 const WET: f32 = 1.6;
 /// Where the vibrato's random speeds start, whenever it's cleared.
 const SEED: u64 = 0x4741_4C41_4354;
+
+/// How a space's tail dies away at its settings and a rate, for a drawing. Its tank has no damping,
+/// so it falls as fast at every frequency. Each trip round goes through one line of each of its
+/// three blocks and over to the other side, a frame of the tank later, and each block's mixing
+/// shares what comes out of each line evenly among the next block's four, keeping all of it but
+/// doubling it, so what each trip keeps, `regen` times eight, is the same whichever lines it took,
+/// but the trip's length isn't. Its power then falls at the rate `s` at which a trip of any of the
+/// 64 ways round, each as likely, keeps it level on average: `regen² 64 E[e^(s τ)] = 1`, for trips
+/// `τ` frames long, as a renewal process's does. That's slower than the average trip says, as the
+/// longest ways round lose least for their time.
+pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
+    let share = |value: u8| f32::from(value) / 255.0;
+    let regen = regen(share(settings.decay));
+    let bigness = bigness(share(settings.size));
+    let every = every(rate as f32 / TUNING_RATE);
+    // What a trip keeps of the power that goes round, and each way round's length.
+    let kept = f64::from(regen * 8.0).powi(2);
+    let delays = LENGTHS.map(|block| block.map(|length| line_delay(length, bigness) as f64));
+    let mut trips = Vec::with_capacity(64);
+    for first in delays[0] {
+        for second in delays[1] {
+            for third in delays[2] {
+                trips.push(first + second + third + 1.0);
+            }
+        }
+    }
+    // What a trip leaves on average, against the rate it falls at, a tank frame at a time: less
+    // than one at nothing, and more as it falls faster.
+    let left =
+        |falls: f64| kept * trips.iter().map(|trip| (falls * trip).exp()).sum::<f64>() / 64.0;
+    if left(0.0) >= 1.0 {
+        return None;
+    }
+    let (mut slow, mut fast) = (0.0, 1.0);
+    while left(fast) < 1.0 {
+        fast *= 2.0;
+    }
+    for _ in 0..60 {
+        let middle = (slow + fast) / 2.0;
+        if left(middle) < 1.0 {
+            slow = middle;
+        } else {
+            fast = middle;
+        }
+    }
+    let falls = (slow + fast) / 2.0;
+    // 60 dB is a millionth of the power.
+    let seconds = (1e6_f64.ln() / falls * every as f64 / f64::from(rate)) as f32;
+    Some(Tail {
+        pre: 0.0,
+        seconds: [seconds; 2],
+    })
+}
+
+/// What each trip round the tank keeps, for `Decay` from 0 to 1, as Galactic's `regen`.
+fn regen(decay: f32) -> f32 {
+    let replace = 1.0 - decay * (1.0 - LEAST_REPLACE);
+    LEAST_REGEN + (1.0 - replace) * (KEEPS_ALL - LEAST_REGEN)
+}
+
+/// How many times Galactic's lengths the tank is, for `Size` from 0 to 1.
+fn bigness(size: f32) -> f32 {
+    SMALLEST + (LARGEST - SMALLEST) * size
+}
+
+/// How many frames the tank runs once every, at this many times the tuning rate.
+fn every(scale: f32) -> usize {
+    (scale.floor() as usize).clamp(1, 4)
+}
+
+/// How many of the tank's frames a line holds back, at its length at a size.
+fn line_delay(length: f32, bigness: f32) -> usize {
+    ((length * bigness) as usize).max(1)
+}
 
 /// One of the tank's lines: where it starts in the shared buffer, how long its place is less one,
 /// a power of two, and how many of the tank's frames it holds back now.
@@ -149,7 +224,7 @@ impl Space {
     /// Make one for a sample rate, with lines long enough for the biggest.
     pub fn new(rate: u32) -> Self {
         let scale = rate as f32 / TUNING_RATE;
-        let every = (scale.floor() as usize).clamp(1, 4);
+        let every = every(scale);
         let mut base = 0;
         let mut place = |length: f32| {
             let room = ((length * LARGEST) as usize + 2).next_power_of_two();
@@ -248,16 +323,15 @@ impl Space {
 
     /// Work out what's slow to, from the settings as they are now.
     fn update(&mut self) {
-        let replace = 1.0 - self.decay.value * (1.0 - LEAST_REPLACE);
-        self.regen = LEAST_REGEN + (1.0 - replace) * (KEEPS_ALL - LEAST_REGEN);
+        self.regen = regen(self.decay.value);
         self.attenuate = (1.0 - self.regen / KEEPS_ALL) * 1.333;
         let damp = self.damp.value;
         let brightness = DAMP_BRIGHTNESS.0 + (DAMP_BRIGHTNESS.1 - DAMP_BRIGHTNESS.0) * damp;
         self.lowpass = 1.0 - (1.0 - brightness * brightness).powf(1.0 / self.scale);
-        let bigness = SMALLEST + (LARGEST - SMALLEST) * self.size.value;
+        let bigness = bigness(self.size.value);
         for side in &mut self.sides {
             for line in side.blocks.iter_mut().flatten() {
-                line.delay = ((line.length * bigness) as usize).max(1);
+                line.delay = line_delay(line.length, bigness);
             }
         }
     }
@@ -698,5 +772,55 @@ mod tests {
         for _ in 0..RATE {
             assert_eq!(space.process([0.0, 0.0]), [0.0, 0.0]);
         }
+    }
+
+    #[test]
+    fn its_tail_falls_as_fast_as_a_click_through_it_measures() {
+        // The tank keeps as much of every frequency, and its 64 ways round are worked out as a
+        // renewal process's, which takes their phases as unrelated. Seen: within 6%.
+        use crate::dsp::effects::tail::{TAIL_HZ, measure};
+        let cases = [
+            (0x00, 0x00, 0x80, 48_000),
+            (0x40, 0x00, 0x80, 48_000),
+            (0x80, 0x00, 0x80, 48_000),
+            (0x80, 0x80, 0x00, 48_000),
+            (0xC0, 0x40, 0x40, 48_000),
+            (0x60, 0x00, 0xFF, 48_000),
+            (0x80, 0x40, 0x80, 44_100),
+            (0x80, 0x40, 0x80, 96_000),
+        ];
+        for (decay, damp, size, rate) in cases {
+            let settings = Settings {
+                decay,
+                damp,
+                size,
+                ..Settings::DEFAULT
+            };
+            let said = tail(settings, rate).unwrap();
+            assert_eq!(said.seconds[0], said.seconds[1]);
+            let mut space = space(settings, rate);
+            let ratios = measure::ratios(said, |x| space.process([x, x]), rate);
+            for (ratio, hertz) in ratios.iter().zip(TAIL_HZ) {
+                assert!(
+                    (ratio - 1.0).abs() < 0.1,
+                    "{decay:02X} {damp:02X} {size:02X} at {rate}, {hertz} Hz: {said:?} measured {ratio}"
+                );
+            }
+        }
+        // Its longest still dies away, and a bigger tank rings longer.
+        let longest = tail(settings(0xFF), RATE).unwrap();
+        assert!(longest.seconds[0].is_finite());
+        let size = |size| {
+            tail(
+                Settings {
+                    size,
+                    ..settings(0x80)
+                },
+                RATE,
+            )
+            .unwrap()
+            .seconds[0]
+        };
+        assert!(size(0xFF) > size(0x40) * 2.0);
     }
 }

@@ -532,6 +532,12 @@ pub struct LiveValues {
     pub inserts: [[u8; MAX_PARAMS]; INSERTS],
     /// How far each slot's compressor or limiter is turning down, in dB, for a meter.
     pub reduction: [f32; INSERTS],
+    /// How far each slot's low-pass gate is open, its level and cutoff from 0 to 1, for the FX
+    /// page's zoom to draw its curve (decision 333): none for any other effect.
+    pub openings: [Option<(f32, f32)>; INSERTS],
+    /// The note the slots follow, with the track's `Pitch`, as a MIDI note: middle C before the
+    /// track's first, for the zoom to draw a resonator's, comb's or vowel filter's curve at.
+    pub note: f32,
     /// Whether each slot is switched out as it's heard, a step's lock of it included.
     pub bypassed: [bool; INSERTS],
     /// The highest level of each side since the last report, right after the trim and before the
@@ -580,6 +586,8 @@ impl Default for LiveValues {
             machine: [0; MAX_MACHINE_SETTINGS],
             inserts: Default::default(),
             reduction: Default::default(),
+            openings: Default::default(),
+            note: 60.0,
             bypassed: Default::default(),
             after_trim: Default::default(),
             mods: Default::default(),
@@ -2196,6 +2204,8 @@ impl TrackState {
                 values
             }),
             reduction: std::array::from_fn(|slot| self.inserts[slot].reduction()),
+            openings: std::array::from_fn(|slot| self.inserts[slot].opening()),
+            note: self.inserts[0].note(),
             bypassed: self.bypassed,
             // Taken, as it's the highest since it last was, by `Engine::take_after_trim`, which the
             // report fills this in from.

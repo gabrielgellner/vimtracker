@@ -32,6 +32,7 @@ use vt_model::insert::Spring as Settings;
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::tail::{self, Complex, TAIL_HZ, Tail};
 use crate::rng::Pcg32;
 
 /// How often what's slow to work out is worked out again, in frames, as Surge's block is.
@@ -286,6 +287,149 @@ enum Knock {
     Done,
 }
 
+/// How long it's set to ring, in seconds, for `Decay` and `Size` from 0 to 1, as Surge's: the
+/// loop's feedback is set for this over the loop's delay alone.
+fn t60(decay: f32, size: f32) -> f32 {
+    let correction = 0.7 * (1.0 - size * size);
+    LOW_T60 * (HIGH_T60 / LOW_T60).powf(0.95 * decay - correction)
+}
+
+/// The loop's delay without its wander, in frames, at a size from 0 to 1.
+#[inline]
+fn loop_frames(size: f32, rate: u32) -> f32 {
+    let rate = rate as f32;
+    LOOP_FRAMES * rate / TUNING_RATE + size * LOOP_SECONDS_PER_SIZE * rate
+}
+
+/// Each all-pass's delay, in frames, at a size.
+#[inline]
+fn allpass_frames(size: f32, rate: u32) -> f32 {
+    (ALLPASS_MS + ALLPASS_MS_PER_SIZE * size) / 1000.0 * rate as f32
+}
+
+/// How much the all-passes spread, Surge's `apfG`, for `Spin` from 0 to 1.
+#[inline]
+fn spread(spin: f32) -> f32 {
+    0.5 - 0.4 * spin
+}
+
+/// How far back a reflection is read, in frames, at a size: never closer than two frames, so
+/// the Lagrange read stays on what's been written.
+#[inline]
+fn reflection_frames(seconds: f32, size: f32, rate: u32) -> f32 {
+    (seconds * size * rate as f32).max(2.0)
+}
+
+/// How much of the reflections comes back, before each dies away with the tank, for `Reflect` and
+/// `Size`.
+fn skew(reflect: f32, size: f32) -> f32 {
+    0.95 * reflect * reflect * 0.23 * (0.735 + 0.235 * size)
+}
+
+/// The low-pass on what comes out, for `Damp`.
+fn damping_tpt(damp: f32, rate: u32) -> Tpt {
+    let hertz = DAMP_HZ.1 * (DAMP_HZ.0 / DAMP_HZ.1).powf(1.0 - damp);
+    Tpt::new(hertz.min(rate as f32 * 0.45), rate)
+}
+
+/// The reflections' shelf, for `Damp`.
+fn shelf(damp: f32, rate: u32) -> Shelf {
+    let db = SHELF_DB.0 + (SHELF_DB.1 - SHELF_DB.0) * damp;
+    Shelf::new(1.0, 10_f32.powf(db / 20.0), SHELF_HZ, rate)
+}
+
+/// How a spring's tail dies away at its settings and a rate, for a drawing, with no `Chaos` and
+/// no knock. Each side is one loop: through the DC blocker, sixteen nested all-passes, the
+/// reflections taken away, the low-pass, and back through sixteen more and the springs' delay,
+/// fed back by as much as Surge's `Decay` sets for the delay alone. The all-passes keep all of it
+/// but hold it back longer than the delay, and by different amounts at each frequency, so the
+/// tail is the loop's as `tail::loop_seconds` works it out, and rings longer than `Decay`'s own
+/// seconds. `Chaos` moves the delay by up to 7%, and the feedback with it, so it's left out.
+pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
+    let share = |value: u8| f32::from(value) / 255.0;
+    let (size, damp) = (share(settings.size), share(settings.damp));
+    let frames = loop_frames(size, rate);
+    let t60 = t60(share(settings.decay), size);
+    let dies = |frames: f32| 0.001_f32.powf(frames / (t60 * rate as f32));
+    let feedback = f64::from(dies(frames));
+    let skew = skew(share(settings.reflect), size);
+    let reflections = REFLECTION_SECONDS.map(|seconds| reflection_frames(seconds, size, rate));
+    let gains = reflections.map(|frames| f64::from(dies(frames) * skew));
+    let shelf = shelf(damp, rate);
+    let (dc, damping) = (Tpt::new(DC_HZ, rate), damping_tpt(damp, rate));
+    let (whole, alpha) = thiran(allpass_frames(size, rate));
+    let (whole, alpha) = (whole as f64, f64::from(alpha));
+    let g = f64::from(spread(share(settings.spin)));
+    let response = |omega: f64| {
+        let z1 = Complex::delay(omega, 1.0);
+        // Thiran's read, and a nested all-pass with it as both its delays.
+        let read = Complex::delay(omega, whole)
+            .times(z1.add(Complex(alpha, 0.0)))
+            .over(Complex::ONE.add(z1.scale(alpha)));
+        let allpass = |delayed: Complex, g: f64| {
+            delayed
+                .add(Complex(-g, 0.0))
+                .over(Complex::ONE.add(delayed.scale(-g)))
+        };
+        let chain = |g: f64| {
+            let stage = allpass(read.times(allpass(read, g)), g);
+            (0..STAGES).fold(Complex::ONE, |chain, _| chain.times(stage))
+        };
+        let lagrange = |frames: f32| {
+            let whole = frames as usize - 1;
+            let d = f64::from(frames - whole as f32);
+            let (d1, d2, d3) = (d - 1.0, d - 2.0, d - 3.0);
+            let weights = [
+                -d1 * d2 * d3 / 6.0,
+                d * d2 * d3 * 0.5,
+                -d * d1 * d3 * 0.5,
+                d * d1 * d2 / 6.0,
+            ];
+            weights
+                .iter()
+                .enumerate()
+                .fold(Complex(0.0, 0.0), |sum, (at, weight)| {
+                    sum.add(Complex::delay(omega, (whole + at) as f64).scale(*weight))
+                })
+        };
+        // A state-variable filter's high-pass and low-pass at a Q of 1/√2.
+        let svf = |tpt: Tpt| {
+            let s = Complex(0.0, (omega / 2.0).tan() / f64::from(tpt.g));
+            let under = s
+                .times(s)
+                .add(s.scale(std::f64::consts::SQRT_2))
+                .add(Complex::ONE);
+            (s.times(s).over(under), Complex::ONE.over(under))
+        };
+        let taps = reflections.map(lagrange);
+        let all = taps
+            .iter()
+            .fold(Complex(0.0, 0.0), |sum, tap| sum.add(*tap));
+        let reflected = taps
+            .iter()
+            .zip(gains)
+            .fold(Complex(0.0, 0.0), |sum, (tap, gain)| {
+                sum.add(tap.add(all.scale(-0.5)).scale(gain / 4.0))
+            })
+            .times(
+                Complex(f64::from(shelf.b0), 0.0)
+                    .add(z1.scale(f64::from(shelf.b1)))
+                    .over(Complex::ONE.add(z1.scale(f64::from(shelf.a1)))),
+            );
+        chain(g)
+            .times(svf(dc).0)
+            .over(Complex::ONE.add(reflected))
+            .times(svf(damping).1)
+            .times(z1)
+            .times(chain(-g))
+            .times(lagrange(frames))
+            .scale(-feedback)
+    };
+    let seconds = TAIL_HZ
+        .map(|hertz| tail::loop_seconds(hertz, rate, |omega| tail::kept_and_held(omega, response)));
+    Some(Tail { pre: 0.0, seconds })
+}
+
 /// The stereo spring reverb.
 #[derive(Debug, Clone)]
 pub struct Spring {
@@ -431,13 +575,6 @@ impl Spring {
         self.knocked && self.knock == Knock::Ready
     }
 
-    /// The loop's delay without its wander, in frames, at a size.
-    #[inline]
-    fn loop_frames(&self, size: f32) -> f32 {
-        let rate = self.rate as f32;
-        LOOP_FRAMES * rate / TUNING_RATE + size * LOOP_SECONDS_PER_SIZE * rate
-    }
-
     /// A random number from 0 to 1.
     fn random(&mut self) -> f32 {
         (f64::from(self.rng.next_u32()) / 4_294_967_296.0) as f32
@@ -458,10 +595,9 @@ impl Spring {
             self.knock = Knock::Ready;
         }
 
-        let correction = 0.7 * (1.0 - size * size);
-        let t60 = LOW_T60 * (HIGH_T60 / LOW_T60).powf(0.95 * self.decay.value - correction);
+        let t60 = t60(self.decay.value, size);
         // The wander glides to a new place each block, as Surge's linear smoother does.
-        let frames = self.loop_frames(size);
+        let frames = loop_frames(size, self.rate);
         let target = self.random() * frames * MOST_CHAOS;
         let glide = (CHAOS_GLIDE_SECONDS * rate) as u32;
         self.wander_step = (target - self.wander) / glide as f32;
@@ -472,21 +608,11 @@ impl Spring {
         self.feedback = dies(loop_frames);
 
         let damp = self.damp.value;
-        let hertz = DAMP_HZ.1 * (DAMP_HZ.0 / DAMP_HZ.1).powf(1.0 - damp);
-        self.damping_tpt = Tpt::new(hertz.min(rate * 0.45), self.rate);
-        let reflect = self.reflect.value;
-        let skew = 0.95 * reflect * reflect * 0.23 * (0.735 + 0.235 * size);
-        self.reflection_gains =
-            REFLECTION_SECONDS.map(|seconds| dies(self.reflection_frames(seconds, size)) * skew);
-        let db = SHELF_DB.0 + (SHELF_DB.1 - SHELF_DB.0) * damp;
-        self.shelf = Shelf::new(1.0, 10_f32.powf(db / 20.0), SHELF_HZ, self.rate);
-    }
-
-    /// How far back a reflection is read, in frames, at a size: never closer than two frames, so
-    /// the Lagrange read stays on what's been written.
-    #[inline]
-    fn reflection_frames(&self, seconds: f32, size: f32) -> f32 {
-        (seconds * size * self.rate as f32).max(2.0)
+        self.damping_tpt = damping_tpt(damp, self.rate);
+        let skew = skew(self.reflect.value, size);
+        self.reflection_gains = REFLECTION_SECONDS
+            .map(|seconds| dies(reflection_frames(seconds, size, self.rate)) * skew);
+        self.shelf = shelf(damp, self.rate);
     }
 
     /// The knock's next frame: a half sine, two high.
@@ -509,7 +635,7 @@ impl Spring {
     #[inline]
     fn reflected(&mut self, side: usize, size: f32) -> f32 {
         let taps: [f32; 4] = std::array::from_fn(|at| {
-            let frames = self.reflection_frames(REFLECTION_SECONDS[at], size);
+            let frames = reflection_frames(REFLECTION_SECONDS[at], size, self.rate);
             self.reflections.lagrange(side, self.write, frames)
         });
         let sum = taps.iter().sum::<f32>() * (-2.0 / 4.0);
@@ -538,7 +664,7 @@ impl Spring {
         self.reflect.next(self.smoothing);
         self.chaos.next(self.smoothing);
         // The all-passes' spread moves every frame, as a step in it clicks.
-        self.spread = 0.5 - 0.4 * self.spin.next(self.smoothing);
+        self.spread = spread(self.spin.next(self.smoothing));
         if self.countdown == 0 {
             self.update();
             self.countdown = BLOCK;
@@ -550,8 +676,8 @@ impl Spring {
         }
         let size = self.size_now;
         let chaos = self.chaos.value;
-        let loop_frames = self.loop_frames(size) + chaos * chaos * chaos * self.wander;
-        let allpass_frames = (ALLPASS_MS + ALLPASS_MS_PER_SIZE * size) / 1000.0 * self.rate as f32;
+        let loop_frames = loop_frames(size, self.rate) + chaos * chaos * chaos * self.wander;
+        let allpass_frames = allpass_frames(size, self.rate);
         self.write = self.write.wrapping_sub(1);
         let knock = self.knock_next();
 
@@ -1029,6 +1155,50 @@ mod tests {
         spring.clear();
         for _ in 0..RATE {
             assert_eq!(spring.process([0.0, 0.0]), [0.0, 0.0]);
+        }
+    }
+
+    #[test]
+    fn its_tail_falls_as_fast_as_a_click_through_it_measures() {
+        // Each frequency's modes fall at their own rate, and the tail is what a band of them
+        // measures: much longer than `Decay`'s own seconds, which Surge sets for the springs'
+        // delay alone. The all-passes spread a click out into a chirp over a fifth of a second
+        // or so, which slows the start of a short tail's fall. Seen: within 7%, and 0.13 s for
+        // the shortest, 18% of it.
+        use crate::dsp::effects::tail::measure;
+        let cases = [
+            (0x40, 0x00, 0x80, 0x80, 48_000),
+            (0x80, 0x00, 0x80, 0x80, 48_000),
+            (0xC0, 0x00, 0x80, 0x80, 48_000),
+            (0x80, 0x80, 0x00, 0x00, 48_000),
+            (0xC0, 0xFF, 0xFF, 0xFF, 48_000),
+            (0xE0, 0x40, 0x80, 0x40, 48_000),
+            (0x80, 0x80, 0xC0, 0x80, 44_100),
+            (0x80, 0x80, 0x40, 0x80, 96_000),
+        ];
+        for (decay, damp, size, spin, rate) in cases {
+            let settings = Settings {
+                decay,
+                damp,
+                size,
+                spin,
+                ..Settings::DEFAULT
+            };
+            let said = tail(settings, rate).unwrap();
+            let mut spring = Spring::new(rate);
+            spring.follow(settings);
+            spring.settle();
+            // Quiet, so the loop's clip leaves it as it is.
+            let ratios = measure::ratios(said, |x| spring.process([x * 1e-3; 2]), rate);
+            for ((ratio, hertz), seconds) in ratios.iter().zip(TAIL_HZ).zip(said.seconds) {
+                let off = (ratio - 1.0).abs();
+                assert!(
+                    off < 0.1 || off * seconds < 0.2,
+                    "{decay:02X} {damp:02X} {size:02X} {spin:02X} at {rate}, {hertz} Hz: \
+                     {said:?} measured {ratio}"
+                );
+            }
+            assert!(said.seconds[0] > t60(f32::from(decay) / 255.0, f32::from(size) / 255.0));
         }
     }
 }

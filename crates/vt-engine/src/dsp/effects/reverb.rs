@@ -23,6 +23,7 @@
 use vt_model::insert::Reverb as Settings;
 
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::tail::{self, Complex, TAIL_HZ, Tail};
 use crate::dsp::filters::filter::{Coefficients, Trim};
 
 /// The rate the line lengths and damping are written for.
@@ -41,6 +42,59 @@ const MOST_DAMPING: f32 = 0.1;
 const LONGEST_PRE: f32 = 0.25;
 /// How fast the two slow wobbles go, in hertz.
 const WOBBLE_HERTZ: [f64; 2] = [0.5, 0.3];
+/// Every line's length at the tuning rate: the four diffusers, then each loop's two allpasses and
+/// its delay.
+const LENGTHS: [usize; 10] = [113, 162, 241, 399, 1653, 2038, 3411, 1913, 1663, 4782];
+/// Where the second loop's delay is read, at the tuning rate, and how far its wobble moves it.
+const SWING: [f32; 2] = [4680.0, 100.0];
+
+/// How a reverb's tail dies away at its settings and a rate, for a drawing. Its figure of eight is
+/// one loop: through each side's damping, two allpasses and a delay, kept by `Decay` on the way
+/// into each side. The allpasses keep all of it but hold each frequency back by their own amount,
+/// so the tail is the loop's as `tail::loop_seconds` works it out. The second loop's wobble
+/// moves its read by 2%, and the smear is in a diffuser, before the loop, so neither changes it.
+pub fn tail(settings: Settings, rate: u32) -> Option<Tail> {
+    let scale = rate as f32 / TUNING_RATE;
+    // Each line reads what was written a frame short of its length ago, and the second loop's
+    // delay reads at its swing.
+    let frames = |at: usize| f64::from((LENGTHS[at] as f32 * scale) as usize as f32 - 1.0);
+    let decay = f64::from(f32::from(settings.decay) / 255.0 * MOST_DECAY);
+    let damping = f64::from(damping_at(settings.damp, TUNING_RATE / rate as f32));
+    let swing = f64::from(SWING[0] * scale);
+    let response = |omega: f64| {
+        let allpass = |frames: f64, into: f64| {
+            let delayed = Complex::delay(omega, frames);
+            delayed
+                .add(Complex(-into, 0.0))
+                .over(Complex::ONE.add(delayed.scale(-into)))
+        };
+        let damped = Complex(damping, 0.0)
+            .over(Complex::ONE.add(Complex::delay(omega, 1.0).scale(damping - 1.0)));
+        let one = allpass(frames(4), -f64::from(DIFFUSION))
+            .times(allpass(frames(5), f64::from(DIFFUSION)))
+            .times(Complex::delay(omega, frames(6)));
+        let two = allpass(frames(7), f64::from(DIFFUSION))
+            .times(allpass(frames(8), -f64::from(DIFFUSION)))
+            .times(Complex::read(omega, swing));
+        one.times(two)
+            .times(damped)
+            .times(damped)
+            .scale(decay * decay)
+    };
+    let seconds = TAIL_HZ
+        .map(|hertz| tail::loop_seconds(hertz, rate, |omega| tail::kept_and_held(omega, response)));
+    Some(Tail {
+        pre: f32::from(settings.pre) / 255.0 * LONGEST_PRE,
+        seconds,
+    })
+}
+
+/// The damping one-pole's coefficient at a rate, for `Damp`, from its coefficient at the tuning
+/// rate.
+fn damping_at(damp: u8, rate_ratio: f32) -> f32 {
+    let at_tuning_rate = 1.0 - f32::from(damp) / 255.0 * (1.0 - MOST_DAMPING);
+    1.0 - (1.0 - at_tuning_rate).powf(rate_ratio)
+}
 
 /// One delay line's place in the shared buffer.
 #[derive(Debug, Clone, Copy)]
@@ -129,9 +183,8 @@ impl Reverb {
     /// Make a reverb for a sample rate.
     pub fn new(rate: u32) -> Self {
         let scale = rate as f32 / TUNING_RATE;
-        let lengths = [113, 162, 241, 399, 1653, 2038, 3411, 1913, 1663, 4782];
         let mut base = 0;
-        let lines = lengths.map(|length| {
+        let lines = LENGTHS.map(|length| {
             let line = Line {
                 base,
                 length: (length as f32 * scale) as usize,
@@ -154,7 +207,7 @@ impl Reverb {
                 [lines[7], lines[8], lines[9]],
             ],
             smear: [50.0 * scale, 100.0 * scale, 45.0 * scale],
-            swing: [4680.0 * scale, 100.0 * scale],
+            swing: SWING.map(|frames| frames * scale),
             damped: [0.0; 2],
             wobble: [1.0; 2],
             pre: vec![0.0; pre_frames],
@@ -191,8 +244,7 @@ impl Reverb {
         self.keep_time(frames);
         self.pre_frames.target = f32::from(settings.pre) / 255.0 * LONGEST_PRE * self.rate as f32;
         self.decay.target = f32::from(settings.decay) / 255.0 * MOST_DECAY;
-        let at_tuning_rate = 1.0 - f32::from(settings.damp) / 255.0 * (1.0 - MOST_DAMPING);
-        self.damping.target = 1.0 - (1.0 - at_tuning_rate).powf(self.rate_ratio);
+        self.damping.target = damping_at(settings.damp, self.rate_ratio);
         let rate = self.rate;
         let update = |slot: &mut Option<(u8, Coefficients)>, value: u8, on: bool| {
             if !on {
@@ -461,6 +513,78 @@ mod tests {
         reverb.clear();
         for _ in 0..RATE {
             assert_eq!(reverb.process([0.0, 0.0]), [0.0, 0.0]);
+        }
+    }
+
+    #[test]
+    fn its_tail_falls_as_fast_as_a_click_through_it_measures() {
+        // Each frequency's modes fall at their own rate, and the tail is what a band of them
+        // measures, so it's within the measurement's spread: the wobbles mix the modes as they
+        // go round, so long tails fall a little faster than worked out, and the diffusers spread
+        // a click's start over tens of milliseconds, so short dark ones a little slower. Seen:
+        // within 9%, and 15% for highs darkened hard.
+        use crate::dsp::effects::tail::measure;
+        let cases = [
+            (0x40, 0x00, 48_000),
+            (0x80, 0x00, 48_000),
+            (0xC0, 0x00, 48_000),
+            (0x80, 0x80, 48_000),
+            (0xC0, 0xFF, 48_000),
+            (0xE0, 0x40, 48_000),
+            (0x80, 0x40, 44_100),
+            (0x80, 0x40, 96_000),
+        ];
+        for (decay, damp, rate) in cases {
+            let settings = Settings {
+                decay,
+                damp,
+                ..settings(decay)
+            };
+            let said = tail(settings, rate).unwrap();
+            let mut reverb = reverb(settings, rate);
+            let ratios = measure::ratios(said, |x| reverb.process([x, x]), rate);
+            for (ratio, hertz) in ratios.iter().zip(TAIL_HZ) {
+                assert!(
+                    (ratio - 1.0).abs() < 0.18,
+                    "{decay:02X} {damp:02X} at {rate}, {hertz} Hz: {said:?} measured {ratio}"
+                );
+            }
+        }
+        // Darker damping takes the highs sooner, and leaves the lows.
+        let [open, dark] = [0x00, 0xFF].map(|damp| {
+            tail(
+                Settings {
+                    damp,
+                    ..settings(0xC0)
+                },
+                RATE,
+            )
+            .unwrap()
+            .seconds
+        });
+        assert!(dark[1] < open[1] * 0.5 && dark[0] > open[0] * 0.7);
+    }
+
+    #[test]
+    fn its_tail_starts_after_its_pre_delay() {
+        use crate::dsp::effects::tail::measure;
+        for pre in [0x00, 0x80, 0xFF] {
+            let settings = Settings {
+                pre,
+                ..Settings::DEFAULT
+            };
+            let said = tail(settings, RATE).unwrap();
+            let mut reverb = reverb(settings, RATE);
+            let response: Vec<f32> = (0..RATE as usize / 2)
+                .map(|at| reverb.process([if at == 0 { 1.0 } else { 0.0 }; 2])[0])
+                .collect();
+            // At once, through the diffusers and the loops, to a frame, as it reads between them.
+            let heard = measure::onset(&response, RATE);
+            assert!(
+                heard >= said.pre - 1.0 / RATE as f32 && heard < said.pre + 0.05,
+                "{pre:02X}: {heard} against {}",
+                said.pre
+            );
         }
     }
 }
