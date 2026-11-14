@@ -4,7 +4,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Clear, Paragraph};
+use ratatui::widgets::Paragraph;
 use vt_model::lfo::Shape as Wave;
 use vt_model::scale::Scale;
 use vt_model::shape::{Context, FillKind, GenParam, ShapeColumn, Where, World, written_from};
@@ -15,7 +15,7 @@ use crate::app::App;
 use crate::input::mode::Mode;
 use crate::shaping::ShapePanel;
 use crate::theme;
-use crate::views::widgets;
+use crate::views::widgets::popup;
 
 /// Room for eight notes in a `List`'s values.
 const WIDTH: u16 = 42;
@@ -81,14 +81,12 @@ fn progression(panel: &ShapePanel) -> String {
 pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     let rows = panel.rows();
     let context = panel.context();
-    let width = WIDTH.min(area.width);
-    let height = (rows.len() as u16 + AROUND_ROWS).min(area.height.saturating_sub(FROM_TOP));
-    let window = Rect {
-        x: area.x + area.width - width,
+    let below = Rect {
         y: area.y + FROM_TOP.min(area.height),
-        width,
-        height,
+        height: area.height.saturating_sub(FROM_TOP),
+        ..area
     };
+    let window = popup::top_right(below, WIDTH, rows.len() as u16 + AROUND_ROWS);
     let name = match panel.column {
         ShapeColumn::Note { .. } => "Note".to_owned(),
         ShapeColumn::Velocity => "Velocity".to_owned(),
@@ -246,20 +244,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         _ => "~ swap the ends",
     };
     lines.push(Line::styled(hint, theme::dim()));
-    frame.render_widget(Clear, window);
-    frame.render_widget(
-        Paragraph::new(lines).block(
-            widgets::window_border()
-                .style(theme::window())
-                // What it does: generate on an empty column, or reshape what's there.
-                .title(format!(" {} ", panel.verb()))
-                .title_bottom(if panel.live.is_some() {
-                    " Enter apply  L keep live  Esc cancel "
-                } else {
-                    " Enter keep  L keep live  Esc cancel "
-                })
-                .title_style(Style::new().add_modifier(Modifier::BOLD)),
-        ),
-        window,
-    );
+    let border = popup::border()
+        // What it does: generate on an empty column, or reshape what's there.
+        .title(format!(" {} ", panel.verb()))
+        .title_bottom(if panel.live.is_some() {
+            " Enter apply  L keep live  Esc cancel "
+        } else {
+            " Enter keep  L keep live  Esc cancel "
+        })
+        .title_style(Style::new().add_modifier(Modifier::BOLD));
+    let inside = popup::draw(frame, window, border);
+    frame.render_widget(Paragraph::new(lines), inside);
 }

@@ -3,11 +3,10 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
-use ratatui::widgets::{Clear, Paragraph};
+use ratatui::widgets::Paragraph;
 
 use crate::guides::Guide;
-use crate::theme;
-use crate::views::widgets;
+use crate::views::widgets::popup;
 
 /// The widest the window gets, since long lines are hard to read.
 const WIDTH: u16 = 100;
@@ -26,26 +25,16 @@ pub fn page(height: u16) -> usize {
 
 /// Draw the guide from a scroll position.
 pub fn draw(frame: &mut Frame, area: Rect, guide: Guide, scroll: usize) {
-    let width = WIDTH.min(area.width);
-    let window = Rect {
-        x: area.x + (area.width - width) / 2,
-        width,
-        ..area
-    };
+    let window = popup::centred(area, WIDTH, area.height);
     let lines: Vec<_> = guide
         .lines(text_width(area.width))
         .into_iter()
         .skip(scroll)
         .collect();
-    frame.render_widget(Clear, window);
-    frame.render_widget(
-        Paragraph::new(lines).block(
-            widgets::window_border()
-                .style(theme::window())
-                .title(format!(" {} ", guide.title()))
-                .title_bottom(" j k scroll  C-d C-u page  g G ends  ? guides  q close ")
-                .title_style(Style::new().add_modifier(Modifier::BOLD)),
-        ),
-        window,
-    );
+    let border = popup::border()
+        .title(format!(" {} ", guide.title()))
+        .title_bottom(" j k scroll  C-d C-u page  g G ends  ? guides  q close ")
+        .title_style(Style::new().add_modifier(Modifier::BOLD));
+    let inside = popup::draw(frame, window, border);
+    frame.render_widget(Paragraph::new(lines), inside);
 }

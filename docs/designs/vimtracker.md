@@ -814,6 +814,11 @@ built from, so a new page uses them rather than working out its layout again:
     cells.
 *   `image`: an image's placeholder rows, and the faint box round the track page's curves.
 *   `hint`: a window's hint along its border. `window_border`: the rounded border every window has.
+*   `popup`: a window over the screen, as the picker, the command line's list of matches, the
+    guides, the keys, the shape panel and the mapping view are: `popup::draw` clears its area and
+    draws `popup::border`, the window's border in the window's colours, giving the area inside;
+    `centred`, `top_left`, `top_right`, `bottom_right` and `above` say where it goes in an area,
+    never bigger than the area (#739).
 *   `toggle`: the switch glyph pair, `nf-fa-toggle_on` green and `nf-fa-toggle_off` faint, each
     before two plain spaces, three cells, for everything that's on or off (decisions 140, 157 and
     256): a device's switch, a two-state setting's value on the Sound, FX, Mod, sample and audio

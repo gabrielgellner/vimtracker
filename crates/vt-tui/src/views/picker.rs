@@ -11,16 +11,15 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use vt_model::tag::Source;
 
 use crate::explorer::{Icon, Purpose};
 use crate::glyphs;
 use crate::input::picker::{Focus, Picker, Row};
 use crate::theme;
-use crate::views::widgets;
 use crate::views::widgets::hint::{Switch, hint_line};
-use crate::views::widgets::image;
+use crate::views::widgets::{image, popup};
 
 /// The list's width, inside its border, at least and at most.
 const MIN_LIST_WIDTH: usize = 32;
@@ -81,14 +80,9 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
     };
     let preview_width = if preview { PREVIEW_WIDTH + 1 } else { 0 };
     // The search line, and the border all round.
-    let width = ((list_width + preview_width + 2) as u16).min(area.width);
-    let height = ((rows + 3) as u16).min(area.height);
-    let window = Rect {
-        x: area.x + (area.width - width) / 2,
-        y: area.y + (area.height - height) / 2,
-        width,
-        height,
-    };
+    let width = (list_width + preview_width + 2) as u16;
+    let height = (rows + 3) as u16;
+    let window = popup::centred(area, width, height);
     let mut title = vec![Span::styled(
         format!(" {} ", picker.title),
         Style::new().add_modifier(Modifier::BOLD),
@@ -110,15 +104,11 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
             theme::dim(),
         ));
     }
-    let mut block = widgets::window_border()
-        .style(theme::window())
-        .title(Line::from(title));
+    let mut border = popup::border().title(Line::from(title));
     if let Some(hint) = picker.shown_hint() {
-        block = block.title_bottom(self::hint(picker, hint));
+        border = border.title_bottom(self::hint(picker, hint));
     }
-    let inner = block.inner(window);
-    frame.render_widget(Clear, window);
-    frame.render_widget(block, window);
+    let inner = popup::draw(frame, window, border);
     let list_area = Rect {
         width: inner.width.min(list_width as u16),
         ..inner
@@ -171,28 +161,18 @@ pub fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: &mut Pi
         (GUTTER + columns.label + columns.meaning).clamp(MIN_MENU_WIDTH, MAX_LIST_WIDTH);
     let rows_shown = picker.items().len().clamp(1, MAX_MENU_ROWS);
     // The border all round, and a space inside it on the right.
-    let width = ((list_width + 3) as u16).min(area.width);
-    let bottom = status.bottom().saturating_sub(1);
-    let height = ((rows_shown + 2) as u16).min(bottom.saturating_sub(area.y));
-    let left = (column.saturating_sub(GUTTER + 1) as u16).min(area.width - width);
-    let window = Rect {
-        x: area.x + left,
-        y: bottom - height,
-        width,
-        height,
-    };
-    let block = widgets::window_border()
-        .style(theme::window())
-        .title(Line::from(vec![
-            Span::styled(
-                format!(" {} ", picker.title),
-                Style::new().add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(format!("{} ", picker.items().len()), theme::dim()),
-        ]));
-    let inner = block.inner(window);
-    frame.render_widget(Clear, window);
-    frame.render_widget(block, window);
+    let width = (list_width + 3) as u16;
+    let height = (rows_shown + 2) as u16;
+    let left = column.saturating_sub(GUTTER + 1) as u16;
+    let window = popup::above(area, status.bottom().saturating_sub(1), left, width, height);
+    let border = popup::border().title(Line::from(vec![
+        Span::styled(
+            format!(" {} ", picker.title),
+            Style::new().add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(format!("{} ", picker.items().len()), theme::dim()),
+    ]));
+    let inner = popup::draw(frame, window, border);
     picker.scroll_within(usize::from(inner.height));
     let lines = rows(
         picker,
