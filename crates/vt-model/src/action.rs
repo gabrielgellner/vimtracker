@@ -574,6 +574,22 @@ pub enum TrackControl {
 }
 
 impl TrackControl {
+    /// Every one, in the order they're declared.
+    pub const ALL: [Self; 12] = [
+        Self::Cutoff,
+        Self::Resonance,
+        Self::Pan,
+        Self::SendA,
+        Self::SendB,
+        Self::Drive,
+        Self::Punch,
+        Self::LowCut,
+        Self::HighCut,
+        Self::Pitch,
+        Self::VelocityDelta,
+        Self::Quantise,
+    ];
+
     /// The setting this is the base of, if steps can set it too.
     pub fn setting(self) -> Option<SettingId> {
         match self {
@@ -993,20 +1009,7 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .tracks
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?;
-            match control {
-                TrackControl::Cutoff => track.cutoff = *value,
-                TrackControl::Resonance => track.resonance = *value,
-                TrackControl::Pan => track.pan = *value,
-                TrackControl::SendA => track.send_a = (*value).min(MAX_LEVEL),
-                TrackControl::SendB => track.send_b = (*value).min(MAX_LEVEL),
-                TrackControl::Drive => track.drive = *value,
-                TrackControl::Punch => track.punch = *value,
-                TrackControl::LowCut => track.low_cut = *value,
-                TrackControl::HighCut => track.high_cut = *value,
-                TrackControl::Pitch => track.pitch = *value,
-                TrackControl::VelocityDelta => track.velocity_delta = *value,
-                TrackControl::Quantise => track.quantise = *value,
-            }
+            track.set_control(*control, *value);
             // At the top, a fine part goes.
             if let Some(id) = control.setting() {
                 track.set_fine(id, track.fine(id));
