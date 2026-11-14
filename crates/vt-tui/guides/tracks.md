@@ -303,7 +303,8 @@ the page's width, with its settings in the same places and bars nearly twice as 
 | `Reso`, `Comb` | Its curve at the note playing |
 | `Vowel` | Its curve |
 | `Delay` | Its repeats over time, left up and right down |
-| `Reverb`, `Plate`, `Spring`, `Space` | How its tail dies away |
+| `Reverb`, `Plate` | How its tail dies away |
+| `Spring`, `Space` | How its tail dies away |
 
 A `Comp`'s curve is square and 16 rows tall, and its meter as tall, 0 to 24 dB, with the last two
 bars of how far it turned down beside them. A `Distort`'s transfer curve, on `Soft`, `Hard`,
