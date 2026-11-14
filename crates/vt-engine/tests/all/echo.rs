@@ -2,8 +2,6 @@
 //! lock of `Rate` bends what's on the tape, `Sync` keeps time with the song, and golden renders of
 //! a few of its modes. When `VT_ECHO_DEMOS` names a folder, the demo test writes WAVs there to hear.
 
-mod support;
-
 use std::sync::Arc;
 
 use vt_engine::published::Published;
@@ -13,7 +11,7 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
