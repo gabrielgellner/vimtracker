@@ -17,9 +17,10 @@ use crate::step::Step;
 use super::{
     Acid, Bar, Bits, CellStart, Channel, DEFAULT_RATE, DEFAULT_RULE, Degrees, Division, Divisions,
     DrumPart, EUCLID_HITS, Edge, FillKind, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH,
-    MAX_FACTOR, MAX_LOOP, MAX_MUTATION, MAX_ORDER, MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN,
-    MIN_DEPTH, Mutations, Pink, Random, Ring, Shape, ShapeColumn, Source, VARIES, Values,
-    Variation, WAVES, WaveRate, Where, default_step, degree_count, degree_name, first_note,
+    MAX_FACTOR, MAX_LOOP, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION, MAX_ORDER, MAX_RING,
+    MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, MoveList, Moves, Mutations, Pink, Quality,
+    Random, Ring, Shape, ShapeColumn, Source, Tonnetz, TonnetzVoice, VARIES, Values, Variation,
+    WAVES, WaveRate, Where, default_step, degree_count, degree_name, first_note,
 };
 use super::{CHILD, CLUSTERS, MARKOV, Role, SHARE, STATES, World};
 
@@ -49,6 +50,9 @@ const MAX_NOTE_STEP: u8 = 24;
 const FACTOR_JUMP: i32 = 4;
 /// How far a large step moves a `Cells`' rule.
 const RULE_JUMP: i32 = 10;
+/// How far a large step moves a `Tonnetz`' weights and its loop.
+const WEIGHT_JUMP: i32 = 3;
+const LOOP_JUMP: i32 = 4;
 
 /// How many columns and rows a generator's settings take on the Gen page.
 pub const GEN_COLUMNS: usize = 4;
@@ -142,6 +146,8 @@ pub enum Choice {
     World(World),
     Role(Role),
     CellStart(CellStart),
+    Moves(Moves),
+    Voice(TonnetzVoice),
     Vary(u8),
 }
 
@@ -160,6 +166,8 @@ impl Choice {
             Self::World(rhythm) => rhythm.name().to_owned(),
             Self::Role(part) => part.name().to_owned(),
             Self::CellStart(start) => start.name().to_owned(),
+            Self::Moves(moves) => moves.name().to_owned(),
+            Self::Voice(voice) => voice.name().to_owned(),
             Self::Vary(passes) => vary_name(passes),
         }
     }
@@ -174,6 +182,8 @@ impl Choice {
             Self::World(rhythm) => Some(rhythm.description()),
             Self::Role(part) => Some(part.description()),
             Self::CellStart(start) => Some(start.description()),
+            Self::Moves(moves) => Some(moves.description()),
+            Self::Voice(voice) => Some(voice.description()),
             _ => None,
         }
     }
@@ -204,6 +214,8 @@ impl Choice {
                     cells.start = start;
                 }
             }
+            Self::Moves(moves) => shape.tonnetz.moves = moves,
+            Self::Voice(voice) => shape.tonnetz.voice = Some(voice),
             Self::Vary(passes) => shape.vary = passes,
         }
     }
@@ -228,6 +240,8 @@ pub enum Typing {
     Whole { signed: bool },
     /// A hex digit for each of the scale's degrees, from the root, kept with `Enter`.
     Weights,
+    /// The letters of a `Tonnetz`' moves, `P`, `L` and `R`, kept with `Enter`.
+    Moves,
 }
 
 /// How a setting's values read.
@@ -353,6 +367,18 @@ pub enum GenParam {
     Change,
     Ones,
     RingLength,
+    /// A `Tonnetz`' own: whether its first chord is major or minor, what a track writes of the
+    /// chords, where its moves come from, the list of them, each move's weight, the loop's length,
+    /// and whether it keeps to the scale.
+    Triad,
+    Voice,
+    Moves,
+    MoveList,
+    PWeight,
+    LWeight,
+    RWeight,
+    LoopLength,
+    InScale,
     /// A `Variation`'s own: how many rows before each row its next hangs on, and how far from
     /// the likeliest it may stray.
     Order,
@@ -401,7 +427,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 90] = [
+    pub const ALL: [Self; 99] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -464,6 +490,15 @@ impl GenParam {
         Self::Change,
         Self::Ones,
         Self::RingLength,
+        Self::Triad,
+        Self::Voice,
+        Self::Moves,
+        Self::MoveList,
+        Self::PWeight,
+        Self::LWeight,
+        Self::RWeight,
+        Self::LoopLength,
+        Self::InScale,
         Self::Order,
         Self::Temperature,
         Self::Flip,
@@ -559,6 +594,15 @@ impl GenParam {
             Self::Change => "change",
             Self::Ones => "ones",
             Self::RingLength => "length",
+            Self::Triad => "triad",
+            Self::Voice => "voice",
+            Self::Moves => "moves",
+            Self::MoveList => "list",
+            Self::PWeight => "p",
+            Self::LWeight => "l",
+            Self::RWeight => "r",
+            Self::LoopLength => "loop",
+            Self::InScale => "inscale",
             Self::Order => "order",
             Self::Temperature => "temperature",
             Self::Flip => "flip",
@@ -661,6 +705,15 @@ impl GenParam {
             Self::Change => "Change",
             Self::Ones => "Chance",
             Self::RingLength => "Length",
+            Self::Triad => "Triad",
+            Self::Voice => "Voice",
+            Self::Moves => "Moves",
+            Self::MoveList => "List",
+            Self::PWeight => "P",
+            Self::LWeight => "L",
+            Self::RWeight => "R",
+            Self::LoopLength => "Length",
+            Self::InScale => "Scale",
             Self::Order => "Order",
             Self::Temperature => "Temp",
             Self::Flip => "Flip",
@@ -714,7 +767,11 @@ impl GenParam {
             | Self::NoteLoop
             | Self::OctaveLoop
             | Self::AccentLoop
-            | Self::SlideLoop => Units::Count,
+            | Self::SlideLoop
+            | Self::PWeight
+            | Self::LWeight
+            | Self::RWeight
+            | Self::LoopLength => Units::Count,
             Self::Weights => Units::Weights,
             Self::Flip | Self::Keep => Units::Bits,
             Self::Step => Units::Step,
@@ -776,6 +833,11 @@ impl GenParam {
             | Self::Channel
             | Self::Bar
             | Self::CellStart
+            | Self::Triad
+            | Self::Voice
+            | Self::Moves
+            | Self::MoveList
+            | Self::InScale
             | Self::Vary => Units::Named,
         }
     }
@@ -794,6 +856,7 @@ impl GenParam {
                 | Self::Source
                 | Self::Values
                 | Self::Weights
+                | Self::MoveList
         )
     }
 
@@ -817,8 +880,11 @@ impl GenParam {
     /// `A+B`, or while the panel shapes several tracks, each taking its own channel, when it has
     /// no `Channel`; and its `Note` where it `generates`, as `Grids` has. A `Ring` makes its own
     /// rhythm from its register, so it has its ends, `Change`, `Chance` and `Length` and no
-    /// `Where`. Only a shape that draws from its seed has `Vary`, which a `Ring` hasn't, as it
-    /// runs on from pass to pass by itself.
+    /// `Where`. A `Tonnetz` has its first chord's root, `From`, and no `To`; its `Triad`, its
+    /// `Moves` and its `Scale`; its list of moves while it goes through them, and the moves'
+    /// weights while it draws them, with a loop's `Length` while it loops; and its `Voice` but
+    /// while the panel shapes several tracks, each taking its own. Only a shape that draws from its
+    /// seed has `Vary`, which a `Ring` hasn't, as it runs on from pass to pass by itself.
     pub fn exists_for(self, shape: &Shape, column: ShapeColumn, generates: bool) -> bool {
         let kind = shape.kind;
         let grids = kind == FillKind::Grids;
@@ -830,6 +896,7 @@ impl GenParam {
         let riff = acid && (generates || !shape.acid.keep);
         let rows = kind.has_where();
         let follow = kind == FillKind::Follow;
+        let tonnetz = kind == FillKind::Tonnetz;
         match self {
             Self::Fill => true,
             Self::Where => rows,
@@ -844,6 +911,7 @@ impl GenParam {
             Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
                 follow && shape.follow.mutation > 0
             }
+            Self::From if tonnetz => true,
             Self::From | Self::To => {
                 riff || matches!(
                     kind,
@@ -890,6 +958,11 @@ impl GenParam {
             Self::SnareDensity => density(DrumPart::Snare),
             Self::HatDensity => density(DrumPart::Hats),
             Self::Change | Self::Ones | Self::RingLength => kind == FillKind::Ring,
+            Self::Triad | Self::Moves | Self::InScale => tonnetz,
+            Self::Voice => tonnetz && shape.tonnetz.voice.is_some(),
+            Self::MoveList => tonnetz && shape.tonnetz.moves == Moves::List,
+            Self::PWeight | Self::LWeight | Self::RWeight => tonnetz && shape.tonnetz.draws(),
+            Self::LoopLength => tonnetz && shape.tonnetz.moves == Moves::Loop,
             Self::Order | Self::Temperature => kind == FillKind::Variation,
             Self::Flip => kind == FillKind::InvertBits,
             Self::Keep => kind == FillKind::MaskBits,
@@ -965,7 +1038,8 @@ impl GenParam {
     /// the shape has on its `column` are. `Grids` has the map and chaos first, then its part's
     /// density, and has no `Where`. A `Follow` has none either, so its `Mutation` and the kinds
     /// it may make take the third column and the fourth. `Acid`'s three are full, so its riff's
-    /// `Spread` and `Bias` take the fourth.
+    /// `Spread` and `Bias` take the fourth. A `Tonnetz` has its first chord and its voice, then
+    /// its moves, and its moves' weights in the fourth.
     pub fn grid(
         shape: &Shape,
         column: ShapeColumn,
@@ -1052,6 +1126,16 @@ impl GenParam {
                 [Some(From), Some(To), None],
                 [Some(Change), Some(Ones), Some(RingLength)],
             ],
+            FillKind::Tonnetz => {
+                let moves = match shape.tonnetz.moves {
+                    super::Moves::Loop => LoopLength,
+                    _ => MoveList,
+                };
+                [
+                    [Some(From), Some(Triad), Some(Voice)],
+                    [Some(Moves), Some(moves), Some(InScale)],
+                ]
+            }
             FillKind::Grids | FillKind::Divisions => unreachable!("laid out above"),
             FillKind::InvertBits => [[Some(Flip), None, None], none],
             FillKind::MaskBits => [[Some(Keep), None, None], none],
@@ -1089,6 +1173,7 @@ impl GenParam {
                 last = [Some(Mutation), Some(Repitch), Some(Shift)];
                 more = [Some(Retro), Some(Ratchet), Some(DropAdd)];
             }
+            FillKind::Tonnetz => more = [Some(PWeight), Some(LWeight), Some(RWeight)],
             _ => {}
         }
         [
@@ -1229,6 +1314,23 @@ impl GenParam {
     fn marbles_amount(self, place: Where) -> Option<u8> {
         let mut place = place;
         self.marbles_amount_mut(&mut place).map(|amount| *amount)
+    }
+
+    /// A `Tonnetz` move's weight, as its field.
+    fn weight_mut(self, tonnetz: &mut Tonnetz) -> Option<&mut u8> {
+        let at = match self {
+            Self::PWeight => 0,
+            Self::LWeight => 1,
+            Self::RWeight => 2,
+            _ => return None,
+        };
+        Some(&mut tonnetz.weights[at])
+    }
+
+    /// The same, read.
+    fn weight(self, tonnetz: Tonnetz) -> Option<u8> {
+        let mut tonnetz = tonnetz;
+        self.weight_mut(&mut tonnetz).map(|weight| *weight)
     }
 
     /// The settings a shape has on a column, in order.
@@ -1415,6 +1517,23 @@ impl GenParam {
             Self::Change => format!("{}%", shape.ring.change),
             Self::Ones => format!("{}%", shape.ring.chance),
             Self::RingLength => shape.ring.length.to_string(),
+            Self::Triad => shape.tonnetz.quality.name().to_owned(),
+            Self::Voice => shape
+                .tonnetz
+                .voice
+                .map_or("By track", TonnetzVoice::name)
+                .to_owned(),
+            Self::Moves => shape.tonnetz.moves.name().to_owned(),
+            Self::MoveList => shape.tonnetz.list.to_string(),
+            Self::PWeight | Self::LWeight | Self::RWeight => {
+                self.weight(shape.tonnetz).unwrap_or(0).to_string()
+            }
+            Self::LoopLength => match shape.tonnetz.length {
+                1 => "1 move".to_owned(),
+                moves => format!("{moves} moves"),
+            },
+            Self::InScale if shape.tonnetz.in_scale => "In scale".to_owned(),
+            Self::InScale => "Free".to_owned(),
             Self::Flip => format!("{:02X}", shape.bits.flip),
             Self::Keep => format!("{:02X}", shape.bits.keep),
             Self::Turn => match shape.bits.turn {
@@ -1468,13 +1587,18 @@ impl GenParam {
             | Self::Edge
             | Self::Masks
             | Self::Rows
-            | Self::Side => Typing::Toggled,
+            | Self::Side
+            | Self::Triad
+            | Self::InScale => Typing::Toggled,
+            Self::MoveList => Typing::Moves,
             Self::Part
             | Self::Channel
             | Self::Bar
             | Self::Rhythm
             | Self::Role
-            | Self::CellStart => Typing::Listed,
+            | Self::CellStart
+            | Self::Moves
+            | Self::Voice => Typing::Listed,
             Self::Axis | Self::Pitch => Typing::Named { list: false },
             Self::MapX
             | Self::MapY
@@ -1514,6 +1638,8 @@ impl GenParam {
             Self::Rhythm => World::ALL.into_iter().map(Choice::World).collect(),
             Self::Role => Role::ALL.into_iter().map(Choice::Role).collect(),
             Self::CellStart => CellStart::ALL.into_iter().map(Choice::CellStart).collect(),
+            Self::Moves => Moves::ALL.into_iter().map(Choice::Moves).collect(),
+            Self::Voice => TonnetzVoice::ALL.into_iter().map(Choice::Voice).collect(),
             Self::Vary => VARIES.into_iter().map(Choice::Vary).collect(),
             _ => return None,
         })
@@ -1544,6 +1670,8 @@ impl GenParam {
                 Choice::CellStart(start) => {
                     matches!(shape.place, Where::Cells(cells) if cells.start == start)
                 }
+                Choice::Moves(moves) => moves == shape.tonnetz.moves,
+                Choice::Voice(voice) => Some(voice) == shape.tonnetz.voice,
                 Choice::Vary(passes) => passes == shape.vary,
             })
     }
@@ -1578,6 +1706,8 @@ impl GenParam {
             | Self::Rhythm
             | Self::Role
             | Self::CellStart
+            | Self::Moves
+            | Self::Voice
             | Self::Vary => {
                 let choices = self.choices(context).unwrap_or_default();
                 if !choices.is_empty() {
@@ -1800,6 +1930,20 @@ impl GenParam {
                 let most = i32::from(MAX_RING);
                 shape.ring.length = moved(length, by(1, EUCLID_JUMP), 1, most) as u8;
             }
+            Self::Triad => shape.tonnetz.quality = shape.tonnetz.quality.other(),
+            Self::InScale => shape.tonnetz.in_scale = !shape.tonnetz.in_scale,
+            Self::MoveList => return Err("Type the moves with i, like P L R L"),
+            Self::PWeight | Self::LWeight | Self::RWeight => {
+                if let Some(weight) = self.weight_mut(&mut shape.tonnetz) {
+                    let most = i32::from(MAX_MOVE_WEIGHT);
+                    *weight = moved(i32::from(*weight), by(1, WEIGHT_JUMP), 0, most) as u8;
+                }
+            }
+            Self::LoopLength => {
+                let length = i32::from(shape.tonnetz.length);
+                let most = i32::from(MAX_MOVE_LOOP);
+                shape.tonnetz.length = moved(length, by(1, LOOP_JUMP), 1, most) as u8;
+            }
             Self::Flip => shape.bits.flip = moved_byte(shape.bits.flip, by(1, HEX_JUMP)),
             Self::Keep => shape.bits.keep = moved_byte(shape.bits.keep, by(1, HEX_JUMP)),
             Self::Turn => {
@@ -1920,6 +2064,17 @@ impl GenParam {
             Self::Change => shape.ring.change = Ring::default().change,
             Self::Ones => shape.ring.chance = Ring::default().chance,
             Self::RingLength => shape.ring.length = Ring::default().length,
+            Self::Triad => shape.tonnetz.quality = Quality::default(),
+            Self::Moves => shape.tonnetz.moves = Moves::default(),
+            Self::MoveList => shape.tonnetz.list = MoveList::default(),
+            Self::PWeight | Self::LWeight | Self::RWeight => {
+                let start = self.weight(Tonnetz::default());
+                if let (Some(weight), Some(start)) = (self.weight_mut(&mut shape.tonnetz), start) {
+                    *weight = start;
+                }
+            }
+            Self::LoopLength => shape.tonnetz.length = Tonnetz::default().length,
+            Self::InScale => shape.tonnetz.in_scale = false,
             Self::Flip => shape.bits.flip = Bits::default().flip,
             Self::Keep => shape.bits.keep = Bits::default().keep,
             Self::Turn => shape.bits.turn = Bits::default().turn,
@@ -1950,8 +2105,8 @@ impl GenParam {
                 }
             }
             // Which side of the coin a track is, so the other track of the two keeps its own, and
-            // which part of a rhythm it plays, so the others keep theirs.
-            Self::Side | Self::Role => {}
+            // which part of a rhythm or voice of a chord it plays, so the others keep theirs.
+            Self::Side | Self::Role | Self::Voice => {}
             Self::Rhythm => Choice::World(World::default()).apply(shape),
             Self::Rule => {
                 if let Where::Cells(cells) = &mut shape.place {
@@ -2182,6 +2337,22 @@ impl GenParam {
                 Ok(length) if (1..=MAX_RING).contains(&length) => shape.ring.length = length,
                 _ => return Err("Length runs from 1 to 16"),
             },
+            Self::MoveList => {
+                shape.tonnetz.list = MoveList::parse(text)
+                    .ok_or("Moves are P, L and R, up to 8 of them, like P L R L")?;
+            }
+            Self::PWeight | Self::LWeight | Self::RWeight => {
+                match (self.weight_mut(&mut shape.tonnetz), text.parse::<u8>()) {
+                    (Some(weight), Ok(typed)) if typed <= MAX_MOVE_WEIGHT => *weight = typed,
+                    _ => return Err("A weight runs from 0 to 9"),
+                }
+            }
+            Self::LoopLength => match text.parse::<u8>() {
+                Ok(length) if (1..=MAX_MOVE_LOOP).contains(&length) => {
+                    shape.tonnetz.length = length
+                }
+                _ => return Err("Length runs from 1 to 16"),
+            },
             Self::Quarters
             | Self::Eighths
             | Self::Sixteenths
@@ -2222,6 +2393,10 @@ impl GenParam {
             | Self::Channel
             | Self::Bar
             | Self::CellStart
+            | Self::Triad
+            | Self::Voice
+            | Self::Moves
+            | Self::InScale
             | Self::Vary => {}
             Self::MapX
             | Self::MapY
@@ -2295,6 +2470,12 @@ impl GenParam {
             Self::Order => (1, i32::from(MAX_ORDER)),
             Self::Temperature | Self::Change | Self::Ones => (0, 100),
             Self::RingLength => (1, i32::from(MAX_RING)),
+            Self::Triad | Self::InScale => (0, 1),
+            Self::Moves => (0, Moves::ALL.len() as i32 - 1),
+            Self::Voice => (0, TonnetzVoice::ALL.len() as i32 - 1),
+            Self::MoveList => return None,
+            Self::PWeight | Self::LWeight | Self::RWeight => (0, i32::from(MAX_MOVE_WEIGHT)),
+            Self::LoopLength => (1, i32::from(MAX_MOVE_LOOP)),
             Self::Step => (1, i32::from(longest_step(column))),
             Self::Depth => (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH)),
             Self::Spread => (0, i32::from(MAX_SPREAD)),
@@ -2387,6 +2568,13 @@ impl GenParam {
             Self::Change => i32::from(shape.ring.change),
             Self::Ones => i32::from(shape.ring.chance),
             Self::RingLength => i32::from(shape.ring.length),
+            Self::Triad => i32::from(shape.tonnetz.quality == Quality::Minor),
+            Self::InScale => i32::from(shape.tonnetz.in_scale),
+            Self::Moves => shape.tonnetz.moves.index() as i32,
+            Self::Voice => shape.tonnetz.voice?.index() as i32,
+            Self::MoveList => return None,
+            Self::PWeight | Self::LWeight | Self::RWeight => i32::from(self.weight(shape.tonnetz)?),
+            Self::LoopLength => i32::from(shape.tonnetz.length),
             Self::Phase => i32::from(shape.phase),
             Self::Values => return None,
             Self::Run => i32::from(shape.run),
@@ -2601,6 +2789,23 @@ impl GenParam {
             Self::Change => shape.ring.change = number as u8,
             Self::Ones => shape.ring.chance = number as u8,
             Self::RingLength => shape.ring.length = number as u8,
+            Self::Triad => {
+                shape.tonnetz.quality = if number != 0 {
+                    Quality::Minor
+                } else {
+                    Quality::Major
+                };
+            }
+            Self::InScale => shape.tonnetz.in_scale = number != 0,
+            Self::Moves => shape.tonnetz.moves = Moves::ALL[number as usize],
+            Self::Voice => shape.tonnetz.voice = Some(TonnetzVoice::ALL[number as usize]),
+            Self::MoveList => {}
+            Self::PWeight | Self::LWeight | Self::RWeight => {
+                if let Some(weight) = self.weight_mut(&mut shape.tonnetz) {
+                    *weight = number as u8;
+                }
+            }
+            Self::LoopLength => shape.tonnetz.length = number as u8,
             Self::Vary => shape.vary = VARIES[number as usize],
         }
     }
@@ -2780,6 +2985,7 @@ mod tests {
             variation: crate::shape::Variation::default(),
             divisions: crate::shape::Divisions::default(),
             ring: crate::shape::Ring::default(),
+            tonnetz: crate::shape::Tonnetz::default(),
         }
     }
 

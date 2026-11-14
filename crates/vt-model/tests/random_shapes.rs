@@ -39,6 +39,7 @@ fn shape(from: u8, to: u8, random: Random) -> Shape {
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
         ring: vt_model::shape::Ring::default(),
+        tonnetz: vt_model::shape::Tonnetz::default(),
     }
 }
 

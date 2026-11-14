@@ -86,7 +86,7 @@ nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Walk`, `Wave`, `Acid`, `Grids`, `Divisions`, `Ring` and more |
+| Fill | `Ramp`, `Random`, `Walk`, `Wave`, `Acid`, `Grids`, `Ring`, `Tonnetz` and more |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
@@ -533,6 +533,63 @@ from the seed and its number, so playing from bar 33 hears what playing to it
 would. On the Gen page, `Space g a` keeps the register as the pass just heard
 began: that pass then plays first, the ring runs on from there, and `Change`
 down to `0%` holds its loop, the Turing Machine's lock.
+
+### Chords on the Tonnetz
+
+`Tonnetz`, on the Note column only, writes a chord progression that walks the
+Tonnetz, the lattice of the twelve notes by fifths and thirds, after Ornament &
+Crime's Harrington 1200 and Automatonnetz. Each move keeps two notes of a major
+or minor triad and moves the third by a semitone or a tone:
+
+| Move | Does | C major to |
+|---|---|---|
+| `P` | Parallel: the third a semitone | C minor |
+| `L` | Leading-tone: major root down a semitone, minor fifth up | E minor |
+| `R` | Relative: major fifth up a tone, minor root down | A minor |
+
+Each undoes itself: `L` from E minor is C major again. The first row `Where`
+chooses plays the chord on `From`, and each row it chooses after plays the next
+chord, one move on, so `Where` is the progression's rhythm: `Every 4` is a chord
+a beat, and on a track at `1/2`, `All rows` is a chord each half note.
+
+| Row | Does |
+|---|---|
+| From | The first chord's root |
+| Triad | Whether the first chord is `Major` or `Minor` |
+| Voice | What the track writes: `Chord`, `Root`, `Low`, `Mid` or `High` |
+| Moves | `List`, as typed; `Random`, each by weight; `Loop`, a loop by weight |
+| List | The moves, typed with `i` as letters, like `plrl`, up to 8 |
+| P, L, R | Each move's weight, 0 to 9, for `Random` and `Loop` |
+| Length | How many moves a `Loop` draws before it goes round, 1 to 16 |
+| Scale | `Free`, or `In scale`: only moves that keep to the song's scale |
+
+The panel's last line names the first chords, as `C Cm G# Fm C# C#m A F#m` for
+`P L R L` from `C-3`.
+
+**On the Chord voice.** `Voice` `Chord` writes each row's root, within a
+tritone of `From`, and locks the voice's `Chord` to `M` or `m` in the first FX
+slot that's free, or the one that already locks it, so one track plays the whole
+progression; the row's other FX stay. On the `Chord` voice the panel starts on
+`Chord`, and on any other on `Root`, the roots alone, as a bass.
+
+**Across tracks.** `S` on three tracks at once gives each a voice of the triad
+in turn: `Low` from the first chord's root, `Mid` from its third and `High` from
+its fifth, in close position from `From`. All three walk from one seed, so they
+play one progression, and from chord to chord only the track whose note the move
+changes moves, by a semitone or a tone: the voice-leading is the Tonnetz's own.
+A voice stays within a tritone of where it started: a move that would take it
+further takes it an octave the other way, the one leap it makes, so a long walk
+keeps each track in its register. A fourth track takes `Low` again. `gl` on one
+track shows its own `Voice`.
+
+**In scale.** A move that would bring in a note outside the scale isn't taken: a
+`List` or a `Loop` goes on to its next move, and `Random` draws from the others;
+with none left, the chord holds. In a major or minor key that leaves `P` out, as
+it always brings a note from outside, and `L` and `R` walk round the key's six
+major and minor chords. With the scale off it's free either way.
+
+`Random` and `Loop` draw from the seed, so `r` rolls a new walk and they have
+`Vary`; a `List` draws nothing.
 
 ### On an empty column
 

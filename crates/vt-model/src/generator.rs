@@ -11,8 +11,8 @@ use crate::song::Song;
 use crate::scale::Scale;
 use crate::selection::StepRange;
 use crate::shape::{
-    Context, FillKind, GenCell, RowView, Shape, ShapeColumn, Source, copy_fx, is_empty, open_rows,
-    render_into,
+    Context, FillKind, GenCell, RowView, Shape, ShapeColumn, Source, TonnetzVoice, copy_fx,
+    is_empty, open_rows, render_into,
 };
 use crate::step::{FxCommand, FxSlot, Note, Step};
 
@@ -73,7 +73,8 @@ enum Owns {
     /// A note's velocity and gate as well as its pitch, as `Acid` writes its accents and slides
     /// there, and `Follow` copies them.
     Note,
-    /// Those and the row's FX, for a `Follow` copying them too, or ratcheting some rows.
+    /// Those and the row's FX, for a `Follow` copying them too, or ratcheting some rows, and a
+    /// `Tonnetz` locking each row's chord.
     NoteFx,
     /// A note's velocity, gate and nudge, for `Divisions`, which nudges its triplets off the
     /// rows.
@@ -96,6 +97,8 @@ fn owns(shape: &Shape) -> Owns {
         FillKind::Divisions => Owns::Timed,
         // A row plays or rests by the register, so its note, velocity and gate are the ring's.
         FillKind::Ring => Owns::Note,
+        // On the `Chord` voice, a row's chord is locked in one of its FX slots.
+        FillKind::Tonnetz if shape.tonnetz.voice == Some(TonnetzVoice::Chord) => Owns::NoteFx,
         _ => Owns::Cell,
     }
 }

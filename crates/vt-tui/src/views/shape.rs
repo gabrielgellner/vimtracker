@@ -6,6 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use vt_model::lfo::Shape as Wave;
+use vt_model::scale::Scale;
 use vt_model::shape::{Context, FillKind, GenParam, ShapeColumn, Where, World, written_from};
 use vt_model::speed::Speed;
 use vt_model::step::Note;
@@ -52,6 +53,30 @@ fn spans(panel: &ShapePanel, context: &Context, row: GenParam) -> Vec<Span<'stat
     spans
 }
 
+/// A `Tonnetz`' first chords as the panel names them, `C Cm G# Fm`, and across tracks that each
+/// plays a voice of them.
+fn progression(panel: &ShapePanel) -> String {
+    let scale = match panel.column {
+        ShapeColumn::Note { scale, .. } => scale,
+        _ => Scale::default(),
+    };
+    let shape = panel.shape_of(0);
+    let across = panel.parts.len() > 1;
+    let count = if across { 5 } else { 8 };
+    let names: Vec<String> = shape
+        .tonnetz
+        .chords(shape.from, shape.seed, scale, count)
+        .into_iter()
+        .map(|chord| chord.name())
+        .collect();
+    let names = names.join(" ");
+    if across {
+        format!("A voice a track: {names}")
+    } else {
+        names
+    }
+}
+
 /// Draw the panel.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     let rows = panel.rows();
@@ -82,7 +107,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         let shape = panel.shape_of(nth);
         let written = written_from(steps, part.range, part.column, &shape, source);
         // A `Follow`, `Grids`, `Divisions`, `Ring` and a `Variation` write every row, rests and
-        // all, so their count is of the notes, and `Multiply`'s of the rhythm it leaves.
+        // all, so their count is of the notes, and `Multiply`'s of the rhythm it leaves. A
+        // `Tonnetz` writes the rows its `Where` chooses, as other fills do.
         filled += if matches!(
             shape.kind,
             FillKind::Follow
@@ -155,6 +181,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     };
     let speed = panel.speed();
     let cells = panel.shape.evolves();
+    let chords = if panel.shape.kind == FillKind::Tonnetz {
+        progression(panel)
+    } else {
+        String::new()
+    };
     let hint = match panel.shape.kind {
         // Each pair of tracks shares one coin (decision 321).
         _ if pairs && panel.shape.kind.has_where() => "Each row goes to one track or the other",
@@ -200,6 +231,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         FillKind::Ring if panel.shape.ring.kept.is_some() => "Its loop kept  r starts a new one",
         FillKind::Ring if app.mode == Mode::Shape => "r a new ring  L runs it on each pass",
         FillKind::Ring => "Bit 0 plays, the byte is the pitch",
+        FillKind::Tonnetz => chords.as_str(),
         FillKind::Variation => match &too_few {
             Some(why) => why.as_str(),
             None if app.mode == Mode::Shape => "r another  Order 3 copies closely",

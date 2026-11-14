@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds twenty-one of them out of what vimtracker already has, each as a
+let you steer. This chapter builds twenty-two of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -30,6 +30,7 @@ there are no samples to find.
 | `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
 | `clock-multiplier` | 4ms' Shuffling Clock Multiplier | `Space o` rotating a group's speeds, and a live `CHA 00` column as `Skip` |
 | `cells` | dan derks' *less concepts* | `S`'s `Cells`: Wolfram's rules, a row a cell or a track a cell, a generation a pass |
+| `tonnetz` | Ornament & Crime's Harrington 1200 and Automatonnetz | `S`'s `Tonnetz`: chords by P, L and R, on the `Chord` voice and a voice a track |
 | `turing-machine`, again | Nonlinear Circuits' Sloth, Ornament & Crime's Low-rents | A `Lorenz` LFO on `Pitch in scale`: a tune that drifts and never goes round |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
@@ -1530,6 +1531,95 @@ row.
     `Rule` takes that track alone to another automaton, as each is a generator of its own.
 *   `Space g a` keeps the rows as last heard, as plain notes, to edit by hand.
 
+## The Tonnetz
+
+The Tonnetz, Euler's "tone network", lays the twelve notes out in a lattice: fifths one way,
+major thirds another, minor thirds the third, so every triangle is a major or minor triad. Hugo
+Riemann's harmonic theory, taken up by David Lewin and Richard Cohn as neo-Riemannian theory,
+moves between neighbouring triangles by three moves, each keeping two of a triad's notes and
+moving the third by a semitone or a tone:
+
+| Move | C major becomes | What moves |
+|---|---|---|
+| `P`, parallel | C minor | The third, E to E♭ |
+| `L`, leading-tone exchange | E minor | The root, C down to B |
+| `R`, relative | A minor | The fifth, G up to A |
+
+Chains of them make the progressions of late Romantic and film music: `P` and `L` in turn go
+round six chords and back, `P` and `R` round eight, and `L` and `R` walk the circle of fifths a
+third at a time. Ornament & Crime's Harrington 1200 applies them to a triad on triggers, and its
+Automatonnetz walks a grid of them as a vector sequencer, after Noise Engineering's Tonnetz
+Sequent; Live 12's Stacks writes chord progressions in a scale.
+
+`Tonnetz` is this: from the chord on `From`, each row `Where` chooses plays the next chord, one
+move on. The moves are a list you type, such as `P L R L`, going round, or drawn from the seed by
+a weight for each, each row afresh or as a loop of so many. `Voice` says what a track writes of
+each chord: on the `Chord` voice the root with the chord locked, and across three tracks a voice
+of the triad each, so plain mono voices play the progression between them, one note moving at a
+time.
+
+**How the song does it.** One walk, `L R L R R L R L` from C major in G major, played three
+ways. Track 1, a pad on the `Chord` voice at `1/2`, has a chord each half note: each row is the
+chord's root with `CHRD` locked to `M` (`0A`) or `m` (`03`) in its first FX column.
+Tracks 2 to 4, plucked `String`s, are the three voices across, each on a Euclidean eight of 64
+sixteenths, the middle voice two rows and the top four rows after the low, so each chord rises
+as an arpeggio. Track 5, a `VA` bass at `1/2`, plays the roots. A kick and hats keep time.
+[`song.ron`](songs/tonnetz/song.ron)
+
+```text
+         C    Em   G    Bm   D    Bm   G    Em
+CH       C-3  E-3  G-2  B-2  D-3  B-2  G-2  E-3
+CHRD     0A   03   0A   03   0A   03   0A   03
+HI       G-4  G-4  G-4  F#4  F#4  F#4  G-4  G-4
+MD       E-4  E-4  D-4  D-4  D-4  D-4  D-4  E-4
+LO       C-4  B-3  B-3  B-3  A-3  B-3  B-3  B-3
+BS       C-1  E-1  G-0  B-0  D-1  B-0  G-0  E-1
+```
+
+Read the three strings across: from each chord to the next, one of them moves, by a semitone or
+a tone, and the other two hold. `L` takes C's root down to B, `R` takes E minor's root down to D,
+`L` again takes G's root down to F♯, and the walk climbs to D major and comes back down the same
+way, so the last chord leads into the first. The walk keeps to G major by itself: all eight are
+the key's chords, IV, vi, I, iii and V.
+
+**Build it.**
+
+1.  `:set scale=major`, `:set root=g` and `:bpm 92`.
+2.  The pad, track 1: `Space 5`, `K` `chord` `Enter`, `:name CH`, and on the Play device
+    `/speed` `Enter`, `=` up to `1/2`. In the phrase view, `:len 8`, a chord each half note
+    for four bars, then `vG` on the Note column and `S`. On `Fill`, `K` `/tonnetz` `Enter`: on the `Chord` voice its `Voice` is
+    `Chord`, and the last line names the chords, `C Cm G# Fm C# C#m A F#m` for `P L R L`.
+3.  `From` `i` `c3` `Enter`; `List` `i` `lrlrrlrl` `Enter`, and the last line says
+    `C Em G Bm D Bm G Em`; `Scale` `i` for `In scale`. `L` keeps it live.
+4.  The strings: tracks 2 to 4 `K` `string` `Enter`, named `LO`, `MD` and `HI`, each with a
+    phrase of 64 rows, `:len 64` (see **The loop**).
+5.  On track 2, `Space 3`, `vG` on the Note column, `W` twice to reach track 4, and `S`. `Fill`
+    `Tonnetz`: the last line starts `A voice a track`. `From` `c4`, `List` `lrlrrlrl`, `Scale`
+    `In scale`, `Where` `Euclid` with `Hits` `8`, and `L`: each track a generator of its own,
+    `Low`, `Mid` and `High`.
+6.  The arpeggio: on track 3, `gl`, `Rotate` `2`, `L`; on track 4, `Rotate` `4`.
+7.  Track 5, the bass: `K` `va` `Enter`, `:name BS`, `Speed` `1/2` and `:len 8`, then `vG`,
+    `S`, `Tonnetz`, `From` `c1`, the same list and `Scale`, and `L`; its `Voice` is `Root`, as
+    it isn't a `Chord` voice. Then a `Kick` on every beat and a `Hat` on the off-beats.
+
+The finished song also sets the pad's wave, the sends and the levels.
+
+**Try next.** Each track's generator is its own, so a change on one leaves the others on the
+old walk: solo the track to hear it alone, or make the same change on each.
+
+*   On the pad, `gl` and `List` `pl`: the hexatonic cycle, C, C minor, A♭, A♭ minor, E, E
+    minor and back. With `Scale` `In scale` the `P`s are left out, so it rocks between C and E
+    minor; `Scale` `Free` lets them through.
+*   `List` `pr`, free: the octatonic cycle, eight chords a minor third apart in pairs, round to
+    C again.
+*   `Moves` `Random`: each chord a move drawn by the weights `P`, `L` and `R`, and `r` rolls
+    another walk. `Vary` `Each pass` walks anew every time round. `Loop` with `Length` 3 draws
+    three moves and goes round them.
+*   `Triad` `Minor` starts from C minor, and the walk follows from there.
+*   Across the strings, `S` again with `Where` `Every` `4`: a chord each beat, all three struck
+    together, and over 64 rows the walk goes four times as far.
+*   `Space g a` keeps any of them as plain notes and locks, to edit by hand.
+
 ## Strange attractors
 
 Nonlinear Circuits' Sloth is a chaotic circuit so slow that one wander takes minutes, made to
@@ -1568,11 +1658,3 @@ holds where it is at each note instead: one note of the scale each, the rhythm a
     breathes and never quite repeats.
 *   When a pass is one you want, `Space 3` and `Space g A`: the notes it played are written in
     and the slot is switched out, as with the Steps slot.
-
-## Generators still to come
-
-These are planned, each its own issue, and this chapter grows a section as each lands:
-
-| Issue | Generator |
-|---|---|
-| [#590](https://github.com/gabrielgellner/vimtracker/issues/590) | Tonnetz chord movement: P, L and R moves |

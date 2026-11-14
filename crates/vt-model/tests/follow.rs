@@ -88,6 +88,7 @@ fn following(source: Source, follow: Follow) -> Shape {
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
         ring: vt_model::shape::Ring::default(),
+        tonnetz: vt_model::shape::Tonnetz::default(),
     }
 }
 
