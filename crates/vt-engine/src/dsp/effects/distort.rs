@@ -12,9 +12,9 @@
 
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
-    Chorus, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser, Exciter,
-    Flanger, FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate, Resonator,
-    Reverb, Rotary, Space, Spring, Stutter, Tape, Vowel, Warps,
+    Chorus, Clouds, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Equaliser,
+    Exciter, Flanger, FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch, Plate,
+    Resonator, Reverb, Rotary, Space, Spring, Stutter, Tape, Vowel, Warps,
 };
 use vt_model::song::level_gain;
 
@@ -33,6 +33,7 @@ use crate::dsp::effects::phaser::Phaser as AllPasses;
 use crate::dsp::filters::lpg::LowPassGate as Gate;
 use crate::dsp::filters::vowel::Formants;
 use crate::dsp::voices::drums::soft_clip;
+use crate::rng::Pcg32;
 use crate::track_state::Keys;
 
 /// How much `Amount` turns up what's clipped or folded, at full, in dB.
@@ -115,6 +116,9 @@ pub struct InsertState {
     /// The track's note, as a MIDI note with its `Pitch` added, for an oscillator or resonator to
     /// follow.
     note: f32,
+    /// The generator an effect that draws random numbers starts from, from the track's seed, so
+    /// a song renders the same each time: Clouds' grains.
+    rng: Pcg32,
 }
 
 impl Default for InsertState {
@@ -141,6 +145,7 @@ impl Default for InsertState {
             pedal: Pedal::default(),
             on: Smoothed::at(1.0),
             note: DEFAULT_NOTE,
+            rng: Pcg32::new(0, 0),
         }
     }
 }
@@ -172,7 +177,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Space(_), Insert::Space(_))
         | (Insert::Rotary(_), Insert::Rotary(_))
         | (Insert::Exciter(_), Insert::Exciter(_))
-        | (Insert::Stutter(_), Insert::Stutter(_)) => true,
+        | (Insert::Stutter(_), Insert::Stutter(_))
+        | (Insert::Clouds(_), Insert::Clouds(_)) => true,
         _ => false,
     }
 }
@@ -376,6 +382,9 @@ impl InsertState {
         let started = self.memory.is_none();
         if started {
             self.memory = pool.take(insert);
+            if let Some(memory) = &mut self.memory {
+                memory.seed(self.rng);
+            }
         }
         if let Some(memory) = &mut self.memory {
             memory.follow(insert, frames_per_tick, frames);
@@ -415,6 +424,15 @@ impl InsertState {
             if memory.waking() {
                 self.quiet = 0;
             }
+        }
+    }
+
+    /// Start drawing random numbers again from a generator of the track's, as playing from the top
+    /// does, so what it plays repeats.
+    pub fn reseed(&mut self, rng: Pcg32) {
+        self.rng = rng;
+        if let Some(memory) = &mut self.memory {
+            memory.seed(rng);
         }
     }
 
@@ -465,6 +483,8 @@ impl InsertState {
             | Insert::FreqShift(FreqShift { mix, gain, .. }) => (0, mix, gain),
             // A compressor's makeup is its own, on what it turned down, with nothing after the mix.
             Insert::Compressor(Compressor { mix, .. }) => (0, mix, UNITY_LEVEL),
+            // Clouds blends as the module does, inside it.
+            Insert::Clouds(Clouds { gain, .. }) => (0, 0xFF, gain),
             // An EQ is all wet: what it leaves alone comes through as it is.
             Insert::Eq(Equaliser { gain, .. }) => (0, 0xFF, gain),
         };
@@ -474,10 +494,11 @@ impl InsertState {
             level_gain(f32::from(gain)),
         );
         if !same_effect(self.insert, insert) {
-            let (on, note) = (self.on, self.note);
+            let (on, note, rng) = (self.on, self.note, self.rng);
             *self = Self::default();
             self.on = on;
             self.note = note;
+            self.rng = rng;
             self.amount = Smoothed::at(amount);
             self.mix = Smoothed::at(mix);
             self.gain = Smoothed::at(gain);
@@ -619,6 +640,7 @@ impl InsertState {
             pedal,
             on,
             note,
+            rng,
         } = self;
         Self {
             memory: None,
@@ -642,6 +664,7 @@ impl InsertState {
             pedal: *pedal,
             on: *on,
             note: *note,
+            rng: *rng,
         }
     }
 
@@ -847,7 +870,8 @@ impl InsertState {
             | Insert::Spring(_)
             | Insert::Space(_)
             | Insert::Rotary(_)
-            | Insert::Stutter(_) => Mono::Stereo,
+            | Insert::Stutter(_)
+            | Insert::Clouds(_) => Mono::Stereo,
         }
     }
 
@@ -1004,6 +1028,17 @@ impl InsertState {
                     .eq
                     .process(input, same, smoothing, rate)
                     .map(|sample| sample * gain);
+            }
+            // What comes out is already the module's blend of the sound and what it made, so the
+            // slot only turns it up or down. Until its recording comes, the sound passes.
+            Insert::Clouds(_) => {
+                let gain = self.gain.next(smoothing);
+                let out = if self.memory.is_some() {
+                    self.ring(input, rate)
+                } else {
+                    input
+                };
+                return out.map(|sample| sample * gain);
             }
             Insert::Distort(settings) => (Some(settings.kind), settings),
             Insert::Delay(_)

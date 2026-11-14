@@ -112,6 +112,10 @@ pub struct Reverb {
     pre_frames: Smoothed,
     decay: Smoothed,
     damping: Smoothed,
+    /// How much the allpasses spread what goes through them, and how much of what goes in reaches
+    /// the lines: the reverb's own, unless Clouds tunes them as the module does.
+    diffusion: f32,
+    input_gain: f32,
     smoothing: f32,
     /// What damping at the tuning rate takes to be the same at this one.
     rate_ratio: f32,
@@ -158,6 +162,8 @@ impl Reverb {
             pre_frames: Smoothed::at(0.0),
             decay: Smoothed::at(0.0),
             damping: Smoothed::at(0.0),
+            diffusion: DIFFUSION,
+            input_gain: INPUT_GAIN,
             smoothing: coefficient(rate),
             rate_ratio: TUNING_RATE / rate as f32,
             trim: Trim::default(),
@@ -249,6 +255,31 @@ impl Reverb {
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let incoming = self.before_lines(input);
+        self.tank(incoming)
+    }
+
+    /// Tune the tank as Clouds tunes its own reverb, block by block: what each trip round its loops
+    /// keeps, its damping as a one-pole's coefficient at 32 kHz, its allpasses' diffusion and how
+    /// much of what goes in reaches the lines. The decay and damping glide there as `Decay` and
+    /// `Damp` do.
+    pub fn tune(&mut self, decay: f32, damping_at_tuning_rate: f32, diffusion: f32, gain: f32) {
+        self.decay.target = decay;
+        self.damping.target = 1.0 - (1.0 - damping_at_tuning_rate).powf(self.rate_ratio);
+        self.diffusion = diffusion;
+        self.input_gain = gain;
+    }
+
+    /// Feed one frame into the tank alone, with no cuts or pre-delay, as Clouds' reverb has none,
+    /// and get the wet signal out.
+    #[inline]
+    pub fn process_tank(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.tank(input[0] + input[1])
+    }
+
+    /// Both sides together through the diffusers and the tank's two loops.
+    #[inline]
+    fn tank(&mut self, incoming: f32) -> [f32; 2] {
+        let diffusion = self.diffusion;
         let decay = self.decay.next(self.smoothing);
         let damping = self.damping.next(self.smoothing);
         let lines = &mut self.lines;
@@ -261,9 +292,9 @@ impl Reverb {
         let smeared = lines.between(first, read_at + moves * self.wobble[0]);
         lines.write(first, write_at as usize, smeared);
 
-        let mut diffused = incoming * INPUT_GAIN;
+        let mut diffused = incoming * self.input_gain;
         for line in self.diffusers {
-            diffused = lines.allpass(line, diffused, DIFFUSION);
+            diffused = lines.allpass(line, diffused, diffusion);
         }
 
         let [[one_a, one_b, one_delay], [two_a, two_b, two_delay]] = self.loops;
@@ -272,16 +303,16 @@ impl Reverb {
         let mut left = diffused + from_two * decay;
         self.damped[0] += damping * (left - self.damped[0]);
         left = self.damped[0];
-        left = lines.allpass(one_a, left, -DIFFUSION);
-        left = lines.allpass(one_b, left, DIFFUSION);
+        left = lines.allpass(one_a, left, -diffusion);
+        left = lines.allpass(one_b, left, diffusion);
         lines.write(one_delay, 0, left);
 
         let from_one = lines.tail(one_delay);
         let mut right = diffused + from_one * decay;
         self.damped[1] += damping * (right - self.damped[1]);
         right = self.damped[1];
-        right = lines.allpass(two_a, right, DIFFUSION);
-        right = lines.allpass(two_b, right, -DIFFUSION);
+        right = lines.allpass(two_a, right, diffusion);
+        right = lines.allpass(two_b, right, -diffusion);
         lines.write(two_delay, 0, right);
 
         [left * WET, right * WET]

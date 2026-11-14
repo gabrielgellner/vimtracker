@@ -9,6 +9,7 @@ use vt_model::song::Song;
 
 use crate::dsp::dynamics::limiter::Limiter;
 use crate::dsp::effects::chorus::Chorus;
+use crate::dsp::effects::clouds::Clouds;
 use crate::dsp::effects::delay::Delay;
 use crate::dsp::effects::flanger::Flanger;
 use crate::dsp::effects::freq_shifter::FreqShifter;
@@ -52,6 +53,7 @@ pub enum Memory {
     Space(Box<Space>),
     Rotary(Box<Rotary>),
     Stutter(Box<Stutter>),
+    Clouds(Box<Clouds>),
 }
 
 impl Memory {
@@ -142,6 +144,11 @@ impl Memory {
         Self::Space(Box::new(Space::new(rate)))
     }
 
+    /// Clouds', which records the longest of the module's qualities.
+    pub fn clouds(rate: u32) -> Self {
+        Self::Clouds(Box::new(Clouds::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -163,6 +170,7 @@ impl Memory {
             Self::Stutter(stutter) => stutter.process(input),
             Self::Rotary(rotary) => rotary.process_alone(input),
             Self::Space(space) => space.process(input),
+            Self::Clouds(clouds) => clouds.process(input),
         }
     }
 
@@ -185,6 +193,7 @@ impl Memory {
             Self::FreqShift(shifter) => shifter.frames() as u32,
             Self::Stutter(stutter) => stutter.quiet_frames(),
             Self::Rotary(rotary) => rotary.frames() as u32,
+            Self::Clouds(clouds) => clouds.quiet_frames(),
         }
     }
 
@@ -215,17 +224,26 @@ impl Memory {
             }
             (Self::Rotary(rotary), Insert::Rotary(settings)) => rotary.follow(settings),
             (Self::Space(space), Insert::Space(settings)) => space.follow(settings),
+            (Self::Clouds(clouds), Insert::Clouds(settings)) => clouds.follow(settings, frames),
             _ => {}
         }
     }
 
     /// Move what goes by the frame rather than by what it's done to where it is this many frames
-    /// in, as taking its settings does: a reverb's and a plate's wobbles.
+    /// in, as taking its settings does: a reverb's and a plate's wobbles, and Clouds' reverb's.
     pub fn keep_time(&mut self, frames: u64) {
         match self {
             Self::Reverb(reverb) => reverb.keep_time(frames),
             Self::Plate(plate) => plate.keep_time(frames),
+            Self::Clouds(clouds) => clouds.keep_time(frames),
             _ => {}
+        }
+    }
+
+    /// Give what draws random numbers its own generator, from the track's: Clouds' grains.
+    pub fn seed(&mut self, rng: crate::rng::Pcg32) {
+        if let Self::Clouds(clouds) = self {
+            clouds.seed(rng);
         }
     }
 
@@ -281,6 +299,7 @@ impl Memory {
             Self::Stutter(_) => {}
             Self::Rotary(rotary) => rotary.settle(),
             Self::Space(space) => space.settle(),
+            Self::Clouds(clouds) => clouds.settle(),
         }
     }
 
@@ -303,6 +322,7 @@ impl Memory {
             Self::Stutter(stutter) => stutter.clear(),
             Self::Rotary(rotary) => rotary.clear(),
             Self::Space(space) => space.clear(),
+            Self::Clouds(clouds) => clouds.clear(),
         }
     }
 }
@@ -327,6 +347,7 @@ pub struct MemoryCount {
     pub space: u16,
     pub rotary: u16,
     pub stutter: u16,
+    pub clouds: u16,
 }
 
 impl MemoryCount {
@@ -352,6 +373,7 @@ impl MemoryCount {
                 Insert::Stutter(_) => count.stutter += 1,
                 Insert::Rotary(_) => count.rotary += 1,
                 Insert::Space(_) => count.space += 1,
+                Insert::Clouds(_) => count.clouds += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Exciter(_)
@@ -386,6 +408,7 @@ pub struct MemoryPool {
     stutters: Vec<Memory>,
     rotaries: Vec<Memory>,
     spaces: Vec<Memory>,
+    clouds: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -414,6 +437,7 @@ impl MemoryPool {
             stutters: Vec::with_capacity(POOL_CAPACITY),
             rotaries: Vec::with_capacity(POOL_CAPACITY),
             spaces: Vec::with_capacity(POOL_CAPACITY),
+            clouds: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -468,6 +492,9 @@ impl MemoryPool {
         for _ in 0..needed.space {
             pool.put(Memory::space(rate));
         }
+        for _ in 0..needed.clouds {
+            pool.put(Memory::clouds(rate));
+        }
         pool
     }
 
@@ -491,6 +518,7 @@ impl MemoryPool {
             Memory::Stutter(_) => &mut self.stutters,
             Memory::Rotary(_) => &mut self.rotaries,
             Memory::Space(_) => &mut self.spaces,
+            Memory::Clouds(_) => &mut self.clouds,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -521,6 +549,7 @@ impl MemoryPool {
             Insert::Stutter(_) => &mut self.stutters,
             Insert::Rotary(_) => &mut self.rotaries,
             Insert::Space(_) => &mut self.spaces,
+            Insert::Clouds(_) => &mut self.clouds,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Exciter(_)
@@ -556,6 +585,7 @@ impl MemoryPool {
         self.owed.stutter += count.stutter;
         self.owed.rotary += count.rotary;
         self.owed.space += count.space;
+        self.owed.clouds += count.clouds;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -662,6 +692,12 @@ impl MemoryPool {
             self.owed.space -= 1;
             return Some(memory);
         }
+        if self.owed.clouds > 0
+            && let Some(memory) = self.clouds.pop()
+        {
+            self.owed.clouds -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -684,6 +720,7 @@ impl MemoryPool {
             + self.stutters.len()
             + self.rotaries.len()
             + self.spaces.len()
+            + self.clouds.len()
     }
 }
 

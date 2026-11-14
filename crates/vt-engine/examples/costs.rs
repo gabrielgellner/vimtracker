@@ -13,8 +13,9 @@ use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_model::bank::{BankEntry, ContentHash};
 use vt_model::insert::{
-    Chorus, ChorusType, Compressor, CompressorType, Distort, DistortType, Exciter, FreqShift,
-    Grains, INSERTS, Insert, Pitch, Plate, Rotary, Space, Spring, Stutter, Warps,
+    Chorus, ChorusType, Clouds, CloudsMode, Compressor, CompressorType, Distort, DistortType,
+    Exciter, FreqShift, Grains, INSERTS, Insert, Pitch, Plate, QUALITY_NAMES, Rotary, Space,
+    Spring, Stutter, Warps,
 };
 use vt_model::modulation::{MOD_SLOTS, ModKind};
 use vt_model::sample::SampleData;
@@ -172,6 +173,33 @@ fn effects() -> Vec<(String, Insert)> {
             ..Compressor::DEFAULT
         };
         all.push((format!("Comp {kind:?}"), Insert::Compressor(compressor)));
+    }
+    // Clouds' other modes, its other qualities, and its densest grains.
+    for mode in CloudsMode::ALL.into_iter().skip(1) {
+        let clouds = Clouds {
+            mode,
+            ..Clouds::DEFAULT
+        };
+        all.push((format!("Clouds {mode:?}"), Insert::Clouds(clouds)));
+    }
+    for (quality, name) in QUALITY_NAMES.into_iter().enumerate().skip(1) {
+        let clouds = Clouds {
+            quality: quality as u8,
+            ..Clouds::DEFAULT
+        };
+        all.push((format!("Clouds {name}"), Insert::Clouds(clouds)));
+    }
+    for (density, name) in [(0x00, "regular"), (0xFF, "random")] {
+        let clouds = Clouds {
+            density,
+            size: 0xFF,
+            quality: 3,
+            ..Clouds::DEFAULT
+        };
+        all.push((
+            format!("Clouds densest {name}, Mono 8"),
+            Insert::Clouds(clouds),
+        ));
     }
     all
 }
