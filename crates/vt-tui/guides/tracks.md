@@ -604,6 +604,61 @@ Changes to `Time`, `Size`, `Pitch` and `Shape` reach the next grains, so
 moving them never clicks. For a held drone, turn `Freeze` on with a step's
 FX slot, then move `Time` to scan through what's held.
 
+`Clouds` is Mutable Instruments' Clouds as the module plays: it records the
+sound all the time, with what it feeds back, and plays it back in one of
+three modes, then through its diffuser, filters and reverb. Its `Mode` is in
+the slot's title, picked with `K`:
+
+* `Granular`, the module's own sound: grains read the recording.
+* `Stretch` reads it through two windows, each lined up with the last where
+  they match best, so it slows, freezes or shifts the sound without the
+  grains' blur.
+* `Looping` is a delay, its repeats shifted by `Pitch`. Frozen, it loops what
+  it holds.
+
+The first two columns are the module's knobs, the third what its `Blend`
+knob also does, each a setting of its own here.
+
+| Setting | Granular | Stretch | Looping |
+|---|---|---|---|
+| `Position` | Where grains read, from now to the oldest | Where the windows read | The delay's time; frozen, where the loop starts |
+| `Size` | How long each grain is, 32 to 512 ms, twice that at 8 bits | How long the windows are | Frozen, how long the loop is |
+| `Pitch` | How far grains are shifted, in semitones | How far it shifts | How far the repeats are shifted |
+| `Density` | How many grains, and how they start | The diffuser | The diffuser |
+| `Texture` | The grains' envelope, then the diffuser | Low-pass below `80`, high-pass above | Low-pass below `80`, high-pass above |
+| `Freeze` | On, it stops recording | The same | The same, and loops |
+
+| Setting | Does |
+|---|---|
+| `Spread` | How far the grains spread across the sides |
+| `Feedback` | How much of what comes out is recorded again |
+| `Reverb` | How much of Clouds' own reverb comes out |
+| `Quality` | Its recording: `Stereo 16`, `Mono 16`, `Stereo 8` or `Mono 8` |
+| `Blend` | From `00`, the sound alone, to `FF`, all Clouds |
+
+`Density` makes no grains at `80`. Below it they come at a steady rate, and
+above it at random, more and more overlapping towards either end, as the
+module's knob does past noon. `Texture` shapes each grain from a square
+through a triangle to a bell, and above `C0` turns up the diffuser, which
+smears them into a wash.
+
+`Quality` sets how long the recording is, as the module's does: about 1
+second in `Stereo 16`, 2 in `Mono 16`, 4 in `Stereo 8` and 7.4 in `Mono 8`.
+The 8-bit ones record at half the rate, through mu-law, so they're duller and
+grittier. Changing it starts a new recording, so steps don't lock it, nor
+`Mode`.
+
+Frozen, with `Feedback` up, the feedback fades out and the reverb comes up in
+its place, as on the module, for a long wash of what's held. `Blend` is the
+module's, and loud sounds soft clip through it as they do on the module. It
+starts half way, with a little reverb.
+
+`Clouds` and `Grains` are siblings: `Grains` is Beads', Clouds' successor,
+with its own envelopes and randomness, and `Pitch` and `Reverb` are Clouds'
+own pitch shifter and reverb on their own. Its grains' places come from the
+track's seed, so a render is the same each time. Clouds' fourth mode, its
+spectral one, isn't here yet.
+
 `Warps` crosses the sound with a second one, after Mutable Instruments'
 Warps. The track's own sound is the carrier. The modulator is another
 track, chosen with `Source` as `Comp`'s is, or with `Source` on `Osc`,

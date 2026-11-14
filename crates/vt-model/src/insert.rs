@@ -52,6 +52,7 @@ pub enum Insert {
     Rotary(Rotary),
     Exciter(Exciter),
     Stutter(Stutter),
+    Clouds(Clouds),
 }
 
 /// What a slot's setting is, for what moves it to read and write it on its own scale.
@@ -197,6 +198,17 @@ pub enum Setting {
     /// A space's: how big its tank is. Its `Decay` and `Damp` are the reverb's and its `Mod` the
     /// plate's.
     SpaceSize,
+    /// Clouds': its mode, where in its recording it reads, how long a piece, how many and how
+    /// regularly, their texture, how much of its reverb, and its recording's quality. Its `Pitch`
+    /// is the pitch shifter's, its `Blend` a `Mix`, and its `Spread`, `Feedback` and `Freeze` the
+    /// granular effect's and the delay's.
+    CloudsMode,
+    CloudsPosition,
+    CloudsSize,
+    CloudsDensity,
+    Texture,
+    ReverbAmount,
+    Quality,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -243,6 +255,8 @@ impl Setting {
             Self::Wave => WAVE_NAMES.len() as u8 - 1,
             Self::GateMode => GateMode::ALL.len() as u8 - 1,
             Self::CombMode => CombMode::ALL.len() as u8 - 1,
+            Self::CloudsMode => CloudsMode::ALL.len() as u8 - 1,
+            Self::Quality => QUALITY_NAMES.len() as u8 - 1,
             _ => 0xFF,
         }
     }
@@ -274,6 +288,8 @@ impl Setting {
             Self::Wave => (WAVE_NAMES.len() - 1) as f32,
             Self::GateMode => (GateMode::ALL.len() - 1) as f32,
             Self::CombMode => (CombMode::ALL.len() - 1) as f32,
+            Self::CloudsMode => (CloudsMode::ALL.len() - 1) as f32,
+            Self::Quality => (QUALITY_NAMES.len() - 1) as f32,
             _ => 255.0,
         }
     }
@@ -312,8 +328,9 @@ impl Param {
     }
 }
 
-/// The most settings any effect shows at once, in the type or mode it's in.
-pub const MAX_PARAMS: usize = 12;
+/// The most settings any effect shows at once, in the type or mode it's in: a grid's twelve and
+/// its type or mode in the title (decision 312).
+pub const MAX_PARAMS: usize = 13;
 /// The most settings any effect keeps across all of its types and modes, of which it shows at
 /// most [`MAX_PARAMS`]. A compressor keeps each type's own.
 pub const MAX_KEPT_PARAMS: usize = 17;
@@ -402,7 +419,7 @@ fn source_track(source: u8, sounds: usize) -> Option<usize> {
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 26] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -428,6 +445,7 @@ impl Insert {
         Self::Rotary(Rotary::DEFAULT),
         Self::Exciter(Exciter::DEFAULT),
         Self::Stutter(Stutter::DEFAULT),
+        Self::Clouds(Clouds::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -470,6 +488,7 @@ impl Insert {
             Self::Exciter(_) => "Exciter",
             Self::Rotary(_) => "Rotary",
             Self::Space(_) => "Space",
+            Self::Clouds(_) => "Clouds",
         }
     }
 
@@ -503,6 +522,9 @@ impl Insert {
             Self::Exciter(_) => "Adds air: harmonics made from the highs, more as they get louder",
             Self::Rotary(_) => "Spins it in a Leslie's cabinet, slow or fast, for organs and more",
             Self::Space(_) => "Washes the sound into a huge, nearly endless pad",
+            Self::Clouds(_) => {
+                "Mutable's Clouds: grains, stretching or a looping delay, with reverb"
+            }
         }
     }
 
@@ -543,6 +565,7 @@ impl Insert {
             Self::Rotary(_) => &ROTARY_PARAMS,
             Self::Exciter(_) => &EXCITER_PARAMS,
             Self::Stutter(_) => &STUTTER_PARAMS,
+            Self::Clouds(_) => &CLOUDS_PARAMS,
         }
     }
 
@@ -707,6 +730,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| space.read(setting));
             }
+            Self::Clouds(clouds) => {
+                return CLOUDS_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| clouds.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -755,6 +784,7 @@ impl Insert {
             Self::Exciter(exciter) => return Self::Exciter(exciter.written(setting, whole)),
             Self::Rotary(rotary) => return Self::Rotary(rotary.written(setting, whole)),
             Self::Space(space) => return Self::Space(space.written(setting, whole)),
+            Self::Clouds(clouds) => return Self::Clouds(clouds.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -785,6 +815,7 @@ impl Insert {
                     | Setting::CompressorType
                     | Setting::GateMode
                     | Setting::CombMode
+                    | Setting::CloudsMode
             )
         })
     }
@@ -850,6 +881,14 @@ impl Insert {
                 &[S::Doppler, S::Tremolo],
                 &[S::Drive, S::Width],
                 &[S::Mix, S::Gain],
+            ],
+            // The module's big knobs, then its small ones with its freeze button, then what its
+            // `Blend` knob also does, then its quality over what comes out.
+            Self::Clouds(_) => &[
+                &[S::CloudsPosition, S::CloudsSize, S::Shift],
+                &[S::CloudsDensity, S::Texture, S::Freeze],
+                &[S::Spread, S::Feedback, S::ReverbAmount],
+                &[S::Quality, S::Mix, S::Gain],
             ],
             _ => return self.default_grid(),
         };

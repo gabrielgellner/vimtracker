@@ -1331,6 +1331,32 @@ const GRAINS: DeviceLayout = stored(
         knobs("Shape", [s("shape"), __, __, __, __, __, __, __]),
     ],
 );
+/// The module's knobs in its panel's order, its reverb, the job of its `Blend` most played after
+/// the mix, then `Blend` where a mix goes, with `Freeze` on the button under `Position`, as it
+/// holds what it reads; then `Blend`'s other jobs and the quality on a page of their own.
+const CLOUDS: DeviceLayout = stored(
+    "fx/clouds",
+    &[
+        page(
+            "Clouds",
+            [
+                s("position"),
+                s("size"),
+                tinted("pitch", Family::Time),
+                s("density"),
+                s("texture"),
+                s("reverb"),
+                s("blend"),
+                s("gain"),
+            ],
+            button(0, "freeze"),
+        ),
+        knobs(
+            "Blend",
+            [s("spread"), s("feedback"), s("quality"), __, __, __, __, __],
+        ),
+    ],
+);
 const WARPS: DeviceLayout = live(
     "fx/warps",
     &[knobs(
@@ -1852,7 +1878,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
 }
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 100] = [
+pub const ALL: [&DeviceLayout; 101] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -1953,6 +1979,7 @@ pub const ALL: [&DeviceLayout; 100] = [
     &ROTARY,
     &EXCITER,
     &STUTTER,
+    &CLOUDS,
 ];
 
 /// A machine's layout.
@@ -2049,6 +2076,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::FreqShift(_) => &FREQ_SHIFT,
         Insert::Spring(_) => &SPRING,
         Insert::Stutter(_) => &STUTTER,
+        Insert::Clouds(_) => &CLOUDS,
         Insert::Rotary(_) => &ROTARY,
         Insert::Exciter(_) => &EXCITER,
         Insert::Space(_) => &SPACE,

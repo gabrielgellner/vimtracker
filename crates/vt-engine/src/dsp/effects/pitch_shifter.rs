@@ -111,6 +111,14 @@ impl PitchShifter {
         self.feedback.target = f32::from(settings.feedback) / 255.0 * MOST_FEEDBACK;
     }
 
+    /// Shift by so many semitones through a window of so many frames, with nothing fed back, as
+    /// Clouds' looping delay has it after its delay. Both glide there as `Pitch` and `Size` do.
+    pub fn aim(&mut self, semitones: f32, window: f32) {
+        self.semitones.target = semitones;
+        self.window.target = window;
+        self.feedback.target = 0.0;
+    }
+
     /// Jump to what's set, as it's only just started.
     pub fn settle(&mut self) {
         self.semitones.settle();

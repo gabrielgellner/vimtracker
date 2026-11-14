@@ -1,4 +1,4 @@
-//! The effects that move a sound's pitch: a pitch shifter, a granular effect and a
+//! The effects that move a sound's pitch: a pitch shifter, a granular effect, Clouds and a
 //! frequency shifter.
 
 use serde::{Deserialize, Serialize};
@@ -333,6 +333,233 @@ impl Grains {
             _ => {}
         }
         grains
+    }
+}
+
+/// What Clouds does with what it records, as the module's modes do. Its fourth, the spectral one,
+/// is left for later.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CloudsMode {
+    /// Grains read the recording, overlapping as `Density` says, shaped and then diffused by
+    /// `Texture`.
+    #[default]
+    Granular,
+    /// Two windows read the recording, each lined up with the one before where the two match
+    /// best, so it can be slowed, frozen or shifted without grains' blur.
+    Stretch,
+    /// A delay as long as `Position` says, its repeats shifted by `Pitch`; frozen, a loop of what
+    /// it holds as long as `Size` says.
+    Looping,
+}
+
+impl CloudsMode {
+    pub const ALL: [Self; 3] = [Self::Granular, Self::Stretch, Self::Looping];
+}
+
+const CLOUDS_MODE_NAMES: [&str; 3] = ["Granular", "Stretch", "Looping"];
+
+/// Clouds' four qualities, the module's: its recording in stereo or mono, in 16 bits or in 8-bit
+/// mu-law at half the rate, each holding a longer recording than the one before.
+pub const QUALITY_NAMES: [&str; 4] = ["Stereo 16", "Mono 16", "Stereo 8", "Mono 8"];
+
+/// Clouds', in the order the slot keeps them: its mode, which the title shows, the module's six
+/// knobs, `Blend`'s other three jobs as settings of their own, `Freeze` and `Quality`, then the
+/// gain every slot has.
+pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
+    Param {
+        name: "Mode",
+        key: "mode",
+        // Choosing a mode chooses a sound, so steps don't lock it.
+        label: None,
+        setting: Setting::CloudsMode,
+        choices: &CLOUDS_MODE_NAMES,
+        wraps: true,
+        default: 0,
+    },
+    hex_param(
+        "Position",
+        "position",
+        "POS",
+        Setting::CloudsPosition,
+        Clouds::DEFAULT.position,
+    ),
+    hex_param(
+        "Size",
+        "size",
+        "SIZE",
+        Setting::CloudsSize,
+        Clouds::DEFAULT.size,
+    ),
+    Param {
+        default: Clouds::DEFAULT.pitch,
+        ..PITCH_PARAMS[0]
+    },
+    hex_param(
+        "Density",
+        "density",
+        "DENS",
+        Setting::CloudsDensity,
+        Clouds::DEFAULT.density,
+    ),
+    hex_param(
+        "Texture",
+        "texture",
+        "TEXT",
+        Setting::Texture,
+        Clouds::DEFAULT.texture,
+    ),
+    Param {
+        name: "Blend",
+        key: "blend",
+        label: Some("BLND"),
+        default: Clouds::DEFAULT.blend,
+        ..MIX_PARAM
+    },
+    hex_param(
+        "Spread",
+        "spread",
+        "SPRD",
+        Setting::Spread,
+        Clouds::DEFAULT.spread,
+    ),
+    hex_param(
+        "Feedback",
+        "feedback",
+        "FDBK",
+        Setting::Feedback,
+        Clouds::DEFAULT.feedback,
+    ),
+    hex_param(
+        "Reverb",
+        "reverb",
+        "VERB",
+        Setting::ReverbAmount,
+        Clouds::DEFAULT.reverb,
+    ),
+    Param {
+        name: "Freeze",
+        key: "freeze",
+        label: Some("FRZ"),
+        setting: Setting::Freeze,
+        choices: &OFF_ON,
+        wraps: true,
+        default: Clouds::DEFAULT.freeze,
+    },
+    Param {
+        name: "Quality",
+        key: "quality",
+        // A new quality starts a new recording, so steps don't lock it.
+        label: None,
+        setting: Setting::Quality,
+        choices: &QUALITY_NAMES,
+        wraps: true,
+        default: Clouds::DEFAULT.quality,
+    },
+    GAIN_PARAM,
+];
+
+/// Clouds' settings: Mutable Instruments' texture synthesizer as the module plays, with its modes,
+/// its six knobs, `Blend`'s four jobs and its qualities. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Clouds {
+    pub mode: CloudsMode,
+    /// Where in the recording it reads, from what's just come in at `00` to the oldest at `FF`; in
+    /// `Looping`, how long its delay is.
+    pub position: u8,
+    /// How long its grains, windows or loop are.
+    pub size: u8,
+    /// How far it shifts, as a place in the list from two octaves down to two up.
+    pub pitch: u8,
+    /// In `Granular`, how many grains overlap and how they start: regularly below `80`, none in
+    /// the middle, and at random above, as the module's manual has it. In the other modes, how far
+    /// the diffuser smears what comes out.
+    pub density: u8,
+    /// In `Granular`, the grains' envelope, from a square through a triangle to a bell, then the
+    /// diffuser above `C0`. In the other modes, a low-pass below `80` and a high-pass above it.
+    pub texture: u8,
+    /// From `00`, all dry, to `FF`, all wet: `Blend`'s first job on the module.
+    pub blend: u8,
+    /// How far the grains spread across the sides.
+    pub spread: u8,
+    /// How much of what comes out goes back in to be recorded again.
+    pub feedback: u8,
+    /// How much of Clouds' own reverb is on what comes out.
+    pub reverb: u8,
+    /// Whether it stops recording, `1`, so it keeps playing what it holds.
+    pub freeze: u8,
+    /// Its recording's quality, a place in [`QUALITY_NAMES`].
+    pub quality: u8,
+    pub gain: u8,
+}
+
+impl Default for Clouds {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Clouds {
+    /// As it starts: grains a quarter of the way back, about 130 ms long, no shift, a few at a
+    /// time at random, a smooth envelope, half wet, spread half way, no feedback, a little reverb,
+    /// recording, in stereo at 16 bits.
+    pub const DEFAULT: Self = Self {
+        mode: CloudsMode::Granular,
+        position: 0x40,
+        size: 0x80,
+        pitch: MOST_SHIFT,
+        density: 0xC0,
+        texture: 0x80,
+        blend: 0x80,
+        spread: 0x80,
+        feedback: 0,
+        reverb: 0x40,
+        freeze: 0,
+        quality: 0,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    pub(super) fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::CloudsMode => self.mode as u8,
+            Setting::CloudsPosition => self.position,
+            Setting::CloudsSize => self.size,
+            Setting::Shift => self.pitch,
+            Setting::CloudsDensity => self.density,
+            Setting::Texture => self.texture,
+            Setting::Mix => self.blend,
+            Setting::Spread => self.spread,
+            Setting::Feedback => self.feedback,
+            Setting::ReverbAmount => self.reverb,
+            Setting::Freeze => self.freeze,
+            Setting::Quality => self.quality,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut clouds = self;
+        match setting {
+            Setting::CloudsMode => clouds.mode = CloudsMode::ALL[usize::from(value)],
+            Setting::CloudsPosition => clouds.position = value,
+            Setting::CloudsSize => clouds.size = value,
+            Setting::Shift => clouds.pitch = value,
+            Setting::CloudsDensity => clouds.density = value,
+            Setting::Texture => clouds.texture = value,
+            Setting::Mix => clouds.blend = value,
+            Setting::Spread => clouds.spread = value,
+            Setting::Feedback => clouds.feedback = value,
+            Setting::ReverbAmount => clouds.reverb = value,
+            Setting::Freeze => clouds.freeze = value,
+            Setting::Quality => clouds.quality = value,
+            Setting::Gain => clouds.gain = value,
+            _ => {}
+        }
+        clouds
     }
 }
 
