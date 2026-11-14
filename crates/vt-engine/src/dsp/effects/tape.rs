@@ -389,7 +389,7 @@ impl Side {
 
 /// Beads' wobbles, which the line's length follows.
 #[derive(Debug, Clone, Copy)]
-struct Wobble {
+pub(super) struct Wobble {
     wow: f32,
     flutter: f32,
     drift: f32,
@@ -404,7 +404,7 @@ struct Wobble {
 }
 
 impl Wobble {
-    fn new(rate: u32) -> Self {
+    pub(super) fn new(rate: u32) -> Self {
         Self {
             wow: 0.0,
             flutter: 0.0,
@@ -437,7 +437,7 @@ impl Wobble {
     /// How far back to read the line this frame, in frames, at an amount of wow and flutter in
     /// frames at their fullest.
     #[inline]
-    fn next(&mut self, wow: f32, flutter: f32, rate: u32) -> f32 {
+    pub(super) fn next(&mut self, wow: f32, flutter: f32, rate: u32) -> f32 {
         if self.countdown == 0 {
             self.countdown = CONTROL_FRAMES;
             let frames = CONTROL_FRAMES as f32;

@@ -53,6 +53,7 @@ pub enum Insert {
     Exciter(Exciter),
     Stutter(Stutter),
     Clouds(Clouds),
+    Beads(Beads),
 }
 
 /// What a slot's setting is, for what moves it to read and write it on its own scale.
@@ -209,6 +210,14 @@ pub enum Setting {
     Texture,
     ReverbAmount,
     Quality,
+    /// Beads': its mode, where in its recording it reads, how often grains start or how long its
+    /// delay is, and whether that follows the song's steps. Its `Size` is the granular effect's
+    /// `Length`, its `Pitch` the pitch shifter's, its `Quality` Clouds' and the rest the granular
+    /// effect's, the delay's and Clouds'.
+    BeadsMode,
+    BeadsTime,
+    BeadsDensity,
+    Clock,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -247,7 +256,9 @@ impl Setting {
             Self::Time => DIVISION_NAMES.len() as u8 - 1,
             Self::SweepRate => SWEEP_NAMES.len() as u8 - 1,
             Self::Stages => STAGE_NAMES.len() as u8 - 1,
-            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast | Self::Trig => 1,
+            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast | Self::Trig | Self::Clock => {
+                1
+            }
             Self::RepeatLength => REPEAT_LENGTH_NAMES.len() as u8 - 1,
             Self::Repeats => REPEAT_NAMES.len() as u8 - 1,
             Self::Retime => RETIMES.len() as u8 - 1,
@@ -257,6 +268,7 @@ impl Setting {
             Self::CombMode => CombMode::ALL.len() as u8 - 1,
             Self::CloudsMode => CloudsMode::ALL.len() as u8 - 1,
             Self::Quality => QUALITY_NAMES.len() as u8 - 1,
+            Self::BeadsMode => BeadsMode::ALL.len() as u8 - 1,
             _ => 0xFF,
         }
     }
@@ -280,7 +292,9 @@ impl Setting {
             Self::Time => (DIVISION_NAMES.len() - 1) as f32,
             Self::SweepRate => (SWEEP_NAMES.len() - 1) as f32,
             Self::Stages => (STAGE_NAMES.len() - 1) as f32,
-            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast | Self::Trig => 1.0,
+            Self::PingPong | Self::Freeze | Self::Knock | Self::Fast | Self::Trig | Self::Clock => {
+                1.0
+            }
             Self::RepeatLength => (REPEAT_LENGTH_NAMES.len() - 1) as f32,
             Self::Repeats => (REPEAT_NAMES.len() - 1) as f32,
             Self::Retime => (RETIMES.len() - 1) as f32,
@@ -290,6 +304,7 @@ impl Setting {
             Self::CombMode => (CombMode::ALL.len() - 1) as f32,
             Self::CloudsMode => (CloudsMode::ALL.len() - 1) as f32,
             Self::Quality => (QUALITY_NAMES.len() - 1) as f32,
+            Self::BeadsMode => (BeadsMode::ALL.len() - 1) as f32,
             _ => 255.0,
         }
     }
@@ -329,8 +344,9 @@ impl Param {
 }
 
 /// The most settings any effect shows at once, in the type or mode it's in: a grid's twelve and
-/// its type or mode in the title (decision 312).
-pub const MAX_PARAMS: usize = 13;
+/// its type or mode in the title (decision 312), and Beads' quality beside its mode there
+/// (decision 320).
+pub const MAX_PARAMS: usize = 14;
 /// The most settings any effect keeps across all of its types and modes, of which it shows at
 /// most [`MAX_PARAMS`]. A compressor keeps each type's own.
 pub const MAX_KEPT_PARAMS: usize = 17;
@@ -419,7 +435,7 @@ fn source_track(source: u8, sounds: usize) -> Option<usize> {
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 27] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -446,6 +462,7 @@ impl Insert {
         Self::Exciter(Exciter::DEFAULT),
         Self::Stutter(Stutter::DEFAULT),
         Self::Clouds(Clouds::DEFAULT),
+        Self::Beads(Beads::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -489,6 +506,7 @@ impl Insert {
             Self::Rotary(_) => "Rotary",
             Self::Space(_) => "Space",
             Self::Clouds(_) => "Clouds",
+            Self::Beads(_) => "Beads",
         }
     }
 
@@ -525,6 +543,7 @@ impl Insert {
             Self::Clouds(_) => {
                 "Mutable's Clouds: grains, stretching or a looping delay, with reverb"
             }
+            Self::Beads(_) => "Mutable's Beads: grains or a delay on tape or digital, with reverb",
         }
     }
 
@@ -566,6 +585,7 @@ impl Insert {
             Self::Exciter(_) => &EXCITER_PARAMS,
             Self::Stutter(_) => &STUTTER_PARAMS,
             Self::Clouds(_) => &CLOUDS_PARAMS,
+            Self::Beads(_) => &BEADS_PARAMS,
         }
     }
 
@@ -736,6 +756,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| clouds.read(setting));
             }
+            Self::Beads(beads) => {
+                return BEADS_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| beads.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -785,6 +811,7 @@ impl Insert {
             Self::Rotary(rotary) => return Self::Rotary(rotary.written(setting, whole)),
             Self::Space(space) => return Self::Space(space.written(setting, whole)),
             Self::Clouds(clouds) => return Self::Clouds(clouds.written(setting, whole)),
+            Self::Beads(beads) => return Self::Beads(beads.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -816,8 +843,21 @@ impl Insert {
                     | Setting::GateMode
                     | Setting::CombMode
                     | Setting::CloudsMode
+                    | Setting::BeadsMode
             )
         })
+    }
+
+    /// A second setting the FX page shows in the slot's title, after its type: Beads' quality,
+    /// which, as its mode does, chooses what it is rather than how it's played.
+    pub fn title_param(self) -> Option<usize> {
+        match self {
+            Self::Beads(_) => self
+                .params()
+                .iter()
+                .position(|found| found.setting == Setting::Quality),
+            _ => None,
+        }
     }
 
     /// Where its settings sit on the FX page, by their places among those it has now. Its type is
@@ -889,6 +929,15 @@ impl Insert {
                 &[S::CloudsDensity, S::Texture, S::Freeze],
                 &[S::Spread, S::Feedback, S::ReverbAmount],
                 &[S::Quality, S::Mix, S::Gain],
+            ],
+            // The module's big knobs; its pitch, its attenuverters' randomness and its freeze
+            // button; its density, the clock it follows and its feedback; then its reverb over
+            // what comes out. Its mode and quality are in the title.
+            Self::Beads(_) => &[
+                &[S::BeadsTime, S::Length, S::Shape],
+                &[S::Shift, S::Random, S::Freeze],
+                &[S::BeadsDensity, S::Clock, S::Feedback],
+                &[S::ReverbAmount, S::Mix, S::Gain],
             ],
             _ => return self.default_grid(),
         };

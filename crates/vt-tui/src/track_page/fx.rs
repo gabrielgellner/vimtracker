@@ -21,12 +21,16 @@ pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
 }
 
 impl DeviceSpec {
-    /// A slot on the FX page: its effect over the grid's first column and its type over the
-    /// second, then its effect's grid. An empty slot has only its effect.
+    /// A slot on the FX page: its effect over the grid's first column, its type over the second
+    /// and, for Beads, its quality over the third, then its effect's grid. An empty slot has only
+    /// its effect.
     pub fn slot(slot: usize, insert: Insert) -> Self {
         let mut title = [None; DEVICE_COLUMNS];
         title[0] = Some(Control::Insert(slot));
         title[1] = insert.type_param().map(|at| Control::InsertParam(slot, at));
+        title[2] = insert
+            .title_param()
+            .map(|at| Control::InsertParam(slot, at));
         let device = Self::new((slot + 1).to_string(), title, insert.grid(), |at| {
             Control::InsertParam(slot, at)
         });

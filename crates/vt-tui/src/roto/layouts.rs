@@ -1358,6 +1358,41 @@ const CLOUDS: DeviceLayout = stored(
         ),
     ],
 );
+/// The module's four big knobs, its density, its reverb and its dry/wet, with `Freeze` on the
+/// button under `Time`, as `Grains` and `Clouds` have it; then what its attenuverters stray, its
+/// feedback, the clock it follows and its quality on a page of their own.
+const BEADS: DeviceLayout = stored(
+    "fx/beads",
+    &[
+        page(
+            "Beads",
+            [
+                s("time"),
+                s("size"),
+                s("shape"),
+                tinted("pitch", Family::Time),
+                s("density"),
+                s("reverb"),
+                s("blend"),
+                s("gain"),
+            ],
+            button(0, "freeze"),
+        ),
+        knobs(
+            "Random",
+            [
+                s("random"),
+                s("feedback"),
+                s("clock"),
+                s("quality"),
+                __,
+                __,
+                __,
+                __,
+            ],
+        ),
+    ],
+);
 const WARPS: DeviceLayout = live(
     "fx/warps",
     &[knobs(
@@ -1928,7 +1963,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
 }
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 101] = [
+pub const ALL: [&DeviceLayout; 102] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -2030,6 +2065,7 @@ pub const ALL: [&DeviceLayout; 101] = [
     &EXCITER,
     &STUTTER,
     &CLOUDS,
+    &BEADS,
 ];
 
 /// A machine's layout.
@@ -2127,6 +2163,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::Spring(_) => &SPRING,
         Insert::Stutter(_) => &STUTTER,
         Insert::Clouds(_) => &CLOUDS,
+        Insert::Beads(_) => &BEADS,
         Insert::Rotary(_) => &ROTARY,
         Insert::Exciter(_) => &EXCITER,
         Insert::Space(_) => &SPACE,

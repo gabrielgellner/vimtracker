@@ -13,9 +13,9 @@ use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_model::bank::{BankEntry, ContentHash};
 use vt_model::insert::{
-    Chorus, ChorusType, Clouds, CloudsMode, Compressor, CompressorType, Distort, DistortType,
-    Exciter, FreqShift, Grains, INSERTS, Insert, Pitch, Plate, QUALITY_NAMES, Rotary, Space,
-    Spring, Stutter, Warps,
+    BEADS_QUALITY_NAMES, Beads, BeadsMode, Chorus, ChorusType, Clouds, CloudsMode, Compressor,
+    CompressorType, Distort, DistortType, Exciter, FreqShift, Grains, INSERTS, Insert, Pitch,
+    Plate, QUALITY_NAMES, Rotary, Space, Spring, Stutter, Warps,
 };
 use vt_model::modulation::{MOD_SLOTS, ModKind};
 use vt_model::sample::SampleData;
@@ -201,6 +201,38 @@ fn effects() -> Vec<(String, Insert)> {
             Insert::Clouds(clouds),
         ));
     }
+    // Beads' delay, its other qualities, its densest longest grains in the dirtiest, and its
+    // delay at its shortest with its pitch shifted, which reads each tap twice.
+    let delay = Beads {
+        mode: BeadsMode::Delay,
+        ..Beads::DEFAULT
+    };
+    all.push(("Beads Delay".to_owned(), Insert::Beads(delay)));
+    for (quality, name) in BEADS_QUALITY_NAMES.into_iter().enumerate().skip(1) {
+        let beads = Beads {
+            quality: quality as u8,
+            ..Beads::DEFAULT
+        };
+        all.push((format!("Beads {name}"), Insert::Beads(beads)));
+    }
+    for (density, name) in [(0x00, "regular"), (0xFF, "random")] {
+        let beads = Beads {
+            density,
+            size: 0xFF,
+            quality: 3,
+            ..Beads::DEFAULT
+        };
+        all.push((
+            format!("Beads densest {name}, Scorched cassette"),
+            Insert::Beads(beads),
+        ));
+    }
+    let shifted = Beads {
+        density: 0x00,
+        pitch: vt_model::insert::MOST_SHIFT + 7,
+        ..delay
+    };
+    all.push(("Beads Delay shifted".to_owned(), Insert::Beads(shifted)));
     all
 }
 
