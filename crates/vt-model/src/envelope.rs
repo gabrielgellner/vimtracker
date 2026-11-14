@@ -125,6 +125,8 @@ impl Curve {
     }
 }
 
+crate::listed::listed!(Curve: meaning);
+
 /// Vital's `powerScale` at `p = -rate`, written as Peaks writes its fall.
 #[inline]
 fn bent(rate: f32, t: f32) -> f32 {

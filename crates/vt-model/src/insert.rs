@@ -843,6 +843,8 @@ impl Insert {
     }
 }
 
+crate::listed::listed!(Insert: meaning);
+
 fn unity_gain() -> u8 {
     UNITY_LEVEL
 }

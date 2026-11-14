@@ -152,6 +152,8 @@ impl Warp {
     }
 }
 
+crate::listed::listed!(Warp);
+
 /// The most cents an entry's tune can be moved either way, short of a semitone, which is the
 /// tune's.
 pub const MAX_CENTS: i8 = 99;

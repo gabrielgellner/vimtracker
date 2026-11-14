@@ -406,6 +406,8 @@ impl Shape {
     }
 }
 
+crate::listed::listed!(Shape);
+
 /// A wave's value from -1 to 1, some number of cycles from its start. It's worked out from where
 /// the song is rather than stepped along, so it can't drift, and the same project gives the same
 /// result. `key` picks a random wave's
@@ -555,6 +557,8 @@ impl LfoMode {
         }
     }
 }
+
+crate::listed::listed!(LfoMode: meaning);
 
 /// How many lengths a fade can take either way: the sweeps', from `1/64` to 16 bars.
 const FADES: usize = SWEEPS;
