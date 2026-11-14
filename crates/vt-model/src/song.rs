@@ -702,6 +702,7 @@ impl Track {
     }
 
     /// Whether any of its macros holds anything.
+    #[inline]
     pub fn has_macro_maps(&self) -> bool {
         self.macros.iter().any(|held| !held.maps.is_empty())
     }
