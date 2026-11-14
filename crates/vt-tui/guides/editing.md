@@ -434,7 +434,7 @@ already there it keeps their rhythm.
 |---|---|
 | From, To | The riff's notes come from between them, and From is its root |
 | Notes | How many notes the riff has, from 1 to 8, its root among them |
-| Spread, Bias | Which notes between the ends the riff takes, as `Random`'s lean its values |
+| Spread, Bias | Which notes between the ends the riff takes |
 | Octave | The chance a note goes an octave up or down |
 | Density | On an empty column, the share of rows that play |
 | Accent | The chance a note is accented, written as `7F` |
