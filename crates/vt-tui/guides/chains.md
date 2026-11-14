@@ -240,6 +240,19 @@ once, as a `:reset` would, without changing what they play:
 Press either again before the line to take it back. While one waits, the status
 line shows `󰔟 REALIGN`. With `:launch chain` they wait for the next bar.
 
+Tracks' clocks can be passed round, too, as on 4ms' Shuffling Clock Multiplier:
+
+| Keys | Does |
+|---|---|
+| `Space o` | Each track of this group takes the next one's `Speed` |
+| `Space O` | The same round every track |
+
+In Visual, `Space o` goes round the tracks selected.
+
+It's heard from each track's next step, and as many presses as tracks bring the
+speeds back. While recording, it writes held `RATE`s on the next rows instead:
+see **Rotating speeds** in **FX commands**.
+
 Mutes and solos can land on the grid too, for a drop or an entry on the bar:
 
 | Keys | Does, while playing |

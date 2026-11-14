@@ -78,6 +78,9 @@ pub enum Cmd {
     /// Start the cursor's track's chain again at the next line of the launch grid, or take back
     /// one waiting for it.
     RealignTrack,
+    /// Rotate the speeds round the tracks selected or the cursor's group, or with `true` round
+    /// every track: each takes the next one's (decision 328).
+    RotateSpeeds(bool),
     /// Give the cursor's track's faders, or every track's, back to the steps' automation.
     GiveBack,
     GiveBackAll,
@@ -277,6 +280,16 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         "Space a",
         Cmd::RealignTrack,
         "Realign this track on the launch grid, or take it back",
+    ),
+    (
+        "Space o",
+        Cmd::RotateSpeeds(false),
+        "Rotate the speeds round this group: each takes the next's",
+    ),
+    (
+        "Space O",
+        Cmd::RotateSpeeds(true),
+        "Rotate the speeds round every track: each takes the next's",
     ),
     (
         "Space e",
@@ -1025,6 +1038,11 @@ const VISUAL: &[(&str, Cmd, &str)] = &[
         "Space g A",
         Cmd::BakeMods,
         "Write the pitch the mod slots played into the selected notes",
+    ),
+    (
+        "Space o",
+        Cmd::RotateSpeeds(false),
+        "Rotate the speeds round the tracks selected",
     ),
     (".", Cmd::Repeat, "Repeat the last change on the selection"),
     (
