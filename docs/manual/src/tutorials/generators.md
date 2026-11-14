@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds fifteen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds seventeen of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -13,6 +13,7 @@ there are no samples to find.
 | `fugue` | Fugue Machine | One theme and three tracks following it live with `Follow`, each at its own `Speed` |
 | `kria` | monome's Kria | Triggers, pitches, octaves and lengths on loops of different lengths |
 | `metropolix` | Intellijel's Metropolix | Pulses and gates per row, `ACU`, `ARP` and a pendulum order |
+| `eloquencer` | Winter Modular's Eloquencer | `RND`: a chance on each row of a note, a length, a velocity or a ratchet varying |
 | `live-generators` | Elektron's Euclidean mode | Columns kept live with `L`, and what hand edits do to them |
 | `acid-lines` | Roland's TB-303 | `S`'s `Acid` fill: notes, accents and slides rolled together |
 | `walks` | Max's `drunk` and Voss's 1/f music | `S`'s `Walk` and `1/f` fills, kept live |
@@ -21,6 +22,7 @@ there are no samples to find.
 | `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
 | `random-rhythm` | Vermona's randomRHYTHM | `S`'s `Divisions`: a chance per division, triplets nudged between the rows |
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
+| `marbles-t` | Mutable Instruments' Marbles' T | `S`'s `Complementary`, `Markov`, `3 states` and `Clusters` rows |
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 | `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
@@ -530,6 +532,79 @@ The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `C0`, `Env m
 *   Track 2's `ARP` to `13` or `35` for other shapes, `Mode` `Random`, or `Oct` 3.
 *   Track 1 at `1/8`, the clock divided, under the same arpeggio.
 
+## Eloquencer
+
+Winter Modular's Eloquencer is a sequencer whose steps each carry their own chances, which it
+calls controlled chance: how likely the step's pitch is to vary and how far, how likely its gate
+is to play, how much its gate's length varies, and how likely it is to ratchet, with a range of
+ratchets to choose from. The line stays the one you wrote, and wanders round it by as much as you
+let each step. `RND xy` is this on a row: a chance `x` in `F` that what's to its left varies, by
+up to `y`.
+
+**How the song does it.** Track 1, a `VA` in D minor, is a line of twelve notes. The roots carry
+`RND 31`, so a fifth of the time they move a degree, and the rest wander more: `RND 62` and
+`RND A2` move up to two degrees, two times in five and two in three, `RND 83` up to three about
+half the time, and the last note, `RND F3`, always moves. The two `F-3`s have none. On the roots and the `G-3`, an `RND` beside a `LEN` varies the length instead:
+`LEN 60 RND A4` plays the note anywhere from `20` to `A0` long, two times in three. Track 2's hats
+have the other two of the module's chances: an `RND` beside a `VDLT 80` on the off-beats, so
+their velocity wanders up to `30` either way, and beside a `RET 02` before each beat, so they
+ratchet two times in five, with the ratchet's units anywhere from 1 to 3. Track 3 is a kick on
+every beat. [`song.ron`](songs/eloquencer/song.ron)
+
+```text
+Track 1                                Track 2
+00  D-3 64  RND 31  LEN 60  RND A4     00  --- --
+01  --- --                             01  --- --
+02  A-3 50  RND 62                     02  C-4 50  VDLT 80  RND F3
+03  F-3 50                             03  C-4 40  RET 02   RND 61
+04  D-3 64  RND 31  LEN 60  RND A4     ... the same each beat
+05  C-4 50  RND A2
+06  --- --
+07  A-3 50  RND 62
+08  D-3 64  RND 31  LEN 60  RND A4
+09  --- --
+0A  E-3 50  RND 83
+0B  F-3 50
+0C  G-3 64  RND 62  LEN 40  RND A6
+0D  A-3 50  RND A2
+0E  --- --
+0F  C-4 50  RND F3
+```
+
+Each roll is worked out from the `:seed` and where the track is, so the line goes a different
+way every bar, the same every time you play it, and playing from a step plays what playing up to
+it would.
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=d` and `:bpm 116`.
+2.  Track 1: `K` `va` `Enter`, `:name EQ`. In the phrase view, type the notes and velocities.
+3.  The chances: on row `00`'s FX 1, `K` `rnd` `Enter` and `31`. The status line says what it
+    does: `20% of the times it plays, moves the note up to 1 scale degree either way`. Then the
+    other rows' `RND`s the same way, each in FX 1, so there's nothing to their left but the note.
+4.  The lengths: on row `00`'s FX 2, `K` `len` `Enter` `60`, and on its FX 3 `K` `rnd` `Enter`
+    `A4`. Beside the `LEN`, the status line says `67% of the times it plays, moves LEN up to 40
+    either way`. The same on rows `04` and `08`, and `LEN 40 RND A6` on row `0C`.
+5.  Track 2: `W`, `K` `/hat` `Enter`, `:name HH`, and `C-4 50` on rows `02`, `06`, `0A` and
+    `0E`, each with `VDLT 80` (`K` `vdlt` `Enter` `80`), which leaves the velocity as written,
+    and `RND F3` beside it. On rows `03`, `07`, `0B` and `0F`, `C-4 40` with `RET 02` and
+    `RND 61`.
+6.  Track 3: a `Kick` on every beat.
+
+The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay` `260 ms` and `Sustain` `45%`),
+sets its `Cut` `90`, sends it to the delay and the reverb, a shorter hat, and the levels.
+
+**Try next.**
+
+*   `+` on an `RND`'s value raises its chance a step and `=` widens its range, so the roots
+    wander as much as the rest, or `-` and `_` pin a note back down.
+*   `:seed 9`, and every `RND` rolls otherwise, as the module's random source would.
+*   `:set scale=off`: the same `RND`s move by semitones, and the line goes chromatic.
+*   An `ACU 01` on row `05`: the `C-4` climbs a degree each bar and wanders round where it's got.
+*   When a bar goes somewhere you like, `Space g A` on track 1 writes its notes in, as they were
+    heard, and takes their `RND`s out, so it stays. The `RND`s beside the `LEN`s stay, so the
+    lengths keep varying.
+
 ## Live generators
 
 Generators on Elektron's newer boxes, the Cirklon and the Hapax stay tied to their settings:
@@ -917,6 +992,76 @@ and `Steps` on macros; add it with `:patch`.
     `M` a macro: map both to one, and an LFO on it sweeps the tune from a drone to a scatter.
 *   `Vary` `Each pass` on the bass, and every pass draws a new pattern of octaves.
 
+## Marbles' T
+
+Marbles' T section is a random clock: its gates fire at random, and its models say how. In
+*complementary Bernoulli*, one coin a tick decides which of two outputs fires, so they never fire
+together; in *clusters*, hits bunch together, then leave gaps; in *Markov*, each tick's chance
+hangs on what fired before, leaning toward what fired eight ticks back; and in *three states*,
+each tick is one output, the other, or neither. One knob, Bias, shapes each model. These four are
+`Where` choices, each with an `Amount`: `Complementary` across two tracks, `Clusters`, `Markov`,
+and `3 states`, where on one track the two outputs are a gate and a tie, a note held into the
+next.
+
+**How the song does it.** Five tracks in A minor, each a live generator writing notes of its own
+on 16 rows:
+
+| Track | Where | Fill |
+|---|---|---|
+| `HH` | `Complementary` `65%`, `First` | `C-4` on every row it plays |
+| `PC` | `Complementary` `65%`, `Second` | `Random`, `A-3` to `A-4` |
+| `BD` | `Markov` `90%` | `C-1` on every row it plays |
+| `BS` | `3 states` `80%` | `Random`, `A-1` to `A-2` |
+| `ST` | `Clusters` `35%` | `Random`, `A-3` to `A-5` |
+
+The hat and the modal percussion share one coin, so every sixteenth is one's or the other's,
+never both, the hat on about two in three. The kick's Markov at `90%` keeps to an eight-row loop,
+here the same twice; lower, the second eight rows stray further from the first. The bass's three states at `80%` are mostly rests and ties,
+so it holds its notes, `~` below for a note held into the next (its gate `HLD`). The string plays
+in bunches of two to four. [`song.ron`](songs/marbles-t/song.ron)
+
+```text
+HH  x.xxx..x..xxx.x.
+PC  .x...xx.xx...x.x
+BD  x..x...xx..x...x
+BS  ...xx~x...~~x...
+ST  .xxxx..xxx......
+```
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 120`.
+2.  Tracks 1 to 5: on each Sound page, `Space 5`, the machines `/hat`, `/modal`, `/kick`, `va` and
+    `string` (`K`, the name, `Enter`), named `HH`, `PC`, `BD`, `BS` and `ST` with `:name`.
+3.  The hat and the percussion: on track 1, `Space 3`, `vG` on the Note column, `W` to reach
+    track 2, and `S`. `From` and `To` `c4` (`i`, the note, `Enter`). `j` down to `Where`, `K`
+    `/compl` `Enter`: the panel says `Each row goes to one track or the other`. `j` to `Amount`,
+    `i` `65` `Enter`, and `L`. Track 1 is the coin's `First` side and track 2 its `Second`.
+4.  On track 2, `gl` on one of its notes reopens its own generator. On `Fill`, `K` `random`
+    `Enter`, `From` `a3`, `To` `a4`, and `L`. Its rows stay the coin's.
+5.  The kick: track 3, `vG`, `S`, both ends `c1`, `Where` `Markov` with an `Amount` of 90, and
+    `L`.
+6.  The bass: track 4, `vG`, `S`, `Fill` `Random`, `From` `a1`, `To` `a2`, `Where` `3 states`
+    with 80, and `L`.
+7.  The string: track 5, `vG`, `S`, `Fill` `Random`, `From` `a3`, `To` `a5`, `Where` `Clusters`
+    with 35, and `L`.
+
+Each `S` draws a seed of its own, so your rhythms differ from the song's; `r` in the panel draws
+again. The finished song also sets the hat's and the kick's `Decay`, the string's, the bass's
+filter, the sends and the levels.
+
+**Try next.**
+
+*   `gl` on the hat and `Amount` `30`, then the same on the percussion: it takes most of the
+    rows now. Each generator keeps its own amount, so turn both, or map both to one macro.
+*   `K` on the percussion's `Side` makes it `First`: it plays the hat's rows, together.
+*   On the kick, `Amount` `100%` repeats its eight rows exactly; `33%` is a sparse coin; `0%` is
+    busier, and never plays the same eight rows twice.
+*   On the bass, `Amount` `0%` is mostly gates, short notes, and `50%` mostly rests.
+*   `Vary` `Each pass` on the string, and every pass bunches its notes anew.
+*   On the Gen page, `Space 8`, each `Amount` is a cell to turn while it plays, and on the Roto
+    knob 7.
+
 ## Variations of your own phrase
 
 Write a line, then ask for another one like it. A Markov chain does that by
@@ -1090,7 +1235,6 @@ These are planned, each its own issue, and this chapter grows a section as each 
 
 | Issue | Generator |
 |---|---|
-| [#586](https://github.com/gabrielgellner/vimtracker/issues/586) | Marbles' rhythm models as `Where` choices |
 | [#589](https://github.com/gabrielgellner/vimtracker/issues/589) | Cellular automata rhythms from Wolfram's elementary rules |
 | [#590](https://github.com/gabrielgellner/vimtracker/issues/590) | Tonnetz chord movement: P, L and R moves |
 | [#591](https://github.com/gabrielgellner/vimtracker/issues/591) | Per-attribute loop lengths after Kria |

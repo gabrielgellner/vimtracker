@@ -438,6 +438,22 @@ only changes the pitch, as a tie does; on, each starts again, as a `RET`'s does.
 `Random` draws from a stream of the track's own, so `CHA` rolls as it would
 without it, and a render repeats.
 
+## A variation is rolled where the track is
+
+An `RND xy` gives what's to its left a chance of varying each time its row plays:
+the note, a lock's value, or whether a `RET` ratchets. Each roll is worked out from
+the `:seed`, the track, how far the track is into its chain and the column, as a
+condition's pass is, rather than drawn from a stream in turn. So a render repeats,
+playing from a step hears what playing up to it would, a `CHA` rolls as it would
+without it, and the chain starting again plays the same variations again. It
+moves the note from where an `ACU` has it, without adding to the walk, and an
+`ARP` goes round the note it moved to:
+
+```text
+row:         C-3  ACU 01  RND F1      scale off
+heard:       B-2   D-3   C#3   E-3   ...    each pass one up, then 1 either way
+```
+
 ## Envelopes follow notes, LFOs follow the song
 
 Each track has three envelopes and three LFOs, on its Mod page. An **envelope** belongs

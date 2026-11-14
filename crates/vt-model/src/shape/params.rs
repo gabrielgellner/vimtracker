@@ -21,6 +21,7 @@ use super::{
     ShapeColumn, Source, VARIES, Values, Variation, WAVES, WaveRate, Where, default_step,
     degree_count, degree_name, first_note,
 };
+use super::{CLUSTERS, MARKOV, SHARE, STATES};
 
 /// How far a small and a large step move a curve, here and in a macro mapping's `Curve` and `S`.
 pub const BEND_NUDGE: i32 = 5;
@@ -340,6 +341,14 @@ pub enum GenParam {
     Chance,
     Hits,
     Rotate,
+    /// The amounts of Marbles' rhythms: how many rows `Clusters` plays, the Bias of `Markov` and
+    /// of `3 states`, and the first track's share of `Complementary`'s rows, then which side of
+    /// its coin this track is.
+    Clusters,
+    Markov,
+    States,
+    Share,
+    Side,
     /// How many passes each of its variations lasts, a new seed each time, for a shape that
     /// draws from its seed: none, each pass, or every two, four or eight.
     Vary,
@@ -347,7 +356,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 72] = [
+    pub const ALL: [Self; 77] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -419,6 +428,11 @@ impl GenParam {
         Self::Chance,
         Self::Hits,
         Self::Rotate,
+        Self::Clusters,
+        Self::Markov,
+        Self::States,
+        Self::Share,
+        Self::Side,
         Self::Vary,
     ];
 
@@ -496,6 +510,11 @@ impl GenParam {
             Self::Chance => "chance",
             Self::Hits => "hits",
             Self::Rotate => "rotate",
+            Self::Clusters => "clusters",
+            Self::Markov => "markov",
+            Self::States => "states",
+            Self::Share => "share",
+            Self::Side => "side",
             Self::Vary => "vary",
         }
     }
@@ -505,8 +524,8 @@ impl GenParam {
         Self::ALL.into_iter().find(|param| param.key() == key)
     }
 
-    /// Its name on screen. An `Every`'s step and a `Chance`'s percent are both its `Where`'s
-    /// amount.
+    /// Its name on screen. An `Every`'s step, a `Chance`'s percent and the amounts of Marbles'
+    /// rhythms are each its `Where`'s amount.
     pub fn name(self) -> &'static str {
         match self {
             Self::Fill => "Fill",
@@ -576,7 +595,13 @@ impl GenParam {
             Self::Values => "Values",
             Self::Run => "Run",
             Self::Where => "Where",
-            Self::Every | Self::Chance => "Amount",
+            Self::Every
+            | Self::Chance
+            | Self::Clusters
+            | Self::Markov
+            | Self::States
+            | Self::Share => "Amount",
+            Self::Side => "Side",
             Self::Hits => "Hits",
             Self::Rotate => "Rotate",
             Self::Vary => "Vary",
@@ -609,6 +634,10 @@ impl GenParam {
             | Self::Accent
             | Self::Slide
             | Self::Chance
+            | Self::Clusters
+            | Self::Markov
+            | Self::States
+            | Self::Share
             | Self::Spread
             | Self::Temperature
             | Self::Quarters
@@ -647,6 +676,7 @@ impl GenParam {
             | Self::Masks
             | Self::Part
             | Self::Rows
+            | Self::Side
             | Self::Channel
             | Self::Bar
             | Self::Vary => Units::Named,
@@ -779,6 +809,10 @@ impl GenParam {
             Self::Every => rows && matches!(shape.place, Where::Every(_)),
             Self::Chance => rows && matches!(shape.place, Where::Chance(_)),
             Self::Hits | Self::Rotate => rows && matches!(shape.place, Where::Euclid { .. }),
+            Self::Clusters => rows && matches!(shape.place, Where::Clusters(_)),
+            Self::Markov => rows && matches!(shape.place, Where::Markov(_)),
+            Self::States => rows && matches!(shape.place, Where::States(_)),
+            Self::Share | Self::Side => rows && matches!(shape.place, Where::Complementary { .. }),
             Self::Vary => shape.draws(),
         }
     }
@@ -913,6 +947,10 @@ impl GenParam {
             super::Where::Every(_) => [None, None, Some(Every)],
             super::Where::Chance(_) => [None, None, Some(Chance)],
             super::Where::Euclid { .. } => [None, Some(Hits), Some(Rotate)],
+            super::Where::Clusters(_) => [None, None, Some(Clusters)],
+            super::Where::Markov(_) => [None, None, Some(Markov)],
+            super::Where::States(_) => [None, None, Some(States)],
+            super::Where::Complementary { .. } => [None, Some(Share), Some(Side)],
             _ => none,
         };
         let mut more = none;
@@ -1013,6 +1051,24 @@ impl GenParam {
         self.mutation_kind_mut(&mut mutations).map(|on| *on)
     }
 
+    /// The amount of one of Marbles' rhythms, as its `Where`'s field, where the `Where` is the one
+    /// it's the amount of.
+    fn marbles_amount_mut(self, place: &mut Where) -> Option<&mut u8> {
+        match (self, place) {
+            (Self::Clusters, Where::Clusters(amount))
+            | (Self::Markov, Where::Markov(amount))
+            | (Self::States, Where::States(amount))
+            | (Self::Share, Where::Complementary { share: amount, .. }) => Some(amount),
+            _ => None,
+        }
+    }
+
+    /// The same, read.
+    fn marbles_amount(self, place: Where) -> Option<u8> {
+        let mut place = place;
+        self.marbles_amount_mut(&mut place).map(|amount| *amount)
+    }
+
     /// The settings a shape has on a column, in order.
     pub fn of(shape: &Shape, column: ShapeColumn, generates: bool) -> Vec<Self> {
         Self::ALL
@@ -1055,6 +1111,14 @@ impl GenParam {
             },
             Self::Rotate => match shape.place {
                 Where::Euclid { rotate, .. } => rotate.to_string(),
+                _ => String::new(),
+            },
+            Self::Clusters | Self::Markov | Self::States | Self::Share => self
+                .marbles_amount(shape.place)
+                .map_or_else(String::new, |amount| format!("{amount}%")),
+            Self::Side => match shape.place {
+                Where::Complementary { second: true, .. } => "Second".to_owned(),
+                Where::Complementary { .. } => "First".to_owned(),
                 _ => String::new(),
             },
             Self::Notes => shape.acid.notes.to_string(),
@@ -1209,7 +1273,8 @@ impl GenParam {
             | Self::DropAdd
             | Self::Edge
             | Self::Masks
-            | Self::Rows => Typing::Toggled,
+            | Self::Rows
+            | Self::Side => Typing::Toggled,
             Self::Part | Self::Channel | Self::Bar => Typing::Listed,
             Self::Axis | Self::Pitch => Typing::Named { list: false },
             Self::MapX
@@ -1349,6 +1414,16 @@ impl GenParam {
                     let rotate =
                         (i32::from(rotate) + by(1, EUCLID_JUMP)).rem_euclid(open.max(1)) as u16;
                     shape.place = Where::Euclid { hits, rotate };
+                }
+            }
+            Self::Clusters | Self::Markov | Self::States | Self::Share => {
+                if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
+                    *amount = moved(i32::from(*amount), by(1, CHANCE_JUMP), 0, 100) as u8;
+                }
+            }
+            Self::Side => {
+                if let Where::Complementary { second, .. } = &mut shape.place {
+                    *second = !*second;
                 }
             }
             Self::Notes => {
@@ -1607,6 +1682,19 @@ impl GenParam {
                     shape.place = Where::Euclid { hits, rotate: 0 };
                 }
             }
+            Self::Clusters | Self::Markov | Self::States | Self::Share => {
+                let start = match self {
+                    Self::Clusters => CLUSTERS,
+                    Self::Markov => MARKOV,
+                    Self::States => STATES,
+                    _ => SHARE,
+                };
+                if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
+                    *amount = start;
+                }
+            }
+            // Which side of the coin a track is, so the other track of the two keeps its own.
+            Self::Side => {}
         }
     }
 
@@ -1668,6 +1756,14 @@ impl GenParam {
                 }
                 _ => return Err("Hits and Rotate are whole numbers"),
             },
+            Self::Clusters | Self::Markov | Self::States | Self::Share => {
+                let typed = text
+                    .parse::<u16>()
+                    .map_err(|_| "An amount runs from 0 to 100")?;
+                if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
+                    *amount = typed.min(100) as u8;
+                }
+            }
             // A wave here is laid out by rows, so a rate has to be in time with them.
             Self::Rate => {
                 shape.rate = text
@@ -1828,6 +1924,7 @@ impl GenParam {
             | Self::Masks
             | Self::Part
             | Self::Rows
+            | Self::Side
             | Self::Channel
             | Self::Bar
             | Self::Vary => {}
@@ -1867,7 +1964,8 @@ impl GenParam {
             | Self::SnareDensity
             | Self::HatDensity
             | Self::Chaos => (0, 0xFF),
-            Self::Rows => (0, 1),
+            Self::Rows | Self::Side => (0, 1),
+            Self::Clusters | Self::Markov | Self::States | Self::Share => (0, 100),
             // Its choices' places, without a list, so the engine can hold them.
             Self::Channel => (0, Channel::ALL.len() as i32 - 1),
             Self::Bar => (0, Bar::ALL.len() as i32 - 1),
@@ -2000,6 +2098,13 @@ impl GenParam {
                 Where::Euclid { rotate, .. } => i32::from(rotate),
                 _ => return None,
             },
+            Self::Clusters | Self::Markov | Self::States | Self::Share => {
+                i32::from(self.marbles_amount(shape.place)?)
+            }
+            Self::Side => match shape.place {
+                Where::Complementary { second, .. } => i32::from(second),
+                _ => return None,
+            },
             Self::Notes => i32::from(shape.acid.notes),
             Self::Octave | Self::Density | Self::Accent | Self::Slide => {
                 i32::from(acid_chance(shape.acid, self)?)
@@ -2057,6 +2162,16 @@ impl GenParam {
                         hits,
                         rotate: number as u16,
                     };
+                }
+            }
+            Self::Clusters | Self::Markov | Self::States | Self::Share => {
+                if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
+                    *amount = number as u8;
+                }
+            }
+            Self::Side => {
+                if let Where::Complementary { second, .. } = &mut shape.place {
+                    *second = number != 0;
                 }
             }
             Self::Notes => shape.acid.notes = number as u8,

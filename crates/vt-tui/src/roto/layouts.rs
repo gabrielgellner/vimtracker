@@ -1585,8 +1585,8 @@ const SPACE: DeviceLayout = live(
 
 // Live generators, after the Mod page's devices: a layout a fill, from the declared table
 // (`GenParam`), its settings in their musical order, and its `Where`'s on knobs 7 and 8 as an
-// effect's `Mix` and `Gain` are, `where1` being Euclid's `Hits` or an `Every` or a `Chance`, and
-// `where2` Euclid's `Rotate`. The fill and the `Where`, and a `Follow`'s source, are what the
+// effect's `Mix` and `Gain` are, `where1` being Euclid's `Hits`, an `Every`, a `Chance` or the
+// amount of one of Marbles' rhythms, and `where2` Euclid's `Rotate`. The fill and the `Where`, and a `Follow`'s source, are what the
 // device is, so they're chosen in the app (the generators study, `generators-page.md` §6). A
 // generator has no off/on settings of its own, so it's live, and `Acid`'s `Pitches` is a
 // two-step knob. `Vary` is knob 6, beside the `Where`, on every fill; `Wave`, `Acid` and
@@ -2219,8 +2219,9 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
 pub fn app_only(control: Control, track: &Track) -> bool {
     match control {
         Control::Machine | Control::Insert(_) | Control::Mod(_, ModField::Type) => true,
-        // A generator's fill and rows, what a `Follow` follows, which part a `Grids` plays and
-        // which channel a `Divisions` plays are what it is, and a `List`'s values and a `Random`'s weights are typed.
+        // A generator's fill and rows, what a `Follow` follows, which part a `Grids` plays, which
+        // channel a `Divisions` plays and which side of `Complementary`'s coin a track is are
+        // what it is, and a `List`'s values and a `Random`'s weights are typed.
         Control::Gen { param, .. } => matches!(
             param,
             GenParam::Fill
@@ -2229,6 +2230,7 @@ pub fn app_only(control: Control, track: &Track) -> bool {
                 | GenParam::Values
                 | GenParam::Part
                 | GenParam::Channel
+                | GenParam::Side
                 | GenParam::Weights
         ),
         Control::InsertParam(slot, param) => track.inserts[slot].type_param() == Some(param),
@@ -2250,7 +2252,15 @@ pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Co
     }
     // A generator's `Where`'s settings, whichever it has.
     let wanted: &[GenParam] = match setting.key {
-        WHERE_FIRST => &[GenParam::Hits, GenParam::Every, GenParam::Chance],
+        WHERE_FIRST => &[
+            GenParam::Hits,
+            GenParam::Every,
+            GenParam::Chance,
+            GenParam::Clusters,
+            GenParam::Markov,
+            GenParam::States,
+            GenParam::Share,
+        ],
         WHERE_SECOND => &[GenParam::Rotate],
         PART_DENSITY => &[
             GenParam::KickDensity,

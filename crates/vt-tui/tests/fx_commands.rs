@@ -1052,6 +1052,54 @@ fn k_chooses_arp_and_its_value_is_typed_as_two_digits() {
 }
 
 #[test]
+fn k_chooses_rnd_and_the_status_line_says_what_it_varies() {
+    use vt_model::step::FxCommand;
+    use vt_tui::views::status::value_shown;
+    let (mut app, _realtime) = app();
+    let slot = |app: &App, column: usize| app.phrase_here().unwrap().steps()[0].fx[column];
+    // On FX 2, beside an empty FX 1, it varies the note.
+    press(&mut app, "llllllllK");
+    press(&mut app, "RND");
+    let picker = app.picker.as_ref().expect("the commands are listed");
+    assert_eq!(
+        listed(picker.current().unwrap()),
+        "RND  Chance x of F to vary the note or lock left, by y"
+    );
+    special(&mut app, KeyCode::Enter);
+    // As `ARP`'s, its two digits are typed, and nothing goes in until they are.
+    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(slot(&app, 1).command, None);
+    press(&mut app, "84");
+    assert_eq!(slot(&app, 1).command, Some(FxCommand::Rnd));
+    assert_eq!(slot(&app, 1).coarse(), 0x84);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("53% of the times it plays, moves the note up to 4 semitones either way")
+    );
+    // `=` and `-` move the range and `+` and `_` the chance, neither carrying into the other.
+    press(&mut app, "==");
+    assert_eq!(slot(&app, 1).coarse(), 0x86);
+    press(&mut app, "++++++++");
+    assert_eq!(slot(&app, 1).coarse(), 0xF6, "it stops at F");
+    command(&mut app, "set scale=on");
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("100% of the times it plays, moves the note up to 6 scale degrees either way")
+    );
+    // Beside a lock, it varies the lock.
+    app.cursor.field = vt_tui::app::Field::FxCommand(0);
+    press(&mut app, "K");
+    press(&mut app, "CUT");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "40");
+    app.cursor.field = vt_tui::app::Field::FxValue(1);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("100% of the times it plays, moves CUT up to 60 either way")
+    );
+}
+
+#[test]
 fn order_plays_the_phrases_rows_in_an_order_from_a_word_or_a_list() {
     use vt_model::order::Order;
     use vt_tui::input::command::Line;

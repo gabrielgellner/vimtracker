@@ -1,5 +1,5 @@
 //! Working out a track's step and playing it: the row it lands on, its nudge, its
-//! conditions, its accumulator and its arpeggio.
+//! conditions, its variations, its accumulator and its arpeggio.
 
 use std::sync::Arc;
 
@@ -15,6 +15,7 @@ use vt_model::speed::Speed;
 use vt_model::step::{
     FxCommand, FxSlot, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, Mark, Note, Step, most_nudge,
 };
+use vt_model::variation::{Roll, Variation, Varies, varied_lock, varied_ratchet, varies_at};
 
 use crate::gens::{Passes, Played, RowAt};
 use crate::track_state::{
@@ -301,12 +302,16 @@ impl Engine {
                                 | FxCommand::Ret
                                 | FxCommand::Acu
                                 | FxCommand::Arp
+                                | FxCommand::Rnd
                         )
                     )
         };
-        // Each FX column reads its own lane's step if it has one, and the note's row if not.
+        // Each FX column reads its own lane's step if it has one, and the note's row if not. What
+        // each reads is kept whether it runs on this pulse or not, for an `RND` to see what's to
+        // its left.
         let mut lane_steps = [None; FX_SLOTS];
         let mut fx = [FxSlot::default(); FX_SLOTS];
+        let mut read_fx = [FxSlot::default(); FX_SLOTS];
         for (number, slot) in fx.iter_mut().enumerate() {
             let lane = phrase.and_then(|phrase| Some((phrase, phrase.lane(number)?)));
             let found = match lane {
@@ -319,8 +324,14 @@ impl Engine {
                             .copied()
                     })
                 }
-                None => step.fx(number).copied().filter(|slot| row_fx(slot)),
+                None => {
+                    read_fx[number] = step.fx(number).copied().unwrap_or_default();
+                    step.fx(number).copied().filter(|slot| row_fx(slot))
+                }
             };
+            if lane_steps[number].is_some() {
+                read_fx[number] = found.unwrap_or_default();
+            }
             *slot = found.unwrap_or_default();
         }
         let mut delay_units = None;
@@ -362,6 +373,11 @@ impl Engine {
             }
         };
         let plays = decided.note;
+        let variation = if row && decided.fx {
+            self.vary(index, &mut fx, &read_fx, &lane_steps, count)
+        } else {
+            NoteVariation::default()
+        };
         // What the row's note does on this pulse.
         let event = event_of(step.note, gate, first);
         let tying = first && self.tracks[index].tied && self.tracks[index].voice.active();
@@ -382,7 +398,8 @@ impl Engine {
                 | FxCommand::Cha
                 | FxCommand::Cnd
                 | FxCommand::Acu
-                | FxCommand::Arp,
+                | FxCommand::Arp
+                | FxCommand::Rnd,
             ) => row && decided.fx,
             _ if lane_steps[number].is_some() => pending.part.runs_lanes(),
             _ => row && decided.fx,
@@ -396,7 +413,7 @@ impl Engine {
                 FxCommand::Kil => kill_units = Some(slot.coarse()),
                 FxCommand::Off => off_units = Some(slot.coarse()),
                 FxCommand::Ret => retrigger = Some(slot.coarse()),
-                FxCommand::Cha | FxCommand::Cnd => {}
+                FxCommand::Cha | FxCommand::Cnd | FxCommand::Rnd => {}
                 // Two on a row add up, as far as an `ACU` goes at once. A value past that is left
                 // out, as if it wasn't there.
                 FxCommand::Acu => {
@@ -475,15 +492,24 @@ impl Engine {
             Note::On(_) if !plays => {}
             Note::On(midi) => {
                 let heard = self.accumulate(index, epoch, key, midi, accumulates.filter(|_| adds));
+                // The row's `RND`s move the note from where the accumulators have it, so they
+                // don't add to the walk.
+                let moved = moved_note(heard, variation.by, self.scale);
+                self.tracks[index].accumulated = (moved != midi).then_some(moved);
                 if accumulation.adds == Adds::Retrig {
                     accumulating = accumulates.map(|amount| Accumulating {
                         row: key,
                         amount,
                         written: midi,
+                        varied: variation.by,
                         transpose: position.transpose,
                         epoch,
                     });
                 }
+                // What the row's own `RND`s moved it by, in semitones, as it's heard.
+                let own = moved_note(heard, variation.own, self.scale);
+                let varied = (i16::from(own) - i16::from(heard)) as i8;
+                let heard = moved;
                 let note = (i16::from(heard) + i16::from(position.transpose))
                     .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE))
                     as u8;
@@ -503,20 +529,23 @@ impl Engine {
                 };
                 let velocity = velocity.min(u32::from(MAX_VELOCITY)) as u8;
                 let on = self.note_on(index, note, velocity, self.note_shape(index));
-                // A row's note on a track with a slot on `Pitch` has what the slots move it by
-                // reported, from the phrase's first step, for `Space g A` to write in.
+                // A row's note on a track with a slot on `Pitch`, or with an `RND` of its own on
+                // its note, has what the slots and the `RND`s move it by reported, from the
+                // phrase's first step, for `Space g A` to write in.
                 if first
                     && on.is_some()
-                    && owner
-                        .mods
-                        .iter()
-                        .any(|slot| slot.destination == Some(SettingId::PITCH))
+                    && (variation.rolled
+                        || owner
+                            .mods
+                            .iter()
+                            .any(|slot| slot.destination == Some(SettingId::PITCH)))
                 {
                     let start = phrase.map_or(0, |phrase| phrase.start());
                     self.tracks[index].pitch_row = Some(RowKey {
                         row: start + key.row,
                         ..key
                     });
+                    self.tracks[index].pitch_varied = varied;
                 }
                 match on {
                     // A `Hold` before it ties into this note, with no new attack.
@@ -574,6 +603,56 @@ impl Engine {
                 });
             }
         }
+    }
+
+    /// Roll a row's `RND`s, left to right as they run, and vary what each has to its left: a
+    /// lock's value, or whether a `RET` ratchets and its units, in `fx` before they run, and the
+    /// note by what comes back. A lock or a `RET` that doesn't run on this pulse isn't varied.
+    fn vary(
+        &self,
+        index: usize,
+        fx: &mut [FxSlot; FX_SLOTS],
+        read: &[FxSlot; FX_SLOTS],
+        lane_steps: &[Option<usize>; FX_SLOTS],
+        count: i64,
+    ) -> NoteVariation {
+        let seed = self.current.song.seed;
+        let mut variation = NoteVariation::default();
+        for column in 0..FX_SLOTS {
+            if fx[column].command != Some(FxCommand::Rnd) {
+                continue;
+            }
+            let chance = Variation::of(fx[column].coarse());
+            let roll = Roll::new(seed, index, count, column);
+            let hits = roll.hits(chance);
+            let left = column.saturating_sub(1);
+            match varies_at(read, column) {
+                Varies::Note => {
+                    let own = lane_steps[column].is_none();
+                    variation.rolled |= own;
+                    if hits {
+                        let by = roll.moved_by(u16::from(chance.range));
+                        variation.by += by;
+                        if own {
+                            variation.own += by;
+                        }
+                    }
+                }
+                Varies::Nothing => {}
+                _ if fx[left].command != read[left].command => {}
+                Varies::Lock(id) if hits => {
+                    fx[left].value = varied_lock(id, fx[left].value, chance.range, roll);
+                }
+                Varies::Lock(_) => {}
+                Varies::Ratchet if hits => {
+                    let units = varied_ratchet(fx[left].coarse(), chance.range, roll);
+                    fx[left].value = u16::from(units) << 8;
+                }
+                // The `RET` doesn't ratchet this time.
+                Varies::Ratchet => fx[left] = FxSlot::default(),
+            }
+        }
+        variation
     }
 
     /// The arpeggio a note starting now plays, from the note as it's heard before its chain's
@@ -750,6 +829,19 @@ impl Engine {
         let count = pending.count + self.tracks[index].lane_offsets[number];
         count.div_euclid(lane.length.max(1) as i64)
     }
+}
+
+/// What a row's `RND`s do to its note, in scale degrees with the scale on and semitones with it
+/// off.
+#[derive(Debug, Clone, Copy, Default)]
+struct NoteVariation {
+    /// How far they move it, all of them.
+    by: i16,
+    /// How far those in the row's own columns move it, rather than a lane's, which `Space g A`
+    /// writes in.
+    own: i16,
+    /// Whether one in the row's own columns rolled for its note, so what it did is reported.
+    rolled: bool,
 }
 
 /// How much `RET`'s first digit changes the level on each retrigger. `0` is no change, 1-7 are

@@ -76,6 +76,9 @@ pub enum FxCommand {
     /// Goes round the row's note, the note and `x` above it, and the note and `y` above it, an
     /// arpeggio.
     Arp,
+    /// Gives what's to its left on the row, its note, a lock or a `RET`, a chance `x` of varying
+    /// by up to `y` each time the row plays, after the Eloquencer's controlled chance.
+    Rnd,
     /// Sets a setting, by its id, so it belongs to its owner: the track, a voice, or an effect in
     /// a slot.
     Set(SettingId),
@@ -90,7 +93,7 @@ impl FxCommand {
     pub const SEND_B: Self = Self::Set(SettingId::SEND_B);
 
     /// Every event, in the order a list shows them.
-    pub const EVENTS: [Self; 8] = [
+    pub const EVENTS: [Self; 9] = [
         Self::Del,
         Self::Kil,
         Self::Off,
@@ -99,6 +102,7 @@ impl FxCommand {
         Self::Cnd,
         Self::Acu,
         Self::Arp,
+        Self::Rnd,
     ];
 
     /// What it does, for a list to show.
@@ -112,6 +116,7 @@ impl FxCommand {
             Self::Cnd => "Play the row only when condition xx holds".to_owned(),
             Self::Acu => "Move the note on xx scale degrees each time it plays".to_owned(),
             Self::Arp => "Arpeggio: the note, x up and y up".to_owned(),
+            Self::Rnd => "Chance x of F to vary the note or lock left, by y".to_owned(),
             Self::Set(id) => format!("{}: {}", id.group(), id.name()),
         }
     }
@@ -137,6 +142,7 @@ impl FxCommand {
             Self::Cnd => "CND".to_owned(),
             Self::Acu => "ACU".to_owned(),
             Self::Arp => "ARP".to_owned(),
+            Self::Rnd => "RND".to_owned(),
             Self::Set(id) => id.label().unwrap_or_else(|| id.key()),
         }
     }
