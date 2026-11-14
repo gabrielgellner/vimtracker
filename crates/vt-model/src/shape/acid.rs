@@ -10,6 +10,11 @@
 //! <https://github.com/vitling/acid-banger>, CC BY 4.0). Its `ThreeOhGen` plays a step of a bar
 //! of 16 with a chance of 0.6 on each beat, 0.5 on every third step, 0.3 on the other even steps
 //! and 0.1 on the rest, and gives a note an accent 30% of the time and a slide 10%.
+//!
+//! Each part of the line, its rhythm, pitches, octaves, accents and slides, can loop on a length
+//! of its own, after monome's Kria (decision 331): a part on a loop of 5 draws for 5 rows and
+//! goes round them, counting on from pass to pass, so loops of different lengths drift against
+//! each other and the whole repeats only at their least common multiple.
 
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +27,8 @@ use crate::step::{ACCENT_VELOCITY, GateKind, MAX_NOTE, MAX_VELOCITY, MIN_NOTE, N
 
 /// The most notes a riff's set holds.
 pub const MAX_ACID_NOTES: u8 = 8;
+/// The longest loop a part of the line can go round, four bars of sixteenths.
+pub const MAX_LOOP: u8 = 64;
 /// The rows in a bar, which the rhythm's weights repeat over.
 const BAR: usize = (4 * TICKS_PER_QUARTER / TICKS_PER_STEP) as usize;
 /// The mean of the weights over a bar: the share of rows Vitling's plays.
@@ -46,6 +53,74 @@ pub struct Acid {
     /// Picks the accents, slides and octaves with the shape's seed, so a roll with `keep` changes
     /// this alone, and the pitches and rhythm stay.
     pub roll: u64,
+    /// How many rows each part loops on. Saved only once one's on.
+    #[serde(skip_serializing_if = "Loops::is_off")]
+    pub loops: Loops,
+    /// The count its first row is at on the first pass, which `Space g a` keeps so the pass heard
+    /// plays first and the loops go on from there. Saved only once it's kept.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub at: u64,
+    /// The pass it plays, counted from the first and taken round the loops' least common
+    /// multiple, which [`Shape::on_pass`](super::Shape::on_pass) sets as the engine plays it.
+    /// The written line plays the first, and this is never saved.
+    #[serde(skip)]
+    pub pass: u32,
+}
+
+fn is_zero(value: &u64) -> bool {
+    *value == 0
+}
+
+/// How many rows each part of an `Acid` line loops on, after Kria's loop per parameter: `0` for
+/// none, so the part is drawn for each row of the span, as it always was, the same each pass.
+/// On a loop, a row's part is the one drawn for its count round the loop, the count running on
+/// from pass to pass, so a part on 5 rows against a span of 16 starts each pass where the last
+/// left it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Loops {
+    /// Which rows play, on an empty column, from the density's draws.
+    pub trigs: u8,
+    /// Which of the riff's notes each plays.
+    pub notes: u8,
+    pub octaves: u8,
+    pub accents: u8,
+    pub slides: u8,
+}
+
+impl Loops {
+    pub fn is_off(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Each loop's length, `0` where it's off.
+    fn lengths(&self) -> [u8; 5] {
+        [
+            self.trigs,
+            self.notes,
+            self.octaves,
+            self.accents,
+            self.slides,
+        ]
+    }
+
+    /// The least common multiple of the loops that are on, after which every one of them is
+    /// back where it started; `1` with none on.
+    pub fn period(&self) -> u64 {
+        self.lengths()
+            .into_iter()
+            .filter(|length| *length > 0)
+            .map(|length| u64::from(length.min(MAX_LOOP)))
+            .fold(1, lcm)
+    }
+}
+
+fn gcd(a: u64, b: u64) -> u64 {
+    if b == 0 { a } else { gcd(b, a % b) }
+}
+
+fn lcm(a: u64, b: u64) -> u64 {
+    a / gcd(a, b) * b
 }
 
 impl Default for Acid {
@@ -58,13 +133,67 @@ impl Default for Acid {
             slide: 20,
             keep: false,
             roll: 0,
+            loops: Loops::default(),
+            at: 0,
+            pass: 0,
         }
     }
 }
 
 impl Acid {
     pub fn is_default(&self) -> bool {
-        *self == Self::default()
+        Self { pass: 0, ..*self } == Self::default()
+    }
+
+    /// Whether a part loops, so the line runs on from pass to pass and the engine renders it.
+    pub fn loops(&self) -> bool {
+        !self.loops.is_off()
+    }
+
+    /// The count a span of `rows` starts its pass at, taken round the loops' period.
+    fn first(&self, rows: usize) -> u64 {
+        let period = self.loops.period();
+        let passed = u64::from(self.pass) % period * (rows as u64 % period) % period;
+        (self.at % period + passed) % period
+    }
+
+    /// What `Space g a` keeps of the pass it plays over a span of `rows`: the count that pass
+    /// started at, so the line kept plays it first and its loops go on from there.
+    pub fn kept_at(&self, rows: usize) -> u64 {
+        self.first(rows)
+    }
+
+    /// The pass as it's kept, round the loops' period, past which every pass is one before it.
+    pub fn round(pass: i64, loops: Loops) -> u32 {
+        pass.rem_euclid(loops.period() as i64) as u32
+    }
+}
+
+/// Where each part of the line is for a row: the row's offset in the span where the part has no
+/// loop, and its count round its loop where it has.
+#[derive(Debug, Clone, Copy)]
+struct Places {
+    trigs: usize,
+    notes: usize,
+    octaves: usize,
+    accents: usize,
+    slides: usize,
+}
+
+impl Places {
+    fn of(loops: Loops, first: u64, offset: usize) -> Self {
+        let count = first + offset as u64;
+        let place = |length: u8| match length.min(MAX_LOOP) {
+            0 => offset,
+            length => (count % u64::from(length)) as usize,
+        };
+        Self {
+            trigs: place(loops.trigs),
+            notes: place(loops.notes),
+            octaves: place(loops.octaves),
+            accents: place(loops.accents),
+            slides: place(loops.slides),
+        }
     }
 }
 
@@ -257,7 +386,7 @@ fn plain(velocity: u8) -> u8 {
 
 /// The cells of the rows an `Acid` fill changes: each a note with its velocity and gate. On a
 /// column with notes it plays on every row `Where` chooses; on an empty one, on those the density
-/// draws.
+/// draws. Each part is drawn for its place ([`Places`]), so a part on a loop goes round it.
 pub(super) fn render<F: FnMut(usize, &Shaped)>(
     steps: &[Step],
     range: StepRange,
@@ -282,6 +411,7 @@ pub(super) fn render<F: FnMut(usize, &Shaped)>(
     let density = f64::from(acid.density.min(100)) / 100.0;
     // The second die: the accents, slides and octaves, which a roll with `keep` changes alone.
     let flags = mix(shape.seed ^ FLAGS ^ acid.roll.rotate_left(29), 0);
+    let first = acid.first(range.len());
     let rows = chosen(
         steps,
         range,
@@ -295,18 +425,19 @@ pub(super) fn render<F: FnMut(usize, &Shaped)>(
         let Some(step) = steps.get(row) else {
             continue;
         };
-        if writes.is_some() && unit(shape.seed ^ PLAYS, offset) >= chance(offset, density) {
+        let at = Places::of(acid.loops, first, offset);
+        if writes.is_some() && unit(shape.seed ^ PLAYS, at.trigs) >= chance(at.trigs, density) {
             continue;
         }
-        let picked = set[(mix(shape.seed ^ PICK, offset) % set.len() as u64) as usize];
+        let picked = set[(mix(shape.seed ^ PICK, at.notes) % set.len() as u64) as usize];
         let mut pitch = match step.note {
             Note::On(note) if acid.keep => note,
             _ => picked,
         };
-        if within(flags ^ OCTAVE, offset, acid.octave) {
-            pitch = octaved(pitch, mix(flags ^ UP, offset) & 1 == 0);
+        if within(flags ^ OCTAVE, at.octaves, acid.octave) {
+            pitch = octaved(pitch, mix(flags ^ UP, at.octaves) & 1 == 0);
         }
-        let accent = within(flags ^ ACCENT, offset, acid.accent);
+        let accent = within(flags ^ ACCENT, at.accents, acid.accent);
         let accented = step.velocity.is_none_or(|v| v >= ACCENT_VELOCITY);
         let velocity = match (writes, accent) {
             (_, true) if accented && writes.is_none() => step.velocity,
@@ -315,7 +446,7 @@ pub(super) fn render<F: FnMut(usize, &Shaped)>(
             (None, false) if accented => Some(DEFAULT_NOTE_VELOCITY),
             (None, false) => step.velocity,
         };
-        let gate = if within(flags ^ SLIDE, offset, acid.slide) {
+        let gate = if within(flags ^ SLIDE, at.slides, acid.slide) {
             slid(step.gate, true)
         } else if step.gate_kind() == GateKind::Hold {
             slid(step.gate, false)
@@ -905,6 +1036,191 @@ mod tests {
         assert_eq!(
             run(&steps, writing(C_MINOR), &shape),
             run(&steps, writing(C_MINOR), &shape)
+        );
+    }
+
+    /// Each row of a line written on an empty column of `rows`: none where it doesn't play, and
+    /// where it does, its pitch, whether it's accented and whether it slides.
+    fn parts(shape: &Shape, rows: usize) -> Vec<Option<(u8, bool, bool)>> {
+        let mut line = vec![None; rows];
+        for (row, step) in run(&empty(rows), writing(C_MINOR), shape) {
+            let accent = step.velocity == Some(MAX_VELOCITY);
+            line[row] = Some((pitch(&step), accent, step.gate_kind() == GateKind::Hold));
+        }
+        line
+    }
+
+    /// Whether one part of a line, `part` of each row that plays, comes round every `period`
+    /// rows: the same on every two rows that far apart which both play.
+    fn repeats<T: PartialEq>(
+        line: &[Option<(u8, bool, bool)>],
+        period: usize,
+        part: impl Fn((u8, bool, bool)) -> T,
+    ) -> bool {
+        line.iter().zip(&line[period..]).all(|pair| match pair {
+            (Some(one), Some(other)) => part(*one) == part(*other),
+            _ => true,
+        })
+    }
+
+    fn looping(loops: Loops) -> Shape {
+        acid(
+            7,
+            Acid {
+                notes: 6,
+                octave: 50,
+                density: 50,
+                accent: 50,
+                slide: 50,
+                loops,
+                ..Acid::default()
+            },
+        )
+    }
+
+    /// Kria's polymeter: a rhythm of 8 rows against 5 notes, 3 octaves, 7 accents and 6 slides.
+    const KRIA: Loops = Loops {
+        trigs: 8,
+        notes: 5,
+        octaves: 3,
+        accents: 7,
+        slides: 6,
+    };
+
+    #[test]
+    fn each_part_repeats_at_its_own_loop_and_the_whole_at_their_least_common_multiple() {
+        assert_eq!(KRIA.period(), 840);
+        let shape = looping(KRIA);
+        let line = parts(&shape, 2 * 840);
+        // Which rows play comes round every 8.
+        let plays: Vec<bool> = line.iter().map(Option::is_some).collect();
+        assert!(
+            plays
+                .iter()
+                .zip(&plays[8..])
+                .all(|(one, other)| one == other)
+        );
+        assert!(
+            plays
+                .iter()
+                .zip(&plays[4..])
+                .any(|(one, other)| one != other)
+        );
+        // Each other part at its own, and not at a shorter one.
+        assert!(repeats(&line, 7, |(_, accent, _)| accent));
+        assert!(repeats(&line, 6, |(_, _, slide)| slide));
+        assert!(!repeats(&line, 1, |(_, accent, _)| accent));
+        assert!(!repeats(&line, 3, |(_, _, slide)| slide));
+        // A pitch is a note and an octave, so it comes round every 15; with no octaves, every 5.
+        assert!(repeats(&line, 15, |(pitch, _, _)| pitch));
+        assert!(!repeats(&line, 5, |(pitch, _, _)| pitch));
+        let no_octaves = Shape {
+            acid: Acid {
+                octave: 0,
+                ..shape.acid
+            },
+            ..shape
+        };
+        assert!(repeats(&parts(&no_octaves, 200), 5, |(pitch, _, _)| pitch));
+        // The whole comes round at 840 rows, and at none of the loops' shorter common multiples.
+        assert_eq!(line[..840], line[840..]);
+        for shorter in [840 / 2, 840 / 3, 840 / 5, 840 / 7] {
+            assert_ne!(line[..shorter], line[shorter..2 * shorter], "{shorter}");
+        }
+    }
+
+    #[test]
+    fn the_loops_count_on_from_pass_to_pass() {
+        let shape = looping(KRIA);
+        assert!(shape.varies(), "the engine renders each pass");
+        assert_eq!(shape.on_pass(0), shape, "the first pass is the one written");
+        // A pass of 16 rows plays the line's next 16 rows, so the loops drift across the phrase.
+        let long = parts(&shape, 16 * 60);
+        for pass in [1, 2, 7, 52] {
+            let played = parts(&shape.on_pass(pass), 16);
+            let from = 16 * pass as usize;
+            assert_eq!(played, long[from..from + 16], "pass {pass}");
+        }
+        assert_ne!(parts(&shape.on_pass(1), 16), parts(&shape, 16));
+        // After the loops' least common multiple of passes, it's the first again, at rest.
+        assert_eq!(shape.on_pass(840), shape);
+        assert_eq!(shape.on_pass(841), shape.on_pass(1));
+        // What `Space g a` keeps of a pass plays that pass first, and the loops go on from it.
+        let heard = shape.on_pass(9);
+        let kept = Shape {
+            acid: Acid {
+                at: heard.acid.kept_at(16),
+                ..shape.acid
+            },
+            ..shape
+        };
+        assert_eq!(parts(&kept, 16), parts(&heard, 16));
+        assert_eq!(parts(&kept.on_pass(3), 16), parts(&shape.on_pass(12), 16));
+    }
+
+    #[test]
+    fn a_part_with_no_loop_is_drawn_for_each_row_of_the_span_as_it_was() {
+        let off = looping(Loops::default());
+        assert!(!off.varies(), "nothing to render as it plays");
+        assert_eq!(off.on_pass(5), off);
+        // A loop as long as the span writes what no loop does, as the count starts at its first.
+        let span = Loops {
+            trigs: 16,
+            notes: 16,
+            octaves: 16,
+            accents: 16,
+            slides: 16,
+        };
+        assert_eq!(parts(&looping(span), 16), parts(&off, 16));
+        // With only the notes on a loop of 3, the rest repeat with the span, every pass the same,
+        // and the pitches come round with it every third pass, at 48 rows.
+        let notes = looping(Loops {
+            notes: 3,
+            ..Loops::default()
+        });
+        let pass = |pass| parts(&notes.on_pass(pass), 16);
+        let rest = |line: Vec<Option<(u8, bool, bool)>>| {
+            line.into_iter()
+                .map(|row| row.map(|(_, accent, slide)| (accent, slide)))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(rest(pass(1)), rest(pass(0)));
+        assert_ne!(pass(1), pass(0));
+        assert_eq!(pass(3), pass(0));
+    }
+
+    #[test]
+    fn on_notes_there_the_loops_go_round_their_rhythm() {
+        // A note on every row, so the rhythm is the column's own, and each part loops along it.
+        let steps = vec!["C-2 40 --- --- ---".parse::<Step>().unwrap(); 48];
+        let shape = Shape {
+            place: Where::Notes,
+            ..looping(Loops {
+                notes: 4,
+                octaves: 2,
+                accents: 3,
+                ..Loops::default()
+            })
+        };
+        let out = run(&steps, ON_NOTES, &shape);
+        assert_eq!(out.len(), 48, "every note plays");
+        let accents: Vec<bool> = out
+            .iter()
+            .map(|(_, step)| step.velocity == Some(MAX_VELOCITY))
+            .collect();
+        assert!(
+            accents
+                .iter()
+                .zip(&accents[3..])
+                .all(|(one, other)| one == other)
+        );
+        assert!(accents.iter().any(|accent| *accent) && accents.iter().any(|accent| !*accent));
+        let pitches: Vec<u8> = out.iter().map(|(_, step)| pitch(step)).collect();
+        assert!(
+            pitches
+                .iter()
+                .zip(&pitches[4..])
+                .all(|(one, other)| one == other)
         );
     }
 }

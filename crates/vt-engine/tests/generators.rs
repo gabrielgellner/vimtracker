@@ -1074,3 +1074,74 @@ fn cells_step_a_generation_each_pass_from_wherever_the_song_plays() {
     assert!(held == play(&reshaped(&song, ninety), &[], 32).0);
     assert!(held != play(&song, &[], 32).0, "rule 90 isn't rule 30");
 }
+
+/// The nine-pass song with a live `Acid` on an empty Note column whose parts loop on lengths of
+/// their own, 12, 7, 5, 3 and 4 rows, so they run on from pass to pass (decision 331).
+fn kria_line() -> Song {
+    let mut song = nine_passes();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(vec![Step::default(); 16])));
+    let mut line = shape(FillKind::Acid, 40, 52, Where::AllRows);
+    line.acid.accent = 50;
+    line.acid.slide = 40;
+    line.acid.loops = vt_model::shape::Loops {
+        trigs: 12,
+        notes: 7,
+        octaves: 5,
+        accents: 3,
+        slides: 4,
+    };
+    generate(song, 0, writing(), rows(15), line)
+}
+
+/// The passes heard of a track's `Acid`, each with the count its loops began it at.
+fn counts_heard(engine: &mut Engine, track: usize) -> Vec<(i64, Option<u64>)> {
+    let mut heard = Vec::new();
+    engine.take_gen_reports(|on, report| {
+        if let GenReport::Pass(pass) = report
+            && on == track
+        {
+            heard.push((pass.pass, pass.acid_at));
+        }
+    });
+    heard
+}
+
+/// An `Acid`'s loops run on from pass to pass, as a `Ring` does: pass 0 is what's written, with
+/// nothing rendered; each later pass renders once and plays, sample for sample, what keeping it
+/// plays as its first; and each is reported once with the count it began at.
+#[test]
+fn an_acids_loops_run_on_from_pass_to_pass() {
+    let song = kria_line();
+    let shape = written(&song, 0, writing());
+    let kept_on = |pass: i64| {
+        let mut kept = shape;
+        kept.acid.at = shape.on_pass(pass).acid.kept_at(16);
+        reshape(&song, kept)
+    };
+    let (first, engine) = play_pass(&song, 0);
+    assert!(first == play_pass(&kept_on(0), 0).0, "pass 0 is as written");
+    assert!(heard(&engine, 0).iter().all(|run| run.renders == 0));
+    for pass in [1, 2, 8] {
+        let (heard_out, engine) = play_pass(&song, pass);
+        let (kept_out, _) = play_pass(&kept_on(pass as i64), 0);
+        assert!(heard_out == kept_out, "pass {pass} plays what's kept of it");
+        assert!(heard_out != first, "pass {pass} is a pass of its own");
+        let run = heard(&engine, 0)[0];
+        assert_eq!((run.pass, run.renders), (pass as i64, 1));
+    }
+    let mut engine = Engine::new(RATE, version(&song));
+    engine.play_from(0);
+    let mut out = [0.0; 512];
+    let mut reported = Vec::new();
+    for _ in 0..(8 * 16 + 4) * STEP / 256 {
+        engine.process(&mut out);
+        reported.extend(counts_heard(&mut engine, 0));
+    }
+    let wanted: Vec<_> = (0..9)
+        .map(|pass| (pass, Some(shape.on_pass(pass).acid.kept_at(16))))
+        .collect();
+    assert_eq!(reported, wanted);
+    assert_eq!(wanted[2].1, Some(32), "two passes of 16 rows on");
+}

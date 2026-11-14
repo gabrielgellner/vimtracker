@@ -860,7 +860,7 @@ mod tests {
         assert_eq!(texts(&found), ["Euclid"], "the folder's own, once");
         assert_eq!(found.candidates[0].meaning, "");
         let found = complete("patch load Ac", places);
-        assert_eq!(texts(&found), ["Accents", "Acid line"]);
+        assert_eq!(texts(&found), ["Acid loops", "Accents", "Acid line"]);
         assert_eq!(found.candidates[0].meaning, "Factory");
         assert!(
             complete("patch save Tu", places).candidates.is_empty(),

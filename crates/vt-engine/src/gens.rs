@@ -235,6 +235,9 @@ pub struct GenPass {
     /// A `Ring`'s register as the pass started, and which pass that is from its first, which
     /// `Space g a` keeps.
     pub ring: Option<Kept>,
+    /// The count an `Acid` with loops started the pass at, which `Space g a` keeps so its loops
+    /// go on from there (decision 331).
+    pub acid_at: Option<u64>,
 }
 
 /// A row of a live generator as it was heard: the cell it played there, if it played one of its
@@ -519,6 +522,8 @@ impl GenScratch {
                     roll: heard.acid.roll,
                     ring: (heard.kind == FillKind::Ring)
                         .then(|| heard.ring.kept_on(heard.seed, run.rows.len())),
+                    acid_at: (heard.kind == FillKind::Acid && heard.acid.loops())
+                        .then(|| heard.acid.kept_at(run.rows.len())),
                 };
                 run.report = Some(pass);
             }
