@@ -6,7 +6,7 @@ and how to lay it out:
 
     [report]
     kind = "response"     # response, harmonics, oscillation, static, timing, distortion, knob, velocity,
-                          # taper, notes, transition, gate, chirp or spectrum
+                          # taper, notes, transition, gate, chirp, spectrum or echo
     title = "..."         # the page's heading; the spec's file name if not given
     about = "..."         # what the test is, in a paragraph or two, for a reader without our code
     figure = ["filter"]   # our settings that give each figure, for response and harmonics
@@ -46,6 +46,10 @@ The kinds:
   sweeps it, for the 303's squelch at high Res (see `Chirp`).
 - `spectrum`: a whole passage through an effect, such as a riff through a pedal: its long-term
   spectrum's shape in third octaves, and its level, crest factor and dynamics (see `Spectrum`).
+- `echo`: a tape delay's repeats, by its `measure`: `taps`, each repeat of a click's time and
+  level; `tone`, each repeat's spectrum and what a trip round the loop takes; `growth`, the level
+  after a click, for where it runs away; `wow`, a held tone's pitch; or `decay`, a reverb's fall
+  (see `Echo`).
 
 Every side is drawn on the same plots: ours, and each of the spec's references. A kind that gives
 its measurements as `measures` gets a consensus view as well (`consensus.py`): where the
@@ -2324,6 +2328,198 @@ class Spectrum(Report):
         }
 
 
+class Echo(Report):
+    """A tape delay's repeats, measured as `measure` says (decision 337): `taps`, when each repeat of
+    a click comes and how loud; `tone`, each repeat's spectrum against the click's, and what each
+    trip round the loop takes; `growth`, the level over time after a click, for where it runs
+    away; `wow`, a held tone's pitch over time; or `decay`, a reverb's level falling after a
+    click."""
+
+    @property
+    def kind(self) -> str:
+        return self.layout.get("measure", "taps")
+
+    @property
+    def reading(self) -> str:
+        return {
+            "taps": "Each panel is one case: a line at each repeat of the click, as loud as it is, in "
+            "dBFS, at its time after the click. The table lists them in order on every side.",
+            "tone": "Each panel is one case: each repeat's spectrum in third octaves against the "
+            "click's, the first the darkest line. The table gives each repeat's level at 500 Hz and "
+            "how far under it its 4 kHz is, and what each trip round the loop takes at both.",
+            "growth": "Each panel is one case: the RMS level over each half second after one click. A "
+            "line that falls dies away; one that rises runs away and settles where the tape holds it.",
+            "wow": "Each panel is one case: a held sine's pitch through the first head, in cents from "
+            "its mean. The table gives its RMS and the rate of its strongest wobble.",
+            "decay": "Each panel is one case: the RMS level over each 50 ms after one click, for how "
+            "the reverb falls and how loud it is.",
+        }[self.kind]
+
+    def build(self):
+        names = [r.name for r in self.rendered]
+        columns = min(3, len(names))
+        rows_count = math.ceil(len(names) / columns)
+        figure, axes = plt.subplots(rows_count, columns, figsize=(3.6 * columns, 2.6 * rows_count), squeeze=False)
+        at = float(self.layout.get("at", 0.1))
+        rows, summary = [], []
+        for index, r in enumerate(self.rendered):
+            panel = axes[index // columns][index % columns]
+            found = {}
+            for side, _, colour, samples in self.sides(r):
+                found[side] = self.measured(r, samples, at)
+                self.draw(panel, found[side], colour)
+            panel.set_title(r.name, loc="left")
+            rows.extend(self.numbers(r.name, found))
+            summary.append(html.escape(self.said(r.name, found)))
+        for index in range(len(names), rows_count * columns):
+            axes[index // columns][index % columns].axis("off")
+        figure.tight_layout()
+        headers = {
+            "taps": ["Case", "Side", "Repeats, ms after the click and dBFS"],
+            "tone": ["Case", "Side", "Repeat", "500 Hz dB", "4 kHz under 500 Hz, dB", "Trip at 500 Hz, dB", "Trip at 4 kHz, dB"],
+            "growth": ["Case", "Side", "dBFS at 1 s", "At the end", "Change, dB a second", "Peak at the end"],
+            "wow": ["Case", "Side", "RMS cents", "Strongest wobble, Hz"],
+            "decay": ["Case", "Side", "First heard, ms", "dBFS, 0.1 to 0.6 s", "Falls, dB a second", "T60, s"],
+        }[self.kind]
+        return {
+            "keys": self.keys(),
+            "summary": summary,
+            "figures": [image(figure)],
+            "numbers": table(headers, rows, numeric_from=2),
+            "numbers note": "Every side is given the same input and measured the same way, from its output alone.",
+        }
+
+    def measured(self, r, samples, at):
+        rate = self.spec.rate
+        if self.kind == "taps":
+            return measure.echo_taps(samples, rate, at, float(self.layout.get("floor", -40.0)))
+        if self.kind == "tone":
+            period = float(self.layout["period"])
+            return measure.tap_tones(samples, r.given, rate, at, period, int(self.layout.get("count", 3)))
+        if self.kind == "growth":
+            times, levels = measure.level_track(samples, rate, 0.5)
+            return times, levels, float(np.abs(samples[:, -rate:]).max())
+        if self.kind == "wow":
+            start, end = self.layout.get("window", [1.0, 11.0])
+            return measure.pitch_cents(samples, rate, float(self.layout.get("frequency", 1000.0)), start, end)
+        return measure.level_track(samples, rate, 0.05)
+
+    def draw(self, panel, found, colour):
+        if self.kind == "taps":
+            for seconds, level in found:
+                panel.plot([seconds * 1000.0] * 2, [-80.0, level], color=colour, linewidth=1.2, alpha=0.8)
+            panel.set_xlabel("ms after the click")
+            panel.set_ylabel("dBFS")
+            panel.set_ylim(-80, 0)
+        elif self.kind == "tone":
+            bands, tones = found
+            for count, tone in enumerate(tones):
+                panel.semilogx(bands, tone, color=colour, alpha=max(0.25, 1.0 - 0.25 * count))
+            log_frequency_axis(panel)
+            panel.set_ylim(-60, 5)
+            panel.set_ylabel("dB against the click")
+        elif self.kind == "growth":
+            times, levels, _ = found
+            panel.plot(times, levels, color=colour)
+            panel.set_xlabel("seconds")
+            panel.set_ylabel("dBFS")
+        elif self.kind == "wow":
+            times, cents, _, _ = found
+            panel.plot(times, cents, color=colour, linewidth=0.8)
+            panel.set_xlabel("seconds")
+            panel.set_ylabel("cents")
+        else:
+            times, levels = found
+            panel.plot(times, levels, color=colour, linewidth=0.9)
+            panel.set_xlabel("seconds")
+            panel.set_ylabel("dBFS, RMS over 50 ms")
+            panel.set_ylim(-120, 0)
+
+    @staticmethod
+    def at_bands(bands):
+        return int(np.argmin(np.abs(bands - 500.0))), int(np.argmin(np.abs(bands - 4000.0)))
+
+    def numbers(self, case, found):
+        rows = []
+        for side, f in found.items():
+            label = [case if side == "ours" else "", self.label(side)]
+            if self.kind == "taps":
+                rows.append(label + [", ".join(f"{seconds * 1000:.1f} ms {level:.1f}" for seconds, level in f[:8])])
+            elif self.kind == "tone":
+                bands, tones = f
+                low, high = self.at_bands(bands)
+                for count, tone in enumerate(tones):
+                    trip = tone - tones[count - 1] if count else None
+                    rows.append(label + [
+                        str(count + 1),
+                        number(tone[low], 1),
+                        number(tone[high] - tone[low], 1),
+                        number(trip[low], 1) if trip is not None else "",
+                        number(trip[high], 1) if trip is not None else "",
+                    ])
+                    label = ["", ""]
+            elif self.kind == "growth":
+                at_one, end, slope, peak = self.growth(f)
+                rows.append(label + [number(at_one, 1), number(end, 1), number(slope, 2), number(peak, 3)])
+            elif self.kind == "wow":
+                _, _, rms, strongest = f
+                rows.append(label + [number(rms, 2), number(strongest, 2)])
+            else:
+                rows.append(label + list(self.decay(f)))
+        return rows
+
+    @staticmethod
+    def growth(found):
+        """The level at 1 s and at the end, how fast it changes from 1 to 5 s, in dB a second, over
+        the windows still above -130 dBFS, as one that dies away soon reaches the arithmetic's
+        floor; and the peak in the last second."""
+        times, levels, peak = found
+        second = int(np.argmin(np.abs(times - 1.0)))
+        fit = (times >= 1.0) & (times <= 5.0) & (levels > -130.0)
+        slope = np.polyfit(times[fit], levels[fit], 1)[0] if fit.sum() > 2 else float("nan")
+        return levels[second], levels[-1], slope, peak
+
+    def decay(self, found):
+        times, levels = found
+        at = float(self.layout.get("at", 0.1))
+        heard = times[levels > levels.max() - 40.0]
+        first = (heard[0] - at) * 1000.0 if heard.size else float("nan")
+        early = levels[(times > at + 0.1) & (times < at + 0.6)]
+        fit = (times > at + 0.5) & (levels > levels.max() - 60.0)
+        slope = np.polyfit(times[fit], levels[fit], 1)[0] if fit.sum() > 2 else float("nan")
+        return (
+            number(first, 0),
+            number(10 * np.log10(np.mean(10 ** (early / 10))) if early.size else float("nan"), 1),
+            number(slope, 1),
+            number(-60.0 / slope if slope < 0 else float("nan"), 2),
+        )
+
+    def said(self, case, found):
+        parts = []
+        for side, f in found.items():
+            who = "ours" if side == "ours" else side
+            if self.kind == "taps":
+                parts.append(f"{who}: " + ", ".join(f"{seconds * 1000:.0f} ms at {level:.1f} dBFS" for seconds, level in f[:4]))
+            elif self.kind == "tone":
+                bands, tones = f
+                low, high = self.at_bands(bands)
+                text = f"{who}: the first repeat {number(tones[0][low], 1)} dB at 500 Hz, its 4 kHz {number(tones[0][high] - tones[0][low], 1)} dB under"
+                if len(tones) > 1:
+                    trip = tones[1] - tones[0]
+                    text += f"; a trip takes {number(-trip[low], 1)} dB at 500 Hz and {number(-trip[high], 1)} dB at 4 kHz"
+                parts.append(text)
+            elif self.kind == "growth":
+                _, _, slope, peak = self.growth(f)
+                parts.append(f"{who} {number(slope, 1, sign=True)} dB a second, peak {number(peak, 2)} at the end")
+            elif self.kind == "wow":
+                _, _, rms, strongest = f
+                parts.append(f"{who} {number(rms, 1)} cents RMS, strongest at {number(strongest, 2)} Hz")
+            else:
+                first, early, _, t60 = self.decay(f)
+                parts.append(f"{who} first heard {first} ms, {early} dBFS early on, T60 {t60} s")
+        return f"{case}: " + "; ".join(parts) + "."
+
+
 KINDS = {
     "response": Response,
     "harmonics": Harmonics,
@@ -2339,6 +2535,7 @@ KINDS = {
     "gate": Gate,
     "chirp": Chirp,
     "spectrum": Spectrum,
+    "echo": Echo,
 }
 
 STYLE = """
