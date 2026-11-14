@@ -1688,13 +1688,13 @@ track's eight macros (see **Macros**), then the live columns.
 Each live column is a device, under the macros, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
 them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
-`Where`, a `Variation`'s fill alone, as it learns its rows with its notes, and
-a `Divisions`' channel and bar, as it makes its own rhythm;
+`Where`, a `Variation`'s and a `Ring`'s fill alone, as each makes its rows with
+its notes, and a `Divisions`' channel and bar, as it makes its own rhythm;
 then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
 Note 00–0F`, or `FX1 CUT lane 0C` for a lane. A `Where` that's its column's own is
 dim too, and so is a `Vary` of `Once`. Its settings are the
 shape panel's, laid out by what they do: the fill's down the first two columns,
-and the `Where`'s, `Hits` and `Rotate`, `Rule` and `Start` or an amount, at the foot of the third, so
+and the `Where`'s, `Hits` and `Rotate`, `Rule` and `Start`, an amount, or `Complementary`'s amount and `Side`, at the foot of the third, so
 they stay put as the fill changes. A `Follow`, which has no `Where`, has its
 `Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
 whose three are full, its riff's `Spread` and `Bias` in the fourth. A value with a bar is brief, as `9` for hits,
@@ -1724,7 +1724,7 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 **A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,
 `1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), `Divisions` (its dice), `Variation`, a
 `Wave` of `Random` or `Smooth`,
-a `Follow` that mutates, or any fill on rows chosen by `Chance`, has `Vary`: `Once`, as it's always been, the
+a `Follow` that mutates, or any fill on rows chosen by `Chance` or one of Marbles' rhythms, has `Vary`: `Once`, as it's always been, the
 same every time round; `Each pass`, a new roll each time the phrase comes round; or
 `Every 2 passes`, 4 or 8, so each variation plays that many times before the next,
 the way an Elektron's `1:4` condition keeps to the bars. Each pass's seed comes from
@@ -1750,6 +1750,13 @@ generator's seed and `Vary` goes back to `Once`, so that variation plays every p
 and the phrase holds it, still live to turn, as one undo step. Before it's been
 heard varying, it says so. It's the Turing Machine's lock, as `Space g a` on a Steps
 slot's `Mutate` is.
+
+A `Ring` has no `Vary`: its register runs on from pass to pass by itself, each pass
+where the last left it, worked out from its seed and the pass so playing from bar 33
+hears what playing to it would. `Space g a` on one keeps the register as the pass
+just heard began, so that pass plays first and the ring runs on from there,
+`Change` where it was; turn `Change` to `0%` and that loop holds, every pass. `r`
+lets go of it and starts a new ring.
 
 **Making a column live.** The last device, `Empty`, has `K` list the columns of
 the phrase with nothing live on them. Choosing one makes it live over the phrase's
@@ -1908,7 +1915,7 @@ under `Factory` after your own, so `:patch` has some from the start. They're bui
 program rather than written into your folder, so they can't be changed, tagged or written over;
 a patch of yours with the same name comes first, and `:patch save` always saves one of yours.
 Each is tagged `generative` and with what it acts on, so `#generative` lists them and `#rhythm`
-finds `Euclid`.
+finds `Euclid` and `Noise Ring`.
 
 | Patch | From the song | Its macros |
 |---|---|---|
@@ -1919,6 +1926,7 @@ finds `Euclid`.
 | `Accents` | `live-generators`' hats | `Hits`, `Rotate` |
 | `Acid line` | `acid-lines` | `Density`, `Notes`, `Octave`, `Accent`, `Slide` |
 | `Drunk walk` | `walks`' bass | `Step`, `Hits` |
+| `Noise Ring` | `noise-ring`'s bell | `Change`, `Chance`, `Length` |
 | `Marbles X` | `marbles`' tune | `Spread`, `Bias`, `Steps` |
 | `Variations` | `variations` | `Order`, `Temperature` |
 

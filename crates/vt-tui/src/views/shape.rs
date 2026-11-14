@@ -6,7 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use vt_model::lfo::Shape as Wave;
-use vt_model::shape::{Context, FillKind, GenParam, ShapeColumn, written_from};
+use vt_model::shape::{Context, FillKind, GenParam, ShapeColumn, Where, written_from};
 use vt_model::step::Note;
 
 use crate::app::App;
@@ -80,11 +80,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         let steps = panel.base_steps(part);
         let shape = panel.shape_of(nth);
         let written = written_from(steps, part.range, part.column, &shape, source);
-        // A `Follow`, `Grids`, `Divisions` and a `Variation` write every row, rests and all, so
-        // their count is of the notes, and `Multiply`'s of the rhythm it leaves.
+        // A `Follow`, `Grids`, `Divisions`, `Ring` and a `Variation` write every row, rests and
+        // all, so their count is of the notes, and `Multiply`'s of the rhythm it leaves.
         filled += if matches!(
             shape.kind,
-            FillKind::Follow | FillKind::Grids | FillKind::Divisions | FillKind::Variation
+            FillKind::Follow
+                | FillKind::Grids
+                | FillKind::Divisions
+                | FillKind::Ring
+                | FillKind::Variation
         ) {
             written
                 .iter()
@@ -143,8 +147,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         lines.push(Line::from(line));
     }
     let too_few = panel.too_few_notes();
+    let pairs = panel.parts.len() > 1 && matches!(panel.shape.place, Where::Complementary { .. });
     let cells = panel.shape.evolves();
     let hint = match panel.shape.kind {
+        // Each pair of tracks shares one coin (decision 321).
+        _ if pairs && panel.shape.kind.has_where() => "Each row goes to one track or the other",
         _ if cells && panel.parts.len() > 1 => "Each track a cell, a row a generation",
         _ if cells => "Each row a cell, stepped on by Vary",
         FillKind::Random | FillKind::Walk | FillKind::Pink if app.mode == Mode::Shape => {
@@ -178,6 +185,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         }
         FillKind::Divisions if app.mode == Mode::Shape => "r rolls the dice  a chance only adds",
         FillKind::Divisions => "A chance only adds strikes",
+        FillKind::Ring if panel.shape.ring.kept.is_some() => "Its loop kept  r starts a new one",
+        FillKind::Ring if app.mode == Mode::Shape => "r a new ring  L runs it on each pass",
+        FillKind::Ring => "Bit 0 plays, the byte is the pitch",
         FillKind::Variation => match &too_few {
             Some(why) => why.as_str(),
             None if app.mode == Mode::Shape => "r another  Order 3 copies closely",

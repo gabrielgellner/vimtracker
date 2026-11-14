@@ -1585,8 +1585,9 @@ const SPACE: DeviceLayout = live(
 
 // Live generators, after the Mod page's devices: a layout a fill, from the declared table
 // (`GenParam`), its settings in their musical order, and its `Where`'s on knobs 7 and 8 as an
-// effect's `Mix` and `Gain` are, `where1` being Euclid's `Hits`, an `Every`, a `Chance` or a
-// `Cells`' `Rule`, and `where2` Euclid's `Rotate` or a `Cells`' `Start`. The fill and the `Where`, and a `Follow`'s source, are what the
+// effect's `Mix` and `Gain` are, `where1` being Euclid's `Hits`, an `Every`, a `Chance`, the
+// amount of one of Marbles' rhythms or a `Cells`' `Rule`, and `where2` Euclid's `Rotate` or a
+// `Cells`' `Start`. The fill and the `Where`, and a `Follow`'s source, are what the
 // device is, so they're chosen in the app (the generators study, `generators-page.md` §6). A
 // generator has no off/on settings of its own, so it's live, and `Acid`'s `Pitches` is a
 // two-step knob. `Vary` is knob 6, beside the `Where`, on every fill; `Wave`, `Acid` and
@@ -1865,6 +1866,25 @@ const GEN_DIVISIONS: DeviceLayout = live(
         ),
     ],
 );
+/// A noise ring: its ends, then the module's two knobs, `Change` and `Chance`, and the loop's
+/// `Length`; its register makes its rhythm, so it has no `Where`, and it runs on from pass to pass
+/// by itself, so it has no `Vary`.
+const GEN_RING: DeviceLayout = live(
+    "gen/ring",
+    &[knobs(
+        "Ring",
+        [
+            s("from"),
+            s("to"),
+            s("change"),
+            s("ones"),
+            s("length"),
+            __,
+            __,
+            __,
+        ],
+    )],
+);
 /// A Markov chain learned from the notes there: how closely it copies them and how far it strays;
 /// it learns its rows with its notes, so it has no `Where`.
 const GEN_VARIATION: DeviceLayout = live(
@@ -1921,7 +1941,7 @@ const GEN_REWORK: DeviceLayout = live(
 
 /// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
 /// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 16] = [
+pub const GENERATORS: [&DeviceLayout; 17] = [
     &GEN_RAMP,
     &GEN_RANDOM,
     &GEN_WAVE,
@@ -1935,6 +1955,7 @@ pub const GENERATORS: [&DeviceLayout; 16] = [
     &GEN_MULTIPLY,
     &GEN_GRIDS,
     &GEN_DIVISIONS,
+    &GEN_RING,
     &GEN_VARIATION,
     &GEN_BITS,
     &GEN_REWORK,
@@ -1956,6 +1977,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
         FillKind::Multiply => &GEN_MULTIPLY,
         FillKind::Grids => &GEN_GRIDS,
         FillKind::Divisions => &GEN_DIVISIONS,
+        FillKind::Ring => &GEN_RING,
         FillKind::Variation => &GEN_VARIATION,
         FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => &GEN_BITS,
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,
@@ -2219,8 +2241,9 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
 pub fn app_only(control: Control, track: &Track) -> bool {
     match control {
         Control::Machine | Control::Insert(_) | Control::Mod(_, ModField::Type) => true,
-        // A generator's fill and rows, what a `Follow` follows, which part a `Grids` plays and
-        // which channel a `Divisions` plays are what it is, and a `List`'s values and a `Random`'s weights are typed.
+        // A generator's fill and rows, what a `Follow` follows, which part a `Grids` plays, which
+        // channel a `Divisions` plays and which side of `Complementary`'s coin a track is are
+        // what it is, and a `List`'s values and a `Random`'s weights are typed.
         Control::Gen { param, .. } => matches!(
             param,
             GenParam::Fill
@@ -2229,6 +2252,7 @@ pub fn app_only(control: Control, track: &Track) -> bool {
                 | GenParam::Values
                 | GenParam::Part
                 | GenParam::Channel
+                | GenParam::Side
                 | GenParam::Weights
         ),
         Control::InsertParam(slot, param) => track.inserts[slot].type_param() == Some(param),
@@ -2254,6 +2278,10 @@ pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Co
             GenParam::Hits,
             GenParam::Every,
             GenParam::Chance,
+            GenParam::Clusters,
+            GenParam::Markov,
+            GenParam::States,
+            GenParam::Share,
             GenParam::Rule,
         ],
         WHERE_SECOND => &[GenParam::Rotate, GenParam::CellStart],

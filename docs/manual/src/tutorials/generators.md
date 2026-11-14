@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds seventeen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds nineteen of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -21,7 +21,9 @@ there are no samples to find.
 | `walks`, again | Xaoc Devices' Leibniz | `S`'s bit transforms on the tune and the hats |
 | `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
 | `random-rhythm` | Vermona's randomRHYTHM | `S`'s `Divisions`: a chance per division, triplets nudged between the rows |
+| `noise-ring` | The Wiard Noise Ring, Malekko's Richter Noise Ring | `S`'s `Ring`: rhythm and pitch from one shift register, running on each pass |
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
+| `marbles-t` | Mutable Instruments' Marbles' T | `S`'s `Complementary`, `Markov`, `3 states` and `Clusters` rows |
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 | `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
@@ -933,6 +935,72 @@ chances as its own.
 *   The hats are a generator of their own, so `gl` on the kick changes the kick alone, and the
     hats keep its old chances. `S` across the three again sets them together.
 
+## Noise Ring
+
+Grant Richter's Wiard 1210 Noise Ring, of the Buchla 266's line and in Eurorack as Malekko's
+Richter Noise Ring, is an 8-bit shift register going round. Each clock a bit comes out of one
+end and goes back in at the other, unless `Change` replaces it with a new bit, which `Chance`
+makes a 1 or a 0. Its outputs are the register itself: each bit as a gate, and the byte as a
+stepped voltage. Patch a gate to a drum and the voltage to a quantiser, and the rhythm and the
+melody come from the same bits, so they move together: a note is the one before it with its
+bits moved along. It's the Turing Machine's cousin, but where the Turing Machine's loop only
+chooses pitches over a rhythm you play it, the Noise Ring's is both.
+
+`Ring` is this, a row a clock: a row plays if the bit just taken in is a 1, at the pitch of the
+register's byte, from `From` to `To` through the scale. `Change` and `Chance` are the module's two
+knobs, and `Length` is the Turing Machine's switch, how many bits go round, 8 as the module has.
+
+**How the song does it.** Track 1, a `Modal` bell, has a live `Ring` over 16 rows from `D-3` to
+`D-5` in D dorian: `Change` `15%`, so one bit in seven is new as it comes round, `Chance` `55%`, a
+little over half of them 1s, `Length` 8. Kept live, the register runs on from pass to pass, so
+each bar plays where the last one left it, drifting a bit at a time. Track 2, a `VA` bass, has a
+second ring from `D-1` to `D-2`, locked at `Change` `0%`, its `Length` 5: five bits go round the
+bar of 16, so the figure comes in a row earlier each bar and is back where it started on the
+sixth. A kick and hats keep time. [`song.ron`](songs/noise-ring/song.ron)
+
+```text
+    00  01  02  03  04  05  06  07  08  09  0A  0B  0C  0D  0E  0F
+NR  G-4 B-3 --- D-4 --- D-5 --- B-4 G-4 B-3 G-4 B-3 --- D-4 --- D-5
+BS  D-2 --- --- E-1 G-1 D-2 --- --- E-1 G-1 D-2 --- --- E-1 G-1 D-2
+```
+
+That's the first bar, as the phrases hold it. The bell's second half is its first again with one
+bit new, and the next bar, `C-5 B-4 G-4 B-3 --- D-4 --- D-5`, twice, is the same bits moved on.
+A falling run, as `C-5 B-4 G-4 B-3`, is a run of 1s at the top of the byte moving out of it a row
+at a time.
+
+**Build it.**
+
+1.  `:set scale=dorian`, `:set root=d` and `:bpm 112`.
+2.  Track 1: `K` `modal` `Enter`, `:name NR`.
+3.  `Space 3`, `vG` on the Note column, and `S`. On `Fill`, `K` `/ring` `Enter`. The panel shows
+    `From`, `To`, `Change` `10%`, `Chance` `50%` and `Length` `8`.
+4.  `From` `d3` and `To` `d5` (`i`, the note, `Enter`), `Change` `i` `15` `Enter` and `Chance`
+    `i` `55` `Enter`. `r` rolls a new ring until you like the bar, and `L` keeps it live.
+5.  Track 2: `W`, `K` `va` `Enter`, `:name BS`, then in the phrase view `vG`, `S`, `Fill` `Ring`,
+    `From` `d1`, `To` `d2`, `Change` `0`, `Chance` `60` and `Length` `5`, and `L`.
+
+Then a `Kick` on every beat and a `Hat` on the off-beats. The finished song also sets the bass's
+filter, the bell's delay and reverb sends, and the levels.
+
+**Play it.** `Tab`, and `Space 8` on track 1 for the Gen page: the ring's device has `From` and
+`To`, then `Change`, `Chance` and `Length`.
+
+*   `Change` up to `40%` while it plays: the bar changes more each time round, and at `100%`
+    every row is new. Down to `0%` it locks on whatever loop it has reached.
+*   When a bar comes round that you like, `Space g a` keeps the register as that pass began: it
+    plays first from then on, and the ring runs on from there. `Change` to `0%` then holds that
+    loop, the Turing Machine's lock. `r` lets go of it for a new ring.
+*   `Chance` is the density: down to `25%` and the bell plays a few notes a bar, up to `80%` and
+    most rows play, the new 1s joining the ones there.
+*   `Length` 16 for a loop as long as the bar, or 3 for a riff of three bits, its byte the same
+    three going round, so a short ring is a repeating arpeggio.
+*   The bass's `Length` 4, and it lines up with the bar; 7 and it takes seven bars to come back.
+
+**As a patch.** The bell's ring is the shipped patch `Noise Ring`, with `Change`, `Chance` and
+`Length` on macros, the module's two knobs and the Turing Machine's switch; add it with
+`:patch` on any track and turn them on the Gen page or the Roto.
+
 ## Marbles' X
 
 Marbles' X section makes random voltages, and three knobs shape them. Spread runs from one
@@ -987,6 +1055,76 @@ and `Steps` on macros; add it with `:patch`.
 *   On the Gen page, `Space 8`, `Spread` and `Bias` are cells to turn while it plays, and with
     `M` a macro: map both to one, and an LFO on it sweeps the tune from a drone to a scatter.
 *   `Vary` `Each pass` on the bass, and every pass draws a new pattern of octaves.
+
+## Marbles' T
+
+Marbles' T section is a random clock: its gates fire at random, and its models say how. In
+*complementary Bernoulli*, one coin a tick decides which of two outputs fires, so they never fire
+together; in *clusters*, hits bunch together, then leave gaps; in *Markov*, each tick's chance
+hangs on what fired before, leaning toward what fired eight ticks back; and in *three states*,
+each tick is one output, the other, or neither. One knob, Bias, shapes each model. These four are
+`Where` choices, each with an `Amount`: `Complementary` across two tracks, `Clusters`, `Markov`,
+and `3 states`, where on one track the two outputs are a gate and a tie, a note held into the
+next.
+
+**How the song does it.** Five tracks in A minor, each a live generator writing notes of its own
+on 16 rows:
+
+| Track | Where | Fill |
+|---|---|---|
+| `HH` | `Complementary` `65%`, `First` | `C-4` on every row it plays |
+| `PC` | `Complementary` `65%`, `Second` | `Random`, `A-3` to `A-4` |
+| `BD` | `Markov` `90%` | `C-1` on every row it plays |
+| `BS` | `3 states` `80%` | `Random`, `A-1` to `A-2` |
+| `ST` | `Clusters` `35%` | `Random`, `A-3` to `A-5` |
+
+The hat and the modal percussion share one coin, so every sixteenth is one's or the other's,
+never both, the hat on about two in three. The kick's Markov at `90%` keeps to an eight-row loop,
+here the same twice; lower, the second eight rows stray further from the first. The bass's three states at `80%` are mostly rests and ties,
+so it holds its notes, `~` below for a note held into the next (its gate `HLD`). The string plays
+in bunches of two to four. [`song.ron`](songs/marbles-t/song.ron)
+
+```text
+HH  x.xxx..x..xxx.x.
+PC  .x...xx.xx...x.x
+BD  x..x...xx..x...x
+BS  ...xx~x...~~x...
+ST  .xxxx..xxx......
+```
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 120`.
+2.  Tracks 1 to 5: on each Sound page, `Space 5`, the machines `/hat`, `/modal`, `/kick`, `va` and
+    `string` (`K`, the name, `Enter`), named `HH`, `PC`, `BD`, `BS` and `ST` with `:name`.
+3.  The hat and the percussion: on track 1, `Space 3`, `vG` on the Note column, `W` to reach
+    track 2, and `S`. `From` and `To` `c4` (`i`, the note, `Enter`). `j` down to `Where`, `K`
+    `/compl` `Enter`: the panel says `Each row goes to one track or the other`. `j` to `Amount`,
+    `i` `65` `Enter`, and `L`. Track 1 is the coin's `First` side and track 2 its `Second`.
+4.  On track 2, `gl` on one of its notes reopens its own generator. On `Fill`, `K` `random`
+    `Enter`, `From` `a3`, `To` `a4`, and `L`. Its rows stay the coin's.
+5.  The kick: track 3, `vG`, `S`, both ends `c1`, `Where` `Markov` with an `Amount` of 90, and
+    `L`.
+6.  The bass: track 4, `vG`, `S`, `Fill` `Random`, `From` `a1`, `To` `a2`, `Where` `3 states`
+    with 80, and `L`.
+7.  The string: track 5, `vG`, `S`, `Fill` `Random`, `From` `a3`, `To` `a5`, `Where` `Clusters`
+    with 35, and `L`.
+
+Each `S` draws a seed of its own, so your rhythms differ from the song's; `r` in the panel draws
+again. The finished song also sets the hat's and the kick's `Decay`, the string's, the bass's
+filter, the sends and the levels.
+
+**Try next.**
+
+*   `gl` on the hat and `Amount` `30`, then the same on the percussion: it takes most of the
+    rows now. Each generator keeps its own amount, so turn both, or map both to one macro.
+*   `K` on the percussion's `Side` makes it `First`: it plays the hat's rows, together.
+*   On the kick, `Amount` `100%` repeats its eight rows exactly; `33%` is a sparse coin; `0%` is
+    busier, and never plays the same eight rows twice.
+*   On the bass, `Amount` `0%` is mostly gates, short notes, and `50%` mostly rests.
+*   `Vary` `Each pass` on the string, and every pass bunches its notes anew.
+*   On the Gen page, `Space 8`, each `Amount` is a cell to turn while it plays, and on the Roto
+    knob 7.
 
 ## Variations of your own phrase
 
@@ -1237,7 +1375,6 @@ These are planned, each its own issue, and this chapter grows a section as each 
 
 | Issue | Generator |
 |---|---|
-| [#586](https://github.com/gabrielgellner/vimtracker/issues/586) | Marbles' rhythm models as `Where` choices |
 | [#590](https://github.com/gabrielgellner/vimtracker/issues/590) | Tonnetz chord movement: P, L and R moves |
 | [#591](https://github.com/gabrielgellner/vimtracker/issues/591) | Per-attribute loop lengths after Kria |
 | [#592](https://github.com/gabrielgellner/vimtracker/issues/592) | Strange attractors as LFO shapes: Lorenz and Rössler |

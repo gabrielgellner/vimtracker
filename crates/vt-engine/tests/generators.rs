@@ -54,6 +54,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         vary: 0,
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
+        ring: vt_model::shape::Ring::default(),
     }
 }
 
@@ -608,6 +609,49 @@ fn a_held_setting_hitting_fewer_rows_plays_whats_under_on_the_rest() {
     assert!(heard(&engine, 0).iter().any(|run| run.moving));
 }
 
+/// Each of Marbles' rhythms (decision 321) on the accents, its amount held at another number,
+/// plays what writing that number would, and with `Vary` each pass, its second pass plays what
+/// writing that pass's seed would: the engine renders its rows and its ties with the edit
+/// thread's code.
+#[test]
+fn a_marbles_rhythm_held_or_varied_plays_what_writing_it_would() {
+    let rhythms = [
+        (Where::Clusters(30), GenParam::Clusters),
+        (Where::Markov(80), GenParam::Markov),
+        (Where::States(60), GenParam::States),
+        (
+            Where::Complementary {
+                share: 50,
+                second: true,
+            },
+            GenParam::Share,
+        ),
+    ];
+    for (place, param) in rhythms {
+        let mut rhythm = shape(FillKind::Ramp, 0x40, 0x7F, place);
+        rhythm.seed = 11;
+        let song = reshape(&accents(), rhythm);
+        let column = ShapeColumn::Velocity;
+        let (_, other) = another(&written(&song, 0, column), column, param);
+        let hold = (0, column, param, other);
+        let (held, engine) = play(&song, &[hold], 16);
+        let (at_rest, _) = play(&song, &[], 16);
+        let (writes, _) = play(&reshaped(&song, hold), &[], 16);
+        assert!(held != at_rest, "{param:?} at {other} is heard");
+        assert!(held == writes, "{param:?} at {other} plays as written");
+        assert!(heard(&engine, 0).iter().any(|run| run.moving));
+        // A new seed each pass, over the nine passes.
+        let varied = reshape(&nine_passes(), Shape { vary: 1, ..rhythm });
+        let (second, _) = play_pass(&varied, 1);
+        let mut kept = written(&varied, 0, column).on_pass(1);
+        kept.vary = 0;
+        let (as_kept, _) = play_pass(&reshape(&varied, kept), 1);
+        assert!(second == as_kept, "{param:?}'s second pass plays its seed");
+        let (as_written, _) = play_pass(&reshape(&varied, rhythm), 1);
+        assert!(second != as_written, "{param:?}'s second pass is new rows");
+    }
+}
+
 /// The nine-pass song with a line of its own on the Note column, a live `Variation` of it at
 /// order 1, a new variation every pass.
 fn varying_line() -> Song {
@@ -851,6 +895,87 @@ fn a_divisions_rolls_new_dice_each_pass_and_its_chances_can_be_held() {
     let mut fine = written(&still, 0, notes());
     fine.divisions.bar = vt_model::shape::Bar::FourFine;
     assert_eq!(version(&reshape(&still, fine)).lead, 40);
+}
+
+/// The nine-pass song with a live `Ring` on an empty Note column, `Change` at 40%, so its
+/// register runs on from pass to pass.
+fn ringing() -> Song {
+    let mut song = nine_passes();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(vec![Step::default(); 16])));
+    let mut ring = shape(FillKind::Ring, 48, 72, Where::AllRows);
+    ring.ring.change = 40;
+    generate(song, 0, writing(), rows(15), ring)
+}
+
+/// The Note column of a track with no notes, writing at the velocity notes are typed with.
+fn writing() -> ShapeColumn {
+    ShapeColumn::Note {
+        scale: vt_model::scale::Scale::default(),
+        writes: Some(0x64),
+    }
+}
+
+/// The passes heard of a track's ring, each with the register it began with.
+fn rings_heard(engine: &mut Engine, track: usize) -> Vec<(i64, Option<vt_model::shape::Kept>)> {
+    let mut heard = Vec::new();
+    engine.take_gen_reports(|on, report| {
+        if let GenReport::Pass(pass) = report
+            && on == track
+        {
+            heard.push((pass.pass, pass.ring));
+        }
+    });
+    heard
+}
+
+/// A `Ring` runs on from pass to pass: pass 0 is what's written, with nothing rendered; each later
+/// pass renders once and plays, sample for sample, what the ring kept on it plays as its first;
+/// each is reported once with the register it began with; and played from the ninth pass, it
+/// hears and reports what playing there from the top does.
+#[test]
+fn a_ring_runs_on_from_pass_to_pass_where_the_song_is() {
+    let song = ringing();
+    let shape = written(&song, 0, writing());
+    let kept_on = |pass: i64| {
+        let heard = shape.on_pass(pass);
+        let mut kept = shape;
+        kept.ring.kept = Some(heard.ring.kept_on(heard.seed, 16));
+        reshape(&song, kept)
+    };
+    let (first, engine) = play_pass(&song, 0);
+    assert!(first == play_pass(&kept_on(0), 0).0, "pass 0 is as written");
+    assert!(heard(&engine, 0).iter().all(|run| run.renders == 0));
+    for pass in [1, 2, 8] {
+        let (heard_out, engine) = play_pass(&song, pass);
+        let (kept_out, _) = play_pass(&kept_on(pass as i64), 0);
+        assert!(heard_out == kept_out, "pass {pass} plays what's kept of it");
+        assert!(heard_out != first, "pass {pass} is a pass of its own");
+        let run = heard(&engine, 0)[0];
+        assert_eq!((run.pass, run.renders), (pass as i64, 1));
+    }
+    // Each pass reported once, with the register it began with.
+    let mut engine = Engine::new(RATE, version(&song));
+    engine.play_from(0);
+    let mut out = [0.0; 512];
+    let mut reported = Vec::new();
+    for _ in 0..(8 * 16 + 4) * STEP / 256 {
+        engine.process(&mut out);
+        reported.extend(rings_heard(&mut engine, 0));
+    }
+    let wanted: Vec<_> = (0..9)
+        .map(|pass| {
+            let heard = shape.on_pass(pass);
+            (pass, Some(heard.ring.kept_on(heard.seed, 16)))
+        })
+        .collect();
+    assert_eq!(reported, wanted);
+    let mut ninth = Engine::new(RATE, version(&song));
+    ninth.play_from(8 * 16);
+    let mut out = vec![0.0; 4 * STEP * 2];
+    ninth.process(&mut out);
+    assert_eq!(rings_heard(&mut ninth, 0).last(), reported.last());
 }
 
 /// The nine-pass song with accents on its velocities where rule 30 has its cells on, from one cell

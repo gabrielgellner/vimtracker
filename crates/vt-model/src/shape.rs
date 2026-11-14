@@ -6,7 +6,8 @@
 //! bits, and `Grids` writes a drum part from a map of real patterns, one part a track across a
 //! kit's. `Variation` writes something like the notes there, from a Markov chain learned from them.
 //! `Divisions` writes a rhythm from a chance for each note division, straight and triplet, to
-//! strike, after Vermona's randomRHYTHM, its triplets nudged between the rows. A `Where` of
+//! strike, after Vermona's randomRHYTHM, its triplets nudged between the rows. `Ring` writes a
+//! rhythm and a melody together from one shift register, after the Wiard Noise Ring. A `Where` of
 //! `Cells` chooses the rows from an elementary cellular automaton, as Wolfram's rules evolve it.
 
 mod acid;
@@ -19,6 +20,8 @@ mod mutation;
 pub mod params;
 mod random;
 mod render;
+mod rhythm;
+mod ring;
 mod variation;
 mod walk;
 
@@ -41,6 +44,7 @@ pub use random::{
     degree_name,
 };
 pub use render::{GenCell, RowView, render_into};
+pub use ring::{Kept, MAX_RING, Ring};
 use serde::{Deserialize, Serialize};
 pub use variation::{
     MAX_LEARNED, MAX_ORDER, MIN_NOTES as VARIATION_NOTES, Variation, notes as variation_notes,
@@ -149,6 +153,24 @@ const CELLS: Where = Where::Cells(Cells {
     across: None,
     stepped: 0,
 });
+/// The amounts Marbles' rhythms start with: for clusters half the rows; for Markov `80%`, an
+/// eight-row loop that changes now and then, as at noon on one track it's sparse; for three
+/// states a quarter, as at noon three rows in four rest; and half the rows each for the two
+/// tracks of `Complementary`.
+pub const CLUSTERS: u8 = 50;
+pub const MARKOV: u8 = 80;
+pub const STATES: u8 = 25;
+pub const SHARE: u8 = 50;
+/// Marbles' rhythms, as each starts, after Euclid in a list of `Where`s.
+const MARBLES: [Where; 4] = [
+    Where::Clusters(CLUSTERS),
+    Where::Markov(MARKOV),
+    Where::States(STATES),
+    Where::Complementary {
+        share: SHARE,
+        second: false,
+    },
+];
 /// The most values a `List` fill goes through, so a shape stays plain data of a fixed size.
 pub const MAX_VALUES: usize = 8;
 
@@ -177,6 +199,9 @@ pub enum FillKind {
     /// A rhythm from a chance for each note division to strike, straight and triplet, after
     /// Vermona's randomRHYTHM.
     Divisions,
+    /// A rhythm and a melody from one shift register going round, a row playing on its newest
+    /// bit at the pitch of its byte, after the Wiard Noise Ring.
+    Ring,
     /// Another phrase's notes, with their velocities and gates, turned on the way as a canon's
     /// voices are.
     Follow,
@@ -205,7 +230,7 @@ pub enum FillKind {
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 22] = [
         Self::Ramp,
         Self::Random,
         Self::Walk,
@@ -216,6 +241,7 @@ impl FillKind {
         Self::Acid,
         Self::Grids,
         Self::Divisions,
+        Self::Ring,
         Self::Follow,
         Self::Variation,
         Self::Scale,
@@ -242,6 +268,7 @@ impl FillKind {
             Self::Acid => "Acid",
             Self::Grids => "Grids",
             Self::Divisions => "Divisions",
+            Self::Ring => "Ring",
             Self::Follow => "Follow",
             Self::Variation => "Variation",
             Self::Scale => "Scale",
@@ -269,6 +296,7 @@ impl FillKind {
             Self::Acid => "A 303 line, with accents and slides",
             Self::Grids => "A drum part from Grids' map",
             Self::Divisions => "A chance for each note division",
+            Self::Ring => "A noise ring's rhythm and pitch",
             Self::Follow => "Another track's phrase, kept in step",
             Self::Variation => "Something like the notes there",
             Self::Scale => "The values there onto the two",
@@ -307,12 +335,17 @@ impl FillKind {
     }
 
     /// Whether it chooses its rows with a `Where`. A `Follow` writes every row from its source,
-    /// `Multiply` reads and writes the rhythm itself, `Grids` and `Divisions` make one of their
-    /// own, and a `Variation` learns one with the notes.
+    /// `Multiply` reads and writes the rhythm itself, `Grids`, `Divisions` and `Ring` make one of
+    /// their own, and a `Variation` learns one with the notes.
     pub fn has_where(self) -> bool {
         !matches!(
             self,
-            Self::Follow | Self::Multiply | Self::Grids | Self::Divisions | Self::Variation
+            Self::Follow
+                | Self::Multiply
+                | Self::Grids
+                | Self::Divisions
+                | Self::Ring
+                | Self::Variation
         )
     }
 }
@@ -335,6 +368,17 @@ pub enum Where {
     /// `hits` spread as evenly as they go among the rows it can change, then moved `rotate` of
     /// those rows later, going round.
     Euclid { hits: u16, rotate: u16 },
+    /// Runs of two to four rows with gaps between, about this percent of the rows, after Marbles'
+    /// clusters.
+    Clusters(u8),
+    /// Each row's chance hanging on the rows before it, by Marbles' Markov rules at this Bias.
+    Markov(u8),
+    /// Each row a gate, a rest or a tie, which holds the value before it, by Marbles' three
+    /// states at this Bias.
+    States(u8),
+    /// One coin a row for two tracks, Marbles' complementary Bernoulli: the first takes the rows
+    /// it lands under `share` on, as `Chance` would, and the `second` the rest.
+    Complementary { share: u8, second: bool },
     /// The cells an elementary cellular automaton has on: a row a cell on one column, each pass a
     /// generation, or across tracks, a track a cell and a row a generation.
     Cells(Cells),
@@ -351,7 +395,41 @@ impl Where {
             Self::Every(_) => "Every",
             Self::Chance(_) => "Chance",
             Self::Euclid { .. } => "Euclid",
+            Self::Clusters(_) => "Clusters",
+            Self::Markov(_) => "Markov",
+            Self::States(_) => "3 states",
+            Self::Complementary { .. } => "Complementary",
             Self::Cells(_) => "Cells",
+        }
+    }
+
+    /// Whether the rows are drawn from the seed, so another seed would choose others: a
+    /// `Cells`' only where it starts from the seed on one column, as across tracks the row they
+    /// start from is kept.
+    pub fn draws(self) -> bool {
+        match self {
+            Self::Cells(cells) => cells.start == CellStart::Seed && cells.across.is_none(),
+            _ => matches!(
+                self,
+                Self::Chance(_)
+                    | Self::Clusters(_)
+                    | Self::Markov(_)
+                    | Self::States(_)
+                    | Self::Complementary { .. }
+            ),
+        }
+    }
+
+    /// The rows it chooses on the `nth` of the tracks a shape fills at once, counted from 0: the
+    /// same, but `Complementary` gives each pair of tracks its two sides, the first of the pair
+    /// the side chosen and the second the other.
+    pub fn on_track(self, nth: usize) -> Self {
+        match self {
+            Self::Complementary { share, second } => Self::Complementary {
+                share,
+                second: second != (nth % 2 == 1),
+            },
+            place => place,
         }
     }
 }
@@ -424,8 +502,8 @@ impl ShapeColumn {
         }
     }
 
-    /// The fills it offers: `Snap`, `Acid`, `Grids`, `Divisions`, `Follow` and `Variation` only
-    /// mean something for notes, `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform
+    /// The fills it offers: `Snap`, `Acid`, `Grids`, `Divisions`, `Ring`, `Follow` and `Variation`
+    /// only mean something for notes, `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform
     /// or a `Variation` nothing for notes of its own, as there are none to rework or learn from.
     pub fn fills(self) -> Vec<FillKind> {
         FillKind::ALL
@@ -437,6 +515,7 @@ impl ShapeColumn {
                         | FillKind::Acid
                         | FillKind::Grids
                         | FillKind::Divisions
+                        | FillKind::Ring
                         | FillKind::Follow
                         | FillKind::Variation
                 ) || matches!(self, Self::Note { .. })
@@ -516,23 +595,19 @@ impl ShapeColumn {
             // Notes of its own go on rows without one, so the rows are only a rhythm.
             Self::Note {
                 writes: Some(_), ..
-            } => vec![
-                Where::AllRows,
-                Where::Every(4),
-                Where::Chance(50),
-                EUCLID,
-                CELLS,
-            ],
+            } => [Where::AllRows, Where::Every(4), Where::Chance(50), EUCLID]
+                .into_iter()
+                .chain(MARBLES)
+                .chain([CELLS])
+                .collect(),
             Self::Note { .. } | Self::Velocity | Self::Nudge { .. } | Self::Length => {
-                vec![
-                    Where::Notes,
-                    Where::Every(4),
-                    Where::Chance(50),
-                    EUCLID,
-                    CELLS,
-                ]
+                [Where::Notes, Where::Every(4), Where::Chance(50), EUCLID]
+                    .into_iter()
+                    .chain(MARBLES)
+                    .chain([CELLS])
+                    .collect()
             }
-            Self::Fx { .. } => vec![
+            Self::Fx { .. } => [
                 Where::Commands,
                 Where::AllRows,
                 Where::Notes,
@@ -540,8 +615,11 @@ impl ShapeColumn {
                 Where::Every(4),
                 Where::Chance(50),
                 EUCLID,
-                CELLS,
-            ],
+            ]
+            .into_iter()
+            .chain(MARBLES)
+            .chain([CELLS])
+            .collect(),
         }
     }
 
@@ -803,6 +881,10 @@ pub struct Shape {
     /// A `Divisions` fill's chances, its channel and its bar. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Divisions::is_default")]
     pub divisions: Divisions,
+    /// A `Ring` fill's `Change`, `Chance` and `Length`, the register it kept and the pass it
+    /// plays. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Ring::is_default")]
+    pub ring: Ring,
     /// How a `Random` fill spreads and leans its values, and on notes which degrees it lets
     /// through and how often each comes. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Random::is_default")]
@@ -855,23 +937,20 @@ impl Shape {
             vary: 0,
             variation: Variation::default(),
             divisions: Divisions::default(),
+            ring: Ring::default(),
         }
     }
 
     /// Whether anything it writes is drawn from its seed, so another seed would write something
     /// else: a random fill, a walk, `1/f`, `Acid`, `Shuffle`, `Grids`' chaos, a `Variation`, a
-    /// random wave or a `Follow` that mutates, or rows chosen by chance, or by cells drawn from
-    /// it on one column.
+    /// random wave or a `Follow` that mutates, or rows chosen by chance, one of Marbles' rhythms
+    /// or cells drawn from it on one column.
     pub fn draws(&self) -> bool {
         let random_wave =
             self.kind == FillKind::Wave && matches!(self.wave, Wave::Random | Wave::Smooth);
-        let drawn_cells = matches!(
-            self.place,
-            Where::Cells(cells) if cells.start == CellStart::Seed && cells.across.is_none()
-        );
         random_wave
             || self.kind == FillKind::Follow && self.follow.mutates()
-            || (matches!(self.place, Where::Chance(_)) || drawn_cells) && self.kind.has_where()
+            || self.place.draws() && self.kind.has_where()
             || matches!(
                 self.kind,
                 FillKind::Random
@@ -896,9 +975,10 @@ impl Shape {
         self.draws() || self.evolves()
     }
 
-    /// Whether it plays a variation of its own on some passes, so the engine renders it.
+    /// Whether it plays a variation of its own on some passes, so the engine renders it: by its
+    /// `Vary`, or a `Ring`, whose register runs on from pass to pass.
     pub fn varies(&self) -> bool {
-        self.vary > 0 && self.can_vary()
+        self.vary > 0 && self.can_vary() || self.kind == FillKind::Ring
     }
 
     /// The shape a pass of its phrase plays, counted from 0: itself unless it [varies], and
@@ -906,12 +986,18 @@ impl Shape {
     /// it is, as `r` would roll it (with `Acid`'s pitches kept, only the second die). The first
     /// is the seed as written, so what's written is what the first pass plays, and since it's
     /// worked out from the pass alone, a render repeats and playing from anywhere hears what
-    /// playing to there would. A shape that [evolves] keeps its seed, and each `vary` passes step
-    /// its automaton on instead, so its rhythm grows from its seed row and its values stay.
+    /// playing to there would. A `Ring` has no `Vary`: it plays the pass itself, its register
+    /// running on from the last. A shape that [evolves] keeps its seed, and each `vary` passes
+    /// step its automaton on instead, so its rhythm grows from its seed row and its values stay.
     ///
     /// [varies]: Shape::varies
     /// [evolves]: Shape::evolves
     pub fn on_pass(&self, pass: i64) -> Shape {
+        if self.kind == FillKind::Ring {
+            let mut shape = *self;
+            shape.ring.pass = pass.clamp(0, i64::from(u32::MAX)) as u32;
+            return shape;
+        }
         if !self.varies() {
             return *self;
         }
@@ -979,6 +1065,21 @@ pub fn track_seed(seed: u64, nth: usize) -> u64 {
         seed
     } else {
         seed ^ mix(0xC0FF_EE00, nth)
+    }
+}
+
+/// A shape as it goes on the `nth` of the tracks it shapes at once: with its own seed, as
+/// [`track_seed`] gives it, and its rows [on that track](Where::on_track). `Complementary` tosses
+/// one coin for each pair of tracks, so the two of a pair share a seed.
+pub fn on_track(shape: &Shape, nth: usize) -> Shape {
+    let shared = match shape.place {
+        Where::Complementary { .. } => nth - nth % 2,
+        _ => nth,
+    };
+    Shape {
+        seed: track_seed(shape.seed, shared),
+        place: shape.place.on_track(nth),
+        ..*shape
     }
 }
 
@@ -1227,6 +1328,7 @@ mod tests {
             vary: 0,
             variation: crate::shape::Variation::default(),
             divisions: Divisions::default(),
+            ring: Ring::default(),
         }
     }
 

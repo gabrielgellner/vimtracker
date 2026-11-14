@@ -16,9 +16,9 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
     Acid, Across, Bar, Bits, CellStart, Cells, Channel, Divisions, DrumPart, Edge, FillKind,
-    Follow, GenCell, Grids, MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_VALUES, MAX_WEIGHT, Mutations,
-    Pink, Random, RowView, Shape, ShapeColumn, Values, Variation, WAVES, Walk, WaveRate, Where,
-    render_into, written_from,
+    Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_RING, MAX_VALUES,
+    MAX_WEIGHT, Mutations, Pink, Random, Ring, RowView, Shape, ShapeColumn, Values, Variation,
+    WAVES, Walk, WaveRate, Where, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -318,6 +318,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         vary: 0,
         variation: Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
+        ring: vt_model::shape::Ring::default(),
     };
     // Settings added since are drawn from the seed, so the other draws, and the other fills'
     // hashes, stay as they were.
@@ -366,6 +367,26 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         channel: more.chance(90).then(|| more.pick(&Channel::ALL)),
         bar: more.pick(&Bar::ALL),
     };
+    // A ring at any pass, kept on one now and then.
+    let percent = |more: &mut Dice| match more.below(4) {
+        0 => 0,
+        1 => 100,
+        _ => more.below(101) as u8,
+    };
+    shape.ring = Ring {
+        change: percent(&mut more),
+        chance: percent(&mut more),
+        length: 1 + more.below(u64::from(MAX_RING)) as u8,
+        kept: more.chance(20).then(|| Kept {
+            bits: more.next() as u16,
+            pass: more.below(1000) as u32,
+        }),
+        pass: if more.chance(30) {
+            0
+        } else {
+            more.below(100_000) as u32
+        },
+    };
     shape
 }
 
@@ -373,10 +394,14 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
 /// of its own (decision 302), so its own line, with them as they start, stays as it was.
 type Variant = (&'static str, FillKind, fn(&mut Shape));
 
-const VARIANTS: [Variant; 6] = [
+const VARIANTS: [Variant; 10] = [
     ("Random shaped", FillKind::Random, shaped_random),
     ("Follow mutated", FillKind::Follow, mutated_follow),
     ("Acid shaped", FillKind::Acid, shaped_random),
+    ("Ramp, Marbles' rows", FillKind::Ramp, marbles_rows),
+    ("Random, Marbles' rows", FillKind::Random, marbles_rows),
+    ("Acid, Marbles' rows", FillKind::Acid, marbles_rows),
+    ("Shuffle, Marbles' rows", FillKind::Shuffle, marbles_rows),
     ("Ramp on cells", FillKind::Ramp, on_cells),
     ("Random on cells", FillKind::Random, on_cells),
     ("List on cells", FillKind::List, on_cells),
@@ -411,6 +436,26 @@ fn on_cells(shape: &mut Shape) {
         across,
         stepped,
     });
+}
+
+/// One of Marbles' rhythms as the `Where` (decision 321), drawn from the seed, some at the ends of
+/// its amount.
+fn marbles_rows(shape: &mut Shape) {
+    let mut more = Dice(shape.seed ^ 0x7A11);
+    let amount = if more.chance(20) {
+        more.pick(&[0, 100])
+    } else {
+        more.below(101) as u8
+    };
+    shape.place = match more.below(4) {
+        0 => Where::Clusters(amount),
+        1 => Where::Markov(amount),
+        2 => Where::States(amount),
+        _ => Where::Complementary {
+            share: amount,
+            second: more.chance(50),
+        },
+    };
 }
 
 /// A `Follow`'s mutations (decision 307), drawn from its seed: up to the most, each kind on or
@@ -668,6 +713,10 @@ fn every_fill_renders_on_every_column_without_allocating() {
                             hits: 1 + dice.below(64) as u16,
                             rotate: dice.below(64) as u16,
                         };
+                    }
+                    // And Marbles' rhythms, the longest phrase's among them.
+                    if nth % 4 == 0 {
+                        marbles_rows(&mut case.shape);
                     }
                     // Half of each fill's with its variants' settings drawn, weighed notes
                     // among them.

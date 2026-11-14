@@ -43,6 +43,7 @@ fn shape(kind: FillKind, place: Where) -> Shape {
         vary: 0,
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
+        ring: vt_model::shape::Ring::default(),
     }
 }
 
@@ -75,6 +76,13 @@ fn every_generator_puts_each_setting_on_one_knob_and_the_app_keeps_what_it_is() 
         Where::Every(4),
         Where::Chance(50),
         Where::Euclid { hits: 3, rotate: 0 },
+        Where::Clusters(50),
+        Where::Markov(80),
+        Where::States(25),
+        Where::Complementary {
+            share: 50,
+            second: true,
+        },
     ];
     for kind in FillKind::ALL {
         for place in wheres {
@@ -173,6 +181,50 @@ fn turning_a_knob_reshapes_the_column_as_the_pages_keys_do() {
     // A bend has a notch at its middle.
     let curve = control_at(track, Some(0), device, 3, false).unwrap();
     assert_eq!(knob(curve, track, &song).unwrap().feel, Feel::CentreNotch);
+}
+
+#[test]
+fn knob_7_turns_the_amount_of_marbles_rhythms_and_the_app_keeps_complementarys_side() {
+    for place in [
+        Where::Clusters(50),
+        Where::Markov(80),
+        Where::States(25),
+        Where::Complementary {
+            share: 50,
+            second: true,
+        },
+    ] {
+        let song = song_with(shape(FillKind::Ramp, place));
+        let track = &song.tracks[0];
+        let device = track_devices(track, Some(0)).len() - 1;
+        let amount = control_at(track, Some(0), device, 7, false).unwrap();
+        let Control::Gen { param, .. } = amount else {
+            panic!("{amount:?}");
+        };
+        assert_eq!(param.name(), "Amount", "{place:?}");
+        let action = turned(amount, 0, &song, KNOB_TOP).unwrap();
+        let next = edit(&Arc::new(song.clone()), &action).unwrap();
+        let shape = next.tracks[0].phrases[&0].generators()[0].shape;
+        let turned_to = match shape.place {
+            Where::Clusters(amount)
+            | Where::Markov(amount)
+            | Where::States(amount)
+            | Where::Complementary { share: amount, .. } => amount,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(turned_to, 100, "{place:?}");
+        assert_eq!(
+            std::mem::discriminant(&shape.place),
+            std::mem::discriminant(&place)
+        );
+        // Which side of the coin a track is, is what it is, as a `Grids`' part is.
+        let side = Control::Gen {
+            phrase: 0,
+            generator: 0,
+            param: GenParam::Side,
+        };
+        assert!(app_only(side, track));
+    }
 }
 
 #[test]

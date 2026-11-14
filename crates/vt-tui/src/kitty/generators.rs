@@ -180,6 +180,7 @@ mod tests {
             vary: 0,
             variation: vt_model::shape::Variation::default(),
             divisions: vt_model::shape::Divisions::default(),
+            ring: vt_model::shape::Ring::default(),
         };
         let column = ShapeColumn::Note {
             scale: vt_model::scale::Scale::default(),

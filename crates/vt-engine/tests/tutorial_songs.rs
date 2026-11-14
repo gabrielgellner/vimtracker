@@ -36,8 +36,8 @@ use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
     Acid, Bar, Bits, CellStart, Cells, DEFAULT_RATE, Divisions, DrumPart, Edge, FillKind, Follow,
-    GenParam, Grids, Mutations, Pink, Random, Shape, ShapeColumn, Source, Values, Walk, WaveRate,
-    Where, divisions_seed, track_seed,
+    GenParam, Grids, Mutations, Pink, Random, Ring, Shape, ShapeColumn, Source, Values, Walk,
+    WaveRate, Where, divisions_seed, on_track, track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -66,7 +66,9 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("walks", walks()),
         ("grids", grids()),
         ("random-rhythm", random_rhythm()),
+        ("noise-ring", noise_ring()),
         ("marbles", marbles()),
+        ("marbles-t", marbles_t()),
         ("variations", variations()),
         ("rene", rene()),
         ("bloom", bloom()),
@@ -212,6 +214,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         vary: 0,
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
+        ring: vt_model::shape::Ring::default(),
     }
 }
 
@@ -1073,6 +1076,50 @@ fn random_rhythm() -> Song {
     song
 }
 
+/// After the Wiard Noise Ring, Malekko's Richter Noise Ring in Eurorack: a bell whose rhythm and
+/// pitch come from one shift register, a live `Ring` with a little `Change`, so it drifts from
+/// pass to pass; and a bass from a second, locked, its loop of five bits coming in a row earlier
+/// each bar of sixteen; under a kick and hats.
+fn noise_ring() -> Song {
+    let mut song = song("noise-ring", 112, 2, ScaleKind::Dorian, 4);
+    song.seed = 0x66;
+    voice(&mut song, 0, "NR", SynthVoice::Modal, &[REST; 16]);
+    song.tracks[0].level = 0xB8;
+    song.tracks[0].send_a = 0x80;
+    song.tracks[0].send_b = 0xA0;
+    voice(&mut song, 1, "BS", SynthVoice::VirtualAnalog, &[REST; 16]);
+    song.tracks[1].cutoff = 0x50;
+    song.tracks[1].resonance = 0x38;
+    song.tracks[1].level = 0xC0;
+    four_on_the_floor(&mut song, 2);
+    off_beat_hats(&mut song, 3);
+    // The bell: eight bits going round, a little over half of them 1s, one in seven replaced as
+    // it comes round, over two octaves of D dorian.
+    let mut bell = shape(FillKind::Ring, note("D-3"), note("D-5"), Where::AllRows);
+    bell.ring = Ring {
+        change: 15,
+        chance: 55,
+        length: 8,
+        ..Ring::default()
+    };
+    bell.seed = 12;
+    let notes = empty_notes(&song);
+    let mut song = generate(song, 0, notes, 16, bell);
+    // The bass: locked, a loop of five bits over an octave, so it comes in a row earlier each
+    // bar and back to where it started every five.
+    let mut bass = shape(FillKind::Ring, note("D-1"), note("D-2"), Where::AllRows);
+    bass.ring = Ring {
+        change: 0,
+        chance: 60,
+        length: 5,
+        ..Ring::default()
+    };
+    bass.seed = 13;
+    let notes = empty_notes(&song);
+    song = generate(song, 1, notes, 16, bass);
+    song
+}
+
 /// Shaped random values, after Mutable Instruments' Marbles' X section, each a live `Random`: a
 /// tune its `Steps` keeps to a chord's four notes, its `Spread` a bell round the middle of two
 /// octaves; a bass at its range's two ends alone, an octave apart, the low one more often; and
@@ -1136,6 +1183,71 @@ fn marbles() -> Song {
     };
     hats.seed = 6;
     song = generate(song, 2, ShapeColumn::Velocity, 16, hats);
+    song
+}
+
+/// Marbles' rhythms, after Mutable Instruments' Marbles' T section (decision 321), each the
+/// `Where` of a live generator writing notes of its own: a hat and a modal percussion line
+/// trading sixteenths on one `Complementary` coin, a kick on a `Markov` eight-row loop, a bass
+/// whose `3 states` hold some notes into the next, and a string's notes in `Clusters`.
+fn marbles_t() -> Song {
+    let mut song = song("marbles-t", 120, 9, ScaleKind::Minor, 5);
+    song.seed = 0x7B;
+    let blank = vec![REST; 16];
+    voice(&mut song, 0, "HH", SynthVoice::Hat, &blank);
+    set(&mut song, 0, "hat.decay", 0x2C);
+    song.tracks[0].level = 0xB8;
+    voice(&mut song, 1, "PC", SynthVoice::Modal, &blank);
+    song.tracks[1].level = 0xC0;
+    song.tracks[1].send_b = 0x70;
+    voice(&mut song, 2, "BD", SynthVoice::Kick, &blank);
+    set(&mut song, 2, "kick.decay", 0x70);
+    song.tracks[2].level = 0xF0;
+    voice(&mut song, 3, "BS", SynthVoice::VirtualAnalog, &blank);
+    song.tracks[3].cutoff = 0x48;
+    song.tracks[3].resonance = 0x30;
+    song.tracks[3].level = 0xC8;
+    voice(&mut song, 4, "ST", SynthVoice::String, &blank);
+    set(&mut song, 4, "string.decay", 0x80);
+    song.tracks[4].level = 0xB0;
+    song.tracks[4].send_a = 0x90;
+    song.tracks[4].send_b = 0x90;
+    let notes = empty_notes(&song);
+    // The hat and the percussion: one coin a row, the hat taking 65 rows in a hundred, `S` across
+    // both, then the percussion's fill made a `Random` between A-3 and A-4.
+    let coin = Where::Complementary {
+        share: 65,
+        second: false,
+    };
+    let mut hats = shape(FillKind::Ramp, note("C-4"), note("C-4"), coin);
+    hats.seed = 4;
+    let mut song = generate(song, 0, notes, 16, on_track(&hats, 0));
+    let mut tuned = on_track(&hats, 1);
+    tuned.kind = FillKind::Random;
+    (tuned.from, tuned.to) = (note("A-3"), note("A-4"));
+    song = generate(song, 1, notes, 16, tuned);
+    // The kick: Markov at 90%, an eight-row loop that changes now and then.
+    let mut kick = shape(FillKind::Ramp, note("C-1"), note("C-1"), Where::Markov(90));
+    kick.seed = 4;
+    song = generate(song, 2, notes, 16, kick);
+    // The bass: three states at 80%, mostly ties, between A-1 and A-2.
+    let mut bass = shape(
+        FillKind::Random,
+        note("A-1"),
+        note("A-2"),
+        Where::States(80),
+    );
+    bass.seed = 2;
+    song = generate(song, 3, notes, 16, bass);
+    // The string: clusters on a third of the rows, a `Random` between A-3 and A-5.
+    let mut string = shape(
+        FillKind::Random,
+        note("A-3"),
+        note("A-5"),
+        Where::Clusters(35),
+    );
+    string.seed = 0;
+    song = generate(song, 4, notes, 16, string);
     song
 }
 
@@ -1622,6 +1734,23 @@ fn drunk_walk_patch() -> PatchPreset {
     patch_of(&track)
 }
 
+/// The Noise Ring: the bell's `Ring`, with the module's two knobs, `Change` and `Chance`, each
+/// over all it takes, and the loop's `Length`, from one bit to sixteen.
+fn noise_ring_patch() -> PatchPreset {
+    let mut track = noise_ring().tracks[0].clone();
+    let ring = first_shape(&track).ring;
+    let knobs = [
+        ("Change", GenParam::Change, (0, 100), ring.change),
+        ("Chance", GenParam::Ones, (0, 100), ring.chance),
+        ("Length", GenParam::RingLength, (1, 16), ring.length),
+    ];
+    for (at, (name, param, ends, number)) in knobs.into_iter().enumerate() {
+        let knob = (GenColumn::Note, param);
+        gen_knob(&mut track, at, name, knob, ends, i32::from(number));
+    }
+    patch_of(&track)
+}
+
 /// Marbles' X: the marbles' tune, a `Random` on every other row, with its `Spread`, `Bias` and
 /// `Steps`, the module's three knobs, `Steps` from the root alone to all seven degrees.
 fn marbles_x_patch() -> PatchPreset {
@@ -1666,21 +1795,23 @@ fn variations_patch() -> PatchPreset {
 /// Every shipped patch, by its name, in the chapter's order, each tagged `generative` and with
 /// what it acts on, as the study's §5.4 has them.
 fn patches() -> Vec<(&'static str, PatchPreset)> {
-    let patches = [
-        ("Turing Machine", turing_machine_patch(), "pitch"),
-        ("Deja vu", deja_vu_patch(), "pitch"),
-        ("Euclid", euclid_patch(), "rhythm"),
-        ("Kria", kria_patch(), "pitch"),
-        ("Accents", accents_patch(), "accent"),
-        ("Acid line", acid_line_patch(), "303"),
-        ("Drunk walk", drunk_walk_patch(), "pitch"),
-        ("Marbles X", marbles_x_patch(), "pitch"),
-        ("Variations", variations_patch(), "pitch"),
+    let patches: [(&str, PatchPreset, &[&str]); 10] = [
+        ("Turing Machine", turing_machine_patch(), &["pitch"]),
+        ("Deja vu", deja_vu_patch(), &["pitch"]),
+        ("Euclid", euclid_patch(), &["rhythm"]),
+        ("Kria", kria_patch(), &["pitch"]),
+        ("Accents", accents_patch(), &["accent"]),
+        ("Acid line", acid_line_patch(), &["303"]),
+        ("Drunk walk", drunk_walk_patch(), &["pitch"]),
+        ("Noise Ring", noise_ring_patch(), &["pitch", "rhythm"]),
+        ("Marbles X", marbles_x_patch(), &["pitch"]),
+        ("Variations", variations_patch(), &["pitch"]),
     ];
     patches
         .into_iter()
         .map(|(name, preset, acts_on)| {
-            let tags = vec!["generative".to_owned(), acts_on.to_owned()];
+            let mut tags = vec!["generative".to_owned()];
+            tags.extend(acts_on.iter().map(|tag| (*tag).to_owned()));
             (name, PatchPreset { tags, ..preset })
         })
         .collect()
@@ -1794,6 +1925,44 @@ fn every_tutorial_song_renders_as_it_did_before_the_engine_ran_generators() {
     }
 }
 
+/// In `marbles-t`, the hat and the percussion toss one coin, so every row is one's or the
+/// other's, and a turn of the share on both keeps it so, as the chapter's first thing to try
+/// says.
+#[test]
+fn marbles_t_hat_and_percussion_take_every_row_between_them() {
+    let song = load_song(&songs_folder().join("marbles-t")).unwrap();
+    let plays = |song: &Song, track: usize| -> Vec<bool> {
+        song.tracks[track].phrases[&0]
+            .steps()
+            .iter()
+            .map(|step| matches!(step.note, Note::On(_)))
+            .collect()
+    };
+    let between = |song: &Song| {
+        let (hat, percussion) = (plays(song, 0), plays(song, 1));
+        hat.iter().zip(&percussion).all(|(a, b)| a != b)
+    };
+    assert!(between(&song));
+    let mut turned = song.clone();
+    for track in 0..2 {
+        let mut shape = turned.tracks[track].phrases[&0].generators()[0].shape;
+        if let Where::Complementary { share, .. } = &mut shape.place {
+            *share = 30;
+        }
+        turned = apply(
+            turned,
+            &Action::Reshape {
+                track,
+                phrase: 0,
+                generator: 0,
+                shape,
+            },
+        );
+    }
+    assert!(between(&turned));
+    assert!(plays(&turned, 0).iter().filter(|hit| **hit).count() < 8);
+}
+
 /// The variation is something like the line under it, and order 3 at temperature 0 gives the
 /// line back, as the chapter's first thing to try says.
 #[test]
@@ -1832,6 +2001,39 @@ fn the_variation_is_like_its_line_and_order_3_cold_writes_the_line_back() {
         .map(ToString::to_string)
         .collect();
     assert_eq!(back, line);
+}
+
+/// The bell's ring drifts, so its second pass isn't its first, while the bass's, locked, plays
+/// its loop of five a row earlier each bar and comes back to its first bar on the sixth, as the
+/// chapter says.
+#[test]
+fn the_noise_rings_bell_drifts_and_its_bass_comes_in_a_row_earlier_each_bar() {
+    let song = load_song(&songs_folder().join("noise-ring")).unwrap();
+    let notes = |track: usize, pass: i64| -> Vec<Note> {
+        let phrase = first_phrase(&song.tracks[track]);
+        let generator = &phrase.generators()[0];
+        let under = generator.under(phrase.steps());
+        let rows = generator.rows().unwrap();
+        let shape = generator.shape.on_pass(pass);
+        let mut out = vec![Note::Empty; rows.len()];
+        for (row, step) in vt_model::shape::written(&under, rows, generator.column, &shape) {
+            out[row] = step.note;
+        }
+        out
+    };
+    assert_eq!(
+        notes(0, 0),
+        first_phrase(&song.tracks[0])
+            .steps()
+            .iter()
+            .map(|s| s.note)
+            .collect::<Vec<_>>()
+    );
+    assert_ne!(notes(0, 1), notes(0, 0), "the bell drifts");
+    let (first, second) = (notes(1, 0), notes(1, 1));
+    assert!(first.iter().any(|note| matches!(note, Note::On(_))));
+    assert_eq!(second[..15], first[1..], "a row earlier");
+    assert_eq!(notes(1, 5), first, "and round again on the sixth bar");
 }
 
 /// The kick plays channel A and the woodblock B, each with triplets nudged between the rows,

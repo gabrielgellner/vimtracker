@@ -14,8 +14,8 @@ use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
     Acid, Bar, Bits, Channel, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids,
     MAX_VALUES, Pink, Random, Shape, ShapeColumn, Source, Starts, VARIATION_NOTES, Values, WEIGHTS,
-    Walk, Where, default_ends, default_step, divisions_seed, drum_parts, is_empty, open_rows,
-    track_seed, variation_notes,
+    Walk, Where, default_ends, default_step, divisions_seed, drum_parts, is_empty, on_track,
+    open_rows, track_seed, variation_notes,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -178,28 +178,30 @@ impl ShapePanel {
 
     /// The shape each part takes: the panel's, with the part's own seed, on a column it
     /// generates on, every row where the panel chooses the notes or commands there, and across
-    /// tracks, its own part of Grids' beat, or its own channel of `Divisions`, each three tracks
-    /// sharing a seed so the third plays the strikes of the other two, or its own cell of one
-    /// `Cells` automaton.
+    /// tracks, its own part of Grids' beat, its own channel of `Divisions`, each three tracks
+    /// sharing a seed so the third plays the strikes of the other two, its side of
+    /// `Complementary`'s coin, which each pair of tracks shares, or its own cell of one `Cells`
+    /// automaton.
     pub fn shape_of(&self, nth: usize) -> Shape {
         let part = &self.parts[nth];
         let channels =
             self.shape.kind == FillKind::Divisions && self.shape.divisions.channel.is_none();
+        let placed = on_track(&self.shape, nth);
         let hits: Vec<bool> = self
             .parts
             .iter()
             .map(|part| first_hit(self.base_steps(part), part.range))
             .collect();
         let place = if part.generate {
-            generating(self.shape.place, part.column)
+            generating(placed.place, part.column)
         } else {
-            self.shape.place
+            placed.place
         };
         Shape {
             seed: if channels {
                 divisions_seed(self.shape.seed, nth)
             } else {
-                track_seed(self.shape.seed, nth)
+                placed.seed
             },
             divisions: if channels {
                 self.shape.divisions.for_track(nth)
@@ -411,6 +413,7 @@ fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Sh
         vary: 0,
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
+        ring: vt_model::shape::Ring::default(),
     }
 }
 
@@ -1227,8 +1230,10 @@ impl App {
         let mut actions: Vec<Action> = places
             .into_iter()
             .enumerate()
-            .map(
-                |(nth, (track, phrase, range, column, generate))| Action::Shape {
+            .map(|(nth, (track, phrase, range, column, generate))| {
+                // A seed of its own, or for `Complementary`, its pair's, and its side.
+                let placed = on_track(&Shape { seed, ..shape }, nth);
+                Action::Shape {
                     track,
                     phrase,
                     range,
@@ -1239,7 +1244,7 @@ impl App {
                         seed: if channels {
                             divisions_seed(seed, nth)
                         } else {
-                            track_seed(seed, nth)
+                            placed.seed
                         },
                         divisions: if channels {
                             shape.divisions.for_track(nth)
@@ -1248,9 +1253,9 @@ impl App {
                         },
                         place: cells_across(
                             if generate {
-                                generating(shape.place, column)
+                                generating(placed.place, column)
                             } else {
-                                shape.place
+                                placed.place
                             },
                             seed,
                             nth,
@@ -1265,8 +1270,8 @@ impl App {
                         },
                         ..shape
                     },
-                },
-            )
+                }
+            })
             .collect();
         let action = if actions.len() == 1 {
             actions.remove(0)
@@ -1328,7 +1333,8 @@ impl App {
     }
 
     /// Roll a shape's seed again, as `r` does: with `Acid`'s pitches kept, only its second die,
-    /// the accents, slides and octaves.
+    /// the accents, slides and octaves; and a `Ring` starts again from its new seed, letting go of
+    /// a register it kept.
     pub(crate) fn roll(&mut self, shape: &mut Shape) {
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = self.shape_seed;
@@ -1336,6 +1342,7 @@ impl App {
             shape.acid.roll = shape.acid.roll.wrapping_add(seed).wrapping_add(1);
         } else {
             shape.seed = self.song().seed.wrapping_add(seed);
+            shape.ring.kept = None;
         }
     }
 

@@ -11,7 +11,7 @@ use super::mix;
 use super::random::{Odds, unit};
 use super::{
     FillKind, Ladder, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, divisions, follow,
-    grids, variation, walk,
+    grids, rhythm, ring, variation, walk,
 };
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
@@ -344,7 +344,10 @@ pub(super) fn render(
                 );
             }
         }
-        FillKind::Acid => acid::render(steps, range, column, shape, &mut out),
+        FillKind::Acid => {
+            acid::render(steps, range, column, shape, &mut out);
+            tied(steps, range, column, shape, out.cells);
+        }
         FillKind::Multiply => bits::render(steps, range, column, shape.bits, out.cells),
         FillKind::Grids => grids::render(
             steps,
@@ -362,6 +365,15 @@ pub(super) fn render(
             shape.from,
             shape.seed,
             shape.divisions,
+            out.cells,
+        ),
+        FillKind::Ring => ring::render(
+            steps,
+            range,
+            column,
+            (shape.from, shape.to),
+            shape.seed,
+            shape.ring,
             out.cells,
         ),
         FillKind::Variation => {
@@ -384,6 +396,7 @@ pub(super) fn render(
                     );
                 }
             }
+            tied(steps, range, column, shape, out.cells);
         }
     }
 }
@@ -447,6 +460,11 @@ impl Rows {
 
     pub(super) fn has(&self, at: usize) -> bool {
         at < self.len && self.words[at / 64] & (1 << (at % 64)) != 0
+    }
+
+    /// How many bits it has.
+    pub(super) fn len(&self) -> usize {
+        self.len
     }
 
     pub(super) fn set(&mut self, at: usize) {
@@ -574,9 +592,18 @@ pub(super) fn chosen(
             Where::Notes => has_note,
             Where::NoNotes => !has_note,
             Where::Commands => column.value(step).is_some(),
-            Where::AllRows | Where::Euclid { .. } | Where::Cells(_) => true,
+            Where::AllRows
+            | Where::Euclid { .. }
+            | Where::Clusters(_)
+            | Where::Markov(_)
+            | Where::States(_)
+            | Where::Cells(_) => true,
             Where::Every(every) => offset.is_multiple_of(usize::from(every.max(1))),
             Where::Chance(percent) => mix(seed ^ 0x5555, offset) % 100 < u64::from(percent),
+            // The same coin as `Chance`'s, the second track taking the rows the first leaves.
+            Where::Complementary { share, second } => {
+                (mix(seed ^ 0x5555, offset) % 100 < u64::from(share)) != second
+            }
         };
         if chosen {
             rows.set(offset);
@@ -584,6 +611,9 @@ pub(super) fn chosen(
     }
     let (hits, rotate) = match place {
         Where::Euclid { hits, rotate } => (hits, rotate),
+        Where::Clusters(percent) => return rhythm::clusters(&rows, percent, seed),
+        Where::Markov(bias) => return rhythm::markov(&rows, bias, seed),
+        Where::States(bias) => return rhythm::states(&rows, bias, seed).0,
         Where::Cells(cells) => return cells.chosen(steps, range, seed, &rows, len),
         _ => return rows,
     };
@@ -599,6 +629,29 @@ pub(super) fn chosen(
         }
     }
     hit
+}
+
+/// After a three-state rhythm's gates are written, hold each into the ties after it.
+fn tied(
+    steps: &[Step],
+    range: StepRange,
+    column: ShapeColumn,
+    shape: &Shape,
+    cells: &mut [GenCell],
+) {
+    let Where::States(bias) = shape.place else {
+        return;
+    };
+    let open = chosen(
+        steps,
+        range,
+        column,
+        Where::AllRows,
+        shape.seed,
+        cells.len(),
+    );
+    let (gates, ties) = rhythm::states(&open, bias, shape.seed);
+    rhythm::tie(&open, &gates, &ties, column, cells);
 }
 
 /// A Note column's values. A ramp, a random fill, a wave and the transforms work along the
@@ -772,6 +825,7 @@ fn filled<F: FnMut(usize, &Shaped)>(
             FillKind::Multiply => unreachable!("rendered by `bits::render`"),
             FillKind::Grids => unreachable!("rendered by `grids::render`"),
             FillKind::Divisions => unreachable!("rendered by `divisions::render`"),
+            FillKind::Ring => unreachable!("rendered by `ring::render`"),
             FillKind::Acid => unreachable!("rendered by `acid::render`"),
             FillKind::Variation => unreachable!("rendered by `variation::render`"),
             FillKind::Follow => unreachable!("read from what it follows"),

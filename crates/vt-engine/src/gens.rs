@@ -20,7 +20,7 @@ use vt_model::generator::{Span, lay_under};
 use vt_model::macros::GenColumn;
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Context, FillKind, GenCell, GenParam, RowView, Shape, ShapeColumn, is_empty, open_rows,
+    Context, FillKind, GenCell, GenParam, Kept, RowView, Shape, ShapeColumn, is_empty, open_rows,
     render_into,
 };
 use vt_model::song::{Phrase, Song};
@@ -232,6 +232,9 @@ pub struct GenPass {
     /// The seed it played the pass with, and `Acid`'s second die.
     pub seed: u64,
     pub roll: u64,
+    /// A `Ring`'s register as the pass started, and which pass that is from its first, which
+    /// `Space g a` keeps.
+    pub ring: Option<Kept>,
 }
 
 /// A row of a live generator as it was heard: the cell it played there, if it played one of its
@@ -514,6 +517,8 @@ impl GenScratch {
                     pass: run.pass,
                     seed: heard.seed,
                     roll: heard.acid.roll,
+                    ring: (heard.kind == FillKind::Ring)
+                        .then(|| heard.ring.kept_on(heard.seed, run.rows.len())),
                 };
                 run.report = Some(pass);
             }
@@ -701,6 +706,7 @@ mod tests {
             vary: 0,
             variation: vt_model::shape::Variation::default(),
             divisions: vt_model::shape::Divisions::default(),
+            ring: vt_model::shape::Ring::default(),
         }
     }
 
