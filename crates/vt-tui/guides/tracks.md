@@ -1,3 +1,4 @@
+<!-- ANCHOR: before-clouds -->
 # The track page, envelopes and LFOs
 
 Press `Space 5` to `Space 8` for what a track holds apart from its steps, on four pages: Sound
@@ -665,6 +666,8 @@ with its own envelopes and randomness, and `Pitch` and `Reverb` are Clouds'
 own pitch shifter and reverb on their own. Its grains' places come from the
 track's seed, so a render is the same each time. Clouds' fourth mode, its
 spectral one, isn't here yet.
+<!-- ANCHOR_END: before-clouds -->
+<!-- ANCHOR: before-folded -->
 
 `Warps` crosses the sound with a second one, after Mutable Instruments'
 Warps. The track's own sound is the carrier. The modulator is another
@@ -1055,6 +1058,8 @@ grid show it there too, a column of its own, named and empty, in place of its
 tracks'. In the song view and on the mixer, the folded group keeps its own column or
 strip after the tracks, and the cursor goes along them as they're drawn, stepping
 over the folded tracks with `h`, `l`, `0` and `$` as well.
+<!-- ANCHOR_END: before-folded -->
+<!-- ANCHOR: before-gen -->
 
 Folding a group from one of its tracks puts the cursor on the group, as Vim's cursor
 stands on a closed fold; in the song view and on the mixer, so does putting the
@@ -1628,6 +1633,8 @@ velocities and lengths as bars, and nudges up or down from the middle; and an FX
 column as a line through its values. While the phrase plays, a dot rides it on
 the row playing, or on a lane, where the lane is reading. It's drawn from the
 phrase as it is, so it changes as you turn a setting or edit a row.
+<!-- ANCHOR_END: before-gen -->
+<!-- ANCHOR: before-mapping -->
 
 | Keys | Does |
 |---|---|
@@ -1728,6 +1735,8 @@ straight line, and are shown dim while they are. The drawing has the macro's tur
 setting up, the straight line dotted behind the curve and a faint line where the macro is turned;
 the range on a mapped setting's bar is still its `Min` to its `Max`. A sound preset or a patch
 keeps each mapping's curve.
+<!-- ANCHOR_END: before-mapping -->
+<!-- ANCHOR: before-presets -->
 
 **What a macro reaches:** the track's own settings, its machine's, its effects', its mod slots'
 depths, phases and deforms, and their types' own: an envelope's `Attack`, `Decay`, `Sustain` and
@@ -1796,6 +1805,8 @@ icon, and the folder you last saved in or loaded from at its top.
 is tagged `sound` and by its machine, as `synth`, `analog` and `acid`, and every effect preset
 `effect` and by its effect, as `delay`, so `#acid` lists the acid sounds. `T` in the list gives
 one tags of its own, such as `bass`, kept in its file so they go where it goes.
+<!-- ANCHOR_END: before-presets -->
+<!-- ANCHOR: rest -->
 
 ## Patches
 
@@ -1900,3 +1911,4 @@ master being under `Returns`. The part with the cursor has the brighter rule. Un
 track's name is the group it's in, and under a group's name the tracks
 in it, as `01-04 07`. `z a` folds a group's strips into its own, `z M` folds them all
 and `z R` opens them; see **Folding a group**.
+<!-- ANCHOR_END: rest -->
