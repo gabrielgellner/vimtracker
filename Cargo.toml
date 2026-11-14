@@ -45,6 +45,16 @@ midir = "=0.11.1"
 serialport = { version = "=4.10.1", default-features = false }
 toml = { version = "=1.2.1", default-features = false, features = ["std", "parse", "display", "serde"] }
 
+# The engine and the model optimised in debug builds, and so in the tests, which take a few
+# times as long unoptimised (#663). Debug assertions and overflow checks stay on, as the rest of
+# the dev profile has them. Not 1: the golden hashes hold unoptimised, at 2 and in release
+# builds, but 1 rounds a reverb's maths differently.
+[profile.dev.package.vt-engine]
+opt-level = 2
+
+[profile.dev.package.vt-model]
+opt-level = 2
+
 # A release build with symbols, for a profiler.
 [profile.profiling]
 inherits = "release"

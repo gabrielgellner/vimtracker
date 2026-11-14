@@ -1009,8 +1009,14 @@ These need no terminal and no sound device, so they run anywhere.
 
 ### Testing
 
-About 2,100 tests. CI runs `cargo fmt --check`, `cargo clippy` and `cargo test` on Apple silicon
-macOS, the one platform the golden hashes hold on.
+About 3,000 tests. `just ci` runs `cargo fmt --check`, `cargo clippy` and the tests on Apple
+silicon macOS, the one platform the golden hashes hold on: under cargo-nextest when it's installed,
+a test to a process, and under `cargo test` when it isn't. The `dev` profile builds `vt-engine` and
+`vt-model` at `opt-level = 2`, with debug assertions and overflow checks still on, as the DSP takes
+minutes unoptimised (#663). The golden hashes hold unoptimised, at 2 and in release builds, but not
+at `opt-level = 1`, which rounds one reverb's maths differently. A few sweeps over every extreme of
+an effect, granular's and the spring's, take an orthogonal array of their cases in a test build,
+every pair of values still met, and all of them under `cargo test --release`.
 
 | Kind | Where | What it checks |
 |---|---|---|
