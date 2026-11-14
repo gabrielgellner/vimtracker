@@ -7,6 +7,49 @@ use crate::grid::{GRID_ROWS, Grid};
 use crate::lfo::{DIVISION_NAMES, SWEEP_NAMES};
 use crate::settings::{Entry, Kind, Units};
 
+/// An effect's `read` and `written`, from one list of its fields and the setting each is, so a
+/// field is named once here rather than twice. It goes in the effect's `impl`. Each entry is one of:
+/// - `field => Setting`, a `u8` read and written as it is;
+/// - `field: Choices => Setting`, a type or mode, read as its place in `Choices::ALL`;
+/// - `field => Setting via (place, kept)`, kept on a scale of its own: `place` turns what's kept
+///   into what a step gives, and `kept` turns that back. Distort's `bits` is the one.
+///
+/// A setting the effect doesn't have reads as `0` and writes as nothing. [`Insert::write`] only
+/// writes one it has, within its range.
+macro_rules! effect_settings {
+    ($($field:ident $(: $choices:ident)? => $setting:ident $(via ($place:path, $kept:path))?),+ $(,)?) => {
+        /// A setting's value, on the scale a step gives. One it doesn't have reads as nothing.
+        pub(super) fn read(self, setting: $crate::insert::Setting) -> u8 {
+            match setting {
+                $($crate::insert::Setting::$setting => {
+                    effect_settings!(@read self.$field $(, $choices)? $(, via $place)?)
+                })+
+                _ => 0,
+            }
+        }
+
+        /// The same with a setting changed, on the scale `read` gives.
+        pub(super) fn written(self, setting: $crate::insert::Setting, value: u8) -> Self {
+            let mut settings = self;
+            match setting {
+                $($crate::insert::Setting::$setting => {
+                    settings.$field = effect_settings!(@write value $(, $choices)? $(, via $kept)?);
+                })+
+                _ => {}
+            }
+            settings
+        }
+    };
+    (@read $kept:expr) => { $kept };
+    (@read $kept:expr, via $place:path) => { $place($kept) };
+    (@read $kept:expr, $choices:ident) => { $kept as u8 };
+    (@write $value:expr) => { $value };
+    (@write $value:expr, via $kept:path) => { $kept($value) };
+    (@write $value:expr, $choices:ident) => {
+        $choices::ALL[usize::from($value).min($choices::ALL.len() - 1)]
+    };
+}
+
 mod colour;
 mod dynamics;
 mod filters;

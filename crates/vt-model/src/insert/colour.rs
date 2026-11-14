@@ -181,6 +181,16 @@ pub(super) const MOST_BITS: u8 = 12;
 const BIT_NAMES: [&str; (MOST_BITS - LEAST_BITS + 1) as usize] =
     ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
 
+/// A bit depth kept, from 2 to 12, as its place among `BIT_NAMES`, which a step gives.
+const fn bits_place(bits: u8) -> u8 {
+    bits - LEAST_BITS
+}
+
+/// A place among `BIT_NAMES` as the bit depth kept.
+const fn bits_kept(place: u8) -> u8 {
+    place + LEAST_BITS
+}
+
 /// A distortion's settings. It keeps every mode's own, so changing mode and back finds them as
 /// they were.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -225,39 +235,16 @@ impl Distort {
         track: 0,
     };
 
-    /// A setting's value: a place for `Type` and `Bits`. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Type => self.kind as u8,
-            Setting::Amount => self.amount,
-            Setting::Bits => self.bits - LEAST_BITS,
-            Setting::Rate => self.rate,
-            Setting::MuLaw => self.mu_law,
-            Setting::FollowNote => self.track,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            Setting::Tone => self.tone,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, on the scale `read` gives, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut distort = self;
-        match setting {
-            Setting::Type => distort.kind = DistortType::ALL[usize::from(value)],
-            Setting::Amount => distort.amount = value,
-            Setting::Bits => distort.bits = value + LEAST_BITS,
-            Setting::Rate => distort.rate = value,
-            Setting::MuLaw => distort.mu_law = value,
-            Setting::FollowNote => distort.track = value,
-            Setting::Mix => distort.mix = value,
-            Setting::Gain => distort.gain = value,
-            Setting::Tone => distort.tone = value,
-            _ => {}
-        }
-        distort
+    effect_settings! {
+        kind: DistortType => Type,
+        amount => Amount,
+        bits => Bits via (bits_place, bits_kept),
+        rate => Rate,
+        mu_law => MuLaw,
+        track => FollowNote,
+        mix => Mix,
+        gain => Gain,
+        tone => Tone,
     }
 }
 
@@ -358,37 +345,15 @@ impl Tape {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::TapeDrive => self.drive,
-            Setting::Tone => self.tone,
-            Setting::Bias => self.bias,
-            Setting::Bump => self.bump,
-            Setting::Wow => self.wow,
-            Setting::Flutter => self.flutter,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut tape = self;
-        match setting {
-            Setting::TapeDrive => tape.drive = value,
-            Setting::Tone => tape.tone = value,
-            Setting::Bias => tape.bias = value,
-            Setting::Bump => tape.bump = value,
-            Setting::Wow => tape.wow = value,
-            Setting::Flutter => tape.flutter = value,
-            Setting::Mix => tape.mix = value,
-            Setting::Gain => tape.gain = value,
-            _ => {}
-        }
-        tape
+    effect_settings! {
+        drive => TapeDrive,
+        tone => Tone,
+        bias => Bias,
+        bump => Bump,
+        wow => Wow,
+        flutter => Flutter,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -493,32 +458,12 @@ impl Exciter {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Drive => self.drive,
-            Setting::ExciterTone => self.tone,
-            Setting::ExciterAttack => self.attack,
-            Setting::ExciterRelease => self.release,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut exciter = self;
-        match setting {
-            Setting::Drive => exciter.drive = value,
-            Setting::ExciterTone => exciter.tone = value,
-            Setting::ExciterAttack => exciter.attack = value,
-            Setting::ExciterRelease => exciter.release = value,
-            Setting::Mix => exciter.mix = value,
-            Setting::Gain => exciter.gain = value,
-            _ => {}
-        }
-        exciter
+    effect_settings! {
+        drive => Drive,
+        tone => ExciterTone,
+        attack => ExciterAttack,
+        release => ExciterRelease,
+        mix => Mix,
+        gain => Gain,
     }
 }

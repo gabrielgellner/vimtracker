@@ -103,33 +103,12 @@ impl Chorus {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::ChorusType => self.kind as u8,
-            Setting::Rate => self.rate,
-            Setting::Depth => self.depth,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut chorus = self;
-        match setting {
-            Setting::ChorusType => {
-                chorus.kind = ChorusType::ALL[usize::from(value).min(ChorusType::ALL.len() - 1)];
-            }
-            Setting::Rate => chorus.rate = value,
-            Setting::Depth => chorus.depth = value,
-            Setting::Mix => chorus.mix = value,
-            Setting::Gain => chorus.gain = value,
-            _ => {}
-        }
-        chorus
+    effect_settings! {
+        kind: ChorusType => ChorusType,
+        rate => Rate,
+        depth => Depth,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -248,35 +227,14 @@ impl Phaser {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::SweepRate => self.rate,
-            Setting::Depth => self.depth,
-            Setting::Centre => self.centre,
-            Setting::Feedback => self.feedback,
-            Setting::Stages => self.stages,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut phaser = self;
-        match setting {
-            Setting::SweepRate => phaser.rate = value,
-            Setting::Depth => phaser.depth = value,
-            Setting::Centre => phaser.centre = value,
-            Setting::Feedback => phaser.feedback = value,
-            Setting::Stages => phaser.stages = value,
-            Setting::Mix => phaser.mix = value,
-            Setting::Gain => phaser.gain = value,
-            _ => {}
-        }
-        phaser
+    effect_settings! {
+        rate => SweepRate,
+        depth => Depth,
+        centre => Centre,
+        feedback => Feedback,
+        stages => Stages,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -346,33 +304,13 @@ impl Flanger {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::SweepRate => self.rate,
-            Setting::Depth => self.depth,
-            Setting::FlangerDelay => self.delay,
-            Setting::FlangerFeedback => self.feedback,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut flanger = self;
-        match setting {
-            Setting::SweepRate => flanger.rate = value,
-            Setting::Depth => flanger.depth = value,
-            Setting::FlangerDelay => flanger.delay = value,
-            Setting::FlangerFeedback => flanger.feedback = value,
-            Setting::Mix => flanger.mix = value,
-            Setting::Gain => flanger.gain = value,
-            _ => {}
-        }
-        flanger
+    effect_settings! {
+        rate => SweepRate,
+        depth => Depth,
+        delay => FlangerDelay,
+        feedback => FlangerFeedback,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -479,37 +417,15 @@ impl Rotary {
         gain: UNITY_LEVEL,
     };
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Fast => self.fast,
-            Setting::Inertia => self.inertia,
-            Setting::Doppler => self.doppler,
-            Setting::Tremolo => self.tremolo,
-            Setting::Drive => self.drive,
-            Setting::Width => self.width,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut rotary = self;
-        match setting {
-            Setting::Fast => rotary.fast = value,
-            Setting::Inertia => rotary.inertia = value,
-            Setting::Doppler => rotary.doppler = value,
-            Setting::Tremolo => rotary.tremolo = value,
-            Setting::Drive => rotary.drive = value,
-            Setting::Width => rotary.width = value,
-            Setting::Mix => rotary.mix = value,
-            Setting::Gain => rotary.gain = value,
-            _ => {}
-        }
-        rotary
+    effect_settings! {
+        fast => Fast,
+        inertia => Inertia,
+        doppler => Doppler,
+        tremolo => Tremolo,
+        drive => Drive,
+        width => Width,
+        mix => Mix,
+        gain => Gain,
     }
 }
 
@@ -680,36 +596,14 @@ impl Warps {
         source_track(self.source, sounds)
     }
 
-    /// A setting's value. One it doesn't have reads as nothing.
-    pub(super) fn read(self, setting: Setting) -> u8 {
-        match setting {
-            Setting::Algorithm => self.algorithm,
-            Setting::Timbre => self.timbre,
-            Setting::Source => self.source,
-            Setting::ModulatorLevel => self.level,
-            Setting::Shift => self.pitch,
-            Setting::Wave => self.shape,
-            Setting::Mix => self.mix,
-            Setting::Gain => self.gain,
-            _ => 0,
-        }
-    }
-
-    /// The same with a setting changed, within its range.
-    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
-        let value = value.min(setting.highest());
-        let mut warps = self;
-        match setting {
-            Setting::Algorithm => warps.algorithm = value,
-            Setting::Timbre => warps.timbre = value,
-            Setting::Source => warps.source = value,
-            Setting::ModulatorLevel => warps.level = value,
-            Setting::Shift => warps.pitch = value,
-            Setting::Wave => warps.shape = value,
-            Setting::Mix => warps.mix = value,
-            Setting::Gain => warps.gain = value,
-            _ => {}
-        }
-        warps
+    effect_settings! {
+        algorithm => Algorithm,
+        timbre => Timbre,
+        source => Source,
+        level => ModulatorLevel,
+        pitch => Shift,
+        shape => Wave,
+        mix => Mix,
+        gain => Gain,
     }
 }
