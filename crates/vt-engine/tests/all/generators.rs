@@ -2,7 +2,6 @@
 //! written, sample for sample; a generator whose settings the engine holds elsewhere is rendered
 //! again from its `Shape` and heard so, at once, a pass at a time from where the song is.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -25,7 +24,7 @@ use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Step};
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 

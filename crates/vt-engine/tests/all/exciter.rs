@@ -1,6 +1,5 @@
 //! The exciter as a song plays it: what it adds to a track's sound, and golden renders of it.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -11,7 +10,7 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 

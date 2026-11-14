@@ -2,12 +2,11 @@
 //! (#338): the static curve from a sine held at steady levels, and attack and release from a tone
 //! burst, as how long the gain takes to move 63% and 90% of the way.
 
-mod support;
 
 use std::f32::consts::TAU;
 use std::sync::Arc;
 
-use support::golden;
+use crate::support::golden;
 use vt_engine::dsp::compressor::{Compressor, curve_db};
 use vt_engine::dsp::effects::distort::InsertState;
 use vt_engine::engine::Engine;

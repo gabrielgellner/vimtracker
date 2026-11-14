@@ -3,7 +3,6 @@
 //! same on both sides, which `Distort` works out once for both, comes out as it did, as does one
 //! that isn't, and one that goes from one to the other.
 
-mod support;
 
 use std::f32::consts::TAU;
 
@@ -11,7 +10,7 @@ use vt_engine::dsp::effects::distort::InsertState;
 use vt_engine::track_state::Keys;
 use vt_model::insert::{Distort, DistortType, Insert};
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 /// Settings take effect at once, as the smoother has nothing to do.

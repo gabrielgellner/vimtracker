@@ -2,7 +2,6 @@
 //! back and forth, reversed, with fades, and cut by the track's `STA`, `SLEN` and `PLY`, with a
 //! declick wherever it cuts into the sound. Moving a point while it plays is heard at once.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -16,7 +15,7 @@ use vt_model::samples::{Rates, SamplePool};
 use vt_model::settings::SettingId;
 use vt_model::song::Song;
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.

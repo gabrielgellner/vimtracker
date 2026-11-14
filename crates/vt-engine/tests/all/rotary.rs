@@ -1,7 +1,6 @@
 //! The rotary speaker as a song plays it: a step's lock of `Fast` speeds it up from that step, and
 //! golden renders of it.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -12,7 +11,7 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.

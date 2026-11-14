@@ -1,7 +1,6 @@
 //! The stutter as a song plays it: a step's lock repeats a piece of the track's sound on the grid,
 //! each lock starting it again, and golden renders of it.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -12,7 +11,7 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, a sixteenth.

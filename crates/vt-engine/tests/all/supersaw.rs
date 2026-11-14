@@ -1,6 +1,5 @@
 //! `Supersaw` on a track: how it sounds, as a golden, and how wide it plays through the track.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -11,7 +10,7 @@ use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 

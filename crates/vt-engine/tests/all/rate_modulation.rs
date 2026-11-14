@@ -4,7 +4,6 @@
 //! render repeats whatever the blocks, and a song whose rates never move plays as it always did,
 //! from the top or from anywhere.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -19,7 +18,7 @@ use vt_model::settings::SettingId;
 use vt_model::song::Song;
 use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, and 16 to the bar.

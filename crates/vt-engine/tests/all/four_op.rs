@@ -1,6 +1,5 @@
 //! `4-op` on a track: how it sounds, as a golden.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -10,7 +9,7 @@ use vt_model::samples::SamplePool;
 use vt_model::settings::{MAX_MACHINE_SETTINGS, SettingId};
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 

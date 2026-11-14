@@ -1,7 +1,7 @@
 //! A row's nudge: its note part landing up to just under half a step early or late, on top of
 //! where the groove lands its step, while its lanes stay on the grid.
 
-mod support;
+use crate::support;
 
 use std::sync::Arc;
 

@@ -1,7 +1,6 @@
 //! The voices from Braids, and Plaits' speech, each rendered as a golden, so any change to how one
 //! sounds is caught.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -11,7 +10,7 @@ use vt_model::samples::SamplePool;
 use vt_model::settings::{SettingId, voice_key};
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 

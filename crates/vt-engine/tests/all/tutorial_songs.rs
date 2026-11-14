@@ -12,7 +12,7 @@
 //!
 //! After a change to the format or to a builder, `just tutorial-songs` writes them again.
 
-mod support;
+use crate::support;
 
 use std::path::PathBuf;
 use std::sync::Arc;

@@ -2,7 +2,6 @@
 //! grains following the steps start on them, and golden renders of each mode and quality; and
 //! `Grains`, whose grains it shares, renders as it did.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -13,7 +12,7 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 

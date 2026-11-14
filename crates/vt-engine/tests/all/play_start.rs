@@ -3,7 +3,6 @@
 //! are gone through; what comes out is the same as when every state was, as tracks come and go
 //! between plays, and while a removed track still rings.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -15,7 +14,7 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Phrase, Song, level_gain};
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.

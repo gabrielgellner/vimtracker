@@ -1,7 +1,6 @@
 //! The reverbs as a song plays them: golden renders of each, so the ones there are stay exactly as
 //! they were when another comes, and what a spring's knock does on a track with nothing playing.
 
-mod support;
 
 use std::sync::Arc;
 
@@ -12,7 +11,7 @@ use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
-use support::golden;
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
