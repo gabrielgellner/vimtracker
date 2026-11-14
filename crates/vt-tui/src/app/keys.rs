@@ -632,6 +632,7 @@ impl App {
                 self.clear_live();
             }
             Cmd::ToggleRecord => self.toggle_recording(),
+            Cmd::ToggleSampling => self.toggle_sampling(),
             Cmd::Undo => {
                 let before = self.loop_place();
                 if self.history.undo().is_some() {

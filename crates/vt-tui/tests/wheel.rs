@@ -100,8 +100,8 @@ fn the_wheel_is_off_until_turned_on_on_the_audio_page_and_kept_for_the_machine()
     assert!(!app.wants_mouse(), "nothing is captured as it starts");
     scroll(&mut app, true, Instant::now());
     assert_eq!(steps(&app), [NOTE], "a report while it's off does nothing");
-    // Its row is after the buffer, before the Roto's.
-    press(&mut app, " 9Ljjj");
+    // Its row is after the buffer and the input, before the Roto's.
+    press(&mut app, " 9Ljjjj");
     assert_eq!(app.audio_row_here(), AudioRow::Wheel);
     press(&mut app, "=");
     assert!(app.wants_mouse());
@@ -203,7 +203,7 @@ fn the_value_follows_the_fingers_under_natural_scrolling_unless_reversed() {
     let folder = folder();
     let path = folder.join("vimtracker").join(vt_tui::wheel::SETTING_FILE);
     app.wheel.setting_path = Some(path.clone());
-    press(&mut app, " 9Ljjjj");
+    press(&mut app, " 9Ljjjjj");
     assert_eq!(app.audio_row_here(), AudioRow::WheelDirection);
     press(&mut app, "=");
     assert!(app.wheel.setting.reversed);

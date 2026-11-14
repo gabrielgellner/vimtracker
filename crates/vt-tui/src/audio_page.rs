@@ -1,5 +1,5 @@
 //! The audio page, the project page's Audio sub-page (`Space 9`, then `L`): which output this
-//! machine plays through, at what rate, and with what buffer. A change takes effect
+//! machine plays through, at what rate, and with what buffer, and which input the recorder hears. A change takes effect
 //! as it's made, as Ableton's audio preferences do: the main loop opens the new output. Its last
 //! rows turn the mouse wheel on and off as a knob on the cursor's setting (`wheel`), and say
 //! which way it turns, and turn on the Roto-Control (`roto`), as Live's MIDI preferences choose
@@ -20,6 +20,8 @@ pub enum AudioRow {
     Device,
     Rate,
     Buffer,
+    /// The input the recorder hears, or none.
+    Input,
     /// Whether the mouse wheel turns the cursor's setting.
     Wheel,
     /// Whether the value it turns follows the fingers or goes against them.
@@ -29,10 +31,11 @@ pub enum AudioRow {
 }
 
 impl AudioRow {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Device,
         Self::Rate,
         Self::Buffer,
+        Self::Input,
         Self::Wheel,
         Self::WheelDirection,
         Self::Roto,
@@ -43,6 +46,7 @@ impl AudioRow {
             Self::Device => "Device",
             Self::Rate => "Rate",
             Self::Buffer => "Buffer",
+            Self::Input => "Input",
             Self::Roto => "Roto",
             Self::Wheel => "Wheel",
             Self::WheelDirection => "Direction",
@@ -106,6 +110,7 @@ impl App {
                             device: Some(found.id.clone()),
                             rate: keeps(choice.rate, &found.rates),
                             buffer: keeps(choice.buffer, &found.buffers),
+                            input: choice.input.clone(),
                         },
                     )
                 })
@@ -142,6 +147,36 @@ impl App {
                     })
                     .collect()
             }),
+            // Off, then each input, which must run at the output's rate.
+            AudioRow::Input => {
+                let off = (
+                    "Off".to_owned(),
+                    AudioChoice {
+                        input: None,
+                        ..choice.clone()
+                    },
+                );
+                let inputs = self.audio.inputs.iter().map(|found| {
+                    let rate = if found.rates.contains(&self.rate) {
+                        String::new()
+                    } else {
+                        format!(", not at {} Hz", self.rate)
+                    };
+                    let default = if found.default {
+                        ", the system's default"
+                    } else {
+                        ""
+                    };
+                    (
+                        format!("{}{default}{rate}", found.name),
+                        AudioChoice {
+                            input: Some(found.id.clone()),
+                            ..choice.clone()
+                        },
+                    )
+                });
+                std::iter::once(off).chain(inputs).collect()
+            }
             // Off or on, or one way or the other, which their own keys switch.
             AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection => Vec::new(),
         };
@@ -159,6 +194,15 @@ impl App {
                 let size = self.audio.buffer.or(choice.buffer)?;
                 device.buffers.iter().position(|b| *b == size)
             }),
+            AudioRow::Input => match &choice.input {
+                None => Some(0),
+                Some(id) => self
+                    .audio
+                    .inputs
+                    .iter()
+                    .position(|found| found.id == *id)
+                    .map(|at| at + 1),
+            },
             AudioRow::Roto | AudioRow::Wheel | AudioRow::WheelDirection => None,
         };
         (options, current)
@@ -258,7 +302,14 @@ impl App {
             // Back to the system's own choice for this row.
             Cmd::ClearField => {
                 let choice = match self.audio_row_here() {
-                    AudioRow::Device => AudioChoice::default(),
+                    AudioRow::Device => AudioChoice {
+                        input: self.audio.choice.input.clone(),
+                        ..AudioChoice::default()
+                    },
+                    AudioRow::Input => AudioChoice {
+                        input: None,
+                        ..self.audio.choice.clone()
+                    },
                     AudioRow::Rate => AudioChoice {
                         rate: None,
                         ..self.audio.choice.clone()

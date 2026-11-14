@@ -44,6 +44,7 @@ pub mod run;
 pub mod sample_page;
 pub mod sample_settings;
 pub mod sample_wave;
+pub mod sampling;
 pub mod scope;
 pub mod screenshot;
 pub mod shaping;

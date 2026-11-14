@@ -86,6 +86,8 @@ pub enum Cmd {
     GiveBackAll,
     /// Arm or disarm live recording.
     ToggleRecord,
+    /// Record the master, a track or the input into a new sample, or stop.
+    ToggleSampling,
     Double,
     /// Move the loop by this many steps, times the count.
     SlideLoop(isize),
@@ -270,6 +272,11 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         "Solo or unsolo on the launch grid, or take it back",
     ),
     ("Space M", Cmd::ClearMutes, "Clear all mutes and solos"),
+    (
+        "Space R",
+        Cmd::ToggleSampling,
+        "Record the master, a track or the input into a new sample, or stop",
+    ),
     (
         "Space l",
         Cmd::ToggleFill,
@@ -900,6 +907,11 @@ const SAMPLE: &[(&str, Cmd, &str)] = &[
         "The slice's gain down a dB",
     ),
     ("~", Cmd::Sample(SampleKey::Reverse), "Reverse the slice"),
+    (
+        "R",
+        Cmd::ToggleSampling,
+        "Record into a new sample, as Space R, and show it once done",
+    ),
     (
         "K",
         Cmd::PickValue,

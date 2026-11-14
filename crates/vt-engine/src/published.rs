@@ -121,8 +121,8 @@ fn bank(song: &Song, samples: &SamplePool, last: Option<&Published>) -> Bank {
             .and_then(|last| last.bank[at].as_ref())
             .filter(|playable| {
                 samples
-                    .shared(playable.sample)
-                    .is_some_and(|frames| Arc::ptr_eq(frames, &playable.frames))
+                    .sound(playable.sample)
+                    .is_some_and(|sound| sound.same(&playable.sound))
             });
         bank[at] = match kept {
             Some(playable) => Some(Arc::clone(playable)),

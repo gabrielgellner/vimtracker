@@ -420,7 +420,8 @@ pub(crate) fn grid_name(skip: u32) -> String {
 }
 
 /// The transport as glyphs in place of words: play in the active colour, pause and stop dim, and a
-/// red record beside play while recording. Fill changes what the conditions play, so it's named
+/// red record beside play while recording, and the recorder's sample with its seconds while it
+/// records. Fill changes what the conditions play, so it's named
 /// while it's on, and a realign, a cued launch, a mute or solo armed for the grid and a loop are
 /// named, with the glyph for waiting, until the launch grid comes round.
 pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
@@ -436,6 +437,23 @@ pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
             glyphs::RECORD.to_string(),
             Style::new().fg(theme::RED),
         ));
+    }
+    // The recorder: red with its seconds while it writes, and waiting while it waits to start.
+    match app.sampling_shown() {
+        Some((number, Some(seconds))) => {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(
+                glyphs::RECORD.to_string(),
+                Style::new().fg(theme::RED),
+            ));
+            spans.push(Span::raw(format!(" {number:02X} {seconds:.1}s")));
+        }
+        Some((number, None)) => {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(glyphs::WAITING.to_string(), theme::dim()));
+            spans.push(Span::raw(format!(" REC {number:02X}")));
+        }
+        None => {}
     }
     if app.fill {
         spans.push(Span::raw(" FILL"));
