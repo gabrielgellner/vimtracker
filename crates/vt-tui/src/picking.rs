@@ -264,10 +264,16 @@ impl App {
             self.status = "This track has no phrase here".to_owned();
             return;
         };
-        let at = Order::ALL.iter().position(|order| *order == phrase.order());
-        let items = Order::ALL
+        // A Cartesian order is listed with the phrase's own numbers, if it has one.
+        let playing = phrase.order();
+        let orders = Order::ALL.map(|order| match order {
+            Order::Cartesian(_) if order.is_like(playing) => playing,
+            _ => order,
+        });
+        let at = orders.iter().position(|order| *order == playing);
+        let items = orders
             .map(|order| {
-                Item::new(order.name(), Pick::Line(Line::Order(Some(order))))
+                Item::new(order.to_string(), Pick::Line(Line::Order(Some(order))))
                     .meaning(order.meaning())
             })
             .to_vec();
@@ -280,12 +286,13 @@ impl App {
             self.status = "This track has no phrase here".to_owned();
             return;
         };
+        let rows = self.phrase_here().map_or(0, |phrase| phrase.len());
         self.apply(&Action::SetOrder {
             track: self.cursor.track,
             phrase,
             order,
         });
-        self.status = format!("This phrase plays {}: {}", order, order.meaning());
+        self.status = format!("This phrase plays {}: {}", order, order.describe(rows));
     }
 
     /// Give the cursor's track its own groove, or have it follow the project's again.

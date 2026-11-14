@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds twelve of them out of what vimtracker already has, each as a
+let you steer. This chapter builds thirteen of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -21,6 +21,7 @@ there are no samples to find.
 | `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
+| `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -820,6 +821,61 @@ and `0C`, as in `acid-lines`.
     figures, `Order` 2 gives phrases that sound like it without repeating it.
 *   A line with fewer than four notes is too little to learn from, and the panel
     says so.
+
+## René
+
+[Make Noise's René](https://www.makenoisemusic.com/modules/rene) is a sequencer of sixteen
+places on a 4×4 grid, each with a pitch. Its X and Y channels walk the grid along "snakes",
+paths that wind round it or jump, one place on each clock. Its Cartesian channel is moved across
+by the X clock and down by the Y clock, so the pattern is made by the two clocks: on the same
+clock it moves on the diagonal, and with Y slower than X it plays a line, steps down, and plays
+the next line from wherever X has got to. Lay a chord along each line and X picks the chord's
+notes while Y moves on through the chords.
+
+**How the song does it.** Track 1, a plucked `VA` in D minor, is sixteen rows, which
+vimtracker reads as René's 4×4: each line of four a chord, Dm7, B♭maj7, Fmaj7 and C7, its
+first note accented. `:order cartesian 1 3` moves X along a line every row and Y down the lines
+every three, so the line changes a step before X wraps: `1 2 3 8 5 6 11 12 9 14 15 16`, twelve
+steps that drift across the bar of sixteen. Track 2, an `Acid` bass, is eight rows, two lines of
+four, the second an octave above the first; `:order snake columns` reads them down the columns,
+so each note is followed by its octave. Then a kick on the beat and hats off it.
+[`song.ron`](songs/rene/song.ron)
+
+```text
+Track 1, a grid of 4×4                    Track 2, a grid of 4×2
+00 D-3 7F  01 F-3 50  02 A-3 64  03 C-4 50     00 D-1 7F  01 D-1 64  02 A#0 64  03 C-1 64
+04 A#2 7F  05 D-3 50  06 F-3 64  07 A-3 50     04 D-2 64  05 F-1 64  06 A#1 7F  07 C-2 64
+08 F-3 7F  09 A-3 50  0A C-4 64  0B E-4 50
+0C C-3 7F  0D E-3 50  0E G-3 64  0F A#3 50
+```
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=d` and `:bpm 112`.
+2.  Track 1: `K` `va` `Enter`, `:name RN`. In the phrase view, the sixteen notes and
+    velocities, a line of four rows a chord as above.
+3.  `:order cartesian 1 3`. The phrase's title says `Cartesian 1 3`, and the playhead jumps
+    down a line every third step.
+4.  Track 2: `W`, `K` `acid` `Enter`, `:name BS`, `:len 8`, and its eight notes.
+5.  `:order snake columns`, or `:order snake 2`. The title says `Snake columns`.
+
+Then a `Kick` on every beat and a `Hat` on the off-beats. The finished song also makes the `VA` a
+pluck (`Mod 1`'s `Decay` `140 ms` and `Sustain` `20%`, with `Cut` `90`) sent to the delay and
+the reverb, and sets the `Acid`'s `Cutoff` `48`, `Resonance` `A0` and `Env mod` `90`.
+
+**Try next.**
+
+*   `:order cartesian 1 1` on track 1: X and Y move together, down the diagonal, the first note
+    of the first chord, the second of the next, and so on, a four-note line.
+*   `:order cartesian 1 4`: Y moves as X wraps, so the grid plays forward. With `1 5` the line
+    changes a step after X wraps, and with `1 2` twice a line.
+*   `:order cartesian 2 3 4 2`: X on every other row over the whole line, Y over the first two
+    chords only.
+*   Other snakes on track 1: `:order snake spiral` plays the first chord, the last notes of the
+    others, the last chord backwards, and in to the middle; `checker` plays every other note, then
+    the rest.
+*   `:order` alone lists every order, each snake and Cartesian with what it plays in a phrase of
+    16.
 
 ## Generators still to come
 
