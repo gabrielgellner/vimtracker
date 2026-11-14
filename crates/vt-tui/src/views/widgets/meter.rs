@@ -104,3 +104,80 @@ pub fn level_across(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use ratatui::text::{Line, Text};
+
+    use super::*;
+    use crate::views::widgets::pin::{assert_drawn, drawn};
+
+    #[test]
+    fn a_level_rises_from_the_bottom_with_its_peak_dimmer_and_its_top_marked() {
+        // Four rows, top first: the held top, the peak above the average, the average.
+        let rows: Vec<Line> = (0..4)
+            .rev()
+            .map(|row| Line::from(level_cell(row, 4, -30.0, -12.0, -3.0, 2)))
+            .collect();
+        assert_drawn(
+            &drawn(Text::from(rows), 2, 4),
+            &[
+                "▔▔",
+                "aa",
+                "▄▄",
+                "bb",
+                "▁▁",
+                "cc",
+                "██",
+                "dd",
+                "a fg RED bg MANTLE",
+                "b fg #737865 bg MANTLE",
+                "c fg GREEN bg #657a64",
+                "d fg GREEN bg MANTLE",
+            ],
+        );
+    }
+
+    #[test]
+    fn an_amount_hangs_from_the_top_in_eighths() {
+        let rows: Vec<Line> = (0..3)
+            .map(|row| {
+                let filled = hanging_eighths(0.5, row, 3);
+                Line::from(hanging_cell(filled, theme::PEACH, theme::MANTLE, 1))
+            })
+            .collect();
+        assert_drawn(
+            &drawn(Text::from(rows), 1, 3),
+            &[
+                "█",
+                "a",
+                "▄",
+                "b",
+                " ",
+                "a",
+                "a fg PEACH bg MANTLE",
+                "b fg MANTLE bg PEACH",
+            ],
+        );
+    }
+
+    #[test]
+    fn an_amount_and_a_level_go_across_in_eighths() {
+        let lines = vec![
+            Line::from(amount_across(0.45, 6, Style::new().fg(theme::PEACH))),
+            Line::from(level_across(-20.0, -6.0, -48.0, 6.0, 8)),
+        ];
+        assert_drawn(
+            &drawn(Text::from(lines), 8, 2),
+            &[
+                "██▊     ",
+                "aaaaaa..",
+                "████▋ ▏ ",
+                "bbbbb.c.",
+                "a fg PEACH",
+                "b fg GREEN",
+                "c fg OVERLAY0",
+            ],
+        );
+    }
+}

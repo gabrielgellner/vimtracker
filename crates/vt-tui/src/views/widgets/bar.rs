@@ -184,6 +184,7 @@ fn bar_cell(value: u8, cells: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::views::widgets::pin::{assert_drawn, drawn};
 
     #[test]
     fn a_bar_draws_its_ends_and_fill_into_an_area() {
@@ -222,6 +223,71 @@ mod tests {
         let text: String = (0..11).map(|x| buf[(x, 0)].symbol()).collect();
         assert_eq!(text, "▕██▎░░░░  ▏");
         assert_eq!(buf[(4, 0)].fg, theme::OVERLAY0);
+    }
+
+    #[test]
+    fn a_bar_playing_a_cell_or_more_from_its_setting_marks_the_setting_dim() {
+        // Played below where it's set, the mark is faint in the empty part; above, it's cut out
+        // of the fill.
+        assert_drawn(
+            &drawn(ValueBar::new(0xC0, 9).playing(0x40), 11, 1),
+            &["▕██▎   │  ▏", "abbbbbbabba", "a fg OVERLAY0", "b fg MAUVE"],
+        );
+        assert_drawn(
+            &drawn(ValueBar::new(0x40, 9).playing(0xC0), 11, 1),
+            &[
+                "▕██│███▊  ▏",
+                "abbcbbbbbba",
+                "a fg OVERLAY0",
+                "b fg MAUVE",
+                "c fg BASE bg MAUVE",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_bar_playing_less_than_a_cell_from_its_setting_draws_what_plays_alone() {
+        assert_drawn(
+            &drawn(ValueBar::new(0x80, 9).playing(0x88), 11, 1),
+            &["▕████▊    ▏", "abbbbbbbbba", "a fg OVERLAY0", "b fg MAUVE"],
+        );
+    }
+
+    #[test]
+    fn a_centred_bar_playing_off_its_setting_marks_both() {
+        let bar = ValueBar::new(0x40, 9).centred(true).playing(0xE0);
+        assert_drawn(
+            &drawn(bar, 11, 1),
+            &["▕  │ ┊  │ ▏", "abbababbbba", "a fg OVERLAY0", "b fg MAUVE"],
+        );
+    }
+
+    #[test]
+    fn a_macros_range_keeps_the_mark_of_whats_set() {
+        let bar = ValueBar::new(0xE0, 9)
+            .playing(0x30)
+            .range(Some((0x20, 0xFF)));
+        assert_drawn(
+            &drawn(bar, 11, 1),
+            &["▕█▋░░░░░│░▏", "abbaaaaaaaa", "a fg OVERLAY0", "b fg MAUVE"],
+        );
+    }
+
+    #[test]
+    fn a_bar_is_empty_only_at_00_and_full_at_ff() {
+        assert_eq!(level_bar(0, 4), "    ");
+        assert_eq!(level_bar(1, 4), "▏   ");
+        assert_eq!(level_bar(0xFE, 4), "███▉");
+        assert_eq!(level_bar(0xFF, 4), "████");
+        assert_eq!(centre_bar(0, 4), "│   ");
+        assert_eq!(centre_bar(0xFF, 4), "   │");
+    }
+
+    #[test]
+    fn whats_playing_moves_with_the_setting_since_the_report() {
+        assert_eq!(moved_since(0x50, 0x40, 0x48), 0x58);
+        assert_eq!(moved_since(0x10, 0x40, 0x00), 0x00, "held at the bottom");
+        assert_eq!(moved_since(0xF0, 0x40, 0x80), 0xFF, "and the top");
     }
 
     #[test]
