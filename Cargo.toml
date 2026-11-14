@@ -17,7 +17,8 @@ ron = "=0.12.3"
 hound = "=3.5.1"
 symphonia = { version = "=0.6.1", default-features = false, features = ["aiff", "flac", "pcm", "wav"] }
 rubato = "=5.0.1"
-# The onset function's spectra. Already in the tree, through rubato.
+# The onset function's spectra, and `Clouds`' spectral mode. MIT or Apache-2.0. Already in the
+# tree, through rubato.
 realfft = "=3.5.1"
 thiserror = "=2.0.21"
 base64 = "=0.23.1"
@@ -53,6 +54,13 @@ toml = { version = "=1.2.1", default-features = false, features = ["std", "parse
 opt-level = 2
 
 [profile.dev.package.vt-model]
+opt-level = 2
+
+# The FFT under `Clouds`' spectral mode, which the tests play for seconds at a time.
+[profile.dev.package.rustfft]
+opt-level = 2
+
+[profile.dev.package.realfft]
 opt-level = 2
 
 # A release build with symbols, for a profiler.

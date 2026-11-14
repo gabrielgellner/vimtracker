@@ -1126,6 +1126,9 @@ pub struct TrackState {
     gliding: usize,
     /// The voice and effects whose settings are heard now.
     loaded_voice: Option<SynthVoice>,
+    /// Where each of the loaded voice's settings is in the registry, by its place among the
+    /// voice's, looked up as it's loaded rather than at every update (#187).
+    voice_settings: [Option<usize>; MAX_MACHINE_SETTINGS],
     loaded_effects: [Option<Effect>; INSERTS],
     /// Held `VOL`, `SNA` and `SNB`, as level values, so `E0` is exactly 0 dB. What's smoothed is the gain they come to, so the
     /// curve is only worked out when they or an LFO change.
@@ -1215,6 +1218,10 @@ pub struct TrackState {
     panned: (f32, (f32, f32)),
     /// What modulation multiplies a note's speed by.
     pitch: f64,
+    /// The same in octaves, and the semitones both were worked out from, bit for bit, as `powf`
+    /// and `log2` are only worth working out again when it moves (#187).
+    pitch_octaves: f32,
+    pitch_from: Option<u32>,
     /// The held pitch, on the `00` to `FF` scale, as steps and the page set it.
     held_pitch: f32,
     /// Held `LEN`, the track's `Gate`, on the `00` to `FF` scale.
@@ -1306,10 +1313,10 @@ fn played_id(place: usize) -> Option<SettingId> {
 /// are, with no copy.
 fn reshapes(track: &Track) -> bool {
     track.has_macro_maps()
-        || track.mods.iter().any(|slot| {
-            slot.destination
-                .is_some_and(|id| matches!(id.owner().0, Owner::ModOwn(_)))
-        })
+        || track
+            .mods
+            .iter()
+            .any(|slot| slot.destination.is_some_and(SettingId::is_mod_own))
 }
 
 /// A mod slot as it's heard: a copy with each of its type's own settings put in where it isn't
@@ -1437,6 +1444,7 @@ impl TrackState {
                 values
             },
             loaded_voice: None,
+            voice_settings: [None; MAX_MACHINE_SETTINGS],
             loaded_effects: [None; INSERTS],
             pending: [None; PENDING_PARTS],
             soonest: u64::MAX,
@@ -1504,6 +1512,8 @@ impl TrackState {
             pan_envelope: Smoothed::at(0.0),
             panned: (0.5, pan_gains(0.5)),
             pitch: 1.0,
+            pitch_octaves: 0.0,
+            pitch_from: None,
             held_pitch: 128.0,
             held_gate: f32::from(SettingId::GATE_LENGTH.entry().default),
             held_gate_delta: f32::from(SettingId::GATE_DELTA.entry().default),
@@ -1577,7 +1587,7 @@ impl TrackState {
     /// oscillator of their own to follow.
     fn tell_slots_the_note(&mut self) {
         let played = self.last_note.map_or(60.0, |note| f32::from(note.note));
-        let note = played + 12.0 * self.pitch.log2() as f32;
+        let note = played + 12.0 * self.pitch_octaves;
         for insert in &mut self.inserts {
             insert.follow_note(note);
         }
@@ -1754,6 +1764,9 @@ impl TrackState {
         let voice = track.voice();
         if voice != self.loaded_voice {
             self.loaded_voice = voice;
+            self.voice_settings = std::array::from_fn(|at| {
+                voice.and_then(|voice| SettingId::voice(voice, at).map(SettingId::index))
+            });
             if let Some(voice) = voice {
                 for at in 0..MAX_MACHINE_SETTINGS {
                     if let Some(id) = SettingId::voice(voice, at) {
@@ -2024,9 +2037,15 @@ impl TrackState {
         }
         // Each macro puts what it holds where it has it now, before the voice and the slots' effects
         // are given their settings, so they hear it this time; a mod slot's, the next.
-        let moves =
-            std::array::from_fn(|at| SettingId::macro_at(at).map_or(0.0, |id| offsets[id.index()]));
-        self.put_macros(track, &moves);
+        // With none mapped, that comes to forgetting where each was heard (#187).
+        if track.has_macro_maps() {
+            let moves = std::array::from_fn(|at| {
+                SettingId::macro_at(at).map_or(0.0, |id| offsets[id.index()])
+            });
+            self.put_macros(track, &moves);
+        } else {
+            self.macro_heard = [None; MACROS];
+        }
         let offsets = &mut self.offsets;
         // Each slot's effect gets finished values, and doesn't know where they came from.
         for (slot, insert) in track.inserts.into_iter().enumerate() {
@@ -2058,7 +2077,11 @@ impl TrackState {
             self.inserts[slot].bypass(self.bypassed[slot]);
         }
         let semitones = self.held_pitch - 128.0 + offsets[SettingId::PITCH.index()] * 255.0;
-        self.pitch = 2_f64.powf(f64::from(semitones.clamp(-96.0, 96.0)) / 12.0);
+        if self.pitch_from != Some(semitones.to_bits()) {
+            self.pitch_from = Some(semitones.to_bits());
+            self.pitch = 2_f64.powf(f64::from(semitones.clamp(-96.0, 96.0)) / 12.0);
+            self.pitch_octaves = self.pitch.log2() as f32;
+        }
         self.voice.set_pitch(self.pitch);
         self.voice.set_synth(self.synth_settings());
         self.update_gains();
@@ -2226,10 +2249,7 @@ impl TrackState {
     /// What a synth on this track plays with: the held values and what modulation adds.
     pub fn synth_settings(&self) -> Settings {
         let at = |setting: usize| {
-            let offset = self
-                .loaded_voice
-                .and_then(|voice| SettingId::voice(voice, setting))
-                .map_or(0.0, |id| self.offsets[id.index()]);
+            let offset = self.voice_settings[setting].map_or(0.0, |index| self.offsets[index]);
             (self.synth[setting] + offset).clamp(0.0, 1.0)
         };
         Settings::from_places(std::array::from_fn(at))
@@ -3076,6 +3096,10 @@ impl TrackState {
     ) -> [f32; 2] {
         let mut same = same_sides(frame);
         for (slot, insert) in self.inserts.iter_mut().enumerate() {
+            if let Some(passed) = insert.passed_through(frame, same) {
+                (frame, same) = passed;
+                continue;
+            }
             // A setting being modulated keeps up, and a change on its own doesn't jump.
             let keeping_up = if self.slot_moving[slot] {
                 fast

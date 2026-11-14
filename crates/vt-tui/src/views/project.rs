@@ -140,10 +140,10 @@ fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static
         let is_here = *control == here;
         let on_fine = is_here && app.project_fine;
         let on_value = is_here && !on_fine;
-        let text = setting::text(app, on_value, || value(app, *control));
+        let text = setting::text(&app.ctx(), on_value, || value(app, *control));
         let default = *control == ProjectControl::Root && !app.scale.on
             || *control == ProjectControl::Folder && app.folder.is_none();
-        let style = setting::style(app, on_value, default);
+        let style = setting::style(&app.ctx(), on_value, default);
         // An action is its own name, so the cursor is on that rather than a value beside it, and
         // what it does is in the value's place.
         let mut spans = Vec::new();
@@ -159,7 +159,10 @@ fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static
             } else {
                 fine(app.song().millibpm)
             };
-            spans.push(Span::styled(digits, setting::style(app, on_fine, true)));
+            spans.push(Span::styled(
+                digits,
+                setting::style(&app.ctx(), on_fine, true),
+            ));
         }
         if let Some(note) = after(app, *control) {
             if !spans.is_empty() {
@@ -231,12 +234,12 @@ fn groove_rows(app: &App, columns: &Columns) -> Vec<Row<'static>> {
         for step in 0..steps {
             let field = control(step as u8);
             let is_here = field == here;
-            let text = setting::text(app, is_here, || value(app, field));
+            let text = setting::text(&app.ctx(), is_here, || value(app, field));
             // What's left on the grid or at full velocity matters less.
             let default = field == ProjectControl::Push(0)
                 || matches!(field, ProjectControl::Velocity(_))
                     && text == FULL_VELOCITY.to_string();
-            let style = setting::style(app, is_here, default);
+            let style = setting::style(&app.ctx(), is_here, default);
             cells.cell(Line::styled(text, style).right_aligned());
         }
         cells.skip(1).cell(Line::styled(units, theme::dim()));

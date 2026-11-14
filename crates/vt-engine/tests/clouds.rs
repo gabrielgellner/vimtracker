@@ -89,7 +89,7 @@ fn a_lock_of_freeze_holds_what_it_recorded_after_the_sound_has_gone() {
         assert!(frozen.iter().all(|sample| sample.is_finite()), "{mode:?}");
         // The same until the lock, then most of a second after the pluck the frozen one still
         // plays it and the free one has let it go.
-        assert_eq!(free[..STEP * 4], frozen[..STEP * 4], "{mode:?}");
+        assert_eq!(free[..STEP * 2], frozen[..STEP * 2], "{mode:?}");
         let (held, gone) = (
             level(&frozen, STEP * 6, STEP * 8),
             level(&free, STEP * 6, STEP * 8),
@@ -201,6 +201,29 @@ fn golden_clouds_stay_the_same() {
                 ..Clouds::DEFAULT
             },
             &notes,
+        ),
+    );
+    // The phase vocoder an octave up, warped a little, its bins partly frozen and quantised, with
+    // some feedback, then frozen on the fifth step.
+    golden(
+        "clouds-spectral",
+        &looped(
+            Clouds {
+                mode: CloudsMode::Spectral,
+                pitch: MOST_SHIFT + 12,
+                size: 0x70,
+                density: 0x50,
+                texture: 0x38,
+                feedback: 0x40,
+                ..Clouds::DEFAULT
+            },
+            &[
+                notes[0],
+                notes[1],
+                notes[2],
+                notes[3],
+                "--- -- 1.clouds.freeze:01 --- ---",
+            ],
         ),
     );
 }

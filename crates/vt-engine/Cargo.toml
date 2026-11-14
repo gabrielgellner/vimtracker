@@ -12,3 +12,5 @@ hound.workspace = true
 rtrb.workspace = true
 thiserror.workspace = true
 wide.workspace = true
+# The FFT of `Clouds`' spectral mode.
+realfft.workspace = true

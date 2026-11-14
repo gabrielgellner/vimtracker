@@ -981,8 +981,8 @@ mod tests {
         let changing = |round: usize| {
             let mut next = song(2, 16);
             let clouds = Insert::Clouds(Clouds {
-                mode: CloudsMode::ALL[round % 3],
-                quality: (round / 3 % 4) as u8,
+                mode: CloudsMode::ALL[round % 4],
+                quality: (round / 4 % 4) as u8,
                 freeze: (round / 2 % 2) as u8,
                 position: (round * 37 % 256) as u8,
                 size: (round * 91 % 256) as u8,

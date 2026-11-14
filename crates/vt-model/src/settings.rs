@@ -2458,6 +2458,14 @@ impl SettingId {
         self.0 as usize
     }
 
+    /// Whether it's one of a mod slot's own settings, as [`SettingId::owner`] has it, which the
+    /// engine asks of each mod slot's destination at every update.
+    #[inline]
+    pub const fn is_mod_own(self) -> bool {
+        let at = self.index();
+        at >= MOD_OWN_START && at < ACCUMULATION_START
+    }
+
     /// Its place among the track's faders, [`FADERS`], if it's one.
     pub fn fader(self) -> Option<usize> {
         FADERS.iter().position(|fader| *fader == self)
@@ -2748,6 +2756,8 @@ mod tests {
                 (Owner::Arpeggio, at) => SettingId::arpeggio(at),
             };
             assert_eq!(back, Some(id), "{}", id.key());
+            let mod_own = matches!(id.owner().0, Owner::ModOwn(_));
+            assert_eq!(id.is_mod_own(), mod_own, "{}", id.key());
         }
         assert_eq!(SettingId::all().count(), SettingId::COUNT);
     }

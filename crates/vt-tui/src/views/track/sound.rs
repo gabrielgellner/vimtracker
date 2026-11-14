@@ -15,12 +15,12 @@ use vt_model::grid::GRID_ROWS;
 use vt_model::settings::{Kind, SettingId};
 use vt_model::song::{Machine, Track, TrackKind};
 
-use crate::app::App;
 use crate::automating::{as_heard, fader_of};
 use crate::glyphs;
+use crate::page::Ctx;
 use crate::theme;
 use crate::track_page::tuning::{TuneOf, Tuning, tuning};
-use crate::track_page::{Control, DEVICE_COLUMNS, DeviceSpec, Page};
+use crate::track_page::{Control, DEVICE_COLUMNS, DeviceSpec, Page, TrackPage};
 use crate::views::widgets::bar::{ValueBar, moved_since};
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid};
@@ -104,35 +104,35 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
 /// A setting's value's style on the Sound page: as any page's, but the group a track is in is in
 /// its colour, as on the mixer, its role is in the role's, set back while it's `Auto`, and a fader
 /// the steps drive is in the playing colour.
-fn value_style(app: &App, track: &Track, control: Control, here: bool) -> Style {
+fn value_style(ctx: &Ctx, track: &Track, control: Control, here: bool) -> Style {
     let style = setting::style(
-        app,
+        ctx,
         here,
-        at_default(control, track) || untuned(app, track, control),
+        at_default(control, track) || untuned(ctx, track, control),
     );
     let role = theme::role(track.role()).filter(|_| control == Control::Role && !here);
     if let Some(colour) = role {
         let auto = track.role.is_auto();
         return Style::new().fg(if auto { theme::dimmed(colour) } else { colour });
     }
-    match group::style(app.song(), app.cursor.track) {
+    match group::style(ctx.song(), ctx.cursor().track) {
         Some(tint) if control == Control::Group && !here => tint,
-        _ if !here && app.follows_steps(app.cursor.track, control) => theme::automated(),
+        _ if !here && ctx.follows_steps(ctx.cursor().track, control) => theme::automated(),
         _ => style,
     }
 }
 
 /// Whether a sampler's `Tune` or `Cents` is dim: with no sample to tune, or the sample's own left
 /// at none.
-fn untuned(app: &App, track: &Track, control: Control) -> bool {
+fn untuned(ctx: &Ctx, track: &Track, control: Control) -> bool {
     matches!(control, Control::Tune | Control::Cents)
-        && tuning(app.song(), track).is_none_or(|tuning| tuning.at_rest(control))
+        && tuning(ctx.song(), track).is_none_or(|tuning| tuning.at_rest(control))
 }
 
 /// Whose `Tune` is, after its value where a bar would be, on a sample with slices: the slice's
 /// own, `slice 03`, in the slices' colour, or the sample's, dim.
-fn tune_owner(app: &App, track: &Track) -> Option<Span<'static>> {
-    let tuning = tuning(app.song(), track).filter(Tuning::sliced)?;
+fn tune_owner(ctx: &Ctx, track: &Track) -> Option<Span<'static>> {
+    let tuning = tuning(ctx.song(), track).filter(Tuning::sliced)?;
     Some(match tuning.of {
         TuneOf::Slice(slice) => {
             Span::styled(format!("slice {slice:02X}"), Style::new().fg(theme::MAUVE))
@@ -143,7 +143,8 @@ fn tune_owner(app: &App, track: &Track) -> Option<Span<'static>> {
 
 /// What a Sound device's cells show, read from the track.
 struct SoundCells<'a> {
-    app: &'a App,
+    page: &'a TrackPage,
+    ctx: &'a Ctx<'a>,
     track: &'a Track,
 }
 
@@ -152,9 +153,9 @@ impl CellSource for SoundCells<'_> {
 
     /// Its name, with a fader a hand has taken over from the steps marked after it.
     fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let labels = jump_label(self.app, control);
-        let mut line = name_line(self.app, control.label_on(self.track), &labels, room);
-        if self.app.taken_over(self.app.cursor.track, control) {
+        let labels = jump_label(self.ctx, control);
+        let mut line = name_line(self.ctx, control.label_on(self.track), &labels, room);
+        if self.ctx.taken_over(self.ctx.cursor().track, control) {
             line.push_span(Span::raw(" "));
             line.push_span(Span::styled(glyphs::TAKEN.to_string(), theme::taken()));
         }
@@ -165,22 +166,22 @@ impl CellSource for SoundCells<'_> {
     /// `1/16` or the sampler's `One-shot`; or a slice's number with its name after it where a bar
     /// would be, as `00   whole`.
     fn value(&self, control: Control) -> Line<'static> {
-        let (app, track) = (self.app, self.track);
-        let here = control == app.track_control();
+        let (page, ctx, track) = (self.page, self.ctx, self.track);
+        let here = control == page.control_here(ctx);
         // The master's `Limiter` and the filter's `Safe` are on or off, so they're toggles.
         if matches!(control, Control::Limiter | Control::Safe) {
-            return value_line(app, track, control, here, at_default(control, track));
+            return value_line(ctx, track, control, here, at_default(control, track));
         }
-        let on_fine = here && app.track_page.fine;
+        let on_fine = here && page.fine;
         let on_value = here && !on_fine;
-        let style = value_style(app, track, control, on_value);
+        let style = value_style(ctx, track, control, on_value);
         let slice = control.setting_on(track) == Some(SettingId::SLICE);
         let word = match control.setting_on(track).map(|id| id.entry().kind) {
             Some(Kind::Stepped { .. }) if !slice => choice_name(control, track),
             _ => None,
         };
-        let text = setting::text(app, on_value, || {
-            word.unwrap_or_else(|| value(control, track, app.song()))
+        let text = setting::text(ctx, on_value, || {
+            word.unwrap_or_else(|| value(control, track, ctx.song()))
         });
         let fine = control.fine_on(track);
         // What's being typed keeps the fine digits where they are, as `_ 00`.
@@ -188,13 +189,13 @@ impl CellSource for SoundCells<'_> {
             Some(_) => format!("{text:<COARSE_WIDTH$}"),
             None => text,
         };
-        let mut spans = value_spans(app, control, text, style);
+        let mut spans = value_spans(ctx, control, text, style);
         if let Some(id) = fine {
-            let fine = setting::text(app, on_fine, || format!("{:02X}", track.fine(id)));
-            spans.push(Span::styled(fine, setting::style(app, on_fine, true)));
+            let fine = setting::text(ctx, on_fine, || format!("{:02X}", track.fine(id)));
+            spans.push(Span::styled(fine, setting::style(ctx, on_fine, true)));
         }
         if control == Control::Tune
-            && let Some(owner) = tune_owner(app, track)
+            && let Some(owner) = tune_owner(ctx, track)
         {
             let width: usize = spans.iter().map(Span::width).sum();
             spans.push(Span::raw(" ".repeat(TUNE_WIDTH.saturating_sub(width))));
@@ -205,7 +206,7 @@ impl CellSource for SoundCells<'_> {
             let width: usize = spans.iter().map(Span::width).sum();
             spans.push(Span::raw(" ".repeat(room.saturating_sub(width))));
             spans.push(Span::styled(
-                app.slice_choice(track),
+                ctx.slice_choice(track),
                 Style::new().fg(theme::MAUVE),
             ));
         }
@@ -218,11 +219,11 @@ impl CellSource for SoundCells<'_> {
     fn bar(&self, control: Control) -> Option<ValueBar> {
         let (value, centred) = bar_value(control, self.track)?;
         let then = self
-            .app
+            .ctx
             .reported_track()
             .and_then(|track| bar_value(control, &track.with_macros()));
         let live = match (
-            self.app.live.and_then(|live| live_value(control, &live)),
+            self.ctx.live().and_then(|live| live_value(control, &live)),
             then,
         ) {
             (Some(live), Some((then, _))) => moved_since(live, then, value),
@@ -242,19 +243,24 @@ impl CellSource for SoundCells<'_> {
 
 /// A device's title controls, each in its own style: the machine and its type, the type being the
 /// sample a sampler plays or the choice a synth's is on, or the filter's type and mode.
-fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'static>> {
-    let current = app.track_control();
+fn title_controls(
+    page: &TrackPage,
+    ctx: &Ctx,
+    track: &Track,
+    device: &DeviceSpec,
+) -> Vec<Line<'static>> {
+    let current = page.control_here(ctx);
     device
         .title
         .iter()
         .flatten()
         .map(|control| {
             let here = *control == current;
-            let text = setting::text(app, here, || {
-                choice_name(*control, track).unwrap_or_else(|| value(*control, track, app.song()))
+            let text = setting::text(ctx, here, || {
+                choice_name(*control, track).unwrap_or_else(|| value(*control, track, ctx.song()))
             });
-            let style = setting::style(app, here, at_default(*control, track));
-            Line::from(value_spans(app, *control, text, style))
+            let style = setting::style(ctx, here, at_default(*control, track));
+            Line::from(value_spans(ctx, *control, text, style))
         })
         .collect()
 }
@@ -272,10 +278,10 @@ const OUTPUT_METER_SCALE_DB: [i32; 5] = [-48, -36, -24, -12, 0];
 /// The Output's meter, in its panel: each side's level right after the trim, so the trim can be
 /// set by eye, as horizontal eighths in the level colours, with a faint mark at the highest it
 /// was lately, and a faint scale under them. It's text, so it moves every frame for nothing.
-fn output_meter(app: &App) -> Vec<Line<'static>> {
+fn output_meter(page: &TrackPage) -> Vec<Line<'static>> {
     let blank = || Line::raw(" ".repeat(LARGE_PANEL_WIDTH));
     let mut lines = vec![blank()];
-    for (side, held) in ["L", "R"].into_iter().zip(app.after_trim) {
+    for (side, held) in ["L", "R"].into_iter().zip(page.after_trim) {
         let mut spans = vec![Span::styled(format!(" {side} "), theme::dim())];
         spans.extend(level_across(
             held.now,
@@ -304,19 +310,19 @@ fn output_meter(app: &App) -> Vec<Line<'static>> {
 /// what a sampler plays beside the machine's, each in its box once its image has been sent, and
 /// the Output's meter. The master's Output has none, as the main meter beside it already shows
 /// what it plays (the study's §1.5, rule 5).
-fn panel(app: &App, track: &Track, device: &DeviceSpec) -> GraphicPanel {
+fn panel(page: &TrackPage, track: &Track, device: &DeviceSpec) -> GraphicPanel {
     // The Output is the device that starts with `Trim`.
     if device.grid[0][0] == Some(Control::Trim) {
         if track.kind == TrackKind::Master {
             return GraphicPanel::new();
         }
-        return GraphicPanel::new().boxed(output_meter(app), LARGE_PANEL_WIDTH as u16, None);
+        return GraphicPanel::new().boxed(output_meter(page), LARGE_PANEL_WIDTH as u16, None);
     }
     let image = match device.title[0] {
-        Some(Control::FilterType) => app
+        Some(Control::FilterType) => page
             .filter_image
             .map(|id| (id, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT)),
-        Some(Control::Machine) if track.machine == Machine::Sampler => app
+        Some(Control::Machine) if track.machine == Machine::Sampler => page
             .waveform_image
             .map(|id| (id, WAVEFORM_WIDTH, WAVEFORM_HEIGHT)),
         _ => None,
@@ -337,23 +343,28 @@ fn panel(app: &App, track: &Track, device: &DeviceSpec) -> GraphicPanel {
 fn draw_device(
     frame: &mut Frame,
     area: Rect,
-    app: &App,
+    page: &TrackPage,
+    ctx: &Ctx,
     track: &Track,
     device: &DeviceSpec,
     focused: bool,
 ) {
     let widget = Device::new(device.identity.clone())
-        .controls(title_controls(app, track, device))
+        .controls(title_controls(page, ctx, track, device))
         .focused(focused);
     frame.render_widget(widget, area);
     let rows = device.grid.iter().copied().map(Vec::from).collect();
     // Its faders show where the steps have them while they drive them.
-    let faders = app.faders(app.cursor.track);
+    let faders = ctx.faders(ctx.cursor().track);
     let heard = as_heard(track, &faders);
-    let source = SoundCells { app, track: &heard };
+    let source = SoundCells {
+        page,
+        ctx,
+        track: &heard,
+    };
     let grid = SettingsGrid::new(&source, rows, CellWidths::SOUND);
     frame.render_widget(grid, Device::settings_area(area));
-    let panel = panel(app, track, device);
+    let panel = panel(page, track, device);
     if !panel.is_empty() {
         let at = Device::panel_area(area, panel.width());
         frame.render_widget(panel, at);
@@ -363,10 +374,9 @@ fn draw_device(
 /// The Sound page's devices, stacked down the page: a sound track's four, which fill the rows
 /// inside the keyboard's box, or a fixed track's Output. Where fewer fit, the page goes by whole
 /// devices to keep the cursor's in view.
-fn draw_rack(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
+fn draw_rack(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, track: &Track) {
     let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
-    let cursor = app
-        .track_page
+    let cursor = page
         .device_cursor(Some(track))
         .map_or(0, |cursor| cursor.device);
     let first = (cursor + 1).saturating_sub(fit);
@@ -374,7 +384,7 @@ fn draw_rack(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
     let devices = Page::Sound.devices(track);
     for (at, device) in devices.iter().enumerate().skip(first).take(fit) {
         let area = take_top(&mut rest, DEVICE_HEIGHT);
-        draw_device(frame, area, app, track, device, at == cursor);
+        draw_device(frame, area, page, ctx, track, device, at == cursor);
     }
 }
 
@@ -426,8 +436,8 @@ fn feed_rows(feeds: &[Feed]) -> Vec<Vec<Option<Feed>>> {
 
 /// How a track that feeds another is named: a sound track by its number and name, and a group by
 /// its letters, as `G1`, in its group's colour if it has one.
-fn feed_name(app: &App, track: usize) -> Span<'static> {
-    let song = app.song();
+fn feed_name(ctx: &Ctx, track: usize) -> Span<'static> {
+    let song = ctx.song();
     let this = &song.tracks[track];
     let name = if this.is_sound() {
         format!("{:02} {}", track + 1, this.name)
@@ -440,7 +450,7 @@ fn feed_name(app: &App, track: usize) -> Span<'static> {
 
 /// What the cells of a return's Sends in show: each track sending to it, and how much.
 struct SendsIn<'a> {
-    app: &'a App,
+    ctx: &'a Ctx<'a>,
     /// Which of the sends goes to this return.
     send: SettingId,
 }
@@ -448,7 +458,7 @@ struct SendsIn<'a> {
 impl SendsIn<'_> {
     /// How much a track sends here, its coarse and fine parts.
     fn amount(&self, track: usize) -> (u8, u8) {
-        let this = &self.app.song().tracks[track];
+        let this = &self.ctx.song().tracks[track];
         (this.coarse(self.send).unwrap_or(0), this.fine(self.send))
     }
 }
@@ -463,7 +473,7 @@ impl CellSource for SendsIn<'_> {
             Line::from(Span::styled(text, span.style))
         };
         match feed {
-            Feed::Track(track) => fit(feed_name(self.app, track)),
+            Feed::Track(track) => fit(feed_name(self.ctx, track)),
             Feed::More(more) => Line::styled(format!("+{more} more"), theme::faint()),
             Feed::Nothing => Line::styled("None", theme::dim()),
         }
@@ -478,9 +488,9 @@ impl CellSource for SendsIn<'_> {
         Line::from(vec![
             Span::styled(
                 format!("{coarse:02X}"),
-                setting::style(self.app, false, false),
+                setting::style(self.ctx, false, false),
             ),
-            Span::styled(format!("{fine:02X}"), setting::style(self.app, false, true)),
+            Span::styled(format!("{fine:02X}"), setting::style(self.ctx, false, true)),
         ])
     }
 
@@ -495,10 +505,10 @@ impl CellSource for SendsIn<'_> {
 /// A return's Sends in, under its Output: every track and group that sends to it, with how much,
 /// as the Output's settings are laid out, so they're found here rather than strip by strip on the
 /// mixer. It's worked out from the song each time it's drawn, and the cursor doesn't stop in it.
-fn draw_sends_in(frame: &mut Frame, area: Rect, app: &App, send: SettingId) {
+fn draw_sends_in(frame: &mut Frame, area: Rect, ctx: &Ctx, send: SettingId) {
     frame.render_widget(Device::new("Sends in"), area);
-    let source = SendsIn { app, send };
-    let song = app.song();
+    let source = SendsIn { ctx, send };
+    let song = ctx.song();
     let sending = (0..song.tracks.len())
         .filter(|track| {
             let this = &song.tracks[*track];
@@ -513,16 +523,16 @@ fn draw_sends_in(frame: &mut Frame, area: Rect, app: &App, send: SettingId) {
 /// A group's Tracks, under its Output: the tracks it sums, by number and name in the group's
 /// colour, each with its own mute or solo, three down each column, as the Output's settings are.
 /// The cursor doesn't stop in it.
-fn draw_tracks(frame: &mut Frame, area: Rect, app: &App) {
+fn draw_tracks(frame: &mut Frame, area: Rect, ctx: &Ctx) {
     frame.render_widget(Device::new("Tracks"), area);
-    let members = app.song().group_members(app.cursor.track).collect();
+    let members = ctx.song().group_members(ctx.cursor().track).collect();
     let rows = feed_rows(&feeds(members));
     let inside = Device::settings_area(area);
     let width = CellWidths::SOUND.column();
     for (row, places) in rows.iter().enumerate() {
         for (column, feed) in places.iter().enumerate() {
             let line = match feed {
-                Some(Feed::Track(member)) => member_line(app, *member),
+                Some(Feed::Track(member)) => member_line(ctx, *member),
                 Some(Feed::More(more)) => Line::styled(format!("+{more} more"), theme::faint()),
                 Some(Feed::Nothing) => Line::styled("None", theme::dim()),
                 None => continue,
@@ -539,9 +549,9 @@ fn draw_tracks(frame: &mut Frame, area: Rect, app: &App) {
 
 /// One of a group's tracks, by its number and name in the group's colour, with its own mute or
 /// solo after it, dim while it's muted.
-fn member_line(app: &App, member: usize) -> Line<'static> {
-    let live = app.levels.get(member).copied().unwrap_or_default();
-    let mut name = feed_name(app, member);
+fn member_line(ctx: &Ctx, member: usize) -> Line<'static> {
+    let live = ctx.levels().get(member).copied().unwrap_or_default();
+    let mut name = feed_name(ctx, member);
     if live.mute {
         name.style = theme::dim();
     }
@@ -561,15 +571,15 @@ fn member_line(app: &App, member: usize) -> Line<'static> {
 
 /// Draw the Sound page in the area under the track page's title: its rack, and under a group's or
 /// a return's Output, what feeds it.
-pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
-    draw_rack(frame, area, app, track);
+pub(super) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, track: &Track) {
+    draw_rack(frame, area, page, ctx, track);
     let mut rest = area;
     take_top(&mut rest, DEVICE_HEIGHT);
     let below = take_top(&mut rest, DEVICE_HEIGHT);
     match track.kind {
-        TrackKind::Group(_) => draw_tracks(frame, below, app),
-        TrackKind::ReturnA => draw_sends_in(frame, below, app, SettingId::SEND_A),
-        TrackKind::ReturnB => draw_sends_in(frame, below, app, SettingId::SEND_B),
+        TrackKind::Group(_) => draw_tracks(frame, below, ctx),
+        TrackKind::ReturnA => draw_sends_in(frame, below, ctx, SettingId::SEND_A),
+        TrackKind::ReturnB => draw_sends_in(frame, below, ctx, SettingId::SEND_B),
         TrackKind::Sound | TrackKind::Master => {}
     }
 }

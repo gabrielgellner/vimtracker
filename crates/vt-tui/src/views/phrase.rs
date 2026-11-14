@@ -20,6 +20,7 @@ use crate::app::{App, Field, TrackSpan};
 use crate::folding::Order;
 use crate::glyphs;
 use crate::input::mode::Mode;
+use crate::page::Ctx;
 use crate::theme;
 use crate::timeline::{self, Line as TimeLine};
 use crate::views::inspector;
@@ -728,12 +729,12 @@ pub(crate) fn track_name(app: &App, track: usize) -> String {
 /// its own, or its group's colour for its group's. A mute wins, as the track is silent, and one of
 /// its own wins over its group's. A mute or solo waiting for the launch grid is the glyph for
 /// waiting, dim, until it switches.
-pub(crate) fn level_glyph(app: &App, track: usize) -> Option<(char, Style)> {
-    let jam = app.jam.get(track).copied().unwrap_or_default();
+pub(crate) fn level_glyph(ctx: &Ctx, track: usize) -> Option<(char, Style)> {
+    let jam = ctx.jam().get(track).copied().unwrap_or_default();
     if jam.mute_waiting || jam.solo_waiting {
         return Some((glyphs::WAITING, theme::dim()));
     }
-    let (muted, soloed) = (group::muted(app, track), group::soloed(app, track));
+    let (muted, soloed) = (group::muted(ctx, track), group::soloed(ctx, track));
     let order = [
         (muted == Switched::Own, glyphs::MUTE, muted),
         (muted.is_on(), glyphs::MUTE, muted),
@@ -756,7 +757,7 @@ fn column_label(app: &App, track: usize) -> (String, Option<(char, Style)>) {
         let style = group::style(app.song(), track).unwrap_or_default();
         (glyphs::FOLDED, style)
     });
-    match level_glyph(app, track).or(folded) {
+    match level_glyph(&app.ctx(), track).or(folded) {
         Some(glyph) => (name.chars().take(cells - 1).collect(), Some(glyph)),
         None => (
             format!("{:<cells$}", name.chars().take(cells).collect::<String>()),
@@ -983,7 +984,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     if let Some(mark) = group::mark(app.song(), app.cursor.track) {
         title.extend([Span::raw(" "), mark.patch_style(bold)]);
     }
-    if let Some((glyph, style)) = level_glyph(app, app.cursor.track) {
+    if let Some((glyph, style)) = level_glyph(&app.ctx(), app.cursor.track) {
         title.push(Span::styled(format!(" {glyph}"), style));
     }
     let chain = app.chain_id().unwrap_or(0);

@@ -4,7 +4,9 @@
 //! Each figure is the song's time with each block at its fastest over several runs, less the same
 //! song's without the part, so it's what the part adds while it plays. A thing over about 1% of a core an instance, 208 ns a frame, is
 //! marked. `just costs worst` plays only a 16-track song of the heaviest parts, and
-//! `just costs save folder` saves that song as a project, to bench or open.
+//! `just costs save folder` saves that song as a project, to bench or open. `just costs blocks`
+//! times the slowest block of the effects that do their work a part at a time, against a block's
+//! budget at 192 kHz.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -200,6 +202,30 @@ fn effects() -> Vec<(String, Insert)> {
             format!("Clouds densest {name}, Mono 8"),
             Insert::Clouds(clouds),
         ));
+    }
+    // Its phase vocoder in mono, with every bin's phase scattered, and quantised and flattened.
+    for (name, clouds) in [
+        (
+            "Clouds Spectral, Mono 16",
+            Clouds {
+                mode: CloudsMode::Spectral,
+                quality: 1,
+                ..Clouds::DEFAULT
+            },
+        ),
+        (
+            "Clouds Spectral, all on",
+            Clouds {
+                mode: CloudsMode::Spectral,
+                density: 0xFF,
+                texture: 0xFF,
+                size: 0x20,
+                pitch: vt_model::insert::MOST_SHIFT + 7,
+                ..Clouds::DEFAULT
+            },
+        ),
+    ] {
+        all.push((name.to_owned(), Insert::Clouds(clouds)));
     }
     // Beads' delay, its other qualities, its densest longest grains in the dirtiest, and its
     // delay at its shortest with its pitch shifted, which reads each tap twice.
@@ -479,6 +505,73 @@ fn worst(pool: &Arc<SamplePool>) {
     );
 }
 
+/// The slowest block of a song at a rate, in microseconds, each block at its fastest over the runs,
+/// and its average in nanoseconds a frame.
+fn slowest_block(song: &Song, pool: &Arc<SamplePool>, rate: u32, block: usize) -> (f64, f64) {
+    let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(pool)));
+    let mut out = vec![0.0_f32; block * 2];
+    let blocks = (SECONDS * f64::from(rate)) as usize / block;
+    let mut fastest = vec![u128::MAX; blocks];
+    for _ in 0..RUNS {
+        let mut engine = Engine::new(rate, Arc::clone(&version));
+        engine.play_from(0);
+        for _ in 0..rate as usize / block {
+            engine.process(&mut out);
+        }
+        for fastest in &mut fastest {
+            let started = Instant::now();
+            engine.process(&mut out);
+            *fastest = (*fastest).min(started.elapsed().as_nanos());
+        }
+    }
+    std::hint::black_box(&out);
+    let slowest = fastest.iter().max().copied().unwrap_or(0) as f64 / 1000.0;
+    let average = fastest.iter().sum::<u128>() as f64 / (blocks * block) as f64;
+    (slowest, average)
+}
+
+/// The effects that do their work a part at a time, against a block's budget at 192 kHz: Clouds'
+/// phase vocoder, whose FFTs are the most any one frame does.
+fn blocks(pool: &Arc<SamplePool>) {
+    let rate = 192_000;
+    let block = 256;
+    let budget = block as f64 / f64::from(rate) * 1e6;
+    let voice = Machine::Plaits(SynthVoice::VirtualAnalog);
+    let (base_slowest, base_average) = slowest_block(&one(voice, true, |_| {}), pool, rate, block);
+    println!();
+    println!(
+        "The slowest block at {rate} Hz in blocks of {block}, a budget of {budget:.0} us, on a \
+         playing VA ({base_slowest:.0} us without, {base_average:.0} ns a frame)"
+    );
+    println!(
+        "{:<26} {:>8} {:>8} {:>8} {:>9}",
+        "", "slowest", "added", "% block", "ns/frame"
+    );
+    for (name, mode, quality) in [
+        ("Clouds Granular", CloudsMode::Granular, 0),
+        ("Clouds Spectral", CloudsMode::Spectral, 0),
+        ("Clouds Spectral, Mono 16", CloudsMode::Spectral, 1),
+        ("Clouds Spectral, Stereo 8", CloudsMode::Spectral, 2),
+    ] {
+        let clouds = Clouds {
+            mode,
+            quality,
+            density: 0xFF,
+            ..Clouds::DEFAULT
+        };
+        let song = one(voice, true, |track| {
+            track.inserts[0] = Insert::Clouds(clouds)
+        });
+        let (slowest, average) = slowest_block(&song, pool, rate, block);
+        let added = slowest - base_slowest;
+        println!(
+            "{name:<26} {slowest:>6.0}us {added:>6.0}us {:>7.1}% {:>9.0}",
+            added / budget * 100.0,
+            average - base_average
+        );
+    }
+}
+
 fn main() {
     let pool = pool();
     let only: Vec<String> = std::env::args().skip(1).collect();
@@ -510,5 +603,8 @@ fn main() {
     }
     if wanted("worst") {
         worst(&pool);
+    }
+    if wanted("blocks") {
+        blocks(&pool);
     }
 }
