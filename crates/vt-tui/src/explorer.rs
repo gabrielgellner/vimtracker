@@ -3,7 +3,7 @@
 //! they're opened. A kit opens like a folder, to its sounds, and a sound with variants or layers
 //! opens to those; in the kit explorer, the kit dialog, its sounds are marked to load as tracks.
 //! The preset browser lists the presets folder's sounds or effects (decision 310), or its patches
-//! (decision 311).
+//! (decision 311). Each sample, kit sound and preset is listed with its tags (decision 315).
 
 use std::path::{Path, PathBuf};
 
@@ -11,6 +11,7 @@ use vt_model::kit::{KitEntry, load_kit};
 use vt_model::preset::{PresetKind, load_effect, load_patch, load_sound, preset_name};
 use vt_model::project::is_project;
 use vt_model::sample::is_sample_file;
+use vt_model::tag::{self, Source, Tag, TagLibrary};
 
 use crate::input::picker::{Item, Pick, Preview};
 use crate::picking::kit_item;
@@ -43,6 +44,12 @@ impl Purpose {
     /// what it is beside its name instead.
     pub fn previews(self) -> bool {
         !self.chooses_folder() && !matches!(self, Self::Preset(_))
+    }
+
+    /// Whether what it lists has tags, which a search finds with `#` and `T` changes: samples,
+    /// kits' sounds and presets (decision 315).
+    pub fn tags(self) -> bool {
+        matches!(self, Self::Sample | Self::Kit | Self::Preset(_))
     }
 
     /// Whether moving onto a file plays it: a sample, or a kit's sound in either explorer.
@@ -88,15 +95,17 @@ impl Kind {
         matches!(self, Self::Folder | Self::KitFolder | Self::Kit)
     }
 
-    /// The icon it's drawn with, as it's been found in its folder.
-    pub fn icon(self, path: &Path) -> Icon {
+    /// The icon a file or folder is drawn with, as it's been found in its folder, with its tags:
+    /// a sample tagged `loop` is drawn as one.
+    pub fn icon(self, tags: &[Tag]) -> Icon {
         match self {
             Self::Folder => Icon::Folder,
             Self::Project => Icon::Project,
-            Self::Sample if is_loop(path) => Icon::Loop,
+            Self::Sample if tag::has(tags, tag::LOOP) => Icon::Loop,
             Self::Sample => Icon::Sample,
             Self::Kit | Self::KitFolder => Icon::Kit,
-            Self::Preset(kind) => preset_icon(path, kind),
+            // A preset's comes from reading it, which `item` does.
+            Self::Preset(_) => Icon::Missing,
         }
     }
 }
@@ -127,36 +136,68 @@ pub enum Icon {
     Missing,
 }
 
-/// A preset's icon: a sound's by its machine, an effect's, or a warning if it won't read.
-fn preset_icon(path: &Path, kind: PresetKind) -> Icon {
-    match kind {
-        PresetKind::Sound => {
-            load_sound(path).map_or(Icon::Missing, |preset| Icon::Sound(preset.sound.machine))
+/// How a preset is listed, from reading it once: its icon, a sound's by its machine; what it is,
+/// beside its name; and its tags, those it always has and then its own. One that won't read has
+/// a warning, and why beside it.
+fn preset_listing(path: &Path, kind: PresetKind) -> (Icon, String, Vec<Tag>) {
+    let read = match kind {
+        PresetKind::Sound => load_sound(path).map(|preset| {
+            let icon = Icon::Sound(preset.sound.machine);
+            (icon, preset.summary(), preset.fixed_tags(), preset.tags)
+        }),
+        PresetKind::Effect => load_effect(path).map(|preset| {
+            (
+                Icon::Effect,
+                preset.summary(),
+                preset.fixed_tags(),
+                preset.tags,
+            )
+        }),
+        PresetKind::Patch => load_patch(path).map(|preset| {
+            (
+                Icon::Patch,
+                preset.summary(),
+                preset.fixed_tags(),
+                preset.tags,
+            )
+        }),
+    };
+    match read {
+        Ok((icon, meaning, fixed, own)) => {
+            let mut tags: Vec<Tag> = fixed
+                .into_iter()
+                .map(|name| Tag::new(name, Source::Fixed))
+                .collect();
+            for name in own {
+                if !tag::has(&tags, &name) {
+                    tags.push(Tag::new(name, Source::Own));
+                }
+            }
+            (icon, meaning, tags)
         }
-        PresetKind::Effect => load_effect(path).map_or(Icon::Missing, |_| Icon::Effect),
-        PresetKind::Patch => load_patch(path).map_or(Icon::Missing, |_| Icon::Patch),
+        Err(error) => {
+            let why = match error {
+                vt_model::preset::PresetError::Parse { detail, .. }
+                | vt_model::preset::PresetError::Holds { detail, .. } => detail,
+                error => error.to_string(),
+            };
+            (Icon::Missing, why, Vec::new())
+        }
     }
 }
 
-/// What a preset is, beside its name in the browser, or why it won't read.
-fn preset_meaning(path: &Path, kind: PresetKind) -> String {
-    let read = match kind {
-        PresetKind::Sound => load_sound(path).map(|preset| preset.summary()),
-        PresetKind::Effect => load_effect(path).map(|preset| preset.summary()),
-        PresetKind::Patch => load_patch(path).map(|preset| preset.summary()),
-    };
-    read.unwrap_or_else(|error| match error {
-        vt_model::preset::PresetError::Parse { detail, .. }
-        | vt_model::preset::PresetError::Holds { detail, .. } => detail,
-        error => error.to_string(),
-    })
+/// A sample file's tags: what's guessed from where it is, its name and, for one of a kit's
+/// sounds, its label, and what's kept for it by hand (decision 315).
+pub fn file_tags(path: &Path, label: &str, library: &TagLibrary) -> Vec<Tag> {
+    tag::file_tags(&tag::guess(path, label), library.of_file(path))
 }
 
-/// The icon for a sample file a kit names: a loop's, or a warning if it isn't there.
-pub fn sample_icon(path: &Path) -> Icon {
+/// The icon for a sample file a kit names: a loop's if its tags say so, or a warning if it isn't
+/// there.
+pub fn sample_icon(path: &Path, tags: &[Tag]) -> Icon {
     if !path.exists() {
         Icon::Missing
-    } else if is_loop(path) {
+    } else if tag::has(tags, tag::LOOP) {
         Icon::Loop
     } else {
         Icon::Sample
@@ -172,54 +213,6 @@ pub fn kit_sound_icon(path: &Path, layered: bool) -> Icon {
     } else {
         Icon::KitSound
     }
-}
-
-/// The words in a name, in lower case, without the spaces and marks between them.
-fn words(name: &std::ffi::OsStr) -> Vec<String> {
-    name.to_string_lossy()
-        .to_lowercase()
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|word| !word.is_empty())
-        .map(str::to_owned)
-        .collect()
-}
-
-/// Whether a sample is a loop, as far as its folders and name say. The nearest folder named for
-/// loops or one-shots decides, as Ableton's library has `Loops` and `One Shots`, whose one-shots
-/// can have a tempo in their names. Otherwise a tempo in its name, such as `Break 120 bpm.wav`,
-/// makes it a loop, as sample packs name them.
-pub fn is_loop(path: &Path) -> bool {
-    for folder in path.ancestors().skip(1) {
-        let Some(name) = folder.file_name() else {
-            continue;
-        };
-        let words = words(name);
-        let has = |wanted: &str| words.iter().any(|word| word == wanted);
-        if has("loop") || has("loops") {
-            return true;
-        }
-        let one_shot = words
-            .windows(2)
-            .any(|pair| pair[0] == "one" && matches!(pair[1].as_str(), "shot" | "shots"));
-        if one_shot || has("oneshot") || has("oneshots") {
-            return false;
-        }
-    }
-    let Some(stem) = path.file_stem() else {
-        return false;
-    };
-    let words = words(stem);
-    let tempo = |word: &str| {
-        (2..=3).contains(&word.len())
-            && word
-                .parse::<u32>()
-                .is_ok_and(|bpm| (40..=300).contains(&bpm))
-    };
-    words.iter().enumerate().any(|(at, word)| {
-        let joined = word.strip_suffix("bpm").is_some_and(tempo);
-        let apart = word == "bpm" && at > 0 && tempo(&words[at - 1]);
-        joined || apart
-    })
 }
 
 /// What a path is, for a purpose, or none if it isn't listed.
@@ -274,19 +267,25 @@ pub fn list(
     Ok(found)
 }
 
-/// The picker's item for an entry: a folder opens, and anything else is chosen.
-pub fn item(path: &Path, kind: Kind) -> Item {
+/// The picker's item for an entry, with its tags, and its icon: a folder opens, and anything else
+/// is chosen.
+pub fn item(path: &Path, kind: Kind, library: &TagLibrary) -> (Item, Icon) {
     let name = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.display().to_string());
     let path = path.to_path_buf();
-    match kind {
+    let item = match kind {
         Kind::Folder => Item::new(name, Pick::Folder(path)),
         Kind::Project => {
             Item::new(name, Pick::Project(path.clone())).preview(Preview::Project(path))
         }
-        Kind::Sample => Item::new(name, Pick::Sample(path.clone())).preview(Preview::Sample(path)),
+        Kind::Sample => {
+            let tags = file_tags(&path, "", library);
+            Item::new(name, Pick::Sample(path.clone()))
+                .preview(Preview::Sample(path))
+                .tagged(tags)
+        }
         // A kit by the name `:kit` takes, without `.ron`.
         Kind::Kit => Item::new(
             path.file_stem()
@@ -302,15 +301,22 @@ pub fn item(path: &Path, kind: Kind) -> Item {
         )
         .preview(Preview::Kit(path)),
         // By the name `:preset load` takes, with what it is beside it.
-        Kind::Preset(preset) => Item::new(
-            preset_name(&path),
-            Pick::Preset {
-                kind: preset,
-                path: path.clone(),
-            },
-        )
-        .meaning(preset_meaning(&path, preset)),
-    }
+        Kind::Preset(preset) => {
+            let (icon, meaning, tags) = preset_listing(&path, preset);
+            let item = Item::new(
+                preset_name(&path),
+                Pick::Preset {
+                    kind: preset,
+                    path: path.clone(),
+                },
+            )
+            .meaning(meaning)
+            .tagged(tags);
+            return (item, icon);
+        }
+    };
+    let icon = kind.icon(&item.tags);
+    (item, icon)
 }
 
 /// One thing in a folder or kit that's been opened: the path the tree knows it by, its item, its
@@ -326,38 +332,46 @@ pub struct Entry {
 /// A kit's sounds are known by their places in it, under the kit's own path, as
 /// `909 Core Kit.ron/0`, and a sound's files by their places under the sound's, so the tree finds
 /// them again as it finds files.
-pub fn contents(path: &Path, purpose: Purpose, hidden: bool) -> Option<Vec<Entry>> {
+pub fn contents(
+    path: &Path,
+    purpose: Purpose,
+    hidden: bool,
+    library: &TagLibrary,
+) -> Option<Vec<Entry>> {
     if path.is_dir() {
         let listed = list(path, purpose, hidden).ok()?;
-        let entries = listed.into_iter().map(|(path, kind)| Entry {
-            item: item(&path, kind),
-            icon: kind.icon(&path),
-            opens: kind.opens(),
-            path,
+        let entries = listed.into_iter().map(|(path, kind)| {
+            let (item, icon) = item(&path, kind, library);
+            Entry {
+                item,
+                icon,
+                opens: kind.opens(),
+                path,
+            }
         });
         return Some(entries.collect());
     }
     if path.is_file() {
-        return kit_sounds(path);
+        return kit_sounds(path, library);
     }
     let place = path
         .file_name()
         .and_then(|name| name.to_str()?.parse::<usize>().ok());
     match (path.parent(), place) {
-        (Some(kit), Some(place)) if kit.is_file() => sound_files(kit, place),
+        (Some(kit), Some(place)) if kit.is_file() => sound_files(kit, place, library),
         _ => None,
     }
 }
 
 /// A kit's sounds, label first and named beside it, as the kit in use lists them. A sound with
 /// variants or layers opens to them.
-fn kit_sounds(kit: &Path) -> Option<Vec<Entry>> {
+fn kit_sounds(kit: &Path, library: &TagLibrary) -> Option<Vec<Entry>> {
     let loaded = load_kit(kit).ok()?;
     let sounds = loaded.sounds.iter().enumerate().map(|(place, sound)| {
         let opens = !sound.variants.is_empty() || !sound.layers.is_empty();
         Entry {
             path: kit.join(place.to_string()),
-            item: kit_item(sound),
+            item: kit_item(sound).tagged(file_tags(&sound.path, &sound.label, library)),
             icon: kit_sound_icon(&sound.path, opens),
             opens,
         }
@@ -368,7 +382,7 @@ fn kit_sounds(kit: &Path) -> Option<Vec<Entry>> {
 /// One of a kit's sounds as its files: its own, then its variants, then its velocity layers from
 /// the softest, each by its file's name with what it is beside it. Each is chosen as the sound
 /// is, with its label, choke group, gain and tune.
-fn sound_files(kit: &Path, place: usize) -> Option<Vec<Entry>> {
+fn sound_files(kit: &Path, place: usize, library: &TagLibrary) -> Option<Vec<Entry>> {
     let sound = load_kit(kit).ok()?.sounds.into_iter().nth(place)?;
     let layers = sound.layers.len();
     let mut files = vec![(sound.path.clone(), "Main".to_owned())];
@@ -393,7 +407,8 @@ fn sound_files(kit: &Path, place: usize) -> Option<Vec<Entry>> {
             || file.display().to_string(),
             |name| name.to_string_lossy().into_owned(),
         );
-        let icon = sample_icon(&file);
+        let tags = file_tags(&file, &sound.label, library);
+        let icon = sample_icon(&file, &tags);
         let entry = KitEntry {
             path: file,
             ..sound.clone()
@@ -403,6 +418,7 @@ fn sound_files(kit: &Path, place: usize) -> Option<Vec<Entry>> {
             item: Item {
                 label,
                 meaning,
+                tags,
                 ..kit_item(&entry)
             },
             icon,
@@ -520,29 +536,10 @@ mod tests {
     }
 
     #[test]
-    fn a_loop_is_known_by_its_folder_or_the_tempo_in_its_name() {
-        let library = "/Applications/Live.app/Core Library/Samples";
-        let is = |path: &str| is_loop(Path::new(&path.replace("LIB", library)));
-        assert!(is("LIB/Loops/FX/Scratch Baby.aif"), "under Loops");
-        assert!(is("/samples/Drum Loops/amen.wav"));
-        assert!(is("/samples/Break 90 bpm.wav"), "a tempo");
-        assert!(is("/samples/break_174bpm.wav"));
-        assert!(
-            !is("LIB/One Shots/FX/Impact Deep Pad 120 bpm.wav"),
-            "a one-shot's folder says so, whatever its name"
-        );
-        assert!(!is("/samples/oneshots/hit 120 bpm.wav"));
-        assert!(!is("/samples/kick.wav"));
-        assert!(!is("/samples/909 kick.wav"), "a number alone isn't a tempo");
-        assert!(!is("/samples/bpm.wav"));
-        assert!(!is("/samples/Looper/kick.wav"), "a word, not part of one");
-    }
-
-    #[test]
     fn each_entry_has_an_icon_and_a_folder_that_wont_read_has_none() {
         let root = everything("icons");
         let icons = |purpose: Purpose| -> Vec<(String, Icon)> {
-            contents(&root, purpose, false)
+            contents(&root, purpose, false, &TagLibrary::default())
                 .unwrap()
                 .into_iter()
                 .map(|entry| (entry.item.label, entry.icon))
@@ -557,7 +554,15 @@ mod tests {
             icons(Purpose::Sample)[3],
             ("kick.wav".to_owned(), Icon::Sample)
         );
-        assert!(contents(&root.join("gone"), Purpose::Sample, false).is_none());
+        assert!(
+            contents(
+                &root.join("gone"),
+                Purpose::Sample,
+                false,
+                &TagLibrary::default()
+            )
+            .is_none()
+        );
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

@@ -29,13 +29,13 @@ use crate::views::widgets;
 use crate::views::widgets::bar::{ValueBar, moved_since};
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid, faded};
-use crate::views::widgets::group;
 use crate::views::widgets::image;
 use crate::views::widgets::meter::{hanging_cell, hanging_eighths};
 use crate::views::widgets::panel::GraphicPanel;
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
 use crate::views::widgets::table::take_top;
 use crate::views::widgets::toggle;
+use crate::views::widgets::{group, role};
 
 mod generators;
 mod modulation;
@@ -95,6 +95,7 @@ fn at_default(control: Control, track: &Track) -> bool {
         || control == Control::FilterMode && !track.filter.has_modes()
         || control == Control::Base(TrackControl::Punch) && !track.filter.has_punch()
         || control == Control::Safe && !track.filter.has_safe()
+        || control == Control::Role && track.role.is_auto()
 }
 
 /// A setting's value as text.
@@ -126,6 +127,8 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
         Control::Group => track
             .group
             .map_or_else(|| "Off".to_owned(), |group| format!("G{group}")),
+        // `Auto` shows what it goes by, which the page dims as its default.
+        Control::Role => track.role().name().to_owned(),
         Control::Choke => track
             .choke
             .map_or_else(|| "Off".to_owned(), |group| group.to_string()),
@@ -644,11 +647,13 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> Drawn {
             Span::styled(text, theme::dim())
         }
     });
-    let name = if track.is_sound() {
-        let name = format!("Track {:02} {}", app.cursor.track + 1, track.name);
-        format!("{} ", name.trim_end())
+    // A sound track's number and name, with what it's for as the rule under them, as on the mixer,
+    // or a fixed track's title over its rule.
+    let (lead, name) = if track.is_sound() {
+        let name = format!("{:02} {}", app.cursor.track + 1, track.name);
+        ("Track ", name.trim_end().to_owned())
     } else {
-        format!("{} ", group::title(track))
+        ("", group::title(track))
     };
     // The track's machine or kind as a glyph before it, a group's in its colour, and whether it's
     // muted or soloed after.
@@ -658,8 +663,10 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> Drawn {
     };
     let mut title = vec![
         Span::styled(format!("{} ", glyphs::track(track)), icon),
-        Span::styled(name, bold),
+        Span::styled(lead, bold),
     ];
+    title.extend(role::ruled(app.song(), app.cursor.track, &name, bold));
+    title.push(Span::styled(" ", bold));
     // A track in a group carries its mark, in the group's colour, as on the mixer.
     if let Some(mark) = group::mark(app.song(), app.cursor.track) {
         title.extend([mark.patch_style(bold), Span::raw(" ")]);

@@ -41,6 +41,7 @@ pub mod speed;
 pub mod step;
 pub mod steps;
 pub mod steptext;
+pub mod tag;
 pub mod target;
 pub mod tracking;
 pub mod view;

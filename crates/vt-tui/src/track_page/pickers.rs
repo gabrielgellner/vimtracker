@@ -1,5 +1,6 @@
 //! `K` and `i` on a setting that's a choice: a list of what it can be.
 
+use ratatui::style::Style;
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio, MOST_OCTAVES, retrig_meaning};
 use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Lpg};
@@ -7,7 +8,7 @@ use vt_model::insert::Insert;
 use vt_model::lfo::{Fade, Lfo, LfoMode, Shape, note_rates};
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId};
-use vt_model::song::{FilterType, Machine};
+use vt_model::song::{FilterType, Machine, Role};
 use vt_model::speed::Speed;
 use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
 use vt_model::tracking::{Source, Tracking};
@@ -16,6 +17,7 @@ use crate::app::App;
 use crate::glyphs;
 use crate::input::command::{Line, PatchLine, PresetLine};
 use crate::input::picker::{Item, Pick, Picker};
+use crate::theme;
 use crate::views::track::IN_SCALE_PITCH;
 use vt_model::preset::PresetKind;
 
@@ -169,6 +171,10 @@ impl App {
         }
         if self.track_control() == Control::FilterMode {
             self.open_filter_mode_picker();
+            return;
+        }
+        if control == Control::Role {
+            self.open_role_picker();
             return;
         }
         if self.track_control() == Control::Speed {
@@ -399,6 +405,28 @@ impl App {
             .to_vec();
         let position = Speed::ALL.iter().position(|speed| *speed == current);
         self.show_picker(Picker::new("Speed", items).opened_on(position));
+    }
+
+    /// List the roles, each in its colour with what it's for, `Auto` saying what the machine
+    /// makes it, and the track's highlighted.
+    fn open_role_picker(&mut self) {
+        let track = self.cursor.track;
+        let page = self.page_track();
+        let items = Role::ALL
+            .map(|role| {
+                let meaning = match role {
+                    Role::Auto => format!("As its machine is for: {}", page.machine.role().name()),
+                    _ => role.meaning().to_owned(),
+                };
+                let style =
+                    theme::role(role).map_or_else(Style::new, |colour| Style::new().fg(colour));
+                Item::new(role.name(), Pick::Role { track, role })
+                    .meaning(meaning)
+                    .styled(style)
+            })
+            .to_vec();
+        let position = Role::ALL.iter().position(|role| *role == page.role);
+        self.show_picker(Picker::new("Role", items).opened_on(position));
     }
 
     /// List the modes the track's filter type offers, with what each does and the one it plays

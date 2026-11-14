@@ -2,7 +2,8 @@
 //! bar down the sections `:loop` keeps playing (decision 173). A group with no tracks in it is
 //! faint, as it plays nothing (decision 126). A group and its tracks are named in its colour, and
 //! a folded group's tracks are left out, its name marked, while an empty group is folded away
-//! unless it's opened (decision 128).
+//! unless it's opened (decision 128). What each track is for is a rule under its name
+//! (decision 316).
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -18,8 +19,8 @@ use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
-use crate::views::widgets::group;
 use crate::views::widgets::table::centred_run;
+use crate::views::widgets::{group, role};
 
 /// Room for a section's number, its playing marker and its loop's bar.
 const NUMBER_WIDTH: usize = 5;
@@ -81,7 +82,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     ))];
     for &track in &shown_tracks {
         let name = &song.tracks[track].name;
-        let mut label = if name.is_empty() {
+        let label = if name.is_empty() {
             format!("{:02}", track + 1)
         } else {
             name.clone()
@@ -89,19 +90,26 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         // A group with its tracks folded into it says so, as the mixer does, beside its whole
         // name, as its column has room for both.
         let width = column_width(song, track);
-        if app.folds.holds(song, track) {
-            label = label.chars().take(width - 2).collect();
-            label.extend([glyphs::FOLDED, glyphs::ICON_SPACE]);
+        let folded = app.folds.holds(song, track);
+        let label: String = label
+            .chars()
+            .take(width - 1 - usize::from(folded))
+            .collect();
+        let mark = if folded {
+            format!("{}{}", glyphs::FOLDED, glyphs::ICON_SPACE)
         } else {
-            label = label.chars().take(width - 1).collect();
-        }
+            String::new()
+        };
         // A group and the tracks in it are in its colour, and an empty group is faint.
         let style = if group::is_empty(song, track) {
             theme::faint()
         } else {
             group::style(song, track).unwrap_or_default()
         };
-        heading.push(Span::styled(format!("{label:<width$}"), style));
+        // What it's for is the rule under its name, and not under the fold's mark.
+        heading.extend(role::ruled(song, track, &label, style));
+        let gap = width - label.chars().count() - mark.chars().count();
+        heading.push(Span::styled(format!("{mark}{}", " ".repeat(gap)), style));
     }
     let mut lines = vec![
         Line::styled("Song", bold),

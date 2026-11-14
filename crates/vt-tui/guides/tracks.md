@@ -60,7 +60,7 @@ and its settings in up to four columns of three.
 |---|---|---|
 | Machine | Machine, type | The machine's own; a sample's `Tune` `Cents` |
 | Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
-| Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
+| Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group`; `Role` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; |
 | | | `Choke` `Velocity` `Quantise` |
 
@@ -973,6 +973,35 @@ bars as `2bar`, or `off`, and `x` turns it off. For a one-off, `Space a` starts 
 chain again at the next line of the launch grid: see **Jamming** in **Phrases and
 chains**.
 
+## Track colours
+
+What a track is for is a thin rule under its name, in a colour of its own, so drums,
+bass and synths stand apart at a glance: in the song view's columns, on the mixer's
+strips, in the phrase view's columns and titles, in the track list (`Space f b`) and in
+the track page's title. The name keeps its own colour, a group's, so the rule says what
+a track is and the name's colour which group it's in.
+
+| Role | Colour | What it's for |
+|---|---|---|
+| `Drums` | maroon | Drums and percussion |
+| `Bass` | yellow | A bass line |
+| `Synth` | sky blue | A lead, an arpeggio or a melody |
+| `Pad` | lavender | Chords and pads |
+| `Texture` | pink | Noise, risers and atmosphere |
+| `None` | none | Nothing to say |
+
+`Role`, at the end of the Output, sets it. It starts on `Auto`, which goes by the
+machine and shows what that makes it, dimmed: the drum voices are `Drums`, `Acid` is
+`Bass`, `Chord` and `Paraphonic` are `Pad`, the noise voices are `Texture` and every
+other voice is `Synth`. A sampler could be playing anything, so it has no colour until
+you say, but a kit's sounds are `Drums`, whether `:kit` puts them on tracks or `:sample`
+chooses one for a track left on `Auto`. `K` lists the
+roles in their colours, `=` and `-` go through them, and `x` goes back to `Auto`.
+
+A group takes the colour its tracks all share, so a folded kit still reads as drums;
+with tracks for different things, and on the returns and the master, the rule is grey,
+as they play nothing of their own.
+
 ## Groups
 
 A group sums tracks into one, as Ableton's group tracks do, so a whole kit can go
@@ -1763,13 +1792,19 @@ the slots all start in; an effect replaces only the slot under the cursor. The l
 preset with what it is beside it, as `Acid · Distort Delay · 3 macros`, a sound by its machine's
 icon, and the folder you last saved in or loaded from at its top.
 
+**Tags** find presets as they find samples (see **Tags** in **Navigation**): every sound preset
+is tagged `sound` and by its machine, as `synth`, `analog` and `acid`, and every effect preset
+`effect` and by its effect, as `delay`, so `#acid` lists the acid sounds. `T` in the list gives
+one tags of its own, such as `bass`, kept in its file so they go where it goes.
+
 ## Patches
 
 A patch is what plays a sound without the sound: a track's macros and the parts they move, saved
 to add to any other track while it keeps its own machine, filter and effects, as Live's MIDI
 Effect Rack presets go in front of whatever instrument is there. A Steps slot with `Change`,
 `Length` and `Range` on it is a Turing Machine you can put on an `Acid`, a `VA` or a kick. Patches
-are kept in the presets folder's `patches`, beside `sounds` and `effects`.
+are kept in the presets folder's `patches`, beside `sounds` and `effects`. Each is tagged
+`patch`, and `T` in the list gives it tags of its own, such as `pitch`.
 
 **Shipped patches** come with vimtracker, made from the generators tutorial's songs, and are listed
 under `Factory` after your own, so `:patch` has some from the start. They're built into the

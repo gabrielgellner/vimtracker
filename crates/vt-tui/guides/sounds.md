@@ -623,8 +623,13 @@ warning for its icon, and its preview says why.
 
 Moving onto a sample plays it through the current track, as an Elektron's or the M8's
 browser does, and `A` stops that or starts it again. Beside the list is its waveform,
-how long it is, its rate and whether it's mono or stereo. A long file is read in the
-background, so the list doesn't wait for it, and the last few are kept.
+how long it is, its rate and whether it's mono or stereo, and its tags. A long file is
+read in the background, so the list doesn't wait for it, and the last few are kept.
+
+Tags find samples across folders: `#kick` lists every kick below the open folders,
+`#loop` every loop, and `T` gives the one under the cursor tags of your own. Most are
+guessed from names and folders, so they're there from the start (see **Tags** in
+**Navigation**).
 
 | Command | Does |
 |---|---|

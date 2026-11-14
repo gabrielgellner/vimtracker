@@ -134,6 +134,8 @@ pub enum Control {
     Choke,
     /// The group it plays through, or none for the master.
     Group,
+    /// What it's for, which its colour shows, or `Auto` to go by its machine (decision 316).
+    Role,
     /// How much of its last pulse a note lasts, as a percentage.
     GateLength,
     /// How long its steps are, as a note division.
@@ -215,6 +217,7 @@ impl Control {
             Self::Base(TrackControl::Quantise) => "Quantise",
             Self::Choke => "Choke",
             Self::Group => "Group",
+            Self::Role => "Role",
             Self::GateLength => "Gate",
             Self::Speed => "Speed",
             Self::Reset => "Reset",
@@ -439,6 +442,7 @@ impl Control {
             )
             | Self::Choke
             | Self::Group
+            | Self::Role
             | Self::GateLength
             | Self::Speed
             | Self::Reset
@@ -497,6 +501,7 @@ impl Control {
                 | Self::FilterMode
                 | Self::Groove
                 | Self::Speed
+                | Self::Role
                 | Self::Mod(
                     _,
                     ModField::Type

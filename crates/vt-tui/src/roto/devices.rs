@@ -30,7 +30,7 @@ use vt_model::modulation::{MAX_DEPTH, ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::shape::GenParam;
 use vt_model::shape::params::Units as GenUnits;
-use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
+use vt_model::song::{FilterType, Machine, Role, Song, Track, TrackKind};
 use vt_model::speed::Speed;
 use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
 use vt_model::tracking::Source;
@@ -554,6 +554,13 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
         Control::Group => list(
             std::iter::once("Off".to_owned()).chain((1..=MAX_GROUPS).map(|g| format!("G{g}"))),
             usize::from(track.group.unwrap_or(0)),
+        ),
+        Control::Role => list(
+            Role::ALL.iter().map(|role| role.name().to_owned()),
+            Role::ALL
+                .iter()
+                .position(|role| *role == track.role)
+                .unwrap_or(0),
         ),
         Control::GateLength => value(
             u16::from(vt_model::settings::gate_percent(track.gate_length())) - 1,
