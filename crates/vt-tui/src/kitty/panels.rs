@@ -1,17 +1,25 @@
-//! The images of the track page's graphic panels the terminal has: each panel's picture in each
-//! of its shades, with what it was drawn from, so moving the cursor or switching a device out and
-//! back sends nothing once each has been sent, and a picture is sent again only when what shapes
-//! it changes.
+//! The pictures of the graphic panels, as data: what a page wants on screen ([`PanelWant`]), the
+//! ids it's given back for them ([`PanelIds`]), and the images the terminal has
+//! ([`PanelImages`]): each panel's picture in each of its shades, with what it was drawn from, so
+//! moving the cursor or switching a device out and back sends nothing once each has been sent,
+//! and a picture is sent again only when what shapes it changes.
 
 use std::collections::BTreeMap;
 
 use vt_model::envelope::Envelope;
 use vt_model::modulation::Polarity;
+use vt_model::song::{FilterMode, FilterType};
 
 use super::generators::GenDrawing;
-use super::plot::{LfoDrawing, MappingDrawing, Shade, TrackDrawing};
-use super::{FilterSettings, SlotDrawing};
+use super::plot::{self, LfoDrawing, MappingDrawing, Shade, TrackDrawing};
+use super::rgb;
+use super::slots::SlotDrawing;
 use crate::sample_wave::Thumbnail;
+use crate::theme;
+
+/// The settings a filter curve is drawn from: its type, the mode it plays, `Cut` and `Res` as
+/// they're playing, its drive, `Safe`, and the utility filter's low and high cuts.
+pub(crate) type FilterSettings = (FilterType, FilterMode, u8, u8, u8, bool, u8, u8);
 
 /// A panel that draws an image: the Sound page's filter curve and sampler's thumbnail, a mod
 /// slot's picture on the Mod page, an envelope's shape, an LFO's cycle or a Track slot's map, an
@@ -33,7 +41,7 @@ pub enum PanelKey {
 
 /// What a panel's picture was drawn from, which is all that's compared to tell if it's changed.
 #[derive(Debug, Clone)]
-pub enum Shape {
+pub(crate) enum Shape {
     Filter(FilterSettings),
     /// A sampler's slice, with where it starts and stops, drawn again only when one of those
     /// changes or the file's frames come in.
@@ -66,6 +74,81 @@ impl PartialEq for Shape {
             (Self::Mapping(a), Self::Mapping(b)) => a == b,
             _ => false,
         }
+    }
+}
+
+impl Shape {
+    /// Its picture in a shade, as a PNG, for a panel this many characters across and down at
+    /// characters of `cell` pixels, at the program's sample rate.
+    pub fn png(
+        &self,
+        cells: (usize, usize),
+        cell: (usize, usize),
+        shade: Shade,
+        rate: u32,
+    ) -> Vec<u8> {
+        let size = (cells.0 * cell.0, cells.1 * cell.1);
+        let color = shade.color();
+        match self {
+            Self::Filter(settings) => plot::filter_from(*settings, rate, size).png(color),
+            Self::Waveform(thumbnail) => {
+                let (sound, outside) = thumbnail_colors(shade);
+                thumbnail.picture(cells, cell, sound, outside).png()
+            }
+            Self::Envelope(envelope, polarity) => {
+                plot::envelope_in(envelope, *polarity, size).png(color)
+            }
+            Self::Lfo(drawing) => plot::lfo_cycle(*drawing, size).png(color),
+            Self::Track(drawing) => plot::track_map(*drawing, size).png(color),
+            Self::Slot(drawing) => drawing.plot(rate, size).png(color),
+            Self::Gen(drawing) => drawing.plot(size).png(color),
+            Self::Mapping(drawing) => plot::mapping(*drawing, size).png(color),
+        }
+    }
+}
+
+/// A thumbnail's colours in a shade: the sound that plays and the rest. With the cursor in the
+/// Machine, what plays is the text's colour, as on the sample page, rather than the active
+/// green, which would be hard to tell from the start's teal.
+fn thumbnail_colors(shade: Shade) -> ([u8; 3], [u8; 3]) {
+    match shade {
+        Shade::Focused => (rgb(theme::TEXT), rgb(theme::OVERLAY0)),
+        Shade::Dim => (shade.color(), rgb(theme::SURFACE1)),
+        Shade::Faint => (shade.color(), rgb(theme::SURFACE0)),
+    }
+}
+
+/// A picture a page wants on screen this frame: which panel it's for, in which shade, what it's
+/// drawn from, which is compared to tell if it's new, and its size in characters.
+#[derive(Debug, Clone)]
+pub(crate) struct PanelWant {
+    pub key: PanelKey,
+    pub shade: Shade,
+    pub shape: Shape,
+    pub cells: (usize, usize),
+}
+
+/// The ids of a page's pictures, by panel, for its drawing to put placeholders for. A panel with
+/// none has nothing drawn yet, and its box is left out.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PanelIds(BTreeMap<PanelKey, u32>);
+
+impl PanelIds {
+    /// The id of a panel's picture, if it has one.
+    pub fn get(&self, key: PanelKey) -> Option<u32> {
+        self.0.get(&key).copied()
+    }
+
+    /// Give a panel's picture an id, as [`Graphics::panels`](super::Graphics::panels) does, or a
+    /// test that draws a page with ids of its own.
+    pub fn insert(&mut self, key: PanelKey, id: u32) {
+        self.0.insert(key, id);
+    }
+}
+
+impl FromIterator<(PanelKey, u32)> for PanelIds {
+    fn from_iter<T: IntoIterator<Item = (PanelKey, u32)>>(ids: T) -> Self {
+        Self(ids.into_iter().collect())
     }
 }
 

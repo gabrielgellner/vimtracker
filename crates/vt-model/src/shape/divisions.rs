@@ -83,6 +83,8 @@ impl Division {
     }
 }
 
+crate::listed::listed!(Division);
+
 /// Which of the module's channels a track plays: its own dice, `A` or `B`, or the strikes of both.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Channel {
@@ -124,6 +126,8 @@ impl Channel {
         Self::ALL[nth % Self::ALL.len()]
     }
 }
+
+crate::listed::listed!(Channel);
 
 /// How long the dice's bar is and how long a row: a bar of four or three beats, in sixteenths, or
 /// in 32nds for a track at `1/32`, where every division has rows of its own.
@@ -202,6 +206,8 @@ impl Bar {
         }
     }
 }
+
+crate::listed::listed!(Bar);
 
 /// A `Divisions` fill's chances, the channel it plays and its bar. Saved with a live generator's
 /// shape, and left out while it's as it starts.

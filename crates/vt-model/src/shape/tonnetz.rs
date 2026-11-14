@@ -307,6 +307,8 @@ impl Moves {
     }
 }
 
+crate::listed::listed!(Moves);
+
 /// What a track writes of the chords.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Voice {
@@ -367,6 +369,8 @@ impl Voice {
         }
     }
 }
+
+crate::listed::listed!(Voice);
 
 /// A `Tonnetz` fill's settings, saved with a live generator's shape and left out while they're as
 /// they start. The first chord's root is the shape's `From`.

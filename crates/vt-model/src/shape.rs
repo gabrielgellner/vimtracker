@@ -375,6 +375,8 @@ impl FillKind {
     }
 }
 
+crate::listed::listed!(FillKind);
+
 /// Which rows get a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Where {

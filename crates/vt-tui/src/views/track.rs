@@ -20,6 +20,7 @@ use crate::app::App;
 use crate::banking::sample_text;
 use crate::glyphs;
 use crate::input::mode::Mode;
+use crate::kitty::PanelKey;
 use crate::page::Ctx;
 use crate::shaping::live_shown;
 use crate::theme;
@@ -672,7 +673,7 @@ fn slot_panel(page: &TrackPage, ctx: &Ctx, track: &Track, slot: usize) -> Graphi
         (lines, REDUCTION_METER_WIDTH as u16, Some(REDUCTION_CAPTION))
     };
     let curve = |width: usize| {
-        page.slot_images[slot].map(|id| {
+        page.images.get(PanelKey::Slot(slot)).map(|id| {
             let lines = image::rows(id, width, SLOT_DRAWING_HEIGHT)
                 .into_iter()
                 .map(Line::from)

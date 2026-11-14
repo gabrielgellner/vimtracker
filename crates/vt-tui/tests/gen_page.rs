@@ -21,6 +21,7 @@ use vt_tui::track_page::{Control, Page};
 
 mod common;
 use common::*;
+use vt_tui::kitty::PanelKey;
 
 const E: &str = "--- -- --- --- ---";
 
@@ -399,25 +400,25 @@ fn each_device_has_a_preview_sent_again_only_as_its_column_changes() {
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         String::from_utf8(out)
             .unwrap()
             .matches(",c=49,r=5,")
             .count()
     };
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    let first = app.track_page.gen_images[0].unwrap();
+    let first = app.track_page.images.get(PanelKey::Gen(0)).unwrap();
     assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
     // Moving the cursor off it shows it dim, which is sent once, and back costs nothing.
     keys(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics), 1);
     keys(&mut app, "{");
     assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.track_page.gen_images[0], Some(first));
+    assert_eq!(app.track_page.images.get(PanelKey::Gen(0)), Some(first));
     // A turn of `Hits` changes the column, so it's drawn again.
     keys(&mut app, "jj$=");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    assert_ne!(app.track_page.gen_images[0], Some(first));
+    assert_ne!(app.track_page.images.get(PanelKey::Gen(0)), Some(first));
     // On screen, its box is beside the grid, and its brief value is the hits alone.
     let cells = screen_cells(&mut app).join("\n");
     assert!(
@@ -435,10 +436,10 @@ fn the_row_playing_rides_the_preview_as_a_dot() {
     let (mut app, _rt) = on_gen_page();
     let mut graphics = Graphics::new();
     let frame = |app: &mut App, graphics: &mut Graphics| {
-        graphics.sync(app, &mut Vec::new()).unwrap();
+        app.send_pictures(graphics, &mut Vec::new()).unwrap();
         screen_cells(app);
         let mut placed = Vec::new();
-        graphics.place(app, &mut placed).unwrap();
+        app.place_pictures(graphics, &mut placed).unwrap();
         String::from_utf8_lossy(&placed).into_owned()
     };
     assert_eq!(frame(&mut app, &mut graphics), "", "stopped, no dot");

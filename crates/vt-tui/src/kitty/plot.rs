@@ -22,7 +22,9 @@ use vt_model::modulation::{ModSlot, Polarity};
 use vt_model::song::{FilterType, Track};
 use vt_model::tracking::{Bounds, Source};
 
-use super::{indexed_png, rgb};
+use super::encoding::indexed_png;
+use super::panels::FilterSettings;
+use super::rgb;
 use crate::theme;
 use crate::views::curve::{
     ahd_level_at, ahd_stage_ends, drum_level_at, drum_stage_ends, level_at, lpg_level_at,
@@ -372,6 +374,23 @@ pub fn distort(settings: Distort, (width, height): (usize, usize)) -> Plot {
 /// Where a level in dB is on a filter's curve, from 0 at its bottom to 1 at its top.
 pub fn filter_level(db: f32) -> f32 {
     (db - CURVE_BOTTOM_DB) / (CURVE_TOP_DB - CURVE_BOTTOM_DB)
+}
+
+/// The filter curve a panel's settings say, as [`filter`] draws it for a track with them.
+pub(crate) fn filter_from(settings: FilterSettings, rate: u32, size: (usize, usize)) -> Plot {
+    let (filter, filter_mode, cutoff, resonance, drive, safe, low_cut, high_cut) = settings;
+    let track = Track {
+        filter,
+        filter_mode,
+        cutoff,
+        resonance,
+        drive,
+        safe,
+        low_cut,
+        high_cut,
+        ..Track::default()
+    };
+    self::filter(&track, rate, size)
 }
 
 /// A track's filter and utility filter: what they let through at each frequency, from 20 Hz to
