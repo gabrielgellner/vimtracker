@@ -991,7 +991,7 @@ its own, and `S` on its notes changes it.
 | `l` on a kit | Open it to its sounds |
 | `Space` `x` | Mark this sound, or take the mark off, and go to the next |
 | `a` | Mark every sound in this kit, or take the marks off |
-| `A` | Stop playing each sound as the cursor moves onto it, or start again |
+| `A` | Stop or start playing each sound the cursor moves onto |
 | `Enter` | Load the marked sounds, or this one, as new tracks |
 | `Enter` on a kit | Use it, for `:sample` to list first |
 | `L` on a kit | Put every sound on tracks from the first, as `all` does |
