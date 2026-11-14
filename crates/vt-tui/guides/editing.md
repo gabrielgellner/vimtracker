@@ -200,10 +200,10 @@ lowest and highest.
 | Every | Every so many rows, counting from the first selected |
 | Chance | Each row with this percent chance |
 | Euclid | `Hits` spread as evenly as they go, with `Rotate` below it |
-| Clusters | Runs of two to four rows with gaps between, about this percent of the rows |
-| Markov | Each row's chance hanging on the rows before it, as Marbles' Markov model |
-| 3 states | Each row a gate, a rest or a tie, as Marbles' three states model |
-| Complementary | A coin a row for two tracks: one takes this percent, the other the rest |
+| Clusters | Runs of two to four rows, about this percent of them |
+| Markov | Each row's chance hanging on the rows before it |
+| 3 states | Each row a gate, a rest or a tie |
+| Complementary | One coin a row for two tracks, so never both |
 
 `Euclid` spreads its hits over the rows it could change, as the Euclidean
 rhythms do: 3 in 8 is `x..x..x.` and 5 in 8 is `x.xx.xx.`. On Velocity it
