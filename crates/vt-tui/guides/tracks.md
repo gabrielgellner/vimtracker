@@ -636,8 +636,8 @@ FX slot, then move `Time` to scan through what's held.
 
 `Clouds` is Mutable Instruments' Clouds as the module plays: it records the
 sound all the time, with what it feeds back, and plays it back in one of
-three modes, then through its diffuser, filters and reverb. Its `Mode` is in
-the slot's title, picked with `K`:
+three modes, or takes it apart in a fourth, then through its diffuser,
+filters and reverb. Its `Mode` is in the slot's title, picked with `K`:
 
 * `Granular`, the module's own sound: grains read the recording.
 * `Stretch` reads it through two windows, each lined up with the last where
@@ -645,6 +645,8 @@ the slot's title, picked with `K`:
   grains' blur.
 * `Looping` is a delay, its repeats shifted by `Pitch`. Frozen, it loops what
   it holds.
+* `Spectral` takes the sound apart into its spectrum, frame by frame, keeps
+  it, bends it and puts it back together, as the module's phase vocoder does.
 
 The first two columns are the module's knobs, the third what its `Blend`
 knob also does, each a setting of its own here. In `Granular`:
@@ -690,11 +692,38 @@ its place, as on the module, for a long wash of what's held. `Blend` is the
 module's, and loud sounds soft clip through it as they do on the module. It
 starts half way, with a little reverb.
 
+In `Spectral` the knobs take other jobs, as on the module:
+
+| Setting | Does |
+|---|---|
+| `Position` | Which kept spectrum it writes and plays |
+| `Size` | Warps the spectrum, none at `80` |
+| `Pitch` | Shifts the spectrum, in semitones |
+| `Density` | How often the spectrum is updated |
+| `Texture` | Quantises it below `80`, flattens it above |
+| `Freeze` | On, it plays what it holds, still turning |
+
+It keeps two spectra in the stereo qualities and six in the mono ones, and
+`Position` blends between them: freeze at `00`, let go, freeze again at
+`FF`, and `Position` moves from one to the other. `Size` shifts and reverses
+the spectrum towards either end. Below `80`, `Density` leaves bins as they
+were at random, a partial freeze; above it, it merges each frame with the
+last; and towards either end it scatters the phases, a spectral smear.
+Below `80`, `Texture` makes the levels coarser and coarser, like a file at
+a low bit rate; above it, the strongest bins weaken and the weakest grow,
+towards noise.
+
+Each frame is 128 ms, and what comes out is 160 ms late, as on the module;
+at 8 bits both are twice as long, with finer bins. It has no diffuser or
+filters, `Spread` does nothing, and nothing above 16 kHz comes out, as on
+the module, which also makes it 6 dB louder than what goes in. Changing to
+or from `Spectral` fades out what's playing first.
+
 `Clouds` and `Grains` are siblings: `Grains` is Beads', Clouds' successor,
 with its own envelopes and randomness, and `Pitch` and `Reverb` are Clouds'
 own pitch shifter and reverb on their own. Its grains' places come from the
-track's seed, so a render is the same each time. Clouds' fourth mode, its
-spectral one, isn't here yet.
+track's seed, so a render is the same each time, as are the random bins and
+phases of `Spectral`.
 <!-- ANCHOR_END: before-clouds -->
 <!-- ANCHOR: before-folded -->
 
