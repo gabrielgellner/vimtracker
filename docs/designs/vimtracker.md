@@ -293,7 +293,10 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     `EffectSpec` row each in `insert/kind.rs`'s `EFFECTS`, by `EffectKind`, with its key, name,
     meaning and `Param`s, and each `Param` states its kind, with the units it reads in, and its
     place in the effect, so the table, the slot's title and its usual grid take them as they are
-    (decision 339).
+    (decision 339). A synth voice's come in the same way, from its `VoiceSpec` row in
+    `machine.rs`'s `VOICES`, by `SynthVoice`, with its key, name, meaning and entries (in
+    `settings/voices.rs`), and what its Machine device takes from it: the setting its title shows,
+    any placing of its grid of its own, its role and its gate.
 
 **Decisions:** 29, 30, 59, 60, 158, 159 and 161, the [M14](#m14-design-one-list-of-settings) and
 [M14b](#m14b-design-kinds-of-setting) designs, and the three crates of the
