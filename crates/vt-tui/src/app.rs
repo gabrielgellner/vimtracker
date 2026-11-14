@@ -34,6 +34,7 @@ use crate::input::completion::CommandMenu;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
+use crate::input::typed::TypedValue;
 use crate::jumping::FieldJump;
 use crate::mixer_page::MixerPage;
 use crate::recording::Recording;
@@ -90,7 +91,7 @@ const NOTE_VELOCITY_STEP: u8 = 0x10;
 /// Typed characters not yet written, in Insert mode.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Entry {
-    pub text: String,
+    pub text: TypedValue,
     /// A command name waiting for its value, so the command doesn't take effect until then.
     pub command: Option<FxCommand>,
 }

@@ -12,6 +12,7 @@ use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
+use crate::input::typed::{HEX, Typed};
 
 /// The columns before the tracks': Length, Rpt and Start.
 pub const LENGTH_COLUMN: usize = 0;
@@ -220,7 +221,7 @@ impl App {
                 self.modes.entry.text.pop();
             }
             KeyCode::Enter => {
-                let text = std::mem::take(&mut self.modes.entry.text);
+                let text = self.modes.entry.text.take();
                 self.modes.mode = Mode::Normal;
                 if self.song_column == LENGTH_COLUMN {
                     match text.parse() {
@@ -252,9 +253,7 @@ impl App {
                 self.modes.entry.text.push(c);
             }
             KeyCode::Char(c) if c.is_ascii_hexdigit() => {
-                self.modes.entry.text.push(c.to_ascii_uppercase());
-                if self.modes.entry.text.len() == 2 {
-                    let text = std::mem::take(&mut self.modes.entry.text);
+                if let Typed::Commit(text) = self.modes.entry.text.key(key, HEX) {
                     self.modes.mode = Mode::Normal;
                     if let (Some(track), Ok(chain)) =
                         (self.song_track(), u32::from_str_radix(&text, 16))
