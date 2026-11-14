@@ -1,7 +1,9 @@
 //! `Acid`: a 303 line on the Note column, its notes, accents and slides written together. On an
 //! empty column it writes a riff of its own, its rhythm weighted toward the strong beats; on notes
 //! already there it keeps their rhythm and gives them the riff's pitches, or with `keep` their own,
-//! and new accents, slides and octaves.
+//! and new accents, slides and octaves. `Random`'s `Spread` and `Bias` (`shape/random.rs`) choose
+//! which notes between the ends the riff's set holds, round the bias point or out at the ends, low
+//! or high; as they start, every note is as likely, as it always was.
 //!
 //! The rhythm's weights, the root counted twice in the riff's set, and the starting accent chance
 //! are adapted from David Whiting's Endless Acid Banger (`src/pattern.ts`,
@@ -11,6 +13,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::random::{Random, unit as even};
 use super::render::{GenCell, Out, Shaped, chosen};
 use super::{Ladder, Shape, ShapeColumn, mix};
 use crate::constants::{DEFAULT_NOTE_VELOCITY, TICKS_PER_QUARTER, TICKS_PER_STEP};
@@ -132,9 +135,17 @@ impl Riff {
 }
 
 /// The riff's notes: `from`, its root, then up to `count - 1` others drawn between the two ends,
-/// along the ladder, so in key while the scale is on. The root is listed twice, so it's picked
-/// more often than the others, as most of Vitling's sets hold theirs two to four times.
-pub(super) fn riff(ladder: &Ladder, from: u8, to: u8, count: u8, seed: u64) -> Riff {
+/// along the ladder, so in key while the scale is on, each as likely unless `random` leans them.
+/// The root is listed twice, so it's picked more often than the others, as most of Vitling's sets
+/// hold theirs two to four times.
+pub(super) fn riff(
+    ladder: &Ladder,
+    from: u8,
+    to: u8,
+    count: u8,
+    seed: u64,
+    random: &Random,
+) -> Riff {
     let root = ladder.step(from);
     let other = ladder.step(to);
     let (low, high) = (root.min(other), root.max(other));
@@ -145,12 +156,16 @@ pub(super) fn riff(ladder: &Ladder, from: u8, to: u8, count: u8, seed: u64) -> R
         others[len] = step;
         len += 1;
     }
-    // Fisher and Yates, as far as it needs, from the seed.
     let wanted = usize::from(count.clamp(1, MAX_ACID_NOTES) - 1).min(len);
-    for index in 0..wanted {
-        let left = len - index;
-        let pick = index + (mix(seed ^ SET, index) % left as u64) as usize;
-        others.swap(index, pick);
+    if random.shaped() {
+        leaned(&mut others[..len], wanted, low, high, seed, random);
+    } else {
+        // Fisher and Yates, as far as it needs, from the seed.
+        for index in 0..wanted {
+            let left = len - index;
+            let pick = index + (mix(seed ^ SET, index) % left as u64) as usize;
+            others.swap(index, pick);
+        }
     }
     let others = &mut others[..wanted];
     others.sort_unstable();
@@ -167,6 +182,54 @@ pub(super) fn riff(ladder: &Ladder, from: u8, to: u8, count: u8, seed: u64) -> R
         set.push(note(*step));
     }
     set
+}
+
+/// Put `wanted` of the ladder's `steps` first, drawn without repeats as `Random`'s `Spread` and
+/// `Bias` lean them over the steps from `low` to `high`: each step's chance is its share of the
+/// draw, as a `Random` weighs its notes, among the steps still left. Where the draw's odds miss
+/// every step left, as `Spread` 0 does once the step at the bias point is taken, it's the one
+/// nearest where the draw lands, the lower of two as near, so a narrow spread gathers the riff
+/// round the bias point.
+fn leaned(steps: &mut [u8], wanted: usize, low: u8, high: u8, seed: u64, random: &Random) {
+    let span = usize::from(high - low) + 1;
+    let place = |step: u8| usize::from(step - low);
+    // The chance a draw lands on a step, from its place between the ends.
+    let odds = |step: u8| {
+        let at = place(step);
+        let up_to = if at + 1 == span {
+            1.0
+        } else {
+            random.below((at + 1) as f64 / span as f64)
+        };
+        (up_to - random.below(at as f64 / span as f64)).max(0.0)
+    };
+    for index in 0..wanted.min(steps.len()) {
+        let u = even(mix(seed ^ SET, index));
+        let left = &steps[index..];
+        let total: f64 = left.iter().map(|step| odds(*step)).sum();
+        let pick = if total > 0.0 {
+            let target = u * total;
+            let mut sum = 0.0;
+            left.iter()
+                .position(|step| {
+                    sum += odds(*step);
+                    sum > target
+                })
+                .unwrap_or(left.len() - 1)
+        } else {
+            let lands = random.draw(u) * span as f64;
+            let distance = |step: u8| (place(step) as f64 + 0.5 - lands).abs();
+            let mut nearest = 0;
+            for (at, step) in left.iter().enumerate() {
+                let (this, best) = (distance(*step), distance(left[nearest]));
+                if this < best || (this == best && *step < left[nearest]) {
+                    nearest = at;
+                }
+            }
+            nearest
+        };
+        steps.swap(index, index + pick);
+    }
 }
 
 /// A pitch an octave up or down, the other way if one would leave the notes a step holds.
@@ -207,7 +270,14 @@ pub(super) fn render<F: FnMut(usize, &Shaped)>(
     };
     let acid = shape.acid;
     let ladder = Ladder::new(scale);
-    let set = riff(&ladder, shape.from, shape.to, acid.notes, shape.seed);
+    let set = riff(
+        &ladder,
+        shape.from,
+        shape.to,
+        acid.notes,
+        shape.seed,
+        &shape.random,
+    );
     let set = set.notes();
     let density = f64::from(acid.density.min(100)) / 100.0;
     // The second die: the accents, slides and octaves, which a roll with `keep` changes alone.
@@ -309,6 +379,7 @@ mod tests {
             random: crate::shape::Random::default(),
             vary: 0,
             variation: crate::shape::Variation::default(),
+            divisions: crate::shape::Divisions::default(),
         }
     }
 
@@ -724,6 +795,105 @@ mod tests {
         assert_ne!(
             run(&steps, writing(OFF), &other),
             run(&steps, writing(OFF), &shape(0))
+        );
+    }
+
+    /// A riff's set as `Spread` and `Bias` lean it, sorted, with the root once.
+    fn leaned_set(scale: Scale, from: u8, to: u8, notes: u8, seed: u64, random: Random) -> Vec<u8> {
+        let ladder = Ladder::new(scale);
+        let mut set = riff(&ladder, from, to, notes, seed, &random)
+            .notes()
+            .to_vec();
+        set.sort_unstable();
+        set.dedup();
+        set
+    }
+
+    fn leaning(spread: u8, bias: i8) -> Random {
+        Random {
+            spread,
+            bias,
+            ..Random::default()
+        }
+    }
+
+    #[test]
+    fn spread_and_bias_lean_the_riffs_notes_and_keep_its_root_and_count() {
+        // As they start, the riff is drawn as it always was, so a seed's riff stays.
+        for seed in 0..20 {
+            let ladder = Ladder::new(C_MINOR);
+            assert_eq!(
+                riff(&ladder, 36, 60, 5, seed, &Random::default()).notes(),
+                riff(&ladder, 36, 60, 5, seed, &leaning(50, 0)).notes()
+            );
+        }
+        // Bias leans the set up or down, and the root stays whichever way.
+        let mean = |bias: i8| {
+            let (mut sum, mut count) = (0, 0);
+            for seed in 0..300 {
+                for note in leaned_set(OFF, 36, 60, 4, seed, leaning(30, bias)) {
+                    assert!((36..=60).contains(&note));
+                    if note != 36 {
+                        sum += u32::from(note);
+                        count += 1;
+                    }
+                }
+            }
+            f64::from(sum) / f64::from(count)
+        };
+        let (low, middle, high) = (mean(-70), mean(0), mean(70));
+        assert!(
+            low + 4.0 < middle && middle + 4.0 < high,
+            "{low} {middle} {high}"
+        );
+        // Every notes count and spread keeps the root and gives as many notes as asked.
+        for notes in 1..=MAX_ACID_NOTES {
+            for spread in [0, 10, 30, 70, 100] {
+                for seed in 0..10 {
+                    let set = leaned_set(C_MINOR, 48, 36, notes, seed, leaning(spread, -40));
+                    assert_eq!(set.len(), usize::from(notes), "{notes} {spread} {seed}");
+                    assert!(set.contains(&48), "the root");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn no_spread_gathers_the_riff_round_the_bias_point_and_full_spread_at_the_ends() {
+        // From `C-2` to `C-3` chromatic, the middle is `F#2`, and then the nearest, lower first.
+        for seed in 0..10 {
+            assert_eq!(
+                leaned_set(OFF, 36, 48, 4, seed, leaning(0, 0)),
+                [36, 41, 42, 43]
+            );
+            // Biased to the top, the notes just under it.
+            assert_eq!(
+                leaned_set(OFF, 36, 48, 4, seed, leaning(0, 100)),
+                [36, 46, 47, 48]
+            );
+        }
+        // Full spread takes the far end first, then each end's neighbours inward.
+        let mut seen = std::collections::HashSet::new();
+        for seed in 0..40 {
+            let set = leaned_set(OFF, 36, 48, 3, seed, leaning(100, 0));
+            assert!(set == [36, 37, 48] || set == [36, 47, 48], "{set:?}");
+            seen.insert(set);
+        }
+        assert_eq!(seen.len(), 2, "either end's neighbour");
+        // In key, gathered round the middle of `C-2` to `C-4`, `C-3`'s neighbours in C minor.
+        assert_eq!(
+            leaned_set(C_MINOR, 36, 60, 3, 1, leaning(0, 0)),
+            [36, 46, 48]
+        );
+        // The tutorial's: `acid-lines`' four notes from `C-2` to `C-3` in C minor, round the
+        // middle and at the top.
+        assert_eq!(
+            leaned_set(C_MINOR, 36, 48, 4, 1, leaning(0, 0)),
+            [36, 39, 41, 43]
+        );
+        assert_eq!(
+            leaned_set(C_MINOR, 36, 48, 4, 1, leaning(0, 100)),
+            [36, 44, 46, 48]
         );
     }
 

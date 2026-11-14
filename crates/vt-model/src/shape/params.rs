@@ -15,11 +15,11 @@ use crate::scale::Scale;
 use crate::step::Step;
 
 use super::{
-    Acid, Bits, DEFAULT_RATE, Degrees, DrumPart, EUCLID_HITS, Edge, FillKind, Grids,
-    MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_ORDER, MAX_SPREAD,
-    MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Mutations, Pink, Random, Shape, ShapeColumn, Source,
-    VARIES, Values, Variation, WAVES, WaveRate, Where, default_step, degree_count, degree_name,
-    first_note,
+    Acid, Bar, Bits, Channel, DEFAULT_RATE, Degrees, Division, Divisions, DrumPart, EUCLID_HITS,
+    Edge, FillKind, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH, MAX_FACTOR, MAX_MUTATION,
+    MAX_ORDER, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Mutations, Pink, Random, Shape,
+    ShapeColumn, Source, VARIES, Values, Variation, WAVES, WaveRate, Where, default_step,
+    degree_count, degree_name, first_note,
 };
 use super::{CLUSTERS, MARKOV, SHARE, STATES};
 
@@ -135,6 +135,8 @@ pub enum Choice {
     Where(Where),
     Source(Source),
     Part(DrumPart),
+    Channel(Channel),
+    Bar(Bar),
     Vary(u8),
 }
 
@@ -148,6 +150,8 @@ impl Choice {
             Self::Where(place) => place.name().to_owned(),
             Self::Source(source) => source.to_string(),
             Self::Part(part) => part.name().to_owned(),
+            Self::Channel(channel) => channel.name().to_owned(),
+            Self::Bar(bar) => bar.name().to_owned(),
             Self::Vary(passes) => vary_name(passes),
         }
     }
@@ -157,6 +161,8 @@ impl Choice {
         match self {
             Self::Fill(kind) => Some(kind.description()),
             Self::Part(part) => Some(part.description()),
+            Self::Channel(channel) => Some(channel.description()),
+            Self::Bar(bar) => Some(bar.description()),
             _ => None,
         }
     }
@@ -170,6 +176,8 @@ impl Choice {
             Self::Where(place) => shape.place = place,
             Self::Source(source) => shape.follow.source = source,
             Self::Part(part) => shape.grids.part = Some(part),
+            Self::Channel(channel) => shape.divisions.channel = Some(channel),
+            Self::Bar(bar) => shape.divisions.bar = bar,
             Self::Vary(passes) => shape.vary = passes,
         }
     }
@@ -270,7 +278,7 @@ pub enum GenParam {
     Depth,
     /// A `Random` fill's own, after Marbles: how widely its values spread and which way they
     /// lean, and on notes how many degrees it lets through, the most important first, and how
-    /// often each comes.
+    /// often each comes. `Spread` and `Bias` also lean the notes an `Acid` riff's set holds.
     Spread,
     Bias,
     Steps,
@@ -290,6 +298,23 @@ pub enum GenParam {
     HatDensity,
     Chaos,
     Rows,
+    /// A `Divisions` fill's own: the channel its track plays, the bar its dice are fixed for and
+    /// how long a row is, and each division's chance, its own channel's (or `A`'s) and then `B`'s,
+    /// which only `A+B` plays.
+    Channel,
+    Bar,
+    Quarters,
+    Eighths,
+    Sixteenths,
+    QuarterTriplets,
+    EighthTriplets,
+    SixteenthTriplets,
+    QuartersB,
+    EighthsB,
+    SixteenthsB,
+    QuarterTripletsB,
+    EighthTripletsB,
+    SixteenthTripletsB,
     /// A `Variation`'s own: how many rows before each row its next hangs on, and how far from
     /// the likeliest it may stray.
     Order,
@@ -331,11 +356,13 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 63] = [
+    pub const ALL: [Self; 77] = [
         Self::Fill,
         Self::From,
         Self::To,
         Self::Notes,
+        Self::Spread,
+        Self::Bias,
         Self::Octave,
         Self::Density,
         Self::Accent,
@@ -357,8 +384,6 @@ impl GenParam {
         Self::Step,
         Self::Edge,
         Self::Depth,
-        Self::Spread,
-        Self::Bias,
         Self::Steps,
         Self::Weights,
         Self::Factor,
@@ -372,6 +397,20 @@ impl GenParam {
         Self::HatDensity,
         Self::Chaos,
         Self::Rows,
+        Self::Channel,
+        Self::Bar,
+        Self::Quarters,
+        Self::Eighths,
+        Self::Sixteenths,
+        Self::QuarterTriplets,
+        Self::EighthTriplets,
+        Self::SixteenthTriplets,
+        Self::QuartersB,
+        Self::EighthsB,
+        Self::SixteenthsB,
+        Self::QuarterTripletsB,
+        Self::EighthTripletsB,
+        Self::SixteenthTripletsB,
         Self::Order,
         Self::Temperature,
         Self::Flip,
@@ -440,6 +479,20 @@ impl GenParam {
             Self::HatDensity => "hh",
             Self::Chaos => "chaos",
             Self::Rows => "rows",
+            Self::Channel => "channel",
+            Self::Bar => "bar",
+            Self::Quarters => "d4",
+            Self::Eighths => "d8",
+            Self::Sixteenths => "d16",
+            Self::QuarterTriplets => "d4t",
+            Self::EighthTriplets => "d8t",
+            Self::SixteenthTriplets => "d16t",
+            Self::QuartersB => "b4",
+            Self::EighthsB => "b8",
+            Self::SixteenthsB => "b16",
+            Self::QuarterTripletsB => "b4t",
+            Self::EighthTripletsB => "b8t",
+            Self::SixteenthTripletsB => "b16t",
             Self::Order => "order",
             Self::Temperature => "temperature",
             Self::Flip => "flip",
@@ -515,6 +568,20 @@ impl GenParam {
             Self::HatDensity => "HH fill",
             Self::Chaos => "Chaos",
             Self::Rows => "Rows",
+            Self::Channel => "Channel",
+            Self::Bar => "Bar",
+            Self::Quarters => "1/4",
+            Self::Eighths => "1/8",
+            Self::Sixteenths => "1/16",
+            Self::QuarterTriplets => "1/4T",
+            Self::EighthTriplets => "1/8T",
+            Self::SixteenthTriplets => "1/16T",
+            Self::QuartersB => "B 1/4",
+            Self::EighthsB => "B 1/8",
+            Self::SixteenthsB => "B 1/16",
+            Self::QuarterTripletsB => "B 1/4T",
+            Self::EighthTripletsB => "B 1/8T",
+            Self::SixteenthTripletsB => "B 1/16T",
             Self::Order => "Order",
             Self::Temperature => "Temp",
             Self::Flip => "Flip",
@@ -572,7 +639,19 @@ impl GenParam {
             | Self::States
             | Self::Share
             | Self::Spread
-            | Self::Temperature => Units::Percent,
+            | Self::Temperature
+            | Self::Quarters
+            | Self::Eighths
+            | Self::Sixteenths
+            | Self::QuarterTriplets
+            | Self::EighthTriplets
+            | Self::SixteenthTriplets
+            | Self::QuartersB
+            | Self::EighthsB
+            | Self::SixteenthsB
+            | Self::QuarterTripletsB
+            | Self::EighthTripletsB
+            | Self::SixteenthTripletsB => Units::Percent,
             Self::MapX
             | Self::MapY
             | Self::KickDensity
@@ -598,6 +677,8 @@ impl GenParam {
             | Self::Part
             | Self::Rows
             | Self::Side
+            | Self::Channel
+            | Self::Bar
             | Self::Vary => Units::Named,
         }
     }
@@ -632,12 +713,19 @@ impl GenParam {
     /// several tracks, each taking its own part, every part's and no `Part`; and its `Note` only
     /// where it `generates`, as a hit takes the note there or the first one. `Random` has its
     /// `Spread` and `Bias` on every `column`, and its `Steps` and `Weights` on the Note column,
-    /// where there are degrees to let through. A `Variation` learns its rows with its notes, so
-    /// it has its `Order` and `Temperature` and no `Where`. Only a shape that draws from its seed
-    /// has `Vary`.
+    /// where there are degrees to let through; `Acid` has `Spread` and `Bias` for its riff's
+    /// notes, so wherever it has `Notes`. A `Variation` learns its rows with its notes, so
+    /// it has its `Order` and `Temperature` and no `Where`. `Divisions` makes its own rhythm too:
+    /// it has its bar and its own channel's chances, and channel `B`'s as well where it plays
+    /// `A+B`, or while the panel shapes several tracks, each taking its own channel, when it has
+    /// no `Channel`; and its `Note` where it `generates`, as `Grids` has. Only a shape that draws
+    /// from its seed has `Vary`.
     pub fn exists_for(self, shape: &Shape, column: ShapeColumn, generates: bool) -> bool {
         let kind = shape.kind;
         let grids = kind == FillKind::Grids;
+        let divisions = kind == FillKind::Divisions;
+        let both =
+            divisions && !matches!(shape.divisions.channel, Some(Channel::A) | Some(Channel::B));
         let density = |part: DrumPart| grids && shape.grids.part.is_none_or(|own| own == part);
         let acid = kind == FillKind::Acid;
         let riff = acid && (generates || !shape.acid.keep);
@@ -674,13 +762,27 @@ impl GenParam {
             Self::Density => acid && generates,
             Self::Step | Self::Edge => kind == FillKind::Walk,
             Self::Depth => kind == FillKind::Pink,
-            Self::Spread | Self::Bias => kind == FillKind::Random,
+            Self::Spread | Self::Bias => riff || kind == FillKind::Random,
             Self::Steps | Self::Weights => {
                 kind == FillKind::Random && matches!(column, ShapeColumn::Note { .. })
             }
             Self::Factor | Self::Masks => kind == FillKind::Multiply,
             Self::Part => grids && shape.grids.part.is_some(),
-            Self::Pitch => grids && generates,
+            Self::Pitch => (grids || divisions) && generates,
+            Self::Channel => divisions && shape.divisions.channel.is_some(),
+            Self::Bar
+            | Self::Quarters
+            | Self::Eighths
+            | Self::Sixteenths
+            | Self::QuarterTriplets
+            | Self::EighthTriplets
+            | Self::SixteenthTriplets => divisions,
+            Self::QuartersB
+            | Self::EighthsB
+            | Self::SixteenthsB
+            | Self::QuarterTripletsB
+            | Self::EighthTripletsB
+            | Self::SixteenthTripletsB => both,
             Self::MapX | Self::MapY | Self::Chaos | Self::Rows => grids,
             Self::KickDensity => density(DrumPart::Kick),
             Self::SnareDensity => density(DrumPart::Snare),
@@ -725,6 +827,7 @@ impl GenParam {
             FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None, None],
             FillKind::Multiply | FillKind::Variation => [Some(Self::Fill), None, None, None],
             FillKind::Grids => [Some(Self::Fill), Some(Self::Part), None, None],
+            FillKind::Divisions => [Some(Self::Fill), Some(Self::Channel), Some(Self::Bar), None],
             FillKind::Acid => [
                 Some(Self::Fill),
                 Some(Self::Where),
@@ -748,7 +851,8 @@ impl GenParam {
     /// above them. A random fill's curve does nothing, so it isn't placed, and only the settings
     /// the shape has on its `column` are. `Grids` has the map and chaos first, then its part's
     /// density, and has no `Where`. A `Follow` has none either, so its `Mutation` and the kinds
-    /// it may make take the third column and the fourth, which only it uses.
+    /// it may make take the third column and the fourth. `Acid`'s three are full, so its riff's
+    /// `Spread` and `Bias` take the fourth.
     pub fn grid(
         shape: &Shape,
         column: ShapeColumn,
@@ -771,6 +875,31 @@ impl GenParam {
                     [Some(KickDensity), Some(SnareDensity), Some(HatDensity)],
                     [Some(Pitch), Some(Rows), None],
                     none,
+                ],
+            };
+            return grid.map(|column| column.map(has));
+        }
+        if shape.kind == FillKind::Divisions {
+            let straight = [Some(Quarters), Some(Eighths), Some(Sixteenths)];
+            let triplets = [
+                Some(QuarterTriplets),
+                Some(EighthTriplets),
+                Some(SixteenthTriplets),
+            ];
+            // `A+B`'s twelve chances fill the page, so its `Note` is the panel's alone.
+            let grid = match shape.divisions.channel {
+                Some(super::Channel::A | super::Channel::B) => {
+                    [straight, triplets, [Some(Pitch), None, None], none]
+                }
+                _ => [
+                    straight,
+                    triplets,
+                    [Some(QuartersB), Some(EighthsB), Some(SixteenthsB)],
+                    [
+                        Some(QuarterTripletsB),
+                        Some(EighthTripletsB),
+                        Some(SixteenthTripletsB),
+                    ],
                 ],
             };
             return grid.map(|column| column.map(has));
@@ -806,7 +935,7 @@ impl GenParam {
             FillKind::Scale => [[Some(From), Some(To), Some(Curve)], [Some(S), None, None]],
             FillKind::Multiply => [[Some(Factor), Some(Masks), None], none],
             FillKind::Variation => [[Some(Order), Some(Temperature), None], none],
-            FillKind::Grids => unreachable!("laid out above"),
+            FillKind::Grids | FillKind::Divisions => unreachable!("laid out above"),
             FillKind::InvertBits => [[Some(Flip), None, None], none],
             FillKind::MaskBits => [[Some(Keep), None, None], none],
             FillKind::RotateBits => [[Some(Turn), None, None], none],
@@ -826,7 +955,10 @@ impl GenParam {
         };
         let mut more = none;
         match shape.kind {
-            FillKind::Acid => last[0] = Some(Density),
+            FillKind::Acid => {
+                last[0] = Some(Density);
+                more = [Some(Spread), Some(Bias), None];
+            }
             FillKind::Random => last[0] = Some(Weights),
             FillKind::Follow => {
                 last = [Some(Mutation), Some(Repitch), Some(Shift)];
@@ -868,6 +1000,37 @@ impl GenParam {
     fn grids_value(self, grids: Grids) -> Option<u8> {
         let mut grids = grids;
         self.grids_byte(&mut grids).map(|value| *value)
+    }
+
+    /// A `Divisions` chance, as its set, the track's own channel's or `B`'s, and its division.
+    pub fn division(self) -> Option<(usize, Division)> {
+        Some(match self {
+            Self::Quarters => (0, Division::Quarter),
+            Self::Eighths => (0, Division::Eighth),
+            Self::Sixteenths => (0, Division::Sixteenth),
+            Self::QuarterTriplets => (0, Division::QuarterTriplet),
+            Self::EighthTriplets => (0, Division::EighthTriplet),
+            Self::SixteenthTriplets => (0, Division::SixteenthTriplet),
+            Self::QuartersB => (1, Division::Quarter),
+            Self::EighthsB => (1, Division::Eighth),
+            Self::SixteenthsB => (1, Division::Sixteenth),
+            Self::QuarterTripletsB => (1, Division::QuarterTriplet),
+            Self::EighthTripletsB => (1, Division::EighthTriplet),
+            Self::SixteenthTripletsB => (1, Division::SixteenthTriplet),
+            _ => return None,
+        })
+    }
+
+    /// A `Divisions` chance's field.
+    fn chance_mut(self, divisions: &mut Divisions) -> Option<&mut u8> {
+        let (set, division) = self.division()?;
+        Some(&mut divisions.chances[set][division.index()])
+    }
+
+    /// The same, read.
+    fn chance_of(self, divisions: Divisions) -> Option<u8> {
+        let mut divisions = divisions;
+        self.chance_mut(&mut divisions).map(|chance| *chance)
     }
 
     /// A kind of mutation a `Follow` may make, as its switch.
@@ -1040,6 +1203,26 @@ impl GenParam {
             | Self::Chaos => format!("{:02X}", self.grids_value(shape.grids).unwrap_or(0)),
             Self::Rows if shape.grids.fine => "1/32".to_owned(),
             Self::Rows => "1/16".to_owned(),
+            Self::Channel => shape
+                .divisions
+                .channel
+                .map_or("By track", Channel::name)
+                .to_owned(),
+            Self::Bar => shape.divisions.bar.name().to_owned(),
+            Self::Quarters
+            | Self::Eighths
+            | Self::Sixteenths
+            | Self::QuarterTriplets
+            | Self::EighthTriplets
+            | Self::SixteenthTriplets
+            | Self::QuartersB
+            | Self::EighthsB
+            | Self::SixteenthsB
+            | Self::QuarterTripletsB
+            | Self::EighthTripletsB
+            | Self::SixteenthTripletsB => {
+                format!("{}%", self.chance_of(shape.divisions).unwrap_or(0))
+            }
             Self::Order => shape.variation.order.to_string(),
             Self::Temperature => format!("{}%", shape.variation.temperature),
             Self::Flip => format!("{:02X}", shape.bits.flip),
@@ -1092,7 +1275,7 @@ impl GenParam {
             | Self::Masks
             | Self::Rows
             | Self::Side => Typing::Toggled,
-            Self::Part => Typing::Listed,
+            Self::Part | Self::Channel | Self::Bar => Typing::Listed,
             Self::Axis | Self::Pitch => Typing::Named { list: false },
             Self::MapX
             | Self::MapY
@@ -1127,6 +1310,8 @@ impl GenParam {
                 .map(Choice::Source)
                 .collect(),
             Self::Part => DrumPart::ALL.into_iter().map(Choice::Part).collect(),
+            Self::Channel => Channel::ALL.into_iter().map(Choice::Channel).collect(),
+            Self::Bar => Bar::ALL.into_iter().map(Choice::Bar).collect(),
             Self::Vary => VARIES.into_iter().map(Choice::Vary).collect(),
             _ => return None,
         })
@@ -1146,6 +1331,8 @@ impl GenParam {
                 }
                 Choice::Source(source) => source == shape.follow.source,
                 Choice::Part(part) => Some(part) == shape.grids.part,
+                Choice::Channel(channel) => Some(channel) == shape.divisions.channel,
+                Choice::Bar(bar) => bar == shape.divisions.bar,
                 Choice::Vary(passes) => passes == shape.vary,
             })
     }
@@ -1170,7 +1357,14 @@ impl GenParam {
             Self::To => shape.to = stepped(column, shape.to, sign, large),
             Self::Curve => shape.curve = bent(shape.curve, by(BEND_NUDGE, BEND_JUMP)),
             Self::S => shape.s = bent(shape.s, by(BEND_NUDGE, BEND_JUMP)),
-            Self::Fill | Self::Wave | Self::Where | Self::Source | Self::Part | Self::Vary => {
+            Self::Fill
+            | Self::Wave
+            | Self::Where
+            | Self::Source
+            | Self::Part
+            | Self::Channel
+            | Self::Bar
+            | Self::Vary => {
                 let choices = self.choices(context).unwrap_or_default();
                 if !choices.is_empty() {
                     let at = self.chosen(shape, context).unwrap_or(0);
@@ -1338,6 +1532,22 @@ impl GenParam {
                 }
             }
             Self::Rows => shape.grids.fine = !shape.grids.fine,
+            Self::Quarters
+            | Self::Eighths
+            | Self::Sixteenths
+            | Self::QuarterTriplets
+            | Self::EighthTriplets
+            | Self::SixteenthTriplets
+            | Self::QuartersB
+            | Self::EighthsB
+            | Self::SixteenthsB
+            | Self::QuarterTripletsB
+            | Self::EighthTripletsB
+            | Self::SixteenthTripletsB => {
+                if let Some(chance) = self.chance_mut(&mut shape.divisions) {
+                    *chance = moved(i32::from(*chance), by(1, CHANCE_JUMP), 0, 100) as u8;
+                }
+            }
             Self::Order => {
                 let most = i32::from(MAX_ORDER);
                 let order = moved(i32::from(shape.variation.order), by(1, 1), 1, most);
@@ -1433,6 +1643,26 @@ impl GenParam {
                 }
             }
             Self::Rows => shape.grids.fine = Grids::default().fine,
+            Self::Channel => shape.divisions.channel = Some(Channel::default()),
+            Self::Bar => shape.divisions.bar = Bar::default(),
+            Self::Quarters
+            | Self::Eighths
+            | Self::Sixteenths
+            | Self::QuarterTriplets
+            | Self::EighthTriplets
+            | Self::SixteenthTriplets
+            | Self::QuartersB
+            | Self::EighthsB
+            | Self::SixteenthsB
+            | Self::QuarterTripletsB
+            | Self::EighthTripletsB
+            | Self::SixteenthTripletsB => {
+                let start = self.chance_of(Divisions::default());
+                if let (Some(chance), Some(start)) = (self.chance_mut(&mut shape.divisions), start)
+                {
+                    *chance = start;
+                }
+            }
             Self::Order => shape.variation.order = Variation::default().order,
             Self::Temperature => shape.variation.temperature = Variation::default().temperature,
             Self::Flip => shape.bits.flip = Bits::default().flip,
@@ -1660,6 +1890,23 @@ impl GenParam {
                 Ok(typed) => shape.variation.temperature = typed.min(100) as u8,
                 Err(_) => return Err("Temp runs from 0 to 100"),
             },
+            Self::Quarters
+            | Self::Eighths
+            | Self::Sixteenths
+            | Self::QuarterTriplets
+            | Self::EighthTriplets
+            | Self::SixteenthTriplets
+            | Self::QuartersB
+            | Self::EighthsB
+            | Self::SixteenthsB
+            | Self::QuarterTripletsB
+            | Self::EighthTripletsB
+            | Self::SixteenthTripletsB => {
+                match (self.chance_mut(&mut shape.divisions), text.parse::<u16>()) {
+                    (Some(chance), Ok(typed)) => *chance = typed.min(100) as u8,
+                    _ => return Err("A chance runs from 0 to 100"),
+                }
+            }
             Self::Fill
             | Self::Wave
             | Self::Where
@@ -1678,6 +1925,8 @@ impl GenParam {
             | Self::Part
             | Self::Rows
             | Self::Side
+            | Self::Channel
+            | Self::Bar
             | Self::Vary => {}
             Self::MapX
             | Self::MapY
@@ -1717,6 +1966,21 @@ impl GenParam {
             | Self::Chaos => (0, 0xFF),
             Self::Rows | Self::Side => (0, 1),
             Self::Clusters | Self::Markov | Self::States | Self::Share => (0, 100),
+            // Its choices' places, without a list, so the engine can hold them.
+            Self::Channel => (0, Channel::ALL.len() as i32 - 1),
+            Self::Bar => (0, Bar::ALL.len() as i32 - 1),
+            Self::Quarters
+            | Self::Eighths
+            | Self::Sixteenths
+            | Self::QuarterTriplets
+            | Self::EighthTriplets
+            | Self::SixteenthTriplets
+            | Self::QuartersB
+            | Self::EighthsB
+            | Self::SixteenthsB
+            | Self::QuarterTripletsB
+            | Self::EighthTripletsB
+            | Self::SixteenthTripletsB => (0, 100),
             Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Source => {
                 (0, self.choices(context)?.len().checked_sub(1)? as i32)
             }
@@ -1796,6 +2060,20 @@ impl GenParam {
             | Self::HatDensity
             | Self::Chaos => i32::from(self.grids_value(shape.grids)?),
             Self::Rows => i32::from(shape.grids.fine),
+            Self::Channel => shape.divisions.channel?.index() as i32,
+            Self::Bar => shape.divisions.bar.index() as i32,
+            Self::Quarters
+            | Self::Eighths
+            | Self::Sixteenths
+            | Self::QuarterTriplets
+            | Self::EighthTriplets
+            | Self::SixteenthTriplets
+            | Self::QuartersB
+            | Self::EighthsB
+            | Self::SixteenthsB
+            | Self::QuarterTripletsB
+            | Self::EighthTripletsB
+            | Self::SixteenthTripletsB => i32::from(self.chance_of(shape.divisions)?),
             Self::Flip => i32::from(shape.bits.flip),
             Self::Keep => i32::from(shape.bits.keep),
             Self::Turn => i32::from(shape.bits.turn),
@@ -1947,6 +2225,24 @@ impl GenParam {
                 }
             }
             Self::Rows => shape.grids.fine = number != 0,
+            Self::Channel => shape.divisions.channel = Some(Channel::ALL[number as usize]),
+            Self::Bar => shape.divisions.bar = Bar::ALL[number as usize],
+            Self::Quarters
+            | Self::Eighths
+            | Self::Sixteenths
+            | Self::QuarterTriplets
+            | Self::EighthTriplets
+            | Self::SixteenthTriplets
+            | Self::QuartersB
+            | Self::EighthsB
+            | Self::SixteenthsB
+            | Self::QuarterTripletsB
+            | Self::EighthTripletsB
+            | Self::SixteenthTripletsB => {
+                if let Some(chance) = self.chance_mut(&mut shape.divisions) {
+                    *chance = number as u8;
+                }
+            }
             Self::Flip => shape.bits.flip = number as u8,
             Self::Keep => shape.bits.keep = number as u8,
             Self::Turn => shape.bits.turn = number as u8,
@@ -2111,6 +2407,7 @@ mod tests {
             random: crate::shape::Random::default(),
             vary: 0,
             variation: crate::shape::Variation::default(),
+            divisions: crate::shape::Divisions::default(),
         }
     }
 
@@ -2183,7 +2480,8 @@ mod tests {
         assert_eq!(
             of(FillKind::Acid, true),
             [
-                Fill, From, To, Notes, Octave, Density, Accent, Slide, Pitches, Where, Vary
+                Fill, From, To, Notes, Spread, Bias, Octave, Density, Accent, Slide, Pitches,
+                Where, Vary
             ]
         );
         let mut kept = shape(FillKind::Acid);
@@ -2192,6 +2490,20 @@ mod tests {
             GenParam::of(&kept, note(), false),
             [Fill, Octave, Accent, Slide, Pitches, Where, Vary]
         );
+        // An `Acid` riff's `Spread` and `Bias` take the Gen page's fourth column, as its three are
+        // full with Euclid's, and keeping the pitches there leaves them nothing to lean.
+        let mut riff = shape(FillKind::Acid);
+        riff.place = crate::shape::Where::Euclid { hits: 5, rotate: 0 };
+        assert_eq!(
+            GenParam::grid(&riff, note(), true),
+            [
+                [Some(From), Some(To), Some(Notes)],
+                [Some(Octave), Some(Accent), Some(Slide)],
+                [Some(Density), Some(Hits), Some(Rotate)],
+                [Some(Spread), Some(Bias), None],
+            ]
+        );
+        assert_eq!(GenParam::grid(&kept, note(), false)[3], [None, None, None]);
         let mut euclid = shape(FillKind::Alternate);
         euclid.place = crate::shape::Where::Euclid { hits: 3, rotate: 0 };
         assert_eq!(
@@ -2324,6 +2636,100 @@ mod tests {
         );
         let acid = shape(FillKind::Acid);
         assert_eq!(GenParam::title(&acid)[3], Some(GenParam::Vary));
+    }
+
+    /// A `Divisions`' chances run from 0 to 100%, its channel and bar are lists, a track of its own
+    /// has its own channel's chances and its `Note`, and `A+B` has `B`'s as well, its twelve
+    /// filling the Gen page.
+    #[test]
+    fn a_divisions_chances_channel_and_bar() {
+        use GenParam::*;
+        let notes = context(note());
+        let mut divisions = shape(FillKind::Divisions);
+        let own = [
+            Quarters,
+            Eighths,
+            Sixteenths,
+            QuarterTriplets,
+            EighthTriplets,
+            SixteenthTriplets,
+        ];
+        let theirs = [
+            QuartersB,
+            EighthsB,
+            SixteenthsB,
+            QuarterTripletsB,
+            EighthTripletsB,
+            SixteenthTripletsB,
+        ];
+        let mut wanted = vec![Fill, Pitch, Channel, Bar];
+        wanted.extend(own);
+        wanted.push(Vary);
+        assert_eq!(GenParam::of(&divisions, note(), true), wanted);
+        assert!(!GenParam::of(&divisions, note(), false).contains(&Pitch));
+        assert_eq!(Quarters.shown(&divisions, &notes), "75%");
+        assert_eq!(Quarters.name(), "1/4");
+        assert_eq!(EighthTripletsB.name(), "B 1/8T");
+        assert_eq!(Channel.shown(&divisions, &notes), "A");
+        assert_eq!(Bar.shown(&divisions, &notes), "4/4 16ths");
+        for _ in 0..4 {
+            Quarters.step(&mut divisions, &notes, 1, true).unwrap();
+        }
+        assert_eq!(divisions.divisions.chances[0][0], 100);
+        EighthTriplets.typed(&mut divisions, &notes, "250").unwrap();
+        assert_eq!(divisions.divisions.chances[0][4], 100);
+        assert!(Sixteenths.typed(&mut divisions, &notes, "lots").is_err());
+        assert_eq!(Quarters.bounds(&notes), Some((0, 100)));
+        Quarters.reset(&mut divisions, &notes, Starts::default());
+        EighthTriplets.reset(&mut divisions, &notes, Starts::default());
+        assert!(divisions.divisions.is_default());
+        // The channel and the bar are lists the engine can hold by their places.
+        Bar.step(&mut divisions, &notes, 1, false).unwrap();
+        assert_eq!(divisions.divisions.bar, super::Bar::Three);
+        assert_eq!(Bar.number(&divisions, &notes), Some(1));
+        Channel.set_number(&mut divisions, &notes, 2);
+        assert_eq!(divisions.divisions.channel, Some(super::Channel::Both));
+        assert!(Channel.held_in_engine() && Bar.held_in_engine());
+        assert_eq!(
+            Channel
+                .choices(&notes)
+                .unwrap()
+                .into_iter()
+                .map(Choice::name)
+                .collect::<Vec<_>>(),
+            ["A", "B", "A+B"]
+        );
+        // `A+B` has B's chances, and its twelve fill the page.
+        let mut both = GenParam::of(&divisions, note(), false);
+        both.retain(|param| param.division().is_some());
+        assert_eq!(both, [own, theirs].concat());
+        assert_eq!(
+            GenParam::title(&divisions),
+            [Some(Fill), Some(Channel), Some(Bar), Some(Vary)]
+        );
+        let grid = GenParam::grid(&divisions, note(), true);
+        assert_eq!(
+            grid[2],
+            [Some(QuartersB), Some(EighthsB), Some(SixteenthsB)]
+        );
+        assert!(grid.iter().flatten().all(|param| *param != Some(Pitch)));
+        // On a track of its own, its own six, then its note.
+        divisions.divisions.channel = Some(super::Channel::B);
+        let grid = GenParam::grid(&divisions, note(), true);
+        assert_eq!(grid[0], [Some(Quarters), Some(Eighths), Some(Sixteenths)]);
+        assert_eq!(grid[2], [Some(Pitch), None, None]);
+        assert_eq!(grid[3], [None, None, None]);
+        // Across tracks, no channel and every chance.
+        divisions.divisions.channel = None;
+        assert!(!GenParam::of(&divisions, note(), false).contains(&Channel));
+        assert!(GenParam::of(&divisions, note(), false).contains(&QuartersB));
+        // It writes notes, so only a Note column offers it.
+        assert!(notes.fills().contains(&FillKind::Divisions));
+        assert!(
+            !context(ShapeColumn::Velocity)
+                .fills()
+                .contains(&FillKind::Divisions)
+        );
     }
 
     /// `Order` goes from 1 to 3 and `Temperature` from 0 to 100%, each put back to where it starts.

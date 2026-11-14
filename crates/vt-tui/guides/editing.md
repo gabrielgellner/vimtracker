@@ -86,7 +86,7 @@ nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Walk`, `1/f`, `Wave`, `Acid`, `Grids`, `Variation` and more |
+| Fill | `Ramp`, `Random`, `Walk`, `Wave`, `Acid`, `Grids`, `Divisions` and more |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
@@ -394,6 +394,49 @@ the snare reopens the snare's alone, with its own density and the Part row; a
 change there moves that track and leaves the others. On the Gen page its title
 is its part, like `Grids  SD`.
 
+### A chance for each division
+
+`Divisions`, on the Note column only, writes a rhythm after Vermona's
+randomRHYTHM: a chance for each note division to strike, the quarters, eighths
+and sixteenths and the three triplets. Each strike a division could make in a
+bar has a die of its own, and its chance is how high the die must come: at `0%`
+the division never strikes, at `100%` it always does, and raising a chance only
+adds strikes, as the module's sliders reshape its pattern. The dice are the same
+each bar, so the bar repeats; `r` rolls new ones, and `Vary` rolls them again as
+it plays, the module's `Realtime`.
+
+| Row | Does |
+|---|---|
+| Note | On an empty column, the note it writes |
+| Channel | `A` or `B`, the module's two, or `A+B`, both |
+| Bar | 4/4 or 3/4, in 16ths, or in 32nds for a `1/32` track |
+| 1/4 to 1/16T | Each division's chance, `0%` to `100%` |
+| B 1/4 to B 1/16T | With `A+B`, channel B's chances |
+
+The divisions share the track. The straight ones fall on the rows, and a
+triplet between two rows is the nearer one's, nudged a third of a row early or
+late. On a track at `1/32`, with `Bar` in 32nds, every division has rows of its
+own: the sixteenths the even rows, the triplets the odd ones, nudged `4`
+either way. At `1/16` the eighth and quarter triplets take the odd rows, nudged
+`8`, which the sixteenths take too, so a row both strike plays the one on the
+row, and the panel says `16ths and triplets need 32nds to fit`. The panel
+starts `Bar` in 32nds on a `1/32` track.
+
+Select three tracks, `vGWW`, and `S`: the first plays channel `A`, the second
+`B`, with B's chances, and the third `A+B`, every row either of the others
+strikes, as the module's combined output. The panel shows both channels'
+chances and no Channel. All three take one seed, so the third is exactly the
+other two; kept live, each is a generator of its own, so a change to the first
+leaves the third as it was, unless a macro moves both.
+
+A strike on a note keeps its pitch, and a new one takes the first note in the
+rows, so type one note on each track first; on an empty column it writes
+`Note`. A strike is a note at its nudge, so the generator owns the rows'
+nudges; a row it doesn't strike is cleared, and an `OFF` stays. Kept live with
+`L`, its title on the Gen page is its channel and bar, like
+`Divisions  A  4/4 32nds`. With `A+B`, the twelve chances fill the device, so
+its `Note` is set in the panel, with `gl`.
+
 ### On an empty column
 
 On a Note column with no notes in the rows selected, `S` writes notes of its
@@ -424,6 +467,7 @@ already there it keeps their rhythm.
 |---|---|
 | From, To | The riff's notes come from between them, and From is its root |
 | Notes | How many notes the riff has, from 1 to 8, its root among them |
+| Spread, Bias | Which notes between the ends the riff takes |
 | Octave | The chance a note goes an octave up or down |
 | Density | On an empty column, the share of rows that play |
 | Accent | The chance a note is accented, written as `7F` |
@@ -432,6 +476,12 @@ already there it keeps their rhythm.
 
 The riff's notes come from the scale while it's on, so a set of four in C minor
 might be `C-3 D#3 G-3 A#3`, and the root plays more often than the others.
+Spread and Bias choose the others, as they lean a `Random`'s values: as they
+start, `50%` and `0`, any note between the ends is as likely; a narrow Spread
+gathers them round the bias point, so `0%` with four notes from `C-2` to `C-3`,
+the scale off, takes `F-2 F#2 G-2` with the root, and a wide one takes them from the ends inward; and Bias
+leans them up or down, the root staying wherever From is. With Notes as many as
+the ends hold, every note is in the riff, so there's nothing for them to choose.
 Density counts where each row falls in the bar, counting from the first row
 selected: beats play most, then every third row, then the other even rows, and
 the rest least, so at `50%` half the rows play, most of them on the beat. A

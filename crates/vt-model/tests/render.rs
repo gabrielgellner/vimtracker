@@ -15,9 +15,9 @@ use vt_model::lfo::Rate;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, Bits, DrumPart, Edge, FillKind, Follow, GenCell, Grids, MAX_DEPTH, MAX_FACTOR,
-    MAX_MUTATION, MAX_VALUES, MAX_WEIGHT, Mutations, Pink, Random, RowView, Shape, ShapeColumn,
-    Values, Variation, WAVES, Walk, WaveRate, Where, render_into, written_from,
+    Acid, Bar, Bits, Channel, Divisions, DrumPart, Edge, FillKind, Follow, GenCell, Grids,
+    MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_VALUES, MAX_WEIGHT, Mutations, Pink, Random, RowView,
+    Shape, ShapeColumn, Values, Variation, WAVES, Walk, WaveRate, Where, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -316,6 +316,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         random: Random::default(),
         vary: 0,
         variation: Variation::default(),
+        divisions: vt_model::shape::Divisions::default(),
     };
     // Settings added since are drawn from the seed, so the other draws, and the other fills'
     // hashes, stay as they were.
@@ -350,6 +351,20 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
             more.below(120) as u8
         },
     };
+    let mut chance = || match more.below(4) {
+        0 => 0,
+        1 => 100,
+        _ => more.below(101) as u8,
+    };
+    let chances = [
+        std::array::from_fn(|_| chance()),
+        std::array::from_fn(|_| chance()),
+    ];
+    shape.divisions = Divisions {
+        chances,
+        channel: more.chance(90).then(|| more.pick(&Channel::ALL)),
+        bar: more.pick(&Bar::ALL),
+    };
     shape
 }
 
@@ -357,9 +372,10 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
 /// of its own (decision 302), so its own line, with them as they start, stays as it was.
 type Variant = (&'static str, FillKind, fn(&mut Shape));
 
-const VARIANTS: [Variant; 6] = [
+const VARIANTS: [Variant; 7] = [
     ("Random shaped", FillKind::Random, shaped_random),
     ("Follow mutated", FillKind::Follow, mutated_follow),
+    ("Acid shaped", FillKind::Acid, shaped_random),
     ("Ramp, Marbles' rows", FillKind::Ramp, marbles_rows),
     ("Random, Marbles' rows", FillKind::Random, marbles_rows),
     ("Acid, Marbles' rows", FillKind::Acid, marbles_rows),
@@ -400,7 +416,8 @@ fn mutated_follow(shape: &mut Shape) {
     };
 }
 
-/// A `Random`'s spread, bias, steps and weights, drawn from its seed, some at their ends.
+/// A `Random`'s spread, bias, steps and weights, drawn from its seed, some at their ends; an
+/// `Acid`'s riff takes the spread and bias (decision 322).
 fn shaped_random(shape: &mut Shape) {
     let mut more = Dice(shape.seed ^ 0x6A2B);
     let spread = if more.chance(25) {

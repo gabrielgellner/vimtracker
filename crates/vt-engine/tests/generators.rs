@@ -53,6 +53,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         random: vt_model::shape::Random::default(),
         vary: 0,
         variation: vt_model::shape::Variation::default(),
+        divisions: vt_model::shape::Divisions::default(),
     }
 }
 
@@ -801,4 +802,63 @@ fn a_bloom_branch_that_varies_mutates_again_each_pass_and_a_macro_reaches_its_mu
     let (written_out, _) = play(&reshaped(&still, more), &[], 16);
     assert!(held == written_out, "a held mutation plays as written");
     assert!(held != play(&still, &[], 16).0, "and not as before");
+}
+
+/// The nine-pass song with a live `Divisions` on its notes, quarters, eighths and eighth
+/// triplets, new dice every pass.
+fn varying_divisions() -> Song {
+    let mut song = nine_passes();
+    let hit: Step = "C-3 64 --- --- ---".parse().unwrap();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(vec![hit; 16])));
+    let mut rhythm = shape(FillKind::Divisions, 0, 0, Where::AllRows);
+    rhythm.divisions.chances[0] = [60, 40, 0, 0, 50, 0];
+    rhythm.vary = 1;
+    generate(song, 0, notes(), rows(15), rhythm)
+}
+
+/// `Divisions` draws its dice from its seed, so `Vary` rolls new ones each pass, the module's
+/// `Realtime`, each playing sample for sample as writing that pass's seed would; a held chance
+/// plays what writing it would; and a live one works the engine ahead as far as its triplets
+/// are nudged early, a third of a row.
+#[test]
+fn a_divisions_rolls_new_dice_each_pass_and_its_chances_can_be_held() {
+    let song = varying_divisions();
+    let kept = |pass: i64| {
+        let mut shape = written(&song, 0, notes()).on_pass(pass);
+        shape.vary = 0;
+        reshape(&song, shape)
+    };
+    let (first, engine) = play_pass(&song, 0);
+    assert!(first == play_pass(&kept(0), 0).0, "pass 0 is as written");
+    // Worked out ahead for its early triplets, the next pass's first row is read too, so it has
+    // rendered only for that.
+    assert!(
+        heard(&engine, 0)
+            .iter()
+            .all(|run| run.renders <= 1 && run.pass == 1)
+    );
+    for pass in [1, 2] {
+        let (heard_out, _) = play_pass(&song, pass);
+        assert!(
+            heard_out == play_pass(&kept(pass as i64), pass).0,
+            "pass {pass}"
+        );
+        assert!(
+            heard_out != play_pass(&kept(0), pass).0,
+            "pass {pass} differs"
+        );
+    }
+    let all = (0, notes(), GenParam::EighthTriplets, 100);
+    let still = kept(0);
+    let (held, _) = play(&still, &[all], 16);
+    let (written_out, _) = play(&reshaped(&still, all), &[], 16);
+    assert!(held == written_out, "a held chance plays as written");
+    assert!(held != play(&still, &[], 16).0, "and not as before");
+    // Eight 24ths of a sixteenth early on rows of sixteenths, and four on 32nds.
+    assert_eq!(version(&still).lead, 80);
+    let mut fine = written(&still, 0, notes());
+    fine.divisions.bar = vt_model::shape::Bar::FourFine;
+    assert_eq!(version(&reshape(&still, fine)).lead, 40);
 }

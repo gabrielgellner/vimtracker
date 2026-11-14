@@ -35,8 +35,9 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, DrumPart, Edge, FillKind, Follow, GenParam, Grids, Mutations, Pink,
-    Random, Shape, ShapeColumn, Source, Values, Walk, WaveRate, Where, on_track, track_seed,
+    Acid, Bar, Bits, DEFAULT_RATE, Divisions, DrumPart, Edge, FillKind, Follow, GenParam, Grids,
+    Mutations, Pink, Random, Shape, ShapeColumn, Source, Values, Walk, WaveRate, Where,
+    divisions_seed, on_track, track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -63,6 +64,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("acid-lines", acid_lines()),
         ("walks", walks()),
         ("grids", grids()),
+        ("random-rhythm", random_rhythm()),
         ("marbles", marbles()),
         ("marbles-t", marbles_t()),
         ("variations", variations()),
@@ -208,6 +210,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         random: Random::default(),
         vary: 0,
         variation: vt_model::shape::Variation::default(),
+        divisions: vt_model::shape::Divisions::default(),
     }
 }
 
@@ -923,6 +926,89 @@ fn grids() -> Song {
                 ..beat.grids
             },
             ..beat
+        };
+        song = generate(song, track, column, 32, shape);
+    }
+    song
+}
+
+/// After Vermona's randomRHYTHM: three drums at `1/32`, each a live `Divisions` over a bar, the
+/// kick channel `A`, a woodblock channel `B` heavy with triplets, and the hats `A+B`, the strikes
+/// of both, all from one seed; under a snare on the backbeat and a bass, written.
+fn random_rhythm() -> Song {
+    let mut song = song("random-rhythm", 108, 9, ScaleKind::Minor, 5);
+    song.seed = 0x60;
+    let first = |note: &str| {
+        let mut rows = vec![format!("{note} 64 --- --- ---")];
+        rows.extend((1..32).map(|_| REST.to_owned()));
+        rows
+    };
+    voice(&mut song, 0, "BD", SynthVoice::Kick, &texts(&first("C-1")));
+    set(&mut song, 0, "kick.decay", 0x68);
+    song.tracks[0].level = 0xF0;
+    voice(&mut song, 1, "WB", SynthVoice::Modal, &texts(&first("E-4")));
+    song.tracks[1].level = 0xA8;
+    song.tracks[1].send_b = 0x70;
+    voice(&mut song, 2, "HH", SynthVoice::Hat, &texts(&first("C-4")));
+    set(&mut song, 2, "hat.decay", 0x28);
+    song.tracks[2].level = 0xB0;
+    for track in &mut song.tracks[..3] {
+        track.speed = Speed::ThirtySecond;
+    }
+    voice(
+        &mut song,
+        3,
+        "SD",
+        SynthVoice::Snare,
+        &texts(&hits("....x.......x...", "G-2")),
+    );
+    song.tracks[3].level = 0xC0;
+    song.tracks[3].send_b = 0x90;
+    let bass = [
+        "A-1 64 --- --- ---",
+        REST,
+        REST,
+        "A-1 50 --- --- ---",
+        REST,
+        REST,
+        "C-2 64 --- --- ---",
+        REST,
+        REST,
+        REST,
+        "A-1 64 --- --- ---",
+        REST,
+        "G-1 64 --- --- ---",
+        REST,
+        "E-1 50 --- --- ---",
+        REST,
+    ];
+    voice(&mut song, 4, "BS", SynthVoice::VirtualAnalog, &bass);
+    song.tracks[4].cutoff = 0x48;
+    song.tracks[4].resonance = 0x40;
+    song.tracks[4].level = 0xC8;
+    // The panel's sliders: channel A on the beats, with a few eighths and sixteenths; channel B
+    // on the triplets, with a few eighths; each three tracks take A, B and A+B, and one seed.
+    let mut dice = shape(
+        FillKind::Divisions,
+        note("C-3"),
+        note("C-4"),
+        Where::AllRows,
+    );
+    dice.seed = 13;
+    dice.divisions = Divisions {
+        chances: [[90, 20, 10, 0, 10, 0], [0, 25, 0, 35, 40, 10]],
+        channel: None,
+        bar: Bar::FourFine,
+    };
+    let column = ShapeColumn::Note {
+        scale: song.scale,
+        writes: None,
+    };
+    for track in 0..3 {
+        let shape = Shape {
+            seed: divisions_seed(dice.seed, track),
+            divisions: dice.divisions.for_track(track),
+            ..dice
         };
         song = generate(song, track, column, 32, shape);
     }
@@ -1706,6 +1792,54 @@ fn the_variation_is_like_its_line_and_order_3_cold_writes_the_line_back() {
         .map(ToString::to_string)
         .collect();
     assert_eq!(back, line);
+}
+
+/// The kick plays channel A and the woodblock B, each with triplets nudged between the rows,
+/// and the hats exactly the strikes of both, as the chapter's bar shows.
+#[test]
+fn the_random_rhythms_hats_play_the_kicks_and_the_woodblocks_strikes() {
+    let song = load_song(&songs_folder().join("random-rhythm")).unwrap();
+    let strikes = |track: usize| -> Vec<(usize, i8)> {
+        song.tracks[track].phrases[&0]
+            .steps()
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| matches!(step.note, Note::On(_)))
+            .map(|(row, step)| (row, step.nudge))
+            .collect()
+    };
+    let drawn = |track: usize| -> String {
+        let mut bar = vec!['.'; 32];
+        for (row, nudge) in strikes(track) {
+            bar[row] = match nudge {
+                0 => 'x',
+                nudge if nudge < 0 => '<',
+                _ => '>',
+            };
+        }
+        bar.into_iter().collect()
+    };
+    assert_eq!(drawn(0), "x.....x.x.......x.......x.......");
+    assert_eq!(drawn(1), "x..<x......<x>..x.......x..<.>..");
+    assert_eq!(drawn(2), "x..<x.x.x..<x>..x.......x..<.>..");
+    let mut both = strikes(0);
+    both.extend(strikes(1));
+    both.sort();
+    both.dedup_by_key(|(row, _)| *row);
+    assert_eq!(strikes(2), both);
+    let channels: Vec<_> = (0..3)
+        .map(|track| {
+            song.tracks[track].phrases[&0].generators()[0]
+                .shape
+                .divisions
+                .channel
+        })
+        .collect();
+    use vt_model::shape::Channel;
+    assert_eq!(
+        channels,
+        [Some(Channel::A), Some(Channel::B), Some(Channel::Both)]
+    );
 }
 
 #[test]

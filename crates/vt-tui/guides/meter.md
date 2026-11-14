@@ -1,3 +1,4 @@
+<!-- ANCHOR: top -->
 # The meter
 
 The column on the right of the screen shows the main output, going into the
@@ -78,6 +79,8 @@ step through its choices, as do Cmd with `l` and `h`, or `k` and `j`, `K` lists 
 and `x` goes back to the system's own. A change takes effect at once: the transport stops, and the song,
 undo, mutes and solos all stay. This machine remembers the choice for next time, in
 `~/.config/vimtracker/audio.ron`.
+<!-- ANCHOR_END: top -->
+<!-- ANCHOR: rest -->
 
 The buffer is how much sound is worked out at a time. A smaller one answers keys sooner,
 but leaves less room when the CPU is busy, so it drops out sooner. Lower it until `late`
@@ -191,7 +194,9 @@ not like the screen, the same way for every device:
 *   A live column's knobs are its fill's settings in the order they shape the line, its
     rows' (`Hits` and `Rotate`, or the amount of an `Every`, a `Chance` or one of Marbles'
     rhythms) on knobs 7 and 8. Its fill, its rows' kind, a `Follow`'s source and
-    `Complementary`'s `Side` are chosen in the app, and a list's values are typed there. `Acid`'s `Pitches` is a knob of two steps, `Roll` and `Keep`.
+    `Complementary`'s `Side` are chosen in the app, and a list's values are typed there.
+    `Acid`'s `Pitches` is a knob of two steps, `Roll` and `Keep`, and its range, the `Spread`
+    and `Bias` of its riff's notes and `Vary` are on its second page.
     A `Follow` has its canon's moves on the first page and its `Mutation`, its kinds and
     `Vary` on the second.
 
@@ -250,3 +255,4 @@ it plays.
 
 Only one vimtracker can have the Roto. If another one has it, this one's `Roto` row says
 so; turn it off in the other and this one takes it within a second.
+<!-- ANCHOR_END: rest -->

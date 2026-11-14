@@ -10,8 +10,8 @@
 use super::mix;
 use super::random::{Odds, unit};
 use super::{
-    FillKind, Ladder, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, follow, grids,
-    rhythm, variation, walk,
+    FillKind, Ladder, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, divisions, follow,
+    grids, rhythm, variation, walk,
 };
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
@@ -40,6 +40,14 @@ pub enum GenCell {
         velocity: Option<u8>,
         gate: Option<Gate>,
         fx: [FxSlot; FX_SLOTS],
+    },
+    /// A note with its velocity, gate and nudge: `Divisions`' strikes, whose triplets are nudged
+    /// off the rows.
+    Timed {
+        note: Note,
+        velocity: Option<u8>,
+        gate: Option<Gate>,
+        nudge: i8,
     },
     Velocity(u8),
     /// A nudge, in 24ths of a sixteenth either way.
@@ -77,6 +85,17 @@ impl GenCell {
                 for (slot, cell) in step.fx.iter_mut().enumerate() {
                     *cell = fx.get(slot).copied().unwrap_or_default();
                 }
+            }
+            Self::Timed {
+                note,
+                velocity,
+                gate,
+                nudge,
+            } => {
+                step.note = note;
+                step.velocity = velocity;
+                step.gate = gate;
+                step.nudge = nudge;
             }
             Self::Velocity(velocity) => step.velocity = Some(velocity),
             Self::Nudge(nudge) => step.nudge = nudge,
@@ -172,6 +191,17 @@ impl RowView {
                         *cell = fx[slot];
                     }
                 }
+            }
+            GenCell::Timed {
+                note,
+                velocity,
+                gate,
+                nudge,
+            } => {
+                self.note = note;
+                self.velocity = velocity;
+                self.gate = gate;
+                self.nudge = nudge;
             }
             GenCell::Velocity(velocity) => self.velocity = Some(velocity),
             GenCell::Nudge(nudge) => self.nudge = nudge,
@@ -326,6 +356,15 @@ pub(super) fn render(
             shape.from,
             shape.seed,
             shape.grids,
+            out.cells,
+        ),
+        FillKind::Divisions => divisions::render(
+            steps,
+            range,
+            column,
+            shape.from,
+            shape.seed,
+            shape.divisions,
             out.cells,
         ),
         FillKind::Variation => {
@@ -774,6 +813,7 @@ fn filled<F: FnMut(usize, &Shaped)>(
             | FillKind::RotateBits => unreachable!("reworked above"),
             FillKind::Multiply => unreachable!("rendered by `bits::render`"),
             FillKind::Grids => unreachable!("rendered by `grids::render`"),
+            FillKind::Divisions => unreachable!("rendered by `divisions::render`"),
             FillKind::Acid => unreachable!("rendered by `acid::render`"),
             FillKind::Variation => unreachable!("rendered by `variation::render`"),
             FillKind::Follow => unreachable!("read from what it follows"),

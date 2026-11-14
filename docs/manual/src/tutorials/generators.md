@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds fifteen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds sixteen of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -19,6 +19,7 @@ there are no samples to find.
 | `euclid`, again | Noise Engineering's Numeric Repetitor | `S`'s `Multiply` on the kick's rhythm |
 | `walks`, again | Xaoc Devices' Leibniz | `S`'s bit transforms on the tune and the hats |
 | `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
+| `random-rhythm` | Vermona's randomRHYTHM | `S`'s `Divisions`: a chance per division, triplets nudged between the rows |
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
 | `marbles-t` | Mutable Instruments' Marbles' T | `S`'s `Complementary`, `Markov`, `3 states` and `Clusters` rows |
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
@@ -250,9 +251,28 @@ every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu
 The finished song also sets the `String`'s `Decay` `B0` and `Bright` `50`, sends it to the delay
 and reverb (`Send A` `B0`, `Send B` `B8`), shortens the hat (`Decay` `28`), and sets the levels.
 
+**One knob, two settings.** Marbles' knob has two halves, and here each is a setting of its
+own, as they act on different things: `Mutate` draws the Steps slot's values again, the notes
+that come in new, and `:order` is the order the phrase plays its rows, the loop's own notes.
+Turn the knob from left to right like this:
+
+| Déjà vu | Here |
+|---|---|
+| Fully left: every note new | `Mutate` `100%`, `:order forward` |
+| Toward noon: new notes now and then | `Mutate` low, as `12%` |
+| Noon: the loop locked | `Space g a` on the Steps slot to keep what it drew, then `Mutate` `0%` |
+| Past noon: the loop out of order | `:order shuffle`, every note once a pass |
+| Fully right: any of the loop's notes each step | `:order random` |
+
+`Space g a` comes first at noon, as `Mutate` at `0%` plays the values as written and forgets
+what it drew; Marbles locks the loop it drifted to, and `Space g a` is that lock. The song has a
+little of both halves at once, `Mutate` `12%` and `:order random`, which Marbles' one knob can't
+do: the phrase's notes jump around while the slot brings a new one in now and then.
+
 **As a patch.** Track 1's Steps slot is the shipped patch `Deja vu`; add it with `:patch`. Its
-`Deja vu` macro turns `Mutate` the module's way, from all new up to a locked loop, and `Spread`
-its `Depth`. The phrase's `:order random` isn't part of a patch, so give it that yourself.
+`Deja vu` macro is the knob's left half, turning `Mutate` from all new at `00` to none at `FF`,
+and `Spread` turns its `Depth`. The right half is the phrase's `:order`, which a macro can't turn
+and a patch doesn't hold, so give the phrase that yourself.
 
 **Try next.**
 
@@ -608,6 +628,11 @@ off-beats. The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `
 *   `Pitches` `Keep` in the panel: `r` then rolls only the accents, slides and octaves, Roland's
     second die, and the notes stay.
 *   `Density` up for a busier line, `Notes` 2 for a two-note pump, `Octave` up for more jumps.
+*   `Spread` and `Bias` choose the riff's notes besides its root, as they lean `Random`'s
+    values in Marbles' X below: `Spread` `0%` gathers them round the middle of the range,
+    `D#2 F-2 G-2`, a tight riff, and `Bias` `+100` with it takes them from the top, `G#2 A#2
+    C-3`, leaps up from the root. On the Gen page they're in the fourth column, to turn while
+    it plays.
 *   Write a line by hand first, then `S` with `Acid` on it: its rhythm stays, and the panel gives
     it new pitches, accents and slides.
 *   `Space g a` keeps the one you like as plain notes, to tweak by hand.
@@ -767,6 +792,72 @@ order, so three tracks of samples named `BD`, `SD` and `CH`, or nothing at all, 
 *   `r` on the hats rolls their chaos again; `Chaos` `00` makes both bars the same.
 *   On the Gen page, `Space 8`, the drum's device is titled `Grids  BD`, its map, density and
     chaos ready to turn while it plays, and on the Roto its first knobs.
+
+## Vermona's randomRHYTHM
+
+Vermona's randomRHYTHM, a Eurorack module of 2018, makes rhythms from chances. Each of its two
+channels has four sliders, the quarters, the eighths, the sixteenths and the triplets, and each
+slider is how likely that division is to strike. Every strike a bar
+could have has a random value, and a slider is the line it must get over, so at the bottom a
+division never plays, at the top it always does, and in between, pushing a slider up only adds
+strikes to the ones you have. In `Dice` mode the values are fixed for a bar, so the bar repeats
+while the sliders reshape it; in `Realtime` mode they're rolled again all the time. A third
+output plays both channels at once. `Divisions` is all of this, with three triplets, and the two
+channels and their sum as three tracks.
+
+**How the song does it.** Tracks 1 to 3 are a `Kick`, a woodblock, a `Modal` voice high up, and a
+`Hat`, at `Speed` `1/32`, each with one live `Divisions` column over a bar of 32 rows. The kick
+plays channel `A`, mostly quarters, `1/4` `90%`, with `1/8` `20%`, `1/16` `10%` and `1/8T`
+`10%`. The woodblock plays channel `B`, mostly triplets: `1/4T` `35%`, `1/8T` `40%` and `1/16T`
+`10%`, with `1/8` `25%`. The hats play `A+B`, every strike of either. Track 4 is a snare on the
+backbeat and track 5 a bass, both written, at `1/16`. [`song.ron`](songs/random-rhythm/song.ron)
+The bar, `x` a strike on its row and `<` and `>` a triplet nudged a third of a row early or late:
+
+```text
+BD  x.....x.x.......x.......x.......
+WB  x..<x......<x>..x.......x..<.>..
+HH  x..<x.x.x..<x>..x.......x..<.>..
+```
+
+At `1/32` every division has rows of its own: the sixteenths fall on the even rows, and a
+triplet between two rows is the nearer one's, nudged `4`, 40 ticks, either way. So the
+woodblock's triplets play as triplets against the kick's straight time, in one track.
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 108`.
+2.  Tracks 1 to 3: the machines `kick`, `modal` and `hat` (`K` `/kick` `Enter` and so on), named `BD`, `WB` and `HH`. On each,
+    `/speed` `Enter` and `-` twice, to `1/32`; then `Space 3`, `:len 32`, and one note on row `00`
+    for its pitch: `C-1`, `E-4` and `C-4`.
+3.  Back on track 1, `gg` `vG` on the Note column, `W` `W` to reach track 3, and `S`. On `Fill`,
+    `K` `/divisions` `Enter`. The panel shows `Each track its own channel: A, B, A+B`, and `Bar`
+    `4/4 32nds`, as the tracks are at `1/32`.
+4.  Channel A's chances: `j` `j` to `1/4` and `i` `90` `Enter`, `j` and `i` `20` `Enter`, `j`
+    and `i` `10` `Enter`, then `j` `j` to `1/8T` and `i` `10` `Enter`. Then B's: `j` `j` `j` to
+    `B 1/8` and `i` `25` `Enter`, `j` `j` to `B 1/4T` and `i` `35` `Enter`, `j` and `i` `40`
+    `Enter`, `j` and `i` `10` `Enter`.
+5.  `r` rolls new dice until you like the bar, and `L` keeps it live, a generator on each track.
+6.  Track 4: `K` `/snare` `Enter`, `:name SD`, and `G-2`s on rows `04` and `0C`. Track 5: `K`
+    `va` `Enter`, `:name BS`, and a line of `A-1`s round the kick, with a `C-2`, `G-1` and `E-1`.
+
+A strike on a note keeps its pitch, and a new one takes the first note's, which is why each
+track starts with one. All three take one seed, as the module's channels come from one module,
+so the hats are exactly the kick's and the woodblock's strikes; the woodblock has channel B's
+chances as its own.
+
+**Try next.**
+
+*   `gl` on the woodblock and `+` on `1/8T`: more triplets come in, and every one there stays.
+    Down to `0%`, its triplets go, and the straight eighths are left.
+*   `1/4` `100%` on the kick: four on the floor, whatever the dice. Then `1/16` up, and the
+    sixteenths it adds are always the same ones, as the dice are fixed.
+*   On the Gen page, `Space 8`, `Vary` `Each pass` on all three tracks, the module's `Realtime`:
+    a new bar every time round. Set it the same on all three, so the hats stay the sum of the
+    other two. `Every 4 passes` holds each roll for four bars.
+*   `Bar` `3/4 32nds` on the woodblock: its dice go round every 24 rows against the kick's 32,
+    so its figure drifts across the bar and comes back every three bars.
+*   The hats are a generator of their own, so `gl` on the kick changes the kick alone, and the
+    hats keep its old chances. `S` across the three again sets them together.
 
 ## Marbles' X
 

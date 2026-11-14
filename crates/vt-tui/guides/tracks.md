@@ -1,3 +1,4 @@
+<!-- ANCHOR: before-clouds -->
 # The track page, envelopes and LFOs
 
 Press `Space 5` to `Space 8` for what a track holds apart from its steps, on four pages: Sound
@@ -665,6 +666,8 @@ with its own envelopes and randomness, and `Pitch` and `Reverb` are Clouds'
 own pitch shifter and reverb on their own. Its grains' places come from the
 track's seed, so a render is the same each time. Clouds' fourth mode, its
 spectral one, isn't here yet.
+<!-- ANCHOR_END: before-clouds -->
+<!-- ANCHOR: before-folded -->
 
 `Warps` crosses the sound with a second one, after Mutable Instruments'
 Warps. The track's own sound is the carrier. The modulator is another
@@ -1055,6 +1058,8 @@ grid show it there too, a column of its own, named and empty, in place of its
 tracks'. In the song view and on the mixer, the folded group keeps its own column or
 strip after the tracks, and the cursor goes along them as they're drawn, stepping
 over the folded tracks with `h`, `l`, `0` and `$` as well.
+<!-- ANCHOR_END: before-folded -->
+<!-- ANCHOR: before-gen -->
 
 Folding a group from one of its tracks puts the cursor on the group, as Vim's cursor
 stands on a closed fold; in the song view and on the mixer, so does putting the
@@ -1611,14 +1616,16 @@ track's eight macros (see **Macros**), then the live columns.
 Each live column is a device, under the macros, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
 them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
-`Where`, and a `Variation`'s fill alone, as it learns its rows with its notes;
+`Where`, a `Variation`'s fill alone, as it learns its rows with its notes, and
+a `Divisions`' channel and bar, as it makes its own rhythm;
 then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
 Note 00–0F`, or `FX1 CUT lane 0C` for a lane. A `Where` that's its column's own is
 dim too, and so is a `Vary` of `Once`. Its settings are the
 shape panel's, laid out by what they do: the fill's down the first two columns,
 and the `Where`'s, `Hits` and `Rotate`, an amount, or `Complementary`'s amount and `Side`, at the foot of the third, so
 they stay put as the fill changes. A `Follow`, which has no `Where`, has its
-`Mutation` and the kinds it may make in the third column and the fourth. A value with a bar is brief, as `9` for hits,
+`Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
+whose three are full, its riff's `Spread` and `Bias` in the fourth. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 
@@ -1628,6 +1635,8 @@ velocities and lengths as bars, and nudges up or down from the middle; and an FX
 column as a line through its values. While the phrase plays, a dot rides it on
 the row playing, or on a lane, where the lane is reading. It's drawn from the
 phrase as it is, so it changes as you turn a setting or edit a row.
+<!-- ANCHOR_END: before-gen -->
+<!-- ANCHOR: before-mapping -->
 
 | Keys | Does |
 |---|---|
@@ -1641,7 +1650,8 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
 
 **A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,
-`1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), `Variation`, a `Wave` of `Random` or `Smooth`,
+`1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), `Divisions` (its dice), `Variation`, a
+`Wave` of `Random` or `Smooth`,
 a `Follow` that mutates, or any fill on rows chosen by `Chance` or one of Marbles' rhythms, has `Vary`: `Once`, as it's always been, the
 same every time round; `Each pass`, a new roll each time the phrase comes round; or
 `Every 2 passes`, 4 or 8, so each variation plays that many times before the next,
@@ -1728,6 +1738,8 @@ straight line, and are shown dim while they are. The drawing has the macro's tur
 setting up, the straight line dotted behind the curve and a faint line where the macro is turned;
 the range on a mapped setting's bar is still its `Min` to its `Max`. A sound preset or a patch
 keeps each mapping's curve.
+<!-- ANCHOR_END: before-mapping -->
+<!-- ANCHOR: before-presets -->
 
 **What a macro reaches:** the track's own settings, its machine's, its effects', its mod slots'
 depths, phases and deforms, and their types' own: an envelope's `Attack`, `Decay`, `Sustain` and
@@ -1796,6 +1808,8 @@ icon, and the folder you last saved in or loaded from at its top.
 is tagged `sound` and by its machine, as `synth`, `analog` and `acid`, and every effect preset
 `effect` and by its effect, as `delay`, so `#acid` lists the acid sounds. `T` in the list gives
 one tags of its own, such as `bass`, kept in its file so they go where it goes.
+<!-- ANCHOR_END: before-presets -->
+<!-- ANCHOR: rest -->
 
 ## Patches
 
@@ -1827,7 +1841,9 @@ finds `Euclid`.
 
 Each is the part of that song's track that plays it, with its macros turned to where the song
 has them; the generators tutorial has a section on each. `Deja vu` is the Turing Machine with
-Marbles' knob, up for more memory, and `Kria`'s length loop comes with its lane of 4 on FX 1.
+the left half of Marbles' knob, up for more memory; the right half, the loop played out of
+order, is the phrase's `:order random`, which a patch doesn't hold. `Kria`'s length loop comes
+with its lane of 4 on FX 1.
 
 **What's saved** goes by the macros, as they're the patch's knobs: each macro that holds
 something, with its name, value, mappings and ranges; every mod slot a macro maps to, the slots
@@ -1900,3 +1916,4 @@ master being under `Returns`. The part with the cursor has the brighter rule. Un
 track's name is the group it's in, and under a group's name the tracks
 in it, as `01-04 07`. `z a` folds a group's strips into its own, `z M` folds them all
 and `z R` opens them; see **Folding a group**.
+<!-- ANCHOR_END: rest -->

@@ -18,6 +18,16 @@ baed90c19fa87d2c Acid on Note, chromatic
 0cefc3d116d4361c Acid on Note, in key
 87e59c5569117b25 Acid on Nudge
 87e59c5569117b25 Acid on Velocity
+87e59c5569117b25 Acid shaped on FX, event
+87e59c5569117b25 Acid shaped on FX, fine
+87e59c5569117b25 Acid shaped on FX, last slot
+87e59c5569117b25 Acid shaped on Length
+7ed3308b73a1c3de Acid shaped on Note of its own, chromatic
+da58da4c03e5b678 Acid shaped on Note of its own, in key
+55633686b99615aa Acid shaped on Note, chromatic
+00d88fbee669ea93 Acid shaped on Note, in key
+87e59c5569117b25 Acid shaped on Nudge
+87e59c5569117b25 Acid shaped on Velocity
 87e59c5569117b25 Acid, Marbles' rows on FX, event
 87e59c5569117b25 Acid, Marbles' rows on FX, fine
 87e59c5569117b25 Acid, Marbles' rows on FX, last slot
@@ -38,6 +48,16 @@ df776ee82666f89d Alternate on Note, chromatic
 bbb5560ad9af8f76 Alternate on Note, in key
 c181f8d57a08f1ec Alternate on Nudge
 1a809c4fbe6871fe Alternate on Velocity
+87e59c5569117b25 Divisions on FX, event
+87e59c5569117b25 Divisions on FX, fine
+87e59c5569117b25 Divisions on FX, last slot
+87e59c5569117b25 Divisions on Length
+19066490cea03340 Divisions on Note of its own, chromatic
+8f797147a1c4a946 Divisions on Note of its own, in key
+986169c963d7db37 Divisions on Note, chromatic
+9087341c00308f05 Divisions on Note, in key
+87e59c5569117b25 Divisions on Nudge
+87e59c5569117b25 Divisions on Velocity
 87e59c5569117b25 Follow mutated on FX, event
 87e59c5569117b25 Follow mutated on FX, fine
 87e59c5569117b25 Follow mutated on FX, last slot

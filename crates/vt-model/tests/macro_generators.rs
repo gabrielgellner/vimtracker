@@ -72,6 +72,7 @@ fn tresillo() -> Shape {
         random: vt_model::shape::Random::default(),
         vary: 0,
         variation: vt_model::shape::Variation::default(),
+        divisions: vt_model::shape::Divisions::default(),
     }
 }
 

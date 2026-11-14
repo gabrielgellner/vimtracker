@@ -12,10 +12,10 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Acid, Bits, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids, MAX_VALUES,
-    Pink, Random, Shape, ShapeColumn, Source, Starts, VARIATION_NOTES, Values, WEIGHTS, Walk,
-    Where, default_ends, default_step, drum_parts, is_empty, on_track, open_rows, track_seed,
-    variation_notes,
+    Acid, Bar, Bits, Channel, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids,
+    MAX_VALUES, Pink, Random, Shape, ShapeColumn, Source, Starts, VARIATION_NOTES, Values, WEIGHTS,
+    Walk, Where, default_ends, default_step, divisions_seed, drum_parts, is_empty, on_track,
+    open_rows, track_seed, variation_notes,
 };
 use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
@@ -160,13 +160,25 @@ impl ShapePanel {
 
     /// The shape each part takes: the panel's, with the part's own seed, on a column it
     /// generates on, every row where the panel chooses the notes or commands there, and across
-    /// tracks, its own part of Grids' beat, or its side of `Complementary`'s coin, which each pair
-    /// of tracks shares.
+    /// tracks, its own part of Grids' beat, its own channel of `Divisions`, each three tracks
+    /// sharing a seed so the third plays the strikes of the other two, or its side of
+    /// `Complementary`'s coin, which each pair of tracks shares.
     pub fn shape_of(&self, nth: usize) -> Shape {
         let part = &self.parts[nth];
+        let channels =
+            self.shape.kind == FillKind::Divisions && self.shape.divisions.channel.is_none();
         let placed = on_track(&self.shape, nth);
         Shape {
-            seed: placed.seed,
+            seed: if channels {
+                divisions_seed(self.shape.seed, nth)
+            } else {
+                placed.seed
+            },
+            divisions: if channels {
+                self.shape.divisions.for_track(nth)
+            } else {
+                self.shape.divisions
+            },
             place: if part.generate {
                 generating(placed.place, part.column)
             } else {
@@ -375,6 +387,7 @@ fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Sh
         random: Random::default(),
         vary: 0,
         variation: vt_model::shape::Variation::default(),
+        divisions: vt_model::shape::Divisions::default(),
     }
 }
 
@@ -775,8 +788,11 @@ impl App {
         };
         let mut shape = starting_shape(column, (from, to), place);
         shape.seed = base.seed.wrapping_add(self.shape_seed);
-        // Across tracks, each takes its own part.
+        // Across tracks, each takes its own part, and its own channel; a track at `1/32` reads
+        // its rows as 32nds.
         shape.grids.part = alone.then_some(first.drum);
+        shape.divisions.channel = alone.then_some(Channel::A);
+        shape.divisions.bar = Bar::for_step(base.tracks[first.track].speed.ticks());
         Ok(ShapePanel {
             selection,
             parts,
@@ -1176,9 +1192,11 @@ impl App {
         };
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = song.seed.wrapping_add(self.shape_seed);
-        // Grids across tracks gives each its own part, as `S` does.
+        // Grids across tracks gives each its own part, as `S` does, and `Divisions` each its own
+        // channel.
         let tracks: Vec<usize> = places.iter().map(|place| place.0).collect();
         let drums = self.drums_of(&tracks);
+        let channels = shape.kind == FillKind::Divisions && tracks.len() > 1;
         let mut actions: Vec<Action> = places
             .into_iter()
             .enumerate()
@@ -1193,7 +1211,16 @@ impl App {
                     shape: Shape {
                         from,
                         to,
-                        seed: placed.seed,
+                        seed: if channels {
+                            divisions_seed(seed, nth)
+                        } else {
+                            placed.seed
+                        },
+                        divisions: if channels {
+                            shape.divisions.for_track(nth)
+                        } else {
+                            shape.divisions
+                        },
                         place: if generate {
                             generating(placed.place, column)
                         } else {
