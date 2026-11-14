@@ -6,7 +6,8 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use vt_model::lfo::Shape as Wave;
-use vt_model::shape::{Context, FillKind, GenParam, ShapeColumn, Where, written_from};
+use vt_model::shape::{Context, FillKind, GenParam, ShapeColumn, Where, World, written_from};
+use vt_model::speed::Speed;
 use vt_model::step::Note;
 
 use crate::app::App;
@@ -148,10 +149,21 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
     }
     let too_few = panel.too_few_notes();
     let pairs = panel.parts.len() > 1 && matches!(panel.shape.place, Where::Complementary { .. });
+    let rhythm = match panel.shape.place {
+        Where::Rhythm { rhythm, .. } if panel.shape.kind.has_where() => Some(rhythm),
+        _ => None,
+    };
+    let speed = panel.speed();
     let cells = panel.shape.evolves();
     let hint = match panel.shape.kind {
         // Each pair of tracks shares one coin (decision 321).
         _ if pairs && panel.shape.kind.has_where() => "Each row goes to one track or the other",
+        // A named rhythm's parts go to the tracks in turn, and a 12/8 one's pulses are a bar's
+        // triplet eighths (decision 327).
+        _ if rhythm.is_some() && panel.parts.len() > 1 => "Each track plays the next part",
+        _ if rhythm.is_some_and(World::ternary) && speed != Some(Speed::EighthTriplet) => {
+            "Its 12 rows make a bar on a 1/8T track"
+        }
         _ if cells && panel.parts.len() > 1 => "Each track a cell, a row a generation",
         _ if cells => "Each row a cell, stepped on by Vary",
         FillKind::Random | FillKind::Walk | FillKind::Pink if app.mode == Mode::Shape => {

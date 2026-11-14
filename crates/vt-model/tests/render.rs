@@ -17,8 +17,8 @@ use vt_model::selection::StepRange;
 use vt_model::shape::{
     Acid, Across, Bar, Bits, CellStart, Cells, Channel, Divisions, DrumPart, Edge, FillKind,
     Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_RING, MAX_VALUES,
-    MAX_WEIGHT, Mutations, Pink, Random, Ring, RowView, Shape, ShapeColumn, Values, Variation,
-    WAVES, Walk, WaveRate, Where, render_into, written_from,
+    MAX_WEIGHT, Mutations, Pink, Random, Ring, Role, RowView, Shape, ShapeColumn, Values,
+    Variation, WAVES, Walk, WaveRate, Where, World, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -396,7 +396,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
 /// of its own (decision 302), so its own line, with them as they start, stays as it was.
 type Variant = (&'static str, FillKind, fn(&mut Shape));
 
-const VARIANTS: [Variant; 10] = [
+const VARIANTS: [Variant; 13] = [
     ("Random shaped", FillKind::Random, shaped_random),
     ("Follow mutated", FillKind::Follow, mutated_follow),
     ("Acid shaped", FillKind::Acid, shaped_random),
@@ -404,6 +404,13 @@ const VARIANTS: [Variant; 10] = [
     ("Random, Marbles' rows", FillKind::Random, marbles_rows),
     ("Acid, Marbles' rows", FillKind::Acid, marbles_rows),
     ("Shuffle, Marbles' rows", FillKind::Shuffle, marbles_rows),
+    ("Ramp, a named rhythm's rows", FillKind::Ramp, world_rows),
+    (
+        "Random, a named rhythm's rows",
+        FillKind::Random,
+        world_rows,
+    ),
+    ("Acid, a named rhythm's rows", FillKind::Acid, world_rows),
     ("Ramp on cells", FillKind::Ramp, on_cells),
     ("Random on cells", FillKind::Random, on_cells),
     ("List on cells", FillKind::List, on_cells),
@@ -438,6 +445,22 @@ fn on_cells(shape: &mut Shape) {
         across,
         stepped,
     });
+}
+
+/// A named rhythm as the `Where` (decision 327), its rhythm, part and `Child` drawn from the seed,
+/// some children at the ends.
+fn world_rows(shape: &mut Shape) {
+    let mut more = Dice(shape.seed ^ 0x2017);
+    let child = if more.chance(30) {
+        more.pick(&[0, 100])
+    } else {
+        more.below(101) as u8
+    };
+    shape.place = Where::Rhythm {
+        rhythm: more.pick(&World::ALL),
+        part: more.pick(&Role::ALL),
+        child,
+    };
 }
 
 /// One of Marbles' rhythms as the `Where` (decision 321), drawn from the seed, some at the ends of
@@ -719,6 +742,10 @@ fn every_fill_renders_on_every_column_without_allocating() {
                     // And Marbles' rhythms, the longest phrase's among them.
                     if nth % 4 == 0 {
                         marbles_rows(&mut case.shape);
+                    }
+                    // And the named rhythms.
+                    if nth % 4 == 2 {
+                        world_rows(&mut case.shape);
                     }
                     // Half of each fill's with its variants' settings drawn, weighed notes
                     // among them.

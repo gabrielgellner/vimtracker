@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds nineteen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds twenty of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -24,6 +24,7 @@ there are no samples to find.
 | `noise-ring` | The Wiard Noise Ring, Malekko's Richter Noise Ring | `S`'s `Ring`: rhythm and pitch from one shift register, running on each pass |
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
 | `marbles-t` | Mutable Instruments' Marbles' T | `S`'s `Complementary`, `Markov`, `3 states` and `Clusters` rows |
+| `world-rhythms` | Noise Engineering's Zularic Repetitor | `S`'s `Rhythm` rows: a clave, a bell and their drums, a part a track, with children |
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 | `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
@@ -1129,6 +1130,80 @@ filter, the sends and the levels.
 *   `Vary` `Each pass` on the string, and every pass bunches its notes anew.
 *   On the Gen page, `Space 8`, each `Amount` is a cell to turn while it plays, and on the Roto
     knob 7.
+
+## Zularic Repetitor
+
+Noise Engineering's Zularic Repetitor plays rhythms from around the world, an idea it took from
+William Sethares' book *Rhythm and Transforms*. You pick a pattern, and its outputs play the
+pattern's parts, with *children*: offshoots in which each beat of the pattern plays only by
+chance, so a part varies round the pattern without losing it. Here that's a `Where`, `Rhythm`:
+`Rhythm` picks the pattern, `Part` which of its three parts a track plays, `Bell`, `Low drum` or
+`High drum`, and `Child` the chance each of the part's hits plays, `100%` the pattern as written.
+
+The patterns are vimtracker's own, transcribed from Godfried Toussaint's papers on the clave and
+bell timelines and from the sources each names, not taken from the module: the son and rumba
+claves, the bossa nova, gahu, shiko, soukous and samba bells, the tresillo and the cinquillo, the
+12/8 bembé bell and the motorik beat. A pattern plays a pulse a row, from the selection's first
+row. The 16-pulse ones are a bar on a `1/16` track, the tresillo and the cinquillo half of one,
+and the bembé's twelve pulses are a bar's triplet eighths, so it wants a track at `1/8T`, where
+twelve rows are a bar, its four beats on the song's.
+
+**How the song does it.** Five tracks in A minor at 100 BPM, each a live generator writing notes of
+its own. The first three are the son: one `S` across them gave each the next part of `Son clave`,
+the clave's bell, the bass's tumbao on the two offbeats of each tresillo, and the conga's open
+tones at the end of each half, the conga a child at `80%`. The last two are at `1/8T`, twelve
+rows: the bembé's bell, a child at `75%` that `Vary` makes anew each pass, and its four beats on
+a kick. [`song.ron`](songs/world-rhythms/song.ron)
+
+| Track | Rhythm | Part | Child | Fill |
+|---|---|---|---|---|
+| `CL` | `Son clave` | `Bell` | `100%` | `E-5` on every row it plays |
+| `BS` | `Son clave` | `Low drum` | `100%` | `Alternate`, `A-1` and `E-2` |
+| `CG` | `Son clave` | `High drum` | `80%` | `Alternate`, `E-3` and `A-3` |
+| `BL` | `Bembé` | `Bell` | `75%`, `Vary` `Each pass` | `C-4` |
+| `BD` | `Bembé` | `Low drum` | `100%` | `C-1` |
+
+```text
+CL  x..x..x...x.x...
+BS  ...x..x....x..x.
+CG  ......xx.......x
+BL  ..x.xx...x..        the bell, x.x.xx.x.x.x, a child
+BD  x..x..x..x..
+```
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 100`.
+2.  Tracks 1 to 5: the machines `modal`, `va`, `modal`, `hat` and `kick` (`K`, the name, `Enter`),
+    named `CL`, `BS`, `CG`, `BL` and `BD` with `:name`. On tracks 4 and 5, `/speed` `Enter` and
+    `+` once, to `1/8T`, then `Space 3` and `:len 12`.
+3.  The son: on track 1, `Space 3`, `vG` on the Note column, `W` `W` to reach track 3, and `S`.
+    `From` and `To` `e5` (`i`, the note, `Enter`). `j` down to `Where`, `K` `/rhythm` `Enter`: it
+    starts on `Son clave`, and the panel says `Each track plays the next part`. `L`.
+4.  On track 2, `gl` on one of its notes reopens its own generator: `Fill` `Alternate`, `From`
+    `a1`, `To` `e2`, and `L`. On track 3, the same with `e3` and `a3`, then `Child` `80` and `L`.
+5.  The bembé: track 4, `vG`, `W`, `S`, `Where` `Rhythm`, then `Rhythm`, `K` `/bemb` `Enter`. On a
+    `1/16` track the panel would say `Its 12 rows make a bar on a 1/8T track`. `From` and `To`
+    `c4`, `L`.
+6.  On track 4, `gl`: `Child` `75` and `Vary` `Each pass`, and `L`. On track 5, `gl`: `From` and
+    `To` `c1`, and `L`.
+
+A child draws from the seed, so yours drop other hits than the song's; `r` in the panel draws
+again. The finished song also sets the voices' decays, the bass's filter, the sends and the
+levels.
+
+**Try next.**
+
+*   `gl` on the clave and `Rhythm` `Rumba clave`: its third stroke moves a row later. The bass and
+    conga are generators of their own, so they keep the son's parts; `S` across all three again
+    sets them together, `Rumba clave`'s drums being its beat and offbeats.
+*   On the conga, `Child` `100%` gives back its four open tones, and `40%` leaves fewer, which
+    ones hanging on the seed.
+*   `Vary` `Each pass` on the conga too, and it plays a new child each bar round the bembé's.
+*   `Rhythm` `Motorik` across the first three tracks makes its hats, kick and snare, Neu!'s beat,
+    if the voices are a hat, a kick and a snare.
+*   On the Gen page, `Space 8`, `Child` is a cell at the foot of the third column, and on the
+    Roto knob 7; a macro or an LFO on it thins a part and fills it in again as it plays.
 
 ## Variations of your own phrase
 

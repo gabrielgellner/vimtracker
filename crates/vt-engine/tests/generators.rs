@@ -18,8 +18,8 @@ use vt_model::samples::SamplePool;
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, Bits, Context, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Shape, ShapeColumn,
-    Values, Walk, Where,
+    Acid, Bits, Context, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Role, Shape, ShapeColumn,
+    Values, Walk, Where, World,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
 use vt_model::speed::Speed;
@@ -650,6 +650,43 @@ fn a_marbles_rhythm_held_or_varied_plays_what_writing_it_would() {
         let (as_written, _) = play_pass(&reshape(&varied, rhythm), 1);
         assert!(second != as_written, "{param:?}'s second pass is new rows");
     }
+}
+
+/// A named rhythm (decision 327) on the accents, its rhythm, its part or its `Child` held at
+/// another number, plays what writing that number would, as a macro's lock does; and with `Vary`
+/// each pass, a child's second pass plays what writing that pass's seed would.
+#[test]
+fn a_named_rhythm_held_or_varied_plays_what_writing_it_would() {
+    let place = Where::Rhythm {
+        rhythm: World::Samba,
+        part: Role::Bell,
+        child: 60,
+    };
+    let mut rhythm = shape(FillKind::Ramp, 0x40, 0x7F, place);
+    rhythm.seed = 5;
+    let song = reshape(&accents(), rhythm);
+    let column = ShapeColumn::Velocity;
+    for param in [GenParam::Rhythm, GenParam::Role, GenParam::Child] {
+        let (_, other) = another(&written(&song, 0, column), column, param);
+        let hold = (0, column, param, other);
+        let (held, engine) = play(&song, &[hold], 16);
+        let (at_rest, _) = play(&song, &[], 16);
+        let (writes, _) = play(&reshaped(&song, hold), &[], 16);
+        assert!(held != at_rest, "{param:?} at {other} is heard");
+        assert!(held == writes, "{param:?} at {other} plays as written");
+        assert!(heard(&engine, 0).iter().any(|run| run.moving));
+    }
+    let varied = reshape(&nine_passes(), Shape { vary: 1, ..rhythm });
+    let (second, _) = play_pass(&varied, 1);
+    let mut kept = written(&varied, 0, column).on_pass(1);
+    kept.vary = 0;
+    let (as_kept, _) = play_pass(&reshape(&varied, kept), 1);
+    assert!(second == as_kept, "the second pass plays its seed");
+    let (as_written, _) = play_pass(&reshape(&varied, rhythm), 1);
+    assert!(
+        second != as_written,
+        "the second pass is a child of its own"
+    );
 }
 
 /// The nine-pass song with a line of its own on the Note column, a live `Variation` of it at

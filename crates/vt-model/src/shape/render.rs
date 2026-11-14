@@ -11,7 +11,7 @@ use super::mix;
 use super::random::{Odds, unit};
 use super::{
     FillKind, Ladder, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, divisions, follow,
-    grids, rhythm, ring, variation, walk,
+    grids, rhythm, ring, variation, walk, world,
 };
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
@@ -604,6 +604,11 @@ pub(super) fn chosen(
             Where::Complementary { share, second } => {
                 (mix(seed ^ 0x5555, offset) % 100 < u64::from(share)) != second
             }
+            Where::Rhythm {
+                rhythm,
+                part,
+                child,
+            } => world::plays(rhythm, part, child, seed, offset),
         };
         if chosen {
             rows.set(offset);

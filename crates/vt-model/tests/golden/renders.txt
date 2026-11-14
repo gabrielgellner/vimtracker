@@ -38,6 +38,16 @@ e3558c9e50c195c6 Acid, Marbles' rows on Note, chromatic
 def08b653d460d39 Acid, Marbles' rows on Note, in key
 87e59c5569117b25 Acid, Marbles' rows on Nudge
 87e59c5569117b25 Acid, Marbles' rows on Velocity
+87e59c5569117b25 Acid, a named rhythm's rows on FX, event
+87e59c5569117b25 Acid, a named rhythm's rows on FX, fine
+87e59c5569117b25 Acid, a named rhythm's rows on FX, last slot
+87e59c5569117b25 Acid, a named rhythm's rows on Length
+106cf501c31aab7d Acid, a named rhythm's rows on Note of its own, chromatic
+464a2e8d26ee8045 Acid, a named rhythm's rows on Note of its own, in key
+ee50497dd0bdd334 Acid, a named rhythm's rows on Note, chromatic
+e53be031b1b8f209 Acid, a named rhythm's rows on Note, in key
+87e59c5569117b25 Acid, a named rhythm's rows on Nudge
+87e59c5569117b25 Acid, a named rhythm's rows on Velocity
 cce56ab9ebd45da9 Alternate on FX, event
 483489bacf438830 Alternate on FX, fine
 669b8cf3908f707d Alternate on FX, last slot
@@ -178,6 +188,16 @@ a5a673c14c403882 Ramp, Marbles' rows on Note of its own, chromatic
 522ac8caff2f61e1 Ramp, Marbles' rows on Note, in key
 b485f3f546a60b6c Ramp, Marbles' rows on Nudge
 c9da7499f785b5ae Ramp, Marbles' rows on Velocity
+5891b22030227a16 Ramp, a named rhythm's rows on FX, event
+a581cf286b289f12 Ramp, a named rhythm's rows on FX, fine
+4b3d0289264cc312 Ramp, a named rhythm's rows on FX, last slot
+a0d56f9f6adafdb6 Ramp, a named rhythm's rows on Length
+650e2dc279887364 Ramp, a named rhythm's rows on Note of its own, chromatic
+553ef10fabd389d3 Ramp, a named rhythm's rows on Note of its own, in key
+41880d77ff021fbb Ramp, a named rhythm's rows on Note, chromatic
+6ba9c6f34ff44b52 Ramp, a named rhythm's rows on Note, in key
+a3d7cc6cd1823bd9 Ramp, a named rhythm's rows on Nudge
+1d79da79a5ba1651 Ramp, a named rhythm's rows on Velocity
 42d600394983fa04 Random on FX, event
 7a77142b9097a4d5 Random on FX, fine
 3a34ab4c7e458b16 Random on FX, last slot
@@ -218,6 +238,16 @@ b0bafd08cdee3164 Random, Marbles' rows on Note of its own, in key
 d78b761172b89bac Random, Marbles' rows on Note, in key
 509745ef701c4821 Random, Marbles' rows on Nudge
 c8bf5dba18ec992e Random, Marbles' rows on Velocity
+5ca14861de2cc0b8 Random, a named rhythm's rows on FX, event
+d2985c11f1cc1370 Random, a named rhythm's rows on FX, fine
+48dd883379501e73 Random, a named rhythm's rows on FX, last slot
+01eab79908a8e204 Random, a named rhythm's rows on Length
+c321b4d8f95c0cd6 Random, a named rhythm's rows on Note of its own, chromatic
+cee05eca7b5eceda Random, a named rhythm's rows on Note of its own, in key
+ca379ee343cac001 Random, a named rhythm's rows on Note, chromatic
+fdf1f37da22eb490 Random, a named rhythm's rows on Note, in key
+44821410794481f0 Random, a named rhythm's rows on Nudge
+51a472ed5ee6c22a Random, a named rhythm's rows on Velocity
 2ca67f2fbdfc6dfc Reverse on FX, event
 305ea3c7e0767856 Reverse on FX, fine
 11dc386aa55b9156 Reverse on FX, last slot
