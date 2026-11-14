@@ -95,6 +95,8 @@ impl DrumPart {
     }
 }
 
+crate::listed::listed!(DrumPart);
+
 /// The part each of several tracks plays, in order, from the part its sound plays where it says
 /// one (`known`): a track whose sound says none takes the first part no track has yet, so a kick,
 /// a pad and a hat give the pad the snare; once all three are taken, the rest go round them by

@@ -109,6 +109,8 @@ impl ScaleKind {
     }
 }
 
+crate::listed::listed!(ScaleKind);
+
 /// A root from its name, in any case, with sharps or flats: `d`, `F#`, `Bb`.
 pub fn parse_root(text: &str) -> Option<u8> {
     let mut letters = text.trim().chars();

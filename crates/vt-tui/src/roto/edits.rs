@@ -452,14 +452,14 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
             let insert = track.inserts[slot];
             let found = insert.params().get(param)?;
             let set = insert.value(param);
-            let to = if found.choices.is_empty() {
+            let to = if found.choices().is_empty() {
                 let (id, _) = control.value_on(track)?;
                 match id.entry().kind {
                     Kind::Continuous { top, .. } => whole(position, u32::from(top)) as u8,
                     Kind::Stepped { choices, .. } => step_at(position, choices.len()) as u8,
                 }
             } else {
-                step_at(position, found.choices.len()) as u8
+                step_at(position, found.choices().len()) as u8
             };
             changed(to, set, |to| Action::SetInsert {
                 track: at,

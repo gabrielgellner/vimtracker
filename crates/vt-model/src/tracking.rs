@@ -67,6 +67,8 @@ impl Source {
     }
 }
 
+crate::listed::listed!(Source: meaning);
+
 /// Where a Track slot's map starts and ends, in its source's values: none of its depth at `low`
 /// and all of it at `high`, flat either side. `low` above `high` turns it round, as the M8's does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

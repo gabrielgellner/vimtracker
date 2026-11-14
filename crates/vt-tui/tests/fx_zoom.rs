@@ -11,6 +11,7 @@ use vt_tui::track_page::Page;
 
 mod common;
 use common::*;
+use vt_tui::kitty::{PanelIds, PanelKey};
 
 /// The screen at the author's 163 by 42, with the keyboard's mode or not.
 fn zoomed_screen(app: &mut App, keys: bool) -> Vec<String> {
@@ -29,7 +30,7 @@ fn cut(line: &str, from: usize, to: usize) -> String {
 fn z_i_zooms_in_on_the_cursors_slot_under_a_strip_of_them_all_and_z_o_goes_back() {
     let (mut app, _realtime) = on_fx_page();
     four_devices(&mut app);
-    app.track_page.zoom_image = Some(0x01_02_03);
+    app.track_page.images.insert(PanelKey::Zoom, 0x01_02_03);
     press(&mut app, "zi");
     assert!(app.track_page.zoomed);
     assert!(app.fx_zoomed());
@@ -112,7 +113,7 @@ fn z_i_zooms_in_on_the_cursors_slot_under_a_strip_of_them_all_and_z_o_goes_back(
         "Slot 2 zoomed in: { } another slot, z o every slot"
     );
     // A pedal has nothing to draw: its settings alone, as tall as a device in the rack.
-    app.track_page.zoom_image = None;
+    app.track_page.images = PanelIds::default();
     press(&mut app, "}");
     let screen = zoomed_screen(&mut app, false);
     assert!(screen[6].contains("Distort  Overdrive"), "{}", screen[6]);
@@ -216,42 +217,42 @@ fn zoomed_in_only_its_slot_is_drawn_bigger_and_a_shaping_distortion_has_its_curv
     use std::collections::HashMap;
     let synced = |app: &mut App, graphics: &mut vt_tui::kitty::Graphics| -> HashMap<u32, Vec<u8>> {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         vt_tui::screenshot::sent_images(&out)
     };
     let (mut app, _realtime) = on_fx_page();
     four_devices(&mut app);
     let mut graphics = vt_tui::kitty::Graphics::new();
     synced(&mut app, &mut graphics);
-    assert!(app.track_page.slot_images[0].is_some());
-    assert_eq!(app.track_page.zoom_image, None);
+    assert!(app.track_page.images.get(PanelKey::Slot(0)).is_some());
+    assert_eq!(app.track_page.images.get(PanelKey::Zoom), None);
     press(&mut app, "zi");
     // At the author's 15 by 39 pixels a character, the compressor's curve is nearly square, and
     // it's the only one sent.
     let sent = synced(&mut app, &mut graphics);
     assert_eq!(sent.len(), 1);
-    let comp = app.track_page.zoom_image.unwrap();
+    let comp = app.track_page.images.get(PanelKey::Zoom).unwrap();
     assert_eq!(png_size(&sent[&comp]), (630, 624));
-    assert_eq!(app.track_page.slot_images, [None; 4]);
+    assert_eq!(slot_images(&app), [None; 4]);
     assert!(synced(&mut app, &mut graphics).is_empty(), "sent once");
     // The EQ's is the device's width.
     press(&mut app, "}");
     let sent = synced(&mut app, &mut graphics);
     assert_eq!(
-        png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+        png_size(&sent[&app.track_page.images.get(PanelKey::Zoom).unwrap()]),
         (2100, 624)
     );
     // An Overdrive has none, and Soft, which shapes each sample alone, has its transfer curve.
     press(&mut app, "}");
     assert!(synced(&mut app, &mut graphics).is_empty());
-    assert_eq!(app.track_page.zoom_image, None);
+    assert_eq!(app.track_page.images.get(PanelKey::Zoom), None);
     press(&mut app, "l");
     press(&mut app, "K");
     press(&mut app, "Soft");
     special(&mut app, KeyCode::Enter);
     let sent = synced(&mut app, &mut graphics);
     assert_eq!(
-        png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+        png_size(&sent[&app.track_page.images.get(PanelKey::Zoom).unwrap()]),
         (630, 624)
     );
     let screen = zoomed_screen(&mut app, false);
@@ -259,8 +260,11 @@ fn zoomed_in_only_its_slot_is_drawn_bigger_and_a_shaping_distortion_has_its_curv
     // Back in the rack, the rack's own come back.
     press(&mut app, "zo");
     synced(&mut app, &mut graphics);
-    assert!(app.track_page.slot_images[0].is_some() && app.track_page.slot_images[1].is_some());
-    assert_eq!(app.track_page.zoom_image, None);
+    assert!(
+        app.track_page.images.get(PanelKey::Slot(0)).is_some()
+            && app.track_page.images.get(PanelKey::Slot(1)).is_some()
+    );
+    assert_eq!(app.track_page.images.get(PanelKey::Zoom), None);
 }
 
 #[test]
@@ -268,7 +272,7 @@ fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_
     use std::collections::HashMap;
     let synced = |app: &mut App, graphics: &mut vt_tui::kitty::Graphics| -> HashMap<u32, Vec<u8>> {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         vt_tui::screenshot::sent_images(&out)
     };
     let (mut app, _realtime) = on_fx_page();
@@ -287,7 +291,7 @@ fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_
         let sent = synced(&mut app, &mut graphics);
         assert_eq!(sent.len(), 1, "slot {slot}");
         assert_eq!(
-            png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+            png_size(&sent[&app.track_page.images.get(PanelKey::Zoom).unwrap()]),
             (2100, 624)
         );
         assert!(synced(&mut app, &mut graphics).is_empty(), "slot {slot}");
@@ -311,21 +315,21 @@ fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_
     press(&mut app, "gg}");
     app.services.live = Some(live(60.0, (0.0, 0.1)));
     twice(&mut app);
-    let at_c = app.track_page.zoom_image.unwrap();
+    let at_c = app.track_page.images.get(PanelKey::Zoom).unwrap();
     app.services.live = Some(live(67.0, (0.0, 0.1)));
     assert_eq!(twice(&mut app).len(), 1);
-    assert_ne!(app.track_page.zoom_image.unwrap(), at_c);
+    assert_ne!(app.track_page.images.get(PanelKey::Zoom).unwrap(), at_c);
     // The gate's follows how far it's open, but not a step finer than it's drawn.
     press(&mut app, "{");
     app.services.live = Some(live(67.0, (0.0, 0.25)));
     twice(&mut app);
-    let closed = app.track_page.zoom_image.unwrap();
+    let closed = app.track_page.images.get(PanelKey::Zoom).unwrap();
     app.services.live = Some(live(67.0, (0.0, 0.25 + 1e-4)));
     assert!(twice(&mut app).is_empty());
-    assert_eq!(app.track_page.zoom_image, Some(closed));
+    assert_eq!(app.track_page.images.get(PanelKey::Zoom), Some(closed));
     app.services.live = Some(live(67.0, (1.0, 0.6)));
     assert_eq!(twice(&mut app).len(), 1);
-    assert_ne!(app.track_page.zoom_image, Some(closed));
+    assert_ne!(app.track_page.images.get(PanelKey::Zoom), Some(closed));
 }
 
 #[test]
@@ -333,7 +337,7 @@ fn a_delay_has_its_repeats_and_each_reverb_its_tail_with_their_time_scales() {
     use std::collections::HashMap;
     let synced = |app: &mut App, graphics: &mut vt_tui::kitty::Graphics| -> HashMap<u32, Vec<u8>> {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         vt_tui::screenshot::sent_images(&out)
     };
     let (mut app, _realtime) = on_fx_page();
@@ -359,7 +363,7 @@ fn a_delay_has_its_repeats_and_each_reverb_its_tail_with_their_time_scales() {
         let sent = synced(&mut app, &mut graphics);
         assert_eq!(sent.len(), 1, "slot {slot}");
         assert_eq!(
-            png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+            png_size(&sent[&app.track_page.images.get(PanelKey::Zoom).unwrap()]),
             (2100, 624)
         );
         assert!(synced(&mut app, &mut graphics).is_empty(), "slot {slot}");
@@ -381,14 +385,14 @@ fn a_space_echo_has_its_repeats_drawn_as_a_delays_are() {
     special(&mut app, KeyCode::Enter);
     let mut graphics = vt_tui::kitty::Graphics::new();
     let mut out = Vec::new();
-    graphics.sync(&mut app, &mut out).unwrap();
+    app.send_pictures(&mut graphics, &mut out).unwrap();
     press(&mut app, "zi");
     let mut out = Vec::new();
-    graphics.sync(&mut app, &mut out).unwrap();
+    app.send_pictures(&mut graphics, &mut out).unwrap();
     let sent = vt_tui::screenshot::sent_images(&out);
     assert_eq!(sent.len(), 1);
     assert_eq!(
-        png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+        png_size(&sent[&app.track_page.images.get(PanelKey::Zoom).unwrap()]),
         (2100, 624)
     );
     let screen = zoomed_screen(&mut app, false);

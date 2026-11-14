@@ -721,6 +721,26 @@ pub fn project_cursor_on(app: &mut App, control: vt_tui::project_page::ProjectCo
     assert_eq!(app.project_control(), control);
 }
 
+/// The ids of the track page's images of the Mod page's slots, by slot, none as 0, as a Steps
+/// slot has no picture.
+pub fn mod_images(app: &App) -> [u32; vt_model::modulation::MOD_SLOTS] {
+    std::array::from_fn(|slot| {
+        app.track_page
+            .images
+            .get(vt_tui::kitty::PanelKey::Mod(slot))
+            .unwrap_or(0)
+    })
+}
+
+/// The ids of the track page's images of the FX page's slots, by slot, for those that have one.
+pub fn slot_images(app: &App) -> [Option<u32>; vt_model::insert::INSERTS] {
+    std::array::from_fn(|slot| {
+        app.track_page
+            .images
+            .get(vt_tui::kitty::PanelKey::Slot(slot))
+    })
+}
+
 /// What's drawn, a line at a time.
 pub fn drawn_lines(buffer: &ratatui::buffer::Buffer) -> Vec<String> {
     (0..buffer.area.height)

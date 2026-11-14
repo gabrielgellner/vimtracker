@@ -10,6 +10,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use crate::app::App;
+use crate::kitty::PanelKey;
 use crate::macroing::{MapField, MappingView, bend_text, end_text, macro_name};
 use crate::theme;
 use crate::views::widgets::{image, popup};
@@ -130,7 +131,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
         height: (RESPONSE_HEIGHT + 2) as u16,
     }
     .intersection(inner);
-    let drawing = match app.mapping_image {
+    let drawing = match view.images.get(PanelKey::Mapping) {
         Some(id) => image::boxed(id, RESPONSE_WIDTH, RESPONSE_HEIGHT),
         None => empty_box(RESPONSE_WIDTH, RESPONSE_HEIGHT),
     };

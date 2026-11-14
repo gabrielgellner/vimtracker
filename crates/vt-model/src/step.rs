@@ -333,6 +333,8 @@ impl GateKind {
     }
 }
 
+crate::listed::listed!(GateKind: meaning);
+
 /// A row's gate cell: what its note does, how many pulses, or steps, the row lasts, and how much
 /// of its last pulse the note lasts. Every gate command's argument is its length, and `0` skips
 /// the row.
