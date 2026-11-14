@@ -269,7 +269,7 @@ pub enum GenParam {
     Depth,
     /// A `Random` fill's own, after Marbles: how widely its values spread and which way they
     /// lean, and on notes how many degrees it lets through, the most important first, and how
-    /// often each comes.
+    /// often each comes. `Spread` and `Bias` also lean the notes an `Acid` riff's set holds.
     Spread,
     Bias,
     Steps,
@@ -327,6 +327,8 @@ impl GenParam {
         Self::From,
         Self::To,
         Self::Notes,
+        Self::Spread,
+        Self::Bias,
         Self::Octave,
         Self::Density,
         Self::Accent,
@@ -348,8 +350,6 @@ impl GenParam {
         Self::Step,
         Self::Edge,
         Self::Depth,
-        Self::Spread,
-        Self::Bias,
         Self::Steps,
         Self::Weights,
         Self::Factor,
@@ -602,7 +602,8 @@ impl GenParam {
     /// several tracks, each taking its own part, every part's and no `Part`; and its `Note` only
     /// where it `generates`, as a hit takes the note there or the first one. `Random` has its
     /// `Spread` and `Bias` on every `column`, and its `Steps` and `Weights` on the Note column,
-    /// where there are degrees to let through. A `Variation` learns its rows with its notes, so
+    /// where there are degrees to let through; `Acid` has `Spread` and `Bias` for its riff's
+    /// notes, so wherever it has `Notes`. A `Variation` learns its rows with its notes, so
     /// it has its `Order` and `Temperature` and no `Where`. Only a shape that draws from its seed
     /// has `Vary`.
     pub fn exists_for(self, shape: &Shape, column: ShapeColumn, generates: bool) -> bool {
@@ -644,7 +645,7 @@ impl GenParam {
             Self::Density => acid && generates,
             Self::Step | Self::Edge => kind == FillKind::Walk,
             Self::Depth => kind == FillKind::Pink,
-            Self::Spread | Self::Bias => kind == FillKind::Random,
+            Self::Spread | Self::Bias => riff || kind == FillKind::Random,
             Self::Steps | Self::Weights => {
                 kind == FillKind::Random && matches!(column, ShapeColumn::Note { .. })
             }
@@ -714,7 +715,8 @@ impl GenParam {
     /// above them. A random fill's curve does nothing, so it isn't placed, and only the settings
     /// the shape has on its `column` are. `Grids` has the map and chaos first, then its part's
     /// density, and has no `Where`. A `Follow` has none either, so its `Mutation` and the kinds
-    /// it may make take the third column and the fourth, which only it uses.
+    /// it may make take the third column and the fourth. `Acid`'s three are full, so its riff's
+    /// `Spread` and `Bias` take the fourth.
     pub fn grid(
         shape: &Shape,
         column: ShapeColumn,
@@ -788,7 +790,10 @@ impl GenParam {
         };
         let mut more = none;
         match shape.kind {
-            FillKind::Acid => last[0] = Some(Density),
+            FillKind::Acid => {
+                last[0] = Some(Density);
+                more = [Some(Spread), Some(Bias), None];
+            }
             FillKind::Random => last[0] = Some(Weights),
             FillKind::Follow => {
                 last = [Some(Mutation), Some(Repitch), Some(Shift)];
@@ -2068,7 +2073,8 @@ mod tests {
         assert_eq!(
             of(FillKind::Acid, true),
             [
-                Fill, From, To, Notes, Octave, Density, Accent, Slide, Pitches, Where, Vary
+                Fill, From, To, Notes, Spread, Bias, Octave, Density, Accent, Slide, Pitches,
+                Where, Vary
             ]
         );
         let mut kept = shape(FillKind::Acid);
@@ -2077,6 +2083,20 @@ mod tests {
             GenParam::of(&kept, note(), false),
             [Fill, Octave, Accent, Slide, Pitches, Where, Vary]
         );
+        // An `Acid` riff's `Spread` and `Bias` take the Gen page's fourth column, as its three are
+        // full with Euclid's, and keeping the pitches there leaves them nothing to lean.
+        let mut riff = shape(FillKind::Acid);
+        riff.place = crate::shape::Where::Euclid { hits: 5, rotate: 0 };
+        assert_eq!(
+            GenParam::grid(&riff, note(), true),
+            [
+                [Some(From), Some(To), Some(Notes)],
+                [Some(Octave), Some(Accent), Some(Slide)],
+                [Some(Density), Some(Hits), Some(Rotate)],
+                [Some(Spread), Some(Bias), None],
+            ]
+        );
+        assert_eq!(GenParam::grid(&kept, note(), false)[3], [None, None, None]);
         let mut euclid = shape(FillKind::Alternate);
         euclid.place = crate::shape::Where::Euclid { hits: 3, rotate: 0 };
         assert_eq!(

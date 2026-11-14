@@ -391,6 +391,7 @@ already there it keeps their rhythm.
 |---|---|
 | From, To | The riff's notes come from between them, and From is its root |
 | Notes | How many notes the riff has, from 1 to 8, its root among them |
+| Spread, Bias | Which notes between the ends the riff takes, as `Random`'s lean its values |
 | Octave | The chance a note goes an octave up or down |
 | Density | On an empty column, the share of rows that play |
 | Accent | The chance a note is accented, written as `7F` |
@@ -399,6 +400,12 @@ already there it keeps their rhythm.
 
 The riff's notes come from the scale while it's on, so a set of four in C minor
 might be `C-3 D#3 G-3 A#3`, and the root plays more often than the others.
+Spread and Bias choose the others, as they lean a `Random`'s values: as they
+start, `50%` and `0`, any note between the ends is as likely; a narrow Spread
+gathers them round the bias point, so `0%` with four notes from `C-2` to `C-3`,
+the scale off, takes `F-2 F#2 G-2` with the root, and a wide one takes them from the ends inward; and Bias
+leans them up or down, the root staying wherever From is. With Notes as many as
+the ends hold, every note is in the riff, so there's nothing for them to choose.
 Density counts where each row falls in the bar, counting from the first row
 selected: beats play most, then every third row, then the other even rows, and
 the rest least, so at `50%` half the rows play, most of them on the beat. A

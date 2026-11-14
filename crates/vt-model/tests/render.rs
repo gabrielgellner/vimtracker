@@ -357,9 +357,10 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
 /// of its own (decision 302), so its own line, with them as they start, stays as it was.
 type Variant = (&'static str, FillKind, fn(&mut Shape));
 
-const VARIANTS: [Variant; 2] = [
+const VARIANTS: [Variant; 3] = [
     ("Random shaped", FillKind::Random, shaped_random),
     ("Follow mutated", FillKind::Follow, mutated_follow),
+    ("Acid shaped", FillKind::Acid, shaped_random),
 ];
 
 /// A `Follow`'s mutations (decision 307), drawn from its seed: up to the most, each kind on or
@@ -376,7 +377,8 @@ fn mutated_follow(shape: &mut Shape) {
     };
 }
 
-/// A `Random`'s spread, bias, steps and weights, drawn from its seed, some at their ends.
+/// A `Random`'s spread, bias, steps and weights, drawn from its seed, some at their ends; an
+/// `Acid`'s riff takes the spread and bias (decision 322).
 fn shaped_random(shape: &mut Shape) {
     let mut more = Dice(shape.seed ^ 0x6A2B);
     let spread = if more.chance(25) {
