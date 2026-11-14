@@ -8,12 +8,15 @@
 //! over half the new time, ignoring changes while it fades, and a slow wobble moves the two sides'
 //! reads opposite ways.
 
+use vt_model::constants::{MIN_MILLIBPM, TICKS_PER_QUARTER};
 use vt_model::insert::Delay as Settings;
 use vt_model::lfo::DIVISION_TICKS;
+use vt_model::song::level_gain;
 
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::filters::filter::{Coefficients, Trim};
 use crate::dsp::voices::drums::soft_clip;
+use crate::engine::sample_of_tick;
 
 /// How much of what's in the line comes out. Tuned by ear with the send levels.
 const WET: f32 = 0.6;
@@ -38,6 +41,114 @@ const MOST_WOW: f64 = 0.005;
 const WOW_ROUNDING: f64 = 1.0 / 16.0;
 /// Where the wobble's triangle starts in its turn: at its middle, going down.
 const WOW_START: f64 = 0.25;
+/// The most repeats [`repeats`] gives, and how quiet one is when it stops, as a gain: -60 dB.
+pub const MOST_TAPS: usize = 16;
+const QUIETEST_TAP: f32 = 0.001;
+/// Where repeats are measured with no cuts, and the frequencies the cuts' best is looked for
+/// among: 64 a decade from 20 Hz to 20 kHz.
+const OPEN_HERTZ: f32 = 1_000.0;
+const SEARCH_STEPS: usize = 192;
+
+/// How many frames a slot's delay can hold: its longest time at the slowest tempo, and room to
+/// read around it.
+pub fn buffer_frames(rate: u32) -> usize {
+    let longest = u64::from(DIVISION_TICKS[DIVISION_TICKS.len() - 1]);
+    sample_of_tick(longest, rate, MIN_MILLIBPM) as usize + 8
+}
+
+/// How many frames a tick lasts at a tempo, in thousandths of a beat a minute, and a rate, as the
+/// engine works it out for what keeps time with the song.
+pub fn frames_per_tick(millibpm: u32, rate: u32) -> f64 {
+    60.0 * f64::from(rate) * 1000.0 / (TICKS_PER_QUARTER as f64 * f64::from(millibpm))
+}
+
+/// One repeat of a delay, for a drawing of them: when it's heard, in seconds after the sound, and
+/// how loud on each side, as a gain, with the slot's `Mix` and `Gain`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tap {
+    pub seconds: f32,
+    pub levels: [f32; 2],
+}
+
+/// A delay's repeats at its settings and a tempo, for a drawing: the sound itself as it comes
+/// through, `dry`, a gain on both sides, and each repeat while it's louder than -60 dB, at most
+/// [`MOST_TAPS`], for a sound the same on both sides, measured at `hertz`, where the feedback's
+/// cuts pass the most.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Repeats {
+    pub dry: f32,
+    pub hertz: f32,
+    pub taps: Vec<Tap>,
+}
+
+/// A delay's repeats, as [`Delay::process`] makes them for a quiet sound once its settings have
+/// settled. The first comes out as it went in, and each after has been round the feedback once
+/// more, through the cuts and turned down by `Feedback`; `Drive`'s clip leaves a quiet sound as it
+/// is. With `Ping-pong` the sound goes in on the left and each repeat crosses to the other side,
+/// and `Width` brings the sides together. `Wow` bends their pitch by at most half a percent, and
+/// moves them by a few milliseconds at most, so they're drawn without it.
+pub fn repeats(settings: Settings, frames_per_tick: f64, rate: u32) -> Repeats {
+    let buffer = buffer_frames(rate);
+    let ticks = DIVISION_TICKS[usize::from(settings.time).min(DIVISION_TICKS.len() - 1)];
+    let longest = (buffer - 1) as f64 - SHORTEST_FRAMES;
+    let frames = (f64::from(ticks) * frames_per_tick).clamp(SHORTEST_FRAMES, longest);
+    let low_cut = (settings.low_cut > 0)
+        .then(|| Coefficients::new(f32::from(settings.low_cut) / 255.0, 0.0, rate));
+    let high_cut = (settings.high_cut < 0xFF)
+        .then(|| Coefficients::new(f32::from(settings.high_cut) / 255.0, 0.0, rate));
+    let passed = |hertz: f32| {
+        let low = low_cut
+            .as_ref()
+            .map_or(1.0, |c| Trim::gains(c, rate, hertz).0);
+        let high = high_cut
+            .as_ref()
+            .map_or(1.0, |c| Trim::gains(c, rate, hertz).1);
+        low * high
+    };
+    let hertz = if low_cut.is_none() && high_cut.is_none() {
+        OPEN_HERTZ
+    } else {
+        (0..=SEARCH_STEPS)
+            .map(|step| 20.0 * 1000_f32.powf(step as f32 / SEARCH_STEPS as f32))
+            .filter(|hertz| *hertz < rate as f32 * 0.45)
+            .fold((OPEN_HERTZ, 0.0), |best, hertz| {
+                let gain = passed(hertz);
+                if gain > best.1 { (hertz, gain) } else { best }
+            })
+            .0
+    };
+    let round = f32::from(settings.feedback) / 255.0 * passed(hertz);
+    let mix = f32::from(settings.mix) / 255.0;
+    let gain = level_gain(f32::from(settings.gain));
+    let width = f32::from(settings.width) / 255.0;
+    let mut taps = Vec::new();
+    let mut level = WET * mix * gain;
+    for repeat in 0..MOST_TAPS {
+        // What comes out of the line on each side, before `Width`.
+        let out = if settings.ping_pong == 0 {
+            [level; 2]
+        } else if repeat % 2 == 0 {
+            [level, 0.0]
+        } else {
+            [0.0, level]
+        };
+        let (middle, side) = ((out[0] + out[1]) * 0.5, (out[0] - out[1]) * 0.5 * width);
+        let levels = [middle + side, middle - side];
+        if levels[0].max(levels[1]) < QUIETEST_TAP {
+            break;
+        }
+        taps.push(Tap {
+            seconds: ((repeat + 1) as f64 * frames / f64::from(rate)) as f32,
+            levels,
+        });
+        level *= round;
+    }
+    Repeats {
+        dry: (1.0 - mix) * gain,
+        hertz,
+        taps,
+    }
+}
 
 /// The delay line and what's in its feedback.
 #[derive(Debug, Clone)]
@@ -308,6 +419,7 @@ impl Delay {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::effects::memory::Memory;
 
     const RATE: u32 = 48_000;
     /// 120 BPM at this rate, so 1/4 is 24000 frames.
@@ -692,6 +804,191 @@ mod tests {
         let [left, right] = crossings(0xFF);
         assert!((1588..1596).contains(&left), "{left}");
         assert!((1604..1612).contains(&right), "{right}");
+    }
+
+    /// A slot holding a delay at 120 BPM, settled, as the engine has one.
+    fn slot(settings: Settings) -> crate::dsp::effects::distort::InsertState {
+        use crate::dsp::effects::distort::InsertState;
+        use crate::dsp::effects::memory::{MemoryPool, SongPlace};
+        use vt_model::insert::Insert;
+        let insert = Insert::Delay(settings);
+        let mut song = vt_model::song::Song::new(1);
+        song.tracks[0].inserts[0] = insert;
+        let mut pool = MemoryPool::for_song(&song, RATE);
+        let mut state = InsertState::default();
+        let place = SongPlace {
+            frames_per_tick: FRAMES_PER_TICK,
+            ..SongPlace::STILL
+        };
+        state.hold(insert, &mut pool, place, 0);
+        state.settle();
+        state
+    }
+
+    /// What a slot gives for `input`, then silence, until this many frames.
+    fn through_slot(settings: Settings, input: &[f32], frames: usize) -> Vec<[f32; 2]> {
+        let keys = crate::track_state::Keys::default();
+        let mut state = slot(settings);
+        (0..frames)
+            .map(|at| {
+                let sample = input.get(at).copied().unwrap_or(0.0);
+                state.process([sample; 2], 1.0, RATE, &keys)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_tempo_gives_the_engines_frames_a_tick() {
+        assert_eq!(frames_per_tick(120_000, RATE), FRAMES_PER_TICK);
+        let Memory::Delay(delay) = Memory::delay(RATE) else {
+            panic!("a delay's memory")
+        };
+        assert_eq!(delay.buffer.len(), buffer_frames(RATE));
+    }
+
+    #[test]
+    fn a_click_repeats_where_and_as_loud_as_the_taps_say() {
+        // With no cuts, a repeat at a whole number of frames is a click again, so each tap is
+        // its level within what rounding in the feedback adds up to.
+        for (ping_pong, width) in [(0, 0xFF), (1, 0xFF), (1, 0x60), (0, 0x00)] {
+            for (feedback, mix, gain) in
+                [(0x80, 0xFF, 0xE0), (0xC8, 0xA0, 0xC0), (0xFF, 0x40, 0xF0)]
+            {
+                let settings = Settings {
+                    feedback,
+                    ping_pong,
+                    width,
+                    mix,
+                    gain,
+                    ..settings()
+                };
+                let said = repeats(settings, FRAMES_PER_TICK, RATE);
+                assert_eq!(said.hertz, OPEN_HERTZ);
+                let click = 0.01;
+                let out = through_slot(settings, &[click], 24_000 * MOST_TAPS + 1);
+                for heard in out[0] {
+                    assert!((heard / click - said.dry).abs() < 1e-6);
+                }
+                assert!(!said.taps.is_empty());
+                for (at, tap) in said.taps.iter().enumerate() {
+                    let frame = 24_000 * (at + 1);
+                    assert!((tap.seconds - frame as f32 / RATE as f32).abs() < 1e-6);
+                    for side in 0..2 {
+                        let heard = out[frame][side] / click;
+                        assert!(
+                            (heard - tap.levels[side]).abs() < 1e-4 * tap.levels[side].max(0.01),
+                            "{settings:?} tap {at} side {side}: {heard} against {tap:?}"
+                        );
+                    }
+                }
+                // What it stopped at is under -60 dB, or past the most it gives.
+                let next = 24_000 * (said.taps.len() + 1);
+                if said.taps.len() < MOST_TAPS {
+                    let heard = out[next][0].abs().max(out[next][1].abs()) / click;
+                    assert!(heard < QUIETEST_TAP, "{settings:?}: {heard}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_burst_where_the_cuts_pass_most_repeats_as_loud_as_the_taps_say() {
+        // A burst a tenth of a second long, smoothly faded in and out, is about 20 Hz wide, and
+        // where the cuts pass the most they're flat, so its energy in each repeat is the tap's
+        // level squared times its own, to within about 0.1 dB.
+        for (low_cut, high_cut, ping_pong) in [(0x60, 0xB0, 1), (0x90, 0xFF, 0), (0x00, 0x70, 1)] {
+            let settings = Settings {
+                feedback: 0xD0,
+                low_cut,
+                high_cut,
+                ping_pong,
+                width: 0xC0,
+                mix: 0xC0,
+                ..settings()
+            };
+            let said = repeats(settings, FRAMES_PER_TICK, RATE);
+            let length = RATE as usize / 10;
+            let burst: Vec<f32> = (0..length)
+                .map(|at| {
+                    let fade = (at as f32 / length as f32 * std::f32::consts::PI)
+                        .sin()
+                        .powi(2);
+                    let turn = at as f32 / RATE as f32 * said.hertz * std::f32::consts::TAU;
+                    turn.sin() * fade * 0.01
+                })
+                .collect();
+            let energy = |samples: &mut dyn Iterator<Item = f32>| -> f32 {
+                samples.map(|s| s * s).sum::<f32>()
+            };
+            let went_in = energy(&mut burst.iter().copied());
+            let out = through_slot(settings, &burst, 24_000 * (said.taps.len() + 1));
+            assert!(said.taps.len() >= 4, "{settings:?}");
+            for (at, tap) in said.taps.iter().enumerate() {
+                let start = 24_000 * (at + 1) - 2_000;
+                for side in 0..2 {
+                    let heard =
+                        energy(&mut out[start..start + length + 4_000].iter().map(|f| f[side]));
+                    let level = (heard / went_in).sqrt();
+                    let wanted = tap.levels[side];
+                    if wanted < 1e-3 {
+                        assert!(level < 2e-3, "{settings:?} tap {at} side {side}: {level}");
+                        continue;
+                    }
+                    let db = 20.0 * (level / wanted).log10();
+                    assert!(
+                        db.abs() < 0.1,
+                        "{settings:?} tap {at} side {side}: {db} dB at {} Hz",
+                        said.hertz
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_cuts_gains_are_the_trims_own() {
+        // A sine through each of the utility filter's halves comes out as loud as `Trim::gains`
+        // says, as the delay's feedback uses them.
+        for cut in [0x40_u8, 0x80, 0xC0] {
+            let c = Coefficients::new(f32::from(cut) / 255.0, 0.0, RATE);
+            for hertz in [40.0, 300.0, 2_000.0, 9_000.0] {
+                let (mut low, mut high) = (Trim::default(), Trim::default());
+                // Its level by its power over the last half second, a whole number of cycles of
+                // each, as a peak between samples falls short.
+                let (mut low_power, mut high_power) = (0.0_f64, 0.0_f64);
+                for at in 0..RATE as usize {
+                    let x = (at as f32 / RATE as f32 * hertz * std::f32::consts::TAU).sin();
+                    let (l, h) = (low.low_cut(x, &c), high.high_cut(x, &c));
+                    if at >= RATE as usize / 2 {
+                        low_power += f64::from(l * l);
+                        high_power += f64::from(h * h);
+                    }
+                }
+                let level = |power: f64| (power * 4.0 / f64::from(RATE)).sqrt() as f32;
+                let (low_peak, high_peak) = (level(low_power), level(high_power));
+                let (low_gain, high_gain) = Trim::gains(&c, RATE, hertz);
+                assert!(
+                    (low_peak - low_gain).abs() < 2e-3,
+                    "{cut} {hertz}: {low_peak} {low_gain}"
+                );
+                assert!(
+                    (high_peak - high_gain).abs() < 2e-3,
+                    "{cut} {hertz}: {high_peak} {high_gain}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_long_time_at_a_slow_tempo_is_held_to_the_buffer() {
+        let longest = Settings {
+            time: (DIVISION_TICKS.len() - 1) as u8,
+            ..settings()
+        };
+        let slowest = frames_per_tick(MIN_MILLIBPM, RATE);
+        let said = repeats(longest, slowest * 2.0, RATE);
+        let most = (buffer_frames(RATE) - 1) as f64 - SHORTEST_FRAMES;
+        assert!((f64::from(said.taps[0].seconds) - most / f64::from(RATE)).abs() < 1e-4);
     }
 
     #[test]

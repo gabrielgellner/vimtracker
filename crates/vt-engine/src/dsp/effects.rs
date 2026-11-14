@@ -24,5 +24,6 @@ pub mod spring;
 pub mod stutter;
 #[cfg(test)]
 pub(crate) mod sweep;
+pub mod tail;
 pub mod tape;
 pub mod warps;

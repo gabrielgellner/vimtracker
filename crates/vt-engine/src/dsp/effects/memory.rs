@@ -2,16 +2,15 @@
 //! thread makes them and sends them ahead of the version that needs them. The callback keeps them
 //! in a pool, and slots take what they need from it, so an effect costs nothing until it's used.
 
-use vt_model::constants::{MAX_TRACKS, MIN_MILLIBPM};
+use vt_model::constants::MAX_TRACKS;
 use vt_model::insert::{INSERTS, Insert};
-use vt_model::lfo::DIVISION_TICKS;
 use vt_model::song::Song;
 
 use crate::dsp::dynamics::limiter::Limiter;
 use crate::dsp::effects::beads::Beads;
 use crate::dsp::effects::chorus::Chorus;
 use crate::dsp::effects::clouds::Clouds;
-use crate::dsp::effects::delay::Delay;
+use crate::dsp::effects::delay::{self, Delay};
 use crate::dsp::effects::flanger::Flanger;
 use crate::dsp::effects::freq_shifter::FreqShifter;
 use crate::dsp::effects::granular::Granular;
@@ -26,7 +25,6 @@ use crate::dsp::effects::stutter::Stutter;
 use crate::dsp::effects::tape::Tape;
 use crate::dsp::effects::warps::Warps;
 use crate::dsp::filters::comb::Comb;
-use crate::engine::sample_of_tick;
 
 /// Where the song is, for the effects that keep time with it: its tick, whether it's playing,
 /// and how many frames a tick takes.
@@ -79,9 +77,7 @@ pub enum Memory {
 impl Memory {
     /// A delay's, which can hold its longest time at the slowest tempo, and read around it.
     pub fn delay(rate: u32) -> Self {
-        let longest = u64::from(DIVISION_TICKS[DIVISION_TICKS.len() - 1]);
-        let frames = sample_of_tick(longest, rate, MIN_MILLIBPM) as usize + 8;
-        Self::Delay(Box::new(Delay::new(frames, rate)))
+        Self::Delay(Box::new(Delay::new(delay::buffer_frames(rate), rate)))
     }
 
     /// A reverb's.
@@ -780,6 +776,8 @@ impl MemoryPool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::sample_of_tick;
+    use vt_model::constants::MIN_MILLIBPM;
     use vt_model::insert::Delay as DelaySettings;
 
     const DELAY: Insert = Insert::Delay(DelaySettings::DEFAULT);
