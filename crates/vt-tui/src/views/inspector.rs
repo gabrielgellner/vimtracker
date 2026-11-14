@@ -12,7 +12,7 @@ use vt_model::step::{FxCommand, FxSlot, GateKind, Mark, Note, Step, nudge_text};
 use crate::app::{App, Field};
 use crate::theme;
 use crate::views::status::phrase_value;
-use crate::views::widgets::{self, bar::ValueBar};
+use crate::views::widgets::{self, bar::ValueBar, popup};
 
 /// The narrowest it's drawn: a label, a value and room for what it means.
 pub const NARROWEST: u16 = 39;
@@ -181,10 +181,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, row: &str) {
     let mut lines = lines(app, step);
     lines.push(Line::raw(""));
     // As tall as the row needs, with a nudge or without.
-    let area = Rect {
-        height: area.height.min(lines.len() as u16 + 2),
-        ..area
-    };
+    let area = popup::top_left(area, area.width, lines.len() as u16 + 2);
     let inner = block.inner(area);
     block.render(area, frame.buffer_mut());
     frame.render_widget(Paragraph::new(lines), inner);

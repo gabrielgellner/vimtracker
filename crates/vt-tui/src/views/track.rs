@@ -35,7 +35,7 @@ use crate::views::widgets::grid::{CellSource, CellWidths, ROW_STEP, SettingsGrid
 use crate::views::widgets::image;
 use crate::views::widgets::meter::{hanging_cell, hanging_eighths};
 use crate::views::widgets::panel::GraphicPanel;
-use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
+use crate::views::widgets::setting::{self, Focus, name_line, value_spans};
 use crate::views::widgets::table::take_top;
 use crate::views::widgets::toggle;
 use crate::views::widgets::{group, role};
@@ -317,25 +317,25 @@ fn value_line(
     here: bool,
     default: bool,
 ) -> Line<'static> {
-    let typing = here && ctx.mode() == Mode::Insert;
+    let look = ctx.look_on(control, Focus::at(here, false));
     let (text, style) = match toggle_on(control, track, ctx.song()) {
-        Some(on) if !typing => {
+        Some(on) if look.typed.is_none() => {
             // One that does nothing on this track, as `Safe` on a clean filter, is dim.
             let style = if here {
-                theme::cursor(ctx.mode())
+                theme::cursor(look.mode)
             } else if default {
-                setting::style(ctx, false, true)
+                setting::resting(true)
             } else {
                 toggle::style(on)
             };
             (toggle::text(on), style)
         }
         _ => (
-            setting::text(ctx, here, || value(control, track, ctx.song())),
-            setting::style(ctx, here, default),
+            setting::text(&look, || value(control, track, ctx.song())),
+            setting::style(&look, default),
         ),
     };
-    Line::from(value_spans(ctx, control, text, style))
+    Line::from(value_spans(&look, text, style))
 }
 
 /// Whether the cursor is in a sound track's Machine device, on the machine, its type, its
@@ -396,8 +396,8 @@ impl CellSource for SlotCells<'_> {
     type Id = Control;
 
     fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let labels = jump_label(self.ctx, control);
-        name_line(self.ctx, control.name_on(self.track), &labels, room)
+        let look = self.ctx.look_on(control, Focus::Off);
+        name_line(&look, control.name_on(self.track), room)
     }
 
     fn value(&self, control: Control) -> Line<'static> {
@@ -458,12 +458,13 @@ fn title_controls(
             let here = *control == current;
             let empty =
                 matches!(*control, Control::Insert(slot) if track.inserts[slot] == Insert::Empty);
-            let text = setting::text(ctx, here, || match empty {
+            let look = ctx.look_on(*control, Focus::at(here, false));
+            let text = setting::text(&look, || match empty {
                 true => EMPTY_SLOT.to_owned(),
                 false => value(*control, track, ctx.song()),
             });
-            let style = setting::style(ctx, here, empty);
-            Line::from(value_spans(ctx, *control, text, style))
+            let style = setting::style(&look, empty);
+            Line::from(value_spans(&look, text, style))
         })
         .collect()
 }
