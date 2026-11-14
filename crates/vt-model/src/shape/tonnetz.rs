@@ -30,7 +30,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::render::Rows;
-use super::{GenCell, ShapeColumn, mix};
+use super::{GenCell, Shape, ShapeColumn, mix};
 use crate::constants::FX_SLOTS;
 use crate::scale::Scale;
 use crate::selection::StepRange;
@@ -617,23 +617,22 @@ fn chord_cell(column: ShapeColumn, step: &Step, root: u8, triad: Triad) -> GenCe
 }
 
 /// A `Tonnetz` fill's cells for `range`, one for each row, the first in `cells[0]`: on each row
-/// `rows` chooses, the walk's next chord, as its voice writes it, from the triad on `from`. It
-/// writes notes; on any other column it leaves the rows alone.
+/// `rows` chooses, the walk's next chord, as its voice writes it, from the triad on the shape's
+/// `From`. It writes notes; on any other column it leaves the rows alone.
 pub(super) fn render(
     steps: &[Step],
     range: StepRange,
     column: ShapeColumn,
-    from: u8,
-    seed: u64,
-    tonnetz: Tonnetz,
+    shape: &Shape,
     rows: &Rows,
     cells: &mut [GenCell],
 ) {
     let ShapeColumn::Note { scale, .. } = column else {
         return;
     };
+    let tonnetz = shape.tonnetz;
     let voice = tonnetz.voice.unwrap_or(Voice::Low);
-    let mut walk = Walk::new(tonnetz, from, seed, scale);
+    let mut walk = Walk::new(tonnetz, shape.from, shape.seed, scale);
     for (nth, offset) in rows.ones().enumerate() {
         let (Some(cell), Some(step)) = (cells.get_mut(offset), steps.get(range.first + offset))
         else {

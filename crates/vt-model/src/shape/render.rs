@@ -381,16 +381,7 @@ pub(super) fn render(
         }
         FillKind::Tonnetz => {
             let rows = chosen(steps, range, column, shape.place, shape.seed, len);
-            tonnetz::render(
-                steps,
-                range,
-                column,
-                shape.from,
-                shape.seed,
-                shape.tonnetz,
-                &rows,
-                out.cells,
-            );
+            tonnetz::render(steps, range, column, shape, &rows, out.cells);
             tied(steps, range, column, shape, out.cells);
         }
         _ => {
