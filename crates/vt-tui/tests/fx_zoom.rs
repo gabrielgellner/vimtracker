@@ -315,3 +315,45 @@ fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_
     assert_eq!(twice(&mut app).len(), 1);
     assert_ne!(app.zoom_image, Some(closed));
 }
+
+#[test]
+fn a_delay_has_its_repeats_and_each_reverb_its_tail_with_their_time_scales() {
+    use std::collections::HashMap;
+    let synced = |app: &mut App, graphics: &mut vt_tui::kitty::Graphics| -> HashMap<u32, Vec<u8>> {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        vt_tui::screenshot::sent_images(&out)
+    };
+    let (mut app, _realtime) = on_fx_page();
+    for effect in ["Delay", "Reverb", "Plate", "Spring"] {
+        press(&mut app, "K");
+        press(&mut app, effect);
+        special(&mut app, KeyCode::Enter);
+        press(&mut app, "}");
+    }
+    press(&mut app, "gg");
+    let mut graphics = vt_tui::kitty::Graphics::new();
+    synced(&mut app, &mut graphics);
+    press(&mut app, "zi");
+    for (slot, said) in [
+        "s across, a line a beat",
+        "falls 60 dB in",
+        "falls 60 dB in",
+        "falls 60 dB in",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let sent = synced(&mut app, &mut graphics);
+        assert_eq!(sent.len(), 1, "slot {slot}");
+        assert_eq!(png_size(&sent[&app.zoom_image.unwrap()]), (2100, 624));
+        assert!(synced(&mut app, &mut graphics).is_empty(), "slot {slot}");
+        // Its time scale is under its box.
+        let screen = zoomed_screen(&mut app, false);
+        assert!(
+            screen.iter().any(|line| line.contains(said)),
+            "slot {slot}: {screen:#?}"
+        );
+        press(&mut app, "}");
+    }
+}

@@ -931,7 +931,9 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     FX page draws its compressor's or distortion's curve 42 by 16 and its EQ's 140 by 16, the
     zoomed slot's alone, and the filter effects' 140 by 16 from the engine's response functions
     (`lpg`, `resonator`, `comb` and `vowel`'s `response`, decision 333), with a point at each peak
-    `plot::peaks` finds so a narrow one is drawn to its top. Gain reduction, in the rack and zoomed, and its last two bars are text,
+    `plot::peaks` finds so a narrow one is drawn to its top, a delay's repeats (`delay::repeats`)
+    and a reverb's tail (`reverb`, `plate`, `spring` and `space`'s `tail`), with their time scales
+    as the box's caption. Gain reduction, in the rack and zoomed, and its last two bars are text,
     so pumping moves every frame without a picture. The
     scope and the pickers' waveforms stay solid dots.
 *   **Placed dots.** An LFO's dot is a small image of its own, stored once in each of two shades

@@ -302,6 +302,8 @@ the page's width, with its settings in the same places and bars nearly twice as 
 | `LPG` | Its curve as far as it's open, and open all the way |
 | `Reso`, `Comb` | Its curve at the note playing |
 | `Vowel` | Its curve |
+| `Delay` | Its repeats over time, left up and right down |
+| `Reverb`, `Plate`, `Spring`, `Space` | How its tail dies away |
 
 A `Comp`'s curve is square and 16 rows tall, and its meter as tall, 0 to 24 dB, with the last two
 bars of how far it turned down beside them. A `Distort`'s transfer curve, on `Soft`, `Hard`,
@@ -314,6 +316,14 @@ harmonics, with a dashed line at that note, so the curve moves as the notes do; 
 are drawn to their tops. An `LPG`'s moves as what it
 hears opens and closes it, with a dashed line at its cutoff; the dotted curve under it is where it
 goes opened all the way, so what lies between is how far it moves.
+
+A `Delay`'s repeats are lines along the time from the sound, as loud on the left as they reach up
+and on the right as they reach down, from -60 dB in the middle to 0 dB at the edges, so a
+ping-pong's cross from side to side. The sound itself, with `Mix`, is first, at the left, and
+fainter lines mark the beats. Each repeat is as loud as it is where `Low cut` and `High cut` pass
+the most. A reverb's tail falls from the top, after its pre-delay, 60 dB in its decay time at its
+lows, and a dotted line falls as its highs do, which `Damp` shortens. The box says how long each
+takes, and how far apart the lines down it are.
 
 The last two bars are a sweep, as an oscilloscope's: it writes from left to right as the song's
 tempo goes, with a gap after the newest, and starts again at the left after two bars, so a beat's

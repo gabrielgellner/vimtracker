@@ -164,6 +164,18 @@ const SHOTS: &[Shot] = &[
         song: Some(sidechained),
         ..PLAIN
     },
+    // The FX page zoomed in on a comb a fifth over a bass, after the four filter effects
+    // (`filtering`): its peaks on the note it rings at and its harmonics.
+    Shot {
+        name: "track-fx-zoom-comb",
+        rows: LANE,
+        keys: " 7zi}}<Tab>",
+        play: 40,
+        voice: Some(SynthVoice::VirtualAnalog),
+        size: FULL,
+        song: Some(filtering),
+        ..PLAIN
+    },
     Shot {
         name: "project",
         keys: " 9jjj=l+++:set scale=dorian<Enter>:groove pull<Enter>",
@@ -382,6 +394,28 @@ fn sidechained(song: &mut Song) {
             ..Distort::DEFAULT
         }),
         Insert::Limit(Limiter::DEFAULT),
+    ];
+}
+
+/// A bass through the four filter effects: a gate opened by its own sound, a resonator, a comb a
+/// fifth up and a vowel filter at `E`, ringing.
+fn filtering(song: &mut Song) {
+    use vt_model::insert::{Comb, LowPassGate, MOST_SHIFT, Resonator, Vowel};
+    song.tracks[0].inserts = [
+        Insert::Lpg(LowPassGate {
+            resonance: 0x90,
+            ..LowPassGate::DEFAULT
+        }),
+        Insert::Reso(Resonator::DEFAULT),
+        Insert::Comb(Comb {
+            tune: MOST_SHIFT + 7,
+            ..Comb::DEFAULT
+        }),
+        Insert::Vowel(Vowel {
+            vowel: 0x40,
+            resonance: 0xC0,
+            ..Vowel::DEFAULT
+        }),
     ];
 }
 

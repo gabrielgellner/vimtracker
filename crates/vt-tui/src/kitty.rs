@@ -14,14 +14,15 @@ use ratatui::buffer::Buffer;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
 use vt_engine::dsp::distort::{DEFAULT_NOTE, transfer};
-use vt_engine::dsp::effects::resonator;
+use vt_engine::dsp::effects::tail::Tail;
+use vt_engine::dsp::effects::{delay, plate, resonator, reverb, space, spring};
 use vt_engine::dsp::filters::{comb, lpg, vowel};
 use vt_engine::engine::PLAYHEADS;
 use vt_engine::track_state::{LfoNow, LiveValues};
 use vt_model::bank::{ContentHash, Points};
 use vt_model::insert::{
-    Comb, Compressor, Distort, Equaliser, GateMode, INSERTS, Insert, LowPassGate, MAX_PARAMS,
-    Resonator, Vowel, shift_semitones,
+    Comb, Compressor, Delay, Distort, Equaliser, GateMode, INSERTS, Insert, LowPassGate,
+    MAX_PARAMS, Resonator, Vowel, shift_semitones,
 };
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
 use vt_model::song::{FilterMode, FilterType, Machine, Track};
@@ -712,6 +713,73 @@ pub(crate) enum SlotDrawing {
     Reso(Resonator, Cents),
     Comb(Comb, Cents),
     Vowel(Vowel, Cents),
+    /// A delay's repeats, at the song's tempo in thousandths of a BPM.
+    Delay(Delay, u32),
+    /// A reverb's tail: a `Reverb`, `Plate`, `Spring` or `Space`.
+    Tail(Insert),
+}
+
+/// What a delay's drawing shows: the sound and each repeat, when and how loud on each side, how
+/// long a beat is and how many seconds across it goes, all in seconds.
+struct Repeated {
+    sounds: Vec<(f32, [f32; 2])>,
+    beat: f32,
+    span: f32,
+}
+
+impl Repeated {
+    fn of(settings: Delay, millibpm: u32, rate: u32) -> Self {
+        let shown = delay::repeats(settings, delay::frames_per_tick(millibpm, rate), rate);
+        let mut sounds = vec![(0.0, [shown.dry; 2])];
+        sounds.extend(shown.taps.iter().map(|tap| (tap.seconds, tap.levels)));
+        // A repeat's time past the last, so it isn't on the edge.
+        let time = shown.taps.first().map_or(0.0, |tap| tap.seconds);
+        let beat = 60_000.0 / millibpm.max(1) as f32;
+        let last = shown.taps.last().map_or(0.0, |tap| tap.seconds);
+        Self {
+            sounds,
+            beat,
+            span: (last + time).max(beat),
+        }
+    }
+
+    fn caption(&self) -> String {
+        format!("{:.2} s across, a line a beat", self.span)
+    }
+}
+
+/// A reverb's tail, if it has one worked out: a `Reverb`'s, `Plate`'s, `Spring`'s or `Space`'s.
+fn tail_of(insert: Insert, rate: u32) -> Option<Tail> {
+    match insert {
+        Insert::Reverb(settings) => reverb::tail(settings, rate),
+        Insert::Plate(settings) => plate::tail(settings, rate),
+        Insert::Spring(settings) => spring::tail(settings, rate),
+        Insert::Space(settings) => space::tail(settings, rate),
+        _ => None,
+    }
+}
+
+/// How many seconds across a reverb's tail goes, a little past where its slowest part has fallen
+/// 60 dB, and how far apart the lines down it are: a second, or ten for a tail over 15 s.
+fn tail_span(tail: Tail) -> (f32, f32) {
+    let longest = tail.seconds[0].max(tail.seconds[1]);
+    let span = tail.pre + longest * 1.15;
+    (span, if span > 15.0 { 10.0 } else { 1.0 })
+}
+
+/// What a reverb's tail says under its box: how long it takes to fall 60 dB, at its lows and at
+/// its highs, and how far apart the lines down it are.
+fn tail_caption(tail: Tail) -> String {
+    let (_, every) = tail_span(tail);
+    let lines = if every > 1.0 {
+        "a line every 10 s"
+    } else {
+        "a line a second"
+    };
+    format!(
+        "falls 60 dB in {:.1} s, highs {:.1} s, {lines}",
+        tail.seconds[0], tail.seconds[1]
+    )
 }
 
 /// How many steps a low-pass gate's level and cutoff are drawn in, from 0 to 1 each, so a gate
@@ -789,7 +857,12 @@ impl SlotDrawing {
     /// rack's, a distortion's transfer curve for a type that shapes each sample alone, or a filter
     /// effect's curve, at the note the track's slots follow and, for a low-pass gate, as far as
     /// it's open. Before the engine says, it's at middle C, and a gate where it rests.
-    fn zoomed(insert: Insert, live: Option<&LiveValues>, slot: usize) -> Option<Self> {
+    fn zoomed(
+        insert: Insert,
+        live: Option<&LiveValues>,
+        slot: usize,
+        (rate, millibpm): (u32, u32),
+    ) -> Option<Self> {
         let values = live.map(|live| live.inserts[slot]);
         let note = Cents::of(live.map_or(DEFAULT_NOTE, |live| live.note));
         match playing(insert, values) {
@@ -803,6 +876,11 @@ impl SlotDrawing {
             Insert::Reso(settings) => Some(Self::Reso(settings, note)),
             Insert::Comb(settings) => Some(Self::Comb(settings, note)),
             Insert::Vowel(settings) => Some(Self::Vowel(settings, note)),
+            Insert::Delay(settings) => Some(Self::Delay(settings, millibpm)),
+            playing @ (Insert::Reverb(_)
+            | Insert::Plate(_)
+            | Insert::Spring(_)
+            | Insert::Space(_)) => tail_of(playing, rate).map(|_| Self::Tail(playing)),
             _ => Self::of(insert, values),
         }
     }
@@ -811,9 +889,13 @@ impl SlotDrawing {
     fn width(self) -> usize {
         match self {
             Self::Compressor(_) | Self::Distort(_) => DYNAMICS_CURVE_WIDTH,
-            Self::Eq(_) | Self::Lpg(..) | Self::Reso(..) | Self::Comb(..) | Self::Vowel(..) => {
-                EQ_CURVE_WIDTH
-            }
+            Self::Eq(_)
+            | Self::Lpg(..)
+            | Self::Reso(..)
+            | Self::Comb(..)
+            | Self::Vowel(..)
+            | Self::Delay(..)
+            | Self::Tail(_) => EQ_CURVE_WIDTH,
         }
     }
 
@@ -822,9 +904,13 @@ impl SlotDrawing {
     fn zoomed_size(self) -> (usize, usize) {
         let width = match self {
             Self::Compressor(_) | Self::Distort(_) => ZOOM_CURVE_WIDTH,
-            Self::Eq(_) | Self::Lpg(..) | Self::Reso(..) | Self::Comb(..) | Self::Vowel(..) => {
-                ZOOM_EQ_WIDTH
-            }
+            Self::Eq(_)
+            | Self::Lpg(..)
+            | Self::Reso(..)
+            | Self::Comb(..)
+            | Self::Vowel(..)
+            | Self::Delay(..)
+            | Self::Tail(_) => ZOOM_EQ_WIDTH,
         };
         (width, ZOOM_PANEL_HEIGHT)
     }
@@ -865,6 +951,17 @@ impl SlotDrawing {
                     size,
                 )
             }
+            Self::Delay(settings, millibpm) => {
+                let shown = Repeated::of(settings, millibpm, rate);
+                plot::repeats(&shown.sounds, shown.beat, shown.span, size)
+            }
+            Self::Tail(insert) => match tail_of(insert, rate) {
+                Some(tail) => {
+                    let (span, every) = tail_span(tail);
+                    plot::tail(tail.pre, tail.seconds, span, every, size)
+                }
+                None => Plot::new(size.0, size.1),
+            },
             Self::Vowel(settings, note) => {
                 let filtering = Filtering {
                     db_at: vowel::response(settings, note.note(), rate),
@@ -873,6 +970,19 @@ impl SlotDrawing {
                 };
                 plot::filtering(filtering, size)
             }
+        }
+    }
+}
+
+impl SlotDrawing {
+    /// What's said under its box zoomed in, if anything: a delay's and a reverb's time scale.
+    fn caption(self, rate: u32) -> Option<String> {
+        match self {
+            Self::Delay(settings, millibpm) => {
+                Some(Repeated::of(settings, millibpm, rate).caption())
+            }
+            Self::Tail(insert) => tail_of(insert, rate).map(tail_caption),
+            _ => None,
         }
     }
 }
@@ -942,6 +1052,8 @@ pub struct Graphics {
     /// The track page's panels: the filter's curve and the sample's waveform, the envelopes and
     /// the FX slots' curves.
     panels: PanelImages,
+    /// What's said under the zoomed slot's box, and the drawing it was worked out for.
+    zoom_caption: Option<(SlotDrawing, Option<String>)>,
     /// The scope's picture, as the rows it covers in each column, and its image.
     scope: Option<(Vec<(usize, usize)>, u32)>,
     /// The picker's preview and its images.
@@ -995,6 +1107,7 @@ impl Graphics {
             base: (std::process::id() & 0xFFFF) << 8,
             next: 0,
             panels: PanelImages::default(),
+            zoom_caption: None,
             scope: None,
             preview: None,
             sample_wave: None,
@@ -1523,7 +1636,18 @@ impl Graphics {
                 .device_cursor(Some(track))
                 .map_or(0, |cursor| cursor.device)
                 .min(INSERTS - 1);
-            if let Some(shown) = SlotDrawing::zoomed(track.inserts[slot], app.live.as_ref(), slot) {
+            let tempo = (app.rate, app.song().millibpm);
+            let shown = SlotDrawing::zoomed(track.inserts[slot], app.live.as_ref(), slot, tempo);
+            // The caption is worked out again only when the drawing changes, as a reverb's tail
+            // takes a few milliseconds.
+            if self.zoom_caption.as_ref().map(|(of, _)| of) != shown.as_ref() {
+                self.zoom_caption = shown.map(|shown| (shown, shown.caption(app.rate)));
+            }
+            app.zoom_caption = self
+                .zoom_caption
+                .as_ref()
+                .and_then(|(_, caption)| caption.clone());
+            if let Some(shown) = shown {
                 // The zoomed slot always has the cursor.
                 let shade = Shade::of(true, heard_bypassed(app, track, slot));
                 let rate = app.rate;
