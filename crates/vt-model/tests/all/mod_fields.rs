@@ -317,10 +317,13 @@ fn a_type_has_the_fields_the_track_page_gave_it() {
     }
 }
 
+/// A grid's columns, top to bottom.
+type Columns = [[Option<usize>; 3]];
+
 #[test]
 fn each_types_title_settings_and_grid_are_the_mod_pages() {
     use ModField::*;
-    let today: [(&[ModField], &[[Option<usize>; 3]]); 7] = [
+    let today: [(&[ModField], &Columns); 7] = [
         (
             &[Attack, Decay, Release, Sustain, Depth, Reset],
             &[[Some(0), Some(1), Some(2)], [Some(3), Some(4), Some(5)]],
