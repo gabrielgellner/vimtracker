@@ -19,6 +19,7 @@ use vt_model::step::{
 use crate::input::bindings::{Cmd, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::input::typed::{HEX, Typed};
 
 use super::{App, Entry, GRID_SIZES, LONGEST_LABEL, next_note_velocity, snap_by};
 
@@ -350,18 +351,16 @@ impl App {
                 }
             }
             KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
-                self.modes.entry.text.push(c.to_ascii_uppercase());
-                if self.modes.entry.text.len() == 2 {
-                    self.commit_value();
+                if let Typed::Commit(text) = self.modes.entry.text.key(key.code, HEX) {
+                    self.commit_value(&text);
                 }
             }
             _ => {}
         }
     }
 
-    fn commit_value(&mut self) {
-        let text = std::mem::take(&mut self.modes.entry.text);
-        let Ok(value) = u8::from_str_radix(&text, 16) else {
+    fn commit_value(&mut self, text: &str) {
+        let Ok(value) = u8::from_str_radix(text, 16) else {
             return;
         };
         match self.services.cursor.field {
@@ -425,9 +424,7 @@ impl App {
                     self.services.status = "Only a setting that sweeps has a fine part".to_owned();
                     return;
                 }
-                self.modes.entry.text.push(c.to_ascii_uppercase());
-                if self.modes.entry.text.len() == 2 {
-                    let text = std::mem::take(&mut self.modes.entry.text);
+                if let Typed::Commit(text) = self.modes.entry.text.key(key.code, HEX) {
                     if let Ok(fine) = u8::from_str_radix(&text, 16) {
                         self.set_fine(slot, fine);
                     }
@@ -497,7 +494,7 @@ impl App {
             // A label on this track goes to its value. Anything else opens the list, searching
             // for what was typed, so a name half remembered still gets there.
             KeyCode::Enter if !self.modes.entry.text.is_empty() => {
-                let name = std::mem::take(&mut self.modes.entry.text);
+                let name = self.modes.entry.text.take();
                 let track = self.song().tracks.get(self.services.cursor.track);
                 match track.and_then(|track| FxCommand::typed(&name, track)) {
                     Some(command) => {
@@ -533,7 +530,7 @@ impl App {
                     self.modes.entry.text.clear();
                     return;
                 }
-                let name = std::mem::take(&mut self.modes.entry.text);
+                let name = self.modes.entry.text.take();
                 let kind = match name.as_str() {
                     "" => self
                         .current_gate()
@@ -585,9 +582,7 @@ impl App {
                 }
             }
             KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
-                self.modes.entry.text.push(c.to_ascii_uppercase());
-                if self.modes.entry.text.len() == 2 {
-                    let text = std::mem::take(&mut self.modes.entry.text);
+                if let Typed::Commit(text) = self.modes.entry.text.key(key.code, HEX) {
                     if let Ok(length) = u8::from_str_radix(&text, 16) {
                         self.set_length(Some(length));
                     }
@@ -630,7 +625,7 @@ impl App {
             KeyCode::Char(sign @ ('-' | '+' | '='))
                 if !key.ctrl && self.modes.entry.text.len() <= 1 =>
             {
-                self.modes.entry.text = if sign == '-' { "-" } else { "+" }.to_owned();
+                self.modes.entry.text = if sign == '-' { "-" } else { "+" }.into();
             }
             KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
                 let most = self.most_nudge_here();

@@ -9,7 +9,7 @@ use vt_model::macros::{
     GEN_ZERO, GenColumn, MACROS, Macro, MacroMap, MacroTarget, top_value, valid_name,
 };
 use vt_model::settings::{Kind, Owner};
-use vt_model::shape::params::{BEND_JUMP, BEND_NUDGE};
+use vt_model::shape::params::{BEND_JUMP, BEND_NUDGE, Typing};
 use vt_model::song::Track;
 
 use crate::app::App;
@@ -17,17 +17,17 @@ use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker};
+use crate::input::typed::{Typed, TypedValue};
+use crate::kitty::plot::{MappingDrawing, Shade};
+use crate::kitty::{PanelIds, PanelKey, PanelWant, Shape};
 use crate::track_page::Control;
+use crate::views::mapping::{RESPONSE_HEIGHT, RESPONSE_WIDTH};
 
 /// The macro picker's title, which `M` opens and a digit chooses in at once.
 pub const MACRO_PICKER: &str = "Map to a macro";
 
 /// How far a large step moves an end of a range, in coarse steps.
 const RANGE_JUMP: i32 = 0x10;
-
-/// The most characters a typed `Curve` or `S` takes, as the shape panel's: a sign and three
-/// digits.
-const BEND_TEXT: usize = 4;
 
 /// What of a mapping the view's cursor is on, across its row: the ends of its range, then its
 /// response's `Curve` and `S` (decision 314).
@@ -90,7 +90,30 @@ pub struct MappingView {
     pub deleting: bool,
     /// What's typed so far after `i`, if it's typing: hex digits for an end, a signed whole
     /// number for a bend.
-    pub typing: Option<String>,
+    pub typing: Option<TypedValue>,
+    /// The id of the terminal's image of the response of the mapping under the cursor.
+    pub images: PanelIds,
+}
+
+impl MappingView {
+    /// The picture the view wants on screen for the cursor's track: the response of the mapping
+    /// under its cursor (decision 314), drawn again as its `Curve`, its `S`, its way or its
+    /// macro's turn changes.
+    pub(crate) fn panels(&self, track: &Track) -> Vec<PanelWant> {
+        let held = &track.macros[self.at];
+        let Some(map) = held
+            .maps
+            .get(self.row.min(held.maps.len().saturating_sub(1)))
+        else {
+            return Vec::new();
+        };
+        vec![PanelWant {
+            key: PanelKey::Mapping,
+            shade: Shade::Focused,
+            shape: Shape::Mapping(MappingDrawing::of(map, held.value)),
+            cells: (RESPONSE_WIDTH, RESPONSE_HEIGHT),
+        }]
+    }
 }
 
 /// An end of a mapping as the view shows it: a list's choice by name, and anything else as its
@@ -505,8 +528,8 @@ impl App {
             self.modes.mode = Mode::Normal;
             return;
         };
-        if let Some(typed) = view.typing.clone() {
-            self.mapping_typing(key.code, typed);
+        if view.typing.is_some() {
+            self.mapping_typing(key.code);
             return;
         }
         let count = self.services.page_track().macros[view.at].maps.len();
@@ -540,7 +563,7 @@ impl App {
             }
             KeyCode::Char('i') => {
                 if let Some(view) = self.mapping.as_mut() {
-                    view.typing = Some(String::new());
+                    view.typing = Some(TypedValue::default());
                 }
                 self.services.status = if view.field.bends() {
                     "From -100 to 100, then Enter".to_owned()
@@ -564,53 +587,43 @@ impl App {
 
     /// What's typed after `i`: hex digits for an end, set at the second, or a bend's signed number
     /// ended with `Enter`, as the shape panel's is; `Esc` gives up.
-    fn mapping_typing(&mut self, code: KeyCode, mut typed: String) {
-        let done = |app: &mut Self| {
-            if let Some(view) = app.mapping.as_mut() {
+    fn mapping_typing(&mut self, code: KeyCode) {
+        let Some(view) = self.mapping.as_mut() else {
+            return;
+        };
+        let bends = view.field.bends();
+        let Some(typed) = view.typing.as_mut() else {
+            return;
+        };
+        // An end's digits are neither taken back nor ended early.
+        if !bends && matches!(code, KeyCode::Backspace | KeyCode::Enter) {
+            return;
+        }
+        let rule = if bends {
+            Typing::Whole { signed: true }
+        } else {
+            Typing::Hex
+        };
+        let before = typed.clone();
+        match typed.key(code, rule.into()) {
+            Typed::Editing => {
+                if code == KeyCode::Backspace || *typed != before {
+                    self.services.status = typed.shown();
+                }
+            }
+            Typed::Cancel => {
                 view.typing = None;
-            }
-        };
-        let bends = self.mapping.as_ref().is_some_and(|view| view.field.bends());
-        let keep = |app: &mut Self, typed: String| {
-            app.services.status = format!("{typed}_");
-            if let Some(view) = app.mapping.as_mut() {
-                view.typing = Some(typed);
-            }
-        };
-        match code {
-            KeyCode::Esc => {
-                done(self);
                 self.say_mapping();
             }
-            KeyCode::Backspace if bends => {
-                typed.pop();
-                keep(self, typed);
-            }
-            KeyCode::Enter if bends => {
-                done(self);
+            Typed::Commit(typed) if bends => {
+                view.typing = None;
                 match typed.parse::<i32>() {
                     Ok(value) => self.set_bend(value),
                     Err(_) => self.services.status = "Curve and S run from -100 to 100".to_owned(),
                 }
             }
-            KeyCode::Char(c)
-                if bends
-                    && typed.len() < BEND_TEXT
-                    && (c.is_ascii_digit() || (typed.is_empty() && matches!(c, '-' | '+'))) =>
-            {
-                typed.push(c);
-                keep(self, typed);
-            }
-            KeyCode::Char(c) if !bends && c.is_ascii_hexdigit() => {
-                typed.push(c.to_ascii_uppercase());
-                if typed.len() < 2 {
-                    if let Some(view) = self.mapping.as_mut() {
-                        view.typing = Some(typed.clone());
-                    }
-                    self.services.status = format!("{typed}_");
-                    return;
-                }
-                done(self);
+            Typed::Commit(typed) => {
+                view.typing = None;
                 let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row())
                 else {
                     return;
@@ -627,7 +640,6 @@ impl App {
                     MacroMap { min: value, ..map }
                 });
             }
-            _ => {}
         }
     }
 

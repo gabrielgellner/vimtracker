@@ -21,6 +21,7 @@ use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems, write_wav};
 use vt_model::analysis;
 use vt_model::constants::{DEFAULT_TRACKS, FRAME_MS};
+use vt_model::modulation::MOD_SLOTS;
 use vt_model::project::{self, ProjectError};
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
@@ -31,7 +32,7 @@ use crate::config::Settings;
 use crate::input::command_history::CommandHistory;
 use crate::input::keys::{KEYBOARD_FLAGS, Key};
 use crate::input::mode::{Mode, View};
-use crate::kitty::{self, Graphics};
+use crate::kitty::{self, Graphics, Placements, SampleLines};
 use crate::places::RecentPlaces;
 use crate::theme;
 use crate::views;
@@ -451,7 +452,7 @@ fn main_loop(
                 inner: std::io::stdout(),
                 wrote: false,
             };
-            graphics.sync(app, &mut out)?;
+            app.send_pictures(graphics, &mut out)?;
             let drawn = terminal.draw(|frame| {
                 draw_screen(frame, app, Some(stats), Instant::now());
                 // The switches are pictures placed over their glyphs, which are hidden first.
@@ -461,7 +462,7 @@ fn main_loop(
             if changed {
                 shown.clone_from(drawn.buffer);
             }
-            graphics.place(app, &mut out)?;
+            app.place_pictures(graphics, &mut out)?;
             redraws.drawn(changed || out.wrote);
             shown_song = Arc::clone(app.song());
         }
@@ -573,6 +574,84 @@ fn hear_input(
             name: None,
             note: Some(format!("The input isn't heard: {error}")),
         },
+    }
+}
+
+impl App {
+    /// Send the pictures the screen is about to show, if the terminal lacks them, and give each
+    /// page and overlay the ids of its own: the track page's panels and the mapping view's
+    /// response, the sample page's waveform and overview, the picker's preview and the scope.
+    /// Before ratatui draws, as the drawing puts their placeholders down.
+    pub fn send_pictures(
+        &mut self,
+        graphics: &mut Graphics,
+        out: &mut impl std::io::Write,
+    ) -> std::io::Result<()> {
+        graphics.begin(out)?;
+        let rate = self.services.rate;
+        if self.modes.view == View::Track && self.services.track_here().is_some() {
+            let wants = self.track_page.panels(&self.ctx());
+            let ids = graphics.panels(&wants, rate, out)?;
+            self.track_page.take_images(ids, &wants, rate);
+            if let (Some(view), Some(track)) = (self.mapping.as_mut(), self.services.track_here()) {
+                view.images = graphics.panels(&view.panels(track), rate, out)?;
+            }
+        }
+        if self.modes.view == View::Sample {
+            // So `h` and `l` move the cursor's line by a pixel of these.
+            self.sample_page.cell_width = Some(graphics.cell().0);
+            self.sample_images = match self.sample_page_here() {
+                Ok(shown) => Some(graphics.sample(&shown, &self.sample_page, out)?),
+                Err(_) => None,
+            };
+        } else {
+            self.sample_images = None;
+        }
+        let shown = self
+            .picker
+            .as_ref()
+            .and_then(|picker| picker.preview.clone());
+        let preview = graphics.preview(shown, out)?;
+        if let (Some(picker), Some((ids, wave))) = (self.picker.as_mut(), preview) {
+            picker.preview_images.clone_from(ids);
+            picker.preview_wave = *wave;
+        }
+        if self.scope_shown
+            && let Some(id) = graphics.scope(&self.services.scope, out)?
+        {
+            self.scope_image = Some(id);
+        }
+        graphics.finish(out)
+    }
+
+    /// Place what the terminal places itself, once the screen is drawn: the dots on the track
+    /// page's pictures, and the sample page's ruler marks, playheads and cursor as lines, each
+    /// only while nothing is drawn over the page.
+    pub fn place_pictures(
+        &self,
+        graphics: &mut Graphics,
+        out: &mut impl std::io::Write,
+    ) -> std::io::Result<()> {
+        let now = Instant::now();
+        let dots = if self.modes.view == View::Track {
+            self.track_page.dots(&self.ctx(), graphics.cell(), now)
+        } else {
+            [None; MOD_SLOTS]
+        };
+        let page = &self.sample_page;
+        let sample = SampleLines {
+            page,
+            marks: views::sample::marks_placed(self, now),
+            playheads: views::sample::lines_placed(self, now),
+            cursor: self.modes.view == View::Sample
+                && page.cursor_line
+                && self.sample_images.is_some()
+                && !views::sample::overlaid(self, now),
+            // With the focus on the settings rows, `h` and `l` go along them, so the line is set
+            // back to show it isn't what moves.
+            dimmed: page.setting.is_some() && self.modes.mode != Mode::Keys,
+        };
+        graphics.place(&Placements { dots, sample }, out)
     }
 }
 

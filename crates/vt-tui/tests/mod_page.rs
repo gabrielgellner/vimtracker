@@ -28,6 +28,7 @@ const LFOS: usize = 3;
 
 mod common;
 use common::*;
+use vt_tui::kitty::{PanelIds, PanelKey};
 
 /// Every setting a new track's mod slots have under their types, the three ADSRs' and the three
 /// LFOs', then the accumulator's and the arpeggio's.
@@ -436,9 +437,14 @@ fn each_slots_type_mode_and_destination_are_in_its_title() {
 #[test]
 fn the_mod_page_fills_the_keys_box_at_163_by_42() {
     let (mut app, _realtime) = app();
-    app.track_page.mod_images = Some([
-        0x01_02_03, 0x04_05_06, 0x07_08_09, 0x0A_0B_0C, 0x0D_0E_0F, 0x10_11_12,
-    ]);
+    app.track_page.images = PanelIds::from_iter(
+        [
+            0x01_02_03, 0x04_05_06, 0x07_08_09, 0x0A_0B_0C, 0x0D_0E_0F, 0x10_11_12,
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(slot, id)| (PanelKey::Mod(slot), id)),
+    );
     press(&mut app, " 5L");
     for keys_mode in [false, true] {
         if keys_mode {
@@ -910,17 +916,17 @@ fn a_switched_out_envelopes_shape_is_sent_faint_and_its_own_comes_back() {
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     press(&mut app, " 5L");
-    graphics.sync(&mut app, &mut Vec::new()).unwrap();
-    let shown = app.track_page.mod_images.unwrap();
+    app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+    let shown = mod_images(&app);
     press(&mut app, "b");
-    graphics.sync(&mut app, &mut Vec::new()).unwrap();
-    let faint = app.track_page.mod_images.unwrap();
+    app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+    let faint = mod_images(&app);
     assert_ne!(faint[0], shown[0], "a faint picture of its shape");
     assert_eq!(faint[1..], shown[1..], "the others' stay");
     // Back in, the picture it had is still held, so it's placed again.
     press(&mut app, "b");
-    graphics.sync(&mut app, &mut Vec::new()).unwrap();
-    assert_eq!(app.track_page.mod_images.unwrap(), shown);
+    app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+    assert_eq!(mod_images(&app), shown);
 }
 
 #[test]
@@ -929,15 +935,15 @@ fn a_slots_picture_follows_its_type() {
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     press(&mut app, " 5L");
-    graphics.sync(&mut app, &mut Vec::new()).unwrap();
-    let shown = app.track_page.mod_images.unwrap();
+    app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+    let shown = mod_images(&app);
     // Mod 3, made an LFO, has a cycle where its envelope's shape was, and its cycle is placed.
     press(&mut app, "}}K");
     press(&mut app, "/lfo");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].mods[2].kind, ModKind::Lfo);
-    graphics.sync(&mut app, &mut Vec::new()).unwrap();
-    let now = app.track_page.mod_images.unwrap();
+    app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+    let now = mod_images(&app);
     assert_ne!(now[2], shown[2]);
     assert_eq!(now[5], shown[5]);
     screen_cells(&mut app);
@@ -994,10 +1000,10 @@ fn reported(app: &App, turns: [Option<f64>; LFOS]) -> LiveValues {
 /// itself, giving back what was sent for each.
 fn frame(app: &mut App, graphics: &mut Graphics) -> (String, String) {
     let mut synced = Vec::new();
-    graphics.sync(app, &mut synced).unwrap();
+    app.send_pictures(graphics, &mut synced).unwrap();
     screen_cells(app);
     let mut placed = Vec::new();
-    graphics.place(app, &mut placed).unwrap();
+    app.place_pictures(graphics, &mut placed).unwrap();
     (
         String::from_utf8_lossy(&synced).into_owned(),
         String::from_utf8_lossy(&placed).into_owned(),
@@ -1171,9 +1177,9 @@ fn an_lfos_cycle_is_sent_again_only_for_its_wave_phase_deform_or_depths_sign() {
     let mut graphics = Graphics::new();
     let mut sync = |app: &mut App| {
         let mut sent = Vec::new();
-        graphics.sync(app, &mut sent).unwrap();
+        app.send_pictures(&mut graphics, &mut sent).unwrap();
         (
-            app.track_page.mod_images.unwrap()[LFOS],
+            app.track_page.images.get(PanelKey::Mod(LFOS)).unwrap(),
             // The panels' pictures, and not the scope's.
             String::from_utf8_lossy(&sent).matches(",c=24,r=5,").count(),
         )
@@ -1252,11 +1258,11 @@ fn three_lfos_dots_move_by_placing_alone_at_about_60_bytes_each() {
         realtime.process(&mut out);
         app.tick();
         let mut synced = Vec::new();
-        graphics.sync(&mut app, &mut synced).unwrap();
+        app.send_pictures(&mut graphics, &mut synced).unwrap();
         screen_cells(&mut app);
         let mut placed = Vec::new();
         let started = std::time::Instant::now();
-        graphics.place(&app, &mut placed).unwrap();
+        app.place_pictures(&mut graphics, &mut placed).unwrap();
         placing += started.elapsed();
         let placed = String::from_utf8_lossy(&placed);
         // After the first frame, which sends the pictures and the dots' two images.
@@ -1432,10 +1438,10 @@ fn a_slots_picture_is_sent_again_when_its_polarity_changes() {
     ]);
     let mut graphics = Graphics::new();
     let mut ids = |app: &mut App| {
-        graphics.sync(app, &mut Vec::new()).unwrap();
+        app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
         // Twice, as a picture changed a frame after another waits a frame.
-        graphics.sync(app, &mut Vec::new()).unwrap();
-        app.track_page.mod_images.unwrap()
+        app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+        mod_images(app)
     };
     let first = ids(&mut app);
     let set = |app: &mut App, slot: usize, polarity: Polarity| {
@@ -1468,9 +1474,9 @@ fn an_envelopes_curve_is_its_mode_in_the_title_and_its_picture_follows_it() {
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     let mut ids = |app: &mut App| {
-        graphics.sync(app, &mut Vec::new()).unwrap();
-        graphics.sync(app, &mut Vec::new()).unwrap();
-        app.track_page.mod_images.unwrap()
+        app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+        app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+        mod_images(app)
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
@@ -1523,9 +1529,9 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     let mut ids = |app: &mut App| {
-        graphics.sync(app, &mut Vec::new()).unwrap();
-        graphics.sync(app, &mut Vec::new()).unwrap();
-        app.track_page.mod_images.unwrap()
+        app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+        app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+        mod_images(app)
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
@@ -1622,9 +1628,9 @@ fn a_drum_slot_strikes_onto_a_body_with_its_own_settings_ratchet_and_picture() {
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     let mut ids = |app: &mut App| {
-        graphics.sync(app, &mut Vec::new()).unwrap();
-        graphics.sync(app, &mut Vec::new()).unwrap();
-        app.track_page.mod_images.unwrap()
+        app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+        app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+        mod_images(app)
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
@@ -1696,9 +1702,9 @@ fn an_lpg_slot_has_no_mode_and_its_own_attack_decay_colour_and_reset() {
     let (mut app, _realtime) = app();
     let mut graphics = Graphics::new();
     let mut ids = |app: &mut App| {
-        graphics.sync(app, &mut Vec::new()).unwrap();
-        graphics.sync(app, &mut Vec::new()).unwrap();
-        app.track_page.mod_images.unwrap()
+        app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+        app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
+        mod_images(app)
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);

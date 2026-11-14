@@ -166,7 +166,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             let selected = here && app.song_column == column;
             let typing = selected && app.modes.mode == Mode::Insert;
             let text = if typing {
-                format!("{}_", app.modes.entry.text)
+                app.modes.entry.text.shown()
             } else {
                 text
             };
