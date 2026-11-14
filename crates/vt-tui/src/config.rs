@@ -1,5 +1,5 @@
 //! The program's settings for this machine, kept in `settings.ron` beside `audio.ron`: where its
-//! kits and samples are. They belong to the machine rather than to a song.
+//! kits, samples and presets are. They belong to the machine rather than to a song.
 
 use std::path::{Path, PathBuf};
 
@@ -15,6 +15,8 @@ const TEMPLATE: &str = r#"// vimtracker's settings for this machine. A path can 
     kits: ["~/Music/vimtracker/kits"],
     // Folders the sample browser lists, after the project's own samples.
     samples: ["~/Music/vimtracker/samples"],
+    // The folder presets are saved in and loaded from, with sounds and effects inside it.
+    presets: "~/Music/vimtracker/presets",
 )
 "#;
 
@@ -44,22 +46,26 @@ pub fn home_folder() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
-/// Where kits and samples are found. Each list is searched in order, and a folder that isn't
-/// there is passed over. Paths are kept as written, so `~/` stays readable in the file.
+/// Where kits, samples and presets are found. Each list is searched in order, and a folder that
+/// isn't there is passed over. Paths are kept as written, so `~/` stays readable in the file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub kits: Vec<String>,
     pub samples: Vec<String>,
+    /// The one folder presets are saved in and loaded from, made on the first save, or empty for
+    /// none (decision 310).
+    pub presets: String,
 }
 
 impl Default for Settings {
-    /// Kits and samples in their own folders under `~/Music/vimtracker`, as the M8 and the
-    /// Polyend Tracker keep theirs in folders on the card.
+    /// Kits, samples and presets in their own folders under `~/Music/vimtracker`, as the M8 and
+    /// the Polyend Tracker keep theirs in folders on the card.
     fn default() -> Self {
         Self {
             kits: vec!["~/Music/vimtracker/kits".to_owned()],
             samples: vec!["~/Music/vimtracker/samples".to_owned()],
+            presets: "~/Music/vimtracker/presets".to_owned(),
         }
     }
 }
@@ -71,6 +77,7 @@ impl Settings {
         Self {
             kits: Vec::new(),
             samples: Vec::new(),
+            presets: String::new(),
         }
     }
 
@@ -118,6 +125,11 @@ impl Settings {
         self.kits.iter().map(|folder| expand_home(folder)).collect()
     }
 
+    /// The presets folder, with `~/` expanded, if there's one.
+    pub fn preset_folder(&self) -> Option<PathBuf> {
+        (!self.presets.is_empty()).then(|| expand_home(&self.presets))
+    }
+
     /// The folders the sample browser lists, with `~/` expanded.
     pub fn sample_folders(&self) -> Vec<PathBuf> {
         self.samples
@@ -159,6 +171,7 @@ mod tests {
         let settings: Settings = ron::from_str(r#"(kits: ["/kits", "~/more"])"#).unwrap();
         assert_eq!(settings.kits, ["/kits", "~/more"]);
         assert_eq!(settings.samples, Settings::default().samples);
+        assert_eq!(settings.presets, Settings::default().presets);
     }
 
     #[test]

@@ -379,6 +379,8 @@ fn icon_span(picker: &Picker, index: usize) -> Span<'static> {
         Icon::KitSoundLayered => glyphs::KIT_SOUND_LAYERED,
         Icon::Sample => glyphs::SAMPLE,
         Icon::Loop => glyphs::LOOP,
+        Icon::Sound(machine) => glyphs::machine(machine),
+        Icon::Effect => glyphs::EFFECT,
         Icon::Missing => glyphs::MISSING,
     };
     let style = if icon == Icon::Missing {

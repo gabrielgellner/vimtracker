@@ -26,6 +26,7 @@ pub mod onsets;
 pub mod order;
 pub mod patch_names;
 pub mod playable;
+pub mod preset;
 pub mod project;
 pub mod riff;
 pub mod sample;

@@ -157,6 +157,7 @@ fn paths_and_kits_complete_from_the_disk() {
     app.settings = Settings {
         kits: vec![root.join("kits").display().to_string()],
         samples: Vec::new(),
+        presets: String::new(),
     };
     press(&mut app, ":kit ");
     tap_special(&mut app, KeyCode::Tab);

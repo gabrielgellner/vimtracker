@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use vt_model::preset::PresetKind;
+
 use crate::explorer::Purpose;
 
 /// The file's name, in the config folder.
@@ -21,6 +23,8 @@ struct Lists {
     samples: Vec<PathBuf>,
     kits: Vec<PathBuf>,
     renders: Vec<PathBuf>,
+    sounds: Vec<PathBuf>,
+    effects: Vec<PathBuf>,
 }
 
 /// The folders used recently, and where they're kept.
@@ -67,6 +71,8 @@ impl RecentPlaces {
             Purpose::Sample => &self.lists.samples,
             Purpose::Kit => &self.lists.kits,
             Purpose::Render => &self.lists.renders,
+            Purpose::Preset(PresetKind::Sound) => &self.lists.sounds,
+            Purpose::Preset(PresetKind::Effect) => &self.lists.effects,
         }
     }
 
@@ -76,6 +82,8 @@ impl RecentPlaces {
             Purpose::Sample => &mut self.lists.samples,
             Purpose::Kit => &mut self.lists.kits,
             Purpose::Render => &mut self.lists.renders,
+            Purpose::Preset(PresetKind::Sound) => &mut self.lists.sounds,
+            Purpose::Preset(PresetKind::Effect) => &mut self.lists.effects,
         }
     }
 

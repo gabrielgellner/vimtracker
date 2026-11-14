@@ -993,19 +993,22 @@ its own, and `S` on its notes changes it.
 
 ## Kit and sample folders
 
-Where kits and samples are found is set for this machine in
+Where kits, samples and presets are found is set for this machine in
 `~/.config/vimtracker/settings.ron`, made the first time the program runs:
 
 ```
 (
     kits: ["~/Music/vimtracker/kits"],
     samples: ["~/Music/vimtracker/samples"],
+    presets: "~/Music/vimtracker/presets",
 )
 ```
 
-Each is a list of folders, looked through in order, and a folder that isn't
-there is passed over. `:kit 909` opens the first `909.ron` found. Changes are
-read the next time the program starts.
+`kits` and `samples` are lists of folders, looked through in order, and a folder
+that isn't there is passed over. `:kit 909` opens the first `909.ron` found.
+`presets` is one folder, made the first time a preset is saved (see **Presets** in
+**The track page, envelopes and LFOs**). A file from before presets keeps the
+default. Changes are read the next time the program starts.
 
 `:kit` opens the kit folders as a tree, with the first one open, and opens on
 the kit in use. Beside the list are the sounds of the kit under the cursor, each
