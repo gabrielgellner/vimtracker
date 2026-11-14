@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds twenty of them out of what vimtracker already has, each as a
+let you steer. This chapter builds twenty-one of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -29,6 +29,7 @@ there are no samples to find.
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 | `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
 | `clock-multiplier` | 4ms' Shuffling Clock Multiplier | `Space o` rotating a group's speeds, and a live `CHA 00` column as `Skip` |
+| `cells` | dan derks' *less concepts* | `S`'s `Cells`: Wolfram's rules, a row a cell or a track a cell, a generation a pass |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -1422,13 +1423,88 @@ HH  X   x   .   x   X   x   x   .   X   .   .   x   X   x   .   x       . is CHA
 *   Give the group a groove of its own, `Swing 62` on each track's `Groove`, for the SCM's
     `Shuffle`.
 
+## Cellular automata
+
+Stephen Wolfram's elementary cellular automata are a row of cells, each on or off, that makes
+its next generation from itself: each cell looks at itself and its two neighbours, and a rule
+says, for each of the eight ways those three can be, whether the cell is on next. Write the
+eight answers as bits and the rule is a number from 0 to 255. Rule 30 is chaotic, rule 90 draws
+Sierpiński's triangle, 110 is complex enough to compute with, and 184 moves its cells along like
+cars in traffic. dan derks' *less concepts*, a script for monome's norns, plays them as a
+sequencer: a seed row and a rule, and each new generation is the next step's notes.
+
+`Cells` is a `Where`, so it chooses the rows any fill writes on, in two ways. On one column, each
+row is a cell, and with `Vary` each pass plays the next generation. Across tracks, each track is
+a cell and each row a generation, so the tracks play the automaton's picture down the phrase,
+and each pass carries on from the last row. The row is a ring: the first cell's left neighbour
+is the last.
+
+**How the song does it.** Track 1 is a plucked `String` whose rows are rule 30's cells, a
+`Random` fill of notes between `A-3` and `A-5` on them. It starts from one cell, in the middle
+of its sixteen rows, with `Vary` `Each pass`, so the first bar plays one note and each bar after
+it the next generation, growing until it's chaos. Tracks 2 to 6, a hat, a rimshot, a woodblock,
+a shaker and a low tom, are the five cells of rule 26, from one cell, the woodblock's, each row a
+generation, with `Vary` on too. Its picture goes round every twenty generations and each bar
+carries on from the last, so the beat comes back to the first bar's every five bars. A written
+kick and bass keep time. [`song.ron`](songs/cells/song.ron)
+
+```text
+The lead, a pass a line       The five across, a row a line, the first pass
+pass 1  ........x.......      00 ..x..    04 ...x.    08 ....x    0C x....
+pass 2  .......xxx......      01 .x.x.    05 ..x.x    09 x..x.    0D .x..x
+pass 3  ......xx..x.....      02 x...x    06 xx...    0A .xx..    0E ..xx.
+pass 4  .....xx.xxxx....      03 .x.xx    07 x.x.x    0B xx.x.    0F .xx.x
+```
+
+Read down the five columns of the second picture and each is one track's rhythm: the hat, the
+first, plays rows `02`, `06`, `07`, `09`, `0B` and `0C`.
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 112`.
+2.  The lead, track 1: `Space 5`, `K` `string` `Enter`, `:name LD`. `Space 3`, `vG` on the Note
+    column, and `S`. On `Fill`, `K` `random` `Enter`; `From` `i` `a3` `Enter` and `To` `i` `a5`
+    `Enter`. On `Where`, `K` `cells` `Enter`: the panel says `Each row a cell, stepped on
+    by Vary`. `Rule` `i` `30` `Enter`, `Start` `K` `one` `Enter`, and `Vary` `K`
+    `each` `Enter`. `L` keeps it live.
+3.  The five: on tracks 2 to 6 the machines `hat`, `snare`, `modal`, `dust` and `modal` (`K`
+    `/hat` `Enter` and so on), named `HH`, `RS`, `WB`, `SH` and `LT`.
+4.  On track 2, `Space 3`, `vG` on the Note column, `W` four times to reach track 6, and `S`. The
+    panel says `Each track a cell, a row a generation`. `From` and `To` `c4`, `Where` `Cells`,
+    `Rule` `26`, `Start` `One` and `Vary` `Each pass`, then `L`: a generator on each track, each
+    its own cell.
+5.  Each its own note: on the rimshot's rows, `gl`, `From` and `To` `c3`, and `L`; the same with
+    `e4` for the woodblock, `c5` for the shaker and `a2` for the tom. Its rows stay as they were,
+    as the note doesn't change them.
+6.  Tracks 7 and 8: a `Kick` on every beat, and a `VA` bass on `A-1`, `E-1`, `C-2` and `G-1`.
+
+All five start from one row worked out for all of them as `S` shapes them, so they play one
+automaton, and a track's `gl` has `Rule` but no `Start`. `Seed` would draw that row from the
+seed, which `r` rolls again, and `Hits` would take it from which tracks have a note on the first
+row.
+
+**Try next.**
+
+*   On the lead, `gl` and `Rule` `110`: it grows to the left only. `90` draws Sierpiński's
+    triangle, and on a ring of sixteen dies out after eight generations, so its bars thin to
+    nothing; `184` slides its one note a row along each bar.
+*   `Start` `Seed` on the lead: it starts from cells drawn from the seed, about half of them on,
+    and `r` rolls another start.
+*   `Vary` `Every 4 passes` holds each generation for four bars. `Once` stops it: the first pass
+    plays every time.
+*   On the Gen page, `Space 8`, `Rule` and `Start` are at the foot of the third column, where
+    Euclid's `Hits` and `Rotate` go: map a macro to `Rule` with `M`, and an LFO on the macro
+    goes through the rules as it plays.
+*   `S` across the five again with `Rule` `30`: chaos down the kit. `gl` on one track and a new
+    `Rule` takes that track alone to another automaton, as each is a generator of its own.
+*   `Space g a` keeps the rows as last heard, as plain notes, to edit by hand.
+
 ## Generators still to come
 
 These are planned, each its own issue, and this chapter grows a section as each lands:
 
 | Issue | Generator |
 |---|---|
-| [#589](https://github.com/gabrielgellner/vimtracker/issues/589) | Cellular automata rhythms from Wolfram's elementary rules |
 | [#590](https://github.com/gabrielgellner/vimtracker/issues/590) | Tonnetz chord movement: P, L and R moves |
 | [#591](https://github.com/gabrielgellner/vimtracker/issues/591) | Per-attribute loop lengths after Kria |
 | [#592](https://github.com/gabrielgellner/vimtracker/issues/592) | Strange attractors as LFO shapes: Lorenz and Rössler |

@@ -15,11 +15,11 @@ use crate::scale::Scale;
 use crate::step::Step;
 
 use super::{
-    Acid, Bar, Bits, Channel, DEFAULT_RATE, Degrees, Division, Divisions, DrumPart, EUCLID_HITS,
-    Edge, FillKind, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH, MAX_FACTOR, MAX_MUTATION,
-    MAX_ORDER, MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, Mutations, Pink, Random,
-    Ring, Shape, ShapeColumn, Source, VARIES, Values, Variation, WAVES, WaveRate, Where,
-    default_step, degree_count, degree_name, first_note,
+    Acid, Bar, Bits, CellStart, Channel, DEFAULT_RATE, DEFAULT_RULE, Degrees, Division, Divisions,
+    DrumPart, EUCLID_HITS, Edge, FillKind, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH,
+    MAX_FACTOR, MAX_MUTATION, MAX_ORDER, MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH,
+    Mutations, Pink, Random, Ring, Shape, ShapeColumn, Source, VARIES, Values, Variation, WAVES,
+    WaveRate, Where, default_step, degree_count, degree_name, first_note,
 };
 use super::{CHILD, CLUSTERS, MARKOV, Role, SHARE, STATES, World};
 
@@ -47,6 +47,8 @@ const LISTED_CYCLES: [u16; 8] = [1, 2, 3, 4, 5, 6, 7, 8];
 const MAX_NOTE_STEP: u8 = 24;
 /// How far a large step moves `Multiply`'s factor.
 const FACTOR_JUMP: i32 = 4;
+/// How far a large step moves a `Cells`' rule.
+const RULE_JUMP: i32 = 10;
 
 /// How many columns and rows a generator's settings take on the Gen page.
 pub const GEN_COLUMNS: usize = 4;
@@ -139,6 +141,7 @@ pub enum Choice {
     Bar(Bar),
     World(World),
     Role(Role),
+    CellStart(CellStart),
     Vary(u8),
 }
 
@@ -156,6 +159,7 @@ impl Choice {
             Self::Bar(bar) => bar.name().to_owned(),
             Self::World(rhythm) => rhythm.name().to_owned(),
             Self::Role(part) => part.name().to_owned(),
+            Self::CellStart(start) => start.name().to_owned(),
             Self::Vary(passes) => vary_name(passes),
         }
     }
@@ -169,6 +173,7 @@ impl Choice {
             Self::Bar(bar) => Some(bar.description()),
             Self::World(rhythm) => Some(rhythm.description()),
             Self::Role(part) => Some(part.description()),
+            Self::CellStart(start) => Some(start.description()),
             _ => None,
         }
     }
@@ -192,6 +197,11 @@ impl Choice {
             Self::Role(chosen) => {
                 if let Where::Rhythm { part, .. } = &mut shape.place {
                     *part = chosen;
+                }
+            }
+            Self::CellStart(start) => {
+                if let Where::Cells(cells) = &mut shape.place {
+                    cells.start = start;
                 }
             }
             Self::Vary(passes) => shape.vary = passes,
@@ -356,7 +366,7 @@ pub enum GenParam {
     /// How many rows in a row take each value.
     Run,
     /// Which rows get a value, and its amount: an `Every`'s step, a `Chance`'s percent, or
-    /// Euclid's hits and rotation.
+    /// Euclid's hits and rotation, or a `Cells`' rule and the row it starts from.
     Where,
     Every,
     Chance,
@@ -375,6 +385,8 @@ pub enum GenParam {
     Rhythm,
     Role,
     Child,
+    Rule,
+    CellStart,
     /// How many passes each of its variations lasts, a new seed each time, for a shape that
     /// draws from its seed: none, each pass, or every two, four or eight.
     Vary,
@@ -382,7 +394,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 83] = [
+    pub const ALL: [Self; 85] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -465,6 +477,8 @@ impl GenParam {
         Self::Rhythm,
         Self::Role,
         Self::Child,
+        Self::Rule,
+        Self::CellStart,
         Self::Vary,
     ];
 
@@ -553,6 +567,8 @@ impl GenParam {
             Self::Rhythm => "rhythm",
             Self::Role => "role",
             Self::Child => "child",
+            Self::Rule => "rule",
+            Self::CellStart => "start",
             Self::Vary => "vary",
         }
     }
@@ -648,6 +664,8 @@ impl GenParam {
             Self::Child => "Child",
             Self::Hits => "Hits",
             Self::Rotate => "Rotate",
+            Self::Rule => "Rule",
+            Self::CellStart => "Start",
             Self::Vary => "Vary",
         }
     }
@@ -668,7 +686,8 @@ impl GenParam {
             | Self::Steps
             | Self::RingLength
             | Self::Order
-            | Self::Mutation => Units::Count,
+            | Self::Mutation
+            | Self::Rule => Units::Count,
             Self::Weights => Units::Weights,
             Self::Flip | Self::Keep => Units::Bits,
             Self::Step => Units::Step,
@@ -729,6 +748,7 @@ impl GenParam {
             | Self::Role
             | Self::Channel
             | Self::Bar
+            | Self::CellStart
             | Self::Vary => Units::Named,
         }
     }
@@ -870,7 +890,12 @@ impl GenParam {
             Self::Rhythm | Self::Role | Self::Child => {
                 rows && matches!(shape.place, Where::Rhythm { .. })
             }
-            Self::Vary => shape.draws(),
+            Self::Rule => rows && matches!(shape.place, Where::Cells(_)),
+            // Across tracks, the row they start from is worked out once, for all of them.
+            Self::CellStart => {
+                rows && matches!(shape.place, Where::Cells(cells) if cells.across.is_none())
+            }
+            Self::Vary => shape.can_vary(),
         }
     }
 
@@ -895,9 +920,9 @@ impl GenParam {
             ],
             _ => [Some(Self::Fill), Some(Self::Where), None, None],
         };
-        // A shape has `Vary` where it draws from its seed, whatever its column.
+        // A shape has `Vary` where it draws from its seed or evolves, whatever its column.
         if let Some(free) = title.iter_mut().find(|place| place.is_none())
-            && shape.draws()
+            && shape.can_vary()
         {
             *free = Some(Self::Vary);
         }
@@ -1015,6 +1040,7 @@ impl GenParam {
             super::Where::States(_) => [None, None, Some(States)],
             super::Where::Complementary { .. } => [None, Some(Share), Some(Side)],
             super::Where::Rhythm { .. } => [Some(Rhythm), Some(Role), Some(Child)],
+            super::Where::Cells(_) => [None, Some(Rule), Some(CellStart)],
             _ => none,
         };
         let mut more = none;
@@ -1200,6 +1226,14 @@ impl GenParam {
                 Where::Rhythm { part, .. } => part.name().to_owned(),
                 _ => String::new(),
             },
+            Self::Rule => match shape.place {
+                Where::Cells(cells) => cells.rule.to_string(),
+                _ => String::new(),
+            },
+            Self::CellStart => match shape.place {
+                Where::Cells(cells) => cells.start.name().to_owned(),
+                _ => String::new(),
+            },
             Self::Notes => shape.acid.notes.to_string(),
             Self::Octave | Self::Density | Self::Accent | Self::Slide => {
                 format!("{}%", acid_chance(shape.acid, self).unwrap_or(0))
@@ -1357,7 +1391,12 @@ impl GenParam {
             | Self::Masks
             | Self::Rows
             | Self::Side => Typing::Toggled,
-            Self::Part | Self::Channel | Self::Bar | Self::Rhythm | Self::Role => Typing::Listed,
+            Self::Part
+            | Self::Channel
+            | Self::Bar
+            | Self::Rhythm
+            | Self::Role
+            | Self::CellStart => Typing::Listed,
             Self::Axis | Self::Pitch => Typing::Named { list: false },
             Self::MapX
             | Self::MapY
@@ -1396,6 +1435,7 @@ impl GenParam {
             Self::Bar => Bar::ALL.into_iter().map(Choice::Bar).collect(),
             Self::Rhythm => World::ALL.into_iter().map(Choice::World).collect(),
             Self::Role => Role::ALL.into_iter().map(Choice::Role).collect(),
+            Self::CellStart => CellStart::ALL.into_iter().map(Choice::CellStart).collect(),
             Self::Vary => VARIES.into_iter().map(Choice::Vary).collect(),
             _ => return None,
         })
@@ -1422,6 +1462,9 @@ impl GenParam {
                 }
                 Choice::Role(chosen) => {
                     matches!(shape.place, Where::Rhythm { part, .. } if part == chosen)
+                }
+                Choice::CellStart(start) => {
+                    matches!(shape.place, Where::Cells(cells) if cells.start == start)
                 }
                 Choice::Vary(passes) => passes == shape.vary,
             })
@@ -1456,6 +1499,7 @@ impl GenParam {
             | Self::Bar
             | Self::Rhythm
             | Self::Role
+            | Self::CellStart
             | Self::Vary => {
                 let choices = self.choices(context).unwrap_or_default();
                 if !choices.is_empty() {
@@ -1516,6 +1560,12 @@ impl GenParam {
             Self::Side => {
                 if let Where::Complementary { second, .. } = &mut shape.place {
                     *second = !*second;
+                }
+            }
+            Self::Rule => {
+                if let Where::Cells(cells) = &mut shape.place {
+                    let rule = moved(i32::from(cells.rule), by(1, RULE_JUMP), 0, 0xFF);
+                    cells.rule = rule as u8;
                 }
             }
             Self::Notes => {
@@ -1806,6 +1856,16 @@ impl GenParam {
             // which part of a rhythm it plays, so the others keep theirs.
             Self::Side | Self::Role => {}
             Self::Rhythm => Choice::World(World::default()).apply(shape),
+            Self::Rule => {
+                if let Where::Cells(cells) = &mut shape.place {
+                    cells.rule = DEFAULT_RULE;
+                }
+            }
+            Self::CellStart => {
+                if let Where::Cells(cells) = &mut shape.place {
+                    cells.start = CellStart::default();
+                }
+            }
         }
     }
 
@@ -1875,6 +1935,10 @@ impl GenParam {
                     *amount = typed.min(100) as u8;
                 }
             }
+            Self::Rule => match (&mut shape.place, text.parse::<u8>()) {
+                (Where::Cells(cells), Ok(rule)) => cells.rule = rule,
+                _ => return Err("Rule runs from 0 to 255"),
+            },
             // A wave here is laid out by rows, so a rate has to be in time with them.
             Self::Rate => {
                 shape.rate = text
@@ -2052,6 +2116,7 @@ impl GenParam {
             | Self::Role
             | Self::Channel
             | Self::Bar
+            | Self::CellStart
             | Self::Vary => {}
             Self::MapX
             | Self::MapY
@@ -2096,6 +2161,8 @@ impl GenParam {
             Self::Rhythm => (0, World::ALL.len() as i32 - 1),
             Self::Role => (0, Role::ALL.len() as i32 - 1),
             Self::Bar => (0, Bar::ALL.len() as i32 - 1),
+            Self::CellStart => (0, CellStart::ALL.len() as i32 - 1),
+            Self::Rule => (0, 0xFF),
             Self::Quarters
             | Self::Eighths
             | Self::Sixteenths
@@ -2244,6 +2311,14 @@ impl GenParam {
                 Where::Rhythm { part, .. } => part.index() as i32,
                 _ => return None,
             },
+            Self::Rule => match shape.place {
+                Where::Cells(cells) => i32::from(cells.rule),
+                _ => return None,
+            },
+            Self::CellStart => match shape.place {
+                Where::Cells(cells) => cells.start.index() as i32,
+                _ => return None,
+            },
             Self::Notes => i32::from(shape.acid.notes),
             Self::Octave | Self::Density | Self::Accent | Self::Slide => {
                 i32::from(acid_chance(shape.acid, self)?)
@@ -2315,6 +2390,16 @@ impl GenParam {
             }
             Self::Rhythm => Choice::World(World::ALL[number as usize]).apply(shape),
             Self::Role => Choice::Role(Role::ALL[number as usize]).apply(shape),
+            Self::Rule => {
+                if let Where::Cells(cells) = &mut shape.place {
+                    cells.rule = number as u8;
+                }
+            }
+            Self::CellStart => {
+                if let Where::Cells(cells) = &mut shape.place {
+                    cells.start = CellStart::ALL[number as usize];
+                }
+            }
             Self::Notes => shape.acid.notes = number as u8,
             Self::Octave | Self::Density | Self::Accent | Self::Slide => {
                 if let Some(percent) = acid_chance_mut(&mut shape.acid, self) {
@@ -2781,6 +2866,74 @@ mod tests {
         );
         let acid = shape(FillKind::Acid);
         assert_eq!(GenParam::title(&acid)[3], Some(GenParam::Vary));
+    }
+
+    /// A `Cells` `Where` has its rule, `0` to `255`, and where it starts, a list, under it on the
+    /// Gen page as Euclid's are; a generator across tracks has no `Start`, as theirs is worked
+    /// out once for all of them; and it has `Vary` on any fill, as each pass steps it on.
+    #[test]
+    fn a_cells_rule_and_start() {
+        use GenParam::*;
+        let velocity = context(ShapeColumn::Velocity);
+        let mut ramp = shape(FillKind::Ramp);
+        let cells = GenParam::Where
+            .choices(&velocity)
+            .unwrap()
+            .into_iter()
+            .find(|choice| choice.name() == "Cells")
+            .expect("Cells is a Where");
+        cells.apply(&mut ramp);
+        assert_eq!(
+            GenParam::of(&ramp, ShapeColumn::Velocity, false),
+            [Fill, From, To, Curve, S, Run, Where, Rule, CellStart, Vary]
+        );
+        assert_eq!(Rule.shown(&ramp, &velocity), "30");
+        assert_eq!(CellStart.shown(&ramp, &velocity), "Seed");
+        Rule.step(&mut ramp, &velocity, 1, true).unwrap();
+        assert_eq!(Rule.number(&ramp, &velocity), Some(40));
+        Rule.typed(&mut ramp, &velocity, "110").unwrap();
+        assert_eq!(Rule.brief(&ramp, &velocity), "110");
+        assert!(Rule.typed(&mut ramp, &velocity, "256").is_err());
+        Rule.set_number(&mut ramp, &velocity, 300);
+        assert_eq!(
+            Rule.number(&ramp, &velocity),
+            Some(255),
+            "within its bounds"
+        );
+        Rule.step(&mut ramp, &velocity, 1, false).unwrap();
+        assert_eq!(Rule.number(&ramp, &velocity), Some(255));
+        Rule.reset(&mut ramp, &velocity, Starts::default());
+        assert_eq!(Rule.number(&ramp, &velocity), Some(30));
+        let names: Vec<String> = CellStart
+            .choices(&velocity)
+            .unwrap()
+            .into_iter()
+            .map(Choice::name)
+            .collect();
+        assert_eq!(names, ["Seed", "One", "Hits"]);
+        CellStart.step(&mut ramp, &velocity, 1, false).unwrap();
+        assert_eq!(CellStart.shown(&ramp, &velocity), "One");
+        assert_eq!(CellStart.bounds(&velocity), Some((0, 2)));
+        CellStart.set_number(&mut ramp, &velocity, 2);
+        assert_eq!(CellStart.shown(&ramp, &velocity), "Hits");
+        assert_eq!(CellStart.typing(ShapeColumn::Velocity), Typing::Listed);
+        CellStart.reset(&mut ramp, &velocity, Starts::default());
+        assert_eq!(CellStart.number(&ramp, &velocity), Some(0));
+        assert!(Rule.held_in_engine() && CellStart.held_in_engine());
+        assert_eq!(
+            GenParam::grid(&ramp, ShapeColumn::Velocity, false)[2],
+            [None, Some(Rule), Some(CellStart)]
+        );
+        assert_eq!(GenParam::title(&ramp)[2], Some(Vary));
+        // Across tracks.
+        let super::Where::Cells(own) = ramp.place else {
+            unreachable!()
+        };
+        ramp.place = super::Where::Cells(own.for_track(0, 1, &[false; 4]));
+        assert!(!CellStart.exists_for(&ramp, ShapeColumn::Velocity, false));
+        assert!(Rule.exists_for(&ramp, ShapeColumn::Velocity, false));
+        // Without it, neither.
+        assert_eq!(Rule.number(&shape(FillKind::Ramp), &velocity), None);
     }
 
     /// A `Divisions`' chances run from 0 to 100%, its channel and bar are lists, a track of its own

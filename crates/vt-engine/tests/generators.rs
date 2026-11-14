@@ -1014,3 +1014,63 @@ fn a_ring_runs_on_from_pass_to_pass_where_the_song_is() {
     ninth.process(&mut out);
     assert_eq!(rings_heard(&mut ninth, 0).last(), reported.last());
 }
+
+/// The nine-pass song with accents on its velocities where rule 30 has its cells on, from one cell
+/// in the middle of the phrase's sixteen, a generation each pass (decision 326).
+fn evolving_cells() -> Song {
+    let song = nine_passes();
+    let cells = vt_model::shape::Cells {
+        rule: 30,
+        start: vt_model::shape::CellStart::One,
+        ..vt_model::shape::Cells::default()
+    };
+    let mut accents = shape(FillKind::Ramp, 0x7F, 0x7F, Where::Cells(cells));
+    accents.vary = 1;
+    reshape(&song, accents)
+}
+
+/// `Cells` with `Vary` steps a generation each pass, which plays sample for sample as writing that
+/// generation would, whether the song plays to it or from it: pass 0 is the seed row as written,
+/// with nothing rendered, and each later pass renders once; and a held `Rule` plays what writing
+/// it would.
+#[test]
+fn cells_step_a_generation_each_pass_from_wherever_the_song_plays() {
+    let song = evolving_cells();
+    let (first, engine) = play_pass(&song, 0);
+    assert!(
+        first == play_pass(&kept(&song, 0), 0).0,
+        "pass 0 is as written"
+    );
+    assert!(heard(&engine, 0).iter().all(|run| run.renders == 0));
+    for pass in [1, 2, 8] {
+        let (heard_out, engine) = play_pass(&song, pass);
+        assert!(
+            heard_out == play_pass(&kept(&song, pass as i64), pass).0,
+            "pass {pass} plays its generation"
+        );
+        assert!(
+            heard_out != play_pass(&kept(&song, 0), pass).0,
+            "pass {pass} isn't the seed row"
+        );
+        let run = heard(&engine, 0)[0];
+        assert_eq!((run.pass, run.renders), (pass as i64, 1));
+    }
+    // From the top to the ninth pass, it renders once a pass and hears the ninth's generation.
+    let (_, from_top) = play(&song, &[], 8 * 16 + 4);
+    let run = heard(&from_top, 0)[0];
+    assert_eq!((run.pass, run.renders), (8, 8));
+    let ninth = |engine: &Engine| {
+        heard(engine, 0)
+            .into_iter()
+            .map(|run| run.pass)
+            .collect::<Vec<_>>()
+    };
+    let (_, from_ninth) = play_pass(&song, 8);
+    assert_eq!(ninth(&from_top), ninth(&from_ninth));
+    // Its rule held plays as writing it would. From one cell, every rule's seed row is the same,
+    // so it's heard from the second pass.
+    let ninety = (0, ShapeColumn::Velocity, GenParam::Rule, 90);
+    let (held, _) = play(&song, &[ninety], 32);
+    assert!(held == play(&reshaped(&song, ninety), &[], 32).0);
+    assert!(held != play(&song, &[], 32).0, "rule 90 isn't rule 30");
+}
