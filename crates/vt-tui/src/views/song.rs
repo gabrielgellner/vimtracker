@@ -10,7 +10,8 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_engine::engine::Transport;
-use vt_model::song::SectionStart;
+use vt_model::label::GROUP_NAME_CHARS;
+use vt_model::song::{SectionStart, Song};
 
 use crate::app::App;
 use crate::glyphs;
@@ -18,6 +19,7 @@ use crate::input::mode::Mode;
 use crate::song_view::{COLUMNS_BEFORE_TRACKS, LENGTH_COLUMN, REPEAT_COLUMN, START_COLUMN};
 use crate::theme;
 use crate::views::widgets::group;
+use crate::views::widgets::table::centred_run;
 
 /// Room for a section's number, its playing marker and its loop's bar.
 const NUMBER_WIDTH: usize = 5;
@@ -28,6 +30,9 @@ const REPEAT_WIDTH: usize = 5;
 const START_WIDTH: usize = 7;
 /// A track's column: two hex digits, or a name over them, and a gap.
 const TRACK_WIDTH: usize = 4;
+/// A group's column: its whole name, the mark beside it while it's folded, and a gap
+/// (decision 308).
+const GROUP_WIDTH: usize = GROUP_NAME_CHARS + 2;
 /// The rows that aren't sections: the title, a gap and the column names.
 const ROWS_AROUND_SECTIONS: u16 = 3;
 
@@ -39,18 +44,36 @@ fn first_shown(cursor: usize, count: usize, room: usize) -> usize {
         .min(count.saturating_sub(room))
 }
 
+/// How wide a track's column is: a group's holds its whole name.
+fn column_width(song: &Song, track: usize) -> usize {
+    if song.tracks[track].is_group() {
+        GROUP_WIDTH
+    } else {
+        TRACK_WIDTH
+    }
+}
+
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let song = app.song();
     let before = NUMBER_WIDTH + LENGTH_WIDTH + REPEAT_WIDTH + START_WIDTH;
-    let room = usize::from(area.width).saturating_sub(before) / TRACK_WIDTH;
-    // The tracks not folded away, of which as many as fit around the cursor's are drawn.
+    let room = usize::from(area.width).saturating_sub(before);
+    // The tracks not folded away, of which as many as fit around the cursor's are drawn, or the
+    // cursor's alone if none do.
     let cursor_track = app.song_column.saturating_sub(COLUMNS_BEFORE_TRACKS);
     let tracks: Vec<usize> = app.folds.shown(song).collect();
     let at = tracks.partition_point(|&track| track < cursor_track);
-    let first_track = first_shown(at, tracks.len(), room);
-    let shown_tracks = tracks[first_track..(first_track + room.max(1)).min(tracks.len())].to_vec();
+    let widths: Vec<usize> = tracks
+        .iter()
+        .map(|&track| column_width(song, track))
+        .collect();
+    let mut run = centred_run(&widths, at, room);
+    if run.is_empty() && !tracks.is_empty() {
+        let only = at.min(tracks.len() - 1);
+        run = only..only + 1;
+    }
+    let shown_tracks = tracks[run].to_vec();
 
     let mut heading = vec![Span::raw(format!(
         "{:<NUMBER_WIDTH$}{:<LENGTH_WIDTH$}{:<REPEAT_WIDTH$}{:<START_WIDTH$}",
@@ -63,14 +86,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             name.clone()
         };
-        // A group with its tracks folded into it says so, as the mixer does. A group named after
-        // its kit has three characters, cut to two to leave room for the mark, as the phrase
-        // view's labels are.
+        // A group with its tracks folded into it says so, as the mixer does, beside its whole
+        // name, as its column has room for both.
+        let width = column_width(song, track);
         if app.folds.holds(song, track) {
-            label = label.chars().take(TRACK_WIDTH - 2).collect();
+            label = label.chars().take(width - 2).collect();
             label.extend([glyphs::FOLDED, glyphs::ICON_SPACE]);
         } else {
-            label = label.chars().take(TRACK_WIDTH - 1).collect();
+            label = label.chars().take(width - 1).collect();
         }
         // A group and the tracks in it are in its colour, and an empty group is faint.
         let style = if group::is_empty(song, track) {
@@ -78,7 +101,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             group::style(song, track).unwrap_or_default()
         };
-        heading.push(Span::styled(format!("{label:<TRACK_WIDTH$}"), style));
+        heading.push(Span::styled(format!("{label:<width$}"), style));
     }
     let mut lines = vec![
         Line::styled("Song", bold),
@@ -187,7 +210,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             cell(
                 format!("{text}{mark}"),
                 COLUMNS_BEFORE_TRACKS + track,
-                TRACK_WIDTH,
+                column_width(song, track),
                 faint,
             );
         }

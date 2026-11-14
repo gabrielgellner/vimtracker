@@ -648,7 +648,7 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> Drawn {
         let name = format!("Track {:02} {}", app.cursor.track + 1, track.name);
         format!("{} ", name.trim_end())
     } else {
-        format!("{} ", track.kind.title())
+        format!("{} ", group::title(track))
     };
     // The track's machine or kind as a glyph before it, a group's in its colour, and whether it's
     // muted or soloed after.

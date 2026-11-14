@@ -922,6 +922,11 @@ group 2, and `:group off` takes it out of any, or `:group off 1-4` a range. Each
 `u`. The Sound page's `Group`, under `Send B`, does the same for one track: `=` and `-`
 go through `G1` to `G4`, `i` takes a number or `off`, and `x` takes it out.
 
+`:group name drums` names the cursor's group, or the group the cursor's track is in,
+`DRUMS`: up to five letters or digits, shown whole in the song view, on the mixer, in
+the phrase view's columns and in the track page's title, `Group 1 DRUMS`. `:group name`
+on its own gives it back its letters, `G1`. Each is one `u`.
+
 A track in a group plays through it, and the group plays through its own slots,
 `Level` and `Pan` to the master. Its sends still go from the track itself, so a snare
 can go to the reverb on its own, and the group has `Send A` and `Send B` of its own

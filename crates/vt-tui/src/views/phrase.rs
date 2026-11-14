@@ -9,9 +9,10 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::constants::{BAR_STEPS, BEAT_STEPS, FX_SLOTS, TICKS_PER_STEP};
 use vt_model::generator::Span as GenSpan;
+use vt_model::label::GROUP_NAME_CHARS;
 use vt_model::selection::{Scope, StepRange};
 use vt_model::shape::{ShapeColumn, Source};
-use vt_model::song::{Phrase, Track};
+use vt_model::song::{Phrase, Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind, Mark, Note, Step, nudge_text};
 
@@ -23,10 +24,13 @@ use crate::theme;
 use crate::timeline::{self, Line as TimeLine};
 use crate::views::inspector;
 use crate::views::widgets::group::{self, Switched};
+use crate::views::widgets::table::centred_run;
 
 /// The width of a read-only note column for another track: its playhead marker, a note and a gap,
 /// so a marker has a cell of its own and the playing line reads as columns, not one string.
 const NEIGHBOUR_WIDTH: usize = 5;
+/// A group's column is wider, for its whole name over it with the fold mark (decision 308).
+const GROUP_NEIGHBOUR_WIDTH: usize = NEIGHBOUR_WIDTH + GROUP_NAME_CHARS - 2;
 /// The gap between the overview and the row inspector.
 const INSPECTOR_GAP: usize = 1;
 /// Room for the distance from the cursor, the row number, the playhead marker and a gap.
@@ -381,16 +385,32 @@ fn neighbours(app: &App, width: usize) -> Vec<usize> {
         .collect();
     // In the order `W` and `B` go through them (decision 305).
     tracks.sort_by_key(|&track| app.folds.place(song, track, Order::Stops));
-    let shown = (width / NEIGHBOUR_WIDTH).min(tracks.len());
-    if shown == 0 {
-        return Vec::new();
-    }
     let centre = tracks
         .iter()
         .position(|&track| track == app.cursor.track)
         .unwrap_or_else(|| tracks.partition_point(|&track| track < app.cursor.track));
-    let start = centre.saturating_sub(shown / 2).min(tracks.len() - shown);
-    tracks[start..start + shown].to_vec()
+    let widths: Vec<usize> = tracks
+        .iter()
+        .map(|&track| neighbour_width(song, track))
+        .collect();
+    tracks[centred_run(&widths, centre, width)].to_vec()
+}
+
+/// How wide another track's column is: a group's has room for its whole name.
+fn neighbour_width(song: &Song, track: usize) -> usize {
+    if song.tracks[track].is_group() {
+        GROUP_NEIGHBOUR_WIDTH
+    } else {
+        NEIGHBOUR_WIDTH
+    }
+}
+
+/// How wide the other tracks' columns are together.
+fn neighbours_width(song: &Song, tracks: &[usize]) -> usize {
+    tracks
+        .iter()
+        .map(|&track| neighbour_width(song, track))
+        .sum()
 }
 
 /// The headings over the grid's parts, the note and each FX slot, numbered as the title's lanes
@@ -507,6 +527,7 @@ enum At {
 /// the row each track starts in its time, with a mark before it when more than one does, and
 /// nothing when none does, as a slower track leaves lines blank.
 fn column_spans(
+    song: &Song,
     columns: &[Option<Column>],
     tracks: &[usize],
     at: &At,
@@ -516,8 +537,10 @@ fn column_spans(
         .iter()
         .zip(tracks)
         .flat_map(|(column, track)| {
+            // A group's wider column has the room after its gap.
+            let gap = Span::raw(" ".repeat(neighbour_width(song, *track) - NEIGHBOUR_WIDTH + 1));
             let Some(column) = column else {
-                return [Span::raw(" "), Span::raw("   "), Span::raw(" ")];
+                return [Span::raw(" "), Span::raw("   "), gap];
             };
             // The row shown, whether the playhead is in this line, and whether more rows start.
             let (shown, playing, more) = match at {
@@ -585,7 +608,7 @@ fn column_spans(
                 ),
                 None => (Span::raw(" "), Span::raw("   ")),
             };
-            [marker, note, Span::raw(" ")]
+            [marker, note, gap]
         })
         .collect()
 }
@@ -722,22 +745,20 @@ pub(crate) fn level_glyph(app: &App, track: usize) -> Option<(char, Style)> {
         .map(|(_, glyph, why)| (glyph, why.style()))
 }
 
-/// A track's label over its column in the overview, three cells wide: the start of its name, and
-/// its mute or solo glyph in the last cell if it has one, or a group's mark that its tracks are
-/// folded into it.
+/// A track's label over its column in the overview, three cells wide, or six for a group's whole
+/// name: the start of its name, and its mute or solo glyph after it if it has one, or a group's
+/// mark that its tracks are folded into it. Without a glyph, the name fills the cells.
 fn column_label(app: &App, track: usize) -> (String, Option<(char, Style)>) {
     let name = track_name(app, track);
+    let cells = neighbour_width(app.song(), track) - 2;
     let folded = (track != app.cursor.track && app.folds.holds(app.song(), track)).then(|| {
         let style = group::style(app.song(), track).unwrap_or_default();
         (glyphs::FOLDED, style)
     });
     match level_glyph(app, track).or(folded) {
-        Some(glyph) => (
-            format!("{:<2}", name.chars().take(2).collect::<String>()),
-            Some(glyph),
-        ),
+        Some(glyph) => (name.chars().take(cells - 1).collect(), Some(glyph)),
         None => (
-            format!("{:<3}", name.chars().take(3).collect::<String>()),
+            format!("{:<cells$}", name.chars().take(cells).collect::<String>()),
             None,
         ),
     }
@@ -830,7 +851,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let room = usize::from(area.width).saturating_sub(GUTTER + body_width + 2);
     // The row inspector takes the room right of the overview while every track's column still
     // fits beside it, and gives way to the overview when they need the room.
-    let every = neighbours(app, usize::MAX).len() * NEIGHBOUR_WIDTH;
+    let every = neighbours_width(app.song(), &neighbours(app, usize::MAX));
     let inspector_width = app
         .inspector
         .then(|| room.saturating_sub(every + INSPECTOR_GAP))
@@ -1028,6 +1049,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         top_rule.push(Span::raw(" "));
         let marked = (*track == app.cursor.track).then(|| bold.fg(theme::BASE).bg(theme::GREEN));
         let named = group::style(app.song(), *track).map_or(bold, |tint| bold.patch(tint));
+        let used = label.chars().count() + usize::from(glyph.is_some());
         top_rule.push(Span::styled(label, marked.unwrap_or(named)));
         let gap = match glyph {
             Some((glyph, style)) => {
@@ -1036,7 +1058,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             }
             None => ' ',
         };
-        top_rule.push(Span::raw(gap.to_string()));
+        // The gap, and the rest of the column after a glyph beside a short name.
+        let rest = neighbour_width(app.song(), *track) - 2 - used;
+        top_rule.push(Span::raw(format!("{gap}{}", " ".repeat(rest))));
     }
     let side = "│";
     let mut lines = vec![Line::from(title), Line::from(top_rule)];
@@ -1067,7 +1091,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 Span::styled(format!("{left}{}{right}", fill.repeat(body_width)), edge),
                 Span::raw(" "),
             ];
-            spans.extend(column_spans(&columns, &others, &columns_at(line), across));
+            spans.extend(column_spans(
+                app.song(),
+                &columns,
+                &others,
+                &columns_at(line),
+                across,
+            ));
             lines.push(Line::from(spans));
             continue;
         };
@@ -1095,7 +1125,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             ));
             spans.push(Span::styled(side, edge));
             spans.push(Span::raw(" "));
-            spans.extend(column_spans(&columns, &others, &columns_at(line), across));
+            spans.extend(column_spans(
+                app.song(),
+                &columns,
+                &others,
+                &columns_at(line),
+                across,
+            ));
             lines.push(Line::from(spans));
             continue;
         }
@@ -1370,7 +1406,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         spans.push(Span::styled(" ".repeat(padding), under.unwrap_or_default()));
         spans.push(Span::styled(side, edge));
         spans.push(Span::raw(" "));
-        spans.extend(column_spans(&columns, &others, &columns_at(line), across));
+        spans.extend(column_spans(
+            app.song(),
+            &columns,
+            &others,
+            &columns_at(line),
+            across,
+        ));
         lines.push(Line::from(spans));
     }
     if !(first_line..first_line + height).contains(&stored_lines)
@@ -1381,7 +1423,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(Paragraph::new(lines), area);
     // Beside the overview, its top level with the grid's frame.
     if let Some(width) = inspector_width {
-        let x = GUTTER + body_width + 2 + others.len() * NEIGHBOUR_WIDTH + INSPECTOR_GAP;
+        let x = GUTTER + body_width + 2 + neighbours_width(app.song(), &others) + INSPECTOR_GAP;
         let at = Rect::new(
             area.x + x as u16,
             area.y + 1,
