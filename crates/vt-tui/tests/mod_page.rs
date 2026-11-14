@@ -1502,7 +1502,17 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
         .collect();
     assert_eq!(
         listed,
-        ["ADSR", "AHD", "Drum", "LPG", "LFO", "Steps", "Track"]
+        [
+            "ADSR",
+            "AHD",
+            "Drum",
+            "LPG",
+            "LFO",
+            "Steps",
+            "Track",
+            "Add a patch",
+            "Save as a patch"
+        ]
     );
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
