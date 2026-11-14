@@ -107,7 +107,7 @@ impl App {
             return;
         }
         self.set_insert(slot, Insert::Empty);
-        self.taken_insert = Some(TakenInsert {
+        self.track_page.taken_insert = Some(TakenInsert {
             insert,
             track: self.cursor.track,
             slot,
@@ -120,7 +120,7 @@ impl App {
     /// `p`: put what was taken into this slot. What's there goes where it came from, if that's still
     /// empty, so two slots swap. Straight after `dd`, the whole move is one undo step.
     pub(super) fn put_insert(&mut self) {
-        let Some(taken) = self.taken_insert.take() else {
+        let Some(taken) = self.track_page.taken_insert.take() else {
             self.status = "dd takes an effect out of a slot first".to_owned();
             return;
         };
@@ -146,7 +146,7 @@ impl App {
                 });
             } else {
                 // There's nowhere for it to go, so it's the next one to put.
-                self.taken_insert = Some(TakenInsert {
+                self.track_page.taken_insert = Some(TakenInsert {
                     insert: displaced,
                     track,
                     slot,

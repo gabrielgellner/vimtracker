@@ -390,18 +390,18 @@ fn each_device_has_a_preview_sent_again_only_as_its_column_changes() {
             .count()
     };
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    let first = app.gen_images[0].unwrap();
+    let first = app.track_page.gen_images[0].unwrap();
     assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
     // Moving the cursor off it shows it dim, which is sent once, and back costs nothing.
     keys(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics), 1);
     keys(&mut app, "{");
     assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.gen_images[0], Some(first));
+    assert_eq!(app.track_page.gen_images[0], Some(first));
     // A turn of `Hits` changes the column, so it's drawn again.
     keys(&mut app, "jj$=");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    assert_ne!(app.gen_images[0], Some(first));
+    assert_ne!(app.track_page.gen_images[0], Some(first));
     // On screen, its box is beside the grid, and its brief value is the hits alone.
     let cells = screen_cells(&mut app).join("\n");
     assert!(
@@ -409,7 +409,7 @@ fn each_device_has_a_preview_sent_again_only_as_its_column_changes() {
         "{cells}"
     );
     assert!(cells.contains("Hits      4 "), "{cells}");
-    assert_eq!(app.gen_panels_at.len(), 1);
+    assert_eq!(app.track_page.gen_panels_at.len(), 1);
 }
 
 #[test]

@@ -20,9 +20,9 @@ use super::{
     EMPTY_SLOT, MeterScale, REDUCTION_CAPTION, REDUCTION_METER_WIDTH, heard_bypassed,
     reduction_cell, slot_frame, slot_grid, value,
 };
-use crate::app::App;
+use crate::page::Ctx;
 use crate::theme;
-use crate::track_page::{Control, DeviceSpec, Page};
+use crate::track_page::{Control, DeviceSpec, Page, TrackPage};
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
 use crate::views::widgets::grid::{CellWidths, GRID_HEIGHT, faded};
 use crate::views::widgets::image;
@@ -67,13 +67,12 @@ const TILE_METER_DB: f32 = 20.0;
 const TILE_SPACE: &str = "  ";
 
 /// Draw the FX page zoomed in on the cursor's slot: the strip, a blank line, and the slot.
-pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
+pub(super) fn draw(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, track: &Track) {
     let devices = Page::Fx.devices(track);
     let Some(last) = devices.len().checked_sub(1) else {
         return;
     };
-    let zoomed = app
-        .track_page
+    let zoomed = page
         .device_cursor(Some(track))
         .map_or(0, |cursor| cursor.device)
         .min(last);
@@ -81,7 +80,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
     strip(
         frame,
         take_top(&mut rest, TILE_HEIGHT),
-        (app, track),
+        (ctx, track),
         &devices,
         zoomed,
     );
@@ -89,7 +88,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
     let device = &devices[zoomed];
     let panel = match track.inserts[zoomed] {
         Insert::Empty => GraphicPanel::new(),
-        _ => zoom_panel(app, track, zoomed),
+        _ => zoom_panel(page, ctx, track, zoomed),
     };
     // The graphics and a blank line under them, over the settings.
     let tall = match panel.is_empty() {
@@ -97,7 +96,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
         false => panel.height() + 1,
     };
     let area = take_top(&mut rest, DEVICE_HEIGHT + tall);
-    if slot_frame(frame, area, app, track, device).is_none() {
+    if slot_frame(frame, area, page, ctx, track, device).is_none() {
         return;
     }
     let top = Device::settings_area(area);
@@ -112,7 +111,13 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
         top.width,
         GRID_HEIGHT.min(area.bottom().saturating_sub(below)),
     );
-    slot_grid(frame, settings, (app, track), device, CellWidths::ZOOM);
+    slot_grid(
+        frame,
+        settings,
+        (page, ctx, track),
+        device,
+        CellWidths::ZOOM,
+    );
 }
 
 /// Every slot as a tile, side by side across the page, the zoomed one's frame brighter, so the
@@ -120,7 +125,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
 fn strip(
     frame: &mut Frame,
     area: Rect,
-    (app, track): (&App, &Track),
+    (ctx, track): (&Ctx, &Track),
     devices: &[DeviceSpec],
     zoomed: usize,
 ) {
@@ -129,7 +134,7 @@ fn strip(
     for (at, device) in devices.iter().enumerate() {
         let x = area.x + at as u16 * (width + TILE_GAP);
         let tile = Rect::new(x, area.y, width, area.height);
-        draw_tile(frame, tile, (app, track), device, at == zoomed);
+        draw_tile(frame, tile, (ctx, track), device, at == zoomed);
     }
 }
 
@@ -140,7 +145,7 @@ fn strip(
 fn draw_tile(
     frame: &mut Frame,
     area: Rect,
-    (app, track): (&App, &Track),
+    (ctx, track): (&Ctx, &Track),
     device: &DeviceSpec,
     zoomed: bool,
 ) {
@@ -149,7 +154,7 @@ fn draw_tile(
     };
     let insert = track.inserts[slot];
     let empty = insert == Insert::Empty;
-    let bypassed = heard_bypassed(app, track, slot);
+    let bypassed = heard_bypassed(ctx, track, slot);
     let fade = |line: Line<'static>| match bypassed {
         true => faded(line, theme::faint()),
         false => line,
@@ -161,9 +166,9 @@ fn draw_tile(
         .map(|control| {
             let text = match empty {
                 true => EMPTY_SLOT.to_owned(),
-                false => value(*control, track, app.song()),
+                false => value(*control, track, ctx.song()),
             };
-            fade(Line::styled(text, setting::style(app, false, empty)))
+            fade(Line::styled(text, setting::style(ctx, false, empty)))
         })
         .collect();
     let tile = Device::new(device.identity.clone());
@@ -183,8 +188,8 @@ fn draw_tile(
     );
     let meter = match insert {
         Insert::Compressor(_) | Insert::Limit(_) => {
-            let reduction = app
-                .live
+            let reduction = ctx
+                .live()
                 .filter(|_| !bypassed)
                 .map_or(0.0, |live| live.reduction[slot]);
             let style = match zoomed {
@@ -212,7 +217,7 @@ fn draw_tile(
         let Some(label) = insert.params().get(param).and_then(|found| found.label) else {
             continue;
         };
-        let shown = value(*control, track, app.song());
+        let shown = value(*control, track, ctx.song());
         let gap = if spans.is_empty() {
             0
         } else {
@@ -241,27 +246,27 @@ fn draw_tile(
 /// reduction meter with its scale, and the last two bars of it; a limiter's meter and two bars; an
 /// EQ's curve; or a distortion's transfer curve. A curve's box is left out until its image has
 /// been sent. A bypassed slot's meter and history are faint, as its curve is.
-fn zoom_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
+fn zoom_panel(page: &TrackPage, ctx: &Ctx, track: &Track, slot: usize) -> GraphicPanel {
     let color = theme::active().fg.unwrap_or(theme::TEXT);
-    let bypassed = heard_bypassed(app, track, slot);
-    let reduction = app
-        .live
+    let bypassed = heard_bypassed(ctx, track, slot);
+    let reduction = ctx
+        .live()
         .filter(|_| !bypassed)
         .map_or(0.0, |live| live.reduction[slot]);
     let held = if bypassed {
         0.0
     } else {
-        app.slot_reduction[slot].top
+        page.slot_reduction[slot].top
     };
-    let cursor = theme::cursor(app.mode);
+    let cursor = theme::cursor(ctx.mode());
     let fade = |line: Line<'static>| if bypassed { faded(line, cursor) } else { line };
-    let curve = |panel: GraphicPanel, width: usize| match app.zoom_image {
+    let curve = |panel: GraphicPanel, width: usize| match page.zoom_image {
         Some(id) => {
             let lines = image::rows(id, width, ZOOM_PANEL_HEIGHT)
                 .into_iter()
                 .map(Line::from)
                 .collect();
-            panel.boxed(lines, width as u16, app.zoom_caption.as_deref())
+            panel.boxed(lines, width as u16, page.zoom_caption.as_deref())
         }
         None => panel,
     };
@@ -286,7 +291,7 @@ fn zoom_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
             .beside(scale, ZOOM_SCALE_WIDTH)
     };
     let history = |panel: GraphicPanel, width: usize| {
-        let lines = history_lines(app, slot, width, color)
+        let lines = history_lines(page, slot, width, color)
             .into_iter()
             .map(fade)
             .collect();
@@ -316,8 +321,8 @@ fn zoom_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
 /// The last two bars of a slot's gain reduction, a line for each row, this many columns wide:
 /// each column the deepest it turned down in its share of the sweep, hanging from the top as the
 /// meter does, with a blank column after the newest, where the sweep writes over the oldest.
-fn history_lines(app: &App, slot: usize, width: usize, color: Color) -> Vec<Line<'static>> {
-    let history = &app.reduction_history;
+fn history_lines(page: &TrackPage, slot: usize, width: usize, color: Color) -> Vec<Line<'static>> {
+    let history = &page.reduction_history;
     let head = history.head(width);
     let gap = (head + 1) % width.max(1);
     let deepest: Vec<f32> = (0..width)
