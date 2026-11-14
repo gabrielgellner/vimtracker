@@ -30,6 +30,7 @@ use crate::meter::Meter;
 use crate::services::Services;
 use crate::shaping::LiveGen;
 use crate::track_page::Control;
+use crate::views::widgets::setting::{CellLook, Focus};
 
 /// What a page reads of the program, borrowed from it while the page is drawn.
 #[derive(Clone, Copy)]
@@ -102,6 +103,32 @@ impl<'a> Ctx<'a> {
     /// The search for a setting under way, whose labels go over the settings it finds.
     pub fn field_jump(&self) -> Option<&'a FieldJump> {
         self.app.modes.field_jump.as_ref()
+    }
+
+    /// How the modes show a setting's cell with the cursor on it this way: in the mode's colour,
+    /// with what Insert has typed while the cursor's on it, and with no jump's labels, for a
+    /// setting a jump doesn't reach.
+    pub fn look(&self, focus: Focus) -> CellLook<'a> {
+        let mode = self.mode();
+        let typing = mode == Mode::Insert && focus != Focus::Off;
+        CellLook {
+            focus,
+            mode,
+            typed: typing.then(|| self.entry().text.as_str()),
+            query: self.field_jump().map(|jump| jump.query.as_str()),
+            name_labels: "",
+            value_label: None,
+        }
+    }
+
+    /// How the modes show a setting's cell, as `look`, with the labels a jump puts on it.
+    pub fn look_on(&self, control: Control, focus: Focus) -> CellLook<'a> {
+        let jump = self.field_jump();
+        CellLook {
+            name_labels: jump.map_or("", |jump| jump.label_text(control)),
+            value_label: jump.and_then(|jump| jump.label(control)),
+            ..self.look(focus)
+        }
     }
 
     /// Whether the song plays, as the engine last said.

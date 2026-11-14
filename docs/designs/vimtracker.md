@@ -810,8 +810,10 @@ built from, so a new page uses them rather than working out its layout again:
 
 *   `table`: `Columns`, a page's fixed column widths and the room between them, for ratatui
     `Table`s and for `Layout` cells that hold images.
-*   `bar`: `ValueBar`, a value's bar. `setting`: a setting's name and value. `meter`: a meter's
-    cells.
+*   `bar`: `ValueBar`, a value's bar. `meter`: a meter's cells.
+*   `setting`: a setting's name and value, drawn from a `CellLook`, a plain value the page builds
+    with `Ctx::look` or `Ctx::look_on`: where the cursor is on the cell (`Focus`), the mode, what
+    Insert has typed and a jump's query and labels. It reads nothing of `Ctx` itself (#739).
 *   `image`: an image's placeholder rows, and the faint box round the track page's curves.
 *   `hint`: a window's hint along its border. `window_border`: the rounded border every window has.
 *   `popup`: a window over the screen, as the picker, the command line's list of matches, the

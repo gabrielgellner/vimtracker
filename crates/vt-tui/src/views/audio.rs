@@ -10,7 +10,7 @@ use ratatui::widgets::Paragraph;
 use crate::app::App;
 use crate::audio_page::{AudioRow, buffer_ms};
 use crate::theme;
-use crate::views::widgets::setting;
+use crate::views::widgets::setting::{self, Focus};
 use crate::views::widgets::table::{Columns, blank_row, take_top};
 use crate::views::widgets::toggle;
 use crate::views::{project, system};
@@ -66,7 +66,8 @@ fn switch_value(app: &App, row: AudioRow, here: bool) -> Line<'static> {
         _ => app.services.roto.setting.on,
     };
     let switch = if here {
-        Span::styled(toggle::text(on), setting::style(&app.ctx(), true, false))
+        let look = app.ctx().look(Focus::Value);
+        Span::styled(toggle::text(on), setting::style(&look, false))
     } else {
         toggle::span(on)
     };
@@ -102,7 +103,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             AudioRow::WheelDirection if !app.wheel.setting.on && !here => {
                 Line::styled(value(app, row), theme::dim())
             }
-            _ => Line::styled(value(app, row), setting::style(&app.ctx(), here, false)),
+            _ => {
+                let look = app.ctx().look(Focus::at(here, false));
+                Line::styled(value(app, row), setting::style(&look, false))
+            }
         };
         rows.push(named(row.name(), line));
     }
