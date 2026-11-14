@@ -21,7 +21,7 @@ use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport}
 use vt_engine::gens::{GenPass, GenRow};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
-use vt_engine::track_state::{Faders, LiveValues};
+use vt_engine::track_state::{Faders, LiveValues, NotePitch};
 use vt_model::action::{Action, edit};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::groove::GrooveId;
@@ -279,9 +279,10 @@ pub struct App {
     pub sample_images: Option<(u32, u32)>,
     /// What the cursor's track is playing with right now, and the track the engine reports.
     pub live: Option<LiveValues>,
-    /// What each mod slot moved each row's note by on `Pitch` the last time it was heard, by
-    /// track, phrase and row, in semitones, as the engine reports them, for `Space g A` (#569).
-    pub(crate) heard_pitches: HashMap<(usize, u32, usize), [f32; MOD_SLOTS]>,
+    /// What each mod slot moved each row's note by on `Pitch` the last time it was heard, and
+    /// what the row's own `RND`s moved it by, by track, phrase and row, in semitones, as the engine
+    /// reports them, for `Space g A` (#569, decision 323).
+    pub(crate) heard_pitches: HashMap<(usize, u32, usize), NotePitch>,
     /// The pass each live generator that varies was last heard on and the seeds it played, by
     /// track, phrase and its place in the phrase's list, as the engine reports them, for
     /// `Space g a` on the Gen page to keep (decision 293).
@@ -1022,7 +1023,7 @@ impl App {
         }
         while let Some((track, pitch)) = self.handle.note_pitch() {
             let row = (track, pitch.row.phrase, pitch.row.row);
-            self.heard_pitches.insert(row, pitch.moves);
+            self.heard_pitches.insert(row, pitch);
         }
         while let Some((track, report)) = self.handle.gen_heard() {
             self.hear_generator(track, report);

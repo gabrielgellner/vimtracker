@@ -1,5 +1,6 @@
 //! When each step and each track's own events fall, in frames, and firing them as they do.
 
+use vt_model::accumulator::moved_note;
 use vt_model::arpeggio::ArpMode;
 use vt_model::constants::{GROOVE_UNIT_TICKS, MAX_TRACKS, TICKS_PER_QUARTER, TICKS_PER_STEP};
 use vt_model::song::SynthVoice;
@@ -221,6 +222,8 @@ impl Engine {
             (Some(row), Some(_)) => {
                 let heard =
                     self.accumulate(index, row.epoch, row.row, row.written, Some(row.amount));
+                let heard = moved_note(heard, row.varied, self.scale);
+                self.tracks[index].accumulated = (heard != row.written).then_some(heard);
                 Some(
                     (i16::from(heard) + i16::from(row.transpose))
                         .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8,

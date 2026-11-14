@@ -250,7 +250,7 @@ pub(crate) fn playhead_place(app: &App) -> Option<(usize, usize)> {
 }
 
 /// The note the cursor's track's row playing was heard at, before its chain's transpose, where an
-/// accumulator moved it.
+/// accumulator or an `RND` moved it.
 pub(crate) fn heard_note(app: &App) -> Option<u8> {
     app.places.get(app.cursor.track)?.accumulated
 }

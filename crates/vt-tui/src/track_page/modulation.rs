@@ -11,8 +11,9 @@ use vt_model::grid::Grid;
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
 use vt_model::settings::SettingId;
 use vt_model::song::Track;
-use vt_model::step::{MAX_NOTE, MIN_NOTE, Note, Step};
+use vt_model::step::{FxCommand, FxSlot, MAX_NOTE, MIN_NOTE, Note, Step};
 use vt_model::steps::STEPS;
+use vt_model::variation::{Varies, varies_at};
 
 use crate::app::App;
 
@@ -284,11 +285,12 @@ impl App {
 
     /// `Space g A`: make the phrase here what was last heard, as one undo step: write into its
     /// notes, or the selection's, the pitch the track's Steps and LFO slots on `Pitch` moved each
-    /// to the last time it was heard, and switch those slots out (#569); and apply each live
-    /// generator a macro or `Vary` moved, each row as it was heard and the rest as written
-    /// (decision 300). The engine reports each slot's move as each note starts (`NotePitch`), and
-    /// each generator's row as it plays. A move of part of a semitone goes to the nearest note, as
-    /// the Note column has no finer step.
+    /// to the last time it was heard, and switch those slots out (#569); write in what each row's
+    /// own `RND`s on its note moved it to, and take those `RND`s out (decision 323); and apply each
+    /// live generator a macro or `Vary` moved, each row as it was heard and the rest as written
+    /// (decision 300). The engine reports each slot's and `RND`'s move as each note starts
+    /// (`NotePitch`), and each generator's row as it plays. A move of part of a semitone goes to
+    /// the nearest note, as the Note column has no finer step.
     pub(crate) fn bake_pitch_mods(&mut self) {
         let selected = self.mode.is_visual().then(|| {
             let selection = self.current_selection();
@@ -319,14 +321,36 @@ impl App {
             .rev()
             .filter(|at| self.heard_rows_of(track, phrase, *at).is_some())
             .collect();
-        if moving.is_empty() && !owner.mods.iter().any(baked) {
-            self.status =
-                "No Steps or LFO slot on Pitch, and no generator moved, to write in".to_owned();
-            return;
-        }
         let (first, last) = selected.map_or((0, steps.len().saturating_sub(1)), |range| {
             (range.first, range.last.min(steps.len().saturating_sub(1)))
         });
+        // A row's own `RND`s on its note, by column, not a lane's, which plays whatever row is
+        // under it.
+        let varying = |row: &Step| -> Vec<usize> {
+            (0..row.fx.len())
+                .filter(|&column| {
+                    row.fx[column].command == Some(FxCommand::Rnd)
+                        && held.lane(column).is_none()
+                        && varies_at(&row.fx, column) == Varies::Note
+                })
+                .collect()
+        };
+        let any_varying =
+            steps
+                .iter()
+                .enumerate()
+                .take(last + 1)
+                .skip(first)
+                .any(|(row, written)| {
+                    let heard = self.heard_step(track, phrase, row);
+                    !varying(heard.as_ref().unwrap_or(written)).is_empty()
+                });
+        if moving.is_empty() && !owner.mods.iter().any(baked) && !any_varying {
+            self.status =
+                "No Steps or LFO slot on Pitch, RND on a note, or generator moved, to write in"
+                    .to_owned();
+            return;
+        }
         let mut actions: Vec<Action> = moving
             .iter()
             .map(|&generator| Action::ApplyGenerator {
@@ -340,16 +364,17 @@ impl App {
             .filter_map(|row| Some((row, self.heard_step(track, phrase, row)?)))
             .collect();
         let mut moved = [false; MOD_SLOTS];
-        let (mut heard, mut unheard) = (0, 0);
+        let (mut heard, mut unheard, mut varied) = (0, 0, 0);
         for (step, written) in steps.iter().enumerate().take(last + 1).skip(first) {
             let row = rows.get(&step).unwrap_or(written);
             let Note::On(midi) = row.note else {
                 continue;
             };
-            if !owner.mods.iter().any(baked) {
+            let rnds = varying(row);
+            if !owner.mods.iter().any(baked) && rnds.is_empty() {
                 continue;
             }
-            let Some(moves) = self.heard_pitches.get(&(track, phrase, step)) else {
+            let Some(pitch) = self.heard_pitches.get(&(track, phrase, step)) else {
                 unheard += 1;
                 continue;
             };
@@ -357,25 +382,38 @@ impl App {
             let mut by = 0.0;
             for (at, slot) in owner.mods.iter().enumerate() {
                 if baked(slot) {
-                    by += moves[at];
-                    moved[at] |= moves[at].abs() >= 0.5;
+                    by += pitch.moves[at];
+                    moved[at] |= pitch.moves[at].abs() >= 0.5;
                 }
+            }
+            // The pass heard is what the row plays from now on, so its `RND`s on the note go,
+            // whether or not they moved it this time.
+            if !rnds.is_empty() {
+                by += f32::from(pitch.varied);
+                varied += 1;
             }
             let note = (f32::from(midi) + by)
                 .round()
                 .clamp(f32::from(MIN_NOTE), f32::from(MAX_NOTE)) as u8;
-            if note == midi {
+            // A row with nothing but its note to change changes only its note, so a live column
+            // elsewhere on it stays live.
+            if rnds.is_empty() && !rows.contains_key(&step) {
+                if note != midi {
+                    actions.push(Action::SetNote {
+                        track,
+                        phrase,
+                        step,
+                        note: Note::On(note),
+                    });
+                }
                 continue;
             }
-            match rows.get_mut(&step) {
-                Some(row) => row.note = Note::On(note),
-                None => actions.push(Action::SetNote {
-                    track,
-                    phrase,
-                    step,
-                    note: Note::On(note),
-                }),
+            let mut row = row.clone();
+            row.note = Note::On(note);
+            for column in rnds {
+                row.fx[column] = FxSlot::default();
             }
+            rows.insert(step, row);
         }
         let slots: Vec<usize> = (0..MOD_SLOTS).filter(|at| moved[*at]).collect();
         if moving.is_empty() {
@@ -383,7 +421,7 @@ impl App {
                 self.status = "None of these notes has been heard yet: play them first".to_owned();
                 return;
             }
-            if slots.is_empty() {
+            if slots.is_empty() && varied == 0 {
                 self.status = "No Steps or LFO slot on Pitch moved these notes".to_owned();
                 return;
             }
@@ -418,6 +456,13 @@ impl App {
             let notes = if heard == 1 { "note" } else { "notes" };
             said.push(format!(
                 "Wrote what {names} played into {heard} {notes}, and switched {them} out"
+            ));
+        }
+        if varied > 0 {
+            let notes = if varied == 1 { "note" } else { "notes" };
+            let verb = if said.is_empty() { "Wrote" } else { "wrote" };
+            said.push(format!(
+                "{verb} what RND played into {varied} {notes}, and took their RNDs out"
             ));
         }
         if !moving.is_empty() {

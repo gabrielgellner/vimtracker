@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds fifteen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds sixteen of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -13,6 +13,7 @@ there are no samples to find.
 | `fugue` | Fugue Machine | One theme and three tracks following it live with `Follow`, each at its own `Speed` |
 | `kria` | monome's Kria | Triggers, pitches, octaves and lengths on loops of different lengths |
 | `metropolix` | Intellijel's Metropolix | Pulses and gates per row, `ACU`, `ARP` and a pendulum order |
+| `eloquencer` | Winter Modular's Eloquencer | `RND`: a chance on each row of a note, a length, a velocity or a ratchet varying |
 | `live-generators` | Elektron's Euclidean mode | Columns kept live with `L`, and what hand edits do to them |
 | `acid-lines` | Roland's TB-303 | `S`'s `Acid` fill: notes, accents and slides rolled together |
 | `walks` | Max's `drunk` and Voss's 1/f music | `S`'s `Walk` and `1/f` fills, kept live |
@@ -525,6 +526,79 @@ The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `C0`, `Env m
 *   `Reset` every 4 loops, so the line climbs for four bars and starts again.
 *   Track 2's `ARP` to `13` or `35` for other shapes, `Mode` `Random`, or `Oct` 3.
 *   Track 1 at `1/8`, the clock divided, under the same arpeggio.
+
+## Eloquencer
+
+Winter Modular's Eloquencer is a sequencer whose steps each carry their own chances, which it
+calls controlled chance: how likely the step's pitch is to vary and how far, how likely its gate
+is to play, how much its gate's length varies, and how likely it is to ratchet, with a range of
+ratchets to choose from. The line stays the one you wrote, and wanders round it by as much as you
+let each step. `RND xy` is this on a row: a chance `x` in `F` that what's to its left varies, by
+up to `y`.
+
+**How the song does it.** Track 1, a `VA` in D minor, is a line of twelve notes. The roots carry
+`RND 31`, so a fifth of the time they move a degree, and the rest wander more: `RND 62` and
+`RND A2` move up to two degrees, two times in five and two in three, `RND 83` up to three about
+half the time, and the last note, `RND F3`, always moves. The two `F-3`s have none. On the roots and the `G-3`, an `RND` beside a `LEN` varies the length instead:
+`LEN 60 RND A4` plays the note anywhere from `20` to `A0` long, two times in three. Track 2's hats
+have the other two of the module's chances: an `RND` beside a `VDLT 80` on the off-beats, so
+their velocity wanders up to `30` either way, and beside a `RET 02` before each beat, so they
+ratchet two times in five, with the ratchet's units anywhere from 1 to 3. Track 3 is a kick on
+every beat. [`song.ron`](songs/eloquencer/song.ron)
+
+```text
+Track 1                                Track 2
+00  D-3 64  RND 31  LEN 60  RND A4     00  --- --
+01  --- --                             01  --- --
+02  A-3 50  RND 62                     02  C-4 50  VDLT 80  RND F3
+03  F-3 50                             03  C-4 40  RET 02   RND 61
+04  D-3 64  RND 31  LEN 60  RND A4     ... the same each beat
+05  C-4 50  RND A2
+06  --- --
+07  A-3 50  RND 62
+08  D-3 64  RND 31  LEN 60  RND A4
+09  --- --
+0A  E-3 50  RND 83
+0B  F-3 50
+0C  G-3 64  RND 62  LEN 40  RND A6
+0D  A-3 50  RND A2
+0E  --- --
+0F  C-4 50  RND F3
+```
+
+Each roll is worked out from the `:seed` and where the track is, so the line goes a different
+way every bar, the same every time you play it, and playing from a step plays what playing up to
+it would.
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=d` and `:bpm 116`.
+2.  Track 1: `K` `va` `Enter`, `:name EQ`. In the phrase view, type the notes and velocities.
+3.  The chances: on row `00`'s FX 1, `K` `rnd` `Enter` and `31`. The status line says what it
+    does: `20% of the times it plays, moves the note up to 1 scale degree either way`. Then the
+    other rows' `RND`s the same way, each in FX 1, so there's nothing to their left but the note.
+4.  The lengths: on row `00`'s FX 2, `K` `len` `Enter` `60`, and on its FX 3 `K` `rnd` `Enter`
+    `A4`. Beside the `LEN`, the status line says `67% of the times it plays, moves LEN up to 40
+    either way`. The same on rows `04` and `08`, and `LEN 40 RND A6` on row `0C`.
+5.  Track 2: `W`, `K` `/hat` `Enter`, `:name HH`, and `C-4 50` on rows `02`, `06`, `0A` and
+    `0E`, each with `VDLT 80` (`K` `vdlt` `Enter` `80`), which leaves the velocity as written,
+    and `RND F3` beside it. On rows `03`, `07`, `0B` and `0F`, `C-4 40` with `RET 02` and
+    `RND 61`.
+6.  Track 3: a `Kick` on every beat.
+
+The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay` `260 ms` and `Sustain` `45%`),
+sets its `Cut` `90`, sends it to the delay and the reverb, a shorter hat, and the levels.
+
+**Try next.**
+
+*   `+` on an `RND`'s value raises its chance a step and `=` widens its range, so the roots
+    wander as much as the rest, or `-` and `_` pin a note back down.
+*   `:seed 9`, and every `RND` rolls otherwise, as the module's random source would.
+*   `:set scale=off`: the same `RND`s move by semitones, and the line goes chromatic.
+*   An `ACU 01` on row `05`: the `C-4` climbs a degree each bar and wanders round where it's got.
+*   When a bar goes somewhere you like, `Space g A` on track 1 writes its notes in, as they were
+    heard, and takes their `RND`s out, so it stays. The `RND`s beside the `LEN`s stay, so the
+    lengths keep varying.
 
 ## Live generators
 
