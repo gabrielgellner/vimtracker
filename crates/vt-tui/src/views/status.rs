@@ -47,7 +47,7 @@ pub fn format_bpm(millibpm: u32) -> String {
 /// which part of an empty cell the cursor is on.
 fn fx_name(app: &App, slot: usize) -> String {
     let command = app.current_slot(slot).and_then(|cell| cell.command);
-    match (command, app.track_here()) {
+    match (command, app.services.track_here()) {
         (Some(FxCommand::Set(id)), Some(track)) if id.exists_on(track) => {
             format!("{}: {}", id.group(), id.name())
         }
@@ -122,7 +122,7 @@ pub fn column_name(app: &App) -> String {
 /// The value under the cursor in its setting's units, like `1.21 kHz`, where it's a setting the
 /// track has: a lock in the grid, or a row of the track page.
 pub fn value_shown(app: &App) -> Option<String> {
-    let track = app.track_here()?;
+    let track = app.services.track_here()?;
     if app.modes.view == View::Phrase {
         return heard_shown(app, app.services.cursor.field)
             .or_else(|| phrase_value(app, app.services.cursor.field));
@@ -195,8 +195,8 @@ pub fn value_shown(app: &App) -> Option<String> {
 /// On a cell of a live generator a macro or `Vary` moved, what's written and what was last heard
 /// there, as `C-2 written; D#2 heard on pass 3` (decision 300).
 fn heard_shown(app: &App, field: Field) -> Option<String> {
-    let id = app.phrase_id()?;
-    let phrase = app.phrase_here()?;
+    let id = app.services.phrase_id()?;
+    let phrase = app.services.phrase_here()?;
     let row = app.services.cursor.step;
     let (at, generator) = phrase
         .generators()
@@ -210,7 +210,8 @@ fn heard_shown(app: &App, field: Field) -> Option<String> {
         })?;
     let (heard, pass) = app.heard_cell(app.services.cursor.track, id, at, row)?;
     let written = phrase.steps().get(row)?;
-    let shown = |step| generator_cell_text(step, &heard, generator.column, app.track_here());
+    let shown =
+        |step| generator_cell_text(step, &heard, generator.column, app.services.track_here());
     Some(format!(
         "{} written; {} heard on pass {}",
         shown(written),
@@ -223,7 +224,7 @@ fn heard_shown(app: &App, field: Field) -> Option<String> {
 /// note heard where an accumulator or an `RND` moved the row playing, an FX value, or the gate's length. The
 /// status line says it for the cursor's field and the row inspector for each of the row's.
 pub(crate) fn phrase_value(app: &App, field: Field) -> Option<String> {
-    let track = app.track_here()?;
+    let track = app.services.track_here()?;
     let (id, value) = match field {
         Field::Nudge => return Some(nudge_shown(app.current_nudge())),
         // While an accumulator or an `RND` moves the row playing, the Note column says what it's
@@ -573,6 +574,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .map_or(0, |t| t.level);
     // Only shown when on, since it changes what you hear and tracks otherwise run freely.
     let reset = app
+        .services
         .section_here()
         .and_then(|s| s.reset)
         .map_or_else(String::new, |steps| format!("Reset {steps}  "));
@@ -693,6 +695,7 @@ fn gen_shown(app: &App, phrase: u32, generator: usize, param: GenParam) -> Strin
         param,
     };
     let held = app
+        .services
         .track_here()
         .and_then(|track| crate::macroing::held_text(track, target));
     match held {

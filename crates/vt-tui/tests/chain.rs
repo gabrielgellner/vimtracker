@@ -29,7 +29,7 @@ fn cuj_5_reuse_and_vary_a_phrase() {
     );
     // The clone stays here. An edit reaches only the clone.
     press(&mut app, "gc");
-    assert_eq!(app.phrase_id(), Some(1));
+    assert_eq!(app.services.phrase_id(), Some(1));
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     assert_eq!(
@@ -58,15 +58,15 @@ fn gd_on_the_empty_row_adds_the_lowest_unused_phrase() {
     let (mut app, _realtime) = app();
     press(&mut app, " 2G");
     assert_eq!(app.services.cursor.slot, 1);
-    assert_eq!(app.phrase_id(), None);
+    assert_eq!(app.services.phrase_id(), None);
     press(&mut app, "gd");
     assert_eq!(app.modes.view, View::Phrase);
-    assert_eq!(app.phrase_id(), Some(1));
+    assert_eq!(app.services.phrase_id(), Some(1));
     assert_eq!(app.chain_entries().len(), 2);
     // Leaving the chain view never leaves the cursor on the empty row.
     press(&mut app, " 2G 3");
     assert_eq!(app.services.cursor.slot, 1);
-    assert_eq!(app.phrase_id(), Some(1));
+    assert_eq!(app.services.phrase_id(), Some(1));
     assert_eq!(notes(&app).len(), 16);
 }
 
@@ -161,7 +161,7 @@ fn undo_keeps_the_cursor_on_a_row_that_exists() {
     assert_eq!(app.services.cursor.slot, 1);
     press(&mut app, "u");
     assert_eq!(app.services.cursor.slot, 0);
-    assert_eq!(app.phrase_id(), Some(0));
+    assert_eq!(app.services.phrase_id(), Some(0));
 }
 
 #[test]

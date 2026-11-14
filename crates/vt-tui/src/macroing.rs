@@ -217,7 +217,7 @@ impl App {
         let Some((target, at, _)) = self.macro_here().filter(|_| turns) else {
             return false;
         };
-        let name = target.name_on(&self.page_track());
+        let name = target.name_on(&self.services.page_track());
         self.services.status = format!(
             "{name} is on macro {}: turn it there, or gm for its range",
             at + 1
@@ -237,7 +237,7 @@ impl App {
             };
             return;
         };
-        let track = self.page_track();
+        let track = self.services.page_track();
         let on = track.macro_holding(target).map(|(at, _)| at);
         let items = (0..MACROS)
             .map(|at| {
@@ -264,7 +264,7 @@ impl App {
         let Some(target) = self.setting_here() else {
             return;
         };
-        let track = self.page_track();
+        let track = self.services.page_track();
         let name = target.name_on(&track);
         let index = self.services.cursor.track;
         let held = &track.macros[at];
@@ -287,7 +287,7 @@ impl App {
                     "{name} moved from macro {} to macro {}, {}",
                     on + 1,
                     at + 1,
-                    macro_name(&self.page_track().macros[at], at)
+                    macro_name(&self.services.page_track().macros[at], at)
                 );
             }
             None => {
@@ -315,7 +315,7 @@ impl App {
                 }
                 let first = held.maps.is_empty();
                 self.services.apply(&Action::Batch(actions));
-                let now = self.page_track();
+                let now = self.services.page_track();
                 self.services.status = if first {
                     format!(
                         "{name} is on macro {}, {}, from its bottom to its top: gm for its range",
@@ -336,7 +336,7 @@ impl App {
     /// `gm`: open the mapping of the macro under the cursor, or of the one the setting under the
     /// cursor is on, on its row.
     pub(crate) fn open_mapping(&mut self) {
-        let track = self.page_track();
+        let track = self.services.page_track();
         let (at, row) = match self.track_control() {
             Control::Macro(at) => (at, 0),
             _ => match self.macro_here() {
@@ -366,7 +366,7 @@ impl App {
     /// The mapping under the mapping view's cursor, with its place, if the view is open on one.
     fn mapping_row(&self) -> Option<(usize, MacroMap)> {
         let view = self.mapping.as_ref()?;
-        let maps = &self.page_track().macros[view.at].maps;
+        let maps = &self.services.page_track().macros[view.at].maps;
         let row = view.row.min(maps.len().checked_sub(1)?);
         Some((row, maps[row]))
     }
@@ -379,7 +379,7 @@ impl App {
         let Some((_, map)) = self.mapping_row() else {
             return;
         };
-        let track = self.page_track();
+        let track = self.services.page_track();
         let target = map.target;
         let held = &track.macros[view.at];
         let now = map.at(f32::from(held.value) / 256.0);
@@ -509,7 +509,7 @@ impl App {
             self.mapping_typing(key.code, typed);
             return;
         }
-        let count = self.page_track().macros[view.at].maps.len();
+        let count = self.services.page_track().macros[view.at].maps.len();
         let deleting = view.deleting;
         if let Some(view) = self.mapping.as_mut() {
             view.deleting = false;
@@ -651,7 +651,7 @@ impl App {
         let Some((_, map)) = self.mapping_row() else {
             return;
         };
-        let track = self.page_track();
+        let track = self.services.page_track();
         let name = map.target.name_on(&track);
         self.services.apply(&Action::UnmapMacro {
             track: self.services.cursor.track,
@@ -712,7 +712,7 @@ impl App {
             at,
             name: (!name.is_empty()).then(|| name.to_owned()),
         });
-        let held = &self.page_track().macros[at];
+        let held = &self.services.page_track().macros[at];
         self.services.status = format!("Macro {} is {}", at + 1, macro_name(held, at));
     }
 }

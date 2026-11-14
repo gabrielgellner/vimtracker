@@ -131,7 +131,10 @@ fn lines(app: &App, step: &Step) -> Vec<Line<'static>> {
         // label and value, with what it does.
         let line = match command {
             FxCommand::Set(id) => {
-                let on_track = app.track_here().is_some_and(|track| id.exists_on(track));
+                let on_track = app
+                    .services
+                    .track_here()
+                    .is_some_and(|track| id.exists_on(track));
                 let mut meaning: Vec<String> =
                     phrase_value(app, Field::FxValue(at)).into_iter().collect();
                 if !on_track {
@@ -162,6 +165,7 @@ fn lines(app: &App, step: &Step) -> Vec<Line<'static>> {
 /// Draw it in an area, over the row under the cursor.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App, row: &str) {
     let Some(step) = app
+        .services
         .phrase_here()
         .and_then(|phrase| phrase.steps().get(app.services.cursor.step))
     else {

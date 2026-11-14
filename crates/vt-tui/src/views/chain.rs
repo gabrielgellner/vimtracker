@@ -25,7 +25,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // The track as the phrase view names it, with its machine or kind as a glyph before it, and a
     // track in a group carries its mark, in the group's colour, as on the mixer.
     let mut title = vec![];
-    if let Some(track) = app.track_here() {
+    if let Some(track) = app.services.track_here() {
         title.push(Span::styled(
             format!("{} ", glyphs::track(track)),
             theme::dim(),

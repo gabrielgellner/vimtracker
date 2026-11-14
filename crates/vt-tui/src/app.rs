@@ -23,7 +23,7 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Extent, Motion, Scope, StepRange};
-use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
+use vt_model::song::{ChainEntry, Song, Track};
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
 use crate::grammar::{Adjustments, Change, SelectionPlace};
@@ -628,14 +628,6 @@ impl App {
         self.services.song()
     }
 
-    /// The section being edited.
-    pub fn section_here(&self) -> Option<&Section> {
-        let sections = &self.song().sections;
-        sections
-            .get(self.services.cursor.section)
-            .or(sections.last())
-    }
-
     /// How far a track is through this chain, if it's playing it.
     pub fn chain_playhead(&self, track: usize, chain: u32) -> Option<usize> {
         let length = (self.song().tracks.get(track)?.chain_steps(chain)).max(1);
@@ -661,44 +653,6 @@ impl App {
         }
     }
 
-    /// The step of its own that one track is at when another is at this one of its own, at their
-    /// own speeds: the step playing then.
-    pub fn step_on(&self, track: usize, from: usize, step: usize) -> usize {
-        let ticks = |index: usize| {
-            self.song()
-                .tracks
-                .get(index)
-                .map_or(TICKS_PER_STEP, |track| track.speed.ticks())
-        };
-        (step as u64 * ticks(from) / ticks(track)) as usize
-    }
-
-    /// The track under the cursor.
-    pub fn track_here(&self) -> Option<&Track> {
-        self.song().tracks.get(self.services.cursor.track)
-    }
-
-    /// The phrase under the cursor.
-    pub fn phrase_id(&self) -> Option<u32> {
-        let chain = (*self
-            .section_here()?
-            .chains
-            .get(self.services.cursor.track)?)?;
-        Some(
-            self.track_here()?
-                .chains
-                .get(&chain)?
-                .entries
-                .get(self.services.cursor.slot)?
-                .phrase,
-        )
-    }
-
-    /// The contents of the phrase under the cursor.
-    pub fn phrase_here(&self) -> Option<&Arc<Phrase>> {
-        self.track_here()?.phrases.get(&self.phrase_id()?)
-    }
-
     /// The keys typed so far in a sequence.
     pub fn pending(&self) -> &[Key] {
         &self.pending
@@ -707,12 +661,15 @@ impl App {
     /// What `gg` and `G` go by: the cursor's FX column's lane if it has one, and the phrase's loop
     /// otherwise. Beats always go by the phrase's loop.
     pub(crate) fn motion_extent(&self, motion: Motion) -> Extent {
-        let extent = self.extent();
+        let extent = self.services.extent();
         let lane = match (motion, self.services.cursor.field) {
             (
                 Motion::First | Motion::Last,
                 Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot),
-            ) => self.phrase_here().and_then(|phrase| phrase.lane(slot)),
+            ) => self
+                .services
+                .phrase_here()
+                .and_then(|phrase| phrase.lane(slot)),
             _ => None,
         };
         lane.map_or(extent, |lane| Extent {
@@ -722,55 +679,9 @@ impl App {
         })
     }
 
-    /// Where the cursor's phrase's loop sits.
-    pub fn extent(&self) -> Extent {
-        self.phrase_here()
-            .map_or(Extent::whole(0), |phrase| phrase.extent())
-    }
-
-    /// The position in the section where the cursor's phrase starts playing.
-    pub fn slot_start(&self) -> usize {
-        let Some(track) = self.track_here() else {
-            return 0;
-        };
-        let Some(chain) = self
-            .section_here()
-            .and_then(|s| s.chains.get(self.services.cursor.track).copied().flatten())
-            .and_then(|id| track.chains.get(&id))
-        else {
-            return 0;
-        };
-        chain
-            .entries
-            .iter()
-            .take(self.services.cursor.slot)
-            .filter_map(|e| track.phrases.get(&e.phrase))
-            .map(|p| p.time())
-            .sum()
-    }
-
-    /// The cursor's position within the section. Only the loop has one, so a step outside it
-    /// counts as the loop's first.
-    pub fn section_step(&self) -> usize {
-        if self.modes.view == View::Song {
-            return 0;
-        }
-        let extent = self.extent();
-        // The chain view has no step of its own, so it plays from the row's first.
-        let row = if self.modes.view != View::Chain && extent.plays(self.services.cursor.step) {
-            self.services.cursor.step - extent.start
-        } else {
-            0
-        };
-        // Rows above it last their pulses. In another order, the walk is wherever it is at that
-        // step, worked out from the count as everything else is.
-        let time = self.phrase_here().map_or(row, |phrase| phrase.time_to(row));
-        self.slot_start() + time
-    }
-
     /// Put the cursor on the first step that plays, at the top of the screen.
     pub(crate) fn go_to_loop_start(&mut self) {
-        let start = self.extent().start;
+        let start = self.services.extent().start;
         self.services.cursor.step = start;
         self.top = start;
     }

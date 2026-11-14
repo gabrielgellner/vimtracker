@@ -1287,8 +1287,8 @@ impl App {
             return;
         }
         match switches {
-            SwitchMode::Mute => self.switch_mute(track),
-            SwitchMode::Solo => self.switch_solo(track),
+            SwitchMode::Mute => self.services.switch_mute(track),
+            SwitchMode::Solo => self.services.switch_solo(track),
             SwitchMode::Arm => {}
         }
     }

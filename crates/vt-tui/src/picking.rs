@@ -32,6 +32,7 @@ use crate::input::picker::{Item, KitChoice, Outcome, Pick, Picker, Preview, Prev
 use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
 use crate::track_page::Page;
+use crate::track_page::tuning::set_tuning;
 use crate::views::picker::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
 use crate::views::widgets::{group, role};
 
@@ -267,7 +268,7 @@ impl App {
     /// Open the list of orders the cursor's phrase's rows can play in, on the one they play in.
     pub(crate) fn open_order_picker(&mut self) {
         self.modes.count = None;
-        let Some(phrase) = self.phrase_here() else {
+        let Some(phrase) = self.services.phrase_here() else {
             self.services.status = "This track has no phrase here".to_owned();
             return;
         };
@@ -292,32 +293,17 @@ impl App {
 
     /// Play the cursor's phrase's rows in an order.
     pub(crate) fn set_order(&mut self, order: Order) {
-        let Some(phrase) = self.phrase_id() else {
+        let Some(phrase) = self.services.phrase_id() else {
             self.services.status = "This track has no phrase here".to_owned();
             return;
         };
-        let rows = self.phrase_here().map_or(0, |phrase| phrase.len());
+        let rows = self.services.phrase_here().map_or(0, |phrase| phrase.len());
         self.services.apply(&Action::SetOrder {
             track: self.services.cursor.track,
             phrase,
             order,
         });
         self.services.status = format!("This phrase plays {}: {}", order, order.describe(rows));
-    }
-
-    /// Give the cursor's track its own groove, or have it follow the project's again.
-    pub(crate) fn set_track_groove(&mut self, groove: Option<GrooveId>) {
-        let track = self.services.cursor.track;
-        if !self.song().tracks.get(track).is_some_and(|t| t.is_sound()) {
-            self.services.status = "Only a track with notes has a groove of its own".to_owned();
-            return;
-        }
-        self.services
-            .apply(&Action::SetTrackGroove { track, groove });
-        self.services.status = match groove {
-            Some(groove) => format!("This track plays with {groove}"),
-            None => format!("This track follows the project's {}", self.song().groove),
-        };
     }
 
     /// Open the list of scales, with this one highlighted.
@@ -383,7 +369,7 @@ impl App {
         let was = self.services.folds;
         self.services.folds.open_over(&song, track);
         self.folds_changed(was);
-        self.go_to_track_at(track);
+        self.services.go_to_track_at(track, self.modes.view);
         self.song_column = COLUMNS_BEFORE_TRACKS + track;
     }
 
@@ -893,7 +879,7 @@ impl App {
             Pick::Mark(letter) => self.jump_to_mark(letter),
             Pick::SampleSetting(setting) => self.pick_sample_setting(setting),
             Pick::SampleValue { setting, value } => self.pick_sample_value(setting, value),
-            Pick::Tuning { control, value } => self.set_tuning(control, value),
+            Pick::Tuning { control, value } => set_tuning(&mut self.services, control, value),
             Pick::Track(track) => self.go_to_track(track),
             Pick::Audio(choice) => self.pick_audio(choice),
             // The list above the command line takes its own choices, so none comes here.

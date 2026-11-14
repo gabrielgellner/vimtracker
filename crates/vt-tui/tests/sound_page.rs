@@ -722,7 +722,7 @@ fn the_masters_limiter_is_a_toggle_after_its_level_and_switches_the_songs_with_u
     // Only the master has it.
     for kind in [TrackKind::Group(1), TrackKind::ReturnB] {
         let (app, _realtime) = on_fixed(kind);
-        let devices = app.track_page.devices(app.track_here());
+        let devices = app.track_page.devices(app.services.track_here());
         let mut places = devices[0].rows().flatten();
         assert!(!places.any(|place| place == Some(Control::Limiter)));
     }

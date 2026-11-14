@@ -224,10 +224,10 @@ impl App {
         self.started = None;
         // The Gen page shows the phrase under the cursor, wherever a key or the time between
         // keys has moved it.
-        self.track_page.phrase = self.phrase_id();
+        self.track_page.phrase = self.services.phrase_id();
         self.handle_key(key, now);
         self.keep_cursor_shown();
-        self.track_page.phrase = self.phrase_id();
+        self.track_page.phrase = self.services.phrase_id();
         // Something that lasts while its key is down is tied to that key, and doesn't repeat.
         // One already held ends as if let go now, as only one is kept.
         if let Some(what) = self.started.take() {
@@ -550,7 +550,7 @@ impl App {
                 self.modes.mode = Mode::Command;
             }
             Cmd::PlayFromCursor => {
-                let step = self.section_step();
+                let step = self.services.section_step(self.modes.view);
                 // The song view plays from the row, so tracks stand where the song has them.
                 let track = (self.modes.view != View::Song).then_some(self.services.cursor.track);
                 self.services.handle.send(Command::PlaySection {
@@ -565,8 +565,8 @@ impl App {
                 self.repeats_ignored = true;
             }
             Cmd::Audition => {
-                if self.extent().plays(self.services.cursor.step) {
-                    let section_step = self.section_step();
+                if self.services.extent().plays(self.services.cursor.step) {
+                    let section_step = self.services.section_step(self.modes.view);
                     self.audition(section_step);
                 } else {
                     self.audition_outside_loop();
@@ -584,14 +584,14 @@ impl App {
             Cmd::FoldAll(closed) => self.fold_all(closed),
             Cmd::NarrowGrid => self.change_grid(false),
             Cmd::WidenGrid => self.change_grid(true),
-            Cmd::NextTrack => self.move_track(1),
-            Cmd::PreviousTrack => self.move_track(-1),
+            Cmd::NextTrack => self.services.move_track(1, self.modes.view),
+            Cmd::PreviousTrack => self.services.move_track(-1, self.modes.view),
             Cmd::NextGroupTrack => self.move_to_group(1),
             Cmd::PreviousGroupTrack => self.move_to_group(-1),
             Cmd::ToggleMute => {
                 let track = self.services.cursor.track;
                 if let Some(was) = self.services.levels.get(track).map(|live| live.mute) {
-                    self.toggle_mute();
+                    self.services.toggle_mute();
                     if self.services.levels[track].mute != was {
                         self.started = Some(Momentary::Mute { track, was });
                     }
@@ -600,7 +600,7 @@ impl App {
             Cmd::ToggleSolo => {
                 let track = self.services.cursor.track;
                 if let Some(was) = self.services.levels.get(track).map(|live| live.solo) {
-                    self.toggle_solo();
+                    self.services.toggle_solo();
                     if self.services.levels[track].solo != was {
                         self.started = Some(Momentary::Solo { track, was });
                     }

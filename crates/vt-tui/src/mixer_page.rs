@@ -1,8 +1,8 @@
 //! The mixer, `Space 4`, a strip for each track. `MixerPage` is the page as a component (#320): the
 //! row its cursor is on, which goes up and down a strip's settings, with the moves that need only
-//! the cursor's track, and its drawing, in `views::mixer`, given a [`Ctx`]. Across the strips, `h`
-//! and `l` move the program's own cursor to another track, and the edits are the track page's,
-//! `App`'s, as the mixer turns the same controls.
+//! the cursor's track, and its drawing, in `views::mixer`, given a [`Ctx`]. Across the strips, `h`,
+//! `l`, `0` and `$` move the program's own cursor to another track, through the [`CtxMut`] it's
+//! given, and the edits are the track page's, as the mixer turns the same controls.
 
 use vt_model::action::TrackControl;
 use vt_model::selection::Motion;
@@ -105,9 +105,25 @@ impl MixerPage {
     }
 
     /// Run a key as the program gives it to the page, on the cursor's track: one of the page's
-    /// own keys, [`MixerPage::key`], or passed back.
+    /// own keys, [`MixerPage::key`]; `h` and `l` to the strips either side and `0` and `$` to the
+    /// ends, moving the program's cursor; or passed back.
     pub fn run(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
-        self.key(cmd, times, ctx.track_here())
+        let outcome = self.key(cmd, times, ctx.track_here());
+        if outcome != Outcome::Passed {
+            return outcome;
+        }
+        let view = ctx.modes.view;
+        match cmd {
+            Cmd::Move(Motion::Right) => ctx.services.move_track(times as isize, view),
+            Cmd::Move(Motion::Left) => ctx.services.move_track(-(times as isize), view),
+            Cmd::Move(Motion::RowStart | Motion::RowEnd) => {
+                if let Some(to) = self.end_track(cmd == Cmd::Move(Motion::RowEnd), ctx) {
+                    ctx.services.go_to_track_at(to, view);
+                }
+            }
+            _ => return Outcome::Passed,
+        }
+        Outcome::Done
     }
 
     /// `0` and `$`: the first or last strip shown that has the row the cursor is on, for the
@@ -129,32 +145,15 @@ impl MixerPage {
 }
 
 impl App {
-    /// Run a command on the mixer. `j` and `k` go up and down its strips, the page's own keys, and
-    /// `h` and `l` between them, moving the program's cursor. Everything else means what it does
-    /// on the track page.
+    /// Run a command on the mixer: one of the page's own keys, or what it means on the track page.
     pub(crate) fn run_mixer(&mut self, cmd: Cmd) -> bool {
         let times = self.modes.count.unwrap_or(1).max(1);
         let mut ctx = CtxMut {
             services: &mut self.services,
             modes: &self.modes,
         };
-        let outcome = self.mixer_page.run(cmd, times, &mut ctx);
-        if outcome == Outcome::Passed {
-            match cmd {
-                Cmd::Move(Motion::Right) => self.move_track(times as isize),
-                Cmd::Move(Motion::Left) => self.move_track(-(times as isize)),
-                Cmd::Move(Motion::RowStart | Motion::RowEnd) => {
-                    let ctx = CtxMut {
-                        services: &mut self.services,
-                        modes: &self.modes,
-                    };
-                    let last = cmd == Cmd::Move(Motion::RowEnd);
-                    if let Some(to) = self.mixer_page.end_track(last, &ctx) {
-                        self.go_to_track_at(to);
-                    }
-                }
-                _ => return self.run_track_page(cmd),
-            }
+        if self.mixer_page.run(cmd, times, &mut ctx) == Outcome::Passed {
+            return self.run_track_page(cmd);
         }
         self.modes.count = None;
         true

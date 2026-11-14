@@ -1,5 +1,6 @@
 //! Changing the setting under the cursor: `=` and `-` and their large steps, the fine digits, and
-//! `x` back to its default.
+//! `x` back to its default. Each is a function over the [`Services`], given the setting, as the
+//! track page and the mixer both turn them.
 
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, MOST_DEGREES, Moves, Reset};
 use vt_model::action::{Action, TrackControl};
@@ -17,10 +18,11 @@ use vt_model::speed::Speed;
 use vt_model::steps::{Loop, MAX_MUTATE, MAX_STEP, STEPS, Steps, StepsMode};
 use vt_model::tracking::{Source, Tracking};
 
-use crate::app::App;
-use crate::input::command::Line;
+use crate::services::Services;
 
 use super::controls::no_modes;
+use super::fx::set_insert;
+use super::tuning::{adjust_tuning, set_tuning};
 use super::{AccumulatorField, ArpField, Control, ModField};
 
 /// How far a small and a large step move a phase, in degrees.
@@ -419,637 +421,648 @@ fn adjust_arpeggio(arpeggio: &mut Arpeggio, field: ArpField, up: bool) {
     }
 }
 
-impl App {
-    pub(crate) fn page_track(&self) -> Track {
-        self.song()
-            .tracks
-            .get(self.services.cursor.track)
-            .cloned()
-            .unwrap_or_default()
-    }
+/// Put the track in a group, or take it out of any.
+pub(super) fn set_group_here(services: &mut Services, group: Option<u8>) {
+    services.apply(&Action::SetTrackGroup {
+        first: services.cursor.track,
+        last: services.cursor.track,
+        group,
+    });
+}
 
-    /// The cursor's track as it's heard, with its faders where the steps have them while they
-    /// drive them.
-    pub(super) fn page_track_as_heard(&self) -> Track {
-        self.services
-            .track_as_heard(self.services.cursor.track)
-            .map(std::borrow::Cow::into_owned)
-            .unwrap_or_default()
-    }
+/// Replace one of the track's mod slots, as one undo step.
+pub(super) fn set_mod(services: &mut Services, slot: usize, modulator: ModSlot) {
+    services.apply(&Action::SetMod {
+        track: services.cursor.track,
+        slot,
+        modulator,
+    });
+}
 
-    /// Put the track in a group, or take it out of any.
-    pub(super) fn set_group_here(&mut self, group: Option<u8>) {
-        self.services.apply(&Action::SetTrackGroup {
-            first: self.services.cursor.track,
-            last: self.services.cursor.track,
-            group,
+/// Set how many of the song's steps the track's chain plays before starting again, or none.
+pub(super) fn set_reset(services: &mut Services, reset: Option<u16>) {
+    services.apply(&Action::SetTrackReset {
+        track: services.cursor.track,
+        reset,
+    });
+}
+
+/// Set how long the track's ties glide into the next note.
+pub(super) fn set_glide(services: &mut Services, glide: u8) {
+    services.apply(&Action::SetTrackGlide {
+        track: services.cursor.track,
+        glide,
+    });
+}
+
+pub(super) fn set_hex(services: &mut Services, control: Control, value: u8) {
+    let track = services.cursor.track;
+    // On the mixer, the cursor can be on a setting this track doesn't have.
+    let tracks = &services.song().tracks;
+    if tracks.get(track).is_some_and(|t| !control.exists_on(t)) {
+        return;
+    }
+    if let Some(setting) = tracks.get(track).and_then(|t| control.setting_on(t)) {
+        services.apply(&Action::SetTrackSetting {
+            track,
+            setting,
+            value,
         });
+        return;
     }
-
-    /// Replace one of the track's mod slots, as one undo step.
-    pub(super) fn set_mod(&mut self, slot: usize, modulator: ModSlot) {
-        self.services.apply(&Action::SetMod {
-            track: self.services.cursor.track,
-            slot,
-            modulator,
-        });
+    match control {
+        Control::Base(control) => services.apply(&Action::SetTrackBase {
+            track,
+            control,
+            value,
+        }),
+        Control::Level => services.apply(&Action::SetTrackLevel {
+            track,
+            level: value,
+        }),
+        Control::Trim => services.apply(&Action::SetTrackTrim { track, trim: value }),
+        _ => {}
     }
+}
 
-    /// Set how many of the song's steps the track's chain plays before starting again, or none.
-    pub(super) fn set_reset(&mut self, reset: Option<u16>) {
-        self.services.apply(&Action::SetTrackReset {
-            track: self.services.cursor.track,
-            reset,
-        });
-    }
-
-    /// Set how long the track's ties glide into the next note.
-    pub(super) fn set_glide(&mut self, glide: u8) {
-        self.services.apply(&Action::SetTrackGlide {
-            track: self.services.cursor.track,
-            glide,
-        });
-    }
-
-    pub(super) fn set_hex(&mut self, control: Control, value: u8) {
-        let track = self.services.cursor.track;
-        // On the mixer, the cursor can be on a setting this track doesn't have.
-        let tracks = &self.song().tracks;
-        if tracks.get(track).is_some_and(|t| !control.exists_on(t)) {
-            return;
+pub(super) fn adjust_control(
+    services: &mut Services,
+    control: Control,
+    up: bool,
+    count: usize,
+    large: bool,
+) {
+    // A fader the steps drive moves from where it's heard, as a hand takes it over there.
+    let track = services.page_track_as_heard();
+    // A machine's setting stops at its own top, as a list stops at its last choice.
+    let top = control
+        .setting_on(&track)
+        .map_or(0xFF, |id| id.entry().kind.top());
+    let change = |value: u8| {
+        let size = if large { HEX_JUMP } else { 1 };
+        let moved = i64::from(value.min(top)) + if up { size } else { -size } * count as i64;
+        moved.clamp(0, i64::from(top)) as u8
+    };
+    match control {
+        // The Gen page's own keys reshape its generators (`generators::run_gen_page`).
+        Control::Gen { .. } | Control::NewGenerator(_) => {}
+        Control::Mute | Control::Solo => {
+            let live = services
+                .levels
+                .get(services.cursor.track)
+                .copied()
+                .unwrap_or_default();
+            let on = if control == Control::Mute {
+                live.mute
+            } else {
+                live.solo
+            };
+            if on != up {
+                toggle_control(services, control);
+            }
         }
-        if let Some(setting) = tracks.get(track).and_then(|t| control.setting_on(t)) {
-            self.services.apply(&Action::SetTrackSetting {
-                track,
-                setting,
-                value,
+        // `=` puts it on and `-` takes it off, as on the project page it was on.
+        Control::Limiter if services.song().limiter != up => set_limiter(services, up),
+        Control::Limiter => {}
+        Control::Safe if track.safe != up => set_safe(services, up),
+        Control::Safe => {}
+        Control::Setting(_) => {
+            if let Some(id) = control.setting_on(&track) {
+                set_hex(services, control, change(track.setting(id)));
+            }
+        }
+        Control::Machine => {
+            let machine = next_in(&Machine::ALL, track.machine, up);
+            services.apply(&Action::SetTrackMachine {
+                track: services.cursor.track,
+                machine,
             });
-            return;
         }
-        match control {
-            Control::Base(control) => self.services.apply(&Action::SetTrackBase {
-                track,
-                control,
-                value,
-            }),
-            Control::Level => self.services.apply(&Action::SetTrackLevel {
-                track,
-                level: value,
-            }),
-            Control::Trim => self
-                .services
-                .apply(&Action::SetTrackTrim { track, trim: value }),
-            _ => {}
+        Control::Sample => {
+            let size = if large { HEX_JUMP as usize } else { 1 };
+            let sample = next_sample(services, track.sample(), up, size * count);
+            services.apply(&Action::SetTrackSample {
+                track: services.cursor.track,
+                sample,
+            });
         }
-    }
-
-    pub(super) fn adjust_control(&mut self, up: bool, count: usize, large: bool) {
-        let control = self.track_control();
-        // A fader the steps drive moves from where it's heard, as a hand takes it over there.
-        let track = self.page_track_as_heard();
-        // A machine's setting stops at its own top, as a list stops at its last choice.
-        let top = control
-            .setting_on(&track)
-            .map_or(0xFF, |id| id.entry().kind.top());
-        let change = |value: u8| {
+        Control::Tune | Control::Cents => adjust_tuning(services, control, up, count, large),
+        Control::Base(which) => {
+            let value = match which {
+                TrackControl::Cutoff => track.cutoff,
+                TrackControl::Resonance => track.resonance,
+                TrackControl::Pan => track.pan,
+                TrackControl::SendA => track.send_a,
+                TrackControl::SendB => track.send_b,
+                TrackControl::Drive => track.drive,
+                TrackControl::Punch => track.punch,
+                TrackControl::LowCut => track.low_cut,
+                TrackControl::HighCut => track.high_cut,
+                TrackControl::Pitch => track.pitch,
+                TrackControl::VelocityDelta => track.velocity_delta,
+                TrackControl::Quantise => track.quantise,
+            };
+            set_hex(services, control, change(value));
+        }
+        Control::Level => set_hex(services, control, change(track.level)),
+        Control::Trim => set_hex(services, control, change(track.trim)),
+        Control::Insert(slot) => set_insert(services, slot, track.inserts[slot].stepped(up)),
+        Control::InsertParam(slot, param) => {
+            let insert = track.inserts[slot];
+            let Some(found) = insert.params().get(param) else {
+                return;
+            };
+            let value = insert.value(param);
+            let count = found.choices.len() as u8;
+            let moved = if found.choices.is_empty() {
+                change(value)
+            } else if found.wraps {
+                (value + if up { 1 } else { count - 1 }) % count
+            } else if up {
+                (value + 1).min(count - 1)
+            } else {
+                value.saturating_sub(1)
+            };
+            set_insert(services, slot, insert.with_value(param, moved));
+        }
+        Control::FilterType => {
+            // One way at a time, as a large step would skip through a short list.
+            let filter = next_in(&FilterType::ALL, track.filter, up);
+            services.apply(&Action::SetFilterType {
+                track: services.cursor.track,
+                filter,
+            });
+        }
+        Control::FilterMode => {
+            let modes = track.filter.modes();
+            if modes.is_empty() {
+                services.status = no_modes(track.filter);
+                return;
+            }
+            let mode = next_in(modes, track.filter.plays(track.filter_mode), up);
+            services.apply(&Action::SetFilterMode {
+                track: services.cursor.track,
+                mode,
+            });
+        }
+        Control::Choke => {
+            let from = i64::from(track.choke.unwrap_or(0));
+            let moved = (from + if up { 1 } else { -1 } * count.min(0x100) as i64)
+                .clamp(0, i64::from(CHOKE_GROUPS)) as u8;
+            services.apply(&Action::SetTrackChoke {
+                track: services.cursor.track,
+                choke: (moved > 0).then_some(moved),
+            });
+        }
+        Control::Group => {
+            let from = i64::from(track.group.unwrap_or(0));
+            let moved = (from + if up { 1 } else { -1 } * count.min(0x100) as i64)
+                .clamp(0, MAX_GROUPS as i64) as u8;
+            set_group_here(services, (moved > 0).then_some(moved));
+        }
+        Control::GateLength => {
+            let size = if large { GATE_JUMP } else { 1 };
+            let by = size * count.min(100) as i32;
+            let from = i32::from(gate_percent(track.gate_length()));
+            let moved = from + if up { by } else { -by };
+            services.apply(&Action::SetTrackGateLength {
+                track: services.cursor.track,
+                gate_length: Some(gate_value(moved.clamp(1, 100) as u8)),
+            });
+        }
+        Control::Glide => {
             let size = if large { HEX_JUMP } else { 1 };
-            let moved = i64::from(value.min(top)) + if up { size } else { -size } * count as i64;
-            moved.clamp(0, i64::from(top)) as u8
-        };
-        match control {
-            // The Gen page's own keys reshape its generators (`generators::run_gen_page`).
-            Control::Gen { .. } | Control::NewGenerator(_) => {}
-            Control::Mute | Control::Solo => {
-                let live = self
-                    .services
-                    .levels
-                    .get(self.services.cursor.track)
-                    .copied()
-                    .unwrap_or_default();
-                let on = if control == Control::Mute {
-                    live.mute
-                } else {
-                    live.solo
-                };
-                if on != up {
-                    self.toggle_control(control);
-                }
-            }
-            // `=` puts it on and `-` takes it off, as on the project page it was on.
-            Control::Limiter if self.song().limiter != up => self.set_limiter(up),
-            Control::Limiter => {}
-            Control::Safe if track.safe != up => self.set_safe(up),
-            Control::Safe => {}
-            Control::Setting(_) => {
-                if let Some(id) = control.setting_on(&track) {
-                    self.set_hex(control, change(track.setting(id)));
-                }
-            }
-            Control::Machine => {
-                let machine = next_in(&Machine::ALL, track.machine, up);
-                self.services.apply(&Action::SetTrackMachine {
-                    track: self.services.cursor.track,
-                    machine,
-                });
-            }
-            Control::Sample => {
-                let size = if large { HEX_JUMP as usize } else { 1 };
-                let sample = self.next_sample(track.sample(), up, size * count);
-                self.services.apply(&Action::SetTrackSample {
-                    track: self.services.cursor.track,
-                    sample,
-                });
-            }
-            Control::Tune | Control::Cents => self.adjust_tuning(control, up, count, large),
-            Control::Base(which) => {
-                let value = match which {
-                    TrackControl::Cutoff => track.cutoff,
-                    TrackControl::Resonance => track.resonance,
-                    TrackControl::Pan => track.pan,
-                    TrackControl::SendA => track.send_a,
-                    TrackControl::SendB => track.send_b,
-                    TrackControl::Drive => track.drive,
-                    TrackControl::Punch => track.punch,
-                    TrackControl::LowCut => track.low_cut,
-                    TrackControl::HighCut => track.high_cut,
-                    TrackControl::Pitch => track.pitch,
-                    TrackControl::VelocityDelta => track.velocity_delta,
-                    TrackControl::Quantise => track.quantise,
-                };
-                self.set_hex(control, change(value));
-            }
-            Control::Level => self.set_hex(control, change(track.level)),
-            Control::Trim => self.set_hex(control, change(track.trim)),
-            Control::Insert(slot) => self.set_insert(slot, track.inserts[slot].stepped(up)),
-            Control::InsertParam(slot, param) => {
-                let insert = track.inserts[slot];
-                let Some(found) = insert.params().get(param) else {
-                    return;
-                };
-                let value = insert.value(param);
-                let count = found.choices.len() as u8;
-                let moved = if found.choices.is_empty() {
-                    change(value)
-                } else if found.wraps {
-                    (value + if up { 1 } else { count - 1 }) % count
-                } else if up {
-                    (value + 1).min(count - 1)
-                } else {
-                    value.saturating_sub(1)
-                };
-                self.set_insert(slot, insert.with_value(param, moved));
-            }
-            Control::FilterType => {
-                // One way at a time, as a large step would skip through a short list.
-                let filter = next_in(&FilterType::ALL, track.filter, up);
-                self.services.apply(&Action::SetFilterType {
-                    track: self.services.cursor.track,
-                    filter,
-                });
-            }
-            Control::FilterMode => {
-                let modes = track.filter.modes();
-                if modes.is_empty() {
-                    self.services.status = no_modes(track.filter);
-                    return;
-                }
-                let mode = next_in(modes, track.filter.plays(track.filter_mode), up);
-                self.services.apply(&Action::SetFilterMode {
-                    track: self.services.cursor.track,
-                    mode,
-                });
-            }
-            Control::Choke => {
-                let from = i64::from(track.choke.unwrap_or(0));
-                let moved = (from + if up { 1 } else { -1 } * count.min(0x100) as i64)
-                    .clamp(0, i64::from(CHOKE_GROUPS)) as u8;
-                self.services.apply(&Action::SetTrackChoke {
-                    track: self.services.cursor.track,
-                    choke: (moved > 0).then_some(moved),
-                });
-            }
-            Control::Group => {
-                let from = i64::from(track.group.unwrap_or(0));
-                let moved = (from + if up { 1 } else { -1 } * count.min(0x100) as i64)
-                    .clamp(0, MAX_GROUPS as i64) as u8;
-                self.set_group_here((moved > 0).then_some(moved));
-            }
-            Control::GateLength => {
-                let size = if large { GATE_JUMP } else { 1 };
-                let by = size * count.min(100) as i32;
-                let from = i32::from(gate_percent(track.gate_length()));
-                let moved = from + if up { by } else { -by };
-                self.services.apply(&Action::SetTrackGateLength {
-                    track: self.services.cursor.track,
-                    gate_length: Some(gate_value(moved.clamp(1, 100) as u8)),
-                });
-            }
-            Control::Glide => {
-                let size = if large { HEX_JUMP } else { 1 };
-                let by = size * count.min(0x100) as i64;
-                let moved = i64::from(track.glide) + if up { by } else { -by };
-                self.set_glide(moved.clamp(0, 0xFF) as u8);
-            }
-            Control::Reset => {
-                // A step at a time, or a bar to the next whole bar, with off below 1.
-                let from = u32::from(track.reset.unwrap_or(0));
-                let (bar, by) = (
-                    BAR_STEPS as u32,
-                    count.min(usize::from(MAX_TRACK_RESET)) as u32,
-                );
-                let moved = match (large, up) {
-                    (false, true) => from + by,
-                    (false, false) => from.saturating_sub(by),
-                    (true, true) => (from / bar + by) * bar,
-                    (true, false) => from.div_ceil(bar).saturating_sub(by) * bar,
-                };
-                let moved = moved.min(u32::from(MAX_TRACK_RESET)) as u16;
-                self.set_reset((moved > 0).then_some(moved));
-            }
-            Control::Role => {
-                let role = next_in(&Role::ALL, track.role, up);
-                self.services.apply(&Action::SetTrackRole {
-                    track: self.services.cursor.track,
-                    role,
-                });
-            }
-            Control::Speed => {
-                // One way at a time, stopping at either end, as the list runs short to long.
-                let at = usize::from(track.speed.index());
-                let speed = Speed::from_index(if up { at + 1 } else { at.saturating_sub(1) });
-                self.services.apply(&Action::SetTrackSpeed {
-                    track: self.services.cursor.track,
-                    speed,
-                });
-            }
-            Control::Groove => {
-                // One at a time, from what it plays, as a large step would skip through the list.
-                let from = track.groove.unwrap_or(self.song().groove).index();
-                let last = GrooveId::all().count() - 1;
-                let to = if up {
-                    (from + 1).min(last)
-                } else {
-                    from.saturating_sub(1)
-                };
-                if track.groove.is_none() || to != from {
-                    self.set_track_groove(GrooveId::from_index(to));
-                }
-            }
-            Control::Mod(slot, ModField::Type) => {
-                self.services.status = format!(
-                    "K picks Mod {}'s type, as a type changes what the device is",
-                    slot + 1
-                );
-            }
-            Control::Mod(slot, field) => {
-                let mut modulator = track.mods[slot];
-                for _ in 0..count.min(0x200) {
-                    adjust_mod(&mut modulator, slot, field, up, large, &track);
-                }
-                self.set_mod(slot, modulator);
-            }
-            Control::Accumulator(field) => {
-                let mut accumulation = track.accumulation;
-                for _ in 0..count.min(0x100) {
-                    adjust_accumulation(&mut accumulation, field, up, large);
-                }
-                self.set_accumulation(accumulation);
-            }
-            Control::Arpeggio(field) => {
-                let mut arpeggio = track.arpeggio;
-                for _ in 0..count.min(0x10) {
-                    adjust_arpeggio(&mut arpeggio, field, up);
-                }
-                self.set_arpeggio(arpeggio);
-            }
-            // A coarse step a turn, as a cutoff's, keeping any fine part the Roto left.
-            Control::Macro(at) => {
-                let size = if large { HEX_JUMP } else { 1 } * count.min(0x100) as i64;
-                let from = i64::from(track.macros[at].value);
-                let by = if up { size } else { -size } * 0x100;
-                let moved = (from + by).clamp(0, 0xFF00);
-                self.set_macro(at, moved as u16);
-            }
+            let by = size * count.min(0x100) as i64;
+            let moved = i64::from(track.glide) + if up { by } else { -by };
+            set_glide(services, moved.clamp(0, 0xFF) as u8);
         }
-    }
-
-    /// Turn one of the track's macros, and with it everything it holds.
-    pub(crate) fn set_macro(&mut self, at: usize, value: u16) {
-        if self.page_track().macros[at].value != value {
-            self.services.apply(&Action::SetMacro {
-                track: self.services.cursor.track,
-                at,
-                value,
+        Control::Reset => {
+            // A step at a time, or a bar to the next whole bar, with off below 1.
+            let from = u32::from(track.reset.unwrap_or(0));
+            let (bar, by) = (
+                BAR_STEPS as u32,
+                count.min(usize::from(MAX_TRACK_RESET)) as u32,
+            );
+            let moved = match (large, up) {
+                (false, true) => from + by,
+                (false, false) => from.saturating_sub(by),
+                (true, true) => (from / bar + by) * bar,
+                (true, false) => from.div_ceil(bar).saturating_sub(by) * bar,
+            };
+            let moved = moved.min(u32::from(MAX_TRACK_RESET)) as u16;
+            set_reset(services, (moved > 0).then_some(moved));
+        }
+        Control::Role => {
+            let role = next_in(&Role::ALL, track.role, up);
+            services.apply(&Action::SetTrackRole {
+                track: services.cursor.track,
+                role,
             });
         }
-    }
-
-    pub(super) fn set_accumulation(&mut self, accumulation: Accumulation) {
-        if accumulation != self.page_track().accumulation {
-            self.services.apply(&Action::SetAccumulation {
-                track: self.services.cursor.track,
-                accumulation,
+        Control::Speed => {
+            // One way at a time, stopping at either end, as the list runs short to long.
+            let at = usize::from(track.speed.index());
+            let speed = Speed::from_index(if up { at + 1 } else { at.saturating_sub(1) });
+            services.apply(&Action::SetTrackSpeed {
+                track: services.cursor.track,
+                speed,
             });
         }
-    }
-
-    pub(super) fn set_arpeggio(&mut self, arpeggio: Arpeggio) {
-        if arpeggio != self.page_track().arpeggio {
-            self.services.apply(&Action::SetArpeggio {
-                track: self.services.cursor.track,
-                arpeggio,
-            });
+        Control::Groove => {
+            // One at a time, from what it plays, as a large step would skip through the list.
+            let from = track.groove.unwrap_or(services.song().groove).index();
+            let last = GrooveId::all().count() - 1;
+            let to = if up {
+                (from + 1).min(last)
+            } else {
+                from.saturating_sub(1)
+            };
+            if track.groove.is_none() || to != from {
+                set_track_groove(services, GrooveId::from_index(to));
+            }
+        }
+        Control::Mod(slot, ModField::Type) => {
+            services.status = format!(
+                "K picks Mod {}'s type, as a type changes what the device is",
+                slot + 1
+            );
+        }
+        Control::Mod(slot, field) => {
+            let mut modulator = track.mods[slot];
+            for _ in 0..count.min(0x200) {
+                adjust_mod(&mut modulator, slot, field, up, large, &track);
+            }
+            set_mod(services, slot, modulator);
+        }
+        Control::Accumulator(field) => {
+            let mut accumulation = track.accumulation;
+            for _ in 0..count.min(0x100) {
+                adjust_accumulation(&mut accumulation, field, up, large);
+            }
+            set_accumulation(services, accumulation);
+        }
+        Control::Arpeggio(field) => {
+            let mut arpeggio = track.arpeggio;
+            for _ in 0..count.min(0x10) {
+                adjust_arpeggio(&mut arpeggio, field, up);
+            }
+            set_arpeggio(services, arpeggio);
+        }
+        // A coarse step a turn, as a cutoff's, keeping any fine part the Roto left.
+        Control::Macro(at) => {
+            let size = if large { HEX_JUMP } else { 1 } * count.min(0x100) as i64;
+            let from = i64::from(track.macros[at].value);
+            let by = if up { size } else { -size } * 0x100;
+            let moved = (from + by).clamp(0, 0xFF00);
+            set_macro(services, at, moved as u16);
         }
     }
+}
 
-    /// Move the fine part of the setting under the cursor, carrying into its value past `FF` or
-    /// below `00`, as one undo step.
-    pub(super) fn adjust_fine(&mut self, up: bool, count: usize, large: bool) {
-        let control = self.track_control();
-        let track = self.page_track_as_heard();
-        let Some(id) = control.fine_on(&track) else {
-            return;
-        };
-        let Some(coarse) = track.coarse(id) else {
-            return;
-        };
-        // What's set, which a fader the steps drive may not be at.
-        let set = self.page_track().coarse(id).unwrap_or(coarse);
-        let size = if large { HEX_JUMP } else { 1 } * count as i64;
-        let value = i64::from(coarse) << 8 | i64::from(track.fine(id));
-        let top = i64::from(id.entry().kind.top()) << 8;
-        let moved = (value + if up { size } else { -size }).clamp(0, top);
-        let (coarse_now, fine) = ((moved >> 8) as u8, (moved & 0xFF) as u8);
-        let index = self.services.cursor.track;
-        let mut actions = Vec::new();
-        if coarse_now != set {
-            actions.push(match control {
-                Control::Base(control) => Action::SetTrackBase {
-                    track: index,
-                    control,
-                    value: coarse_now,
-                },
-                _ => Action::SetTrackSetting {
-                    track: index,
-                    setting: id,
-                    value: coarse_now,
-                },
-            });
-        }
-        actions.push(Action::SetTrackFine {
-            track: index,
-            setting: id,
+/// Turn one of the track's macros, and with it everything it holds.
+pub(crate) fn set_macro(services: &mut Services, at: usize, value: u16) {
+    if services.page_track().macros[at].value != value {
+        services.apply(&Action::SetMacro {
+            track: services.cursor.track,
+            at,
+            value,
+        });
+    }
+}
+
+pub(super) fn set_accumulation(services: &mut Services, accumulation: Accumulation) {
+    if accumulation != services.page_track().accumulation {
+        services.apply(&Action::SetAccumulation {
+            track: services.cursor.track,
+            accumulation,
+        });
+    }
+}
+
+pub(super) fn set_arpeggio(services: &mut Services, arpeggio: Arpeggio) {
+    if arpeggio != services.page_track().arpeggio {
+        services.apply(&Action::SetArpeggio {
+            track: services.cursor.track,
+            arpeggio,
+        });
+    }
+}
+
+/// Move the fine part of the setting under the cursor, carrying into its value past `FF` or
+/// below `00`, as one undo step.
+pub(super) fn adjust_fine(
+    services: &mut Services,
+    control: Control,
+    up: bool,
+    count: usize,
+    large: bool,
+) {
+    let track = services.page_track_as_heard();
+    let Some(id) = control.fine_on(&track) else {
+        return;
+    };
+    let Some(coarse) = track.coarse(id) else {
+        return;
+    };
+    // What's set, which a fader the steps drive may not be at.
+    let set = services.page_track().coarse(id).unwrap_or(coarse);
+    let size = if large { HEX_JUMP } else { 1 } * count as i64;
+    let value = i64::from(coarse) << 8 | i64::from(track.fine(id));
+    let top = i64::from(id.entry().kind.top()) << 8;
+    let moved = (value + if up { size } else { -size }).clamp(0, top);
+    let (coarse_now, fine) = ((moved >> 8) as u8, (moved & 0xFF) as u8);
+    let index = services.cursor.track;
+    let mut actions = Vec::new();
+    if coarse_now != set {
+        actions.push(match control {
+            Control::Base(control) => Action::SetTrackBase {
+                track: index,
+                control,
+                value: coarse_now,
+            },
+            _ => Action::SetTrackSetting {
+                track: index,
+                setting: id,
+                value: coarse_now,
+            },
+        });
+    }
+    actions.push(Action::SetTrackFine {
+        track: index,
+        setting: id,
+        fine,
+    });
+    services.apply(&Action::Batch(actions));
+}
+
+/// Set the fine part of the setting under the cursor.
+pub(super) fn set_fine_here(services: &mut Services, control: Control, fine: u8) {
+    if let Some(setting) = control.fine_on(&services.page_track()) {
+        services.apply(&Action::SetTrackFine {
+            track: services.cursor.track,
+            setting,
             fine,
         });
-        self.services.apply(&Action::Batch(actions));
     }
+}
 
-    /// Set the fine part of the setting under the cursor.
-    pub(super) fn set_fine_here(&mut self, fine: u8) {
-        if let Some(setting) = self.track_control().fine_on(&self.page_track()) {
-            self.services.apply(&Action::SetTrackFine {
-                track: self.services.cursor.track,
-                setting,
-                fine,
+/// Put the setting under the cursor back to its default. If it's there already, nothing changes
+/// and no undo step is left.
+pub(super) fn reset_control(services: &mut Services, control: Control) {
+    let track = services.page_track();
+    let fresh = Track::default();
+    match control {
+        Control::Gen { .. } | Control::NewGenerator(_) => {}
+        Control::Base(which) => {
+            let value = |track: &Track| match which {
+                TrackControl::Cutoff => track.cutoff,
+                TrackControl::Resonance => track.resonance,
+                TrackControl::Pan => track.pan,
+                TrackControl::SendA => track.send_a,
+                TrackControl::SendB => track.send_b,
+                TrackControl::Drive => track.drive,
+                TrackControl::Punch => track.punch,
+                TrackControl::LowCut => track.low_cut,
+                TrackControl::HighCut => track.high_cut,
+                TrackControl::Pitch => track.pitch,
+                TrackControl::VelocityDelta => track.velocity_delta,
+                TrackControl::Quantise => track.quantise,
+            };
+            if value(&track) != value(&fresh) {
+                set_hex(services, control, value(&fresh));
+            }
+        }
+        Control::Macro(at) => set_macro(services, at, 0),
+        Control::Mute | Control::Solo => {
+            let live = services
+                .levels
+                .get(services.cursor.track)
+                .copied()
+                .unwrap_or_default();
+            if (control == Control::Mute && live.mute) || (control == Control::Solo && live.solo) {
+                toggle_control(services, control);
+            }
+        }
+        // A new song's is on.
+        Control::Limiter if !services.song().limiter => set_limiter(services, true),
+        Control::Limiter => {}
+        Control::Safe if track.safe => set_safe(services, false),
+        Control::Safe => {}
+        Control::Setting(_) => {
+            if let Some(id) = control.setting_on(&track)
+                && track.setting(id) != id.entry().default
+            {
+                set_hex(services, control, id.entry().default);
+            }
+        }
+        Control::Machine => {
+            if track.machine != fresh.machine {
+                services.apply(&Action::SetTrackMachine {
+                    track: services.cursor.track,
+                    machine: fresh.machine,
+                });
+            }
+        }
+        Control::Sample if track.sample() != 0 => {
+            services.apply(&Action::SetTrackSample {
+                track: services.cursor.track,
+                sample: 0,
             });
         }
-    }
-
-    /// Put the setting under the cursor back to its default. If it's there already, nothing changes
-    /// and no undo step is left.
-    pub(super) fn reset_control(&mut self) {
-        let control = self.track_control();
-        let track = self.page_track();
-        let fresh = Track::default();
-        match control {
-            Control::Gen { .. } | Control::NewGenerator(_) => {}
-            Control::Base(which) => {
-                let value = |track: &Track| match which {
-                    TrackControl::Cutoff => track.cutoff,
-                    TrackControl::Resonance => track.resonance,
-                    TrackControl::Pan => track.pan,
-                    TrackControl::SendA => track.send_a,
-                    TrackControl::SendB => track.send_b,
-                    TrackControl::Drive => track.drive,
-                    TrackControl::Punch => track.punch,
-                    TrackControl::LowCut => track.low_cut,
-                    TrackControl::HighCut => track.high_cut,
-                    TrackControl::Pitch => track.pitch,
-                    TrackControl::VelocityDelta => track.velocity_delta,
-                    TrackControl::Quantise => track.quantise,
-                };
-                if value(&track) != value(&fresh) {
-                    self.set_hex(control, value(&fresh));
-                }
-            }
-            Control::Macro(at) => self.set_macro(at, 0),
-            Control::Mute | Control::Solo => {
-                let live = self
-                    .services
-                    .levels
-                    .get(self.services.cursor.track)
-                    .copied()
-                    .unwrap_or_default();
-                if (control == Control::Mute && live.mute)
-                    || (control == Control::Solo && live.solo)
-                {
-                    self.toggle_control(control);
-                }
-            }
-            // A new song's is on.
-            Control::Limiter if !self.song().limiter => self.set_limiter(true),
-            Control::Limiter => {}
-            Control::Safe if track.safe => self.set_safe(false),
-            Control::Safe => {}
-            Control::Setting(_) => {
-                if let Some(id) = control.setting_on(&track)
-                    && track.setting(id) != id.entry().default
-                {
-                    self.set_hex(control, id.entry().default);
-                }
-            }
-            Control::Machine => {
-                if track.machine != fresh.machine {
-                    self.services.apply(&Action::SetTrackMachine {
-                        track: self.services.cursor.track,
-                        machine: fresh.machine,
-                    });
-                }
-            }
-            Control::Sample if track.sample() != 0 => {
-                self.services.apply(&Action::SetTrackSample {
-                    track: self.services.cursor.track,
-                    sample: 0,
-                });
-            }
-            Control::Sample => {}
-            Control::Tune | Control::Cents => self.set_tuning(control, None),
-            Control::Insert(slot) => {
-                if track.inserts[slot] != Insert::Empty {
-                    self.set_insert(slot, Insert::Empty);
-                }
-            }
-            Control::InsertParam(slot, param) => {
-                let insert = track.inserts[slot];
-                if let Some(found) = insert.params().get(param)
-                    && insert.value(param) != found.default
-                {
-                    self.set_insert(slot, insert.with_value(param, found.default));
-                }
-            }
-            Control::Level if track.level != fresh.level => self.set_hex(control, fresh.level),
-            Control::Level => {}
-            Control::Trim if track.trim != fresh.trim => self.set_hex(control, fresh.trim),
-            Control::Trim => {}
-            Control::Groove if track.groove.is_some() => self.set_track_groove(None),
-            Control::Groove => {}
-            Control::Choke if track.choke.is_some() => {
-                self.services.apply(&Action::SetTrackChoke {
-                    track: self.services.cursor.track,
-                    choke: None,
-                });
-            }
-            Control::Choke => {}
-            Control::Group if track.group.is_some() => self.set_group_here(None),
-            Control::Group => {}
-            Control::Role if !track.role.is_auto() => {
-                self.services.apply(&Action::SetTrackRole {
-                    track: self.services.cursor.track,
-                    role: Role::Auto,
-                });
-            }
-            Control::Role => {}
-            Control::GateLength if track.gate_length.is_some() => {
-                self.services.apply(&Action::SetTrackGateLength {
-                    track: self.services.cursor.track,
-                    gate_length: None,
-                });
-            }
-            Control::GateLength => {}
-            Control::Glide if track.glide != fresh.glide => self.set_glide(fresh.glide),
-            Control::Glide => {}
-            Control::Speed if track.speed != fresh.speed => {
-                self.services.apply(&Action::SetTrackSpeed {
-                    track: self.services.cursor.track,
-                    speed: fresh.speed,
-                });
-            }
-            Control::Speed => {}
-            Control::Reset if track.reset.is_some() => self.set_reset(None),
-            Control::Reset => {}
-            Control::FilterType => {
-                if track.filter != fresh.filter {
-                    self.services.apply(&Action::SetFilterType {
-                        track: self.services.cursor.track,
-                        filter: fresh.filter,
-                    });
-                }
-            }
-            Control::FilterMode => {
-                if track.filter_mode != fresh.filter_mode {
-                    self.services.apply(&Action::SetFilterMode {
-                        track: self.services.cursor.track,
-                        mode: fresh.filter_mode,
-                    });
-                }
-            }
-            Control::Mod(slot, field) => {
-                let modulator = track.mods[slot];
-                let reset = mod_at_default(modulator, slot, field);
-                if reset != modulator {
-                    self.set_mod(slot, reset);
-                }
-            }
-            Control::Accumulator(field) => {
-                let (now, default) = (track.accumulation, Accumulation::default());
-                let reset = match field {
-                    AccumulatorField::Up => Accumulation {
-                        up: default.up,
-                        ..now
-                    },
-                    AccumulatorField::Down => Accumulation {
-                        down: default.down,
-                        ..now
-                    },
-                    AccumulatorField::Moves => Accumulation {
-                        moves: default.moves,
-                        ..now
-                    },
-                    AccumulatorField::AtLimit => Accumulation {
-                        at_limit: default.at_limit,
-                        ..now
-                    },
-                    AccumulatorField::Adds => Accumulation {
-                        adds: default.adds,
-                        ..now
-                    },
-                    AccumulatorField::Reset => Accumulation {
-                        reset: default.reset,
-                        ..now
-                    },
-                };
-                self.set_accumulation(reset);
-            }
-            Control::Arpeggio(field) => {
-                let (now, default) = (track.arpeggio, Arpeggio::default());
-                let reset = match field {
-                    ArpField::Rate => Arpeggio {
-                        rate: default.rate,
-                        ..now
-                    },
-                    ArpField::Mode => Arpeggio {
-                        mode: default.mode,
-                        ..now
-                    },
-                    ArpField::Octaves => Arpeggio {
-                        octaves: default.octaves,
-                        ..now
-                    },
-                    ArpField::Retrig => Arpeggio {
-                        retrig: default.retrig,
-                        ..now
-                    },
-                };
-                self.set_arpeggio(reset);
+        Control::Sample => {}
+        Control::Tune | Control::Cents => set_tuning(services, control, None),
+        Control::Insert(slot) => {
+            if track.inserts[slot] != Insert::Empty {
+                set_insert(services, slot, Insert::Empty);
             }
         }
-    }
-
-    /// List what an LFO's setting can be, with the current one highlighted.
-    /// Switch this track's mute or solo.
-    /// The bank entry so many on from this one, up or down, through those the bank has, with
-    /// `Off` below the first. It stops at either end.
-    fn next_sample(&self, from: u8, up: bool, count: usize) -> u8 {
-        let numbers = std::iter::once(0).chain(self.song().bank.iter().map(|(number, _)| number));
-        let found = if up {
-            numbers.filter(|number| *number > from).take(count).last()
-        } else {
-            let below: Vec<u8> = numbers.filter(|number| *number < from).collect();
-            below.get(below.len().saturating_sub(count)).copied()
-        };
-        found.unwrap_or(from)
-    }
-
-    /// Switch the track's mute, solo or filter's `Safe`, or the song's limiter.
-    pub(super) fn toggle_control(&mut self, control: Control) {
-        match control {
-            Control::Mute => self.toggle_mute(),
-            Control::Limiter => self.set_limiter(!self.song().limiter),
-            Control::Safe => self.set_safe(!self.page_track().safe),
-            _ => self.toggle_solo(),
+        Control::InsertParam(slot, param) => {
+            let insert = track.inserts[slot];
+            if let Some(found) = insert.params().get(param)
+                && insert.value(param) != found.default
+            {
+                set_insert(services, slot, insert.with_value(param, found.default));
+            }
+        }
+        Control::Level if track.level != fresh.level => set_hex(services, control, fresh.level),
+        Control::Level => {}
+        Control::Trim if track.trim != fresh.trim => set_hex(services, control, fresh.trim),
+        Control::Trim => {}
+        Control::Groove if track.groove.is_some() => set_track_groove(services, None),
+        Control::Groove => {}
+        Control::Choke if track.choke.is_some() => {
+            services.apply(&Action::SetTrackChoke {
+                track: services.cursor.track,
+                choke: None,
+            });
+        }
+        Control::Choke => {}
+        Control::Group if track.group.is_some() => set_group_here(services, None),
+        Control::Group => {}
+        Control::Role if !track.role.is_auto() => {
+            services.apply(&Action::SetTrackRole {
+                track: services.cursor.track,
+                role: Role::Auto,
+            });
+        }
+        Control::Role => {}
+        Control::GateLength if track.gate_length.is_some() => {
+            services.apply(&Action::SetTrackGateLength {
+                track: services.cursor.track,
+                gate_length: None,
+            });
+        }
+        Control::GateLength => {}
+        Control::Glide if track.glide != fresh.glide => set_glide(services, fresh.glide),
+        Control::Glide => {}
+        Control::Speed if track.speed != fresh.speed => {
+            services.apply(&Action::SetTrackSpeed {
+                track: services.cursor.track,
+                speed: fresh.speed,
+            });
+        }
+        Control::Speed => {}
+        Control::Reset if track.reset.is_some() => set_reset(services, None),
+        Control::Reset => {}
+        Control::FilterType => {
+            if track.filter != fresh.filter {
+                services.apply(&Action::SetFilterType {
+                    track: services.cursor.track,
+                    filter: fresh.filter,
+                });
+            }
+        }
+        Control::FilterMode => {
+            if track.filter_mode != fresh.filter_mode {
+                services.apply(&Action::SetFilterMode {
+                    track: services.cursor.track,
+                    mode: fresh.filter_mode,
+                });
+            }
+        }
+        Control::Mod(slot, field) => {
+            let modulator = track.mods[slot];
+            let reset = mod_at_default(modulator, slot, field);
+            if reset != modulator {
+                set_mod(services, slot, reset);
+            }
+        }
+        Control::Accumulator(field) => {
+            let (now, default) = (track.accumulation, Accumulation::default());
+            let reset = match field {
+                AccumulatorField::Up => Accumulation {
+                    up: default.up,
+                    ..now
+                },
+                AccumulatorField::Down => Accumulation {
+                    down: default.down,
+                    ..now
+                },
+                AccumulatorField::Moves => Accumulation {
+                    moves: default.moves,
+                    ..now
+                },
+                AccumulatorField::AtLimit => Accumulation {
+                    at_limit: default.at_limit,
+                    ..now
+                },
+                AccumulatorField::Adds => Accumulation {
+                    adds: default.adds,
+                    ..now
+                },
+                AccumulatorField::Reset => Accumulation {
+                    reset: default.reset,
+                    ..now
+                },
+            };
+            set_accumulation(services, reset);
+        }
+        Control::Arpeggio(field) => {
+            let (now, default) = (track.arpeggio, Arpeggio::default());
+            let reset = match field {
+                ArpField::Rate => Arpeggio {
+                    rate: default.rate,
+                    ..now
+                },
+                ArpField::Mode => Arpeggio {
+                    mode: default.mode,
+                    ..now
+                },
+                ArpField::Octaves => Arpeggio {
+                    octaves: default.octaves,
+                    ..now
+                },
+                ArpField::Retrig => Arpeggio {
+                    retrig: default.retrig,
+                    ..now
+                },
+            };
+            set_arpeggio(services, reset);
         }
     }
+}
 
-    /// Switch the track filter's `Safe` on or off.
-    fn set_safe(&mut self, on: bool) {
-        self.services.apply(&Action::SetTrackSafe {
-            track: self.services.cursor.track,
-            on,
-        });
-    }
+/// List what an LFO's setting can be, with the current one highlighted.
+/// Switch this track's mute or solo.
+/// The bank entry so many on from this one, up or down, through those the bank has, with
+/// `Off` below the first. It stops at either end.
+fn next_sample(services: &Services, from: u8, up: bool, count: usize) -> u8 {
+    let numbers = std::iter::once(0).chain(services.song().bank.iter().map(|(number, _)| number));
+    let found = if up {
+        numbers.filter(|number| *number > from).take(count).last()
+    } else {
+        let below: Vec<u8> = numbers.filter(|number| *number < from).collect();
+        below.get(below.len().saturating_sub(count)).copied()
+    };
+    found.unwrap_or(from)
+}
 
-    /// Switch the song's limiter on or off, as `:set limiter` does, saying what that means.
-    fn set_limiter(&mut self, on: bool) {
-        self.line(Line::SetLimiter(on));
+/// Switch the track's mute, solo or filter's `Safe`, or the song's limiter.
+pub(super) fn toggle_control(services: &mut Services, control: Control) {
+    match control {
+        Control::Mute => services.toggle_mute(),
+        Control::Limiter => set_limiter(services, !services.song().limiter),
+        Control::Safe => set_safe(services, !services.page_track().safe),
+        _ => services.toggle_solo(),
     }
+}
+
+/// Switch the track filter's `Safe` on or off.
+fn set_safe(services: &mut Services, on: bool) {
+    services.apply(&Action::SetTrackSafe {
+        track: services.cursor.track,
+        on,
+    });
+}
+
+/// Switch the song's limiter on or off, as `:set limiter` does, saying what that means.
+pub(crate) fn set_limiter(services: &mut Services, on: bool) {
+    services.apply(&Action::SetLimiter(on));
+    services.status = if on {
+        "Limiter on".to_owned()
+    } else {
+        "Limiter off: renders keep levels over 0, and the output still clips at 0".to_owned()
+    };
+}
+
+/// Give the cursor's track its own groove, or have it follow the project's again.
+pub(crate) fn set_track_groove(services: &mut Services, groove: Option<GrooveId>) {
+    let track = services.cursor.track;
+    if !services
+        .song()
+        .tracks
+        .get(track)
+        .is_some_and(|t| t.is_sound())
+    {
+        services.status = "Only a track with notes has a groove of its own".to_owned();
+        return;
+    }
+    services.apply(&Action::SetTrackGroove { track, groove });
+    services.status = match groove {
+        Some(groove) => format!("This track plays with {groove}"),
+        None => format!(
+            "This track follows the project's {}",
+            services.song().groove
+        ),
+    };
 }
