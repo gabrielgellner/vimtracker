@@ -11,7 +11,7 @@ use super::mix;
 use super::random::{Odds, unit};
 use super::{
     FillKind, Ladder, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, divisions, follow,
-    grids, variation, walk,
+    grids, ring, variation, walk,
 };
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
@@ -362,6 +362,15 @@ pub(super) fn render(
             shape.from,
             shape.seed,
             shape.divisions,
+            out.cells,
+        ),
+        FillKind::Ring => ring::render(
+            steps,
+            range,
+            column,
+            (shape.from, shape.to),
+            shape.seed,
+            shape.ring,
             out.cells,
         ),
         FillKind::Variation => {
@@ -770,6 +779,7 @@ fn filled<F: FnMut(usize, &Shaped)>(
             FillKind::Multiply => unreachable!("rendered by `bits::render`"),
             FillKind::Grids => unreachable!("rendered by `grids::render`"),
             FillKind::Divisions => unreachable!("rendered by `divisions::render`"),
+            FillKind::Ring => unreachable!("rendered by `ring::render`"),
             FillKind::Acid => unreachable!("rendered by `acid::render`"),
             FillKind::Variation => unreachable!("rendered by `variation::render`"),
             FillKind::Follow => unreachable!("read from what it follows"),
