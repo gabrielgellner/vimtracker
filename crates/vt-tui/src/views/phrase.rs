@@ -16,6 +16,7 @@ use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind, Mark, Note, Step, nudge_text};
 
 use crate::app::{App, Field, TrackSpan};
+use crate::folding::Order;
 use crate::glyphs;
 use crate::input::mode::Mode;
 use crate::theme;
@@ -371,24 +372,15 @@ fn live_value(step: &Step, column: ShapeColumn) -> bool {
 /// a column of the group's own, named and empty, where the first of them would be (decision 128).
 fn neighbours(app: &App, width: usize) -> Vec<usize> {
     let song = app.song();
-    let mut tracks: Vec<usize> = song
-        .tracks
-        .iter()
-        .enumerate()
-        .filter(|(index, track)| {
-            *index == app.cursor.track || (track.is_sound() && !app.folds.hides(song, *index))
+    let mut tracks: Vec<usize> = (0..song.tracks.len())
+        .filter(|&index| {
+            index == app.cursor.track
+                || (song.tracks[index].is_sound() && !app.folds.hides(song, index))
+                || app.folds.holds(song, index)
         })
-        .map(|(index, _)| index)
         .collect();
-    for group in (0..song.tracks.len()).filter(|&track| app.folds.holds(song, track)) {
-        if group == app.cursor.track {
-            continue;
-        }
-        if let Some(first) = song.group_members(group).next() {
-            let at = tracks.partition_point(|&track| track < first);
-            tracks.insert(at, group);
-        }
-    }
+    // In the order `W` and `B` go through them (decision 305).
+    tracks.sort_by_key(|&track| app.folds.place(song, track, Order::Stops));
     let shown = (width / NEIGHBOUR_WIDTH).min(tracks.len());
     if shown == 0 {
         return Vec::new();
