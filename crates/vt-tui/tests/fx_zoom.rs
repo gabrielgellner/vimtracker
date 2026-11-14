@@ -160,8 +160,8 @@ fn the_zoomed_meter_and_its_two_bars_show_how_far_it_turned_down() {
     let screen = zoomed_screen(&mut app, false);
     // With no curve sent yet its box is left out, so the meter starts the panel.
     assert_eq!(cut(&screen[8], 3, 7), "┌──┐");
-    for row in 9..17 {
-        assert_eq!(cut(&screen[row], 4, 6), "██", "{row}");
+    for (row, line) in screen.iter().enumerate().take(17).skip(9) {
+        assert_eq!(cut(line, 4, 6), "██", "{row}");
     }
     assert_eq!(cut(&screen[17], 4, 6), "  ");
     // The tile's bar: 12 dB of its 20 is three of its five cells.
