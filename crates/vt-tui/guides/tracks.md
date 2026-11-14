@@ -424,7 +424,7 @@ mode is as loud.
 | `Rate` | The tape's speed: the first head 1 s behind to 10 ms |
 | `Sync` | `Free`, or a note division the first head keeps to |
 | `Inertia` | How slowly the motor gets to a new speed |
-| `Intensity` | How much goes round again. Past about `E0` it runs away |
+| `Intensity` | How much goes round again. From about `DC` it runs away |
 | `Input` | How hard the tape's driven, ±24 dB, as it comes at `80` |
 | `Wow` | How far the tape's speed wavers |
 | `Bass`, `Treble` | Lift or cut what comes out, flat at `80` |

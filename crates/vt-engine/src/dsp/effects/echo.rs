@@ -3,7 +3,7 @@
 //! tape through a saturation; three playback heads, the second and third two and three times as
 //! far from the record head as the first, read it back; the mode chooses which heads are heard;
 //! and `Intensity` sends what they play back to the record head, so each repeat goes through the
-//! tape again, darker and more saturated than the last, until past about `E0` it runs away.
+//! tape again, darker and more saturated than the last, until from about `DC` it runs away.
 //!
 //! The tape's speed is the delay: `Rate`, or a note division at the song's tempo, sets the first
 //! head's, and the motor comes to a new speed through two one-poles, the slower of them
@@ -972,7 +972,7 @@ mod tests {
     }
 
     #[test]
-    fn past_about_e0_it_runs_away_and_stays_bounded() {
+    fn from_about_dc_it_runs_away_and_stays_bounded() {
         let grows = |intensity: u8| {
             let mut echo = echo(Settings {
                 intensity,
@@ -986,7 +986,7 @@ mod tests {
                 peak,
             )
         };
-        assert!(grows(0xD8).0 < 1.0, "{:?}", grows(0xD8));
+        assert!(grows(0xD4).0 < 1.0, "{:?}", grows(0xD4));
         let (growth, peak) = grows(0xFF);
         assert!(growth > 10.0, "{growth}");
         assert!(peak < 1.0, "{peak}");

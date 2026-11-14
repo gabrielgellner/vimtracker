@@ -329,7 +329,8 @@ pub struct Echo {
     pub sync: u8,
     /// How slowly the motor comes to a new speed, from about a fifth of a second at `00` to two.
     pub inertia: u8,
-    /// How much of what the heads play goes round again: the repeats run away a little past `E0`.
+    /// How much of what the heads play goes round again: the repeats run away from about `DC`,
+    /// 1.03 on TAPE-201's scale.
     pub intensity: u8,
     /// How hard what goes in drives the tape, from 24 dB down at `00`, through as it is at `80`,
     /// to 24 dB up at `FF`.
