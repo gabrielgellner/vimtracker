@@ -9,7 +9,7 @@ pub use vt_model::playable::{LoopSpan, Playable, Span};
 use vt_model::playable::{normalize_peak, onset_analysis};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
-use vt_model::shape::ShapeColumn;
+use vt_model::shape::{FillKind, ShapeColumn};
 use vt_model::song::{Song, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, most_nudge};
@@ -163,7 +163,8 @@ fn track_longest(track: &Track) -> (u64, bool) {
 /// How far the earliest nudge in the song moves its row, in ticks, if any row has one: 0 when every
 /// nudge is late. A nudge plays no further than its step's range, so a track's own are as early
 /// as the longest step it can play lets them be, and a live Nudge generator, which the engine can
-/// move to any nudge its column takes, counts as the earliest of those.
+/// move to any nudge its column takes, counts as the earliest of those, as a live `Divisions`
+/// does as its triplets' earliest, which its dice or a macro may bring in on any row.
 fn earliest_nudge(song: &Song) -> Option<i64> {
     song.tracks
         .iter()
@@ -175,6 +176,9 @@ fn earliest_nudge(song: &Song) -> Option<i64> {
                 .flat_map(|phrase| phrase.generators())
                 .filter_map(move |generator| match generator.column {
                     ShapeColumn::Nudge { most: own } => Some(-own.clamp(0, most)),
+                    ShapeColumn::Note { .. } if generator.shape.kind == FillKind::Divisions => {
+                        Some(generator.shape.divisions.bar.earliest().clamp(-most, 0))
+                    }
                     _ => None,
                 });
             phrases

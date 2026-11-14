@@ -15,9 +15,9 @@ use vt_model::lfo::Rate;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, Bits, DrumPart, Edge, FillKind, Follow, GenCell, Grids, MAX_DEPTH, MAX_FACTOR,
-    MAX_MUTATION, MAX_VALUES, MAX_WEIGHT, Mutations, Pink, Random, RowView, Shape, ShapeColumn,
-    Values, Variation, WAVES, Walk, WaveRate, Where, render_into, written_from,
+    Acid, Bar, Bits, Channel, Divisions, DrumPart, Edge, FillKind, Follow, GenCell, Grids,
+    MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_VALUES, MAX_WEIGHT, Mutations, Pink, Random, RowView,
+    Shape, ShapeColumn, Values, Variation, WAVES, Walk, WaveRate, Where, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -316,6 +316,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         random: Random::default(),
         vary: 0,
         variation: Variation::default(),
+        divisions: vt_model::shape::Divisions::default(),
     };
     // Settings added since are drawn from the seed, so the other draws, and the other fills'
     // hashes, stay as they were.
@@ -349,6 +350,20 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         } else {
             more.below(120) as u8
         },
+    };
+    let mut chance = || match more.below(4) {
+        0 => 0,
+        1 => 100,
+        _ => more.below(101) as u8,
+    };
+    let chances = [
+        std::array::from_fn(|_| chance()),
+        std::array::from_fn(|_| chance()),
+    ];
+    shape.divisions = Divisions {
+        chances,
+        channel: more.chance(90).then(|| more.pick(&Channel::ALL)),
+        bar: more.pick(&Bar::ALL),
     };
     shape
 }
