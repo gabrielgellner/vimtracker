@@ -393,7 +393,22 @@ Track:       C D E F | D E F G | E F G A
 ```
 
 At a limit, `Wrap` carries on from the note as written, `Bounce` turns back and
-turns again at the note, and `Hold` stays. With `Reset` at `Chain`, the default, it
+turns again at the note, and `Hold` stays. Each of these goes between the note and
+the limit its `ACU` points to, as the Metropolix's unipolar ones do; `Wrap bi` and
+`Bounce bi` go between both limits, on past the note, as its bipolar ones. `Random`
+is the Metropolix's drunken walk: each add goes the `ACU`'s way half the time, the
+other way 30% and nowhere 20%, by 1 to the `ACU`'s amount, carrying on from the
+other end past either; `Random bi` walks between both limits. Its rolls come from
+the project's `:seed`, on a stream of the track's own, so `CHA` rolls as it would
+without it and a render repeats:
+
+```text
+ACU 01, Up 2, Down 2:    C D E C D E C ...     Wrap
+                         C D E A2 B2 C D E ... Wrap bi
+                         C D E D C B2 A2 B2 C  Bounce bi
+```
+
+With `Reset` at `Chain`, the default, it
 starts again wherever the count does; at `Play`, only when playing starts; and
 every so many loops of the chain, counted from where it started. It adds once a
 row, or with `Adds` set, on each pulse of a `MLT` or each hit of a `RET`.
@@ -473,7 +488,27 @@ pedal:         1  2  1  3 | 1  4  1  2 | 1  3  1  4 | 1 ...    a round of 6
 ```
 
 `reverse`, `odd-even`, `converge` and `diverge` visit each row once a round, so each
-pass plays the same. The walk starts again where the chain does: from the top, at a
+pass plays the same. The rest of the Metropolix's fixed orders are there too, each
+going round as its manual shows for eight rows:
+
+```text
+rows:          1  2  3  4  5  6  7  8
+jump 3:        1  4  7  2  5  8  3  6                    so many rows on, going round
+hopscotch:     1  3  2  4  3  5  4  6  5  7  6  8  7  1  8  2
+arp 3 1:       1 2 3  2 3 4  3 4 5  4 5 6 …              runs of 3, each a row on
+growing:       1  1 2  1 2 3  1 2 3 4 …                  runs from the first, one longer
+shrinking:     1 2 3 4 5 6 7 8  1 2 3 4 5 6 7 …          the same, one shorter
+```
+
+`jump` takes how many rows on, 2 to 16, and is `jump 3` alone; a jump that shares a
+factor with the rows comes back to the first before it's played them all, so
+`jump 2` of eight plays `1 3 5 7`. `arp` takes how many rows a run is, 2 to 16, and
+how far on from the last each starts, 1 to 16, and is `arp 3 1` alone; the
+Metropolix's `Arp 4 Shift -2` is `arp 4 1` and `Arp 4 Shift -1` is `arp 4 2`. Their
+rounds are longer than a pass, so they drift as `up-down` does, and the status line
+spells out the rows a jump or an arp plays.
+
+The walk starts again where the chain does: from the top, at a
 section that brings the chain in or resets, a launch, `:reset`, `Space A`, `Space a`
 or the track's own `Reset`, which
 is where a condition's passes and the accumulators start again too. It's worked out
@@ -511,8 +546,14 @@ heard:          C        |    D     E  |          F
 `shuffle` deals each pass a new order with every row in it once; `random` picks
 any row each time, so rows repeat and some are left out. It picks among the rows
 that fit what's left of the pass, so a row's pulses stay together, and only if none
-fits is its last pick cut short. Both are dealt from the project's `:seed`, the
-track and which time round its chain this is, counted from where the chain started.
+fits is its last pick cut short. `quasi-random` picks the same way but never the row
+it just played, with more than two rows. `brownian` is a drunken walk from the first
+row each pass: each step goes a row on half the time, stays a quarter and goes back
+a quarter, round past either end, so a line trends forward and stumbles. Each pass
+starts it again, so it can be worked out from where the track is, as the others are;
+a row whose pulses run past the end of the pass is cut short. All four are dealt
+from the project's `:seed`, the track and which time round its chain this is,
+counted from where the chain started.
 That's a hash rather than the track's generator, so `CHA`, a groove's humanise and a
 `Random` arpeggio roll as they would without it, a render repeats, and playing from
 a step hears what playing up to it would. A chain that starts again deals again from

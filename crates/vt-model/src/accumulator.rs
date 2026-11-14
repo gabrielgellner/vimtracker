@@ -29,16 +29,28 @@ pub enum Moves {
     Track,
 }
 
-/// What an accumulator does at one of its limits.
+/// What an accumulator does at one of its limits, after the Metropolix's LIM Order and Polarity:
+/// unipolar between the note as written and the limit an amount points to, or bipolar, `Bi`,
+/// between both limits.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AtLimit {
     /// Past it, it carries on from the note as written.
     #[default]
     Wrap,
+    /// Past one limit, it carries on from the other.
+    WrapBi,
     /// At it, it turns back, and turns again at the note as written.
     Bounce,
+    /// At one limit, it turns back, and turns again at the other.
+    BounceBi,
     /// It stays at it until it starts again.
     Hold,
+    /// A drunken walk between the note as written and the limit an amount points to: each add
+    /// moves the amount's way half the time, the other way 30% and not at all 20%, by 1 to the
+    /// amount, carrying on from the other end past either.
+    Random,
+    /// The same walk between both limits.
+    RandomBi,
 }
 
 /// When an `ACU` adds, as the Metropolix's transpose trigger.
@@ -162,9 +174,14 @@ pub struct Walk {
 
 impl Walk {
     /// Add an amount, as these settings say at their limits. Wrap and bounce go back to the note as
-    /// written, the Metropolix's unipolar orders, so a rising line never goes below it.
-    pub fn add(&mut self, amount: i8, settings: Accumulation) {
+    /// written, the Metropolix's unipolar orders, so a rising line never goes below it, and their
+    /// `Bi` forms go on to the other limit. `Random` and `RandomBi` take their rolls from `roll`,
+    /// which the others leave alone.
+    pub fn add(&mut self, amount: i8, settings: Accumulation, roll: &mut impl FnMut() -> u32) {
         let (up, down) = (i16::from(settings.up), i16::from(settings.down));
+        // Where a unipolar walk goes: a positive amount between the note and the upper limit, and
+        // a negative one between the lower limit and the note.
+        let one_way = if amount >= 0 { (0, up) } else { (-down, 0) };
         match settings.at_limit {
             AtLimit::Hold => {
                 self.offset = (self.offset + i16::from(amount)).clamp(-down, up);
@@ -179,33 +196,60 @@ impl Walk {
                     moved
                 };
             }
-            AtLimit::Bounce => {
-                // A positive amount goes between the note and the upper limit, and a negative one
-                // between the lower limit and the note, turning back each time it passes one.
-                let (low, high) = if amount >= 0 { (0, up) } else { (-down, 0) };
-                let step = if self.turned {
-                    -i16::from(amount)
+            AtLimit::WrapBi => {
+                self.offset = around(self.offset + i16::from(amount), -down, up);
+            }
+            AtLimit::Bounce => self.bounce(amount, one_way, (down, up)),
+            AtLimit::BounceBi => self.bounce(amount, (-down, up), (down, up)),
+            AtLimit::Random | AtLimit::RandomBi => {
+                let (low, high) = if settings.at_limit == AtLimit::Random {
+                    one_way
                 } else {
-                    i16::from(amount)
+                    (-down, up)
                 };
-                let mut moved = self.offset + step;
-                let mut rising = step > 0;
-                // Each turn takes some of the way back, so a large amount turns more than once.
-                for _ in 0..=MOST_DEGREES {
-                    if rising && moved > high {
-                        moved = 2 * high - moved;
-                    } else if !rising && moved < low {
-                        moved = 2 * low - moved;
-                    } else {
-                        break;
-                    }
-                    rising = !rising;
-                    self.turned = !self.turned;
-                }
-                self.offset = moved.clamp(-down, up);
+                // The Metropolix's odds: the amount's way 5 in 10, the other way 3 and none 2.
+                let way = match roll() % 10 {
+                    0..5 => 1,
+                    5..8 => -1,
+                    _ => return,
+                };
+                let size = 1 + (roll() % u32::from(amount.unsigned_abs().max(1))) as i16;
+                let step = way * size * if amount < 0 { -1 } else { 1 };
+                self.offset = around(self.offset + step, low, high);
             }
         }
     }
+
+    /// Move by an amount between `low` and `high`, turning back each time it passes one, and kept
+    /// within the limits, `down` below the note and `up` above.
+    fn bounce(&mut self, amount: i8, (low, high): (i16, i16), (down, up): (i16, i16)) {
+        let step = if self.turned {
+            -i16::from(amount)
+        } else {
+            i16::from(amount)
+        };
+        let mut moved = self.offset + step;
+        let mut rising = step > 0;
+        // Each turn takes some of the way back, so a large amount turns more than once.
+        for _ in 0..=2 * MOST_DEGREES {
+            if rising && moved > high {
+                moved = 2 * high - moved;
+            } else if !rising && moved < low {
+                moved = 2 * low - moved;
+            } else {
+                break;
+            }
+            rising = !rising;
+            self.turned = !self.turned;
+        }
+        self.offset = moved.clamp(-down, up);
+    }
+}
+
+/// An offset kept between `low` and `high` by going round: one past either carries on from the
+/// other.
+fn around(offset: i16, low: i16, high: i16) -> i16 {
+    low + (offset - low).rem_euclid(high - low + 1)
 }
 
 /// A note moved by an accumulator's offset: by scale degrees with the scale on, a note outside it
@@ -239,21 +283,38 @@ impl Moves {
 }
 
 impl AtLimit {
-    pub const ALL: [Self; 3] = [Self::Wrap, Self::Bounce, Self::Hold];
+    /// Every choice, each unipolar one beside its `Bi` form.
+    pub const ALL: [Self; 7] = [
+        Self::Wrap,
+        Self::WrapBi,
+        Self::Bounce,
+        Self::BounceBi,
+        Self::Hold,
+        Self::Random,
+        Self::RandomBi,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Self::Wrap => "Wrap",
+            Self::WrapBi => "Wrap bi",
             Self::Bounce => "Bounce",
+            Self::BounceBi => "Bounce bi",
             Self::Hold => "Hold",
+            Self::Random => "Random",
+            Self::RandomBi => "Random bi",
         }
     }
 
     pub fn meaning(self) -> &'static str {
         match self {
             Self::Wrap => "Past the limit, carry on from the note as written",
+            Self::WrapBi => "Past one limit, carry on from the other",
             Self::Bounce => "Turn back at the limit, and again at the note as written",
+            Self::BounceBi => "Turn back at one limit, and again at the other",
             Self::Hold => "Stay at the limit until it starts again",
+            Self::Random => "Step at random, mostly the ACU's way, between the note and the limit",
+            Self::RandomBi => "Step at random, mostly the ACU's way, between both limits",
         }
     }
 }
@@ -321,13 +382,95 @@ mod tests {
 
     /// The offsets an accumulator plays over some adds, from the note as written.
     fn walk(amount: i8, settings: Accumulation, adds: usize) -> Vec<i16> {
+        rolled(amount, settings, adds, &mut || {
+            unreachable!("only Random rolls")
+        })
+    }
+
+    /// The same, with rolls for `Random`.
+    fn rolled(
+        amount: i8,
+        settings: Accumulation,
+        adds: usize,
+        roll: &mut impl FnMut() -> u32,
+    ) -> Vec<i16> {
         let mut walk = Walk::default();
         let mut offsets = vec![walk.offset];
         for _ in 0..adds {
-            walk.add(amount, settings);
+            walk.add(amount, settings, roll);
             offsets.push(walk.offset);
         }
         offsets
+    }
+
+    /// Rolls from a small generator, xorshift, for a long random walk.
+    fn dice(seed: u32) -> impl FnMut() -> u32 {
+        let mut state = seed.max(1);
+        move || {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state
+        }
+    }
+
+    #[test]
+    fn the_bipolar_forms_go_between_both_limits_as_the_metropolix_manual_draws_them() {
+        // Its figures have the limits at +9 and -5.
+        let wrap = limits(9, 5, AtLimit::WrapBi);
+        let mut climb: Vec<i16> = (0..=9).collect();
+        climb.extend(-5..=9);
+        climb.extend(-5..=0);
+        assert_eq!(walk(1, wrap, 30), climb);
+        assert_eq!(walk(4, wrap, 8), [0, 4, 8, -3, 1, 5, 9, -2, 2]);
+        assert_eq!(walk(-1, wrap, 7), [0, -1, -2, -3, -4, -5, 9, 8]);
+        let bounce = limits(9, 5, AtLimit::BounceBi);
+        let mut swing: Vec<i16> = (0..=9).collect();
+        swing.extend((-5..=8).rev());
+        swing.extend(-4..=0);
+        assert_eq!(walk(1, bounce, 28), swing);
+        assert_eq!(walk(4, bounce, 9), [0, 4, 8, 6, 2, -2, -4, 0, 4, 8]);
+    }
+
+    #[test]
+    fn random_walks_drunkenly_within_its_range() {
+        // Unipolar, between the note and the limit the amount points to.
+        let random = limits(9, 5, AtLimit::Random);
+        for amount in [1, 3, -2] {
+            let offsets = rolled(amount, random, 2000, &mut dice(7));
+            let (low, high) = if amount > 0 { (0, 9) } else { (-5, 0) };
+            assert!(offsets.iter().all(|offset| (low..=high).contains(offset)));
+            let distinct: std::collections::BTreeSet<_> = offsets.iter().collect();
+            assert_eq!(
+                distinct.len(),
+                10.min(1 + (high - low) as usize),
+                "{amount}"
+            );
+        }
+        // Bipolar, between both.
+        let both = rolled(3, limits(9, 5, AtLimit::RandomBi), 2000, &mut dice(11));
+        assert!(both.iter().all(|offset| (-5..=9).contains(offset)));
+        assert!(both.contains(&-5) && both.contains(&9));
+        // Each add moves by at most the amount, and over many, half go its way, 30% the other way
+        // and 20% nowhere, as the Metropolix's walk.
+        let steps = rolled(1, limits(28, 28, AtLimit::RandomBi), 4000, &mut dice(3));
+        let (mut with, mut against, mut still) = (0.0, 0.0, 0.0);
+        for pair in steps.windows(2) {
+            match pair[1] - pair[0] {
+                1 | -56 => with += 1.0,
+                -1 | 56 => against += 1.0,
+                0 => still += 1.0,
+                other => panic!("a step of {other}"),
+            }
+        }
+        assert!((with / 4000.0 - 0.5_f64).abs() < 0.03, "{with}");
+        assert!((against / 4000.0 - 0.3_f64).abs() < 0.03, "{against}");
+        assert!((still / 4000.0 - 0.2_f64).abs() < 0.03, "{still}");
+        // Same rolls, same walk.
+        assert_eq!(
+            rolled(3, random, 50, &mut dice(5)),
+            rolled(3, random, 50, &mut dice(5))
+        );
     }
 
     fn limits(up: u8, down: u8, at_limit: AtLimit) -> Accumulation {

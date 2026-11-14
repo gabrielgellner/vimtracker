@@ -3280,6 +3280,12 @@ mod tests {
                 Order::Cartesian(Cartesian::new(2, 5).sized(4, 3)),
                 "order:Cartesian((x_rate:2,y_rate:5,x_length:4,y_length:3))",
             ),
+            (Order::Jump(5), "order:Jump(5)"),
+            (
+                Order::Arp(crate::order::Arp { notes: 4, step: 2 }),
+                "order:Arp((notes:4,step:2))",
+            ),
+            (Order::QuasiRandom, "order:QuasiRandom"),
         ] {
             phrase.set_order(order);
             let saved = ron::to_string(&phrase).unwrap();

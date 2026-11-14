@@ -1138,6 +1138,59 @@ fn order_takes_a_snake_and_cartesian_numbers_and_the_title_shows_them() {
 }
 
 #[test]
+fn order_takes_a_jump_and_an_arps_numbers_and_the_metropolixs_other_orders() {
+    use vt_model::order::{Arp, Order};
+    use vt_tui::input::command::Line;
+    let (mut app, _realtime) = app();
+    command(&mut app, "len 8");
+    let order = |app: &App| app.phrase_here().unwrap().order();
+    let heading = |app: &App| -> String {
+        let buffer = screen(app);
+        (0..80).map(|x| buffer[(x, 0)].symbol()).collect()
+    };
+    command(&mut app, "order jump 5");
+    assert_eq!(order(&app), Order::Jump(5));
+    assert!(heading(&app).contains("Jump 5"), "{}", heading(&app));
+    assert!(
+        app.status
+            .contains("5 rows on each time, going round: 1 6 3 8 5 2 7 4"),
+        "{}",
+        app.status
+    );
+    command(&mut app, "order arp 4 2");
+    let arp = Order::Arp(Arp { notes: 4, step: 2 });
+    assert_eq!(order(&app), arp);
+    assert!(heading(&app).contains("Arp 4 2"), "{}", heading(&app));
+    assert!(
+        app.status.contains("1 2 3 4 3 4 5 6 5 6 7 8 7 8 1 2"),
+        "{}",
+        app.status
+    );
+    command(&mut app, "order jump 1");
+    assert_eq!(order(&app), arp, "a jump of 1 is forward, and refused");
+    assert!(app.status.contains(":order takes"), "{}", app.status);
+    // The list shows the phrase's own arp, and opens on it.
+    command(&mut app, "order");
+    let picker = app.picker.as_ref().expect("the list is open");
+    assert_eq!(
+        picker.current().map(|item| item.pick.clone()),
+        Some(Pick::Line(Line::Order(Some(arp))))
+    );
+    special(&mut app, KeyCode::Esc);
+    for (word, named) in [
+        ("hopscotch", Order::Hopscotch),
+        ("growing", Order::Growing),
+        ("shrinking", Order::Shrinking),
+        ("brownian", Order::Brownian),
+        ("quasi-random", Order::QuasiRandom),
+    ] {
+        command(&mut app, &format!("order {word}"));
+        assert_eq!(order(&app), named, "{word}");
+        assert!(heading(&app).contains(named.name()), "{}", heading(&app));
+    }
+}
+
+#[test]
 fn playing_from_a_row_starts_at_its_step_with_the_walk_where_it_is_then() {
     let (mut app, _realtime) = app();
     command(&mut app, "len 4");

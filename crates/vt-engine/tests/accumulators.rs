@@ -164,6 +164,71 @@ fn hold_stays_at_the_limit() {
 }
 
 #[test]
+fn the_bipolar_limits_go_on_past_the_note_to_the_other_limit() {
+    let wrap = song(&["C-3 -- acu:01"], with(Moves::Row, AtLimit::WrapBi, 2, 2));
+    assert_eq!(notes(&wrap, 9), named("C D E A2 B2 C D E A2"));
+    let bounce = song(
+        &["C-3 -- acu:01"],
+        with(Moves::Row, AtLimit::BounceBi, 2, 2),
+    );
+    assert_eq!(notes(&bounce, 9), named("C D E D C B2 A2 B2 C"));
+}
+
+#[test]
+fn a_random_limit_walks_drunkenly_from_the_seed_and_a_render_repeats() {
+    // Three degrees up at most each time, between the note and four degrees above: C to G.
+    let mut drunk = song(&["C-3 -- acu:03"], with(Moves::Row, AtLimit::Random, 4, 4));
+    drunk.seed = 5;
+    let heard = notes(&drunk, 32);
+    let in_range = named("C D E F G");
+    assert!(
+        heard.iter().all(|note| in_range.contains(note)),
+        "{heard:?}"
+    );
+    let mut distinct = heard.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    assert!(distinct.len() >= 4, "it wanders: {heard:?}");
+    assert_eq!(notes(&drunk, 32), heard, "a render repeats");
+    let mut other = drunk.clone();
+    other.seed = 6;
+    assert_ne!(notes(&other, 32), heard, "another seed walks another way");
+    // Bipolar, it goes below the note too.
+    let mut both = song(
+        &["C-3 -- acu:01"],
+        with(Moves::Row, AtLimit::RandomBi, 2, 2),
+    );
+    both.seed = 5;
+    let heard = notes(&both, 48);
+    assert!(heard.iter().all(|note| named("A2 B2 C D E").contains(note)));
+    assert!(
+        heard.contains(&Some(57)) && heard.contains(&Some(64)),
+        "{heard:?}"
+    );
+}
+
+#[test]
+fn a_random_limit_leaves_the_chances_as_they_rolled() {
+    // A `CHA` on another row rolls the same whether the accumulator walks at random or not.
+    let rows = ["C-3 -- acu:03", "D-3 -- cha:80"];
+    let mut plain = song(&rows, with(Moves::Row, AtLimit::Wrap, 7, 7));
+    plain.seed = 9;
+    let mut drunk = plain.clone();
+    drunk.tracks[0].accumulation.at_limit = AtLimit::Random;
+    let odd = |song: &Song| -> Vec<bool> {
+        notes(song, 32)
+            .into_iter()
+            .skip(1)
+            .step_by(2)
+            .map(|note| note.is_some())
+            .collect()
+    };
+    let rolled = odd(&plain);
+    assert!(rolled.contains(&true) && rolled.contains(&false));
+    assert_eq!(odd(&drunk), rolled);
+}
+
+#[test]
 fn a_negative_amount_goes_down_to_the_lower_limit() {
     let song = song(&["C-3 -- acu:FF"], with(Moves::Row, AtLimit::Wrap, 7, 2));
     assert_eq!(notes(&song, 5), named("C B2 A2 C B2"));

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
-use vt_model::order::{Cartesian, Deal, Order, Round, Snake};
+use vt_model::order::{Arp, Cartesian, Deal, Order, Round, Snake};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
@@ -360,6 +360,46 @@ fn random_picks_rows_from_the_seed_and_can_repeat_them() {
 }
 
 #[test]
+fn brownian_walks_a_row_at_a_time_from_the_first_each_pass() {
+    let mut drunk = scale_song(Order::Brownian);
+    drunk.seed = 13;
+    let scale = named("C D E F G A B C4");
+    let heard = passes(&drunk, 6);
+    for pass in &heard {
+        assert_eq!(pass[0], scale[0], "each pass starts on the first row");
+        let rows: Vec<usize> = pass
+            .iter()
+            .map(|note| scale.iter().position(|row| row == note).unwrap())
+            .collect();
+        assert!(
+            rows.windows(2)
+                .all(|pair| matches!((pair[1] + 8 - pair[0]) % 8, 0 | 1 | 7)),
+            "a row on, back or the same: {pass:?}"
+        );
+    }
+    assert!(
+        heard.iter().any(|pass| *pass != heard[0]),
+        "dealt each pass"
+    );
+    assert_eq!(passes(&drunk, 6), heard, "a render repeats");
+    let mut other = drunk.clone();
+    other.seed = 14;
+    assert_ne!(passes(&other, 6), heard, "another seed walks another way");
+}
+
+#[test]
+fn quasi_random_never_plays_a_row_twice_running_in_a_pass() {
+    let mut quasi = scale_song(Order::QuasiRandom);
+    quasi.seed = 17;
+    let heard = passes(&quasi, 6);
+    for pass in &heard {
+        assert!(pass.iter().all(Option::is_some), "a pick every step");
+        assert!(pass.windows(2).all(|pair| pair[0] != pair[1]), "{pass:?}");
+    }
+    assert_eq!(passes(&quasi, 6), heard, "a render repeats");
+}
+
+#[test]
 fn a_chance_rolls_the_same_whatever_the_order() {
     // Every row's the same, so whichever the order plays, each step rolls one `CHA`.
     let rows = ["C-3 -- cha:80"; 8];
@@ -375,7 +415,16 @@ fn a_chance_rolls_the_same_whatever_the_order() {
 
 #[test]
 fn playing_from_a_step_hears_what_playing_up_to_it_would() {
-    for order in [Order::Shuffle, Order::UpDown, Order::Pedal] {
+    for order in [
+        Order::Shuffle,
+        Order::UpDown,
+        Order::Pedal,
+        Order::Brownian,
+        Order::QuasiRandom,
+        Order::Hopscotch,
+        Order::Growing,
+        Order::Arp(Arp::START),
+    ] {
         // A longer track makes the section long enough to start in its third pass.
         let mut song = scale_song(order);
         song.seed = 21;

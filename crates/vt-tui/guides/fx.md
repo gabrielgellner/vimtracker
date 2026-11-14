@@ -257,14 +257,17 @@ The track's accumulator settings are the `Accumulator` device on the Mod page:
 |---|---|
 | `Up` `Down` | How far from the note as written it goes, 1 to 28 |
 | `Moves` | `Row` moves only its own row, `Track` every row |
-| `Limit` | `Wrap`, `Bounce` or `Hold` at the limit |
+| `Limit` | `Wrap`, `Bounce`, `Hold`, `Random`, or a `bi` one for both limits |
 | `Adds` | `Row` once a row, `Pulse` each pulse, `Retrig` each hit |
 | `Reset` | `Chain`, `Play`, or every 1 to 16 loops of the chain |
 
 The limits are 7 unless changed. With `Moves` at `Track`, every row on the track
 moves with the `ACU`s, rows without one too, so `C D E F` plays `D E F G` the
 second time. `Wrap` carries on from the note as written, `Bounce` turns back at
-the limit and again at the note, and `Hold` stays at the limit. `Pulse` adds on
+the limit and again at the note, and `Hold` stays at the limit. `Random` steps at
+random, mostly the `ACU`'s way, by 1 to its amount, from the `:seed`. Each goes
+between the note and the limit the `ACU` points to; the `bi` ones go between both
+limits, past the note. `Pulse` adds on
 every pulse of a `MLT` too, and `Retrig` on every hit of a `RET` as well. `Reset`
 says when it goes back to the notes as written: `Chain`, wherever the chain
 starts, or `Play`, only when playing starts.

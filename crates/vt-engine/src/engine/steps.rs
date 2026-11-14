@@ -659,7 +659,9 @@ impl Engine {
         let settings = state.heard_accumulation(owner);
         state.accumulators.enter(epoch);
         if let Some(amount) = amount.filter(|amount| *amount != 0) {
-            state.accumulators.add(key, amount, settings);
+            state
+                .accumulators
+                .add(key, amount, settings, &mut state.accumulator_rng);
         }
         let offset = state.accumulators.offset(key, settings.moves);
         let heard = moved_note(written, offset, self.scale);

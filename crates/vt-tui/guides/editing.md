@@ -700,13 +700,28 @@ on from one pass to the next.
 | `down-up` | 4 3 2 1, 2 3 4 3, from the last row |
 | `down-up-inc` | 4 3 2 1, 1 2 3 4, from the last row |
 | `odd-even` | 1 3 2 4, 1 3 2 4 |
+| `jump 3` | 1 4 3 2, 1 4 3 2, so many rows on each time |
+| `hopscotch` | 1 3 2 4, 3 1 4 2, each row then the one two on |
+| `arp 3 1` | 1 2 3 2, 3 4 3 4, runs of 3, each a row on |
 | `converge` | 1 4 2 3, from both ends in |
 | `diverge` | 2 3 1 4, from the middle out |
+| `growing` | 1 1 2 1, 2 3 1 2, runs from the first, growing |
+| `shrinking` | 1 2 3 4, 1 2 3 1, runs from the first, shrinking |
 | `pedal` | 1 2 1 3, 1 4 1 2, the first between the others |
+| `brownian` | a drunken walk from the first row each pass |
 | `shuffle` | each row once a pass, dealt again each pass |
+| `quasi-random` | any row each step but the one just played |
 | `random` | any row each step, so rows repeat |
 | `snake spiral` | the rows as a grid, wound through by a path |
 | `cartesian 1 3` | the rows as a grid, crossed by two counters |
+
+`:order jump` takes how many rows on, 2 to 16, and alone is `jump 3`. `:order
+arp` takes how many rows a run is, 2 to 16, and how far on each starts, 1 to 16,
+and alone is `arp 3 1`; the Metropolix's `Arp 4 Shift -2` is `arp 4 1` and its
+`Arp 4 Shift -1` is `arp 4 2`. The status line spells out the rows they play.
+`brownian` is the Metropolix's drunken walk: half the time a row on, a quarter
+the same row and a quarter a row back. It starts from the first row each pass,
+dealt from the `:seed` as `shuffle` and `random` are, so a render repeats.
 
 `snake` and `cartesian` read the rows as a grid, as Make Noise's René does:
 lines of four rows, a beat of sixteenths each, so 16 rows are 4×4, and lines
@@ -737,7 +752,8 @@ width plays the grid forward. `:order cartesian` alone is `1 3`. The title
 shows the order as it's typed, `Snake spiral` or `Cartesian 1 3`, and `:order`
 lists each snake and Cartesian, with the phrase's own numbers if it has them.
 
-The up-and-down orders, `pedal` and most of Cartesian's counters take longer
+The up-and-down orders, `pedal`, `hopscotch`, the jumps, arps and runs and most
+of Cartesian's counters take longer
 than a pass to come round, so they drift against other tracks as a polymeter
 does. The walk starts again
 where the chain does: from the top, a section that brings it in, a launch, or
