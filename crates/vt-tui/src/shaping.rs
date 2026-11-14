@@ -1309,7 +1309,7 @@ impl App {
 
     /// Roll a shape's seed again, as `r` does: with `Acid`'s pitches kept, only its second die,
     /// the accents, slides and octaves; and a `Ring` starts again from its new seed, letting go of
-    /// a register it kept.
+    /// a register it kept, as an `Acid`'s loops start again from their first rows.
     pub(crate) fn roll(&mut self, shape: &mut Shape) {
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = self.shape_seed;
@@ -1318,6 +1318,7 @@ impl App {
         } else {
             shape.seed = self.song().seed.wrapping_add(seed);
             shape.ring.kept = None;
+            shape.acid.at = 0;
         }
     }
 

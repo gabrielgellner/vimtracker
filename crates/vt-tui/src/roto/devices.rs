@@ -939,6 +939,25 @@ fn identity(
             format!("vimtracker/machine/{}", lower(track.machine.name())),
         ),
         Page::Gen if is_macros(spec) => ("Macros".to_owned(), "vimtracker/macros".to_owned()),
+        // An `Acid`'s loops by its column, as `Note Loops`.
+        Page::Gen if spec.is_loops() => {
+            let column = spec
+                .grid
+                .iter()
+                .flatten()
+                .flatten()
+                .find_map(|control| match control {
+                    Control::Gen {
+                        phrase, generator, ..
+                    } => track.phrases.get(phrase)?.generators().get(*generator),
+                    _ => None,
+                })
+                .map_or_else(String::new, |found| column_label(found.column));
+            (
+                format!("{column} Loops"),
+                format!("vimtracker/gen/{}/loops", lower(&column)),
+            )
+        }
         // A generator by its column and its fill, as `Note Ramp`.
         Page::Gen => {
             let Some(Control::Gen {

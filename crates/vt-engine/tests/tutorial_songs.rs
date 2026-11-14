@@ -36,8 +36,8 @@ use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
     Acid, Bar, Bits, DEFAULT_RATE, Divisions, DrumPart, Edge, FillKind, Follow, GenParam, Grids,
-    Mutations, Pink, Random, Ring, Role, Shape, ShapeColumn, Source, Values, Walk, WaveRate, Where,
-    World, divisions_seed, on_track, track_seed,
+    Loops, Mutations, Pink, Random, Ring, Role, Shape, ShapeColumn, Source, Values, Walk, WaveRate,
+    Where, World, divisions_seed, on_track, track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -534,7 +534,8 @@ fn fugue() -> Song {
 }
 
 /// Kria: each part of a note, its trigger, pitch, octave and length, a loop of its own length,
-/// drifting against the others.
+/// drifting against the others; and a second line from one `Acid` fill whose five parts loop on
+/// lengths of their own (decision 331).
 fn kria() -> Song {
     let mut song = song("kria", 120, 4, ScaleKind::MinorPentatonic, 4);
     song.seed = 0x4B;
@@ -580,27 +581,30 @@ fn kria() -> Song {
         &[0x00, 0x00, 0x0C],
         0,
     );
-    // A second track: a trigger loop of 12 and a pitch loop of 7.
-    voice(
-        &mut song,
-        1,
-        "BS",
-        SynthVoice::Acid,
-        &texts(&hits("x..x.xx..x.x", "E-2")),
-    );
+    // A second track, one `Acid` fill on a phrase of 16: a trigger loop of 12, a note loop of 7,
+    // an octave loop of 5, an accent loop of 3 and a slide loop of 4, coming round every 420 rows.
+    voice(&mut song, 1, "BS", SynthVoice::Acid, &[REST; 16]);
+    let mut line = shape(FillKind::Acid, note("E-2"), note("E-3"), Where::AllRows);
+    line.seed = 3;
+    line.acid = Acid {
+        octave: 30,
+        density: 60,
+        accent: 40,
+        slide: 30,
+        loops: Loops {
+            trigs: 12,
+            notes: 7,
+            octaves: 5,
+            accents: 3,
+            slides: 4,
+        },
+        ..Acid::default()
+    };
+    let notes = empty_notes(&song);
+    let mut song = generate(song, 1, notes, 16, line);
     set(&mut song, 1, "acid.cutoff", 0x48);
     set(&mut song, 1, "acid.resonance", 0xA0);
     song.tracks[1].level = 0xD0;
-    steps_on_pitch(
-        &mut song,
-        1,
-        3,
-        StepsMode::Free,
-        true,
-        0xFF,
-        &[0x00, 0x00, 0x07, 0x00, 0x03, 0x00, 0x0A],
-        0,
-    );
     four_on_the_floor(&mut song, 2);
     // Hats in threes against the fours.
     voice(
@@ -1764,6 +1768,26 @@ fn kria_patch() -> PatchPreset {
     preset
 }
 
+/// Acid loops: the second Kria line, an `Acid` with its five loops on macros, each from one row
+/// to sixteen, as Kria's loops go: `Trig loop`, `Note loop`, `Oct loop`, `Acc loop` and
+/// `Sld loop`.
+fn acid_loops_patch() -> PatchPreset {
+    let mut track = kria().tracks[1].clone();
+    let loops = first_shape(&track).acid.loops;
+    let knobs = [
+        ("Trig loop", GenParam::TrigLoop, loops.trigs),
+        ("Note loop", GenParam::NoteLoop, loops.notes),
+        ("Oct loop", GenParam::OctaveLoop, loops.octaves),
+        ("Acc loop", GenParam::AccentLoop, loops.accents),
+        ("Sld loop", GenParam::SlideLoop, loops.slides),
+    ];
+    for (at, (name, param, rows)) in knobs.into_iter().enumerate() {
+        let knob = (GenColumn::Note, param);
+        gen_knob(&mut track, at, name, knob, (1, 16), i32::from(rows));
+    }
+    patch_of(&track)
+}
+
 /// Euclid: the bass's `Alternate` of `C-2` and `C-3` on Euclid 7 of 16, with `Hits` and
 /// `Rotate`.
 fn euclid_patch() -> PatchPreset {
@@ -1885,11 +1909,12 @@ fn variations_patch() -> PatchPreset {
 /// Every shipped patch, by its name, in the chapter's order, each tagged `generative` and with
 /// what it acts on, as the study's §5.4 has them.
 fn patches() -> Vec<(&'static str, PatchPreset)> {
-    let patches: [(&str, PatchPreset, &[&str]); 10] = [
+    let patches: [(&str, PatchPreset, &[&str]); 11] = [
         ("Turing Machine", turing_machine_patch(), &["pitch"]),
         ("Deja vu", deja_vu_patch(), &["pitch"]),
         ("Euclid", euclid_patch(), &["rhythm"]),
         ("Kria", kria_patch(), &["pitch"]),
+        ("Acid loops", acid_loops_patch(), &["303", "rhythm"]),
         ("Accents", accents_patch(), &["accent"]),
         ("Acid line", acid_line_patch(), &["303"]),
         ("Drunk walk", drunk_walk_patch(), &["pitch"]),

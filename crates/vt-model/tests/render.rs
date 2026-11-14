@@ -299,6 +299,8 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
             slide: dice.below(101) as u8,
             keep: dice.chance(40),
             roll: if dice.chance(50) { 0 } else { dice.next() },
+            // The loops are newer than the hashes, and tested in `shape/acid.rs`.
+            ..Acid::default()
         },
         follow: Follow {
             source: Default::default(),

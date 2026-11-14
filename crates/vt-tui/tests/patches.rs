@@ -599,7 +599,12 @@ fn the_shipped_patches_are_found_by_their_tags_and_cant_be_tagged() {
     let rows = explorer_rows(&app);
     assert_eq!(
         rows,
-        ["v built in", "    Euclid", "    Noise Ring"],
+        [
+            "v built in",
+            "    Euclid",
+            "    Acid loops",
+            "    Noise Ring"
+        ],
         "{rows:?}"
     );
     special(&mut app, KeyCode::Esc);

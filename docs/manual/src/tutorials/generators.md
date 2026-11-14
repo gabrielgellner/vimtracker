@@ -11,7 +11,7 @@ there are no samples to find.
 | `deja-vu` | Mutable Instruments' Marbles | `Mutate` for new notes, `:order random` to replay old ones |
 | `euclid` | Euclidean rhythms | `S`'s `Euclid`, kept live, with `Rotate` |
 | `fugue` | Fugue Machine | One theme and three tracks following it live with `Follow`, each at its own `Speed` |
-| `kria` | monome's Kria | Triggers, pitches, octaves and lengths on loops of different lengths |
+| `kria` | monome's Kria | Triggers, pitches, octaves and lengths on loops of different lengths, and an `Acid` fill's own loops |
 | `metropolix` | Intellijel's Metropolix | Pulses and gates per row, `ACU`, `ARP` and a pendulum order |
 | `eloquencer` | Winter Modular's Eloquencer | `RND`: a chance on each row of a note, a length, a velocity or a ratchet varying |
 | `live-generators` | Elektron's Euclidean mode | Columns kept live with `L`, and what hand edits do to them |
@@ -428,8 +428,22 @@ from the notes:
 
 In `Free` a Steps slot runs from the song's position, a step each sixteenth, as Kria's loops
 do, so each note takes whatever pitch and octave loop are on when it lands. Track 2 is a second
-Kria track, an `Acid` with a trigger loop of 12 and a pitch loop of 7, under a kick on every beat
-and hats in threes. [`song.ron`](songs/kria/song.ron)
+Kria line made by one generator: the shape panel's `Acid` fill, whose five parts each loop on a
+length of their own, under a kick on every beat and hats in threes.
+[`song.ron`](songs/kria/song.ron)
+
+| Loop | Length | What goes round |
+|---|---|---|
+| `Trig loop` | 12 | Which rows play |
+| `Note loop` | 7 | Which of the riff's notes each plays |
+| `Oct loop` | 5 | Which go an octave up or down |
+| `Acc loop` | 3 | Which are accented |
+| `Sld loop` | 4 | Which slide into the next |
+
+Each part is drawn for its first rows, 12 or 7 or 3, and goes round them. The count runs on
+from pass to pass, so on a phrase of 16 the trigger loop starts the second pass four rows into
+its round, and the whole line comes back only after 420 rows, the loops' least common multiple:
+105 passes, over 26 bars.
 
 **Build it.**
 
@@ -448,9 +462,20 @@ and hats in threes. [`song.ron`](songs/kria/song.ron)
     loops its first four steps on its own, and the title says `FX1:4`.
 6.  `Tab`. The notes are all `E-3` on the grid, but no two bars sound alike.
 
-Track 2 is the same idea: an `Acid`, `:len 12`, `E-2`s on `x..x.xx..x.x`, and a `Steps` slot in
-`Free` on `Pitch in scale` with seven values, `00 00 07 00 03 00 0A`. Then a `Kick` on every
-beat, and a `Hat` with `:len 3` and three `C-4`s at velocities `60`, `20` and `38`.
+Track 2, all in one generator:
+
+1.  `K` `acid` `Enter`, `:name BS`. In the phrase view, `vG` on the empty Note column of its 16
+    rows, `S`, and on `Fill`, `K` `acid` `Enter`.
+2.  `From` `e2`, `To` `e3`, `Octave` `30%`, `Density` `60%`, `Accent` `40%` and `Slide` `30%`.
+3.  Under `Pitches`, the loops: `Trig loop` `12`, `Note loop` `7`, `Oct loop` `5`, `Acc loop` `3`
+    and `Sld loop` `4` (`i`, the number, `Enter`). `0` is `Off`, the part drawn afresh on every
+    row of the span, the same each pass, as `Acid` always was.
+4.  `r` until the first bar sounds right, and `L` to keep it live: the loops only run on from
+    pass to pass while it's live, as the engine plays each pass.
+
+On the Gen page (`Space 8`) the loops are a device of their own, `Loops`, under the `Acid`'s,
+which says how long the whole line takes to come round. Then a `Kick` on every beat, and a
+`Hat` with `:len 3` and three `C-4`s at velocities `60`, `20` and `38`.
 
 The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay` `300 ms` and `Sustain` `50%`),
 sets its `Cut` `90` and `Res` `50`, sends it to the delay, sets the `Acid`'s `Cutoff` `48` and
@@ -460,7 +485,8 @@ sets its `Cut` `90` and `Res` `50`, sends it to the delay, sets the `Acid`'s `Cu
 with `:patch`. `Pitch loop` and `Octave loop` are macros turning the two slots' `Length` from 1
 step to 16. The length loop comes as it is, a live `List` of the four `LEN`s on a lane of 4,
 and the patch gives the FX column it goes on a lane as long; a lane's length isn't a setting, so
-no macro turns it.
+no macro turns it. Track 2 is the shipped patch `Acid loops`, its five loops on macros, `Trig
+loop`, `Note loop`, `Oct loop`, `Acc loop` and `Sld loop`, each from 1 row to 16.
 
 **Try next.**
 
@@ -468,6 +494,10 @@ no macro turns it.
 *   `:len 13` on track 1, a trigger loop that drifts against the bar too.
 *   `Rate` `1/8` on the octave loop, so it turns over half as fast, as Kria's clock divisions do.
 *   The lane's length: `:len 5` with the cursor on FX 1.
+*   On track 2, `Acc loop` `16` against `Trig loop` `12`: the accents fall somewhere new each
+    bar for three bars. Or every loop at `16`, and it's an ordinary 16-row `Acid` line again.
+*   `Space g a` on track 2's Gen page keeps the pass just heard as the one written, and the
+    loops go on from there.
 
 ## Metropolix
 
@@ -1430,5 +1460,4 @@ These are planned, each its own issue, and this chapter grows a section as each 
 |---|---|
 | [#589](https://github.com/gabrielgellner/vimtracker/issues/589) | Cellular automata rhythms from Wolfram's elementary rules |
 | [#590](https://github.com/gabrielgellner/vimtracker/issues/590) | Tonnetz chord movement: P, L and R moves |
-| [#591](https://github.com/gabrielgellner/vimtracker/issues/591) | Per-attribute loop lengths after Kria |
 | [#592](https://github.com/gabrielgellner/vimtracker/issues/592) | Strange attractors as LFO shapes: Lorenz and Rössler |

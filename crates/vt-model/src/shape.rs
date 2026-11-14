@@ -24,7 +24,9 @@ mod variation;
 mod walk;
 mod world;
 
-pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
+pub use acid::{
+    Acid, Loops, MAX_ACID_NOTES, MAX_LOOP, chance as acid_chance, weight as acid_weight,
+};
 pub use bits::{Bits, MAX_FACTOR, MAX_TURN};
 pub use divisions::{
     Bar, Channel, DIVISIONS, Division, Divisions, Strike, track_seed as divisions_seed,
@@ -974,9 +976,12 @@ impl Shape {
     }
 
     /// Whether it plays a variation of its own on some passes, so the engine renders it: by its
-    /// `Vary`, or a `Ring`, whose register runs on from pass to pass.
+    /// `Vary`, a `Ring`, whose register runs on from pass to pass, or an `Acid` with a part on a
+    /// loop, which runs on likewise.
     pub fn varies(&self) -> bool {
-        self.vary > 0 && self.draws() || self.kind == FillKind::Ring
+        self.vary > 0 && self.draws()
+            || self.kind == FillKind::Ring
+            || self.kind == FillKind::Acid && self.acid.loops()
     }
 
     /// The shape a pass of its phrase plays, counted from 0: itself unless it [varies], and
@@ -985,7 +990,8 @@ impl Shape {
     /// is the seed as written, so what's written is what the first pass plays, and since it's
     /// worked out from the pass alone, a render repeats and playing from anywhere hears what
     /// playing to there would. A `Ring` has no `Vary`: it plays the pass itself, its register
-    /// running on from the last.
+    /// running on from the last; and an `Acid` with a part on a loop plays the pass too, round
+    /// its loops' period, so its loops count on from the last pass as well as its `Vary` rolls.
     ///
     /// [varies]: Shape::varies
     pub fn on_pass(&self, pass: i64) -> Shape {
@@ -994,16 +1000,20 @@ impl Shape {
             shape.ring.pass = pass.clamp(0, i64::from(u32::MAX)) as u32;
             return shape;
         }
-        if !self.varies() {
-            return *self;
+        let mut shape = *self;
+        // An `Acid`'s loops run on from pass to pass, whatever its `Vary`.
+        if self.kind == FillKind::Acid && self.acid.loops() {
+            shape.acid.pass = Acid::round(pass, self.acid.loops);
+        }
+        if !(self.vary > 0 && self.draws()) {
+            return shape;
         }
         let which = pass.div_euclid(i64::from(self.vary));
         if which == 0 {
-            return *self;
+            return shape;
         }
         // Mixed rather than added, as `track_seed` is, so the next pass isn't the rows moved on.
         let new = |seed: u64| seed ^ mix(PASS_KEY, which as usize);
-        let mut shape = *self;
         if shape.kind == FillKind::Acid && shape.acid.keep {
             shape.acid.roll = new(shape.acid.roll);
         } else {
