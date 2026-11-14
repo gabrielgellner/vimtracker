@@ -1,3 +1,4 @@
+<!-- ANCHOR: top -->
 # Sounds, samples and kits
 
 A track makes one sound at a time, from its machine: a sample, or a synth. Everything
@@ -623,8 +624,13 @@ warning for its icon, and its preview says why.
 
 Moving onto a sample plays it through the current track, as an Elektron's or the M8's
 browser does, and `A` stops that or starts it again. Beside the list is its waveform,
-how long it is, its rate and whether it's mono or stereo. A long file is read in the
-background, so the list doesn't wait for it, and the last few are kept.
+how long it is, its rate and whether it's mono or stereo, and its tags. A long file is
+read in the background, so the list doesn't wait for it, and the last few are kept.
+
+Tags find samples across folders: `#kick` lists every kick below the open folders,
+`#loop` every loop, and `T` gives the one under the cursor tags of your own. Most are
+guessed from names and folders, so they're there from the start (see **Tags** in
+**Navigation**).
 
 | Command | Does |
 |---|---|
@@ -967,6 +973,8 @@ and the title says how many are marked. Marks stay in one kit, so marking a soun
 another starts again there, and a sound whose file has gone can't be marked.
 Moving onto a sound plays it, as in `:sample`, and `A` stops that or starts it again
 in both; marking plays only the sound the cursor moves on to.
+<!-- ANCHOR_END: top -->
+<!-- ANCHOR: rest -->
 
 `Enter` loads the marked sounds, or the one under the cursor if none are, as new
 tracks after the last, so nothing is written over. Each track plays one sound and is
@@ -1042,3 +1050,4 @@ the `Ableton` folder first. A library and a folder to write to can be given:
 ```
 vimtracker kits import-ableton "/path/to/Core Library" ~/kits/Live
 ```
+<!-- ANCHOR_END: rest -->

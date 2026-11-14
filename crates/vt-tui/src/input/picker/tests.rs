@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::*;
-use crate::explorer::Purpose;
+use crate::explorer::{Icon, Purpose};
 use crate::input::keys::parse;
 
 const VIEWS: [&str; 6] = ["table", "song", "chain", "phrase", "instrument", "groove"];
@@ -276,6 +276,8 @@ fn a_group_of_items_given_up_front_starts_open() {
     let roots = vec![
         Root::Group {
             label: "Kit 909".to_owned(),
+            meaning: String::new(),
+            icon: Icon::Kit,
             items,
         },
         Root::Place {
@@ -695,4 +697,18 @@ fn searching_and_folding_after_a_scroll_keep_the_view_on_the_list() {
         (0, 5),
         "on the category, with the list at its top"
     );
+}
+
+#[test]
+fn the_explorers_search_reads_a_word_after_a_hash_as_a_tag() {
+    let search = tree::Search::of("#kick #One punchy", true);
+    assert_eq!(search.tags, ["kick", "one"]);
+    assert_eq!(search.name, "punchy");
+    assert_eq!(search.typing, None);
+    let typing = tree::Search::of("punchy #ki", true);
+    assert_eq!(typing.typing.as_deref(), Some("ki"), "the tag row's");
+    assert_eq!(tree::Search::of("#ki ", true).typing, None, "finished");
+    let plain = tree::Search::of("#1 take", false);
+    assert!(plain.tags.is_empty(), "where nothing has tags");
+    assert_eq!(plain.name, "#1 take");
 }

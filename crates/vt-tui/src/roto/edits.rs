@@ -23,7 +23,7 @@ use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, Polarity};
 use vt_model::settings::{Kind, SettingId, gate_percent, gate_value};
 use vt_model::shape::GenParam;
 use vt_model::shape::params::Units as GenUnits;
-use vt_model::song::{FilterType, Machine, Song, Track, trim_text};
+use vt_model::song::{FilterType, Machine, Role, Song, Track, trim_text};
 use vt_model::speed::Speed;
 use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
 use vt_model::tracking::Source;
@@ -281,6 +281,9 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
                 }
             })
         }
+        Control::Role => changed(pick(&Role::ALL, position), track.role, |role| {
+            Action::SetTrackRole { track: at, role }
+        }),
         Control::GateLength => {
             let percent = whole(position, 99) as u8 + 1;
             (percent != gate_percent(track.gate_length())).then_some(Action::SetTrackGateLength {

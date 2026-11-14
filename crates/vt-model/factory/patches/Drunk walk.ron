@@ -1,0 +1,64 @@
+(
+    format: 1,
+    patch: (
+        macros: [
+            (
+                name: Some("Step"),
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "step",
+                        ),
+                        min: 32769,
+                        max: 32775,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Hits"),
+                value: 28560,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "hits",
+                        ),
+                        min: 32768,
+                        max: 32784,
+                    ),
+                ],
+            ),
+        ],
+        generators: [
+            (
+                column: Note,
+                shape: (
+                    from: 45,
+                    to: 57,
+                    curve: 0,
+                    s: 0,
+                    kind: Walk,
+                    wave: Sine,
+                    rate: Time(Note(1920)),
+                    phase: 0,
+                    run: 1,
+                    values: [],
+                    place: Euclid(
+                        hits: 7,
+                        rotate: 0,
+                    ),
+                    seed: 2,
+                    walk: (
+                        step: 1,
+                        edge: Reflect,
+                    ),
+                ),
+            ),
+        ],
+    ),
+    tags: [
+        "generative",
+        "pitch",
+    ],
+)

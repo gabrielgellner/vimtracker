@@ -201,6 +201,9 @@ A track with too few free slots or macros refuses it, saying how many it needs a
 free, and `:patch!` puts it over the last ones instead. `K` on a mod slot's type lists `Add a
 patch` and `Save as a patch` after the types.
 
+The song's slot and macros are also the shipped patch `Turing Machine`; add it with `:patch`,
+where it's listed under `Factory`, on any track, without saving one of your own first.
+
 ## Marbles' Déjà vu
 
 [Mutable Instruments' Marbles](https://pichenettes.github.io/mutable-instruments-documentation/modules/marbles/)
@@ -246,6 +249,10 @@ every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu
 
 The finished song also sets the `String`'s `Decay` `B0` and `Bright` `50`, sends it to the delay
 and reverb (`Send A` `B0`, `Send B` `B8`), shortens the hat (`Decay` `28`), and sets the levels.
+
+**As a patch.** Track 1's Steps slot is the shipped patch `Deja vu`; add it with `:patch`. Its
+`Deja vu` macro turns `Mutate` the module's way, from all new up to a locked loop, and `Spread`
+its `Depth`. The phrase's `:order random` isn't part of a patch, so give it that yourself.
 
 **Try next.**
 
@@ -294,6 +301,9 @@ polyrhythm. [`song.ron`](songs/euclid/song.ron)
 The finished song also lengthens the kick (`Decay` `90`), shortens the snare (`Decay` `60`) and
 the hat (`Decay` `38`), sets the `Acid`'s `Cutoff` `50`, `Resonance` `90` and `Env mod` `90`,
 sends the snare to the reverb, and sets the levels.
+
+**As a patch.** The bass is the shipped patch `Euclid`, with its `Hits` and `Rotate` on macros;
+add it with `:patch`.
 
 **Try next.** Every part stays live, so `gl` on any of its rows opens its panel again, as it
 was:
@@ -418,6 +428,12 @@ The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay` `300 ms` and `S
 sets its `Cut` `90` and `Res` `50`, sends it to the delay, sets the `Acid`'s `Cutoff` `48` and
 `Resonance` `A0`, a shorter hat, and the levels.
 
+**As a patch.** Track 1's pitch, octave and length loops are the shipped patch `Kria`; add it
+with `:patch`. `Pitch loop` and `Octave loop` are macros turning the two slots' `Length` from 1
+step to 16. The length loop comes as it is, a live `List` of the four `LEN`s on a lane of 4,
+and the patch gives the FX column it goes on a lane as long; a lane's length isn't a setting, so
+no macro turns it.
+
 **Try next.**
 
 *   `Length` 7 on the pitch loop, or 4 on the octave loop: the line changes completely.
@@ -537,6 +553,9 @@ The finished song also sets the `Acid`'s `Resonance` `B0` and `Env mod` `70`, th
     values stay, and the status line says so. `u` makes it live again.
 *   Edit any other column, and it stays live.
 
+**As a patch.** The hats' accents are the shipped patch `Accents`, with `Hits` and `Rotate` on
+macros; add it with `:patch` to a track with notes to accent.
+
 **Try next.**
 
 *   `gl` on the hats' Velocity, then `Rotate`, a row at a time, while it plays.
@@ -579,6 +598,9 @@ kick, a snare and hats. [`song.ron`](songs/acid-lines/song.ron)
 Then a `Kick` on every beat, a `Snare` (`G-2`) on rows `04` and `0C` and a `Hat` on the
 off-beats. The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `C0`, `Env mod`
 `A0` and `Decay` `58`, sends it to the delay, and sets the levels.
+
+**As a patch.** The line is the shipped patch `Acid line`, its dice on five macros, `Density`,
+`Notes`, `Octave`, `Accent` and `Slide`; add it with `:patch`.
 
 **Try next.**
 
@@ -632,6 +654,9 @@ drummer's does, rather than jumping about as `Random` would. [`song.ron`](songs/
 
 Then a `Kick` on every beat. The finished song also sets the string's `Decay` and `Bright`, the
 bass's filter, the delay and reverb sends, and the levels.
+
+**As a patch.** The bass is the shipped patch `Drunk walk`, with `Step` from a degree to seven
+and `Hits` on macros; add it with `:patch`.
 
 **Try next.**
 
@@ -849,6 +874,9 @@ velocities gather toward the top, loud but never the same twice. Then a kick on 
 Then a `Kick` on every beat. The finished song also sets the string's `Decay` and `Bright`, the
 bass's filter, the delay and reverb sends, and the levels.
 
+**As a patch.** The tune is the shipped patch `Marbles X`, with the module's `Spread`, `Bias`
+and `Steps` on macros; add it with `:patch`.
+
 **Try next.**
 
 *   `gl` on the tune and `-` on `Steps`: at 3 it's a D minor arpeggio, at 1 only Ds, an octave
@@ -895,6 +923,10 @@ A#1 50   ---      C-2 50   C-3 7F   ---      G-2 HLD  D#2 50   C-2 50
 
 Then a `Kick` on every beat, `Hat`s on the off-beats and a `Snare` on rows `04`
 and `0C`, as in `acid-lines`.
+
+**As a patch.** The `Variation` is the shipped patch `Variations`, with `Order` and
+`Temperature` on macros; add it with `:patch` to a track with a line of at least four notes for
+it to learn from.
 
 **Try next.**
 

@@ -411,6 +411,9 @@ pub struct Track {
     /// What makes its sound.
     #[serde(default)]
     pub machine: Machine,
+    /// What it's for, as drums or a bass, which its colour shows: `Auto` goes by its machine.
+    #[serde(default, skip_serializing_if = "Role::is_auto")]
+    pub role: Role,
     /// The machines' settings it has changed from their defaults, by setting. A track keeps every
     /// voice's, so switching voice and back finds the first as it was.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -602,6 +605,16 @@ impl Track {
         match self.machine {
             Machine::Plaits(voice) if self.is_sound() => Some(voice),
             _ => None,
+        }
+    }
+
+    /// What a sound track is for: its own role, or its machine's while it's `Auto`. A fixed track
+    /// has none, as a group, a return and the master are told by what they are.
+    pub fn role(&self) -> Role {
+        match self.role {
+            _ if !self.is_sound() => Role::None,
+            Role::Auto => self.machine.role(),
+            role => role,
         }
     }
 
@@ -823,6 +836,7 @@ impl Default for Track {
             kind: TrackKind::default(),
             name: String::new(),
             machine: Machine::default(),
+            role: Role::Auto,
             settings: BTreeMap::new(),
             fine: BTreeMap::new(),
             mute: false,
@@ -1063,6 +1077,81 @@ impl Machine {
                 (format!("Op {}", operator + 1), grid)
             })
             .collect()
+    }
+
+    /// What a track playing it is for until it's told (decision 316): the drum voices are drums,
+    /// `Acid` a bass, the chord voices a pad, the noises a texture and every other voice a synth;
+    /// a sample could be anything, so the sampler says nothing.
+    pub fn role(self) -> Role {
+        match self {
+            Self::Sampler => Role::None,
+            Self::Plaits(voice) => match voice {
+                SynthVoice::Kick | SynthVoice::Snare | SynthVoice::Hat | SynthVoice::Drum => {
+                    Role::Drums
+                }
+                SynthVoice::Acid => Role::Bass,
+                SynthVoice::Chord | SynthVoice::Paraphonic => Role::Pad,
+                voice if voice.kind() == "Noise" => Role::Texture,
+                _ => Role::Synth,
+            },
+        }
+    }
+}
+
+/// What a sound track is for, which its colour shows wherever it's named (decision 316). `Auto`,
+/// where every track starts, goes by its machine; `None` has no colour.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Role {
+    #[default]
+    Auto,
+    None,
+    Drums,
+    Bass,
+    Synth,
+    Pad,
+    Texture,
+}
+
+impl Role {
+    /// Every role, in the order its list and `-` and `=` go through them.
+    pub const ALL: [Self; 7] = [
+        Self::Auto,
+        Self::None,
+        Self::Drums,
+        Self::Bass,
+        Self::Synth,
+        Self::Pad,
+        Self::Texture,
+    ];
+
+    /// The name on screen.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::None => "None",
+            Self::Drums => "Drums",
+            Self::Bass => "Bass",
+            Self::Synth => "Synth",
+            Self::Pad => "Pad",
+            Self::Texture => "Texture",
+        }
+    }
+
+    /// What it's for, for a list to show.
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::Auto => "Whatever its machine is for",
+            Self::None => "No colour",
+            Self::Drums => "Drums and percussion",
+            Self::Bass => "A bass line",
+            Self::Synth => "A lead, an arpeggio or a melody",
+            Self::Pad => "Chords and pads",
+            Self::Texture => "Noise, risers and atmosphere",
+        }
+    }
+
+    pub fn is_auto(&self) -> bool {
+        *self == Self::Auto
     }
 }
 
@@ -2963,6 +3052,39 @@ mod tests {
         let text = ron::to_string(&track).unwrap();
         assert!(text.contains("safe:true"), "{text}");
         assert!(ron::from_str::<Track>(&text).unwrap().safe);
+    }
+
+    #[test]
+    fn a_tracks_role_saves_when_told_and_goes_by_its_machine_until_then() {
+        let track: Track = ron::from_str("(mute: false, solo: false)").unwrap();
+        assert_eq!(track.role, Role::Auto);
+        assert_eq!(track.role(), Role::None, "a sample could be anything");
+        assert!(!ron::to_string(&track).unwrap().contains("role"));
+        let kick = Track {
+            machine: Machine::Plaits(SynthVoice::Kick),
+            ..Track::default()
+        };
+        assert_eq!(kick.role(), Role::Drums);
+        let noise = Machine::Plaits(SynthVoice::Swarm);
+        assert_eq!(noise.role(), Role::Texture);
+        let told = Track {
+            role: Role::Bass,
+            ..kick
+        };
+        assert_eq!(told.role(), Role::Bass);
+        let text = ron::to_string(&told).unwrap();
+        assert!(text.contains("role:Bass"), "{text}");
+        assert_eq!(ron::from_str::<Track>(&text).unwrap().role, Role::Bass);
+        let group = Track::fixed(TrackKind::Group(1));
+        assert_eq!(
+            Track {
+                role: Role::Pad,
+                ..group
+            }
+            .role(),
+            Role::None,
+            "a group is told by what it is"
+        );
     }
 
     #[test]

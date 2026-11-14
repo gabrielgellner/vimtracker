@@ -144,12 +144,11 @@ green, and a warning is red.
 | 󰄶 | A kit's sound with variants or layers, which `l` opens |
 | 󰄲 󰄷 | A kit's sound marked to load, in `:kit` |
 | 󱑽 | A sample |
-| 󰑖 | A loop: under a `Loops` folder, or with a tempo in its name |
+| 󰑖 | A loop: tagged `loop`, see **Tags** below |
 | 󰀦 | A file that has gone, or won't read |
 
-A sample is shown as a loop by its folders and name alone: the nearest folder named
-for loops or one-shots decides, as in Ableton's library, and otherwise a tempo such as
-`120 bpm` in its name. A file that won't read is found out when the cursor reaches it.
+A sample is shown as a loop when it's tagged `loop`. A file that won't read is found out
+when the cursor reaches it.
 
 | Keys | Does |
 |---|---|
@@ -160,6 +159,8 @@ for loops or one-shots decides, as in Ableton's library, and otherwise a tempo s
 | `P` | Show the preview, or hide it |
 | `A` | Stop playing samples as you move, or start |
 | `/` | Search what's been opened |
+| `#` | Search by tag, below the open folders |
+| `T` | Change the tags of the sample, kit sound or preset |
 
 The hint under the list shows `H`, `P` and `A` each with a switch, its knob right and
 green while it's on, and left and faint while it's off.
@@ -167,6 +168,44 @@ green while it's on, and left and faint while it's off.
 The numbers down the left count from the cursor, so `12j` can be read off them. A
 search matches names exactly, ignoring case, among the folders you've opened, and
 shows each match under its folders.
+
+### Tags
+
+Samples, kits' sounds and presets have tags, such as `kick`, `snare`, `loop`,
+`one-shot`, `bass` or `pad`, to find things across folders, as Ableton's browser,
+Elektron's sound pool and Splice do. Most are guessed, so a sample library has them
+from the start:
+
+- **From the name,** or failing that the nearest folders: `Kick 909.wav` and anything
+  in a `Kicks` folder are `kick`, `BD01` too, and `Hihat Open` is `hat` and `open-hat`.
+- **Loop or one-shot,** from the folders, as Ableton's `Loops` and `One Shots`, then
+  `loop` or a tempo such as `120 bpm` in the name. A drum is a one-shot unless
+  something says it's a loop. Once a sample has been read, for its preview or to play
+  it, one that fades to silence is a one-shot, and one cut while still sounding is a
+  loop, where nothing else said.
+- **From a kit's label:** a kit's `BD` is a `kick` and its `OH` an open hat.
+- **What a preset is:** `sound`, `effect` or `patch`, and a sound's machine, such as
+  `synth`, `analog` and `acid`, or `drum` and `kick`, or `sampler`.
+
+Start a search with `#` for a tag: `#kick` lists every kick below the folders that are
+open, reading the folders inside them as it goes, not only those you've opened, and
+shows each under its folders, with how many it found at the top. Each word after a
+`#` is another tag, and the other words search names as before, so
+`#kick #one-shot 909` finds the 909 kick one-shots. A `#` alone lists everything below
+the open folders. While a tag is being typed, a row under the search shows the tags
+that could finish it, with how many have each, and `Tab` takes the first.
+
+`T` changes the tags of what's under the cursor: they're typed after a `#` on the search
+line, starting with the ones it has, so a wrong guess is taken off by deleting it.
+`Enter` keeps them, `Tab` finishes a tag from those in use, and `Esc` leaves them as
+they were. A tag is lower case, letters, digits and dashes, up to 24 characters; a
+space or capital typed becomes a dash or lower case. A preset's kind and machine are
+always its tags, so `T` leaves them out.
+
+The tags you give a sample are kept in `tags.ron` in the config folder, by what's in the
+file, so they follow it when it's moved or renamed, and nothing is written beside your
+samples. A preset's are kept in its own file. The tags you give show dim at the right
+of the row, and the preview shows them all, yours plain and the guesses dim.
 
 ## The command line
 

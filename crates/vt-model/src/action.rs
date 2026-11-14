@@ -31,8 +31,8 @@ use crate::selection::{
 use crate::settings::{Owner, SettingId};
 use crate::shape::{FillKind, Shape, ShapeColumn, Source, written_from};
 use crate::song::{
-    Chain, ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section,
-    SectionStart, Song, Track, lowest_unused,
+    Chain, ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Role,
+    Section, SectionStart, Song, Track, lowest_unused,
 };
 use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Gate, Mark, Note, Step};
@@ -342,6 +342,11 @@ pub enum Action {
     SetTrackTrim {
         track: usize,
         trim: u8,
+    },
+    /// Say what a track is for, which its colour shows, or `Auto` to go by its machine.
+    SetTrackRole {
+        track: usize,
+        role: Role,
     },
     /// Put a track in a choke group, from 1 to `CHOKE_GROUPS`, or in none.
     SetTrackChoke {
@@ -1242,6 +1247,12 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?
                 .trim = *trim;
+        }
+        Action::SetTrackRole { track, role } => {
+            next.tracks
+                .get_mut(*track)
+                .ok_or(EditError::NoTrack(*track))?
+                .role = *role;
         }
         Action::SetTrackChoke { track, choke } => {
             check_choke(*choke)?;

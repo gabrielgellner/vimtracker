@@ -24,6 +24,7 @@ use crate::track_page::{Control, MIXER};
 use crate::views::track::value;
 use crate::views::widgets::group::{self, Switched};
 use crate::views::widgets::meter::{EIGHTHS, level_cell};
+use crate::views::widgets::role;
 use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
 use crate::views::widgets::table::{Cells, Columns, fitted, take_top};
 
@@ -170,22 +171,27 @@ fn name_cell(app: &App, index: usize) -> Line<'static> {
     let mark = usize::from(folded);
     let icon =
         !track.is_sound() && 2 + track.name.chars().count() + mark < usize::from(STRIP_WIDTH);
-    let mut name = if track.is_sound() {
+    // What it's for is the rule under its name, and not under its icon or the fold's mark.
+    let mut spans = Vec::new();
+    if icon && !track.is_sound() {
+        spans.push(Span::styled(
+            format!("{}{}", glyphs::track(track), glyphs::ICON_SPACE),
+            style,
+        ));
+    }
+    let name = if track.is_sound() {
         format!("{:02} {}", index + 1, track.name)
-    } else if icon {
-        format!(
-            "{}{}{}",
-            glyphs::track(track),
-            glyphs::ICON_SPACE,
-            track.name
-        )
     } else {
         track.name.clone()
     };
+    spans.extend(role::ruled(song, index, &name, style));
     if folded {
-        name.extend([glyphs::FOLDED, glyphs::ICON_SPACE]);
+        spans.push(Span::styled(
+            format!("{}{}", glyphs::FOLDED, glyphs::ICON_SPACE),
+            style,
+        ));
     }
-    Line::styled(name, style)
+    Line::from(spans)
 }
 
 /// Under a strip's name: the group a sound track plays through, in that group's colour, or the

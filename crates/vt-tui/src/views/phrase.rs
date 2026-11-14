@@ -24,6 +24,7 @@ use crate::theme;
 use crate::timeline::{self, Line as TimeLine};
 use crate::views::inspector;
 use crate::views::widgets::group::{self, Switched};
+use crate::views::widgets::role;
 use crate::views::widgets::table::centred_run;
 
 /// The width of a read-only note column for another track: its playhead marker, a note and a gap,
@@ -971,8 +972,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             theme::dim(),
         ));
     }
-    title.push(Span::styled(
-        format!("Track {}", track_name(app, app.cursor.track)),
+    title.push(Span::styled("Track ", bold));
+    title.extend(role::ruled(
+        app.song(),
+        app.cursor.track,
+        &track_name(app, app.cursor.track),
         bold,
     ));
     // A track in a group carries its mark, in the group's colour, as on the mixer.
@@ -1050,7 +1054,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let marked = (*track == app.cursor.track).then(|| bold.fg(theme::BASE).bg(theme::GREEN));
         let named = group::style(app.song(), *track).map_or(bold, |tint| bold.patch(tint));
         let used = label.chars().count() + usize::from(glyph.is_some());
-        top_rule.push(Span::styled(label, marked.unwrap_or(named)));
+        top_rule.extend(role::ruled(
+            app.song(),
+            *track,
+            &label,
+            marked.unwrap_or(named),
+        ));
         let gap = match glyph {
             Some((glyph, style)) => {
                 top_rule.push(Span::styled(glyph.to_string(), marked.unwrap_or(style)));
