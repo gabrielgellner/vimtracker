@@ -17,7 +17,10 @@ use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker};
+use crate::kitty::plot::{MappingDrawing, Shade};
+use crate::kitty::{PanelIds, PanelKey, PanelWant, Shape};
 use crate::track_page::Control;
+use crate::views::mapping::{RESPONSE_HEIGHT, RESPONSE_WIDTH};
 
 /// The macro picker's title, which `M` opens and a digit chooses in at once.
 pub const MACRO_PICKER: &str = "Map to a macro";
@@ -91,6 +94,29 @@ pub struct MappingView {
     /// What's typed so far after `i`, if it's typing: hex digits for an end, a signed whole
     /// number for a bend.
     pub typing: Option<String>,
+    /// The id of the terminal's image of the response of the mapping under the cursor.
+    pub images: PanelIds,
+}
+
+impl MappingView {
+    /// The picture the view wants on screen for the cursor's track: the response of the mapping
+    /// under its cursor (decision 314), drawn again as its `Curve`, its `S`, its way or its
+    /// macro's turn changes.
+    pub(crate) fn panels(&self, track: &Track) -> Vec<PanelWant> {
+        let held = &track.macros[self.at];
+        let Some(map) = held
+            .maps
+            .get(self.row.min(held.maps.len().saturating_sub(1)))
+        else {
+            return Vec::new();
+        };
+        vec![PanelWant {
+            key: PanelKey::Mapping,
+            shade: Shade::Focused,
+            shape: Shape::Mapping(MappingDrawing::of(map, held.value)),
+            cells: (RESPONSE_WIDTH, RESPONSE_HEIGHT),
+        }]
+    }
 }
 
 /// An end of a mapping as the view shows it: a list's choice by name, and anything else as its

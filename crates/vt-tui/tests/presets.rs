@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::Action;
-use vt_model::insert::Insert;
-use vt_model::settings::{Effect, SettingId};
+use vt_model::insert::{EffectKind, Insert};
+use vt_model::settings::SettingId;
 use vt_model::song::{Machine, SynthVoice};
 use vt_tui::app::App;
 use vt_tui::config::Settings;
@@ -53,7 +53,7 @@ fn acid_on_first(app: &mut App) {
     let track = &mut song.tracks[0];
     track.cutoff = 0x40;
     track.macros[0].name = Some("Bite".to_owned());
-    track.set_fine(SettingId::slot(1, Effect::Delay, 1).unwrap(), 0x40);
+    track.set_fine(SettingId::slot(1, EffectKind::Delay, 1).unwrap(), 0x40);
     let track = track.clone();
     app.services.apply(&Action::LoadSound {
         track: 0,
@@ -118,7 +118,7 @@ fn a_sound_saved_loads_on_another_track_as_one_undo_step_keeping_its_place() {
     assert_eq!(loaded.cutoff, 0x40);
     assert_eq!(loaded.inserts[1], Insert::RETURN_DELAY);
     assert_eq!(
-        loaded.fine(SettingId::slot(1, Effect::Delay, 1).unwrap()),
+        loaded.fine(SettingId::slot(1, EffectKind::Delay, 1).unwrap()),
         0x40
     );
     assert_eq!(loaded.macros[0].name.as_deref(), Some("Bite"));
@@ -256,7 +256,7 @@ fn an_effect_saved_from_one_slot_loads_into_another() {
         app.services.status
     );
     assert_eq!(
-        track.fine(SettingId::slot(3, Effect::Delay, 1).unwrap()),
+        track.fine(SettingId::slot(3, EffectKind::Delay, 1).unwrap()),
         0x40
     );
     assert_eq!(app.services.history.undo_depth(), depth + 1);

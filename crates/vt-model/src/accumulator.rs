@@ -282,6 +282,8 @@ impl Moves {
     }
 }
 
+crate::listed::listed!(Moves: meaning);
+
 impl AtLimit {
     /// Every choice, each unipolar one beside its `Bi` form.
     pub const ALL: [Self; 7] = [
@@ -319,6 +321,8 @@ impl AtLimit {
     }
 }
 
+crate::listed::listed!(AtLimit: meaning);
+
 impl Adds {
     pub const ALL: [Self; 3] = [Self::Row, Self::Pulse, Self::Retrig];
 
@@ -347,6 +351,8 @@ impl Adds {
         }
     }
 }
+
+crate::listed::listed!(Adds: meaning);
 
 impl Reset {
     /// Every choice, in the order a list shows them: the chain, playing, then 1 to 16 loops.

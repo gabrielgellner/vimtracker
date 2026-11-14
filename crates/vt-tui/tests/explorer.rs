@@ -190,7 +190,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
     // The terminal is sent a waveform for each sound.
     let mut sent = Vec::new();
     let mut graphics = vt_tui::kitty::Graphics::new();
-    graphics.sync(&mut app, &mut sent).unwrap();
+    app.send_pictures(&mut graphics, &mut sent).unwrap();
     let mut picker = app.picker.clone().unwrap();
     assert_eq!(picker.preview_images.len(), 3);
     assert!(picker.preview_images.iter().all(Option::is_some));
@@ -219,7 +219,7 @@ fn a_kits_preview_draws_its_sounds_with_their_waveforms() {
     // Moving to another kit sends that kit's, and lets the old ones go.
     press(&mut app, "kkll");
     sent.clear();
-    graphics.sync(&mut app, &mut sent).unwrap();
+    app.send_pictures(&mut graphics, &mut sent).unwrap();
     let sent = String::from_utf8_lossy(&sent);
     assert_eq!(sent.matches("a=T").count(), 2, "one for each of its sounds");
 }
@@ -680,7 +680,7 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
     // Its waveform is sent as an image, and drawn under the note.
     let mut sent = Vec::new();
     let mut graphics = vt_tui::kitty::Graphics::new();
-    graphics.sync(&mut app, &mut sent).unwrap();
+    app.send_pictures(&mut graphics, &mut sent).unwrap();
     let sent = String::from_utf8_lossy(&sent);
     assert_eq!(sent.matches("c=28,r=4").count(), 1, "28 by 4");
     let picker = app.picker.as_ref().unwrap();

@@ -20,6 +20,7 @@ use super::{
     MeterScale, REDUCTION_CAPTION, REDUCTION_METER_WIDTH, TrackCells, heard_bypassed,
     reduction_cell, slot_frame, slot_grid, value,
 };
+use crate::kitty::PanelKey;
 use crate::page::Ctx;
 use crate::theme;
 use crate::track_page::{Control, DeviceSpec, Page, TrackPage};
@@ -254,13 +255,13 @@ fn zoom_panel(page: &TrackPage, ctx: &Ctx, track: &Track, slot: usize) -> Graphi
     };
     let cursor = theme::cursor(ctx.mode());
     let fade = |line: Line<'static>| if bypassed { faded(line, cursor) } else { line };
-    let curve = |panel: GraphicPanel, width: usize| match page.zoom_image {
+    let curve = |panel: GraphicPanel, width: usize| match page.images.get(PanelKey::Zoom) {
         Some(id) => {
             let lines = image::rows(id, width, ZOOM_PANEL_HEIGHT)
                 .into_iter()
                 .map(Line::from)
                 .collect();
-            panel.boxed(lines, width as u16, page.zoom_caption.as_deref())
+            panel.boxed(lines, width as u16, page.zoom_caption())
         }
         None => panel,
     };

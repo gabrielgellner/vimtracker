@@ -14,6 +14,7 @@ use vt_model::modulation::{MOD_SLOTS, ModKind};
 use vt_model::song::Track;
 use vt_model::steps::MAX_STEP;
 
+use crate::kitty::PanelKey;
 use crate::page::Ctx;
 use crate::theme;
 use crate::track_page::{
@@ -164,7 +165,7 @@ fn draw_device(
             (panel, false)
         }
         Some(Control::Mod(slot, _)) => (
-            panel(page.mod_images.map(|ids| ids[slot])),
+            panel(page.images.get(PanelKey::Mod(slot))),
             matches!(track.mods[slot].kind, ModKind::Lfo | ModKind::Track),
         ),
         _ => (GraphicPanel::new(), false),

@@ -29,6 +29,7 @@ use vt_tui::views::status::column_name;
 
 mod common;
 use common::*;
+use vt_tui::kitty::PanelKey;
 
 /// The author's screen: kitty full screen on a MacBook.
 const WIDTH: u16 = 163;
@@ -97,7 +98,7 @@ fn the_four_devices_fill_the_page_and_the_keys_box_at_163_by_42() {
     ];
     for (machine, title) in machines {
         let (mut app, _realtime) = playing(machine);
-        app.track_page.filter_image = Some(0x01_02_03);
+        app.track_page.images.insert(PanelKey::Filter, 0x01_02_03);
         for (mode, top, frame) in [(Mode::Normal, 2, ""), (Mode::Keys, 3, "│")] {
             app.modes.mode = mode;
             let screen = full_screen(&mut app);
@@ -308,7 +309,7 @@ fn the_filter_curve_stays_in_its_panel_in_the_filter() {
         let (top, _) = titles(&plain)[1];
         assert!(!plain[top..top + 9].iter().any(|line| line.contains('┌')));
 
-        app.track_page.filter_image = Some(0x01_02_03);
+        app.track_page.images.insert(PanelKey::Filter, 0x01_02_03);
         let drawn = full_screen(&mut app);
         let text = lines(&drawn);
         let cells = image_cells(&drawn, Color::Rgb(1, 2, 3));
@@ -347,8 +348,8 @@ fn the_filter_curve_stays_in_its_panel_in_the_filter() {
 #[test]
 fn a_samplers_waveform_is_in_the_machines_panel() {
     let (mut app, _realtime) = playing(Machine::Sampler);
-    app.track_page.filter_image = Some(0x01_02_03);
-    app.track_page.waveform_image = Some(0x04_05_06);
+    app.track_page.images.insert(PanelKey::Filter, 0x01_02_03);
+    app.track_page.images.insert(PanelKey::Waveform, 0x04_05_06);
     let drawn = full_screen(&mut app);
     let text = lines(&drawn);
     let found = titles(&text);
@@ -363,14 +364,14 @@ fn a_samplers_waveform_is_in_the_machines_panel() {
     assert_eq!(waveform[0].0, filter[0].0);
     // A synth has none.
     let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Kick));
-    app.track_page.waveform_image = Some(0x04_05_06);
+    app.track_page.images.insert(PanelKey::Waveform, 0x04_05_06);
     assert!(image_cells(&full_screen(&mut app), Color::Rgb(4, 5, 6)).is_empty());
 }
 
 #[test]
 fn acids_sound_page_at_163_by_42() {
     let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Acid));
-    app.track_page.filter_image = Some(0x01_02_03);
+    app.track_page.images.insert(PanelKey::Filter, 0x01_02_03);
     press(&mut app, "}j");
     assert_eq!(column_name(&app), "Cut");
     let text = lines(&full_screen(&mut app));
@@ -531,7 +532,7 @@ fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
         app.tick();
         let mut sent = Vec::new();
         let started = Instant::now();
-        graphics.sync(&mut app, &mut sent).unwrap();
+        app.send_pictures(&mut graphics, &mut sent).unwrap();
         syncing += started.elapsed();
         let text = String::from_utf8_lossy(&sent);
         sends += text.matches(",c=49,r=5,").count();
@@ -552,7 +553,8 @@ fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
         let images = vt_tui::screenshot::sent_images(&sent);
         pngs.extend(
             app.track_page
-                .filter_image
+                .images
+                .get(PanelKey::Filter)
                 .and_then(|id| images.get(&id))
                 .map(Vec::len),
         );

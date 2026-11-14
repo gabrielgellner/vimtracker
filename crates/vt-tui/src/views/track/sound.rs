@@ -14,6 +14,7 @@ use vt_model::song::{Machine, Track, TrackKind};
 
 use crate::automating::as_heard;
 use crate::glyphs;
+use crate::kitty::PanelKey;
 use crate::page::Ctx;
 use crate::theme;
 use crate::track_page::{Control, DEVICE_COLUMNS, DeviceSpec, Page, TrackPage};
@@ -87,10 +88,12 @@ fn panel(page: &TrackPage, track: &Track, device: &DeviceSpec) -> GraphicPanel {
     }
     let image = match device.title[0] {
         Some(Control::FilterType) => page
-            .filter_image
+            .images
+            .get(PanelKey::Filter)
             .map(|id| (id, FILTER_CURVE_WIDTH, FILTER_CURVE_HEIGHT)),
         Some(Control::Machine) if track.machine == Machine::Sampler => page
-            .waveform_image
+            .images
+            .get(PanelKey::Waveform)
             .map(|id| (id, WAVEFORM_WIDTH, WAVEFORM_HEIGHT)),
         _ => None,
     };

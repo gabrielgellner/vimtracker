@@ -92,6 +92,8 @@ impl ModKind {
     }
 }
 
+crate::listed::listed!(ModKind: meaning);
+
 /// Which way a slot moves what it reaches, as Bitwig's and Vital's modulators have it (#434):
 /// one way from the setting, or both ways around it. A negative depth still flips the direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -152,6 +154,8 @@ impl Polarity {
         }
     }
 }
+
+crate::listed::listed!(Polarity: meaning);
 
 fn is_false(value: &bool) -> bool {
     !*value

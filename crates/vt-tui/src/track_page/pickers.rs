@@ -255,13 +255,13 @@ impl App {
         let Some(found) = current
             .params()
             .get(param)
-            .filter(|p| !p.choices.is_empty())
+            .filter(|p| !p.choices().is_empty())
         else {
             self.services.status = "This is a value: = and - change it, and i types it".to_owned();
             return;
         };
         let items = found
-            .choices
+            .choices()
             .iter()
             .enumerate()
             .map(|(index, choice)| {

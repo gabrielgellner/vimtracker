@@ -98,7 +98,7 @@ impl OldCells for SlotCells<'_> {
             return None;
         };
         let insert = self.track.inserts[slot];
-        if !insert.params().get(param)?.choices.is_empty() {
+        if !insert.params().get(param)?.choices().is_empty() {
             return None;
         }
         let set = insert.value(param);
@@ -875,7 +875,7 @@ fn track_cells_draw_every_cell_as_the_old_cell_sources_did() {
         .find_map(|(row, places)| {
             let field = places
                 .iter()
-                .position(|place| matches!(place, Some(Control::InsertParam(0, param)) if first.params()[*param].choices.is_empty()))?;
+                .position(|place| matches!(place, Some(Control::InsertParam(0, param)) if first.params()[*param].choices().is_empty()))?;
             Some((row, field))
         })
         .unwrap();

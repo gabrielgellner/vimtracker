@@ -241,7 +241,7 @@ impl<'a> TrackCells<'a> {
         match control {
             Control::InsertParam(slot, param) => {
                 let insert = track.inserts[slot];
-                if !insert.params().get(param)?.choices.is_empty() {
+                if !insert.params().get(param)?.choices().is_empty() {
                     return None;
                 }
                 plain(insert.value(param))
