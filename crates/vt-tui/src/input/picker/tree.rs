@@ -1,11 +1,13 @@
 //! The explorer's tree: its folders, read as they're opened and closed, and the
-//! `Backspace`, `H` and `h` that go up, show hidden files and close a folder.
+//! `Backspace`, `H` and `h` that go up, show hidden files and close a folder. In the kit explorer,
+//! the kit dialog, `Space` or `x` marks one of a kit's sounds, `a` marks them all, and `Enter`
+//! loads what's marked as new tracks (decision 306).
 
 use std::path::{Path, PathBuf};
 
 use crate::explorer::{self, Icon, Purpose};
 
-use super::{Item, Outcome, Pick, Picker, Row};
+use super::{Item, KitChoice, Outcome, Pick, Picker, Row};
 
 /// The top of the explorer's tree: a folder it starts from, with why it's there dim beside it, or
 /// items given up front under a name, such as the kit's sounds.
@@ -44,12 +46,18 @@ pub struct Tree {
     pub preview: bool,
     /// Whether moving onto a sample plays it.
     pub audition: bool,
+    /// In the kit dialog, the sounds marked to load, by their places under their kit's path, all
+    /// in one kit.
+    pub marked: Vec<PathBuf>,
     roots: Vec<Root>,
     home: Option<PathBuf>,
     pub(super) nodes: Vec<Node>,
     /// The roots' nodes, in order.
     pub(super) top: Vec<usize>,
 }
+
+/// The kit dialog's hint, in a kit's sounds or with any marked.
+pub const MARKING_HINT: &str = "Space mark  a all  Enter load";
 
 /// Where the cursor was and which folders were open, kept while the tree is read again.
 struct Remembered {
@@ -95,6 +103,7 @@ impl Picker {
             hidden: false,
             preview: purpose.previews(),
             audition: purpose.auditions(),
+            marked: Vec::new(),
             roots,
             home,
             nodes: Vec::new(),
@@ -209,7 +218,7 @@ impl Picker {
             return;
         };
         for (item, node) in self.items.iter().zip(tree.nodes.iter_mut()) {
-            if let Pick::Sample(file) | Pick::KitSound { path: file, .. } = &item.pick
+            if let Pick::Sample(file) | Pick::KitSound(KitChoice { path: file, .. }) = &item.pick
                 && file == path
             {
                 node.icon = Icon::Missing;
@@ -273,8 +282,8 @@ impl Picker {
                         .map(|item| {
                             // The kit in use's sounds, each warned of if its file has gone.
                             let icon = match &item.pick {
-                                Pick::KitSound { path, .. } => {
-                                    explorer::kit_sound_icon(path, false)
+                                Pick::KitSound(sound) => {
+                                    explorer::kit_sound_icon(&sound.path, false)
                                 }
                                 _ => Icon::KitSound,
                             };
@@ -561,6 +570,24 @@ impl Picker {
         };
         let node = &tree.nodes[at];
         let chooses = !matches!(self.items[at].pick, Pick::Folder(_));
+        if self.marks_sounds() {
+            if confirm
+                && !wider
+                && let Some(load) = self.marked_load()
+            {
+                return Outcome::Choose(load);
+            }
+            // A sound, or one of its files, is loaded alone.
+            if let Pick::KitSound(sound) = &self.items[at].pick
+                && (node.folder.is_none() || confirm)
+                && let Some(kit) = self.kit_of(at).and_then(|kit| self.path(kit))
+            {
+                return Outcome::Choose(Pick::KitLoad {
+                    kit: kit.to_path_buf(),
+                    sounds: vec![sound.clone()],
+                });
+            }
+        }
         if node.folder.is_none() || (confirm && chooses) {
             let item = &self.items[at];
             let pick = if wider { item.wider.as_ref() } else { None };
@@ -605,5 +632,136 @@ impl Picker {
         if let Some(row) = self.rows.iter().position(|row| *row == Row::Item(target)) {
             self.selected = row;
         }
+    }
+
+    /// Whether this is the kit dialog, which marks a kit's sounds to load as tracks.
+    pub fn marks_sounds(&self) -> bool {
+        self.tree
+            .as_ref()
+            .is_some_and(|tree| tree.purpose == Purpose::Kit)
+    }
+
+    /// The kit an item is or is in, as its node: the nearest with a kit's icon.
+    fn kit_of(&self, item: usize) -> Option<usize> {
+        let mut at = Some(item);
+        while let Some(node) = at {
+            if self.icon(node) == Some(Icon::Kit) {
+                return Some(node);
+            }
+            at = self.node(node).and_then(|node| node.parent);
+        }
+        None
+    }
+
+    /// Whether an item is one of a kit's sounds that can be marked: right under its kit, with
+    /// its file there.
+    fn markable(&self, item: usize) -> bool {
+        let Some(node) = self.node(item) else {
+            return false;
+        };
+        node.icon != Icon::Missing
+            && node
+                .parent
+                .is_some_and(|kit| self.icon(kit) == Some(Icon::Kit))
+            && matches!(self.items[item].pick, Pick::KitSound(_))
+    }
+
+    /// Whether an item is marked to load.
+    pub fn is_marked(&self, item: usize) -> bool {
+        let (Some(tree), Some(path)) = (self.tree.as_ref(), self.path(item)) else {
+            return false;
+        };
+        tree.marked.iter().any(|marked| marked == path)
+    }
+
+    /// How many sounds are marked.
+    pub fn marked_count(&self) -> usize {
+        self.tree.as_ref().map_or(0, |tree| tree.marked.len())
+    }
+
+    /// The hint under the list: the kit dialog's marking keys while the cursor is in a kit's
+    /// sounds or any are marked, and otherwise the list's own.
+    pub fn shown_hint(&self) -> Option<&'static str> {
+        let inside = self.marks_sounds()
+            && self
+                .current_index()
+                .is_some_and(|item| self.kit_of(item).is_some_and(|kit| kit != item));
+        if inside || self.marked_count() > 0 {
+            Some(MARKING_HINT)
+        } else {
+            self.hint
+        }
+    }
+
+    /// `Space` or `x` in the kit dialog: mark the sound under the cursor, or take its mark off,
+    /// and go on to the next, as many times as the count says. A sound in another kit takes the
+    /// marks off that kit's.
+    pub(super) fn toggle_marks(&mut self, count: usize) {
+        for _ in 0..count {
+            let Some(at) = self.current_index() else {
+                return;
+            };
+            if self.markable(at) {
+                let kit = self
+                    .kit_of(at)
+                    .and_then(|kit| self.path(kit).map(Path::to_path_buf));
+                let path = self.path(at).map(Path::to_path_buf);
+                if let (Some(kit), Some(path), Some(tree)) = (kit, path, self.tree.as_mut()) {
+                    tree.marked
+                        .retain(|marked| marked.parent() == Some(kit.as_path()));
+                    match tree.marked.iter().position(|marked| *marked == path) {
+                        Some(found) => {
+                            tree.marked.remove(found);
+                        }
+                        None => tree.marked.push(path),
+                    }
+                }
+            }
+            self.move_highlight(1);
+        }
+    }
+
+    /// `a` in the kit dialog: mark every sound of the kit the cursor is on or in, opening it, or
+    /// take their marks off if they're all marked already.
+    pub(super) fn mark_all(&mut self) {
+        let Some(kit) = self.current_index().and_then(|item| self.kit_of(item)) else {
+            return;
+        };
+        self.set_open(kit, true);
+        self.rebuild();
+        let sounds: Vec<PathBuf> = self
+            .children(kit)
+            .iter()
+            .filter(|sound| self.markable(**sound))
+            .filter_map(|sound| self.path(*sound).map(Path::to_path_buf))
+            .collect();
+        let Some(tree) = self.tree.as_mut() else {
+            return;
+        };
+        let all = !sounds.is_empty()
+            && tree.marked.len() == sounds.len()
+            && sounds.iter().all(|sound| tree.marked.contains(sound));
+        tree.marked = if all { Vec::new() } else { sounds };
+    }
+
+    /// What `Enter` loads with sounds marked: them, in their kit's order.
+    fn marked_load(&self) -> Option<Pick> {
+        let tree = self.tree.as_ref()?;
+        let kit_path = tree.marked.first()?.parent()?;
+        let kit = (0..tree.nodes.len())
+            .find(|at| self.icon(*at) == Some(Icon::Kit) && self.path(*at) == Some(kit_path))?;
+        let sounds = self
+            .children(kit)
+            .iter()
+            .filter(|sound| self.is_marked(**sound))
+            .filter_map(|sound| match &self.items[*sound].pick {
+                Pick::KitSound(choice) => Some(choice.clone()),
+                _ => None,
+            })
+            .collect();
+        Some(Pick::KitLoad {
+            kit: kit_path.to_path_buf(),
+            sounds,
+        })
     }
 }

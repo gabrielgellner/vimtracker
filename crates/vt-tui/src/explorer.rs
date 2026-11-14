@@ -1,7 +1,7 @@
 //! What the file explorer lists for each of its purposes, after snacks.nvim's explorer: the picker
 //! in tree mode (`input/picker.rs`) over the folders it starts from, read a folder at a time as
-//! they're opened. In the sample explorer a kit opens like a folder, to its sounds, and a sound
-//! with variants or layers opens to those.
+//! they're opened. A kit opens like a folder, to its sounds, and a sound with variants or layers
+//! opens to those; in the kit explorer, the kit dialog, its sounds are marked to load as tracks.
 
 use std::path::{Path, PathBuf};
 
@@ -21,7 +21,7 @@ pub enum Purpose {
     Save,
     /// A sample file for a track.
     Sample,
-    /// A kit file.
+    /// A kit file, whose sounds can be marked and loaded as new tracks.
     Kit,
     /// A folder to render into, before the file's name is typed.
     Render,
@@ -63,15 +63,17 @@ pub enum Kind {
     /// A project's folder, which is chosen rather than opened.
     Project,
     Sample,
+    /// A kit in the kit explorer, which `Enter` chooses and `l` opens to its sounds.
     Kit,
     /// A kit in the sample explorer, which opens like a folder to list its sounds.
     KitFolder,
 }
 
 impl Kind {
-    /// Whether it opens, as a folder does, rather than being chosen.
+    /// Whether it opens, as a folder does. A kit in the kit explorer opens too, though `Enter`
+    /// chooses it.
     pub fn opens(self) -> bool {
-        matches!(self, Self::Folder | Self::KitFolder)
+        matches!(self, Self::Folder | Self::KitFolder | Self::Kit)
     }
 
     /// The icon it's drawn with, as it's been found in its folder.

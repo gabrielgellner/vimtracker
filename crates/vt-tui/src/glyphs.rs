@@ -153,6 +153,11 @@ pub const KIT_SOUND: char = '\u{f14fb}';
 /// One of a kit's sounds with variants or velocity layers, which opens to them, as pads stacked:
 /// `nf-md-checkbox_multiple_blank`, U+F0136.
 pub const KIT_SOUND_LAYERED: char = '\u{f0136}';
+/// One of a kit's sounds marked to load as a track, in the kit dialog: `nf-md-checkbox_marked`,
+/// U+F0132.
+pub const KIT_SOUND_MARKED: char = '\u{f0132}';
+/// The same for a sound with variants or layers: `nf-md-checkbox_multiple_marked`, U+F0137.
+pub const KIT_SOUND_LAYERED_MARKED: char = '\u{f0137}';
 /// A sample: `nf-md-waveform`, U+F147D, as Ableton's browser shows one.
 pub const SAMPLE: char = '\u{f147d}';
 /// A sample that's a loop, by its folder or the tempo in its name: `nf-md-repeat`, U+F0456.
