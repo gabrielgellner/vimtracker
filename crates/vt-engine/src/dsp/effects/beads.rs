@@ -1053,7 +1053,7 @@ impl Seed {
 }
 
 /// The song's steps as the clock Beads follows, worked out from where the song is at the start of
-/// each block and moved on frame by frame between: a pulse on each step, high for its first half.
+/// each block and moved on frame by frame between: a pulse on each step.
 #[derive(Debug, Clone, Copy)]
 struct Steps {
     tick: f64,
@@ -1082,22 +1082,19 @@ impl Steps {
         }
     }
 
-    /// A frame on: whether a step starts in it, and how far through the frame, and whether the
-    /// step's pulse is high.
+    /// A frame on: whether a step starts in it, and how far through the frame.
     #[inline]
-    fn next(&mut self) -> (Option<f32>, bool) {
+    fn next(&mut self) -> Option<f32> {
         if !self.playing {
-            return (None, false);
+            return None;
         }
         let step = TICKS_PER_STEP as f64;
         let before = self.tick;
         self.tick += self.ticks_per_frame;
-        let pulse = ((self.tick / step).floor() > (before / step).floor()).then(|| {
+        ((self.tick / step).floor() > (before / step).floor()).then(|| {
             let into = self.tick - (self.tick / step).floor() * step;
             (into / self.ticks_per_frame).clamp(0.0, 1.0) as f32
-        });
-        let high = self.tick.rem_euclid(step) < step * 0.5;
-        (pulse, high)
+        })
     }
 }
 
@@ -1905,7 +1902,7 @@ impl Beads {
     fn core(&mut self, input: [f32; 2]) -> [f32; 2] {
         let knobs = self.knobs();
         let delay_mode = self.delay_mode();
-        let (pulse, _high) = self.steps.next();
+        let pulse = self.steps.next();
         if delay_mode {
             self.delay.render(
                 &knobs,
