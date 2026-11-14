@@ -14,6 +14,7 @@ use vt_engine::dsp::compressor::curve_db;
 use vt_engine::dsp::distort::transfer;
 use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
+use vt_model::attractor::{Attractor, System, view};
 use vt_model::envelope::{Adsr, Envelope};
 use vt_model::insert::{Compressor, Distort, Equaliser, threshold_db};
 use vt_model::lfo::{self, Lfo, LfoMode, deformed_wave};
@@ -439,7 +440,17 @@ pub struct LfoDrawing {
 impl LfoDrawing {
     /// What an LFO's settings draw, with the depth of its slot.
     pub fn of(lfo: &Lfo, depth: i16) -> Self {
-        if lfo_draws_its_wave(lfo.shape) {
+        if lfo.shape.is_attractor() {
+            // Its phase is the axis heard, and its deform its parameter, which both change it.
+            Self {
+                shape: lfo.shape,
+                phase: lfo.phase % 360,
+                flipped: depth < 0,
+                unipolar: false,
+                deform: lfo.deform,
+                half: false,
+            }
+        } else if lfo_draws_its_wave(lfo.shape) {
             Self {
                 shape: lfo.shape,
                 phase: lfo.phase % 360,
@@ -500,8 +511,12 @@ impl LfoDrawing {
         f32::from(self.deform) / f32::from(lfo::MAX_DEFORM)
     }
 
-    /// Where a point so far round the wave, from 0 to 1, is across the cycle drawn.
+    /// Where a point so far round the wave, from 0 to 1, is across the cycle drawn. An attractor's
+    /// is already where it is across its picture, from 0 to 1.
     pub fn x_of(self, turns: f64) -> f32 {
+        if self.shape.is_attractor() {
+            return turns.clamp(0.0, 1.0) as f32;
+        }
         (turns - self.start()).rem_euclid(1.0) as f32
     }
 
@@ -538,7 +553,7 @@ pub fn lfo_draws_its_wave(shape: lfo::Shape) -> bool {
 }
 
 /// One cycle of an LFO, from its `Phase`, at full height, over a dotted centre line. A random one
-/// has the centre line alone.
+/// has the centre line alone, and an attractor is traced side on, as [`attractor_trace`] has it.
 pub fn lfo_cycle(drawing: LfoDrawing, (width, height): (usize, usize)) -> Plot {
     let mut plot = Plot::new(width, height);
     // One way only, it's at rest where the wave is lowest, or highest flipped.
@@ -548,11 +563,41 @@ pub fn lfo_cycle(drawing: LfoDrawing, (width, height): (usize, usize)) -> Plot {
         0.5
     };
     plot.across(rest, Mark::Grid);
-    if lfo_draws_its_wave(drawing.shape) {
+    if let Some(system) = System::of(drawing.shape) {
+        let trace = attractor_trace(drawing, system);
+        plot.line(&trace.map(|(x, level)| plot.at(x, level)));
+    } else if lfo_draws_its_wave(drawing.shape) {
         let level = |x: f32| drawing.level_at(x);
         plot.curve(level, level(0.0), &drawing.corners());
     }
     plot
+}
+
+/// How many cycles of an attractor its picture traces, and how many points a cycle.
+const TRACED_CYCLES: usize = 16;
+const TRACED_POINTS: usize = 32;
+
+/// An attractor as the Mod page draws it, each point `(x, level)` from 0 to 1: what's heard of it
+/// up the picture, as a wave's value is, and the next axis round across it, so the picture is the
+/// attractor itself seen side on, whose shape is the same wherever it started, and the dot rides
+/// it where the LFO is. It traces 16 cycles from its seed, after settling, at its deform.
+pub fn attractor_trace(
+    drawing: LfoDrawing,
+    system: System,
+) -> [(f32, f32); TRACED_CYCLES * TRACED_POINTS] {
+    let deform = drawing.deform_share();
+    let turns = drawing.start();
+    let mut attractor = Attractor::seeded(system, 0, deform, 0.0);
+    std::array::from_fn(|at| {
+        let cycles = at as f64 / TRACED_POINTS as f64;
+        let reached = attractor.reach(cycles, deform);
+        debug_assert!(reached, "a trace goes on a step at a time");
+        let point = attractor.point(cycles, deform);
+        (
+            0.5 + 0.5 * view(point, turns + 1.0 / 3.0),
+            drawing.level_of(view(point, turns)),
+        )
+    })
 }
 
 /// What a Track slot's map is drawn from: its source, where its map starts and ends, whether a
@@ -1205,6 +1250,55 @@ mod tests {
                 assert!(marked.count() > 60, "{shape:?} {phase}");
                 assert!(plot.png([255; 3]).len() < 6000, "{shape:?} {phase}");
             }
+        }
+    }
+
+    #[test]
+    fn an_attractor_is_drawn_side_on_with_the_axis_heard_up_it() {
+        use vt_model::attractor::attractor_at;
+        let size = (360, 195);
+        for shape in [lfo::Shape::Lorenz, lfo::Shape::Rossler] {
+            let system = System::of(shape).unwrap();
+            let lfo = Lfo {
+                shape,
+                ..Lfo::default()
+            };
+            let drawing = LfoDrawing::of(&lfo, 0x40);
+            let plot = lfo_cycle(drawing, size);
+            let covered = plot.cover.iter().filter(|cover| **cover > 0).count();
+            assert!(covered > size.0 * 8, "{shape:?} {covered}");
+            // Up it is `x`, the axis heard at 0°, and across it `y`, the next one round, as the
+            // engine has them from the same seed.
+            let trace = attractor_trace(drawing, system);
+            let point = attractor_at(system, 3.0, 0, 0.0);
+            let (x, level) = trace[3 * TRACED_POINTS];
+            assert!(
+                (level - drawing.level_of(point[0])).abs() < 1e-6,
+                "{shape:?}"
+            );
+            assert!((x - (0.5 + 0.5 * point[1])).abs() < 1e-6, "{shape:?}");
+            // Its axis, its deform and its depth's sign each draw it differently; its mode doesn't.
+            for other in [
+                Lfo { phase: 240, ..lfo },
+                Lfo {
+                    deform: 0x80,
+                    ..lfo
+                },
+            ] {
+                let other = lfo_cycle(LfoDrawing::of(&other, 0x40), size);
+                assert_ne!(other.cover, plot.cover, "{shape:?}");
+            }
+            assert_ne!(
+                lfo_cycle(LfoDrawing::of(&lfo, -0x40), size).cover,
+                plot.cover
+            );
+            let half = Lfo {
+                mode: LfoMode::Half,
+                ..lfo
+            };
+            assert_eq!(LfoDrawing::of(&half, 0x40), drawing);
+            // Its dot is placed across by where the engine says it is.
+            assert_eq!(drawing.x_of(0.25), 0.25);
         }
     }
 

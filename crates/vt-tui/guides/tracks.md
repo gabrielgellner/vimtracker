@@ -1416,13 +1416,13 @@ An `LFO` slot moves around the current value, so `CUT40` on a step moves the cen
 and the LFO carries on around it. It draws one cycle of its wave in a box on its
 right, starting from its `Phase`, upside down for a negative `Depth`, with a dot
 riding it where the LFO is now. `Random` and `Smooth` draw only a centre line, as
-their values aren't known ahead.
+their values aren't known ahead, and `Lorenz` and `Rössler` draw themselves, below.
 
 | Setting | Value |
 |---|---|
 | Mode | In the title: how notes start it, below |
 | Dest | In the title: what it moves, such as `Cut`, or `---` |
-| Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` |
+| Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` `Lorenz` `Rössler` |
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
 | Phase | Where in the cycle it starts, in degrees |
@@ -1468,6 +1468,34 @@ does; lowered, it sags and spends longer low, as an exp curve. On `Square` it's 
 width: `+80` is high for three quarters of the cycle, `-80` for a quarter. The
 random shapes have nothing to bend. The picture draws the bent wave. A step locks
 it with `DFM`, as `DFM4 C0`, where `80` is none.
+
+**Lorenz and Rössler** are strange attractors: a point that goes round and round
+without ever retracing its path, so the LFO moves smoothly but never quite repeats,
+a drift for `Cut` or `Pan`, or a wandering tune on `Pitch in scale`. A cycle of its
+`Rate` is about one turn: once round a wing of Lorenz's butterfly, which it circles
+a few times before it flips to the other, or once round Rössler's loop, a wave that
+swells and shrinks. On them `Deform` is what makes them chaotic, Lorenz's ρ and
+Rössler's c. At `00` each is the textbook attractor. Lowered, Lorenz lingers a
+little longer on each wing, and Rössler calms through loops of four and two turns
+to a plain loop at `-FF`. Raised, both get wilder, and Lorenz at the top settles
+into a figure of eight.
+
+On an attractor `Phase` is `Axis`, as it has no cycle to start part way through:
+it picks which of its three axes you hear, `x` at 0°, `y` at 120° and `z` at 240°,
+and blends the two either side between them. `+` and `_` go from one axis to the
+next. Lorenz's `x` and `y` swing from side to side as it flips wings, and its `z`
+rises and falls once a turn; Rössler's `x` and `y` are its loop, a quarter turn
+apart, and its `z` is a spike once a turn. The picture is the attractor seen side
+on, the axis you hear up it and the next one round across it, with the dot riding
+it where the LFO is.
+
+Each starts from a point the song's seed picks, its own for each track and slot,
+so a render repeats. In `Free` it starts at the top of the song; playing from
+anywhere else starts it from that point where you play from, rather than where
+playing from the top would have taken it. `Trig`, `One` and `Half` start it from
+the same point at each note, so each note plays the same chaotic phrase, and `Hold`
+holds where it is at each note. A rate moved by a macro or another LFO speeds it up
+or slows it down from where it is.
 
 | Type this as a rate | For |
 |---|---|
@@ -1682,7 +1710,8 @@ column has whole notes only, so a move of part of a semitone goes to the nearest
 and a slot that never moved a note half a semitone, such as a gentle vibrato, is
 left playing. Envelopes and Track slots on `Pitch` stay too, as they shape each
 note rather than choose it. With `Mutate` up, it's the time round just heard that's written, so
-play, listen, and press `Space g A` on a pass you like.
+play, listen, and press `Space g A` on a pass you like. A `Lorenz` or `Rössler` LFO never plays
+the same pass twice, so the same goes for it.
 
 It writes in the phrase's live columns a macro or `Vary` moved too, each applied as it was last
 heard and its rows not heard yet as written, so it's the one key for making the phrase what you

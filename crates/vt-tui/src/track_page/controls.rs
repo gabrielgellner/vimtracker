@@ -463,6 +463,12 @@ impl Control {
         if let Self::Mod(slot, ModField::Mode) = self {
             return track.mods[slot].kind.mode_label();
         }
+        // An attractor has no cycle to start part way through, so its phase is the axis heard.
+        if let Self::Mod(slot, ModField::Phase) = self
+            && track.mods[slot].lfo.shape.is_attractor()
+        {
+            return "Axis";
+        }
         self.setting_on(track)
             .map_or_else(|| self.label(), SettingId::name)
     }
