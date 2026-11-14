@@ -265,7 +265,7 @@ pub struct Grains {
     pub shape: u8,
     /// How often grains start, as Beads' `Density`: evenly below `80`, at random above it.
     pub density: u8,
-    /// How far the grains spread across the sides.
+    /// How far the grains spread across the sides. `Spectral` doesn't use it.
     pub spread: u8,
     /// Whether it stops recording, `1`, so the grains keep playing what's held.
     pub freeze: u8,
@@ -336,8 +336,7 @@ impl Grains {
     }
 }
 
-/// What Clouds does with what it records, as the module's modes do. Its fourth, the spectral one,
-/// is left for later.
+/// What Clouds does with what it records, as the module's modes do.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CloudsMode {
     /// Grains read the recording, overlapping as `Density` says, shaped and then diffused by
@@ -350,13 +349,16 @@ pub enum CloudsMode {
     /// A delay as long as `Position` says, its repeats shifted by `Pitch`; frozen, a loop of what
     /// it holds as long as `Size` says.
     Looping,
+    /// The module's phase vocoder: what comes in is taken apart into frames of its spectrum, which
+    /// are kept, warped, shifted and quantised, then put back together, about 160 ms later.
+    Spectral,
 }
 
 impl CloudsMode {
-    pub const ALL: [Self; 3] = [Self::Granular, Self::Stretch, Self::Looping];
+    pub const ALL: [Self; 4] = [Self::Granular, Self::Stretch, Self::Looping, Self::Spectral];
 }
 
-const CLOUDS_MODE_NAMES: [&str; 3] = ["Granular", "Stretch", "Looping"];
+const CLOUDS_MODE_NAMES: [&str; 4] = ["Granular", "Stretch", "Looping", "Spectral"];
 
 /// Clouds' four qualities, the module's: its recording in stereo or mono, in 16 bits or in 8-bit
 /// mu-law at half the rate, each holding a longer recording than the one before.
@@ -465,22 +467,26 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
 pub struct Clouds {
     pub mode: CloudsMode,
     /// Where in the recording it reads, from what's just come in at `00` to the oldest at `FF`; in
-    /// `Looping`, how long its delay is.
+    /// `Looping`, how long its delay is; in `Spectral`, which of its kept spectra it writes and
+    /// plays, blending between them.
     pub position: u8,
-    /// How long its grains, windows or loop are.
+    /// How long its grains, windows or loop are; in `Spectral`, how it warps the spectrum, none at
+    /// `80`.
     pub size: u8,
     /// How far it shifts, as a place in the list from two octaves down to two up.
     pub pitch: u8,
     /// In `Granular`, how many grains overlap and how they start: regularly below `80`, none in
-    /// the middle, and at random above, as the module's manual has it. In the other modes, how far
-    /// the diffuser smears what comes out.
+    /// the middle, and at random above, as the module's manual has it. In `Stretch` and `Looping`,
+    /// how far the diffuser smears what comes out. In `Spectral`, how often its spectrum is
+    /// updated: bins left at random below `80`, frames merged above, random phases at both ends.
     pub density: u8,
     /// In `Granular`, the grains' envelope, from a square through a triangle to a bell, then the
-    /// diffuser above `C0`. In the other modes, a low-pass below `80` and a high-pass above it.
+    /// diffuser above `C0`. In `Stretch` and `Looping`, a low-pass below `80` and a high-pass above
+    /// it. In `Spectral`, its levels quantised below `80`, and the strongest bins weakened above.
     pub texture: u8,
     /// From `00`, all dry, to `FF`, all wet: `Blend`'s first job on the module.
     pub blend: u8,
-    /// How far the grains spread across the sides.
+    /// How far the grains spread across the sides. `Spectral` doesn't use it.
     pub spread: u8,
     /// How much of what comes out goes back in to be recorded again.
     pub feedback: u8,

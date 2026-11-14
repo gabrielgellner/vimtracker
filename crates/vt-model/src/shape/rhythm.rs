@@ -194,8 +194,8 @@ pub(super) fn states(open: &Rows, bias: u8, seed: u64) -> (Rows, Rows) {
 }
 
 /// Hold the value before each tie into it, over the cells a three-state rhythm's gates were
-/// written into: each tie takes the cell before it, and on notes of its own, or `Acid`'s, the note
-/// before is held into it. A gate the fill left alone has nothing to hold, so the ties after it
+/// written into: each tie takes the cell before it, and on notes of its own, `Acid`'s or a
+/// `Tonnetz`' chords with their locks, the note before is held into it. A gate the fill left alone has nothing to hold, so the ties after it
 /// rest, as after a rest.
 pub(super) fn tie(
     open: &Rows,
@@ -246,6 +246,20 @@ fn held(cell: GenCell) -> GenCell {
                 kind: GateKind::Hold,
                 ..gate.unwrap_or_default()
             }),
+        },
+        GenCell::NoteFx {
+            note,
+            velocity,
+            gate,
+            fx,
+        } => GenCell::NoteFx {
+            note,
+            velocity,
+            gate: Some(Gate {
+                kind: GateKind::Hold,
+                ..gate.unwrap_or_default()
+            }),
+            fx,
         },
         cell => cell,
     }

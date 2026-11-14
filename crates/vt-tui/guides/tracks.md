@@ -658,8 +658,8 @@ FX slot, then move `Time` to scan through what's held.
 
 `Clouds` is Mutable Instruments' Clouds as the module plays: it records the
 sound all the time, with what it feeds back, and plays it back in one of
-three modes, then through its diffuser, filters and reverb. Its `Mode` is in
-the slot's title, picked with `K`:
+three modes, or takes it apart in a fourth, then through its diffuser,
+filters and reverb. Its `Mode` is in the slot's title, picked with `K`:
 
 * `Granular`, the module's own sound: grains read the recording.
 * `Stretch` reads it through two windows, each lined up with the last where
@@ -667,6 +667,8 @@ the slot's title, picked with `K`:
   grains' blur.
 * `Looping` is a delay, its repeats shifted by `Pitch`. Frozen, it loops what
   it holds.
+* `Spectral` takes the sound apart into its spectrum, frame by frame, keeps
+  it, bends it and puts it back together, as the module's phase vocoder does.
 
 The first two columns are the module's knobs, the third what its `Blend`
 knob also does, each a setting of its own here. In `Granular`:
@@ -712,11 +714,38 @@ its place, as on the module, for a long wash of what's held. `Blend` is the
 module's, and loud sounds soft clip through it as they do on the module. It
 starts half way, with a little reverb.
 
+In `Spectral` the knobs take other jobs, as on the module:
+
+| Setting | Does |
+|---|---|
+| `Position` | Which kept spectrum it writes and plays |
+| `Size` | Warps the spectrum, none at `80` |
+| `Pitch` | Shifts the spectrum, in semitones |
+| `Density` | How often the spectrum is updated |
+| `Texture` | Quantises it below `80`, flattens it above |
+| `Freeze` | On, it plays what it holds, still turning |
+
+It keeps two spectra in the stereo qualities and six in the mono ones, and
+`Position` blends between them: freeze at `00`, let go, freeze again at
+`FF`, and `Position` moves from one to the other. `Size` shifts and reverses
+the spectrum towards either end. Below `80`, `Density` leaves bins as they
+were at random, a partial freeze; above it, it merges each frame with the
+last; and towards either end it scatters the phases, a spectral smear.
+Below `80`, `Texture` makes the levels coarser and coarser, like a file at
+a low bit rate; above it, the strongest bins weaken and the weakest grow,
+towards noise.
+
+Each frame is 128 ms, and what comes out is 160 ms late, as on the module;
+at 8 bits both are twice as long, with finer bins. It has no diffuser or
+filters, `Spread` does nothing, and nothing above 16 kHz comes out, as on
+the module, which also makes it 6 dB louder than what goes in. Changing to
+or from `Spectral` fades out what's playing first.
+
 `Clouds` and `Grains` are siblings: `Grains` is Beads', Clouds' successor,
 with its own envelopes and randomness, and `Pitch` and `Reverb` are Clouds'
 own pitch shifter and reverb on their own. Its grains' places come from the
-track's seed, so a render is the same each time. Clouds' fourth mode, its
-spectral one, isn't here yet.
+track's seed, so a render is the same each time, as are the random bins and
+phases of `Spectral`.
 <!-- ANCHOR_END: before-clouds -->
 <!-- ANCHOR: before-folded -->
 
@@ -1780,7 +1809,8 @@ and `Side`, or a named rhythm's `Rhythm`, `Part` and `Child`, at the foot of the
 they stay put as the fill changes; where `Acid`'s `Density` or `Random`'s `Weights` takes the
 top of the third, `Rhythm` goes to the fourth. A `Follow`, which has no `Where`, has its
 `Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
-whose three are full, its riff's `Spread` and `Bias` in the fourth. An `Acid`'s loops
+whose three are full, its riff's `Spread` and `Bias` in the fourth, as a `Tonnetz` has its
+moves' weights, `P`, `L` and `R`. An `Acid`'s loops
 (see **Acid lines** in the editing guide) are a device of their own under it, `Loops`:
 `Trig loop` and `Note loop` in its first column, `Oct loop`, `Acc loop` and `Sld loop` in
 its second, level with `Octave`, `Accent` and `Slide` above, and at the end of its
@@ -1812,7 +1842,8 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 **A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,
 `1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), `Divisions` (its dice), `Variation`, a
 `Wave` of `Random` or `Smooth`,
-a `Follow` that mutates, or any fill on rows chosen by `Chance`, one of Marbles' rhythms or a named `Rhythm`, has `Vary`: `Once`, as it's always been, the
+a `Follow` that mutates, a `Tonnetz` whose moves are `Random` or a `Loop`, or any fill on
+rows chosen by `Chance`, one of Marbles' rhythms or a named `Rhythm`, has `Vary`: `Once`, as it's always been, the
 same every time round; `Each pass`, a new roll each time the phrase comes round; or
 `Every 2 passes`, 4 or 8, so each variation plays that many times before the next,
 the way an Elektron's `1:4` condition keeps to the bars. Each pass's seed comes from

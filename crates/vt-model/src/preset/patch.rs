@@ -785,6 +785,7 @@ mod tests {
             variation: Variation::default(),
             divisions: crate::shape::Divisions::default(),
             ring: crate::shape::Ring::default(),
+            tonnetz: crate::shape::Tonnetz::default(),
         }
     }
 
