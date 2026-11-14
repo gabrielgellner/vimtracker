@@ -12,6 +12,7 @@ use vt_tui::input::mode::{Mode, View};
 
 mod common;
 use common::*;
+use vt_tui::kitty::{PanelIds, PanelKey};
 
 /// The FX page's text for a slot: its device's lines, from its title on its frame's top to its
 /// frame's bottom.
@@ -683,7 +684,7 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         String::from_utf8(out)
             .unwrap()
             .matches(",c=13,r=5,")
@@ -691,10 +692,7 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
     };
     press(&mut app, " 5LL");
     assert_eq!(sync(&mut app, &mut graphics), 0, "no slot has a drawing");
-    assert_eq!(
-        app.track_page.slot_images,
-        [None; vt_model::insert::INSERTS]
-    );
+    assert_eq!(slot_images(&app), [None; vt_model::insert::INSERTS]);
     press(&mut app, "K");
     press(&mut app, "Comp");
     special(&mut app, KeyCode::Enter);
@@ -703,7 +701,7 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
         Insert::Compressor(_)
     ));
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    let first = app.track_page.slot_images[0].unwrap();
+    let first = app.track_page.images.get(PanelKey::Slot(0)).unwrap();
     assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
 
     // The attack isn't on the curve, so changing it sends nothing.
@@ -713,11 +711,11 @@ fn a_compressors_curve_is_sent_once_and_again_only_for_its_threshold_or_ratio() 
         Insert::Compressor(Compressor { attack: 0x56, .. })
     ));
     assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.track_page.slot_images[0], Some(first));
+    assert_eq!(app.track_page.images.get(PanelKey::Slot(0)), Some(first));
     // The threshold is.
     press(&mut app, "h=");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    assert_ne!(app.track_page.slot_images[0], Some(first));
+    assert_ne!(app.track_page.images.get(PanelKey::Slot(0)), Some(first));
 }
 
 #[test]
@@ -880,7 +878,7 @@ fn a_compressor_and_a_limiter_show_how_far_theyre_turning_down() {
     press(&mut app, "}}K");
     press(&mut app, "Limit");
     special(&mut app, KeyCode::Enter);
-    app.track_page.slot_images = [Some(0x01_02_03), None, None, None];
+    app.track_page.images = PanelIds::from_iter([(PanelKey::Slot(0), 0x01_02_03)]);
     // 18 dB is nine tenths of the meter's 20: all of its top four rows and half of the last.
     app.services.live = Some(LiveValues {
         reduction: [18.0, 0.0, 3.0, 0.0],
@@ -982,7 +980,7 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
     let mut graphics = Graphics::new();
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         String::from_utf8(out)
             .unwrap()
             .matches(",c=33,r=5,")
@@ -992,22 +990,22 @@ fn an_eqs_curve_follows_its_settings_and_the_cursor() {
     press(&mut app, "EQ3");
     special(&mut app, KeyCode::Enter);
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    let picked = app.track_page.slot_images[0].unwrap();
+    let picked = app.track_page.images.get(PanelKey::Slot(0)).unwrap();
     assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
 
     // Away from the slot it's dim, once, and coming back sends nothing.
     press(&mut app, "}");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    let plain = app.track_page.slot_images[0].unwrap();
+    let plain = app.track_page.images.get(PanelKey::Slot(0)).unwrap();
     assert_ne!(plain, picked);
     press(&mut app, "{");
     assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.track_page.slot_images[0], Some(picked));
+    assert_eq!(app.track_page.images.get(PanelKey::Slot(0)), Some(picked));
 
     // Any of its settings draws it again.
     press(&mut app, "j=");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    assert_ne!(app.track_page.slot_images[0], Some(picked));
+    assert_ne!(app.track_page.images.get(PanelKey::Slot(0)), Some(picked));
 
     let buffer = {
         let backend = ratatui::backend::TestBackend::new(150, 24);
@@ -1052,7 +1050,7 @@ fn synced(
     graphics: &mut vt_tui::kitty::Graphics,
 ) -> std::collections::HashMap<u32, Vec<u8>> {
     let mut out = Vec::new();
-    graphics.sync(app, &mut out).unwrap();
+    app.send_pictures(graphics, &mut out).unwrap();
     vt_tui::screenshot::sent_images(&out)
 }
 
@@ -1065,35 +1063,35 @@ fn a_bypassed_slots_curve_is_faint_and_each_shade_is_sent_once() {
     special(&mut app, KeyCode::Enter);
     let mut graphics = vt_tui::kitty::Graphics::new();
     let sent = synced(&mut app, &mut graphics);
-    let focused = app.track_page.slot_images[0].unwrap();
+    let focused = app.track_page.images.get(PanelKey::Slot(0)).unwrap();
     assert_eq!(line_color(&sent[&focused]), theme::active().fg.unwrap());
 
     // Switched out, it's faint, a picture of its own sent once.
     press(&mut app, "b");
     assert!(app.song().tracks[0].bypassed[0]);
     let sent = synced(&mut app, &mut graphics);
-    let faint = app.track_page.slot_images[0].unwrap();
+    let faint = app.track_page.images.get(PanelKey::Slot(0)).unwrap();
     assert_ne!(faint, focused);
     assert_eq!(line_color(&sent[&faint]), theme::faint().fg.unwrap());
     assert!(synced(&mut app, &mut graphics).is_empty());
     // Away from it, it stays faint.
     press(&mut app, "}");
     assert!(synced(&mut app, &mut graphics).is_empty());
-    assert_eq!(app.track_page.slot_images[0], Some(faint));
+    assert_eq!(app.track_page.images.get(PanelKey::Slot(0)), Some(faint));
 
     // Back in, away from it, it's dim, and with the cursor on it again, the bright one comes back
     // with nothing sent.
     press(&mut app, "{b}");
     assert!(!app.song().tracks[0].bypassed[0]);
     let sent = synced(&mut app, &mut graphics);
-    let dim = app.track_page.slot_images[0].unwrap();
+    let dim = app.track_page.images.get(PanelKey::Slot(0)).unwrap();
     assert_eq!(line_color(&sent[&dim]), theme::dim().fg.unwrap());
     press(&mut app, "{");
     assert!(synced(&mut app, &mut graphics).is_empty());
-    assert_eq!(app.track_page.slot_images[0], Some(focused));
+    assert_eq!(app.track_page.images.get(PanelKey::Slot(0)), Some(focused));
     press(&mut app, "b");
     assert!(synced(&mut app, &mut graphics).is_empty());
-    assert_eq!(app.track_page.slot_images[0], Some(faint));
+    assert_eq!(app.track_page.images.get(PanelKey::Slot(0)), Some(faint));
 }
 
 #[test]
@@ -1108,12 +1106,13 @@ fn the_panels_are_drawn_at_the_screens_pixels_and_sent_again_after_a_clear() {
     special(&mut app, KeyCode::Enter);
     let mut graphics = vt_tui::kitty::Graphics::new();
     let sizes = |app: &App, sent: &std::collections::HashMap<u32, Vec<u8>>| {
-        [0, 1].map(|slot| png_size(&sent[&app.track_page.slot_images[slot].unwrap()]))
+        [0, 1]
+            .map(|slot| png_size(&sent[&app.track_page.images.get(PanelKey::Slot(slot)).unwrap()]))
     };
     // At the author's 15 by 39 pixels a character: the compressor's 13 by 5 is square.
     let sent = synced(&mut app, &mut graphics);
     assert_eq!(sizes(&app, &sent), [(195, 195), (495, 195)]);
-    let first = app.track_page.slot_images;
+    let first = slot_images(&app);
 
     // A font of another size draws each again at its pixels, with new ids.
     let window = |columns: u16, rows: u16, cell: (u16, u16)| WindowSize {
@@ -1125,7 +1124,7 @@ fn the_panels_are_drawn_at_the_screens_pixels_and_sent_again_after_a_clear() {
     graphics.use_window(window(163, 42, (10, 22)));
     let sent = synced(&mut app, &mut graphics);
     assert_eq!(sizes(&app, &sent), [(130, 110), (330, 110)]);
-    let smaller = app.track_page.slot_images;
+    let smaller = slot_images(&app);
     assert!(smaller[..2].iter().zip(first).all(|(now, was)| *now != was));
     assert!(synced(&mut app, &mut graphics).is_empty());
 
@@ -1133,10 +1132,10 @@ fn the_panels_are_drawn_at_the_screens_pixels_and_sent_again_after_a_clear() {
     // the old ones are forgotten, as the clear has taken them off the screen.
     graphics.use_window(window(150, 40, (10, 22)));
     let mut out = Vec::new();
-    graphics.sync(&mut app, &mut out).unwrap();
+    app.send_pictures(&mut graphics, &mut out).unwrap();
     assert_eq!(vt_tui::screenshot::sent_images(&out).len(), 2);
     assert!(
-        app.track_page.slot_images[..2]
+        slot_images(&app)[..2]
             .iter()
             .zip(smaller)
             .all(|(now, was)| *now != was)
@@ -1188,7 +1187,7 @@ fn a_curve_under_an_lfo_is_sent_every_other_frame_and_costs_a_few_kilobytes() {
             ..LiveValues::default()
         });
         let mut out = Vec::new();
-        graphics.sync(&mut app, &mut out).unwrap();
+        app.send_pictures(&mut graphics, &mut out).unwrap();
         let commands = String::from_utf8(out.clone()).unwrap();
         sends += commands.matches("a=T,").count();
         bytes += out.len();
@@ -1210,7 +1209,10 @@ fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
         other => panic!("{other:?}"),
     };
     assert_eq!(compressor(&app).kind, CompressorType::Glue);
-    app.track_page.slot_images = [Some(0x01_02_03), Some(0x04_05_06), None, None];
+    app.track_page.images = PanelIds::from_iter([
+        (PanelKey::Slot(0), 0x01_02_03),
+        (PanelKey::Slot(1), 0x04_05_06),
+    ]);
     // Each row's text, with an image's placeholder, which is several characters, as `#`.
     let rows = |app: &mut App, keys: bool| {
         app.modes.mode = if keys { Mode::Keys } else { Mode::Normal };

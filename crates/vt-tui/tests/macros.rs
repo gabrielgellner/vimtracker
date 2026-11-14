@@ -12,6 +12,7 @@ use vt_tui::track_page::Control;
 
 mod common;
 use common::*;
+use vt_tui::kitty::PanelKey;
 
 /// On `Cut`, the Filter's first setting.
 fn on_cut() -> (App, vt_engine::link::Realtime) {
@@ -238,7 +239,7 @@ fn the_mapping_views_response_is_sent_once_and_again_only_when_it_bends() {
     // The response is 13 by 5 characters; the Sound page's own pictures are other sizes.
     let sync = |app: &mut App, graphics: &mut Graphics| {
         let mut out = Vec::new();
-        graphics.sync(app, &mut out).unwrap();
+        app.send_pictures(graphics, &mut out).unwrap();
         String::from_utf8(out)
             .unwrap()
             .matches(",c=13,r=5,")
@@ -248,18 +249,38 @@ fn the_mapping_views_response_is_sent_once_and_again_only_when_it_bends() {
     assert_eq!(sync(&mut app, &mut graphics), 0, "no view, no response");
     press(&mut app, "gm");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    let first = app.mapping_image.unwrap();
+    let first = app
+        .mapping
+        .as_ref()
+        .and_then(|view| view.images.get(PanelKey::Mapping))
+        .unwrap();
     assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
     // An end moved draws the same; a bend doesn't.
     press(&mut app, "=");
     assert_eq!(sync(&mut app, &mut graphics), 0);
-    assert_eq!(app.mapping_image, Some(first));
+    assert_eq!(
+        app.mapping
+            .as_ref()
+            .and_then(|view| view.images.get(PanelKey::Mapping)),
+        Some(first)
+    );
     press(&mut app, "ll+");
     assert_eq!(sync(&mut app, &mut graphics), 1);
-    assert_ne!(app.mapping_image, Some(first));
+    assert_ne!(
+        app.mapping
+            .as_ref()
+            .and_then(|view| view.images.get(PanelKey::Mapping)),
+        Some(first)
+    );
     special(&mut app, KeyCode::Esc);
     sync(&mut app, &mut graphics);
-    assert_eq!(app.mapping_image, None, "closed, it has none");
+    assert_eq!(
+        app.mapping
+            .as_ref()
+            .and_then(|view| view.images.get(PanelKey::Mapping)),
+        None,
+        "closed, it has none"
+    );
 }
 
 #[test]

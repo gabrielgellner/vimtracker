@@ -15,11 +15,14 @@
 
 use std::borrow::Cow;
 use std::sync::Arc;
+use std::time::Instant;
 
 use vt_engine::engine::Transport;
 use vt_engine::link::JamState;
 use vt_engine::track_state::{Faders, LiveValues};
+use vt_model::generator::Generator;
 use vt_model::order::Dealer;
+use vt_model::samples::SamplePool;
 use vt_model::song::{Song, Track};
 
 use crate::app::{App, Cursor, Entry, Modes, TrackLive};
@@ -178,6 +181,28 @@ impl<'a> Ctx<'a> {
         index: usize,
     ) -> Option<LiveGen> {
         self.app.live_generator(track, phrase, index)
+    }
+
+    /// The row of its span a live generator is playing, counted from its first, while the phrase
+    /// it's on is the one under the cursor and is playing.
+    pub(crate) fn gen_playing_row(&self, generator: &Generator) -> Option<usize> {
+        crate::views::track::gen_playing_row(self.app, generator)
+    }
+
+    /// The sample pool, with each file's analysis and frames, for a sampler's thumbnail.
+    pub fn samples(&self) -> &'a SamplePool {
+        &self.app.services.samples
+    }
+
+    /// The program's sample rate, which the pictures of filters and tails are worked out at.
+    pub fn rate(&self) -> u32 {
+        self.app.services.rate
+    }
+
+    /// Whether something is drawn over the page, which a picture placed above the text would show
+    /// through.
+    pub fn overlaid(&self, now: Instant) -> bool {
+        crate::views::sample::overlaid(self.app, now)
     }
 
     /// Which slice of its sample a track plays, as the Sound page's `Slice` says it after its

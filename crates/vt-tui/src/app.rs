@@ -249,8 +249,6 @@ pub struct App {
     pub section_anchor: Option<usize>,
     /// The track page: which of its pages shows, where its cursor is, and the images it shows.
     pub track_page: TrackPage,
-    /// The image of the mapping view's response the terminal has, while the view is open.
-    pub mapping_image: Option<u32>,
     /// Where the sample page is, and the ids of the images of its waveform and its overview.
     pub sample_page: crate::sample_page::SamplePage,
     pub sample_images: Option<(u32, u32)>,
@@ -444,7 +442,6 @@ impl App {
             looping: None,
             section_anchor: None,
             track_page: TrackPage::default(),
-            mapping_image: None,
             sample_page: crate::sample_page::SamplePage::default(),
             sample_images: None,
             project_row: 0,

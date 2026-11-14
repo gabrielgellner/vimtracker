@@ -15,6 +15,7 @@ use vt_model::shape::{Context, GenParam, ShapeColumn};
 use vt_model::song::Track;
 
 use crate::app::App;
+use crate::kitty::PanelKey;
 use crate::macroing::{holds, macro_name};
 use crate::page::Ctx;
 use crate::shaping::LiveGen;
@@ -329,7 +330,7 @@ fn draw_generator(
     frame.render_widget(widget, area);
     let mut settings = Device::settings_area(area);
     let mut preview = None;
-    let id = page.gen_images.get(generator).copied().flatten();
+    let id = page.images.get(PanelKey::Gen(generator));
     if let Some(id) = id {
         let lines = image::rows(id, LARGE_PANEL_WIDTH, LARGE_PANEL_HEIGHT)
             .into_iter()

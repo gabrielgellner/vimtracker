@@ -298,9 +298,10 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 ### Threads and versions
 
 *   **The edit thread** runs `run::main_loop` once a frame, every `FRAME_MS` (33 ms): `App::tick`
-    frees what came back and reads the newest report, autosave runs if it's due, `Graphics::sync`
-    sends the images the screen is about to show, ratatui draws, `Graphics::place` places the images
-    that are placed directly, and then keys are read until the next frame. Saving, `:render` and
+    frees what came back and reads the newest report, autosave runs if it's due,
+    `App::send_pictures` sends the images the screen is about to show, ratatui draws,
+    `App::place_pictures` places the images that are placed directly, and then keys are read until
+    the next frame. Saving, `:render` and
     loading samples at a new rate happen here too.
 *   **The audio callback** is `cpal`'s output thread, in `audio.rs`. It calls `Realtime::process` in
     blocks of up to `MAX_BLOCK` frames, into scratch made when the stream starts, clamps the output
@@ -840,10 +841,10 @@ built from, so a new page uses them rather than working out its layout again:
 component (#320). `App::track_page` is a `TrackPage`: the page showing (`Page`: Sound, Mod, FX or
 Gen), the cursor's row and field, the field `j` and `k` aim for, whether it's on a value's fine
 digits, and where it was left on each of the other pages, which `TrackPage::show` goes back to
-(decision 209); whether the FX page is zoomed; the ids of the terminal's images it shows (the Mod
-page's slots, the filter's curve, the sample's thumbnail, the FX page's slots and zoom, the Gen
-page's previews), which `Graphics::sync` fills in, and where it last drew the pictures that carry a
-dot; the effect `dd` took, for `p`; and the cursor's track's meters it shows, held as they fall
+(decision 209); whether the FX page is zoomed; the ids of the terminal's images it shows, as one
+`PanelIds` by panel (the Mod page's slots, the filter's curve, the sample's thumbnail, the FX page's
+slots and zoom, the Gen page's previews), with the zoomed slot's caption, and where it last drew the
+pictures that carry a dot; the effect `dd` took, for `p`; and the cursor's track's meters it shows, held as they fall
 (each slot's gain reduction and its two bars of history, and the level after the trim), which
 `App::tick` brings up to date from the engine's report. Its methods are given the cursor's track
 (`App::track_here`) and read no `App`: `TrackPage::rows`, `place`, `control`, `devices` and
@@ -970,8 +971,8 @@ to. It goes a page per PR, the track page first, with keys, drawing and screensh
 edits are `TrackPage::edit`, the page's methods and functions over the `Services`, and the
 mixer's moves across tracks are its own keys. `App` still dispatches to them, in
 `run_track_page` and `run_mixer`, and keeps the track page's pickers, typing and Gen page, which
-open its picker, edit `Modes` and work through the shape panel. `Graphics::sync` still reads the
-pages through `App` (#728);
+open its picker, edit `Modes` and work through the shape panel. The track page says which pictures
+it wants as data and where its dots go, and `Graphics` reads no `App` (#728, below);
 `SamplePage` is half there too: it keeps its own cursor, zoom, scroll,
 selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
 in `placing.rs` and `sample_settings.rs` for editing its points and settings.
@@ -982,8 +983,18 @@ in `placing.rs` and `sample_settings.rs` for editing its points and settings.
 ### Graphics
 
 Pictures are drawn with the kitty graphics protocol, which kitty and Ghostty both have, and which the
-program asks the terminal for at start. `kitty.rs` makes the PNGs and the commands, and `Graphics`
-keeps track of which images the terminal has. Every command is sent with `q=2`, so the terminal's
+program asks the terminal for at start. `kitty/protocol.rs` has the placeholders and the commands,
+`kitty/encoding.rs` and `kitty/plot.rs` make the PNGs, `kitty/slots.rs` says what an FX slot's
+drawing shows, and `Graphics` (`kitty/graphics.rs`) sends them and keeps track of which images the
+terminal has. It's a service that reads no `App` (#728): a page lists the pictures it wants as
+`PanelWant`s, each its panel, shade, size and the `Shape` it's drawn from, which
+`TrackPage::panels` and `MappingView::panels` work out from their state and what they're given;
+`Graphics::panels` sends whichever the terminal lacks and gives back their ids as `PanelIds`, which
+the page keeps for its drawing; and `Shape::png` draws any of them, one match over the shapes. The
+scope, the picker's preview and the sample page's waveforms are `Graphics` methods given what they
+draw, and what's placed directly comes as `Placements`. `App::send_pictures` and
+`App::place_pictures`, in `run.rs`, hand each page its pictures each frame, and the screenshots make
+the same calls. Every command is sent with `q=2`, so the terminal's
 answers never arrive as keys. A picture reaches the screen in one of two ways.
 
 *   **Unicode placeholders, for pictures that fill cells.** The filter's curve, a sampler's thumbnail
@@ -993,8 +1004,8 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     and columns, up to 297 each way. As they're text, ratatui moves and clears them as it does any
     cell, a window drawn over them hides them, and the cell backgrounds show through see-through
     pixels. That's how the cursor, the selection and
-    the playheads show behind a waveform without sending it again. `Graphics::sync` sends what the
-    screen is about to show, before ratatui draws, and only when what it shows has changed. A
+    the playheads show behind a waveform without sending it again. `App::send_pictures` sends what
+    the screen is about to show, before ratatui draws, and only when what it shows has changed. A
     picture can have up to 15 colours that each mean something, and a big one is compressed inside
     its PNG.
 *   **One drawing path for curves, `kitty/plot.rs`.** The FX page's compressor and EQ curves, the
@@ -1019,11 +1030,12 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     and placed with pixel offsets across and down (`Placement`'s `X=` and `Y=`) where
     `LiveValues::mods` says the LFO is, or a Track slot's last note, after the screen is drawn, as the sample page's lines and
     marks are; moving it is placing it again, about 60 bytes. The track page's drawing gives back
-    where each cycle is (`CyclesAt`), and a dot is taken off under anything drawn over the page.
+    where each cycle is (`CyclesAt`), `TrackPage::dots` works out where each dot goes from it, and
+    a dot is taken off under anything drawn over the page.
 *   **Panel images, `kitty/panels.rs`.** `PanelImages` holds the track page's panels' images by
     `(PanelKey, Shade)`: the filter, a sampler's thumbnail, each mod slot, drawn by its type, and each FX slot, each in
     up to three shades, dim, focused and faint (a switched-out slot), with the shape it was drawn
-    from. `Graphics::panel` sends one only when its shape is new, and one that changes again within
+    from. `Graphics::panels` sends one only when its shape is new, and one that changes again within
     a frame of a change waits a frame, so a curve following an LFO is sent at most 15 times a
     second, as the scope is. Moving the cursor or switching a slot out and back sends nothing once
     each shade has been sent.
@@ -1137,7 +1149,7 @@ every pair of values still met, and all of them under `cargo test --release`.
 | DSP | Unit tests beside each module in `dsp/` | Each voice, filter and effect on its own |
 | Real-time safety | The tests in `crates/vt-engine/src/link.rs`, under `rt_guard` | That a block allocates and frees nothing |
 | Interface | `crates/vt-tui/tests/`: `app.rs`, and files of their own for the track page's settings and keys (`track_page.rs`), its Sound page's rack (`sound_page.rs`), its Mod page's rack (`mod_page.rs`), its FX page (`fx_page.rs`) and the sample page (`sample_page.rs`), with the helpers they share in `common/`; and `grammar.rs` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated` |
-| Graphics | Unit tests in `kitty.rs` and `views/` | The commands sent, and the PNGs, pinned by their size and CRC |
+| Graphics | Unit tests in `kitty/` and `views/` | The commands sent, and the PNGs, pinned by their size and CRC |
 | Other paths | `crates/vt-tui/tests/probe.rs`, `notes.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, `notes`' timing of a song's track, the analysis thread and its cache, and importing kits from Ableton |
 | Comparison harness | `tools/compare/tests/`, with `uv run python -m unittest discover tests` | The Live bridge, against stand-ins for Live's objects. Not in CI, as nothing in `tools/compare` is |
 | Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | Not a test: the SVGs are committed, so a change to what's drawn shows in the PR's diff |
