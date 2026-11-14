@@ -108,7 +108,7 @@ row 00 takes three. Its first line is the row, and the rest are dim, with `│` 
 note it holds and a `MLT`'s note again on each of its pulses. `j` and `k` still go a
 row at a time, and counts, selections and the numbers beside the rows count rows.
 The other tracks' columns beside the grid line up by time too, so each line shows
-what they start in it. `z a` collapses the view to a line a row, and opens it again.
+what they start in it. `z i` collapses the view to a line a row, and opens it again.
 
 ![A phrase with a gate column](images/gates.svg)
 
@@ -517,6 +517,28 @@ That's a hash rather than the track's generator, so `CHA`, a groove's humanise a
 `Random` arpeggio roll as they would without it, a render repeats, and playing from
 a step hears what playing up to it would. A chain that starts again deals again from
 its first time round, as its conditions' passes start again.
+
+`snake` and `cartesian`, after Make Noise's René, read the rows as a **grid**: lines of
+four rows, a beat of sixteenths each, up to 32 rows, and lines of eight above, so 16
+rows are René's 4×4 and 64 are 8×8. A snake is a path through every cell, so its round
+is a pass, as `reverse`'s is. Cartesian runs two counters, X along a line and Y down
+the lines, each moving on every so many rows and wrapping after its length, and plays
+the row at Y × the width + X. Its round lasts until both are back at the start, the
+least common multiple of each one's rate times its length, so it drifts across the
+passes:
+
+```text
+rows:            1  2  3  4 / 5  6  7  8 / 9 10 11 12 / 13 14 15 16
+snake spiral:    1  2  3  4  8 12 16 15 14 13  9  5  6  7 11 10
+cartesian 1 3:   X  0  1  2  3  0  1  2  3  0  1  2  3 | 0 ...
+                 Y  0  0  0  1  1  1  2  2  2  3  3  3 | 0 ...
+plays:              1  2  3  8  5  6 11 12  9 14 15 16 | 1 ...   a round of 12
+```
+
+Each counter counts the places of its round, so the walk is worked out from where the
+track is, as the other fixed orders' is, and `1:2`, playing from a step and a render
+work the same. A cell past the last row, in a last line the rows don't fill, is passed
+over, taking no time, as a skipped row does; the counters still count it.
 
 The playhead and the other tracks' columns show the row playing. Playing from a row
 starts at that row's step, where it's written, with the walk wherever it is then:

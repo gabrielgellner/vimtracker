@@ -18,7 +18,7 @@ use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio};
 use vt_model::generator::Span;
 use vt_model::lfo::Shape as Wave;
 use vt_model::modulation::ModKind;
-use vt_model::order::Order;
+use vt_model::order::{Cartesian, Order, Snake};
 use vt_model::project::{load_song, save_song};
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
@@ -55,6 +55,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("grids", grids()),
         ("marbles", marbles()),
         ("variations", variations()),
+        ("rene", rene()),
     ]
 }
 
@@ -993,6 +994,76 @@ fn variations() -> Song {
     );
     song.tracks[3].level = 0xC8;
     song.tracks[3].send_b = 0x98;
+    song
+}
+
+/// René: sixteen notes read as a 4×4 grid, a line a chord, walked by the Cartesian order's two
+/// counters at different rates; a bass of two lines, an octave apart, wound through by a snake
+/// down its columns; and a beat.
+fn rene() -> Song {
+    let mut song = song("rene", 112, 2, ScaleKind::Minor, 4);
+    song.seed = 0x5E;
+    // A line of the grid each: Dm7, Bbmaj7, Fmaj7 and C7, so X moves through a chord and Y moves
+    // to the next.
+    voice(
+        &mut song,
+        0,
+        "RN",
+        SynthVoice::VirtualAnalog,
+        &[
+            "D-3 7F --- --- ---",
+            "F-3 50 --- --- ---",
+            "A-3 64 --- --- ---",
+            "C-4 50 --- --- ---",
+            "A#2 7F --- --- ---",
+            "D-3 50 --- --- ---",
+            "F-3 64 --- --- ---",
+            "A-3 50 --- --- ---",
+            "F-3 7F --- --- ---",
+            "A-3 50 --- --- ---",
+            "C-4 64 --- --- ---",
+            "E-4 50 --- --- ---",
+            "C-3 7F --- --- ---",
+            "E-3 50 --- --- ---",
+            "G-3 64 --- --- ---",
+            "A#3 50 --- --- ---",
+        ],
+    );
+    let mut phrase = (*song.tracks[0].phrases[&0]).clone();
+    phrase.set_order(Order::Cartesian(Cartesian::new(1, 3)));
+    song.tracks[0].phrases.insert(0, Arc::new(phrase));
+    let lead = &mut song.tracks[0];
+    lead.cutoff = 0x90;
+    lead.level = 0xD0;
+    lead.send_a = 0xB0;
+    lead.send_b = 0x90;
+    pluck(&mut song, 0, 140, 20, 80);
+    // Two lines of four, the second an octave up, read down the columns: root and octave.
+    voice(
+        &mut song,
+        1,
+        "BS",
+        SynthVoice::Acid,
+        &[
+            "D-1 7F --- --- ---",
+            "D-1 64 --- --- ---",
+            "A#0 64 --- --- ---",
+            "C-1 64 --- --- ---",
+            "D-2 64 --- --- ---",
+            "F-1 64 --- --- ---",
+            "A#1 7F --- --- ---",
+            "C-2 64 --- --- ---",
+        ],
+    );
+    let mut phrase = (*song.tracks[1].phrases[&0]).clone();
+    phrase.set_order(Order::Snake(Snake::Columns));
+    song.tracks[1].phrases.insert(0, Arc::new(phrase));
+    set(&mut song, 1, "acid.cutoff", 0x48);
+    set(&mut song, 1, "acid.resonance", 0xA0);
+    set(&mut song, 1, "acid.envmod", 0x90);
+    song.tracks[1].level = 0xB8;
+    four_on_the_floor(&mut song, 2);
+    off_beat_hats(&mut song, 3);
     song
 }
 
