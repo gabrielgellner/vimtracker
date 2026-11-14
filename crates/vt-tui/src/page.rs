@@ -1,11 +1,17 @@
 //! What a page is given to run its keys and draw with: the program's shared services, borrowed
 //! (#320). A page, such as the track page or the mixer, keeps its own state, its cursor, its
-//! images and where it last drew them, and reads everything else through a [`Ctx`]: the song, the
-//! cursor's place in it, the view and the modes that span pages, which groups are folded, and what
-//! the engine last reported, the tracks' meters among it. `Ctx` is the seam between a page and
-//! `App`: what a page may read of the program is what's here, and nothing else of `App`'s. It
-//! reads them through `App` for now, as `App` still holds the pages, and only reads: a page's
-//! edits, which apply actions, are still `App`'s.
+//! images and where it last drew them, and reaches everything else through what it's given.
+//!
+//! - **[`CtxMut`]**, to run a key: the [`Services`], the song, the cursor and the rest, borrowed
+//!   mutably apart from the page itself, so a key can change the page and apply an action at once,
+//!   and the [`Modes`] that span the pages, the view and the mode among them, to read.
+//! - **[`Ctx`]**, to be drawn: everything a page reads, the song, the cursor's place in it, the
+//!   view and the modes that span pages, which groups are folded, and what the engine last
+//!   reported, the tracks' meters among it. It only reads, and reads through `App`, as drawing is
+//!   given `&App` and some of what's drawn, a live generator's sources, is worked out by `App`.
+//!
+//! They're the seam between a page and `App`: what a page may reach of the program is what's
+//! here, and nothing else of `App`'s.
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -16,24 +22,44 @@ use vt_engine::track_state::{Faders, LiveValues};
 use vt_model::order::Dealer;
 use vt_model::song::{Song, Track};
 
-use crate::app::{App, Cursor, Entry, TrackLive};
+use crate::app::{App, Cursor, Entry, Modes, TrackLive};
 use crate::folding::Folds;
 use crate::input::mode::{Mode, View};
 use crate::jumping::FieldJump;
 use crate::meter::Meter;
+use crate::services::Services;
 use crate::shaping::LiveGen;
 use crate::track_page::Control;
 
-/// The shared services a page reads, borrowed from the program while it runs a key or is drawn.
+/// What a page reads of the program, borrowed from it while the page is drawn.
 #[derive(Clone, Copy)]
 pub struct Ctx<'a> {
     app: &'a App,
 }
 
+/// What a page is given to run a key: the shared services, to read and change, and the modes that
+/// span the pages, to read, borrowed apart from the page.
+pub struct CtxMut<'a> {
+    pub services: &'a mut Services,
+    pub modes: &'a Modes,
+}
+
 impl App {
-    /// The shared services, for a page to run its keys and draw with.
+    /// What a page reads, to be drawn with.
     pub fn ctx(&self) -> Ctx<'_> {
         Ctx { app: self }
+    }
+}
+
+impl CtxMut<'_> {
+    /// The current song.
+    pub fn song(&self) -> &Arc<Song> {
+        self.services.song()
+    }
+
+    /// The track under the cursor.
+    pub fn track_here(&self) -> Option<&Track> {
+        self.song().tracks.get(self.services.cursor.track)
     }
 }
 
@@ -45,7 +71,7 @@ impl<'a> Ctx<'a> {
 
     /// Where the cursor is in the song: its section, track, chain slot, step and field.
     pub fn cursor(&self) -> Cursor {
-        self.app.cursor
+        self.app.services.cursor
     }
 
     /// The track under the cursor.
@@ -55,37 +81,37 @@ impl<'a> Ctx<'a> {
 
     /// Which groups are folded, so their tracks are left out where tracks are drawn side by side.
     pub fn folds(&self) -> &'a Folds {
-        &self.app.folds
+        &self.app.services.folds
     }
 
     /// The view on screen.
     pub fn view(&self) -> View {
-        self.app.view
+        self.app.modes.view
     }
 
     /// The mode the keys are in.
     pub fn mode(&self) -> Mode {
-        self.app.mode
+        self.app.modes.mode
     }
 
     /// What's been typed in Insert and not yet written.
     pub fn entry(&self) -> &'a Entry {
-        &self.app.entry
+        &self.app.modes.entry
     }
 
     /// The search for a setting under way, whose labels go over the settings it finds.
     pub fn field_jump(&self) -> Option<&'a FieldJump> {
-        self.app.field_jump.as_ref()
+        self.app.modes.field_jump.as_ref()
     }
 
     /// Whether the song plays, as the engine last said.
     pub fn transport(&self) -> Transport {
-        self.app.transport
+        self.app.services.transport
     }
 
     /// What the cursor's track is playing with right now, as the engine last said.
     pub fn live(&self) -> Option<LiveValues> {
-        self.app.live
+        self.app.services.live
     }
 
     /// The cursor's track as the latest report's live values were worked out from.
@@ -95,37 +121,38 @@ impl<'a> Ctx<'a> {
 
     /// What each track is launched onto and cued to, as the engine last said.
     pub fn jam(&self) -> &'a [JamState] {
-        &self.app.jam
+        &self.app.services.jam
     }
 
     /// Each track's live mute and solo.
     pub fn levels(&self) -> &'a [TrackLive] {
-        &self.app.levels
+        &self.app.services.levels
     }
 
     /// How far a track is through this chain, if it's playing it, counting every time round it.
     pub fn playing_place(&self, track: usize, chain: u32) -> Option<usize> {
-        self.app.playing_place(track, chain)
+        self.app.services.playing_place(track, chain)
     }
 
     /// What a track's dealt orders are dealt from, as the engine deals them.
     pub fn dealer(&self, track: usize) -> Dealer {
-        self.app.dealer(track)
+        self.app.services.dealer(track)
     }
 
     /// A track's faders as they're heard.
     pub fn faders(&self, track: usize) -> Faders {
-        self.app.faders(track)
+        self.app.services.faders(track)
     }
 
     /// A track as it's heard, its faders where the steps have them while they drive them.
     pub fn track_as_heard(&self, track: usize) -> Option<Cow<'a, Track>> {
-        self.app.track_as_heard(track)
+        self.app.services.track_as_heard(track)
     }
 
     /// A track's level, as its meter holds it.
     pub fn track_meter(&self, track: usize) -> Meter {
         self.app
+            .services
             .track_meters
             .get(track)
             .copied()
@@ -134,12 +161,12 @@ impl<'a> Ctx<'a> {
 
     /// Whether a control on a track is a fader the steps drive now, so it shows their value.
     pub fn follows_steps(&self, track: usize, control: Control) -> bool {
-        self.app.follows_steps(track, control)
+        self.app.services.follows_steps(track, control)
     }
 
     /// Whether a control on a track is a fader a hand has taken over from the steps.
     pub fn taken_over(&self, track: usize, control: Control) -> bool {
-        self.app.taken_over(track, control)
+        self.app.services.taken_over(track, control)
     }
 
     /// A live generator of a track's phrase, by its place in the phrase's list, with what it

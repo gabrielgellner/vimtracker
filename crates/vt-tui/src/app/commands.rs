@@ -18,15 +18,16 @@ use vt_model::song::{Lane, Song};
 
 use crate::input::command::Line;
 
-use super::{App, Cursor, READ_ONLY, folder_name, live_from, name_song};
+use super::{App, Cursor, READ_ONLY, folder_name, name_song};
+use crate::services::live_from;
 
 impl App {
     /// Run a command line.
     pub fn line(&mut self, line: Line) {
-        self.status.clear();
+        self.services.status.clear();
         match line {
             Line::Quit { force } => self.quit(force),
-            Line::Write { path: None, .. } if self.folder.is_none() => {
+            Line::Write { path: None, .. } if self.services.folder.is_none() => {
                 self.open_naming_explorer(Purpose::Save, "w", String::new());
             }
             Line::Write { path, force } => self.write(path, force),
@@ -39,8 +40,8 @@ impl App {
                 path: Some(path),
                 force,
             } => self.new_project(&path, force),
-            Line::New { path: None, force } if self.dirty && !force => {
-                self.status = self.unsaved(":new! to discard them");
+            Line::New { path: None, force } if self.services.dirty && !force => {
+                self.services.status = self.unsaved(":new! to discard them");
             }
             Line::New { path: None, force } => {
                 let command = if force { "new!" } else { "new" };
@@ -64,27 +65,27 @@ impl App {
             Line::KitTracks(name) => self.load_kit(&self.kit_path(&name)),
             Line::Kit(None) => self.open_kit_picker(),
             Line::Name(name) => self.name_track(name),
-            Line::Bpm(millibpm) => self.apply(&Action::SetMilliBpm(millibpm)),
+            Line::Bpm(millibpm) => self.services.apply(&Action::SetMilliBpm(millibpm)),
             Line::GrabTempo => self.grab_tempo(),
             Line::TrackAdd(count) => {
                 let was = self.song().sound_tracks();
-                self.apply(&Action::AddTracks(count));
+                self.services.apply(&Action::AddTracks(count));
                 self.fit_levels();
                 // A cursor on a fixed track stays on it.
-                if self.cursor.track >= was {
-                    self.cursor.track += self.song().sound_tracks() - was;
+                if self.services.cursor.track >= was {
+                    self.services.cursor.track += self.song().sound_tracks() - was;
                 }
             }
             Line::TrackDel => {
                 let was = self.song().sound_tracks();
-                self.apply(&Action::RemoveLastTrack);
+                self.services.apply(&Action::RemoveLastTrack);
                 self.fit_levels();
                 let now = self.song().sound_tracks();
-                if self.cursor.track >= was {
-                    self.cursor.track -= was - now;
-                } else if self.cursor.track >= now {
-                    self.cursor.track = now - 1;
-                    self.cursor.slot = 0;
+                if self.services.cursor.track >= was {
+                    self.services.cursor.track -= was - now;
+                } else if self.services.cursor.track >= now {
+                    self.services.cursor.track = now - 1;
+                    self.services.cursor.slot = 0;
                     self.clamp_cursor();
                 }
             }
@@ -136,7 +137,7 @@ impl App {
             } => self.render(&path, rows, tail),
             Line::Double => self.double(),
             Line::GenApply => self.apply_generator_here(),
-            Line::SetSkip(size) => self.apply(&Action::SetSkipSize(size)),
+            Line::SetSkip(size) => self.services.apply(&Action::SetSkipSize(size)),
             Line::SetScale(kind) => self.set_scale(Scale {
                 on: true,
                 kind,
@@ -151,8 +152,8 @@ impl App {
             Line::PickScale => self.open_scale_picker(),
             Line::FitToScale => self.fit_to_scale(),
             Line::SetLimiter(on) => {
-                self.apply(&Action::SetLimiter(on));
-                self.status = if on {
+                self.services.apply(&Action::SetLimiter(on));
+                self.services.status = if on {
                     "Limiter on".to_owned()
                 } else {
                     "Limiter off: renders keep levels over 0, and the output still clips at 0"
@@ -160,32 +161,32 @@ impl App {
                 };
             }
             Line::ReadOnly(on) => self.set_read_only(on),
-            Line::Seed(seed) => self.apply(&Action::SetSeed(seed)),
+            Line::Seed(seed) => self.services.apply(&Action::SetSeed(seed)),
             Line::Groove(groove) => {
-                self.apply(&Action::SetGroove(groove));
-                self.status = format!("The project plays with {groove}");
+                self.services.apply(&Action::SetGroove(groove));
+                self.services.status = format!("The project plays with {groove}");
             }
             Line::TrackGroove(groove) => self.set_track_groove(groove),
             Line::PickGroove { track } => self.open_groove_picker(track),
-            Line::Reset(reset) => self.apply(&Action::SetReset {
-                section: self.cursor.section,
+            Line::Reset(reset) => self.services.apply(&Action::SetReset {
+                section: self.services.cursor.section,
                 reset,
             }),
             Line::Loop => self.toggle_loop(),
             Line::Launch(Some(launch)) => {
-                self.apply(&Action::SetLaunch(launch));
-                self.status = format!("Launches start {}", launch.when());
+                self.services.apply(&Action::SetLaunch(launch));
+                self.services.status = format!("Launches start {}", launch.when());
             }
             Line::Launch(None) => {
                 let launch = self.song().launch;
-                self.status = format!("Launches start {}", launch.when());
+                self.services.status = format!("Launches start {}", launch.when());
             }
             Line::Label(label) => self.label_chain(label),
             Line::MacroName(name) => self.name_macro(&name),
             Line::Preset(line) => self.preset_line(line),
             Line::Patch(line) => self.patch_line(line),
-            Line::TrackLevel(level) => self.apply(&Action::SetTrackLevel {
-                track: self.cursor.track,
+            Line::TrackLevel(level) => self.services.apply(&Action::SetTrackLevel {
+                track: self.services.cursor.track,
                 level,
             }),
             Line::Mute => self.toggle_mute(),
@@ -197,10 +198,10 @@ impl App {
             }
             Line::Lane(length) => match self.fx_column() {
                 Some(slot) => {
-                    let start = self.cursor.step;
+                    let start = self.services.cursor.step;
                     self.set_lane(slot, length.map(|length| Lane { start, length }));
                 }
-                None => self.status = ":lane works on an FX column".to_owned(),
+                None => self.services.status = ":lane works on an FX column".to_owned(),
             },
             Line::Order(Some(order)) => self.set_order(order),
             Line::Order(None) => self.open_order_picker(),
@@ -216,8 +217,8 @@ impl App {
             } => self.grow_bloom(branches, mutation, path.unwrap_or_default()),
             Line::Len(length) => {
                 if let Some(phrase) = self.phrase_id() {
-                    self.apply(&Action::SetLength {
-                        track: self.cursor.track,
+                    self.services.apply(&Action::SetLength {
+                        track: self.services.cursor.track,
                         phrase,
                         length,
                     });
@@ -232,18 +233,18 @@ impl App {
     /// normalised sample renders the same however far they'd got.
     fn render(&mut self, path: &Path, rows: Option<usize>, tail: bool) {
         self.finish_analysis();
-        let version = Published::new(self.song_to_save(), Arc::clone(&self.samples));
+        let version = Published::new(self.song_to_save(), Arc::clone(&self.services.samples));
         let options = RenderOptions {
             rows,
             tail,
             ..RenderOptions::default()
         };
-        let samples = render_loop(Arc::new(version), self.rate, options);
-        self.status = match write_wav(path, self.rate, &samples) {
+        let samples = render_loop(Arc::new(version), self.services.rate, options);
+        self.services.status = match write_wav(path, self.services.rate, &samples) {
             Ok(()) => format!(
                 "Rendered {} ({:.2} s)",
                 path.display(),
-                samples.len() as f64 / 2.0 / f64::from(self.rate)
+                samples.len() as f64 / 2.0 / f64::from(self.services.rate)
             ),
             Err(error) => format!("Couldn't write {}: {error}", path.display()),
         };
@@ -253,16 +254,17 @@ impl App {
     /// one per track if asked.
     fn render_stems(&mut self, folder: &Path, options: RenderOptions) {
         self.finish_analysis();
-        let version = Published::new(self.song_to_save(), Arc::clone(&self.samples));
-        self.status = match crate::run::write_stems(&version, folder, self.rate, options) {
-            Ok(count) => crate::run::stems_written(count, folder),
-            Err(error) => format!("Couldn't write {}: {error}", folder.display()),
-        };
+        let version = Published::new(self.song_to_save(), Arc::clone(&self.services.samples));
+        self.services.status =
+            match crate::run::write_stems(&version, folder, self.services.rate, options) {
+                Ok(count) => crate::run::stems_written(count, folder),
+                Err(error) => format!("Couldn't write {}: {error}", folder.display()),
+            };
     }
 
     pub(super) fn quit(&mut self, force: bool) {
-        if self.dirty && !force {
-            self.status = self.unsaved(":q! to quit anyway");
+        if self.services.dirty && !force {
+            self.services.status = self.unsaved(":q! to quit anyway");
         } else {
             self.forget_autosave();
             self.drop_unkept_recordings();
@@ -276,18 +278,18 @@ impl App {
     fn write(&mut self, path: Option<PathBuf>, force: bool) {
         let same = path
             .as_deref()
-            .is_none_or(|p| Some(p) == self.folder.as_deref());
+            .is_none_or(|p| Some(p) == self.services.folder.as_deref());
         if same && self.read_only && !force {
-            self.status = READ_ONLY.to_owned();
+            self.services.status = READ_ONLY.to_owned();
             return;
         }
         let result = if same {
-            match self.folder.clone() {
+            match self.services.folder.clone() {
                 Some(folder) => {
                     project::save_song(&folder, &self.song_to_save()).map(|()| (folder, None))
                 }
                 None => {
-                    self.status = "This project has no folder yet: use :w path".to_owned();
+                    self.services.status = "This project has no folder yet: use :w path".to_owned();
                     return;
                 }
             }
@@ -298,7 +300,7 @@ impl App {
             let mut song = Song::clone(&self.song_to_save());
             song.name = folder_name(&target);
             song.read_only = false;
-            project::save_as(self.folder.as_deref(), &target, &song)
+            project::save_as(self.services.folder.as_deref(), &target, &song)
                 .map(|saved| (target, Some(saved)))
         };
         match result {
@@ -306,16 +308,16 @@ impl App {
                 if let Some(saved) = saved {
                     self.replace_song(saved, Some(folder.clone()));
                 }
-                self.folder = Some(folder.clone());
-                self.dirty = false;
+                self.services.folder = Some(folder.clone());
+                self.services.dirty = false;
                 self.forget_autosave();
-                self.status = if self.read_only {
+                self.services.status = if self.read_only {
                     format!("Saved {}, which stays read-only", folder.display())
                 } else {
                     format!("Saved {}", folder.display())
                 };
             }
-            Err(error) => self.status = error.to_string(),
+            Err(error) => self.services.status = error.to_string(),
         }
     }
 
@@ -324,9 +326,9 @@ impl App {
     fn set_read_only(&mut self, on: bool) {
         if self.read_only != on {
             self.read_only = on;
-            self.dirty = true;
+            self.services.dirty = true;
         }
-        self.status = if on {
+        self.services.status = if on {
             "Read-only: :w path saves a copy, :w! writes over it".to_owned()
         } else {
             "Not read-only: :w saves over it again".to_owned()
@@ -335,31 +337,31 @@ impl App {
 
     /// Open a project. Forced, unsaved changes are thrown away, autosave and all, as `:q!` does.
     fn open(&mut self, path: &Path, force: bool) {
-        if self.dirty && !force {
-            self.status = self.unsaved(":e! to discard them");
+        if self.services.dirty && !force {
+            self.services.status = self.unsaved(":e! to discard them");
             return;
         }
         match project::load_song(path) {
             Ok(song) => {
                 self.discard_changes();
-                self.handle.send(Command::Return);
+                self.services.handle.send(Command::Return);
                 self.give_back_on_opening();
-                self.samples = Arc::new(SamplePool::default());
+                self.services.samples = Arc::new(SamplePool::default());
                 self.replace_song(song, Some(path.to_path_buf()));
-                self.dirty = false;
-                if self.status.is_empty() {
-                    self.status = format!("Opened {}", path.display());
+                self.services.dirty = false;
+                if self.services.status.is_empty() {
+                    self.services.status = format!("Opened {}", path.display());
                 }
                 self.offer_restore();
             }
-            Err(error) => self.status = error.to_string(),
+            Err(error) => self.services.status = error.to_string(),
         }
     }
 
     /// Start a project. Forced, unsaved changes are thrown away, autosave and all.
     fn new_project(&mut self, path: &Path, force: bool) {
-        if self.dirty && !force {
-            self.status = self.unsaved(":new! to discard them");
+        if self.services.dirty && !force {
+            self.services.status = self.unsaved(":new! to discard them");
             return;
         }
         let song = Song {
@@ -369,21 +371,21 @@ impl App {
         match project::create_project(path, &song) {
             Ok(()) => {
                 self.discard_changes();
-                self.handle.send(Command::Return);
+                self.services.handle.send(Command::Return);
                 self.give_back_on_opening();
-                self.samples = Arc::new(SamplePool::default());
+                self.services.samples = Arc::new(SamplePool::default());
                 self.replace_song(song, Some(path.to_path_buf()));
-                self.dirty = false;
-                self.status = format!("Created {}", path.display());
+                self.services.dirty = false;
+                self.services.status = format!("Created {}", path.display());
             }
-            Err(error) => self.status = error.to_string(),
+            Err(error) => self.services.status = error.to_string(),
         }
     }
 
     /// Throw away unsaved changes before another project replaces them, so their autosave isn't
     /// offered back the next time this project opens.
     fn discard_changes(&mut self) {
-        if self.dirty {
+        if self.services.dirty {
             self.forget_autosave();
         }
     }
@@ -392,37 +394,37 @@ impl App {
     pub(crate) fn replace_song(&mut self, mut song: Song, folder: Option<PathBuf>) {
         name_song(&mut song, folder.as_deref(), &mut self.names);
         let notes = project::find_sources(folder.as_deref(), &mut song);
-        let mut pool = SamplePool::clone(&self.samples);
-        let errors = project::load_samples(folder.as_deref(), &song, self.rate, &mut pool);
-        self.samples = Arc::new(pool);
-        self.levels = live_from(&song);
+        let mut pool = SamplePool::clone(&self.services.samples);
+        let errors = project::load_samples(folder.as_deref(), &song, self.services.rate, &mut pool);
+        self.services.samples = Arc::new(pool);
+        self.services.levels = live_from(&song);
         self.scale = song.scale;
         self.auto_jump = song.auto_jump;
         self.read_only = song.read_only;
-        self.folds = Folds::from_view(&song.view);
+        self.services.folds = Folds::from_view(&song.view);
         self.send_live();
-        self.history = History::new(Arc::new(song));
+        self.services.history = History::new(Arc::new(song));
         // Another song's rows and generators aren't these.
-        self.heard_pitches.clear();
-        self.heard_passes.clear();
-        self.heard_rows.clear();
-        self.folder = folder;
-        self.cursor = Cursor {
-            step: self.cursor.step,
-            ..self.cursor
+        self.services.heard_pitches.clear();
+        self.services.heard_passes.clear();
+        self.services.heard_rows.clear();
+        self.services.folder = folder;
+        self.services.cursor = Cursor {
+            step: self.services.cursor.step,
+            ..self.services.cursor
         };
         if self.phrase_id().is_none() {
-            self.cursor.track = 0;
-            self.cursor.slot = 0;
+            self.services.cursor.track = 0;
+            self.services.cursor.slot = 0;
         }
         self.clamp_cursor();
         if let Some(first) = notes.first() {
-            self.status = first.clone();
+            self.services.status = first.clone();
         }
         if let Some(first) = errors.first() {
-            self.status = first.to_string();
+            self.services.status = first.to_string();
         }
-        self.publish();
+        self.services.publish();
     }
 
     /// How a song refers to a sample: where it is, or relative to the project if it's inside,
@@ -432,7 +434,11 @@ impl App {
             path: source.display().to_string(),
             source: error,
         })?;
-        let project = self.folder.as_deref().and_then(|f| f.canonicalize().ok());
+        let project = self
+            .services
+            .folder
+            .as_deref()
+            .and_then(|f| f.canonicalize().ok());
         let inside = project.as_deref().and_then(|f| full.strip_prefix(f).ok());
         Ok(inside.unwrap_or(&full).display().to_string())
     }
@@ -445,7 +451,7 @@ impl App {
     /// Put a file in the bank, have the current track play it, and name the track after it, if
     /// there's a name, as one undo step.
     pub(crate) fn sample_named(&mut self, source: &Path, name: Option<&str>) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let more = name
             .map(|name| Action::SetTrackName {
                 track,

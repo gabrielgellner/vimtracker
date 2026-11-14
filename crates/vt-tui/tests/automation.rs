@@ -29,7 +29,7 @@ fn automated() -> (App, Realtime) {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, mut realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    app.handle.send(Command::PlayFrom { step: 0 });
+    app.services.handle.send(Command::PlayFrom { step: 0 });
     for _ in 0..8 {
         block(&mut realtime, &mut app);
     }
@@ -60,7 +60,7 @@ fn mixer_line(app: &App, name: &str) -> String {
 #[test]
 fn a_held_lev_and_pan_move_the_faders_shown_but_not_the_song() {
     let (app, _realtime) = automated();
-    let faders = app.faders(0);
+    let faders = app.services.faders(0);
     assert!(
         faders.follows_steps(0) && faders.follows_steps(1),
         "{faders:?}"
@@ -91,14 +91,14 @@ fn a_hand_moving_a_fader_the_steps_drive_takes_it_over_from_where_it_is() {
         0x81,
         "a step up from where it's heard"
     );
-    assert!(app.taken_over(0, Control::Level));
+    assert!(app.services.taken_over(0, Control::Level));
     block(&mut realtime, &mut app);
-    let faders = app.faders(0);
+    let faders = app.services.faders(0);
     assert!(faders.taken[0], "the engine says so too");
     assert_eq!(faders.at[0], 0x8100, "what the hand set is heard");
     assert!(faders.follows_steps(1), "the pan still follows the steps");
     assert!(
-        app.faders(1).follows_steps(0),
+        app.services.faders(1).follows_steps(0),
         "and the other track's level"
     );
     let level = mixer_line(&app, "Level");
@@ -108,8 +108,8 @@ fn a_hand_moving_a_fader_the_steps_drive_takes_it_over_from_where_it_is() {
     // Undoing the move leaves it taken over, as a takeover isn't an edit.
     press(&mut app, "u");
     block(&mut realtime, &mut app);
-    assert!(app.faders(0).taken[0]);
-    assert_eq!(app.faders(0).at[0], 0xE000);
+    assert!(app.services.faders(0).taken[0]);
+    assert_eq!(app.services.faders(0).at[0], 0xE000);
 }
 
 #[test]
@@ -117,19 +117,27 @@ fn space_e_gives_the_tracks_faders_back_and_space_capital_e_every_tracks() {
     let (mut app, mut realtime) = automated();
     press(&mut app, " 4=l=h");
     block(&mut realtime, &mut app);
-    assert!(app.faders(0).taken[0] && app.faders(1).taken[0]);
+    assert!(app.services.faders(0).taken[0] && app.services.faders(1).taken[0]);
     press(&mut app, " e");
-    assert!(!app.faders(0).taken[0], "{}", app.status);
-    assert!(app.faders(1).taken[0], "only the cursor's track");
+    assert!(!app.services.faders(0).taken[0], "{}", app.services.status);
+    assert!(app.services.faders(1).taken[0], "only the cursor's track");
     block(&mut realtime, &mut app);
-    assert!(app.faders(0).follows_steps(0));
-    assert_eq!(app.faders(0).at[0], 0x8000, "back to the steps' hold");
+    assert!(app.services.faders(0).follows_steps(0));
+    assert_eq!(
+        app.services.faders(0).at[0],
+        0x8000,
+        "back to the steps' hold"
+    );
     press(&mut app, " E");
     block(&mut realtime, &mut app);
-    assert!(app.faders(1).follows_steps(0));
-    assert_eq!(app.status, "Every fader follows the steps again");
+    assert!(app.services.faders(1).follows_steps(0));
+    assert_eq!(app.services.status, "Every fader follows the steps again");
     press(&mut app, " e");
-    assert!(app.status.contains("no fader taken over"), "{}", app.status);
+    assert!(
+        app.services.status.contains("no fader taken over"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -138,7 +146,7 @@ fn a_fader_no_step_has_set_is_only_edited() {
     press(&mut app, " 4jj=");
     assert_eq!(app.song().tracks[0].send_a, 0x01);
     block(&mut realtime, &mut app);
-    assert!(!app.faders(0).taken[2] && !app.faders(0).automated[2]);
+    assert!(!app.services.faders(0).taken[2] && !app.services.faders(0).automated[2]);
 }
 
 #[test]
@@ -168,11 +176,11 @@ fn the_rotos_mix_mode_knobs_follow_the_faders_the_steps_drive() {
     use vt_tui::roto::mix::{level_position, strips};
     let (mut app, mut realtime) = automated();
     let faders: Vec<_> = (0..app.song().tracks.len())
-        .map(|at| app.faders(at))
+        .map(|at| app.services.faders(at))
         .collect();
-    let [tracks, _] = strips(app.song(), &app.levels, &faders);
+    let [tracks, _] = strips(app.song(), &app.services.levels, &faders);
     assert_eq!(tracks[0].level, Some(level_position(f64::from(0x80_u8))));
-    let unmoved = strips(app.song(), &app.levels, &[]);
+    let unmoved = strips(app.song(), &app.services.levels, &[]);
     assert_eq!(
         unmoved[0][0].level,
         Some(level_position(f64::from(0xE0_u8)))
@@ -181,8 +189,8 @@ fn the_rotos_mix_mode_knobs_follow_the_faders_the_steps_drive() {
     press(&mut app, " 4=");
     block(&mut realtime, &mut app);
     let faders: Vec<_> = (0..app.song().tracks.len())
-        .map(|at| app.faders(at))
+        .map(|at| app.services.faders(at))
         .collect();
-    let [tracks, _] = strips(app.song(), &app.levels, &faders);
+    let [tracks, _] = strips(app.song(), &app.services.levels, &faders);
     assert_eq!(tracks[0].level, Some(level_position(f64::from(0x81_u8))));
 }

@@ -88,7 +88,7 @@ fn four_on_the_floor() -> Vec<&'static str> {
 #[test]
 fn multiply_turns_four_on_the_floor_by_its_factor() {
     let (mut app, _rt) = app_with(&four_on_the_floor());
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vGSKmultiply<Enter>");
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Multiply);
@@ -117,7 +117,7 @@ fn multiply_turns_four_on_the_floor_by_its_factor() {
     keys(&mut app, "+");
     assert_eq!(app.shape.as_ref().unwrap().shape.bits.factor, 8);
     keys(&mut app, "i17<Enter>");
-    assert_eq!(app.status, "Factor runs from 1 to 16");
+    assert_eq!(app.services.status, "Factor runs from 1 to 16");
     keys(&mut app, "i5<Enter>");
     assert_eq!(rhythm(&app), "x.x.x.x.x.x.x.x.");
     keys(&mut app, "i1<Enter>");
@@ -129,7 +129,7 @@ fn multiply_turns_four_on_the_floor_by_its_factor() {
     assert!(app.shape.as_ref().unwrap().shape.bits.masks);
     assert_eq!(rhythm(&app), "xx..........xx..");
     keys(&mut app, "<Enter>");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     assert_eq!(rhythm(&app), "xx..........xx..");
 }
 
@@ -163,7 +163,7 @@ fn the_bit_transforms_flip_keep_and_turn_a_columns_bits() {
         "C-3 00 --- --- ---",
         "C-3 41 --- --- ---",
     ]);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "lvjjSKflipped<Enter>");
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::InvertBits);
@@ -195,5 +195,5 @@ fn the_bit_transforms_flip_keep_and_turn_a_columns_bits() {
     assert!(drawn(&app).contains("Turn    2 bits"));
     assert_eq!(velocities(&app), ["55", "00", "06"]);
     keys(&mut app, "<Enter>");
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
 }

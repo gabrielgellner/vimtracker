@@ -52,7 +52,7 @@ fn app_with(frames: usize, edit: impl FnOnce(&mut BankEntry)) -> (App, Realtime)
     let (handle, realtime) = connect(Engine::new(RATE, version));
     let mut app = App::new(song, None, samples, handle, RATE);
     keys(&mut app, "Space 0");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
     (app, realtime)
 }
 
@@ -86,12 +86,20 @@ fn a_length_in_steps_is_kept_in_bars_where_its_whole_bars() {
     let (mut app, _realtime) = app(96_000);
     command(&mut app, "sample steps 8");
     assert_eq!((hints(&app).bars, hints(&app).steps), (None, Some(8)));
-    assert!(app.status.contains("lasts 8 steps"), "{}", app.status);
+    assert!(
+        app.services.status.contains("lasts 8 steps"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "sample steps 32");
     assert_eq!((hints(&app).bars, hints(&app).steps), (Some(2), None));
     command(&mut app, "sample bars 1");
     assert_eq!(hints(&app).length_steps(), Some(16));
-    assert!(app.status.contains("lasts a bar"), "{}", app.status);
+    assert!(
+        app.services.status.contains("lasts a bar"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "sample steps off");
     assert_eq!(hints(&app), Hints::default());
 }
@@ -102,8 +110,12 @@ fn grab_tempo_plays_a_sample_of_known_length_at_its_own_speed() {
     let (mut app, _realtime) = app(72_000);
     command(&mut app, "sample bars 1");
     command(&mut app, "bpm sample");
-    assert_eq!(app.song().millibpm, 160_000, "{}", app.status);
-    assert!(app.status.contains("Tempo 160 BPM"), "{}", app.status);
+    assert_eq!(app.song().millibpm, 160_000, "{}", app.services.status);
+    assert!(
+        app.services.status.contains("Tempo 160 BPM"),
+        "{}",
+        app.services.status
+    );
     // Eight steps of it is half that.
     command(&mut app, "sample steps 8");
     command(&mut app, "bpm sample");
@@ -120,9 +132,13 @@ fn grab_tempo_on_an_unknown_loop_takes_the_nearest_power_of_two_and_u_takes_both
     let (mut app, _realtime) = app(72_000);
     assert_eq!(app.song().millibpm, 120_000);
     command(&mut app, "bpm sample");
-    assert_eq!(app.song().millibpm, 160_000, "{}", app.status);
+    assert_eq!(app.song().millibpm, 160_000, "{}", app.services.status);
     assert_eq!(hints(&app).length_steps(), Some(16));
-    assert!(app.status.contains("nearest"), "{}", app.status);
+    assert!(
+        app.services.status.contains("nearest"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     assert_eq!(app.song().millibpm, 120_000);
     assert_eq!(hints(&app).length_steps(), None);
@@ -132,9 +148,9 @@ fn grab_tempo_on_an_unknown_loop_takes_the_nearest_power_of_two_and_u_takes_both
     command(&mut short, "bpm sample");
     assert_eq!(short.song().millibpm, 120_000);
     assert!(
-        short.status.contains("can't set a tempo"),
+        short.services.status.contains("can't set a tempo"),
         "{}",
-        short.status
+        short.services.status
     );
 }
 
@@ -144,8 +160,12 @@ fn grab_tempo_on_one_that_says_its_tempo_takes_that_and_u_takes_it_back() {
     // and its length stays unsaid.
     let (mut app, _realtime) = app_with(72_000, |entry| entry.edit.hints.millibpm = Some(98_500));
     command(&mut app, "bpm sample");
-    assert_eq!(app.song().millibpm, 98_500, "{}", app.status);
-    assert!(app.status.contains("Tempo 98.5 BPM"), "{}", app.status);
+    assert_eq!(app.song().millibpm, 98_500, "{}", app.services.status);
+    assert!(
+        app.services.status.contains("Tempo 98.5 BPM"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(hints(&app).length_steps(), None);
     keys(&mut app, "u");
     assert_eq!(app.song().millibpm, 120_000);
@@ -164,15 +184,16 @@ fn steps_and_warp_are_the_entrys_on_the_settings_row() {
         app.sample_page.setting,
         Some(SampleSetting::Steps),
         "{}",
-        app.status
+        app.services.status
     );
     keys(&mut app, "+");
     assert_eq!(hints(&app).length_steps(), Some(16));
     assert!(
-        app.status
+        app.services
+            .status
             .contains("playing at 1.000x on Play's Tempo at 120 BPM"),
         "{}",
-        app.status
+        app.services.status
     );
     keys(&mut app, "=");
     assert_eq!(hints(&app).steps, Some(17));
@@ -182,7 +203,11 @@ fn steps_and_warp_are_the_entrys_on_the_settings_row() {
     keys(&mut app, "l =");
     assert_eq!(app.sample_page.setting, Some(SampleSetting::Warp));
     assert_eq!(app.song().bank.get(1).unwrap().edit.play.warp, Warp::Beats);
-    assert!(app.status.contains("Warp Beats"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Warp Beats"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     assert_eq!(
         app.song().bank.get(1).unwrap().edit.play.warp,

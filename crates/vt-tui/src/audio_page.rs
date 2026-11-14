@@ -64,7 +64,7 @@ impl App {
     /// leaf before the CPU figure means, while it shows, as `󰌪 CPU slowed ×3.6 by power saving,
     /// about 8% at full speed`.
     pub fn audio_page_hint(&self) -> Option<String> {
-        if self.view != View::Audio {
+        if self.modes.view != View::Audio {
             return None;
         }
         let meaning = self.slowdown.explanation(self.cpu.percent())?;
@@ -138,7 +138,10 @@ impl App {
                     .map(|size| {
                         let size = *size;
                         (
-                            format!("{size} frames, {:.1} ms", buffer_ms(size, self.rate)),
+                            format!(
+                                "{size} frames, {:.1} ms",
+                                buffer_ms(size, self.services.rate)
+                            ),
                             AudioChoice {
                                 buffer: Some(size),
                                 ..choice.clone()
@@ -157,10 +160,10 @@ impl App {
                     },
                 );
                 let inputs = self.audio.inputs.iter().map(|found| {
-                    let rate = if found.rates.contains(&self.rate) {
+                    let rate = if found.rates.contains(&self.services.rate) {
                         String::new()
                     } else {
-                        format!(", not at {} Hz", self.rate)
+                        format!(", not at {} Hz", self.services.rate)
                     };
                     let default = if found.default {
                         ", the system's default"
@@ -188,7 +191,7 @@ impl App {
                     .position(|found| found.id == device.id)
             }),
             AudioRow::Rate => {
-                device.and_then(|device| device.rates.iter().position(|r| *r == self.rate))
+                device.and_then(|device| device.rates.iter().position(|r| *r == self.services.rate))
             }
             AudioRow::Buffer => device.and_then(|device| {
                 let size = self.audio.buffer.or(choice.buffer)?;
@@ -212,7 +215,7 @@ impl App {
     /// off, `K`, `i` and Enter switch it, and `x` puts it back off, as it starts. Returns false
     /// for a key that means nothing there.
     fn run_roto_row(&mut self, cmd: Cmd) -> bool {
-        let on = self.roto.setting.on;
+        let on = self.services.roto.setting.on;
         let wanted = match cmd {
             Cmd::Increase | Cmd::IncreaseLarge => true,
             Cmd::Decrease | Cmd::DecreaseLarge | Cmd::ClearField => false,
@@ -262,7 +265,7 @@ impl App {
 
     /// Run a command on the audio page. Returns false if it means the same as anywhere.
     pub(crate) fn run_audio_page(&mut self, cmd: Cmd) -> bool {
-        let count = self.count.take();
+        let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1);
         let last = AudioRow::ALL.len() - 1;
         if matches!(cmd, Cmd::PreviousPage | Cmd::NextPage) {
@@ -287,7 +290,7 @@ impl App {
                 let up = matches!(cmd, Cmd::Increase | Cmd::IncreaseLarge);
                 let (options, current) = self.audio_options(self.audio_row_here());
                 if options.is_empty() {
-                    self.status = "This device doesn't say what it takes".to_owned();
+                    self.services.status = "This device doesn't say what it takes".to_owned();
                     return true;
                 }
                 let at = match (current, up) {
@@ -325,7 +328,7 @@ impl App {
             }
             Cmd::PickValue | Cmd::EnterInsert => self.open_audio_picker(),
             _ => {
-                self.count = count;
+                self.modes.count = count;
                 return false;
             }
         }
@@ -337,7 +340,7 @@ impl App {
         let row = self.audio_row_here();
         let (options, current) = self.audio_options(row);
         if options.is_empty() {
-            self.status = "There's nothing to choose here".to_owned();
+            self.services.status = "There's nothing to choose here".to_owned();
             return;
         }
         let items = options

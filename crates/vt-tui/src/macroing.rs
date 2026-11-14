@@ -158,7 +158,7 @@ impl App {
     /// The setting under the cursor on the track page, if it's one a macro can hold: one of the
     /// registry's, or a live generator's on the Gen page, by its column.
     fn setting_here(&self) -> Option<MacroTarget> {
-        let track = self.song().tracks.get(self.cursor.track)?;
+        let track = self.song().tracks.get(self.services.cursor.track)?;
         let target = match self.track_control() {
             Control::Gen {
                 phrase,
@@ -186,7 +186,7 @@ impl App {
         else {
             return None;
         };
-        let live = self.live_generator(self.cursor.track, phrase, generator)?;
+        let live = self.live_generator(self.services.cursor.track, phrase, generator)?;
         let context = live.context();
         let bounds = param.bounds(&context)?;
         let now = param.number(&live.generator.heard(), &context)?;
@@ -196,7 +196,7 @@ impl App {
     /// The macro holding the setting under the cursor, and its mapping there, if one does.
     pub(crate) fn macro_here(&self) -> Option<(MacroTarget, usize, MacroMap)> {
         let target = self.setting_here()?;
-        let track = self.song().tracks.get(self.cursor.track)?;
+        let track = self.song().tracks.get(self.services.cursor.track)?;
         let (at, map) = track.macro_holding(target)?;
         Some((target, at, *map))
     }
@@ -218,7 +218,7 @@ impl App {
             return false;
         };
         let name = target.name_on(&self.page_track());
-        self.status = format!(
+        self.services.status = format!(
             "{name} is on macro {}: turn it there, or gm for its range",
             at + 1
         );
@@ -229,7 +229,7 @@ impl App {
     /// on one, opened on the one it's on already.
     pub(crate) fn open_macro_picker(&mut self) {
         let Some(target) = self.setting_here() else {
-            self.status = match self.track_control() {
+            self.services.status = match self.track_control() {
                 Control::Macro(_) => {
                     "A macro can't hold a macro: M maps the settings around it".to_owned()
                 }
@@ -250,7 +250,7 @@ impl App {
             })
             .collect();
         self.show_picker(Picker::new(MACRO_PICKER, items).opened_on(on));
-        self.status = format!(
+        self.services.status = format!(
             "Enter maps {} to the macro chosen, from bottom to top to start with; a digit chooses at once",
             target.name_on(&track)
         );
@@ -266,23 +266,24 @@ impl App {
         };
         let track = self.page_track();
         let name = target.name_on(&track);
-        let index = self.cursor.track;
+        let index = self.services.cursor.track;
         let held = &track.macros[at];
         match track.macro_holding(target) {
             Some((on, _)) if on == at => {
-                self.apply(&Action::UnmapMacro {
+                self.services.apply(&Action::UnmapMacro {
                     track: index,
                     target,
                 });
-                self.status = format!("{name} is off macro {}, and back to its own", at + 1);
+                self.services.status =
+                    format!("{name} is off macro {}, and back to its own", at + 1);
             }
             Some((on, map)) => {
-                self.apply(&Action::MapMacro {
+                self.services.apply(&Action::MapMacro {
                     track: index,
                     at,
                     map: *map,
                 });
-                self.status = format!(
+                self.services.status = format!(
                     "{name} moved from macro {} to macro {}, {}",
                     on + 1,
                     at + 1,
@@ -313,9 +314,9 @@ impl App {
                     });
                 }
                 let first = held.maps.is_empty();
-                self.apply(&Action::Batch(actions));
+                self.services.apply(&Action::Batch(actions));
                 let now = self.page_track();
-                self.status = if first {
+                self.services.status = if first {
                     format!(
                         "{name} is on macro {}, {}, from its bottom to its top: gm for its range",
                         at + 1,
@@ -341,7 +342,7 @@ impl App {
             _ => match self.macro_here() {
                 Some((target, at, _)) => (at, track.macros[at].map_of(target).unwrap_or(0)),
                 None => {
-                    self.status =
+                    self.services.status =
                         "This isn't on a macro: M maps it to one, and gm on a macro opens it"
                             .to_owned();
                     return;
@@ -349,7 +350,8 @@ impl App {
             },
         };
         if track.macros[at].maps.is_empty() {
-            self.status = format!("Macro {} holds nothing yet: M on a setting maps it", at + 1);
+            self.services.status =
+                format!("Macro {} holds nothing yet: M on a setting maps it", at + 1);
             return;
         }
         self.mapping = Some(MappingView {
@@ -357,7 +359,7 @@ impl App {
             row,
             ..MappingView::default()
         });
-        self.mode = Mode::Mapping;
+        self.modes.mode = Mode::Mapping;
         self.say_mapping();
     }
 
@@ -387,7 +389,7 @@ impl App {
             ""
         };
         if view.field.bends() {
-            self.status = format!(
+            self.services.status = format!(
                 "Curve {} bends {} from Min to Max, early above 0 and late below; S {} shapes both ends, an S above 0 and the reverse below",
                 bend_text(map.curve),
                 target.name(),
@@ -404,7 +406,7 @@ impl App {
                 bend_text(map.s)
             )
         };
-        self.status = format!(
+        self.services.status = format!(
             "At 00 the macro sets {} to {}, at FF to {}{along}; it's at {:02X}, so {} is {}{by_hand}",
             target.name_on(&track),
             end_shown(&track, target, map.min),
@@ -420,8 +422,8 @@ impl App {
         let Some(view) = self.mapping.clone() else {
             return;
         };
-        self.apply(&Action::MapMacro {
-            track: self.cursor.track,
+        self.services.apply(&Action::MapMacro {
+            track: self.services.cursor.track,
             at: view.at,
             map,
         });
@@ -500,7 +502,7 @@ impl App {
             _ => key,
         };
         let Some(view) = self.mapping.clone() else {
-            self.mode = Mode::Normal;
+            self.modes.mode = Mode::Normal;
             return;
         };
         if let Some(typed) = view.typing.clone() {
@@ -515,8 +517,8 @@ impl App {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => {
                 self.mapping = None;
-                self.mode = Mode::Normal;
-                self.status.clear();
+                self.modes.mode = Mode::Normal;
+                self.services.status.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => self.mapping_move(|row| (row + 1).min(count - 1)),
             KeyCode::Char('k') | KeyCode::Up => self.mapping_move(|row| row.saturating_sub(1)),
@@ -540,7 +542,7 @@ impl App {
                 if let Some(view) = self.mapping.as_mut() {
                     view.typing = Some(String::new());
                 }
-                self.status = if view.field.bends() {
+                self.services.status = if view.field.bends() {
                     "From -100 to 100, then Enter".to_owned()
                 } else {
                     "Two hex digits for this end".to_owned()
@@ -570,7 +572,7 @@ impl App {
         };
         let bends = self.mapping.as_ref().is_some_and(|view| view.field.bends());
         let keep = |app: &mut Self, typed: String| {
-            app.status = format!("{typed}_");
+            app.services.status = format!("{typed}_");
             if let Some(view) = app.mapping.as_mut() {
                 view.typing = Some(typed);
             }
@@ -588,7 +590,7 @@ impl App {
                 done(self);
                 match typed.parse::<i32>() {
                     Ok(value) => self.set_bend(value),
-                    Err(_) => self.status = "Curve and S run from -100 to 100".to_owned(),
+                    Err(_) => self.services.status = "Curve and S run from -100 to 100".to_owned(),
                 }
             }
             KeyCode::Char(c)
@@ -605,7 +607,7 @@ impl App {
                     if let Some(view) = self.mapping.as_mut() {
                         view.typing = Some(typed.clone());
                     }
-                    self.status = format!("{typed}_");
+                    self.services.status = format!("{typed}_");
                     return;
                 }
                 done(self);
@@ -651,15 +653,15 @@ impl App {
         };
         let track = self.page_track();
         let name = map.target.name_on(&track);
-        self.apply(&Action::UnmapMacro {
-            track: self.cursor.track,
+        self.services.apply(&Action::UnmapMacro {
+            track: self.services.cursor.track,
             target: map.target,
         });
         self.keep_mapping_open();
         if self.mapping.is_some() {
-            self.status = format!("{name} is off the macro: u brings it back");
+            self.services.status = format!("{name} is off the macro: u brings it back");
         } else {
-            self.status =
+            self.services.status =
                 format!("{name} is off the macro, which holds nothing now: u brings it back");
         }
     }
@@ -670,17 +672,18 @@ impl App {
             return;
         };
         let count = self
+            .services
             .history
             .current()
             .tracks
-            .get(self.cursor.track)
+            .get(self.services.cursor.track)
             .map_or(0, |track| track.macros[view.at].maps.len());
         if count == 0 {
             self.mapping = None;
-            self.mode = Mode::Normal;
+            self.modes.mode = Mode::Normal;
         } else {
             view.row = view.row.min(count - 1);
-            self.mode = Mode::Mapping;
+            self.modes.mode = Mode::Mapping;
         }
     }
 
@@ -692,23 +695,24 @@ impl App {
             (None, Control::Macro(at)) => Some(at),
             (None, _) => self.macro_here().map(|(_, at, _)| at),
         };
-        let Some(at) =
-            at.filter(|_| self.view == crate::input::mode::View::Track || self.mapping.is_some())
-        else {
-            self.status = ":macro names the macro under the cursor, on the track page".to_owned();
+        let Some(at) = at.filter(|_| {
+            self.modes.view == crate::input::mode::View::Track || self.mapping.is_some()
+        }) else {
+            self.services.status =
+                ":macro names the macro under the cursor, on the track page".to_owned();
             return;
         };
         let name = name.trim();
         if !name.is_empty() && !valid_name(name) {
-            self.status = "A macro's name is up to 12 plain characters".to_owned();
+            self.services.status = "A macro's name is up to 12 plain characters".to_owned();
             return;
         }
-        self.apply(&Action::NameMacro {
-            track: self.cursor.track,
+        self.services.apply(&Action::NameMacro {
+            track: self.services.cursor.track,
             at,
             name: (!name.is_empty()).then(|| name.to_owned()),
         });
         let held = &self.page_track().macros[at];
-        self.status = format!("Macro {} is {}", at + 1, macro_name(held, at));
+        self.services.status = format!("Macro {} is {}", at + 1, macro_name(held, at));
     }
 }

@@ -255,8 +255,10 @@ fn app_with_a_fake_roto() -> (App, vt_engine::link::Realtime, FakePorts) {
     fake.mode = Mode::Plugin;
     let ports = FakePorts::new(fake, true);
     let shared = ports.clone();
-    app.roto.use_ports(move || Box::new(shared.clone()));
-    app.roto.options = Options {
+    app.services
+        .roto
+        .use_ports(move || Box::new(shared.clone()));
+    app.services.roto.options = Options {
         watch_every: Duration::from_millis(10),
         sysex_gap: Duration::ZERO,
         ..Options::default()
@@ -280,9 +282,9 @@ fn tick_until(app: &mut App, ports: &FakePorts, done: impl Fn(&FakeRoto) -> bool
 #[test]
 fn the_roto_is_off_until_turned_on_on_the_audio_page() {
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
-    assert!(!app.roto.setting.on);
+    assert!(!app.services.roto.setting.on);
     app.tick();
-    assert_eq!(app.roto.connection, Connection::Off);
+    assert_eq!(app.services.roto.connection, Connection::Off);
     std::thread::sleep(Duration::from_millis(50));
     app.tick();
     assert!(
@@ -290,13 +292,20 @@ fn the_roto_is_off_until_turned_on_on_the_audio_page() {
         "nothing is sent while it's off"
     );
     press(&mut app, " 9LG");
-    assert_eq!(app.view, View::Audio);
+    assert_eq!(app.modes.view, View::Audio);
     assert_eq!(vt_tui::views::status::column_name(&app), "Roto");
     press(&mut app, "=");
-    assert!(app.roto.setting.on);
-    assert!(app.status.contains("Live"), "{}", app.status);
+    assert!(app.services.roto.setting.on);
+    assert!(
+        app.services.status.contains("Live"),
+        "{}",
+        app.services.status
+    );
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
-    assert!(matches!(app.roto.connection, Connection::Connected { .. }));
+    assert!(matches!(
+        app.services.roto.connection,
+        Connection::Connected { .. }
+    ));
 }
 
 #[test]
@@ -378,10 +387,14 @@ fn turning_the_roto_off_hands_it_back_and_closes_the_link() {
     app.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
     press(&mut app, " 9LG-");
-    assert!(!app.roto.setting.on);
-    assert!(!app.roto.is_linked());
-    assert_eq!(app.roto.connection, Connection::Off);
-    assert!(app.status.contains("given back"), "{}", app.status);
+    assert!(!app.services.roto.setting.on);
+    assert!(!app.services.roto.is_linked());
+    assert_eq!(app.services.roto.connection, Connection::Off);
+    assert!(
+        app.services.status.contains("given back"),
+        "{}",
+        app.services.status
+    );
     let sent = ports.with(|fake| fake.received.len());
     assert_eq!(
         ports.with(|fake| fake.received.last().cloned()),
@@ -399,15 +412,15 @@ fn the_setting_is_saved_for_this_machine_and_read_back() {
     let folder = common::folder();
     let path = folder.join("vimtracker").join(vt_tui::roto::SETTING_FILE);
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
-    app.roto.setting_path = Some(path.clone());
+    app.services.roto.setting_path = Some(path.clone());
     assert_eq!(RotoSetting::load_from(&path), RotoSetting { on: false });
     app.set_roto(true);
     assert_eq!(RotoSetting::load_from(&path), RotoSetting { on: true });
     // The next start reads it and connects.
     let (mut next, _realtime, next_ports) = app_with_a_fake_roto();
-    next.roto.setting = RotoSetting::load_from(&path);
+    next.services.roto.setting = RotoSetting::load_from(&path);
     next.start_roto_if_on();
-    assert!(next.roto.is_linked());
+    assert!(next.services.roto.is_linked());
     assert!(tick_until(&mut next, &next_ports, |fake| fake
         .shown
         .is_some()));
@@ -444,7 +457,7 @@ fn the_audio_page_says_whether_the_roto_is_on_and_connected() {
     app.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
     assert!(tick_until_app(&mut app, |app| matches!(
-        app.roto.connection,
+        app.services.roto.connection,
         Connection::Connected { firmware: Some(_) }
     )));
     let shown = text(&app);
@@ -455,7 +468,7 @@ fn the_audio_page_says_whether_the_roto_is_on_and_connected() {
 /// track, its first page's knobs learned.
 fn showing(device: u8) -> (App, vt_engine::link::Realtime, FakePorts) {
     let (mut app, realtime, ports) = app_with_a_fake_roto();
-    app.roto.gesture_pause = Duration::ZERO;
+    app.services.roto.gesture_pause = Duration::ZERO;
     app.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
     ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(device))]);
@@ -552,16 +565,16 @@ const SPEED_KNOB: u8 = 4;
 #[test]
 fn a_knob_edits_its_own_track_whatever_the_cursor_is_on() {
     let (mut app, _realtime, ports) = showing(OUTPUT);
-    assert_eq!(app.roto.track, 0);
+    assert_eq!(app.services.roto.track, 0);
     // The cursor goes to the second track, and to the phrase view.
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     press(&mut app, " 3");
     let other = app.song().tracks[1].level;
     let top = SettingId::VOL.entry().kind.top();
     turn(&ports, LEVEL_KNOB, KNOB_TOP);
     assert!(tick_until_song(&mut app, |song| song.tracks[0].level == top));
     assert_eq!(app.song().tracks[1].level, other, "not the cursor's track");
-    assert_eq!(app.cursor.track, 1, "the cursor stays");
+    assert_eq!(app.services.cursor.track, 1, "the cursor stays");
     // Its value, as the app writes it.
     let text = value_text(Control::Level, &app.song().tracks[0], app.song());
     assert!(text.ends_with("dB"), "{text}");
@@ -574,7 +587,7 @@ fn a_knob_edits_its_own_track_whatever_the_cursor_is_on() {
 fn touching_a_knob_to_letting_it_go_is_one_undo_step() {
     let (mut app, _realtime, ports) = showing(OUTPUT);
     let was = app.song().tracks[0].level;
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     touch(&ports, LEVEL_KNOB, true);
     for value in [2000, 5000, 8000, 11_000] {
         turn(&ports, LEVEL_KNOB, value);
@@ -584,13 +597,14 @@ fn touching_a_knob_to_letting_it_go_is_one_undo_step() {
         settle(&mut app, 10);
     }
     assert!(
-        app.history.undo_depth() > depth + 1,
+        app.services.history.undo_depth() > depth + 1,
         "each frame's move is an edit"
     );
     // Held, nothing closes the step, so it's one only once the letting go has arrived.
     touch(&ports, LEVEL_KNOB, false);
     assert!(
-        tick_until_app(&mut app, |app| app.history.undo_depth() == depth + 1),
+        tick_until_app(&mut app, |app| app.services.history.undo_depth()
+            == depth + 1),
         "one step for the touch"
     );
     press(&mut app, "u");
@@ -598,11 +612,11 @@ fn touching_a_knob_to_letting_it_go_is_one_undo_step() {
     // Turned without a touch, as a hard twist can be, it's a step of its own once it settles.
     // The two moves may reach the app a frame or more apart, so the pause is long enough to
     // join them however busy the machine is, and it's one step once the second has arrived.
-    app.roto.gesture_pause = Duration::from_secs(1);
+    app.services.roto.gesture_pause = Duration::from_secs(1);
     turn(&ports, LEVEL_KNOB, 3000);
     turn(&ports, LEVEL_KNOB, 4000);
     assert!(tick_until_app(&mut app, |app| {
-        level_position(app).abs_diff(4000) < 100 && app.history.undo_depth() == depth + 1
+        level_position(app).abs_diff(4000) < 100 && app.services.history.undo_depth() == depth + 1
     }));
 }
 
@@ -635,7 +649,7 @@ fn a_knob_being_touched_is_never_sent_its_own_value_back() {
         "not sent its own value"
     );
     // Another knob's setting moved by the keys is sent: its motor follows.
-    app.apply(&vt_model::action::Action::SetTrackTrim {
+    app.services.apply(&vt_model::action::Action::SetTrackTrim {
         track: 0,
         trim: 0xC0,
     });
@@ -649,10 +663,11 @@ fn a_knob_being_touched_is_never_sent_its_own_value_back() {
         values_shown(fake, TRIM_KNOB).last() == Some(&text)
     }));
     // The touched knob's own setting moved by the keys waits for the hand to let go.
-    app.apply(&vt_model::action::Action::SetTrackLevel {
-        track: 0,
-        level: 0x10,
-    });
+    app.services
+        .apply(&vt_model::action::Action::SetTrackLevel {
+            track: 0,
+            level: 0x10,
+        });
     settle(&mut app, 30);
     assert_eq!(
         positions(&ports, LEVEL_KNOB),
@@ -711,7 +726,7 @@ fn sel_switches_an_effect_or_a_modulator_and_b_shows_on_the_roto() {
         ports.from_roto(vec![bytes]);
     };
     let enabled = |fake: &FakeRoto, device: u8| fake.plugins.get(&device).map(|p| p.enabled);
-    app.apply(&Action::SetInsert {
+    app.services.apply(&Action::SetInsert {
         track: 0,
         slot: 0,
         insert: Insert::ALL[2],
@@ -722,7 +737,7 @@ fn sel_switches_an_effect_or_a_modulator_and_b_shows_on_the_roto() {
     assert!(tick_until_song(&mut app, |song| song.tracks[0].bypassed[0]));
     assert!(tick_until(&mut app, &ports, |fake| enabled(fake, 5) == Some(false)));
     // `b` in the app, as its action, brings it back, which shows on the Roto.
-    app.apply(&Action::SetBypass {
+    app.services.apply(&Action::SetBypass {
         track: 0,
         slot: 0,
         bypassed: false,
@@ -739,12 +754,16 @@ fn sel_switches_an_effect_or_a_modulator_and_b_shows_on_the_roto() {
     // The accumulator has no switch: it stays on, and is sent so again.
     let (sent, undo) = (
         ports.with(|fake| fake.received.len()),
-        app.history.undo_depth(),
+        app.services.history.undo_depth(),
     );
     tap(&ports, 7, false);
     assert!(tick_until(&mut app, &ports, |fake| fake.received.len() > sent));
     assert_eq!(ports.with(|fake| enabled(fake, 15)), Some(true));
-    assert_eq!(app.history.undo_depth(), undo, "and nothing changed");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        undo,
+        "and nothing changed"
+    );
 }
 
 #[test]
@@ -754,7 +773,7 @@ fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
     // asking for the device's knobs.
     for says_so in [true, false] {
         let (mut app, _realtime, ports) = showing(OUTPUT);
-        let depth = app.history.undo_depth();
+        let depth = app.services.history.undo_depth();
         // Tapping SEL, paging to the second bank, then holding SEL and pressing LFO 1, the
         // eleventh device: the Roto switches it as the button goes down.
         let messages = ports.with(|fake| {
@@ -788,7 +807,7 @@ fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
             fake.shown == Some((10, 0)) && fake.knob(1).is_some_and(|knob| knob.name == first)
         }));
         assert_eq!(
-            app.roto.view.selected_index(),
+            app.services.roto.view.selected_index(),
             10,
             "LFO 1's knobs, {says_so}"
         );
@@ -796,7 +815,11 @@ fn choosing_a_device_while_sels_switches_are_up_never_switches_it() {
             !app.song().tracks[0].mods[3].bypassed,
             "chosen, not switched"
         );
-        assert_eq!(app.history.undo_depth(), depth, "and no undo step left");
+        assert_eq!(
+            app.services.history.undo_depth(),
+            depth,
+            "and no undo step left"
+        );
         assert_eq!(
             ports.with(|fake| fake.plugins.get(&10).map(|p| p.enabled)),
             Some(true)
@@ -818,7 +841,8 @@ fn func_chooses_the_track_the_roto_shows_and_the_cursor_stays() {
         );
     });
     let machine = Machine::ALL[3];
-    app.apply(&Action::SetTrackMachine { track: 1, machine });
+    app.services
+        .apply(&Action::SetTrackMachine { track: 1, machine });
     let choose = ports.with(|fake| fake.press(FromRoto::RotoSelectTrack(1)));
     ports.from_roto(vec![choose]);
     assert!(tick_until(&mut app, &ports, |fake| {
@@ -826,9 +850,13 @@ fn func_chooses_the_track_the_roto_shows_and_the_cursor_stays() {
             .get(&1)
             .is_some_and(|p| p.name.as_str() == machine.name())
     }));
-    assert_eq!(app.roto.track, 1);
-    assert_eq!(app.cursor.track, 0, "the cursor stays");
-    assert_eq!(app.roto.view.selected_index(), OUTPUT, "on the same device");
+    assert_eq!(app.services.roto.track, 1);
+    assert_eq!(app.services.cursor.track, 0, "the cursor stays");
+    assert_eq!(
+        app.services.roto.view.selected_index(),
+        OUTPUT,
+        "on the same device"
+    );
     // Its knobs now edit that track.
     let top = SettingId::VOL.entry().kind.top();
     let first = app.song().tracks[0].level;
@@ -940,7 +968,7 @@ fn app_with_stored_setups() -> (App, vt_engine::link::Realtime, FakePorts) {
         });
     });
     let serial = ports.clone();
-    app.roto.serial = Some(std::sync::Arc::new(move || {
+    app.services.roto.serial = Some(std::sync::Arc::new(move || {
         Ok(Box::new(serial.clone()) as Box<dyn Serial + Send>)
     }));
     (app, realtime, ports)
@@ -966,7 +994,7 @@ fn a_device_with_buttons_is_stored_and_its_buttons_switch_its_settings_lit_from_
     let (mut app, _realtime, ports) = app_with_stored_setups();
     let comp = Insert::ALL[6];
     let glue = comp.with_value(comp.type_param().unwrap(), 2);
-    app.apply(&Action::SetInsert {
+    app.services.apply(&Action::SetInsert {
         track: 0,
         slot: 0,
         insert: glue,
@@ -1006,44 +1034,48 @@ fn a_device_with_buttons_is_stored_and_its_buttons_switch_its_settings_lit_from_
         assert!(!threshold.macro_param, "a stored device's knob");
     });
     // Auto's button, under the makeup, switches it, one undo step a press, and its light follows.
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press_button(&ports, 4);
     assert!(tick_until_song(&mut app, |song| auto_on(song) != was));
     assert!(tick_until(&mut app, &ports, |fake| fake.light(4) == Some(!was)));
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     press_button(&ports, 4);
     assert!(tick_until_song(&mut app, |song| auto_on(song) == was));
     assert!(tick_until(&mut app, &ports, |fake| fake.light(4) == Some(was)));
     // Switched from the keys, the light follows too.
-    app.apply(&Action::SetInsert {
+    app.services.apply(&Action::SetInsert {
         track: 0,
         slot: 0,
         insert: glue.with_value(auto, u8::from(!was)),
     });
     assert!(tick_until(&mut app, &ports, |fake| fake.light(4) == Some(!was)));
     // A button with nothing on it changes nothing.
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press_button(&ports, 0);
     settle(&mut app, 30);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
 }
 
 #[test]
 fn without_vimtrackers_setups_a_devices_buttons_are_two_step_knobs() {
     use vt_roto::store::Serial;
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
-    app.roto.serial = Some(std::sync::Arc::new(|| {
+    app.services.roto.serial = Some(std::sync::Arc::new(|| {
         Err::<Box<dyn Serial + Send>, _>(vt_roto::transport::LinkError::NotFound)
     }));
     app.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
     // The serial port is tried a few times, a second apart, before it gives up.
     let deadline = Instant::now() + Duration::from_secs(5);
-    while !app.status.contains("knobs for now") && Instant::now() < deadline {
+    while !app.services.status.contains("knobs for now") && Instant::now() < deadline {
         settle(&mut app, 20);
     }
-    assert!(app.status.contains("knobs for now"), "{}", app.status);
-    assert!(!app.roto.stored_on_roto);
+    assert!(
+        app.services.status.contains("knobs for now"),
+        "{}",
+        app.services.status
+    );
+    assert!(!app.services.roto.stored_on_roto);
     ports.with(|fake| {
         assert!(fake.plugins.values().all(|p| p.kind == PluginKind::Macro));
         assert!(fake.serial_changes.is_empty());

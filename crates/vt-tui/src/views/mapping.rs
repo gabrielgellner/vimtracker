@@ -37,7 +37,7 @@ fn width_of(field: MapField) -> usize {
 
 /// Draw the mapping view in the middle of an area.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
-    let Some(track) = app.song().tracks.get(app.cursor.track) else {
+    let Some(track) = app.song().tracks.get(app.services.cursor.track) else {
         return;
     };
     let held = &track.macros[view.at];
@@ -106,7 +106,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
                 },
             };
             let style = if on {
-                theme::cursor(app.mode)
+                theme::cursor(app.modes.mode)
             } else if by_hand || (field.bends() && map.is_straight()) {
                 // A straight response is dim, so a bent one stands out.
                 theme::dim()

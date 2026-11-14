@@ -39,7 +39,7 @@ impl App {
             Pick::Preset { kind, path } => self.tag_preset(item, kind, &path, &typed),
             _ => return,
         };
-        self.status = match done {
+        self.services.status = match done {
             Ok(name) => {
                 let tags = self
                     .picker

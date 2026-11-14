@@ -1,34 +1,24 @@
 //! Application state, and what each key does. It runs without a terminal, so tests can drive it.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::accent_slide::{HeldFlag, Moved, Written};
-use crate::analysing::Analyst;
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
-use crate::config::Settings;
 use crate::exploring::Naming;
-use crate::folding::Folds;
 use crate::glyphs;
 use crate::loading::Loader;
-use crate::meter::Meter;
 use crate::places::RecentPlaces;
 use crate::views::picker::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
 use ratatui::crossterm::event::KeyCode;
-use vt_engine::engine::{PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transport};
-use vt_engine::gens::{GenPass, GenRow};
+use vt_engine::engine::{PLAYHEADS, SectionLoop, TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
-use vt_engine::published::Published;
-use vt_engine::track_state::{Faders, LiveValues, NotePitch};
-use vt_model::action::{Action, edit};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::groove::GrooveId;
-use vt_model::history::History;
 use vt_model::kit::KitEntry;
 use vt_model::names::Names;
-use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
@@ -47,6 +37,7 @@ use crate::input::picker::Picker;
 use crate::jumping::FieldJump;
 use crate::mixer_page::MixerPage;
 use crate::recording::Recording;
+use crate::services::Services;
 use crate::shaping::ShapePanel;
 use crate::track_page::TrackPage;
 use crate::tree::{ChainColumn, Place};
@@ -104,6 +95,31 @@ pub struct Entry {
     pub command: Option<FxCommand>,
 }
 
+/// What spans the pages as keys are typed: the view on screen, the mode the keys are in, what
+/// Insert has typed, a field jump under way and the count typed before a command. A page's keys
+/// read them.
+#[derive(Debug, Clone)]
+pub struct Modes {
+    pub view: View,
+    pub mode: Mode,
+    pub entry: Entry,
+    /// The search for a setting under way.
+    pub field_jump: Option<FieldJump>,
+    pub(crate) count: Option<usize>,
+}
+
+impl Default for Modes {
+    fn default() -> Self {
+        Self {
+            view: View::Phrase,
+            mode: Mode::Normal,
+            entry: Entry::default(),
+            field_jump: None,
+            count: None,
+        }
+    }
+}
+
 /// Where the cursor is: a step in a chain slot on a track.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cursor {
@@ -130,10 +146,6 @@ pub const HOLD_TIME: Duration = Duration::from_millis(300);
 /// How long the playheads stay without a report from the audio thread, after which audio has
 /// stopped and nothing is playing.
 const PLAYHEADS_KEPT: Duration = Duration::from_millis(250);
-
-/// How many versions sent are kept for a report to be of. The callback takes each within a block,
-/// so only a few are ever waiting; these are for when it has stopped.
-const SENT_KEPT: usize = 64;
 
 /// What `:w` says to a read-only song in its own folder (decision 313).
 const READ_ONLY: &str = "This song is read-only: :w path saves a copy, :w! writes over it";
@@ -213,51 +225,28 @@ pub struct AudioState {
 
 /// The whole program's state.
 pub struct App {
-    pub history: History,
-    pub folder: Option<PathBuf>,
-    pub dirty: bool,
-    pub samples: Arc<SamplePool>,
-    pub handle: Handle,
-    /// The version last sent to the audio thread, whose bank entries the next keeps where they're
-    /// the same.
-    published: Option<Arc<Published>>,
-    /// The songs of the versions sent that a report could still be of, by their ids, oldest
-    /// first, and the song the live values were worked out from, so a bar draws what's playing
-    /// against the setting it was reported with (#421). The engine starts on the song the app
-    /// starts with, before any version is sent.
-    sent: VecDeque<(u64, Arc<Song>)>,
-    live_song: Option<Arc<Song>>,
-    pub rate: u32,
+    /// What every page shares: the song and the cursor, the engine, the samples, the status line.
+    pub services: Services,
+    /// The view and the mode the keys are in, and what spans the pages as they're typed.
+    pub modes: Modes,
     /// The audio output as it plays, and what the audio page chooses from.
     pub audio: AudioState,
     /// A different output the audio page has chosen, for the main loop to open.
     pub audio_request: Option<AudioChoice>,
     /// The audio page's row: device, rate or buffer.
     pub audio_row: usize,
-    /// The Roto-Control: whether it's on, the link to it, and what it shows.
-    pub roto: crate::roto::Roto,
     /// The mouse wheel as a knob on the cursor's setting, while its setting is on.
     pub wheel: crate::wheel::Wheel,
-    /// Where this machine keeps its kits and samples.
-    pub settings: Settings,
     /// The sample library the sample explorer lists, such as Ableton Live's, if this machine has
     /// one: found as the program starts, and none in tests.
     pub library: Option<PathBuf>,
-    pub mode: Mode,
-    pub view: View,
     /// The mixer: the row its cursor is on.
     pub mixer_page: MixerPage,
     pub song_column: usize,
-    /// The section the engine is on.
-    pub playing_section: usize,
     /// The sections being kept playing, set with `:loop`.
     pub looping: Option<SectionLoop>,
-    /// Whether that loop is waiting for the launch grid's next line, as the engine last said.
-    pub loop_waiting: bool,
     /// Where a selection of sections in the song view started, while `V` selects them.
     pub section_anchor: Option<usize>,
-    /// What each track is launched onto and cued to, as the engine last said.
-    pub jam: Vec<JamState>,
     /// The track page: which of its pages shows, where its cursor is, and the images it shows.
     pub track_page: TrackPage,
     /// The image of the mapping view's response the terminal has, while the view is open.
@@ -265,29 +254,6 @@ pub struct App {
     /// Where the sample page is, and the ids of the images of its waveform and its overview.
     pub sample_page: crate::sample_page::SamplePage,
     pub sample_images: Option<(u32, u32)>,
-    /// What the cursor's track is playing with right now, and the track the engine reports.
-    pub live: Option<LiveValues>,
-    /// What each mod slot moved each row's note by on `Pitch` the last time it was heard, and
-    /// what the row's own `RND`s moved it by, by track, phrase and row, in semitones, as the engine
-    /// reports them, for `Space g A` (#569, decision 323).
-    pub(crate) heard_pitches: HashMap<(usize, u32, usize), NotePitch>,
-    /// The pass each live generator that varies was last heard on and the seeds it played, by
-    /// track, phrase and its place in the phrase's list, as the engine reports them, for
-    /// `Space g a` on the Gen page to keep (decision 293).
-    pub(crate) heard_passes: HashMap<(usize, u32, usize), GenPass>,
-    /// Each row of a live generator as it was last heard, by track, phrase, the generator's place
-    /// in the phrase's list and the stored row, where something moved it from what's written,
-    /// as the engine reports them: for the playhead's row, the overview, the phrase's `~` and the
-    /// status line to show, and `Space g a` and `Space g A` to keep (decision 300).
-    pub(crate) heard_rows: HashMap<(usize, u32, usize, usize), GenRow>,
-    /// Every track's faders as they're heard: where the steps have them, and which a hand has
-    /// taken over, as the engine last said, with what's been asked of it since (decision 174).
-    pub(crate) faders: [Faders; MAX_TRACKS],
-    pub(crate) fader_wishes: Vec<crate::automating::Wish>,
-    /// Where each voice playing a sample through the cursor's track is in it, for the sample
-    /// page's playheads.
-    pub playheads: [Option<Playhead>; PLAYHEADS],
-    watched: usize,
     /// The project page's row and setting, whether the cursor is on the tempo's fine part, and
     /// the field `j` and `k` aim for, as on the track page.
     pub project_row: usize,
@@ -307,7 +273,6 @@ pub struct App {
     pub(crate) jumped_from: Option<Place>,
     pub(crate) last_autosave: Option<Instant>,
     pub(crate) autosaved: Option<Arc<Song>>,
-    pub cursor: Cursor,
     /// The octave the keys play and enter notes in, as note names number it: 3, where `a` is
     /// `C-3`, middle C.
     pub octave: i8,
@@ -320,41 +285,20 @@ pub struct App {
     pub command_menu: Option<CommandMenu>,
     /// The command lines run before, which `Up` and `Down` go through.
     pub command_history: CommandHistory,
-    pub status: String,
-    pub transport: Transport,
-    pub playhead: usize,
-    /// How far through the playhead's step the engine last said it was, and when that was read.
-    pub progress: f32,
-    /// Where each track is heard, as its own steps count, which a track at another speed than the
-    /// song's needs.
-    pub places: [TrackPlace; MAX_TRACKS],
-    pub(crate) report_at: Instant,
-    /// The time of the frame or key being handled, which the playhead is carried on to from the
-    /// engine's last report, so what's recorded goes by the times the app is given and never
-    /// reads the clock itself.
-    pub(crate) now: Instant,
     /// Live recording, while it's armed.
     pub(crate) recording: Option<Recording>,
     /// The recorder: what `Space R` records, and the recording going on.
     pub sampling: crate::sampling::Sampling,
-    /// The main output's level.
-    pub meter: Meter,
-    /// The main output's recent sound, for the scope above the meter.
-    pub scope: crate::scope::Scope,
     /// The id of the scope's image, and whether the last screen drawn had room for it.
     pub scope_image: Option<u32>,
     pub scope_shown: bool,
-    /// Each track's level, for the mixer.
-    pub track_meters: Vec<Meter>,
     /// The CPU figure on the status line.
     pub cpu: LoadReadout,
     /// How slowed the audio thread is, for the leaf beside it.
     pub slowdown: SlowdownReadout,
-    last_tick: Instant,
     pub should_quit: bool,
-    /// Live mute and solo per track, kept outside undo and written to the song on save.
-    pub levels: Vec<TrackLive>,
-    /// The scale, likewise, as it's for entering notes and isn't part of what's undone.
+    /// The scale, kept outside undo and written to the song on save as the live mutes and solos
+    /// are, as it's for entering notes and isn't part of what's undone.
     pub scale: Scale,
     /// Whether entering in Insert moves on by the grid, likewise.
     pub auto_jump: bool,
@@ -362,10 +306,6 @@ pub struct App {
     pub read_only: bool,
     /// Whether fill is on, for `CND`'s `FILL` and `!FILL`. It's a live control, never saved.
     pub fill: bool,
-    /// Whether a realign is waiting for the launch grid, as the engine last said.
-    pub realigning: bool,
-    /// Whether each track's own realign is waiting for the launch grid, as the engine last said.
-    pub realigning_tracks: [bool; MAX_TRACKS],
     /// The key last pressed, as it is on the keyboard, until it's let go.
     key_down: Option<KeyCode>,
     /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
@@ -387,7 +327,6 @@ pub struct App {
     momentary: Option<Held>,
     /// What the press being handled started, for [`App::press`] to tie to its key.
     pub(crate) started: Option<Momentary>,
-    pub entry: Entry,
     /// The first step on screen, and how many lines fit.
     pub top: usize,
     pub view_height: usize,
@@ -396,9 +335,6 @@ pub struct App {
     /// The phrase view shows the row inspector right of the overview, for this session
     /// (decision 255).
     pub inspector: bool,
-    /// Which groups are folded, read from the song's `view` when it opens and written into it
-    /// when it's saved, not undone (decisions 128 and 305).
-    pub folds: Folds,
     pub help_scroll: usize,
     /// The open guide, how far it has scrolled, and how many of its rows fit.
     pub guide: Option<Guide>,
@@ -408,7 +344,6 @@ pub struct App {
     pub(crate) table: Table,
     pub(crate) pending: Vec<Key>,
     pub(crate) pending_since: Option<Instant>,
-    pub(crate) count: Option<usize>,
     pub(crate) operator: Option<Op>,
     pub(crate) operator_count: Option<usize>,
     pub(crate) register: Option<char>,
@@ -430,8 +365,6 @@ pub struct App {
     pub mapping: Option<crate::macroing::MappingView>,
     /// A selection to shape once the command for its empty FX column is chosen, and its field.
     pub(crate) shape_command: Option<(Selection, Field)>,
-    /// The search for a setting under way.
-    pub field_jump: Option<FieldJump>,
     /// Changes each time random values are wanted anew.
     pub(crate) shape_seed: u64,
     /// The sounds of the kit in use, to choose from for a track.
@@ -440,8 +373,6 @@ pub struct App {
     pub kit_file: Option<PathBuf>,
     /// Reads the files the explorer previews and plays, off this thread.
     pub loader: Loader,
-    /// Analyses the bank's files, off this thread, for normalising, `:trim` and the waveform.
-    pub analyst: Analyst,
     /// When the loader or the analyst started on what they're doing, while they are, for the
     /// spinner on the status line.
     pub(crate) work_since: Option<Instant>,
@@ -499,45 +430,23 @@ impl App {
         handle: Handle,
         rate: u32,
     ) -> Self {
-        let levels = live_from(&song);
         let scale = song.scale;
         let auto_jump = song.auto_jump;
         let read_only = song.read_only;
-        let folds = Folds::from_view(&song.view);
         let mut names = Names::from_clock();
         let mut song = song;
         name_song(&mut song, folder.as_deref(), &mut names);
         let mut app = Self {
-            history: History::new(Arc::new(song)),
-            folder,
-            dirty: false,
-            samples,
-            handle,
-            published: None,
-            sent: VecDeque::new(),
-            live_song: None,
-            rate,
-            mode: Mode::Normal,
-            view: View::Phrase,
+            services: Services::new(song, folder, samples, handle, rate),
+            modes: Modes::default(),
             mixer_page: MixerPage::default(),
             song_column: 0,
-            playing_section: 0,
             looping: None,
-            loop_waiting: false,
             section_anchor: None,
-            jam: vec![JamState::default(); MAX_TRACKS],
             track_page: TrackPage::default(),
             mapping_image: None,
             sample_page: crate::sample_page::SamplePage::default(),
             sample_images: None,
-            live: None,
-            heard_pitches: HashMap::new(),
-            heard_passes: HashMap::new(),
-            heard_rows: HashMap::new(),
-            faders: [Faders::default(); MAX_TRACKS],
-            fader_wishes: Vec::new(),
-            playheads: [None; PLAYHEADS],
-            watched: 0,
             project_row: 0,
             project_field: 0,
             project_fine: false,
@@ -545,10 +454,8 @@ impl App {
             groove_shown: None,
             audio: AudioState::default(),
             audio_request: None,
-            settings: Settings::none(),
             library: None,
             audio_row: 0,
-            roto: crate::roto::Roto::default(),
             wheel: crate::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
             picker: None,
@@ -559,44 +466,23 @@ impl App {
             jumped_from: None,
             last_autosave: None,
             autosaved: None,
-            cursor: Cursor {
-                section: 0,
-                track: 0,
-                slot: 0,
-                step: 0,
-                field: Field::Note,
-            },
             octave: 3,
             note_velocity: DEFAULT_NOTE_VELOCITY,
             replacing: None,
             command_line: String::new(),
             command_menu: None,
             command_history: CommandHistory::default(),
-            status: String::new(),
-            transport: Transport::Stopped,
-            playhead: 0,
-            progress: 0.0,
-            places: [TrackPlace::default(); MAX_TRACKS],
-            report_at: Instant::now(),
-            now: Instant::now(),
             recording: None,
             sampling: crate::sampling::Sampling::default(),
-            meter: Meter::default(),
-            scope: crate::scope::Scope::new(rate),
             scope_image: None,
             scope_shown: true,
-            track_meters: vec![Meter::default(); MAX_TRACKS],
             cpu: LoadReadout::default(),
             slowdown: SlowdownReadout::default(),
-            last_tick: Instant::now(),
             should_quit: false,
-            levels,
             scale,
             auto_jump,
             read_only,
             fill: false,
-            realigning: false,
-            realigning_tracks: [false; MAX_TRACKS],
             key_down: None,
             repeats_ignored: false,
             repeating: false,
@@ -606,12 +492,10 @@ impl App {
             octave_moved: None,
             momentary: None,
             started: None,
-            entry: Entry::default(),
             top: 0,
             view_height: 16,
             rows_collapsed: false,
             inspector: false,
-            folds,
             help_scroll: 0,
             guide: None,
             guide_scroll: 0,
@@ -620,7 +504,6 @@ impl App {
             table: Table::default(),
             pending: Vec::new(),
             pending_since: None,
-            count: None,
             operator: None,
             operator_count: None,
             register: None,
@@ -634,12 +517,10 @@ impl App {
             shape: None,
             mapping: None,
             shape_command: None,
-            field_jump: None,
             shape_seed: 0,
             kit: Vec::new(),
             kit_file: None,
             loader: Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT)),
-            analyst: Analyst::new(None),
             work_since: None,
             audition_files: true,
             file_wanted: None,
@@ -656,7 +537,7 @@ impl App {
             last_selection: None,
             last_change: None,
         };
-        app.live_song = Some(Arc::clone(app.song()));
+        app.services.live_song = Some(Arc::clone(app.song()));
         app.send_live();
         app
     }
@@ -664,42 +545,44 @@ impl App {
     /// Play through a new engine, on another output or at another rate. The song, undo, mutes and
     /// solos stay, and the transport is stopped, as the new engine starts that way.
     pub fn reconnect(&mut self, handle: Handle, samples: Arc<SamplePool>, rate: u32) {
-        self.handle = handle;
+        self.services.handle = handle;
         // The engine recording is gone, and its recording with it.
         self.lose_sampling();
         // An analysis is of the file at its own rate, so it's the same at the new one.
         let mut samples = SamplePool::clone(&samples);
-        samples.keep_analyses(&self.samples);
-        self.samples = Arc::new(samples);
-        self.rate = rate;
+        samples.keep_analyses(&self.services.samples);
+        self.services.samples = Arc::new(samples);
+        self.services.rate = rate;
         self.loader = Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
         self.file_playing = None;
-        self.scope = crate::scope::Scope::new(rate);
-        self.transport = Transport::Stopped;
-        self.playhead = 0;
-        self.places = [TrackPlace::default(); MAX_TRACKS];
-        self.live = None;
+        self.services.scope = crate::scope::Scope::new(rate);
+        self.services.transport = Transport::Stopped;
+        self.services.playhead = 0;
+        self.services.places = [TrackPlace::default(); MAX_TRACKS];
+        self.services.live = None;
         // The new engine starts on the song as it is.
-        self.sent.clear();
-        self.live_song = Some(Arc::clone(self.song()));
-        self.jam = vec![JamState::default(); MAX_TRACKS];
+        self.services.sent.clear();
+        self.services.live_song = Some(Arc::clone(self.song()));
+        self.services.jam = vec![JamState::default(); MAX_TRACKS];
         // Sent again when the next frame finds it differs.
-        self.watched = usize::MAX;
+        self.services.watched = usize::MAX;
         self.send_live();
         // The new engine's first version was built before the analyses were kept.
-        self.publish();
+        self.services.publish();
     }
 
     /// Tell the engine every track's live controls, and the scale `ACU` moves notes through, after
     /// loading a song.
     fn send_live(&mut self) {
-        self.handle.send(Command::SetScale { scale: self.scale });
-        for (track, live) in self.levels.clone().into_iter().enumerate() {
-            self.handle.send(Command::SetMute {
+        self.services
+            .handle
+            .send(Command::SetScale { scale: self.scale });
+        for (track, live) in self.services.levels.clone().into_iter().enumerate() {
+            self.services.handle.send(Command::SetMute {
                 track,
                 mute: live.mute,
             });
-            self.handle.send(Command::SetSolo {
+            self.services.handle.send(Command::SetSolo {
                 track,
                 solo: live.solo,
             });
@@ -712,8 +595,8 @@ impl App {
         song.scale = self.scale;
         song.auto_jump = self.auto_jump;
         song.read_only = self.read_only;
-        song.view = self.folds.view();
-        for (track, live) in song.tracks.iter_mut().zip(&self.levels) {
+        song.view = self.services.folds.view();
+        for (track, live) in song.tracks.iter_mut().zip(&self.services.levels) {
             track.mute = live.mute;
             track.solo = live.solo;
         }
@@ -740,51 +623,34 @@ impl App {
         Arc::new(song)
     }
 
-    /// The current song.
+    /// The current song, as the services hold it.
     pub fn song(&self) -> &Arc<Song> {
-        self.history.current()
+        self.services.song()
     }
 
     /// The section being edited.
     pub fn section_here(&self) -> Option<&Section> {
         let sections = &self.song().sections;
-        sections.get(self.cursor.section).or(sections.last())
+        sections
+            .get(self.services.cursor.section)
+            .or(sections.last())
     }
 
     /// How far a track is through this chain, if it's playing it.
     pub fn chain_playhead(&self, track: usize, chain: u32) -> Option<usize> {
         let length = (self.song().tracks.get(track)?.chain_steps(chain)).max(1);
-        Some(self.playing_place(track, chain)? % length)
-    }
-
-    /// How far a track is through this chain, if it's playing it, counting every time round it
-    /// since it started, as the engine does to deal a dealt order, for finding the row playing.
-    pub fn playing_place(&self, track: usize, chain: u32) -> Option<usize> {
-        let moving = matches!(self.transport, Transport::Playing | Transport::Paused);
-        let jam = self.jam.get(track)?;
-        if !moving || jam.chain != Some(chain) {
-            return None;
-        }
-        let length = (self.song().tracks.get(track)?.chain_steps(chain) as i64).max(1);
-        let place = self.places.get(track)?.count - jam.started;
-        let laps = place.div_euclid(length).max(0);
-        Some((laps * length + place.rem_euclid(length)) as usize)
-    }
-
-    /// What a track's dealt orders are dealt from, as the engine deals them.
-    pub fn dealer(&self, track: usize) -> Dealer {
-        Dealer::new(self.song().seed, track)
+        Some(self.services.playing_place(track, chain)? % length)
     }
 
     /// Put the playhead at a step of the song's, with each track at the step of its own playing
     /// then, as the engine reports them, for drawing without playing.
     pub fn set_playhead(&mut self, step: usize) {
-        self.playhead = step;
+        self.services.playhead = step;
         let tracks = self.song().tracks.len().min(MAX_TRACKS);
         for track in 0..tracks {
             let speed = self.song().tracks[track].speed;
             let ticks = speed.ticks();
-            self.places[track] = TrackPlace {
+            self.services.places[track] = TrackPlace {
                 count: (step as u64 * TICKS_PER_STEP / ticks) as i64,
                 progress: 0.0,
                 ticks: ticks as u32,
@@ -809,18 +675,21 @@ impl App {
 
     /// The track under the cursor.
     pub fn track_here(&self) -> Option<&Track> {
-        self.song().tracks.get(self.cursor.track)
+        self.song().tracks.get(self.services.cursor.track)
     }
 
     /// The phrase under the cursor.
     pub fn phrase_id(&self) -> Option<u32> {
-        let chain = (*self.section_here()?.chains.get(self.cursor.track)?)?;
+        let chain = (*self
+            .section_here()?
+            .chains
+            .get(self.services.cursor.track)?)?;
         Some(
             self.track_here()?
                 .chains
                 .get(&chain)?
                 .entries
-                .get(self.cursor.slot)?
+                .get(self.services.cursor.slot)?
                 .phrase,
         )
     }
@@ -839,7 +708,7 @@ impl App {
     /// otherwise. Beats always go by the phrase's loop.
     pub(crate) fn motion_extent(&self, motion: Motion) -> Extent {
         let extent = self.extent();
-        let lane = match (motion, self.cursor.field) {
+        let lane = match (motion, self.services.cursor.field) {
             (
                 Motion::First | Motion::Last,
                 Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot),
@@ -866,7 +735,7 @@ impl App {
         };
         let Some(chain) = self
             .section_here()
-            .and_then(|s| s.chains.get(self.cursor.track).copied().flatten())
+            .and_then(|s| s.chains.get(self.services.cursor.track).copied().flatten())
             .and_then(|id| track.chains.get(&id))
         else {
             return 0;
@@ -874,7 +743,7 @@ impl App {
         chain
             .entries
             .iter()
-            .take(self.cursor.slot)
+            .take(self.services.cursor.slot)
             .filter_map(|e| track.phrases.get(&e.phrase))
             .map(|p| p.time())
             .sum()
@@ -883,13 +752,13 @@ impl App {
     /// The cursor's position within the section. Only the loop has one, so a step outside it
     /// counts as the loop's first.
     pub fn section_step(&self) -> usize {
-        if self.view == View::Song {
+        if self.modes.view == View::Song {
             return 0;
         }
         let extent = self.extent();
         // The chain view has no step of its own, so it plays from the row's first.
-        let row = if self.view != View::Chain && extent.plays(self.cursor.step) {
-            self.cursor.step - extent.start
+        let row = if self.modes.view != View::Chain && extent.plays(self.services.cursor.step) {
+            self.services.cursor.step - extent.start
         } else {
             0
         };
@@ -902,45 +771,19 @@ impl App {
     /// Put the cursor on the first step that plays, at the top of the screen.
     pub(crate) fn go_to_loop_start(&mut self) {
         let start = self.extent().start;
-        self.cursor.step = start;
+        self.services.cursor.step = start;
         self.top = start;
-    }
-
-    /// Send the current version to the audio thread. Only the bank entries that changed are
-    /// worked out again.
-    pub fn publish(&mut self) {
-        let version = Arc::new(Published::after(
-            Arc::clone(self.song()),
-            Arc::clone(&self.samples),
-            self.published.as_deref(),
-        ));
-        self.published = Some(Arc::clone(&version));
-        self.sent.push_back((version.id, Arc::clone(&version.song)));
-        if self.sent.len() > SENT_KEPT {
-            self.sent.pop_front();
-        }
-        self.handle.publish(version);
-        self.analyse_bank();
-    }
-
-    /// Note which version a report is of: the versions before it are done with, as the callback
-    /// never goes back to one, and its song is what the live values were worked out from. A
-    /// report of a version before any still kept, such as the one the engine started on, keeps
-    /// the song it was last of.
-    fn follow_version(&mut self, version: u64) {
-        while self.sent.front().is_some_and(|(id, _)| *id < version) {
-            self.sent.pop_front();
-        }
-        if let Some((_, song)) = self.sent.front().filter(|(id, _)| *id == version) {
-            self.live_song = Some(Arc::clone(song));
-        }
     }
 
     /// The cursor's track as the latest report's live values were worked out from, which is a
     /// frame or so behind the song while it's being changed.
     pub fn reported_track(&self) -> Option<&Track> {
-        let song = self.live_song.as_ref().unwrap_or_else(|| self.song());
-        song.tracks.get(self.cursor.track)
+        let song = self
+            .services
+            .live_song
+            .as_ref()
+            .unwrap_or_else(|| self.song());
+        song.tracks.get(self.services.cursor.track)
     }
 
     /// Do the work due each frame: send waiting versions and read the callback's report.
@@ -950,45 +793,55 @@ impl App {
 
     /// Do a frame's work as if it's `now`, so the screenshots can step the meters by a fixed time.
     pub fn tick_at(&mut self, now: Instant) {
-        self.now = now;
-        self.handle.pump();
-        let seconds = now.saturating_duration_since(self.last_tick).as_secs_f32();
-        self.last_tick = now;
-        let track = self.cursor.track;
-        if self.watched != track && self.handle.send(Command::Watch { track }) {
-            self.watched = track;
+        self.services.now = now;
+        self.services.handle.pump();
+        let seconds = now
+            .saturating_duration_since(self.services.last_tick)
+            .as_secs_f32();
+        self.services.last_tick = now;
+        let track = self.services.cursor.track;
+        if self.services.watched != track && self.services.handle.send(Command::Watch { track }) {
+            self.services.watched = track;
         }
-        let report = self.handle.latest();
-        self.handle.read_scope(&mut self.scope);
-        self.meter
+        let report = self.services.handle.latest();
+        self.services.handle.read_scope(&mut self.services.scope);
+        self.services
+            .meter
             .update(report.map(|report| report.reading), seconds);
         let tracks = self.song().tracks.len();
-        for (index, meter) in self.track_meters.iter_mut().take(tracks).enumerate() {
+        for (index, meter) in self
+            .services
+            .track_meters
+            .iter_mut()
+            .take(tracks)
+            .enumerate()
+        {
             meter.update(report.map(|report| report.tracks[index]), seconds);
         }
         if let Some(report) = report {
-            self.playhead = report.position;
-            self.progress = report.progress;
-            self.places = report.places;
-            self.report_at = now;
-            self.playing_section = report.section;
-            self.transport = report.transport;
-            self.realigning = report.realigning;
-            self.loop_waiting = report.loop_waiting;
-            self.realigning_tracks = report.realigning_tracks;
-            self.live = (report.watched == track).then_some(report.live);
-            self.follow_version(report.version);
-            self.follow_faders(&report.faders, now);
-            self.playheads = if report.watched == track {
+            self.services.playhead = report.position;
+            self.services.progress = report.progress;
+            self.services.places = report.places;
+            self.services.report_at = now;
+            self.services.playing_section = report.section;
+            self.services.transport = report.transport;
+            self.services.realigning = report.realigning;
+            self.services.loop_waiting = report.loop_waiting;
+            self.services.realigning_tracks = report.realigning_tracks;
+            self.services.live = (report.watched == track).then_some(report.live);
+            self.services.follow_version(report.version);
+            self.services.follow_faders(&report.faders, now);
+            self.services.playheads = if report.watched == track {
                 report.playheads
             } else {
                 [None; PLAYHEADS]
             };
-        } else if now.saturating_duration_since(self.report_at) > PLAYHEADS_KEPT {
+        } else if now.saturating_duration_since(self.services.report_at) > PLAYHEADS_KEPT {
             // Audio has stopped, so nothing is playing.
-            self.playheads = [None; PLAYHEADS];
+            self.services.playheads = [None; PLAYHEADS];
         }
         let reduction = self
+            .services
             .live
             .map_or([0.0; vt_model::insert::INSERTS], |live| live.reduction);
         for (held, now) in self.track_page.slot_reduction.iter_mut().zip(reduction) {
@@ -1005,23 +858,23 @@ impl App {
         for (held, level) in self.track_page.after_trim.iter_mut().zip(trimmed) {
             held.update(crate::meter::to_db(level), seconds);
         }
-        while let Some((track, pitch)) = self.handle.note_pitch() {
+        while let Some((track, pitch)) = self.services.handle.note_pitch() {
             let row = (track, pitch.row.phrase, pitch.row.row);
-            self.heard_pitches.insert(row, pitch);
+            self.services.heard_pitches.insert(row, pitch);
         }
-        while let Some((track, report)) = self.handle.gen_heard() {
+        while let Some((track, report)) = self.services.handle.gen_heard() {
             self.hear_generator(track, report);
         }
-        while let Some((track, state)) = self.handle.jam_change() {
+        while let Some((track, state)) = self.services.handle.jam_change() {
             // A mute or solo waiting for the grid has landed, so the live controls follow it.
-            if state.switches_landed != self.jam[track].switches_landed
-                && let Some(live) = self.levels.get_mut(track)
+            if state.switches_landed != self.services.jam[track].switches_landed
+                && let Some(live) = self.services.levels.get_mut(track)
             {
                 live.mute = state.mute;
                 live.solo = state.solo;
-                self.dirty = true;
+                self.services.dirty = true;
             }
-            self.jam[track] = state;
+            self.services.jam[track] = state;
         }
         self.take_loaded();
         self.take_analyses();
@@ -1029,7 +882,7 @@ impl App {
         self.wheel_frame(now);
         self.follow_recording();
         self.follow_sampling();
-        let working = self.loader.is_waiting() || self.analyst.is_waiting();
+        let working = self.loader.is_waiting() || self.services.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
     }
 
@@ -1038,11 +891,11 @@ impl App {
     /// on the status line, and nothing shows once it's done, so an idle screen stays still.
     pub fn background_work(&self) -> Option<(&'static str, char)> {
         let since = self.work_since?;
-        let elapsed = self.now.saturating_duration_since(since);
+        let elapsed = self.services.now.saturating_duration_since(since);
         if elapsed < glyphs::SPINNER_AFTER {
             return None;
         }
-        let work = if self.analyst.is_waiting() {
+        let work = if self.services.analyst.is_waiting() {
             "Analysing"
         } else {
             "Loading"
@@ -1057,21 +910,6 @@ impl App {
     pub fn window_title(&self) -> String {
         let read_only = if self.read_only { " [RO]" } else { "" };
         format!("vimtracker: {}{read_only}", self.project_name())
-    }
-
-    /// Run an action and make the result current. A fader it moves that the steps drive is
-    /// taken over by the hand that moved it.
-    pub fn apply(&mut self, action: &Action) {
-        match edit(self.song(), action) {
-            Ok(next) => {
-                self.say_applied(&next);
-                self.take_over_moved(action);
-                self.history.commit(next);
-                self.dirty = true;
-                self.publish();
-            }
-            Err(error) => self.status = error.to_string(),
-        }
     }
 }
 
@@ -1114,16 +952,6 @@ fn which_key_due(since: Option<Instant>, now: Instant, delay: Duration) -> bool 
         Some(started) => now.saturating_duration_since(started) >= delay,
         None => false,
     }
-}
-
-fn live_from(song: &Song) -> Vec<TrackLive> {
-    song.tracks
-        .iter()
-        .map(|t| TrackLive {
-            mute: t.mute,
-            solo: t.solo,
-        })
-        .collect()
 }
 
 /// A folder's own name, which a project saved in it is called.

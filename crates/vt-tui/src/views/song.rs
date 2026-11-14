@@ -63,7 +63,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // The tracks not folded away, of which as many as fit around the cursor's are drawn, or the
     // cursor's alone if none do.
     let cursor_track = app.song_column.saturating_sub(COLUMNS_BEFORE_TRACKS);
-    let tracks: Vec<usize> = app.folds.shown(song).collect();
+    let tracks: Vec<usize> = app.services.folds.shown(song).collect();
     let at = tracks.partition_point(|&track| track < cursor_track);
     let widths: Vec<usize> = tracks
         .iter()
@@ -90,7 +90,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         // A group with its tracks folded into it says so, as the mixer does, beside its whole
         // name, as its column has room for both.
         let width = column_width(song, track);
-        let folded = app.folds.holds(song, track);
+        let folded = app.services.folds.holds(song, track);
         let label: String = label
             .chars()
             .take(width - 1 - usize::from(folded))
@@ -118,8 +118,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     ];
 
     let rows = usize::from(area.height.saturating_sub(ROWS_AROUND_SECTIONS));
-    let first = first_shown(app.cursor.section, song.sections.len(), rows);
-    let moving = matches!(app.transport, Transport::Playing | Transport::Paused);
+    let first = first_shown(app.services.cursor.section, song.sections.len(), rows);
+    let moving = matches!(
+        app.services.transport,
+        Transport::Playing | Transport::Paused
+    );
     let selection = app.selected_sections();
     for (index, section) in song
         .sections
@@ -128,8 +131,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .skip(first)
         .take(rows.max(1))
     {
-        let here = index == app.cursor.section;
-        let marker = if moving && index == app.playing_section {
+        let here = index == app.services.cursor.section;
+        let marker = if moving && index == app.services.playing_section {
             ">"
         } else {
             " "
@@ -148,7 +151,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         // A bar down the sections being looped, dim while the loop waits for the launch grid.
         let looped = app.looping.is_some_and(|sections| sections.holds(index));
         let bar = if looped { LOOP_BAR } else { " " };
-        let bar_style = if app.loop_waiting {
+        let bar_style = if app.services.loop_waiting {
             theme::dim()
         } else {
             theme::active()
@@ -158,17 +161,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled(bar, bar_style),
             Span::raw(" ".repeat(NUMBER_WIDTH - 4)),
         ];
-        let playing_here = moving && index == app.playing_section;
+        let playing_here = moving && index == app.services.playing_section;
         let mut cell = |text: String, column: usize, width: usize, faint: Option<Style>| {
             let selected = here && app.song_column == column;
-            let typing = selected && app.mode == Mode::Insert;
+            let typing = selected && app.modes.mode == Mode::Insert;
             let text = if typing {
-                format!("{}_", app.entry.text)
+                format!("{}_", app.modes.entry.text)
             } else {
                 text
             };
             let style = if selected {
-                theme::cursor(app.mode)
+                theme::cursor(app.modes.mode)
             } else if chosen {
                 theme::selected()
             } else if let Some(faint) = faint {
@@ -199,7 +202,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         cell(start.to_owned(), START_COLUMN, START_WIDTH, None);
         for &track in &shown_tracks {
             let chain = section.chains.get(track).copied().flatten();
-            let jam = app.jam.get(track).copied().unwrap_or_default();
+            let jam = app.services.jam.get(track).copied().unwrap_or_default();
             let text = chain.map_or_else(|| "--".to_owned(), |id| format!("{id:02X}"));
             // `~` is waiting to start, `>` is launched, and a row's chain that's been replaced dims.
             let mark = if jam.cued == Some(chain) {

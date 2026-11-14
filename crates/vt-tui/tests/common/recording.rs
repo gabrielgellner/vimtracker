@@ -28,7 +28,7 @@ pub fn recording_app(rows: Vec<Step>) -> (App, Realtime) {
     let (handle, realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     press(&mut app, "W");
-    assert_eq!(app.cursor.track, 1);
+    assert_eq!(app.services.cursor.track, 1);
     (app, realtime)
 }
 

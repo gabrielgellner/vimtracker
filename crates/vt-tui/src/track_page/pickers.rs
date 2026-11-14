@@ -209,7 +209,7 @@ impl App {
             return;
         }
         let Control::Mod(slot, field) = self.track_control() else {
-            self.status =
+            self.services.status =
                 "K chooses from a list on Machine, Voice, Patch, File, Type, Mode, Groove, Speed, Dest, Shape, Rate and Reset"
                     .to_owned();
             return;
@@ -220,7 +220,7 @@ impl App {
     /// List the filter types, with what each does and the current one highlighted.
     /// List the effects a slot can hold, with the current one highlighted.
     fn open_insert_picker(&mut self, slot: usize) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let current = self.page_track().inserts[slot];
         let items = Insert::ALL
             .map(|insert| {
@@ -249,14 +249,14 @@ impl App {
 
     /// List the choices of a slot's setting, with the current one highlighted.
     fn open_insert_param_picker(&mut self, slot: usize, param: usize) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let current = self.page_track().inserts[slot];
         let Some(found) = current
             .params()
             .get(param)
             .filter(|p| !p.choices.is_empty())
         else {
-            self.status = "This is a value: = and - change it, and i types it".to_owned();
+            self.services.status = "This is a value: = and - change it, and i types it".to_owned();
             return;
         };
         let items = found
@@ -279,7 +279,7 @@ impl App {
     }
 
     fn open_filter_picker(&mut self) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let current = self.page_track().filter;
         let items = FilterType::ALL
             .map(|filter| {
@@ -294,7 +294,7 @@ impl App {
     /// List what one of the accumulator's settings can be, with what each does and the one it has
     /// highlighted. Its limits are numbers, typed or moved instead.
     fn open_accumulator_picker(&mut self, field: AccumulatorField) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let now = self.page_track().accumulation;
         let pick = |accumulation| Pick::Accumulation {
             track,
@@ -302,7 +302,7 @@ impl App {
         };
         let (title, items): (&str, Vec<Item>) = match field {
             AccumulatorField::Up | AccumulatorField::Down => {
-                self.status = format!(
+                self.services.status = format!(
                     "A limit is a number of degrees from 1 to {MOST_DEGREES}: i types it, = and - move it"
                 );
                 return;
@@ -351,12 +351,12 @@ impl App {
     /// List what one of the arpeggio's settings can be, with what each does and the one it has
     /// highlighted. Its octaves are a number, typed or moved instead.
     fn open_arpeggio_picker(&mut self, field: ArpField) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let now = self.page_track().arpeggio;
         let pick = |arpeggio| Pick::Arpeggio { track, arpeggio };
         let (title, items): (&str, Vec<Item>) = match field {
             ArpField::Octaves => {
-                self.status = format!(
+                self.services.status = format!(
                     "Octaves is a number from 1 to {MOST_OCTAVES}: i types it, = and - move it"
                 );
                 return;
@@ -396,7 +396,7 @@ impl App {
 
     /// List the speeds a track's steps can go at, with the one it plays highlighted.
     fn open_speed_picker(&mut self) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let current = self.page_track().speed;
         let items = Speed::ALL
             .map(|speed| {
@@ -410,7 +410,7 @@ impl App {
     /// List the roles, each in its colour with what it's for, `Auto` saying what the machine
     /// makes it, and the track's highlighted.
     fn open_role_picker(&mut self) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let page = self.page_track();
         let items = Role::ALL
             .map(|role| {
@@ -432,11 +432,11 @@ impl App {
     /// List the modes the track's filter type offers, with what each does and the one it plays
     /// highlighted.
     fn open_filter_mode_picker(&mut self) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let page = self.page_track();
         let modes = page.filter.modes();
         if modes.is_empty() {
-            self.status = no_modes(page.filter);
+            self.services.status = no_modes(page.filter);
             return;
         }
         let items = modes
@@ -454,7 +454,7 @@ impl App {
     /// List the machines, each with its glyph, a sampler, a synth or a drum, and what it does,
     /// the sampler at the top and each voice under its kind, and the current one highlighted.
     fn open_machine_picker(&mut self) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let current = self.page_track().machine;
         let items = Machine::ALL
             .map(|machine| {
@@ -472,7 +472,7 @@ impl App {
     /// List what a machine's setting can be, such as 6-op's patches, with the current one
     /// highlighted.
     fn open_setting_picker(&mut self, setting: SettingId, choices: &'static [&'static str]) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let current = self.page_track().setting(setting);
         let items = (0..choices.len().min(0x100))
             .map(|at| {
@@ -492,7 +492,7 @@ impl App {
     /// List what a mod slot's setting can be, with the current one highlighted: its type, its
     /// type's mode, where it goes, or an envelope's or an LFO's own that are lists.
     fn open_mod_picker(&mut self, slot: usize, field: ModField) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let page = self.page_track();
         let modulator = page.mods[slot];
         let pick = |modulator| Pick::Mod {
@@ -703,7 +703,7 @@ impl App {
                 ("LFO fade", fades.to_vec())
             }
             _ => {
-                self.status =
+                self.services.status =
                     "K chooses from a list on Type, Mode, Loop, Polarity, Dest, Shape, Rate, Fade and Reset"
                         .to_owned();
                 return;

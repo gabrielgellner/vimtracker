@@ -378,7 +378,11 @@ fn the_keys_move_across_the_mod_page_in_the_app() {
     press(&mut app, "2{");
     assert_eq!(app.track_control(), Control::Mod(0, ModField::Sustain));
     // `{` and `}` aren't refused here, as they are off a rack.
-    assert!(!app.status.contains("go between"), "{}", app.status);
+    assert!(
+        !app.services.status.contains("go between"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -438,7 +442,7 @@ fn the_mod_page_fills_the_keys_box_at_163_by_42() {
     press(&mut app, " 5L");
     for keys_mode in [false, true] {
         if keys_mode {
-            app.mode = Mode::Keys;
+            app.modes.mode = Mode::Keys;
         }
         let lines = screen_cells(&mut app);
         let text = lines.join("\n");
@@ -616,11 +620,15 @@ fn b_switches_a_modulator_out_and_back_with_its_toggle_in_the_title() {
     // `b` from any row of Mod 4, here its Rate, switches it out, as one undo step.
     press(&mut app, &format!("{}jj", to_lfo(0)));
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Rate));
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "b");
     assert!(lfo(&app).bypassed);
-    assert!(app.status.contains("Switched Mod 4 out"), "{}", app.status);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert!(
+        app.services.status.contains("Switched Mod 4 out"),
+        "{}",
+        app.services.status
+    );
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     assert!(device_title(&app, "Mod 4").starts_with(&modulator_title(
         "Mod 4",
         false,
@@ -651,7 +659,11 @@ fn b_switches_a_modulator_out_and_back_with_its_toggle_in_the_title() {
     // Again brings it back, and undo takes it back out.
     press(&mut app, "b");
     assert!(!lfo(&app).bypassed);
-    assert!(app.status.contains("Mod 4 is back in"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Mod 4 is back in"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(track_page_buffer(&app)[(79, 4)].fg, name_colour);
     press(&mut app, "u");
     assert!(lfo(&app).bypassed);
@@ -673,16 +685,24 @@ fn b_refuses_what_has_no_switch() {
     let (mut app, _realtime) = app();
     press(&mut app, " 5L");
     let before = app.song().tracks[0].clone();
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     // The arpeggio, at the bottom of the LFOs' column, has nothing to switch.
     press(&mut app, &format!("{}3}}b", to_lfo(0)));
     assert_eq!(app.track_control(), Control::Arpeggio(ArpField::Rate));
-    assert!(app.status.contains("no switch"), "{}", app.status);
+    assert!(
+        app.services.status.contains("no switch"),
+        "{}",
+        app.services.status
+    );
     // Nor has the Sound page.
     press(&mut app, "Hb");
     assert_eq!(app.track_page.page, Page::Sound);
-    assert!(app.status.contains("FX and Mod pages"), "{}", app.status);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert!(
+        app.services.status.contains("FX and Mod pages"),
+        "{}",
+        app.services.status
+    );
+    assert_eq!(app.services.history.undo_depth(), depth);
     assert_eq!(app.song().tracks[0], before);
 }
 
@@ -707,11 +727,15 @@ fn k_on_a_slots_type_changes_it_keeping_where_it_goes_and_each_types_settings() 
     assert_eq!(app.track_control(), Control::Mod(1, ModField::Type));
     let picker = app.picker.as_ref().expect("the type picker");
     assert_eq!(picker.title, "Mod 2 type");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "/lfo");
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).kind, ModKind::Lfo);
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo step"
+    );
     // It keeps where it goes, how far and its switch, and its LFO is a new one's.
     assert_eq!(
         (
@@ -722,7 +746,11 @@ fn k_on_a_slots_type_changes_it_keeping_where_it_goes_and_each_types_settings() 
         (Some(SettingId::CUT), 0x40, true)
     );
     assert_eq!(slot(&app).lfo, Lfo::default());
-    assert!(app.status.contains("Mod 2 is LFO"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Mod 2 is LFO"),
+        "{}",
+        app.services.status
+    );
     assert!(device_title(&app, "Mod 2").starts_with(&modulator_title(
         "Mod 2",
         false,
@@ -735,11 +763,11 @@ fn k_on_a_slots_type_changes_it_keeping_where_it_goes_and_each_types_settings() 
     assert_ne!(phase, 0);
     press(&mut app, "hk");
     assert_eq!(app.track_control(), Control::Mod(1, ModField::Type));
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "K");
     press(&mut app, "/adsr");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     assert_eq!(slot(&app).kind, ModKind::Adsr);
     assert_eq!(slot(&app).adsr, adsr);
     assert_eq!(slot(&app).depth, 0x40);
@@ -758,18 +786,18 @@ fn equals_on_a_type_refuses_and_x_puts_back_the_slots_own() {
     let (mut app, _realtime) = app();
     press(&mut app, " 5L");
     let before = app.song().tracks[0].clone();
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     // `=` and `-` don't move a type, as it changes what the device is.
     press(&mut app, "=");
     assert_eq!(app.track_control(), Control::Mod(0, ModField::Type));
     assert!(
-        app.status.contains("K picks Mod 1's type"),
+        app.services.status.contains("K picks Mod 1's type"),
         "{}",
-        app.status
+        app.services.status
     );
     press(&mut app, "-");
     assert_eq!(app.song().tracks[0], before);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
     // Mod 4, made an ADSR, goes back to an LFO with `x`, keeping where it goes.
     press(&mut app, &format!("{}$K/cut", to_lfo(0)));
     special(&mut app, KeyCode::Enter);
@@ -921,7 +949,7 @@ fn a_slots_picture_follows_its_type() {
 fn with_lfos(lfos: [ModSlot; LFOS]) -> (App, Realtime) {
     let (mut app, realtime) = app();
     for (at, modulator) in lfos.into_iter().enumerate() {
-        app.apply(&Action::SetMod {
+        app.services.apply(&Action::SetMod {
             track: 0,
             slot: at + LFOS,
             modulator,
@@ -1022,7 +1050,7 @@ fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_pla
 
     // Each running LFO's dot is where its wave is, on its cycle drawn from its phase.
     let turns = [Some(0.1), Some(0.6), Some(0.3)];
-    app.live = Some(reported(&app, turns));
+    app.services.live = Some(reported(&app, turns));
     let (synced, placed) = frame(&mut app, &mut graphics);
     assert!(!synced.contains("a=T"), "the cycles are as they were");
     assert_eq!(
@@ -1068,7 +1096,7 @@ fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_pla
     // Moving on, each is placed again, and nothing is sent: no image, only the two placements.
     let ids: Vec<u32> = middles.iter().map(|(id, _)| *id).collect();
     let turns = [Some(0.35), Some(0.95), Some(0.5)];
-    app.live = Some(reported(&app, turns));
+    app.services.live = Some(reported(&app, turns));
     let (synced, placed) = frame(&mut app, &mut graphics);
     assert!(
         !synced.contains("a=T") && !placed.contains("a=t"),
@@ -1109,21 +1137,21 @@ fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_pla
     assert_eq!(dot_middles(&all).len(), 2, "{placed:?}");
 
     // Under the help, no dot shows through.
-    app.mode = Mode::Help;
+    app.modes.mode = Mode::Help;
     let (_, placed) = frame(&mut app, &mut graphics);
     all.push_str(&placed);
     assert!(dot_middles(&all).is_empty(), "{placed:?}");
-    app.mode = Mode::Normal;
+    app.modes.mode = Mode::Normal;
     let (_, placed) = frame(&mut app, &mut graphics);
     all.push_str(&placed);
 
     // Stopped, the engine reports none running, and they go.
-    app.live = Some(reported(&app, [None; LFOS]));
+    app.services.live = Some(reported(&app, [None; LFOS]));
     let (_, placed) = frame(&mut app, &mut graphics);
     all.push_str(&placed);
     assert!(dot_middles(&all).is_empty(), "{placed:?}");
     // And off the Mod page too.
-    app.live = Some(reported(&app, turns));
+    app.services.live = Some(reported(&app, turns));
     let (_, placed) = frame(&mut app, &mut graphics);
     all.push_str(&placed);
     assert_eq!(dot_middles(&all).len(), 2);
@@ -1155,7 +1183,7 @@ fn an_lfos_cycle_is_sent_again_only_for_its_wave_phase_deform_or_depths_sign() {
     let set = |app: &mut App, change: &dyn Fn(&mut ModSlot)| {
         let mut modulator = app.song().tracks[0].mods[LFOS];
         change(&mut modulator);
-        app.apply(&Action::SetMod {
+        app.services.apply(&Action::SetMod {
             track: 0,
             slot: LFOS,
             modulator,
@@ -1211,7 +1239,8 @@ fn three_lfos_dots_move_by_placing_alone_at_about_60_bytes_each() {
         lfo(SettingId::PAN, Shape::Tri, quarter / 2),
         lfo(SettingId::RES, Shape::Smooth, quarter * 4),
     ]);
-    app.handle
+    app.services
+        .handle
         .send(vt_engine::link::Command::PlayFrom { step: 0 });
     let mut graphics = Graphics::new();
     let frames = 4 * 1000 / FRAME_MS as usize;
@@ -1288,10 +1317,14 @@ fn a_slots_polarity_is_in_its_title_and_equals_flips_it_as_one_undo_step() {
     press(&mut app, "}2l");
     assert_eq!(app.track_control(), Control::Mod(1, ModField::Polarity));
     assert_eq!(slot(&app).polarity, None);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "=");
     assert_eq!(slot(&app).polarity, Some(Polarity::Bi));
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo step"
+    );
     assert!(device_title(&app, "Mod 2").starts_with(&modulator_title(
         "Mod 2",
         true,
@@ -1410,7 +1443,7 @@ fn a_slots_picture_is_sent_again_when_its_polarity_changes() {
             polarity: Some(polarity),
             ..app.song().tracks[0].mods[slot]
         };
-        app.apply(&Action::SetMod {
+        app.services.apply(&Action::SetMod {
             track: 0,
             slot,
             modulator,
@@ -1755,7 +1788,11 @@ fn a_slot_made_steps_with_no_depth_is_given_ff_and_its_title_has_its_mode_and_lo
     let slot = |app: &App| app.song().tracks[0].mods[3];
     assert_eq!(slot(&app).kind, ModKind::Steps);
     assert_eq!(slot(&app).depth, 0xFF, "heard as written");
-    assert!(app.status.contains("+FF"), "{}", app.status);
+    assert!(
+        app.services.status.contains("+FF"),
+        "{}",
+        app.services.status
+    );
     // One undo step takes back both.
     press(&mut app, "u");
     assert_eq!((slot(&app).kind, slot(&app).depth), (ModKind::Lfo, 0));
@@ -1801,7 +1838,7 @@ fn mod_page_text(app: &App) -> Vec<String> {
 /// A track whose `Mod 4` is Steps on `Cut`, with the cursor on its type.
 fn with_steps() -> (App, vt_engine::link::Realtime) {
     let (mut app, realtime) = app();
-    app.apply(&Action::SetMod {
+    app.services.apply(&Action::SetMod {
         track: 0,
         slot: 3,
         modulator: ModSlot::steps(Some(SettingId::CUT), Steps::default()),
@@ -1841,7 +1878,7 @@ fn the_steps_panel_is_a_cursor_stop_that_h_and_l_go_across() {
     assert_eq!(app.track_control(), Control::Mod(3, ModField::Step(0)));
     // From Mod 1 on its right, `h` comes in on the last value.
     let (mut app, _realtime) = with_steps();
-    app.apply(&Action::SetMod {
+    app.services.apply(&Action::SetMod {
         track: 0,
         slot: 0,
         modulator: ModSlot::steps(Some(SettingId::CUT), Steps::default()),
@@ -1921,7 +1958,7 @@ fn a_steps_rate_length_and_start_step_and_type() {
     // In `Note` mode, a rate means nothing.
     let mut slot = app.song().tracks[0].mods[3];
     slot.steps.mode = StepsMode::Note;
-    app.apply(&Action::SetMod {
+    app.services.apply(&Action::SetMod {
         track: 0,
         slot: 3,
         modulator: slot,
@@ -1941,7 +1978,7 @@ fn the_step_playing_is_lit_in_the_playheads_colour() {
     let (mut app, _realtime) = with_steps();
     let mut live = LiveValues::default();
     live.steps[3] = Some(2);
-    app.live = Some(live);
+    app.services.live = Some(live);
     let backend = ratatui::backend::TestBackend::new(163, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -2034,7 +2071,7 @@ fn pitch_in_scale_is_a_destination_of_its_own_for_every_type() {
 /// A track whose `Mod 4` is a Track slot, with the cursor on its type.
 fn with_tracking(tracking: ModSlot) -> (App, vt_engine::link::Realtime) {
     let (mut app, realtime) = app();
-    app.apply(&Action::SetMod {
+    app.services.apply(&Action::SetMod {
         track: 0,
         slot: 3,
         modulator: tracking,
@@ -2084,7 +2121,11 @@ fn a_track_slot_follows_velocity_with_its_source_in_the_title_and_its_map_down_t
         0x40,
         "past the highest velocity"
     );
-    assert!(app.status.contains("00 to 7F"), "{}", app.status);
+    assert!(
+        app.services.status.contains("00 to 7F"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "j=");
     assert_eq!(app.track_control(), Control::Mod(3, ModField::High));
     assert_eq!(slot(&app).track.velocity.high, 0x7F, "it stops at the top");
@@ -2111,7 +2152,11 @@ fn a_track_slot_follows_velocity_with_its_source_in_the_title_and_its_map_down_t
     assert_eq!(slot(&app).track.note.low, 127);
     typed(&mut app, "40");
     assert_eq!(slot(&app).track.note.low, 127, "a note, not hex");
-    assert!(app.status.contains("c_1 to G-8"), "{}", app.status);
+    assert!(
+        app.services.status.contains("c_1 to G-8"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "x");
     assert_eq!(slot(&app).track.note.low, 36);
     // Velocity's is as it was left.
@@ -2136,7 +2181,7 @@ fn a_track_slots_map_is_sent_with_a_dot_at_the_last_note() {
     assert_eq!(placed, "", "no note yet, so no dot");
     let corner = app.track_page.lfo_cycles_at[3].expect("its map is placed");
     // The engine says the last note was half way along its velocities, and so half way up.
-    app.live = Some(LiveValues {
+    app.services.live = Some(LiveValues {
         mods: std::array::from_fn(|slot| (slot == 3).then(|| LfoNow::along(0.5, 0.5))),
         ..LiveValues::default()
     });
@@ -2185,7 +2230,7 @@ fn space_g_a_keeps_what_mutate_drew_as_the_values_heard_in_one_undo_step() {
     use vt_model::step::Note;
     let (mut app, mut realtime) = app();
     with_a_sound(&mut app);
-    app.apply(&Action::SetTrackBase {
+    app.services.apply(&Action::SetTrackBase {
         track: 0,
         control: vt_model::action::TrackControl::Cutoff,
         value: 0x80,
@@ -2196,12 +2241,12 @@ fn space_g_a_keeps_what_mutate_drew_as_the_values_heard_in_one_undo_step() {
         mutate: 100,
         ..Steps::default()
     };
-    app.apply(&Action::SetMod {
+    app.services.apply(&Action::SetMod {
         track: 0,
         slot: 3,
         modulator: ModSlot::steps(Some(SettingId::CUT), written),
     });
-    app.apply(&Action::SetNote {
+    app.services.apply(&Action::SetNote {
         track: 0,
         phrase: 0,
         step: 0,
@@ -2214,7 +2259,7 @@ fn space_g_a_keeps_what_mutate_drew_as_the_values_heard_in_one_undo_step() {
     press(&mut app, " ga");
     assert_eq!(app.song().tracks[0].mods[3].steps, written);
     assert_eq!(
-        app.status,
+        app.services.status,
         "Mod 4 has drawn nothing to keep: Mutate draws as it plays"
     );
 
@@ -2223,13 +2268,13 @@ fn space_g_a_keeps_what_mutate_drew_as_the_values_heard_in_one_undo_step() {
     for _ in 0..4 {
         block(&mut realtime, &mut app);
     }
-    app.handle.send(Command::PlayFrom { step: 0 });
+    app.services.handle.send(Command::PlayFrom { step: 0 });
     run_for(&mut realtime, &mut app, 3000);
     cutoffs_heard(&mut realtime, &mut app, 3);
     let heard = cutoffs_heard(&mut realtime, &mut app, 4);
     let drawn = realtime.engine().live(0).drawn[3];
     assert_eq!(
-        app.live.unwrap().drawn[3],
+        app.services.live.unwrap().drawn[3],
         drawn,
         "the report has the draws"
     );
@@ -2253,7 +2298,7 @@ fn space_g_a_keeps_what_mutate_drew_as_the_values_heard_in_one_undo_step() {
         .collect();
     assert_eq!(as_heard, heard, "what was heard");
     assert_eq!(
-        app.status,
+        app.services.status,
         "Kept the 4 values Mod 4 drew: Mutate 0% now plays them"
     );
 
@@ -2297,13 +2342,13 @@ fn space_g_a_on_another_type_or_page_says_what_it_keeps() {
     press(&mut app, " 5L");
     press(&mut app, " ga");
     assert_eq!(
-        app.status,
+        app.services.status,
         "Space g a keeps a Steps slot's drift: Mod 1 is ADSR"
     );
     press(&mut app, "H");
     press(&mut app, " ga");
     assert_eq!(
-        app.status,
+        app.services.status,
         "Space g a keeps a Steps slot's drift on the Mod page, or applies a generator on the Gen page"
     );
 }
@@ -2356,7 +2401,8 @@ fn melody(steps: Steps, depth: i16, in_scale: bool) -> (App, Realtime) {
 
 /// Play from the top for this many frames, the app reading each report.
 fn hear(app: &mut App, realtime: &mut Realtime, frames: usize) {
-    app.handle
+    app.services
+        .handle
         .send(vt_engine::link::Command::PlayFrom { step: 0 });
     let mut out = vec![0.0; 1000 * 2];
     for _ in 0..frames / 1000 {
@@ -2411,7 +2457,7 @@ fn space_g_capital_a_writes_what_a_steps_slot_played_on_pitch_into_the_notes() {
         let before = app.song().as_ref().clone();
         press(&mut app, " gA");
         assert_eq!(
-            app.status,
+            app.services.status,
             "None of these notes has been heard yet: play them first"
         );
         hear(&mut app, &mut realtime, LAP);
@@ -2425,7 +2471,7 @@ fn space_g_capital_a_writes_what_a_steps_slot_played_on_pitch_into_the_notes() {
         assert!(slot.bypassed, "switched out");
         assert_eq!(slot.steps, moves, "its settings are kept");
         assert_eq!(
-            app.status,
+            app.services.status,
             "Wrote what Mod 4 played into 3 notes, and switched it out"
         );
         // It sounds as it did.
@@ -2517,7 +2563,7 @@ fn space_g_capital_a_writes_what_rnd_played_into_the_notes_and_takes_them_out() 
     let before = app.song().as_ref().clone();
     press(&mut app, " gA");
     assert_eq!(
-        app.status,
+        app.services.status,
         "None of these notes has been heard yet: play them first"
     );
     hear(&mut app, &mut realtime, LAP);
@@ -2540,7 +2586,7 @@ fn space_g_capital_a_writes_what_rnd_played_into_the_notes_and_takes_them_out() 
     assert_eq!((rnds(0), rnds(4)), (0, 0), "the note's RNDs are taken out");
     assert_eq!(rnds(8), 1, "the one beside the CUT stays");
     assert_eq!(
-        app.status,
+        app.services.status,
         "Wrote what RND played into 3 notes, and took their RNDs out"
     );
     // The first time round sounds as it did, but for the `CUT`'s, which still varies.
@@ -2561,14 +2607,14 @@ fn space_g_capital_a_writes_what_rnd_played_into_the_notes_and_takes_them_out() 
 #[test]
 fn space_g_capital_a_leaves_envelopes_on_pitch_alone() {
     let (mut app, _realtime) = app();
-    app.apply(&Action::SetMod {
+    app.services.apply(&Action::SetMod {
         track: 0,
         slot: 0,
         modulator: ModSlot::adsr(Some(SettingId::PITCH), vt_model::envelope::Adsr::default()),
     });
     press(&mut app, " gA");
     assert_eq!(
-        app.status,
+        app.services.status,
         "No Steps or LFO slot on Pitch, RND on a note, or generator moved, to write in"
     );
 }
@@ -2587,7 +2633,7 @@ fn space_g_capital_a_writes_what_a_random_lfo_held_at_each_note_played_in_scale(
         in_scale: true,
         ..ModSlot::lfo(Some(SettingId::PITCH), random).with_depth(0x0C)
     };
-    app.apply(&Action::SetMod {
+    app.services.apply(&Action::SetMod {
         track: 0,
         slot: 3,
         modulator: slot,
@@ -2697,7 +2743,7 @@ fn space_g_capital_a_writes_the_chaotic_line_a_lorenz_lfo_played_in_scale() {
         in_scale: true,
         ..ModSlot::lfo(Some(SettingId::PITCH), lorenz).with_depth(0x0C)
     };
-    app.apply(&Action::SetMod {
+    app.services.apply(&Action::SetMod {
         track: 0,
         slot: 3,
         modulator: slot,

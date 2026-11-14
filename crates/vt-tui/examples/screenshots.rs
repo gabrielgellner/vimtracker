@@ -681,7 +681,7 @@ fn explore(app: &mut App, purpose: Purpose, folder: &Path, meaning: &str, home: 
             .opening_first()
             .hinted(hint),
     );
-    app.mode = Mode::Picker;
+    app.modes.mode = Mode::Picker;
 }
 
 /// The sample explorer, `:sample`, over a folder of samples with a kit, some loops and a sound
@@ -718,7 +718,7 @@ fn take_explorer(folder: &Path) -> std::io::Result<PathBuf> {
         .following(Some(&samples.join("kick.wav")))
         .hinted("Enter choose");
     app.picker = Some(picker);
-    app.mode = Mode::Picker;
+    app.modes.mode = Mode::Picker;
     // Open the loops and the kit, and come back down to the kick, which is the track's.
     press(&mut app, "kkkljjjljjj", start);
     app.finish_loading();

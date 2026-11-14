@@ -15,6 +15,7 @@ use vt_model::settings::{FADER_COUNT, FADERS, SettingId};
 use vt_model::song::Track;
 
 use crate::app::App;
+use crate::services::Services;
 use crate::track_page::Control;
 
 /// How long a takeover or a giving back asked for is shown before the engine says so, after which
@@ -88,7 +89,7 @@ pub fn as_heard<'a>(track: &'a Track, faders: &Faders) -> Cow<'a, Track> {
     Cow::Owned(heard)
 }
 
-impl App {
+impl Services {
     /// The engine's report of a track's faders, with what's been asked of it since on top.
     pub fn faders(&self, track: usize) -> Faders {
         self.faders.get(track).copied().unwrap_or_default()
@@ -146,7 +147,7 @@ impl App {
         }
     }
 
-    fn wish(&mut self, track: usize, fader: usize, taken: bool) {
+    pub(crate) fn wish(&mut self, track: usize, fader: usize, taken: bool) {
         if let Some(faders) = self.faders.get_mut(track) {
             faders.taken[fader] = taken;
         }
@@ -159,7 +160,9 @@ impl App {
             at: self.now,
         });
     }
+}
 
+impl App {
     /// `Space e` and `Space E`: give the cursor's track's faders, or every track's, back to the
     /// steps, as Live's Re-Enable Automation does.
     pub(crate) fn give_back_faders(&mut self, every: bool) {
@@ -167,30 +170,30 @@ impl App {
         let which: Vec<usize> = if every {
             (0..tracks).collect()
         } else {
-            vec![self.cursor.track]
+            vec![self.services.cursor.track]
         };
         let taken: Vec<(usize, usize)> = which
             .iter()
             .flat_map(|track| (0..FADER_COUNT).map(move |fader| (*track, fader)))
-            .filter(|(track, fader)| self.faders(*track).taken[*fader])
+            .filter(|(track, fader)| self.services.faders(*track).taken[*fader])
             .collect();
         let name = if every {
             "Every track".to_owned()
         } else {
-            self.track_name(self.cursor.track)
+            self.track_name(self.services.cursor.track)
         };
         if taken.is_empty() {
-            self.status = format!("{name} has no fader taken over from the steps");
+            self.services.status = format!("{name} has no fader taken over from the steps");
             return;
         }
-        let track = (!every).then_some(self.cursor.track);
-        if !self.handle.send(Command::GiveBack { track }) {
+        let track = (!every).then_some(self.services.cursor.track);
+        if !self.services.handle.send(Command::GiveBack { track }) {
             return;
         }
         for (track, fader) in taken {
-            self.wish(track, fader, false);
+            self.services.wish(track, fader, false);
         }
-        self.status = if every {
+        self.services.status = if every {
             "Every fader follows the steps again".to_owned()
         } else {
             format!("{name}'s faders follow the steps again")
@@ -200,9 +203,9 @@ impl App {
     /// Opening a song gives every fader back to its steps, as a takeover belongs to playing the
     /// song it was made in.
     pub(crate) fn give_back_on_opening(&mut self) {
-        self.handle.send(Command::GiveBack { track: None });
-        self.fader_wishes.clear();
-        self.faders = [Faders::default(); vt_model::constants::MAX_TRACKS];
+        self.services.handle.send(Command::GiveBack { track: None });
+        self.services.fader_wishes.clear();
+        self.services.faders = [Faders::default(); vt_model::constants::MAX_TRACKS];
     }
 
     /// A track's name for the status line: `Track 01`, or a fixed track's title.
@@ -216,9 +219,9 @@ impl App {
     /// The status line's word on a fader's value, after it in real units: from the steps, or
     /// taken over from them, with how to give it back.
     pub fn fader_note(&self, track: usize, control: Control) -> Option<&'static str> {
-        if self.taken_over(track, control) {
+        if self.services.taken_over(track, control) {
             Some(", taken over from the steps: Space e gives it back")
-        } else if self.follows_steps(track, control) {
+        } else if self.services.follows_steps(track, control) {
             Some(", from the steps")
         } else {
             None

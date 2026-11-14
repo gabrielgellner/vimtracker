@@ -47,24 +47,24 @@ impl App {
         };
         match key {
             KeyCode::Esc => {
-                self.entry = Entry::default();
-                self.mode = Mode::Normal;
+                self.modes.entry = Entry::default();
+                self.modes.mode = Mode::Normal;
             }
             KeyCode::Backspace => {
-                self.entry.text.pop();
+                self.modes.entry.text.pop();
             }
             KeyCode::Enter if !hex => {
-                let text = std::mem::take(&mut self.entry.text);
-                self.mode = Mode::Normal;
+                let text = std::mem::take(&mut self.modes.entry.text);
+                self.modes.mode = Mode::Normal;
                 if !text.is_empty() {
                     self.commit_control(control, &text);
                 }
             }
             KeyCode::Char(c) if hex && c.is_ascii_hexdigit() => {
-                self.entry.text.push(c.to_ascii_uppercase());
-                if self.entry.text.len() == 2 {
-                    let text = std::mem::take(&mut self.entry.text);
-                    self.mode = Mode::Normal;
+                self.modes.entry.text.push(c.to_ascii_uppercase());
+                if self.modes.entry.text.len() == 2 {
+                    let text = std::mem::take(&mut self.modes.entry.text);
+                    self.modes.mode = Mode::Normal;
                     if self.track_page.fine {
                         if let Ok(fine) = u8::from_str_radix(&text, 16) {
                             self.set_fine_here(fine);
@@ -74,8 +74,8 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char(c) if !hex && self.entry.text.len() < longest => {
-                self.entry.text.push(c);
+            KeyCode::Char(c) if !hex && self.modes.entry.text.len() < longest => {
+                self.modes.entry.text.push(c);
             }
             _ => {}
         }
@@ -102,19 +102,22 @@ impl App {
                 }
             }
             Control::Choke if text.eq_ignore_ascii_case("off") => {
-                self.apply(&Action::SetTrackChoke {
-                    track: self.cursor.track,
+                self.services.apply(&Action::SetTrackChoke {
+                    track: self.services.cursor.track,
                     choke: None,
                 });
             }
             Control::Choke => match text.parse::<u8>() {
                 Ok(group) if (1..=CHOKE_GROUPS).contains(&group) => {
-                    self.apply(&Action::SetTrackChoke {
-                        track: self.cursor.track,
+                    self.services.apply(&Action::SetTrackChoke {
+                        track: self.services.cursor.track,
                         choke: Some(group),
                     });
                 }
-                _ => self.status = format!("Choke is a group from 1 to {CHOKE_GROUPS}, or off"),
+                _ => {
+                    self.services.status =
+                        format!("Choke is a group from 1 to {CHOKE_GROUPS}, or off")
+                }
             },
             Control::Group if text.eq_ignore_ascii_case("off") => self.set_group_here(None),
             Control::Group => {
@@ -123,17 +126,20 @@ impl App {
                     Ok(group) if (1..=MAX_GROUPS).contains(&usize::from(group)) => {
                         self.set_group_here(Some(group));
                     }
-                    _ => self.status = format!("Group is a group from 1 to {MAX_GROUPS}, or off"),
+                    _ => {
+                        self.services.status =
+                            format!("Group is a group from 1 to {MAX_GROUPS}, or off")
+                    }
                 }
             }
             Control::GateLength => match text.trim_end_matches('%').trim().parse::<u8>() {
                 Ok(percent) if (1..=100).contains(&percent) => {
-                    self.apply(&Action::SetTrackGateLength {
-                        track: self.cursor.track,
+                    self.services.apply(&Action::SetTrackGateLength {
+                        track: self.services.cursor.track,
                         gate_length: Some(gate_value(percent)),
                     });
                 }
-                _ => self.status = "Gate is a percent from 1 to 100".to_owned(),
+                _ => self.services.status = "Gate is a percent from 1 to 100".to_owned(),
             },
             Control::Glide if text.eq_ignore_ascii_case("off") => self.set_glide(0),
             Control::Glide => match text
@@ -145,13 +151,14 @@ impl App {
             {
                 Some(ms) => self.set_glide(glide_value(ms)),
                 None => {
-                    self.status = format!("Glide is a time in ms up to {LONGEST_GLIDE_MS}, or off");
+                    self.services.status =
+                        format!("Glide is a time in ms up to {LONGEST_GLIDE_MS}, or off");
                 }
             },
             Control::Reset => match reset_named(text) {
                 Some(reset) => self.set_reset(reset),
                 None => {
-                    self.status = format!(
+                    self.services.status = format!(
                         "Reset is a number of steps from 1 to {MAX_TRACK_RESET}, of bars like 2bar, or off"
                     );
                 }
@@ -169,7 +176,7 @@ impl App {
                         });
                     }
                     _ => {
-                        self.status =
+                        self.services.status =
                             format!("A limit is a number of degrees from 1 to {MOST_DEGREES}");
                     }
                 }
@@ -182,7 +189,7 @@ impl App {
                         ..track.arpeggio
                     });
                 }
-                _ => self.status = format!("Octaves is a number from 1 to {MOST_OCTAVES}"),
+                _ => self.services.status = format!("Octaves is a number from 1 to {MOST_OCTAVES}"),
             },
             Control::Arpeggio(_) => {}
             Control::Mod(slot, field) => self.type_mod(slot, field, text),
@@ -409,7 +416,7 @@ impl App {
         };
         match changed {
             Some(modulator) => self.set_mod(slot, modulator),
-            None => self.status = why,
+            None => self.services.status = why,
         }
     }
 }

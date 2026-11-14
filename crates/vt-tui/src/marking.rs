@@ -31,7 +31,9 @@ impl App {
     /// else the one the current track plays.
     pub(crate) fn marked_entry(&self) -> u8 {
         match self.sample_page.pinned {
-            Some((track, number)) if self.view == View::Sample && track == self.cursor.track => {
+            Some((track, number))
+                if self.modes.view == View::Sample && track == self.services.cursor.track =>
+            {
                 number
             }
             _ => self.track_sample_number(),
@@ -44,22 +46,23 @@ impl App {
     pub(crate) fn set_mark(&mut self, letter: char, slice: Option<u8>) {
         let number = self.marked_entry();
         let Some(mut entry) = self.song().bank.get(number).cloned() else {
-            self.status = format!(
+            self.services.status = format!(
                 "Track {:02} plays no sample to mark: K on Sample chooses one",
-                self.cursor.track + 1
+                self.services.cursor.track + 1
             );
             return;
         };
         let name = sample_text(self.song(), number);
         let points = &mut entry.edit.points;
         if points.slices.is_empty() {
-            self.status = format!("{name} has no slices to name: :slice 16 cuts it into 16");
+            self.services.status =
+                format!("{name} has no slices to name: :slice 16 cuts it into 16");
             return;
         }
         let count = points.slices.len();
         let at = match slice {
             Some(slice) if usize::from(slice) >= count => {
-                self.status = format!("{name} has slices 00 to {:02X}", count - 1);
+                self.services.status = format!("{name} has slices 00 to {:02X}", count - 1);
                 return;
             }
             Some(slice) => usize::from(slice),
@@ -68,38 +71,40 @@ impl App {
         let points = &mut entry.edit.points;
         let before = points.marked(letter).filter(|before| *before != at);
         points.set_mark(letter, at);
-        self.apply(&Action::SetBankEntry {
+        self.services.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
         let moved = before.map_or(String::new(), |before| format!(", not {before:02X}"));
-        self.status = format!("'{letter} names slice {at:02X} of {name}{moved}: u to undo");
+        self.services.status =
+            format!("'{letter} names slice {at:02X} of {name}{moved}: u to undo");
     }
 
     /// The key after `'` or `m` on the sample page.
     pub(crate) fn mark_key(&mut self, wait: MarkWait, key: Key) {
         let KeyCode::Char(c) = key.code else {
-            self.status = "Marks are a to z: :marks lists them".to_owned();
+            self.services.status = "Marks are a to z: :marks lists them".to_owned();
             return;
         };
         if key.ctrl || key.alt {
-            self.status = "Marks are a to z: :marks lists them".to_owned();
+            self.services.status = "Marks are a to z: :marks lists them".to_owned();
             return;
         }
         match (wait, c) {
             (MarkWait::Name, c) if is_mark(c) => self.set_mark(c, None),
             (MarkWait::Name, _) => {
-                self.status = "m takes a letter, a to z, to name the slice with".to_owned();
+                self.services.status =
+                    "m takes a letter, a to z, to name the slice with".to_owned();
             }
             (MarkWait::Jump, c) if is_mark(c) => self.jump_to_mark(c),
             (MarkWait::Jump, '\'') => {
                 if !self.jump_to_previous_context() {
-                    self.status = "No jump to go back from yet".to_owned();
+                    self.services.status = "No jump to go back from yet".to_owned();
                 }
             }
             (MarkWait::Jump, '<' | '>') => self.jump_to_selection_end(c == '>'),
             (MarkWait::Jump, _) => {
-                self.status =
+                self.services.status =
                     "Marks are a to z, '< '> the last selection and '' the last jump".to_owned();
             }
         }
@@ -109,7 +114,7 @@ impl App {
     /// the selection made last, not one being made.
     pub(crate) fn jump_to_selection_end(&mut self, last: bool) {
         let Some((first, end)) = self.sample_page.last_selection else {
-            self.status = "No selection yet: v starts one".to_owned();
+            self.services.status = "No selection yet: v starts one".to_owned();
             return;
         };
         let Ok(shown) = self.sample_page_here() else {
@@ -123,16 +128,19 @@ impl App {
     /// `:marks`: list the letters naming slices, in the order of their slices, with each slice's
     /// number and where it starts, to go to one on the sample page.
     pub(crate) fn open_marks_picker(&mut self) {
-        self.count = None;
+        self.modes.count = None;
         let number = self.marked_entry();
         let items = self.mark_items(number, Pick::Mark);
         if items.is_empty() {
-            self.status = match self.song().bank.get(number) {
+            self.services.status = match self.song().bank.get(number) {
                 Some(_) => format!(
                     "No slice of {} has a name: :mark a names the slice here",
                     sample_text(self.song(), number)
                 ),
-                None => format!("Track {:02} plays no sample", self.cursor.track + 1),
+                None => format!(
+                    "Track {:02} plays no sample",
+                    self.services.cursor.track + 1
+                ),
             };
             return;
         }
@@ -143,7 +151,10 @@ impl App {
     pub(crate) fn delete_marks(&mut self, letters: Option<&[char]>) {
         let number = self.marked_entry();
         let Some(mut entry) = self.song().bank.get(number).cloned() else {
-            self.status = format!("Track {:02} plays no sample", self.cursor.track + 1);
+            self.services.status = format!(
+                "Track {:02} plays no sample",
+                self.services.cursor.track + 1
+            );
             return;
         };
         let marks = &mut entry.edit.points.marks;
@@ -154,16 +165,16 @@ impl App {
             .collect();
         let name = sample_text(self.song(), number);
         if taken.is_empty() {
-            self.status = format!("No such marks on {name}");
+            self.services.status = format!("No such marks on {name}");
             return;
         }
         marks.retain(|letter, _| !taken.contains(letter));
-        self.apply(&Action::SetBankEntry {
+        self.services.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
         let said: Vec<String> = taken.iter().map(|letter| format!("'{letter}")).collect();
-        self.status = format!("Took {} off {name}: u to undo", said.join(" "));
+        self.services.status = format!("Took {} off {name}: u to undo", said.join(" "));
     }
 
     /// `'a`: the sample page on the slice a letter names, as a jump `C-o` comes back from.
@@ -175,14 +186,14 @@ impl App {
             .get(number)
             .and_then(|entry| entry.edit.points.marked(letter));
         let Some(slice) = marked else {
-            self.status = format!(
+            self.services.status = format!(
                 "No slice of {} is named {letter}: :marks lists them",
                 sample_text(self.song(), number)
             );
             return;
         };
         self.go_to_slice(number, slice);
-        self.status = format!("'{letter}: slice {slice:02X}");
+        self.services.status = format!("'{letter}: slice {slice:02X}");
     }
 
     /// `]'` and `['`: the sample page on the next or previous slice with a letter naming it, from
@@ -218,18 +229,19 @@ impl App {
                     .map(|letter| format!("'{letter}"))
                     .collect();
                 self.go_to_slice(number, slice);
-                self.status = format!("{}: slice {slice:02X}", letters.join(" "));
+                self.services.status = format!("{}: slice {slice:02X}", letters.join(" "));
             }
             None if named.is_empty() => {
-                self.status = "No slice has a name: :mark a names the slice here".to_owned();
+                self.services.status =
+                    "No slice has a name: :mark a names the slice here".to_owned();
             }
-            None => self.status = "No named slice further that way".to_owned(),
+            None => self.services.status = "No named slice further that way".to_owned(),
         }
     }
 
     /// Put the sample page's cursor on a slice's start, as a jump.
     fn go_to_slice(&mut self, number: u8, slice: usize) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         self.record_jump();
         self.show_view(View::Sample);
         self.sample_page.pinned = (number != self.track_sample_number()).then_some((track, number));
@@ -238,7 +250,7 @@ impl App {
                 let start = shown.slice(slice).start;
                 self.sample_page.show_frame(start, shown.length());
             }
-            Err(why) => self.status = why,
+            Err(why) => self.services.status = why,
         }
     }
 }
