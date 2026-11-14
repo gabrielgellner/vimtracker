@@ -899,7 +899,7 @@ impl InsertState {
 
     /// What its effect does with a sound that's the same on both sides (decision 147). Every
     /// effect says, so a new one has to choose: `Mono::Stereo` is always safe, and
-    /// `tests/mono.rs` checks every other claim.
+    /// `tests/all/mono.rs` checks every other claim.
     pub fn mono(&self) -> Mono {
         match self.insert {
             // Each of its types works each side alone, the same way, with nothing between them.
