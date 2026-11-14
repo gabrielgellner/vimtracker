@@ -49,16 +49,28 @@ symbols-font:
 costs *args:
     cargo run --release -q -p vt-engine --example costs -- {{args}}
 
-# Run every test
+# cargo-nextest runs each test in a process of its own, as many at once as there are cores, and
+# takes about a third of the time `cargo test` does, which runs one test binary at a time.
+#
+# Run every test, under cargo-nextest when it's installed and cargo test when it isn't
 test:
-    cargo test --workspace
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v cargo-nextest > /dev/null; then
+        cargo nextest run --workspace --locked
+        # nextest doesn't run doctests.
+        cargo test --workspace --locked --doc
+    else
+        echo "cargo-nextest isn't installed, so the tests run under cargo test, a binary at a time."
+        echo "nextest is about three times faster: cargo install cargo-nextest --locked"
+        cargo test --workspace --locked
+    fi
 
 # What a pull request must pass before it merges, run here rather than on GitHub: formatting,
 # clippy with warnings as errors, then every test
-ci:
+ci: && test
     cargo fmt --all --check
     cargo clippy --workspace --all-targets --locked -- -D warnings
-    cargo test --workspace --locked
 
 # Show what the next release would add to the changelog
 changelog-preview:

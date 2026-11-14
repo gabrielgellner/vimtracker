@@ -1,0 +1,9 @@
+# cargo-nextest's settings, for `just ci`'s tests (#663). Each test runs in a process of its own,
+# as many at once as there are cores, so one binary's slow tests don't hold up the rest.
+[profile.default]
+# A test still running after this is marked SLOW as it goes, and listed again at the end. Most
+# take well under a second; the DSP and engine sweeps take a few, more on a busy machine.
+slow-timeout = { period = "20s" }
+final-status-level = "slow"
+# Every failure, rather than the first.
+fail-fast = false
