@@ -135,6 +135,10 @@ impl TypedValue {
         format!("{}_", self.text)
     }
 
+    pub fn as_str(&self) -> &str {
+        &self.text
+    }
+
     /// Type a character, whatever it is, for a caller with rules of its own.
     pub fn push(&mut self, c: char) {
         self.text.push(c);
