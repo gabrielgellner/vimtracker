@@ -338,6 +338,50 @@ fn draw_generator(
     preview
 }
 
+/// An `Acid`'s `Loops`, under its device: each part's loop, and at the end of the title, dim,
+/// when the loops come round together, their least common multiple in rows, and when the
+/// phrase plays the same pass again, in passes of its span.
+fn draw_loops(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, focused: bool) {
+    let Some(Control::Gen {
+        phrase, generator, ..
+    }) = device.grid.iter().flatten().flatten().next().copied()
+    else {
+        return;
+    };
+    let Some(live) = app.live_generator(app.cursor.track, phrase, generator) else {
+        return;
+    };
+    let heard = live.generator.heard();
+    let rows = live.generator.rows().map_or(1, |rows| rows.len()) as u64;
+    let after = if heard.acid.loops() {
+        let period = heard.acid.loops.period();
+        let passes = lcm(period, rows) / rows.max(1);
+        format!("· in step again every {period} rows, the phrase every {passes} passes")
+    } else {
+        "· no loops: every pass the same".to_owned()
+    };
+    let widget = Device::new(device.identity.clone())
+        .after(Line::styled(after, theme::dim()))
+        .focused(focused);
+    frame.render_widget(widget, area);
+    let cells = GenCells {
+        app,
+        live: &live,
+        context: live.context(),
+        bar_cells: GEN_CELLS.bar_cells,
+    };
+    let rows = device.grid.iter().copied().map(Vec::from).collect();
+    let grid = SettingsGrid::new(&cells, rows, GEN_CELLS);
+    frame.render_widget(grid, Device::settings_area(area));
+}
+
+fn lcm(a: u64, b: u64) -> u64 {
+    fn gcd(a: u64, b: u64) -> u64 {
+        if b == 0 { a } else { gcd(b, a % b) }
+    }
+    a / gcd(a, b).max(1) * b
+}
+
 /// `Empty`, which `K` makes another column live from.
 fn draw_empty(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, focused: bool) {
     let here = device.title[0] == Some(app.track_control());
@@ -382,6 +426,7 @@ pub(super) fn draw(
             (Some(Control::NewGenerator(_)), _) => {
                 draw_empty(frame, area, app, device, at == cursor);
             }
+            _ if device.is_loops() => draw_loops(frame, area, app, device, at == cursor),
             (Some(Control::Gen { generator, .. }), _) => {
                 if let Some(corner) = draw_generator(frame, area, app, device, at == cursor) {
                     previews.push((generator, corner));

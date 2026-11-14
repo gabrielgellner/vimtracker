@@ -5,6 +5,7 @@ use vt_engine::link::{Command, connect};
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_engine::track_state::LiveValues;
+use vt_model::attractor::{System, attractor_at};
 use vt_model::insert::{Distort, DistortType, Insert};
 use vt_model::lfo::{Fade, Lfo, LfoMode, Rate, Shape};
 use vt_model::modulation::{MOD_SLOTS, ModSlot};
@@ -1057,4 +1058,114 @@ fn a_pitch_lock_plays_its_semitones_up() {
     assert!(apart(STEP / 2) < 1e-3, "{}", apart(STEP / 2));
     let plain = render(song(&["C-3 -- pitch:8C80 --- ---"]), slow_sine(), STEP);
     assert_ne!(plain, octave, "the fine part bends it");
+}
+
+/// An attractor's LFO, as `moving` takes a wave's.
+fn chaotic(shape: Shape, rate: Rate, mode: LfoMode) -> Lfo {
+    Lfo {
+        shape,
+        rate,
+        mode,
+        ..Lfo::default()
+    }
+}
+
+#[test]
+fn an_attractor_repeats_whatever_the_blocks_and_follows_the_seed() {
+    for shape in [Shape::Lorenz, Shape::Rossler] {
+        let lfo = chaotic(shape, Rate::Note(QUARTER), LfoMode::Free);
+        let whole = render(moving(lfo), flat(), STEP * 24);
+        assert_eq!(whole, render(moving(lfo), flat(), STEP * 24), "{shape:?}");
+        let mut engine = Engine::new(RATE, version(moving(lfo), flat()));
+        engine.play_from(0);
+        let mut pieces = vec![0.0; whole.len()];
+        for chunk in pieces.chunks_mut(2 * 37) {
+            engine.process(chunk);
+        }
+        assert_eq!(whole, pieces, "{shape:?}");
+        let mut reseeded = moving(lfo);
+        reseeded.seed += 1;
+        assert_ne!(whole, render(reseeded, flat(), STEP * 24), "{shape:?}");
+        // Over 16 cycles it moves the volume across at least half its swing. Lorenz can circle
+        // one wing for several, so it needn't be either side of where it's held.
+        let out = render(moving(lfo), flat(), STEP * 64);
+        let levels: Vec<f32> = (0..256).map(|at| left(&out, STEP / 4 * at)).collect();
+        let (low, high) = (
+            levels.iter().copied().fold(f32::MAX, f32::min),
+            levels.iter().copied().fold(0.0, f32::max),
+        );
+        let half = level_gain(HELD + SWING * 0.5) / level_gain(HELD - SWING * 0.5);
+        assert!(high / low > half, "{shape:?} {low} {high}");
+    }
+}
+
+#[test]
+fn an_attractor_from_the_top_is_where_its_seed_takes_it_and_its_phase_picks_the_axis() {
+    // A quarter a cycle, so eight steps are two cycles.
+    for shape in [Shape::Lorenz, Shape::Rossler] {
+        let system = System::of(shape).unwrap();
+        for (phase, axis) in [(0, 0), (120, 1), (240, 2)] {
+            let lfo = Lfo {
+                phase,
+                ..chaotic(shape, Rate::Note(QUARTER), LfoMode::Free)
+            };
+            let song = moving(lfo);
+            let seed = song.seed;
+            let now = live_after(song, 8).mods[3].unwrap();
+            let expected = attractor_at(system, 2.0, seed, 0.0)[axis];
+            let heard = f32::from(now.value) / f32::from(i16::MAX);
+            assert!(
+                (heard - expected).abs() < 0.02,
+                "{shape:?} {phase} {heard} {expected}"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_attractor_moves_faster_at_a_faster_rate() {
+    // How far the LFO goes in all over eight bars, read every 192 frames: the same path four times
+    // as fast goes about four times as far.
+    let travel = |rate: Rate| {
+        let song = moving(chaotic(Shape::Lorenz, rate, LfoMode::Free));
+        let mut engine = Engine::new(RATE, version(song, flat()));
+        engine.play_from(0);
+        let mut out = vec![0.0; 2 * 192];
+        let values: Vec<f32> = (0..STEP * 128 / 192)
+            .map(|_| {
+                engine.process(&mut out);
+                f32::from(engine.live(0).mods[3].unwrap().value) / f32::from(i16::MAX)
+            })
+            .collect();
+        values
+            .windows(2)
+            .map(|two| (two[1] - two[0]).abs())
+            .sum::<f32>()
+    };
+    let (slow, fast) = (travel(Rate::Note(QUARTER)), travel(Rate::Note(QUARTER / 4)));
+    assert!(
+        fast > slow * 3.0 && fast < slow * 5.0,
+        "a sixteenth goes about four times as far as a quarter: {slow} {fast}"
+    );
+}
+
+#[test]
+fn trig_starts_an_attractor_from_its_seed_at_each_note_and_hold_holds_it() {
+    let mut notes = song(&["C-3 -- vol:80 --- ---"]);
+    let phrase = Arc::make_mut(notes.tracks[0].phrases.get_mut(&0).unwrap());
+    *phrase.step_mut(8).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
+    let with = |mode| {
+        let mut song = notes.clone();
+        song.tracks[0].mods[3] = ModSlot::lfo(
+            Some(SettingId::VOL),
+            chaotic(Shape::Rossler, Rate::Note(QUARTER), mode),
+        )
+        .with_depth(0x40);
+        song
+    };
+    let at = |mode, steps| live_after(with(mode), steps).mods[3].unwrap();
+    assert_eq!(at(LfoMode::Trig, 3), at(LfoMode::Trig, 11));
+    assert_ne!(at(LfoMode::Free, 3), at(LfoMode::Free, 11));
+    assert_eq!(at(LfoMode::Hold, 3), at(LfoMode::Hold, 6));
+    assert_ne!(at(LfoMode::Hold, 6), at(LfoMode::Hold, 10));
 }

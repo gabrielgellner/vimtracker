@@ -1437,13 +1437,13 @@ An `LFO` slot moves around the current value, so `CUT40` on a step moves the cen
 and the LFO carries on around it. It draws one cycle of its wave in a box on its
 right, starting from its `Phase`, upside down for a negative `Depth`, with a dot
 riding it where the LFO is now. `Random` and `Smooth` draw only a centre line, as
-their values aren't known ahead.
+their values aren't known ahead, and `Lorenz` and `Rössler` draw themselves, below.
 
 | Setting | Value |
 |---|---|
 | Mode | In the title: how notes start it, below |
 | Dest | In the title: what it moves, such as `Cut`, or `---` |
-| Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` |
+| Shape | `Sine` `Tri` `Saw` `Ramp` `Square` `Random` `Smooth` `Lorenz` `Rössler` |
 | Rate | The length of one cycle. `=` and `+` are always faster |
 | Depth | How far it swings each way, in hex. Negative flips it |
 | Phase | Where in the cycle it starts, in degrees |
@@ -1489,6 +1489,34 @@ does; lowered, it sags and spends longer low, as an exp curve. On `Square` it's 
 width: `+80` is high for three quarters of the cycle, `-80` for a quarter. The
 random shapes have nothing to bend. The picture draws the bent wave. A step locks
 it with `DFM`, as `DFM4 C0`, where `80` is none.
+
+**Lorenz and Rössler** are strange attractors: a point that goes round and round
+without ever retracing its path, so the LFO moves smoothly but never quite repeats,
+a drift for `Cut` or `Pan`, or a wandering tune on `Pitch in scale`. A cycle of its
+`Rate` is about one turn: once round a wing of Lorenz's butterfly, which it circles
+a few times before it flips to the other, or once round Rössler's loop, a wave that
+swells and shrinks. On them `Deform` is what makes them chaotic, Lorenz's ρ and
+Rössler's c. At `00` each is the textbook attractor. Lowered, Lorenz lingers a
+little longer on each wing, and Rössler calms through loops of four and two turns
+to a plain loop at `-FF`. Raised, both get wilder, and Lorenz at the top settles
+into a figure of eight.
+
+On an attractor `Phase` is `Axis`, as it has no cycle to start part way through:
+it picks which of its three axes you hear, `x` at 0°, `y` at 120° and `z` at 240°,
+and blends the two either side between them. `+` and `_` go from one axis to the
+next. Lorenz's `x` and `y` swing from side to side as it flips wings, and its `z`
+rises and falls once a turn; Rössler's `x` and `y` are its loop, a quarter turn
+apart, and its `z` is a spike once a turn. The picture is the attractor seen side
+on, the axis you hear up it and the next one round across it, with the dot riding
+it where the LFO is.
+
+Each starts from a point the song's seed picks, its own for each track and slot,
+so a render repeats. In `Free` it starts at the top of the song; playing from
+anywhere else starts it from that point where you play from, rather than where
+playing from the top would have taken it. `Trig`, `One` and `Half` start it from
+the same point at each note, so each note plays the same chaotic phrase, and `Hold`
+holds where it is at each note. A rate moved by a macro or another LFO speeds it up
+or slows it down from where it is.
 
 | Type this as a rate | For |
 |---|---|
@@ -1703,7 +1731,8 @@ column has whole notes only, so a move of part of a semitone goes to the nearest
 and a slot that never moved a note half a semitone, such as a gentle vibrato, is
 left playing. Envelopes and Track slots on `Pitch` stay too, as they shape each
 note rather than choose it. With `Mutate` up, it's the time round just heard that's written, so
-play, listen, and press `Space g A` on a pass you like.
+play, listen, and press `Space g A` on a pass you like. A `Lorenz` or `Rössler` LFO never plays
+the same pass twice, so the same goes for it.
 
 It writes in the phrase's live columns a macro or `Vary` moved too, each applied as it was last
 heard and its rows not heard yet as written, so it's the one key for making the phrase what you
@@ -1750,7 +1779,12 @@ and `Side`, or a named rhythm's `Rhythm`, `Part` and `Child`, at the foot of the
 they stay put as the fill changes; where `Acid`'s `Density` or `Random`'s `Weights` takes the
 top of the third, `Rhythm` goes to the fourth. A `Follow`, which has no `Where`, has its
 `Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
-whose three are full, its riff's `Spread` and `Bias` in the fourth. A value with a bar is brief, as `9` for hits,
+whose three are full, its riff's `Spread` and `Bias` in the fourth. An `Acid`'s loops
+(see **Acid lines** in the editing guide) are a device of their own under it, `Loops`:
+`Trig loop` and `Note loop` in its first column, `Oct loop`, `Acc loop` and `Sld loop` in
+its second, level with `Octave`, `Accent` and `Slide` above, and at the end of its
+title, dim, when the loops come round together and when the phrase plays the same pass
+again, `in step again every 420 rows, the phrase every 105 passes`. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 
@@ -1810,6 +1844,11 @@ hears what playing to it would. `Space g a` on one keeps the register as the pas
 just heard began, so that pass plays first and the ring runs on from there,
 `Change` where it was; turn `Change` to `0%` and that loop holds, every pass. `r`
 lets go of it and starts a new ring.
+
+An `Acid` with a loop on runs on from pass to pass the same way, each loop where the
+last pass left it, with or without `Vary`. `Space g a` on one keeps the pass just
+heard as the one written, and its loops go on from there; `r` starts them from
+their first rows again.
 
 **Making a column live.** The last device, `Empty`, has `K` list the columns of
 the phrase with nothing live on them. Choosing one makes it live over the phrase's
@@ -1968,7 +2007,7 @@ under `Factory` after your own, so `:patch` has some from the start. They're bui
 program rather than written into your folder, so they can't be changed, tagged or written over;
 a patch of yours with the same name comes first, and `:patch save` always saves one of yours.
 Each is tagged `generative` and with what it acts on, so `#generative` lists them and `#rhythm`
-finds `Euclid` and `Noise Ring`.
+finds `Euclid`, `Acid loops` and `Noise Ring`.
 
 | Patch | From the song | Its macros |
 |---|---|---|
@@ -1976,6 +2015,7 @@ finds `Euclid` and `Noise Ring`.
 | `Deja vu` | `deja-vu` | `Deja vu`, `Spread` |
 | `Euclid` | `euclid`'s bass | `Hits`, `Rotate` |
 | `Kria` | `kria` | `Pitch loop`, `Octave loop` |
+| `Acid loops` | `kria`'s bass | `Trig loop` to `Sld loop`, all five |
 | `Accents` | `live-generators`' hats | `Hits`, `Rotate` |
 | `Acid line` | `acid-lines` | `Density`, `Notes`, `Octave`, `Accent`, `Slide` |
 | `Drunk walk` | `walks`' bass | `Step`, `Hits` |

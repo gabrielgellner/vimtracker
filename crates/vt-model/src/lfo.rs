@@ -7,6 +7,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::attractor::{System, attractor_at};
 use crate::constants::{TICKS_PER_QUARTER, TICKS_PER_STEP};
 
 const BAR_TICKS: u32 = TICKS_PER_QUARTER as u32 * 4;
@@ -361,11 +362,16 @@ pub enum Shape {
     Random,
     /// Random values with a smooth path between them.
     Smooth,
+    /// Lorenz's strange attractor, a turn round a wing of its butterfly a cycle, never quite the
+    /// same twice (#592).
+    Lorenz,
+    /// Rössler's, a turn round its loop a cycle.
+    Rossler,
 }
 
 impl Shape {
     /// Every shape, in the order `+` goes through them.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 9] = [
         Self::Sine,
         Self::Tri,
         Self::Saw,
@@ -373,7 +379,16 @@ impl Shape {
         Self::Square,
         Self::Random,
         Self::Smooth,
+        Self::Lorenz,
+        Self::Rossler,
     ];
+
+    /// Whether it's a strange attractor, which the engine keeps running rather than working out
+    /// from where the song is, whose `Deform` is its chaotic parameter and whose `Phase` picks
+    /// the axis heard.
+    pub fn is_attractor(self) -> bool {
+        matches!(self, Self::Lorenz | Self::Rossler)
+    }
 
     /// The name on screen.
     pub fn name(self) -> &'static str {
@@ -385,6 +400,8 @@ impl Shape {
             Self::Square => "Square",
             Self::Random => "Random",
             Self::Smooth => "Smooth",
+            Self::Lorenz => "Lorenz",
+            Self::Rossler => "Rössler",
         }
     }
 }
@@ -401,7 +418,8 @@ pub fn wave(shape: Shape, cycles: f64, key: u64) -> f32 {
 /// A wave bent by an LFO's `Deform`, from -1 to 1 (#468): Surge's `bend1`, one bend for every
 /// shape, which skews `Sine`, `Tri`, `Saw` and `Ramp` toward a log or an exp shape while keeping
 /// their peaks where they are, and is the width of `Square`'s high part. The random shapes have
-/// nothing to bend. At 0 it's the wave exactly.
+/// nothing to bend, and to an attractor it's the parameter that makes it chaotic. At 0 it's the
+/// wave exactly.
 #[inline]
 pub fn deformed_wave(shape: Shape, cycles: f64, key: u64, deform: f32) -> f32 {
     let position = cycles.rem_euclid(1.0) as f32;
@@ -433,6 +451,13 @@ pub fn deformed_wave(shape: Shape, cycles: f64, key: u64, deform: f32) -> f32 {
             let cycle = cycles.floor() as i64;
             let at = |offset: i64| random(key, cycle.wrapping_add(offset));
             catmull_rom([at(-1), at(0), at(1), at(2)], position).clamp(-1.0, 1.0)
+        }
+        // An attractor's `x`, from its seed at the start: a step for every 128th of a cycle, so
+        // the engine keeps one running instead (`attractor::Attractor`), and the deform is its
+        // parameter rather than a bend.
+        Shape::Lorenz | Shape::Rossler => {
+            let system = System::of(shape).expect("an attractor");
+            attractor_at(system, cycles, key, deform)[0]
         }
     }
 }

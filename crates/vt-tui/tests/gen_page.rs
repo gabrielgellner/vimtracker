@@ -194,6 +194,64 @@ fn an_acid_riffs_spread_and_bias_are_in_the_fourth_column() {
     assert_eq!(app.history.undo_depth(), depth + 5);
 }
 
+/// An `Acid`'s loops are a device of their own under it, `Loops`, whose title says how long the
+/// line takes to come round; and `Space g a` keeps the pass heard, the count its loops began it
+/// at, so they go on from there.
+#[test]
+fn an_acids_loops_are_a_device_of_their_own_and_space_g_a_keeps_the_pass_heard() {
+    use vt_engine::link::Command;
+    let (mut app, mut realtime) = on_gen_page();
+    keys(&mut app, "Kacid<Enter>");
+    let text = fx_page_text(&app).join("\n");
+    assert!(
+        text.contains("Loops") && text.contains("Trig loop"),
+        "{text}"
+    );
+    assert!(text.contains("no loops: every pass the same"), "{text}");
+    for _ in 0..8 {
+        if here(&app) == Some(GenParam::TrigLoop) {
+            break;
+        }
+        keys(&mut app, "j");
+    }
+    assert_eq!(
+        here(&app),
+        Some(GenParam::TrigLoop),
+        "down into the Loops device"
+    );
+    keys(&mut app, "i12<Enter>j");
+    assert_eq!(here(&app), Some(GenParam::NoteLoop));
+    keys(&mut app, "i7<Enter>");
+    let looping = generators(&app)[0].shape;
+    assert_eq!(
+        (looping.acid.loops.trigs, looping.acid.loops.notes),
+        (12, 7)
+    );
+    let text = fx_page_text(&app).join("\n");
+    // 12 and 7 together every 84 rows, which is 10 and a half of the span's 8.
+    assert!(
+        text.contains("in step again every 84 rows, the phrase every 21 passes"),
+        "{text}"
+    );
+    let written = notes(&app);
+    for _ in 0..4 {
+        block(&mut realtime, &mut app);
+    }
+    app.handle.send(Command::PlayFrom { step: 0 });
+    let pass = 8 * 6000;
+    for _ in 0..(pass * 5 / 2) / 256 {
+        block(&mut realtime, &mut app);
+    }
+    let depth = app.history.undo_depth();
+    keys(&mut app, " ga");
+    let kept = generators(&app)[0].shape;
+    assert_eq!(kept.acid.at, 16, "the third pass began 16 rows on");
+    assert_eq!(kept.acid.loops, looping.acid.loops, "still looping");
+    assert_ne!(notes(&app), written, "the phrase holds the pass heard");
+    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert!(app.status.contains("its loops go on"), "{}", app.status);
+}
+
 /// `Vary` sits last in a drawing fill's title, `K` lists how long each variation lasts, and
 /// `Space g a` keeps the pass last heard as its seed, `Vary` back to `Once`, as one undo step.
 #[test]

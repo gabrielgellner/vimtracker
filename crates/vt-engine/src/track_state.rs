@@ -3,6 +3,7 @@
 use vt_model::accumulator::{Accumulation, Moves, Walk};
 use vt_model::arpeggio::Arpeggio;
 use vt_model::arpeggio::{ArpMode, Cycle};
+use vt_model::attractor::{Attractor, System, view};
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
 use vt_model::envelope::{Envelope, Lpg};
 use vt_model::groove::Groove;
@@ -218,6 +219,10 @@ struct SlotRun {
     steps_lap: Lap<StepRate>,
     /// Where its LFO was at the track's last note, which `Hold` holds.
     held: f64,
+    /// Its LFO's attractor while its shape is one (#592), which can't be worked out from where the
+    /// song is as a wave can, so it's stepped on in the LFO's cycles: none until it's first heard
+    /// after a start, so it's seeded there.
+    chaos: Option<Attractor>,
     /// Its held depth, phase, polarity and deform, on the `00` to `FF` scale, as steps and the
     /// page set them. The polarity is below zero until it's first set, which is the slot's own.
     values: [f32; 4],
@@ -267,6 +272,7 @@ impl Default for SlotRun {
             lfo_lap: Lap::default(),
             steps_lap: Lap::default(),
             held: 0.0,
+            chaos: None,
             values: [128.0, 0.0, -1.0, 128.0],
             share: 1.0,
             out: 0.0,
@@ -294,6 +300,24 @@ impl SlotRun {
         self.start = start;
         self.lfo_lap.start(start);
         self.steps_lap.start(start);
+        self.chaos = None;
+    }
+
+    /// Where its LFO's attractor is `cycles` into its count, each axis from -1 to 1, stepped on
+    /// from where it was. It's seeded there, from `key`, when it has none since its start, was
+    /// another attractor, or is behind or too far behind to step on to it, as after a long rest
+    /// or between notes far apart in `Hold`: always at a time the song fixes, so a render repeats.
+    fn attractor_at(&mut self, system: System, cycles: f64, key: u64, deform: f32) -> [f32; 3] {
+        let reached = self
+            .chaos
+            .as_mut()
+            .is_some_and(|chaos| chaos.system == system && chaos.reach(cycles, deform));
+        if !reached {
+            self.chaos = Some(Attractor::seeded(system, key, deform, cycles));
+        }
+        self.chaos
+            .as_ref()
+            .map_or([0.0; 3], |chaos| chaos.point(cycles, deform))
     }
 
     /// Draw the value of the step that's come round again, with `Mutate`'s chance, once each time
@@ -643,6 +667,15 @@ impl LfoNow {
         let turn = f64::from(u16::MAX) + 1.0;
         Self {
             phase: (cycles.rem_euclid(1.0) * turn) as u32 as u16,
+            value: (value.clamp(-1.0, 1.0) * f32::from(i16::MAX)).round() as i16,
+        }
+    }
+
+    /// Where an attractor is in its picture: `across` it from -1 at the left to 1 at the right, as
+    /// the phase, and what's heard of it, from -1 to 1, as the value.
+    pub fn across(across: f32, value: f32) -> Self {
+        Self {
+            phase: ((across.clamp(-1.0, 1.0) + 1.0) / 2.0 * f32::from(u16::MAX)).round() as u16,
             value: (value.clamp(-1.0, 1.0) * f32::from(i16::MAX)).round() as i16,
         }
     }
@@ -1876,8 +1909,20 @@ impl TrackState {
                     let phase = f64::from(phase_of(phase) + moved_by(1));
                     let deform = ((depth_of(deform) + moved_by(3) * 255.0) / f32::from(MAX_DEFORM))
                         .clamp(-1.0, 1.0);
-                    let value = deformed_wave(slot.lfo.shape, cycles + phase, key, deform);
-                    run.now = Some(LfoNow::of(cycles + phase, value));
+                    // An attractor's phase is the way it's looked at, which axis is heard, as it has
+                    // no cycle to start part way through; the Mod page draws it from the next
+                    // axis round, so its dot goes across by that one.
+                    let value = if let Some(system) = System::of(slot.lfo.shape) {
+                        let point = run.attractor_at(system, cycles, key, deform);
+                        let value = view(point, phase);
+                        let across = view(point, phase + 1.0 / 3.0);
+                        run.now = Some(LfoNow::across(across, value));
+                        value
+                    } else {
+                        let value = deformed_wave(slot.lfo.shape, cycles + phase, key, deform);
+                        run.now = Some(LfoNow::of(cycles + phase, value));
+                        value
+                    };
                     let since_note = noted.map(|note| now.tick - note.tick);
                     let value = polarity.of(Polarity::Bi, value) * slot.lfo.fade.gain(since_note);
                     offsets[destination.index()] +=
