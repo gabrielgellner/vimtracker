@@ -4,38 +4,18 @@ use vt_engine::engine::{Engine, Transport};
 use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::insert::{Distort, DistortType, INSERTS, Insert};
-use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Song, level_gain};
+
+use crate::support::{pool, song};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, and 1000 per groove unit.
 const STEP: usize = 6000;
 const UNIT: usize = 1000;
 
-fn pool(frames: Vec<[f32; 2]>) -> Arc<SamplePool> {
-    let mut pool = SamplePool::default();
-    pool.insert("s", SampleData { frames });
-    Arc::new(pool)
-}
-
 fn flat(level: f32) -> Arc<SamplePool> {
     pool(vec![[level, level]; RATE as usize * 4])
-}
-
-/// A song with one track playing these step texts, and instant envelopes.
-fn song(texts: &[&str]) -> Song {
-    let mut song = Song::new(1);
-    for track in 0..song.sound_tracks() {
-        song.sample_on(track, "s");
-    }
-    song.tracks[0].mods[0].adsr.attack_ms = 0;
-    song.tracks[0].mods[0].adsr.release_ms = 0;
-    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
-    for (index, text) in texts.iter().enumerate() {
-        *phrase.step_mut(index).unwrap() = text.parse().unwrap();
-    }
-    song
 }
 
 fn render(song: Song, samples: Arc<SamplePool>, frames: usize) -> Vec<[f32; 2]> {

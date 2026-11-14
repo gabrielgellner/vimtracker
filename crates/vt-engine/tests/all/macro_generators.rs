@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 use vt_engine::engine::Engine;
 use vt_engine::gens::{GenReport, GenRow};
-use vt_engine::published::Published;
 use vt_model::action::{Action, edit};
 use vt_model::bloom::Bloom;
 use vt_model::generator::Span;
@@ -16,7 +15,6 @@ use vt_model::lfo::{Lfo, Rate, Shape as Wave};
 use vt_model::macros::{GenColumn, MacroMap, MacroTarget};
 use vt_model::modulation::ModSlot;
 use vt_model::project::{load_song, save_song};
-use vt_model::samples::SamplePool;
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
@@ -25,6 +23,8 @@ use vt_model::shape::{
 };
 use vt_model::song::{Machine, Phrase, Song, SynthVoice};
 use vt_model::step::Step;
+
+use crate::support::no_samples::version;
 
 const RATE: u32 = 48_000;
 /// 5625 frames a step at 128 BPM.
@@ -122,13 +122,6 @@ fn plain(song: &Song, steps: Vec<Step>) -> Song {
 
 fn written(song: &Song) -> Vec<Step> {
     song.tracks[0].phrases[&0].steps().to_vec()
-}
-
-fn version(song: &Song) -> Arc<Published> {
-    Arc::new(Published::new(
-        Arc::new(song.clone()),
-        Arc::new(SamplePool::default()),
-    ))
 }
 
 /// Play a song from the top for so many steps, a step at a time, and what was heard of its

@@ -6,12 +6,13 @@
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
-use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::{Chain, ChainEntry, Lane, Phrase, Song};
 use vt_model::speed::Speed;
+
+use crate::support::version;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -60,10 +61,6 @@ fn song(tracks: &[&[&str]]) -> Song {
         track.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));
     }
     song
-}
-
-fn version(song: &Song, pool: Arc<SamplePool>) -> Arc<Published> {
-    Arc::new(Published::new(Arc::new(song.clone()), pool))
 }
 
 /// Which steps a note starts on, in one channel, over this many steps.

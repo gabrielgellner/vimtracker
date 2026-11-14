@@ -4,13 +4,15 @@
 use std::sync::Arc;
 
 use vt_engine::engine::{Engine, sample_of_tick};
-use vt_engine::published::Published;
-use vt_engine::render::{RenderOptions, render_frames, render_loop};
+use vt_engine::render::{RenderOptions, render_loop};
 use vt_model::constants::TICKS_PER_STEP;
 use vt_model::groove::{Groove, GrooveId, SWING_PERCENTS};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Lane, Phrase, Song};
+use vt_model::song::{Lane, Song};
+
+use crate::support::panned::{render, song};
+use crate::support::version;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, and 25 per tick.
@@ -51,30 +53,6 @@ fn flat_pool() -> Arc<SamplePool> {
     Arc::new(pool)
 }
 
-/// Tracks playing these rows, each on its own, panned apart when there are two so each channel
-/// is one track's.
-fn song(tracks: &[&[&str]]) -> Song {
-    let mut song = Song::new(tracks.len());
-    song.limiter = false;
-    for (index, rows) in tracks.iter().enumerate() {
-        song.sample_on(index, "s");
-        let track = &mut song.tracks[index];
-        track.mods[0].adsr.attack_ms = 0;
-        track.mods[0].adsr.release_ms = 0;
-        let pan = match (tracks.len(), index) {
-            (1, _) => "",
-            (_, 0) => " pan:00",
-            _ => " pan:FF",
-        };
-        let steps = rows
-            .iter()
-            .map(|text| format!("{text}{pan}").parse().unwrap())
-            .collect();
-        track.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));
-    }
-    song
-}
-
 /// A row of notes this many steps long.
 fn notes(steps: usize) -> Vec<&'static str> {
     vec!["C-3 --"; steps]
@@ -85,18 +63,6 @@ fn with_own(mut song: Song, groove: Groove) -> Song {
     song.grooves = vec![groove];
     song.groove = GrooveId::custom(0).unwrap();
     song
-}
-
-fn version(song: &Song, pool: Arc<SamplePool>) -> Arc<Published> {
-    Arc::new(Published::new(Arc::new(song.clone()), pool))
-}
-
-/// One channel of a render, for this many steps.
-fn render(song: &Song, pool: Arc<SamplePool>, steps: usize, channel: usize) -> Vec<f32> {
-    render_frames(version(song, pool), RATE, steps * STEP)
-        .chunks(2)
-        .map(|frame| frame[channel])
-        .collect()
 }
 
 /// Where notes begin in one channel, for songs of short hits.

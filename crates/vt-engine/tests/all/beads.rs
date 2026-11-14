@@ -2,7 +2,6 @@
 //! grains following the steps start on them, and golden renders of each mode and quality; and
 //! `Grains`, whose grains it shares, renders as it did.
 
-
 use std::sync::Arc;
 
 use vt_engine::published::Published;
@@ -13,27 +12,9 @@ use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
 use crate::support::golden;
+use crate::support::pluck::pool;
 
 const RATE: u32 = 48_000;
-
-/// A plucked chord a quarter of a second long, then nothing: a few sines and their octaves,
-/// dying away.
-fn pool() -> Arc<SamplePool> {
-    let frames = (0..RATE as usize / 4)
-        .map(|frame| {
-            let t = frame as f32 / RATE as f32;
-            let value = [130.8_f32, 196.0, 261.6, 329.6, 523.2]
-                .iter()
-                .map(|hertz| (t * hertz * std::f32::consts::TAU).sin() * 0.12)
-                .sum::<f32>()
-                * (-t * 6.0).exp();
-            [value, value]
-        })
-        .collect();
-    let mut pool = SamplePool::default();
-    pool.insert("pluck", SampleData { frames });
-    Arc::new(pool)
-}
 
 fn song(insert: Insert, texts: &[&str]) -> Song {
     let mut song = Song::new(1);

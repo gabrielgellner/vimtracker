@@ -2,11 +2,9 @@
 //! (#338): the static curve from a sine held at steady levels, and attack and release from a tone
 //! burst, as how long the gain takes to move 63% and 90% of the way.
 
-
 use std::f32::consts::TAU;
 use std::sync::Arc;
 
-use crate::support::golden;
 use vt_engine::dsp::compressor::{Compressor, curve_db};
 use vt_engine::dsp::effects::distort::InsertState;
 use vt_engine::engine::Engine;
@@ -19,6 +17,8 @@ use vt_model::insert::{
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::song::Song;
+
+use crate::support::golden;
 
 const RATE: u32 = 48_000;
 /// The tone the measurements play, as the harness's specs do.

@@ -4,7 +4,6 @@
 //! render repeats whatever the blocks, and a song whose rates never move plays as it always did,
 //! from the top or from anywhere.
 
-
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
@@ -19,6 +18,7 @@ use vt_model::song::Song;
 use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
 
 use crate::support::golden;
+use crate::support::steady::flat;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, and 16 to the bar.
@@ -28,17 +28,6 @@ const BAR: usize = 16 * STEP;
 const UPDATE: usize = 32;
 /// A whole turn of an LFO's reported phase.
 const TURN: i64 = 1 << 16;
-
-fn flat() -> Arc<SamplePool> {
-    let mut pool = SamplePool::default();
-    pool.insert(
-        "s",
-        SampleData {
-            frames: vec![[1.0, 1.0]; RATE as usize * 20],
-        },
-    );
-    Arc::new(pool)
-}
 
 /// A slow tone, so the filter's moves are heard.
 fn tone() -> Arc<SamplePool> {

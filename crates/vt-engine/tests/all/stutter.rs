@@ -1,7 +1,6 @@
 //! The stutter as a song plays it: a step's lock repeats a piece of the track's sound on the grid,
 //! each lock starting it again, and golden renders of it.
 
-
 use std::sync::Arc;
 
 use vt_engine::published::Published;

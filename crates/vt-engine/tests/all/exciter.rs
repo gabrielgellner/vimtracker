@@ -1,6 +1,5 @@
 //! The exciter as a song plays it: what it adds to a track's sound, and golden renders of it.
 
-
 use std::sync::Arc;
 
 use vt_engine::published::Published;

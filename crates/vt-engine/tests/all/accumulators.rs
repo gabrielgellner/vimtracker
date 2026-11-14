@@ -6,33 +6,18 @@
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
-use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::accumulator::{Accumulation, Adds, AtLimit, Moves, Reset};
-use vt_model::sample::SampleData;
-use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::{Chain, ChainEntry, Phrase, Song};
+
+use crate::support::ramp::{RAMP_FRAMES, render, version};
 
 const RATE: u32 = 48_000;
 /// Frames per step at 120 BPM.
 const STEP: usize = 6000;
-/// The ramp the sample plays, so a note's pitch is how fast it climbs.
-const RAMP_FRAMES: usize = RATE as usize * 8;
 /// `C-3`, which plays the ramp at its own speed.
 const C3: i32 = 60;
-
-fn pool() -> Arc<SamplePool> {
-    let mut pool = SamplePool::default();
-    let frames = (0..RAMP_FRAMES)
-        .map(|at| {
-            let level = at as f32 / RAMP_FRAMES as f32;
-            [level, level]
-        })
-        .collect();
-    pool.insert("ramp", SampleData { frames });
-    Arc::new(pool)
-}
 
 const C_MAJOR: Scale = Scale {
     on: true,
@@ -54,18 +39,6 @@ fn song(rows: &[&str], accumulation: Accumulation) -> Song {
     let steps = rows.iter().map(|text| text.parse().unwrap()).collect();
     track.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));
     song
-}
-
-fn version(song: &Song) -> Arc<Published> {
-    Arc::new(Published::new(Arc::new(song.clone()), pool()))
-}
-
-/// The left channel, for this many steps.
-fn render(song: &Song, steps: usize) -> Vec<f32> {
-    render_frames(version(song), RATE, steps * STEP)
-        .chunks(2)
-        .map(|frame| frame[0])
-        .collect()
 }
 
 /// Below this a little into a step, a note started there. One carried on from the step before has

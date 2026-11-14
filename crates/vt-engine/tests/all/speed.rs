@@ -15,6 +15,8 @@ use vt_model::song::{Phrase, Section, SectionStart, Song};
 use vt_model::speed::Speed;
 use vt_model::step::MOST_NUDGE;
 
+use crate::support::version;
+
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM, and 25 per tick.
 const STEP: usize = 6000;
@@ -78,10 +80,6 @@ fn with_own(mut song: Song, groove: Groove) -> Song {
     song.grooves = vec![groove];
     song.groove = GrooveId::custom(0).unwrap();
     song
-}
-
-fn version(song: &Song, pool: Arc<SamplePool>) -> Arc<Published> {
-    Arc::new(Published::new(Arc::new(song.clone()), pool))
 }
 
 /// One channel of a render, for this many frames.

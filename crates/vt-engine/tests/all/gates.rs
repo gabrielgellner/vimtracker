@@ -3,30 +3,13 @@
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
-use vt_engine::published::Published;
-use vt_engine::render::render_frames;
-use vt_model::sample::SampleData;
-use vt_model::samples::SamplePool;
 use vt_model::song::{Lane, Phrase, Song};
+
+use crate::support::ramp::{render, version};
 
 const RATE: u32 = 48_000;
 /// Frames per step at 120 BPM.
 const STEP: usize = 6000;
-/// The ramp the sample plays, so a note that starts again starts from 0, and a faster one climbs
-/// faster.
-const RAMP_FRAMES: usize = RATE as usize * 8;
-
-fn pool() -> Arc<SamplePool> {
-    let mut pool = SamplePool::default();
-    let frames = (0..RAMP_FRAMES)
-        .map(|at| {
-            let level = at as f32 / RAMP_FRAMES as f32;
-            [level, level]
-        })
-        .collect();
-    pool.insert("ramp", SampleData { frames });
-    Arc::new(pool)
-}
 
 /// One track playing these rows, with notes that start and stop at once.
 fn song(rows: &[&str]) -> Song {
@@ -39,18 +22,6 @@ fn song(rows: &[&str]) -> Song {
         .phrases
         .insert(0, Arc::new(Phrase::from_steps(steps)));
     song
-}
-
-fn version(song: &Song) -> Arc<Published> {
-    Arc::new(Published::new(Arc::new(song.clone()), pool()))
-}
-
-/// The left channel, for this many steps.
-fn render(song: &Song, steps: usize) -> Vec<f32> {
-    render_frames(version(song), RATE, steps * STEP)
-        .chunks(2)
-        .map(|frame| frame[0])
-        .collect()
 }
 
 /// How far the ramp has climbed a little into a step, past the fade of a note cut short: near 0

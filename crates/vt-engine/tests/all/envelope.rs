@@ -5,22 +5,17 @@ use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::envelope::{Adsr, Ahd, Curve, Drum, Hold, Lpg};
 use vt_model::modulation::ModSlot;
-use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::{FilterMode, FilterType, Song};
+
+use crate::support::pool;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
 const STEP: usize = 6000;
 /// Frames in a millisecond.
 const MS: usize = 48;
-
-fn pool(frames: Vec<[f32; 2]>) -> Arc<SamplePool> {
-    let mut pool = SamplePool::default();
-    pool.insert("s", SampleData { frames });
-    Arc::new(pool)
-}
 
 fn flat() -> Arc<SamplePool> {
     pool(vec![[1.0, 1.0]; RATE as usize * 10])

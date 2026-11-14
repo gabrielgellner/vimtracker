@@ -1,32 +1,16 @@
-
 use std::sync::Arc;
 
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, Stem, render_loop, render_stems, write_wav};
 use vt_model::groove::{Groove, GrooveId};
-use vt_model::sample::SampleData;
-use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
 use crate::support::golden;
+use crate::support::tone::pool;
 
 const RATE: u32 = 48_000;
 /// 16 steps at 120 BPM.
 const LOOP: usize = 96_000;
-
-/// A short decaying tone, computed so no audio file is needed.
-fn pool() -> Arc<SamplePool> {
-    let frames = (0..4800)
-        .map(|i| {
-            let t = i as f32 / RATE as f32;
-            let value = (t * 220.0 * std::f32::consts::TAU).sin() * (1.0 - i as f32 / 4800.0) * 0.8;
-            [value, value]
-        })
-        .collect();
-    let mut pool = SamplePool::default();
-    pool.insert("tone", SampleData { frames });
-    Arc::new(pool)
-}
 
 fn song(texts: &[&str]) -> Song {
     let mut song = Song::new(2);

@@ -1,35 +1,19 @@
 //! The reverbs as a song plays them: golden renders of each, so the ones there are stay exactly as
 //! they were when another comes, and what a spring's knock does on a track with nothing playing.
 
-
 use std::sync::Arc;
 
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_frames, render_loop};
 use vt_model::insert::{Insert, Plate, Reverb, Space, Spring};
-use vt_model::sample::SampleData;
-use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
 use crate::support::golden;
+use crate::support::tone::pool;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
 const STEP: usize = 6000;
-
-/// A short decaying tone, computed so no audio file is needed.
-fn pool() -> Arc<SamplePool> {
-    let frames = (0..4800)
-        .map(|i| {
-            let t = i as f32 / RATE as f32;
-            let value = (t * 220.0 * std::f32::consts::TAU).sin() * (1.0 - i as f32 / 4800.0) * 0.8;
-            [value, value]
-        })
-        .collect();
-    let mut pool = SamplePool::default();
-    pool.insert("tone", SampleData { frames });
-    Arc::new(pool)
-}
 
 /// A song with one track playing these step texts through an effect in its first slot.
 fn song(insert: Insert, texts: &[&str]) -> Song {

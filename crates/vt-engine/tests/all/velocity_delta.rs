@@ -3,49 +3,15 @@
 
 use std::sync::Arc;
 
-use vt_engine::published::Published;
-use vt_engine::render::render_frames;
 use vt_model::lfo::{Lfo, Rate, Shape};
 use vt_model::modulation::ModSlot;
-use vt_model::sample::SampleData;
-use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
-use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
+use vt_model::song::{Lane, Machine, SynthVoice};
 
-const RATE: u32 = 48_000;
+use crate::support::level::{render, song};
+
 /// Frames per step at 120 BPM.
 const STEP: usize = 6000;
-
-/// A sample that holds one level, so what's heard is the note's gain alone.
-fn pool() -> Arc<SamplePool> {
-    let mut pool = SamplePool::default();
-    let frames = vec![[0.5, 0.5]; RATE as usize * 8];
-    pool.insert("flat", SampleData { frames });
-    Arc::new(pool)
-}
-
-/// One sample track playing these rows, with notes that start and stop at once.
-fn song(rows: &[&str]) -> Song {
-    let mut song = Song::new(1);
-    song.limiter = false;
-    song.sample_on(0, "flat");
-    song.tracks[0].mods[0].adsr.attack_ms = 0;
-    song.tracks[0].mods[0].adsr.release_ms = 0;
-    let steps = rows.iter().map(|text| text.parse().unwrap()).collect();
-    song.tracks[0]
-        .phrases
-        .insert(0, Arc::new(Phrase::from_steps(steps)));
-    song
-}
-
-/// The left channel, for this many steps.
-fn render(song: &Song, steps: usize) -> Vec<f32> {
-    let version = Arc::new(Published::new(Arc::new(song.clone()), pool()));
-    render_frames(version, RATE, steps * STEP)
-        .chunks(2)
-        .map(|frame| frame[0])
-        .collect()
-}
 
 /// How loud the note at this step is, halfway through it.
 fn level(out: &[f32], step: usize) -> f32 {

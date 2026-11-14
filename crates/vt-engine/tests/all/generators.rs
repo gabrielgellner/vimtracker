@@ -2,18 +2,15 @@
 //! written, sample for sample; a generator whose settings the engine holds elsewhere is rendered
 //! again from its `Shape` and heard so, at once, a pass at a time from where the song is.
 
-
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
 use vt_engine::gens::{GenHeard, GenReport};
-use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop};
 use vt_model::action::{Action, edit};
 use vt_model::bloom::Bloom;
 use vt_model::generator::Span;
 use vt_model::lfo::Shape as Wave;
-use vt_model::samples::SamplePool;
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
@@ -25,6 +22,7 @@ use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Step};
 
 use crate::support::golden;
+use crate::support::no_samples::version;
 
 const RATE: u32 = 48_000;
 
@@ -165,13 +163,6 @@ pub fn moving_song() -> Song {
         Span::Lane,
         shape(FillKind::Random, 0x10, 0x90, Where::AllRows),
     )
-}
-
-fn version(song: &Song) -> Arc<Published> {
-    Arc::new(Published::new(
-        Arc::new(song.clone()),
-        Arc::new(SamplePool::default()),
-    ))
 }
 
 #[test]

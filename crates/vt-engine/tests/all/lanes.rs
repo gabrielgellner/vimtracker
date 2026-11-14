@@ -3,21 +3,14 @@
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
-use vt_engine::published::Published;
-use vt_model::samples::SamplePool;
 use vt_model::song::{Chain, ChainEntry, Lane, Phrase, Song};
 use vt_model::step::Step;
+
+use crate::support::no_samples::version;
 
 const RATE: u32 = 48_000;
 /// Frames per step at 120 BPM.
 const STEP: usize = 6000;
-
-fn version(song: &Song) -> Arc<Published> {
-    Arc::new(Published::new(
-        Arc::new(song.clone()),
-        Arc::new(SamplePool::default()),
-    ))
-}
 
 /// A phrase of 16 steps whose first FX column holds these, from its first step.
 fn phrase(fx: &[&str]) -> Phrase {

@@ -1,6 +1,5 @@
 //! `4-op` on a track: how it sounds, as a golden.
 
-
 use std::sync::Arc;
 
 use vt_engine::published::Published;

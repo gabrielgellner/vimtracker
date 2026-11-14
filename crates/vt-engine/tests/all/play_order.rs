@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
-use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::order::{Arp, Cartesian, Deal, Order, Round, Snake};
 use vt_model::sample::SampleData;
@@ -15,6 +14,8 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::song::{Chain, ChainEntry, Lane, Phrase, Song};
 use vt_model::speed::Speed;
 use vt_model::step::Step;
+
+use crate::support::version;
 
 const RATE: u32 = 48_000;
 /// Frames per step at 120 BPM.
@@ -86,10 +87,6 @@ fn scale_song(order: Order) -> Song {
         "C-3 --", "D-3 --", "E-3 --", "F-3 --", "G-3 --", "A-3 --", "B-3 --", "C-4 --",
     ];
     song(&rows, order)
-}
-
-fn version(song: &Song, pool: Arc<SamplePool>) -> Arc<Published> {
-    Arc::new(Published::new(Arc::new(song.clone()), pool))
 }
 
 /// The left channel, for this many steps.

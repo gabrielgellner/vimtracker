@@ -3,7 +3,6 @@
 //! same on both sides, which `Distort` works out once for both, comes out as it did, as does one
 //! that isn't, and one that goes from one to the other.
 
-
 use std::f32::consts::TAU;
 
 use vt_engine::dsp::effects::distort::InsertState;

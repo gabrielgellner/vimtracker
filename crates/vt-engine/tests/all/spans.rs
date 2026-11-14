@@ -2,7 +2,6 @@
 //! back and forth, reversed, with fades, and cut by the track's `STA`, `SLEN` and `PLY`, with a
 //! declick wherever it cuts into the sound. Moving a point while it plays is heard at once.
 
-
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;

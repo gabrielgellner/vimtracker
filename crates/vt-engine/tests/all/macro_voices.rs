@@ -1,7 +1,6 @@
 //! The voices from Braids, and Plaits' speech, each rendered as a golden, so any change to how one
 //! sounds is caught.
 
-
 use std::sync::Arc;
 
 use vt_engine::published::Published;

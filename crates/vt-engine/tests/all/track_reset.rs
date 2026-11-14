@@ -5,57 +5,17 @@
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
-use vt_engine::published::Published;
 use vt_model::groove::GrooveId;
-use vt_model::sample::SampleData;
-use vt_model::samples::SamplePool;
 use vt_model::song::{Chain, ChainEntry, Launch, Phrase, Section, Song};
 use vt_model::speed::Speed;
+
+use crate::support::rising::{song, version};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
 const STEP: usize = 6000;
 /// Halfway into a step.
 const HALF: usize = STEP / 2;
-
-/// A long ramp, so a note's level says how far into it the note is, and its velocity how high it
-/// starts.
-fn pool() -> Arc<SamplePool> {
-    let frames = RATE as usize * 8;
-    let mut pool = SamplePool::default();
-    pool.insert(
-        "s",
-        SampleData {
-            frames: (0..frames)
-                .map(|at| {
-                    let level = 0.25 + 0.5 * at as f32 / frames as f32;
-                    [level, level]
-                })
-                .collect(),
-        },
-    );
-    Arc::new(pool)
-}
-
-/// Tracks playing these rows, with notes that start and stop at once, in a long section.
-fn song(tracks: &[&[&str]]) -> Song {
-    let mut song = Song::new(tracks.len());
-    song.limiter = false;
-    song.sections[0].length = Some(64);
-    for (index, rows) in tracks.iter().enumerate() {
-        song.sample_on(index, "s");
-        let track = &mut song.tracks[index];
-        track.mods[0].adsr.attack_ms = 0;
-        track.mods[0].adsr.release_ms = 0;
-        let steps = rows.iter().map(|text| text.parse().unwrap()).collect();
-        track.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));
-    }
-    song
-}
-
-fn version(song: &Song) -> Arc<Published> {
-    Arc::new(Published::new(Arc::new(song.clone()), pool()))
-}
 
 /// Rows of notes, one a step.
 fn rows(count: usize) -> Vec<&'static str> {

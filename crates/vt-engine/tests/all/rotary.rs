@@ -1,7 +1,6 @@
 //! The rotary speaker as a song plays it: a step's lock of `Fast` speeds it up from that step, and
 //! golden renders of it.
 
-
 use std::sync::Arc;
 
 use vt_engine::published::Published;

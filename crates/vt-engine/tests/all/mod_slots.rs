@@ -6,15 +6,14 @@
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
-use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_model::envelope::Adsr;
 use vt_model::lfo::{Lfo, Rate, Shape, wave};
 use vt_model::modulation::{ModKind, ModSlot, Polarity};
-use vt_model::sample::SampleData;
-use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::Song;
+
+use crate::support::steady::version;
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -23,21 +22,6 @@ const STEP: usize = 6000;
 const QUARTER: u32 = 960;
 /// Frames in a millisecond.
 const MS: usize = 48;
-
-fn flat() -> Arc<SamplePool> {
-    let mut pool = SamplePool::default();
-    pool.insert(
-        "s",
-        SampleData {
-            frames: vec![[1.0, 1.0]; RATE as usize * 20],
-        },
-    );
-    Arc::new(pool)
-}
-
-fn version(song: &Song) -> Arc<Published> {
-    Arc::new(Published::new(Arc::new(song.clone()), flat()))
-}
 
 /// One long note on a track held at `CUT 80`, with these steps after it.
 fn song(texts: &[&str]) -> Song {

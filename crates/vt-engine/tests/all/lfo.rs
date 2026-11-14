@@ -9,10 +9,12 @@ use vt_model::attractor::{System, attractor_at};
 use vt_model::insert::{Distort, DistortType, Insert};
 use vt_model::lfo::{Fade, Lfo, LfoMode, Rate, Shape};
 use vt_model::modulation::{MOD_SLOTS, ModSlot};
-use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::{Effect, SettingId};
 use vt_model::song::{Machine, Song, SynthVoice, level_gain};
+
+use crate::support::steady::flat;
+use crate::support::{pool, song};
 
 const RATE: u32 = 48_000;
 /// 6000 frames per step at 120 BPM.
@@ -23,16 +25,6 @@ const QUARTER: u32 = 960;
 const HELD: f32 = 128.0;
 /// What `Depth 40` swings by, in level values.
 const SWING: f32 = 64.0;
-
-fn pool(frames: Vec<[f32; 2]>) -> Arc<SamplePool> {
-    let mut pool = SamplePool::default();
-    pool.insert("s", SampleData { frames });
-    Arc::new(pool)
-}
-
-fn flat() -> Arc<SamplePool> {
-    pool(vec![[1.0, 1.0]; RATE as usize * 20])
-}
 
 /// A slow wave, so a jump in the output can only come from the filter.
 fn slow_sine() -> Arc<SamplePool> {
@@ -51,20 +43,6 @@ fn buzz() -> Arc<SamplePool> {
         [value, value]
     };
     pool((0..RATE as usize * 8).map(wave).collect())
-}
-
-fn song(texts: &[&str]) -> Song {
-    let mut song = Song::new(1);
-    for track in 0..song.sound_tracks() {
-        song.sample_on(track, "s");
-    }
-    song.tracks[0].mods[0].adsr.attack_ms = 0;
-    song.tracks[0].mods[0].adsr.release_ms = 0;
-    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
-    for (index, text) in texts.iter().enumerate() {
-        *phrase.step_mut(index).unwrap() = text.parse().unwrap();
-    }
-    song
 }
 
 /// A song holding `VOL 80` on one long note, with this LFO moving the volume.

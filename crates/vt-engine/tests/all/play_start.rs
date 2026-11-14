@@ -3,7 +3,6 @@
 //! are gone through; what comes out is the same as when every state was, as tracks come and go
 //! between plays, and while a removed track still rings.
 
-
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;

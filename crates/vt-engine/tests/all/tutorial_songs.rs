@@ -12,8 +12,6 @@
 //!
 //! After a change to the format or to a builder, `just tutorial-songs` writes them again.
 
-use crate::support;
-
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -44,6 +42,8 @@ use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Note, Step};
 use vt_model::steps::StepsMode;
+
+use crate::support;
 
 const RATE: u32 = 48_000;
 
