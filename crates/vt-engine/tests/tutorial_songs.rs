@@ -951,8 +951,8 @@ fn random_rhythm() -> Song {
     voice(&mut song, 2, "HH", SynthVoice::Hat, &texts(&first("C-4")));
     set(&mut song, 2, "hat.decay", 0x28);
     song.tracks[2].level = 0xB0;
-    for track in 0..3 {
-        song.tracks[track].speed = Speed::ThirtySecond;
+    for track in &mut song.tracks[..3] {
+        track.speed = Speed::ThirtySecond;
     }
     voice(
         &mut song,
