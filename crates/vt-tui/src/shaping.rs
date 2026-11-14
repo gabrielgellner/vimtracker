@@ -12,10 +12,10 @@ use vt_model::scale::Scale;
 use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
-    Acid, Bits, Channel, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids,
-    MAX_VALUES, Pink, Random, Shape, ShapeColumn, Source, Starts, TonnetzVoice, VARIATION_NOTES,
-    Values, WEIGHTS, Walk, Where, default_ends, default_step, divisions_seed, drum_parts, is_empty,
-    on_track, open_rows, track_seed, variation_notes,
+    Acid, Bits, Channel, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids, Pink,
+    Random, Shape, ShapeColumn, Source, Starts, TonnetzVoice, VARIATION_NOTES, Values, Walk, Where,
+    default_ends, default_step, divisions_seed, drum_parts, is_empty, on_track, open_rows,
+    track_seed, variation_notes,
 };
 use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -26,15 +26,11 @@ use crate::input::bindings::{Cmd, adjusting_key};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker};
+use crate::input::typed::{Typed, TypedValue};
 use crate::services::Services;
 
 /// The title of the list offering a beat after a kit's sounds are loaded as tracks.
 pub const KIT_BEAT_PICKER: &str = "Start a beat";
-
-/// The longest rate that can be typed, like `64 bars`.
-const RATE_TEXT: usize = 8;
-/// The longest list of a `Tonnetz`' moves that can be typed: eight and the spaces between.
-const MOVES_TEXT: usize = 15;
 
 /// One track's part of what the panel shapes: the phrase it's on, its rows, and its column, whose
 /// FX command is the first on its own rows, or the one chosen for a column with none.
@@ -112,7 +108,7 @@ pub struct ShapePanel {
     /// The setting the cursor is on.
     pub row: GenParam,
     /// What's being typed into the current row.
-    pub typing: Option<String>,
+    pub typing: Option<TypedValue>,
     /// The live generator it was opened on with `gl`, by its place in its phrase's list, which
     /// it reshapes rather than shaping the rows once.
     pub live: Option<usize>,
@@ -501,27 +497,6 @@ pub(crate) fn on_column(field: Field, column: ShapeColumn) -> bool {
         _ => false,
     }
 }
-
-/// A character typed into a list of values. Two hex digits make a value, and the space after it
-/// comes by itself, so `704055` types `70 40 55`; a space ends a value of one digit sooner.
-fn type_list(text: &mut String, c: char) {
-    let count = text.split_whitespace().count();
-    let last = text.rsplit(' ').next().unwrap_or("");
-    if c.is_ascii_hexdigit() {
-        if last.len() == 2 {
-            if count == MAX_VALUES {
-                return;
-            }
-            text.push(' ');
-        }
-        text.push(c.to_ascii_uppercase());
-    } else if c == ' ' && !last.is_empty() && count < MAX_VALUES {
-        text.push(' ');
-    }
-}
-
-/// The longest list of notes or nudges that can be typed: eight notes and the spaces between.
-const NAMED_LIST_TEXT: usize = 40;
 
 /// Why a selection shapes nothing yet.
 enum Refusal {
@@ -1542,7 +1517,7 @@ impl App {
             Typing::Toggled => self.adjust_shape(1, false),
             _ => {
                 if let Some(panel) = &mut self.shape {
-                    panel.typing = Some(String::new());
+                    panel.typing = Some(TypedValue::default());
                 }
             }
         }
@@ -1556,68 +1531,26 @@ impl App {
         let Some(text) = &mut panel.typing else {
             return;
         };
-        match (code, typing) {
-            (KeyCode::Esc, _) => panel.typing = None,
-            (KeyCode::Backspace, _) => {
-                text.pop();
+        // `Enter` keeps a single hex digit too, here.
+        let typed = match code {
+            KeyCode::Enter => Typed::Commit(text.take()),
+            _ => text.key(code, typing.into()),
+        };
+        match typed {
+            Typed::Editing => {}
+            Typed::Cancel => panel.typing = None,
+            Typed::Commit(text) => {
+                panel.typing = None;
+                self.commit_shape_typing(&text);
             }
-            (KeyCode::Enter, _) => self.commit_shape_typing(),
-            // A note's name or a nudge, alone or in a list, ended with Enter.
-            (KeyCode::Char(c), Typing::Named { list }) => {
-                let longest = if list { NAMED_LIST_TEXT } else { 4 };
-                if text.len() < longest
-                    && (c.is_ascii_alphanumeric()
-                        || matches!(c, '#' | '-' | '+' | '_')
-                        || (list && c == ' '))
-                {
-                    text.push(c);
-                }
-            }
-            (KeyCode::Char(c), Typing::HexList) => type_list(text, c),
-            // A `Tonnetz`' moves, `P`, `L` and `R`, with spaces between as wanted.
-            (KeyCode::Char(c), Typing::Moves)
-                if text.len() < MOVES_TEXT
-                    && (matches!(c.to_ascii_uppercase(), 'P' | 'L' | 'R') || c == ' ') =>
-            {
-                text.push(c.to_ascii_uppercase());
-            }
-            // A hex digit a degree, at most one for each semitone.
-            (KeyCode::Char(c), Typing::Weights)
-                if c.is_ascii_hexdigit() && text.len() < WEIGHTS =>
-            {
-                text.push(c.to_ascii_uppercase());
-            }
-            (KeyCode::Char(c), Typing::Hex) if c.is_ascii_hexdigit() => {
-                text.push(c.to_ascii_uppercase());
-                if text.len() == 2 {
-                    self.commit_shape_typing();
-                }
-            }
-            (KeyCode::Char(c), Typing::Rate)
-                if text.len() < RATE_TEXT
-                    && (c.is_ascii_alphanumeric() || matches!(c, '/' | ' ')) =>
-            {
-                text.push(c);
-            }
-            (KeyCode::Char(c), Typing::Whole { signed })
-                if text.len() < 4
-                    && (c.is_ascii_digit()
-                        || (signed && text.is_empty() && matches!(c, '-' | '+'))) =>
-            {
-                text.push(c);
-            }
-            _ => {}
         }
     }
 
-    fn commit_shape_typing(&mut self) {
-        let Some(text) = self.shape.as_mut().and_then(|panel| panel.typing.take()) else {
-            return;
-        };
+    fn commit_shape_typing(&mut self, text: &str) {
         let mut refused = None;
         self.change_shape(|panel| {
             let mut shape = panel.shape;
-            refused = panel.row.typed(&mut shape, &panel.context(), &text).err();
+            refused = panel.row.typed(&mut shape, &panel.context(), text).err();
             panel.shape = shape;
         });
         if let Some(reason) = refused {

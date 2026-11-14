@@ -964,7 +964,7 @@ fn the_project_page_names_the_project_and_the_window_title_says_it() {
     // C-r while typing rolls a new name.
     tap(&mut app, "i");
     app.key(parse_sequence("C-r").unwrap()[0], Instant::now());
-    let rolled = app.modes.entry.text.clone();
+    let rolled = app.modes.entry.text.to_string();
     assert!(random_name_like(&rolled), "{rolled}");
     assert_ne!(rolled, random);
     special(&mut app, KeyCode::Enter);

@@ -89,7 +89,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
         let cell = |field: MapField| {
             let on = here && view.field == field;
             let text = match &view.typing {
-                Some(typed) if on => format!("{typed}_"),
+                Some(typed) if on => typed.shown(),
                 _ => match field {
                     MapField::Min => end_text(target, map.min),
                     MapField::Max => end_text(target, map.max),

@@ -19,6 +19,7 @@ use vt_model::tracking::Source;
 
 use crate::app::{App, Entry};
 use crate::input::mode::Mode;
+use crate::input::typed::{HEX, Rule, Typed};
 use crate::services::Services;
 
 use super::editing::{
@@ -52,39 +53,23 @@ impl App {
             Control::Gen { .. } => (self.gen_typing() == Some(Typing::Hex), GEN_TEXT),
             _ => (control.is_hex(), 12),
         };
-        match key {
-            KeyCode::Esc => {
+        let rule = if hex { HEX } else { Rule::Text { longest } };
+        match self.modes.entry.text.key(key, rule) {
+            Typed::Editing => {}
+            Typed::Cancel => {
                 self.modes.entry = Entry::default();
                 self.modes.mode = Mode::Normal;
             }
-            KeyCode::Backspace => {
-                self.modes.entry.text.pop();
-            }
-            KeyCode::Enter if !hex => {
-                let text = std::mem::take(&mut self.modes.entry.text);
+            Typed::Commit(text) => {
                 self.modes.mode = Mode::Normal;
-                if !text.is_empty() {
+                if hex && self.track_page.fine {
+                    if let Ok(fine) = u8::from_str_radix(&text, 16) {
+                        set_fine_here(&mut self.services, control, fine);
+                    }
+                } else if !text.is_empty() {
                     self.commit_typed(control, &text);
                 }
             }
-            KeyCode::Char(c) if hex && c.is_ascii_hexdigit() => {
-                self.modes.entry.text.push(c.to_ascii_uppercase());
-                if self.modes.entry.text.len() == 2 {
-                    let text = std::mem::take(&mut self.modes.entry.text);
-                    self.modes.mode = Mode::Normal;
-                    if self.track_page.fine {
-                        if let Ok(fine) = u8::from_str_radix(&text, 16) {
-                            set_fine_here(&mut self.services, control, fine);
-                        }
-                    } else {
-                        self.commit_typed(control, &text);
-                    }
-                }
-            }
-            KeyCode::Char(c) if !hex && self.modes.entry.text.len() < longest => {
-                self.modes.entry.text.push(c);
-            }
-            _ => {}
         }
     }
 
