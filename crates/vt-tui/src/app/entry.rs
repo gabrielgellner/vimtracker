@@ -140,7 +140,7 @@ impl App {
             self.services.status = "The scale is off".to_owned();
             return;
         }
-        if let Some(phrase) = self.phrase_id() {
+        if let Some(phrase) = self.services.phrase_id() {
             self.services.apply(&Action::FitToScale {
                 track: self.services.cursor.track,
                 phrase,
@@ -208,10 +208,10 @@ impl App {
                     let velocity = self.flagged_velocity(self.note_velocity);
                     self.hold_note(key, midi, velocity);
                 } else if let Some(midi) = played {
-                    let on_step = self
-                        .phrase_here()
-                        .cloned()
-                        .and_then(|phrase| phrase.steps().get(self.services.cursor.step).cloned());
+                    let on_step =
+                        self.services.phrase_here().cloned().and_then(|phrase| {
+                            phrase.steps().get(self.services.cursor.step).cloned()
+                        });
                     let velocity = on_step
                         .as_ref()
                         .map_or(self.note_velocity, |step| self.played_with(step));
@@ -234,7 +234,7 @@ impl App {
     }
 
     fn current_row(&self) -> isize {
-        self.extent().row(self.services.cursor.step)
+        self.services.extent().row(self.services.cursor.step)
     }
 
     /// Move without writing, staying in Insert. Anything half typed is dropped.
@@ -249,11 +249,11 @@ impl App {
     /// Write a played note with its velocity, and an accent or slide whose key is down, as one
     /// change, and say which phrase it went in.
     fn write_played_note(&mut self, midi: u8) -> Option<u32> {
-        let Some(id) = self.phrase_id() else {
+        let Some(id) = self.services.phrase_id() else {
             self.services.status = "This track has no phrase here".to_owned();
             return None;
         };
-        let current = self.phrase_here();
+        let current = self.services.phrase_here();
         let step = current.and_then(|p| p.steps().get(self.services.cursor.step).cloned())?;
         let velocity = self.flagged_velocity(self.played_with(&step));
         let gate = if self.flagged_slide() {
@@ -287,10 +287,10 @@ impl App {
 
     /// Clear a note along with the velocity it was written with.
     fn clear_note(&mut self) {
-        let Some(id) = self.phrase_id() else {
+        let Some(id) = self.services.phrase_id() else {
             return;
         };
-        let current = self.phrase_here();
+        let current = self.services.phrase_here();
         let Some(step) = current.and_then(|p| p.steps().get(self.services.cursor.step).cloned())
         else {
             return;
@@ -321,7 +321,7 @@ impl App {
     }
 
     pub(crate) fn set_field(&mut self, value: FieldValue) {
-        let Some(phrase) = self.phrase_id() else {
+        let Some(phrase) = self.services.phrase_id() else {
             return;
         };
         self.services.apply(&Action::SetField {
@@ -455,7 +455,7 @@ impl App {
     /// The mark a value typed here gets: the one it's typed over, or else the nearest value's
     /// above it in this column.
     pub(crate) fn mark_for_typed_value(&self, slot: usize) -> Mark {
-        let phrase = self.phrase_here();
+        let phrase = self.services.phrase_here();
         let Some(steps) = phrase.map(|phrase| phrase.steps()) else {
             return Mark::default();
         };
@@ -469,7 +469,7 @@ impl App {
     }
 
     pub(crate) fn current_slot(&self, slot: usize) -> Option<FxSlot> {
-        let phrase = self.phrase_here()?;
+        let phrase = self.services.phrase_here()?;
         phrase
             .steps()
             .get(self.services.cursor.step)?
@@ -668,7 +668,8 @@ impl App {
 
     /// The furthest the cursor's track's nudges go at its speed.
     pub(crate) fn most_nudge_here(&self) -> i8 {
-        self.track_here()
+        self.services
+            .track_here()
             .map_or(Speed::Sixteenth, |track| track.speed)
             .most_nudge()
     }
@@ -680,14 +681,15 @@ impl App {
 
     /// How far the row under the cursor is nudged, in 24ths of a sixteenth.
     pub(crate) fn current_nudge(&self) -> i8 {
-        self.phrase_here()
+        self.services
+            .phrase_here()
             .and_then(|phrase| phrase.steps().get(self.services.cursor.step))
             .map_or(0, |step| step.nudge)
     }
 
     /// The gate cell under the cursor.
     pub(crate) fn current_gate(&self) -> Option<Gate> {
-        let phrase = self.phrase_here()?;
+        let phrase = self.services.phrase_here()?;
         phrase.steps().get(self.services.cursor.step)?.gate
     }
 
@@ -722,7 +724,7 @@ impl App {
     }
 
     fn write_note(&mut self, note: Note) {
-        let Some(phrase) = self.phrase_id() else {
+        let Some(phrase) = self.services.phrase_id() else {
             self.services.status = "This track has no phrase here".to_owned();
             return;
         };

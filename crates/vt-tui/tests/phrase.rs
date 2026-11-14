@@ -471,7 +471,8 @@ fn option_keys_narrow_and_widen_the_grid_in_normal_and_insert() {
     assert_eq!(app.modes.mode, Mode::Insert);
     assert_eq!(app.services.cursor.step, 0);
     let notes = |app: &App| {
-        app.phrase_here()
+        app.services
+            .phrase_here()
             .unwrap()
             .steps()
             .iter()
@@ -517,7 +518,7 @@ fn let_go_of_at(app: &mut App, at: f64, c: char) {
 
 /// The rows of the cursor's phrase.
 fn rows_here(app: &App) -> Vec<Step> {
-    app.phrase_here().unwrap().steps().to_vec()
+    app.services.phrase_here().unwrap().steps().to_vec()
 }
 
 /// Press a key and hold it, as a test can't from a script.
@@ -644,7 +645,7 @@ fn a_tapped_slide_puts_hld_on_the_gate_and_keeps_its_pulses_and_length() {
         }),
         ..Step::default()
     };
-    let phrase = app.phrase_id().unwrap();
+    let phrase = app.services.phrase_id().unwrap();
     app.services.apply(&vt_model::action::Action::SetStep {
         track: 0,
         phrase,

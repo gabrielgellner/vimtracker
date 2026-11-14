@@ -3424,7 +3424,7 @@ fn the_last_slot_lfo_and_envelope_are_set_locked_and_saved() {
     special(&mut app, KeyCode::Enter);
     press(&mut app, "01");
     let bypass = SettingId::bypass(INSERTS - 1).unwrap();
-    let step = &app.phrase_here().unwrap().steps()[0];
+    let step = &app.services.phrase_here().unwrap().steps()[0];
     assert_eq!(step.fx[0].command, Some(FxCommand::Set(bypass)));
 
     // The last slot, an LFO, on the delay's feedback, and the last envelope on its depth.

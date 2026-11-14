@@ -46,7 +46,7 @@ fn keys(app: &mut App, text: &str) {
 
 /// Each row as `x` for a note and `.` for none.
 fn rhythm(app: &App) -> String {
-    let id = app.phrase_id().unwrap();
+    let id = app.services.phrase_id().unwrap();
     app.song().tracks[0].phrases[&id]
         .steps()
         .iter()
@@ -148,7 +148,7 @@ fn multiply_is_only_offered_on_a_rhythm() {
 
 /// Each row's velocity.
 fn velocities(app: &App) -> Vec<String> {
-    let id = app.phrase_id().unwrap();
+    let id = app.services.phrase_id().unwrap();
     app.song().tracks[0].phrases[&id]
         .steps()
         .iter()

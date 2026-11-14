@@ -41,7 +41,7 @@ fn app_with(steps: &[&str]) -> (App, Realtime) {
 }
 
 fn steps(app: &App) -> Vec<String> {
-    let id = app.phrase_id().unwrap();
+    let id = app.services.phrase_id().unwrap();
     app.song().tracks[0].phrases[&id]
         .steps()
         .iter()

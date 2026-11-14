@@ -30,7 +30,7 @@ fn a_step_locks_the_gate_by_its_label() {
     press(&mut app, "40");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "k");
-    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    let step = app.services.phrase_here().unwrap().steps()[0].to_string();
     assert!(step.contains("gate:40"), "{step}");
     assert_eq!(column_name(&app), "Machine: Gate");
     assert_eq!(value_shown(&app).as_deref(), Some("25 %"));
@@ -49,7 +49,7 @@ fn a_chosen_command_shows_in_its_cell_while_its_value_is_typed() {
     special(&mut app, KeyCode::Enter);
     assert!(row(&app).contains("CUT   00"), "{}", row(&app));
     assert_eq!(
-        app.phrase_here().unwrap().steps()[0].fx[0].command,
+        app.services.phrase_here().unwrap().steps()[0].fx[0].command,
         None,
         "not written yet"
     );
@@ -57,7 +57,7 @@ fn a_chosen_command_shows_in_its_cell_while_its_value_is_typed() {
     assert!(row(&app).contains("CUT   4_"), "{}", row(&app));
     press(&mut app, "0");
     assert_eq!(
-        app.phrase_here().unwrap().steps()[0].fx[0].command,
+        app.services.phrase_here().unwrap().steps()[0].fx[0].command,
         Some(vt_model::step::FxCommand::CUT)
     );
     // Typing the name works the same way, over a value already there.
@@ -67,7 +67,7 @@ fn a_chosen_command_shows_in_its_cell_while_its_value_is_typed() {
     special(&mut app, KeyCode::Enter);
     assert!(row(&app).contains("RES   40"), "{}", row(&app));
     assert_eq!(
-        app.phrase_here().unwrap().steps()[0].fx[0].command,
+        app.services.phrase_here().unwrap().steps()[0].fx[0].command,
         Some(vt_model::step::FxCommand::CUT),
         "still the old one until the value"
     );
@@ -211,7 +211,8 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
     use vt_model::step::FxCommand;
     let (mut app, _realtime) = app();
     press(&mut app, " 5LL= 3");
-    let command = |app: &App, step: usize| app.phrase_here().unwrap().steps()[step].fx[0].command;
+    let command =
+        |app: &App, step: usize| app.services.phrase_here().unwrap().steps()[step].fx[0].command;
     let setting = |at| FxCommand::Set(SettingId::slot(0, Effect::Distort, at).unwrap());
 
     // The list has what's on the track, by label and then by group and name.
@@ -236,8 +237,11 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
     special(&mut app, KeyCode::Enter);
     press(&mut app, "80");
     assert_eq!(command(&app, 0), Some(setting(1)));
-    assert_eq!(app.phrase_here().unwrap().steps()[0].fx[0].value, 0x8000);
-    let text = app.phrase_here().unwrap().steps()[0].to_string();
+    assert_eq!(
+        app.services.phrase_here().unwrap().steps()[0].fx[0].value,
+        0x8000
+    );
+    let text = app.services.phrase_here().unwrap().steps()[0].to_string();
     assert!(
         text.contains("1.distort.amount:80"),
         "a file holds the setting's key: {text}"
@@ -725,7 +729,7 @@ fn an_lfos_depth_is_locked_by_its_label_and_reads_in_its_units() {
     press(&mut app, "9F");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "k");
-    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    let step = app.services.phrase_here().unwrap().steps()[0].to_string();
     assert!(step.contains("mod4.depth:9F"), "{step}");
     assert_eq!(column_name(&app), "Mod 4: Depth");
     // Fine-tuned to a depth of exactly +40.
@@ -754,7 +758,7 @@ fn a_step_locks_the_speed_by_its_label() {
     press(&mut app, "05");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "k");
-    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    let step = app.services.phrase_here().unwrap().steps()[0].to_string();
     assert!(step.contains("speed:05"), "{step}");
     assert_eq!(column_name(&app), "Machine: Speed");
     assert_eq!(value_shown(&app).as_deref(), Some("1/8"));
@@ -764,7 +768,7 @@ fn a_step_locks_the_speed_by_its_label() {
 fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
     use vt_model::step::GateKind;
     let (mut app, _realtime) = app();
-    let gate = |app: &App| app.phrase_here().unwrap().steps()[0].gate;
+    let gate = |app: &App| app.services.phrase_here().unwrap().steps()[0].gate;
     // On the gate, the gate types.
     press(&mut app, "lllK");
     assert_eq!(app.services.cursor.field, vt_tui::app::Field::Gate);
@@ -833,7 +837,7 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
     use vt_model::step::FxCommand;
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
-    let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
+    let slot = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
     press(&mut app, "CND");
     special(&mut app, KeyCode::Enter);
@@ -936,7 +940,7 @@ fn k_chooses_acu_then_its_amount_from_a_list() {
     use vt_model::step::FxCommand;
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
-    let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
+    let slot = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
     press(&mut app, "ACU");
     special(&mut app, KeyCode::Enter);
@@ -1035,7 +1039,7 @@ fn k_chooses_arp_and_its_value_is_typed_as_two_digits() {
     use vt_model::step::FxCommand;
     use vt_tui::views::status::{column_name, value_shown};
     let (mut app, _realtime) = app();
-    let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
+    let slot = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
     press(&mut app, "ARP");
     let picker = app.picker.as_ref().expect("the commands are listed");
@@ -1087,7 +1091,7 @@ fn k_chooses_rnd_and_the_status_line_says_what_it_varies() {
     use vt_model::step::FxCommand;
     use vt_tui::views::status::value_shown;
     let (mut app, _realtime) = app();
-    let slot = |app: &App, column: usize| app.phrase_here().unwrap().steps()[0].fx[column];
+    let slot = |app: &App, column: usize| app.services.phrase_here().unwrap().steps()[0].fx[column];
     // On FX 2, beside an empty FX 1, it varies the note.
     press(&mut app, "llllllllK");
     press(&mut app, "RND");
@@ -1135,7 +1139,7 @@ fn order_plays_the_phrases_rows_in_an_order_from_a_word_or_a_list() {
     use vt_model::order::Order;
     use vt_tui::input::command::Line;
     let (mut app, _realtime) = app();
-    let order = |app: &App| app.phrase_here().unwrap().order();
+    let order = |app: &App| app.services.phrase_here().unwrap().order();
     let heading = |app: &App| -> String {
         let buffer = screen(app);
         (0..80).map(|x| buffer[(x, 0)].symbol()).collect()
@@ -1190,7 +1194,7 @@ fn order_takes_a_snake_and_cartesian_numbers_and_the_title_shows_them() {
     use vt_model::order::{Cartesian, Order, Snake};
     use vt_tui::input::command::Line;
     let (mut app, _realtime) = app();
-    let order = |app: &App| app.phrase_here().unwrap().order();
+    let order = |app: &App| app.services.phrase_here().unwrap().order();
     let heading = |app: &App| -> String {
         let buffer = screen(app);
         (0..80).map(|x| buffer[(x, 0)].symbol()).collect()
@@ -1243,7 +1247,7 @@ fn order_takes_a_jump_and_an_arps_numbers_and_the_metropolixs_other_orders() {
     use vt_tui::input::command::Line;
     let (mut app, _realtime) = app();
     command(&mut app, "len 8");
-    let order = |app: &App| app.phrase_here().unwrap().order();
+    let order = |app: &App| app.services.phrase_here().unwrap().order();
     let heading = |app: &App| -> String {
         let buffer = screen(app);
         (0..80).map(|x| buffer[(x, 0)].symbol()).collect()
@@ -1304,9 +1308,9 @@ fn playing_from_a_row_starts_at_its_step_with_the_walk_where_it_is_then() {
     command(&mut app, "order reverse");
     // A row's step is where it's written, whatever the order, and the walk plays what it plays
     // there, as it would playing up to it: in reverse, the bottom row first.
-    assert_eq!(app.section_step(), 0);
+    assert_eq!(app.services.section_step(app.modes.view), 0);
     press(&mut app, "j");
-    assert_eq!(app.section_step(), 1);
+    assert_eq!(app.services.section_step(app.modes.view), 1);
 }
 
 #[test]
@@ -1319,7 +1323,7 @@ fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
     special(&mut app, KeyCode::Enter);
     press(&mut app, " 3");
     assert_eq!(app.modes.view, View::Phrase);
-    let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
+    let slot = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
     press(&mut app, "1byp");
     let picker = app.picker.as_ref().expect("the commands are listed");
@@ -1334,7 +1338,7 @@ fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
     assert_eq!(slot(&app).coarse(), 0x01);
     assert_eq!(column_name(&app), "FX 1: Bypass");
     assert_eq!(value_shown(&app).as_deref(), Some("Bypassed"));
-    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    let step = app.services.phrase_here().unwrap().steps()[0].to_string();
     assert!(step.contains("1.bypass:01"), "{step}");
     // It stops at the last choice, and back down is the slot heard.
     press(&mut app, "=");
@@ -1365,7 +1369,7 @@ fn a_step_locks_the_glide_by_its_label() {
     press(&mut app, "80");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "k");
-    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    let step = app.services.phrase_here().unwrap().steps()[0].to_string();
     assert!(step.contains("glide:80"), "{step}");
     assert_eq!(column_name(&app), "Machine: Glide");
     assert_eq!(value_shown(&app).as_deref(), Some("63 ms"));

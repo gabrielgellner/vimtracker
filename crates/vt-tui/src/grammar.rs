@@ -527,14 +527,14 @@ impl App {
             self.services.cursor.step,
             self.services.cursor.field.group(),
             count,
-            self.extent(),
+            self.services.extent(),
         )
     }
 
     /// The steps and columns a cover means at the cursor.
     fn resolve_cover(&self, cover: Cover) -> (StepRange, Scope) {
         let step = self.services.cursor.step;
-        let extent = self.extent();
+        let extent = self.services.extent();
         let column = Scope::column(self.services.cursor.field.group());
         match cover {
             Cover::Cursor => (StepRange::between(step, step), column),
@@ -600,11 +600,15 @@ impl App {
     pub(crate) fn phrase_beside(&self, track: usize) -> Option<(u32, usize)> {
         let song = self.song();
         let id = if track == self.services.cursor.track {
-            self.phrase_id()?
+            self.services.phrase_id()?
         } else {
-            let chain = (*self.section_here()?.chains.get(track)?)?;
+            let chain = (*self.services.section_here()?.chains.get(track)?)?;
             song.tracks[track]
-                .chain_position(chain, self.section_step(), self.services.dealer(track))?
+                .chain_position(
+                    chain,
+                    self.services.section_step(self.modes.view),
+                    self.services.dealer(track),
+                )?
                 .phrase
         };
         Some((id, song.tracks.get(track)?.phrases.get(&id)?.start()))
@@ -614,7 +618,7 @@ impl App {
     /// loop start, as they do on screen, and any a phrase doesn't have are left out.
     pub(crate) fn place_on(&self, track: usize, range: StepRange) -> Option<(u32, StepRange)> {
         let (phrase, start) = self.phrase_beside(track)?;
-        let focus = self.extent().start as isize;
+        let focus = self.services.extent().start as isize;
         let stored = self.song().tracks[track]
             .phrases
             .get(&phrase)?
@@ -822,7 +826,7 @@ impl App {
     fn begin_selection_replace(&mut self) {
         let selection = self.current_selection();
         let field = self.services.cursor.field;
-        let Some(phrase) = self.phrase_here().cloned() else {
+        let Some(phrase) = self.services.phrase_here().cloned() else {
             return;
         };
         let takes = |step: &usize| {
@@ -894,6 +898,7 @@ impl App {
         };
         self.services.cursor.field = field;
         let value = self
+            .services
             .phrase_here()
             .cloned()
             .and_then(|phrase| phrase.steps().get(self.services.cursor.step).cloned());
@@ -1006,7 +1011,7 @@ impl App {
             }
             Change::ClearField => {
                 let (range, scope) = self.resolve_cover(Cover::Cursor);
-                if let Some(phrase) = self.phrase_id() {
+                if let Some(phrase) = self.services.phrase_id() {
                     self.services.apply(&Action::Clear {
                         track: self.services.cursor.track,
                         phrase,
@@ -1021,7 +1026,7 @@ impl App {
                 steps,
                 tracks,
             } => {
-                let last = self.extent().last_stored();
+                let last = self.services.extent().last_stored();
                 let end = self
                     .services
                     .cursor
@@ -1045,7 +1050,7 @@ impl App {
                 value,
                 steps,
             } if *steps > 1 => {
-                let last = self.extent().last_stored();
+                let last = self.services.extent().last_stored();
                 let end = self
                     .services
                     .cursor
@@ -1068,7 +1073,7 @@ impl App {
                 ..
             } => self.set_length(value.length()),
             Change::Replace { field, value, .. } => {
-                let Some(phrase) = self.phrase_id() else {
+                let Some(phrase) = self.services.phrase_id() else {
                     return;
                 };
                 let step = self.services.cursor.step;
@@ -1119,11 +1124,12 @@ impl App {
                     self.services.status = format!("Nothing in register {name}");
                     return;
                 };
-                if let Some(phrase) = self.phrase_id() {
+                if let Some(phrase) = self.services.phrase_id() {
                     let length = block.steps.len().saturating_mul(*times);
                     let before = Arc::clone(self.song());
                     let group = self.services.cursor.field.group();
-                    let row = self.services.cursor.step as isize - self.extent().start as isize;
+                    let row =
+                        self.services.cursor.step as isize - self.services.extent().start as isize;
                     let mut actions = vec![Action::Paste {
                         track: self.services.cursor.track,
                         phrase,
@@ -1301,7 +1307,8 @@ impl App {
         self.modes.mode = Mode::Normal;
         self.anchor = None;
         self.anchor_track = None;
-        self.go_to_track_at(selection.tracks.first);
+        self.services
+            .go_to_track_at(selection.tracks.first, self.modes.view);
         self.selection_scope = None;
         self.clamp_cursor();
     }
@@ -1315,7 +1322,8 @@ impl App {
         self.anchor_track = Some(selection.tracks.last);
         self.selection_scope = Some(selection.scope);
         self.adjustments = Adjustments::default();
-        self.go_to_track_at(selection.tracks.first);
+        self.services
+            .go_to_track_at(selection.tracks.first, self.modes.view);
         self.services.cursor.step = selection.range.last;
         self.modes.mode = if selection.scope.is_whole() {
             Mode::VisualStep

@@ -774,7 +774,7 @@ fn in_insert_off_and_scale_degrees_are_written_once_and_other_keys_repeat() {
     press(&mut app, "li");
     press(&mut app, "4");
     app.key_repeated(Key::char('4'), Instant::now());
-    let id = app.phrase_id().unwrap();
+    let id = app.services.phrase_id().unwrap();
     let velocity = app.song().tracks[0].phrases[&id].steps()[app.services.cursor.step - 1].velocity;
     assert_eq!(velocity, Some(0x44), "the repeat typed the second digit");
 }
