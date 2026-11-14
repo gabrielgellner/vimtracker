@@ -342,6 +342,62 @@ fn a_mac_lock_moves_the_generators_it_holds_on_its_own_row() {
     assert_eq!(as_heard(&song, &rows), wanted, "kept, it's what played");
 }
 
+/// The song with macro 1's mapping of `Hits` bent to move early, `Curve +60` (decision 314).
+fn bent(song: Song) -> Song {
+    let hits = MacroTarget::Gen {
+        column: GenColumn::Velocity,
+        param: GenParam::Hits,
+    };
+    apply(
+        song,
+        &Action::MapMacro {
+            track: 0,
+            at: 0,
+            map: MacroMap::numbers(hits, (1, 16)).bent(60, 0),
+        },
+    )
+}
+
+fn hits(steps: &[Step]) -> usize {
+    steps
+        .iter()
+        .filter(|step| step.velocity == Some(0x7F))
+        .count()
+}
+
+#[test]
+fn a_bent_mapping_moves_its_generator_along_its_curve_as_it_plays() {
+    // At the macro's turn, 22, straight is 3 hits and bent early 7, which is what's written.
+    let turned = bent(song(&[]));
+    assert_eq!(hits(&written(&song(&[]))), 3);
+    assert_eq!(hits(&written(&turned)), 7);
+    // The engine bends it as the edit does, so at the turn nothing renders.
+    let (out, rows, engine) = play(&turned, 32);
+    let (as_written, ..) = play(&plain(&turned, written(&turned)), 32);
+    assert!(out == as_written, "it plays sample for sample as written");
+    assert!(engine.generators_heard(0).all(|run| run.renders == 0));
+    assert!(rows.iter().all(|row| row.cell.is_none()), "as written");
+    // With the macro at 00, one hit, a lock to 22 on row 7 is 7 hits there, so row 7 is one,
+    // where straight it isn't.
+    assert_eq!(written(&turned)[7].velocity, Some(0x7F));
+    assert_eq!(written(&song(&[]))[7].velocity, Some(0x40));
+    let locked = apply(
+        bent(song(&[(7, "C-3 40 macro1:22 --- ---")])),
+        &Action::SetMacro {
+            track: 0,
+            at: 0,
+            value: 0,
+        },
+    );
+    assert_eq!(hits(&written(&locked)), 1);
+    let (out, rows, _) = play(&locked, 16);
+    let mut wanted = written(&locked);
+    wanted[7].velocity = Some(0x7F);
+    let (as_locked, ..) = play(&plain(&locked, wanted.clone()), 16);
+    assert!(out == as_locked, "row 7 plays as a hit, and only it");
+    assert_eq!(as_heard(&locked, &rows), wanted, "kept, it's what played");
+}
+
 #[test]
 fn an_lfo_on_a_macro_moves_its_generator_and_what_was_heard_plays_the_same_written() {
     let mut song = song(&[]);

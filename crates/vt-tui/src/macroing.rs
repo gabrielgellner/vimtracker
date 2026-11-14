@@ -9,6 +9,7 @@ use vt_model::macros::{
     GEN_ZERO, GenColumn, MACROS, Macro, MacroMap, MacroTarget, top_value, valid_name,
 };
 use vt_model::settings::{Kind, Owner};
+use vt_model::shape::params::{BEND_JUMP, BEND_NUDGE};
 use vt_model::song::Track;
 
 use crate::app::App;
@@ -24,16 +25,71 @@ pub const MACRO_PICKER: &str = "Map to a macro";
 /// How far a large step moves an end of a range, in coarse steps.
 const RANGE_JUMP: i32 = 0x10;
 
-/// The open mapping view: which macro, which of its mappings the cursor's on, and which end.
+/// The most characters a typed `Curve` or `S` takes, as the shape panel's: a sign and three
+/// digits.
+const BEND_TEXT: usize = 4;
+
+/// What of a mapping the view's cursor is on, across its row: the ends of its range, then its
+/// response's `Curve` and `S` (decision 314).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MapField {
+    #[default]
+    Min,
+    Max,
+    Curve,
+    S,
+}
+
+impl MapField {
+    /// Left to right, as `h` and `l` go.
+    pub const ALL: [Self; 4] = [Self::Min, Self::Max, Self::Curve, Self::S];
+
+    /// Its heading in the view.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Min => "Min",
+            Self::Max => "Max",
+            Self::Curve => "Curve",
+            Self::S => "S",
+        }
+    }
+
+    /// Whether it bends the response rather than being an end of the range.
+    pub fn bends(self) -> bool {
+        matches!(self, Self::Curve | Self::S)
+    }
+
+    /// The one beside it, `by` places to the right, kept to the row.
+    fn beside(self, by: isize) -> Self {
+        let at = Self::ALL
+            .iter()
+            .position(|field| *field == self)
+            .unwrap_or(0);
+        Self::ALL[at.saturating_add_signed(by).min(Self::ALL.len() - 1)]
+    }
+}
+
+/// A `Curve` or `S` as the view and the status line show it, as the shape panel does: `+20`,
+/// `-5`, or `0` straight.
+pub fn bend_text(bend: i8) -> String {
+    if bend > 0 {
+        format!("+{bend}")
+    } else {
+        bend.to_string()
+    }
+}
+
+/// The open mapping view: which macro, which of its mappings the cursor's on, and what of it.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MappingView {
     pub at: usize,
     pub row: usize,
-    /// Whether the cursor's on `Max` rather than `Min`.
-    pub max: bool,
+    /// The end or the bend the cursor's on.
+    pub field: MapField,
     /// Whether `d` was pressed, waiting for a second to unmap.
     pub deleting: bool,
-    /// The hex digits typed so far after `i`, if it's typing.
+    /// What's typed so far after `i`, if it's typing: hex digits for an end, a signed whole
+    /// number for a bend.
     pub typing: Option<String>,
 }
 
@@ -330,8 +386,26 @@ impl App {
         } else {
             ""
         };
+        if view.field.bends() {
+            self.status = format!(
+                "Curve {} bends {} from Min to Max, early above 0 and late below; S {} shapes both ends, an S above 0 and the reverse below",
+                bend_text(map.curve),
+                target.name(),
+                bend_text(map.s)
+            );
+            return;
+        }
+        let along = if map.is_straight() {
+            String::new()
+        } else {
+            format!(
+                ", along Curve {} S {}",
+                bend_text(map.curve),
+                bend_text(map.s)
+            )
+        };
         self.status = format!(
-            "At 00 the macro sets {} to {}, at FF to {}; it's at {:02X}, so {} is {}{by_hand}",
+            "At 00 the macro sets {} to {}, at FF to {}{along}; it's at {:02X}, so {} is {}{by_hand}",
             target.name_on(&track),
             end_shown(&track, target, map.min),
             end_shown(&track, target, map.max),
@@ -354,12 +428,52 @@ impl App {
         self.say_mapping();
     }
 
+    /// `=` `-` `+` or `_`: move what's under the cursor up or down a small step or a large one,
+    /// an end by a coarse step or `10` of them, and a bend by 5 or 25, as the shape panel's are.
+    fn nudge_mapping(&mut self, up: bool, large: bool) {
+        let Some(view) = self.mapping.as_ref() else {
+            return;
+        };
+        let sign = if up { 1 } else { -1 };
+        if view.field.bends() {
+            self.move_bend(sign * if large { BEND_JUMP } else { BEND_NUDGE });
+        } else {
+            self.move_end(sign * if large { RANGE_JUMP } else { 1 });
+        }
+    }
+
+    /// Put the bend under the cursor, `Curve` or `S`, at a value, kept to -100 to 100.
+    fn set_bend(&mut self, to: i32) {
+        let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row()) else {
+            return;
+        };
+        let (curve, s) = (i32::from(map.curve), i32::from(map.s));
+        self.set_range(match view.field {
+            MapField::Curve => map.bent(to, s),
+            _ => map.bent(curve, to),
+        });
+    }
+
+    /// Move the bend under the cursor by so much.
+    fn move_bend(&mut self, by: i32) {
+        let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row()) else {
+            return;
+        };
+        let now = if view.field == MapField::Curve {
+            map.curve
+        } else {
+            map.s
+        };
+        self.set_bend(i32::from(now) + by);
+    }
+
     /// Move the end of the range under the cursor by so many coarse steps.
     fn move_end(&mut self, by: i32) {
         let (Some(view), Some((_, map))) = (self.mapping.clone(), self.mapping_row()) else {
             return;
         };
-        let end = if view.max { map.max } else { map.min };
+        let max = view.field == MapField::Max;
+        let end = if max { map.max } else { map.min };
         // A setting's coarse step, or a generator's whole number.
         let moved = match map.target.setting() {
             Some(id) => {
@@ -368,7 +482,7 @@ impl App {
             }
             None => (i32::from(end) + by).clamp(0, i32::from(u16::MAX)) as u16,
         };
-        let map = if view.max {
+        let map = if max {
             MacroMap { max: moved, ..map }
         } else {
             MacroMap { min: moved, ..map }
@@ -376,9 +490,10 @@ impl App {
         self.set_range(map);
     }
 
-    /// A key in the mapping view: `j` and `k` go between its settings, `h` and `l` between their
-    /// `Min` and `Max`, `=` `-` `+` and `_` move an end, `i` types one in hex, `~` swaps them,
-    /// `dd` unmaps, `u` takes the last change back, and `Esc` closes it.
+    /// A key in the mapping view: `j` and `k` go between its settings, `h` and `l` across their
+    /// `Min`, `Max`, `Curve` and `S`, `=` `-` `+` and `_` move the one under the cursor, `i` types
+    /// it, an end in hex and a bend as a signed number, `x` puts a bend back to straight, `~`
+    /// swaps the ends, `dd` unmaps, `u` takes the last change back, and `Esc` closes it.
     pub(crate) fn mapping_key(&mut self, key: Key) {
         let key = match (key.command, crate::input::bindings::adjusting_key(key)) {
             (true, Some(plain)) => plain,
@@ -405,12 +520,13 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => self.mapping_move(|row| (row + 1).min(count - 1)),
             KeyCode::Char('k') | KeyCode::Up => self.mapping_move(|row| row.saturating_sub(1)),
-            KeyCode::Char('h') | KeyCode::Left => self.mapping_end(false),
-            KeyCode::Char('l') | KeyCode::Right => self.mapping_end(true),
-            KeyCode::Char('=') => self.move_end(1),
-            KeyCode::Char('-') => self.move_end(-1),
-            KeyCode::Char('+') => self.move_end(RANGE_JUMP),
-            KeyCode::Char('_') => self.move_end(-RANGE_JUMP),
+            KeyCode::Char('h') | KeyCode::Left => self.mapping_across(-1),
+            KeyCode::Char('l') | KeyCode::Right => self.mapping_across(1),
+            KeyCode::Char('=') => self.nudge_mapping(true, false),
+            KeyCode::Char('-') => self.nudge_mapping(false, false),
+            KeyCode::Char('+') => self.nudge_mapping(true, true),
+            KeyCode::Char('_') => self.nudge_mapping(false, true),
+            KeyCode::Char('x') if view.field.bends() => self.set_bend(0),
             KeyCode::Char('~') => {
                 if let Some((_, map)) = self.mapping_row() {
                     self.set_range(MacroMap {
@@ -424,7 +540,11 @@ impl App {
                 if let Some(view) = self.mapping.as_mut() {
                     view.typing = Some(String::new());
                 }
-                self.status = "Two hex digits for this end".to_owned();
+                self.status = if view.field.bends() {
+                    "From -100 to 100, then Enter".to_owned()
+                } else {
+                    "Two hex digits for this end".to_owned()
+                };
             }
             KeyCode::Char('d') if deleting => self.unmap_row(),
             KeyCode::Char('d') => {
@@ -440,11 +560,19 @@ impl App {
         }
     }
 
-    /// Hex digits typed after `i`, the end set at the second, or `Esc` to give up.
+    /// What's typed after `i`: hex digits for an end, set at the second, or a bend's signed number
+    /// ended with `Enter`, as the shape panel's is; `Esc` gives up.
     fn mapping_typing(&mut self, code: KeyCode, mut typed: String) {
         let done = |app: &mut Self| {
             if let Some(view) = app.mapping.as_mut() {
                 view.typing = None;
+            }
+        };
+        let bends = self.mapping.as_ref().is_some_and(|view| view.field.bends());
+        let keep = |app: &mut Self, typed: String| {
+            app.status = format!("{typed}_");
+            if let Some(view) = app.mapping.as_mut() {
+                view.typing = Some(typed);
             }
         };
         match code {
@@ -452,7 +580,26 @@ impl App {
                 done(self);
                 self.say_mapping();
             }
-            KeyCode::Char(c) if c.is_ascii_hexdigit() => {
+            KeyCode::Backspace if bends => {
+                typed.pop();
+                keep(self, typed);
+            }
+            KeyCode::Enter if bends => {
+                done(self);
+                match typed.parse::<i32>() {
+                    Ok(value) => self.set_bend(value),
+                    Err(_) => self.status = "Curve and S run from -100 to 100".to_owned(),
+                }
+            }
+            KeyCode::Char(c)
+                if bends
+                    && typed.len() < BEND_TEXT
+                    && (c.is_ascii_digit() || (typed.is_empty() && matches!(c, '-' | '+'))) =>
+            {
+                typed.push(c);
+                keep(self, typed);
+            }
+            KeyCode::Char(c) if !bends && c.is_ascii_hexdigit() => {
                 typed.push(c.to_ascii_uppercase());
                 if typed.len() < 2 {
                     if let Some(view) = self.mapping.as_mut() {
@@ -472,7 +619,7 @@ impl App {
                     // A generator's setting typed as a number, in hex as every value is.
                     None => (i32::from(typed) + GEN_ZERO) as u16,
                 };
-                self.set_range(if view.max {
+                self.set_range(if view.field == MapField::Max {
                     MacroMap { max: value, ..map }
                 } else {
                     MacroMap { min: value, ..map }
@@ -489,9 +636,9 @@ impl App {
         self.say_mapping();
     }
 
-    fn mapping_end(&mut self, max: bool) {
+    fn mapping_across(&mut self, by: isize) {
         if let Some(view) = self.mapping.as_mut() {
-            view.max = max;
+            view.field = view.field.beside(by);
         }
         self.say_mapping();
     }

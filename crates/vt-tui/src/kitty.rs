@@ -27,6 +27,7 @@ use crate::sample_page::SamplePage;
 use crate::sample_wave::{Drawing, Thumbnail};
 use crate::theme;
 use crate::track_page::Page;
+use crate::views::mapping::{RESPONSE_HEIGHT, RESPONSE_WIDTH};
 use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
 use crate::views::picker::{
     PREVIEW_ROWS, PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH, PREVIEW_WAVE_HEIGHT,
@@ -52,7 +53,7 @@ pub use encoding::{Picture, scope_png, spans_png, waveform_spans};
 use encoding::{indexed_png, png};
 use generators::GenDrawing;
 use panels::{Found, PanelImages, PanelKey, Shape};
-use plot::{LfoDrawing, Plot, Shade, TrackDrawing};
+use plot::{LfoDrawing, MappingDrawing, Plot, Shade, TrackDrawing};
 use switches::Look;
 
 /// The character that stands for a piece of an image.
@@ -957,6 +958,7 @@ impl Graphics {
                 Page::Fx => self.sync_fx(app, &track, out)?,
                 Page::Gen => self.sync_gen(app, &track, out)?,
             }
+            self.sync_mapping(app, &track, out)?;
         }
         if app.view == View::Sample {
             // So `h` and `l` move the cursor's line by a pixel of these.
@@ -1417,6 +1419,37 @@ impl Graphics {
             )?));
         }
         app.gen_images = ids;
+        Ok(())
+    }
+
+    /// Send the response of the mapping under the mapping view's cursor while the view is open
+    /// (decision 314), drawn again as its `Curve`, its `S`, its way or its macro's turn changes.
+    fn sync_mapping(
+        &mut self,
+        app: &mut App,
+        track: &Track,
+        out: &mut impl Write,
+    ) -> io::Result<()> {
+        app.mapping_image = None;
+        let Some(view) = app.mapping.as_ref() else {
+            return Ok(());
+        };
+        let held = &track.macros[view.at];
+        let Some(map) = held
+            .maps
+            .get(view.row.min(held.maps.len().saturating_sub(1)))
+        else {
+            return Ok(());
+        };
+        let drawing = MappingDrawing::of(map, held.value);
+        let shade = Shade::Focused;
+        app.mapping_image = Some(self.panel(
+            out,
+            (PanelKey::Mapping, shade),
+            Shape::Mapping(drawing),
+            (RESPONSE_WIDTH, RESPONSE_HEIGHT),
+            |size| plot::mapping(drawing, size).png(shade.color()),
+        )?);
         Ok(())
     }
 

@@ -22,9 +22,9 @@ use super::{
     first_note,
 };
 
-/// How far a small and a large step move a curve.
-const BEND_NUDGE: i32 = 5;
-const BEND_JUMP: i32 = 25;
+/// How far a small and a large step move a curve, here and in a macro mapping's `Curve` and `S`.
+pub const BEND_NUDGE: i32 = 5;
+pub const BEND_JUMP: i32 = 25;
 /// How many small steps a large one is for a value in hex.
 const HEX_JUMP: i32 = 0x10;
 /// How far a large step moves an `Every` or a `Chance`, and any other percent.

@@ -1669,18 +1669,36 @@ over drawn faint behind its bar, `▕██▎░░░░  ▏`, and the status
 as `Cut, 1.05 kHz: on macro 1 Bite, 170 Hz to 9.56 kHz`. Turning it is refused, as Live greys a
 mapped control out: turn its macro, or open its range with `gm`.
 
-**The mapping view**, `gm`, lists each setting the macro holds with its `Min` and `Max`:
+**The mapping view**, `gm`, lists each setting the macro holds with its `Min`, its `Max`, and
+the `Curve` and `S` of its response, with a drawing of the response of the one under the cursor
+beside them:
 
 | Keys | Does |
 |---|---|
 | `j` `k` | The next or previous setting |
-| `h` `l` | Its `Min` or `Max` |
-| `=` `-` `+` `_` | Move that end a step, or `10` |
-| `i` | Type that end, two hex digits |
+| `h` `l` | Across its `Min`, `Max`, `Curve` and `S` |
+| `=` `-` `+` `_` | Move an end a step or `10`, a bend `5` or `25` |
+| `i` | Type it: an end in two hex digits, a bend `-100` to `100` and `Enter` |
+| `x` | Put `Curve` or `S` back to straight, `0` |
 | `~` | Swap `Min` and `Max`, so the setting goes the other way |
 | `dd` | Take the setting off the macro |
 | `u` | Take the last change back |
 | `Esc` | Close it |
+
+**Each setting its own way.** A setting's `Min` and `Max` are its own, so one macro can turn one
+setting up while it turns another down: map both, then `~` on the one to go the other way. One
+macro then opens the cutoff while it takes a mod envelope's depth down, say.
+
+**Each setting its own curve.** `Curve` and `S` bend a mapping's response as the shape panel's
+`Curve` and `S` bend a ramp, with the same numbers. `Curve` above `0` moves the setting early,
+most of the way toward its `Max` in the macro's first part, and below `0` late. `S` then eases
+both ends, above `0` an S, slow at `Min` and `Max` and quick between, and below `0` the reverse.
+The ends stay `Min` and `Max` however it's bent, and a setting turned the other way bends the
+same way along the turn, so `Curve +60` reaches a lower `Max` early too. Both start at `0`, a
+straight line, and are shown dim while they are. The drawing has the macro's turn across, the
+setting up, the straight line dotted behind the curve and a faint line where the macro is turned;
+the range on a mapped setting's bar is still its `Min` to its `Max`. A sound preset or a patch
+keeps each mapping's curve.
 
 **What a macro reaches:** the track's own settings, its machine's, its effects', its mod slots'
 depths, phases and deforms, and their types' own: an envelope's `Attack`, `Decay`, `Sustain` and

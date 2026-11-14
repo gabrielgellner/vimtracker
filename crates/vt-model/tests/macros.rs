@@ -31,7 +31,13 @@ fn map(at: usize, target: MacroTarget, min: u16, max: u16) -> Action {
     Action::MapMacro {
         track: 0,
         at,
-        map: MacroMap { target, min, max },
+        map: MacroMap {
+            target,
+            min,
+            max,
+            curve: 0,
+            s: 0,
+        },
     }
 }
 

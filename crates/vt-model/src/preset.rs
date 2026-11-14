@@ -591,6 +591,9 @@ mod tests {
                 target: MacroTarget::Setting(SettingId::CUT),
                 min: 0x1000,
                 max: 0xF000,
+                // Bent, so a sound's mapping is seen to keep its curve (decision 314).
+                curve: 40,
+                s: -20,
             }],
         };
         track
@@ -642,6 +645,9 @@ mod tests {
         let text = fs::read_to_string(&path).unwrap();
         assert!(text.contains("format: 1"), "{text}");
         assert!(!text.contains("level"), "{text}");
+        assert!(text.contains("curve: 40"), "the mapping's curve: {text}");
+        let map = load_sound(&path).unwrap().patch.macros[0].maps[0];
+        assert_eq!((map.curve, map.s), (40, -20));
         assert!(matches!(
             save(&path, &preset, false),
             Err(PresetError::Taken(_))

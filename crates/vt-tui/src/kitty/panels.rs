@@ -9,13 +9,13 @@ use vt_model::envelope::Envelope;
 use vt_model::modulation::Polarity;
 
 use super::generators::GenDrawing;
-use super::plot::{LfoDrawing, Shade, TrackDrawing};
+use super::plot::{LfoDrawing, MappingDrawing, Shade, TrackDrawing};
 use super::{FilterSettings, SlotDrawing};
 use crate::sample_wave::Thumbnail;
 
 /// A panel that draws an image: the Sound page's filter curve and sampler's thumbnail, a mod
 /// slot's picture on the Mod page, an envelope's shape, an LFO's cycle or a Track slot's map, an
-/// FX slot's curve, or a live generator's preview.
+/// FX slot's curve, a live generator's preview, or the mapping view's response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PanelKey {
     Filter,
@@ -24,6 +24,8 @@ pub enum PanelKey {
     Slot(usize),
     /// A live generator's preview on the Gen page, by its place in its phrase's list.
     Gen(usize),
+    /// The response of the mapping under the mapping view's cursor (decision 314).
+    Mapping,
 }
 
 /// What a panel's picture was drawn from, which is all that's compared to tell if it's changed.
@@ -44,6 +46,8 @@ pub enum Shape {
     Slot(SlotDrawing),
     /// What a live generator writes across its span.
     Gen(GenDrawing),
+    /// A macro mapping's response.
+    Mapping(MappingDrawing),
 }
 
 impl PartialEq for Shape {
@@ -56,6 +60,7 @@ impl PartialEq for Shape {
             (Self::Track(a), Self::Track(b)) => a == b,
             (Self::Slot(a), Self::Slot(b)) => a == b,
             (Self::Gen(a), Self::Gen(b)) => a == b,
+            (Self::Mapping(a), Self::Mapping(b)) => a == b,
             _ => false,
         }
     }

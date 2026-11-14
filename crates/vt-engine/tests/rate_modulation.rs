@@ -100,6 +100,8 @@ fn rate_on_macro(song: &mut Song, slot: usize, from: u16, to: u16) {
         target: MacroTarget::Setting(rate_of(slot)),
         min: from,
         max: to,
+        curve: 0,
+        s: 0,
     }];
 }
 
@@ -425,12 +427,16 @@ fn unmoved() -> Song {
                 target: MacroTarget::Setting(SettingId::CUT),
                 min: 0x2000,
                 max: 0xE000,
+                curve: 0,
+                s: 0,
             });
             track.macros[1].value = 0x4000;
             track.macros[1].maps.push(MacroMap {
                 target: MacroTarget::Setting(SettingId::mod_own(1, 1).unwrap()),
                 min: 0x2000,
                 max: 0x9000,
+                curve: 0,
+                s: 0,
             });
         }
     }
