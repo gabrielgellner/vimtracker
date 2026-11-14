@@ -1513,7 +1513,7 @@ fn param_entry(param: &Param) -> Entry {
 }
 
 /// A mod slot's settings that steps can lock: its depth and polarity, whatever its type, and an
-/// LFO's phase and deform.
+/// LFO's phase and deform, in [`MOD_LOCKED_FIELDS`](crate::modulation::MOD_LOCKED_FIELDS)' order.
 const MOD: [Entry; 4] = [
     Entry {
         key: "depth",
@@ -1778,7 +1778,8 @@ const fn percentage(key: &'static str, name: &'static str) -> Entry {
 
 /// A mod slot's type's own settings that a macro or modulation can move, by what they are, so an
 /// ADSR's, an AHD's and an LPG's `Attack` are one: unlabelled, as steps can't lock them (decision
-/// 283). Each is on the slot only while its type has it.
+/// 283). Each is on the slot only while its type has it. They're in
+/// [`MOD_OWN_FIELDS`](crate::modulation::MOD_OWN_FIELDS)' order, which names them.
 const MOD_OWN: [Entry; MOD_OWN_SETTINGS] = [
     time("attack", "Attack"),
     time("decay", "Decay"),

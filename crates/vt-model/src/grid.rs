@@ -13,6 +13,11 @@ pub const GRID_ROWS: usize = 3;
 pub struct Grid([[Option<usize>; GRID_ROWS]; GRID_COLUMNS]);
 
 impl Grid {
+    /// A grid from all four of its columns, for a table that states one as a constant.
+    pub const fn new(columns: [[Option<usize>; GRID_ROWS]; GRID_COLUMNS]) -> Self {
+        Self(columns)
+    }
+
     /// A grid from its columns, each listing its settings from the top. Past four columns, or past
     /// three in a column, they're left out, which [`Grid::places_each_once`] catches.
     pub fn from_columns<C: AsRef<[Option<usize>]>>(columns: &[C]) -> Self {

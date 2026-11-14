@@ -8,6 +8,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::accumulator::Accumulation;
+use crate::action::TrackControl;
 use crate::arpeggio::Arpeggio;
 use crate::bank::{Bank, BankEntry, ContentHash};
 use crate::constants::{
@@ -670,6 +671,47 @@ impl Track {
         } else {
             self.settings.insert(id, value);
         }
+    }
+
+    /// One of the values it holds that its page sets, its coarse byte where it has a fine part.
+    pub fn control(&self, control: TrackControl) -> u8 {
+        match control {
+            TrackControl::Cutoff => self.cutoff,
+            TrackControl::Resonance => self.resonance,
+            TrackControl::Pan => self.pan,
+            TrackControl::SendA => self.send_a,
+            TrackControl::SendB => self.send_b,
+            TrackControl::Drive => self.drive,
+            TrackControl::Punch => self.punch,
+            TrackControl::LowCut => self.low_cut,
+            TrackControl::HighCut => self.high_cut,
+            TrackControl::Pitch => self.pitch,
+            TrackControl::VelocityDelta => self.velocity_delta,
+            TrackControl::Quantise => self.quantise,
+        }
+    }
+
+    /// Set one of the values it holds that its page sets, leaving any fine part as it is. A send
+    /// stops at the level scale's top.
+    pub fn set_control(&mut self, control: TrackControl, value: u8) {
+        let held = match control {
+            TrackControl::Cutoff => &mut self.cutoff,
+            TrackControl::Resonance => &mut self.resonance,
+            TrackControl::Pan => &mut self.pan,
+            TrackControl::SendA => &mut self.send_a,
+            TrackControl::SendB => &mut self.send_b,
+            TrackControl::Drive => &mut self.drive,
+            TrackControl::Punch => &mut self.punch,
+            TrackControl::LowCut => &mut self.low_cut,
+            TrackControl::HighCut => &mut self.high_cut,
+            TrackControl::Pitch => &mut self.pitch,
+            TrackControl::VelocityDelta => &mut self.velocity_delta,
+            TrackControl::Quantise => &mut self.quantise,
+        };
+        *held = match control {
+            TrackControl::SendA | TrackControl::SendB => value.min(MAX_LEVEL),
+            _ => value,
+        };
     }
 
     /// A setting's fine part on this track, `00` unless it's been set.
