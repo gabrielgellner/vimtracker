@@ -269,8 +269,8 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 
 | Crate | Owns | May depend on |
 |---|---|---|
-| `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, presets, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
-| `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs` and `engine/`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs and `wide` for `Supersaw`'s four lanes |
+| `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, presets, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `realfft`, `thiserror` and `xxhash-rust` |
+| `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs` and `engine/`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs, `wide` for `Supersaw`'s four lanes, `realfft` for `Clouds`' spectral mode and `thiserror` |
 | `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
 | `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), the faders as the steps automate them and a hand takes them over (`automating.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
 
@@ -300,8 +300,10 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 *   **The edit thread** runs `run::main_loop` once a frame, every `FRAME_MS` (33 ms): `App::tick`
     frees what came back and reads the newest report, autosave runs if it's due, `Graphics::sync`
     sends the images the screen is about to show, ratatui draws, `Graphics::place` places the images
-    that are placed directly, and then keys are read until the next frame. Saving, `:render` and
-    loading samples at a new rate happen here too.
+    that are placed directly, and then keys are read until the next frame. A screen that has come
+    out the same for about half a second is drawn only every eighth frame, about four times a
+    second, until a key, the mouse or the window brings something, the song changes or it plays
+    (`Redraws`, #547). Saving, `:render` and loading samples at a new rate happen here too.
 *   **The audio callback** is `cpal`'s output thread, in `audio.rs`. It calls `Realtime::process` in
     blocks of up to `MAX_BLOCK` frames, into scratch made when the stream starts, clamps the output
     at full level, and counts its load, late blocks and latency in `AudioStats`' atomics for the
@@ -415,8 +417,9 @@ Song                               song.ron, refused unless format_version is FO
  |- bank                           01..FF -> BankEntry: label, name, edit
  |   '- SampleEdit                 timeline (one whole file for now), points, play, hints
  |       |- Points                 start, end, loop, slices[], next_id, marks{a..z}
- |       |- PlayParams             gain, tune, cents, reverse, fades, normalize, snap_zero
- |       '- Hints                  sens, bars, root note, tempo: what the sound is like
+ |       |- PlayParams             gain, tune, cents, reverse, fade_in, fade_out, normalize,
+ |       |                         snap_zero, warp
+ |       '- Hints                  sens, bars or steps, root note, tempo: what the sound is like
  |- tracks[]                       sound tracks, then the groups G1 to G4, Return A, Return B
  |   |                             and Master
  |   |- kind, name, mute, solo     kind: Sound, Group(n), ReturnA, ReturnB or Master
@@ -430,8 +433,9 @@ Song                               song.ron, refused unless format_version is FO
  |   |- pitch, velocity_delta, quantise, choke, gate_length, speed, reset, glide, groove
  |   |- group                      the group a sound track plays through, or none
  |   |- accumulation, arpeggio     how ACU and ARP play on it
- |   |- mods[6]                    ModSlot: kind, destination, depth, switch, polarity, each type's
- |   |                             own settings (adsr, lfo), kept while another type plays
+ |   |- mods[6]                    ModSlot: kind, destination, depth, bypassed, polarity, in_scale,
+ |   |                             each type's own settings (adsr, ahd, drum, lpg, lfo, steps,
+ |   |                             track), kept while another type plays
  |   |- macros[8]                  Macro: name, value, maps[(setting, min, max)], saved only once
  |   |                             one isn't empty
  |   |- chains{id}                 Chain: entries[(phrase, transpose)], label
@@ -440,7 +444,8 @@ Song                               song.ron, refused unless format_version is FO
  |       |   '- FxSlot             command, value (coarse and fine), mark
  |       '- Generator              a live shape: column, span (rows or the lane), Shape, and the
  |                                 column's cells from under it, saved as steps
- '- sections[]                     Section: chains[one per track], length, repeat, start, reset
+ |- sections[]                     Section: chains[one per track], length, repeat, start, reset
+ '- view                           ViewState: the folded and opened groups, not undone
 ```
 
 *   **Tracks.** Up to `MAX_SOUND_TRACKS` (64) sound tracks, then the fixed tracks every song has:
@@ -583,8 +588,11 @@ generator's cells laid over; at rest nothing renders, and the row is the step (d
 Each row a track plays while something reaches its generators is reported on `GEN_HEARD_QUEUE`, a
 `GenReport::Row` for each live generator on it with the cell it played, or none where it played
 what's written, and a phrase played with nothing reaching them, once, as `GenReport::Rest`; the app
-keeps the latest for each row (`App::heard_rows`), for the playhead's row, the overview, the
-title's `~`, the status line and `Space g a` and `Space g A` (decision 300).
+keeps the latest for each row (`Services::heard_rows`), for the playhead's row, the overview, the
+title's `~`, the status line and `Space g a` and `Space g A` (decision 300). A generator that varies
+is also reported as each pass of it is first heard, with the seeds it played, as
+`GenReport::Pass`, and the app keeps the latest for each generator (`Services::heard_passes`) for
+`Space g a` to keep (decision 293).
 
 A `Playable` is one bank entry ready to play: its `SampleId` and frames, a `Span` for each slice in
 `SLI`'s order, or one for the whole entry, the whole entry's span for the sample page, its start
@@ -700,10 +708,10 @@ module per file, each keeping its port's licence notice:
 | Folder | Holds | Modules |
 |---|---|---|
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_noise`, `braids_physical`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `braids_vocal`, `braids_waves`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `four_op` (four operators in `wide`'s `f32x4` lanes, an operator a lane), `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `speech`, `string_model`, `supersaw` (its saws four at a time in `wide`'s `f32x4` lanes), `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves, DX7 patches and words and Braids' waves |
-| `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `beads` (Mutable Instruments' Beads, whose grains are `granular`'s and whose wow and flutter are `tape`'s), `chorus`, `clouds` (Mutable Instruments' Clouds, whose reverb and pitch shifter are `reverb`'s and `pitch_shifter`'s, with its phase vocoder in `clouds/spectral`, on `realfft`), `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `echo` (the Space Echo, a Roland RE-201's tape loop, whose reverb is `spring`'s), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `space`, `spring`, `stutter`, `tape`, `warps`, and `tables/` with Warps' fold |
+| `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `obx` (the OB-X's two-pole filter, after OB-Xf's), `comb`, `lpg`, `vowel` |
+| `effects/` | The other slot effects, and what plays a slot | `beads` (Mutable Instruments' Beads, whose grains are `granular`'s and whose wow and flutter are `tape`'s), `chorus`, `clouds` (Mutable Instruments' Clouds, whose reverb and pitch shifter are `reverb`'s and `pitch_shifter`'s, with its phase vocoder in `clouds/spectral`, on `realfft`), `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `echo` (the Space Echo, a Roland RE-201's tape loop, whose reverb is `spring`'s), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `space`, `spring`, `stutter`, `sweep` (sines swept through a slot, for the tests that hold its curve to what's heard), `tail` (how a reverb's tail dies away, for its drawing), `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
-| `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler` (also its `Decimator`, for a sound made at twice the rate), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
+| `blocks/` | Small parts the others share, which use nothing else in `dsp` | `clip` (a clamp that's safe in a feedback loop, #461), `drift` (what makes each note of an analog voice a little different, decisions 190 and 191), `flush` (a filter's state let go once it's far below anything heard, #260), `oversampler` (also its `Decimator`, for a sound made at twice the rate), `response` (what a filter does to a steady sine, from its coefficients, for the FX page's curves, decision 333), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 
 A new voice, filter, effect or dynamics tool goes in its folder. A part that two folders would
 share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of #260,
@@ -718,8 +726,9 @@ voice borrows its bank of modes. `memory` names every effect with a long buffer,
 them in `effects/` rather than under them in `blocks/`. `grain` (Plaits' formant voice) and `noise`
 (its clocked noise) are voices; `granular`, Beads' effect, is an effect. `eq` sits with the
 compressor and limiter as a mixing tool, as a channel strip has them. Each of the compressor's types
-(#338) has a module of its own beside `compressor`, which matches the slot's type each frame, so
-`VCA`, `FET` and `Diode` each add a module and an arm. `compressor` applies the `Auto` and `Makeup`
+(#338) has a module of its own beside `compressor`, which matches the slot's type each frame:
+`Clean` in `compressor` itself, `Console` and `Glue`. `VCA`, `FET` and `Diode`, #338's work still to
+come, will each add a module and an arm. `compressor` applies the `Auto` and `Makeup`
 every type shares after the type's own module, so a new type has both with nothing of its own
 (decision 132). `plaits_parts` holds Plaits'
 and stmlib's shared filters and helpers, used by voices, `lpg`, `warps` and `resonator`, so it's a
@@ -1019,7 +1028,7 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     each entry, always compressed, about 1 to 2 KB. The filter curve is the Sound page's large
     panel, 49 by 5 characters, with frequency gridlines, a 0 dB line and a dashed mark at `Cut`.
     The Mod page's panels are the half size, 24 by 5: an envelope over its baseline and stage
-    lines, one cycle of an LFO from its `Phase`, drawn from the engine's own `lfo::wave`, and a
+    lines, one cycle of an LFO from its `Phase`, drawn from `vt_model::lfo::deformed_wave`, as the engine plays it, and a
     Track slot's map across its source's span. Zoomed in on one slot (`z i`, decision 329), the
     FX page draws its compressor's or distortion's curve 42 by 16 and its EQ's 140 by 16, the
     zoomed slot's alone, and the filter effects' 140 by 16 from the engine's response functions
@@ -1126,6 +1135,12 @@ These need no terminal and no sound device, so they run anywhere.
     other than `Straight` is refused rather than read wrongly. `tools/compare/song_line.py` uses
     it for a spec that's a stub naming a song, writing the whole spec from the song each run, so a
     song's line is compared without being copied into the repository.
+*   **`just take`** (`tools/compare/take.py`) compares a riff played on Acid V in Ableton Live
+    with the same riff on ours (#565): it reads the clip's notes and knob moves out of Live, and
+    `crates/vt-tui/examples/take_song.rs` builds the song from them with the program's own model,
+    for `vimtracker render` to play and the harness to compare over time.
+*   **`vimtracker convert-nudges <project>`**, hidden from the help, converts a project saved in
+    format 10 to format 11 once, with `vt_model::convert`, keeping the old files beside the new.
 *   **`probe-keys`** prints the key events the terminal delivers, and **`kits import-ableton`**
     writes a kit for each of Ableton Live's drum racks.
 
@@ -1149,8 +1164,9 @@ every pair of values still met, and all of them under `cargo test --release`.
 | Golden renders | `crates/vt-engine/tests/golden/`, through `support::golden` | An FNV-1a hash of a render's exact samples. `VT_BLESS=1` updates one after a change to the sound on purpose, and `VT_DUMP` writes the samples, to compare two builds |
 | Tutorial songs | `crates/vt-engine/tests/all/tutorial_songs.rs`, which builds the songs in `docs/manual/src/tutorials/songs/` | That each song on disk is what its builder makes, so a format change can't leave them stale, and that each loads, plays and stays below full scale. `just tutorial-songs` writes them again |
 | DSP | Unit tests beside each module in `dsp/` | Each voice, filter and effect on its own |
-| Real-time safety | The tests in `crates/vt-engine/src/link.rs`, under `rt_guard` | That a block allocates and frees nothing |
-| Interface | `crates/vt-tui/tests/`: `app.rs`, and files of their own for the track page's settings and keys (`track_page.rs`), its Sound page's rack (`sound_page.rs`), its Mod page's rack (`mod_page.rs`), its FX page (`fx_page.rs`) and the sample page (`sample_page.rs`), with the helpers they share in `common/`; and `grammar.rs` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated` |
+| Real-time safety | The tests in `crates/vt-engine/src/link.rs`, `gens.rs`, `slowdown.rs` and `dsp/filters/filter.rs`, under `rt_guard` | That a block, a generator's render, the slowdown check and the track filter allocate and free nothing |
+| Interface | `crates/vt-tui/tests/`, a file for each part of the program, such as the keys (`keys.rs`), the track page's settings and keys (`track_page.rs`), its Sound page's rack (`sound_page.rs`), its Mod page's rack (`mod_page.rs`), its FX page (`fx_page.rs`), the sample page (`sample_page.rs`), live recording (`recording.rs`) and `grammar.rs`, with the helpers they share in `common/` | Keys pressed into an `App` connected to a real engine, whose `Realtime` the test runs. A held key can't be pressed from a test, so held keys go through `App::key_released` and `App::key_repeated`, mostly in `keys.rs` and `recording.rs` |
+| Roto-Control | `crates/vt-roto/tests/`: `handshake.rs`, `live.rs`, `protocol.rs` and `store.rs`, against the fake Roto, and unit tests in its modules | Every message of both protocols written and read back, the handshake and the link's thread, live devices, and vimtracker's own stored setups, with no hardware and no MIDI ports |
 | Graphics | Unit tests in `kitty.rs` and `views/` | The commands sent, and the PNGs, pinned by their size and CRC |
 | Other paths | `crates/vt-tui/tests/probe.rs`, `notes.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, `notes`' timing of a song's track, the analysis thread and its cache, and importing kits from Ableton |
 | Comparison harness | `tools/compare/tests/`, with `uv run python -m unittest discover tests` | The Live bridge, against stand-ins for Live's objects. Not in CI, as nothing in `tools/compare` is |

@@ -48,8 +48,8 @@ laid out for, rather than minimised, and `just live shot out.png` saves a pictur
 alone, kitty's images and all. Set `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` to folders of the check's
 own first, so the real ones are left alone.
 
-A key can't be held from here, so what a held key does is tested in `crates/vt-tui/tests/app.rs`,
-which can say when a key is let go.
+A key can't be held from here, so what a held key does is tested in `crates/vt-tui/tests/`,
+mostly `keys.rs` and `recording.rs`, which can say when a key is let go.
 
 ## Pull requests and CI
 
