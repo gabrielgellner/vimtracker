@@ -47,6 +47,7 @@ pub mod screenshot;
 pub mod shaping;
 pub mod slicing;
 pub mod song_view;
+pub mod tagging;
 pub mod theme;
 pub mod timeline;
 pub mod track_notes;

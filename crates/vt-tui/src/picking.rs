@@ -222,7 +222,10 @@ impl App {
             _ => self.explorer_preview(item, &preview),
         };
         if let Some(picker) = self.picker.as_mut() {
-            picker.preview = shown.map(Arc::new);
+            picker.preview = shown.map(|shown| {
+                let tags = picker.item(item).tags.clone();
+                Arc::new(Shown { tags, ..shown })
+            });
         }
     }
 
@@ -784,6 +787,10 @@ impl App {
                 self.shape_command = None;
                 self.mode = self.mode_after_picker();
                 self.leave_explorer();
+            }
+            Outcome::Tag { item, tags } => {
+                self.tag_item(item, tags);
+                self.refresh_preview();
             }
             Outcome::Choose(pick) => {
                 let naming = self.naming.take();

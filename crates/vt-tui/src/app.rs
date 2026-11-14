@@ -470,6 +470,11 @@ pub struct App {
     pub file_playing: Option<PathBuf>,
     /// The folders the explorer was last used in.
     pub recent_places: RecentPlaces,
+    /// The tags given to files by hand, by their content (decision 315).
+    pub tag_library: std::sync::Arc<vt_model::tag::TagLibrary>,
+    /// What each sample read for the explorer is by how its sound ends, `loop` or `one-shot`,
+    /// kept for the session.
+    pub heard_tags: std::collections::HashMap<PathBuf, &'static str>,
     /// The command line a folder chosen in the explorer goes on to.
     pub naming: Option<Naming>,
     /// Whether the project the explorer opens throws away unsaved changes, as after `:e!`.
@@ -666,6 +671,8 @@ impl App {
             file_wanted: None,
             file_playing: None,
             recent_places: RecentPlaces::default(),
+            tag_library: std::sync::Arc::default(),
+            heard_tags: std::collections::HashMap::new(),
             naming: None,
             opening_discards: false,
             patch_over: false,

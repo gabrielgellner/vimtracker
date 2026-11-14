@@ -230,6 +230,16 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
             status = note;
         }
     }
+    if let Some(folder) = crate::config::config_folder() {
+        let path = folder.join(vt_model::tag::TAGS_FILE);
+        let (library, note) = vt_model::tag::TagLibrary::load(&path);
+        app.tag_library = std::sync::Arc::new(library);
+        if let Some(note) = note
+            && status.is_empty()
+        {
+            status = note;
+        }
+    }
     if let Some(path) = RecentPlaces::default_path() {
         let (places, note) = RecentPlaces::load(&path);
         app.recent_places = places;

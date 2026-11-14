@@ -12,10 +12,11 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use vt_model::tag::Source;
 
 use crate::explorer::{Icon, Purpose};
 use crate::glyphs;
-use crate::input::picker::{Picker, Row};
+use crate::input::picker::{Focus, Picker, Row};
 use crate::theme;
 use crate::views::widgets;
 use crate::views::widgets::hint::{Switch, hint_line};
@@ -42,10 +43,10 @@ pub const PREVIEW_SAMPLE_WIDTH: usize = 28;
 pub const PREVIEW_SAMPLE_HEIGHT: usize = 4;
 /// Room for a label in a kit's preview, such as `BD`.
 const PREVIEW_LABEL_WIDTH: usize = 4;
-/// The explorer's list's width, inside its border, as its tree grows and shrinks. It's 60 so the
-/// sample explorer's hint, with its three three-cell switches, fits under it with the preview off,
-/// with a dash of the border to spare.
-const EXPLORER_WIDTH: usize = 60;
+/// The explorer's list's width, inside its border, as its tree grows and shrinks. It's 67 so the
+/// sample explorer's hint, `Enter choose  T tag` and its three three-cell switches, fits under it
+/// with the preview off, with a dash of the border to spare.
+const EXPLORER_WIDTH: usize = 67;
 /// The kit dialog's list is wider, so its marking hint, `Space mark  a all  Enter load`, fits
 /// with the same three switches, and a dash to spare, with the preview off.
 const KIT_EXPLORER_WIDTH: usize = 77;
@@ -93,12 +94,16 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
         Style::new().add_modifier(Modifier::BOLD),
     )];
     // The explorer's count would only be what's been read so far, but the kit dialog counts
-    // the sounds marked.
+    // the sounds marked, and a search by tag what it found below the open folders.
     if !explorer {
         title.push(Span::styled(
             format!("{}/{} ", picker.matching(), picker.items().len()),
             theme::dim(),
         ));
+    } else if let Some(found) = picker.tag_found() {
+        let short = picker.tree().is_some_and(|tree| tree.read_short);
+        let more = if short { " in the first read" } else { "" };
+        title.push(Span::styled(format!("{found} found{more} "), theme::dim()));
     } else if picker.marked_count() > 0 {
         title.push(Span::styled(
             format!("{} marked ", picker.marked_count()),
@@ -118,8 +123,9 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
         width: inner.width.min(list_width as u16),
         ..inner
     };
-    // Under the search line.
-    picker.scroll_within(usize::from(list_area.height).saturating_sub(1));
+    // Under the search line, and the tag row while a tag is typed.
+    let tag_row = usize::from(picker.tag_row().is_some());
+    picker.scroll_within(usize::from(list_area.height).saturating_sub(1 + tag_row));
     frame.render_widget(Paragraph::new(list(picker, &columns, list_area)), list_area);
     if preview && inner.width > list_area.width {
         let preview_area = Rect {
@@ -226,17 +232,43 @@ impl Columns {
     }
 }
 
-/// The search line and the rows that fit, from the picker's first row shown.
+/// The search line and the rows that fit, from the picker's first row shown. While `T` types an
+/// item's tags, the search line is theirs, after a `#`; and while a search's last word is a tag
+/// being typed, the tag row under it shows the tags that could finish it.
 fn list(picker: &Picker, columns: &Columns, area: Rect) -> Vec<Line<'static>> {
-    let query = if picker.focus == crate::input::picker::Focus::Search {
-        Line::raw(format!("> {}_", picker.query))
-    } else {
-        Line::styled(format!("> {}", picker.count()), theme::dim())
+    let query = match picker.focus {
+        Focus::Search => Line::raw(format!("> {}_", picker.query)),
+        Focus::Tags => Line::raw(format!("# {}_", picker.tag_line)),
+        Focus::List => Line::styled(format!("> {}", picker.count()), theme::dim()),
     };
-    let room = usize::from(area.height).saturating_sub(1);
+    let width = usize::from(area.width);
     let mut lines = vec![query];
-    lines.extend(rows(picker, columns, usize::from(area.width), room));
+    if let Some(tags) = picker.tag_row() {
+        lines.push(tag_row(&tags, width));
+    }
+    let room = usize::from(area.height).saturating_sub(lines.len());
+    lines.extend(rows(picker, columns, width, room));
     lines
+}
+
+/// The tag row: each tag that could finish the one being typed, with how many have it, as many as
+/// fit, `Tab` taking the first. With none, it says so.
+fn tag_row(tags: &[(String, usize)], width: usize) -> Line<'static> {
+    if tags.is_empty() {
+        return Line::styled("  no tags", theme::dim());
+    }
+    let mut spans = Vec::new();
+    let mut used = 0;
+    for (name, count) in tags {
+        let text = format!("  #{name} {count}");
+        if used + text.chars().count() > width {
+            break;
+        }
+        used += text.chars().count();
+        spans.push(Span::raw(format!("  #{name}")));
+        spans.push(Span::styled(format!(" {count}"), theme::dim()));
+    }
+    Line::from(spans)
 }
 
 /// The rows that fit in `room`, from the picker's first row shown.
@@ -370,6 +402,21 @@ fn tree_spans(picker: &Picker, row: usize, index: usize, width: usize) -> Vec<Sp
             theme::dim(),
         ));
     }
+    // The tags given by hand, dim at the right where they fit. The guesses would mostly say the
+    // name again, so they're in the preview.
+    let own: Vec<String> = item
+        .tags
+        .iter()
+        .filter(|tag| tag.source == Source::Own)
+        .map(|tag| format!("#{}", tag.name))
+        .collect();
+    let own = own.join(" ");
+    let length = own.chars().count();
+    let shown: usize = spans.iter().map(|span| span.content.chars().count()).sum();
+    if length > 0 && shown + GAP + length <= width {
+        spans.push(Span::raw(" ".repeat(width - shown - length)));
+        spans.push(Span::styled(own, theme::dim()));
+    }
     spans
 }
 
@@ -461,6 +508,18 @@ fn preview_lines(picker: &Picker, area: Rect) -> Vec<Line<'static>> {
         Line::raw(format!(" {}", shown.heading)),
         Line::styled(format!(" {}", shown.note), theme::dim()),
     ];
+    // Its tags, those given by hand plain and the rest dim.
+    if !shown.tags.is_empty() {
+        let spans = shown.tags.iter().map(|tag| {
+            let style = if tag.source == Source::Own {
+                Style::new()
+            } else {
+                theme::dim()
+            };
+            Span::styled(format!(" #{}", tag.name), style)
+        });
+        lines.push(Line::from(spans.collect::<Vec<_>>()));
+    }
     lines.extend(
         shown
             .details

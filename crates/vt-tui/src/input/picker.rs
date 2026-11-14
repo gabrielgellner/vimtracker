@@ -27,6 +27,7 @@ use vt_model::shape::params::Choice;
 use vt_model::song::{FilterMode, FilterType, Machine, Role};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind};
+use vt_model::tag::Tag;
 
 use crate::audio::AudioChoice;
 use crate::guides::Guide;
@@ -264,6 +265,8 @@ pub struct Item {
     pub preview: Option<Preview>,
     /// How its name is drawn, as a track in a group is in the group's colour.
     pub style: Style,
+    /// In the explorer, its tags, which a search with `#` finds it by (decision 315).
+    pub tags: Vec<Tag>,
 }
 
 impl Item {
@@ -277,6 +280,7 @@ impl Item {
             wider: None,
             preview: None,
             style: Style::new(),
+            tags: Vec::new(),
         }
     }
 
@@ -307,6 +311,11 @@ impl Item {
             wider: Some(pick),
             ..self
         }
+    }
+
+    /// With these tags.
+    pub fn tagged(self, tags: Vec<Tag>) -> Self {
+        Self { tags, ..self }
     }
 
     /// With something to show beside the list.
@@ -345,6 +354,8 @@ struct Category {
 pub enum Focus {
     List,
     Search,
+    /// The explorer's `T`: the tags of the item under the cursor, being typed.
+    Tags,
 }
 
 /// What a key did to an open picker.
@@ -353,6 +364,11 @@ pub enum Outcome {
     Stay,
     Choose(Pick),
     Close,
+    /// Give an item in the explorer these tags, as typed after `T`, and stay open.
+    Tag {
+        item: usize,
+        tags: Vec<String>,
+    },
 }
 
 /// What the preview shows for the item under the cursor, once it's been loaded.
@@ -369,6 +385,8 @@ pub struct Shown {
     /// sample's.
     pub wave: Option<Vec<(usize, usize)>>,
     pub lines: Vec<PreviewLine>,
+    /// The item's tags, those given by hand plain and those guessed dim.
+    pub tags: Vec<Tag>,
 }
 
 impl Shown {
@@ -381,6 +399,7 @@ impl Shown {
             details: Vec::new(),
             wave: None,
             lines: Vec::new(),
+            tags: Vec::new(),
         }
     }
 }
@@ -421,6 +440,11 @@ pub struct Picker {
     rows: Vec<Row>,
     /// While searching, where in each row's text its matched letters are.
     matched: Vec<Vec<u32>>,
+    /// In the explorer while searching, whether each row matched, rather than being a folder
+    /// shown for what's in it.
+    hits: Vec<bool>,
+    /// In the explorer, the tags being typed for the item under the cursor with `T`.
+    pub tag_line: String,
     /// The item already chosen, which the list marks.
     current: Option<usize>,
     /// Digits typed for a count, and a `g` or a `z` waiting for another key.
@@ -489,6 +513,8 @@ impl Picker {
             top,
             rows: Vec::new(),
             matched: Vec::new(),
+            hits: Vec::new(),
+            tag_line: String::new(),
             current: None,
             count: String::new(),
             pending_g: false,
@@ -605,10 +631,7 @@ impl Picker {
     /// How many items match the search, which is all of them before typing.
     pub fn matching(&self) -> usize {
         if self.tree.is_some() && self.is_searching() {
-            self.matched
-                .iter()
-                .filter(|found| !found.is_empty())
-                .count()
+            self.hits.iter().filter(|hit| **hit).count()
         } else if self.is_searching() {
             self.rows.len()
         } else {
@@ -694,16 +717,15 @@ impl Picker {
     pub fn set_query(&mut self, query: String) {
         let kept = self.current_index();
         self.query = query;
+        if self.tree.is_some() && !self.search().tags.is_empty() {
+            self.read_below_open();
+        }
         self.rebuild();
         match kept {
             Some(item) if !self.is_searching() => self.reveal(item),
             // In the explorer, the first match rather than a folder it's in.
             _ if self.tree.is_some() => {
-                self.selected = self
-                    .matched
-                    .iter()
-                    .position(|found| !found.is_empty())
-                    .unwrap_or(0);
+                self.selected = self.hits.iter().position(|hit| *hit).unwrap_or(0);
             }
             _ => self.selected = 0,
         }
@@ -713,7 +735,7 @@ impl Picker {
     fn rebuild(&mut self) {
         self.past_end = false;
         if self.tree.is_some() {
-            (self.rows, self.matched) = self.tree_rows();
+            (self.rows, self.matched, self.hits) = self.tree_rows();
         } else if self.is_searching() {
             let haystacks: Vec<String> = self.items.iter().map(Item::haystack).collect();
             let texts: Vec<(&str, &str)> = self
@@ -730,6 +752,7 @@ impl Picker {
             self.matched = matched;
         } else {
             self.matched.clear();
+            self.hits.clear();
             self.rows = self
                 .top
                 .iter()
@@ -818,6 +841,7 @@ impl Picker {
         let outcome = match self.focus {
             Focus::List => self.list_key(key),
             Focus::Search => self.search_key(key),
+            Focus::Tags => self.tag_key(key),
         };
         self.scroll(self.first_shown);
         outcome
@@ -890,6 +914,8 @@ impl Picker {
                 self.toggle_marks(count.unwrap_or(1));
             }
             KeyCode::Char('a') if self.marks_sounds() => self.mark_all(),
+            // Its tags, to change, after Ableton's and Splice's tags (decision 315).
+            KeyCode::Char('T') if self.taggable().is_some() => self.start_tagging(),
             KeyCode::Char('h') => self.close_category(),
             KeyCode::Char('/') => self.focus = Focus::Search,
             // A count, a `g` or a `z` is let go first, as in Vim.
@@ -913,6 +939,7 @@ impl Picker {
             KeyCode::Down => self.move_highlight(1),
             KeyCode::Up => self.move_highlight(-1),
             KeyCode::Enter => return self.enter(false, true),
+            KeyCode::Tab if self.tree.is_some() => self.complete_tag(),
             // Back to the list, as `Esc` leaves Insert mode, keeping what's found so `j` and `k`
             // move through it. Only the list's own `Esc` closes.
             KeyCode::Esc => self.focus = Focus::List,
