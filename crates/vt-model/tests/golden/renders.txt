@@ -18,6 +18,16 @@ baed90c19fa87d2c Acid on Note, chromatic
 0cefc3d116d4361c Acid on Note, in key
 87e59c5569117b25 Acid on Nudge
 87e59c5569117b25 Acid on Velocity
+87e59c5569117b25 Acid shaped on FX, event
+87e59c5569117b25 Acid shaped on FX, fine
+87e59c5569117b25 Acid shaped on FX, last slot
+87e59c5569117b25 Acid shaped on Length
+7ed3308b73a1c3de Acid shaped on Note of its own, chromatic
+da58da4c03e5b678 Acid shaped on Note of its own, in key
+55633686b99615aa Acid shaped on Note, chromatic
+00d88fbee669ea93 Acid shaped on Note, in key
+87e59c5569117b25 Acid shaped on Nudge
+87e59c5569117b25 Acid shaped on Velocity
 cce56ab9ebd45da9 Alternate on FX, event
 483489bacf438830 Alternate on FX, fine
 669b8cf3908f707d Alternate on FX, last slot

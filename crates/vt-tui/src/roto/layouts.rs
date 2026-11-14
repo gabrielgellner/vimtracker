@@ -1689,8 +1689,9 @@ const GEN_LIST: DeviceLayout = live(
         ],
     )],
 );
-/// `Acid`'s riff first, as a 303's randomiser has it, then its range and `Vary` on a page of
-/// their own, as it has more than eight.
+/// `Acid`'s riff first, as a 303's randomiser has it, then its range, the spread and bias that
+/// lean its notes, as a random's are placed, and `Vary` on a page of their own, as it has more
+/// than eight.
 const GEN_ACID: DeviceLayout = live(
     "gen/acid",
     &[
@@ -1707,7 +1708,19 @@ const GEN_ACID: DeviceLayout = live(
                 s(WHERE_SECOND),
             ],
         ),
-        knobs("Range", [s("from"), s("to"), __, __, __, s("vary"), __, __]),
+        knobs(
+            "Range",
+            [
+                s("from"),
+                s("to"),
+                s("spread"),
+                s("bias"),
+                __,
+                s("vary"),
+                __,
+                __,
+            ],
+        ),
     ],
 );
 /// A canon's moves; it writes every row, so it has no `Where`. Then its mutations, a Bloom

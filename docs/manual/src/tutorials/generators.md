@@ -250,9 +250,28 @@ every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu
 The finished song also sets the `String`'s `Decay` `B0` and `Bright` `50`, sends it to the delay
 and reverb (`Send A` `B0`, `Send B` `B8`), shortens the hat (`Decay` `28`), and sets the levels.
 
+**One knob, two settings.** Marbles' knob has two halves, and here each is a setting of its
+own, as they act on different things: `Mutate` draws the Steps slot's values again, the notes
+that come in new, and `:order` is the order the phrase plays its rows, the loop's own notes.
+Turn the knob from left to right like this:
+
+| Déjà vu | Here |
+|---|---|
+| Fully left: every note new | `Mutate` `100%`, `:order forward` |
+| Toward noon: new notes now and then | `Mutate` low, as `12%` |
+| Noon: the loop locked | `Space g a` on the Steps slot to keep what it drew, then `Mutate` `0%` |
+| Past noon: the loop out of order | `:order shuffle`, every note once a pass |
+| Fully right: any of the loop's notes each step | `:order random` |
+
+`Space g a` comes first at noon, as `Mutate` at `0%` plays the values as written and forgets
+what it drew; Marbles locks the loop it drifted to, and `Space g a` is that lock. The song has a
+little of both halves at once, `Mutate` `12%` and `:order random`, which Marbles' one knob can't
+do: the phrase's notes jump around while the slot brings a new one in now and then.
+
 **As a patch.** Track 1's Steps slot is the shipped patch `Deja vu`; add it with `:patch`. Its
-`Deja vu` macro turns `Mutate` the module's way, from all new up to a locked loop, and `Spread`
-its `Depth`. The phrase's `:order random` isn't part of a patch, so give it that yourself.
+`Deja vu` macro is the knob's left half, turning `Mutate` from all new at `00` to none at `FF`,
+and `Spread` turns its `Depth`. The right half is the phrase's `:order`, which a macro can't turn
+and a patch doesn't hold, so give the phrase that yourself.
 
 **Try next.**
 
@@ -608,6 +627,11 @@ off-beats. The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `
 *   `Pitches` `Keep` in the panel: `r` then rolls only the accents, slides and octaves, Roland's
     second die, and the notes stay.
 *   `Density` up for a busier line, `Notes` 2 for a two-note pump, `Octave` up for more jumps.
+*   `Spread` and `Bias` choose the riff's notes besides its root, as they lean `Random`'s
+    values in Marbles' X below: `Spread` `0%` gathers them round the middle of the range,
+    `D#2 F-2 G-2`, a tight riff, and `Bias` `+100` with it takes them from the top, `G#2 A#2
+    C-3`, leaps up from the root. On the Gen page they're in the fourth column, to turn while
+    it plays.
 *   Write a line by hand first, then `S` with `Acid` on it: its rhythm stays, and the panel gives
     it new pitches, accents and slides.
 *   `Space g a` keeps the one you like as plain notes, to tweak by hand.
