@@ -19,8 +19,10 @@ use crate::app::App;
 use crate::automating::fader_of;
 use crate::glyphs;
 use crate::meter::{height_of, to_db};
+use crate::mixer_page::{MIXER, MixerPage};
+use crate::page::Ctx;
 use crate::theme;
-use crate::track_page::{Control, MIXER};
+use crate::track_page::Control;
 use crate::views::track::value;
 use crate::views::widgets::group::{self, Switched};
 use crate::views::widgets::meter::{EIGHTHS, level_cell};
@@ -151,8 +153,8 @@ impl Strips {
 
 /// A strip's name: a sound track's number and name, or a fixed track's icon and name, a group's in
 /// its colour, faint while nothing's in it, and marked while its tracks are folded into it.
-fn name_cell(app: &App, index: usize) -> Line<'static> {
-    let song = app.song();
+fn name_cell(ctx: &Ctx, index: usize) -> Line<'static> {
+    let song = ctx.song();
     let track = &song.tracks[index];
     let mut style = if track.is_sound() {
         Style::new()
@@ -161,10 +163,10 @@ fn name_cell(app: &App, index: usize) -> Line<'static> {
     } else {
         group::style(song, index).unwrap_or_default()
     };
-    if index == app.cursor.track {
+    if index == ctx.cursor().track {
         style = style.add_modifier(Modifier::BOLD);
     }
-    let folded = app.folds.holds(song, index);
+    let folded = ctx.folds().holds(song, index);
     // A group's whole name comes first: where the icon would leave no gap before the next strip,
     // it's left out, as the group's colour and the rule over its part still say what it is. The
     // space after the fold mark is a gap.
@@ -229,10 +231,10 @@ fn part_rule(name: &str, width: usize, focused: bool) -> Line<'static> {
 
 /// The row of the parts' names, each on a rule over its strips that stops a column short of the
 /// next part's gap.
-fn parts_row(app: &App, columns: &Columns, strips: &Strips) -> Row<'static> {
+fn parts_row(ctx: &Ctx, columns: &Columns, strips: &Strips) -> Row<'static> {
     let mut cells = columns.row();
     cells.skip(2);
-    let cursor = strips.part(app.cursor.track);
+    let cursor = strips.part(ctx.cursor().track);
     let mut place = 0;
     while place < strips.shown.len() {
         if strips.gap_before(place) {
@@ -249,7 +251,7 @@ fn parts_row(app: &App, columns: &Columns, strips: &Strips) -> Row<'static> {
 
 /// One row of the meters, counting rows up from the bottom.
 fn meter_row(
-    app: &App,
+    ctx: &Ctx,
     columns: &Columns,
     strips: &Strips,
     row: usize,
@@ -261,14 +263,14 @@ fn meter_row(
     cells
         .cell(Line::styled(mark, theme::dim()).right_aligned())
         .skip(1);
-    let playing = app.transport == Transport::Playing;
+    let playing = ctx.transport() == Transport::Playing;
     strips.fill(&mut cells, |index| {
-        let meter = app.track_meters.get(index).copied().unwrap_or_default();
-        let faders = app.faders(index);
+        let meter = ctx.track_meter(index);
+        let faders = ctx.faders(index);
         let level = if faders.follows_steps(0) {
             (faders.at[0] >> 8) as u8
         } else {
-            app.song().tracks[index].level
+            ctx.song().tracks[index].level
         };
         let channel = |side: usize| {
             let channel = meter.channels[side];
@@ -291,16 +293,27 @@ fn meter_row(
     cells.done()
 }
 
-/// Draw the mixer.
+/// Draw the view: the program's mixer, given the rest of the program.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
+    app.mixer_page.draw(frame, area, &app.ctx());
+}
+
+impl MixerPage {
+    /// Draw the mixer.
+    pub fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
+        draw_page(frame, area, self, ctx);
+    }
+}
+
+/// Draw the mixer, as [`MixerPage::draw`].
+fn draw_page(frame: &mut Frame, area: Rect, page: &MixerPage, ctx: &Ctx) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
-    let song = app.song();
-    let ctx = app.ctx();
+    let song = ctx.song();
     // Room is kept for both gaps, whether or not they're in view.
     let room = area.width.saturating_sub(LABEL_WIDTH + 2 * SECTION_GAP);
     let count = usize::from(room / STRIP_WIDTH).max(1);
-    let tracks: Vec<usize> = app.folds.shown(song).collect();
-    let at = tracks.partition_point(|&track| track < app.cursor.track);
+    let tracks: Vec<usize> = ctx.folds().shown(song).collect();
+    let at = tracks.partition_point(|&track| track < ctx.cursor().track);
     let first = first_shown(at, tracks.len(), count);
     let strips = Strips::new(
         song,
@@ -315,12 +328,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     );
     let mut names = columns.row();
     names.skip(2);
-    strips.fill(&mut names, |index| name_cell(app, index));
+    strips.fill(&mut names, |index| name_cell(ctx, index));
     let mut routing = columns.row();
     routing.skip(2);
     strips.fill(&mut routing, |index| routing_cell(song, index));
     let mut rows = vec![
-        parts_row(app, &columns, &strips),
+        parts_row(ctx, &columns, &strips),
         names.done(),
         routing.done(),
     ];
@@ -328,32 +341,32 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let settings = MIXER.len() as u16;
     let meter_rows = usize::from(area.height.saturating_sub(ROWS_ABOVE_METERS + settings));
     for row in (0..meter_rows).rev() {
-        rows.push(meter_row(app, &columns, &strips, row, meter_rows));
+        rows.push(meter_row(ctx, &columns, &strips, row, meter_rows));
     }
 
-    let current = app.track_control();
+    let current = page.control_here(ctx);
     for control in MIXER {
         let mut cells = columns.row();
-        let labels = jump_label(&ctx, control);
-        cells.span(name_line(&ctx, control.label(), &labels, LABEL_WIDTH), 2);
+        let labels = jump_label(ctx, control);
+        cells.span(name_line(ctx, control.label(), &labels, LABEL_WIDTH), 2);
         strips.fill(&mut cells, |index| {
             // A fader the steps drive shows where they have it.
-            let heard = app.track_as_heard(index);
+            let heard = ctx.track_as_heard(index);
             let track = heard.as_deref().unwrap_or(&song.tracks[index]);
-            let muted = group::muted(&ctx, index);
-            let automated = app.follows_steps(index, control);
-            let taken = app.taken_over(index, control);
-            let here = index == app.cursor.track;
+            let muted = group::muted(ctx, index);
+            let automated = ctx.follows_steps(index, control);
+            let taken = ctx.taken_over(index, control);
+            let here = index == ctx.cursor().track;
             let selected = here && control == current;
             // A mute or solo that's on is its glyph: in the active colour for the track's own, and
             // in its group's colour for its group's.
             let switched = match control {
                 Control::Mute => Some((muted, glyphs::MUTE)),
-                Control::Solo => Some((group::soloed(&ctx, index), glyphs::SOLO)),
+                Control::Solo => Some((group::soloed(ctx, index), glyphs::SOLO)),
                 _ => None,
             };
             // One waiting for the launch grid is the glyph for waiting until it switches.
-            let jam = app.jam.get(index).copied().unwrap_or_default();
+            let jam = ctx.jam().get(index).copied().unwrap_or_default();
             let waiting = match control {
                 Control::Mute => jam.mute_waiting,
                 Control::Solo => jam.solo_waiting,
@@ -364,10 +377,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 _ if waiting => glyphs::WAITING.to_string(),
                 (_, Some((Switched::Off, _))) => "-".to_owned(),
                 (_, Some((_, glyph))) => glyph.to_string(),
-                _ => setting::text(&ctx, selected, || value(control, track, song)),
+                _ => setting::text(ctx, selected, || value(control, track, song)),
             };
             let style = match switched {
-                _ if selected => theme::cursor(app.mode),
+                _ if selected => theme::cursor(ctx.mode()),
                 _ if waiting => theme::dim(),
                 Some((why, _)) if why.is_on() => why.style(),
                 _ if muted.is_on() => theme::dim(),
@@ -377,7 +390,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             };
             // A jump's labels go on the cursor's track, which it stays on.
             let mut line = if here {
-                Line::from(value_spans(&ctx, control, text, style))
+                Line::from(value_spans(ctx, control, text, style))
             } else {
                 Line::styled(text, style)
             };
