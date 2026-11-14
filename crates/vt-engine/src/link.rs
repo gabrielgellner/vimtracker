@@ -1610,10 +1610,12 @@ mod tests {
                     SettingId::accumulation(0).unwrap(),
                     SettingId::arpeggio(1).unwrap(),
                 ];
+                // Bent, as a mapping's response is worked out each block (decision 314).
+                let bend = [0, 60, -80][index % 3];
                 for target in targets {
                     track.macros[index % 2]
                         .maps
-                        .push(MacroMap::whole(MacroTarget::Setting(target)));
+                        .push(MacroMap::whole(MacroTarget::Setting(target)).bent(bend, -bend / 2));
                 }
                 track.macros[1].value = (round as u16 * 0x0140) % 0xFF00;
                 let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());

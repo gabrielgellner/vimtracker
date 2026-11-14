@@ -153,6 +153,99 @@ fn gm_opens_the_mapping_and_moves_swaps_types_and_unmaps_its_ends() {
 }
 
 #[test]
+fn gm_bends_a_mappings_response_with_curve_and_s_as_the_shape_panel_does() {
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "i40M1gm");
+    let map = |app: &App| *app.song().tracks[0].macro_holding(cut()).unwrap().1;
+    assert_eq!(
+        (map(&app).curve, map(&app).s),
+        (0, 0),
+        "straight to start with"
+    );
+    // Across to Curve: a large step and a small one, 25 and 5, as the shape panel's.
+    press(&mut app, "ll");
+    assert!(app.status.contains("Curve 0 bends"), "{}", app.status);
+    press(&mut app, "+=");
+    assert_eq!(map(&app).curve, 30);
+    // S: down, then typed as a signed number and Enter, kept to 100, and straight again with x.
+    press(&mut app, "l-_");
+    assert_eq!(map(&app).s, -30);
+    press(&mut app, "i-40");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(map(&app).s, -40);
+    press(&mut app, "i250");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(map(&app).s, 100);
+    press(&mut app, "lx");
+    assert_eq!(map(&app).s, 0, "l stays on S, the row's last");
+    press(&mut app, "u");
+    assert_eq!(map(&app).s, 100, "each change is an undo step");
+    assert_eq!(app.mode, Mode::Mapping);
+    // The ends are as they were, and the status line on one says the bend.
+    assert_eq!((map(&app).min, map(&app).max), (0, 0xFF00));
+    press(&mut app, "hhh");
+    assert!(
+        app.status
+            .contains("at FF to 20.0 kHz, along Curve +30 S +100"),
+        "{}",
+        app.status
+    );
+    // The view has the columns and the drawing's box; the page shows Cut where the bent
+    // response puts it, its range still drawn from Min to Max.
+    let rows = screen_rows(&mut app);
+    let cut_row = rows.iter().find(|row| row.contains("›Cut")).unwrap();
+    assert!(cut_row.contains("00     FF     +30   +100"), "{cut_row}");
+    assert!(
+        rows.iter().any(|row| row.contains("Curve S")),
+        "{}",
+        rows.join("\n")
+    );
+    assert!(rows.iter().any(|row| row.contains("┌─────────────┐")));
+    special(&mut app, KeyCode::Esc);
+    let track = &app.song().tracks[0];
+    let bent = map(&app).at(f32::from(track.macros[0].value) / 256.0) >> 8;
+    assert_ne!(bent, 0x40, "the curve moves it");
+    let line = page_text(&app)
+        .into_iter()
+        .find(|line| line.contains(" Cut "))
+        .unwrap();
+    assert!(line.contains(&format!("Cut       {bent:02X}")), "{line}");
+    assert!(line.contains('░'), "the range is drawn: {line}");
+}
+
+#[test]
+fn the_mapping_views_response_is_sent_once_and_again_only_when_it_bends() {
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = on_cut();
+    let mut graphics = Graphics::new();
+    // The response is 13 by 5 characters; the Sound page's own pictures are other sizes.
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        graphics.sync(app, &mut out).unwrap();
+        String::from_utf8(out)
+            .unwrap()
+            .matches(",c=13,r=5,")
+            .count()
+    };
+    press(&mut app, "i40M1");
+    assert_eq!(sync(&mut app, &mut graphics), 0, "no view, no response");
+    press(&mut app, "gm");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let first = app.mapping_image.unwrap();
+    assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
+    // An end moved draws the same; a bend doesn't.
+    press(&mut app, "=");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(app.mapping_image, Some(first));
+    press(&mut app, "ll+");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(app.mapping_image, Some(first));
+    special(&mut app, KeyCode::Esc);
+    sync(&mut app, &mut graphics);
+    assert_eq!(app.mapping_image, None, "closed, it has none");
+}
+
+#[test]
 fn the_page_shows_where_the_macro_puts_a_setting_and_its_range_on_its_bar() {
     let (mut app, _realtime) = on_cut();
     press(&mut app, "i40M1gm");

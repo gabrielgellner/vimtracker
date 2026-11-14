@@ -662,11 +662,22 @@ mod tests {
         let _ = fs::remove_dir_all(&root);
         let path =
             super::super::preset_path(&root, super::super::PresetKind::Patch, "Turing").unwrap();
-        let preset = PatchPreset::of(&turing(), None).unwrap();
+        // `Range` bent, so its curve is seen to come along, added and renumbered (decision 314).
+        let mut bent = turing();
+        bent.macros[2].maps[0] = bent.macros[2].maps[0].bent(-60, 30);
+        let preset = PatchPreset::of(&bent, None).unwrap();
         super::super::save(&path, &preset, false).unwrap();
-        assert_eq!(load_patch(&path).unwrap(), preset);
+        let loaded = load_patch(&path).unwrap();
+        assert_eq!(loaded, preset);
         let text = fs::read_to_string(&path).unwrap();
         assert!(!text.contains("cutoff"), "{text}");
+        assert!(text.contains("curve: -60"), "{text}");
+        let mut track = Song::new(2).tracks[1].clone();
+        let placement = loaded.patch.place(&track, false).unwrap();
+        loaded.patch.add_to(&mut track, &placement);
+        let range = track.macros[2].maps[0];
+        assert_eq!(key_of(range.target), "mod3.depth");
+        assert_eq!((range.curve, range.s), (-60, 30));
         fs::write(
             &path,
             r#"(format: 1, patch: (macros: [(maps: [(target: Setting("mod2.depth"), min: 0, max: 1)])]))"#,

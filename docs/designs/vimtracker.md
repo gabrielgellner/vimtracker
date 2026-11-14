@@ -509,9 +509,11 @@ Song                               song.ron, refused unless format_version is FO
 *   **Macros** (`macros.rs`, decision 282, the [Gen page study](generators-page.md) §4). Each
     track has `MACROS` (8), after Ableton Live's Rack macros: a `Macro` has a name, a value from
     `0000` to `FF00` and any number of `MacroMap`s, each a `MacroTarget` with the `min` and `max`
-    it's put at with the macro at `00` and `FF`, in its own values. A setting is on one macro at
-    most. A macro is itself a setting of the registry, `Owner::Macro`, keyed `macro1` to `macro8`
-    and labelled `MAC1` to `MAC8`, so a step locks it and a mod slot moves it. The registry also
+    it's put at with the macro at `00` and `FF`, in its own values, and the `curve` and `s` its
+    response bends by between them, the shape panel's (`shape::curved`, decision 314). A setting
+    is on one macro at most. A macro is itself a setting of the registry, `Owner::Macro`, keyed
+    `macro1` to `macro8` and labelled `MAC1` to `MAC8`, so a step locks it and a mod slot moves
+    it. The registry also
     holds, unlabelled, the settings only macros and modulation reach (decision 283): each mod
     slot's type's own (`Owner::ModOwn`, read and written by `ModSlot::own_value` and `set_own` on
     the registry's scale), and the accumulator's and the arpeggio's. A `MacroTarget::Gen` holds a

@@ -800,7 +800,8 @@ mod tests {
     }
 
     /// The song with macro 1 holding the `Acid`'s density and the `Cut` ramp's end, an LFO on it,
-    /// a `MAC1` lock every third row, and macro 2 on the Euclid's hits, turned to `turn`.
+    /// a `MAC1` lock every third row, and macro 2 on the Euclid's hits, turned to `turn`, each
+    /// mapping bent (decision 314).
     fn macro_song(rows: usize, turn: u16) -> Song {
         use vt_model::lfo::{Lfo, Rate};
         use vt_model::macros::{GenColumn, MacroMap, MacroTarget};
@@ -810,8 +811,8 @@ mod tests {
         let target = |column, param| MacroTarget::Gen { column, param };
         let track = &mut song.tracks[0];
         track.macros[0].maps = vec![
-            MacroMap::numbers(target(GenColumn::Note, GenParam::Density), (0, 100)),
-            MacroMap::numbers(target(GenColumn::Fx(0), GenParam::To), (0x20, 0xF0)),
+            MacroMap::numbers(target(GenColumn::Note, GenParam::Density), (0, 100)).bent(60, 0),
+            MacroMap::numbers(target(GenColumn::Fx(0), GenParam::To), (0x20, 0xF0)).bent(-40, 70),
         ];
         track.mods[3] = ModSlot::lfo(
             SettingId::macro_at(0),
@@ -829,7 +830,7 @@ mod tests {
         }
         let other = &mut song.tracks[1];
         let hits = target(GenColumn::Velocity, GenParam::Hits);
-        other.macros[1].maps = vec![MacroMap::numbers(hits, (1, 16))];
+        other.macros[1].maps = vec![MacroMap::numbers(hits, (1, 16)).bent(0, -50)];
         other.macros[1].value = turn;
         song
     }

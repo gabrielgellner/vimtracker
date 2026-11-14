@@ -39,6 +39,8 @@ fn map(target: SettingId, min: u16, max: u16) -> MacroMap {
         target: MacroTarget::Setting(target),
         min,
         max,
+        curve: 0,
+        s: 0,
     }
 }
 
@@ -111,6 +113,18 @@ fn a_turn_puts_every_setting_the_macro_holds_along_its_range() {
         assert_eq!(heard(&mut engine, 64), expected, "at {value:04X}");
         assert_eq!(engine.live(0).macros[0], value);
     }
+    // Each mapping bent its own way (decision 314), and heard where `MacroMap::at` puts it.
+    let maps = &mut song.tracks[0].macros[0].maps;
+    maps[0] = maps[0].bent(60, 0);
+    maps[1] = maps[1].bent(-60, 40);
+    let bent = song.tracks[0].macros[0].maps.clone();
+    let coarse = |at: usize| (bent[at].at(64.0) >> 8) as u8;
+    song.tracks[0].macros[0].value = 0x4000;
+    engine.swap(version(&song));
+    let (cut, res, feedback) = heard(&mut engine, 64);
+    assert_eq!((cut, res, feedback), (coarse(0), coarse(1), 0x30));
+    assert!(cut > 0x4C + 0x10, "Cut moves early: {cut:02X}");
+    assert!(res > 0x98 + 0x08, "Res, turned down, moves late: {res:02X}");
 }
 
 #[test]

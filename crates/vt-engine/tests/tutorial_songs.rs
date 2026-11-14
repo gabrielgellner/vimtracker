@@ -166,6 +166,8 @@ fn knob(song: &mut Song, at: usize, name: &str, key: &str, ends: (u16, u16), val
         target: MacroTarget::Setting(id),
         min: ends.0,
         max: ends.1,
+        curve: 0,
+        s: 0,
     });
 }
 

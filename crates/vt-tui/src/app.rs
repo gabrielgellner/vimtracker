@@ -269,6 +269,8 @@ pub struct App {
     /// The images of the Gen page's previews the terminal has, by each generator's place in its
     /// phrase's list.
     pub gen_images: Vec<Option<u32>>,
+    /// The image of the mapping view's response the terminal has, while the view is open.
+    pub mapping_image: Option<u32>,
     /// Where each preview the Gen page drew is, its generator's place and its picture's top left,
     /// for the terminal to place the row playing on.
     pub gen_panels_at: Vec<(usize, (u16, u16))>,
@@ -543,6 +545,7 @@ impl App {
             waveform_image: None,
             slot_images: [None; vt_model::insert::INSERTS],
             gen_images: Vec::new(),
+            mapping_image: None,
             gen_panels_at: Vec::new(),
             sample_page: crate::sample_page::SamplePage::default(),
             sample_images: None,

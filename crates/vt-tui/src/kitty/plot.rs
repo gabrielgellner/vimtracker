@@ -7,12 +7,15 @@
 //! Sound page, and the envelopes and the LFOs' cycles on the Mod page, with the dot that rides an
 //! LFO's.
 
+use std::cmp::Ordering;
+
 use vt_engine::dsp::compressor::curve_db;
 use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
 use vt_model::envelope::{Adsr, Envelope};
 use vt_model::insert::{Compressor, Equaliser, threshold_db};
 use vt_model::lfo::{self, Lfo, LfoMode, deformed_wave};
+use vt_model::macros::{MacroMap, response};
 use vt_model::modulation::{ModSlot, Polarity};
 use vt_model::song::{FilterType, Track};
 use vt_model::tracking::{Bounds, Source};
@@ -593,6 +596,59 @@ pub fn track_map(drawing: TrackDrawing, (width, height): (usize, usize)) -> Plot
     // The same twice is a switch, which goes straight up there.
     let level = |x: f32| drawing.level_at(x);
     plot.curve(level, level(0.0), &[low - JUMP, low, high - JUMP, high]);
+    plot
+}
+
+/// What a macro mapping's response draws (decision 314): its `Curve` and `S`, which way it
+/// turns its setting, and where the macro is turned, from 0 to 1, so it's drawn again only when
+/// one of those changes, never for how far apart its ends are.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MappingDrawing {
+    pub curve: i8,
+    pub s: i8,
+    /// Which way its ends go: `Less` for a setting it turns up, `Greater` down.
+    pub way: Ordering,
+    pub turned: f32,
+}
+
+impl MappingDrawing {
+    /// What a mapping with its macro at `value`, `0000` to `FF00`, draws.
+    pub fn of(map: &MacroMap, value: u16) -> Self {
+        Self {
+            curve: map.curve,
+            s: map.s,
+            way: map.min.cmp(&map.max),
+            turned: f32::from(value) / f32::from(0xFF00_u16),
+        }
+    }
+
+    /// Where its setting is up the picture with its straight line's share `along` from its min
+    /// to its max, from its lower end at the bottom to its higher at the top, or across the
+    /// middle while its ends are the same.
+    fn level_of(self, along: f32) -> f32 {
+        match self.way {
+            Ordering::Less => along,
+            Ordering::Equal => 0.5,
+            Ordering::Greater => 1.0 - along,
+        }
+    }
+
+    /// Where its setting is up the picture with the macro `along` its turn.
+    pub fn level_at(self, along: f32) -> f32 {
+        self.level_of(response(along, self.curve, self.s))
+    }
+}
+
+/// A macro mapping's response: the macro's turn across, from `00` at the left to `FF` at the
+/// right, and its setting up, along its curve, over the straight line it bends, dotted, as the
+/// compressor's 1:1 is, with a fainter line down where the macro is turned.
+pub fn mapping(drawing: MappingDrawing, (width, height): (usize, usize)) -> Plot {
+    let mut plot = Plot::new(width, height);
+    let line = |along: f32| drawing.level_of(along);
+    plot.dotted((0.0, line(0.0)), (1.0, line(1.0)), Mark::Grid);
+    plot.down(drawing.turned, Mark::Fainter);
+    let level = |along: f32| drawing.level_at(along);
+    plot.curve(level, level(0.0), &[]);
     plot
 }
 
@@ -1208,5 +1264,63 @@ mod tests {
             }
         }
         assert!(png.len() < 200, "{}", png.len());
+    }
+
+    #[test]
+    fn a_mappings_response_is_its_curve_within_a_pixel_and_turned_over_for_an_inverted_one() {
+        use vt_model::macros::MacroTarget;
+        use vt_model::settings::SettingId;
+        let size = (195, 195);
+        let whole = MacroMap::whole(MacroTarget::Setting(SettingId::CUT));
+        for (curve, s) in [(0, 0), (60, 0), (-60, 40), (30, 100)] {
+            for inverted in [false, true] {
+                let map = if inverted {
+                    MacroMap {
+                        min: whole.max,
+                        max: whole.min,
+                        ..whole
+                    }
+                } else {
+                    whole
+                }
+                .bent(curve, s);
+                let drawing = MappingDrawing::of(&map, 0x4000);
+                let plot = mapping(drawing, size);
+                // Where the setting is between its lower and its higher end, as `at` puts it.
+                let level = |x: f32| f32::from(map.at(x * 255.0)) / f32::from(whole.max);
+                for x in 1..size.0 - 1 {
+                    let share = (x as f32 + 0.5 - 1.0) / (size.0 as f32 - LINE_PIXELS);
+                    if steep(&plot, level, share) {
+                        continue;
+                    }
+                    let expected = plot.at(share, level(share)).1;
+                    let found = middle(&plot, x).unwrap();
+                    assert!(
+                        (found - expected).abs() < 1.0,
+                        "{curve} {s} {inverted} {x}: {found} against {expected}"
+                    );
+                }
+                assert!(plot.png([255; 3]).len() < 3000);
+            }
+        }
+        // Moving an end draws nothing new; bending it, or turning the other way, does.
+        let drawn = MappingDrawing::of(&whole, 0x4000);
+        assert_eq!(
+            MappingDrawing::of(
+                &MacroMap {
+                    max: 0x8000,
+                    ..whole
+                },
+                0x4000
+            ),
+            drawn
+        );
+        assert_ne!(MappingDrawing::of(&whole.bent(5, 0), 0x4000), drawn);
+        let down = MacroMap {
+            min: 0x9000,
+            max: 0x1000,
+            ..whole
+        };
+        assert_ne!(MappingDrawing::of(&down, 0x4000), drawn);
     }
 }

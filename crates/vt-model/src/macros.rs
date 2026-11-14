@@ -13,7 +13,7 @@ use crate::generator::Generator;
 use crate::lfo::phase_value;
 use crate::modulation::{ModKind, Polarity, depth_of, depth_value};
 use crate::settings::{Effect, Kind, Owner, SettingId};
-use crate::shape::{GenParam, Shape, ShapeColumn};
+use crate::shape::{GenParam, MAX_BEND, Shape, ShapeColumn, curved};
 use crate::song::{FilterMode, Track};
 use crate::speed::Speed;
 use crate::step::Step;
@@ -43,7 +43,11 @@ fn is_zero(value: &u16) -> bool {
     *value == 0
 }
 
-/// One setting a macro turns, and how far.
+fn is_straight(bend: &i8) -> bool {
+    *bend == 0
+}
+
+/// One setting a macro turns, how far, and along what curve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MacroMap {
     pub target: MacroTarget,
@@ -51,6 +55,14 @@ pub struct MacroMap {
     /// a coarse byte and a fine one. `min` above `max` turns it the other way.
     pub min: u16,
     pub max: u16,
+    /// Its response from `min` to `max`, bent as the shape panel's ramp is (decision 314):
+    /// `curve` bends it, above 0 moving early and below 0 late, and `s` then eases both ends,
+    /// above 0 an S and below 0 the reverse, each from -100 to 100 and 0 straight, as a new
+    /// mapping is.
+    #[serde(default, skip_serializing_if = "is_straight")]
+    pub curve: i8,
+    #[serde(default, skip_serializing_if = "is_straight")]
+    pub s: i8,
 }
 
 /// What a mapping reaches. Keyed by what it is rather than where, so a mapping saved with a sound
@@ -175,6 +187,15 @@ impl MacroTarget {
     }
 }
 
+/// A mapping's response with this `curve` and `s`, as [`MacroMap::response`] gives it.
+pub fn response(along: f32, curve: i8, s: i8) -> f32 {
+    if curve == 0 && s == 0 {
+        along
+    } else {
+        curved(f64::from(along), curve, s) as f32
+    }
+}
+
 /// The highest value a setting takes, with its coarse byte and fine one: a fine part goes no
 /// further than the top's coarse value.
 pub fn top_value(kind: Kind) -> u16 {
@@ -191,6 +212,8 @@ impl MacroMap {
             target,
             min: 0,
             max: top,
+            curve: 0,
+            s: 0,
         }
     }
 
@@ -201,11 +224,40 @@ impl MacroMap {
             target,
             min: end(low),
             max: end(high),
+            curve: 0,
+            s: 0,
         }
     }
 
-    /// Whether its ends are values its setting takes. A generator's are kept to its bounds as
-    /// they're used, as those hang on the phrase it's in.
+    /// Whether its response is a straight line, as a new mapping's is.
+    pub fn is_straight(&self) -> bool {
+        self.curve == 0 && self.s == 0
+    }
+
+    /// The same with its `curve` and `s` at these, each kept within the shape panel's -100 to
+    /// 100.
+    #[must_use]
+    pub fn bent(self, curve: i32, s: i32) -> Self {
+        let most = i32::from(MAX_BEND);
+        Self {
+            curve: curve.clamp(-most, most) as i8,
+            s: s.clamp(-most, most) as i8,
+            ..self
+        }
+    }
+
+    /// How far from `min` toward `max` it puts its setting with its macro `along` its turn, both
+    /// from 0 to 1: `along` itself while it's straight, and otherwise along the shape panel's
+    /// ramp ([`curved`]), `curve` first and `s` over it, so `S` eases the ends of whatever
+    /// `Curve` makes. It starts at 0 and ends at 1 however it's bent, so its ends are always
+    /// `min` and `max`.
+    pub fn response(&self, along: f32) -> f32 {
+        response(along, self.curve, self.s)
+    }
+
+    /// Whether its ends are values its setting takes, and its `curve` and `s` within -100 to 100.
+    /// A generator's ends are kept to its bounds as they're used, as those hang on the phrase
+    /// it's in.
     pub fn in_range(&self) -> bool {
         let fits = match self.target {
             MacroTarget::Setting(id) => {
@@ -214,15 +266,19 @@ impl MacroMap {
             }
             MacroTarget::Gen { .. } => true,
         };
-        self.target.mappable() && fits
+        let bends = [self.curve, self.s]
+            .iter()
+            .all(|bend| bend.unsigned_abs() <= MAX_BEND.unsigned_abs());
+        self.target.mappable() && fits && bends
     }
 
     /// What it puts its setting at with its macro at `value`, on the `00` to `FF` scale with any
-    /// fine part as the fraction: from `min` at `00` to `max` at `FF`, in a straight line, and to
-    /// a whole step for a setting with no fine part, as a list's or the level scale's. A
-    /// generator's is its number set off by [`GEN_ZERO`], to the nearest whole one.
+    /// fine part as the fraction: from `min` at `00` to `max` at `FF`, along its
+    /// [response](MacroMap::response), and to a whole step for a setting with no fine part, as a
+    /// list's or the level scale's. A generator's is its number set off by [`GEN_ZERO`], to the
+    /// nearest whole one.
     pub fn at(&self, value: f32) -> u16 {
-        let along = (value / 255.0).clamp(0.0, 1.0);
+        let along = self.response((value / 255.0).clamp(0.0, 1.0));
         let (min, max) = (f32::from(self.min), f32::from(self.max));
         let to = min + (max - min) * along;
         let Some(id) = self.target.setting() else {
@@ -250,8 +306,22 @@ impl MacroMap {
             return 0;
         }
         let (min, max) = (f32::from(self.min), f32::from(self.max));
-        let along = ((f32::from(value) - min) / (max - min)).clamp(0.0, 1.0);
-        (along * f32::from(0xFF00_u16)).round() as u16
+        let wanted = ((f32::from(value) - min) / (max - min)).clamp(0.0, 1.0);
+        if self.is_straight() {
+            return (wanted * f32::from(0xFF00_u16)).round() as u16;
+        }
+        // However it's bent, the response only rises, so halving finds where it reaches what's
+        // wanted.
+        let (mut low, mut high) = (0.0_f32, 1.0_f32);
+        for _ in 0..24 {
+            let middle = (low + high) / 2.0;
+            if self.response(middle) < wanted {
+                low = middle;
+            } else {
+                high = middle;
+            }
+        }
+        ((low + high) / 2.0 * f32::from(0xFF00_u16)).round() as u16
     }
 }
 
@@ -502,6 +572,8 @@ mod tests {
             target: MacroTarget::Setting(SettingId::CUT),
             min: 0x3000,
             max: 0xA000,
+            curve: 0,
+            s: 0,
         };
         assert_eq!(map.at(0.0), 0x3000);
         assert_eq!(map.at(255.0), 0xA000);
@@ -532,6 +604,8 @@ mod tests {
             target: MacroTarget::Setting(SettingId::CUT),
             min: 0x2000,
             max: 0xE000,
+            curve: 0,
+            s: 0,
         };
         let turned = map.macro_for(0x8000);
         assert_eq!(map.at(f32::from(turned) / 256.0), 0x8000);
@@ -598,6 +672,8 @@ mod tests {
             target: MacroTarget::Setting(SettingId::CUT),
             min: 0x2000,
             max: 0x6000,
+            curve: 0,
+            s: 0,
         });
         assert_eq!(track.with_macros().cutoff, 0x60);
         assert_eq!(track.cutoff, 0xFF, "the track keeps its own");
@@ -609,5 +685,124 @@ mod tests {
         assert!(!other.mappable());
         assert!(!MacroMap::whole(other).in_range());
         assert!(MacroMap::whole(MacroTarget::Setting(SettingId::RES)).in_range());
+    }
+
+    /// A mapping of `Cut` from `00` to `7F`, bent so.
+    fn to_7f(curve: i32, s: i32) -> MacroMap {
+        MacroMap {
+            max: 0x7F00,
+            ..MacroMap::whole(MacroTarget::Setting(SettingId::CUT))
+        }
+        .bent(curve, s)
+    }
+
+    /// Where it puts its setting, to the nearest coarse step, with its macro at each of so many
+    /// places evenly from `00` to `FF`.
+    fn coarse(map: MacroMap, places: usize) -> Vec<u8> {
+        (0..places)
+            .map(|at| {
+                let value = 255.0 * at as f32 / (places - 1) as f32;
+                ((u32::from(map.at(value)) + 0x80) >> 8) as u8
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_straight_mapping_is_the_line_it_always_was_and_saves_as_before() {
+        for (min, max) in [
+            (0, 0xFF00),
+            (0x3000, 0xA000),
+            (0xA000, 0x3000),
+            (0x1234, 0x1234),
+        ] {
+            let map = MacroMap {
+                min,
+                max,
+                ..MacroMap::whole(MacroTarget::Setting(SettingId::CUT))
+            };
+            assert!(map.is_straight());
+            for quarter in 0..=1020 {
+                let value = quarter as f32 / 4.0;
+                let (low, high) = (f32::from(min), f32::from(max));
+                let line = (low + (high - low) * (value / 255.0)).round() as u16;
+                assert_eq!(map.at(value), line, "{min:04X} to {max:04X} at {value}");
+            }
+        }
+        let text = ron::to_string(&MacroMap::whole(MacroTarget::Setting(SettingId::CUT))).unwrap();
+        assert!(!text.contains("curve") && !text.contains("s:"), "{text}");
+        let bent = to_7f(40, -20);
+        let text = ron::to_string(&bent).unwrap();
+        assert!(text.contains("curve:40,s:-20"), "{text}");
+        assert_eq!(ron::from_str::<MacroMap>(&text).unwrap(), bent);
+    }
+
+    #[test]
+    fn curve_and_s_bend_a_mapping_as_they_bend_the_shape_panels_ramp() {
+        // The shape panel's own numbers for a ramp over 9 rows from 00 to 7F, with `Curve +60`
+        // and with `S +60` (the shape's `a_curve_reaches_the_values_the_design_gives`).
+        assert_eq!(
+            coarse(to_7f(60, 0), 9),
+            [0x00, 0x2E, 0x49, 0x5A, 0x66, 0x6E, 0x75, 0x7B, 0x7F]
+        );
+        assert_eq!(
+            coarse(to_7f(0, 60), 9),
+            [0x00, 0x05, 0x0D, 0x1B, 0x40, 0x64, 0x72, 0x7A, 0x7F]
+        );
+        for curve in [-100, -60, -1, 0, 1, 60, 100] {
+            for s in [-100, -60, 0, 60, 100] {
+                let map = to_7f(curve, s);
+                for at in 0..=64 {
+                    let along = at as f32 / 64.0;
+                    let ramp = curved(f64::from(along), curve as i8, s as i8) as f32;
+                    assert!((map.response(along) - ramp).abs() < 1e-6, "{curve} {s}");
+                }
+                let out = coarse(map, 33);
+                assert_eq!((out[0], out[32]), (0x00, 0x7F), "{curve} {s}: its ends");
+                assert!(out.windows(2).all(|pair| pair[0] <= pair[1]), "{out:?}");
+            }
+        }
+        assert_eq!((to_7f(300, -300).curve, to_7f(300, -300).s), (100, -100));
+    }
+
+    #[test]
+    fn an_inverted_mapping_bends_the_same_way_along_its_turn() {
+        for (curve, s) in [(60, 0), (-60, 0), (0, 60), (40, -30), (-100, 100)] {
+            let up = to_7f(curve, s);
+            let down = MacroMap {
+                min: up.max,
+                max: up.min,
+                ..up
+            };
+            for at in 0..=32 {
+                let value = 255.0 * at as f32 / 32.0;
+                // As far from its own min as the upright one is from its, the other way.
+                let sum = i32::from(up.at(value)) + i32::from(down.at(value));
+                assert!((sum - 0x7F00).abs() <= 1, "{curve} {s} at {value}");
+            }
+        }
+        // `Curve +60` from 7F down to 00 gets most of the way early, as it does going up.
+        let down = MacroMap {
+            min: 0x7F00,
+            max: 0,
+            ..to_7f(60, 0)
+        };
+        assert_eq!(
+            coarse(down, 9),
+            [0x7F, 0x51, 0x36, 0x25, 0x19, 0x11, 0x0A, 0x04, 0x00]
+        );
+    }
+
+    #[test]
+    fn a_bent_macro_turned_to_where_its_setting_is_still_puts_it_there() {
+        let map = MacroMap {
+            min: 0x2000,
+            max: 0xE000,
+            ..to_7f(60, -40)
+        };
+        for value in [0x2000, 0x3000, 0x5000, 0x8000, 0xC000, 0xE000] {
+            let turned = map.macro_for(value);
+            let back = map.at(f32::from(turned) / 256.0);
+            assert!(back.abs_diff(value) <= 0x40, "{value:04X}: {back:04X}");
+        }
     }
 }
