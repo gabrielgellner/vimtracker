@@ -373,6 +373,23 @@ impl Services {
             None => self.cursor.slot = 0,
         }
     }
+
+    /// The cursor's track, or a fresh one if there's none, as the track page edits it.
+    pub(crate) fn page_track(&self) -> Track {
+        self.song()
+            .tracks
+            .get(self.cursor.track)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// The cursor's track as it's heard, with its faders where the steps have them while they
+    /// drive them.
+    pub(crate) fn page_track_as_heard(&self) -> Track {
+        self.track_as_heard(self.cursor.track)
+            .map(std::borrow::Cow::into_owned)
+            .unwrap_or_default()
+    }
 }
 
 /// Each track's live mute and solo, as a song has them saved.

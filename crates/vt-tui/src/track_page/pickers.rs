@@ -22,6 +22,7 @@ use crate::views::track::IN_SCALE_PITCH;
 use vt_model::preset::PresetKind;
 
 use super::controls::no_modes;
+use super::editing::toggle_control;
 
 /// The titles of each slot's lists, as a list's title is fixed text.
 const TYPE_TITLES: [&str; MOD_SLOTS] = [
@@ -142,7 +143,7 @@ impl App {
             control,
             Control::Mute | Control::Solo | Control::Limiter | Control::Safe
         ) {
-            self.toggle_control(control);
+            toggle_control(&mut self.services, control);
             return;
         }
         if self.track_control() == Control::Sample {
@@ -153,7 +154,7 @@ impl App {
             self.open_tuning_picker(control);
             return;
         }
-        if self.track_control().setting_on(&self.page_track()) == Some(SettingId::SLICE) {
+        if self.track_control().setting_on(&self.services.page_track()) == Some(SettingId::SLICE) {
             self.open_slice_picker();
             return;
         }
@@ -189,7 +190,7 @@ impl App {
             self.open_groove_picker(true);
             return;
         }
-        if let Some(id) = self.track_control().setting_on(&self.page_track())
+        if let Some(id) = self.track_control().setting_on(&self.services.page_track())
             && let Kind::Stepped { choices, .. } = id.entry().kind
         {
             self.open_setting_picker(id, choices);
@@ -221,7 +222,7 @@ impl App {
     /// List the effects a slot can hold, with the current one highlighted.
     fn open_insert_picker(&mut self, slot: usize) {
         let track = self.services.cursor.track;
-        let current = self.page_track().inserts[slot];
+        let current = self.services.page_track().inserts[slot];
         let items = Insert::ALL
             .map(|insert| {
                 Item::new(
@@ -250,7 +251,7 @@ impl App {
     /// List the choices of a slot's setting, with the current one highlighted.
     fn open_insert_param_picker(&mut self, slot: usize, param: usize) {
         let track = self.services.cursor.track;
-        let current = self.page_track().inserts[slot];
+        let current = self.services.page_track().inserts[slot];
         let Some(found) = current
             .params()
             .get(param)
@@ -280,7 +281,7 @@ impl App {
 
     fn open_filter_picker(&mut self) {
         let track = self.services.cursor.track;
-        let current = self.page_track().filter;
+        let current = self.services.page_track().filter;
         let items = FilterType::ALL
             .map(|filter| {
                 Item::new(filter.name(), Pick::FilterType { track, filter })
@@ -295,7 +296,7 @@ impl App {
     /// highlighted. Its limits are numbers, typed or moved instead.
     fn open_accumulator_picker(&mut self, field: AccumulatorField) {
         let track = self.services.cursor.track;
-        let now = self.page_track().accumulation;
+        let now = self.services.page_track().accumulation;
         let pick = |accumulation| Pick::Accumulation {
             track,
             accumulation,
@@ -352,7 +353,7 @@ impl App {
     /// highlighted. Its octaves are a number, typed or moved instead.
     fn open_arpeggio_picker(&mut self, field: ArpField) {
         let track = self.services.cursor.track;
-        let now = self.page_track().arpeggio;
+        let now = self.services.page_track().arpeggio;
         let pick = |arpeggio| Pick::Arpeggio { track, arpeggio };
         let (title, items): (&str, Vec<Item>) = match field {
             ArpField::Octaves => {
@@ -397,7 +398,7 @@ impl App {
     /// List the speeds a track's steps can go at, with the one it plays highlighted.
     fn open_speed_picker(&mut self) {
         let track = self.services.cursor.track;
-        let current = self.page_track().speed;
+        let current = self.services.page_track().speed;
         let items = Speed::ALL
             .map(|speed| {
                 Item::new(speed.name(), Pick::Speed { track, speed }).meaning(speed.meaning())
@@ -411,7 +412,7 @@ impl App {
     /// makes it, and the track's highlighted.
     fn open_role_picker(&mut self) {
         let track = self.services.cursor.track;
-        let page = self.page_track();
+        let page = self.services.page_track();
         let items = Role::ALL
             .map(|role| {
                 let meaning = match role {
@@ -433,7 +434,7 @@ impl App {
     /// highlighted.
     fn open_filter_mode_picker(&mut self) {
         let track = self.services.cursor.track;
-        let page = self.page_track();
+        let page = self.services.page_track();
         let modes = page.filter.modes();
         if modes.is_empty() {
             self.services.status = no_modes(page.filter);
@@ -455,7 +456,7 @@ impl App {
     /// the sampler at the top and each voice under its kind, and the current one highlighted.
     fn open_machine_picker(&mut self) {
         let track = self.services.cursor.track;
-        let current = self.page_track().machine;
+        let current = self.services.page_track().machine;
         let items = Machine::ALL
             .map(|machine| {
                 let label = format!("{} {}", glyphs::machine(machine), machine.name());
@@ -473,7 +474,7 @@ impl App {
     /// highlighted.
     fn open_setting_picker(&mut self, setting: SettingId, choices: &'static [&'static str]) {
         let track = self.services.cursor.track;
-        let current = self.page_track().setting(setting);
+        let current = self.services.page_track().setting(setting);
         let items = (0..choices.len().min(0x100))
             .map(|at| {
                 Item::new(
@@ -493,7 +494,7 @@ impl App {
     /// type's mode, where it goes, or an envelope's or an LFO's own that are lists.
     fn open_mod_picker(&mut self, slot: usize, field: ModField) {
         let track = self.services.cursor.track;
-        let page = self.page_track();
+        let page = self.services.page_track();
         let modulator = page.mods[slot];
         let pick = |modulator| Pick::Mod {
             track,

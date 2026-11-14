@@ -591,7 +591,7 @@ impl App {
             Cmd::ToggleMute => {
                 let track = self.services.cursor.track;
                 if let Some(was) = self.services.levels.get(track).map(|live| live.mute) {
-                    self.toggle_mute();
+                    self.services.toggle_mute();
                     if self.services.levels[track].mute != was {
                         self.started = Some(Momentary::Mute { track, was });
                     }
@@ -600,7 +600,7 @@ impl App {
             Cmd::ToggleSolo => {
                 let track = self.services.cursor.track;
                 if let Some(was) = self.services.levels.get(track).map(|live| live.solo) {
-                    self.toggle_solo();
+                    self.services.toggle_solo();
                     if self.services.levels[track].solo != was {
                         self.started = Some(Momentary::Solo { track, was });
                     }

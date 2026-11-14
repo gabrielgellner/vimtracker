@@ -20,6 +20,7 @@ use crate::input::command::Line;
 
 use super::{App, Cursor, READ_ONLY, folder_name, name_song};
 use crate::services::live_from;
+use crate::track_page::editing::{set_limiter, set_track_groove};
 
 impl App {
     /// Run a command line.
@@ -151,22 +152,14 @@ impl App {
             Line::ScaleOn(on) => self.set_scale(Scale { on, ..self.scale }),
             Line::PickScale => self.open_scale_picker(),
             Line::FitToScale => self.fit_to_scale(),
-            Line::SetLimiter(on) => {
-                self.services.apply(&Action::SetLimiter(on));
-                self.services.status = if on {
-                    "Limiter on".to_owned()
-                } else {
-                    "Limiter off: renders keep levels over 0, and the output still clips at 0"
-                        .to_owned()
-                };
-            }
+            Line::SetLimiter(on) => set_limiter(&mut self.services, on),
             Line::ReadOnly(on) => self.set_read_only(on),
             Line::Seed(seed) => self.services.apply(&Action::SetSeed(seed)),
             Line::Groove(groove) => {
                 self.services.apply(&Action::SetGroove(groove));
                 self.services.status = format!("The project plays with {groove}");
             }
-            Line::TrackGroove(groove) => self.set_track_groove(groove),
+            Line::TrackGroove(groove) => set_track_groove(&mut self.services, groove),
             Line::PickGroove { track } => self.open_groove_picker(track),
             Line::Reset(reset) => self.services.apply(&Action::SetReset {
                 section: self.services.cursor.section,
@@ -189,8 +182,8 @@ impl App {
                 track: self.services.cursor.track,
                 level,
             }),
-            Line::Mute => self.toggle_mute(),
-            Line::Solo => self.toggle_solo(),
+            Line::Mute => self.services.toggle_mute(),
+            Line::Solo => self.services.toggle_solo(),
             Line::Len(length) if self.lane_slot().is_some() => {
                 let slot = self.lane_slot().unwrap_or(0);
                 let start = self.lane_here(slot).start;

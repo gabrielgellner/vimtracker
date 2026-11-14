@@ -32,6 +32,7 @@ use crate::input::picker::{Item, KitChoice, Outcome, Pick, Picker, Preview, Prev
 use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
 use crate::track_page::Page;
+use crate::track_page::tuning::set_tuning;
 use crate::views::picker::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
 use crate::views::widgets::{group, role};
 
@@ -303,21 +304,6 @@ impl App {
             order,
         });
         self.services.status = format!("This phrase plays {}: {}", order, order.describe(rows));
-    }
-
-    /// Give the cursor's track its own groove, or have it follow the project's again.
-    pub(crate) fn set_track_groove(&mut self, groove: Option<GrooveId>) {
-        let track = self.services.cursor.track;
-        if !self.song().tracks.get(track).is_some_and(|t| t.is_sound()) {
-            self.services.status = "Only a track with notes has a groove of its own".to_owned();
-            return;
-        }
-        self.services
-            .apply(&Action::SetTrackGroove { track, groove });
-        self.services.status = match groove {
-            Some(groove) => format!("This track plays with {groove}"),
-            None => format!("This track follows the project's {}", self.song().groove),
-        };
     }
 
     /// Open the list of scales, with this one highlighted.
@@ -893,7 +879,7 @@ impl App {
             Pick::Mark(letter) => self.jump_to_mark(letter),
             Pick::SampleSetting(setting) => self.pick_sample_setting(setting),
             Pick::SampleValue { setting, value } => self.pick_sample_value(setting, value),
-            Pick::Tuning { control, value } => self.set_tuning(control, value),
+            Pick::Tuning { control, value } => set_tuning(&mut self.services, control, value),
             Pick::Track(track) => self.go_to_track(track),
             Pick::Audio(choice) => self.pick_audio(choice),
             // The list above the command line takes its own choices, so none comes here.

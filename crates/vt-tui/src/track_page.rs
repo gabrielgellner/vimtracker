@@ -1,13 +1,16 @@
 //! The track page, `Space 5` to `Space 8`: a track's Sound, Mod, FX and Gen pages. `TrackPage` is
 //! the page as a component, which page shows, where its cursor is and the images it shows, with
-//! the moves that need only the cursor's track, and its drawing, in `views::track`, given a
-//! [`Ctx`]; the edits, which change the song, are `App`'s. Each page's settings are in a file of its
-//! own (`sound`, `modulation`, `fx`), each gives its devices to `Page::devices` if it's a rack
-//! (`device`), and `editing`, `pickers` and `typing` change the setting under the cursor.
+//! the moves that need only the cursor's track, its edits, [`TrackPage::edit`], given the
+//! [`Services`], and its drawing, in `views::track`, given a [`Ctx`]. Each page's settings are in a
+//! file of its own (`sound`, `modulation`, `fx`), each gives its devices to `Page::devices` if it's
+//! a rack (`device`), and `editing`, `typing` and `tuning` change the setting under the cursor, as
+//! functions over the services that the mixer shares; `pickers`, which open the program's
+//! picker, and the Gen page's `generators`, which reshape through the program's shape panel, are
+//! still `App`'s.
 
 mod controls;
 mod device;
-mod editing;
+pub(crate) mod editing;
 mod fx;
 mod generators;
 mod modulation;
@@ -37,8 +40,11 @@ use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::meter::{FLOOR_DB, Held, ReductionHistory};
 use crate::page::{Ctx, CtxMut};
+use crate::services::Services;
 use crate::views::track::CyclesAt;
 use device::{device_beside, rack_column};
+use editing::{adjust_control, adjust_fine, reset_control, set_fine_here};
+use modulation::toggle_modulator;
 
 /// A part of the track page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -398,6 +404,47 @@ impl TrackPage {
         self.key(cmd, times, track)
     }
 
+    /// Run one of the page's edits on the setting under the cursor, `control`, which on the mixer
+    /// is the mixer's: `b`, `dd` and `p`, `=` and `-` and their large steps, on the fine digits if
+    /// the cursor is on them, and `x`. `times` is its count, at least 1.
+    pub fn edit(
+        &mut self,
+        cmd: Cmd,
+        times: usize,
+        control: Control,
+        services: &mut Services,
+    ) -> Outcome {
+        let fine = self.fine;
+        match cmd {
+            Cmd::RemoveRow | Cmd::Paste if self.page != Page::Fx => {
+                return Outcome::Refused("dd and p move effects, on the FX page");
+            }
+            Cmd::Bypass => match self.page {
+                Page::Fx => self.toggle_bypass(services),
+                Page::Mod => toggle_modulator(services, control),
+                Page::Sound | Page::Gen => {
+                    return Outcome::Refused(
+                        "b switches an effect or a modulator, on the FX and Mod pages",
+                    );
+                }
+            },
+            Cmd::RemoveRow => self.take_insert(services),
+            Cmd::Paste => self.put_insert(services),
+            Cmd::Increase if fine => adjust_fine(services, control, true, times, false),
+            Cmd::Decrease if fine => adjust_fine(services, control, false, times, false),
+            Cmd::IncreaseLarge if fine => adjust_fine(services, control, true, times, true),
+            Cmd::DecreaseLarge if fine => adjust_fine(services, control, false, times, true),
+            Cmd::ClearField if fine => set_fine_here(services, control, 0),
+            Cmd::Increase => adjust_control(services, control, true, times, false),
+            Cmd::Decrease => adjust_control(services, control, false, times, false),
+            Cmd::IncreaseLarge => adjust_control(services, control, true, times, true),
+            Cmd::DecreaseLarge => adjust_control(services, control, false, times, true),
+            Cmd::ClearField => reset_control(services, control),
+            _ => return Outcome::Passed,
+        }
+        Outcome::Done
+    }
+
     /// Put the cursor where it's seen, keeping the column `j` and `k` aim for. Left elsewhere,
     /// as after `}` onto an empty slot, an edit could bring back the setting it was kept for.
     pub fn settle(&mut self, track: Option<&Track>) {
@@ -622,7 +669,6 @@ impl App {
             }
             Outcome::Passed => {}
         }
-        let fine = self.track_page.fine;
         if self.refuses_turn(cmd) {
             return true;
         }
@@ -642,17 +688,6 @@ impl App {
                 self.services.status =
                     "r and Enter work on a generator, on the Gen page".to_owned();
             }
-            Cmd::RemoveRow | Cmd::Paste if self.track_page.page != Page::Fx => {
-                self.services.status = "dd and p move effects, on the FX page".to_owned();
-            }
-            Cmd::Bypass => match self.track_page.page {
-                Page::Fx => self.toggle_bypass(),
-                Page::Mod => self.toggle_modulator(),
-                Page::Sound | Page::Gen => {
-                    self.services.status =
-                        "b switches an effect or a modulator, on the FX and Mod pages".to_owned();
-                }
-            },
             Cmd::ApplyGenerator if self.track_page.page == Page::Mod => self.keep_drift(),
             Cmd::ApplyGenerator => {
                 self.services.status =
@@ -660,20 +695,8 @@ impl App {
                      on the Gen page"
                         .to_owned();
             }
-            Cmd::RemoveRow => self.take_insert(),
-            Cmd::Paste => self.put_insert(),
-            Cmd::Increase if fine => self.adjust_fine(true, times, false),
-            Cmd::Decrease if fine => self.adjust_fine(false, times, false),
-            Cmd::IncreaseLarge if fine => self.adjust_fine(true, times, true),
-            Cmd::DecreaseLarge if fine => self.adjust_fine(false, times, true),
-            Cmd::ClearField if fine => self.set_fine_here(0),
-            Cmd::Increase => self.adjust_control(true, times, false),
-            Cmd::Decrease => self.adjust_control(false, times, false),
-            Cmd::IncreaseLarge => self.adjust_control(true, times, true),
-            Cmd::DecreaseLarge => self.adjust_control(false, times, true),
-            Cmd::ClearField => self.reset_control(),
             Cmd::PickValue => self.open_control_picker(),
-            Cmd::EnterInsert if self.track_control().is_choice(&self.page_track()) => {
+            Cmd::EnterInsert if self.track_control().is_choice(&self.services.page_track()) => {
                 self.open_control_picker();
             }
             Cmd::EnterInsert => {
@@ -681,11 +704,21 @@ impl App {
                 self.modes.mode = Mode::Insert;
             }
             _ => {
-                // What it means elsewhere, such as going to another track, keeps the cursor
-                // where it was kept.
-                self.track_page = kept;
-                self.modes.count = count;
-                return false;
+                let control = self.track_control();
+                match self
+                    .track_page
+                    .edit(cmd, times, control, &mut self.services)
+                {
+                    Outcome::Done => {}
+                    Outcome::Refused(why) => self.services.status = why.to_owned(),
+                    Outcome::Passed => {
+                        // What it means elsewhere, such as going to another track, keeps the
+                        // cursor where it was kept.
+                        self.track_page = kept;
+                        self.modes.count = count;
+                        return false;
+                    }
+                }
             }
         }
         true
