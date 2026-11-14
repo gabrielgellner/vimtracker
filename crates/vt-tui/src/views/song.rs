@@ -63,9 +63,14 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             name.clone()
         };
-        // A group with its tracks folded into it says so, as the mixer does.
+        // A group with its tracks folded into it says so, as the mixer does. A group named after
+        // its kit has three characters, cut to two to leave room for the mark, as the phrase
+        // view's labels are.
         if app.folds.holds(song, track) {
+            label = label.chars().take(TRACK_WIDTH - 2).collect();
             label.extend([glyphs::FOLDED, glyphs::ICON_SPACE]);
+        } else {
+            label = label.chars().take(TRACK_WIDTH - 1).collect();
         }
         // A group and the tracks in it are in its colour, and an empty group is faint.
         let style = if group::is_empty(song, track) {

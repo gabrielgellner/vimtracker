@@ -26,6 +26,9 @@ use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::input::picker::{Item, Pick, Picker};
 
+/// The title of the list offering a beat after a kit's sounds are loaded as tracks.
+pub const KIT_BEAT_PICKER: &str = "Start a beat";
+
 /// The longest rate that can be typed, like `64 bars`.
 const RATE_TEXT: usize = 8;
 
@@ -321,6 +324,37 @@ fn settle(shape: &mut Shape, sources: &[Source], start: Option<Source>) {
     }
 }
 
+/// The shape the panel opens with on a column, from and to these, on these rows: a ramp, with
+/// every other fill's settings as they start.
+fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Shape {
+    Shape {
+        from,
+        to,
+        curve: 0,
+        s: 0,
+        kind: FillKind::Ramp,
+        wave: Wave::Sine,
+        rate: DEFAULT_RATE,
+        phase: 0,
+        run: 1,
+        values: Values::default(),
+        place,
+        seed: 0,
+        acid: Acid::default(),
+        follow: Follow::default(),
+        walk: Walk {
+            step: default_step(column),
+            ..Walk::default()
+        },
+        pink: Pink::default(),
+        bits: Bits::default(),
+        grids: Grids::default(),
+        random: Random::default(),
+        vary: 0,
+        variation: vt_model::shape::Variation::default(),
+    }
+}
+
 /// Read a song's live generator, one of a track's phrase's by its place in its list, with what
 /// its settings act on, from the song alone, as the Roto and the page's text do: `None` if
 /// there's no such generator. A `Follow`'s sources aren't listed here, so its `Source` has no
@@ -558,6 +592,86 @@ impl App {
         drum_parts(&known)
     }
 
+    /// After a kit's sounds are loaded as tracks, offer a beat from Grids' map on the first kick,
+    /// snare and hat among them, each playing its own part as `S` across them would (decision
+    /// 296), in a list whose `Enter` writes it and whose `Esc` leaves the tracks empty.
+    pub(crate) fn offer_kit_beat(&mut self, tracks: &[usize]) {
+        let mut found = [false; DrumPart::ALL.len()];
+        let drums: Vec<usize> = tracks
+            .iter()
+            .copied()
+            .filter(|&track| {
+                self.drum_of(track)
+                    .is_some_and(|part| !std::mem::replace(&mut found[part.index()], true))
+            })
+            .collect();
+        if drums.is_empty() {
+            return;
+        }
+        let names: Vec<&str> = drums
+            .iter()
+            .map(|&track| self.song().tracks[track].name.as_str())
+            .collect();
+        let items = vec![
+            Item::new("Grids", Pick::KitBeat(drums.clone()))
+                .meaning(format!("A beat on {} from Grids' map", names.join(" "))),
+            Item::new("None", Pick::KitBeat(Vec::new())).meaning("Leave the tracks empty"),
+        ];
+        self.show_picker(Picker::new(KIT_BEAT_PICKER, items));
+    }
+
+    /// Write a beat from Grids' map on these tracks' first phrases, each its own part, from the
+    /// middle of the map as `S` starts, as one undo step.
+    pub(crate) fn write_kit_beat(&mut self, tracks: &[usize]) {
+        let song = Arc::clone(self.song());
+        let column = ShapeColumn::Note {
+            scale: self.scale,
+            writes: Some(self.note_velocity),
+        };
+        let ends = self.generated_ends(column);
+        self.shape_seed = self.shape_seed.wrapping_add(1);
+        let seed = song.seed.wrapping_add(self.shape_seed);
+        let drums = self.drums_of(tracks);
+        let actions: Vec<Action> = tracks
+            .iter()
+            .zip(drums)
+            .enumerate()
+            .filter_map(|(nth, (&track, part))| {
+                let chain = song
+                    .sections
+                    .first()?
+                    .chains
+                    .get(track)
+                    .copied()
+                    .flatten()?;
+                let phrase = song.tracks[track]
+                    .chains
+                    .get(&chain)?
+                    .entries
+                    .first()?
+                    .phrase;
+                let rows = song.tracks[track].phrases.get(&phrase)?.steps().len();
+                let mut shape = starting_shape(column, ends, Where::AllRows);
+                shape.kind = FillKind::Grids;
+                shape.seed = track_seed(seed, nth);
+                shape.grids.part = Some(part);
+                Some(Action::Shape {
+                    track,
+                    phrase,
+                    range: StepRange::between(0, rows.saturating_sub(1)),
+                    column,
+                    shape,
+                })
+            })
+            .collect();
+        if actions.is_empty() {
+            return;
+        }
+        self.apply(&Action::Batch(actions));
+        self.status =
+            "A beat from Grids' map: S on its notes changes it, u takes it off".to_owned();
+    }
+
     /// Open the panel on the selection, and show its first result. An empty FX column lists the
     /// commands first, to choose the one it writes.
     pub(crate) fn open_shape(&mut self) {
@@ -636,40 +750,15 @@ impl App {
             ShapeColumn::Note { .. } => self.follow_sources(&base, &parts),
             _ => (Vec::new(), None),
         };
+        let mut shape = starting_shape(column, (from, to), place);
+        shape.seed = base.seed.wrapping_add(self.shape_seed);
+        // Across tracks, each takes its own part.
+        shape.grids.part = alone.then_some(first.drum);
         Ok(ShapePanel {
             selection,
             parts,
             column,
-            shape: Shape {
-                from,
-                to,
-                curve: 0,
-                s: 0,
-                kind: FillKind::Ramp,
-                wave: Wave::Sine,
-                rate: DEFAULT_RATE,
-                phase: 0,
-                run: 1,
-                values: Values::default(),
-                place,
-                seed: base.seed.wrapping_add(self.shape_seed),
-                acid: Acid::default(),
-                follow: Follow::default(),
-                walk: Walk {
-                    step: default_step(column),
-                    ..Walk::default()
-                },
-                pink: Pink::default(),
-                bits: Bits::default(),
-                // Across tracks, each takes its own part.
-                grids: Grids {
-                    part: alone.then_some(first.drum),
-                    ..Grids::default()
-                },
-                random: Random::default(),
-                vary: 0,
-                variation: vt_model::shape::Variation::default(),
-            },
+            shape,
             row: GenParam::Fill,
             typing: None,
             live: None,

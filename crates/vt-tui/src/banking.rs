@@ -7,17 +7,18 @@ use std::sync::Arc;
 
 use vt_model::action::{Action, FieldValue, KitSound};
 use vt_model::bank::{Bank, BankEntry, ContentHash, PlayParams, Source};
+use vt_model::constants::{MAX_GROUPS, MAX_SOUND_TRACKS};
 use vt_model::kit::load_kit;
 use vt_model::project;
 use vt_model::samples::SamplePool;
 use vt_model::seeding;
 use vt_model::settings::SettingId;
-use vt_model::song::Song;
+use vt_model::song::{Song, TrackKind};
 use vt_model::step::{FxCommand, FxSlot, Mark};
 
 use crate::app::{App, Field};
 use crate::input::command::Line;
-use crate::input::picker::{Item, Pick, Picker, Preview};
+use crate::input::picker::{Item, KitChoice, Pick, Picker, Preview};
 
 /// What a kit says about one of its sounds, for the entry it becomes.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -70,6 +71,40 @@ struct Banked {
     seeded: Option<(BankEntry, String)>,
     problems: Vec<String>,
 }
+
+/// A kit's sounds put in a copy of the bank: the entry each plays, in order, the edits that add
+/// the new ones, the edits that give them the points their files say, what in the files couldn't
+/// be read, and the pool with their files loaded.
+struct KitBanked {
+    numbers: Vec<u8>,
+    adds: Vec<Action>,
+    seeds: Vec<Action>,
+    problems: Vec<String>,
+    pool: SamplePool,
+}
+
+/// The first group with no tracks in it, by its number from 1, for a kit's new tracks.
+fn free_group(song: &Song) -> Option<u8> {
+    (1..=MAX_GROUPS as u8).find(|&number| {
+        song.fixed_track(TrackKind::Group(number))
+            .is_some_and(|group| song.group_members(group).next().is_none())
+    })
+}
+
+/// A group's name from its kit's: its first word, in capitals, up to the three characters a
+/// column's label holds, so `909 Core Kit` names it `909`.
+pub fn group_name(kit: &str) -> String {
+    kit.split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .take(GROUP_NAME_CHARS)
+        .collect::<String>()
+        .to_uppercase()
+}
+
+/// The most characters a group named after its kit takes.
+pub const GROUP_NAME_CHARS: usize = 3;
 
 impl App {
     /// Put a file in a bank, loading it into a pool, unless the bank already plays it. A kit's
@@ -207,6 +242,71 @@ impl App {
         self.status = said;
     }
 
+    /// Put a kit's sounds, each as its file and what the kit says of it, in a copy of the bank,
+    /// loading their files: the entry each plays, the edits that add the new ones, and the points
+    /// their files say as edits of their own. Any that won't load stops it, with the file named.
+    fn bank_kit_sounds<'a>(
+        &self,
+        sounds: impl IntoIterator<Item = (&'a Path, Seed)>,
+    ) -> Result<KitBanked, String> {
+        let mut bank = self.song().bank.clone();
+        let mut pool = SamplePool::clone(&self.samples);
+        let mut banked = KitBanked {
+            numbers: Vec::new(),
+            adds: Vec::new(),
+            seeds: Vec::new(),
+            problems: Vec::new(),
+            pool: SamplePool::default(),
+        };
+        for (path, seed) in sounds {
+            let Banked {
+                number,
+                new,
+                seeded,
+                problems,
+            } = self
+                .bank_file(path, Some(&seed), &mut bank, &mut pool)
+                .map_err(|error| format!("{}: {error}", path.display()))?;
+            if let Some((entry, _)) = seeded {
+                banked.seeds.push(Action::SetBankEntry {
+                    number,
+                    entry: Some(entry),
+                });
+            }
+            let file = path.file_name().unwrap_or_default().to_string_lossy();
+            banked
+                .problems
+                .extend(problems.iter().map(|problem| format!("{file}: {problem}")));
+            if new {
+                banked.adds.push(Action::SetBankEntry {
+                    number,
+                    entry: bank.get(number).cloned(),
+                });
+            }
+            banked.numbers.push(number);
+        }
+        banked.pool = pool;
+        Ok(banked)
+    }
+
+    /// After a kit's sounds are in: the points their files say, as an undo step of their own, and
+    /// the status line saying so and what couldn't be read, after what it already says.
+    fn finish_kit(&mut self, seeds: Vec<Action>, problems: &[String]) {
+        let seeded = seeds.len();
+        if seeded > 0 {
+            self.apply(&Action::Batch(seeds));
+            let which = if seeded == 1 {
+                "1 sound with points from its file".to_owned()
+            } else {
+                format!("{seeded} sounds with points from their files")
+            };
+            self.status = format!("{}, {which}: u leaves them out", self.status);
+        }
+        for problem in problems {
+            self.status = format!("{}. {problem}", self.status);
+        }
+    }
+
     /// Put a kit's sounds in the bank and on tracks from the first, keeping the tracks' other
     /// settings and adding tracks if needed. It is one undo step, and if any sound won't load,
     /// nothing changes. Replacing a track's other sample is reported.
@@ -222,13 +322,7 @@ impl App {
                 return;
             }
         };
-        let mut bank = self.song().bank.clone();
-        let mut pool = SamplePool::clone(&self.samples);
-        let mut actions = Vec::new();
-        let mut sounds = Vec::with_capacity(kit.sounds.len());
-        let mut seeds = Vec::new();
-        let mut problems = Vec::new();
-        for sound in &kit.sounds {
+        let seeds = kit.sounds.iter().map(|sound| {
             let seed = Seed {
                 label: sound.label.clone(),
                 name: sound.name.clone(),
@@ -238,39 +332,25 @@ impl App {
                     ..PlayParams::default()
                 },
             };
-            let banked = match self.bank_file(&sound.path, Some(&seed), &mut bank, &mut pool) {
-                Ok(found) => found,
-                Err(error) => {
-                    self.status = format!("{}: {error}", sound.path.display());
-                    return;
-                }
-            };
-            let Banked {
-                number,
-                new,
-                seeded,
-                problems: unread,
-            } = banked;
-            if let Some((entry, _)) = seeded {
-                seeds.push(Action::SetBankEntry {
-                    number,
-                    entry: Some(entry),
-                });
+            (sound.path.as_path(), seed)
+        });
+        let banked = match self.bank_kit_sounds(seeds) {
+            Ok(banked) => banked,
+            Err(error) => {
+                self.status = error;
+                return;
             }
-            let file = sound.path.file_name().unwrap_or_default().to_string_lossy();
-            problems.extend(unread.iter().map(|problem| format!("{file}: {problem}")));
-            if new {
-                actions.push(Action::SetBankEntry {
-                    number,
-                    entry: bank.get(number).cloned(),
-                });
-            }
-            sounds.push(KitSound {
-                sample: number,
+        };
+        let sounds: Vec<KitSound> = kit
+            .sounds
+            .iter()
+            .zip(&banked.numbers)
+            .map(|(sound, &sample)| KitSound {
+                sample,
                 name: sound.label.clone(),
                 choke: sound.choke,
-            });
-        }
+            })
+            .collect();
         let replaced: Vec<String> = sounds
             .iter()
             .enumerate()
@@ -283,35 +363,140 @@ impl App {
             .map(|(track, _)| format!("{:02}", track + 1))
             .collect();
         let count = sounds.len();
+        let KitBanked {
+            mut adds,
+            seeds,
+            problems,
+            pool,
+            ..
+        } = banked;
+        let seeded = !seeds.is_empty();
         self.samples = Arc::new(pool);
-        actions.push(Action::LoadKit(sounds));
-        self.apply(&Action::Batch(actions));
-        let seeded = seeds.len();
-        if seeded > 0 {
-            self.apply(&Action::Batch(seeds));
-        }
+        adds.push(Action::LoadKit(sounds));
+        self.apply(&Action::Batch(adds));
         self.fit_levels();
         self.kit_file = Some(path.to_path_buf());
         self.status = format!("Kit {}: {count} tracks", kit.name);
-        if seeded > 0 {
-            let which = if seeded == 1 {
-                "1 sound with points from its file".to_owned()
-            } else {
-                format!("{seeded} sounds with points from their files")
-            };
-            self.status = format!("{}, {which}: u leaves them out", self.status);
-        }
+        self.finish_kit(seeds, &[]);
         if !replaced.is_empty() {
-            let undo = if seeded > 0 { "u again" } else { "u" };
+            let undo = if seeded { "u again" } else { "u" };
             self.status = format!(
                 "{}. Replaced {}: {undo} to undo",
                 self.status,
                 replaced.join(" ")
             );
         }
-        for problem in problems {
-            self.status = format!("{}. {problem}", self.status);
+        self.finish_kit(Vec::new(), &problems);
+    }
+
+    /// The kit dialog's `Enter`: put these of a kit's sounds on new tracks after the last, never
+    /// over one, each named by its label and in its choke group, and the tracks in the first
+    /// group with none, named after the kit and folded. It is one undo step, and if any sound
+    /// won't load, nothing changes. Where the tracks have a kick, a snare or a hat, a beat from
+    /// Grids' map is offered after.
+    pub fn load_kit_tracks(&mut self, path: &Path, chosen: &[KitChoice]) {
+        if chosen.is_empty() {
+            return;
         }
+        let kit = match load_kit(path) {
+            Ok(kit) => kit,
+            Err(error) => {
+                self.status = error.to_string();
+                return;
+            }
+        };
+        let first = self.song().sound_tracks();
+        let count = chosen.len();
+        if first + count > MAX_SOUND_TRACKS {
+            self.status = format!(
+                "{count} more tracks would be over the {MAX_SOUND_TRACKS} a project can have"
+            );
+            return;
+        }
+        let seeds = chosen.iter().map(|sound| {
+            let seed = Seed {
+                label: sound.label.clone(),
+                name: sound.name.clone(),
+                play: sound.play,
+            };
+            (sound.path.as_path(), seed)
+        });
+        let banked = match self.bank_kit_sounds(seeds) {
+            Ok(banked) => banked,
+            Err(error) => {
+                self.status = error;
+                return;
+            }
+        };
+        let KitBanked {
+            numbers,
+            mut adds,
+            seeds,
+            problems,
+            pool,
+        } = banked;
+        adds.push(Action::AddTracks(count));
+        for (at, (sound, &sample)) in chosen.iter().zip(&numbers).enumerate() {
+            let track = first + at;
+            adds.push(Action::SetTrackSample { track, sample });
+            adds.push(Action::SetTrackChoke {
+                track,
+                choke: sound.choke,
+            });
+            if !sound.label.is_empty() {
+                adds.push(Action::SetTrackName {
+                    track,
+                    name: sound.label.clone(),
+                });
+            }
+        }
+        let group = free_group(self.song());
+        if let Some(number) = group {
+            adds.push(Action::SetTrackGroup {
+                first,
+                last: first + count - 1,
+                group: Some(number),
+            });
+            // The group moves along with the fixed tracks, past the new ones.
+            let name = group_name(&kit.name);
+            if let Some(at) = self.song().fixed_track(TrackKind::Group(number))
+                && !name.is_empty()
+            {
+                adds.push(Action::SetTrackName {
+                    track: at + count,
+                    name,
+                });
+            }
+        }
+        let depth = self.history.undo_depth();
+        self.samples = Arc::new(pool);
+        self.apply(&Action::Batch(adds));
+        if self.history.undo_depth() == depth {
+            return;
+        }
+        self.fit_levels();
+        // A cursor on a fixed track stays on it.
+        if self.cursor.track >= first {
+            self.cursor.track += count;
+        }
+        if let Some(number) = group {
+            self.fold_group(number, true);
+        }
+        self.kit_file = Some(path.to_path_buf());
+        let tracks = match count {
+            1 => format!("track {:02}", first + 1),
+            _ => format!("tracks {:02}-{:02}", first + 1, first + count),
+        };
+        self.status = match group {
+            Some(number) => format!("Kit {}: {tracks} in G{number}, folded", kit.name),
+            None => format!(
+                "Kit {}: {tracks} in no group, as all {MAX_GROUPS} have tracks",
+                kit.name
+            ),
+        };
+        self.finish_kit(seeds, &problems);
+        let tracks: Vec<usize> = (first..first + count).collect();
+        self.offer_kit_beat(&tracks);
     }
 
     /// Remove the bank's entries nothing names, as one undo step: no track's `Sample` and no
