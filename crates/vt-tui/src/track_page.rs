@@ -1,6 +1,7 @@
 //! The track page, `Space 5` to `Space 8`: a track's Sound, Mod, FX and Gen pages. `TrackPage` is
-//! the page as a component, which page shows and where its cursor is, with the moves that need
-//! only the cursor's track; the edits, which change the song, are `App`'s. Each page's settings are in a file of its
+//! the page as a component, which page shows, where its cursor is and the images it shows, with
+//! the moves that need only the cursor's track, and its drawing, in `views::track`, given a
+//! [`Ctx`]; the edits, which change the song, are `App`'s. Each page's settings are in a file of its
 //! own (`sound`, `modulation`, `fx`), each gives its devices to `Page::devices` if it's a rack
 //! (`device`), and `editing`, `pickers` and `typing` change the setting under the cursor.
 
@@ -27,6 +28,8 @@ pub(crate) use modulation::modulator_bypassed;
 
 use std::sync::Arc;
 
+use vt_model::insert::INSERTS;
+use vt_model::modulation::MOD_SLOTS;
 use vt_model::selection::Motion;
 use vt_model::song::Track;
 use vt_model::steps::STEPS;
@@ -34,6 +37,9 @@ use vt_model::steps::STEPS;
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
+use crate::meter::{FLOOR_DB, Held, ReductionHistory};
+use crate::page::Ctx;
+use crate::views::track::CyclesAt;
 use device::{device_beside, rack_column};
 
 /// A part of the track page.
@@ -137,8 +143,11 @@ pub enum Outcome {
 /// The track page as a component: which of its pages shows, and where its cursor is, kept while
 /// other views are shown. Each page keeps its own place, which the cursor goes back to when that
 /// page shows again, and starts on its first setting. What's on a page depends on the cursor's track, so each move is given
-/// that track, or none, and the page holds no song of its own.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// that track, or none, and the page holds no song of its own. It also keeps the ids of the
+/// terminal's images it shows and where it last drew those that carry a dot, the effect `dd`
+/// took, and the cursor's track's meters it shows, held as they fall. It's drawn with
+/// [`TrackPage::draw`], given the rest of the program as a [`Ctx`].
+#[derive(Debug, Clone, PartialEq)]
 pub struct TrackPage {
     /// The page showing: Sound, Mod or FX.
     pub page: Page,
@@ -164,6 +173,68 @@ pub struct TrackPage {
     /// Whether the FX page is zoomed in on the cursor's slot, `z i`, rather than showing the rack
     /// (decision 329). It's kept while other pages show, as the FX page's own.
     pub zoomed: bool,
+    /// The terminal's images of the Mod page's slots, an envelope's shape or an LFO's cycle each,
+    /// by slot.
+    pub mod_images: Option<[u32; MOD_SLOTS]>,
+    /// Where each LFO's cycle was last drawn, for the terminal to place its dot on.
+    pub lfo_cycles_at: CyclesAt,
+    /// The id of the image of the filter's curve, likewise.
+    pub filter_image: Option<u32>,
+    /// The id of the image of the waveform of the sample the cursor's track plays, if it has one.
+    pub waveform_image: Option<u32>,
+    /// The ids of the images of the FX page's slots, for those that have a drawing.
+    pub slot_images: [Option<u32>; INSERTS],
+    /// The id of the image of the zoomed slot's drawing, while the FX page is zoomed on one that
+    /// has one.
+    pub zoom_image: Option<u32>,
+    /// What's said under the zoomed slot's box: a delay's or a reverb's time scale.
+    pub zoom_caption: Option<String>,
+    /// The images of the Gen page's previews the terminal has, by each generator's place in its
+    /// phrase's list.
+    pub gen_images: Vec<Option<u32>>,
+    /// Where each preview the Gen page drew is, its generator's place and its picture's top left,
+    /// for the terminal to place the row playing on.
+    pub gen_panels_at: Vec<(usize, (u16, u16))>,
+    /// An effect taken out of a slot with `dd`, for `p` to put somewhere.
+    pub(crate) taken_insert: Option<TakenInsert>,
+    /// How far each FX slot of the cursor's track has turned down lately, in dB, for the mark its
+    /// gain reduction meter holds at the deepest.
+    pub slot_reduction: [Held; INSERTS],
+    /// What each FX slot of the cursor's track turned down over the last two bars, for the FX
+    /// page's zoom.
+    pub reduction_history: ReductionHistory,
+    /// The cursor's track's level right after its trim, each side's in dB, for the meter in its
+    /// Output device: where it is now and the highest it was lately.
+    pub after_trim: [Held; 2],
+}
+
+impl Default for TrackPage {
+    fn default() -> Self {
+        Self {
+            page: Page::default(),
+            row: 0,
+            field: 0,
+            wanted: None,
+            fine: false,
+            step: 0,
+            kept: Default::default(),
+            phrase: None,
+            zoomed: false,
+            mod_images: None,
+            lfo_cycles_at: Default::default(),
+            filter_image: None,
+            waveform_image: None,
+            slot_images: [None; INSERTS],
+            zoom_image: None,
+            zoom_caption: None,
+            gen_images: Vec::new(),
+            gen_panels_at: Vec::new(),
+            taken_insert: None,
+            slot_reduction: [Held::new(0.0); INSERTS],
+            reduction_history: ReductionHistory::default(),
+            after_trim: [Held::new(FLOOR_DB); 2],
+        }
+    }
 }
 
 impl TrackPage {
@@ -230,6 +301,11 @@ impl TrackPage {
             }
             place => place.unwrap_or(Control::Machine),
         }
+    }
+
+    /// What the cursor is on, on the cursor's track.
+    pub fn control_here(&self, ctx: &Ctx) -> Control {
+        self.control(ctx.track_here())
     }
 
     /// The Steps slot whose panel the cursor is in, and how many values it plays, if it's in one.
@@ -309,6 +385,19 @@ impl TrackPage {
             _ => return Outcome::Passed,
         }
         Outcome::Done
+    }
+
+    /// Run a key as the program gives it to the page, on the cursor's track: the cursor first
+    /// goes where it's seen, but for `{` and `}`, which go on from where it was kept so they come
+    /// back to it, and on the mixer, whose cursor this isn't. Then it's one of the page's own
+    /// keys, [`TrackPage::key`], or passed back.
+    pub fn run(&mut self, cmd: Cmd, times: usize, ctx: &Ctx) -> Outcome {
+        let track = ctx.track_here();
+        let braces = matches!(cmd, Cmd::Move(Motion::NextBeat | Motion::PreviousBeat));
+        if !braces && ctx.view() != View::Mixer {
+            self.settle(track);
+        }
+        self.key(cmd, times, track)
     }
 
     /// Put the cursor where it's seen, keeping the column `j` and `k` aim for. Left elsewhere,
@@ -517,17 +606,15 @@ impl App {
 
     pub(crate) fn run_track_page(&mut self, cmd: Cmd) -> bool {
         self.track_page.phrase = self.phrase_id();
-        let song = Arc::clone(self.song());
-        let track = song.tracks.get(self.cursor.track);
-        // Only `{` and `}` go on from where the cursor was kept, so they come back to it.
+        // What a key that means what it does elsewhere leaves the page as.
         let kept = self.track_page.clone();
-        let braces = matches!(cmd, Cmd::Move(Motion::NextBeat | Motion::PreviousBeat));
-        if !braces && self.view != View::Mixer {
-            self.track_page.settle(track);
-        }
         let count = self.count.take();
         let times = count.unwrap_or(1).max(1);
-        match self.track_page.key(cmd, times, track) {
+        // The page runs it on a copy of itself, as it reads the rest of the program it's in.
+        let mut page = kept.clone();
+        let outcome = page.run(cmd, times, &self.ctx());
+        self.track_page = page;
+        match outcome {
             Outcome::Done => return true,
             Outcome::Refused(why) => {
                 self.status = why.to_owned();

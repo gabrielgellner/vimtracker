@@ -29,7 +29,7 @@ fn cut(line: &str, from: usize, to: usize) -> String {
 fn z_i_zooms_in_on_the_cursors_slot_under_a_strip_of_them_all_and_z_o_goes_back() {
     let (mut app, _realtime) = on_fx_page();
     four_devices(&mut app);
-    app.zoom_image = Some(0x01_02_03);
+    app.track_page.zoom_image = Some(0x01_02_03);
     press(&mut app, "zi");
     assert!(app.track_page.zoomed);
     assert!(app.fx_zoomed());
@@ -112,7 +112,7 @@ fn z_i_zooms_in_on_the_cursors_slot_under_a_strip_of_them_all_and_z_o_goes_back(
         "Slot 2 zoomed in: { } another slot, z o every slot"
     );
     // A pedal has nothing to draw: its settings alone, as tall as a device in the rack.
-    app.zoom_image = None;
+    app.track_page.zoom_image = None;
     press(&mut app, "}");
     let screen = zoomed_screen(&mut app, false);
     assert!(screen[6].contains("Distort  Overdrive"), "{}", screen[6]);
@@ -180,9 +180,9 @@ fn the_zoomed_meter_and_its_two_bars_show_how_far_it_turned_down() {
         app.tick_at(start + Duration::from_millis(33 * frame));
     }
     let width = 84;
-    let head = app.reduction_history.head(width);
+    let head = app.track_page.reduction_history.head(width);
     assert!((20..23).contains(&head), "{head}");
-    assert_eq!(app.reduction_history.column(0, 5, width), 6.0);
+    assert_eq!(app.track_page.reduction_history.column(0, 5, width), 6.0);
     let screen = zoomed_screen(&mut app, false);
     let history = |row: usize| cut(&screen[row], 14, 14 + width);
     // 6 dB is a quarter of 24: the top four rows, under the sweep's columns so far, then the gap
@@ -220,38 +220,44 @@ fn zoomed_in_only_its_slot_is_drawn_bigger_and_a_shaping_distortion_has_its_curv
     four_devices(&mut app);
     let mut graphics = vt_tui::kitty::Graphics::new();
     synced(&mut app, &mut graphics);
-    assert!(app.slot_images[0].is_some());
-    assert_eq!(app.zoom_image, None);
+    assert!(app.track_page.slot_images[0].is_some());
+    assert_eq!(app.track_page.zoom_image, None);
     press(&mut app, "zi");
     // At the author's 15 by 39 pixels a character, the compressor's curve is nearly square, and
     // it's the only one sent.
     let sent = synced(&mut app, &mut graphics);
     assert_eq!(sent.len(), 1);
-    let comp = app.zoom_image.unwrap();
+    let comp = app.track_page.zoom_image.unwrap();
     assert_eq!(png_size(&sent[&comp]), (630, 624));
-    assert_eq!(app.slot_images, [None; 4]);
+    assert_eq!(app.track_page.slot_images, [None; 4]);
     assert!(synced(&mut app, &mut graphics).is_empty(), "sent once");
     // The EQ's is the device's width.
     press(&mut app, "}");
     let sent = synced(&mut app, &mut graphics);
-    assert_eq!(png_size(&sent[&app.zoom_image.unwrap()]), (2100, 624));
+    assert_eq!(
+        png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+        (2100, 624)
+    );
     // An Overdrive has none, and Soft, which shapes each sample alone, has its transfer curve.
     press(&mut app, "}");
     assert!(synced(&mut app, &mut graphics).is_empty());
-    assert_eq!(app.zoom_image, None);
+    assert_eq!(app.track_page.zoom_image, None);
     press(&mut app, "l");
     press(&mut app, "K");
     press(&mut app, "Soft");
     special(&mut app, KeyCode::Enter);
     let sent = synced(&mut app, &mut graphics);
-    assert_eq!(png_size(&sent[&app.zoom_image.unwrap()]), (630, 624));
+    assert_eq!(
+        png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+        (630, 624)
+    );
     let screen = zoomed_screen(&mut app, false);
     assert_eq!(cut(&screen[9], 0, 48), format!("│  │{}│ ", "▒".repeat(42)));
     // Back in the rack, the rack's own come back.
     press(&mut app, "zo");
     synced(&mut app, &mut graphics);
-    assert!(app.slot_images[0].is_some() && app.slot_images[1].is_some());
-    assert_eq!(app.zoom_image, None);
+    assert!(app.track_page.slot_images[0].is_some() && app.track_page.slot_images[1].is_some());
+    assert_eq!(app.track_page.zoom_image, None);
 }
 
 #[test]
@@ -277,7 +283,10 @@ fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_
     for slot in 0..4 {
         let sent = synced(&mut app, &mut graphics);
         assert_eq!(sent.len(), 1, "slot {slot}");
-        assert_eq!(png_size(&sent[&app.zoom_image.unwrap()]), (2100, 624));
+        assert_eq!(
+            png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+            (2100, 624)
+        );
         assert!(synced(&mut app, &mut graphics).is_empty(), "slot {slot}");
         press(&mut app, "}");
     }
@@ -299,21 +308,21 @@ fn the_filter_effects_have_their_curves_at_the_note_played_and_as_far_as_a_gate_
     press(&mut app, "gg}");
     app.live = Some(live(60.0, (0.0, 0.1)));
     twice(&mut app);
-    let at_c = app.zoom_image.unwrap();
+    let at_c = app.track_page.zoom_image.unwrap();
     app.live = Some(live(67.0, (0.0, 0.1)));
     assert_eq!(twice(&mut app).len(), 1);
-    assert_ne!(app.zoom_image.unwrap(), at_c);
+    assert_ne!(app.track_page.zoom_image.unwrap(), at_c);
     // The gate's follows how far it's open, but not a step finer than it's drawn.
     press(&mut app, "{");
     app.live = Some(live(67.0, (0.0, 0.25)));
     twice(&mut app);
-    let closed = app.zoom_image.unwrap();
+    let closed = app.track_page.zoom_image.unwrap();
     app.live = Some(live(67.0, (0.0, 0.25 + 1e-4)));
     assert!(twice(&mut app).is_empty());
-    assert_eq!(app.zoom_image, Some(closed));
+    assert_eq!(app.track_page.zoom_image, Some(closed));
     app.live = Some(live(67.0, (1.0, 0.6)));
     assert_eq!(twice(&mut app).len(), 1);
-    assert_ne!(app.zoom_image, Some(closed));
+    assert_ne!(app.track_page.zoom_image, Some(closed));
 }
 
 #[test]
@@ -346,7 +355,10 @@ fn a_delay_has_its_repeats_and_each_reverb_its_tail_with_their_time_scales() {
     {
         let sent = synced(&mut app, &mut graphics);
         assert_eq!(sent.len(), 1, "slot {slot}");
-        assert_eq!(png_size(&sent[&app.zoom_image.unwrap()]), (2100, 624));
+        assert_eq!(
+            png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+            (2100, 624)
+        );
         assert!(synced(&mut app, &mut graphics).is_empty(), "slot {slot}");
         // Its time scale is under its box.
         let screen = zoomed_screen(&mut app, false);

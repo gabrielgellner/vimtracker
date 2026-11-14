@@ -15,9 +15,10 @@ use vt_model::song::Track;
 
 use crate::app::App;
 use crate::macroing::{holds, macro_name};
+use crate::page::Ctx;
 use crate::shaping::LiveGen;
 use crate::theme;
-use crate::track_page::{Control, DeviceSpec};
+use crate::track_page::{Control, DeviceSpec, TrackPage};
 use crate::views::phrase::{lane_playheads, playhead_step};
 use crate::views::widgets::bar::ValueBar;
 use crate::views::widgets::device::{DEVICE_HEIGHT, Device};
@@ -55,7 +56,8 @@ const MACRO_CELLS: CellWidths = CellWidths {
 /// The macros' band's cells: each macro's name, where it's heard, which a lock or modulation may
 /// move from where it's set, and its bar, filled to what's heard with a mark where it's set.
 struct MacroCells<'a> {
-    app: &'a App,
+    page: &'a TrackPage,
+    ctx: &'a Ctx<'a>,
     track: &'a Track,
 }
 
@@ -63,7 +65,7 @@ impl MacroCells<'_> {
     /// Where a macro is set, and where it's heard, from the engine's report of this track.
     fn values(&self, at: usize) -> (u16, u16) {
         let set = self.track.macros[at].value;
-        let heard = match (self.app.live, self.app.reported_track()) {
+        let heard = match (self.ctx.live(), self.ctx.reported_track()) {
             (Some(live), Some(then)) => {
                 let moved = i32::from(live.macros[at]) - i32::from(then.macros[at].value);
                 (i32::from(set) + moved).clamp(0, 0xFF00) as u16
@@ -78,24 +80,24 @@ impl CellSource for MacroCells<'_> {
     type Id = Control;
 
     fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let labels = jump_label(self.app, control);
+        let labels = jump_label(self.ctx, control);
         let Control::Macro(at) = control else {
             return Line::default();
         };
         let name = macro_name(&self.track.macros[at], at);
-        name_line(self.app, &name, &labels, room)
+        name_line(self.ctx, &name, &labels, room)
     }
 
     fn value(&self, control: Control) -> Line<'static> {
         let Control::Macro(at) = control else {
             return Line::default();
         };
-        let here = control == self.app.track_control();
+        let here = control == self.page.control_here(self.ctx);
         let (_, heard) = self.values(at);
-        let text = setting::text(self.app, here, || format!("{heard:04X}"));
+        let text = setting::text(self.ctx, here, || format!("{heard:04X}"));
         let empty = self.track.macros[at].maps.is_empty();
-        let style = setting::style(self.app, here, empty);
-        Line::from(value_spans(self.app, control, text, style))
+        let style = setting::style(self.ctx, here, empty);
+        Line::from(value_spans(self.ctx, control, text, style))
     }
 
     fn bar(&self, control: Control) -> Option<ValueBar> {
@@ -111,17 +113,18 @@ impl CellSource for MacroCells<'_> {
 fn draw_macros(
     frame: &mut Frame,
     area: Rect,
-    app: &App,
+    page: &TrackPage,
+    ctx: &Ctx,
     track: &Track,
     device: &DeviceSpec,
     focused: bool,
 ) {
     frame.render_widget(Device::new(device.identity.clone()).focused(focused), area);
-    let cells = MacroCells { app, track };
+    let cells = MacroCells { page, ctx, track };
     let rows = device.grid.iter().copied().map(Vec::from).collect();
     let mut settings = Device::settings_area(area);
     frame.render_widget(SettingsGrid::new(&cells, rows, MACRO_CELLS), settings);
-    if let Control::Macro(at) = app.track_control() {
+    if let Control::Macro(at) = page.control_here(ctx) {
         take_top(&mut settings, 2 * ROW_STEP);
         let line = format!(
             "{} → {}",
@@ -138,7 +141,8 @@ const EMPTY_HINT: &str = "  make a column of this phrase live";
 /// A generator's cells, read from its shape through the declared table, with bars this many
 /// cells long.
 struct GenCells<'a> {
-    app: &'a App,
+    page: &'a TrackPage,
+    ctx: &'a Ctx<'a>,
     live: &'a LiveGen,
     context: Context<'a>,
     bar_cells: usize,
@@ -157,16 +161,16 @@ impl CellSource for GenCells<'_> {
     type Id = Control;
 
     fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let labels = jump_label(self.app, control);
+        let labels = jump_label(self.ctx, control);
         let name = Self::param(control).map_or("", GenParam::name);
-        name_line(self.app, name, &labels, room)
+        name_line(self.ctx, name, &labels, room)
     }
 
     fn value(&self, control: Control) -> Line<'static> {
-        let here = control == self.app.track_control();
+        let here = control == self.page.control_here(self.ctx);
         // As it's heard, with what any macro holding its settings gives them (decision 294).
         let shape = &self.live.generator.heard();
-        let text = setting::text(self.app, here, || {
+        let text = setting::text(self.ctx, here, || {
             Self::param(control).map_or_else(String::new, |param| {
                 if self.bar(control).is_some() {
                     param.brief(shape, &self.context)
@@ -175,8 +179,8 @@ impl CellSource for GenCells<'_> {
                 }
             })
         });
-        let style = setting::style(self.app, here, false);
-        Line::from(value_spans(self.app, control, text, style))
+        let style = setting::style(self.ctx, here, false);
+        Line::from(value_spans(self.ctx, control, text, style))
     }
 
     fn bar(&self, control: Control) -> Option<ValueBar> {
@@ -197,10 +201,10 @@ impl CellSource for GenCells<'_> {
             param,
         };
         let range = self
-            .app
+            .ctx
             .song()
             .tracks
-            .get(self.app.cursor.track)
+            .get(self.ctx.cursor().track)
             .and_then(|track| track.macro_holding(target))
             .map(|(_, map)| (place(map.number_at(0.0)), place(map.number_at(255.0))));
         Some(
@@ -230,8 +234,13 @@ fn acts_on(live: &LiveGen) -> String {
 
 /// A generator's title: its fill and its `Where` or its source, `Acid`'s `Pitches`, and `Vary`,
 /// each in its own style, a `Where` that's its column's own and a `Vary` of `Once` dim.
-fn title_controls(app: &App, cells: &GenCells, device: &DeviceSpec) -> Vec<Line<'static>> {
-    let current = app.track_control();
+fn title_controls(
+    page: &TrackPage,
+    ctx: &Ctx,
+    cells: &GenCells,
+    device: &DeviceSpec,
+) -> Vec<Line<'static>> {
+    let current = page.control_here(ctx);
     device
         .title
         .iter()
@@ -240,7 +249,7 @@ fn title_controls(app: &App, cells: &GenCells, device: &DeviceSpec) -> Vec<Line<
             let here = *control == current;
             let shape = &cells.live.generator.shape;
             let param = GenCells::param(*control);
-            let text = setting::text(app, here, || {
+            let text = setting::text(ctx, here, || {
                 param.map_or_else(String::new, |param| param.shown(shape, &cells.context))
             });
             let default = match param {
@@ -248,22 +257,22 @@ fn title_controls(app: &App, cells: &GenCells, device: &DeviceSpec) -> Vec<Line<
                 Some(GenParam::Vary) => shape.vary == 0,
                 _ => false,
             };
-            let style = setting::style(app, here, default);
-            Line::from(value_spans(app, *control, text, style))
+            let style = setting::style(ctx, here, default);
+            Line::from(value_spans(ctx, *control, text, style))
         })
         .collect()
 }
 
 /// The phrase the cursor's track is playing, if it's playing one, which the page's title names
 /// beside the one it shows when they differ.
-pub(super) fn playing_phrase(app: &App) -> Option<u32> {
-    let track = app.cursor.track;
-    let owner = app.song().tracks.get(track)?;
-    let chain = app.jam.get(track)?.chain?;
-    let place = app.playing_place(track, chain)?;
+pub(super) fn playing_phrase(ctx: &Ctx) -> Option<u32> {
+    let track = ctx.cursor().track;
+    let owner = ctx.song().tracks.get(track)?;
+    let chain = ctx.jam().get(track)?.chain?;
+    let place = ctx.playing_place(track, chain)?;
     Some(
         owner
-            .chain_position(chain, place, app.dealer(track))?
+            .chain_position(chain, place, ctx.dealer(track))?
             .phrase,
     )
 }
@@ -288,7 +297,8 @@ pub(crate) fn playing_row(app: &App, generator: &Generator) -> Option<usize> {
 fn draw_generator(
     frame: &mut Frame,
     area: Rect,
-    app: &App,
+    page: &TrackPage,
+    ctx: &Ctx,
     device: &DeviceSpec,
     focused: bool,
 ) -> Option<(u16, u16)> {
@@ -298,26 +308,27 @@ fn draw_generator(
     else {
         return None;
     };
-    let live = app.live_generator(app.cursor.track, phrase, generator)?;
+    let live = ctx.live_generator(ctx.cursor().track, phrase, generator)?;
     let four = device
         .grid
         .iter()
         .any(|row| row.get(GEN_COLUMNS - 1).is_some_and(Option::is_some));
     let widths = if four { GEN_FOUR_CELLS } else { GEN_CELLS };
     let cells = GenCells {
-        app,
+        page,
+        ctx,
         live: &live,
         context: live.context(),
         bar_cells: widths.bar_cells,
     };
     let widget = Device::new(String::new())
-        .controls(title_controls(app, &cells, device))
+        .controls(title_controls(page, ctx, &cells, device))
         .after(Line::styled(format!("· {}", acts_on(&live)), theme::dim()))
         .focused(focused);
     frame.render_widget(widget, area);
     let mut settings = Device::settings_area(area);
     let mut preview = None;
-    let id = app.gen_images.get(generator).copied().flatten();
+    let id = page.gen_images.get(generator).copied().flatten();
     if let Some(id) = id {
         let lines = image::rows(id, LARGE_PANEL_WIDTH, LARGE_PANEL_HEIGHT)
             .into_iter()
@@ -341,14 +352,21 @@ fn draw_generator(
 /// An `Acid`'s `Loops`, under its device: each part's loop, and at the end of the title, dim,
 /// when the loops come round together, their least common multiple in rows, and when the
 /// phrase plays the same pass again, in passes of its span.
-fn draw_loops(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, focused: bool) {
+fn draw_loops(
+    frame: &mut Frame,
+    area: Rect,
+    page: &TrackPage,
+    ctx: &Ctx,
+    device: &DeviceSpec,
+    focused: bool,
+) {
     let Some(Control::Gen {
         phrase, generator, ..
     }) = device.grid.iter().flatten().flatten().next().copied()
     else {
         return;
     };
-    let Some(live) = app.live_generator(app.cursor.track, phrase, generator) else {
+    let Some(live) = ctx.live_generator(ctx.cursor().track, phrase, generator) else {
         return;
     };
     let heard = live.generator.heard();
@@ -365,7 +383,8 @@ fn draw_loops(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, foc
         .focused(focused);
     frame.render_widget(widget, area);
     let cells = GenCells {
-        app,
+        page,
+        ctx,
         live: &live,
         context: live.context(),
         bar_cells: GEN_CELLS.bar_cells,
@@ -383,10 +402,17 @@ fn lcm(a: u64, b: u64) -> u64 {
 }
 
 /// `Empty`, which `K` makes another column live from.
-fn draw_empty(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, focused: bool) {
-    let here = device.title[0] == Some(app.track_control());
-    let text = setting::text(app, here, || "Empty".to_owned());
-    let style = setting::style(app, here, true);
+fn draw_empty(
+    frame: &mut Frame,
+    area: Rect,
+    page: &TrackPage,
+    ctx: &Ctx,
+    device: &DeviceSpec,
+    focused: bool,
+) {
+    let here = device.title[0] == Some(page.control_here(ctx));
+    let text = setting::text(ctx, here, || "Empty".to_owned());
+    let style = setting::style(ctx, here, true);
     let widget = Device::new(String::new())
         .controls(vec![Line::styled(text, style)])
         .focused(focused);
@@ -403,15 +429,15 @@ fn draw_empty(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, foc
 pub(super) fn draw(
     frame: &mut Frame,
     area: Rect,
-    app: &App,
+    page: &TrackPage,
+    ctx: &Ctx,
     track: &Track,
 ) -> Vec<(usize, (u16, u16))> {
-    let devices = app.track_page.devices(Some(track));
+    let devices = page.devices(Some(track));
     // The macros alone, with no phrase for generators, say why under them.
     let alone = devices.len() == 1;
     let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
-    let cursor = app
-        .track_page
+    let cursor = page
         .device_cursor(Some(track))
         .map_or(0, |cursor| cursor.device);
     let first = (cursor + 1).saturating_sub(fit);
@@ -421,14 +447,14 @@ pub(super) fn draw(
         let area = take_top(&mut rest, DEVICE_HEIGHT);
         match (device.title[0], device.grid[0][0]) {
             (_, Some(Control::Macro(_))) => {
-                draw_macros(frame, area, app, track, device, at == cursor);
+                draw_macros(frame, area, page, ctx, track, device, at == cursor);
             }
             (Some(Control::NewGenerator(_)), _) => {
-                draw_empty(frame, area, app, device, at == cursor);
+                draw_empty(frame, area, page, ctx, device, at == cursor);
             }
-            _ if device.is_loops() => draw_loops(frame, area, app, device, at == cursor),
+            _ if device.is_loops() => draw_loops(frame, area, page, ctx, device, at == cursor),
             (Some(Control::Gen { generator, .. }), _) => {
-                if let Some(corner) = draw_generator(frame, area, app, device, at == cursor) {
+                if let Some(corner) = draw_generator(frame, area, page, ctx, device, at == cursor) {
                     previews.push((generator, corner));
                 }
             }

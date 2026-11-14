@@ -97,7 +97,7 @@ fn the_four_devices_fill_the_page_and_the_keys_box_at_163_by_42() {
     ];
     for (machine, title) in machines {
         let (mut app, _realtime) = playing(machine);
-        app.filter_image = Some(0x01_02_03);
+        app.track_page.filter_image = Some(0x01_02_03);
         for (mode, top, frame) in [(Mode::Normal, 2, ""), (Mode::Keys, 3, "│")] {
             app.mode = mode;
             let screen = full_screen(&mut app);
@@ -308,7 +308,7 @@ fn the_filter_curve_stays_in_its_panel_in_the_filter() {
         let (top, _) = titles(&plain)[1];
         assert!(!plain[top..top + 9].iter().any(|line| line.contains('┌')));
 
-        app.filter_image = Some(0x01_02_03);
+        app.track_page.filter_image = Some(0x01_02_03);
         let drawn = full_screen(&mut app);
         let text = lines(&drawn);
         let cells = image_cells(&drawn, Color::Rgb(1, 2, 3));
@@ -347,8 +347,8 @@ fn the_filter_curve_stays_in_its_panel_in_the_filter() {
 #[test]
 fn a_samplers_waveform_is_in_the_machines_panel() {
     let (mut app, _realtime) = playing(Machine::Sampler);
-    app.filter_image = Some(0x01_02_03);
-    app.waveform_image = Some(0x04_05_06);
+    app.track_page.filter_image = Some(0x01_02_03);
+    app.track_page.waveform_image = Some(0x04_05_06);
     let drawn = full_screen(&mut app);
     let text = lines(&drawn);
     let found = titles(&text);
@@ -363,14 +363,14 @@ fn a_samplers_waveform_is_in_the_machines_panel() {
     assert_eq!(waveform[0].0, filter[0].0);
     // A synth has none.
     let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Kick));
-    app.waveform_image = Some(0x04_05_06);
+    app.track_page.waveform_image = Some(0x04_05_06);
     assert!(image_cells(&full_screen(&mut app), Color::Rgb(4, 5, 6)).is_empty());
 }
 
 #[test]
 fn acids_sound_page_at_163_by_42() {
     let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Acid));
-    app.filter_image = Some(0x01_02_03);
+    app.track_page.filter_image = Some(0x01_02_03);
     press(&mut app, "}j");
     assert_eq!(column_name(&app), "Cut");
     let text = lines(&full_screen(&mut app));
@@ -437,7 +437,7 @@ fn the_output_meter_shows_each_side_after_the_trim_with_its_held_peak_and_scale(
         let mut quieter = Held::new(FLOOR_DB);
         quieter.update(-6.0, 0.0);
         quieter.update(-13.5, 1.0);
-        app.after_trim = [held, quieter];
+        app.track_page.after_trim = [held, quieter];
         let text = lines(&full_screen(&mut app));
         let rows = panel_rows(&text, top);
         let left = format!(" L {}   ▏{}", "█".repeat(32), " ".repeat(10));
@@ -475,7 +475,7 @@ fn the_output_meter_reads_the_cursors_track_after_its_trim_as_it_plays() {
         let mut out = vec![0.0; 2048 * 2];
         realtime.process(&mut out);
         app.tick();
-        app.after_trim.map(|side| side.now)
+        app.track_page.after_trim.map(|side| side.now)
     };
     let plain = heard(0x80, 0xE0);
     assert!(plain[0] > -30.0 && plain[0] < 6.0, "{plain:?}");
@@ -549,7 +549,8 @@ fn the_filter_curve_under_an_lfo_on_cut_is_sent_at_most_every_other_frame() {
         written += sent.len();
         let images = vt_tui::screenshot::sent_images(&sent);
         pngs.extend(
-            app.filter_image
+            app.track_page
+                .filter_image
                 .and_then(|id| images.get(&id))
                 .map(Vec::len),
         );

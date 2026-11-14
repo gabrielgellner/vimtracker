@@ -432,7 +432,7 @@ fn each_slots_type_mode_and_destination_are_in_its_title() {
 #[test]
 fn the_mod_page_fills_the_keys_box_at_163_by_42() {
     let (mut app, _realtime) = app();
-    app.mod_images = Some([
+    app.track_page.mod_images = Some([
         0x01_02_03, 0x04_05_06, 0x07_08_09, 0x0A_0B_0C, 0x0D_0E_0F, 0x10_11_12,
     ]);
     press(&mut app, " 5L");
@@ -502,9 +502,13 @@ fn the_mod_page_fills_the_keys_box_at_163_by_42() {
                 // envelope's.
                 if setting == "Phase" {
                     let at = ((column + image) as u16, (top + 2) as u16);
-                    assert_eq!(app.lfo_cycles_at[band + LFOS], Some(at), "{text}");
+                    assert_eq!(
+                        app.track_page.lfo_cycles_at[band + LFOS],
+                        Some(at),
+                        "{text}"
+                    );
                 } else {
-                    assert_eq!(app.lfo_cycles_at[band], None, "{text}");
+                    assert_eq!(app.track_page.lfo_cycles_at[band], None, "{text}");
                 }
             }
         }
@@ -879,16 +883,16 @@ fn a_switched_out_envelopes_shape_is_sent_faint_and_its_own_comes_back() {
     let mut graphics = Graphics::new();
     press(&mut app, " 5L");
     graphics.sync(&mut app, &mut Vec::new()).unwrap();
-    let shown = app.mod_images.unwrap();
+    let shown = app.track_page.mod_images.unwrap();
     press(&mut app, "b");
     graphics.sync(&mut app, &mut Vec::new()).unwrap();
-    let faint = app.mod_images.unwrap();
+    let faint = app.track_page.mod_images.unwrap();
     assert_ne!(faint[0], shown[0], "a faint picture of its shape");
     assert_eq!(faint[1..], shown[1..], "the others' stay");
     // Back in, the picture it had is still held, so it's placed again.
     press(&mut app, "b");
     graphics.sync(&mut app, &mut Vec::new()).unwrap();
-    assert_eq!(app.mod_images.unwrap(), shown);
+    assert_eq!(app.track_page.mod_images.unwrap(), shown);
 }
 
 #[test]
@@ -898,18 +902,18 @@ fn a_slots_picture_follows_its_type() {
     let mut graphics = Graphics::new();
     press(&mut app, " 5L");
     graphics.sync(&mut app, &mut Vec::new()).unwrap();
-    let shown = app.mod_images.unwrap();
+    let shown = app.track_page.mod_images.unwrap();
     // Mod 3, made an LFO, has a cycle where its envelope's shape was, and its cycle is placed.
     press(&mut app, "}}K");
     press(&mut app, "/lfo");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].mods[2].kind, ModKind::Lfo);
     graphics.sync(&mut app, &mut Vec::new()).unwrap();
-    let now = app.mod_images.unwrap();
+    let now = app.track_page.mod_images.unwrap();
     assert_ne!(now[2], shown[2]);
     assert_eq!(now[5], shown[5]);
     screen_cells(&mut app);
-    assert!(app.lfo_cycles_at[2].is_some());
+    assert!(app.track_page.lfo_cycles_at[2].is_some());
 }
 
 /// An app on the Mod page of a song whose first track's last three slots are these LFOs, with its
@@ -1036,7 +1040,7 @@ fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_pla
                 let x = (turns - f64::from(modulator.lfo.phase) / 360.0).rem_euclid(1.0);
                 let sign = if modulator.depth < 0 { -1.0 } else { 1.0 };
                 let level = 0.5 + 0.5 * sign * f64::from(wave(modulator.lfo.shape, turns, 0));
-                on_cycle(app.lfo_cycles_at[at + LFOS].unwrap(), x, level)
+                on_cycle(app.track_page.lfo_cycles_at[at + LFOS].unwrap(), x, level)
             })
             .collect::<Vec<_>>()
     };
@@ -1055,7 +1059,8 @@ fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_pla
     // The sine's dot, a tenth of the way round, is in the cycle's top half, and the flipped
     // ramp's, past its middle, in the bottom half.
     let middles = dot_middles(&all);
-    let middle_row = |at: usize| on_cycle(app.lfo_cycles_at[at + LFOS].unwrap(), 0.0, 0.5).1;
+    let middle_row =
+        |at: usize| on_cycle(app.track_page.lfo_cycles_at[at + LFOS].unwrap(), 0.0, 0.5).1;
     assert!(middles[0].1.1 < middle_row(0));
     assert!(middles[1].1.1 > middle_row(1));
     assert!(placed.contains(",Y="), "{placed:?}");
@@ -1140,7 +1145,7 @@ fn an_lfos_cycle_is_sent_again_only_for_its_wave_phase_deform_or_depths_sign() {
         let mut sent = Vec::new();
         graphics.sync(app, &mut sent).unwrap();
         (
-            app.mod_images.unwrap()[LFOS],
+            app.track_page.mod_images.unwrap()[LFOS],
             // The panels' pictures, and not the scope's.
             String::from_utf8_lossy(&sent).matches(",c=24,r=5,").count(),
         )
@@ -1397,7 +1402,7 @@ fn a_slots_picture_is_sent_again_when_its_polarity_changes() {
         graphics.sync(app, &mut Vec::new()).unwrap();
         // Twice, as a picture changed a frame after another waits a frame.
         graphics.sync(app, &mut Vec::new()).unwrap();
-        app.mod_images.unwrap()
+        app.track_page.mod_images.unwrap()
     };
     let first = ids(&mut app);
     let set = |app: &mut App, slot: usize, polarity: Polarity| {
@@ -1432,7 +1437,7 @@ fn an_envelopes_curve_is_its_mode_in_the_title_and_its_picture_follows_it() {
     let mut ids = |app: &mut App| {
         graphics.sync(app, &mut Vec::new()).unwrap();
         graphics.sync(app, &mut Vec::new()).unwrap();
-        app.mod_images.unwrap()
+        app.track_page.mod_images.unwrap()
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
@@ -1487,7 +1492,7 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
     let mut ids = |app: &mut App| {
         graphics.sync(app, &mut Vec::new()).unwrap();
         graphics.sync(app, &mut Vec::new()).unwrap();
-        app.mod_images.unwrap()
+        app.track_page.mod_images.unwrap()
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
@@ -1586,7 +1591,7 @@ fn a_drum_slot_strikes_onto_a_body_with_its_own_settings_ratchet_and_picture() {
     let mut ids = |app: &mut App| {
         graphics.sync(app, &mut Vec::new()).unwrap();
         graphics.sync(app, &mut Vec::new()).unwrap();
-        app.mod_images.unwrap()
+        app.track_page.mod_images.unwrap()
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
@@ -1660,7 +1665,7 @@ fn an_lpg_slot_has_no_mode_and_its_own_attack_decay_colour_and_reset() {
     let mut ids = |app: &mut App| {
         graphics.sync(app, &mut Vec::new()).unwrap();
         graphics.sync(app, &mut Vec::new()).unwrap();
-        app.mod_images.unwrap()
+        app.track_page.mod_images.unwrap()
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
@@ -2129,7 +2134,7 @@ fn a_track_slots_map_is_sent_with_a_dot_at_the_last_note() {
     let (synced, placed) = frame(&mut app, &mut graphics);
     assert!(synced.contains("a=T"), "its map is sent");
     assert_eq!(placed, "", "no note yet, so no dot");
-    let corner = app.lfo_cycles_at[3].expect("its map is placed");
+    let corner = app.track_page.lfo_cycles_at[3].expect("its map is placed");
     // The engine says the last note was half way along its velocities, and so half way up.
     app.live = Some(LiveValues {
         mods: std::array::from_fn(|slot| (slot == 3).then(|| LfoNow::along(0.5, 0.5))),
