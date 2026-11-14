@@ -462,7 +462,7 @@ fn a_tick_on_a_sound_page_setting_moves_its_fine_digits() {
 #[test]
 fn a_tick_on_the_tempo_moves_its_fine_part() {
     let (mut app, _realtime) = app_with(&[NOTE]);
-    press(&mut app, " 9ggjj");
+    press(&mut app, " 9ggjjj");
     assert_eq!(
         app.project_control(),
         vt_tui::project_page::ProjectControl::Bpm
