@@ -135,9 +135,6 @@ const PLAYHEADS_KEPT: Duration = Duration::from_millis(250);
 /// so only a few are ever waiting; these are for when it has stopped.
 const SENT_KEPT: usize = 64;
 
-/// Why `:e` and `:new` refused, and the ways on.
-pub(crate) const UNSAVED_OPEN: &str = "Unsaved changes: :w to save, or :e! to discard them";
-const UNSAVED_NEW: &str = "Unsaved changes: :w to save, or :new! to discard them";
 /// What `:w` says to a read-only song in its own folder (decision 313).
 const READ_ONLY: &str = "This song is read-only: :w path saves a copy, :w! writes over it";
 
@@ -494,6 +491,16 @@ const KEYS_NOTES: &str = "awsedf";
 /// The longest a typed label is: a slot's digit and 4 letters.
 const LONGEST_LABEL: usize = 5;
 impl App {
+    /// Why `:e`, `:new` or `:q` refused unsaved changes, and the ways on: `or` is the forced
+    /// command and what it does. A read-only song's `:w` refuses too, so it's offered `:w path`.
+    pub(crate) fn unsaved(&self, or: &str) -> String {
+        if self.read_only {
+            format!("Unsaved changes to a read-only song: :w path to save a copy, or {or}")
+        } else {
+            format!("Unsaved changes: :w to save, or {or}")
+        }
+    }
+
     /// Start with a song, its project folder if it has one, and a connection to the engine.
     pub fn new(
         song: Song,

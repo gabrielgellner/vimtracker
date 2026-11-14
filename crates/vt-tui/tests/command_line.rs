@@ -107,10 +107,10 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     assert_eq!(
         menu(&app).0.len(),
         6,
-        "the settings, and readonly and noreadonly"
+        "the settings, and readonly and readwrite"
     );
     tap(&mut app, "r");
-    assert_eq!(menu(&app).0, ["root=", "readonly"]);
+    assert_eq!(menu(&app).0, ["root=", "readonly", "readwrite"]);
     special(&mut app, KeyCode::Esc);
     assert!(app.command_menu.is_none());
     assert_eq!(

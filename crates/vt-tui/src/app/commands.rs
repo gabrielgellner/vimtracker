@@ -18,7 +18,7 @@ use vt_model::song::{Lane, Song};
 
 use crate::input::command::Line;
 
-use super::{App, Cursor, READ_ONLY, UNSAVED_NEW, UNSAVED_OPEN, folder_name, live_from, name_song};
+use super::{App, Cursor, READ_ONLY, folder_name, live_from, name_song};
 
 impl App {
     /// Run a command line.
@@ -40,7 +40,7 @@ impl App {
                 force,
             } => self.new_project(&path, force),
             Line::New { path: None, force } if self.dirty && !force => {
-                self.status = UNSAVED_NEW.to_owned();
+                self.status = self.unsaved(":new! to discard them");
             }
             Line::New { path: None, force } => {
                 let command = if force { "new!" } else { "new" };
@@ -259,7 +259,7 @@ impl App {
 
     pub(super) fn quit(&mut self, force: bool) {
         if self.dirty && !force {
-            self.status = "Unsaved changes: use :w to save, or :q! to quit anyway".to_owned();
+            self.status = self.unsaved(":q! to quit anyway");
         } else {
             self.forget_autosave();
             self.should_quit = true;
@@ -315,7 +315,7 @@ impl App {
         }
     }
 
-    /// `:set readonly` and `:set noreadonly`. Like the scale, it isn't an edit to undo, but it's
+    /// `:set readonly` and `:set readwrite`. Like the scale, it isn't an edit to undo, but it's
     /// saved with the song, so switching it marks the song changed.
     fn set_read_only(&mut self, on: bool) {
         if self.read_only != on {
@@ -332,7 +332,7 @@ impl App {
     /// Open a project. Forced, unsaved changes are thrown away, autosave and all, as `:q!` does.
     fn open(&mut self, path: &Path, force: bool) {
         if self.dirty && !force {
-            self.status = UNSAVED_OPEN.to_owned();
+            self.status = self.unsaved(":e! to discard them");
             return;
         }
         match project::load_song(path) {
@@ -355,7 +355,7 @@ impl App {
     /// Start a project. Forced, unsaved changes are thrown away, autosave and all.
     fn new_project(&mut self, path: &Path, force: bool) {
         if self.dirty && !force {
-            self.status = UNSAVED_NEW.to_owned();
+            self.status = self.unsaved(":new! to discard them");
             return;
         }
         let song = Song {

@@ -6,7 +6,7 @@
 | `:w` | Save |
 | `:w path` | Save to a new folder, with a copy of every sample |
 | `:w!` | Save, even over a read-only song |
-| `:set ro`, `:set noro` | Make the song read-only, or not |
+| `:set ro`, `:set rw` | Make the song read-only, or not |
 | `:e path` | Open a project |
 | `:e` | Choose a project to open |
 | `:e! path`, `:e!` | The same, discarding changes |
@@ -57,9 +57,12 @@ window's title says so.
 *   `:w path` saves a copy in a new folder, which isn't read-only, so you carry on in it
     and `:w` saves there from then on.
 *   `:w!` writes over it anyway, on purpose, and it stays read-only.
-*   `:set readonly` or `:set ro` makes a song read-only, and `:set noreadonly` or
-    `:set noro` lets `:w` write over it again. Either is an unsaved change, saved with
-    the song, and isn't undone with `u`. The project page's `Read-only` row does the same.
+*   `:set readonly` or `:set ro` makes a song read-only, and `:set readwrite` or
+    `:set rw` lets `:w` write over it again; Vim's `:set noro` does too. Either is an
+    unsaved change, saved with the song, and isn't undone with `u`. The project page's
+    `Read-only` row does the same.
+*   With unsaved changes, `:e`, `:new` and `:q` refuse as ever, and offer `:w path` to
+    save a copy rather than `:w`.
 
 It's kept in `song.ron` rather than as the file's permission, which git doesn't keep.
 Autosave still writes a read-only song's work beside it, and restoring it after a crash
