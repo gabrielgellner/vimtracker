@@ -201,6 +201,11 @@ pub struct AudioState {
     /// What's chosen, which the system's own choices fill in.
     pub choice: AudioChoice,
     pub devices: Vec<DeviceInfo>,
+    /// The inputs the recorder can hear, the one open by name, if one is, and how long from the
+    /// sound reaching it to its callback, in microseconds.
+    pub inputs: Vec<DeviceInfo>,
+    pub input: Option<String>,
+    pub input_latency_us: u64,
     /// The slowdown check's time at full speed, measured as the program starts, for each stream
     /// it opens.
     pub full_speed: Duration,
@@ -352,6 +357,8 @@ pub struct App {
     pub(crate) now: Instant,
     /// Live recording, while it's armed.
     pub(crate) recording: Option<Recording>,
+    /// The recorder: what `Space R` records, and the recording going on.
+    pub sampling: crate::sampling::Sampling,
     /// The main output's level.
     pub meter: Meter,
     /// How far each FX slot of the cursor's track has turned down lately, in dB, for the mark its
@@ -615,6 +622,7 @@ impl App {
             report_at: Instant::now(),
             now: Instant::now(),
             recording: None,
+            sampling: crate::sampling::Sampling::default(),
             meter: Meter::default(),
             slot_reduction: [crate::meter::Held::new(0.0); vt_model::insert::INSERTS],
             reduction_history: crate::meter::ReductionHistory::default(),
@@ -703,6 +711,8 @@ impl App {
     /// solos stay, and the transport is stopped, as the new engine starts that way.
     pub fn reconnect(&mut self, handle: Handle, samples: Arc<SamplePool>, rate: u32) {
         self.handle = handle;
+        // The engine recording is gone, and its recording with it.
+        self.lose_sampling();
         // An analysis is of the file at its own rate, so it's the same at the new one.
         let mut samples = SamplePool::clone(&samples);
         samples.keep_analyses(&self.samples);
@@ -1063,6 +1073,7 @@ impl App {
         self.tick_roto();
         self.wheel_frame(now);
         self.follow_recording();
+        self.follow_sampling();
         let working = self.loader.is_waiting() || self.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
     }

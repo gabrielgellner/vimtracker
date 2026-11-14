@@ -11,16 +11,15 @@
 use std::sync::Arc;
 
 use crate::bank::{BankEntry, MARK_COUNT, MARK_LETTERS, PlayParams, SliceParams, Warp, mark_index};
-use crate::sample::SampleData;
-use crate::samples::{SampleId, SamplePool};
+use crate::samples::{SampleId, SamplePool, Sound};
 
 /// One entry, ready to play.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Playable {
     /// Its place in the pool, which a voice keeps reading until its note ends.
     pub sample: SampleId,
-    /// Its sound at the program's rate.
-    pub frames: Arc<SampleData>,
+    /// Its sound at the program's rate, loaded whole or still being recorded.
+    pub sound: Sound,
     /// What it can play, by slice number: the whole entry alone, if it has no slices.
     pub spans: Box<[Span]>,
     /// The whole entry from its start to its end, as it plays with no slice's own settings, which
@@ -113,13 +112,17 @@ impl Span {
 
 impl Playable {
     /// Work out how an entry plays, if its file is in the pool. Points in the file's own frames
-    /// become the pool's, and any past the end are brought back to it.
+    /// become the pool's, and any past the end are brought back to it. A recording still being
+    /// written is as long as it can grow, and a voice playing it stops at the last frame written.
     pub fn of(entry: &BankEntry, samples: &SamplePool) -> Option<Self> {
         let source = entry.source()?;
         let sample = samples.id_of(&source.path)?;
-        let frames = Arc::clone(samples.shared(sample)?);
+        let sound = samples.sound(sample)?.clone();
         let rates = samples.rates(sample);
-        let length = frames.frames.len() as u64;
+        let length = match &sound {
+            Sound::Loaded(data) => data.frames.len() as u64,
+            Sound::Growing(growing) => growing.capacity(),
+        };
         let at = |frame: u64| rates.loaded_frame(frame).min(length);
         let points = &entry.edit.points;
         let play = entry.edit.play;
@@ -208,7 +211,7 @@ impl Playable {
         };
         Some(Self {
             sample,
-            frames,
+            sound,
             spans,
             whole: span(start, end, &SliceParams::default(), false),
             start,
@@ -294,6 +297,7 @@ pub fn normalize_peak(entry: &BankEntry, samples: &SamplePool) -> Option<f32> {
 mod tests {
     use super::*;
     use crate::bank::{ContentHash, Loop, MOST_PAN};
+    use crate::sample::SampleData;
     use crate::samples::Rates;
 
     fn pool(rates: Rates) -> SamplePool {
@@ -301,6 +305,19 @@ mod tests {
         let frames = vec![[0.0; 2]; 48_000];
         pool.insert_converted("file", SampleData { frames }, rates);
         pool
+    }
+
+    #[test]
+    fn a_recording_still_growing_plays_as_far_as_it_can_grow() {
+        let mut pool = SamplePool::default();
+        let growing = Arc::new(crate::growing::Growing::with_chunks(64, 1000));
+        pool.insert_growing("recording", Arc::clone(&growing));
+        let mut entry = BankEntry::of_file("recording", ContentHash::UNKNOWN);
+        entry.edit.points.start = 100;
+        let playable = Playable::of(&entry, &pool).unwrap();
+        let span = playable.span(0, false);
+        assert_eq!((span.frames, span.start, span.end), (1024, 100, 1024));
+        assert!(playable.sound.same(&Sound::Growing(growing)));
     }
 
     #[test]

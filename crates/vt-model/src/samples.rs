@@ -3,6 +3,10 @@
 //! The pool only grows during a session and IDs stay stable, so a playing voice can keep its
 //! sample until it ends. Replaced samples stay in memory until the project reloads.
 //!
+//! A sample being recorded is in the pool too, as frames that grow while they're played, until
+//! it's finished and its sound takes their place under the same ID, so a voice playing it carries
+//! on.
+//!
 //! It also keeps each file's analysis, by content, once it's read or worked out.
 
 use std::collections::HashMap;
@@ -11,6 +15,7 @@ use std::sync::Arc;
 
 use crate::analysis::Analysis;
 use crate::bank::ContentHash;
+use crate::growing::Growing;
 use crate::sample::{SampleData, SampleError, load_sample_with_info};
 
 /// A sample's stable place in the pool.
@@ -46,10 +51,97 @@ impl Rates {
     }
 }
 
+/// A sample's sound: loaded whole, or still being written.
+#[derive(Debug, Clone)]
+pub enum Sound {
+    Loaded(Arc<SampleData>),
+    Growing(Arc<Growing>),
+}
+
+/// Loaded sounds are equal by their frames, and growing ones only if they're the same.
+impl PartialEq for Sound {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Loaded(one), Self::Loaded(other)) => one == other,
+            (Self::Growing(one), Self::Growing(other)) => Arc::ptr_eq(one, other),
+            _ => false,
+        }
+    }
+}
+
+impl Sound {
+    /// Whether it's the very same sound as another, not only the same frames.
+    pub fn same(&self, other: &Sound) -> bool {
+        match (self, other) {
+            (Self::Loaded(one), Self::Loaded(other)) => Arc::ptr_eq(one, other),
+            (Self::Growing(one), Self::Growing(other)) => Arc::ptr_eq(one, other),
+            _ => false,
+        }
+    }
+
+    /// Its frames, to read.
+    #[inline]
+    pub fn frames(&self) -> Frames<'_> {
+        match self {
+            Self::Loaded(data) => Frames::Loaded(&data.frames),
+            Self::Growing(growing) => Frames::Growing(growing),
+        }
+    }
+
+    /// The whole sound, once it's loaded.
+    pub fn loaded(&self) -> Option<&Arc<SampleData>> {
+        match self {
+            Self::Loaded(data) => Some(data),
+            Self::Growing(_) => None,
+        }
+    }
+}
+
+/// A sample's frames as a voice reads them, loaded or growing.
+#[derive(Debug, Clone, Copy)]
+pub enum Frames<'a> {
+    Loaded(&'a [[f32; 2]]),
+    Growing(&'a Growing),
+}
+
+impl<'a> From<&'a SampleData> for Frames<'a> {
+    fn from(data: &'a SampleData) -> Self {
+        Self::Loaded(&data.frames)
+    }
+}
+
+impl Frames<'_> {
+    /// A frame and the one after it, for interpolating between them, if the first is there: the
+    /// first again for the second at the end. A growing sample has only what's written.
+    #[inline]
+    pub fn pair(self, index: usize) -> Option<([f32; 2], [f32; 2])> {
+        match self {
+            Self::Loaded(frames) => {
+                let first = *frames.get(index)?;
+                Some((first, frames.get(index + 1).copied().unwrap_or(first)))
+            }
+            Self::Growing(growing) => growing.pair(index),
+        }
+    }
+
+    /// How many frames can be read now.
+    pub fn len(self) -> usize {
+        match self {
+            Self::Loaded(frames) => frames.len(),
+            Self::Growing(growing) => growing.written() as usize,
+        }
+    }
+
+    /// Whether none can be read yet.
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+}
+
 /// Every sample loaded this session.
 #[derive(Debug, Clone, Default)]
 pub struct SamplePool {
-    samples: Vec<Arc<SampleData>>,
+    samples: Vec<Sound>,
     /// Each sample's rates, in the same order.
     rates: Vec<Rates>,
     by_path: HashMap<String, SampleId>,
@@ -90,11 +182,42 @@ impl SamplePool {
         if let Some(id) = self.by_path.get(path) {
             return *id;
         }
+        self.insert_sound(path, Sound::Loaded(Arc::new(data)), rates)
+    }
+
+    /// Add a sample that's still being written, at the program's rate, or return the ID of what's
+    /// already loaded at this path.
+    pub fn insert_growing(&mut self, path: &str, growing: Arc<Growing>) -> SampleId {
+        self.insert_sound(path, Sound::Growing(growing), Rates::SAME)
+    }
+
+    fn insert_sound(&mut self, path: &str, sound: Sound, rates: Rates) -> SampleId {
+        if let Some(id) = self.by_path.get(path) {
+            return *id;
+        }
         let id = self.samples.len() as SampleId;
-        self.samples.push(Arc::new(data));
+        self.samples.push(sound);
         self.rates.push(rates);
         self.by_path.insert(path.to_owned(), id);
         id
+    }
+
+    /// Put a growing sample's finished sound in its place, under the same ID, so a voice playing
+    /// it carries on. Returns false if the ID isn't a growing sample.
+    pub fn finish_growing(&mut self, id: SampleId, data: SampleData) -> bool {
+        match self.samples.get_mut(id as usize) {
+            Some(sound @ Sound::Growing(_)) => {
+                *sound = Sound::Loaded(Arc::new(data));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Forget a path, as for a recording dropped, so nothing new finds it. Its sound stays under
+    /// its ID, as a replaced sample's does, until the pool is made again.
+    pub fn forget(&mut self, path: &str) {
+        self.by_path.remove(path);
     }
 
     /// Read a file at the program's rate and add it under a path, keeping its own rate, unless the
@@ -122,14 +245,34 @@ impl SamplePool {
         self.by_path.get(path).copied()
     }
 
-    /// A sample by ID.
+    /// A sample by ID, once it's loaded whole.
     pub fn get(&self, id: SampleId) -> Option<&SampleData> {
-        self.samples.get(id as usize).map(Arc::as_ref)
+        self.shared(id).map(Arc::as_ref)
     }
 
-    /// A sample by ID, shared, so whoever holds it can tell it from another later given the same ID.
+    /// A sample by ID, shared, so whoever holds it can tell it from another later given the same
+    /// ID, once it's loaded whole.
     pub fn shared(&self, id: SampleId) -> Option<&Arc<SampleData>> {
+        self.samples.get(id as usize)?.loaded()
+    }
+
+    /// A sample's sound by ID, loaded or growing.
+    pub fn sound(&self, id: SampleId) -> Option<&Sound> {
         self.samples.get(id as usize)
+    }
+
+    /// A sample's frames by ID, loaded or growing, as a voice reads them.
+    #[inline]
+    pub fn frames(&self, id: SampleId) -> Option<Frames<'_>> {
+        self.samples.get(id as usize).map(Sound::frames)
+    }
+
+    /// A sample still being written, by ID.
+    pub fn growing(&self, id: SampleId) -> Option<&Arc<Growing>> {
+        match self.samples.get(id as usize)? {
+            Sound::Growing(growing) => Some(growing),
+            Sound::Loaded(_) => None,
+        }
     }
 
     /// The number of samples loaded.

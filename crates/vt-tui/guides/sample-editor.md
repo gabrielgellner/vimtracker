@@ -2,7 +2,8 @@
 
 The sample page shows the current track's sample as a big waveform, to hear it,
 slice it and set its points. Nothing here writes audio: every edit changes how
-the sample plays, and `u` takes it back.
+the sample plays, and `u` takes it back. Recording, `Space R`, is the one thing that
+writes a new file.
 
 ## Opening it
 
@@ -130,6 +131,51 @@ Vim's `iw` and `ip` select a word and a paragraph; with a count, so many.
 `:` while selecting starts the line with `'<,'>`, so `:'<,'>slice transients`
 slices only what's selected. `gv` selects it again, and `'<` and `'>`
 go to its first and last frame. `''` goes back to where the last jump left.
+
+## Recording
+
+`Space R` records the master into a new sample, from any view, and `Space R` again
+stops it. It's resampling, as on an Octatrack, an M8 or a Digitakt: play a pattern, record
+what comes out, and slice and play the result. The new sample goes in the bank's first free
+place as it starts, so a step's `SMP` can play it while it's still recording. `R` on the
+sample page does the same, and the page shows the recording once it stops.
+
+It starts and stops on the next bar, so a loop comes out a whole number of bars long, and
+its `Steps` says how many steps it lasts, ready for `Play`'s `Tempo`. Pressed with the song
+stopped, it waits, armed, and starts as the song does. The status line shows a dim `󰔟 REC 01`
+while it waits, and a red `󰑊 01 3.2s` while it records.
+
+`:record` chooses what's recorded and when, then starts. Its words go in any order:
+
+| Command | Records |
+|---|---|
+| `:record` | As chosen last: to start with, the master |
+| `:record master` | The master, after its limiter |
+| `:record track` | The cursor's track, after its fader |
+| `:record 3` | Track 03 |
+| `:record input` | The input the audio page chooses |
+| `:record now` | Starting and stopping at once |
+| `:record beat` | Starting and stopping on a beat |
+| `:record bar` | Starting and stopping on a bar, to start with |
+| `:record stop` | Stop, as `Space R` does |
+| `:record cancel` | Throw the recording away |
+
+A track is recorded as it goes to the mix or its group, after its fader and mute.
+What `:record` chooses stays for `Space R` until you quit, and isn't saved in the song.
+
+A recording keeps a quarter of a second from before it started and after it stopped, so
+the sample's start and end can be moved out into real sound, and a loop has some to fade in
+from. The input is recorded late by the time sound takes out through the speakers and back
+in, as the devices report it, so it lines up with the song.
+
+When it stops, it's written to the project's `samples/` folder with a name of its own, in
+mono if its right side is silent or the same as its left. It keeps the level it was
+recorded at: `:normalize` brings it up, as a gain. `u` takes the whole recording back.
+A recording thrown away is never written, and one the saved song doesn't play is deleted
+when you quit. A song not saved yet records into the system's temporary folder, and `:w`
+copies what it plays into its own `samples/`.
+
+A recording lasts at most ten minutes. Changing the audio device throws away one going on.
 
 ## Which mode you're in
 

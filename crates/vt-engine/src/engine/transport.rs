@@ -558,6 +558,7 @@ impl Engine {
     /// Stop sequencing but let everything sounding finish on its own, for a render's tail.
     pub fn let_ring(&mut self) {
         self.transport = Transport::Stopped;
+        self.recorder.transport_stopped();
         for track in self.tracks.iter_mut() {
             track.voice.release_if_held();
         }
@@ -569,6 +570,8 @@ impl Engine {
             track.stop();
         }
         self.transport = to;
+        // A recording waiting to stop on the grid stops now, as no line is coming round.
+        self.recorder.transport_stopped();
         self.realign_waiting = false;
         // A loop waiting for the grid is the loop from now, as there's no line coming round.
         if let Some(sections) = self.loop_cued.take() {

@@ -27,6 +27,10 @@ pub enum AudioError {
     Channels(u16),
     #[error("audio device error: {0}")]
     Device(String),
+    #[error("the chosen input isn't there")]
+    NoInput,
+    #[error("the chosen input can't run at the output's {0} Hz")]
+    InputRate(u32),
 }
 
 /// Counters the callback updates and the status line reads.
@@ -46,6 +50,9 @@ pub struct AudioStats {
     /// How many times slower than full speed the system is running the callback, in thousandths,
     /// as it last looked, or 0 before it has.
     pub slowdown: AtomicU64,
+    /// How long from the sound reaching the input to its callback, in microseconds, as the input
+    /// device reports it, while one is open.
+    pub input_latency: AtomicU64,
 }
 
 impl AudioStats {
@@ -57,6 +64,7 @@ impl AudioStats {
             &self.load,
             &self.latency,
             &self.slowdown,
+            &self.input_latency,
         ] {
             counter.store(0, Ordering::Relaxed);
         }
@@ -310,6 +318,10 @@ pub struct AudioChoice {
     pub rate: Option<u32>,
     /// In frames.
     pub buffer: Option<u32>,
+    /// The input the recorder can record, by its device's id, or none: no input is opened until
+    /// one is chosen, so the system never asks to let the program hear a microphone it won't use.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input: Option<String>,
 }
 
 impl AudioChoice {
@@ -428,6 +440,119 @@ pub fn devices() -> Vec<DeviceInfo> {
             })
         })
         .collect()
+}
+
+/// Every input the recorder can record: one with f32 at any rate, in mono or stereo. The rates
+/// listed are those it can match the output at.
+pub fn input_devices() -> Vec<DeviceInfo> {
+    let host = cpal::default_host();
+    let default = host
+        .default_input_device()
+        .and_then(|device| device.id().ok());
+    let Ok(found) = host.input_devices() else {
+        return Vec::new();
+    };
+    found
+        .filter_map(|device| {
+            let id = device.id().ok()?;
+            let rates: Vec<u32> = STANDARD_RATES
+                .into_iter()
+                .filter(|rate| input_config(&device, *rate).is_some())
+                .collect();
+            if rates.is_empty() {
+                return None;
+            }
+            Some(DeviceInfo {
+                name: device
+                    .description()
+                    .map_or_else(|_| id.to_string(), |about| about.name().to_owned()),
+                default: default.as_ref() == Some(&id),
+                id: id.to_string(),
+                rates,
+                buffers: Vec::new(),
+            })
+        })
+        .collect()
+}
+
+/// An input's configuration at a rate, in f32, its first two channels or its one.
+fn input_config(device: &cpal::Device, rate: u32) -> Option<StreamConfig> {
+    device.supported_input_configs().ok()?.find_map(|config| {
+        (config.sample_format() == SampleFormat::F32)
+            .then(|| config.try_with_sample_rate(rate))
+            .flatten()
+            .map(StreamConfig::from)
+    })
+}
+
+/// A chosen input, before its stream starts.
+pub struct Input {
+    device: cpal::Device,
+    config: StreamConfig,
+    /// What it's called, for the audio page.
+    pub name: String,
+}
+
+impl Input {
+    /// Open an input by its id at the output's rate, as the recorder hears it frame for frame with
+    /// what plays. One that isn't there, or can't run at that rate, isn't opened.
+    pub fn open(id: &str, rate: u32) -> Result<Self, AudioError> {
+        let host = cpal::default_host();
+        let device = id
+            .parse()
+            .ok()
+            .and_then(|id: cpal::DeviceId| host.device_by_id(&id))
+            .ok_or(AudioError::NoInput)?;
+        let config = input_config(&device, rate).ok_or(AudioError::InputRate(rate))?;
+        let name = device
+            .description()
+            .map_or_else(|_| "Input".to_owned(), |about| about.name().to_owned());
+        Ok(Self {
+            device,
+            config,
+            name,
+        })
+    }
+
+    /// Start hearing it: each frame goes to the output's callback as interleaved stereo, a mono
+    /// input's one channel on both sides. What doesn't fit, as when the output has stopped, is
+    /// dropped. It stops when the returned stream is dropped.
+    pub fn start(
+        self,
+        mut into: rtrb::Producer<f32>,
+        stats: Arc<AudioStats>,
+    ) -> Result<cpal::Stream, AudioError> {
+        let channels = usize::from(self.config.channels.max(1));
+        let stream = self
+            .device
+            .build_input_stream(
+                self.config,
+                move |data: &[f32], info: &cpal::InputCallbackInfo| {
+                    let when = info.timestamp();
+                    let latency = when.callback.duration_since(when.capture);
+                    stats
+                        .input_latency
+                        .store(latency.as_micros() as u64, Ordering::Relaxed);
+                    for frame in data.chunks_exact(channels) {
+                        if into.slots() < 2 {
+                            break;
+                        }
+                        let left = frame[0];
+                        let right = frame.get(1).copied().unwrap_or(left);
+                        let _ = into.push(left);
+                        let _ = into.push(right);
+                    }
+                },
+                // Never print from here. An input that goes away only stops being heard.
+                |_| {},
+                None,
+            )
+            .map_err(|e| AudioError::Device(e.to_string()))?;
+        stream
+            .play()
+            .map_err(|e| AudioError::Device(e.to_string()))?;
+        Ok(stream)
+    }
 }
 
 /// A chosen device, before its stream starts.
@@ -802,6 +927,7 @@ mod tests {
             device: Some("coreaudio:BuiltIn".to_owned()),
             rate: Some(44_100),
             buffer: Some(128),
+            input: Some("coreaudio:Mic".to_owned()),
         };
         let text = ron::to_string(&choice).unwrap();
         assert_eq!(ron::from_str::<AudioChoice>(&text).unwrap(), choice);

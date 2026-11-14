@@ -73,7 +73,7 @@ impl App {
         self.clamp_cursor();
     }
 
-    pub(super) fn after_history(&mut self) {
+    pub(crate) fn after_history(&mut self) {
         self.dirty = true;
         self.fit_levels();
         self.cursor.track = self.cursor.track.min(self.song().tracks.len() - 1);

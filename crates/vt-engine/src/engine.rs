@@ -15,6 +15,7 @@ use crate::gens::{GenHeard, GenReport, GenScratch};
 use crate::mixer::Reading;
 use crate::preview::{Files, Previews};
 use crate::published::Published;
+use crate::recorder::Recorder;
 use crate::timing::Stopwatch;
 use crate::track_state::{Keys, MasterRest, SongTime, TrackState};
 
@@ -22,6 +23,7 @@ mod block;
 mod controls;
 mod modulation;
 mod previews;
+mod recording;
 mod scheduling;
 mod steps;
 mod transport;
@@ -193,6 +195,8 @@ pub struct Engine {
     rested: RestingBuses,
     /// What moving generators render into, taken from the version playing.
     gens: GenScratch,
+    /// The recorder, listening to the master, a track or the input.
+    recorder: Recorder,
 }
 
 impl Engine {
@@ -245,6 +249,7 @@ impl Engine {
             resting: true,
             rested: RestingBuses::default(),
             gens: GenScratch::default(),
+            recorder: Recorder::new(rate),
         };
         engine.current.scratch.exchange(&mut engine.gens);
         engine.follow_levels();

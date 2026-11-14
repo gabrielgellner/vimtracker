@@ -312,6 +312,12 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     or the Mac is hot (`PowerState`, through `objc2-foundation`), never from the callback. A
     change on the audio page builds a new engine at the new rate and connects it afresh, keeping
     the song and its undo.
+*   **The input callback** is `cpal`'s input thread, also in `audio.rs`, only while the audio page's
+    `Input` row chooses one (`Off` to start with). It runs at the output's rate and pushes each
+    frame, as interleaved stereo, into `INPUT_QUEUE`, which the output's callback reads a block at
+    a time into the recorder, dropping the oldest past `INPUT_MOST_WAITING` so two drifting clocks
+    can't make it later and later. It records the time from capture to its callback in
+    `AudioStats::input_latency`, which a recording of the input is moved by.
 *   **The full-speed thread** (`audio::measure_full_speed`) times the kernel for 100 ms as the
     program starts, while the song loads, at the user-interactive QoS that asks for a performance
     core, and keeps the fastest time it has ever seen in `full-speed.txt` in the cache folder, so
@@ -596,6 +602,20 @@ a slice's settings cost the voice nothing; and `SLI 'a` is looked up rather than
 `vt-engine` names nothing from `vt_model::bank`.
 
 **Decisions:** 94, 97, 98, 105, 111, 288, 289 and 300.
+
+**A sample still recording.** The pool's samples are each a `Sound`: loaded whole, or a
+`vt_model::growing::Growing` the recorder is writing, fixed chunks with the next chunk's first
+frames on each end, put in place on the edit thread ahead of the writer (decision 338). A voice
+reads either through `Frames`, a frame and the next for its interpolation, and reads only what's
+written; its `Playable` is as long as the recording can grow. Once it stops, the app writes the
+file and puts its loaded sound in the same place in the pool, so a voice playing it carries on.
+
+**The recorder** (`recorder.rs`) is the engine's own: it hears the master after its limiter, one
+track's output or the input's block, once a frame, keeping the last quarter second in a ring for
+the margin before a start. `Handle::record` sends the `Growing` on `TAKE_QUEUE` and its source,
+timing and latency as a `Command`; a start or a stop on the grid is placed by `fire_step` on the
+frame its step falls on. Each start and end comes back on `RECORDER_QUEUE`, an end with the
+`Growing`, so nothing is freed on the audio thread.
 
 ### The engine's block
 

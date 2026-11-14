@@ -1,4 +1,4 @@
-//! The audio page, the project page's Audio sub-page: this machine's output playing, its rate and buffer, how it's keeping up, whether
+//! The audio page, the project page's Audio sub-page: this machine's output playing, its rate and buffer, the input the recorder hears, how it's keeping up, whether
 //! vimtracker drives the Roto-Control, and whether the mouse wheel turns the cursor's setting.
 
 use ratatui::Frame;
@@ -39,6 +39,11 @@ fn value(app: &App, row: AudioRow) -> String {
                 None => "The device's own".to_owned(),
             }
         }
+        AudioRow::Input => match (&audio.input, &audio.choice.input) {
+            (Some(name), _) => format!("{name}, heard only by the recorder"),
+            (None, Some(_)) => "Chosen, but it couldn't be opened".to_owned(),
+            (None, None) => "Off".to_owned(),
+        },
         AudioRow::Roto => app.roto.connection.describe(),
         AudioRow::Wheel if app.wheel.setting.on => {
             "Scrolling turns the setting under the cursor. Shift-drag selects text".to_owned()

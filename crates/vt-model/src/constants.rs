@@ -72,6 +72,16 @@ pub const COMMAND_QUEUE: usize = 64;
 /// One-off files on their way to the callback to be heard, as the sample browser sends them, and
 /// on their way back to be freed.
 pub const FILE_QUEUE: usize = 4;
+/// Recordings on their way to the callback's recorder.
+pub const TAKE_QUEUE: usize = 4;
+/// The recorder's starts and ends on their way back, each end with its recording to be freed.
+pub const RECORDER_QUEUE: usize = 16;
+/// The audio input's samples on their way to the callback, interleaved stereo: about a sixth of a
+/// second at 48 kHz, as the input's callback and the output's take turns.
+pub const INPUT_QUEUE: usize = 16_384;
+/// The most input frames kept waiting for the output's callback. Past it, the oldest are dropped,
+/// so the two devices' clocks drifting apart can't make the input later and later.
+pub const INPUT_MOST_WAITING: usize = 4096;
 /// Playhead and load messages. New ones are dropped when it is full.
 pub const TELEMETRY_QUEUE: usize = 64;
 /// The pitch each mod slot moved a row's note by, on their way to the app for `Space g A`. New

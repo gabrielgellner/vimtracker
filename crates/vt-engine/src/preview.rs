@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use vt_model::constants::PREVIEW_VOICES;
 use vt_model::sample::SampleData;
-use vt_model::samples::{SampleId, SamplePool};
+use vt_model::samples::{Frames, SampleId, SamplePool};
 use vt_model::song::SynthVoice;
 
 use crate::dsp::virtual_analog::Settings;
@@ -23,10 +23,10 @@ pub type Files = [Option<Arc<SampleData>>; 2];
 
 /// A sample's sound, from the pool or from the one-off files.
 #[inline]
-fn data<'a>(samples: &'a SamplePool, files: &'a Files, id: SampleId) -> Option<&'a SampleData> {
+fn data<'a>(samples: &'a SamplePool, files: &'a Files, id: SampleId) -> Option<Frames<'a>> {
     match FILE_SAMPLES.iter().position(|file| *file == id) {
-        Some(place) => files[place].as_deref(),
-        None => samples.get(id),
+        Some(place) => files[place].as_deref().map(Frames::from),
+        None => samples.frames(id),
     }
 }
 

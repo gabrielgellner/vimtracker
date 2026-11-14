@@ -14,7 +14,7 @@
 
 use vt_model::constants::DECLICK_FRAMES;
 use vt_model::playable::Span;
-use vt_model::sample::SampleData;
+use vt_model::samples::Frames;
 use vt_model::settings::PlayMode;
 
 /// The shortest a fade at a cut can be, in frames, so a cut into the sound doesn't click.
@@ -404,7 +404,7 @@ impl Reader {
     /// The next frame, before it moves on, or none once it's past the sample. A loop's turn
     /// comes first, so the frame read is always in the loop.
     #[inline]
-    pub fn next(&mut self, data: &SampleData) -> Option<[f32; 2]> {
+    pub fn next(&mut self, data: Frames<'_>) -> Option<[f32; 2]> {
         let clock = self.tempo.and_then(|tempo| tempo.clock);
         if let Some(looping) = self.region.looping {
             match clock {
@@ -468,7 +468,7 @@ impl Reader {
 
     /// The frame at a place, or none past the sample.
     #[inline]
-    fn at(&self, data: &SampleData, place: f64) -> Option<[f32; 2]> {
+    fn at(&self, data: Frames<'_>, place: f64) -> Option<[f32; 2]> {
         at(data, &self.region, place)
     }
 
@@ -535,16 +535,16 @@ impl Reader {
     }
 }
 
-/// The frame at a place in a region, between the two either side of it, or none past the sample.
+/// The frame at a place in a region, between the two either side of it, or none past the sample,
+/// or past what's written of one still being recorded.
 #[inline]
-fn at(data: &SampleData, region: &Region, place: f64) -> Option<[f32; 2]> {
+fn at(data: Frames<'_>, region: &Region, place: f64) -> Option<[f32; 2]> {
     let frame = region.frame(place);
     if frame < 0.0 {
         return None;
     }
     let index = frame as usize;
-    let first = data.frames.get(index)?;
-    let second = data.frames.get(index + 1).unwrap_or(first);
+    let (first, second) = data.pair(index)?;
     let fraction = (frame - index as f64) as f32;
     Some([
         first[0] + (second[0] - first[0]) * fraction,
@@ -555,7 +555,9 @@ fn at(data: &SampleData, region: &Region, place: f64) -> Option<[f32; 2]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vt_model::growing::Growing;
     use vt_model::playable::LoopSpan;
+    use vt_model::sample::SampleData;
 
     /// A ramp, so each frame says where it is.
     fn ramp(frames: usize) -> SampleData {
@@ -568,7 +570,7 @@ mod tests {
     fn read(mut reader: Reader, data: &SampleData, most: usize) -> Vec<f32> {
         let mut out = Vec::new();
         while out.len() < most {
-            let Some(frame) = reader.next(data) else {
+            let Some(frame) = reader.next(data.into()) else {
                 break;
             };
             out.push(frame[0]);
@@ -683,7 +685,7 @@ mod tests {
         let data = ramp(1000);
         let mut reader = Reader::new(Some(span(0, 1000)), Cut::default());
         for _ in 0..500 {
-            reader.next(&data);
+            reader.next((&data).into());
             reader.advance(1.0);
         }
         reader.respan(span(0, 400));
@@ -692,5 +694,100 @@ mod tests {
         for pair in out.windows(2) {
             assert!(pair[1] <= pair[0] + 1.0, "it only fades");
         }
+    }
+
+    /// A sound that isn't a ramp, so interpolating between the wrong frames shows.
+    fn wobble(frames: usize) -> Vec<[f32; 2]> {
+        (0..frames)
+            .map(|at| {
+                let at = at as f32;
+                [(at * 0.37).sin(), (at * 0.11).cos() * 0.5]
+            })
+            .collect()
+    }
+
+    /// Every frame a reader gives of some frames at a speed, both sides.
+    fn read_both(mut reader: Reader, data: Frames<'_>, speed: f64) -> Vec<[f32; 2]> {
+        let mut out = Vec::new();
+        while let Some(frame) = reader.next(data) {
+            out.push(frame);
+            if !reader.advance(speed) {
+                break;
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn chunk_boundaries_read_as_one_buffer_with_interpolation_across_them() {
+        let frames = wobble(1000);
+        let growing = Growing::with_chunks(16, 1000);
+        growing.make_room(1000);
+        for frame in &frames {
+            assert!(growing.push(*frame));
+        }
+        let whole = SampleData {
+            frames: frames.clone(),
+        };
+        for speed in [1.0, 0.37, 1.73, 0.5] {
+            let span = Span::whole(1000);
+            let cut = Cut::default();
+            let from_one = read_both(Reader::new(Some(span), cut), (&whole).into(), speed);
+            let from_chunks = read_both(
+                Reader::new(Some(span), cut),
+                Frames::Growing(&growing),
+                speed,
+            );
+            assert!(from_one.len() > 500, "at {speed}");
+            assert_eq!(from_one, from_chunks, "at {speed}");
+        }
+        // Reversed and looped too, which cross the boundaries backwards and round.
+        let span = Span {
+            reverse: true,
+            loop_: Some(LoopSpan {
+                start: 100,
+                end: 300,
+                crossfade: 20,
+            }),
+            ..Span::whole(1000)
+        };
+        let cut = Cut {
+            mode: PlayMode::PingPong,
+            ..Cut::default()
+        };
+        let mut one = Reader::new(Some(span), cut);
+        let mut chunks = Reader::new(Some(span), cut);
+        for _ in 0..3000 {
+            assert_eq!(
+                one.next((&whole).into()),
+                chunks.next(Frames::Growing(&growing))
+            );
+            one.advance(0.81);
+            chunks.advance(0.81);
+        }
+    }
+
+    #[test]
+    fn a_sample_still_being_written_reads_only_what_is_written() {
+        let frames = wobble(1000);
+        let growing = Growing::with_chunks(16, 4000);
+        growing.make_room(4000);
+        for frame in &frames[..300] {
+            growing.push(*frame);
+        }
+        // Played as long as it can grow, the voice reads up to the last frame written and stops.
+        let reader = Reader::new(Some(Span::whole(growing.capacity())), Cut::default());
+        let out = read_both(reader, Frames::Growing(&growing), 1.0);
+        assert_eq!(out.len(), 300);
+        assert_eq!(out[..], frames[..300]);
+        // A note playing behind the writer hears each frame once it's written, and never one after.
+        let mut reader = Reader::new(Some(Span::whole(growing.capacity())), Cut::default());
+        let mut heard = Vec::new();
+        for frame in &frames[300..] {
+            growing.push(*frame);
+            heard.push(reader.next(Frames::Growing(&growing)).unwrap());
+            reader.advance(1.0);
+        }
+        assert_eq!(heard[..], frames[..700]);
     }
 }

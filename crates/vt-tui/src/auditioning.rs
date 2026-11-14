@@ -120,7 +120,10 @@ impl App {
     /// Play a span of the entry's frames through the cursor's track, held while its key is down.
     fn hear(&mut self, shown: &Shown, playable: &Playable, span: Span) -> bool {
         let track = self.cursor.track;
-        let frames = std::sync::Arc::clone(&playable.frames);
+        let Some(frames) = playable.sound.loaded().map(std::sync::Arc::clone) else {
+            self.status = format!("{} is still recording", shown.entry.title());
+            return false;
+        };
         if !self.handle.play_file(track, frames, Some(span)) {
             self.status =
                 "Audio has stopped, so nothing plays. Space 9 L chooses a device".to_owned();

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use vt_model::scale::{ScaleKind, parse_root};
 
 use thiserror::Error;
+use vt_engine::recorder::RecordQuantise;
 use vt_model::bank::{MAX_CENTS, MAX_SLICES, MIN_NORMALIZE, MOST_PAN, MOST_STEPS, is_mark};
 use vt_model::bloom::{MAX_BRANCHES, PATH_WORDS, Path};
 use vt_model::constants::{MAX_GROUPS, MAX_LABEL_CHARS};
@@ -13,6 +14,8 @@ use vt_model::label::{GROUP_NAME_CHARS, is_group_name, is_name};
 use vt_model::order::Order;
 use vt_model::shape::MAX_MUTATION;
 use vt_model::song::{LAUNCH_WORDS, Launch};
+
+use crate::sampling::RecordWhat;
 
 /// What `:preset` does: a sound preset for the cursor's track, or on the FX page an effect preset
 /// for the slot under the cursor.
@@ -129,6 +132,15 @@ pub enum Line {
     Normalize(Option<i16>),
     /// Start and end this track's sample where its sound does.
     Trim,
+    /// Record into a new sample: what, if it says, and when, if it says, else as set up last.
+    Record {
+        what: Option<RecordWhat>,
+        quantise: Option<RecordQuantise>,
+    },
+    /// Stop the recording going on.
+    RecordStop,
+    /// Take the recording going on back.
+    RecordCancel,
     /// Put a kit's sounds on tracks, by name or path.
     KitTracks(PathBuf),
     /// Name this track, or clear its name.
@@ -578,6 +590,10 @@ pub enum LineError {
     DelMarks,
     #[error(":normalize takes a peak level in dBFS from -60 to 0, such as -0.3, or off")]
     Normalize,
+    #[error(
+        ":record takes master, track, a track's number or input, and now, beat or bar, or stop or cancel"
+    )]
+    Record,
     #[error(":track takes add [n] or del")]
     Track,
     #[error(
@@ -792,6 +808,41 @@ pub enum Takes {
     Patch,
 }
 
+/// The words `:record` takes, beside a track's number.
+const RECORD_WORDS: &[&str] = &[
+    "master", "track", "input", "now", "beat", "bar", "stop", "cancel",
+];
+
+/// `:record`'s words, in any order: what to record and when, or `stop` or `cancel` alone.
+fn record(argument: &str) -> Result<Line, LineError> {
+    match argument {
+        "stop" => return Ok(Line::RecordStop),
+        "cancel" => return Ok(Line::RecordCancel),
+        _ => {}
+    }
+    let (mut what, mut quantise) = (None, None);
+    for word in argument.split_whitespace() {
+        let (said_what, said_when) = match word {
+            "master" => (Some(RecordWhat::Master), None),
+            "track" => (Some(RecordWhat::ThisTrack), None),
+            "input" => (Some(RecordWhat::Input), None),
+            "now" => (None, Some(RecordQuantise::Now)),
+            "beat" => (None, Some(RecordQuantise::Beat)),
+            "bar" => (None, Some(RecordQuantise::Bar)),
+            number => match number.parse::<usize>() {
+                Ok(number) => (Some(RecordWhat::Track(number)), None),
+                Err(_) => return Err(LineError::Record),
+            },
+        };
+        if said_what.is_some() && what.is_some() || said_when.is_some() && quantise.is_some() {
+            return Err(LineError::Record);
+        }
+        what = what.or(said_what);
+        quantise = quantise.or(said_when);
+    }
+    Ok(Line::Record { what, quantise })
+}
+
 /// A command: its name, what it does, what it takes, and how its argument is read.
 #[derive(Debug, Clone, Copy)]
 pub struct Command {
@@ -901,7 +952,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 48] = [
+pub const COMMANDS: [Command; 49] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -1063,6 +1114,12 @@ pub const COMMANDS: [Command; 48] = [
                 .map(|level| Line::Normalize(Some((level * 100.0).round() as i16)))
                 .ok_or(LineError::Normalize),
         },
+    },
+    Command {
+        name: "record",
+        meaning: "Record the master, a track or the input into a new sample, now or on the beat or bar",
+        takes: Takes::Words(RECORD_WORDS),
+        parse: record,
     },
     Command {
         name: "trim",
@@ -1676,6 +1733,31 @@ mod tests {
         assert_eq!(parse("normalize -61"), Err(LineError::Normalize));
         assert_eq!(parse("normalize loud"), Err(LineError::Normalize));
         assert_eq!(parse("trim"), Ok(Line::Trim));
+        assert_eq!(
+            parse("record"),
+            Ok(Line::Record {
+                what: None,
+                quantise: None
+            })
+        );
+        assert_eq!(
+            parse("record bar 3"),
+            Ok(Line::Record {
+                what: Some(RecordWhat::Track(3)),
+                quantise: Some(RecordQuantise::Bar)
+            })
+        );
+        assert_eq!(
+            parse("record input now"),
+            Ok(Line::Record {
+                what: Some(RecordWhat::Input),
+                quantise: Some(RecordQuantise::Now)
+            })
+        );
+        assert_eq!(parse("record stop"), Ok(Line::RecordStop));
+        assert_eq!(parse("record cancel"), Ok(Line::RecordCancel));
+        assert_eq!(parse("record master input"), Err(LineError::Record));
+        assert_eq!(parse("record loud"), Err(LineError::Record));
     }
 
     #[test]
