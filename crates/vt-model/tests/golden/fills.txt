@@ -1,0 +1,23 @@
+Ramp | Ramp
+Random | Random
+Walk | Walk
+Pink | 1/f
+Wave | Wave
+Alternate | Alternate
+List | List
+Acid | Acid
+Grids | Grids
+Divisions | Divisions
+Ring | Ring
+Tonnetz | Tonnetz
+Follow | Follow
+Variation | Variation
+Scale | Scale
+Invert | Invert
+Shuffle | Shuffle
+Reverse | Reverse
+Snap | Snap
+Multiply | Multiply
+InvertBits | Invert bits
+MaskBits | Mask bits
+RotateBits | Rotate bits
