@@ -1,0 +1,26 @@
+distort | Distort
+delay | Delay
+reverb | Reverb
+chorus | Chorus
+eq3 | EQ3
+comp | Comp
+limit | Limit
+phaser | Phaser
+flanger | Flanger
+tape | Tape
+plate | Plate
+pitch | Pitch
+grains | Grains
+warps | Warps
+lpg | LPG
+reso | Reso
+comb | Comb
+vowel | Vowel
+freqshift | Freq Shift
+spring | Spring
+space | Space
+rotary | Rotary
+exciter | Exciter
+stutter | Stutter
+clouds | Clouds
+beads | Beads
