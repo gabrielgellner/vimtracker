@@ -10,8 +10,47 @@ fn every_effect_starts_at_its_declared_defaults_and_fits() {
         }
     }
     assert_eq!(Insert::ALL[1], Insert::Distort(Distort::default()));
-    for effect in crate::settings::Effect::ALL {
+    for effect in EffectKind::ALL {
         assert!(effect.params().len() <= MAX_KEPT_PARAMS, "{effect:?}");
+    }
+}
+
+/// `EffectKind` numbers the effects as `Insert::ALL` lists them after `Empty`, which is the order
+/// their settings take in a slot, and its table's rows are in the same order.
+#[test]
+fn each_effect_kind_is_its_insert_and_its_row() {
+    assert_eq!(Insert::Empty.kind(), None);
+    for (at, kind) in EffectKind::ALL.into_iter().enumerate() {
+        let insert = Insert::ALL[at + 1];
+        assert_eq!(kind as usize, at);
+        assert_eq!(insert.kind(), Some(kind));
+        assert_eq!(kind.name(), insert.name());
+        assert_eq!(kind.spec().meaning, insert.meaning());
+        for param in insert.params() {
+            assert!(
+                kind.params().contains(param),
+                "{} {}",
+                kind.name(),
+                param.key
+            );
+        }
+    }
+}
+
+/// What a setting's kind says is its top is what a step can give it.
+#[test]
+fn each_setting_tops_out_where_a_step_can_set_it() {
+    for kind in EffectKind::ALL {
+        for param in kind.params() {
+            let top = param.kind.top();
+            assert_eq!(
+                top,
+                param.setting.highest(),
+                "{} {}",
+                kind.name(),
+                param.key
+            );
+        }
     }
 }
 
@@ -20,7 +59,7 @@ fn every_kind() -> Vec<Insert> {
     Insert::ALL
         .into_iter()
         .flat_map(|effect| match effect.type_param() {
-            Some(at) => (0..effect.params()[at].choices.len())
+            Some(at) => (0..effect.params()[at].choices().len())
                 .map(|kind| effect.with_value(at, kind as u8))
                 .collect(),
             None => vec![effect],
@@ -95,7 +134,7 @@ fn every_effects_grid_places_each_of_its_settings_once_with_what_comes_out_last(
         // the bar's fourteen.
         for at in grid.settings() {
             assert!(params[at].name.len() < 10, "{}", params[at].name);
-            for choice in params[at].choices {
+            for choice in params[at].choices() {
                 assert!(choice.chars().count() <= 14, "{choice}");
             }
         }
@@ -181,7 +220,7 @@ fn a_compressor_starts_clean_and_each_type_shows_only_its_own() {
     );
     // The console's ratio, attack and release are its switches', with `Auto` after the times.
     let console = compressor(CompressorType::Console);
-    let choices = |at: usize| console.params()[at].choices;
+    let choices = |at: usize| console.params()[at].choices();
     assert_eq!(choices(3), ["2:1", "4:1", "10:1"]);
     assert_eq!(
         choices(4),
@@ -208,7 +247,7 @@ fn a_compressor_starts_clean_and_each_type_shows_only_its_own() {
         ]
     );
     let glue = compressor(CompressorType::Glue);
-    let choices = |at: usize| glue.params()[at].choices;
+    let choices = |at: usize| glue.params()[at].choices();
     assert_eq!(choices(3), ["2:1", "4:1", "10:1"]);
     assert_eq!(
         choices(4),
@@ -234,7 +273,7 @@ fn a_compressor_starts_clean_and_each_type_shows_only_its_own() {
     );
     let clip = glue.params()[10];
     assert_eq!(
-        (clip.key, clip.label, clip.choices),
+        (clip.key, clip.label, clip.choices()),
         ("peakclip", Some("PCLP"), &["Off", "On"][..])
     );
     assert_eq!(range_db(255.0), MOST_RANGE_DB);
@@ -267,7 +306,8 @@ fn a_compressors_type_and_switches_save_and_load_and_an_old_one_loads_clean() {
     assert_eq!(old.kind, CompressorType::Clean);
     assert_eq!((old.threshold, old.ratio), (170, 101));
     // Each switch has a key of its own to save and lock it by.
-    use crate::settings::{Effect, SettingId};
+    use crate::insert::EffectKind;
+    use crate::settings::SettingId;
     let id = SettingId::from_key("1.comp.consolerelease").unwrap();
     assert_eq!(id.name(), "Release");
     assert_eq!(id.label().as_deref(), Some("1CREL"));
@@ -275,13 +315,15 @@ fn a_compressors_type_and_switches_save_and_load_and_an_old_one_loads_clean() {
     assert_eq!(id.label().as_deref(), Some("1GREL"));
     let id = SettingId::from_key("1.comp.range").unwrap();
     assert_eq!((id.name(), id.label().as_deref()), ("Range", Some("1RNGE")));
-    let at = Effect::Compressor
+    let at = EffectKind::Compressor
         .params()
         .iter()
         .position(|param| param.key == "type")
         .unwrap();
     assert_eq!(
-        SettingId::slot(0, Effect::Compressor, at).unwrap().label(),
+        SettingId::slot(0, EffectKind::Compressor, at)
+            .unwrap()
+            .label(),
         None
     );
 }
@@ -348,9 +390,9 @@ fn a_compressors_makeup_runs_from_unity_to_its_most_in_db() {
 fn a_delays_time_is_a_note_division_and_stops_at_the_ends() {
     let delay = Insert::ALL[2];
     let time = delay.params()[0];
-    assert_eq!(time.choices[usize::from(delay.value(0))], "1/8d");
-    assert_eq!(*time.choices.last().unwrap(), "1 bar");
-    assert!(!time.wraps);
+    assert_eq!(time.choices()[usize::from(delay.value(0))], "1/8d");
+    assert_eq!(*time.choices().last().unwrap(), "1 bar");
+    assert!(!time.wraps());
     assert_eq!(
         delay.write(Setting::Time, 300.0).read(Setting::Time),
         Some(17)
@@ -435,7 +477,7 @@ fn a_distort_saved_without_a_gain_loads_at_unity() {
 fn a_setting_changes_alone_and_reads_back() {
     let effect = Insert::ALL[1];
     for (index, param) in effect.params().iter().enumerate() {
-        let value = if param.choices.is_empty() { 0x12 } else { 2 };
+        let value = if param.choices().is_empty() { 0x12 } else { 2 };
         let changed = effect.with_value(index, value);
         assert_eq!(changed.value(index), value, "{}", param.name);
         for other in (0..effect.params().len()).filter(|other| *other != index) {
@@ -518,14 +560,14 @@ fn each_mode_has_its_own_setting_beside_mix_and_gain() {
     }
     // Bits read as their names, and every one goes there and back.
     let bits = distort(DistortType::Crush).params()[1];
-    assert_eq!(bits.choices[usize::from(bits.default)], "9");
-    for index in 0..bits.choices.len() as u8 {
+    assert_eq!(bits.choices()[usize::from(bits.default)], "9");
+    for index in 0..bits.choices().len() as u8 {
         assert_eq!(
             distort(DistortType::Crush).with_value(1, index).value(1),
             index
         );
     }
-    assert!(!bits.wraps);
+    assert!(!bits.wraps());
     assert_eq!(TYPE_PARAM.label, None, "a mode isn't locked from a step");
 }
 
@@ -541,7 +583,7 @@ fn changing_mode_keeps_each_modes_own_setting() {
 #[test]
 fn a_types_name_matches_its_place_in_the_choices() {
     for (index, kind) in DistortType::ALL.into_iter().enumerate() {
-        assert_eq!(DISTORT_PARAMS[0].choices[index], kind.name());
+        assert_eq!(DISTORT_PARAMS[0].choices()[index], kind.name());
     }
 }
 
@@ -549,7 +591,7 @@ fn a_types_name_matches_its_place_in_the_choices() {
 fn a_phaser_and_a_flanger_sweep_in_note_lengths() {
     let phaser = Insert::Phaser(Phaser::DEFAULT);
     let flanger = Insert::Flanger(Flanger::DEFAULT);
-    let rate = |effect: Insert| effect.params()[0].choices[usize::from(effect.value(0))];
+    let rate = |effect: Insert| effect.params()[0].choices()[usize::from(effect.value(0))];
     assert_eq!(rate(phaser), "2 bars");
     assert_eq!(rate(flanger), "1 bar");
     assert_eq!(*SWEEP_NAMES.last().unwrap(), "16 bars");
@@ -560,7 +602,7 @@ fn a_phaser_and_a_flanger_sweep_in_note_lengths() {
         Some(SWEEP_NAMES.len() as u8 - 1)
     );
     let stages = phaser.params()[4];
-    assert_eq!(stages.choices[usize::from(phaser.value(4))], "8");
+    assert_eq!(stages.choices()[usize::from(phaser.value(4))], "8");
     assert_eq!(
         phaser.write(Setting::Stages, 9.0).read(Setting::Stages),
         Some(2)
@@ -623,7 +665,7 @@ fn a_pitch_shifters_settings_read_back_and_save() {
     let names: Vec<&str> = pitch.params().iter().map(|param| param.name).collect();
     assert_eq!(names, ["Pitch", "Fine", "Size", "Feedback", "Mix", "Gain"]);
     assert_eq!(pitch.read(Setting::Shift), Some(MOST_SHIFT));
-    assert_eq!(PITCH_PARAMS[0].choices[usize::from(MOST_SHIFT)], "+0 st");
+    assert_eq!(PITCH_PARAMS[0].choices()[usize::from(MOST_SHIFT)], "+0 st");
     let up = pitch.with_value(0, 36);
     assert_eq!(up.read(Setting::Shift), Some(36));
     assert_eq!(shift_semitones(36.0), 12.0);
@@ -694,13 +736,16 @@ fn warps_settings_read_back_and_save_and_its_algo_reads_as_warps_knob() {
             "Algo", "Timbre", "Source", "Level", "Pitch", "Shape", "Mix", "Gain"
         ]
     );
-    assert_eq!(WARPS_PARAMS[2].choices[0], "Osc");
-    assert_eq!(WARPS_PARAMS[2].choices[1..], SOURCE_NAMES[1..]);
+    assert_eq!(WARPS_PARAMS[2].choices()[0], "Osc");
+    assert_eq!(WARPS_PARAMS[2].choices()[1..], SOURCE_NAMES[1..]);
     assert_eq!(
-        WARPS_PARAMS[4].choices[usize::from(warps.value(4))],
+        WARPS_PARAMS[4].choices()[usize::from(warps.value(4))],
         "+12 st"
     );
-    assert_eq!(WARPS_PARAMS[5].choices[usize::from(warps.value(5))], "Sine");
+    assert_eq!(
+        WARPS_PARAMS[5].choices()[usize::from(warps.value(5))],
+        "Sine"
+    );
     assert_eq!(warps.with_value(5, 0xFF).read(Setting::Wave), Some(4));
     let fed = warps.with_value(2, 2);
     assert_eq!(
@@ -755,7 +800,7 @@ fn a_low_pass_gates_settings_read_back_and_save() {
             "Mode", "Amount", "Base", "Res", "Response", "Source", "Mix", "Gain"
         ]
     );
-    assert_eq!(LPG_PARAMS[0].choices, ["Gate", "Filter", "VCA"]);
+    assert_eq!(LPG_PARAMS[0].choices(), ["Gate", "Filter", "VCA"]);
     assert_eq!(LPG_PARAMS[0].label, None, "a mode isn't locked from a step");
     // It goes round the modes, stopping at the last when written.
     assert_eq!(gate.with_value(0, 0xFF).read(Setting::GateMode), Some(2));

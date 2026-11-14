@@ -573,10 +573,10 @@ pub(super) fn adjust_control(
                 return;
             };
             let value = insert.value(param);
-            let count = found.choices.len() as u8;
-            let moved = if found.choices.is_empty() {
+            let count = found.choices().len() as u8;
+            let moved = if found.choices().is_empty() {
                 change(value)
-            } else if found.wraps {
+            } else if found.wraps() {
                 (value + if up { 1 } else { count - 1 }) % count
             } else if up {
                 (value + 1).min(count - 1)

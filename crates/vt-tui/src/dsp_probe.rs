@@ -28,11 +28,11 @@ use vt_engine::engine::Engine;
 use vt_engine::published::Published;
 use vt_engine::render::write_wav;
 use vt_model::constants::DEFAULT_NOTE_VELOCITY;
-use vt_model::insert::{INSERTS, Insert};
+use vt_model::insert::{EffectKind, INSERTS, Insert};
 use vt_model::project;
 use vt_model::sample::{SampleData, SampleError, load_sample};
 use vt_model::samples::SamplePool;
-use vt_model::settings::{Effect, Kind, Owner, SettingId, voice_key};
+use vt_model::settings::{Kind, Owner, SettingId, voice_key};
 use vt_model::song::{FilterMode, FilterType, Machine, Song, SynthVoice, Track};
 use vt_model::step::{ACCENT_VELOCITY, MAX_VELOCITY};
 
@@ -420,7 +420,7 @@ fn machine(ours: &Ours) -> Result<Option<Machine>, ProbeError> {
 }
 
 /// The effects a spec puts in the slots, from the first.
-fn effects(ours: &Ours) -> Result<Vec<Effect>, ProbeError> {
+fn effects(ours: &Ours) -> Result<Vec<EffectKind>, ProbeError> {
     if ours.effects.len() > INSERTS {
         return Err(wrong(format!(
             "a track has only {INSERTS} slots for effects"
@@ -429,11 +429,11 @@ fn effects(ours: &Ours) -> Result<Vec<Effect>, ProbeError> {
     ours.effects
         .iter()
         .map(|name| {
-            Effect::ALL
+            EffectKind::ALL
                 .into_iter()
                 .find(|effect| effect.key() == name)
                 .ok_or_else(|| {
-                    let known = Effect::ALL.map(Effect::key);
+                    let known = EffectKind::ALL.map(EffectKind::key);
                     wrong(format!(
                         "there's no effect called {name}; there are {}",
                         known.join(", ")
@@ -491,7 +491,7 @@ fn settings(table: &toml::Table) -> Result<BTreeMap<String, Given>, ProbeError> 
 fn setting_of(
     key: &str,
     machine: Option<Machine>,
-    effects: &[Effect],
+    effects: &[EffectKind],
 ) -> Result<SettingId, ProbeError> {
     let Some(id) = SettingId::from_key(key) else {
         // The settings beside the one meant: those of the longest start of the key that has any,
@@ -602,7 +602,7 @@ fn value_of(key: &str, id: SettingId, given: &Given) -> Result<u8, ProbeError> {
 fn check_settings(
     settings: &BTreeMap<String, Given>,
     machine: Option<Machine>,
-    effects: &[Effect],
+    effects: &[EffectKind],
 ) -> Result<(), ProbeError> {
     for (key, given) in settings {
         if key == FILTER_KEY {
@@ -651,10 +651,10 @@ fn set_on(track: &mut Track, id: SettingId, value: u8) {
 }
 
 /// The empty slot's effect, as the program puts a new one in.
-fn fresh(effect: Effect) -> Insert {
+fn fresh(effect: EffectKind) -> Insert {
     Insert::ALL
         .into_iter()
-        .find(|insert| Effect::of(*insert) == Some(effect))
+        .find(|insert| insert.kind() == Some(effect))
         .unwrap_or_default()
 }
 

@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::constants::UNITY_LEVEL;
 
-use super::{GAIN_PARAM, MIX_PARAM, OFF_ON, Param, Setting, WET_MIX_PARAM, from_middle, hex_param};
+use super::{
+    GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, Setting, Units, WET_MIX_PARAM, from_middle,
+    hex_param,
+};
 
 /// How far a pitch shifter goes either way, in semitones.
 pub const MOST_SHIFT: u8 = 24;
@@ -49,12 +52,17 @@ pub(crate) const PITCH_PARAMS: [Param; 6] = [
         key: "pitch",
         label: Some("PTCH"),
         setting: Setting::Shift,
-        choices: &SHIFT_NAMES,
-        wraps: false,
+        kind: Kind::Stepped {
+            choices: &SHIFT_NAMES,
+            wraps: false,
+        },
         default: Pitch::DEFAULT.shift,
+        place: Place::Own,
     },
-    hex_param("Fine", "fine", "FINE", Setting::Fine, Pitch::DEFAULT.fine),
-    hex_param("Size", "size", "SIZE", Setting::Grain, Pitch::DEFAULT.size),
+    hex_param("Fine", "fine", "FINE", Setting::Fine, Pitch::DEFAULT.fine)
+        .units(Units::Cents)
+        .centred(),
+    hex_param("Size", "size", "SIZE", Setting::Grain, Pitch::DEFAULT.size).units(Units::Grain),
     hex_param(
         "Feedback",
         "feedback",
@@ -144,21 +152,24 @@ pub(crate) const GRAINS_PARAMS: [Param; 10] = [
         "TIME",
         Setting::Position,
         Grains::DEFAULT.time,
-    ),
+    )
+    .units(Units::GrainTime),
     hex_param(
         "Size",
         "size",
         "SIZE",
         Setting::Length,
         Grains::DEFAULT.size,
-    ),
+    )
+    .units(Units::GrainLength),
     hex_param(
         "Density",
         "density",
         "DENS",
         Setting::Density,
         Grains::DEFAULT.density,
-    ),
+    )
+    .units(Units::Density),
     hex_param(
         "Spread",
         "spread",
@@ -171,9 +182,12 @@ pub(crate) const GRAINS_PARAMS: [Param; 10] = [
         key: "freeze",
         label: Some("FRZ"),
         setting: Setting::Freeze,
-        choices: &OFF_ON,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: true,
+        },
         default: Grains::DEFAULT.freeze,
+        place: Place::Own,
     },
     hex_param(
         "Random",
@@ -374,9 +388,12 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
         // Choosing a mode chooses a sound, so steps don't lock it.
         label: None,
         setting: Setting::CloudsMode,
-        choices: &CLOUDS_MODE_NAMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &CLOUDS_MODE_NAMES,
+            wraps: true,
+        },
         default: 0,
+        place: Place::Type,
     },
     hex_param(
         "Position",
@@ -443,9 +460,12 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
         key: "freeze",
         label: Some("FRZ"),
         setting: Setting::Freeze,
-        choices: &OFF_ON,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: true,
+        },
         default: Clouds::DEFAULT.freeze,
+        place: Place::Own,
     },
     Param {
         name: "Quality",
@@ -453,9 +473,12 @@ pub(crate) const CLOUDS_PARAMS: [Param; 13] = [
         // A new quality starts a new recording, so steps don't lock it.
         label: None,
         setting: Setting::Quality,
-        choices: &QUALITY_NAMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &QUALITY_NAMES,
+            wraps: true,
+        },
         default: Clouds::DEFAULT.quality,
+        place: Place::Own,
     },
     GAIN_PARAM,
 ];
@@ -610,9 +633,12 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         // Choosing a mode chooses a sound, so steps don't lock it.
         label: None,
         setting: Setting::BeadsMode,
-        choices: &BEADS_MODE_NAMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &BEADS_MODE_NAMES,
+            wraps: true,
+        },
         default: 0,
+        place: Place::Type,
     },
     hex_param(
         "Time",
@@ -621,7 +647,8 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         Setting::BeadsTime,
         Beads::DEFAULT.time,
     ),
-    hex_param("Size", "size", "SIZE", Setting::Length, Beads::DEFAULT.size),
+    hex_param("Size", "size", "SIZE", Setting::Length, Beads::DEFAULT.size)
+        .units(Units::GrainLength),
     hex_param(
         "Shape",
         "shape",
@@ -645,9 +672,12 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         key: "clock",
         label: Some("CLK"),
         setting: Setting::Clock,
-        choices: &CLOCK_NAMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &CLOCK_NAMES,
+            wraps: true,
+        },
         default: Beads::DEFAULT.clock,
+        place: Place::Own,
     },
     hex_param(
         "Random",
@@ -661,9 +691,12 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         key: "freeze",
         label: Some("FRZ"),
         setting: Setting::Freeze,
-        choices: &OFF_ON,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: true,
+        },
         default: Beads::DEFAULT.freeze,
+        place: Place::Own,
     },
     hex_param(
         "Feedback",
@@ -692,9 +725,12 @@ pub(crate) const BEADS_PARAMS: [Param; 14] = [
         // A new quality starts a new recording, so steps don't lock it.
         label: None,
         setting: Setting::Quality,
-        choices: &BEADS_QUALITY_NAMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &BEADS_QUALITY_NAMES,
+            wraps: true,
+        },
         default: Beads::DEFAULT.quality,
+        place: Place::Title,
     },
     GAIN_PARAM,
 ];
@@ -847,14 +883,17 @@ pub(crate) const FREQ_SHIFT_PARAMS: [Param; 7] = [
         "SHFT",
         Setting::ShiftHertz,
         FreqShift::DEFAULT.shift,
-    ),
+    )
+    .units(Units::ShiftHertz)
+    .centred(),
     hex_param(
         "Spread",
         "spread",
         "SPRD",
         Setting::ShiftSpread,
         FreqShift::DEFAULT.spread,
-    ),
+    )
+    .units(Units::SpreadHertz),
     hex_param(
         "Track",
         "track",
@@ -868,7 +907,8 @@ pub(crate) const FREQ_SHIFT_PARAMS: [Param; 7] = [
         "TIME",
         Setting::LoopTime,
         FreqShift::DEFAULT.time,
-    ),
+    )
+    .units(Units::LoopTime),
     hex_param(
         "Feedback",
         "feedback",

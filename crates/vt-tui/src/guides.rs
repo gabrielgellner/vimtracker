@@ -402,7 +402,7 @@ mod tests {
             let kinds: Vec<_> = match effect.type_param() {
                 Some(at) => {
                     let param = effect.params()[at];
-                    (0..param.choices.len())
+                    (0..param.choices().len())
                         .map(|choice| effect.write(param.setting, choice as f32))
                         .collect()
                 }
@@ -412,7 +412,7 @@ mod tests {
                 // The type is named by what it is, as `Glue`, and its settings by theirs.
                 let type_name = kind
                     .type_param()
-                    .map(|at| kind.params()[at].choices[usize::from(kind.value(at))]);
+                    .map(|at| kind.params()[at].choices()[usize::from(kind.value(at))]);
                 let mut named: Vec<&str> = kind.params().iter().map(|param| param.name).collect();
                 if let (Some(at), Some(type_name)) = (kind.type_param(), type_name) {
                     named[at] = type_name;

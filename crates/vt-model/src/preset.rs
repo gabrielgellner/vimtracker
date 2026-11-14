@@ -30,7 +30,7 @@ use crate::bank::BankEntry;
 use crate::insert::{INSERTS, Insert};
 use crate::macros::{MACROS, Macro};
 use crate::modulation::{MOD_SLOTS, ModSlot, default_mod};
-use crate::settings::{Effect, Owner, SettingId};
+use crate::settings::{Owner, SettingId};
 use crate::song::{FilterMode, FilterType, Machine, Track};
 
 /// The format presets are written in. A preset from a later format isn't read; one from this
@@ -450,7 +450,7 @@ impl EffectPreset {
     /// empty.
     pub fn of(track: &Track, slot: usize) -> Option<Self> {
         let effect = *track.inserts.get(slot)?;
-        let kind = Effect::of(effect)?;
+        let kind = effect.kind()?;
         let fine = track
             .fine
             .iter()
@@ -472,7 +472,7 @@ impl EffectPreset {
     /// The fine parts of its settings as they'd be in a slot, or the first key its effect doesn't
     /// have.
     pub fn fine_in(&self, slot: usize) -> Result<BTreeMap<SettingId, u8>, String> {
-        let Some(effect) = Effect::of(self.effect) else {
+        let Some(effect) = self.effect.kind() else {
             return Ok(BTreeMap::new());
         };
         self.fine
@@ -602,6 +602,7 @@ pub fn save<T: Serialize>(path: &Path, preset: &T, overwrite: bool) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::insert::EffectKind;
     use crate::macros::{MacroMap, MacroTarget};
     use crate::song::{Song, SynthVoice};
 
@@ -637,7 +638,7 @@ mod tests {
         track.send_a = 0x50;
         track.name = "AB".to_owned();
         track.inserts[1] = Insert::RETURN_DELAY;
-        let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
+        let feedback = SettingId::slot(1, EffectKind::Delay, 1).unwrap();
         track.set_fine(feedback, 0x40);
         track.macros[0] = Macro {
             name: Some("Bite".to_owned()),
@@ -677,7 +678,7 @@ mod tests {
         assert_eq!((other.cutoff, other.fine(SettingId::CUT)), (0x40, 0x80));
         assert_eq!(other.inserts[1], Insert::RETURN_DELAY);
         assert_eq!(
-            other.fine(SettingId::slot(1, Effect::Delay, 1).unwrap()),
+            other.fine(SettingId::slot(1, EffectKind::Delay, 1).unwrap()),
             0x40
         );
         assert_eq!(other.macros, acid().macros);
@@ -774,12 +775,12 @@ mod tests {
     fn an_effect_loads_into_any_slot() {
         let preset = EffectPreset::of(&acid(), 1).unwrap();
         assert_eq!(preset.effect, Insert::RETURN_DELAY);
-        let key = Effect::Delay.params()[1].key;
+        let key = EffectKind::Delay.params()[1].key;
         assert_eq!(preset.fine.get(key), Some(&0x40));
         let fine = preset.fine_in(3).unwrap();
         assert_eq!(
             fine.into_iter().collect::<Vec<_>>(),
-            [(SettingId::slot(3, Effect::Delay, 1).unwrap(), 0x40)]
+            [(SettingId::slot(3, EffectKind::Delay, 1).unwrap(), 0x40)]
         );
         assert!(EffectPreset::of(&acid(), 0).is_none(), "an empty slot");
         let wrong = EffectPreset {

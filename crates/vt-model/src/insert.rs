@@ -5,10 +5,12 @@ use serde::{Deserialize, Serialize};
 use crate::constants::{MAX_GROUPS, MAX_LEVEL, MAX_SOUND_TRACKS, UNITY_LEVEL};
 use crate::grid::{GRID_ROWS, Grid};
 use crate::lfo::{DIVISION_NAMES, SWEEP_NAMES};
+use crate::settings::{Entry, Kind, Units};
 
 mod colour;
 mod dynamics;
 mod filters;
+mod kind;
 mod modulation;
 mod pitch;
 mod space;
@@ -16,6 +18,7 @@ mod space;
 pub use colour::*;
 pub use dynamics::*;
 pub use filters::*;
+pub use kind::*;
 pub use modulation::*;
 pub use pitch::*;
 pub use space::*;
@@ -326,8 +329,8 @@ impl Setting {
     }
 }
 
-/// One setting an effect declares. The pages, stepping, `x`, `K` and typing read these, so a new
-/// effect needs no new page code.
+/// One setting an effect declares. The pages, stepping, `x`, `K`, typing and the status line read
+/// these, so a new effect needs no new page code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Param {
     pub name: &'static str,
@@ -338,12 +341,25 @@ pub struct Param {
     pub label: Option<&'static str>,
     /// What it is, on its own scale.
     pub setting: Setting,
-    /// What it chooses between, in order, or nothing for a value in hex.
-    pub choices: &'static [&'static str],
-    /// Whether stepping past the last choice goes round to the first, or stops. A choice that's a
-    /// scale stops, and one that's a list goes round.
-    pub wraps: bool,
+    /// Its range and the units it reads in, or its choices. A choice that's a scale stops at its
+    /// ends, and one that's a list goes round.
+    pub kind: Kind,
     pub default: u8,
+    /// What it is to its effect.
+    pub place: Place,
+}
+
+/// Where a setting sits in its effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place {
+    /// One of the effect's own, in its grid.
+    Own,
+    /// What the effect is: its type or mode, in the slot's title rather than its grid.
+    Type,
+    /// In the title too, after its type, but a played setting: Beads' quality.
+    Title,
+    /// What comes out, `Mix` and `Gain`: most effects' last column.
+    Output,
 }
 
 /// The choices of a setting that's off or on, such as a delay's `Ping-pong`.
@@ -353,9 +369,59 @@ pub const OFF_ON: [&str; 2] = ["Off", "On"];
 pub const RETIMES: [&str; 2] = ["Glide", "Jump"];
 
 impl Param {
+    /// What it chooses between, in order, or nothing for a value in hex.
+    pub const fn choices(&self) -> &'static [&'static str] {
+        match self.kind {
+            Kind::Stepped { choices, .. } => choices,
+            Kind::Continuous { .. } => &[],
+        }
+    }
+
+    /// Whether stepping past its last choice goes round to the first, or stops.
+    pub const fn wraps(&self) -> bool {
+        matches!(self.kind, Kind::Stepped { wraps: true, .. })
+    }
+
     /// Whether it's off or on and nothing else, which the pages show as a toggle.
     pub fn is_toggle(&self) -> bool {
-        self.choices == OFF_ON
+        self.choices() == OFF_ON
+    }
+
+    /// It as an entry in the table of every setting.
+    pub const fn entry(&self) -> Entry {
+        Entry {
+            key: self.key,
+            name: self.name,
+            label: self.label,
+            kind: self.kind,
+            default: self.default,
+        }
+    }
+
+    /// The same, reading in `units`.
+    const fn units(self, units: Units) -> Self {
+        let Kind::Continuous { top, middle, .. } = self.kind else {
+            return self;
+        };
+        Self {
+            kind: Kind::Continuous { top, middle, units },
+            ..self
+        }
+    }
+
+    /// The same, with its middle at `80`, either way of which it reads.
+    const fn centred(self) -> Self {
+        let Kind::Continuous { top, units, .. } = self.kind else {
+            return self;
+        };
+        Self {
+            kind: Kind::Continuous {
+                top,
+                middle: true,
+                units,
+            },
+            ..self
+        }
     }
 }
 
@@ -372,27 +438,39 @@ const MIX_PARAM: Param = Param {
     key: "mix",
     label: Some("MIX"),
     setting: Setting::Mix,
-    choices: &[],
-    wraps: false,
+    kind: Kind::Continuous {
+        top: 0xFF,
+        middle: false,
+        units: Units::Percent,
+    },
     default: 0xFF,
+    place: Place::Output,
 };
 const GAIN_PARAM: Param = Param {
     name: "Gain",
     key: "gain",
     label: Some("GAIN"),
     setting: Setting::Gain,
-    choices: &[],
-    wraps: false,
+    kind: Kind::Continuous {
+        top: MAX_LEVEL,
+        middle: false,
+        units: Units::Decibels,
+    },
     default: UNITY_LEVEL,
+    place: Place::Output,
 };
 const AMOUNT_PARAM: Param = Param {
     name: "Amount",
     key: "amount",
     label: Some("AMNT"),
     setting: Setting::Amount,
-    choices: &[],
-    wraps: false,
+    kind: Kind::Continuous {
+        top: 0xFF,
+        middle: false,
+        units: Units::Percent,
+    },
     default: 0x40,
+    place: Place::Own,
 };
 
 /// A delay or reverb's mix. It starts half wet in a slot, so the sound stays under it.
@@ -400,7 +478,7 @@ const WET_MIX_PARAM: Param = Param {
     default: 0x80,
     ..MIX_PARAM
 };
-/// A setting from `00` to `FF`.
+/// A setting from `00` to `FF`, as a share of its range.
 const fn hex_param(
     name: &'static str,
     key: &'static str,
@@ -413,9 +491,13 @@ const fn hex_param(
         key,
         label: Some(label),
         setting,
-        choices: &[],
-        wraps: false,
+        kind: Kind::Continuous {
+            top: 0xFF,
+            middle: false,
+            units: Units::Percent,
+        },
         default,
+        place: Place::Own,
     }
 }
 
@@ -496,118 +578,30 @@ impl Insert {
 
     /// The effect's name on screen.
     pub fn name(self) -> &'static str {
-        match self {
-            Self::Empty => "---",
-            Self::Distort(_) => "Distort",
-            Self::Delay(_) => "Delay",
-            Self::Reverb(_) => "Reverb",
-            Self::Chorus(_) => "Chorus",
-            Self::Eq(_) => "EQ3",
-            Self::Compressor(_) => "Comp",
-            Self::Limit(_) => "Limit",
-            Self::Phaser(_) => "Phaser",
-            Self::Flanger(_) => "Flanger",
-            Self::Tape(_) => "Tape",
-            Self::Plate(_) => "Plate",
-            Self::Pitch(_) => "Pitch",
-            Self::Grains(_) => "Grains",
-            Self::Warps(_) => "Warps",
-            Self::Lpg(_) => "LPG",
-            Self::Reso(_) => "Reso",
-            Self::Comb(_) => "Comb",
-            Self::Vowel(_) => "Vowel",
-            Self::FreqShift(_) => "Freq Shift",
-            Self::Spring(_) => "Spring",
-            Self::Stutter(_) => "Stutter",
-            Self::Exciter(_) => "Exciter",
-            Self::Rotary(_) => "Rotary",
-            Self::Space(_) => "Space",
-            Self::Clouds(_) => "Clouds",
-            Self::Beads(_) => "Beads",
-            Self::Echo(_) => "Space Echo",
-        }
+        self.kind().map_or("---", EffectKind::name)
     }
 
     /// What it does, for a list to choose from.
     pub fn meaning(self) -> &'static str {
-        match self {
-            Self::Empty => "Nothing here",
-            Self::Distort(_) => "Clips, folds or crushes the sound, or drives it as a pedal",
-            Self::Delay(_) => "Repeats the sound, bouncing side to side",
-            Self::Reverb(_) => "Puts the sound in a room",
-            Self::Chorus(_) => "Thickens it with drifting copies, an ensemble or a Juno's",
-            Self::Eq(_) => "Shapes its tone: a low and a high shelf, and a middle band",
-            Self::Compressor(_) => "Evens out its level, or ducks it under another track",
-            Self::Limit(_) => "Keeps its peaks under a ceiling, looking 2 ms ahead",
-            Self::Phaser(_) => "Sweeps notches through it with all-passes",
-            Self::Flanger(_) => "Sweeps a comb through it with a short delay",
-            Self::Tape(_) => "Saturates, warms and wobbles it as tape does",
-            Self::Plate(_) => "Puts the sound on a bright, dense plate",
-            Self::Pitch(_) => "Shifts its pitch up or down, keeping its time",
-            Self::Grains(_) => "Records it and plays it back as a cloud of grains",
-            Self::Warps(_) => "Ring mods, folds or vocodes it with another track",
-            Self::Lpg(_) => "Gates or filters it by its level, or another track's",
-            Self::Reso(_) => "Rings it like a bell or bar tuned to the note",
-            Self::Comb(_) => "Rings it through a comb or flanger tuned to the note",
-            Self::Vowel(_) => "Makes it say a vowel, morphing from A to U",
-            Self::FreqShift(_) => "Moves every frequency by the same Hz: bells and spirals",
-            Self::Spring(_) => {
-                "Puts the sound in a spring tank, as a guitar amp has: drips and boings"
-            }
-            Self::Stutter(_) => "Repeats a piece of the sound when a step says: rolls and glitches",
-            Self::Exciter(_) => "Adds air: harmonics made from the highs, more as they get louder",
-            Self::Rotary(_) => "Spins it in a Leslie's cabinet, slow or fast, for organs and more",
-            Self::Space(_) => "Washes the sound into a huge, nearly endless pad",
-            Self::Clouds(_) => {
-                "Mutable's Clouds: grains, stretching or a looping delay, with reverb"
-            }
-            Self::Beads(_) => "Mutable's Beads: grains or a delay on tape or digital, with reverb",
-            Self::Echo(_) => {
-                "A Roland RE-201's tape loop: three heads, wow, darkening repeats, springs"
-            }
-        }
+        self.kind()
+            .map_or("Nothing here", |kind| kind.spec().meaning)
     }
 
     /// The settings it has, in the mode it's in.
     pub fn params(self) -> &'static [Param] {
         match self {
-            Self::Empty => &[],
             Self::Distort(distort) => match distort.kind {
                 DistortType::Crush => &CRUSH_PARAMS,
                 DistortType::Down => &DOWN_PARAMS,
                 DistortType::Overdrive | DistortType::Distortion => &PEDAL_PARAMS,
                 _ => &SHAPING_PARAMS,
             },
-            Self::Delay(_) => &DELAY_PARAMS,
-            Self::Reverb(_) => &REVERB_PARAMS,
-            Self::Chorus(_) => &CHORUS_PARAMS,
-            Self::Eq(_) => &EQ_PARAMS,
             Self::Compressor(compressor) => match compressor.kind {
                 CompressorType::Clean => &CLEAN_PARAMS,
                 CompressorType::Console => &CONSOLE_PARAMS,
                 CompressorType::Glue => &GLUE_PARAMS,
             },
-            Self::Limit(_) => &LIMIT_PARAMS,
-            Self::Phaser(_) => &PHASER_PARAMS,
-            Self::Flanger(_) => &FLANGER_PARAMS,
-            Self::Tape(_) => &TAPE_PARAMS,
-            Self::Plate(_) => &PLATE_PARAMS,
-            Self::Pitch(_) => &PITCH_PARAMS,
-            Self::Grains(_) => &GRAINS_PARAMS,
-            Self::Warps(_) => &WARPS_PARAMS,
-            Self::Lpg(_) => &LPG_PARAMS,
-            Self::Reso(_) => &RESO_PARAMS,
-            Self::Comb(_) => &COMB_PARAMS,
-            Self::Vowel(_) => &VOWEL_PARAMS,
-            Self::FreqShift(_) => &FREQ_SHIFT_PARAMS,
-            Self::Spring(_) => &SPRING_PARAMS,
-            Self::Space(_) => &SPACE_PARAMS,
-            Self::Rotary(_) => &ROTARY_PARAMS,
-            Self::Exciter(_) => &EXCITER_PARAMS,
-            Self::Stutter(_) => &STUTTER_PARAMS,
-            Self::Clouds(_) => &CLOUDS_PARAMS,
-            Self::Beads(_) => &BEADS_PARAMS,
-            Self::Echo(_) => &ECHO_PARAMS,
+            _ => self.kind().map_or(&[], EffectKind::params),
         }
     }
 
@@ -632,177 +626,39 @@ impl Insert {
     /// here that has it. A distortion keeps every mode's, and a compressor every type's, so one not
     /// shown now still reads.
     pub fn read(self, setting: Setting) -> Option<u8> {
-        let distort = match self {
-            Self::Distort(distort) => distort,
-            Self::Delay(delay) => {
-                return DELAY_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| delay.read(setting));
-            }
-            Self::Reverb(reverb) => {
-                return REVERB_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| reverb.read(setting));
-            }
-            Self::Chorus(chorus) => {
-                return CHORUS_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| chorus.read(setting));
-            }
-            Self::Eq(eq) => {
-                return EQ_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| eq.read(setting));
-            }
-            Self::Compressor(compressor) => {
-                return COMPRESSOR_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| compressor.read(setting));
-            }
-            Self::Limit(limiter) => {
-                return LIMIT_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| limiter.read(setting));
-            }
-            Self::Phaser(phaser) => {
-                return PHASER_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| phaser.read(setting));
-            }
-            Self::Flanger(flanger) => {
-                return FLANGER_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| flanger.read(setting));
-            }
-            Self::Tape(tape) => {
-                return TAPE_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| tape.read(setting));
-            }
-            Self::Plate(plate) => {
-                return PLATE_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| plate.read(setting));
-            }
-            Self::Pitch(pitch) => {
-                return PITCH_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| pitch.read(setting));
-            }
-            Self::Grains(grains) => {
-                return GRAINS_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| grains.read(setting));
-            }
-            Self::Warps(warps) => {
-                return WARPS_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| warps.read(setting));
-            }
-            Self::Lpg(gate) => {
-                return LPG_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| gate.read(setting));
-            }
-            Self::Reso(resonator) => {
-                return RESO_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| resonator.read(setting));
-            }
-            Self::Comb(comb) => {
-                return COMB_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| comb.read(setting));
-            }
-            Self::Vowel(vowel) => {
-                return VOWEL_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| vowel.read(setting));
-            }
-            Self::FreqShift(shifter) => {
-                return FREQ_SHIFT_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| shifter.read(setting));
-            }
-            Self::Spring(spring) => {
-                return SPRING_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| spring.read(setting));
-            }
-            Self::Stutter(stutter) => {
-                return STUTTER_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| stutter.read(setting));
-            }
-            Self::Exciter(exciter) => {
-                return EXCITER_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| exciter.read(setting));
-            }
-            Self::Rotary(rotary) => {
-                return ROTARY_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| rotary.read(setting));
-            }
-            Self::Space(space) => {
-                return SPACE_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| space.read(setting));
-            }
-            Self::Clouds(clouds) => {
-                return CLOUDS_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| clouds.read(setting));
-            }
-            Self::Beads(beads) => {
-                return BEADS_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| beads.read(setting));
-            }
-            Self::Echo(echo) => {
-                return ECHO_PARAMS
-                    .iter()
-                    .any(|found| found.setting == setting)
-                    .then(|| echo.read(setting));
-            }
+        let kind = self.kind()?;
+        if !kind.params().iter().any(|found| found.setting == setting) {
+            return None;
+        }
+        Some(match self {
             Self::Empty => return None,
-        };
-        Some(match setting {
-            Setting::Type => distort.kind as u8,
-            Setting::Amount => distort.amount,
-            Setting::Bits => distort.bits - LEAST_BITS,
-            Setting::Rate => distort.rate,
-            Setting::MuLaw => distort.mu_law,
-            Setting::FollowNote => distort.track,
-            Setting::Mix => distort.mix,
-            Setting::Gain => distort.gain,
-            Setting::Tone => distort.tone,
-            _ => return None,
+            Self::Distort(distort) => distort.read(setting),
+            Self::Delay(delay) => delay.read(setting),
+            Self::Reverb(reverb) => reverb.read(setting),
+            Self::Chorus(chorus) => chorus.read(setting),
+            Self::Eq(eq) => eq.read(setting),
+            Self::Compressor(compressor) => compressor.read(setting),
+            Self::Limit(limiter) => limiter.read(setting),
+            Self::Phaser(phaser) => phaser.read(setting),
+            Self::Flanger(flanger) => flanger.read(setting),
+            Self::Tape(tape) => tape.read(setting),
+            Self::Plate(plate) => plate.read(setting),
+            Self::Pitch(pitch) => pitch.read(setting),
+            Self::Grains(grains) => grains.read(setting),
+            Self::Warps(warps) => warps.read(setting),
+            Self::Lpg(gate) => gate.read(setting),
+            Self::Reso(resonator) => resonator.read(setting),
+            Self::Comb(comb) => comb.read(setting),
+            Self::Vowel(vowel) => vowel.read(setting),
+            Self::FreqShift(shifter) => shifter.read(setting),
+            Self::Spring(spring) => spring.read(setting),
+            Self::Space(space) => space.read(setting),
+            Self::Rotary(rotary) => rotary.read(setting),
+            Self::Exciter(exciter) => exciter.read(setting),
+            Self::Stutter(stutter) => stutter.read(setting),
+            Self::Clouds(clouds) => clouds.read(setting),
+            Self::Beads(beads) => beads.read(setting),
+            Self::Echo(echo) => echo.read(setting),
         })
     }
 
@@ -811,83 +667,53 @@ impl Insert {
     #[must_use]
     pub fn write(self, setting: Setting, value: f32) -> Self {
         let whole = value.round().clamp(0.0, f32::from(setting.highest())) as u8;
-        let distort = match self {
-            Self::Distort(distort) => distort,
-            Self::Delay(delay) => return Self::Delay(delay.written(setting, whole)),
-            Self::Reverb(reverb) => return Self::Reverb(reverb.written(setting, whole)),
-            Self::Chorus(chorus) => return Self::Chorus(chorus.written(setting, whole)),
-            Self::Eq(eq) => return Self::Eq(eq.written(setting, whole)),
-            Self::Compressor(compressor) => {
-                return Self::Compressor(compressor.written(setting, whole));
-            }
-            Self::Limit(limiter) => return Self::Limit(limiter.written(setting, whole)),
-            Self::Phaser(phaser) => return Self::Phaser(phaser.written(setting, whole)),
-            Self::Flanger(flanger) => return Self::Flanger(flanger.written(setting, whole)),
-            Self::Tape(tape) => return Self::Tape(tape.written(setting, whole)),
-            Self::Plate(plate) => return Self::Plate(plate.written(setting, whole)),
-            Self::Pitch(pitch) => return Self::Pitch(pitch.written(setting, whole)),
-            Self::Grains(grains) => return Self::Grains(grains.written(setting, whole)),
-            Self::Warps(warps) => return Self::Warps(warps.written(setting, whole)),
-            Self::Lpg(gate) => return Self::Lpg(gate.written(setting, whole)),
-            Self::Reso(resonator) => return Self::Reso(resonator.written(setting, whole)),
-            Self::Comb(comb) => return Self::Comb(comb.written(setting, whole)),
-            Self::Vowel(vowel) => return Self::Vowel(vowel.written(setting, whole)),
-            Self::FreqShift(shifter) => return Self::FreqShift(shifter.written(setting, whole)),
-            Self::Spring(spring) => return Self::Spring(spring.written(setting, whole)),
-            Self::Stutter(stutter) => return Self::Stutter(stutter.written(setting, whole)),
-            Self::Exciter(exciter) => return Self::Exciter(exciter.written(setting, whole)),
-            Self::Rotary(rotary) => return Self::Rotary(rotary.written(setting, whole)),
-            Self::Space(space) => return Self::Space(space.written(setting, whole)),
-            Self::Clouds(clouds) => return Self::Clouds(clouds.written(setting, whole)),
-            Self::Beads(beads) => return Self::Beads(beads.written(setting, whole)),
-            Self::Echo(echo) => return Self::Echo(echo.written(setting, whole)),
-            Self::Empty => return self,
-        };
-        let mut distort = distort;
-        match setting {
-            Setting::Type => distort.kind = DistortType::ALL[usize::from(whole)],
-            Setting::Amount => distort.amount = whole,
-            Setting::Bits => distort.bits = whole + LEAST_BITS,
-            Setting::Rate => distort.rate = whole,
-            Setting::MuLaw => distort.mu_law = whole,
-            Setting::FollowNote => distort.track = whole,
-            Setting::Mix => distort.mix = whole,
-            Setting::Gain => distort.gain = whole,
-            Setting::Tone => distort.tone = whole,
-            _ => {}
+        match self {
+            Self::Empty => self,
+            Self::Distort(distort) => Self::Distort(distort.written(setting, whole)),
+            Self::Delay(delay) => Self::Delay(delay.written(setting, whole)),
+            Self::Reverb(reverb) => Self::Reverb(reverb.written(setting, whole)),
+            Self::Chorus(chorus) => Self::Chorus(chorus.written(setting, whole)),
+            Self::Eq(eq) => Self::Eq(eq.written(setting, whole)),
+            Self::Compressor(compressor) => Self::Compressor(compressor.written(setting, whole)),
+            Self::Limit(limiter) => Self::Limit(limiter.written(setting, whole)),
+            Self::Phaser(phaser) => Self::Phaser(phaser.written(setting, whole)),
+            Self::Flanger(flanger) => Self::Flanger(flanger.written(setting, whole)),
+            Self::Tape(tape) => Self::Tape(tape.written(setting, whole)),
+            Self::Plate(plate) => Self::Plate(plate.written(setting, whole)),
+            Self::Pitch(pitch) => Self::Pitch(pitch.written(setting, whole)),
+            Self::Grains(grains) => Self::Grains(grains.written(setting, whole)),
+            Self::Warps(warps) => Self::Warps(warps.written(setting, whole)),
+            Self::Lpg(gate) => Self::Lpg(gate.written(setting, whole)),
+            Self::Reso(resonator) => Self::Reso(resonator.written(setting, whole)),
+            Self::Comb(comb) => Self::Comb(comb.written(setting, whole)),
+            Self::Vowel(vowel) => Self::Vowel(vowel.written(setting, whole)),
+            Self::FreqShift(shifter) => Self::FreqShift(shifter.written(setting, whole)),
+            Self::Spring(spring) => Self::Spring(spring.written(setting, whole)),
+            Self::Stutter(stutter) => Self::Stutter(stutter.written(setting, whole)),
+            Self::Exciter(exciter) => Self::Exciter(exciter.written(setting, whole)),
+            Self::Rotary(rotary) => Self::Rotary(rotary.written(setting, whole)),
+            Self::Space(space) => Self::Space(space.written(setting, whole)),
+            Self::Clouds(clouds) => Self::Clouds(clouds.written(setting, whole)),
+            Self::Beads(beads) => Self::Beads(beads.written(setting, whole)),
+            Self::Echo(echo) => Self::Echo(echo.written(setting, whole)),
         }
-        Self::Distort(distort)
     }
 
     /// The setting that changes the effect's character, by its place among those it has now: the
     /// `Type` of a Distort, a Chorus or a Comp, and the `Mode` of an LPG or a Comb. The FX page
     /// shows it in the slot's title, beside the effect, rather than in its grid.
     pub fn type_param(self) -> Option<usize> {
-        self.params().iter().position(|found| {
-            matches!(
-                found.setting,
-                Setting::Type
-                    | Setting::ChorusType
-                    | Setting::CompressorType
-                    | Setting::GateMode
-                    | Setting::CombMode
-                    | Setting::CloudsMode
-                    | Setting::BeadsMode
-                    | Setting::EchoMode
-            )
-        })
+        self.params()
+            .iter()
+            .position(|found| found.place == Place::Type)
     }
 
     /// A second setting the FX page shows in the slot's title, after its type: Beads' quality,
     /// which, as its mode does, chooses what it is rather than how it's played.
     pub fn title_param(self) -> Option<usize> {
-        match self {
-            Self::Beads(_) => self
-                .params()
-                .iter()
-                .position(|found| found.setting == Setting::Quality),
-            _ => None,
-        }
+        self.params()
+            .iter()
+            .position(|found| found.place == Place::Title)
     }
 
     /// Where its settings sit on the FX page, by their places among those it has now. Its type is
@@ -992,7 +818,7 @@ impl Insert {
     /// out in a column of its own.
     fn default_grid(self) -> Grid {
         let params = self.params();
-        let output = |at: &usize| matches!(params[*at].setting, Setting::Mix | Setting::Gain);
+        let output = |at: &usize| params[*at].place == Place::Output;
         let own: Vec<usize> = (0..params.len())
             .filter(|at| Some(*at) != self.type_param() && !output(at))
             .collect();

@@ -190,8 +190,8 @@ pub(crate) fn value(control: Control, track: &Track, song: &Song) -> String {
         Control::InsertParam(slot, param) => {
             let insert = track.inserts[slot];
             match insert.params().get(param) {
-                Some(found) if !found.choices.is_empty() => found
-                    .choices
+                Some(found) if !found.choices().is_empty() => found
+                    .choices()
                     .get(usize::from(insert.value(param)))
                     .copied()
                     .unwrap_or("")
@@ -410,7 +410,7 @@ impl CellSource for SlotCells<'_> {
             return None;
         };
         let insert = self.track.inserts[slot];
-        if !insert.params().get(param)?.choices.is_empty() {
+        if !insert.params().get(param)?.choices().is_empty() {
             return None;
         }
         let set = insert.value(param);
