@@ -204,7 +204,7 @@ lowest and highest.
 | Markov | Each row's chance hanging on the rows before it |
 | 3 states | Each row a gate, a rest or a tie |
 | Complementary | One coin a row for two tracks, so never both |
-| Cells | Where a cellular automaton's cells are on, by its `Rule`, from its `Start` |
+| Cells | A cellular automaton's cells, by `Rule` from `Start` |
 
 `Euclid` spreads its hits over the rows it could change, as the Euclidean
 rhythms do: 3 in 8 is `x..x..x.` and 5 in 8 is `x.xx.xx.`. On Velocity it
