@@ -13,7 +13,7 @@ use vt_model::speed::Speed;
 use vt_model::step::slid;
 use vt_model::step::{
     FxCommand, FxSlot, Gate, GateKind, HIGHEST_OCTAVE, LOWEST_OCTAVE, MAX_PULSES, MAX_VELOCITY,
-    Mark, Note, Step, nudge_digits,
+    MOST_NUDGE, Mark, Note, Step, nudge_digits,
 };
 
 use crate::input::bindings::{Cmd, Resolved};
@@ -599,8 +599,9 @@ impl App {
 
     /// A nudge's 24ths of a sixteenth in hex, late unless `-` comes first, and `+` or `=` first
     /// says late again: one digit, `0` to `B` at a sixteenth, on a track whose nudges go no
-    /// further than `F`, and two, `00` to `2F` at a quarter, on one whose go further. All `0`s
-    /// put the row back on the grid, and auto-jump moves on by the grid once the digits are in.
+    /// further than `F`, and two, `00` to `2F` at a quarter and `7F` at a whole note, on one whose
+    /// go further. All `0`s put the row back on the grid, and auto-jump moves on by the grid once
+    /// the digits are in.
     fn insert_nudge(&mut self, key: Key) {
         match key.code {
             KeyCode::Esc => self.cancel_entry(),
@@ -618,13 +619,17 @@ impl App {
                 let early = self.entry.text.starts_with('-');
                 let mut digits: String = self.entry.text.trim_start_matches(['-', '+']).to_owned();
                 digits.push(c.to_ascii_uppercase());
-                let amount = i8::from_str_radix(&digits, 16).unwrap_or(0);
-                if amount > most {
-                    self.status = format!(
-                        "A nudge on this track goes up to {most:X}, just under half its step"
-                    );
+                let amount = u8::from_str_radix(&digits, 16).unwrap_or(0);
+                if amount > most as u8 {
+                    let how = if most == MOST_NUDGE {
+                        "as far as a nudge goes"
+                    } else {
+                        "just under half its step"
+                    };
+                    self.status = format!("A nudge on this track goes up to {most:X}, {how}");
                     return;
                 }
+                let amount = amount as i8;
                 if digits.len() < nudge_digits(most) {
                     self.entry.text.push(c.to_ascii_uppercase());
                     return;

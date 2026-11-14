@@ -352,12 +352,13 @@ its own phrase, turned its own way, and plays them at its own `Speed`.
 |---|---|---|---|---|
 | `V1` | `FM` | `1/8` | `forward` | The theme itself |
 | `V2` | `String` | `1/16` | `up-down` | A fifth up: `Transpose +4` |
-| `V3` | `VA` | `1/4` | `forward` | Inverted, an octave down: `Invert On`, `Transpose -7` |
+| `V3` | `VA` | `1/2` | `forward` | Inverted, an octave down: `Invert On`, `Transpose -7` |
 | `V4` | `Modal` | `1/8T` | `forward` | Backwards, two rows late: `Reverse On`, `Rotate 2` |
 
 With the scale on, `Transpose` counts the scale's degrees, so `+4` is a fifth in key and `-7` an
-octave. `V3` plays the theme upside down as a bass line across two bars, while `V2` runs up and
-down the answer four times a bar. `V4` goes round three times in two bars, backwards.
+octave. `V3` is the canon's slow voice, its augmentation: the theme upside down as a bass line
+in half notes, a quarter of the theme's speed, across four bars, while `V2` runs up and down the
+answer four times a bar. `V4` goes round three times in two bars, backwards.
 [`song.ron`](songs/fugue/song.ron)
 
 ```text
@@ -385,8 +386,8 @@ the notes, and `Follow` writes it again whenever the theme changes. The follower
 5.  Track 4: the same up to `Enter`, then `j` `j` `j` `j` `=` to turn `Reverse` on, and `j` `=`
     `=` for `Rotate` `2 rows late`. `L`.
 6.  The voices and speeds: on each track, `Space 5`, its machine (`string`, `va`, `modal`), its
-    name, and `/speed` `Enter`, then `=` for each step slower: twice for `1/8` on `V1`, four
-    times for `1/4` on `V3`, once for `1/8T` on `V4`. `V2` stays at `1/16`.
+    name, and `/speed` `Enter`, then `=` for each step slower: three times for `1/8` on `V1`,
+    eight times for `1/2` on `V3`, once for `1/8T` on `V4`. `V2` stays at `1/16`.
 7.  The order: in the phrase view, `:order up-down` on track 2.
 
 The finished song also shapes the voices: the `FM`'s `Index` `40`; `String` `Decay` `90`; plucky
@@ -401,6 +402,9 @@ right, some delay and reverb, and the levels.
     another note, so it turns about that one.
 *   Another order on `V2`: `:order down-up`, `converge` or `pedal`.
 *   `V4` at `1/16T`: still triplets, twice as fast, and the canon tightens.
+*   `V3` at `1/1`, a whole note a row, and the slow voice takes eight bars; or at `1/4D`, a
+    dotted quarter, three eighths a row, so its notes fall across the beats and meet the bar again
+    every three bars.
 *   `Space g a` on a voice freezes it: it keeps its notes as plain ones, and stops following.
 
 ## Kria
@@ -506,7 +510,7 @@ Track 1                       Track 2, at 1/8
     `Enter`), and `Limit` `Bounce` (`K`).
 5.  `:order up-down`.
 6.  Track 2: `W`, and on its Sound page `K` `va` `Enter`, `:name AR`, and `/speed` `Enter`
-    and `=` twice for `1/8`. In the phrase view, `:len 4`, the four notes with `SGL4`, and
+    and `=` three times for `1/8`. In the phrase view, `:len 4`, the four notes with `SGL4`, and
     `ARP` on each (`K` `arp` `Enter`, then `24`).
 7.  Its `Arpeggio` device, beside the accumulator: `Rate` `1/32`, which on a track at `1/8` is a
     sixteenth, `Mode` `Up-down`, `Oct` `2` and `Retrig` `on`.

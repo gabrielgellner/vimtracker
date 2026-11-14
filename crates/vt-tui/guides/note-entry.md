@@ -253,7 +253,7 @@ A row's nudge moves its note a little early or late, in 24ths of a sixteenth, 96
 to a quarter note as the MPC's sequencer counts, and Elektron's micro-timing. A
 24th is the same time on every track, whatever its `Speed`, and a nudge goes up
 to just under half the track's step either way, so a note can't pass the next
-row's:
+row's. At `1/1` it stops at `7F`, a third of the step, as far as a nudge goes:
 
 | `Speed` | 24ths a step | A nudge goes to |
 |---|---|---|
@@ -261,9 +261,14 @@ row's:
 | `1/16T` | 16 | `7` |
 | `1/16` | 24 | `B` |
 | `1/8T` | 32 | `F` |
+| `1/16D` | 36 | `11` |
 | `1/8` | 48 | `17` |
 | `1/4T` | 64 | `1F` |
+| `1/8D` | 72 | `23` |
 | `1/4` | 96 | `2F` |
+| `1/4D` | 144 | `47` |
+| `1/2` | 192 | `5F` |
+| `1/1` | 384 | `7F` |
 
 It sits between the velocity and the gate, drawn dim, and is blank on a row
 that's on the grid: `C-3 40 -3 SGL1` plays three 24ths early. A track whose

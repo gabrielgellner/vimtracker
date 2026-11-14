@@ -728,11 +728,11 @@ fn a_step_locks_the_speed_by_its_label() {
     press(&mut app, "llllli");
     press(&mut app, "rate");
     special(&mut app, KeyCode::Enter);
-    press(&mut app, "04");
+    press(&mut app, "05");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "k");
     let step = app.phrase_here().unwrap().steps()[0].to_string();
-    assert!(step.contains("speed:04"), "{step}");
+    assert!(step.contains("speed:05"), "{step}");
     assert_eq!(column_name(&app), "Machine: Speed");
     assert_eq!(value_shown(&app).as_deref(), Some("1/8"));
 }

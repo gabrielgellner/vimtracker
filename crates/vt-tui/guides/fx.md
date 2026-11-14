@@ -424,8 +424,10 @@ page's Play device, which the Roto has as a knob.
 ## Speed
 
 A track's `Speed`, in its Sound page's Play device, is how long each of its steps is: `1/32`,
-`1/16T`, `1/16`, `1/8T`, `1/8`, `1/4T` or `1/4`, the song's `1/16` unless
-changed. A track at `1/8` plays its rows half as fast, and everything on it
+`1/16T`, `1/16`, `1/8T`, `1/16D`, `1/8`, `1/4T`, `1/8D`, `1/4`, `1/4D`, `1/2` or
+`1/1`, the song's `1/16` unless changed. `D` is dotted, half as long again, as an
+LFO's `1/8d` is, so `1/8D` is three sixteenths; `RATE`'s values count through the
+list in that order, `05` being `1/8`. A track at `1/8` plays its rows half as fast, and everything on it
 follows its step: its pulses, its lanes, `DEL`, `KIL`, `OFF` and `RET`, its
 groove's pushes and its notes' `Gate`. A nudge is the same time on every track,
 in 24ths of a sixteenth, and goes further on a slower one: see **Note entry**. Sections, `:reset`, launches
