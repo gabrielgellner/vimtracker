@@ -6,11 +6,10 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
-use ratatui::widgets::{Clear, Paragraph};
+use ratatui::widgets::Paragraph;
 
 use crate::app::App;
-use crate::theme;
-use crate::views::widgets;
+use crate::views::widgets::popup;
 
 /// How long a prefix waits before showing what can come next.
 pub const POPUP_DELAY: Duration = Duration::from_millis(300);
@@ -27,19 +26,9 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, app: &App, now: Instant) {
         .collect();
     // As wide as its longest row, so no description is cut off.
     let widest = lines.iter().map(Line::width).max().unwrap_or(0);
-    let height = (lines.len() as u16 + 2).min(area.height);
-    let width = (widest as u16 + 2).min(area.width);
-    let popup = Rect {
-        x: area.right() - width,
-        y: area.bottom() - height,
-        width,
-        height,
-    };
-    frame.render_widget(Clear, popup);
-    frame.render_widget(
-        Paragraph::new(lines).block(widgets::window_border().style(theme::window())),
-        popup,
-    );
+    let window = popup::bottom_right(area, widest as u16 + 2, lines.len() as u16 + 2);
+    let inside = popup::draw(frame, window, popup::border());
+    frame.render_widget(Paragraph::new(lines), inside);
 }
 
 /// Draw every key. `j` and `k` scroll, and any other key closes it.
@@ -50,14 +39,9 @@ pub fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
         .skip(app.help_scroll)
         .map(Line::raw)
         .collect();
-    frame.render_widget(Clear, area);
-    frame.render_widget(
-        Paragraph::new(lines).block(
-            widgets::window_border()
-                .style(theme::window())
-                .title("Keys: j and k scroll, any other key closes")
-                .title_style(Style::new().add_modifier(Modifier::BOLD)),
-        ),
-        area,
-    );
+    let border = popup::border()
+        .title("Keys: j and k scroll, any other key closes")
+        .title_style(Style::new().add_modifier(Modifier::BOLD));
+    let inside = popup::draw(frame, area, border);
+    frame.render_widget(Paragraph::new(lines), inside);
 }
