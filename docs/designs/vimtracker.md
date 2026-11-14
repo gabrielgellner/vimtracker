@@ -529,9 +529,10 @@ Song                               song.ron, refused unless format_version is FO
     refuses any other version, with no migration. What belongs to the machine rather than the song
     is in the config folder, `$XDG_CONFIG_HOME/vimtracker` or `~/.config/vimtracker`: where kits,
     samples and presets are (`settings.ron`, `config.rs`), the audio choice (`audio.ron`), the command
-    history (`history.ron`) and the explorer's last folders (`places.ron`). The cache folder,
-    `$XDG_CACHE_HOME/vimtracker` or `~/Library/Caches/vimtracker` on macOS, holds the sample
-    analyses and `full-speed.txt`. Autosave (`autosave.rs`) writes `song.autosave.ron` beside
+    history (`history.ron`), the explorer's last folders (`places.ron`) and the tags given to
+    sample files by hand, by their content hash (`tags.ron`, `vt-model`'s `tag.rs`, decision 315).
+    The cache folder, `$XDG_CACHE_HOME/vimtracker` or `~/Library/Caches/vimtracker` on macOS,
+    holds the sample analyses and `full-speed.txt`. Autosave (`autosave.rs`) writes `song.autosave.ron` beside
     `song.ron` every `AUTOSAVE_SECONDS`, and offers it back after a crash.
 *   **Presets.** `vt-model`'s `preset.rs` reads and writes a sound preset, a `Sound` (the machine
     to the slots' effects, and a sampler's bank entry by its full path) and a `Patch` (the mod
@@ -748,7 +749,9 @@ only name Normal's keys on those pages, for the binding table.
     selection to come back to after `r` (decision 148).
 *   **`picker.rs`:** one picker for every list, with categories as a tree one level deep, which is
     also the file explorer. `picking.rs`, `explorer.rs` and `exploring.rs` open it and act on what it
-    chooses.
+    chooses. The explorer's items carry tags, guessed by `vt-model`'s `tag.rs` and kept in its
+    `TagLibrary` or a preset's file; its search reads `#` words as tags (`tree.rs`'s `Search`), and
+    `tagging.rs` keeps what `T` gives (decision 315).
 *   **The command line:** `command.rs` parses a `:` line into a `Line`, `completion.rs` completes it
     with `Tab` from the parser's own tables, and `command_history.rs` keeps the lines run, in
     `history.ron`. `command_line.rs` has the line's keys.

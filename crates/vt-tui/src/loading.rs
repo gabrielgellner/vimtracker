@@ -27,6 +27,8 @@ pub struct Loaded {
     pub sample: Arc<SampleData>,
     pub info: SampleInfo,
     pub wave: Vec<(usize, usize)>,
+    /// A loop or a one-shot by how its sound ends, if that says (decision 315).
+    pub heard: Option<&'static str>,
 }
 
 /// A file read, or why it couldn't be.
@@ -149,10 +151,13 @@ impl Loader {
 fn read(path: &Path, rate: u32, (columns, rows): (usize, usize)) -> Read {
     let (sample, info) = load_sample_with_info(path, rate).map_err(|error| error.to_string())?;
     let wave = kitty::waveform_spans(&sample.frames, columns, rows);
+    let end = vt_model::tag::sound_end(&sample.frames);
+    let heard = vt_model::tag::guess_heard(sample.frames.len() as u64, rate, end);
     Ok(Arc::new(Loaded {
         sample: Arc::new(sample),
         info,
         wave,
+        heard,
     }))
 }
 

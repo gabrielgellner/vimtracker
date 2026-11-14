@@ -1763,13 +1763,19 @@ the slots all start in; an effect replaces only the slot under the cursor. The l
 preset with what it is beside it, as `Acid · Distort Delay · 3 macros`, a sound by its machine's
 icon, and the folder you last saved in or loaded from at its top.
 
+**Tags** find presets as they find samples (see **Tags** in **Navigation**): every sound preset
+is tagged `sound` and by its machine, as `synth`, `analog` and `acid`, and every effect preset
+`effect` and by its effect, as `delay`, so `#acid` lists the acid sounds. `T` in the list gives
+one tags of its own, such as `bass`, kept in its file so they go where it goes.
+
 ## Patches
 
 A patch is what plays a sound without the sound: a track's macros and the parts they move, saved
 to add to any other track while it keeps its own machine, filter and effects, as Live's MIDI
 Effect Rack presets go in front of whatever instrument is there. A Steps slot with `Change`,
 `Length` and `Range` on it is a Turing Machine you can put on an `Acid`, a `VA` or a kick. Patches
-are kept in the presets folder's `patches`, beside `sounds` and `effects`.
+are kept in the presets folder's `patches`, beside `sounds` and `effects`. Each is tagged
+`patch`, and `T` in the list gives it tags of its own, such as `pitch`.
 
 **What's saved** goes by the macros, as they're the patch's knobs: each macro that holds
 something, with its name, value, mappings and ranges; every mod slot a macro maps to, the slots

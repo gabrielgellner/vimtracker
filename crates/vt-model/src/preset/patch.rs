@@ -56,6 +56,9 @@ impl PatchGen {
 pub struct PatchPreset {
     pub format: u32,
     pub patch: Patch,
+    /// Its own tags, beside `patch`, which every patch has (decision 315).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 /// Where a patch's parts go on a track: the track's mod slot for each of the patch's, and its
@@ -486,7 +489,13 @@ impl PatchPreset {
         Some(Self {
             format: PRESET_FORMAT,
             patch: Patch::of_track(track, phrase)?,
+            tags: Vec::new(),
         })
+    }
+
+    /// The tag it always has: `patch`, so `#patch` lists them all, beside `sound` and `effect`.
+    pub fn fixed_tags(&self) -> Vec<String> {
+        vec![super::PresetKind::Patch.noun().to_owned()]
     }
 
     /// What it is, for a list.
@@ -672,6 +681,10 @@ mod tests {
         let text = fs::read_to_string(&path).unwrap();
         assert!(!text.contains("cutoff"), "{text}");
         assert!(text.contains("curve: -60"), "{text}");
+        assert_eq!(loaded.fixed_tags(), ["patch"]);
+        super::super::set_tags(&path, super::super::PresetKind::Patch, vec!["pitch".into()])
+            .unwrap();
+        assert_eq!(load_patch(&path).unwrap().tags, ["pitch"]);
         let mut track = Song::new(2).tracks[1].clone();
         let placement = loaded.patch.place(&track, false).unwrap();
         loaded.patch.add_to(&mut track, &placement);

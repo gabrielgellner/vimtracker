@@ -259,17 +259,18 @@ impl App {
         self.count = None;
         // `H`, `P` and `A` are drawn after these, with their switches.
         let hint = match purpose {
-            Purpose::Sample => "Enter choose",
-            Purpose::Kit => "Enter use  L on tracks",
+            Purpose::Sample => "Enter choose  T tag",
+            Purpose::Kit => "Enter use  L on tracks  T tag",
             Purpose::Project => "Enter open",
             Purpose::Save | Purpose::Render => "l open  Enter choose",
             Purpose::Preset(vt_model::preset::PresetKind::Patch) if self.patch_over => {
-                "Enter add over the last"
+                "Enter add over the last  T tag"
             }
-            Purpose::Preset(vt_model::preset::PresetKind::Patch) => "Enter add",
-            Purpose::Preset(_) => "Enter load",
+            Purpose::Preset(vt_model::preset::PresetKind::Patch) => "Enter add  T tag",
+            Purpose::Preset(_) => "Enter load  T tag",
         };
         let mut picker = Picker::explorer(purpose, roots, home_folder())
+            .with_tags(std::sync::Arc::clone(&self.tag_library))
             .following(on)
             .opening_first()
             .hinted(hint);
@@ -397,8 +398,10 @@ impl App {
         match preview {
             Preview::Sample(path) => {
                 let read = self.loader.want(path);
-                if let Some(Err(_)) = read {
-                    self.mark_unreadable(path);
+                match &read {
+                    Some(Err(_)) => self.mark_unreadable(path),
+                    Some(Ok(loaded)) => self.note_heard(path, loaded.heard),
+                    None => {}
                 }
                 Some(sample_preview(item, path, read.as_ref()))
             }
@@ -474,6 +477,7 @@ impl App {
         }
         match self.loader.want(&path) {
             Some(Ok(loaded)) => {
+                self.note_heard(&path, loaded.heard);
                 let track = self.cursor.track;
                 if self
                     .handle

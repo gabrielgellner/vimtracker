@@ -4,10 +4,16 @@
 //! loads what's marked as new tracks (decision 306).
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use vt_model::tag::{self, Tag, TagLibrary};
 
 use crate::explorer::{self, Icon, Purpose};
 
 use super::{Item, KitChoice, Outcome, Pick, Picker, Row};
+
+/// The most a search by tag reads below the open folders, so one over the home folder stops.
+pub const MOST_READ: usize = 20_000;
 
 /// The top of the explorer's tree: a folder it starts from, with why it's there dim beside it, or
 /// items given up front under a name, such as the kit's sounds.
@@ -49,6 +55,10 @@ pub struct Tree {
     /// In the kit dialog, the sounds marked to load, by their places under their kit's path, all
     /// in one kit.
     pub marked: Vec<PathBuf>,
+    /// The tags given by hand, for what's listed (decision 315).
+    pub library: Arc<TagLibrary>,
+    /// Whether a search by tag stopped reading at [`MOST_READ`].
+    pub read_short: bool,
     roots: Vec<Root>,
     home: Option<PathBuf>,
     pub(super) nodes: Vec<Node>,
@@ -58,6 +68,9 @@ pub struct Tree {
 
 /// The kit dialog's hint, in a kit's sounds or with any marked.
 pub const MARKING_HINT: &str = "Space mark  a all  Enter load";
+
+/// The hint while `T` types an item's tags.
+pub const TAGGING_HINT: &str = "Enter tag  Tab complete  Esc back";
 
 /// Where the cursor was and which folders were open, kept while the tree is read again.
 struct Remembered {
@@ -104,6 +117,8 @@ impl Picker {
             preview: purpose.previews(),
             audition: purpose.auditions(),
             marked: Vec::new(),
+            library: Arc::default(),
+            read_short: false,
             roots,
             home,
             nodes: Vec::new(),
@@ -112,6 +127,17 @@ impl Picker {
         picker.build();
         picker.rebuild();
         picker
+    }
+
+    /// With the tags given by hand, for what it lists. It's read again from its roots, so this
+    /// comes before anything is opened.
+    pub fn with_tags(mut self, library: Arc<TagLibrary>) -> Self {
+        if let Some(tree) = self.tree.as_mut() {
+            tree.library = library;
+        }
+        self.build();
+        self.rebuild();
+        self
     }
 
     /// Open on a file or folder, opening the folders down to it, and mark it. A folder is opened
@@ -245,6 +271,7 @@ impl Picker {
         tree.top.clear();
         let roots = tree.roots.clone();
         let home = tree.home.clone();
+        let library = Arc::clone(&tree.library);
         self.items.clear();
         self.item_categories.clear();
         for root in roots {
@@ -279,10 +306,12 @@ impl Picker {
                     );
                     let children = items
                         .into_iter()
-                        .map(|item| {
+                        .map(|mut item| {
                             // The kit in use's sounds, each warned of if its file has gone.
                             let icon = match &item.pick {
                                 Pick::KitSound(sound) => {
+                                    item.tags =
+                                        explorer::file_tags(&sound.path, &sound.label, &library);
                                     explorer::kit_sound_icon(&sound.path, false)
                                 }
                                 _ => Icon::KitSound,
@@ -325,7 +354,8 @@ impl Picker {
             return;
         }
         let depth = node.depth + 1;
-        let Some(entries) = explorer::contents(path, tree.purpose, tree.hidden) else {
+        let Some(entries) = explorer::contents(path, tree.purpose, tree.hidden, &tree.library)
+        else {
             // It can't be read, so it's empty, and says so.
             if let Some(node) = self.node_mut(at) {
                 node.icon = Icon::Missing;
@@ -401,35 +431,52 @@ impl Picker {
     }
 
     /// The rows of the tree, from its roots: every open folder's contents, or while searching,
-    /// what's been read that matches and the folders it's in, open or not.
-    pub(super) fn tree_rows(&self) -> (Vec<Row>, Vec<Vec<u32>>) {
+    /// what's been read that matches and the folders it's in, open or not. With each, where the
+    /// search matched its name, and whether it matched.
+    pub(super) fn tree_rows(&self) -> (Vec<Row>, Vec<Vec<u32>>, Vec<bool>) {
         let mut rows = Vec::new();
         let mut matched = Vec::new();
-        let query = self.query.trim().to_owned();
+        let mut hits = Vec::new();
+        let search = self.search();
         if let Some(tree) = &self.tree {
             for root in &tree.top {
-                self.visit(*root, &query, &mut rows, &mut matched);
+                self.visit(*root, &search, &mut rows, &mut matched, &mut hits);
             }
         }
-        (rows, matched)
+        (rows, matched, hits)
+    }
+
+    /// The search as the explorer reads it: its tags, each a word starting `#` where the
+    /// explorer lists things with tags, and the rest, the name.
+    pub(super) fn search(&self) -> Search {
+        let tags = self.tree.as_ref().is_some_and(|tree| tree.purpose.tags());
+        Search::of(&self.query, tags)
+    }
+
+    /// Whether an item is something chosen rather than a folder or a heading, so it can match a
+    /// search by tag.
+    fn is_chosen(&self, item: usize) -> bool {
+        !matches!(self.items[item].pick, Pick::Folder(_))
     }
 
     /// Add a node's row and those under it, and say whether any were kept.
     fn visit(
         &self,
         at: usize,
-        query: &str,
+        search: &Search,
         rows: &mut Vec<Row>,
         matched: &mut Vec<Vec<u32>>,
+        hits: &mut Vec<bool>,
     ) -> bool {
-        let searching = !query.is_empty();
+        let searching = !search.is_empty();
         let found = if searching {
-            exact(&self.items[at].label, query)
+            search.find(&self.items[at], self.is_chosen(at))
         } else {
             Some(Vec::new())
         };
         let mark = rows.len();
         rows.push(Row::Item(at));
+        hits.push(searching && found.is_some());
         matched.push(found.clone().unwrap_or_default());
         let mut kept = found.is_some();
         let open = self
@@ -438,14 +485,241 @@ impl Picker {
             .is_some_and(|folder| folder.open);
         if open || searching {
             for child in self.children(at).to_vec() {
-                kept |= self.visit(child, query, rows, matched);
+                kept |= self.visit(child, search, rows, matched, hits);
             }
         }
         if !kept {
             rows.truncate(mark);
             matched.truncate(mark);
+            hits.truncate(mark);
         }
         kept
+    }
+
+    /// Before a search by tag: read everything below the open folders, kits and sounds
+    /// included, up to [`MOST_READ`] things, so `#kick` finds every kick under them rather than
+    /// only those in the folders opened by hand.
+    pub(super) fn read_below_open(&mut self) {
+        let Some(tree) = self.tree.as_ref() else {
+            return;
+        };
+        let opens = |node: &Node| node.path.is_some() && node.folder.is_some();
+        let mut waiting: Vec<usize> = tree
+            .nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| opens(node) && node.folder.as_ref().is_some_and(|f| f.open))
+            .map(|(at, _)| at)
+            .collect();
+        let mut short = false;
+        while let Some(at) = waiting.pop() {
+            if self.items.len() >= MOST_READ {
+                short = true;
+                break;
+            }
+            self.load(at);
+            let children = self.children(at).to_vec();
+            waiting.extend(
+                children
+                    .into_iter()
+                    .filter(|child| self.node(*child).is_some_and(opens)),
+            );
+        }
+        if let Some(tree) = self.tree.as_mut() {
+            tree.read_short |= short;
+        }
+    }
+
+    /// While a search's last word is a tag being typed, the tags starting with it on what the
+    /// rest of the search keeps, each with how many have it, most first: the explorer's tag row.
+    pub fn tag_row(&self) -> Option<Vec<(String, usize)>> {
+        if self.focus != super::Focus::Search {
+            return None;
+        }
+        let search = self.search();
+        let typing = search.typing.as_deref()?;
+        let rest = search.without_typing();
+        let mut counts: Vec<(String, usize)> = Vec::new();
+        for (at, item) in self.items.iter().enumerate() {
+            if !self.is_chosen(at) || rest.find(item, true).is_none() {
+                continue;
+            }
+            for tag in item.tags.iter().filter(|tag| tag.name.starts_with(typing)) {
+                match counts.iter_mut().find(|(name, _)| *name == tag.name) {
+                    Some((_, count)) => *count += 1,
+                    None => counts.push((tag.name.clone(), 1)),
+                }
+            }
+        }
+        counts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        Some(counts)
+    }
+
+    /// How many things a search by tag found, or none for a search by name alone, whose count
+    /// would only be what's been opened.
+    pub fn tag_found(&self) -> Option<usize> {
+        if self.tree.is_none() || self.search().tags.is_empty() {
+            return None;
+        }
+        let found =
+            self.rows.iter().zip(&self.hits).filter(|(row, hit)| {
+                **hit && matches!(row, Row::Item(item) if self.is_chosen(*item))
+            });
+        Some(found.count())
+    }
+
+    /// `Tab` in the search: finish the tag being typed as the tag row's first, and start the
+    /// next word.
+    pub(super) fn complete_tag(&mut self) {
+        let first = self
+            .tag_row()
+            .and_then(|row| row.into_iter().next())
+            .map(|(name, _)| name);
+        if let Some(first) = first
+            && let Some(at) = self.query.rfind('#')
+        {
+            let query = format!("{}#{first} ", &self.query[..at]);
+            self.set_query(query);
+        }
+    }
+
+    /// The items listing a sample file, as a file or as a kit's sound, so a tag given to it shows
+    /// wherever it's listed.
+    pub fn items_of_file(&self, path: &Path) -> Vec<usize> {
+        self.items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| match &item.pick {
+                Pick::Sample(file) | Pick::KitSound(KitChoice { path: file, .. }) => file == path,
+                _ => false,
+            })
+            .map(|(at, _)| at)
+            .collect()
+    }
+
+    /// Give an item these tags, and a sample the loop's icon if they say it's one, as the rows
+    /// and the preview then show.
+    pub fn set_tags(&mut self, item: usize, tags: Vec<Tag>) {
+        let looped = tag::has(&tags, tag::LOOP);
+        if let Some(node) = self.node_mut(item)
+            && matches!(node.icon, Icon::Sample | Icon::Loop)
+        {
+            node.icon = if looped { Icon::Loop } else { Icon::Sample };
+        }
+        if let Some(found) = self.items.get_mut(item) {
+            found.tags = tags;
+        }
+        if self
+            .preview
+            .as_ref()
+            .is_some_and(|shown| shown.item == item)
+        {
+            self.preview = None;
+        }
+    }
+
+    /// The item under the cursor if `T` can tag it: a sample, a kit's sound or a preset, in an
+    /// explorer that lists things with tags.
+    pub fn taggable(&self) -> Option<usize> {
+        let tree = self.tree.as_ref()?;
+        let item = self.current_index()?;
+        let tags = matches!(
+            self.items[item].pick,
+            Pick::Sample(_) | Pick::KitSound(_) | Pick::Preset { .. }
+        );
+        (tree.purpose.tags() && tags).then_some(item)
+    }
+
+    /// `T`: type the tags of the item under the cursor, starting from those it has that can be
+    /// changed, so a wrong guess is taken off by deleting it.
+    pub(super) fn start_tagging(&mut self) {
+        let Some(item) = self.taggable() else {
+            return;
+        };
+        let names: Vec<&str> = self.items[item]
+            .tags
+            .iter()
+            .filter(|tag| tag.source != tag::Source::Fixed)
+            .map(|tag| tag.name.as_str())
+            .collect();
+        self.tag_line = names.join(" ");
+        if !self.tag_line.is_empty() {
+            self.tag_line.push(' ');
+        }
+        self.focus = super::Focus::Tags;
+    }
+
+    /// A key while typing tags: `Enter` gives them, `Tab` finishes the word from the tags in
+    /// use, and `Esc` goes back to the list with nothing changed.
+    pub(super) fn tag_key(&mut self, key: crate::input::keys::Key) -> Outcome {
+        use ratatui::crossterm::event::KeyCode;
+        match key.code {
+            KeyCode::Enter => {
+                let line = std::mem::take(&mut self.tag_line);
+                self.focus = super::Focus::List;
+                let Some(item) = self.taggable() else {
+                    return Outcome::Stay;
+                };
+                let mut tags: Vec<String> = Vec::new();
+                for name in line.split_whitespace().filter_map(tag::tag_name) {
+                    if !tags.contains(&name) {
+                        tags.push(name);
+                    }
+                }
+                return Outcome::Tag { item, tags };
+            }
+            KeyCode::Esc => {
+                self.tag_line.clear();
+                self.focus = super::Focus::List;
+            }
+            KeyCode::Backspace => {
+                self.tag_line.pop();
+            }
+            KeyCode::Tab => {
+                let start = self
+                    .tag_line
+                    .rfind(char::is_whitespace)
+                    .map_or(0, |at| at + 1);
+                let typed = self.tag_line[start..]
+                    .trim_start_matches('#')
+                    .to_lowercase();
+                let found = self
+                    .tags_in_use()
+                    .into_iter()
+                    .find(|name| !typed.is_empty() && name.starts_with(&typed));
+                if let Some(name) = found {
+                    self.tag_line.truncate(start);
+                    self.tag_line.push_str(&name);
+                    self.tag_line.push(' ');
+                }
+            }
+            KeyCode::Char(c) if !key.ctrl => self.tag_line.push(c),
+            _ => {}
+        }
+        Outcome::Stay
+    }
+
+    /// Use these tags given by hand for what's read from now on.
+    pub fn set_library(&mut self, library: Arc<TagLibrary>) {
+        if let Some(tree) = self.tree.as_mut() {
+            tree.library = library;
+        }
+    }
+
+    /// Every tag on what's been read, and every one given by hand anywhere, for `Tab` to
+    /// complete one from as it's typed.
+    pub fn tags_in_use(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .items
+            .iter()
+            .flat_map(|item| item.tags.iter().map(|tag| tag.name.clone()))
+            .collect();
+        if let Some(tree) = &self.tree {
+            names.extend(tree.library.given().map(str::to_owned));
+        }
+        names.sort();
+        names.dedup();
+        names
     }
 
     /// Which folders are open and where the cursor is, to put back once it's read again.
@@ -682,6 +956,9 @@ impl Picker {
     /// The hint under the list: the kit dialog's marking keys while the cursor is in a kit's
     /// sounds or any are marked, and otherwise the list's own.
     pub fn shown_hint(&self) -> Option<&'static str> {
+        if self.focus == super::Focus::Tags {
+            return Some(TAGGING_HINT);
+        }
         let inside = self.marks_sounds()
             && self
                 .current_index()
@@ -763,5 +1040,79 @@ impl Picker {
             kit: kit_path.to_path_buf(),
             sounds,
         })
+    }
+}
+
+/// A search in the explorer: the tags it wants, each a word that started `#`, and the rest, which
+/// a name has to hold. The last word, while it's a tag being typed, is kept apart too, for the tag
+/// row.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Search {
+    pub tags: Vec<String>,
+    pub name: String,
+    pub typing: Option<String>,
+}
+
+impl Search {
+    /// A search as typed. Where nothing listed has tags, `#` is only a letter of a name.
+    pub fn of(query: &str, tags: bool) -> Self {
+        let mut search = Self::default();
+        if !tags {
+            search.name = query.trim().to_owned();
+            return search;
+        }
+        let mut name = Vec::new();
+        for word in query.split_whitespace() {
+            match word.strip_prefix('#') {
+                Some(tag) => search.tags.push(tag.to_lowercase()),
+                None => name.push(word),
+            }
+        }
+        search.name = name.join(" ");
+        let last = query.split_whitespace().last();
+        if !query.ends_with(char::is_whitespace) && last.is_some_and(|w| w.starts_with('#')) {
+            search.typing = search.tags.last().cloned();
+        }
+        search
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.tags.is_empty() && self.name.is_empty()
+    }
+
+    /// The search without the tag being typed.
+    fn without_typing(&self) -> Self {
+        let mut tags = self.tags.clone();
+        if self.typing.is_some() {
+            tags.pop();
+        }
+        Self {
+            tags,
+            name: self.name.clone(),
+            typing: None,
+        }
+    }
+
+    /// Whether an item matches, and where in its name: it has a tag starting with each of the
+    /// search's, which only something chosen can have, and its name holds the rest exactly,
+    /// ignoring case. A `#` alone is anything chosen, so it lists all that's below the open
+    /// folders.
+    pub fn find(&self, item: &Item, chosen: bool) -> Option<Vec<u32>> {
+        if !self.tags.is_empty() {
+            let has = |wanted: &String| {
+                wanted.is_empty()
+                    || item
+                        .tags
+                        .iter()
+                        .any(|tag| tag.name.starts_with(wanted.as_str()))
+            };
+            if !chosen || !self.tags.iter().all(has) {
+                return None;
+            }
+        }
+        if self.name.is_empty() {
+            return Some(Vec::new());
+        }
+        exact(&item.label, &self.name)
     }
 }

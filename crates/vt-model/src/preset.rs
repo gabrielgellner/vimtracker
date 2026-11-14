@@ -277,6 +277,9 @@ pub struct SoundPreset {
     pub sound: Sound,
     #[serde(default)]
     pub patch: Patch,
+    /// Its own tags, beside those its kind and machine give it (decision 315).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 /// An effect preset's file: one slot's effect, and the fine parts of its settings by their own
@@ -288,6 +291,9 @@ pub struct EffectPreset {
     pub effect: Insert,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub fine: BTreeMap<String, u8>,
+    /// Its own tags, beside those its kind and effect give it (decision 315).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 impl SoundPreset {
@@ -333,6 +339,7 @@ impl SoundPreset {
             format: PRESET_FORMAT,
             sound,
             patch,
+            tags: Vec::new(),
         }
     }
 
@@ -410,6 +417,13 @@ impl SoundPreset {
         parts.join(" · ")
     }
 
+    /// The tags it always has: `sound`, and its machine's.
+    pub fn fixed_tags(&self) -> Vec<String> {
+        let mut tags = vec![PresetKind::Sound.noun().to_owned()];
+        tags.extend(crate::tag::machine_tags(self.sound.machine));
+        tags
+    }
+
     /// Check what it holds fits a track, beyond what reading it checks.
     fn check(&self) -> Result<(), String> {
         if self.patch.mods.len() > MOD_SLOTS {
@@ -448,6 +462,7 @@ impl EffectPreset {
             format: PRESET_FORMAT,
             effect,
             fine,
+            tags: Vec::new(),
         })
     }
 
@@ -474,6 +489,13 @@ impl EffectPreset {
     /// What it is, for a list: the effect's name.
     pub fn summary(&self) -> String {
         self.effect.name().to_owned()
+    }
+
+    /// The tags it always has: `effect`, and its effect's name.
+    pub fn fixed_tags(&self) -> Vec<String> {
+        let mut tags = vec![PresetKind::Effect.noun().to_owned()];
+        tags.extend(crate::tag::tag_name(self.effect.name()));
+        tags
     }
 }
 
@@ -519,6 +541,36 @@ pub fn load_effect(path: &Path) -> Result<EffectPreset, PresetError> {
         detail,
     })?;
     Ok(preset)
+}
+
+/// Give a preset of this kind its own tags, writing its file again with nothing else changed.
+pub fn set_tags(path: &Path, kind: PresetKind, tags: Vec<String>) -> Result<(), PresetError> {
+    match kind {
+        PresetKind::Sound => save(
+            path,
+            &SoundPreset {
+                tags,
+                ..load_sound(path)?
+            },
+            true,
+        ),
+        PresetKind::Effect => save(
+            path,
+            &EffectPreset {
+                tags,
+                ..load_effect(path)?
+            },
+            true,
+        ),
+        PresetKind::Patch => save(
+            path,
+            &PatchPreset {
+                tags,
+                ..load_patch(path)?
+            },
+            true,
+        ),
+    }
 }
 
 /// Write a preset, making its folders. One that's there already is written over only if asked,
@@ -653,6 +705,31 @@ mod tests {
             Err(PresetError::Taken(_))
         ));
         save(&path, &preset, true).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_presets_own_tags_are_kept_in_its_file_beside_those_it_always_has() {
+        let root = folder("tags");
+        let path = preset_path(&root, PresetKind::Sound, "Acid Bite").unwrap();
+        let preset = SoundPreset::of(&acid(), None);
+        save(&path, &preset, false).unwrap();
+        assert!(
+            !fs::read_to_string(&path).unwrap().contains("tags"),
+            "none, left out"
+        );
+        set_tags(
+            &path,
+            PresetKind::Sound,
+            vec!["bass".into(), "squelch".into()],
+        )
+        .unwrap();
+        let tagged = load_sound(&path).unwrap();
+        assert_eq!(tagged.tags, ["bass", "squelch"]);
+        assert_eq!(tagged.sound, preset.sound, "nothing else changed");
+        assert_eq!(tagged.fixed_tags(), ["sound", "synth", "analog", "acid"]);
+        let effect = EffectPreset::of(&acid(), 1).unwrap();
+        assert_eq!(effect.fixed_tags(), ["effect", "delay"]);
         fs::remove_dir_all(&root).unwrap();
     }
 
