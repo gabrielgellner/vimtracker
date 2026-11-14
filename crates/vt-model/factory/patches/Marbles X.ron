@@ -1,0 +1,78 @@
+(
+    format: 1,
+    patch: (
+        macros: [
+            (
+                name: Some("Spread"),
+                value: 26112,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "spread",
+                        ),
+                        min: 32768,
+                        max: 32868,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Bias"),
+                value: 32640,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "bias",
+                        ),
+                        min: 32668,
+                        max: 32868,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Steps"),
+                value: 32640,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "steps",
+                        ),
+                        min: 32769,
+                        max: 32775,
+                    ),
+                ],
+            ),
+        ],
+        generators: [
+            (
+                column: Note,
+                shape: (
+                    from: 62,
+                    to: 86,
+                    curve: 0,
+                    s: 0,
+                    kind: Random,
+                    wave: Sine,
+                    rate: Time(Note(1920)),
+                    phase: 0,
+                    run: 1,
+                    values: [],
+                    place: Every(2),
+                    seed: 3,
+                    random: (
+                        spread: 40,
+                        bias: 0,
+                        steps: 4,
+                        weights: (15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15),
+                    ),
+                ),
+            ),
+        ],
+    ),
+    tags: [
+        "generative",
+        "pitch",
+    ],
+)

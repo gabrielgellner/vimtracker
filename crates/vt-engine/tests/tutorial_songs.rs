@@ -5,6 +5,11 @@
 //! read-only, so a `:w` in the program can't change the repository's copy by accident (decision
 //! 313): `:w` and a folder saves a copy to carry on in.
 //!
+//! The patches that come with the program (decision 318) are made here too, each from one of
+//! the songs' tracks with the macros a module's panel would have, and kept in
+//! `crates/vt-model/factory/patches`, which the program reads them from as it's built. A test
+//! checks each file is what its builder makes, as the songs are.
+//!
 //! After a change to the format or to a builder, `just tutorial-songs` writes them again.
 
 mod support;
@@ -20,19 +25,21 @@ use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio};
 use vt_model::bloom::{Bloom, Path};
 use vt_model::generator::Span;
 use vt_model::lfo::Shape as Wave;
-use vt_model::macros::{MacroMap, MacroTarget};
+use vt_model::macros::{GEN_ZERO, GenColumn, MacroMap, MacroTarget};
 use vt_model::modulation::ModKind;
 use vt_model::order::{Cartesian, Order, Snake};
+use vt_model::preset::{FACTORY_PATCHES, PatchGen, PatchPreset};
 use vt_model::project::{load_song, save_song};
 use vt_model::samples::SamplePool;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, DrumPart, Edge, FillKind, Follow, Grids, Mutations, Pink, Random,
-    Shape, ShapeColumn, Source, Values, Walk, WaveRate, Where, track_seed,
+    Acid, Bar, Bits, DEFAULT_RATE, Divisions, DrumPart, Edge, FillKind, Follow, GenParam, Grids,
+    Mutations, Pink, Random, Shape, ShapeColumn, Source, Values, Walk, WaveRate, Where,
+    divisions_seed, track_seed,
 };
-use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice};
+use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, Note, Step};
 use vt_model::steps::StepsMode;
@@ -57,6 +64,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("acid-lines", acid_lines()),
         ("walks", walks()),
         ("grids", grids()),
+        ("random-rhythm", random_rhythm()),
         ("marbles", marbles()),
         ("variations", variations()),
         ("rene", rene()),
@@ -201,6 +209,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         random: Random::default(),
         vary: 0,
         variation: vt_model::shape::Variation::default(),
+        divisions: vt_model::shape::Divisions::default(),
     }
 }
 
@@ -922,6 +931,89 @@ fn grids() -> Song {
     song
 }
 
+/// After Vermona's randomRHYTHM: three drums at `1/32`, each a live `Divisions` over a bar, the
+/// kick channel `A`, a woodblock channel `B` heavy with triplets, and the hats `A+B`, the strikes
+/// of both, all from one seed; under a snare on the backbeat and a bass, written.
+fn random_rhythm() -> Song {
+    let mut song = song("random-rhythm", 108, 9, ScaleKind::Minor, 5);
+    song.seed = 0x60;
+    let first = |note: &str| {
+        let mut rows = vec![format!("{note} 64 --- --- ---")];
+        rows.extend((1..32).map(|_| REST.to_owned()));
+        rows
+    };
+    voice(&mut song, 0, "BD", SynthVoice::Kick, &texts(&first("C-1")));
+    set(&mut song, 0, "kick.decay", 0x68);
+    song.tracks[0].level = 0xF0;
+    voice(&mut song, 1, "WB", SynthVoice::Modal, &texts(&first("E-4")));
+    song.tracks[1].level = 0xA8;
+    song.tracks[1].send_b = 0x70;
+    voice(&mut song, 2, "HH", SynthVoice::Hat, &texts(&first("C-4")));
+    set(&mut song, 2, "hat.decay", 0x28);
+    song.tracks[2].level = 0xB0;
+    for track in &mut song.tracks[..3] {
+        track.speed = Speed::ThirtySecond;
+    }
+    voice(
+        &mut song,
+        3,
+        "SD",
+        SynthVoice::Snare,
+        &texts(&hits("....x.......x...", "G-2")),
+    );
+    song.tracks[3].level = 0xC0;
+    song.tracks[3].send_b = 0x90;
+    let bass = [
+        "A-1 64 --- --- ---",
+        REST,
+        REST,
+        "A-1 50 --- --- ---",
+        REST,
+        REST,
+        "C-2 64 --- --- ---",
+        REST,
+        REST,
+        REST,
+        "A-1 64 --- --- ---",
+        REST,
+        "G-1 64 --- --- ---",
+        REST,
+        "E-1 50 --- --- ---",
+        REST,
+    ];
+    voice(&mut song, 4, "BS", SynthVoice::VirtualAnalog, &bass);
+    song.tracks[4].cutoff = 0x48;
+    song.tracks[4].resonance = 0x40;
+    song.tracks[4].level = 0xC8;
+    // The panel's sliders: channel A on the beats, with a few eighths and sixteenths; channel B
+    // on the triplets, with a few eighths; each three tracks take A, B and A+B, and one seed.
+    let mut dice = shape(
+        FillKind::Divisions,
+        note("C-3"),
+        note("C-4"),
+        Where::AllRows,
+    );
+    dice.seed = 13;
+    dice.divisions = Divisions {
+        chances: [[90, 20, 10, 0, 10, 0], [0, 25, 0, 35, 40, 10]],
+        channel: None,
+        bar: Bar::FourFine,
+    };
+    let column = ShapeColumn::Note {
+        scale: song.scale,
+        writes: None,
+    };
+    for track in 0..3 {
+        let shape = Shape {
+            seed: divisions_seed(dice.seed, track),
+            divisions: dice.divisions.for_track(track),
+            ..dice
+        };
+        song = generate(song, track, column, 32, shape);
+    }
+    song
+}
+
 /// Shaped random values, after Mutable Instruments' Marbles' X section, each a live `Random`: a
 /// tune its `Steps` keeps to a chord's four notes, its `Spread` a bell round the middle of two
 /// octaves; a bass at its range's two ends alone, an octave apart, the low one more often; and
@@ -1177,6 +1269,279 @@ fn bloom() -> Song {
     song
 }
 
+// The shipped patches.
+
+/// Where the shipped patches are kept, a file each, which the program includes as it's built.
+fn patches_folder() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../vt-model/factory/patches")
+}
+
+/// Put one of a track's settings on a macro with a name, between two ends in the setting's own
+/// values, turned to where the setting is, as the first mapping on a macro is, so the patch
+/// plays as the song does.
+fn panel_knob(track: &mut Track, at: usize, name: &str, key: &str, ends: (u16, u16)) {
+    let id = SettingId::from_key(key).unwrap_or_else(|| panic!("no setting {key}"));
+    let map = MacroMap {
+        target: MacroTarget::Setting(id),
+        min: ends.0,
+        max: ends.1,
+        curve: 0,
+        s: 0,
+    };
+    let value = map.macro_for(track.value_of(id));
+    let held = &mut track.macros[at];
+    held.name = Some(name.to_owned());
+    held.value = value;
+    held.maps.push(map);
+}
+
+/// Put a setting of the live generator on a column on a macro with a name, between two of the
+/// setting's own numbers, turned to `number`, where the generator has it.
+fn gen_knob(
+    track: &mut Track,
+    at: usize,
+    name: &str,
+    (column, param): (GenColumn, GenParam),
+    ends: (i32, i32),
+    number: i32,
+) {
+    let map = MacroMap::numbers(MacroTarget::Gen { column, param }, ends);
+    let value = map.macro_for((number + GEN_ZERO) as u16);
+    assert_eq!(
+        map.number_at(f32::from(value) / 256.0),
+        number,
+        "{name} turned to where its generator is"
+    );
+    let held = &mut track.macros[at];
+    held.name = Some(name.to_owned());
+    held.value = value;
+    held.maps.push(map);
+}
+
+/// A track's phrase `00`.
+fn first_phrase(track: &Track) -> &Phrase {
+    &track.phrases[&0]
+}
+
+/// A track's patch, with the live generators its macros hold on phrase `00`.
+fn patch_of(track: &Track) -> PatchPreset {
+    PatchPreset::of(track, Some(first_phrase(track))).expect("its macros hold something")
+}
+
+/// The shape of the first live generator on phrase `00`.
+fn first_shape(track: &Track) -> Shape {
+    first_phrase(track).generators()[0].shape
+}
+
+/// Euclid's hits and rotation in a shape.
+fn euclid_of(shape: Shape) -> (i32, i32) {
+    match shape.place {
+        Where::Euclid { hits, rotate } => (i32::from(hits), i32::from(rotate)),
+        place => panic!("not Euclid: {place:?}"),
+    }
+}
+
+/// `Hits` and `Rotate` on the first two macros, for a Euclidean generator on a column.
+fn euclid_knobs(track: &mut Track, column: GenColumn) {
+    let (hits, rotate) = euclid_of(first_shape(track));
+    gen_knob(track, 0, "Hits", (column, GenParam::Hits), (0, 16), hits);
+    gen_knob(
+        track,
+        1,
+        "Rotate",
+        (column, GenParam::Rotate),
+        (0, 15),
+        rotate,
+    );
+}
+
+/// The Turing Machine: the song's Steps slot with its three macros, `Change`, `Length` and
+/// `Range`, as they are.
+fn turing_machine_patch() -> PatchPreset {
+    patch_of(&turing_machine().tracks[0])
+}
+
+/// Déjà vu: the song's Steps slot, with `Deja vu` turning its `Mutate` from all new to locked,
+/// so up is more memory, as the module's knob is from its left to noon; and `Spread` its
+/// `Depth`, how far a new note goes, from none to two octaves either way. The song's
+/// `:order random` is its phrase's, which a patch doesn't carry.
+fn deja_vu_patch() -> PatchPreset {
+    let mut track = deja_vu().tracks[0].clone();
+    panel_knob(&mut track, 0, "Deja vu", "mod4.mutate", (0x6400, 0x0000));
+    panel_knob(&mut track, 1, "Spread", "mod4.depth", (0x8000, 0x8C00));
+    patch_of(&track)
+}
+
+/// Kria: the pitch loop and the octave loop, `Steps` slots in `Free`, each with its loop's
+/// length on a macro from 1 step to 16; and the length loop, the lane of 4 on FX 1, made live as
+/// the `List` of its four values, which comes with its lane though no macro holds it, as a lane's
+/// length isn't a setting to turn.
+fn kria_patch() -> PatchPreset {
+    let song = kria();
+    let written = first_phrase(&song.tracks[0]).steps().to_vec();
+    let gate = FxCommand::Set(SettingId::from_key("gate").unwrap());
+    let mut lengths = shape(FillKind::List, 0, 0, Where::AllRows);
+    lengths.values = Values::new(&[0x20, 0xC0, 0x08, 0xE6]);
+    let song = apply(
+        song,
+        &Action::Generate {
+            track: 0,
+            phrase: 0,
+            column: ShapeColumn::Fx {
+                slot: 0,
+                command: gate,
+            },
+            span: Span::Lane,
+            shape: lengths,
+        },
+    );
+    let mut track = song.tracks[0].clone();
+    assert_eq!(
+        first_phrase(&track).steps(),
+        written,
+        "the live length loop writes what the song has"
+    );
+    panel_knob(&mut track, 0, "Pitch loop", "mod4.length", (0x0000, 0x0F00));
+    panel_knob(
+        &mut track,
+        1,
+        "Octave loop",
+        "mod5.length",
+        (0x0000, 0x0F00),
+    );
+    let mut preset = patch_of(&track);
+    let phrase = first_phrase(&track);
+    preset
+        .patch
+        .generators
+        .push(PatchGen::of(&phrase.generators()[0], phrase));
+    preset
+}
+
+/// Euclid: the bass's `Alternate` of `C-2` and `C-3` on Euclid 7 of 16, with `Hits` and
+/// `Rotate`.
+fn euclid_patch() -> PatchPreset {
+    let mut track = euclid().tracks[3].clone();
+    euclid_knobs(&mut track, GenColumn::Note);
+    patch_of(&track)
+}
+
+/// Accents: the hats' Velocity, `7F` on Euclid 5 of their notes, with `Hits` and `Rotate`.
+fn accents_patch() -> PatchPreset {
+    let mut track = live_generators().tracks[1].clone();
+    euclid_knobs(&mut track, GenColumn::Velocity);
+    patch_of(&track)
+}
+
+/// An acid line: the `Acid` fill from `C-2` to `C-3`, with its five dice on macros, each over
+/// all it takes: `Density`, `Notes`, `Octave`, `Accent` and `Slide`.
+fn acid_line_patch() -> PatchPreset {
+    let mut track = acid_lines().tracks[0].clone();
+    let acid = first_shape(&track).acid;
+    let knobs = [
+        ("Density", GenParam::Density, (0, 100), acid.density),
+        ("Notes", GenParam::Notes, (1, 8), acid.notes),
+        ("Octave", GenParam::Octave, (0, 100), acid.octave),
+        ("Accent", GenParam::Accent, (0, 100), acid.accent),
+        ("Slide", GenParam::Slide, (0, 100), acid.slide),
+    ];
+    for (at, (name, param, ends, number)) in knobs.into_iter().enumerate() {
+        let knob = (GenColumn::Note, param);
+        gen_knob(&mut track, at, name, knob, ends, i32::from(number));
+    }
+    patch_of(&track)
+}
+
+/// A drunk walk: the walks' bass, a `Walk` of a degree at most on Euclid 7 of 16, with `Step`
+/// from a degree to a leap of up to seven, an octave in a scale of seven, and `Hits`.
+fn drunk_walk_patch() -> PatchPreset {
+    let mut track = walks().tracks[1].clone();
+    let shape = first_shape(&track);
+    let step = i32::from(shape.walk.step);
+    gen_knob(
+        &mut track,
+        0,
+        "Step",
+        (GenColumn::Note, GenParam::Step),
+        (1, 7),
+        step,
+    );
+    let (hits, _) = euclid_of(shape);
+    gen_knob(
+        &mut track,
+        1,
+        "Hits",
+        (GenColumn::Note, GenParam::Hits),
+        (0, 16),
+        hits,
+    );
+    patch_of(&track)
+}
+
+/// Marbles' X: the marbles' tune, a `Random` on every other row, with its `Spread`, `Bias` and
+/// `Steps`, the module's three knobs, `Steps` from the root alone to all seven degrees.
+fn marbles_x_patch() -> PatchPreset {
+    let mut track = marbles().tracks[0].clone();
+    let random = first_shape(&track).random;
+    let knobs = [
+        (
+            "Spread",
+            GenParam::Spread,
+            (0, 100),
+            i32::from(random.spread),
+        ),
+        ("Bias", GenParam::Bias, (-100, 100), i32::from(random.bias)),
+        ("Steps", GenParam::Steps, (1, 7), i32::from(random.steps)),
+    ];
+    for (at, (name, param, ends, number)) in knobs.into_iter().enumerate() {
+        gen_knob(&mut track, at, name, (GenColumn::Note, param), ends, number);
+    }
+    patch_of(&track)
+}
+
+/// Variations: the `Variation` the song keeps live over its own line, with its `Order` and its
+/// `Temperature`.
+fn variations_patch() -> PatchPreset {
+    let mut track = variations().tracks[0].clone();
+    let variation = first_shape(&track).variation;
+    let order = i32::from(variation.order);
+    let temperature = i32::from(variation.temperature);
+    gen_knob(
+        &mut track,
+        0,
+        "Order",
+        (GenColumn::Note, GenParam::Order),
+        (1, 3),
+        order,
+    );
+    let knob = (GenColumn::Note, GenParam::Temperature);
+    gen_knob(&mut track, 1, "Temperature", knob, (0, 100), temperature);
+    patch_of(&track)
+}
+
+/// Every shipped patch, by its name, in the chapter's order, each tagged `generative` and with
+/// what it acts on, as the study's §5.4 has them.
+fn patches() -> Vec<(&'static str, PatchPreset)> {
+    let patches = [
+        ("Turing Machine", turing_machine_patch(), "pitch"),
+        ("Deja vu", deja_vu_patch(), "pitch"),
+        ("Euclid", euclid_patch(), "rhythm"),
+        ("Kria", kria_patch(), "pitch"),
+        ("Accents", accents_patch(), "accent"),
+        ("Acid line", acid_line_patch(), "303"),
+        ("Drunk walk", drunk_walk_patch(), "pitch"),
+        ("Marbles X", marbles_x_patch(), "pitch"),
+        ("Variations", variations_patch(), "pitch"),
+    ];
+    patches
+        .into_iter()
+        .map(|(name, preset, acts_on)| {
+            let tags = vec!["generative".to_owned(), acts_on.to_owned()];
+            (name, PatchPreset { tags, ..preset })
+        })
+        .collect()
+}
+
 // The tests.
 
 /// What `save_song` writes for a song, read back as text.
@@ -1204,6 +1569,43 @@ fn each_tutorial_song_on_disk_is_what_its_builder_makes() {
         );
     }
     let _ = std::fs::remove_dir_all(scratch);
+}
+
+#[test]
+fn each_tutorial_songs_patch_on_disk_is_what_its_builder_makes() {
+    let scratch = std::env::temp_dir().join(format!("vt-factory-{}", std::process::id()));
+    let bless = std::env::var_os("VT_BLESS").is_some();
+    let made = patches();
+    for (name, preset) in &made {
+        let path = patches_folder().join(format!("{name}.ron"));
+        if bless {
+            vt_model::preset::save(&path, preset, true).unwrap();
+            continue;
+        }
+        let fresh = scratch.join(format!("{name}.ron"));
+        vt_model::preset::save(&fresh, preset, true).unwrap();
+        let kept = std::fs::read_to_string(&path)
+            .unwrap_or_else(|_| panic!("{name} is missing: run just tutorial-songs"));
+        assert!(
+            std::fs::read_to_string(&fresh).unwrap() == kept,
+            "{name} on disk isn't what its builder makes: run just tutorial-songs"
+        );
+    }
+    let _ = std::fs::remove_dir_all(scratch);
+    if bless {
+        return;
+    }
+    let names: Vec<&str> = made.iter().map(|(name, _)| *name).collect();
+    let shipped: Vec<&str> = FACTORY_PATCHES.iter().map(|(name, _)| *name).collect();
+    assert_eq!(shipped, names, "the program ships each, in this order");
+    let mut files: Vec<String> = std::fs::read_dir(patches_folder())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    files.sort();
+    let mut wanted: Vec<String> = names.iter().map(|name| format!("{name}.ron")).collect();
+    wanted.sort();
+    assert_eq!(files, wanted, "a file for each, and no others");
 }
 
 #[test]
@@ -1286,6 +1688,54 @@ fn the_variation_is_like_its_line_and_order_3_cold_writes_the_line_back() {
         .map(ToString::to_string)
         .collect();
     assert_eq!(back, line);
+}
+
+/// The kick plays channel A and the woodblock B, each with triplets nudged between the rows,
+/// and the hats exactly the strikes of both, as the chapter's bar shows.
+#[test]
+fn the_random_rhythms_hats_play_the_kicks_and_the_woodblocks_strikes() {
+    let song = load_song(&songs_folder().join("random-rhythm")).unwrap();
+    let strikes = |track: usize| -> Vec<(usize, i8)> {
+        song.tracks[track].phrases[&0]
+            .steps()
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| matches!(step.note, Note::On(_)))
+            .map(|(row, step)| (row, step.nudge))
+            .collect()
+    };
+    let drawn = |track: usize| -> String {
+        let mut bar = vec!['.'; 32];
+        for (row, nudge) in strikes(track) {
+            bar[row] = match nudge {
+                0 => 'x',
+                nudge if nudge < 0 => '<',
+                _ => '>',
+            };
+        }
+        bar.into_iter().collect()
+    };
+    assert_eq!(drawn(0), "x.....x.x.......x.......x.......");
+    assert_eq!(drawn(1), "x..<x......<x>..x.......x..<.>..");
+    assert_eq!(drawn(2), "x..<x.x.x..<x>..x.......x..<.>..");
+    let mut both = strikes(0);
+    both.extend(strikes(1));
+    both.sort();
+    both.dedup_by_key(|(row, _)| *row);
+    assert_eq!(strikes(2), both);
+    let channels: Vec<_> = (0..3)
+        .map(|track| {
+            song.tracks[track].phrases[&0].generators()[0]
+                .shape
+                .divisions
+                .channel
+        })
+        .collect();
+    use vt_model::shape::Channel;
+    assert_eq!(
+        channels,
+        [Some(Channel::A), Some(Channel::B), Some(Channel::Both)]
+    );
 }
 
 #[test]

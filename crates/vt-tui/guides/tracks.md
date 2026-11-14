@@ -1,3 +1,4 @@
+<!-- ANCHOR: before-clouds -->
 # The track page, envelopes and LFOs
 
 Press `Space 5` to `Space 8` for what a track holds apart from its steps, on four pages: Sound
@@ -665,6 +666,8 @@ with its own envelopes and randomness, and `Pitch` and `Reverb` are Clouds'
 own pitch shifter and reverb on their own. Its grains' places come from the
 track's seed, so a render is the same each time. Clouds' fourth mode, its
 spectral one, isn't here yet.
+<!-- ANCHOR_END: before-clouds -->
+<!-- ANCHOR: before-folded -->
 
 `Beads` is Mutable Instruments' Beads as the module plays: it records the
 sound all the time, with what it feeds back, onto one of four kinds of tape
@@ -1127,6 +1130,8 @@ grid show it there too, a column of its own, named and empty, in place of its
 tracks'. In the song view and on the mixer, the folded group keeps its own column or
 strip after the tracks, and the cursor goes along them as they're drawn, stepping
 over the folded tracks with `h`, `l`, `0` and `$` as well.
+<!-- ANCHOR_END: before-folded -->
+<!-- ANCHOR: before-gen -->
 
 Folding a group from one of its tracks puts the cursor on the group, as Vim's cursor
 stands on a closed fold; in the song view and on the mixer, so does putting the
@@ -1683,7 +1688,8 @@ track's eight macros (see **Macros**), then the live columns.
 Each live column is a device, under the macros, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
 them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
-`Where`, and a `Variation`'s fill alone, as it learns its rows with its notes;
+`Where`, a `Variation`'s fill alone, as it learns its rows with its notes, and
+a `Divisions`' channel and bar, as it makes its own rhythm;
 then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
 Note 00–0F`, or `FX1 CUT lane 0C` for a lane. A `Where` that's its column's own is
 dim too, and so is a `Vary` of `Once`. Its settings are the
@@ -1700,6 +1706,8 @@ velocities and lengths as bars, and nudges up or down from the middle; and an FX
 column as a line through its values. While the phrase plays, a dot rides it on
 the row playing, or on a lane, where the lane is reading. It's drawn from the
 phrase as it is, so it changes as you turn a setting or edit a row.
+<!-- ANCHOR_END: before-gen -->
+<!-- ANCHOR: before-mapping -->
 
 | Keys | Does |
 |---|---|
@@ -1713,7 +1721,8 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
 
 **A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,
-`1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), `Variation`, a `Wave` of `Random` or `Smooth`,
+`1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), `Divisions` (its dice), `Variation`, a
+`Wave` of `Random` or `Smooth`,
 a `Follow` that mutates, or any fill on rows chosen by `Chance`, has `Vary`: `Once`, as it's always been, the
 same every time round; `Each pass`, a new roll each time the phrase comes round; or
 `Every 2 passes`, 4 or 8, so each variation plays that many times before the next,
@@ -1800,6 +1809,8 @@ straight line, and are shown dim while they are. The drawing has the macro's tur
 setting up, the straight line dotted behind the curve and a faint line where the macro is turned;
 the range on a mapped setting's bar is still its `Min` to its `Max`. A sound preset or a patch
 keeps each mapping's curve.
+<!-- ANCHOR_END: before-mapping -->
+<!-- ANCHOR: before-presets -->
 
 **What a macro reaches:** the track's own settings, its machine's, its effects', its mod slots'
 depths, phases and deforms, and their types' own: an envelope's `Attack`, `Decay`, `Sustain` and
@@ -1868,6 +1879,8 @@ icon, and the folder you last saved in or loaded from at its top.
 is tagged `sound` and by its machine, as `synth`, `analog` and `acid`, and every effect preset
 `effect` and by its effect, as `delay`, so `#acid` lists the acid sounds. `T` in the list gives
 one tags of its own, such as `bass`, kept in its file so they go where it goes.
+<!-- ANCHOR_END: before-presets -->
+<!-- ANCHOR: rest -->
 
 ## Patches
 
@@ -1878,12 +1891,36 @@ Effect Rack presets go in front of whatever instrument is there. A Steps slot wi
 are kept in the presets folder's `patches`, beside `sounds` and `effects`. Each is tagged
 `patch`, and `T` in the list gives it tags of its own, such as `pitch`.
 
+**Shipped patches** come with vimtracker, made from the generators tutorial's songs, and are listed
+under `Factory` after your own, so `:patch` has some from the start. They're built into the
+program rather than written into your folder, so they can't be changed, tagged or written over;
+a patch of yours with the same name comes first, and `:patch save` always saves one of yours.
+Each is tagged `generative` and with what it acts on, so `#generative` lists them and `#rhythm`
+finds `Euclid`.
+
+| Patch | From the song | Its macros |
+|---|---|---|
+| `Turing Machine` | `turing-machine` | `Change`, `Length`, `Range` |
+| `Deja vu` | `deja-vu` | `Deja vu`, `Spread` |
+| `Euclid` | `euclid`'s bass | `Hits`, `Rotate` |
+| `Kria` | `kria` | `Pitch loop`, `Octave loop` |
+| `Accents` | `live-generators`' hats | `Hits`, `Rotate` |
+| `Acid line` | `acid-lines` | `Density`, `Notes`, `Octave`, `Accent`, `Slide` |
+| `Drunk walk` | `walks`' bass | `Step`, `Hits` |
+| `Marbles X` | `marbles`' tune | `Spread`, `Bias`, `Steps` |
+| `Variations` | `variations` | `Order`, `Temperature` |
+
+Each is the part of that song's track that plays it, with its macros turned to where the song
+has them; the generators tutorial has a section on each. `Deja vu` is the Turing Machine with
+Marbles' knob, up for more memory, and `Kria`'s length loop comes with its lane of 4 on FX 1.
+
 **What's saved** goes by the macros, as they're the patch's knobs: each macro that holds
 something, with its name, value, mappings and ranges; every mod slot a macro maps to, the slots
 those go to in turn, and any slot going to one of them, as an LFO on a macro or on a slot's
 `Depth`; the accumulator and the arpeggio if any of that reaches them; and the live generators of
-the phrase under the cursor that a macro holds by its column, with their shapes, and any slot or
-macro an FX one locks, as `DEP4`, so the lock has its slot wherever the patch goes. Never the
+the phrase under the cursor that a macro holds by its column, with their shapes and, for one on
+a lane, the lane's length, and any slot or macro an FX one locks, as `DEP4`, so the lock has its
+slot wherever the patch goes. Never the
 machine, the filter, the output or the effects: a macro mapped to one of those keeps the mapping
 by the setting's name, and on a track without that setting it does nothing. A track whose macros
 hold nothing has no patch to save; a sound preset (`:preset save`) keeps the whole track instead.
@@ -1907,7 +1944,8 @@ macros hold comes off any of the track's own macros, as a setting is on one macr
 generators go onto the phrase under the cursor over its loop, as `S` would: an empty Note column
 is written, notes there are reshaped, and a column already live takes the new shape. An FX
 generator goes on the first FX column live with its command or holding it, else the first empty
-one. One that locks a slot's or macro's setting by its number, as `DEP4` or `MAC2`, locks the
+one, and one that filled a lane gives an empty column a lane as long from the loop's first row,
+as `Kria`'s lane of 4. One that locks a slot's or macro's setting by its number, as `DEP4` or `MAC2`, locks the
 slot or macro where it went: a generator saved writing `DEP4` writes `DEP3` on a track where
 that slot went into `Mod 3`. Locks already on the track's own rows stay as they are. The status line
 says where everything went.
@@ -1919,7 +1957,8 @@ anything that reached a slot or macro it replaced lets go of it.
 `K` on a mod slot's type, in the title of its device on the Mod page, lists `Add a patch` and
 `Save as a patch` after the types, and `K` on a macro of the Gen page's band lists the two alone.
 The patches' list shows what each needs beside its name, as `1 slot, 3 macros` or
-`Note generator, 2 macros`.
+`Note generator, 2 macros`, your own first and then `Factory`'s. `Tab` after `:patch load`
+completes both.
 
 ## The mixer
 
@@ -1946,3 +1985,4 @@ master being under `Returns`. The part with the cursor has the brighter rule. Un
 track's name is the group it's in, and under a group's name the tracks
 in it, as `01-04 07`. `z a` folds a group's strips into its own, `z M` folds them all
 and `z R` opens them; see **Folding a group**.
+<!-- ANCHOR_END: rest -->

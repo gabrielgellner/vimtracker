@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds fourteen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds fifteen of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -19,6 +19,7 @@ there are no samples to find.
 | `euclid`, again | Noise Engineering's Numeric Repetitor | `S`'s `Multiply` on the kick's rhythm |
 | `walks`, again | Xaoc Devices' Leibniz | `S`'s bit transforms on the tune and the hats |
 | `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
+| `random-rhythm` | Vermona's randomRHYTHM | `S`'s `Divisions`: a chance per division, triplets nudged between the rows |
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
@@ -200,6 +201,9 @@ A track with too few free slots or macros refuses it, saying how many it needs a
 free, and `:patch!` puts it over the last ones instead. `K` on a mod slot's type lists `Add a
 patch` and `Save as a patch` after the types.
 
+The song's slot and macros are also the shipped patch `Turing Machine`; add it with `:patch`,
+where it's listed under `Factory`, on any track, without saving one of your own first.
+
 ## Marbles' Déjà vu
 
 [Mutable Instruments' Marbles](https://pichenettes.github.io/mutable-instruments-documentation/modules/marbles/)
@@ -245,6 +249,10 @@ every step, each with a `CHA` of its own, Marbles' T. [`song.ron`](songs/deja-vu
 
 The finished song also sets the `String`'s `Decay` `B0` and `Bright` `50`, sends it to the delay
 and reverb (`Send A` `B0`, `Send B` `B8`), shortens the hat (`Decay` `28`), and sets the levels.
+
+**As a patch.** Track 1's Steps slot is the shipped patch `Deja vu`; add it with `:patch`. Its
+`Deja vu` macro turns `Mutate` the module's way, from all new up to a locked loop, and `Spread`
+its `Depth`. The phrase's `:order random` isn't part of a patch, so give it that yourself.
 
 **Try next.**
 
@@ -293,6 +301,9 @@ polyrhythm. [`song.ron`](songs/euclid/song.ron)
 The finished song also lengthens the kick (`Decay` `90`), shortens the snare (`Decay` `60`) and
 the hat (`Decay` `38`), sets the `Acid`'s `Cutoff` `50`, `Resonance` `90` and `Env mod` `90`,
 sends the snare to the reverb, and sets the levels.
+
+**As a patch.** The bass is the shipped patch `Euclid`, with its `Hits` and `Rotate` on macros;
+add it with `:patch`.
 
 **Try next.** Every part stays live, so `gl` on any of its rows opens its panel again, as it
 was:
@@ -417,6 +428,12 @@ The finished song also makes the `VA` a pluck (`Mod 1`'s `Decay` `300 ms` and `S
 sets its `Cut` `90` and `Res` `50`, sends it to the delay, sets the `Acid`'s `Cutoff` `48` and
 `Resonance` `A0`, a shorter hat, and the levels.
 
+**As a patch.** Track 1's pitch, octave and length loops are the shipped patch `Kria`; add it
+with `:patch`. `Pitch loop` and `Octave loop` are macros turning the two slots' `Length` from 1
+step to 16. The length loop comes as it is, a live `List` of the four `LEN`s on a lane of 4,
+and the patch gives the FX column it goes on a lane as long; a lane's length isn't a setting, so
+no macro turns it.
+
 **Try next.**
 
 *   `Length` 7 on the pitch loop, or 4 on the octave loop: the line changes completely.
@@ -536,6 +553,9 @@ The finished song also sets the `Acid`'s `Resonance` `B0` and `Env mod` `70`, th
     values stay, and the status line says so. `u` makes it live again.
 *   Edit any other column, and it stays live.
 
+**As a patch.** The hats' accents are the shipped patch `Accents`, with `Hits` and `Rotate` on
+macros; add it with `:patch` to a track with notes to accent.
+
 **Try next.**
 
 *   `gl` on the hats' Velocity, then `Rotate`, a row at a time, while it plays.
@@ -578,6 +598,9 @@ kick, a snare and hats. [`song.ron`](songs/acid-lines/song.ron)
 Then a `Kick` on every beat, a `Snare` (`G-2`) on rows `04` and `0C` and a `Hat` on the
 off-beats. The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `C0`, `Env mod`
 `A0` and `Decay` `58`, sends it to the delay, and sets the levels.
+
+**As a patch.** The line is the shipped patch `Acid line`, its dice on five macros, `Density`,
+`Notes`, `Octave`, `Accent` and `Slide`; add it with `:patch`.
 
 **Try next.**
 
@@ -631,6 +654,9 @@ drummer's does, rather than jumping about as `Random` would. [`song.ron`](songs/
 
 Then a `Kick` on every beat. The finished song also sets the string's `Decay` and `Bright`, the
 bass's filter, the delay and reverb sends, and the levels.
+
+**As a patch.** The bass is the shipped patch `Drunk walk`, with `Step` from a degree to seven
+and `Hits` on macros; add it with `:patch`.
 
 **Try next.**
 
@@ -742,6 +768,72 @@ order, so three tracks of samples named `BD`, `SD` and `CH`, or nothing at all, 
 *   On the Gen page, `Space 8`, the drum's device is titled `Grids  BD`, its map, density and
     chaos ready to turn while it plays, and on the Roto its first knobs.
 
+## Vermona's randomRHYTHM
+
+Vermona's randomRHYTHM, a Eurorack module of 2018, makes rhythms from chances. Each of its two
+channels has four sliders, the quarters, the eighths, the sixteenths and the triplets, and each
+slider is how likely that division is to strike. Every strike a bar
+could have has a random value, and a slider is the line it must get over, so at the bottom a
+division never plays, at the top it always does, and in between, pushing a slider up only adds
+strikes to the ones you have. In `Dice` mode the values are fixed for a bar, so the bar repeats
+while the sliders reshape it; in `Realtime` mode they're rolled again all the time. A third
+output plays both channels at once. `Divisions` is all of this, with three triplets, and the two
+channels and their sum as three tracks.
+
+**How the song does it.** Tracks 1 to 3 are a `Kick`, a woodblock, a `Modal` voice high up, and a
+`Hat`, at `Speed` `1/32`, each with one live `Divisions` column over a bar of 32 rows. The kick
+plays channel `A`, mostly quarters, `1/4` `90%`, with `1/8` `20%`, `1/16` `10%` and `1/8T`
+`10%`. The woodblock plays channel `B`, mostly triplets: `1/4T` `35%`, `1/8T` `40%` and `1/16T`
+`10%`, with `1/8` `25%`. The hats play `A+B`, every strike of either. Track 4 is a snare on the
+backbeat and track 5 a bass, both written, at `1/16`. [`song.ron`](songs/random-rhythm/song.ron)
+The bar, `x` a strike on its row and `<` and `>` a triplet nudged a third of a row early or late:
+
+```text
+BD  x.....x.x.......x.......x.......
+WB  x..<x......<x>..x.......x..<.>..
+HH  x..<x.x.x..<x>..x.......x..<.>..
+```
+
+At `1/32` every division has rows of its own: the sixteenths fall on the even rows, and a
+triplet between two rows is the nearer one's, nudged `4`, 40 ticks, either way. So the
+woodblock's triplets play as triplets against the kick's straight time, in one track.
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 108`.
+2.  Tracks 1 to 3: the machines `kick`, `modal` and `hat` (`K` `/kick` `Enter` and so on), named `BD`, `WB` and `HH`. On each,
+    `/speed` `Enter` and `-` twice, to `1/32`; then `Space 3`, `:len 32`, and one note on row `00`
+    for its pitch: `C-1`, `E-4` and `C-4`.
+3.  Back on track 1, `gg` `vG` on the Note column, `W` `W` to reach track 3, and `S`. On `Fill`,
+    `K` `/divisions` `Enter`. The panel shows `Each track its own channel: A, B, A+B`, and `Bar`
+    `4/4 32nds`, as the tracks are at `1/32`.
+4.  Channel A's chances: `j` `j` to `1/4` and `i` `90` `Enter`, `j` and `i` `20` `Enter`, `j`
+    and `i` `10` `Enter`, then `j` `j` to `1/8T` and `i` `10` `Enter`. Then B's: `j` `j` `j` to
+    `B 1/8` and `i` `25` `Enter`, `j` `j` to `B 1/4T` and `i` `35` `Enter`, `j` and `i` `40`
+    `Enter`, `j` and `i` `10` `Enter`.
+5.  `r` rolls new dice until you like the bar, and `L` keeps it live, a generator on each track.
+6.  Track 4: `K` `/snare` `Enter`, `:name SD`, and `G-2`s on rows `04` and `0C`. Track 5: `K`
+    `va` `Enter`, `:name BS`, and a line of `A-1`s round the kick, with a `C-2`, `G-1` and `E-1`.
+
+A strike on a note keeps its pitch, and a new one takes the first note's, which is why each
+track starts with one. All three take one seed, as the module's channels come from one module,
+so the hats are exactly the kick's and the woodblock's strikes; the woodblock has channel B's
+chances as its own.
+
+**Try next.**
+
+*   `gl` on the woodblock and `+` on `1/8T`: more triplets come in, and every one there stays.
+    Down to `0%`, its triplets go, and the straight eighths are left.
+*   `1/4` `100%` on the kick: four on the floor, whatever the dice. Then `1/16` up, and the
+    sixteenths it adds are always the same ones, as the dice are fixed.
+*   On the Gen page, `Space 8`, `Vary` `Each pass` on all three tracks, the module's `Realtime`:
+    a new bar every time round. Set it the same on all three, so the hats stay the sum of the
+    other two. `Every 4 passes` holds each roll for four bars.
+*   `Bar` `3/4 32nds` on the woodblock: its dice go round every 24 rows against the kick's 32,
+    so its figure drifts across the bar and comes back every three bars.
+*   The hats are a generator of their own, so `gl` on the kick changes the kick alone, and the
+    hats keep its old chances. `S` across the three again sets them together.
+
 ## Marbles' X
 
 Marbles' X section makes random voltages, and three knobs shape them. Spread runs from one
@@ -781,6 +873,9 @@ velocities gather toward the top, loud but never the same twice. Then a kick on 
 
 Then a `Kick` on every beat. The finished song also sets the string's `Decay` and `Bright`, the
 bass's filter, the delay and reverb sends, and the levels.
+
+**As a patch.** The tune is the shipped patch `Marbles X`, with the module's `Spread`, `Bias`
+and `Steps` on macros; add it with `:patch`.
 
 **Try next.**
 
@@ -828,6 +923,10 @@ A#1 50   ---      C-2 50   C-3 7F   ---      G-2 HLD  D#2 50   C-2 50
 
 Then a `Kick` on every beat, `Hat`s on the off-beats and a `Snare` on rows `04`
 and `0C`, as in `acid-lines`.
+
+**As a patch.** The `Variation` is the shipped patch `Variations`, with `Order` and
+`Temperature` on macros; add it with `:patch` to a track with a line of at least four notes for
+it to learn from.
 
 **Try next.**
 

@@ -75,6 +75,9 @@ enum Owns {
     Note,
     /// Those and the row's FX, for a `Follow` copying them too, or ratcheting some rows.
     NoteFx,
+    /// A note's velocity, gate and nudge, for `Divisions`, which nudges its triplets off the
+    /// rows.
+    Timed,
 }
 
 /// What a shape owns of each row.
@@ -89,6 +92,8 @@ fn owns(shape: &Shape) -> Owns {
         FillKind::Grids => Owns::Note,
         // Each row is a note learned with its accent and slide, or a rest, so it writes all three.
         FillKind::Variation => Owns::Note,
+        // A strike is a note at its nudge, so a row's nudge is its as well.
+        FillKind::Divisions => Owns::Timed,
         _ => Owns::Cell,
     }
 }
@@ -106,6 +111,9 @@ fn copy(column: ShapeColumn, owns: Owns, from: &Step, to: &mut Step) {
             }
             if whole {
                 to.gate = from.gate;
+            }
+            if owns == Owns::Timed {
+                to.nudge = from.nudge;
             }
             if owns == Owns::NoteFx {
                 copy_fx(from, to);
@@ -141,6 +149,9 @@ pub fn lay_under(generator: &Generator, under: &Step, view: &mut RowView) {
             if whole {
                 view.gate = under.gate;
             }
+            if owns == Owns::Timed {
+                view.nudge = under.nudge;
+            }
             if owns == Owns::NoteFx {
                 for slot in 0..FX_SLOTS {
                     view.set_fx(slot, fx(slot));
@@ -175,6 +186,7 @@ fn same(column: ShapeColumn, owns: Owns, a: &Step, b: &Step) -> bool {
             a.note == b.note
                 && ((writes.is_none() && !whole) || a.velocity == b.velocity)
                 && (!whole || a.gate == b.gate)
+                && (owns != Owns::Timed || a.nudge == b.nudge)
                 && (owns != Owns::NoteFx || a.fx == b.fx)
         }
         ShapeColumn::Velocity => a.velocity == b.velocity,

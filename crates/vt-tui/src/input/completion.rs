@@ -342,7 +342,8 @@ fn kit(start: usize, argument: &str, places: Places) -> Completions {
 
 /// `:preset`'s word, then a preset's name from the presets folder, by its folders and name without
 /// `.ron`, as `:kit` completes a kit's. `:preset!` only saves; `:patch` and `:patch!` complete
-/// the patches' names, and both save and load.
+/// the patches' names, and both save and load, `load` the shipped patches' names too, after the
+/// folder's (decision 318).
 fn preset(start: usize, argument: &str, command: &'static str, places: Places) -> Completions {
     let patch = command.starts_with("patch");
     let Some((word, name)) = argument.split_once(char::is_whitespace) else {
@@ -363,12 +364,26 @@ fn preset(start: usize, argument: &str, command: &'static str, places: Places) -
     } else {
         places.presets
     };
-    let candidates = root.map_or_else(Vec::new, |root| {
+    let mut candidates: Vec<Candidate> = root.map_or_else(Vec::new, |root| {
         entries(&root.join(folder_typed), prefix, Files::KitNames)
             .into_iter()
             .map(|entry| entry.candidate(folder_typed))
             .collect()
     });
+    if patch && word == "load" && folder_typed.is_empty() {
+        let shipped = vt_model::preset::FACTORY_PATCHES
+            .iter()
+            .map(|(name, _)| *name)
+            .filter(|name| starts_with(name, prefix))
+            .filter(|name| !candidates.iter().any(|found| found.text == *name))
+            .map(|name| Candidate {
+                text: name.to_owned(),
+                label: name.to_owned(),
+                meaning: vt_model::preset::FACTORY.to_owned(),
+            })
+            .collect::<Vec<_>>();
+        candidates.extend(shipped);
+    }
     Completions {
         start,
         title: if patch { "Patches" } else { "Presets" },
@@ -828,6 +843,29 @@ mod tests {
             ["bass/Acid Bite"]
         );
         assert!(complete("preset wobble ", places).candidates.is_empty());
+    }
+
+    #[test]
+    fn patch_load_completes_the_folders_patches_then_the_shipped_ones() {
+        let root = folder("patches");
+        std::fs::write(root.join("Euclid.ron"), "").unwrap();
+        std::fs::write(root.join("Wobble.ron"), "").unwrap();
+        let places = Places {
+            patches: Some(&root),
+            ..nowhere()
+        };
+        assert_eq!(tab("patch load Tu", places), "patch load Turing Machine");
+        assert_eq!(tab("patch load wo", places), "patch load Wobble");
+        let found = complete("patch load E", places);
+        assert_eq!(texts(&found), ["Euclid"], "the folder's own, once");
+        assert_eq!(found.candidates[0].meaning, "");
+        let found = complete("patch load Ac", places);
+        assert_eq!(texts(&found), ["Accents", "Acid line"]);
+        assert_eq!(found.candidates[0].meaning, "Factory");
+        assert!(
+            complete("patch save Tu", places).candidates.is_empty(),
+            "a new patch is the user's"
+        );
     }
 
     #[test]

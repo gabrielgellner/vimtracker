@@ -316,10 +316,15 @@ fn a_presets_tags_are_kept_in_its_file_and_patch_lists_the_patches() {
     .unwrap();
     command(&mut app, "patch");
     assert_eq!(app.picker.as_ref().unwrap().title, "Patches");
+    // The shipped patches are listed after the folder's, with their own tags (decision 318).
     press(&mut app, "#patch");
-    assert_eq!(found(&app), ["Empty"]);
+    let all = found(&app);
+    assert_eq!(all[..2], ["Empty", "Turing Machine"], "{all:?}");
+    assert_eq!(all.len(), 1 + vt_model::preset::FACTORY_PATCHES.len());
     special(&mut app, KeyCode::Esc);
     press(&mut app, "#pitch");
-    assert_eq!(found(&app), ["Empty"]);
+    let pitch = found(&app);
+    assert_eq!(pitch[..2], ["Empty", "Turing Machine"], "{pitch:?}");
+    assert!(!pitch.iter().any(|name| name == "Euclid"), "{pitch:?}");
     std::fs::remove_dir_all(presets.parent().unwrap()).unwrap();
 }

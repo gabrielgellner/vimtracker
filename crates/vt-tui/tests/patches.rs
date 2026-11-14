@@ -160,13 +160,12 @@ fn too_few_free_is_refused_saying_how_many_and_bang_puts_it_over_the_last() {
 #[test]
 fn the_browser_and_k_add_a_patch() {
     let (mut app, _realtime, presets) = turing_machine();
+    // Before any is saved, the browser lists the shipped ones, under `Factory`.
     command(&mut app, "patch");
-    assert!(
-        app.status
-            .starts_with("No patches yet: :patch save name saves track 01's macros"),
-        "{}",
-        app.status
-    );
+    assert_eq!(app.mode, Mode::Picker, "{}", app.status);
+    let rows = explorer_rows(&app);
+    assert_eq!(rows[..2], ["v built in", "    Turing Machine"], "{rows:?}");
+    special(&mut app, KeyCode::Esc);
     command(&mut app, "patch save Turing");
     assert!(presets.join("patches").is_dir());
 
@@ -187,7 +186,12 @@ fn the_browser_and_k_add_a_patch() {
     assert_eq!(app.mode, Mode::Picker, "{}", app.status);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Patches");
-    assert_eq!(explorer_rows(&app), ["v recent", "    Turing"]);
+    let rows = explorer_rows(&app);
+    assert_eq!(
+        rows[..4],
+        ["v recent", "    Turing", "v built in", "    Turing Machine"],
+        "the folder's, then the shipped ones"
+    );
     assert_eq!(picker.current().unwrap().meaning, "1 slot, 3 macros");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[2].mods[2].kind, ModKind::Steps);
@@ -305,6 +309,7 @@ fn level() -> vt_model::shape::Shape {
         random: Random::default(),
         vary: 0,
         variation: Variation::default(),
+        divisions: vt_model::shape::Divisions::default(),
     }
 }
 
@@ -465,4 +470,173 @@ fn bang_puts_a_patch_over_the_last_slot_and_its_lock_follows_leaving_the_tracks_
         "the track's own lock stays: {own}"
     );
     assert_eq!(cutoff_heard(app.song(), 1), 0xC0, "the lock plays on Mod 6");
+}
+
+/// A track that plays a `VA`, with a line of eight notes on its phrase `00` of 16 rows, every
+/// other row, as a fresh track with a few notes typed.
+fn fresh_track() -> Song {
+    use vt_model::song::{Machine, SynthVoice};
+    let mut song = Song::new(1);
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    let line = ["C-3", "D#3", "C-3", "G-3", "C-3", "D#3", "A#3", "G-3"];
+    let steps: Vec<Step> = (0..16)
+        .map(|row| {
+            let text = if row % 2 == 0 {
+                format!("{} 64 --- --- ---", line[row / 2])
+            } else {
+                "--- -- --- --- ---".to_owned()
+            };
+            text.parse().unwrap()
+        })
+        .collect();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(steps)));
+    song
+}
+
+/// Two bars of a song from the top, stereo.
+fn two_bars(song: &Song) -> Vec<f32> {
+    let version = Arc::new(vt_engine::published::Published::new(
+        Arc::new(song.clone()),
+        Arc::new(vt_model::samples::SamplePool::default()),
+    ));
+    let mut engine = vt_engine::engine::Engine::new(48_000, version);
+    engine.play_from(0);
+    // 32 sixteenths at 120 BPM.
+    let mut out = vec![0.0; 32 * 6000 * 2];
+    engine.process(&mut out);
+    out
+}
+
+#[test]
+fn every_shipped_patch_goes_onto_a_fresh_track_and_plays() {
+    let plain = two_bars(&fresh_track());
+    for (name, _) in vt_model::preset::FACTORY_PATCHES {
+        let (mut app, _realtime, presets) = app_on(fresh_track());
+        command(&mut app, &format!("patch load {name}"));
+        assert!(
+            app.status.starts_with(&format!("Track 01 has {name} in")),
+            "{name}: {}",
+            app.status
+        );
+        assert!(
+            !presets.exists(),
+            "nothing is written in the presets folder"
+        );
+        let named = app.song().tracks[0]
+            .macros
+            .iter()
+            .filter(|held| held.name.is_some())
+            .count();
+        assert!(named > 0, "{name} has named macros");
+        let out = two_bars(app.song());
+        let peak = out.iter().fold(0.0_f32, |peak, s| peak.max(s.abs()));
+        let rms = (out.iter().map(|s| s * s).sum::<f32>() / out.len() as f32).sqrt();
+        assert!(rms > 0.01, "{name} plays: RMS {rms}");
+        assert!(peak < 1.0, "{name} stays below full scale: peak {peak}");
+        assert!(out != plain, "{name} changes what the track plays");
+        press(&mut app, "u");
+        assert_eq!(
+            app.song().tracks[0],
+            fresh_track().tracks[0],
+            "{name} undoes"
+        );
+    }
+}
+
+#[test]
+fn the_browser_adds_a_shipped_patch_and_kria_brings_its_lane() {
+    let (mut app, _realtime, _presets) = app_on(fresh_track());
+    command(&mut app, "patch");
+    press(&mut app, "/kria");
+    let picker = app.picker.as_ref().unwrap();
+    assert_eq!(
+        picker.current().unwrap().meaning,
+        "FX1 generator, 2 slots, 2 macros"
+    );
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.status,
+        "Track 01 has Kria in mod slots 3 and 4, macros 1 and 2 and live FX1 on phrase 00, keeping its sound: u undoes it"
+    );
+    let track = &app.song().tracks[0];
+    assert_eq!(
+        track.phrases[&0].lane(0),
+        Some(vt_model::song::Lane {
+            start: 0,
+            length: 4
+        }),
+        "the length loop has its lane of 4"
+    );
+    let written: Vec<String> = ["gate:20", "gate:C0", "gate:08", "gate:E6"]
+        .iter()
+        .map(|cell| {
+            let step: Step = format!("--- -- {cell} --- ---").parse().unwrap();
+            step.fx[0].to_string()
+        })
+        .collect();
+    assert_eq!(fx1(&app, 0)[..4], written);
+    let names: Vec<_> = track.macros[..2].iter().map(|m| m.name.clone()).collect();
+    assert_eq!(
+        names,
+        [Some("Pitch loop".into()), Some("Octave loop".into())]
+    );
+    assert_eq!(key_of(&track.macros[0].maps[0]), "mod3.length");
+    assert_eq!(track.mods[3].steps.length, 3, "the octave loop's 3 steps");
+}
+
+#[test]
+fn the_shipped_patches_are_found_by_their_tags_and_cant_be_tagged() {
+    let (mut app, _realtime, _presets) = app_on(fresh_track());
+    command(&mut app, "patch");
+    press(&mut app, "/#rhythm");
+    let rows = explorer_rows(&app);
+    assert_eq!(rows, ["v built in", "    Euclid"], "{rows:?}");
+    special(&mut app, KeyCode::Esc);
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "patch");
+    press(&mut app, "/#generative");
+    let rows = explorer_rows(&app);
+    assert_eq!(rows.len(), 10, "all nine: {rows:?}");
+    special(&mut app, KeyCode::Esc);
+    let tags: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .current()
+        .unwrap()
+        .tags
+        .iter()
+        .map(|tag| tag.name.clone())
+        .collect();
+    assert_eq!(tags, ["patch", "generative", "pitch"]);
+    press(&mut app, "T");
+    assert_eq!(app.mode, Mode::Picker);
+    assert!(
+        app.picker.as_ref().unwrap().taggable().is_none(),
+        "a shipped patch is read-only"
+    );
+}
+
+#[test]
+fn a_patch_of_the_users_own_comes_before_a_shipped_one_of_the_same_name() {
+    let (mut app, _realtime, presets) = turing_machine();
+    command(&mut app, "patch save Euclid");
+    assert!(presets.join("patches/Euclid.ron").is_file());
+    app.cursor.track = 1;
+    command(&mut app, "patch load Euclid");
+    assert!(
+        app.status
+            .starts_with("Track 02 has Euclid in mod slot 3 and macros 1, 2 and 3"),
+        "the user's own, a Turing Machine: {}",
+        app.status
+    );
+    command(&mut app, "patch load Nothing");
+    assert!(
+        app.status.starts_with("There's no patch called Nothing in")
+            && app.status.ends_with("nor one that comes with vimtracker"),
+        "{}",
+        app.status
+    );
 }

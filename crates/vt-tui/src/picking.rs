@@ -827,6 +827,10 @@ impl App {
                 self.note_place_of(Purpose::Preset(kind), &path);
                 self.load_preset(kind, &path);
             }
+            Pick::FactoryPatch(name) => {
+                let over = std::mem::take(&mut self.patch_over);
+                self.add_factory_patch(&name, over);
+            }
             Pick::Prompt(text) => {
                 self.command_line = text;
                 self.command_menu = None;

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::*;
-use crate::explorer::Purpose;
+use crate::explorer::{Icon, Purpose};
 use crate::input::keys::parse;
 
 const VIEWS: [&str; 6] = ["table", "song", "chain", "phrase", "instrument", "groove"];
@@ -276,6 +276,8 @@ fn a_group_of_items_given_up_front_starts_open() {
     let roots = vec![
         Root::Group {
             label: "Kit 909".to_owned(),
+            meaning: String::new(),
+            icon: Icon::Kit,
             items,
         },
         Root::Place {

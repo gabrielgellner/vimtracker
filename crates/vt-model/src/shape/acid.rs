@@ -309,6 +309,7 @@ mod tests {
             random: crate::shape::Random::default(),
             vary: 0,
             variation: crate::shape::Variation::default(),
+            divisions: crate::shape::Divisions::default(),
         }
     }
 

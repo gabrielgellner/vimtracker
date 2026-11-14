@@ -547,6 +547,8 @@ impl App {
         if !kit.is_empty() {
             roots.push(Root::Group {
                 label: kit_name,
+                meaning: String::new(),
+                icon: crate::explorer::Icon::Kit,
                 items: kit,
             });
         }

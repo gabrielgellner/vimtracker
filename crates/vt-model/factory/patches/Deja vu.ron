@@ -1,0 +1,45 @@
+(
+    format: 1,
+    patch: (
+        mods: [
+            (
+                kind: Steps,
+                destination: Some("pitch"),
+                depth: 12,
+                in_scale: true,
+                steps: (
+                    mode: Note,
+                    mutate: 12,
+                ),
+            ),
+        ],
+        macros: [
+            (
+                name: Some("Deja vu"),
+                value: 57446,
+                maps: [
+                    (
+                        target: Setting("mod1.mutate"),
+                        min: 25600,
+                        max: 0,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Spread"),
+                value: 32513,
+                maps: [
+                    (
+                        target: Setting("mod1.depth"),
+                        min: 32768,
+                        max: 35840,
+                    ),
+                ],
+            ),
+        ],
+    ),
+    tags: [
+        "generative",
+        "pitch",
+    ],
+)

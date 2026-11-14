@@ -1,0 +1,100 @@
+(
+    format: 1,
+    patch: (
+        macros: [
+            (
+                name: Some("Density"),
+                value: 32640,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "density",
+                        ),
+                        min: 32768,
+                        max: 32868,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Notes"),
+                value: 27977,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "notes",
+                        ),
+                        min: 32769,
+                        max: 32776,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Octave"),
+                value: 13056,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "octave",
+                        ),
+                        min: 32768,
+                        max: 32868,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Accent"),
+                value: 19584,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "accent",
+                        ),
+                        min: 32768,
+                        max: 32868,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Slide"),
+                value: 13056,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "slide",
+                        ),
+                        min: 32768,
+                        max: 32868,
+                    ),
+                ],
+            ),
+        ],
+        generators: [
+            (
+                column: Note,
+                shape: (
+                    from: 48,
+                    to: 60,
+                    curve: 0,
+                    s: 0,
+                    kind: Acid,
+                    wave: Sine,
+                    rate: Time(Note(1920)),
+                    phase: 0,
+                    run: 1,
+                    values: [],
+                    place: AllRows,
+                    seed: 5,
+                ),
+            ),
+        ],
+    ),
+    tags: [
+        "generative",
+        "303",
+    ],
+)

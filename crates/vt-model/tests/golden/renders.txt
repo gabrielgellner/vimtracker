@@ -28,6 +28,16 @@ df776ee82666f89d Alternate on Note, chromatic
 bbb5560ad9af8f76 Alternate on Note, in key
 c181f8d57a08f1ec Alternate on Nudge
 1a809c4fbe6871fe Alternate on Velocity
+87e59c5569117b25 Divisions on FX, event
+87e59c5569117b25 Divisions on FX, fine
+87e59c5569117b25 Divisions on FX, last slot
+87e59c5569117b25 Divisions on Length
+19066490cea03340 Divisions on Note of its own, chromatic
+8f797147a1c4a946 Divisions on Note of its own, in key
+986169c963d7db37 Divisions on Note, chromatic
+9087341c00308f05 Divisions on Note, in key
+87e59c5569117b25 Divisions on Nudge
+87e59c5569117b25 Divisions on Velocity
 87e59c5569117b25 Follow mutated on FX, event
 87e59c5569117b25 Follow mutated on FX, fine
 87e59c5569117b25 Follow mutated on FX, last slot

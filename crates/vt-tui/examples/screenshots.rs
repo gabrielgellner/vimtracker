@@ -15,11 +15,14 @@ use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_model::analysis::Analysis;
 use vt_model::bank::{BankEntry, ContentHash, Loop, Points};
+use vt_model::insert::Insert;
+use vt_model::preset::{PresetKind, SoundPreset, preset_path, set_tags};
 use vt_model::sample::{Decoded, SampleData};
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Song, SynthVoice, TrackKind};
 use vt_tui::app::App;
+use vt_tui::audio::DeviceInfo;
 use vt_tui::explorer::Purpose;
 use vt_tui::input::keys::Key;
 use vt_tui::input::mode::Mode;
@@ -36,6 +39,15 @@ const WIDTH: u16 = 120;
 const HEIGHT: u16 = 24;
 /// The project page's, which is taller, with its groove under its settings.
 const PROJECT_HEIGHT: u16 = 32;
+/// The sample page's, the track pages' and the mixer's shots are of the author's screen, kitty
+/// full screen on a MacBook, where each track page's four rows of devices fit beside the main
+/// meter.
+const FULL_WIDTH: u16 = 163;
+const FULL_HEIGHT: u16 = 42;
+
+const SMALL: (u16, u16) = (WIDTH, HEIGHT);
+const PROJECT: (u16, u16) = (WIDTH, PROJECT_HEIGHT);
+const FULL: (u16, u16) = (FULL_WIDTH, FULL_HEIGHT);
 
 /// One picture for the manual.
 struct Shot {
@@ -53,7 +65,28 @@ struct Shot {
     /// Whether the first track plays a drum loop, analysed, with a start, an end and a loop, for
     /// the sample page.
     drums: bool,
+    /// The screen's size in cells.
+    size: (u16, u16),
+    /// What else the song needs before the app starts on it, as the sends to a return.
+    song: Option<fn(&mut Song)>,
+    /// What else the app needs before the keys, as the audio devices it lists.
+    app: Option<fn(&mut App)>,
 }
+
+/// What a shot is unless it says otherwise: the gates' phrase, played by a sampler with nothing
+/// in it, with nothing pressed, on the small screen.
+const PLAIN: Shot = Shot {
+    name: "",
+    rows: GATES,
+    keys: "",
+    play: 0,
+    voice: None,
+    kick: false,
+    drums: false,
+    size: SMALL,
+    song: None,
+    app: None,
+};
 
 const GATES: &[&str] = &[
     "C-3 64 HLD3 --- --- ---",
@@ -77,32 +110,23 @@ const LANE: &[&str] = &[
 ];
 
 const SHOTS: &[Shot] = &[
+    // Zoomed in once, so the start, the end and the loop all show.
     Shot {
         name: "sample",
-        rows: GATES,
-        keys: " 0zizilllllzc",
-        play: 0,
-        voice: None,
-        kick: false,
+        keys: " 0zilllllzc",
         drums: true,
+        size: FULL,
+        ..PLAIN
     },
     Shot {
         name: "gates",
-        rows: GATES,
         keys: "lll",
-        play: 0,
-        voice: None,
-        kick: false,
-        drums: false,
+        ..PLAIN
     },
     Shot {
         name: "gate-list",
-        rows: GATES,
         keys: "lllK",
-        play: 0,
-        voice: None,
-        kick: false,
-        drums: false,
+        ..PLAIN
     },
     Shot {
         name: "lane",
@@ -110,17 +134,14 @@ const SHOTS: &[Shot] = &[
         keys: "lllll:lane 3<Enter><Tab>",
         play: 21,
         voice: Some(SynthVoice::VirtualAnalog),
-        kick: false,
-        drums: false,
+        ..PLAIN
     },
     Shot {
         name: "track-sound",
-        rows: GATES,
         keys: " 5jli60<Enter>ji90<Enter>k",
-        play: 0,
-        voice: None,
         kick: true,
-        drums: false,
+        size: FULL,
+        ..PLAIN
     },
     Shot {
         name: "track-fx",
@@ -128,56 +149,95 @@ const SHOTS: &[Shot] = &[
         keys: " 5LLKComp<Enter>l==hji40}KEQ3<Enter>jjiD0li50}KLimit<Enter><Tab>",
         play: 6,
         voice: Some(SynthVoice::VirtualAnalog),
-        kick: false,
-        drums: false,
+        size: FULL,
+        ..PLAIN
     },
     Shot {
         name: "project",
-        rows: GATES,
         keys: " 9jjj=l+++:set scale=dorian<Enter>:groove pull<Enter>",
-        play: 0,
-        voice: None,
-        kick: false,
-        drums: false,
+        size: PROJECT,
+        ..PLAIN
+    },
+    // The project page's second page, with two outputs to choose from.
+    Shot {
+        name: "project-audio",
+        keys: " 9L",
+        size: PROJECT,
+        app: Some(two_outputs),
+        ..PLAIN
     },
     // Return B, past the four tracks, group 1 and return A, with what sends to it under its
     // Output (`sends_to_b`).
     Shot {
         name: "track-return",
-        rows: GATES,
         keys: " 5WWWWWWgg0j<Tab>",
         play: 8,
         voice: Some(SynthVoice::VirtualAnalog),
-        kick: false,
-        drums: false,
+        size: FULL,
+        song: Some(sends_to_b),
+        ..PLAIN
     },
     // `Space` and a wait: the popup of what can come next, the views' digits among it, on the
     // author's screen, where it fits whole. The steps played are only the wait, as nothing is
     // playing.
     Shot {
         name: "which-key",
-        rows: GATES,
         keys: " ",
         play: 4,
-        voice: None,
-        kick: false,
-        drums: false,
+        size: FULL,
+        ..PLAIN
     },
+    // Mod 1's envelope shaped, and Mod 4's LFO sent to the cutoff.
     Shot {
         name: "track-mod",
-        rows: GATES,
-        keys: " 5Lji20<Enter>ji300<Enter>ji400<Enter>lkki60<Enter>gglllK/cut<Enter>jjji+30<Enter><Tab>",
+        keys: " 5Lji20<Enter>ji300<Enter>ji400<Enter>lkki60<Enter>ggllll$K/cut<Enter>0jjji+30<Enter><Tab>",
         play: 3,
-        voice: None,
-        kick: false,
-        drums: false,
+        size: FULL,
+        ..PLAIN
+    },
+    // Clouds in the first slot, a little larger grains, playing what comes in.
+    Shot {
+        name: "track-clouds",
+        rows: LANE,
+        keys: " 7KClouds<Enter>jjiC0<Enter><Tab>",
+        play: 12,
+        voice: Some(SynthVoice::VirtualAnalog),
+        size: FULL,
+        ..PLAIN
+    },
+    // An acid line made live on the empty phrase from the shape panel; `Cut` and `Res` on macro
+    // 1, named `Bite`, from the Sound page; then the Gen page, with the acid's `Density` on macro
+    // 2, `Dense`, and playing.
+    Shot {
+        name: "track-gen",
+        rows: &[],
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8}kj$M2:macro Dense<Enter><Tab>",
+        play: 6,
+        voice: Some(SynthVoice::Acid),
+        size: FULL,
+        ..PLAIN
+    },
+    // The same, then macro 1's mapping from its place in the band: `Res` kept below `A0`, and
+    // `Cut`'s response bent to come early.
+    Shot {
+        name: "mapping",
+        rows: &[],
+        keys: "vGSK/acid<Enter>L 5}ji60M1jM1:macro Bite<Enter> 8}kj$M2:macro Dense<Enter>gg0gmjliA0kl++",
+        voice: Some(SynthVoice::Acid),
+        size: FULL,
+        ..PLAIN
+    },
+    // A band of seven tracks, the drums folded into their group, `z a` from the kick, playing.
+    Shot {
+        name: "mixer-folded",
+        rows: &[],
+        keys: " 4za<Tab>",
+        play: 10,
+        size: FULL,
+        song: Some(band),
+        ..PLAIN
     },
 ];
-
-/// The sample page's and the Sound, Mod and FX pages' shots are of the author's screen, kitty full
-/// screen on a MacBook, where each track page's four rows of devices fit beside the main meter.
-const SAMPLE_WIDTH: u16 = 163;
-const SAMPLE_HEIGHT: u16 = 42;
 
 /// The name the drum loop is played by, and the content it's analysed as.
 const DRUMS: &str = "drums.wav";
@@ -232,16 +292,10 @@ fn kick() -> SampleData {
     SampleData { frames }
 }
 
-/// A song whose first track plays these rows in a phrase of 16, with this synth if it's given.
-fn song(rows: &[&str], voice: Option<SynthVoice>) -> Song {
-    let mut song = Song::new(4);
-    // A name of its own, as a random one would differ on every run.
-    song.name = "dusty-breakdown".to_owned();
-    if let Some(voice) = voice {
-        song.tracks[0].machine = Machine::Plaits(voice);
-    }
+/// Write rows into a track's first phrase, one row of step text each.
+fn write_rows(song: &mut Song, track: usize, rows: &[&str]) {
     let phrase = Arc::make_mut(
-        song.tracks[0]
+        song.tracks[track]
             .phrases
             .get_mut(&0)
             .expect("a new song's phrase"),
@@ -251,6 +305,17 @@ fn song(rows: &[&str], voice: Option<SynthVoice>) -> Song {
             *step = text.parse().expect("a step's text");
         }
     }
+}
+
+/// A song whose first track plays these rows in a phrase of 16, with this synth if it's given.
+fn song(rows: &[&str], voice: Option<SynthVoice>) -> Song {
+    let mut song = Song::new(4);
+    // A name of its own, as a random one would differ on every run.
+    song.name = "dusty-breakdown".to_owned();
+    if let Some(voice) = voice {
+        song.tracks[0].machine = Machine::Plaits(voice);
+    }
+    write_rows(&mut song, 0, rows);
     song
 }
 
@@ -268,6 +333,81 @@ fn sends_to_b(song: &mut Song) {
     }
     let group = song.fixed_track(TrackKind::Group(1)).expect("a group");
     song.tracks[group].send_b = 0x18;
+}
+
+/// Seven tracks, each playing: four drums in group 1, named `909`, then an acid bass, a lead and
+/// a pad, so each role's colour shows under its name.
+fn band(song: &mut Song) {
+    let name = std::mem::take(&mut song.name);
+    *song = Song::new(7);
+    song.name = name;
+    const KICKS: &[&str] = &["C-3 64", "", "", "", "C-3 64", "", "", "", "C-3 64"];
+    const SNARES: &[&str] = &[
+        "", "", "", "", "C-3 64", "", "", "", "", "", "", "", "C-3 64",
+    ];
+    const HATS: &[&str] = &["", "", "C-3 50", "", "", "", "C-3 50", "", "", "", "C-3 50"];
+    const OPEN: &[&str] = &[
+        "", "", "", "", "", "", "", "", "", "", "", "", "", "", "C-3 40",
+    ];
+    const BASS: &[&str] = &[
+        "C-2 64", "C-2 50", "", "C-3 64", "", "G-2 64", "C-2 64", "", "D#2 64",
+    ];
+    const LEAD: &[&str] = &["G-4 50", "", "", "", "", "", "D#4 50", "", "", "", "C-4 50"];
+    const PAD: &[&str] = &["C-3 40"];
+    let parts: [(&str, SynthVoice, &[&str]); 7] = [
+        ("BD", SynthVoice::Kick, KICKS),
+        ("SD", SynthVoice::Snare, SNARES),
+        ("CH", SynthVoice::Hat, HATS),
+        ("OH", SynthVoice::Hat, OPEN),
+        ("AC", SynthVoice::Acid, BASS),
+        ("LD", SynthVoice::VirtualAnalog, LEAD),
+        ("PD", SynthVoice::Chord, PAD),
+    ];
+    for (track, (label, voice, rows)) in parts.into_iter().enumerate() {
+        song.tracks[track].name = label.to_owned();
+        song.tracks[track].machine = Machine::Plaits(voice);
+        // Down from 0 dB, so seven together don't clip the master.
+        song.tracks[track].level = 0xA0;
+        let rows: Vec<String> = rows
+            .iter()
+            .map(|row| {
+                if row.is_empty() {
+                    "--- -- --- --- ---".to_owned()
+                } else {
+                    format!("{row} --- --- ---")
+                }
+            })
+            .collect();
+        let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+        write_rows(song, track, &rows);
+    }
+    for track in &mut song.tracks[..4] {
+        track.group = Some(1);
+    }
+    let group = song.fixed_track(TrackKind::Group(1)).expect("a group");
+    song.tracks[group].name = "909".to_owned();
+}
+
+/// Two outputs for the audio page to list, the laptop's own playing, at a buffer of 256.
+fn two_outputs(app: &mut App) {
+    app.audio.devices = vec![
+        DeviceInfo {
+            id: "coreaudio:speakers".to_owned(),
+            name: "MacBook Pro Speakers".to_owned(),
+            rates: vec![44_100, 48_000, 96_000],
+            buffers: vec![64, 128, 256, 512, 1024],
+            default: true,
+        },
+        DeviceInfo {
+            id: "coreaudio:interface".to_owned(),
+            name: "Audio Interface".to_owned(),
+            rates: vec![44_100, 48_000],
+            buffers: vec![32, 64, 128, 256, 512],
+            default: false,
+        },
+    ];
+    app.audio.buffer = Some(256);
+    app.audio.latency_us = 9_800;
 }
 
 /// Press keys as they're written, with `<Name>` for a key that isn't a character, all at this
@@ -395,24 +535,20 @@ fn take_slowed(shot: &Shot, folder: &Path, slower: Duration) -> std::io::Result<
         song.tracks[0].machine = Machine::Sampler;
         song.tracks[0].set_setting(SettingId::SAMPLE, number);
     }
-    if shot.name == "track-return" {
-        sends_to_b(&mut song);
+    if let Some(prepare) = shot.song {
+        prepare(&mut song);
     }
     // Taken before the app, so its first frame measures no time since the app began.
     let start = Instant::now();
     let (mut app, mut realtime) = app_on(song, pool);
+    if let Some(prepare) = shot.app {
+        prepare(&mut app);
+    }
     std::thread::sleep(slower);
     press(&mut app, shot.keys, start);
     let now = play(&mut app, &mut realtime, shot.play, start);
-    let size = match shot.name {
-        "project" => (WIDTH, PROJECT_HEIGHT),
-        "sample" | "track-fx" | "track-sound" | "track-mod" | "track-return" | "which-key" => {
-            (SAMPLE_WIDTH, SAMPLE_HEIGHT)
-        }
-        _ => (WIDTH, HEIGHT),
-    };
     let path = folder.join(format!("{}.svg", shot.name));
-    write(&mut app, now, size, &path)?;
+    write(&mut app, now, shot.size, &path)?;
     Ok(path)
 }
 
@@ -432,13 +568,42 @@ fn kick_file(path: &Path, gain: f32) -> std::io::Result<()> {
     writer.finalize().map_err(std::io::Error::other)
 }
 
-/// The sample explorer, `:sample`, over a folder of samples with a kit, some loops and a sound
-/// whose file has gone, so each of its icons shows. The folder is made in the system's temporary
-/// folder and named from it as `~`, so the picture is the same wherever it's taken. It's this
-/// process's own, so two runs at once, as CI's on one machine, don't share it.
-fn take_explorer(folder: &Path) -> std::io::Result<PathBuf> {
-    let home = std::env::temp_dir().join(format!("vimtracker-screenshots-{}", std::process::id()));
+/// A folder of the system's temporary folder for one picture of the explorer, named from it as
+/// `~`, so the picture is the same wherever it's taken. It's this process's own, so two runs at
+/// once, as CI's on one machine, don't share it.
+fn scratch_home(picture: &str) -> PathBuf {
+    let home = std::env::temp_dir().join(format!(
+        "vimtracker-screenshots-{picture}-{}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&home);
+    home
+}
+
+/// Show the explorer for a purpose over this folder, on its first row, as the app opens it.
+fn explore(app: &mut App, purpose: Purpose, folder: &Path, meaning: &str, home: &Path) {
+    let roots = vec![Root::Place {
+        path: folder.to_path_buf(),
+        meaning: meaning.to_owned(),
+    }];
+    let hint = match purpose {
+        Purpose::Kit => "Enter use  L on tracks  T tag",
+        Purpose::Preset(_) => "Enter load  T tag",
+        _ => "Enter choose  T tag",
+    };
+    app.picker = Some(
+        Picker::explorer(purpose, roots, Some(home.to_path_buf()))
+            .with_tags(Arc::clone(&app.tag_library))
+            .opening_first()
+            .hinted(hint),
+    );
+    app.mode = Mode::Picker;
+}
+
+/// The sample explorer, `:sample`, over a folder of samples with a kit, some loops and a sound
+/// whose file has gone, so each of its icons shows.
+fn take_explorer(folder: &Path) -> std::io::Result<PathBuf> {
+    let home = scratch_home("explorer");
     let samples = home.join("Samples");
     for inside in ["Drums", "Loops", "Vocals"] {
         std::fs::create_dir_all(samples.join(inside))?;
@@ -479,6 +644,127 @@ fn take_explorer(folder: &Path) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
+/// The kit dialog, `:kit`, opened to a kit's sounds with four of them marked to load as tracks.
+fn take_kit(folder: &Path) -> std::io::Result<PathBuf> {
+    let home = scratch_home("kit");
+    let kits = home.join("Kits");
+    let drums = home.join("Samples/Drums");
+    std::fs::create_dir_all(&kits)?;
+    std::fs::create_dir_all(&drums)?;
+    for (file, gain) in [
+        ("kick.wav", 0.9),
+        ("snare.wav", 0.7),
+        ("closed hat.wav", 0.4),
+        ("open hat.wav", 0.5),
+        ("clap.wav", 0.6),
+        ("rim.wav", 0.3),
+        ("low tom.wav", 0.8),
+    ] {
+        kick_file(&drums.join(file), gain)?;
+    }
+    std::fs::write(
+        kits.join("909 Core Kit.ron"),
+        r#"(name: "909 Core Kit", category: "Drum Machines", sounds: [
+            (label: "BD", name: "Kick 909", path: "../Samples/Drums/kick.wav"),
+            (label: "SD", name: "Snare 909", path: "../Samples/Drums/snare.wav"),
+            (label: "CH", name: "Closed Hat 909", path: "../Samples/Drums/closed hat.wav",
+             choke: Some(1)),
+            (label: "OH", name: "Open Hat 909", path: "../Samples/Drums/open hat.wav",
+             choke: Some(1)),
+            (label: "CP", name: "Clap 909", path: "../Samples/Drums/clap.wav"),
+            (label: "RS", name: "Rim 909", path: "../Samples/Drums/rim.wav"),
+            (label: "LT", name: "Low Tom 909", path: "../Samples/Drums/low tom.wav", tune: -5),
+        ])"#,
+    )?;
+    std::fs::write(
+        kits.join("Rytm Analog.ron"),
+        r#"(sounds: [(label: "BD", path: "../Samples/Drums/kick.wav")])"#,
+    )?;
+    let start = Instant::now();
+    let (mut app, _realtime) = app_on(song(&[], None), SamplePool::default());
+    explore(&mut app, Purpose::Kit, &kits, "kits", &home);
+    // Into the 909 kit, the kick, snare and both hats marked, and on to the clap.
+    press(&mut app, "l4x", start);
+    app.finish_loading();
+    let path = folder.join("kit.svg");
+    write(&mut app, start, (WIDTH, HEIGHT), &path)?;
+    std::fs::remove_dir_all(&home)?;
+    Ok(path)
+}
+
+/// The sound presets' browser, `:preset`, over a few saved in folders, each tagged by what it
+/// is, with tags of their own on the basses.
+fn take_presets(folder: &Path) -> std::io::Result<PathBuf> {
+    let home = scratch_home("presets");
+    let presets = home.join("Presets");
+    let mut sounds = Song::new(1);
+    let saved: [(&str, SynthVoice, Option<Insert>, &[&str]); 5] = [
+        (
+            "bass/Bite",
+            SynthVoice::Acid,
+            Some(Insert::RETURN_DELAY),
+            &["squelch"],
+        ),
+        (
+            "bass/Round Sub",
+            SynthVoice::VirtualAnalogVcf,
+            None,
+            &["sub"],
+        ),
+        (
+            "keys/Glass Bell",
+            SynthVoice::Fm,
+            Some(Insert::RETURN_REVERB),
+            &[],
+        ),
+        ("keys/Hoover", SynthVoice::Supersaw, None, &[]),
+        (
+            "Dust Cloud",
+            SynthVoice::Dust,
+            Some(Insert::RETURN_REVERB),
+            &[],
+        ),
+    ];
+    for (name, voice, insert, tags) in saved {
+        let track = &mut sounds.tracks[0];
+        track.machine = Machine::Plaits(voice);
+        track.inserts[0] = insert.unwrap_or_default();
+        let path = preset_path(&presets, PresetKind::Sound, name).map_err(std::io::Error::other)?;
+        let preset = SoundPreset::of(track, None);
+        vt_model::preset::save(&path, &preset, true).map_err(std::io::Error::other)?;
+        if !tags.is_empty() {
+            let tags = tags.iter().map(|tag| (*tag).to_owned()).collect();
+            set_tags(&path, PresetKind::Sound, tags).map_err(std::io::Error::other)?;
+        }
+    }
+    let start = Instant::now();
+    let (mut app, _realtime) = app_on(song(&[], None), SamplePool::default());
+    let sounds = presets.join(PresetKind::Sound.folder());
+    explore(
+        &mut app,
+        Purpose::Preset(PresetKind::Sound),
+        &sounds,
+        "sounds",
+        &home,
+    );
+    // Open the basses and the keys, and stand on the acid.
+    press(&mut app, "ljjlkkk", start);
+    let path = folder.join("presets.svg");
+    write(&mut app, start, (WIDTH, HEIGHT), &path)?;
+    std::fs::remove_dir_all(&home)?;
+    Ok(path)
+}
+
+/// Make one picture in a folder, saying where it went.
+type Take = fn(&Path) -> std::io::Result<PathBuf>;
+
+/// Each picture made from files of its own rather than a song, by its name.
+const EXPLORERS: [(&str, Take); 3] = [
+    ("explorer", take_explorer),
+    ("kit", take_kit),
+    ("presets", take_presets),
+];
+
 fn main() -> std::io::Result<()> {
     let folder = std::env::args()
         .nth(1)
@@ -487,7 +773,9 @@ fn main() -> std::io::Result<()> {
     for shot in SHOTS {
         println!("{}", take(shot, &folder)?.display());
     }
-    println!("{}", take_explorer(&folder)?.display());
+    for (_, take) in EXPLORERS {
+        println!("{}", take(&folder)?.display());
+    }
     Ok(())
 }
 
@@ -507,9 +795,11 @@ mod tests {
             let b = std::fs::read(take(shot, &second).unwrap()).unwrap();
             assert!(a == b, "{} differs between runs", shot.name);
         }
-        let a = std::fs::read(take_explorer(&first).unwrap()).unwrap();
-        let b = std::fs::read(take_explorer(&second).unwrap()).unwrap();
-        assert!(a == b, "the explorer differs between runs");
+        for (name, take) in EXPLORERS {
+            let a = std::fs::read(take(&first).unwrap()).unwrap();
+            let b = std::fs::read(take(&second).unwrap()).unwrap();
+            assert!(a == b, "{name} differs between runs");
+        }
         let _ = std::fs::remove_dir_all(&base);
     }
 

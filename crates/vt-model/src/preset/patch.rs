@@ -11,6 +11,9 @@
 //! Loading adds the parts to free mod slots and free macros, in order, renumbering every
 //! reference among them, its generators' locks too, and refuses when there are too few unless
 //! told to put them over the last ones (the study's §5.3).
+//!
+//! A generator on an FX column's lane keeps the lane's length, so it fills a lane as long on the
+//! track it's added to (decision 318, for Kria's length loop).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -19,8 +22,8 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::{PRESET_FORMAT, Patch, PresetError, io_at, parse};
-use crate::constants::FX_SLOTS;
-use crate::generator::Generator;
+use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
+use crate::generator::{Generator, Span};
 use crate::macros::{GenColumn, MACROS, Macro, MacroTarget};
 use crate::modulation::MOD_SLOTS;
 use crate::settings::{Owner, SettingId};
@@ -29,7 +32,8 @@ use crate::song::{Phrase, Track};
 use crate::step::FxCommand;
 
 /// A live generator a patch carries: its column, an FX column's command by its key, and its
-/// shape, which goes onto the phrase under the cursor when the patch is loaded.
+/// shape, which goes onto the phrase under the cursor when the patch is loaded; and for one
+/// filling an FX column's lane, the lane's length.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PatchGen {
@@ -38,9 +42,45 @@ pub struct PatchGen {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
     pub shape: Shape,
+    /// The length of the lane it fills, which it's given again where it's added, or none for a
+    /// generator over the phrase's loop.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane: Option<usize>,
 }
 
 impl PatchGen {
+    /// A phrase's live generator as a patch carries it, with an FX one's lock as it is: what
+    /// [`Patch::of_track`] takes for each generator a macro holds, there renumbered from the
+    /// patch's first slot and macro.
+    pub fn of(found: &Generator, phrase: &Phrase) -> Self {
+        Self::numbered(found, phrase, Some)
+    }
+
+    /// A phrase's live generator, its command's lock on a slot or macro renumbered.
+    fn numbered(
+        found: &Generator,
+        phrase: &Phrase,
+        renumbered: impl Fn(SettingId) -> Option<SettingId>,
+    ) -> Self {
+        let lane = match (found.span, found.column) {
+            (Span::Lane, ShapeColumn::Fx { slot, .. }) => phrase.lane(slot).map(|lane| lane.length),
+            _ => None,
+        };
+        Self {
+            column: GenColumn::of(found.column),
+            command: match found.column {
+                ShapeColumn::Fx {
+                    command: FxCommand::Set(id),
+                    ..
+                } => Some(FxCommand::Set(renumbered(id).unwrap_or(id)).key()),
+                ShapeColumn::Fx { command, .. } => Some(command.key()),
+                _ => None,
+            },
+            shape: found.shape,
+            lane,
+        }
+    }
+
     /// The command an FX generator writes, if it's one this build knows.
     pub fn fx_command(&self) -> Option<FxCommand> {
         self.command.as_deref().and_then(FxCommand::from_key)
@@ -268,21 +308,13 @@ impl Patch {
                 held
             })
             .collect();
-        let generators = held
-            .into_iter()
-            .map(|found| PatchGen {
-                column: GenColumn::of(found.column),
-                command: match found.column {
-                    ShapeColumn::Fx {
-                        command: FxCommand::Set(id),
-                        ..
-                    } => Some(FxCommand::Set(renumbered(id).unwrap_or(id)).key()),
-                    ShapeColumn::Fx { command, .. } => Some(command.key()),
-                    _ => None,
-                },
-                shape: found.shape,
-            })
-            .collect();
+        let generators = match phrase {
+            Some(phrase) => held
+                .into_iter()
+                .map(|found| PatchGen::numbered(found, phrase, renumbered))
+                .collect(),
+            None => Vec::new(),
+        };
         Some(Self {
             mods: patch_mods,
             accumulation: if parts.accumulation {
@@ -497,6 +529,20 @@ impl Patch {
                     generator.column.name()
                 ));
             }
+            match (generator.column, generator.lane) {
+                (GenColumn::Fx(_), Some(length)) if !(1..=MAX_PHRASE_STEPS).contains(&length) => {
+                    return Err(format!(
+                        "its lane is {length} steps long, and a lane is 1 to {MAX_PHRASE_STEPS}"
+                    ));
+                }
+                (GenColumn::Fx(_), _) | (_, None) => {}
+                (column, Some(_)) => {
+                    return Err(format!(
+                        "its {} generator has a lane, which only an FX one has",
+                        column.name()
+                    ));
+                }
+            }
             match (generator.column, &generator.command) {
                 (GenColumn::Fx(slot), _) if slot >= FX_SLOTS => {
                     return Err(format!(
@@ -547,7 +593,12 @@ impl PatchPreset {
 /// Read a patch preset.
 pub fn load_patch(path: &Path) -> Result<PatchPreset, PresetError> {
     let text = fs::read_to_string(path).map_err(io_at(path))?;
-    let preset: PatchPreset = parse(&text, path)?;
+    read_patch(&text, path)
+}
+
+/// A patch preset from its file's text, `path` naming it in what's said if it won't read.
+pub(super) fn read_patch(text: &str, path: &Path) -> Result<PatchPreset, PresetError> {
+    let preset: PatchPreset = parse(text, path)?;
     preset
         .patch
         .check_alone()
@@ -732,6 +783,7 @@ mod tests {
             random: Random::default(),
             vary: 0,
             variation: Variation::default(),
+            divisions: crate::shape::Divisions::default(),
         }
     }
 
@@ -796,6 +848,47 @@ mod tests {
         outside.generators[0].command = Some("mod2.depth".to_owned());
         let error = outside.check_alone().unwrap_err();
         assert!(error.contains("mod2.depth"), "{error}");
+    }
+
+    #[test]
+    fn a_generator_on_a_lane_keeps_its_length_and_only_an_fx_one_has_one() {
+        use crate::generator::Span;
+        use crate::song::Lane;
+        let mut track = Song::new(1).tracks[0].clone();
+        let to = MacroTarget::Gen {
+            column: GenColumn::Fx(0),
+            param: crate::shape::GenParam::To,
+        };
+        track.macros[0].maps = vec![MacroMap::numbers(to, (0xA0, 0xA0))];
+        let steps: Vec<crate::step::Step> = (0..8)
+            .map(|_| "C-3 -- --- --- ---".parse().unwrap())
+            .collect();
+        let mut phrase = Phrase::from_steps(steps);
+        phrase.set_lane(
+            0,
+            Some(Lane {
+                start: 0,
+                length: 3,
+            }),
+        );
+        let column = ShapeColumn::Fx {
+            slot: 0,
+            command: FxCommand::Set(SettingId::CUT),
+        };
+        assert!(phrase.add_generator(Generator::new(column, Span::Lane, level()), None));
+        let patch = Patch::of_track(&track, Some(&phrase)).unwrap();
+        assert_eq!(patch.generators[0].lane, Some(3));
+        assert_eq!(
+            patch.generators[0],
+            PatchGen::of(&phrase.generators()[0], &phrase)
+        );
+        assert_eq!(patch.check_alone(), Ok(()));
+
+        let mut on_notes = patch.clone();
+        on_notes.generators[0].column = GenColumn::Note;
+        on_notes.generators[0].command = None;
+        let error = on_notes.check_alone().unwrap_err();
+        assert!(error.contains("lane"), "{error}");
     }
 
     #[test]

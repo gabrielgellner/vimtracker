@@ -1,0 +1,82 @@
+(
+    format: 1,
+    patch: (
+        mods: [
+            (
+                kind: Steps,
+                destination: Some("pitch"),
+                depth: 255,
+                in_scale: true,
+                steps: (
+                    values: (0, 3, 7, 5, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+                    mode: Free,
+                    length: 5,
+                ),
+            ),
+            (
+                kind: Steps,
+                destination: Some("pitch"),
+                depth: 255,
+                steps: (
+                    values: (0, 0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+                    mode: Free,
+                    length: 3,
+                ),
+            ),
+        ],
+        macros: [
+            (
+                name: Some("Pitch loop"),
+                value: 17408,
+                maps: [
+                    (
+                        target: Setting("mod1.length"),
+                        min: 0,
+                        max: 3840,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Octave loop"),
+                value: 8704,
+                maps: [
+                    (
+                        target: Setting("mod2.length"),
+                        min: 0,
+                        max: 3840,
+                    ),
+                ],
+            ),
+        ],
+        generators: [
+            (
+                column: Fx(0),
+                command: Some("gate"),
+                shape: (
+                    from: 0,
+                    to: 0,
+                    curve: 0,
+                    s: 0,
+                    kind: List,
+                    wave: Sine,
+                    rate: Time(Note(1920)),
+                    phase: 0,
+                    run: 1,
+                    values: [
+                        32,
+                        192,
+                        8,
+                        230,
+                    ],
+                    place: AllRows,
+                    seed: 1,
+                ),
+                lane: Some(4),
+            ),
+        ],
+    ),
+    tags: [
+        "generative",
+        "pitch",
+    ],
+)
