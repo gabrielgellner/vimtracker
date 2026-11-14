@@ -1782,6 +1782,40 @@ const GEN_GRIDS: DeviceLayout = live(
         ],
     )],
 );
+/// A chance for each note division, as the module's sliders, the straight ones first, then the
+/// bar and the note; it makes its own rhythm, so it has no `Where`, and its channel is what it is.
+/// Channel `B`'s chances, which only `A+B` has, are on a second page, with `Vary` after them.
+const GEN_DIVISIONS: DeviceLayout = live(
+    "gen/divisions",
+    &[
+        knobs(
+            "Divisions",
+            [
+                s("d4"),
+                s("d8"),
+                s("d16"),
+                s("d4t"),
+                s("d8t"),
+                s("d16t"),
+                s("bar"),
+                s("note"),
+            ],
+        ),
+        knobs(
+            "Channel B",
+            [
+                s("b4"),
+                s("b8"),
+                s("b16"),
+                s("b4t"),
+                s("b8t"),
+                s("b16t"),
+                __,
+                s("vary"),
+            ],
+        ),
+    ],
+);
 /// A Markov chain learned from the notes there: how closely it copies them and how far it strays;
 /// it learns its rows with its notes, so it has no `Where`.
 const GEN_VARIATION: DeviceLayout = live(
@@ -1838,7 +1872,7 @@ const GEN_REWORK: DeviceLayout = live(
 
 /// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
 /// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 15] = [
+pub const GENERATORS: [&DeviceLayout; 16] = [
     &GEN_RAMP,
     &GEN_RANDOM,
     &GEN_WAVE,
@@ -1851,6 +1885,7 @@ pub const GENERATORS: [&DeviceLayout; 15] = [
     &GEN_PINK,
     &GEN_MULTIPLY,
     &GEN_GRIDS,
+    &GEN_DIVISIONS,
     &GEN_VARIATION,
     &GEN_BITS,
     &GEN_REWORK,
@@ -1871,6 +1906,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
         FillKind::Pink => &GEN_PINK,
         FillKind::Multiply => &GEN_MULTIPLY,
         FillKind::Grids => &GEN_GRIDS,
+        FillKind::Divisions => &GEN_DIVISIONS,
         FillKind::Variation => &GEN_VARIATION,
         FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => &GEN_BITS,
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,
@@ -2132,8 +2168,8 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
 pub fn app_only(control: Control, track: &Track) -> bool {
     match control {
         Control::Machine | Control::Insert(_) | Control::Mod(_, ModField::Type) => true,
-        // A generator's fill and rows, what a `Follow` follows and which part a `Grids` plays are
-        // what it is, and a `List`'s values and a `Random`'s weights are typed.
+        // A generator's fill and rows, what a `Follow` follows, which part a `Grids` plays and
+        // which channel a `Divisions` plays are what it is, and a `List`'s values and a `Random`'s weights are typed.
         Control::Gen { param, .. } => matches!(
             param,
             GenParam::Fill
@@ -2141,6 +2177,7 @@ pub fn app_only(control: Control, track: &Track) -> bool {
                 | GenParam::Source
                 | GenParam::Values
                 | GenParam::Part
+                | GenParam::Channel
                 | GenParam::Weights
         ),
         Control::InsertParam(slot, param) => track.inserts[slot].type_param() == Some(param),

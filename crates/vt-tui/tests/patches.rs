@@ -305,6 +305,7 @@ fn level() -> vt_model::shape::Shape {
         random: Random::default(),
         vary: 0,
         variation: Variation::default(),
+        divisions: vt_model::shape::Divisions::default(),
     }
 }
 

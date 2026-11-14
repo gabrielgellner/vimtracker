@@ -723,6 +723,7 @@ mod tests {
             random: Random::default(),
             vary: 0,
             variation: Variation::default(),
+            divisions: crate::shape::Divisions::default(),
         }
     }
 

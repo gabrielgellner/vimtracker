@@ -5,9 +5,12 @@
 //! `Multiply` reworks the rhythm there rather than its values, the bit transforms each value's
 //! bits, and `Grids` writes a drum part from a map of real patterns, one part a track across a
 //! kit's. `Variation` writes something like the notes there, from a Markov chain learned from them.
+//! `Divisions` writes a rhythm from a chance for each note division, straight and triplet, to
+//! strike, after Vermona's randomRHYTHM, its triplets nudged between the rows.
 
 mod acid;
 mod bits;
+mod divisions;
 mod follow;
 mod grids;
 mod mutation;
@@ -19,6 +22,9 @@ mod walk;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
 pub use bits::{Bits, MAX_FACTOR, MAX_TURN};
+pub use divisions::{
+    Bar, Channel, DIVISIONS, Division, Divisions, Strike, track_seed as divisions_seed,
+};
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
@@ -155,6 +161,9 @@ pub enum FillKind {
     Acid,
     /// A drum part from Grids' map of patterns, one of the kick's, the snare's and the hats'.
     Grids,
+    /// A rhythm from a chance for each note division to strike, straight and triplet, after
+    /// Vermona's randomRHYTHM.
+    Divisions,
     /// Another phrase's notes, with their velocities and gates, turned on the way as a canon's
     /// voices are.
     Follow,
@@ -183,7 +192,7 @@ pub enum FillKind {
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 21] = [
         Self::Ramp,
         Self::Random,
         Self::Walk,
@@ -193,6 +202,7 @@ impl FillKind {
         Self::List,
         Self::Acid,
         Self::Grids,
+        Self::Divisions,
         Self::Follow,
         Self::Variation,
         Self::Scale,
@@ -218,6 +228,7 @@ impl FillKind {
             Self::List => "List",
             Self::Acid => "Acid",
             Self::Grids => "Grids",
+            Self::Divisions => "Divisions",
             Self::Follow => "Follow",
             Self::Variation => "Variation",
             Self::Scale => "Scale",
@@ -244,6 +255,7 @@ impl FillKind {
             Self::List => "A few values in turn",
             Self::Acid => "A 303 line, with accents and slides",
             Self::Grids => "A drum part from Grids' map",
+            Self::Divisions => "A chance for each note division",
             Self::Follow => "Another track's phrase, kept in step",
             Self::Variation => "Something like the notes there",
             Self::Scale => "The values there onto the two",
@@ -282,12 +294,12 @@ impl FillKind {
     }
 
     /// Whether it chooses its rows with a `Where`. A `Follow` writes every row from its source,
-    /// `Multiply` reads and writes the rhythm itself, `Grids` makes one of its own, and a
-    /// `Variation` learns one with the notes.
+    /// `Multiply` reads and writes the rhythm itself, `Grids` and `Divisions` make one of their
+    /// own, and a `Variation` learns one with the notes.
     pub fn has_where(self) -> bool {
         !matches!(
             self,
-            Self::Follow | Self::Multiply | Self::Grids | Self::Variation
+            Self::Follow | Self::Multiply | Self::Grids | Self::Divisions | Self::Variation
         )
     }
 }
@@ -395,8 +407,8 @@ impl ShapeColumn {
         }
     }
 
-    /// The fills it offers: `Snap`, `Acid`, `Grids`, `Follow` and `Variation` only mean something
-    /// for notes, `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform
+    /// The fills it offers: `Snap`, `Acid`, `Grids`, `Divisions`, `Follow` and `Variation` only
+    /// mean something for notes, `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform
     /// or a `Variation` nothing for notes of its own, as there are none to rework or learn from.
     pub fn fills(self) -> Vec<FillKind> {
         FillKind::ALL
@@ -407,6 +419,7 @@ impl ShapeColumn {
                     FillKind::Snap
                         | FillKind::Acid
                         | FillKind::Grids
+                        | FillKind::Divisions
                         | FillKind::Follow
                         | FillKind::Variation
                 ) || matches!(self, Self::Note { .. })
@@ -757,6 +770,9 @@ pub struct Shape {
     /// Where a `Grids` fill reads its map, and the part it plays. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Grids::is_default")]
     pub grids: Grids,
+    /// A `Divisions` fill's chances, its channel and its bar. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Divisions::is_default")]
+    pub divisions: Divisions,
     /// How a `Random` fill spreads and leans its values, and on notes which degrees it lets
     /// through and how often each comes. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Random::is_default")]
@@ -808,6 +824,7 @@ impl Shape {
             random: Random::default(),
             vary: 0,
             variation: Variation::default(),
+            divisions: Divisions::default(),
         }
     }
 
@@ -828,6 +845,7 @@ impl Shape {
                     | FillKind::Acid
                     | FillKind::Shuffle
                     | FillKind::Grids
+                    | FillKind::Divisions
                     | FillKind::Variation
             )
     }
@@ -1152,6 +1170,7 @@ mod tests {
             random: crate::shape::Random::default(),
             vary: 0,
             variation: crate::shape::Variation::default(),
+            divisions: Divisions::default(),
         }
     }
 
