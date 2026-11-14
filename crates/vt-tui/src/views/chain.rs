@@ -12,7 +12,7 @@ use crate::input::mode::Mode;
 use crate::theme;
 use crate::tree::ChainColumn;
 use crate::views::phrase::track_name;
-use crate::views::widgets::group;
+use crate::views::widgets::{group, role};
 
 /// Draw the view.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
@@ -31,8 +31,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             theme::dim(),
         ));
     }
-    title.push(Span::styled(
-        format!("Track {}", track_name(app, app.cursor.track)),
+    title.push(Span::styled("Track ", bold));
+    title.extend(role::ruled(
+        song,
+        app.cursor.track,
+        &track_name(app, app.cursor.track),
         bold,
     ));
     if let Some(mark) = group::mark(song, app.cursor.track) {

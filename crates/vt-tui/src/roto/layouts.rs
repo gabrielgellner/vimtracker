@@ -721,7 +721,8 @@ const FILTER: DeviceLayout = stored(
 );
 
 /// The fader and pan first, as a mixer strip has them, then the sends, then the gain at its
-/// input and the group it plays through. `Level` is knob 1 and `Trim` knob 5 on every track.
+/// input, the group it plays through and what it's for. `Level` is knob 1 and `Trim` knob 5 on
+/// every track.
 const OUTPUT: DeviceLayout = live(
     "output",
     &[knobs(
@@ -733,7 +734,7 @@ const OUTPUT: DeviceLayout = live(
             s("sendb"),
             s("trim"),
             s("group"),
-            __,
+            s("role"),
             __,
         ],
     )],
@@ -2226,6 +2227,7 @@ pub fn key(control: Control, track: &Track) -> &'static str {
         Control::Groove => "groove",
         Control::Choke => "choke",
         Control::Group => "group",
+        Control::Role => "role",
         Control::GateLength => "gate",
         Control::Speed => "speed",
         Control::Reset => "reset",

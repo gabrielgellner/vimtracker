@@ -102,13 +102,19 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
 }
 
 /// A setting's value's style on the Sound page: as any page's, but the group a track is in is in
-/// its colour, as on the mixer, and a fader the steps drive is in the playing colour.
+/// its colour, as on the mixer, its role is in the role's, set back while it's `Auto`, and a fader
+/// the steps drive is in the playing colour.
 fn value_style(app: &App, track: &Track, control: Control, here: bool) -> Style {
     let style = setting::style(
         app,
         here,
         at_default(control, track) || untuned(app, track, control),
     );
+    let role = theme::role(track.role()).filter(|_| control == Control::Role && !here);
+    if let Some(colour) = role {
+        let auto = track.role.is_auto();
+        return Style::new().fg(if auto { theme::dimmed(colour) } else { colour });
+    }
     match group::style(app.song(), app.cursor.track) {
         Some(tint) if control == Control::Group && !here => tint,
         _ if !here && app.follows_steps(app.cursor.track, control) => theme::automated(),

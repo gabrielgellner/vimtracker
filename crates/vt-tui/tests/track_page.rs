@@ -18,7 +18,7 @@ use vt_model::lfo::{Lfo, LfoMode, Rate, Shape};
 use vt_model::modulation::{MOD_SLOTS, default_mod};
 use vt_model::samples::SamplePool;
 use vt_model::settings::{SettingId, gate_value};
-use vt_model::song::{FilterType, Machine, Song, SynthVoice, TrackKind};
+use vt_model::song::{FilterType, Machine, Role, Song, SynthVoice, TrackKind};
 use vt_tui::app::App;
 use vt_tui::input::keys::parse_sequence;
 use vt_tui::input::mode::{Mode, View};
@@ -664,7 +664,7 @@ fn levels_snap_to_the_top_of_the_scale_and_filter_values_do_not() {
     // Pan runs to FF, and the sends stop at the top.
     press(&mut app, "jiFF");
     assert_eq!(track(&app).pan, 0xFF);
-    press(&mut app, "kk$iFF");
+    press(&mut app, "kkliFF");
     assert_eq!(track(&app).send_a, 0xF8);
     press(&mut app, "jiFF");
     assert_eq!(track(&app).send_b, 0xF8);
@@ -1434,7 +1434,7 @@ fn x_puts_track_page_settings_back_to_their_defaults() {
     assert_eq!(track(&app).level, 0xE0);
     press(&mut app, "ji40x");
     assert_eq!(track(&app).pan, 0x80);
-    press(&mut app, "kk$i40x");
+    press(&mut app, "kkli40x");
     assert_eq!(track(&app).send_a, 0);
     press(&mut app, "ji40x");
     assert_eq!(track(&app).send_b, 0);
@@ -2328,13 +2328,13 @@ fn j_and_k_come_back_to_the_column_a_shorter_row_moved_them_from() {
     assert_eq!(app.track_control(), Control::InsertParam(0, 2));
 
     // On the Sound page, through the Filter's last row, which has only its first column, and on
-    // into the next device's second.
+    // into the next device's third.
     press(&mut app, "HHgg}j$");
     assert_eq!(app.track_control().label(), "Low cut");
     press(&mut app, "jj");
     assert_eq!(app.track_control().label(), "Drive");
     press(&mut app, "j");
-    assert_eq!(app.track_control().label(), "Send A");
+    assert_eq!(app.track_control().label(), "Role");
     press(&mut app, "kk");
     assert_eq!(app.track_control().label(), "High cut");
     press(&mut app, "G");
@@ -3505,4 +3505,32 @@ fn four_op_has_a_device_for_each_operator_and_the_page_goes_down_to_them() {
         lines.iter().any(|line| line.contains(&title))
     };
     assert!(shown("Op 4") && !shown("Machine"), "{lines:#?}");
+}
+
+#[test]
+fn a_tracks_role_is_its_machines_until_its_told_and_k_lists_them() {
+    let (mut app, _rt) = app();
+    let track = |app: &App| app.song().tracks[0].clone();
+    app.apply(&Action::SetTrackMachine {
+        track: 0,
+        machine: Machine::Plaits(SynthVoice::Acid),
+    });
+    press(&mut app, " 5gg2}$");
+    assert_eq!(app.track_control().label(), "Role");
+    assert_eq!(track(&app).role, Role::Auto);
+    assert_eq!(track(&app).role(), Role::Bass, "Acid is a bass");
+    press(&mut app, "==");
+    assert_eq!(track(&app).role, Role::Drums);
+    press(&mut app, "-");
+    assert_eq!(track(&app).role, Role::None);
+    assert_eq!(track(&app).role(), Role::None);
+    press(&mut app, "x");
+    assert_eq!(track(&app).role, Role::Auto);
+    // `K` lists them, the track's highlighted, and choosing one sets it, as one undo step.
+    press(&mut app, "K");
+    press(&mut app, "pad");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(track(&app).role, Role::Pad);
+    press(&mut app, "u");
+    assert_eq!(track(&app).role, Role::Auto);
 }

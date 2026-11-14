@@ -296,7 +296,18 @@ fn item_spans(
         }
     ))];
     let label_length = item.label.chars().count();
-    spans.extend(matched_spans(&item.label, 0, matched, item.style));
+    // A rule under a name, as a track's role is, starts where its text does.
+    let indent = item.label.len() - item.label.trim_start().len();
+    if indent > 0 {
+        let plain = item.style.remove_modifier(Modifier::UNDERLINED);
+        spans.push(Span::styled(item.label[..indent].to_owned(), plain));
+    }
+    spans.extend(matched_spans(
+        &item.label[indent..],
+        indent as u32,
+        matched,
+        item.style,
+    ));
     let mut used = GUTTER + if nested { INDENT } else { 0 } + label_length;
     if !item.meaning.is_empty() {
         // Meanings line up whether their items are in a category or not.
