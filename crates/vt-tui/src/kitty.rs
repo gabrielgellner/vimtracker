@@ -13,11 +13,17 @@ use base64::engine::general_purpose::STANDARD;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
-use vt_engine::dsp::distort::transfer;
+use vt_engine::dsp::distort::{DEFAULT_NOTE, transfer};
+use vt_engine::dsp::effects::tail::Tail;
+use vt_engine::dsp::effects::{delay, plate, resonator, reverb, space, spring};
+use vt_engine::dsp::filters::{comb, lpg, vowel};
 use vt_engine::engine::PLAYHEADS;
-use vt_engine::track_state::LfoNow;
+use vt_engine::track_state::{LfoNow, LiveValues};
 use vt_model::bank::{ContentHash, Points};
-use vt_model::insert::{Compressor, Distort, Equaliser, INSERTS, Insert, MAX_PARAMS};
+use vt_model::insert::{
+    Comb, Compressor, Delay, Distort, Equaliser, GateMode, INSERTS, Insert, LowPassGate,
+    MAX_PARAMS, Resonator, Vowel, shift_semitones,
+};
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
 use vt_model::song::{FilterMode, FilterType, Machine, Track};
 
@@ -55,7 +61,7 @@ pub use encoding::{Picture, scope_png, spans_png, waveform_spans};
 use encoding::{indexed_png, png};
 use generators::GenDrawing;
 use panels::{Found, PanelImages, PanelKey, Shape};
-use plot::{LfoDrawing, MappingDrawing, Plot, Shade, TrackDrawing};
+use plot::{Filtering, LfoDrawing, MappingDrawing, Plot, Shade, TrackDrawing};
 use switches::Look;
 
 /// The character that stands for a piece of an image.
@@ -700,6 +706,120 @@ pub(crate) enum SlotDrawing {
     Eq(Equaliser),
     /// A distortion's transfer curve, which only the FX page's zoom draws (decision 329).
     Distort(Distort),
+    /// The filter effects' curves, which only the zoom draws too (decision 333): a low-pass gate's
+    /// as far as it's open now, and a resonator's, comb's or vowel filter's at the note the track
+    /// is playing.
+    Lpg(LowPassGate, Opening),
+    Reso(Resonator, Cents),
+    Comb(Comb, Cents),
+    Vowel(Vowel, Cents),
+    /// A delay's repeats, at the song's tempo in thousandths of a BPM.
+    Delay(Delay, u32),
+    /// A reverb's tail: a `Reverb`, `Plate`, `Spring` or `Space`.
+    Tail(Insert),
+}
+
+/// What a delay's drawing shows: the sound and each repeat, when and how loud on each side, how
+/// long a beat is and how many seconds across it goes, all in seconds.
+struct Repeated {
+    sounds: Vec<(f32, [f32; 2])>,
+    beat: f32,
+    span: f32,
+}
+
+impl Repeated {
+    fn of(settings: Delay, millibpm: u32, rate: u32) -> Self {
+        let shown = delay::repeats(settings, delay::frames_per_tick(millibpm, rate), rate);
+        let mut sounds = vec![(0.0, [shown.dry; 2])];
+        sounds.extend(shown.taps.iter().map(|tap| (tap.seconds, tap.levels)));
+        // A repeat's time past the last, so it isn't on the edge.
+        let time = shown.taps.first().map_or(0.0, |tap| tap.seconds);
+        let beat = 60_000.0 / millibpm.max(1) as f32;
+        let last = shown.taps.last().map_or(0.0, |tap| tap.seconds);
+        Self {
+            sounds,
+            beat,
+            span: (last + time).max(beat),
+        }
+    }
+
+    fn caption(&self) -> String {
+        format!("{:.2} s across, a line a beat", self.span)
+    }
+}
+
+/// A reverb's tail, if it has one worked out: a `Reverb`'s, `Plate`'s, `Spring`'s or `Space`'s.
+fn tail_of(insert: Insert, rate: u32) -> Option<Tail> {
+    match insert {
+        Insert::Reverb(settings) => reverb::tail(settings, rate),
+        Insert::Plate(settings) => plate::tail(settings, rate),
+        Insert::Spring(settings) => spring::tail(settings, rate),
+        Insert::Space(settings) => space::tail(settings, rate),
+        _ => None,
+    }
+}
+
+/// How many seconds across a reverb's tail goes, a little past where its slowest part has fallen
+/// 60 dB, and how far apart the lines down it are: a second, or ten for a tail over 15 s.
+fn tail_span(tail: Tail) -> (f32, f32) {
+    let longest = tail.seconds[0].max(tail.seconds[1]);
+    let span = tail.pre + longest * 1.15;
+    (span, if span > 15.0 { 10.0 } else { 1.0 })
+}
+
+/// What a reverb's tail says under its box: how long it takes to fall 60 dB, at its lows and at
+/// its highs, and how far apart the lines down it are.
+fn tail_caption(tail: Tail) -> String {
+    let (_, every) = tail_span(tail);
+    let lines = if every > 1.0 {
+        "a line every 10 s"
+    } else {
+        "a line a second"
+    };
+    format!(
+        "falls 60 dB in {:.1} s, highs {:.1} s, {lines}",
+        tail.seconds[0], tail.seconds[1]
+    )
+}
+
+/// How many steps a low-pass gate's level and cutoff are drawn in, from 0 to 1 each, so a gate
+/// that has all but stopped moving isn't drawn again: 1/1024 of its cutoff is a hundredth of an
+/// octave.
+const OPENING_STEPS: f32 = 1024.0;
+
+/// A low-pass gate's level and cutoff, from 0 to `OPENING_STEPS` each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Opening([u16; 2]);
+
+impl Opening {
+    fn of((level, cutoff): (f32, f32)) -> Self {
+        let step = |value: f32| (value.clamp(0.0, 1.0) * OPENING_STEPS).round() as u16;
+        Self([step(level), step(cutoff)])
+    }
+
+    fn level_and_cutoff(self) -> (f32, f32) {
+        let [level, cutoff] = self.0.map(|step| f32::from(step) / OPENING_STEPS);
+        (level, cutoff)
+    }
+}
+
+/// A note in hundredths of a semitone, as a MIDI note, so it can be compared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Cents(i32);
+
+impl Cents {
+    fn of(note: f32) -> Self {
+        Self((note * 100.0).round() as i32)
+    }
+
+    fn note(self) -> f32 {
+        self.0 as f32 / 100.0
+    }
+
+    /// Its frequency, `semitones` up, in Hz.
+    fn hertz(self, semitones: f32) -> f32 {
+        440.0 * ((self.note() + semitones - 69.0) / 12.0).exp2()
+    }
 }
 
 /// An effect as it's playing with these values, which a step or an LFO can move from what's set.
@@ -733,12 +853,35 @@ impl SlotDrawing {
         }
     }
 
-    /// The drawing for an effect playing with these values zoomed in on, if it has one: the
-    /// rack's, or a distortion's transfer curve for a type that shapes each sample alone.
-    fn zoomed(insert: Insert, live: Option<[u8; MAX_PARAMS]>) -> Option<Self> {
-        match playing(insert, live) {
+    /// The drawing for the effect in a slot zoomed in on, if it has one, as it's playing: the
+    /// rack's, a distortion's transfer curve for a type that shapes each sample alone, or a filter
+    /// effect's curve, at the note the track's slots follow and, for a low-pass gate, as far as
+    /// it's open. Before the engine says, it's at middle C, and a gate where it rests.
+    fn zoomed(
+        insert: Insert,
+        live: Option<&LiveValues>,
+        slot: usize,
+        (rate, millibpm): (u32, u32),
+    ) -> Option<Self> {
+        let values = live.map(|live| live.inserts[slot]);
+        let note = Cents::of(live.map_or(DEFAULT_NOTE, |live| live.note));
+        match playing(insert, values) {
             Insert::Distort(settings) => transfer(settings, 0.0).map(|_| Self::Distort(settings)),
-            _ => Self::of(insert, live),
+            Insert::Lpg(settings) => {
+                let opening = live
+                    .and_then(|live| live.openings[slot])
+                    .unwrap_or_else(|| lpg::resting(settings));
+                Some(Self::Lpg(settings, Opening::of(opening)))
+            }
+            Insert::Reso(settings) => Some(Self::Reso(settings, note)),
+            Insert::Comb(settings) => Some(Self::Comb(settings, note)),
+            Insert::Vowel(settings) => Some(Self::Vowel(settings, note)),
+            Insert::Delay(settings) => Some(Self::Delay(settings, millibpm)),
+            playing @ (Insert::Reverb(_)
+            | Insert::Plate(_)
+            | Insert::Spring(_)
+            | Insert::Space(_)) => tail_of(playing, rate).map(|_| Self::Tail(playing)),
+            _ => Self::of(insert, values),
         }
     }
 
@@ -746,16 +889,28 @@ impl SlotDrawing {
     fn width(self) -> usize {
         match self {
             Self::Compressor(_) | Self::Distort(_) => DYNAMICS_CURVE_WIDTH,
-            Self::Eq(_) => EQ_CURVE_WIDTH,
+            Self::Eq(_)
+            | Self::Lpg(..)
+            | Self::Reso(..)
+            | Self::Comb(..)
+            | Self::Vowel(..)
+            | Self::Delay(..)
+            | Self::Tail(_) => EQ_CURVE_WIDTH,
         }
     }
 
     /// How many characters across and down it is zoomed in on: a square for a curve of a level
-    /// in against a level out, and the whole width for an EQ's.
+    /// in against a level out, and the whole width for one over frequency.
     fn zoomed_size(self) -> (usize, usize) {
         let width = match self {
             Self::Compressor(_) | Self::Distort(_) => ZOOM_CURVE_WIDTH,
-            Self::Eq(_) => ZOOM_EQ_WIDTH,
+            Self::Eq(_)
+            | Self::Lpg(..)
+            | Self::Reso(..)
+            | Self::Comb(..)
+            | Self::Vowel(..)
+            | Self::Delay(..)
+            | Self::Tail(_) => ZOOM_EQ_WIDTH,
         };
         (width, ZOOM_PANEL_HEIGHT)
     }
@@ -766,7 +921,78 @@ impl SlotDrawing {
             Self::Eq(settings) => plot::eq(settings, rate, size),
             Self::Compressor(settings) => plot::compressor(settings, size),
             Self::Distort(settings) => plot::distort(settings, size),
+            Self::Lpg(settings, opening) => {
+                let (level, cutoff) = opening.level_and_cutoff();
+                let filtering = Filtering {
+                    db_at: lpg::response(settings, (level, cutoff), rate),
+                    // Its cutoff on the track filter's scale, as the plot's is, unless it's a VCA.
+                    marked: (settings.mode != GateMode::Vca).then(|| plot::frequency_at(cutoff)),
+                    opened: Some(lpg::response(settings, lpg::opened(settings), rate)),
+                };
+                plot::filtering(filtering, size)
+            }
+            Self::Reso(settings, note) => {
+                let tune = shift_semitones(f32::from(settings.tune));
+                plot::filtering(
+                    tuned(
+                        resonator::response(settings, note.note(), rate),
+                        note.hertz(tune),
+                    ),
+                    size,
+                )
+            }
+            Self::Comb(settings, note) => {
+                let tune = shift_semitones(f32::from(settings.tune));
+                plot::filtering(
+                    tuned(
+                        comb::response(settings, note.note(), rate),
+                        note.hertz(tune),
+                    ),
+                    size,
+                )
+            }
+            Self::Delay(settings, millibpm) => {
+                let shown = Repeated::of(settings, millibpm, rate);
+                plot::repeats(&shown.sounds, shown.beat, shown.span, size)
+            }
+            Self::Tail(insert) => match tail_of(insert, rate) {
+                Some(tail) => {
+                    let (span, every) = tail_span(tail);
+                    plot::tail(tail.pre, tail.seconds, span, every, size)
+                }
+                None => Plot::new(size.0, size.1),
+            },
+            Self::Vowel(settings, note) => {
+                let filtering = Filtering {
+                    db_at: vowel::response(settings, note.note(), rate),
+                    marked: None,
+                    opened: None::<fn(f32) -> f32>,
+                };
+                plot::filtering(filtering, size)
+            }
         }
+    }
+}
+
+impl SlotDrawing {
+    /// What's said under its box zoomed in, if anything: a delay's and a reverb's time scale.
+    fn caption(self, rate: u32) -> Option<String> {
+        match self {
+            Self::Delay(settings, millibpm) => {
+                Some(Repeated::of(settings, millibpm, rate).caption())
+            }
+            Self::Tail(insert) => tail_of(insert, rate).map(tail_caption),
+            _ => None,
+        }
+    }
+}
+
+/// A curve tuned to a note, with its dashed line at the note's frequency.
+fn tuned<F: Fn(f32) -> f32>(db_at: F, hertz: f32) -> Filtering<F, fn(f32) -> f32> {
+    Filtering {
+        db_at,
+        marked: Some(hertz),
+        opened: None,
     }
 }
 
@@ -826,6 +1052,8 @@ pub struct Graphics {
     /// The track page's panels: the filter's curve and the sample's waveform, the envelopes and
     /// the FX slots' curves.
     panels: PanelImages,
+    /// What's said under the zoomed slot's box, and the drawing it was worked out for.
+    zoom_caption: Option<(SlotDrawing, Option<String>)>,
     /// The scope's picture, as the rows it covers in each column, and its image.
     scope: Option<(Vec<(usize, usize)>, u32)>,
     /// The picker's preview and its images.
@@ -879,6 +1107,7 @@ impl Graphics {
             base: (std::process::id() & 0xFFFF) << 8,
             next: 0,
             panels: PanelImages::default(),
+            zoom_caption: None,
             scope: None,
             preview: None,
             sample_wave: None,
@@ -1407,8 +1636,18 @@ impl Graphics {
                 .device_cursor(Some(track))
                 .map_or(0, |cursor| cursor.device)
                 .min(INSERTS - 1);
-            let live = app.live.map(|live| live.inserts[slot]);
-            if let Some(shown) = SlotDrawing::zoomed(track.inserts[slot], live) {
+            let tempo = (app.rate, app.song().millibpm);
+            let shown = SlotDrawing::zoomed(track.inserts[slot], app.live.as_ref(), slot, tempo);
+            // The caption is worked out again only when the drawing changes, as a reverb's tail
+            // takes a few milliseconds.
+            if self.zoom_caption.as_ref().map(|(of, _)| of) != shown.as_ref() {
+                self.zoom_caption = shown.map(|shown| (shown, shown.caption(app.rate)));
+            }
+            app.zoom_caption = self
+                .zoom_caption
+                .as_ref()
+                .and_then(|(_, caption)| caption.clone());
+            if let Some(shown) = shown {
                 // The zoomed slot always has the cursor.
                 let shade = Shade::of(true, heard_bypassed(app, track, slot));
                 let rate = app.rate;

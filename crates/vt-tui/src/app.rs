@@ -269,6 +269,8 @@ pub struct App {
     /// The id of the image of the zoomed slot's drawing, while the FX page is zoomed on one that
     /// has one.
     pub zoom_image: Option<u32>,
+    /// What's said under the zoomed slot's box: a delay's or a reverb's time scale.
+    pub zoom_caption: Option<String>,
     /// The images of the Gen page's previews the terminal has, by each generator's place in its
     /// phrase's list.
     pub gen_images: Vec<Option<u32>>,
@@ -557,6 +559,7 @@ impl App {
             waveform_image: None,
             slot_images: [None; vt_model::insert::INSERTS],
             zoom_image: None,
+            zoom_caption: None,
             gen_images: Vec::new(),
             mapping_image: None,
             gen_panels_at: Vec::new(),
