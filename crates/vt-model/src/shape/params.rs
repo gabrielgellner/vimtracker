@@ -10,6 +10,7 @@
 //! says. Each read and change is a pure function of the shape and its context, so the edit thread
 //! and, later, the engine work them out alike.
 
+use crate::grid::{GRID_COLUMNS, GRID_ROWS, Grid};
 use crate::lfo::{Shape as Wave, note_rates};
 use crate::scale::Scale;
 use crate::step::Step;
@@ -53,12 +54,6 @@ const RULE_JUMP: i32 = 10;
 /// How far a large step moves a `Tonnetz`' weights and its loop.
 const WEIGHT_JUMP: i32 = 3;
 const LOOP_JUMP: i32 = 4;
-
-/// How many columns and rows a generator's settings take on the Gen page.
-pub const GEN_COLUMNS: usize = 4;
-pub const GEN_ROWS: usize = 3;
-/// How many settings a generator's title on the Gen page has room for.
-pub const GEN_TITLE: usize = 4;
 
 /// What a generator's settings act on, which what some of them mean hangs on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1005,8 +1000,8 @@ impl GenParam {
     /// fill, then its `Where`, or for a `Follow`, the phrase it follows, and for `Acid`, its
     /// `Pitches`, as the second die is a mode of the riff's, `Multiply` its fill alone and `Grids`
     /// its part, which drum it is, and a `Variation` and a `Ring` their fill alone; and last, for a shape that draws from its seed, `Vary`, what
-    /// it is from pass to pass.
-    pub fn title(shape: &Shape) -> [Option<Self>; GEN_TITLE] {
+    /// it is from pass to pass. It's a row as wide as the grid under it.
+    pub fn title(shape: &Shape) -> [Option<Self>; GRID_COLUMNS] {
         let mut title = match shape.kind {
             FillKind::Follow => [Some(Self::Fill), Some(Self::Source), None, None],
             FillKind::Multiply | FillKind::Variation | FillKind::Ring => {
@@ -1040,15 +1035,14 @@ impl GenParam {
     /// it may make take the third column and the fourth. `Acid`'s three are full, so its riff's
     /// `Spread` and `Bias` take the fourth. A `Tonnetz` has its first chord and its voice, then
     /// its moves, and its moves' weights in the fourth.
-    pub fn grid(
-        shape: &Shape,
-        column: ShapeColumn,
-        generates: bool,
-    ) -> [[Option<Self>; GEN_ROWS]; GEN_COLUMNS] {
+    pub fn grid(shape: &Shape, column: ShapeColumn, generates: bool) -> Grid<Self> {
         use GenParam::*;
-        let none = [None; GEN_ROWS];
+        let none = [None; GRID_ROWS];
         let has =
             |param: Option<Self>| param.filter(|param| param.exists_for(shape, column, generates));
+        let placed = |columns: [[Option<Self>; GRID_ROWS]; GRID_COLUMNS]| {
+            Grid::from_columns(&columns.map(|places| places.map(has)))
+        };
         if shape.kind == FillKind::Grids {
             let grid = match shape.grids.part {
                 Some(part) => [
@@ -1064,7 +1058,7 @@ impl GenParam {
                     none,
                 ],
             };
-            return grid.map(|column| column.map(has));
+            return placed(grid);
         }
         if shape.kind == FillKind::Divisions {
             let straight = [Some(Quarters), Some(Eighths), Some(Sixteenths)];
@@ -1089,9 +1083,9 @@ impl GenParam {
                     ],
                 ],
             };
-            return grid.map(|column| column.map(has));
+            return placed(grid);
         }
-        let fill: [[Option<Self>; GEN_ROWS]; 2] = match shape.kind {
+        let fill: [[Option<Self>; GRID_ROWS]; 2] = match shape.kind {
             FillKind::Ramp => [
                 [Some(From), Some(To), Some(Run)],
                 [Some(Curve), Some(S), None],
@@ -1176,12 +1170,7 @@ impl GenParam {
             FillKind::Tonnetz => more = [Some(PWeight), Some(LWeight), Some(RWeight)],
             _ => {}
         }
-        [
-            fill[0].map(has),
-            fill[1].map(has),
-            last.map(has),
-            more.map(has),
-        ]
+        placed([fill[0], fill[1], last, more])
     }
 
     /// Whether it's one of an `Acid` line's loops.
@@ -1196,17 +1185,12 @@ impl GenParam {
     /// fill's, as its own grid is full: the rhythm's and the notes' first, then the octaves',
     /// accents' and slides', each level with its chance in the device above. Only the loops the
     /// shape has on its `column` are placed, and a fill with no loops has none.
-    pub fn loops_grid(
-        shape: &Shape,
-        column: ShapeColumn,
-        generates: bool,
-    ) -> Option<[[Option<Self>; GEN_ROWS]; GEN_COLUMNS]> {
+    pub fn loops_grid(shape: &Shape, column: ShapeColumn, generates: bool) -> Option<Grid<Self>> {
         if shape.kind != FillKind::Acid {
             return None;
         }
         let has =
             |param: Option<Self>| param.filter(|param| param.exists_for(shape, column, generates));
-        let none = [None; GEN_ROWS];
         let grid = [
             [Some(Self::TrigLoop), Some(Self::NoteLoop), None],
             [
@@ -1214,10 +1198,8 @@ impl GenParam {
                 Some(Self::AccentLoop),
                 Some(Self::SlideLoop),
             ],
-            none,
-            none,
         ];
-        Some(grid.map(|column| column.map(has)))
+        Some(Grid::from_columns(&grid.map(|places| places.map(has))))
     }
 
     /// A part's density.
@@ -1688,14 +1670,11 @@ impl GenParam {
         large: bool,
     ) -> Result<(), &'static str> {
         let sign = i32::from(sign.signum());
-        let by = |small: i32, jump: i32| sign * if large { jump } else { small };
         let column = context.column;
-        let open = context.open as i32;
         match self {
             Self::From => shape.from = stepped(column, shape.from, sign, large),
             Self::To => shape.to = stepped(column, shape.to, sign, large),
-            Self::Curve => shape.curve = bent(shape.curve, by(BEND_NUDGE, BEND_JUMP)),
-            Self::S => shape.s = bent(shape.s, by(BEND_NUDGE, BEND_JUMP)),
+            Self::Pitch => shape.from = stepped(column, shape.from, sign, large),
             Self::Fill
             | Self::Wave
             | Self::Where
@@ -1718,10 +1697,6 @@ impl GenParam {
             }
             Self::Rate if large => shape.rate = shape.rate.jumped(sign > 0),
             Self::Rate => shape.rate = shape.rate.nudged(sign > 0),
-            Self::Phase => {
-                shape.phase =
-                    (i32::from(shape.phase) + by(PHASE_NUDGE, PHASE_JUMP)).rem_euclid(360) as u16;
-            }
             Self::Values => {
                 return Err(match column {
                     ShapeColumn::Note { .. } => "Type the notes with i, like C-3 E-3 G-3",
@@ -1729,170 +1704,89 @@ impl GenParam {
                     _ => "Type the values with i, as hex values like 70 40 55",
                 });
             }
-            Self::Run => {
-                let most = i32::from(MAX_RUN);
-                shape.run = moved(i32::from(shape.run), by(1, RUN_JUMP), 1, most) as u16;
-            }
-            Self::Every => {
-                if let Where::Every(every) = shape.place {
-                    let most = i32::from(MAX_EVERY);
-                    let every = moved(i32::from(every), by(1, EVERY_JUMP), 1, most);
-                    shape.place = Where::Every(every as u16);
-                }
-            }
-            Self::Chance => {
-                if let Where::Chance(percent) = shape.place {
-                    let percent = moved(i32::from(percent), by(1, CHANCE_JUMP), 0, 100);
-                    shape.place = Where::Chance(percent as u8);
-                }
-            }
-            Self::Hits => {
-                if let Where::Euclid { hits, rotate } = shape.place {
-                    let hits = i32::from(hits).min(open);
-                    let hits = moved(hits, by(1, EUCLID_JUMP), 0, open) as u16;
-                    shape.place = Where::Euclid { hits, rotate };
-                }
-            }
-            Self::Rotate => {
-                if let Where::Euclid { hits, rotate } = shape.place {
-                    let rotate =
-                        (i32::from(rotate) + by(1, EUCLID_JUMP)).rem_euclid(open.max(1)) as u16;
-                    shape.place = Where::Euclid { hits, rotate };
-                }
-            }
-            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => {
-                if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
-                    *amount = moved(i32::from(*amount), by(1, CHANCE_JUMP), 0, 100) as u8;
-                }
-            }
-            Self::Side => {
-                if let Where::Complementary { second, .. } = &mut shape.place {
-                    *second = !*second;
-                }
-            }
-            Self::Rule => {
-                if let Where::Cells(cells) = &mut shape.place {
-                    let rule = moved(i32::from(cells.rule), by(1, RULE_JUMP), 0, 0xFF);
-                    cells.rule = rule as u8;
-                }
-            }
-            Self::Notes => {
-                let most = i32::from(MAX_ACID_NOTES);
-                let notes = moved(i32::from(shape.acid.notes), by(1, EUCLID_JUMP), 1, most);
-                shape.acid.notes = notes as u8;
-            }
-            Self::Octave | Self::Density | Self::Accent | Self::Slide => {
-                if let Some(percent) = acid_chance_mut(&mut shape.acid, self) {
-                    *percent = moved(i32::from(*percent), by(1, CHANCE_JUMP), 0, 100) as u8;
-                }
-            }
-            Self::Pitches => shape.acid.keep = !shape.acid.keep,
-            Self::TrigLoop
-            | Self::NoteLoop
-            | Self::OctaveLoop
-            | Self::AccentLoop
-            | Self::SlideLoop => {
-                if let Some(rows) = acid_loop_mut(&mut shape.acid, self) {
-                    let most = i32::from(MAX_LOOP);
-                    *rows = moved(i32::from(*rows), by(1, EUCLID_JUMP), 0, most) as u8;
-                }
-            }
-            Self::Transpose => {
-                let octave = match column {
-                    ShapeColumn::Note { scale, .. } if scale.on => {
-                        scale.kind.intervals().len() as i32
-                    }
-                    _ => 12,
-                };
-                let most = i32::from(MAX_TRANSPOSE);
-                let by = by(1, octave);
-                shape.follow.transpose =
-                    moved(i32::from(shape.follow.transpose), by, -most, most) as i8;
-            }
-            Self::Invert => shape.follow.invert = !shape.follow.invert,
             // From the first note, it moves as an end does.
             Self::Axis => {
                 let from = shape.follow.axis.or(context.source.and_then(first_note));
                 shape.follow.axis = from.map(|note| stepped(column, note, sign, large));
-            }
-            Self::Reverse => shape.follow.reverse = !shape.follow.reverse,
-            Self::Late => {
-                let rows = context.source_rows() as i32;
-                shape.follow.rotate =
-                    (i32::from(shape.follow.rotate) + by(1, EUCLID_JUMP)).rem_euclid(rows) as u16;
-            }
-            Self::CopyFx => shape.follow.fx = !shape.follow.fx,
-            Self::Mutation => {
-                let most = i32::from(MAX_MUTATION);
-                let changes = moved(i32::from(shape.follow.mutation), by(1, 4), 0, most);
-                shape.follow.mutation = changes as u8;
-            }
-            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
-                if let Some(on) = self.mutation_kind_mut(&mut shape.follow.mutate) {
-                    *on = !*on;
-                }
-            }
-            // On notes by one or an octave, of degrees while the scale is on; on a nudge by one
-            // or four 24ths of a sixteenth; anything else by one or `10` in hex.
-            Self::Step => {
-                let jump = match column {
-                    ShapeColumn::Note { scale, .. } if scale.on => {
-                        scale.kind.intervals().len() as i32
-                    }
-                    ShapeColumn::Note { .. } => 12,
-                    ShapeColumn::Nudge { .. } => 4,
-                    _ => HEX_JUMP,
-                };
-                let most = i32::from(longest_step(column));
-                shape.walk.step = moved(i32::from(shape.walk.step), by(1, jump), 1, most) as u8;
-            }
-            Self::Edge => shape.walk.edge = shape.walk.edge.other(),
-            Self::Depth => {
-                let (low, high) = (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH));
-                shape.pink.depth = moved(i32::from(shape.pink.depth), by(1, 2), low, high) as u8;
-            }
-            Self::Spread => {
-                let most = i32::from(MAX_SPREAD);
-                let spread = moved(i32::from(shape.random.spread), by(1, CHANCE_JUMP), 0, most);
-                shape.random.spread = spread as u8;
-            }
-            Self::Bias => {
-                let most = i32::from(MAX_BIAS);
-                let by = by(BEND_NUDGE, BEND_JUMP);
-                shape.random.bias = moved(i32::from(shape.random.bias), by, -most, most) as i8;
-            }
-            Self::Steps => {
-                if let ShapeColumn::Note { scale, .. } = column {
-                    let kept = shape.random.kept(scale) as i32;
-                    let most = degree_count(scale) as i32;
-                    let kept = moved(kept, by(1, EUCLID_JUMP), 1, most);
-                    shape.random.steps = steps_kept(kept, scale);
-                }
             }
             Self::Weights => {
                 return Err(
                     "Type the weights with i, a hex digit a degree from the root, like F8C4",
                 );
             }
-            Self::Factor => {
-                let most = i32::from(MAX_FACTOR);
-                let by = by(1, FACTOR_JUMP);
-                shape.bits.factor = moved(i32::from(shape.bits.factor), by, 1, most) as u8;
-            }
-            Self::Masks => shape.bits.masks = !shape.bits.masks,
-            Self::Pitch => shape.from = stepped(column, shape.from, sign, large),
-            Self::MapX
-            | Self::MapY
-            | Self::KickDensity
-            | Self::SnareDensity
-            | Self::HatDensity
-            | Self::Chaos => {
-                if let Some(value) = self.grids_byte(&mut shape.grids) {
-                    *value = moved(i32::from(*value), by(1, HEX_JUMP), 0, 0xFF) as u8;
+            Self::MoveList => return Err("Type the moves with i, like P L R L"),
+            _ => {
+                if let (Some(stepping), Some(number)) =
+                    (self.stepping(column), self.number(shape, context))
+                {
+                    let by = if large { stepping.jump } else { stepping.nudge };
+                    self.put(shape, context, number + sign * by);
                 }
             }
-            Self::Rows => shape.grids.fine = !shape.grids.fine,
-            Self::Quarters
+        }
+        Ok(())
+    }
+
+    /// How far it moves as a number, for one stepped so: by a small step and a large one, and
+    /// whether past an end it goes round to the other, as a phase, a rotation and a switch do,
+    /// rather than stopping there. None for an end, a list, a rate and what's only typed, which
+    /// [`step`](Self::step) moves as they are.
+    fn stepping(self, column: ShapeColumn) -> Option<Stepping> {
+        let stops = |nudge, jump| {
+            Some(Stepping {
+                nudge,
+                jump,
+                round: false,
+            })
+        };
+        let round = |nudge, jump| {
+            Some(Stepping {
+                nudge,
+                jump,
+                round: true,
+            })
+        };
+        match self {
+            Self::From
+            | Self::To
+            | Self::Pitch
+            | Self::Axis
+            | Self::Fill
+            | Self::Wave
+            | Self::Where
+            | Self::Source
+            | Self::Part
+            | Self::Channel
+            | Self::Bar
+            | Self::Rhythm
+            | Self::Role
+            | Self::CellStart
+            | Self::Moves
+            | Self::Voice
+            | Self::Vary
+            | Self::Rate
+            | Self::Values
+            | Self::Weights
+            | Self::MoveList => None,
+            Self::Curve | Self::S | Self::Bias => stops(BEND_NUDGE, BEND_JUMP),
+            Self::Phase => round(PHASE_NUDGE, PHASE_JUMP),
+            Self::Run => stops(1, RUN_JUMP),
+            Self::Every => stops(1, EVERY_JUMP),
+            Self::Chance
+            | Self::Clusters
+            | Self::Markov
+            | Self::States
+            | Self::Share
+            | Self::Child
+            | Self::Octave
+            | Self::Density
+            | Self::Accent
+            | Self::Slide
+            | Self::Spread
+            | Self::Temperature
+            | Self::Change
+            | Self::Ones
+            | Self::Quarters
             | Self::Eighths
             | Self::Sixteenths
             | Self::QuarterTriplets
@@ -1903,55 +1797,82 @@ impl GenParam {
             | Self::SixteenthsB
             | Self::QuarterTripletsB
             | Self::EighthTripletsB
-            | Self::SixteenthTripletsB => {
-                if let Some(chance) = self.chance_mut(&mut shape.divisions) {
-                    *chance = moved(i32::from(*chance), by(1, CHANCE_JUMP), 0, 100) as u8;
-                }
+            | Self::SixteenthTripletsB => stops(1, CHANCE_JUMP),
+            Self::Hits
+            | Self::Notes
+            | Self::Steps
+            | Self::RingLength
+            | Self::TrigLoop
+            | Self::NoteLoop
+            | Self::OctaveLoop
+            | Self::AccentLoop
+            | Self::SlideLoop => stops(1, EUCLID_JUMP),
+            Self::Rotate | Self::Late => round(1, EUCLID_JUMP),
+            Self::Rule => stops(1, RULE_JUMP),
+            Self::Transpose => {
+                let octave = match column {
+                    ShapeColumn::Note { scale, .. } if scale.on => {
+                        scale.kind.intervals().len() as i32
+                    }
+                    _ => 12,
+                };
+                stops(1, octave)
             }
-            Self::Order => {
-                let most = i32::from(MAX_ORDER);
-                let order = moved(i32::from(shape.variation.order), by(1, 1), 1, most);
-                shape.variation.order = order as u8;
+            Self::Mutation => stops(1, 4),
+            // On notes by one or an octave, of degrees while the scale is on; on a nudge by one
+            // or four 24ths of a sixteenth; anything else by one or `10` in hex.
+            Self::Step => {
+                let jump = match column {
+                    ShapeColumn::Note { scale, .. } if scale.on => {
+                        scale.kind.intervals().len() as i32
+                    }
+                    column => large_step(column),
+                };
+                stops(1, jump)
             }
-            Self::Temperature => {
-                let temperature = i32::from(shape.variation.temperature);
-                shape.variation.temperature = moved(temperature, by(1, CHANCE_JUMP), 0, 100) as u8;
-            }
-            Self::Change => {
-                let change = i32::from(shape.ring.change);
-                shape.ring.change = moved(change, by(1, CHANCE_JUMP), 0, 100) as u8;
-            }
-            Self::Ones => {
-                let chance = i32::from(shape.ring.chance);
-                shape.ring.chance = moved(chance, by(1, CHANCE_JUMP), 0, 100) as u8;
-            }
-            Self::RingLength => {
-                let length = i32::from(shape.ring.length);
-                let most = i32::from(MAX_RING);
-                shape.ring.length = moved(length, by(1, EUCLID_JUMP), 1, most) as u8;
-            }
-            Self::Triad => shape.tonnetz.quality = shape.tonnetz.quality.other(),
-            Self::InScale => shape.tonnetz.in_scale = !shape.tonnetz.in_scale,
-            Self::MoveList => return Err("Type the moves with i, like P L R L"),
-            Self::PWeight | Self::LWeight | Self::RWeight => {
-                if let Some(weight) = self.weight_mut(&mut shape.tonnetz) {
-                    let most = i32::from(MAX_MOVE_WEIGHT);
-                    *weight = moved(i32::from(*weight), by(1, WEIGHT_JUMP), 0, most) as u8;
-                }
-            }
-            Self::LoopLength => {
-                let length = i32::from(shape.tonnetz.length);
-                let most = i32::from(MAX_MOVE_LOOP);
-                shape.tonnetz.length = moved(length, by(1, LOOP_JUMP), 1, most) as u8;
-            }
-            Self::Flip => shape.bits.flip = moved_byte(shape.bits.flip, by(1, HEX_JUMP)),
-            Self::Keep => shape.bits.keep = moved_byte(shape.bits.keep, by(1, HEX_JUMP)),
-            Self::Turn => {
-                let turns = i32::from(MAX_TURN) + 1;
-                shape.bits.turn = (i32::from(shape.bits.turn) + by(1, 4)).rem_euclid(turns) as u8;
-            }
+            Self::Depth => stops(1, 2),
+            Self::Factor => stops(1, FACTOR_JUMP),
+            Self::MapX
+            | Self::MapY
+            | Self::KickDensity
+            | Self::SnareDensity
+            | Self::HatDensity
+            | Self::Chaos
+            | Self::Flip
+            | Self::Keep => stops(1, HEX_JUMP),
+            Self::Order => stops(1, 1),
+            Self::PWeight | Self::LWeight | Self::RWeight => stops(1, WEIGHT_JUMP),
+            Self::LoopLength => stops(1, LOOP_JUMP),
+            Self::Turn => round(1, 4),
+            Self::Side
+            | Self::Pitches
+            | Self::Invert
+            | Self::Reverse
+            | Self::CopyFx
+            | Self::Repitch
+            | Self::Shift
+            | Self::Retro
+            | Self::Ratchet
+            | Self::DropAdd
+            | Self::Edge
+            | Self::Masks
+            | Self::Rows
+            | Self::Triad
+            | Self::InScale => round(1, 1),
         }
-        Ok(())
+    }
+
+    /// Set it to a number stepped or typed: taken round within its bounds where it goes round
+    /// past its ends, then kept within them by [`set_number`](Self::set_number), as everything
+    /// that sets it is.
+    fn put(self, shape: &mut Shape, context: &Context, number: i32) {
+        let number = match (self.stepping(context.column), self.bounds(context)) {
+            (Some(Stepping { round: true, .. }), Some((low, high))) => {
+                low + (number - low).rem_euclid(high - low + 1)
+            }
+            _ => number,
+        };
+        self.set_number(shape, context, number);
     }
 
     /// Put it back to what it starts as: `From`, `To` and `Source` to where they `start`, a
@@ -2130,13 +2051,18 @@ impl GenParam {
         text: &str,
     ) -> Result<(), &'static str> {
         let column = context.column;
-        let open = context.open as u16;
         let unknown = match column {
             ShapeColumn::Note { .. } => "A note is like C-3, C#3 or c3",
             ShapeColumn::Nudge { .. } => "A nudge is a sign and hex, like -3, 0 or +B",
             _ => "A value is two hex digits",
         };
-        match self {
+        // Whether a number typed is one it takes, for a setting that refuses the rest rather
+        // than keeping them within its bounds.
+        let within = |number: u16| {
+            self.bounds(context)
+                .is_some_and(|(low, high)| (low..=high).contains(&i32::from(number)))
+        };
+        let number: i32 = match self {
             Self::From | Self::To | Self::Pitch => {
                 let value = column.parse(text).ok_or(unknown)?;
                 if self != Self::To {
@@ -2144,51 +2070,33 @@ impl GenParam {
                 } else {
                     shape.to = value;
                 }
+                return Ok(());
             }
-            Self::Curve | Self::S => {
-                let value = text
-                    .parse::<i16>()
-                    .map_err(|_| "Curve and S run from -100 to 100")?;
-                let most = i16::from(MAX_BEND);
-                let value = value.clamp(-most, most) as i8;
-                if self == Self::Curve {
-                    shape.curve = value;
-                } else {
-                    shape.s = value;
-                }
-            }
+            Self::Curve | Self::S => text
+                .parse::<i16>()
+                .map_err(|_| "Curve and S run from -100 to 100")?
+                .into(),
             Self::Every | Self::Chance => match (shape.place, text.parse::<u16>()) {
-                (Where::Every(_), Ok(every)) if every > 0 => shape.place = Where::Every(every),
+                (Where::Every(_), Ok(every)) if every > 0 => {
+                    shape.place = Where::Every(every);
+                    return Ok(());
+                }
                 (Where::Chance(_), Ok(percent)) => {
-                    shape.place = Where::Chance(percent.min(100) as u8);
+                    Self::Chance.put(shape, context, percent.into());
+                    return Ok(());
                 }
                 _ => return Err("That amount isn't a whole number above 0"),
             },
             Self::Hits | Self::Rotate => match (shape.place, text.parse::<u16>()) {
-                (Where::Euclid { rotate, .. }, Ok(hits)) if self == Self::Hits => {
-                    shape.place = Where::Euclid {
-                        hits: hits.min(open),
-                        rotate,
-                    };
-                }
-                (Where::Euclid { hits, .. }, Ok(rotate)) => {
-                    shape.place = Where::Euclid {
-                        hits,
-                        rotate: rotate % open.max(1),
-                    };
-                }
+                (Where::Euclid { .. }, Ok(number)) => number.into(),
                 _ => return Err("Hits and Rotate are whole numbers"),
             },
-            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => {
-                let typed = text
-                    .parse::<u16>()
-                    .map_err(|_| "An amount runs from 0 to 100")?;
-                if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
-                    *amount = typed.min(100) as u8;
-                }
-            }
-            Self::Rule => match (&mut shape.place, text.parse::<u8>()) {
-                (Where::Cells(cells), Ok(rule)) => cells.rule = rule,
+            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => text
+                .parse::<u16>()
+                .map_err(|_| "An amount runs from 0 to 100")?
+                .into(),
+            Self::Rule => match (shape.place, text.parse::<u8>()) {
+                (Where::Cells(_), Ok(rule)) => rule.into(),
                 _ => return Err("Rule runs from 0 to 255"),
             },
             // A wave here is laid out by rows, so a rate has to be in time with them.
@@ -2196,31 +2104,30 @@ impl GenParam {
                 shape.rate = text
                     .parse::<WaveRate>()
                     .map_err(|_| "A rate here is like 1/4, 1/8d, 2 bars, 7st, or x3 cycles")?;
+                return Ok(());
             }
             Self::Phase => match text.parse::<u16>() {
-                Ok(phase) if phase < 360 => shape.phase = phase,
+                Ok(phase) if within(phase) => phase.into(),
                 _ => return Err("Phase runs from 0 to 359"),
             },
             Self::Notes => match text.parse::<u8>() {
-                Ok(notes) if notes > 0 => shape.acid.notes = notes.min(MAX_ACID_NOTES),
+                Ok(notes) if notes > 0 => notes.into(),
                 _ => return Err("Notes runs from 1 to 8"),
             },
-            Self::Octave | Self::Density | Self::Accent | Self::Slide => {
-                match (acid_chance_mut(&mut shape.acid, self), text.parse::<u16>()) {
-                    (Some(percent), Ok(typed)) => *percent = typed.min(100) as u8,
-                    _ => return Err("A chance runs from 0 to 100"),
-                }
-            }
+            Self::Octave | Self::Density | Self::Accent | Self::Slide => text
+                .parse::<u16>()
+                .map_err(|_| "A chance runs from 0 to 100")?
+                .into(),
             Self::TrigLoop
             | Self::NoteLoop
             | Self::OctaveLoop
             | Self::AccentLoop
-            | Self::SlideLoop => match (acid_loop_mut(&mut shape.acid, self), text.parse::<u8>()) {
-                (Some(rows), Ok(typed)) if typed <= MAX_LOOP => *rows = typed,
+            | Self::SlideLoop => match text.parse::<u8>() {
+                Ok(rows) if within(rows.into()) => rows.into(),
                 _ => return Err("A loop runs from 0, off, to 64 rows"),
             },
             Self::Run => match text.parse::<i16>() {
-                Ok(run) if run > 0 => shape.run = (run as u16).min(MAX_RUN),
+                Ok(run) if run > 0 => run.into(),
                 _ => return Err("Run is a whole number above 0"),
             },
             Self::Values => {
@@ -2233,21 +2140,22 @@ impl GenParam {
                     _ if !typed_in_hex(column) => return Err(unknown),
                     _ => return Err("Values are hex values like 70 40 55, up to 8 of them"),
                 }
+                return Ok(());
             }
-            Self::Transpose => match text.parse::<i16>() {
-                Ok(by) => {
-                    let most = i16::from(MAX_TRANSPOSE);
-                    shape.follow.transpose = by.clamp(-most, most) as i8;
-                }
-                Err(_) => return Err("Transpose runs from -48 to 48"),
-            },
-            Self::Axis => shape.follow.axis = Some(column.parse(text).ok_or(unknown)?),
-            Self::Late => match text.parse::<u16>() {
-                Ok(rows) => shape.follow.rotate = rows % context.source_rows() as u16,
-                Err(_) => return Err("Rotate is a whole number of rows"),
-            },
+            Self::Transpose => text
+                .parse::<i16>()
+                .map_err(|_| "Transpose runs from -48 to 48")?
+                .into(),
+            Self::Axis => {
+                shape.follow.axis = Some(column.parse(text).ok_or(unknown)?);
+                return Ok(());
+            }
+            Self::Late => text
+                .parse::<u16>()
+                .map_err(|_| "Rotate is a whole number of rows")?
+                .into(),
             Self::Mutation => match text.parse::<u8>() {
-                Ok(changes) if changes <= MAX_MUTATION => shape.follow.mutation = changes,
+                Ok(changes) if within(changes.into()) => changes.into(),
                 _ => return Err("Mutation runs from 0 to 32 changes"),
             },
             // In hex on a column whose values are, and as a number on notes and nudges.
@@ -2259,26 +2167,21 @@ impl GenParam {
                     text.parse::<u8>()
                 };
                 match typed {
-                    Ok(step) if step > 0 => shape.walk.step = step.min(longest_step(column)),
+                    Ok(step) if step > 0 => step.into(),
                     _ if hex => return Err("Step is a hex value above 00"),
                     _ => return Err("Step is a whole number above 0"),
                 }
             }
-            Self::Spread => match text.parse::<u16>() {
-                Ok(spread) => shape.random.spread = spread.min(u16::from(MAX_SPREAD)) as u8,
-                Err(_) => return Err("Spread runs from 0 to 100"),
-            },
-            Self::Bias => match text.parse::<i16>() {
-                Ok(lean) => {
-                    let most = i16::from(MAX_BIAS);
-                    shape.random.bias = lean.clamp(-most, most) as i8;
-                }
-                Err(_) => return Err("Bias runs from -100 to 100"),
-            },
+            Self::Spread => text
+                .parse::<u16>()
+                .map_err(|_| "Spread runs from 0 to 100")?
+                .into(),
+            Self::Bias => text
+                .parse::<i16>()
+                .map_err(|_| "Bias runs from -100 to 100")?
+                .into(),
             Self::Steps => match (column, text.parse::<u8>()) {
-                (ShapeColumn::Note { scale, .. }, Ok(kept)) if kept > 0 => {
-                    shape.random.steps = steps_kept(i32::from(kept), scale);
-                }
+                (ShapeColumn::Note { .. }, Ok(kept)) if kept > 0 => kept.into(),
                 _ => return Err("Steps is how many degrees it lets through, from 1"),
             },
             Self::Weights => {
@@ -2296,61 +2199,54 @@ impl GenParam {
                     }
                     _ => return Err("Weights are a hex digit a degree from the root, like F8C4"),
                 }
+                return Ok(());
             }
             Self::Depth => match text.parse::<u8>() {
-                Ok(depth) if (MIN_DEPTH..=MAX_DEPTH).contains(&depth) => shape.pink.depth = depth,
+                Ok(depth) if within(depth.into()) => depth.into(),
                 _ => return Err("Depth runs from 2 to 8"),
             },
             Self::Factor => match text.parse::<u8>() {
-                Ok(factor) if (1..=MAX_FACTOR).contains(&factor) => shape.bits.factor = factor,
+                Ok(factor) if within(factor.into()) => factor.into(),
                 _ => return Err("Factor runs from 1 to 16"),
             },
-            Self::Flip | Self::Keep => {
-                let bits = u8::from_str_radix(text, 16).map_err(|_| "Bits are two hex digits")?;
-                if self == Self::Flip {
-                    shape.bits.flip = bits;
-                } else {
-                    shape.bits.keep = bits;
-                }
-            }
+            Self::Flip | Self::Keep => u8::from_str_radix(text, 16)
+                .map_err(|_| "Bits are two hex digits")?
+                .into(),
             Self::Turn => match text.parse::<u8>() {
-                Ok(turn) if turn <= MAX_TURN => shape.bits.turn = turn,
+                Ok(turn) if within(turn.into()) => turn.into(),
                 _ => return Err("Turn runs from 0 to 7"),
             },
             Self::Order => match text.parse::<u8>() {
-                Ok(order) if (1..=MAX_ORDER).contains(&order) => shape.variation.order = order,
+                Ok(order) if within(order.into()) => order.into(),
                 _ => return Err("Order runs from 1 to 3"),
             },
-            Self::Temperature => match text.parse::<u16>() {
-                Ok(typed) => shape.variation.temperature = typed.min(100) as u8,
-                Err(_) => return Err("Temp runs from 0 to 100"),
-            },
-            Self::Change => match text.parse::<u16>() {
-                Ok(typed) => shape.ring.change = typed.min(100) as u8,
-                Err(_) => return Err("Change runs from 0 to 100"),
-            },
-            Self::Ones => match text.parse::<u16>() {
-                Ok(typed) => shape.ring.chance = typed.min(100) as u8,
-                Err(_) => return Err("Chance runs from 0 to 100"),
-            },
+            Self::Temperature => text
+                .parse::<u16>()
+                .map_err(|_| "Temp runs from 0 to 100")?
+                .into(),
+            Self::Change => text
+                .parse::<u16>()
+                .map_err(|_| "Change runs from 0 to 100")?
+                .into(),
+            Self::Ones => text
+                .parse::<u16>()
+                .map_err(|_| "Chance runs from 0 to 100")?
+                .into(),
             Self::RingLength => match text.parse::<u8>() {
-                Ok(length) if (1..=MAX_RING).contains(&length) => shape.ring.length = length,
+                Ok(length) if within(length.into()) => length.into(),
                 _ => return Err("Length runs from 1 to 16"),
             },
             Self::MoveList => {
                 shape.tonnetz.list = MoveList::parse(text)
                     .ok_or("Moves are P, L and R, up to 8 of them, like P L R L")?;
+                return Ok(());
             }
-            Self::PWeight | Self::LWeight | Self::RWeight => {
-                match (self.weight_mut(&mut shape.tonnetz), text.parse::<u8>()) {
-                    (Some(weight), Ok(typed)) if typed <= MAX_MOVE_WEIGHT => *weight = typed,
-                    _ => return Err("A weight runs from 0 to 9"),
-                }
-            }
+            Self::PWeight | Self::LWeight | Self::RWeight => match text.parse::<u8>() {
+                Ok(weight) if within(weight.into()) => weight.into(),
+                _ => return Err("A weight runs from 0 to 9"),
+            },
             Self::LoopLength => match text.parse::<u8>() {
-                Ok(length) if (1..=MAX_MOVE_LOOP).contains(&length) => {
-                    shape.tonnetz.length = length
-                }
+                Ok(length) if within(length.into()) => length.into(),
                 _ => return Err("Length runs from 1 to 16"),
             },
             Self::Quarters
@@ -2364,12 +2260,10 @@ impl GenParam {
             | Self::SixteenthsB
             | Self::QuarterTripletsB
             | Self::EighthTripletsB
-            | Self::SixteenthTripletsB => {
-                match (self.chance_mut(&mut shape.divisions), text.parse::<u16>()) {
-                    (Some(chance), Ok(typed)) => *chance = typed.min(100) as u8,
-                    _ => return Err("A chance runs from 0 to 100"),
-                }
-            }
+            | Self::SixteenthTripletsB => text
+                .parse::<u16>()
+                .map_err(|_| "A chance runs from 0 to 100")?
+                .into(),
             Self::Fill
             | Self::Wave
             | Self::Where
@@ -2397,20 +2291,17 @@ impl GenParam {
             | Self::Voice
             | Self::Moves
             | Self::InScale
-            | Self::Vary => {}
+            | Self::Vary => return Ok(()),
             Self::MapX
             | Self::MapY
             | Self::KickDensity
             | Self::SnareDensity
             | Self::HatDensity
-            | Self::Chaos => {
-                let typed =
-                    u8::from_str_radix(text, 16).map_err(|_| "A value is two hex digits")?;
-                if let Some(value) = self.grids_byte(&mut shape.grids) {
-                    *value = typed;
-                }
-            }
-        }
+            | Self::Chaos => u8::from_str_radix(text, 16)
+                .map_err(|_| "A value is two hex digits")?
+                .into(),
+        };
+        self.put(shape, context, number);
         Ok(())
     }
 
@@ -2860,46 +2751,42 @@ fn bend(value: i8) -> String {
     }
 }
 
-/// A bend moved, and kept within `MAX_BEND` either way.
-fn bent(value: i8, by: i32) -> i8 {
-    let most = i32::from(MAX_BEND);
-    moved(i32::from(value), by, -most, most) as i8
-}
-
-/// A byte moved and kept within a byte.
-fn moved_byte(value: u8, by: i32) -> u8 {
-    moved(i32::from(value), by, 0, i32::from(u8::MAX)) as u8
-}
-
-/// A value moved and kept from `low` to `high`.
-fn moved(value: i32, by: i32, low: i32, high: i32) -> i32 {
-    (value + by).clamp(low, high)
+/// How a setting stepped as a number moves: by a small step and a large one, and whether past an
+/// end it goes round to the other rather than stopping there.
+#[derive(Debug, Clone, Copy)]
+struct Stepping {
+    nudge: i32,
+    jump: i32,
+    round: bool,
 }
 
 /// An end moved a small or a large step: a note by a semitone or an octave, or by a degree or an
 /// octave of them while the scale is on; a nudge by one or four 24ths; anything else by one or
 /// `10` in hex.
 fn stepped(column: ShapeColumn, value: u8, sign: i32, large: bool) -> u8 {
-    let jump = match column {
-        ShapeColumn::Note { scale, .. } if scale.on => {
-            let degrees = if large {
-                scale.kind.intervals().len()
-            } else {
-                1
-            };
-            return scale.moved(value, degrees as i32 * sign);
-        }
+    if let ShapeColumn::Note { scale, .. } = column
+        && scale.on
+    {
+        let degrees = if large {
+            scale.kind.intervals().len()
+        } else {
+            1
+        };
+        return scale.moved(value, degrees as i32 * sign);
+    }
+    let by = sign * if large { large_step(column) } else { 1 };
+    let (low, top) = (i32::from(column.lowest()), i32::from(column.highest()));
+    (i32::from(value) + by).clamp(low, top) as u8
+}
+
+/// How far a large step moves a value of a column, with the scale off: an octave of notes, four
+/// 24ths of a nudge, or `10` in hex.
+fn large_step(column: ShapeColumn) -> i32 {
+    match column {
         ShapeColumn::Note { .. } => 12,
         ShapeColumn::Nudge { .. } => 4,
         _ => HEX_JUMP,
-    };
-    let (low, top) = (i32::from(column.lowest()), i32::from(column.highest()));
-    moved(
-        i32::from(value),
-        sign * if large { jump } else { 1 },
-        low,
-        top,
-    ) as u8
+    }
 }
 
 /// The longest `Step` a walk takes on a column: two octaves of notes, or its whole range.
@@ -2917,13 +2804,8 @@ fn typed_in_hex(column: ShapeColumn) -> bool {
 
 /// The chance in percent an `Acid` setting is: of an octave, a row playing, an accent or a slide.
 fn acid_chance(acid: Acid, param: GenParam) -> Option<u8> {
-    match param {
-        GenParam::Octave => Some(acid.octave),
-        GenParam::Density => Some(acid.density),
-        GenParam::Accent => Some(acid.accent),
-        GenParam::Slide => Some(acid.slide),
-        _ => None,
-    }
+    let mut acid = acid;
+    acid_chance_mut(&mut acid, param).map(|percent| *percent)
 }
 
 fn acid_chance_mut(acid: &mut Acid, param: GenParam) -> Option<&mut u8> {
@@ -3078,14 +2960,17 @@ mod tests {
         riff.place = crate::shape::Where::Euclid { hits: 5, rotate: 0 };
         assert_eq!(
             GenParam::grid(&riff, note(), true),
-            [
+            Grid::from_columns(&[
                 [Some(From), Some(To), Some(Notes)],
                 [Some(Octave), Some(Accent), Some(Slide)],
                 [Some(Density), Some(Hits), Some(Rotate)],
                 [Some(Spread), Some(Bias), None],
-            ]
+            ])
         );
-        assert_eq!(GenParam::grid(&kept, note(), false)[3], [None, None, None]);
+        assert_eq!(
+            GenParam::grid(&kept, note(), false).column(3),
+            [None, None, None]
+        );
         let mut euclid = shape(FillKind::Alternate);
         euclid.place = crate::shape::Where::Euclid { hits: 3, rotate: 0 };
         assert_eq!(
@@ -3273,7 +3158,7 @@ mod tests {
         assert_eq!(CellStart.number(&ramp, &velocity), Some(0));
         assert!(Rule.held_in_engine() && CellStart.held_in_engine());
         assert_eq!(
-            GenParam::grid(&ramp, ShapeColumn::Velocity, false)[2],
+            GenParam::grid(&ramp, ShapeColumn::Velocity, false).column(2),
             [None, Some(Rule), Some(CellStart)]
         );
         assert_eq!(GenParam::title(&ramp)[2], Some(Vary));
@@ -3359,16 +3244,19 @@ mod tests {
         );
         let grid = GenParam::grid(&divisions, note(), true);
         assert_eq!(
-            grid[2],
+            grid.column(2),
             [Some(QuartersB), Some(EighthsB), Some(SixteenthsB)]
         );
-        assert!(grid.iter().flatten().all(|param| *param != Some(Pitch)));
+        assert!(grid.settings().all(|param| param != Pitch));
         // On a track of its own, its own six, then its note.
         divisions.divisions.channel = Some(super::Channel::B);
         let grid = GenParam::grid(&divisions, note(), true);
-        assert_eq!(grid[0], [Some(Quarters), Some(Eighths), Some(Sixteenths)]);
-        assert_eq!(grid[2], [Some(Pitch), None, None]);
-        assert_eq!(grid[3], [None, None, None]);
+        assert_eq!(
+            grid.column(0),
+            [Some(Quarters), Some(Eighths), Some(Sixteenths)]
+        );
+        assert_eq!(grid.column(2), [Some(Pitch), None, None]);
+        assert_eq!(grid.column(3), [None, None, None]);
         // Across tracks, no channel and every chance.
         divisions.divisions.channel = None;
         assert!(!GenParam::of(&divisions, note(), false).contains(&Channel));
@@ -3395,7 +3283,7 @@ mod tests {
         );
         assert_eq!(GenParam::title(&ring), [Some(Fill), None, None, None]);
         assert_eq!(
-            GenParam::grid(&ring, note(), true)[1],
+            GenParam::grid(&ring, note(), true).column(1),
             [Some(Change), Some(Ones), Some(RingLength)]
         );
         assert_eq!(
@@ -3462,7 +3350,7 @@ mod tests {
         GenParam::Temperature.reset(&mut variation, &notes, Starts::default());
         assert!(variation.variation.is_default());
         assert_eq!(
-            GenParam::grid(&variation, note(), false)[0],
+            GenParam::grid(&variation, note(), false).column(0),
             [Some(GenParam::Order), Some(GenParam::Temperature), None]
         );
         assert_eq!(
@@ -3496,15 +3384,15 @@ mod tests {
                         .into_iter()
                         .chain(
                             GenParam::grid(&base, note(), generates)
-                                .into_iter()
-                                .flatten(),
+                                .settings()
+                                .map(Some),
                         )
                         // An `Acid`'s loops, on a device of their own under it.
                         .chain(
                             GenParam::loops_grid(&base, note(), generates)
                                 .into_iter()
-                                .flatten()
-                                .flatten(),
+                                .flat_map(Grid::settings)
+                                .map(Some),
                         )
                         .flatten()
                         .collect();
@@ -3683,19 +3571,19 @@ mod tests {
         // The fill's own grid is full, so they're a device of their own; none for another fill.
         assert_eq!(
             GenParam::loops_grid(&acid, note(), true),
-            Some([
+            Some(Grid::from_columns(&[
                 [Some(GenParam::TrigLoop), Some(GenParam::NoteLoop), None],
                 [
                     Some(GenParam::OctaveLoop),
                     Some(GenParam::AccentLoop),
                     Some(GenParam::SlideLoop)
                 ],
-                [None; GEN_ROWS],
-                [None; GEN_ROWS],
-            ])
+            ]))
         );
         assert_eq!(
-            GenParam::loops_grid(&acid, note(), false).unwrap()[0],
+            GenParam::loops_grid(&acid, note(), false)
+                .unwrap()
+                .column(0),
             [None, Some(GenParam::NoteLoop), None],
             "on notes there, the rhythm is theirs"
         );
@@ -3764,12 +3652,12 @@ mod tests {
         );
         assert_eq!(
             GenParam::grid(&random, note(), false),
-            [
+            Grid::from_columns(&[
                 [Some(From), Some(To), Some(Run)],
                 [Some(Spread), Some(Bias), Some(Steps)],
                 [Some(Weights), None, None],
                 [None, None, None],
-            ]
+            ])
         );
         let notes = context(ShapeColumn::Note {
             scale: Scale {
@@ -3891,12 +3779,12 @@ mod tests {
         assert_eq!(ramp.place, son(super::Role::High, 100));
         // At the foot of the third column; where a fill takes its top, the rhythm tops the fourth.
         let grid = GenParam::grid(&ramp, column, false);
-        assert_eq!(grid[2], [Some(Rhythm), Some(Role), Some(Child)]);
+        assert_eq!(grid.column(2), [Some(Rhythm), Some(Role), Some(Child)]);
         let mut random = ramp;
         random.kind = FillKind::Random;
         let grid = GenParam::grid(&random, column, false);
-        assert_eq!(grid[2], [None, Some(Role), Some(Child)]);
-        assert_eq!(grid[3][0], Some(Rhythm));
+        assert_eq!(grid.column(2), [None, Some(Role), Some(Child)]);
+        assert_eq!(grid.column(3)[0], Some(Rhythm));
         let mut acid = ramp;
         acid.kind = FillKind::Acid;
         let notes = ShapeColumn::Note {
@@ -3904,8 +3792,8 @@ mod tests {
             writes: Some(0x64),
         };
         let grid = GenParam::grid(&acid, notes, true);
-        assert_eq!(grid[2], [Some(Density), Some(Role), Some(Child)]);
-        assert_eq!(grid[3], [Some(Spread), Some(Bias), Some(Rhythm)]);
+        assert_eq!(grid.column(2), [Some(Density), Some(Role), Some(Child)]);
+        assert_eq!(grid.column(3), [Some(Spread), Some(Bias), Some(Rhythm)]);
         // The list, each with where it's from.
         let listed = Rhythm.choices(&context).unwrap();
         assert_eq!(listed.len(), World::ALL.len());
