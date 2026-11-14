@@ -1965,7 +1965,7 @@ finds `Euclid`, `Acid loops` and `Noise Ring`.
 | `Deja vu` | `deja-vu` | `Deja vu`, `Spread` |
 | `Euclid` | `euclid`'s bass | `Hits`, `Rotate` |
 | `Kria` | `kria` | `Pitch loop`, `Octave loop` |
-| `Acid loops` | `kria`'s second line | `Trig loop`, `Note loop`, `Oct loop`, `Acc loop`, `Sld loop` |
+| `Acid loops` | `kria`'s bass | `Trig loop` to `Sld loop`, all five |
 | `Accents` | `live-generators`' hats | `Hits`, `Rotate` |
 | `Acid line` | `acid-lines` | `Density`, `Notes`, `Octave`, `Accent`, `Slide` |
 | `Drunk walk` | `walks`' bass | `Step`, `Hits` |

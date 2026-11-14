@@ -573,7 +573,9 @@ already there it keeps their rhythm.
 | Pitches | `Roll` gives new pitches on each `r`, `Keep` keeps them |
 | Trig loop | On an empty column, how many rows the rhythm goes round |
 | Note loop | How many rows the riff's notes go round |
-| Oct loop, Acc loop, Sld loop | How many rows the octaves, accents and slides go round |
+| Oct loop | How many rows the octaves go round |
+| Acc loop | How many rows the accents go round |
+| Sld loop | How many rows the slides go round |
 
 The riff's notes come from the scale while it's on, so a set of four in C minor
 might be `C-3 D#3 G-3 A#3`, and the root plays more often than the others.

@@ -612,7 +612,7 @@ fn the_shipped_patches_are_found_by_their_tags_and_cant_be_tagged() {
     command(&mut app, "patch");
     press(&mut app, "/#generative");
     let rows = explorer_rows(&app);
-    assert_eq!(rows.len(), 11, "all ten: {rows:?}");
+    assert_eq!(rows.len(), 12, "all eleven: {rows:?}");
     special(&mut app, KeyCode::Esc);
     let tags: Vec<String> = app
         .picker
