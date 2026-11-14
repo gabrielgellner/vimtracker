@@ -312,7 +312,7 @@ fn generation(row: &Rows, rule: u8) -> Rows {
         out.words[word] = ruled(left, centre, right, rule);
     }
     // Nothing past the last cell.
-    if width % 64 != 0 {
+    if !width.is_multiple_of(64) {
         out.words[words - 1] &= mask((width % 64) as u32);
     }
     out
