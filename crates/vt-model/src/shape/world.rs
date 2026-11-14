@@ -248,7 +248,7 @@ impl World {
 
     /// Whether its pulses are a bar's triplet eighths, so it fits a bar on a `1/8T` track.
     pub fn ternary(self) -> bool {
-        self.pulses() % 3 == 0
+        self.pulses().is_multiple_of(3)
     }
 }
 
