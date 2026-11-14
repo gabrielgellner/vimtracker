@@ -67,7 +67,8 @@ pub struct ParamState {
     pub heard: u8,
     /// Filled to the fader with a mark at what's heard, rather than the other way (decision 174).
     pub fader: bool,
-    /// The range a macro holding it can take it over, which its bar draws behind the fill.
+    /// The range a macro holding it can take it over, which its bar draws behind the fill. A cell
+    /// with no bar shows nothing for it yet.
     pub macro_range: Option<(u8, u8)>,
     /// How its value is coloured while the cursor isn't on it.
     pub tone: Tone,
@@ -79,7 +80,8 @@ pub struct ParamState {
 }
 
 impl ParamState {
-    /// A setting heard as it's set, held by no macro, in this tone.
+    /// A setting in this tone, held by no macro, with nothing after it. One with a bar sets
+    /// `heard` too.
     pub fn new(tone: Tone) -> Self {
         Self {
             heard: 0,
