@@ -17,7 +17,7 @@ fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
     // Past the groups, which are empty and so folded away.
     press(&mut app, "ll");
     press(&mut app, "jj");
-    assert_eq!(app.cursor.track, return_a);
+    assert_eq!(app.services.cursor.track, return_a);
     press(&mut app, "i40");
     assert_eq!(
         app.song().tracks[return_a].send_a,
@@ -25,7 +25,7 @@ fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
         "a return sends nowhere"
     );
     press(&mut app, "ll");
-    assert_eq!(app.cursor.track, return_a + 2);
+    assert_eq!(app.services.cursor.track, return_a + 2);
     press(&mut app, "ki40");
     assert_eq!(
         app.song().tracks[return_a + 2].pan,
@@ -42,10 +42,10 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     press(&mut app, " 4zRjj");
     assert_eq!(column_name(&app), "Send A");
     press(&mut app, "ll");
-    assert_eq!(app.cursor.track, 2);
+    assert_eq!(app.services.cursor.track, 2);
     assert_eq!(column_name(&app), "Send A", "a group sends");
     press(&mut app, &"l".repeat(MAX_GROUPS));
-    assert_eq!(app.cursor.track, 2 + MAX_GROUPS);
+    assert_eq!(app.services.cursor.track, 2 + MAX_GROUPS);
     assert_eq!(
         column_name(&app),
         "Pan",
@@ -60,7 +60,7 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     press(&mut app, "jG");
     assert_eq!(column_name(&app), "Level");
     press(&mut app, &"h".repeat(4 + MAX_GROUPS));
-    assert_eq!(app.cursor.track, 0);
+    assert_eq!(app.services.cursor.track, 0);
     assert_eq!(column_name(&app), "Level", "where it went is where it is");
     press(&mut app, "jjl");
     assert_eq!(column_name(&app), "Send A");
@@ -70,24 +70,24 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     // `$` and `0` go to the last and first tracks that have the row.
     press(&mut app, "$");
     assert_eq!(
-        (app.cursor.track, column_name(&app)),
+        (app.services.cursor.track, column_name(&app)),
         (1 + MAX_GROUPS, "Send A".to_owned()),
         "the last group"
     );
     press(&mut app, "0");
     assert_eq!(
-        (app.cursor.track, column_name(&app)),
+        (app.services.cursor.track, column_name(&app)),
         (0, "Send A".to_owned())
     );
     press(&mut app, "k$");
     assert_eq!(
-        (app.cursor.track, column_name(&app)),
+        (app.services.cursor.track, column_name(&app)),
         (3 + MAX_GROUPS, "Pan".to_owned()),
         "B, as M has none"
     );
     press(&mut app, "k$");
     assert_eq!(
-        (app.cursor.track, column_name(&app)),
+        (app.services.cursor.track, column_name(&app)),
         (4 + MAX_GROUPS, "Level".to_owned())
     );
 }
@@ -109,16 +109,16 @@ fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
-    assert_eq!(app.view, View::Mixer);
-    let depth = app.history.undo_depth();
+    assert_eq!(app.modes.view, View::Mixer);
+    let depth = app.services.history.undo_depth();
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].level, 0xE1);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     press(&mut app, "u");
     assert_eq!(app.song().tracks[0].level, 0xE0);
 
     press(&mut app, "lj");
-    assert_eq!(app.cursor.track, 1);
+    assert_eq!(app.services.cursor.track, 1);
     press(&mut app, "i40");
     assert_eq!(app.song().tracks[1].pan, 0x40);
     assert_eq!(app.song().tracks[0].pan, 0x80, "only this track");
@@ -129,10 +129,14 @@ fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     press(&mut app, "j");
     assert_eq!(column_name(&app), "Send B");
     press(&mut app, "Gk0");
-    assert_eq!(app.cursor.track, 0);
+    assert_eq!(app.services.cursor.track, 0);
     assert_eq!(column_name(&app), "Mute");
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 3 + MAX_GROUPS, "B, the last with a mute");
+    assert_eq!(
+        app.services.cursor.track,
+        3 + MAX_GROUPS,
+        "B, the last with a mute"
+    );
     press(&mut app, "gg");
     assert_eq!(
         column_name(&app),
@@ -150,28 +154,32 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
     block(&mut realtime, &mut app);
     let _ = loudest(&mut realtime, 96_000);
     press(&mut app, " 4Gk=");
-    assert!(app.levels[0].mute);
+    assert!(app.services.levels[0].mute);
     assert!(
         mixer_line(&app, "Mute").contains('M'),
         "{}",
         mixer_line(&app, "Mute")
     );
     press(&mut app, "=");
-    assert!(app.levels[0].mute, "= only switches on");
+    assert!(app.services.levels[0].mute, "= only switches on");
     press(&mut app, " 3k;");
     assert_eq!(loudest(&mut realtime, 2000), 0.0, "muted");
     press(&mut app, " 4-");
-    assert!(!app.levels[0].mute);
+    assert!(!app.services.levels[0].mute);
     press(&mut app, "K");
-    assert!(app.levels[0].mute);
+    assert!(app.services.levels[0].mute);
     press(&mut app, "x");
-    assert!(!app.levels[0].mute);
+    assert!(!app.services.levels[0].mute);
     press(&mut app, "j=");
-    assert!(app.levels[0].solo);
+    assert!(app.services.levels[0].solo);
     assert!(mixer_line(&app, "Solo").contains(vt_tui::glyphs::SOLO));
     press(&mut app, "i");
-    assert!(!app.levels[0].solo);
-    assert_eq!(app.mode, Mode::Normal, "it switches rather than typing");
+    assert!(!app.services.levels[0].solo);
+    assert_eq!(
+        app.modes.mode,
+        Mode::Normal,
+        "it switches rather than typing"
+    );
 }
 
 #[test]
@@ -186,7 +194,7 @@ fn a_long_mixer_scrolls_to_keep_the_track_in_view() {
         mixer_text(&app)[2]
     );
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 31 + FIXED_TRACKS);
+    assert_eq!(app.services.cursor.track, 31 + FIXED_TRACKS);
     let names = &mixer_text(&app)[2];
     assert!(names.contains("32"), "{names}");
     assert!(
@@ -331,8 +339,8 @@ fn a_tracks_mute_and_solo_from_its_group_show_apart_from_its_own() {
     command(&mut app, "group 1 1-2");
     let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
     press(&mut app, " 4");
-    app.levels[group].mute = true;
-    app.levels[2].mute = true;
+    app.services.levels[group].mute = true;
+    app.services.levels[2].mute = true;
     let mutes = mixer_line(&app, "Mute");
     let shown: Vec<&str> = mutes.split_whitespace().skip(1).collect();
     let mute = MUTE.to_string();
@@ -344,8 +352,8 @@ fn a_tracks_mute_and_solo_from_its_group_show_apart_from_its_own() {
     // The track's own in the active colour, its group's in the group's.
     let (blue, green) = (vt_tui::theme::group(1), vt_tui::theme::GREEN);
     assert_eq!(mixer_colors(&app, "Mute", MUTE), [blue, blue, green, green]);
-    app.levels[group].mute = false;
-    app.levels[group].solo = true;
+    app.services.levels[group].mute = false;
+    app.services.levels[group].solo = true;
     assert_eq!(mixer_colors(&app, "Solo", SOLO), [blue, blue, green]);
     assert!(mixer_colors(&app, "Mute", MUTE) == [green], "only 03's own");
 }
@@ -380,11 +388,11 @@ fn the_mixers_meters_show_only_the_track_that_is_playing() {
     let _ = loudest(&mut realtime, 2000);
     app.tick();
     assert!(
-        app.track_meters[0].top() > FLOOR_DB,
+        app.services.track_meters[0].top() > FLOOR_DB,
         "{}",
-        app.track_meters[0].top()
+        app.services.track_meters[0].top()
     );
-    assert_eq!(app.track_meters[1].top(), FLOOR_DB);
+    assert_eq!(app.services.track_meters[1].top(), FLOOR_DB);
 }
 
 #[test]
@@ -398,7 +406,7 @@ fn the_mixer_draws_a_strip_per_track_with_a_meter_and_a_fader() {
         frames: 100,
     };
     for _ in 0..50 {
-        app.track_meters[0].update(Some(reading), 0.033);
+        app.services.track_meters[0].update(Some(reading), 0.033);
     }
     command(&mut app, "track add 6");
     press(&mut app, " 4");
@@ -451,6 +459,6 @@ fn the_mixer_has_a_trim_above_each_fader_and_opens_on_the_fader() {
     assert!(text[trim].contains("81") && text[trim].contains("80"));
     // Every strip has one, the groups', the returns' and the master's too.
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 4 + MAX_GROUPS, "the master");
+    assert_eq!(app.services.cursor.track, 4 + MAX_GROUPS, "the master");
     assert_eq!(column_name(&app), "Trim");
 }

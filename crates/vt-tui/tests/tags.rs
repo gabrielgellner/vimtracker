@@ -30,7 +30,7 @@ fn drum_library(app: &mut App) -> PathBuf {
     ] {
         wav(&library.join(file));
     }
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: Vec::new(),
         samples: vec![library.display().to_string()],
         presets: String::new(),
@@ -168,7 +168,7 @@ fn t_gives_a_sample_tags_by_its_content_and_takes_a_wrong_guess_off() {
     assert!(text.contains("Enter tag  Tab complete  Esc back"), "{text}");
     press(&mut app, "punchy");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.status, "thump.wav: #kick #one-shot #punchy");
+    assert_eq!(app.services.status, "thump.wav: #kick #one-shot #punchy");
     let thump = library.join("drums/kicks/thump.wav");
     assert_eq!(app.tag_library.of_file(&thump).unwrap().tags, ["punchy"]);
     let text = drawn(&app);
@@ -187,7 +187,7 @@ fn t_gives_a_sample_tags_by_its_content_and_takes_a_wrong_guess_off() {
     special(&mut app, KeyCode::Tab);
     assert_eq!(app.picker.as_ref().unwrap().tag_line, "punchy ");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.status, "thump.wav: #punchy");
+    assert_eq!(app.services.status, "thump.wav: #punchy");
     let kept = app.tag_library.of_file(&thump).unwrap();
     assert_eq!(kept.not, ["kick", "one-shot"]);
     press(&mut app, "#kick");
@@ -264,7 +264,7 @@ fn a_kits_sounds_have_their_labels_tags() {
     let (mut app, _realtime) = app();
     let kit = labelled_kit();
     let root = kit.parent().unwrap().to_path_buf();
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![root.display().to_string()],
         samples: Vec::new(),
         presets: String::new(),
@@ -283,7 +283,7 @@ fn a_kits_sounds_have_their_labels_tags() {
 fn a_presets_tags_are_kept_in_its_file_and_patch_lists_the_patches() {
     let (mut app, _realtime) = app();
     let presets = folder().join("presets");
-    app.settings = Settings {
+    app.services.settings = Settings {
         presets: presets.display().to_string(),
         ..Settings::none()
     };
@@ -301,7 +301,7 @@ fn a_presets_tags_are_kept_in_its_file_and_patch_lists_the_patches() {
     );
     press(&mut app, "bass dark");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.status, "Plain: #sound #sampler #bass #dark");
+    assert_eq!(app.services.status, "Plain: #sound #sampler #bass #dark");
     let path = presets.join("sounds/Plain.ron");
     let read = vt_model::preset::load_sound(&path).unwrap();
     assert_eq!(read.tags, ["bass", "dark"]);

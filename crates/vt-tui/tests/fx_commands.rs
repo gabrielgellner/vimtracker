@@ -255,7 +255,11 @@ fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
     press(&mut app, "ggjj0llllliamnt");
     special(&mut app, KeyCode::Enter);
     assert_eq!(command(&app, 2), None);
-    assert!(app.status.contains("isn't a label"), "{}", app.status);
+    assert!(
+        app.services.status.contains("isn't a label"),
+        "{}",
+        app.services.status
+    );
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.query, "amnt");
     assert_eq!(
@@ -445,7 +449,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     assert_eq!(current(&app), "Cut");
     press(&mut app, "j");
     assert_eq!(current(&app), "Res");
-    assert_eq!(app.mode, Mode::Picker, "moving doesn't choose");
+    assert_eq!(app.modes.mode, Mode::Picker, "moving doesn't choose");
 
     // h closes it and goes up to it.
     press(&mut app, "h");
@@ -473,7 +477,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     assert_eq!(current(&app), "1 Mix");
     press(&mut app, "hk");
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(
         app.song().tracks[0].mods[3].destination,
         Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 4).unwrap()),
@@ -550,7 +554,11 @@ fn a_plain_list_opens_on_the_list_and_typing_searches() {
     assert_eq!(app.picker.as_ref().unwrap().query, "pl");
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal, "Esc clears the search, then closes");
+    assert_eq!(
+        app.modes.mode,
+        Mode::Normal,
+        "Esc clears the search, then closes"
+    );
     press(&mut app, "K/j");
     assert_eq!(app.picker.as_ref().unwrap().query, "j");
 }
@@ -564,7 +572,7 @@ fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
     use vt_model::song::Lane;
     let (mut app, _realtime) = app();
     press(&mut app, "llllljj");
-    assert_eq!(app.cursor.field, vt_tui::app::Field::FxCommand(0));
+    assert_eq!(app.services.cursor.field, vt_tui::app::Field::FxCommand(0));
     command(&mut app, "lane 3");
     assert_eq!(
         lane_of(&app, 0),
@@ -573,7 +581,11 @@ fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
             length: 3
         })
     );
-    assert!(app.status.contains("FX 1"), "{}", app.status);
+    assert!(
+        app.services.status.contains("FX 1"),
+        "{}",
+        app.services.status
+    );
     // Now it has a lane, the loop keys set it rather than the phrase.
     press(&mut app, "jjjjge");
     assert_eq!(
@@ -605,7 +617,11 @@ fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
         "the phrase keeps its loop"
     );
     press(&mut app, "kkkkge");
-    assert!(app.status.contains("above its start"), "{}", app.status);
+    assert!(
+        app.services.status.contains("above its start"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "lane");
     assert_eq!(lane_of(&app, 0), None, "following the notes again");
     press(&mut app, "u");
@@ -629,7 +645,11 @@ fn the_loop_keys_on_an_fx_column_without_a_lane_set_the_phrases_loop() {
     assert_eq!(lane_of(&app, 0), None, "the column still follows the notes");
     press(&mut app, "hhh");
     command(&mut app, "lane 3");
-    assert!(app.status.contains("FX column"), "{}", app.status);
+    assert!(
+        app.services.status.contains("FX column"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(lane_of(&app, 0), None);
 }
 
@@ -641,7 +661,7 @@ fn a_lane_shows_its_length_and_where_it_is_playing() {
     press(&mut app, "20gg");
     command(&mut app, "lane 3");
     on_the_row_being_edited(&mut app);
-    app.transport = Transport::Playing;
+    app.services.transport = Transport::Playing;
     // Place 4 is the notes' row 4, and the lane's row 4 % 3 = 1.
     app.set_playhead(4);
     app.top = 0;
@@ -668,20 +688,23 @@ fn gg_and_g_on_a_column_with_a_lane_go_by_the_lane() {
     press(&mut app, "lllll4j");
     command(&mut app, "lane 3");
     press(&mut app, "G");
-    assert_eq!(app.cursor.step, 6, "the lane's last step");
+    assert_eq!(app.services.cursor.step, 6, "the lane's last step");
     press(&mut app, "gg");
-    assert_eq!(app.cursor.step, 4, "the lane's first");
+    assert_eq!(app.services.cursor.step, 4, "the lane's first");
     press(&mut app, "2G");
-    assert_eq!(app.cursor.step, 5, "a count goes by the lane too");
+    assert_eq!(app.services.cursor.step, 5, "a count goes by the lane too");
     press(&mut app, "hhG");
-    assert_eq!(app.cursor.step, 15, "the notes go by the phrase's loop");
+    assert_eq!(
+        app.services.cursor.step, 15,
+        "the notes go by the phrase's loop"
+    );
 }
 
 #[test]
 fn k_on_the_gate_column_chooses_a_gate_and_keeps_its_pulses() {
     let (mut app, _realtime) = app();
     press(&mut app, "lllrMLT3ggK");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     // `h` is a key in the list, so `/` starts the search.
     press(&mut app, "/hld");
     special(&mut app, KeyCode::Enter);
@@ -744,14 +767,14 @@ fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
     let gate = |app: &App| app.phrase_here().unwrap().steps()[0].gate;
     // On the gate, the gate types.
     press(&mut app, "lllK");
-    assert_eq!(app.cursor.field, vt_tui::app::Field::Gate);
+    assert_eq!(app.services.cursor.field, vt_tui::app::Field::Gate);
     assert_eq!(app.picker.as_ref().unwrap().title, "Gates");
     special(&mut app, KeyCode::Esc);
     assert!(app.picker.is_none());
 
     // On its length, some lengths, with the track's first and marked on an empty cell.
     press(&mut app, "lK");
-    assert_eq!(app.cursor.field, vt_tui::app::Field::GateLength);
+    assert_eq!(app.services.cursor.field, vt_tui::app::Field::GateLength);
     let picker = app.picker.as_ref().expect("the lengths are listed");
     assert_eq!(picker.title, "Lengths");
     let labels: Vec<&str> = picker
@@ -772,7 +795,7 @@ fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
     assert_eq!(gate(&app), None);
 
     // Choosing one sets it, in one change, on one pulse of `SGL` for an empty cell.
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "K80");
     special(&mut app, KeyCode::Enter);
     let set = gate(&app).expect("a gate to hold the length");
@@ -780,7 +803,7 @@ fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
         (set.kind, set.pulses, set.length),
         (GateKind::Single, 1, Some(0x80))
     );
-    assert_eq!(app.history.undo_depth(), depth + 1, "one change");
+    assert_eq!(app.services.history.undo_depth(), depth + 1, "one change");
 
     // Typing filters, and the gate keeps its type and pulses.
     press(&mut app, "hKHLD");
@@ -820,11 +843,11 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
     assert_eq!(picker.focus, vt_tui::input::picker::Focus::Search);
     press(&mut app, "1:4");
     assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "1:4");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).command, Some(FxCommand::Cnd));
     assert_eq!(slot(&app).coarse(), 0x14);
-    assert_eq!(app.history.undo_depth(), depth + 1, "one change");
+    assert_eq!(app.services.history.undo_depth(), depth + 1, "one change");
     assert_eq!(
         column_name(&app),
         "Play the row only when condition xx holds"
@@ -850,7 +873,11 @@ fn k_chooses_cnd_then_its_condition_from_a_list() {
     // A value that isn't a condition isn't taken.
     press(&mut app, "r09");
     assert_eq!(slot(&app).coarse(), 0x44);
-    assert!(app.status.contains("isn't a condition"), "{}", app.status);
+    assert!(
+        app.services.status.contains("isn't a condition"),
+        "{}",
+        app.services.status
+    );
     special(&mut app, KeyCode::Esc);
     press(&mut app, "r07");
     assert_eq!(slot(&app).coarse(), 0x07);
@@ -877,7 +904,7 @@ fn space_l_turns_fill_on_and_held_it_goes_back() {
     press(&mut app, " ");
     hold_for(&mut app, 'l', 100);
     assert!(app.fill, "tapped, it stays on");
-    assert_eq!(app.status, "Fill on");
+    assert_eq!(app.services.status, "Fill on");
     let backend = ratatui::backend::TestBackend::new(120, 2);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -901,7 +928,7 @@ fn space_l_turns_fill_on_and_held_it_goes_back() {
     assert!(app.fill, "a repeat doesn't switch it back");
     app.key_released(Key::char('l'), now + Duration::from_millis(600));
     assert!(!app.fill, "held, it goes back");
-    assert!(!app.dirty, "fill isn't part of the song");
+    assert!(!app.services.dirty, "fill isn't part of the song");
 }
 
 #[test]
@@ -924,11 +951,11 @@ fn k_chooses_acu_then_its_amount_from_a_list() {
     );
     press(&mut app, "-2");
     assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "-2");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
     assert_eq!(slot(&app).command, Some(FxCommand::Acu));
     assert_eq!(slot(&app).coarse(), 0xFE);
-    assert_eq!(app.history.undo_depth(), depth + 1, "one change");
+    assert_eq!(app.services.history.undo_depth(), depth + 1, "one change");
     assert_eq!(
         column_name(&app),
         "Move the note on xx scale degrees each time it plays"
@@ -956,7 +983,11 @@ fn k_chooses_acu_then_its_amount_from_a_list() {
     // A value past 28 isn't taken.
     press(&mut app, "r1D");
     assert_eq!(slot(&app).coarse(), 0x1C);
-    assert!(app.status.contains("is past 28"), "{}", app.status);
+    assert!(
+        app.services.status.contains("is past 28"),
+        "{}",
+        app.services.status
+    );
     special(&mut app, KeyCode::Esc);
     press(&mut app, "rE4");
     assert_eq!(slot(&app).coarse(), 0xE4);
@@ -1014,13 +1045,13 @@ fn k_chooses_arp_and_its_value_is_typed_as_two_digits() {
     );
     special(&mut app, KeyCode::Enter);
     // As `RET`'s, its two digits are typed, and nothing goes in until they are.
-    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(app.modes.mode, Mode::Replace);
     assert_eq!(slot(&app).command, None);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, "47");
     assert_eq!(slot(&app).command, Some(FxCommand::Arp));
     assert_eq!(slot(&app).coarse(), 0x47);
-    assert_eq!(app.history.undo_depth(), depth + 1, "one change");
+    assert_eq!(app.services.history.undo_depth(), depth + 1, "one change");
     assert_eq!(column_name(&app), "Arpeggio: the note, x up and y up");
     assert_eq!(
         value_shown(&app).as_deref(),
@@ -1067,7 +1098,7 @@ fn k_chooses_rnd_and_the_status_line_says_what_it_varies() {
     );
     special(&mut app, KeyCode::Enter);
     // As `ARP`'s, its two digits are typed, and nothing goes in until they are.
-    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(app.modes.mode, Mode::Replace);
     assert_eq!(slot(&app, 1).command, None);
     press(&mut app, "84");
     assert_eq!(slot(&app, 1).command, Some(FxCommand::Rnd));
@@ -1087,12 +1118,12 @@ fn k_chooses_rnd_and_the_status_line_says_what_it_varies() {
         Some("100% of the times it plays, moves the note up to 6 scale degrees either way")
     );
     // Beside a lock, it varies the lock.
-    app.cursor.field = vt_tui::app::Field::FxCommand(0);
+    app.services.cursor.field = vt_tui::app::Field::FxCommand(0);
     press(&mut app, "K");
     press(&mut app, "CUT");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "40");
-    app.cursor.field = vt_tui::app::Field::FxValue(1);
+    app.services.cursor.field = vt_tui::app::Field::FxValue(1);
     assert_eq!(
         value_shown(&app).as_deref(),
         Some("100% of the times it plays, moves CUT up to 60 either way")
@@ -1112,14 +1143,26 @@ fn order_plays_the_phrases_rows_in_an_order_from_a_word_or_a_list() {
     assert!(!heading(&app).contains("Forward"), "forward isn't named");
     command(&mut app, "order up-down");
     assert_eq!(order(&app), Order::UpDown);
-    assert!(app.status.contains("the ends once"), "{}", app.status);
+    assert!(
+        app.services.status.contains("the ends once"),
+        "{}",
+        app.services.status
+    );
     assert!(heading(&app).contains("Up-down"), "{}", heading(&app));
     command(&mut app, "order pendulum");
     assert_eq!(order(&app), Order::UpDown, "the old names are gone");
-    assert!(app.status.contains(":order takes"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":order takes"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "order sideways");
     assert_eq!(order(&app), Order::UpDown);
-    assert!(app.status.contains(":order takes"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":order takes"),
+        "{}",
+        app.services.status
+    );
     // With nothing after it, a list opens on the order it plays in.
     command(&mut app, "order");
     let picker = app.picker.as_ref().expect("the list is open");
@@ -1155,7 +1198,11 @@ fn order_takes_a_snake_and_cartesian_numbers_and_the_title_shows_them() {
     command(&mut app, "order snake spiral");
     assert_eq!(order(&app), Order::Snake(Snake::Spiral));
     assert!(heading(&app).contains("Snake spiral"), "{}", heading(&app));
-    assert!(app.status.contains("Round the edge"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Round the edge"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "order snake 2");
     assert_eq!(order(&app), Order::Snake(Snake::Columns));
     command(&mut app, "order cartesian 1 3 4 2");
@@ -1167,14 +1214,19 @@ fn order_takes_a_snake_and_cartesian_numbers_and_the_title_shows_them() {
         heading(&app)
     );
     assert!(
-        app.status
+        app.services
+            .status
             .contains("X moves every row over 4, Y every 3 rows over 2"),
         "{}",
-        app.status
+        app.services.status
     );
     command(&mut app, "order cartesian 0 3");
     assert_eq!(order(&app), cartesian, "a rate of 0 is refused");
-    assert!(app.status.contains(":order takes"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":order takes"),
+        "{}",
+        app.services.status
+    );
     // The list shows the phrase's own Cartesian numbers, and opens on them.
     command(&mut app, "order");
     let picker = app.picker.as_ref().expect("the list is open");
@@ -1200,23 +1252,30 @@ fn order_takes_a_jump_and_an_arps_numbers_and_the_metropolixs_other_orders() {
     assert_eq!(order(&app), Order::Jump(5));
     assert!(heading(&app).contains("Jump 5"), "{}", heading(&app));
     assert!(
-        app.status
+        app.services
+            .status
             .contains("5 rows on each time, going round: 1 6 3 8 5 2 7 4"),
         "{}",
-        app.status
+        app.services.status
     );
     command(&mut app, "order arp 4 2");
     let arp = Order::Arp(Arp { notes: 4, step: 2 });
     assert_eq!(order(&app), arp);
     assert!(heading(&app).contains("Arp 4 2"), "{}", heading(&app));
     assert!(
-        app.status.contains("1 2 3 4 3 4 5 6 5 6 7 8 7 8 1 2"),
+        app.services
+            .status
+            .contains("1 2 3 4 3 4 5 6 5 6 7 8 7 8 1 2"),
         "{}",
-        app.status
+        app.services.status
     );
     command(&mut app, "order jump 1");
     assert_eq!(order(&app), arp, "a jump of 1 is forward, and refused");
-    assert!(app.status.contains(":order takes"), "{}", app.status);
+    assert!(
+        app.services.status.contains(":order takes"),
+        "{}",
+        app.services.status
+    );
     // The list shows the phrase's own arp, and opens on it.
     command(&mut app, "order");
     let picker = app.picker.as_ref().expect("the list is open");
@@ -1259,7 +1318,7 @@ fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
     press(&mut app, "delay");
     special(&mut app, KeyCode::Enter);
     press(&mut app, " 3");
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
     let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
     press(&mut app, "1byp");
@@ -1268,7 +1327,7 @@ fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
     assert_eq!(listed(item), "1BYP  1 Bypass");
     assert_eq!(item.category, "FX 1 Delay", "with the slot's effect");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(app.modes.mode, Mode::Replace);
     press(&mut app, "01");
     let bypass = SettingId::bypass(0).unwrap();
     assert_eq!(slot(&app).command, Some(FxCommand::Set(bypass)));

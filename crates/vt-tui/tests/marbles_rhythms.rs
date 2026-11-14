@@ -118,7 +118,7 @@ fn until(app: &mut App, key: &str, param: GenParam) {
 #[test]
 fn complementary_across_two_tracks_gives_each_row_to_one_or_the_other() {
     let (mut app, _rt) = app_with(2);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vGWS");
     down_to(&mut app, GenParam::Where);
     keys(&mut app, "K/compl<Enter>");
@@ -157,7 +157,11 @@ fn complementary_across_two_tracks_gives_each_row_to_one_or_the_other() {
     );
     assert!(one.chars().zip(two.chars()).all(|(a, b)| a != b));
     keys(&mut app, "L");
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo for both");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo for both"
+    );
     let (first, second) = (generators(&app, 0)[0].shape, generators(&app, 1)[0].shape);
     assert_eq!(first.seed, second.seed, "the two tracks toss one coin");
     assert_eq!(
@@ -197,11 +201,11 @@ fn the_gen_page_turns_a_rhythms_amount_and_switches_complementarys_side() {
     // The amount is the third column's last cell, as a `Chance`'s is.
     keys(&mut app, "jjj$");
     assert_eq!(here(&app), Some(GenParam::Clusters));
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "i100<Enter>");
     assert_eq!(generators(&app, 0)[0].shape.place, Where::Clusters(100));
     assert_eq!(rhythm(&app, 0), "x".repeat(16));
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     assert!(status_line(&app).contains("100%"), "{}", status_line(&app));
     // `x` puts it back to half the rows.
     keys(&mut app, "x");

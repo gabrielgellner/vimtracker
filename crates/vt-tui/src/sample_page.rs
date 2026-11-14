@@ -561,7 +561,7 @@ impl App {
     /// The bank entry the cursor's track plays, or one a jump chose for it, with its analysis, or
     /// why the page can't show it.
     pub fn sample_shown(&self) -> Result<Shown, String> {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let number = match self.sample_page.pinned {
             Some((pinned, number)) if pinned == track => number,
             _ => self
@@ -587,16 +587,16 @@ impl App {
         let Some(source) = entry.source() else {
             return Err(format!("Sample {number:02X} has no file"));
         };
-        let Some(analysis) = self.samples.analysis(source.hash) else {
+        let Some(analysis) = self.services.samples.analysis(source.hash) else {
             return Err(if source.hash.is_known() {
                 format!("Analysing {}…", entry.title())
             } else {
                 format!("{} can't be found, so it can't be shown", source.path)
             });
         };
-        let frames = self.samples.id_of(&source.path).and_then(|id| {
-            let data = self.samples.shared(id)?;
-            Some((Arc::clone(data), self.samples.rates(id)))
+        let frames = self.services.samples.id_of(&source.path).and_then(|id| {
+            let data = self.services.samples.shared(id)?;
+            Some((Arc::clone(data), self.services.samples.rates(id)))
         });
         Ok(Shown {
             number,
@@ -610,10 +610,10 @@ impl App {
     /// mode, `VISUAL` while selecting, and `SETTINGS` with the focus on the settings rows, where
     /// `h` and `l` go along the rows rather than the waveform. None on the waveform.
     pub fn sample_mode(&self) -> Option<&'static str> {
-        if self.view != View::Sample {
+        if self.modes.view != View::Sample {
             return None;
         }
-        if self.mode == Mode::Keys {
+        if self.modes.mode == Mode::Keys {
             Some("PADS")
         } else if self.sample_page.anchor.is_some() {
             Some(Mode::VisualField.label())
@@ -627,10 +627,10 @@ impl App {
     /// What the keys do in the sample page's mode, and how to leave it, for under the status
     /// line while nothing else is said there, so a mode is never on without a word.
     pub fn sample_mode_hint(&self) -> Option<String> {
-        if self.view != View::Sample {
+        if self.modes.view != View::Sample {
             return None;
         }
-        if self.mode == Mode::Keys {
+        if self.modes.mode == Mode::Keys {
             let shown = self.sample_shown().ok()?;
             return Some(self.pads_hint(&shown));
         }
@@ -665,8 +665,8 @@ impl App {
             Ok(shown) => Some(shown),
             Err(why) => {
                 if is_sample_motion(cmd) {
-                    self.status = why;
-                    self.count = None;
+                    self.services.status = why;
+                    self.modes.count = None;
                     return true;
                 }
                 None
@@ -675,11 +675,11 @@ impl App {
         let Some(shown) = shown else {
             return false;
         };
-        let count = self.count.take();
+        let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1) as u64;
         let length = shown.length();
         let beat = beat_frames(shown.rate(), self.song().millibpm);
-        let (repeating, now) = (self.repeating, self.now);
+        let (repeating, now) = (self.repeating, self.services.now);
         // With the focus on the settings rows, `h` and `l` go along them and the keys that change
         // values change the setting rather than a point.
         if let Some(setting) = self.sample_page.setting {
@@ -827,11 +827,12 @@ impl App {
                     page.anchor = Some(first);
                     page.go(last, length);
                 }
-                None => self.status = "No selection yet: v starts one".to_owned(),
+                None => self.services.status = "No selection yet: v starts one".to_owned(),
             },
             Cmd::VisualStep | Cmd::Operator(_) => {
-                self.status = "Whole slices and the operators come later: v selects frames to hear"
-                    .to_owned();
+                self.services.status =
+                    "Whole slices and the operators come later: v selects frames to hear"
+                        .to_owned();
             }
             Cmd::Replace
             | Cmd::Substitute
@@ -842,10 +843,10 @@ impl App {
             | Cmd::PasteAfter
             | Cmd::PasteMerge
             | Cmd::Repeat => {
-                self.status = "That doesn't work on the sample page yet".to_owned();
+                self.services.status = "That doesn't work on the sample page yet".to_owned();
             }
             _ => {
-                self.count = count;
+                self.modes.count = count;
                 return false;
             }
         }
@@ -861,7 +862,7 @@ impl App {
                 let (number, slice) = shown.slice_at(page.cursor);
                 match shown.sound_edge(slice, last) {
                     Some(frame) => page.go(frame, length),
-                    None => self.status = format!("Slice {number:02X} is all silence"),
+                    None => self.services.status = format!("Slice {number:02X} is all silence"),
                 }
             }
             SampleKey::NextPoint | SampleKey::PreviousPoint => {
@@ -882,7 +883,7 @@ impl App {
                 }
                 match to {
                     Some(frame) => page.go(frame, length),
-                    None => self.status = "No point further that way".to_owned(),
+                    None => self.services.status = "No point further that way".to_owned(),
                 }
             }
             SampleKey::NextSound | SampleKey::PreviousSound => {
@@ -901,9 +902,9 @@ impl App {
                 };
                 match found {
                     Some(frame) => page.go(*frame, length),
-                    None if onsets.is_empty() => self.status = no_sounds(shown),
+                    None if onsets.is_empty() => self.services.status = no_sounds(shown),
                     None => {
-                        self.status =
+                        self.services.status =
                             "No sound further that way: a higher Sens finds more".to_owned()
                     }
                 }
@@ -911,7 +912,7 @@ impl App {
             SampleKey::SoundEnd => {
                 let onsets = shown.onsets();
                 if onsets.is_empty() {
-                    self.status = no_sounds(shown);
+                    self.services.status = no_sounds(shown);
                     return;
                 }
                 let mut at = Shown::sound_at(&onsets, page.cursor);
@@ -930,14 +931,15 @@ impl App {
                     to = end;
                 }
                 if to == page.cursor {
-                    self.status = "No sound ends further that way".to_owned();
+                    self.services.status = "No sound ends further that way".to_owned();
                 } else {
                     page.go(to, length);
                 }
             }
             SampleKey::ThisSound | SampleKey::ThisSlice => {
                 if page.anchor.is_none() {
-                    self.status = "is and ip select while selecting: v starts it".to_owned();
+                    self.services.status =
+                        "is and ip select while selecting: v starts it".to_owned();
                     return;
                 }
                 let cursor = page.cursor;
@@ -948,7 +950,7 @@ impl App {
                 } else {
                     let onsets = shown.onsets();
                     if onsets.is_empty() {
-                        self.status = no_sounds(shown);
+                        self.services.status = no_sounds(shown);
                         return;
                     }
                     let first = Shown::sound_at(&onsets, cursor);
@@ -971,7 +973,9 @@ impl App {
                     page.anchor = Some(page.cursor);
                     page.go(anchor, length);
                 }
-                None => self.status = "o swaps a selection's ends: v starts one".to_owned(),
+                None => {
+                    self.services.status = "o swaps a selection's ends: v starts one".to_owned()
+                }
             },
             SampleKey::GainUp | SampleKey::GainDown => {
                 let up = key == SampleKey::GainUp;
@@ -1021,7 +1025,7 @@ impl App {
             }
             SampleKey::CursorStyle => {
                 page.cursor_line = !page.cursor_line;
-                self.status = if page.cursor_line {
+                self.services.status = if page.cursor_line {
                     "The cursor is a line at its frame: zc for its column".to_owned()
                 } else {
                     "The cursor is its column: zc for a line at its frame".to_owned()

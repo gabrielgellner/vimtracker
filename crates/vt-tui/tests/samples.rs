@@ -32,7 +32,11 @@ fn a_sample_can_be_loaded_and_played() {
 
     let (mut app, mut rt) = app();
     command(&mut app, &format!("sample {}", wav.display()));
-    assert!(app.status.contains("loaded"), "{}", app.status);
+    assert!(
+        app.services.status.contains("loaded"),
+        "{}",
+        app.services.status
+    );
     // Writing a note plays it while its key is held.
     press(&mut app, "ia");
     let mut out = vec![0.0; 512];
@@ -59,7 +63,7 @@ fn second_of_wav(path: &std::path::Path) {
 
 /// The current track's bank entry.
 fn entry_of(app: &App) -> vt_model::bank::BankEntry {
-    let number = app.song().tracks[app.cursor.track].sample();
+    let number = app.song().tracks[app.services.cursor.track].sample();
     app.song().bank.get(number).unwrap().clone()
 }
 
@@ -90,7 +94,7 @@ fn a_sliced_wav_comes_in_with_its_slices_and_u_leaves_them_out() {
     let (mut app, _rt) = app();
     command(&mut app, &format!("sample {}", chain.display()));
     assert_eq!(
-        app.status,
+        app.services.status,
         "Track 01 plays 01 chain, loaded into the bank with 4 slices and its root C-3, from its \
          markers: u leaves them out"
     );
@@ -141,7 +145,11 @@ fn a_sample_with_an_ot_beside_it_comes_in_with_its_trim_loop_and_slices() {
 
     let (mut app, _rt) = app();
     command(&mut app, &format!("sample {}", file.display()));
-    assert!(app.status.contains("from break.ot"), "{}", app.status);
+    assert!(
+        app.services.status.contains("from break.ot"),
+        "{}",
+        app.services.status
+    );
     let points = entry_of(&app).edit.points;
     assert_eq!(points.start, 480);
     assert_eq!(points.end, Some(40_000));
@@ -155,7 +163,7 @@ fn a_sample_with_an_ot_beside_it_comes_in_with_its_trim_loop_and_slices() {
     press(&mut app, "W");
     command(&mut app, &format!("sample {}", broken.display()));
     assert_eq!(
-        app.status,
+        app.services.status,
         "Track 02 plays 02 broken, loaded into the bank. The broken.ot beside it is skipped: \
          it's 9 bytes, not the 832 of an .ot file"
     );
@@ -184,7 +192,7 @@ fn a_kits_sound_comes_with_its_files_loop_but_keeps_the_kits_gain() {
     let (mut app, _rt) = app();
     command(&mut app, &format!("kit {} all", kit.display()));
     assert_eq!(
-        app.status,
+        app.services.status,
         "Kit 909: 2 tracks, 1 sound with points from its file: u leaves them out"
     );
     let snare = entry_of(&app);
@@ -215,7 +223,11 @@ fn a_sample_is_referred_to_rather_than_copied() {
         tone.canonicalize().unwrap().display().to_string()
     );
     assert!(!project.join("samples").exists());
-    assert!(app.status.contains("loaded"), "{}", app.status);
+    assert!(
+        app.services.status.contains("loaded"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -270,13 +282,13 @@ fn a_step_locks_a_sample_from_the_bank() {
     press(&mut app, "smp");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.mode,
+        app.modes.mode,
         Mode::Picker,
         "an SMP with no value lists the bank"
     );
     press(&mut app, "/kick");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(slot(&app).command, Some(FxCommand::Set(SettingId::SAMPLE)));
     assert_eq!(slot(&app).coarse(), 2);
     assert_eq!(value_shown(&app).as_deref(), Some("02 kick: kick.wav"));
@@ -308,16 +320,16 @@ fn cleaning_the_bank_removes_what_nothing_plays_and_keeps_the_numbers() {
     assert_eq!(app.song().bank.len(), 3);
     // Track 2 plays nothing now, but a step on track 1 locks the hat.
     let phrase = app.song().tracks[0].chains[&0].entries[0].phrase;
-    app.apply(&Action::SetTrackSample {
+    app.services.apply(&Action::SetTrackSample {
         track: 1,
         sample: 0,
     });
-    app.apply(&Action::SetTrackSample {
+    app.services.apply(&Action::SetTrackSample {
         track: 2,
         sample: 0,
     });
     let step: Step = "C-3 -- sampler.sample:03 --- ---".parse().unwrap();
-    app.apply(&Action::SetStep {
+    app.services.apply(&Action::SetStep {
         track: 0,
         phrase,
         step: 4,
@@ -326,9 +338,13 @@ fn cleaning_the_bank_removes_what_nothing_plays_and_keeps_the_numbers() {
     command(&mut app, "bank clean");
     let left: Vec<u8> = app.song().bank.iter().map(|(number, _)| number).collect();
     assert_eq!(left, [1, 3]);
-    assert!(app.status.contains("Removed 1 sample"), "{}", app.status);
+    assert!(
+        app.services.status.contains("Removed 1 sample"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "bank clean");
-    assert_eq!(app.status, "Every sample in the bank is played");
+    assert_eq!(app.services.status, "Every sample in the bank is played");
     press(&mut app, "u");
     assert_eq!(app.song().bank.len(), 3);
 }
@@ -338,10 +354,10 @@ fn sample_chooses_a_sample_for_the_current_track() {
     let (mut app, _realtime) = app();
     // With nothing to list it asks for a path, and either way the view stays.
     command(&mut app, "sample");
-    assert_ne!(app.mode, Mode::Normal);
+    assert_ne!(app.modes.mode, Mode::Normal);
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert_eq!(app.modes.view, View::Phrase);
 }
 
 #[test]
@@ -378,17 +394,29 @@ fn sample_sets_where_the_tracks_sample_plays_in_its_files_own_frames() {
     use vt_model::bank::Loop;
     let (mut app, _realtime) = app();
     command(&mut app, "sample start 0.25");
-    assert!(app.status.contains("plays no sample"), "{}", app.status);
+    assert!(
+        app.services.status.contains("plays no sample"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, &format!("sample {}", file_at_44k().display()));
     let entry = |app: &App| app.song().bank.get(1).unwrap().edit.clone();
 
     command(&mut app, "sample start 0.25");
     assert_eq!(entry(&app).points.start, 11_025, "at the file's 44.1 kHz");
-    assert!(app.status.contains("starts at 0.250 s"), "{}", app.status);
+    assert!(
+        app.services.status.contains("starts at 0.250 s"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "sample end 500ms");
     assert_eq!(entry(&app).points.end, Some(22_050));
     command(&mut app, "sample end 0.1");
-    assert!(app.status.contains("before the start"), "{}", app.status);
+    assert!(
+        app.services.status.contains("before the start"),
+        "{}",
+        app.services.status
+    );
     assert_eq!(entry(&app).points.end, Some(22_050), "unchanged");
     command(&mut app, "sample loop 0.3 0.4 10ms");
     assert_eq!(

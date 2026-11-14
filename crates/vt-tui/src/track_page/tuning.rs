@@ -157,13 +157,13 @@ impl App {
         let song = self.song();
         let found = song
             .tracks
-            .get(self.cursor.track)
+            .get(self.services.cursor.track)
             .and_then(|track| tuning(song, track))
             .map(|tuning| (tuning.number, tuning.entry.clone(), tuning.of));
         if found.is_none() {
-            self.status = format!(
+            self.services.status = format!(
                 "Track {:02} plays no sample to tune: K on Sample chooses one",
-                self.cursor.track + 1
+                self.services.cursor.track + 1
             );
         }
         found
@@ -183,10 +183,10 @@ impl App {
         let name = control.label().to_lowercase();
         let whose = tuning.whose(control);
         if changed == entry {
-            self.status = format!("{whose} {name} is already that");
+            self.services.status = format!("{whose} {name} is already that");
             return;
         }
-        self.apply(&Action::SetBankEntry {
+        self.services.apply(&Action::SetBankEntry {
             number,
             entry: Some(changed.clone()),
         });
@@ -199,7 +199,7 @@ impl App {
             _ => "",
         };
         let text = tuning_text(control, now.value(control));
-        self.status = format!("{whose} {name} {text}{back}: u to undo");
+        self.services.status = format!("{whose} {name} {text}{back}: u to undo");
     }
 
     /// `=` `-` `+` `_` on `Tune` or `Cents`: a small or a large step, `count` over.
@@ -241,7 +241,7 @@ impl App {
                 } else {
                     "semitones"
                 };
-                self.status = format!(
+                self.services.status = format!(
                     "{} is {what} from -{limit} to +{limit}",
                     control.name_on(&self.page_track())
                 );

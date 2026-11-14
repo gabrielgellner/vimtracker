@@ -139,7 +139,7 @@ fn on_one_column_each_row_is_a_cell() {
 #[test]
 fn across_tracks_each_is_a_cell_of_one_automaton() {
     let (mut app, _rt) = app_with(5);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     cells_from_one(&mut app, "vGWWWW", 90);
     let screen = drawn(&app);
     assert!(
@@ -158,7 +158,11 @@ fn across_tracks_each_is_a_cell_of_one_automaton() {
         ]
     );
     keys(&mut app, "L");
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo for all five");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo for all five"
+    );
     let across: Vec<_> = (0..5)
         .map(|track| {
             match app.song().tracks[track].phrases[&0].generators()[0]
@@ -198,7 +202,7 @@ fn across_tracks_starts_from_the_notes_on_the_first_row() {
         song.tracks[track]
             .phrases
             .insert(0, Arc::new(Phrase::from_steps(steps)));
-        app.history.commit(Arc::new(song));
+        app.services.history.commit(Arc::new(song));
     }
     cells_from_one(&mut app, "vGWWW", 30);
     keys(&mut app, "K/hits<Enter>L");

@@ -75,6 +75,14 @@ effect run in full only in a release build, and `cargo test --workspace --releas
 the real-time guard against optimised code and the hashes made in release builds. Run it too
 after a change to the engine.
 
+`vt-engine` and `vt-model` each build their integration tests as one binary, `tests/all/main.rs`,
+so they link once rather than once a file (#719). A new file of tests goes in `tests/all/`, with a
+`mod` line in its `main.rs`, as a file without one isn't built; a test there fails on a file
+missing its line, or left in `tests/`. Helpers that more than one of the engine's files use go in
+`tests/all/support.rs`. Only a file that needs a process of its own stays a binary in `tests/`, as
+`vt-model`'s `render.rs` does for its allocator. One file's tests run with
+`cargo test -p vt-engine --test all groove::`.
+
 A pull request that makes a choice the issue left open appends it to
 [docs/designs/decisions.md](docs/designs/decisions.md) as the next numbered decision. One that
 changes the structure, such as a crate, a thread or queue, the song model, what the engine sees,

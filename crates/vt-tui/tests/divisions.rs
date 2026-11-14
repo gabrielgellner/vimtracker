@@ -84,7 +84,7 @@ fn drawn(app: &App) -> String {
 #[test]
 fn across_three_tracks_each_plays_a_channel_and_the_third_both() {
     let (mut app, _rt) = app_with(&[Speed::Sixteenth; 3], 16);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vGWWSK/divisions<Enter>");
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Divisions);
@@ -144,7 +144,7 @@ fn across_three_tracks_each_plays_a_channel_and_the_third_both() {
     );
     keys(&mut app, "L");
     assert_eq!(
-        app.history.undo_depth(),
+        app.services.history.undo_depth(),
         depth + 1,
         "one undo for all three"
     );

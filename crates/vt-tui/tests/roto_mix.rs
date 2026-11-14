@@ -43,13 +43,15 @@ fn mixing(tracks: usize) -> (App, Realtime, FakePorts) {
     fake.mode = Mode::Mix;
     let ports = FakePorts::new(fake, true);
     let shared = ports.clone();
-    app.roto.use_ports(move || Box::new(shared.clone()));
-    app.roto.options = Options {
+    app.services
+        .roto
+        .use_ports(move || Box::new(shared.clone()));
+    app.services.roto.options = Options {
         watch_every: Duration::from_millis(10),
         sysex_gap: Duration::ZERO,
         ..Options::default()
     };
-    app.roto.gesture_pause = Duration::ZERO;
+    app.services.roto.gesture_pause = Duration::ZERO;
     app.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake
         .meter_thresholds
@@ -178,7 +180,7 @@ fn mix_mode_shows_the_tracks_levels_on_the_knobs_and_mutes_on_the_buttons() {
             Some((meter_level(METER_YELLOW_DB), meter_level(METER_RED_DB)))
         );
     });
-    app.apply(&Action::SetTrackLevel {
+    app.services.apply(&Action::SetTrackLevel {
         track: 3,
         level: 0x40,
     });
@@ -186,7 +188,7 @@ fn mix_mode_shows_the_tracks_levels_on_the_knobs_and_mutes_on_the_buttons() {
     assert!(tick_until(&mut app, &ports, |fake| fake
         .knob_position(7)
         .is_some()));
-    assert_eq!(app.roto.mode, RotoMode::Mix);
+    assert_eq!(app.services.roto.mode, RotoMode::Mix);
     ports.with(|fake| {
         // The sound tracks, then the groups, in banks of eight.
         assert_eq!(fake.tracks.len(), 8);
@@ -220,8 +222,8 @@ fn a_level_knob_edits_its_own_track_whatever_the_cursor_is_on_one_undo_step_a_to
     assert!(tick_until(&mut app, &ports, |fake| fake
         .knob_position(7)
         .is_some()));
-    app.cursor.track = 6;
-    let depth = app.history.undo_depth();
+    app.services.cursor.track = 6;
+    let depth = app.services.history.undo_depth();
     roto_does(
         &ports,
         ControlEvent::Touch {
@@ -241,12 +243,16 @@ fn a_level_knob_edits_its_own_track_whatever_the_cursor_is_on_one_undo_step_a_to
         },
     );
     assert!(tick_until_app(&mut app, |app| {
-        app.history.undo_depth() == depth + 1
+        app.services.history.undo_depth() == depth + 1
             && position(app, Control::Level, 2).abs_diff(12000) < 100
     }));
     settle(&mut app, 50);
-    assert_eq!(app.history.undo_depth(), depth + 1, "one undo step");
-    assert_eq!(app.cursor.track, 6, "the cursor stays");
+    assert_eq!(
+        app.services.history.undo_depth(),
+        depth + 1,
+        "one undo step"
+    );
+    assert_eq!(app.services.cursor.track, 6, "the cursor stays");
     // Its value, as the app writes it.
     assert!(tick_until(&mut app, &ports, |fake| {
         values_shown(fake, 2)
@@ -269,7 +275,7 @@ fn a_mute_button_mutes_its_track_lit_while_muted_and_the_keys_light_it_too() {
     roto_says(&ports, LEVELS);
     assert!(tick_until(&mut app, &ports, |fake| fake.light(7).is_some()));
     press_button(&ports, 3);
-    assert!(tick_until_app(&mut app, |app| app.levels[3].mute));
+    assert!(tick_until_app(&mut app, |app| app.services.levels[3].mute));
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.light(3) == Some(true)
             && fake
@@ -277,12 +283,12 @@ fn a_mute_button_mutes_its_track_lit_while_muted_and_the_keys_light_it_too() {
                 .is_some_and(|states| !states[3] && states[2])
     }));
     press_button(&ports, 3);
-    assert!(tick_until_app(&mut app, |app| !app.levels[3].mute));
+    assert!(tick_until_app(&mut app, |app| !app.services.levels[3].mute));
     assert!(tick_until(&mut app, &ports, |fake| fake.light(3) == Some(false)));
     // The keys mute the cursor's track, and the Roto shows it.
-    app.cursor.track = 5;
+    app.services.cursor.track = 5;
     press(&mut app, " m");
-    assert!(app.levels[5].mute, "{}", app.status);
+    assert!(app.services.levels[5].mute, "{}", app.services.status);
     assert!(tick_until(&mut app, &ports, |fake| fake.light(5) == Some(true)));
 }
 
@@ -312,7 +318,7 @@ fn sel_puts_pan_or_a_send_on_the_knobs_and_solos_on_the_buttons() {
     );
     assert!(tick_until_app(&mut app, |app| app.song().tracks[1].pan == 0xFF));
     press_button(&ports, 4);
-    assert!(tick_until_app(&mut app, |app| app.levels[4].solo));
+    assert!(tick_until_app(&mut app, |app| app.services.levels[4].solo));
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.light(4) == Some(true)
             && fake
@@ -356,7 +362,7 @@ fn func_focuses_one_track_level_pan_and_sends_and_plugin_mode_shows_it_too() {
             .as_ref()
             .is_some_and(|track| track.index == 3)
     }));
-    assert_eq!(app.roto.track, 3);
+    assert_eq!(app.services.roto.track, 3);
     let level = position(&app, Control::Level, 3);
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.sends == Some(2) && fake.knob_position(0) == Some(level)
@@ -386,12 +392,12 @@ fn func_focuses_one_track_level_pan_and_sends_and_plugin_mode_shows_it_too() {
     });
     press_button(&ports, 0);
     settle(&mut app, 30);
-    assert!(!app.levels[3].mute);
+    assert!(!app.services.levels[3].mute);
     // PLUGIN mode shows the same track's devices.
     roto_says(&ports, FromRoto::SetPluginMode);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
-    assert_eq!(app.roto.mode, RotoMode::Plugin);
-    assert_eq!(app.cursor.track, 0, "the cursor stays");
+    assert_eq!(app.services.roto.mode, RotoMode::Plugin);
+    assert_eq!(app.services.cursor.track, 0, "the cursor stays");
 }
 
 #[test]
@@ -439,7 +445,7 @@ fn the_arrows_page_the_banks_to_the_groups_and_both_reach_the_returns_and_master
         == 0));
     press_button(&ports, 2);
     settle(&mut app, 30);
-    assert!(!app.levels[master].mute);
+    assert!(!app.services.levels[master].mute);
     // Back to the tracks, at the bank it was on.
     roto_says(&ports, FromRoto::SetAllTracksMode(AllTracks::Audio));
     assert!(tick_until(&mut app, &ports, |fake| fake.first_track == 8));
@@ -467,7 +473,7 @@ fn the_keys_move_the_knobs_but_never_one_being_touched() {
     assert!(tick_until(&mut app, &ports, |fake| fake
         .knob_position(7)
         .is_some()));
-    app.apply(&Action::SetTrackLevel {
+    app.services.apply(&Action::SetTrackLevel {
         track: 0,
         level: 0x30,
     });
@@ -492,7 +498,7 @@ fn the_keys_move_the_knobs_but_never_one_being_touched() {
         .len()
         > shown));
     let before = ports.with(|fake| fake.knob_position(1));
-    app.apply(&Action::SetTrackLevel {
+    app.services.apply(&Action::SetTrackLevel {
         track: 1,
         level: 0x30,
     });
@@ -522,7 +528,7 @@ fn the_meters_show_the_engines_levels_on_the_tracks_shown() {
     assert!(tick_until(&mut app, &ports, |fake| fake
         .knob_position(7)
         .is_some()));
-    for channel in &mut app.track_meters[2].channels {
+    for channel in &mut app.services.track_meters[2].channels {
         channel.peak.now = 0.0;
     }
     assert!(tick_until(&mut app, &ports, |fake| {
@@ -540,7 +546,7 @@ fn the_default_asked_for_puts_a_fader_back_where_a_new_track_has_it() {
         .knob_position(7)
         .is_some()));
     let unity = app.song().tracks[1].level;
-    app.apply(&Action::SetTrackLevel {
+    app.services.apply(&Action::SetTrackLevel {
         track: 1,
         level: 0x20,
     });
@@ -563,20 +569,20 @@ fn the_transport_buttons_play_stop_and_light_as_it_plays() {
     };
     transport(&ports, 0);
     let deadline = Instant::now() + Duration::from_secs(5);
-    while app.transport != Transport::Playing && Instant::now() < deadline {
+    while app.services.transport != Transport::Playing && Instant::now() < deadline {
         block(&mut realtime, &mut app);
         std::thread::sleep(Duration::from_millis(2));
     }
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
     assert!(tick_until(&mut app, &ports, |fake| fake.transport_light(0)
         == Some(true)));
     transport(&ports, 1);
     let deadline = Instant::now() + Duration::from_secs(5);
-    while app.transport == Transport::Playing && Instant::now() < deadline {
+    while app.services.transport == Transport::Playing && Instant::now() < deadline {
         block(&mut realtime, &mut app);
         std::thread::sleep(Duration::from_millis(2));
     }
-    assert_eq!(app.transport, Transport::Paused);
+    assert_eq!(app.services.transport, Transport::Paused);
     assert!(tick_until(&mut app, &ports, |fake| fake.transport_light(0)
         == Some(false)));
 }
@@ -601,11 +607,11 @@ fn the_rotos_play_level_and_mute_reach_what_the_engine_plays() {
         },
     );
     let deadline = Instant::now() + Duration::from_secs(5);
-    while app.transport != Transport::Playing && Instant::now() < deadline {
+    while app.services.transport != Transport::Playing && Instant::now() < deadline {
         block(&mut realtime, &mut app);
         std::thread::sleep(Duration::from_millis(2));
     }
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
     // Two seconds: a whole loop of the phrase, and its note.
     const LOOP: usize = 2 * 96_000;
     let heard = common::loudest(&mut realtime, LOOP);
@@ -632,7 +638,7 @@ fn the_rotos_play_level_and_mute_reach_what_the_engine_plays() {
     let up = common::loudest(&mut realtime, LOOP);
     assert!(up > 0.05, "{up}");
     press_button(&ports, 0);
-    assert!(tick_until_app(&mut app, |app| app.levels[0].mute));
+    assert!(tick_until_app(&mut app, |app| app.services.levels[0].mute));
     assert!(heard_until(&mut app, &mut realtime, |engine| engine
         .jam(0)
         .mute));
@@ -648,24 +654,25 @@ fn a_second_vimtracker_leaves_the_roto_to_the_one_that_has_it_and_says_so() {
     let lock = folder.join(vt_tui::roto::LOCK_FILE);
     let (mut first, _realtime, first_ports) = mixing(2);
     first.set_roto(false);
-    first.roto.lock_path = Some(lock.clone());
+    first.services.roto.lock_path = Some(lock.clone());
     first.set_roto(true);
     assert!(tick_until(&mut first, &first_ports, |fake| {
         fake.meter_thresholds.is_some()
     }));
     let (mut second, _second_realtime, second_ports) = mixing(2);
     second.set_roto(false);
-    second.roto.lock_path = Some(lock);
+    second.services.roto.lock_path = Some(lock);
     let sent = second_ports.with(|fake| fake.received.len());
     second.set_roto(true);
-    assert_eq!(second.roto.connection, Connection::Taken);
+    assert_eq!(second.services.roto.connection, Connection::Taken);
     assert!(
-        second.status.contains("another vimtracker"),
+        second.services.status.contains("another vimtracker"),
         "{}",
-        second.status
+        second.services.status
     );
     assert!(
         second
+            .services
             .roto
             .connection
             .describe()
@@ -680,7 +687,7 @@ fn a_second_vimtracker_leaves_the_roto_to_the_one_that_has_it_and_says_so() {
     // The first lets it go, and the second takes it.
     first.set_roto(false);
     assert!(tick_until_app(&mut second, |app| {
-        matches!(app.roto.connection, Connection::Connected { .. })
+        matches!(app.services.roto.connection, Connection::Connected { .. })
     }));
     let _ = std::fs::remove_dir_all(folder);
 }
@@ -706,7 +713,7 @@ fn the_level_knobs_notch_is_zero_db_with_the_ends_at_silence_and_plus_six() {
     roto_says(&ports, LEVELS);
     assert!(tick_until(&mut app, &ports, |fake| fake.knob_position(0)
         == Some(LEVEL_NOTCH)));
-    app.apply(&Action::SetTrackLevel {
+    app.services.apply(&Action::SetTrackLevel {
         track: 1,
         level: 0x80,
     });

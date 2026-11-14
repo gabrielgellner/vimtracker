@@ -325,7 +325,7 @@ impl App {
         let entry = shown.with_setting(setting, cursor, value);
         if entry == shown.entry {
             let inherits = value.is_none() && shown.settings_slice(cursor).is_some();
-            self.status = if inherits && !setting.is_entrys() {
+            self.services.status = if inherits && !setting.is_entrys() {
                 format!("{} already plays as the sample's", setting.name())
             } else {
                 format!("{} is already that", setting.name())
@@ -333,7 +333,7 @@ impl App {
             return;
         }
         let number = shown.number;
-        self.apply(&Action::SetBankEntry {
+        self.services.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
@@ -371,7 +371,7 @@ impl App {
             }
             _ => String::new(),
         };
-        self.status = format!("{whose}{name} {text}{inherited}{found}: u to undo");
+        self.services.status = format!("{whose}{name} {text}{inherited}{found}: u to undo");
     }
 
     /// `=` `-` `+` `_` on the settings rows, `>` `<` for the gain: a setting up or down a small or
@@ -385,7 +385,8 @@ impl App {
         times: u64,
     ) {
         if !setting.exists_on(shown) {
-            self.status = format!("{} is a slice's: slice the sample first", setting.name());
+            self.services.status =
+                format!("{} is a slice's: slice the sample first", setting.name());
             return;
         }
         let (value, _) = shown.setting_value(setting, self.sample_page.cursor);
@@ -505,7 +506,7 @@ impl App {
     /// The status line says `SETTINGS` while it's there, and how to change it under that.
     pub(crate) fn pick_sample_setting(&mut self, setting: SampleSetting) {
         self.sample_page.setting = Some(setting);
-        self.status.clear();
+        self.services.status.clear();
     }
 
     /// A value chosen from `K` on the rows.
@@ -534,7 +535,7 @@ impl App {
         // At either end it says so, so `h` and `l` there don't seem to do nothing.
         if to == here {
             let end = if later { "last" } else { "first" };
-            self.status = format!(
+            self.services.status = format!(
                 "{} is the {end} setting. Esc goes back to the waveform, where h and l move",
                 settings[here].name()
             );

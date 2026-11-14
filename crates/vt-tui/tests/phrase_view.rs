@@ -96,7 +96,7 @@ fn other_tracks_light_the_step_they_are_playing() {
     app.set_playhead(2);
     // Its rows are empty, so faint, as an empty cell on the grid is.
     assert_eq!(color(&app, note, 2), vt_tui::theme::OVERLAY0, "stopped");
-    app.transport = Transport::Playing;
+    app.services.transport = Transport::Playing;
     assert_eq!(color(&app, marker, 2), vt_tui::theme::GREEN);
     assert_eq!(
         color(&app, note, 2),
@@ -104,7 +104,7 @@ fn other_tracks_light_the_step_they_are_playing() {
         "an empty row playing is lit, set back"
     );
     assert_eq!(color(&app, note, 3), vt_tui::theme::OVERLAY0);
-    app.transport = Transport::Paused;
+    app.services.transport = Transport::Paused;
     assert_eq!(color(&app, marker, 2), vt_tui::theme::GREEN);
 }
 
@@ -161,7 +161,7 @@ fn insert_turns_the_cursor_and_the_grids_frame_green_without_moving_anything() {
 fn replace_shows_its_mode_and_a_red_cursor_with_the_frame_dim() {
     let (mut app, _realtime) = app();
     press(&mut app, "r");
-    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(app.modes.mode, Mode::Replace);
     let buffer = screen(&app);
     assert_eq!(buffer[(9, 2)].bg, vt_tui::theme::RED);
     assert_eq!(
@@ -170,7 +170,7 @@ fn replace_shows_its_mode_and_a_red_cursor_with_the_frame_dim() {
         "not lit, as in Insert"
     );
     press(&mut app, "a");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(screen(&app)[(9, 2)].bg, vt_tui::theme::ROSEWATER);
 }
 
@@ -189,7 +189,7 @@ fn the_row_playing_lights_what_is_written_and_sets_back_what_is_empty() {
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     on_the_row_being_edited(&mut app);
-    app.transport = Transport::Playing;
+    app.services.transport = Transport::Playing;
     let (green, set_back) = (
         vt_tui::theme::GREEN,
         vt_tui::theme::dimmed(vt_tui::theme::GREEN),
@@ -271,7 +271,7 @@ fn the_playhead_marks_where_the_loop_is_playing() {
     command(&mut app, "len 4");
     press(&mut app, "2]L");
     on_the_row_being_edited(&mut app);
-    app.transport = Transport::Playing;
+    app.services.transport = Transport::Playing;
     app.set_playhead(1);
     app.top = 0;
     let buffer = screen(&app);
@@ -384,7 +384,7 @@ fn the_title_shows_the_chain_with_this_phrase_in_the_cursors_colour_cut_to_its_r
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     press(&mut app, "]p");
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.services.cursor.slot, 1);
     let buffer = screen_wide(&app);
     let title = drawn_lines(&buffer)[0].clone();
     assert!(title.contains("Chain 00  00 01 02 03"), "{title}");
@@ -406,7 +406,7 @@ fn the_title_shows_the_chain_with_this_phrase_in_the_cursors_colour_cut_to_its_r
     );
     // `]p` moves along it.
     press(&mut app, "]p");
-    assert_eq!(app.cursor.slot, 2);
+    assert_eq!(app.services.cursor.slot, 2);
     let buffer = screen_wide(&app);
     assert_eq!(buffer[(first + 3, 0)].fg, vt_tui::theme::OVERLAY2);
     assert_eq!(buffer[(first + 6, 0)].fg, vt_tui::theme::ROSEWATER);
@@ -504,7 +504,7 @@ fn other_tracks_show_their_own_length_and_playhead() {
 
     on_the_row_being_edited(&mut app);
     // Each track marks where it is in its own loop.
-    app.transport = Transport::Playing;
+    app.services.transport = Transport::Playing;
     app.set_playhead(5);
     let buffer = screen(&app);
     assert_eq!(beside(&buffer, 0, 1), note(">C#3", green));
@@ -512,7 +512,7 @@ fn other_tracks_show_their_own_length_and_playhead() {
     assert_eq!(beside(&buffer, 1, 5), note(">F-3", green));
     assert_eq!(beside(&buffer, 1, 1), note(" C#3", dim));
 
-    app.transport = Transport::Paused;
+    app.services.transport = Transport::Paused;
     assert_eq!(beside(&screen(&app), 1, 5), note(">F-3", green));
 }
 
@@ -548,12 +548,12 @@ fn a_column_shows_the_phrase_its_chain_is_on() {
     assert_eq!(beside(&screen(&app), 0, 0).0, " C-3");
 
     // Stopped, it follows the cursor, as that's where playing would start.
-    app.cursor.step = 2;
+    app.services.cursor.step = 2;
     assert_eq!(beside(&screen(&app), 0, 0).0, " E-3");
-    app.cursor.step = 0;
+    app.services.cursor.step = 0;
 
     on_the_row_being_edited(&mut app);
-    app.transport = Transport::Playing;
+    app.services.transport = Transport::Playing;
     app.set_playhead(2);
     assert_eq!(beside(&screen(&app), 0, 0).0, ">E-3");
 }
@@ -848,7 +848,7 @@ fn a_nudge_shows_dim_by_the_velocity_only_on_a_row_that_has_one() {
 
     // It's a stop of its own, after the velocity.
     press(&mut app, "ll");
-    assert_eq!(app.cursor.field, vt_tui::app::Field::Nudge);
+    assert_eq!(app.services.cursor.field, vt_tui::app::Field::Nudge);
     assert_eq!(column_name(&app), "Nudge");
     assert_eq!(
         value_shown(&app).as_deref(),
@@ -889,7 +889,7 @@ fn a_selection_lights_up_the_neighbour_columns_it_reaches() {
     let selected = vt_tui::theme::selected().bg;
 
     press(&mut app, "lVW");
-    assert!(app.mode.is_visual());
+    assert!(app.modes.mode.is_visual());
     let buffer = screen(&app);
     assert_eq!(buffer[(42, 2)].bg, selected.unwrap());
     assert_ne!(
@@ -994,7 +994,7 @@ fn a_tracks_heading_has_its_machine_and_mute_or_solo_glyphs() {
     // Over its column in the overview too, in place of the number's last cell.
     assert!(heading(&app, 1).contains(&format!(" 01{MUTE}")));
     tap(&mut app, " m");
-    app.levels[0].solo = true;
+    app.services.levels[0].solo = true;
     assert!(heading(&app, 0).contains(&format!("Track 01 {SOLO}  Chain")));
     assert_eq!(vt_tui::glyphs::machine(Machine::Sampler), SAMPLER);
     assert_eq!(
@@ -1018,7 +1018,7 @@ fn a_track_at_an_eighth_has_its_own_playhead() {
     let (handle, _realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     on_the_row_being_edited(&mut app);
-    app.transport = Transport::Playing;
+    app.services.transport = Transport::Playing;
     app.set_playhead(6);
     assert_eq!(app.chain_playhead(0, 0), Some(6));
     assert_eq!(app.chain_playhead(1, 0), Some(3));

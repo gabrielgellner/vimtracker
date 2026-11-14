@@ -98,12 +98,13 @@ fn normalize_and_trim_change_only_the_entrys_settings_and_u_takes_them_back() {
     command(&mut app, "normalize -0.3");
     assert_eq!(entry(&app).edit.play.normalize, Some(-0.3));
     assert!(
-        app.status
+        app.services
+            .status
             .contains("normalised to -0.3 dBFS, +5.7 dB from its peak of -6.0 dBFS"),
         "{}",
-        app.status
+        app.services.status
     );
-    let analysis = app.samples.analysis(before.source().unwrap().hash);
+    let analysis = app.services.samples.analysis(before.source().unwrap().hash);
     assert!(analysis.is_some(), "it waited for the analysis");
 
     command(&mut app, "trim");
@@ -115,7 +116,11 @@ fn normalize_and_trim_change_only_the_entrys_settings_and_u_takes_them_back() {
             ..Points::default()
         }
     );
-    assert!(app.status.contains("trimmed to 0.100 s"), "{}", app.status);
+    assert!(
+        app.services.status.contains("trimmed to 0.100 s"),
+        "{}",
+        app.services.status
+    );
     // Only the entry changed: its timeline, name and the rest of the song are as they were.
     let mut song = Song::clone(app.song());
     song.bank.set(1, Some(before.clone()));
@@ -126,7 +131,11 @@ fn normalize_and_trim_change_only_the_entrys_settings_and_u_takes_them_back() {
     assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
 
     command(&mut app, "trim");
-    assert!(app.status.contains("trimmed already"), "{}", app.status);
+    assert!(
+        app.services.status.contains("trimmed already"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "u");
     assert_eq!(entry(&app).edit.points, Points::default());
     assert_eq!(entry(&app).edit.play.normalize, Some(-0.3));
@@ -138,9 +147,9 @@ fn normalize_and_trim_change_only_the_entrys_settings_and_u_takes_them_back() {
     command(&mut app, "normalize off");
     assert_eq!(entry(&app).edit.play.normalize, None);
     assert!(
-        app.status.contains("no longer normalised"),
+        app.services.status.contains("no longer normalised"),
         "{}",
-        app.status
+        app.services.status
     );
 }
 
@@ -148,11 +157,15 @@ fn normalize_and_trim_change_only_the_entrys_settings_and_u_takes_them_back() {
 fn a_track_with_no_sample_has_nothing_to_normalize_or_trim() {
     let (mut app, _realtime) = new_app();
     command(&mut app, "trim");
-    assert_eq!(app.status, "Track 01 plays no sample");
+    assert_eq!(app.services.status, "Track 01 plays no sample");
     command(&mut app, "normalize -1");
-    assert_eq!(app.status, "Track 01 plays no sample");
+    assert_eq!(app.services.status, "Track 01 plays no sample");
     command(&mut app, "normalize 3");
-    assert!(app.status.contains("from -60 to 0"), "{}", app.status);
+    assert!(
+        app.services.status.contains("from -60 to 0"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -167,9 +180,12 @@ fn a_project_opened_again_finds_its_analyses_in_the_cache() {
     command(&mut app, &format!("sample {}", file.display()));
     command(&mut app, &format!("w {}", project.display()));
     app.finish_analysis();
-    assert_eq!((app.analyst.built, app.analyst.cached), (1, 0));
+    assert_eq!(
+        (app.services.analyst.built, app.services.analyst.cached),
+        (1, 0)
+    );
     let hash = entry(&app).source().unwrap().hash;
-    assert!(app.samples.analysis(hash).is_some());
+    assert!(app.services.samples.analysis(hash).is_some());
     assert!(
         !project.join("samples").read_dir().unwrap().any(|file| {
             let name = file.unwrap().file_name();
@@ -182,8 +198,11 @@ fn a_project_opened_again_finds_its_analyses_in_the_cache() {
     again.use_analysis_cache(Some(cache));
     command(&mut again, &format!("e {}", project.display()));
     again.finish_analysis();
-    assert_eq!((again.analyst.built, again.analyst.cached), (0, 1));
-    assert!(again.samples.analysis(hash).is_some());
+    assert_eq!(
+        (again.services.analyst.built, again.services.analyst.cached),
+        (0, 1)
+    );
+    assert!(again.services.samples.analysis(hash).is_some());
 }
 
 /// The app's song with a note on its first step, played through its samples with no envelope to
@@ -198,7 +217,7 @@ fn play(app: &App, start: u8, length: u8, frames: usize) -> Vec<f32> {
     track.mods[0].adsr.release_ms = 0;
     let phrase = Arc::make_mut(track.phrases.get_mut(&0).unwrap());
     *phrase.step_mut(0).unwrap() = "C-3 -- --- --- ---".parse().unwrap();
-    let version = Published::new(Arc::new(song), Arc::clone(&app.samples));
+    let version = Published::new(Arc::new(song), Arc::clone(&app.services.samples));
     let out = render_frames(Arc::new(version), 48_000, frames);
     out.iter().step_by(2).copied().collect()
 }

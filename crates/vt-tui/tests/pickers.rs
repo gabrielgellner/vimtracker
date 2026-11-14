@@ -28,19 +28,19 @@ fn the_track_picker_goes_to_a_track_by_number_or_name_like_a_buffer() {
     press(&mut app, "bd");
     assert_eq!(app.picker.as_ref().unwrap().shown().count(), 1);
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.cursor.track, 1);
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.services.cursor.track, 1);
+    assert_eq!(app.modes.view, View::Phrase);
     app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
-    assert_eq!(app.cursor.track, 2, "C-o comes back");
+    assert_eq!(app.services.cursor.track, 2, "C-o comes back");
 
     press(&mut app, " fb04");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.cursor.track, 3);
+    assert_eq!(app.services.cursor.track, 3);
     press(&mut app, " 1 fb");
     press(&mut app, "02");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.view, View::Song);
-    assert_eq!(app.cursor.track, 1);
+    assert_eq!(app.modes.view, View::Song);
+    assert_eq!(app.services.cursor.track, 1);
     assert_eq!(vt_tui::views::status::column_name(&app), "Track 02 chain");
 }
 
@@ -48,26 +48,26 @@ fn the_track_picker_goes_to_a_track_by_number_or_name_like_a_buffer() {
 fn the_view_picker_flips_back_and_escape_changes_nothing() {
     let (mut app, _realtime) = app();
     press(&mut app, " 5");
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
     press(&mut app, "  ");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     // Keys that would edit in other modes only search here.
     press(&mut app, "x");
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
     // Esc clears the search, then closes.
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert_eq!(app.modes.view, View::Track);
     assert!(app.picker.is_none());
     // The list starts on the view before this one.
     press(&mut app, " ff");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
     press(&mut app, "  ");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
 }
 
 #[test]
@@ -75,7 +75,7 @@ fn the_view_picker_searches_and_moves_with_ctrl_keys() {
     let (mut app, _realtime) = app();
     press(&mut app, "  fx");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
     assert_eq!(app.track_page.page, Page::Fx);
     press(&mut app, "  zz");
     special(&mut app, KeyCode::Backspace);
@@ -151,8 +151,11 @@ fn the_view_picker_lists_each_view_with_the_key_that_shows_it() {
     );
     // The view before this one is highlighted, so Enter flips back.
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
     press(&mut app, "  ");
     special(&mut app, KeyCode::Enter);
-    assert_eq!((app.view, app.track_page.page), (View::Track, Page::Mod));
+    assert_eq!(
+        (app.modes.view, app.track_page.page),
+        (View::Track, Page::Mod)
+    );
 }

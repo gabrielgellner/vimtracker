@@ -17,7 +17,7 @@ use common::*;
 fn on_cut() -> (App, vt_engine::link::Realtime) {
     let (mut app, realtime) = tracks_of_different_lengths();
     press(&mut app, " 5}j");
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
     assert_eq!(
         app.track_control(),
         Control::Base(vt_model::action::TrackControl::Cutoff)
@@ -48,10 +48,10 @@ fn m_and_a_digit_map_a_setting_to_a_macro_turned_to_where_it_is() {
     let (mut app, _realtime) = on_cut();
     press(&mut app, "i40");
     press(&mut app, "M");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(app.picker.as_ref().unwrap().items().len(), 8);
     press(&mut app, "5");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     let track = &app.song().tracks[0];
     let (at, map) = track.macro_holding(cut()).unwrap();
     assert_eq!(at, 4);
@@ -66,7 +66,11 @@ fn m_and_a_digit_map_a_setting_to_a_macro_turned_to_where_it_is() {
         "turned to where Cut was, so it doesn't jump"
     );
     assert_eq!(track.macros[4].shown_name().as_deref(), Some("Cut"));
-    assert!(app.status.contains("macro 5"), "{}", app.status);
+    assert!(
+        app.services.status.contains("macro 5"),
+        "{}",
+        app.services.status
+    );
     // One undo step takes it all back.
     press(&mut app, "u");
     assert!(app.song().tracks[0].macro_holding(cut()).is_none());
@@ -80,16 +84,16 @@ fn a_mapped_setting_refuses_a_turn_and_says_where_to_turn_it() {
     let before = app.song().clone();
     for keys in ["=", "-", "+", "x", "i"] {
         press(&mut app, keys);
-        assert_eq!(app.mode, Mode::Normal, "{keys}");
+        assert_eq!(app.modes.mode, Mode::Normal, "{keys}");
         assert_eq!(
             app.song().tracks[0].cutoff,
             before.tracks[0].cutoff,
             "{keys}"
         );
         assert!(
-            app.status.contains("is on macro 3"),
+            app.services.status.contains("is on macro 3"),
             "{keys}: {}",
-            app.status
+            app.services.status
         );
     }
 }
@@ -109,7 +113,11 @@ fn m_on_a_mapped_setting_takes_it_off_its_macro_or_moves_it_to_another() {
     assert!(app.song().tracks[0].macros[1].maps.is_empty());
     press(&mut app, "M7");
     assert!(app.song().tracks[0].macro_holding(cut()).is_none());
-    assert!(app.status.contains("off macro 7"), "{}", app.status);
+    assert!(
+        app.services.status.contains("off macro 7"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -119,7 +127,7 @@ fn gm_opens_the_mapping_and_moves_swaps_types_and_unmaps_its_ends() {
     // Res, beside it, on the same macro.
     press(&mut app, "jM1");
     press(&mut app, "kgm");
-    assert_eq!(app.mode, Mode::Mapping);
+    assert_eq!(app.modes.mode, Mode::Mapping);
     let map = |app: &App, target| *app.song().tracks[0].macro_holding(target).unwrap().1;
     // On Cut's Min: up a large step and one, then to Max and type it.
     press(&mut app, "+=");
@@ -133,23 +141,27 @@ fn gm_opens_the_mapping_and_moves_swaps_types_and_unmaps_its_ends() {
         (0xA000, 0x1100)
     );
     assert!(
-        app.status.contains("At 00 the macro sets Cut"),
+        app.services.status.contains("At 00 the macro sets Cut"),
         "{}",
-        app.status
+        app.services.status
     );
     // Down to Res, and off the macro, and back with u.
     let res = MacroTarget::Setting(SettingId::RES);
     press(&mut app, "jdd");
     assert!(app.song().tracks[0].macro_holding(res).is_none());
-    assert_eq!(app.mode, Mode::Mapping, "Cut is still on it");
+    assert_eq!(app.modes.mode, Mode::Mapping, "Cut is still on it");
     press(&mut app, "u");
     assert!(app.song().tracks[0].macro_holding(res).is_some());
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     // gm on a setting on no macro says so.
     press(&mut app, "jjgm");
-    assert_eq!(app.mode, Mode::Normal);
-    assert!(app.status.contains("isn't on a macro"), "{}", app.status);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert!(
+        app.services.status.contains("isn't on a macro"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -165,9 +177,9 @@ fn gm_bends_a_mappings_response_with_curve_and_s_as_the_shape_panel_does() {
     // Across to Curve: a large step and a small one, 25 and 5, as the shape panel's.
     press(&mut app, "ll");
     assert!(
-        app.status.contains("Curve 0 bends Cut from Min"),
+        app.services.status.contains("Curve 0 bends Cut from Min"),
         "{}",
-        app.status
+        app.services.status
     );
     press(&mut app, "+=");
     assert_eq!(map(&app).curve, 30);
@@ -184,15 +196,16 @@ fn gm_bends_a_mappings_response_with_curve_and_s_as_the_shape_panel_does() {
     assert_eq!(map(&app).s, 0, "l stays on S, the row's last");
     press(&mut app, "u");
     assert_eq!(map(&app).s, 100, "each change is an undo step");
-    assert_eq!(app.mode, Mode::Mapping);
+    assert_eq!(app.modes.mode, Mode::Mapping);
     // The ends are as they were, and the status line on one says the bend.
     assert_eq!((map(&app).min, map(&app).max), (0, 0xFF00));
     press(&mut app, "hhh");
     assert!(
-        app.status
+        app.services
+            .status
             .contains("at FF to 20.0 kHz, along Curve +30 S +100"),
         "{}",
-        app.status
+        app.services.status
     );
     // The view has the columns and the drawing's box; the page shows Cut where the bent
     // response puts it, its range still drawn from Min to Max.
@@ -303,9 +316,13 @@ fn the_macros_band_turns_a_macro_and_colon_macro_names_it() {
     assert_eq!(app.song().tracks[0].macros[0].name, None);
     // gm on the band opens its mapping, and M refuses a macro.
     press(&mut app, "M");
-    assert!(app.status.contains("can't hold a macro"), "{}", app.status);
+    assert!(
+        app.services.status.contains("can't hold a macro"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "gm");
-    assert_eq!(app.mode, Mode::Mapping);
+    assert_eq!(app.modes.mode, Mode::Mapping);
 }
 
 /// Eight empty rows with a tresillo of notes kept live on them, then the Gen page, on its `Hits`.
@@ -372,7 +389,11 @@ fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
     );
     // Its own turn is refused, and the band turns it.
     press(&mut app, "=");
-    assert!(app.status.contains("is on macro 2"), "{}", app.status);
+    assert!(
+        app.services.status.contains("is on macro 2"),
+        "{}",
+        app.services.status
+    );
     press(&mut app, "gg0l");
     assert_eq!(app.track_control(), Control::Macro(1));
     press(&mut app, "iFF");
@@ -387,7 +408,11 @@ fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
     );
     // The engine holds `Hits` as it plays, so a lock or an LFO reaches it: it isn't by hand.
     press(&mut app, "gm");
-    assert!(!app.status.contains("by hand"), "{}", app.status);
+    assert!(
+        !app.services.status.contains("by hand"),
+        "{}",
+        app.services.status
+    );
     let backend = ratatui::backend::TestBackend::new(150, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     let view = app.mapping.clone().unwrap();
@@ -415,7 +440,11 @@ fn the_roto_shows_the_macros_first_each_knob_named_by_its_macro_and_turns_them()
     let (mut app, _realtime) = on_cut();
     press(&mut app, "M3");
     command(&mut app, "macro A long macro name");
-    assert!(app.status.contains("12"), "{}", app.status);
+    assert!(
+        app.services.status.contains("12"),
+        "{}",
+        app.services.status
+    );
     command(&mut app, "macro Twelve chars");
     let song = app.song().clone();
     let devices = live_devices(&song.tracks[0], None, &song, false);
@@ -473,12 +502,13 @@ fn m_on_an_lfos_rate_maps_it_and_its_ends_read_as_rates() {
         "turned to where 1/4 is, so it doesn't jump"
     );
     press(&mut app, "gm");
-    assert_eq!(app.mode, Mode::Mapping);
+    assert_eq!(app.modes.mode, Mode::Mapping);
     assert!(
-        app.status
+        app.services
+            .status
             .contains("At 00 the macro sets M4 Rate to 64 bars, at FF to 1/64")
-            && app.status.contains("so Rate is 1/4"),
+            && app.services.status.contains("so Rate is 1/4"),
         "{}",
-        app.status
+        app.services.status
     );
 }

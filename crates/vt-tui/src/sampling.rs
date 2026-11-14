@@ -149,7 +149,7 @@ impl App {
         if self.sampling.live.is_some() {
             self.stop_sampling();
         } else {
-            let from_page = self.view == View::Sample;
+            let from_page = self.modes.view == View::Sample;
             self.start_sampling(from_page);
         }
     }
@@ -161,7 +161,7 @@ impl App {
         quantise: Option<RecordQuantise>,
     ) {
         if let Some(live) = &self.sampling.live {
-            self.status = format!(
+            self.services.status = format!(
                 "Already recording into {:02X}: Space R or :record stop stops it",
                 live.number
             );
@@ -171,11 +171,11 @@ impl App {
             None => None,
             Some(RecordWhat::Master) => Some(Source::Master),
             Some(RecordWhat::Input) => Some(Source::Input),
-            Some(RecordWhat::ThisTrack) => Some(Source::Track(self.cursor.track)),
+            Some(RecordWhat::ThisTrack) => Some(Source::Track(self.services.cursor.track)),
             Some(RecordWhat::Track(number)) => {
                 let sounds = self.song().sound_tracks();
                 if number == 0 || number > sounds {
-                    self.status = format!(":record takes a track from 1 to {sounds}");
+                    self.services.status = format!(":record takes a track from 1 to {sounds}");
                     return;
                 }
                 Some(Source::Track(number - 1))
@@ -187,7 +187,7 @@ impl App {
         if let Some(quantise) = quantise {
             self.sampling.quantise = quantise;
         }
-        let from_page = self.view == View::Sample;
+        let from_page = self.modes.view == View::Sample;
         self.start_sampling(from_page);
     }
 
@@ -196,27 +196,28 @@ impl App {
         let source = self.sampling.source;
         let quantise = self.sampling.quantise;
         if self.read_only {
-            self.status =
+            self.services.status =
                 "This song is read-only, so nothing is recorded into its folder".to_owned();
             return;
         }
         if source == Source::Input && self.audio.input.is_none() {
-            self.status = "No input is open: Space 9 L, then Input, chooses one".to_owned();
+            self.services.status =
+                "No input is open: Space 9 L, then Input, chooses one".to_owned();
             return;
         }
         if let Source::Track(index) = source
             && index >= self.song().tracks.len()
         {
-            self.status = format!("There's no track {:02} to record", index + 1);
+            self.services.status = format!("There's no track {:02} to record", index + 1);
             return;
         }
         let Some(number) = self.song().bank.free() else {
-            self.status =
+            self.services.status =
                 "The bank is full, at 255 samples: :bank clean removes those nothing plays"
                     .to_owned();
             return;
         };
-        let (folder, files) = match &self.folder {
+        let (folder, files) = match &self.services.folder {
             Some(folder) => (Some(folder.clone()), folder.join("samples")),
             None => (None, std::env::temp_dir().join("vimtracker-recordings")),
         };
@@ -228,16 +229,16 @@ impl App {
             Some(_) => format!("samples/{name}.wav"),
             None => file.display().to_string(),
         };
-        let take = Growing::new(u64::from(self.rate) * MOST_SECONDS);
-        take.make_room(u64::from(self.rate) * AHEAD_SECONDS);
+        let take = Growing::new(u64::from(self.services.rate) * MOST_SECONDS);
+        take.make_room(u64::from(self.services.rate) * AHEAD_SECONDS);
         let take = Arc::new(take);
-        let mut pool = SamplePool::clone(&self.samples);
+        let mut pool = SamplePool::clone(&self.services.samples);
         let id = pool.insert_growing(&path, Arc::clone(&take));
-        self.samples = Arc::new(pool);
+        self.services.samples = Arc::new(pool);
         let mut entry = BankEntry::of_file(path.clone(), ContentHash::UNKNOWN);
         entry.name = name;
-        entry.edit.points.start = margin_frames(self.rate);
-        self.apply(&Action::SetBankEntry {
+        entry.edit.points.start = margin_frames(self.services.rate);
+        self.services.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
@@ -245,9 +246,10 @@ impl App {
             Source::Input => self.input_latency(),
             Source::Master | Source::Track(_) => 0,
         };
-        let sent = self
-            .handle
-            .record(Arc::clone(&take), source.engine(), quantise, latency);
+        let sent =
+            self.services
+                .handle
+                .record(Arc::clone(&take), source.engine(), quantise, latency);
         let live = Live {
             take,
             number,
@@ -264,16 +266,16 @@ impl App {
         };
         if !sent {
             self.drop_recording(&live);
-            self.status =
+            self.services.status =
                 "Audio has stopped, so nothing records. Space 9 L chooses a device".to_owned();
             return;
         }
-        let waits = match (quantise, self.transport) {
+        let waits = match (quantise, self.services.transport) {
             (RecordQuantise::Now, _) => "now",
             (_, vt_engine::engine::Transport::Playing) => on(quantise),
             _ => "as the song starts",
         };
-        self.status = format!(
+        self.services.status = format!(
             "Recording {} into {number:02X} {waits}: Space R stops it",
             source_name(self.song(), source)
         );
@@ -284,14 +286,14 @@ impl App {
     /// device, and back in through the input's.
     fn input_latency(&self) -> u64 {
         let micros = self.audio.latency_us + self.audio.input_latency_us;
-        micros * u64::from(self.rate) / 1_000_000
+        micros * u64::from(self.services.rate) / 1_000_000
     }
 
     /// Stop the recording going on, on the beat or bar if it started on one while playing. One
     /// still waiting to start is taken back.
     pub(crate) fn stop_sampling(&mut self) {
         let Some(live) = &mut self.sampling.live else {
-            self.status = "Nothing is recording".to_owned();
+            self.services.status = "Nothing is recording".to_owned();
             return;
         };
         if !live.started {
@@ -300,33 +302,35 @@ impl App {
         }
         live.stopping = true;
         let (quantise, latency, number) = (live.quantise, live.latency, live.number);
-        self.handle
+        self.services
+            .handle
             .send(Command::StopRecording { quantise, latency });
-        let playing = self.transport == vt_engine::engine::Transport::Playing;
+        let playing = self.services.transport == vt_engine::engine::Transport::Playing;
         let when = if playing { on(quantise) } else { "now" };
-        self.status = format!("Stopping {number:02X} {when}");
+        self.services.status = format!("Stopping {number:02X} {when}");
     }
 
     /// `:record cancel`: take the recording back. It's never written, and its entry goes.
     pub(crate) fn cancel_sampling(&mut self) {
         let Some(live) = self.sampling.live.take() else {
-            self.status = "Nothing is recording".to_owned();
+            self.services.status = "Nothing is recording".to_owned();
             return;
         };
-        self.handle.send(Command::CancelRecording);
+        self.services.handle.send(Command::CancelRecording);
         self.drop_recording(&live);
-        self.status = format!("Recording into {:02X} taken back", live.number);
+        self.services.status = format!("Recording into {:02X} taken back", live.number);
     }
 
     /// Take a recording's entry out of every version, and its sample out of the pool's paths.
     fn drop_recording(&mut self, live: &Live) {
         let (number, path) = (live.number, live.path.clone());
-        self.history
+        self.services
+            .history
             .amend(|song| plays(song, number, &path).then(|| without(song, number)));
-        let mut pool = SamplePool::clone(&self.samples);
+        let mut pool = SamplePool::clone(&self.services.samples);
         pool.forget(&live.path);
-        self.samples = Arc::new(pool);
-        self.dirty = true;
+        self.services.samples = Arc::new(pool);
+        self.services.dirty = true;
         self.after_history();
     }
 
@@ -334,7 +338,7 @@ impl App {
     pub(crate) fn lose_sampling(&mut self) {
         if let Some(live) = self.sampling.live.take() {
             self.drop_recording(&live);
-            self.status = format!(
+            self.services.status = format!(
                 "Recording into {:02X} dropped, as the audio changed",
                 live.number
             );
@@ -344,9 +348,10 @@ impl App {
     /// Each frame: keep chunks made ahead of the recording, and take in what the recorder says.
     pub(crate) fn follow_sampling(&mut self) {
         if let Some(live) = &self.sampling.live {
-            live.take.make_room(u64::from(self.rate) * AHEAD_SECONDS);
+            live.take
+                .make_room(u64::from(self.services.rate) * AHEAD_SECONDS);
         }
-        while let Some(event) = self.handle.recorder_event() {
+        while let Some(event) = self.services.handle.recorder_event() {
             match event {
                 RecorderEvent::Started => {
                     if let Some(live) = &mut self.sampling.live {
@@ -373,10 +378,10 @@ impl App {
             return;
         };
         match self.keep_recording(&live, &recorded) {
-            Ok(said) => self.status = said,
+            Ok(said) => self.services.status = said,
             Err(error) => {
                 self.drop_recording(&live);
-                self.status = format!("The recording couldn't be written: {error}");
+                self.services.status = format!("The recording couldn't be written: {error}");
             }
         }
     }
@@ -390,7 +395,7 @@ impl App {
         if let Some(parent) = live.file.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        write_recording(&live.file, self.rate, &frames, mono)?;
+        write_recording(&live.file, self.services.rate, &frames, mono)?;
         let hash = ContentHash::of_file(&live.file)?;
         self.sampling
             .made
@@ -402,13 +407,13 @@ impl App {
             }
         }
         let total = frames.len() as u64;
-        let mut pool = SamplePool::clone(&self.samples);
+        let mut pool = SamplePool::clone(&self.services.samples);
         pool.finish_growing(live.id, SampleData { frames });
-        self.samples = Arc::new(pool);
+        self.services.samples = Arc::new(pool);
         let (number, path) = (live.number, live.path.clone());
         let end = recorded.end;
         let steps = recorded.steps;
-        self.history.amend(|song| {
+        self.services.history.amend(|song| {
             if !plays(song, number, &path) {
                 return None;
             }
@@ -428,12 +433,12 @@ impl App {
             song.bank.set(number, Some(entry));
             Some(song)
         });
-        self.dirty = true;
+        self.services.dirty = true;
         self.after_history();
-        if live.from_page || self.view == View::Sample {
-            self.sample_page.pinned = Some((self.cursor.track, number));
+        if live.from_page || self.modes.view == View::Sample {
+            self.sample_page.pinned = Some((self.services.cursor.track, number));
         }
-        let seconds = (end - recorded.before) as f64 / f64::from(self.rate);
+        let seconds = (end - recorded.before) as f64 / f64::from(self.services.rate);
         let channels = if mono { "mono" } else { "stereo" };
         let full = match recorded.ending {
             Ending::Full => ", where it ran out of room",
@@ -474,8 +479,11 @@ impl App {
     pub fn sampling_shown(&self) -> Option<(u8, Option<f64>)> {
         let live = self.sampling.live.as_ref()?;
         let seconds = live.started.then(|| {
-            let written = live.take.written().saturating_sub(margin_frames(self.rate));
-            written as f64 / f64::from(self.rate)
+            let written = live
+                .take
+                .written()
+                .saturating_sub(margin_frames(self.services.rate));
+            written as f64 / f64::from(self.services.rate)
         });
         Some((live.number, seconds))
     }

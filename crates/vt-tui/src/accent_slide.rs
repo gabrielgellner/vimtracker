@@ -117,15 +117,15 @@ impl App {
             return;
         };
         let held = self.held_flags.remove(at);
-        let writing = self.mode == Mode::Insert
-            && self.view == View::Phrase
-            && self.cursor.field == Field::Note;
+        let writing = self.modes.mode == Mode::Insert
+            && self.modes.view == View::Phrase
+            && self.services.cursor.field == Field::Note;
         if held.used || !writing {
             return;
         }
         if self.recording.is_some() {
             // Recording writes a note only once its row starts, so there's no row to switch yet.
-            self.status = format!(
+            self.services.status = format!(
                 "While recording, hold {} as you play a note",
                 self.flag_key_name(held.flag)
             );
@@ -192,7 +192,7 @@ impl App {
             (false, true) => Some("down"),
             _ => None,
         };
-        self.status = match (flags, octave) {
+        self.services.status = match (flags, octave) {
             (Some(flags), Some(way)) => format!("{flags}, octave {way}"),
             (Some(flags), None) => flags.to_owned(),
             (None, Some(way)) => format!("Octave {way}"),
@@ -204,17 +204,21 @@ impl App {
     /// that left it, and otherwise the cursor's.
     fn flag_target(&self) -> Option<(usize, u32, usize)> {
         match self.last_written {
-            Some(written) if written.cursor == self.cursor => {
+            Some(written) if written.cursor == self.services.cursor => {
                 Some((written.track, written.phrase, written.step))
             }
-            _ => Some((self.cursor.track, self.phrase_id()?, self.cursor.step)),
+            _ => Some((
+                self.services.cursor.track,
+                self.phrase_id()?,
+                self.services.cursor.step,
+            )),
         }
     }
 
     /// Switch a flag on its row's note, or off, as one change to undo.
     fn toggle_flag(&mut self, flag: Flag) {
         let Some((track, phrase, at)) = self.flag_target() else {
-            self.status = "This track has no phrase here".to_owned();
+            self.services.status = "This track has no phrase here".to_owned();
             return;
         };
         let Some(step) = self.song().tracks[track]
@@ -231,7 +235,7 @@ impl App {
                 Flag::Accent => "accent",
                 Flag::Slide => "slide",
             };
-            self.status = format!("No note here to {verb}");
+            self.services.status = format!("No note here to {verb}");
             return;
         };
         if flag.octaves() != 0 {
@@ -257,13 +261,13 @@ impl App {
             }
             Flag::OctaveUp | Flag::OctaveDown => return,
         };
-        self.apply(&Action::SetStep {
+        self.services.apply(&Action::SetStep {
             track,
             phrase,
             step: at,
             value,
         });
-        self.status = format!("{} {}", flag.name(), if on { "on" } else { "off" });
+        self.services.status = format!("{} {}", flag.name(), if on { "on" } else { "off" });
     }
 
     /// Move a row's note an octave up or down, as one change to undo, unless this key moved it
@@ -276,11 +280,11 @@ impl App {
         let to = if octaves == by { 0 } else { octaves + by };
         let Some(moved) = moved_by(note, to - octaves) else {
             let way = if by > 0 { "above" } else { "below" };
-            self.status = format!("No octave {way} this note");
+            self.services.status = format!("No octave {way} this note");
             return;
         };
         let (track, phrase, at) = row;
-        self.apply(&Action::SetStep {
+        self.services.apply(&Action::SetStep {
             track,
             phrase,
             step: at,
@@ -294,7 +298,7 @@ impl App {
             octaves: to,
             note: moved,
         });
-        self.status = match to.signum() {
+        self.services.status = match to.signum() {
             1 => "Octave up",
             -1 => "Octave down",
             _ => "Octave as played",
