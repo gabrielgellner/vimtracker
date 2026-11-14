@@ -7,20 +7,27 @@
 pub const GRID_COLUMNS: usize = 4;
 pub const GRID_ROWS: usize = 3;
 
-/// A device's settings in columns, top to bottom, by their index among its settings. A place with
-/// nothing is a hole the cursor steps over.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Grid([[Option<usize>; GRID_ROWS]; GRID_COLUMNS]);
+/// A device's settings in columns, top to bottom, by their index among its settings, or as
+/// themselves where they're a type of their own, as a generator's
+/// [`GenParam`](crate::shape::GenParam)s are. A place with nothing is a hole the cursor steps over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Grid<T = usize>([[Option<T>; GRID_ROWS]; GRID_COLUMNS]);
 
-impl Grid {
+impl<T: Copy> Default for Grid<T> {
+    fn default() -> Self {
+        Self([[None; GRID_ROWS]; GRID_COLUMNS])
+    }
+}
+
+impl<T: Copy> Grid<T> {
     /// A grid from all four of its columns, for a table that states one as a constant.
-    pub const fn new(columns: [[Option<usize>; GRID_ROWS]; GRID_COLUMNS]) -> Self {
+    pub const fn new(columns: [[Option<T>; GRID_ROWS]; GRID_COLUMNS]) -> Self {
         Self(columns)
     }
 
     /// A grid from its columns, each listing its settings from the top. Past four columns, or past
     /// three in a column, they're left out, which [`Grid::places_each_once`] catches.
-    pub fn from_columns<C: AsRef<[Option<usize>]>>(columns: &[C]) -> Self {
+    pub fn from_columns<C: AsRef<[Option<T>]>>(columns: &[C]) -> Self {
         let mut grid = Self::default();
         for (column, settings) in columns.iter().take(GRID_COLUMNS).enumerate() {
             for (row, setting) in settings.as_ref().iter().take(GRID_ROWS).enumerate() {
@@ -31,20 +38,27 @@ impl Grid {
     }
 
     /// What's at a place, if anything.
-    pub fn at(self, row: usize, column: usize) -> Option<usize> {
+    pub fn at(self, row: usize, column: usize) -> Option<T> {
         self.0.get(column)?.get(row).copied().flatten()
     }
 
     /// A row's places, left to right.
-    pub fn row(self, row: usize) -> [Option<usize>; GRID_COLUMNS] {
+    pub fn row(self, row: usize) -> [Option<T>; GRID_COLUMNS] {
         std::array::from_fn(|column| self.at(row, column))
     }
 
-    /// Every setting it places, column by column.
-    pub fn settings(self) -> impl Iterator<Item = usize> {
-        self.0.into_iter().flatten().flatten()
+    /// A column's places, top to bottom.
+    pub fn column(self, column: usize) -> [Option<T>; GRID_ROWS] {
+        std::array::from_fn(|row| self.at(row, column))
     }
 
+    /// Every setting it places, column by column.
+    pub fn settings(self) -> impl Iterator<Item = T> {
+        self.0.into_iter().flatten().flatten()
+    }
+}
+
+impl Grid {
     /// Whether it places each of a device's settings exactly once, apart from those shown
     /// elsewhere, such as an effect's type in its title, and nothing that isn't one of them.
     pub fn places_each_once(
