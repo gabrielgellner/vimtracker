@@ -961,11 +961,22 @@ mod tests {
 
     #[test]
     fn it_stays_finite_and_bounded_at_every_extreme() {
+        // `cargo test --release` plays all 36 of the times, sizes, pitches and densities at each
+        // rate and corner. A test build, with its overflow checks, takes the 9 of them that still
+        // hold every pair of values of any two of the four (an orthogonal array), in a quarter
+        // of the time.
+        let all = !cfg!(debug_assertions);
+        let played = |t: usize, s: usize, p: usize, d: usize| {
+            all || (t == [0, 1, 0][(s + d) % 3] && p == [0, 1, 1][(s + 2 * d) % 3])
+        };
         for rate in [44_100, 192_000] {
-            for time in [0x00, 0xFF] {
-                for size in [0x00, 0x55, 0xFF] {
-                    for pitch in [0, MOST_SHIFT * 2] {
-                        for density in [0x00, 0x80, 0xFF] {
+            for (t, time) in [0x00, 0xFF].into_iter().enumerate() {
+                for (s, size) in [0x00, 0x55, 0xFF].into_iter().enumerate() {
+                    for (p, pitch) in [0, MOST_SHIFT * 2].into_iter().enumerate() {
+                        for (d, density) in [0x00, 0x80, 0xFF].into_iter().enumerate() {
+                            if !played(t, s, p, d) {
+                                continue;
+                            }
                             for (shape, spread, freeze, random) in [
                                 (0x00, 0x00, 0, 0x00),
                                 (0xFF, 0xFF, 1, 0xFF),

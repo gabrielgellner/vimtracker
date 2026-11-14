@@ -937,9 +937,16 @@ mod tests {
 
     #[test]
     fn it_stays_finite_and_bounded_at_every_extreme() {
+        // `cargo test --release` plays all 8 corners of `Decay`, `Size` and `Spin` at each rate.
+        // A test build, with its overflow checks, takes the 4 of them that still hold every pair
+        // of ends of any two of the three, in half the time.
+        let all = !cfg!(debug_assertions);
         for decay in [0x00, 0xFF] {
             for size in [0x00, 0xFF] {
                 for spin in [0x00, 0xFF] {
+                    if !all && spin != decay ^ size {
+                        continue;
+                    }
                     for (rate, chaos, damp, reflect) in
                         [(44_100, 0x00, 0x00, 0xFF), (192_000, 0xFF, 0xFF, 0x00)]
                     {
