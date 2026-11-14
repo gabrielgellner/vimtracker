@@ -2337,15 +2337,13 @@ const fn effect_start(effect: Effect) -> usize {
                 + FREQ_SHIFT_PARAMS.len()
                 + SPRING_PARAMS.len()
         }
-        // Its settings come after every other's (`ECHO_SLOTS_START`), so none of theirs moved.
-        Effect::Echo => 0,
+        Effect::Echo => SLOT_SIZE - ECHO_PARAMS.len(),
     }
 }
 
 const VOICES_START: usize = TRACK.len();
 const SLOTS_START: usize = VOICES_START + voices_size();
-/// The places a slot's settings take: one for each setting of each effect it could hold, but
-/// for the Space Echo's, which are after everything else.
+/// The places a slot's settings take: one for each setting of each effect it could hold.
 const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + DELAY_PARAMS.len()
     + REVERB_PARAMS.len()
@@ -2371,7 +2369,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + EXCITER_PARAMS.len()
     + STUTTER_PARAMS.len()
     + CLOUDS_PARAMS.len()
-    + BEADS_PARAMS.len();
+    + BEADS_PARAMS.len()
+    + ECHO_PARAMS.len();
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
@@ -2379,10 +2378,6 @@ const MACROS_START: usize = SAMPLER_START + SAMPLER.len();
 const MOD_OWN_START: usize = MACROS_START + MACROS;
 const ACCUMULATION_START: usize = MOD_OWN_START + MOD_SLOTS * MOD_OWN.len();
 const ARPEGGIO_START: usize = ACCUMULATION_START + ACCUMULATION.len();
-/// The Space Echo's settings in each slot, after every other setting, as it came after them: a
-/// setting's place is what songs and the engine keep it by, so a new effect's settings go at the
-/// end rather than move every place after the slots' (`tests/golden/settings.txt`).
-const ECHO_SLOTS_START: usize = ARPEGGIO_START + ARPEGGIO.len();
 
 /// What a setting belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2467,7 +2462,7 @@ impl SettingId {
     pub const PLAY: Self = Self(SAMPLER_START as u16 + 4);
 
     /// How many settings there are.
-    pub const COUNT: usize = ECHO_SLOTS_START + INSERTS * ECHO_PARAMS.len();
+    pub const COUNT: usize = ARPEGGIO_START + ARPEGGIO.len();
 
     /// Every setting, in the table's order.
     pub fn all() -> impl Iterator<Item = Self> {
@@ -2513,11 +2508,6 @@ impl SettingId {
     /// One of an effect's settings, in a slot.
     pub const fn slot(slot: usize, effect: Effect, setting: usize) -> Option<Self> {
         if slot < INSERTS && setting < effect.params().len() {
-            if let Effect::Echo = effect {
-                return Some(Self(
-                    (ECHO_SLOTS_START + slot * ECHO_PARAMS.len() + setting) as u16,
-                ));
-            }
             Some(Self(
                 (SLOTS_START + slot * SLOT_SIZE + effect_start(effect) + setting) as u16,
             ))
@@ -2604,17 +2594,6 @@ impl SettingId {
     /// What it belongs to, and its place among that owner's settings.
     pub fn owner(self) -> (Owner, usize) {
         let at = self.index();
-        if at >= ECHO_SLOTS_START {
-            let within = at - ECHO_SLOTS_START;
-            let slot = within / ECHO_PARAMS.len();
-            return (
-                Owner::Slot {
-                    slot,
-                    effect: Effect::Echo,
-                },
-                within % ECHO_PARAMS.len(),
-            );
-        }
         if at >= ARPEGGIO_START {
             return (Owner::Arpeggio, at - ARPEGGIO_START);
         }
@@ -2652,10 +2631,7 @@ impl SettingId {
         if at < MODS_START {
             let within = at - SLOTS_START;
             let (slot, within) = (within / SLOT_SIZE, within % SLOT_SIZE);
-            for effect in Effect::ALL
-                .into_iter()
-                .filter(|effect| *effect != Effect::Echo)
-            {
+            for effect in Effect::ALL {
                 let start = effect_start(effect);
                 if within < start + effect.params().len() {
                     return (Owner::Slot { slot, effect }, within - start);
