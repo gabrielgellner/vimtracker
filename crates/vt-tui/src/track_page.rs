@@ -10,7 +10,6 @@ mod device;
 mod editing;
 mod fx;
 mod generators;
-mod mixer;
 mod modulation;
 mod pickers;
 mod sound;
@@ -23,7 +22,6 @@ pub use device::{
 };
 pub use fx::TakenInsert;
 pub(crate) use generators::macros_device;
-pub use mixer::{MIXER, MIXER_ROWS, MIXER_START};
 pub(crate) use modulation::modulator_bypassed;
 
 use std::sync::Arc;
@@ -578,7 +576,7 @@ impl App {
     /// What the cursor is on, on the track page or the mixer.
     pub fn track_control(&self) -> Control {
         if self.view == View::Mixer {
-            return MIXER[self.mixer_row_here()];
+            return self.mixer_page.control_here(&self.ctx());
         }
         self.track_page.control(self.track_here())
     }

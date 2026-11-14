@@ -607,7 +607,7 @@ pub fn draw_screen(
             app.track_page.lfo_cycles_at = drawn.cycles;
             app.track_page.gen_panels_at = drawn.previews;
         }
-        View::Mixer => views::mixer::draw(frame, view, app),
+        View::Mixer => app.mixer_page.draw(frame, view, &app.ctx()),
         View::Audio => views::audio::draw(frame, view, app),
         View::Project => views::project::draw(frame, view, app),
         View::Sample => views::sample::draw(frame, view, app),
