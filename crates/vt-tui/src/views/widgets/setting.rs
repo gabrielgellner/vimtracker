@@ -78,3 +78,118 @@ pub fn name_line(ctx: &Ctx, name: &str, labels: &str, room: u16) -> Line<'static
         Span::styled(after, theme::dim()),
     ])
 }
+
+#[cfg(test)]
+mod tests {
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+    use ratatui::widgets::Widget;
+    use vt_model::action::TrackControl;
+
+    use super::*;
+    use crate::views::widgets::pin::{app, assert_drawn, drawn, press};
+
+    const CUT: Control = Control::Base(TrackControl::Cutoff);
+    const PAN: Control = Control::Base(TrackControl::Pan);
+
+    /// Settings a row each, their names in ten cells and their values after them, as a grid's
+    /// cells have them.
+    fn cells(ctx: &Ctx, settings: &[(Control, &str, &str, Style)]) -> Buffer {
+        let area = Rect::new(0, 0, 12, settings.len() as u16);
+        let mut buffer = Buffer::empty(area);
+        for (y, (control, name, value, style)) in (0..).zip(settings) {
+            let labels = jump_label(ctx, *control);
+            name_line(ctx, name, &labels, 10).render(Rect::new(0, y, 10, 1), &mut buffer);
+            let value = Line::from(value_spans(ctx, *control, (*value).to_owned(), *style));
+            value.render(Rect::new(10, y, 2, 1), &mut buffer);
+        }
+        buffer
+    }
+
+    #[test]
+    fn a_value_is_in_the_cursors_colour_under_it_dim_at_its_default_and_plain_otherwise() {
+        let (mut app, _realtime) = app();
+        let ctx = app.ctx();
+        assert_eq!(style(&ctx, true, true), theme::cursor(Mode::Normal));
+        assert_eq!(style(&ctx, false, true), theme::dim());
+        assert_eq!(style(&ctx, false, false), Style::new());
+        let line = Line::from(vec![
+            Span::styled("A0", style(&ctx, true, false)),
+            Span::raw(" "),
+            Span::styled("80", style(&ctx, false, true)),
+            Span::raw(" "),
+            Span::styled("C0", style(&ctx, false, false)),
+        ]);
+        assert_drawn(
+            &drawn(line, 8, 1),
+            &[
+                "A0 80 C0",
+                "aa.bb...",
+                "a fg BASE bg ROSEWATER",
+                "b fg OVERLAY2",
+            ],
+        );
+        press(&mut app, " 5}ji4");
+        assert_eq!(style(&app.ctx(), true, false), theme::cursor(Mode::Insert));
+    }
+
+    #[test]
+    fn insert_shows_whats_typed_under_the_cursor_and_the_value_elsewhere() {
+        let (mut app, _realtime) = app();
+        assert_eq!(text(&app.ctx(), true, || "A0".to_owned()), "A0");
+        press(&mut app, " 5}ji4");
+        assert_eq!(app.modes.mode, Mode::Insert);
+        let ctx = app.ctx();
+        assert_eq!(text(&ctx, true, || "A0".to_owned()), "4_");
+        assert_eq!(text(&ctx, false, || "A0".to_owned()), "A0");
+    }
+
+    #[test]
+    fn a_jump_labels_the_letter_after_whats_typed_and_the_values_first_letter() {
+        let (mut app, _realtime) = app();
+        let ctx = app.ctx();
+        assert_eq!(jump_label(&ctx, CUT), "");
+        assert_drawn(
+            &cells(&ctx, &[(CUT, "Cut", "40", Style::new())]),
+            &["Cut       40", "aaaaaaaaaa..", "a fg OVERLAY2"],
+        );
+        press(&mut app, " 5/cu");
+        let ctx = app.ctx();
+        assert_eq!(jump_label(&ctx, CUT), "f");
+        assert_eq!(jump_label(&ctx, PAN), "", "Pan doesn't match");
+        let drawn = cells(
+            &ctx,
+            &[
+                (CUT, "Cut", "40", Style::new()),
+                (PAN, "Pan", "80", theme::dim()),
+            ],
+        );
+        assert_drawn(
+            &drawn,
+            &[
+                "Cuf       f0",
+                "aab.......b.",
+                "Pan       80",
+                "aaaaaaaaaaaa",
+                "a fg OVERLAY2",
+                "b fg BASE bg PEACH +BOLD",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_jumps_labels_stay_inside_the_room_the_column_has() {
+        let (mut app, _realtime) = app();
+        press(&mut app, " 5/cu");
+        let ctx = app.ctx();
+        assert_drawn(
+            &drawn(name_line(&ctx, "Cut", "fj", 3), 5, 1),
+            &[
+                "Cfj  ",
+                "abb..",
+                "a fg OVERLAY2",
+                "b fg BASE bg PEACH +BOLD",
+            ],
+        );
+    }
+}

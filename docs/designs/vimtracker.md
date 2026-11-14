@@ -844,6 +844,13 @@ built from, so a new page uses them rather than working out its layout again:
     *   `panel`: `GraphicPanel`, faint square boxes side by side, with an image's placeholders or a
         meter's cells inside and a caption in the bottom border, such as `GR`.
 
+The widgets' tests pin what each draws, styles and all, through `widgets/pin.rs`, which writes a
+buffer as lines: each row's text with a letter under each cell for its style, then what each letter
+means. `widgets/cells.rs` pins, the same way, the cells and titles each track page builds for its
+grids, in the states the screenshots don't show, such as a fader taken over, a macro's range or a
+slot a lock switches out (#739). A failing pin prints what was drawn, ready to paste in once it's
+checked by eye.
+
 **The track page** (`track_page.rs` and `track_page/`, decision 145) is the first page that's a
 component (#320). `App::track_page` is a `TrackPage`: the page showing (`Page`: Sound, Mod, FX or
 Gen), the cursor's row and field, the field `j` and `k` aim for, whether it's on a value's fine
