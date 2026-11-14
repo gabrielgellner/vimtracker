@@ -381,8 +381,8 @@ fn band(song: &mut Song) {
         let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
         write_rows(song, track, &rows);
     }
-    for track in 0..4 {
-        song.tracks[track].group = Some(1);
+    for track in &mut song.tracks[..4] {
+        track.group = Some(1);
     }
     let group = song.fixed_track(TrackKind::Group(1)).expect("a group");
     song.tracks[group].name = "909".to_owned();
@@ -755,8 +755,11 @@ fn take_presets(folder: &Path) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
+/// Make one picture in a folder, saying where it went.
+type Take = fn(&Path) -> std::io::Result<PathBuf>;
+
 /// Each picture made from files of its own rather than a song, by its name.
-const EXPLORERS: [(&str, fn(&Path) -> std::io::Result<PathBuf>); 3] = [
+const EXPLORERS: [(&str, Take); 3] = [
     ("explorer", take_explorer),
     ("kit", take_kit),
     ("presets", take_presets),
