@@ -617,16 +617,23 @@ the slot's title, picked with `K`:
   it holds.
 
 The first two columns are the module's knobs, the third what its `Blend`
-knob also does, each a setting of its own here.
+knob also does, each a setting of its own here. In `Granular`:
 
-| Setting | Granular | Stretch | Looping |
-|---|---|---|---|
-| `Position` | Where grains read, from now to the oldest | Where the windows read | The delay's time; frozen, where the loop starts |
-| `Size` | How long each grain is, 32 to 512 ms, twice that at 8 bits | How long the windows are | Frozen, how long the loop is |
-| `Pitch` | How far grains are shifted, in semitones | How far it shifts | How far the repeats are shifted |
-| `Density` | How many grains, and how they start | The diffuser | The diffuser |
-| `Texture` | The grains' envelope, then the diffuser | Low-pass below `80`, high-pass above | Low-pass below `80`, high-pass above |
-| `Freeze` | On, it stops recording | The same | The same, and loops |
+| Setting | Does |
+|---|---|
+| `Position` | Where grains read, from just now to the oldest |
+| `Size` | How long each grain is, 32 to 512 ms, twice that at 8 bits |
+| `Pitch` | How far each grain is shifted, in semitones, two octaves |
+| `Density` | How many grains, and how they start |
+| `Texture` | The grains' envelope, then the diffuser |
+| `Freeze` | On, it stops recording, so grains play what's held |
+
+In `Stretch`, `Position` and `Size` are where its windows read and how long
+they are, and `Pitch` shifts it. In `Looping`, `Position` is the delay's
+time, gliding there as tape does, and `Pitch` shifts the repeats; frozen,
+`Position` is where the loop starts and `Size` how long it is. In both,
+`Density` turns up the diffuser, and `Texture` is a low-pass below `80` and
+a high-pass above it.
 
 | Setting | Does |
 |---|---|
