@@ -270,9 +270,10 @@ fn sends_to_b(song: &mut Song) {
     song.tracks[group].send_b = 0x18;
 }
 
-/// Press keys as they're written, with `<Name>` for a key that isn't a character.
-fn press(app: &mut App, keys: &str) {
-    let now = Instant::now();
+/// Press keys as they're written, with `<Name>` for a key that isn't a character, all at this
+/// time. It's the shot's clock, never the wall clock's, so how long the machine took to get here
+/// can't change what's drawn, as whether the which-key popup's delay has passed (#660).
+fn press(app: &mut App, keys: &str, now: Instant) {
     let mut rest = keys;
     while let Some(c) = rest.chars().next() {
         if c == '<'
@@ -340,6 +341,11 @@ fn write(app: &mut App, now: Instant, size: (u16, u16), path: &Path) -> std::io:
 }
 
 fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
+    take_slowed(shot, folder, Duration::ZERO)
+}
+
+/// Take a shot on a machine this much slower at making the app, as one busy with other builds.
+fn take_slowed(shot: &Shot, folder: &Path, slower: Duration) -> std::io::Result<PathBuf> {
     let mut song = song(shot.rows, shot.voice);
     let mut pool = SamplePool::default();
     if shot.kick {
@@ -395,7 +401,8 @@ fn take(shot: &Shot, folder: &Path) -> std::io::Result<PathBuf> {
     // Taken before the app, so its first frame measures no time since the app began.
     let start = Instant::now();
     let (mut app, mut realtime) = app_on(song, pool);
-    press(&mut app, shot.keys);
+    std::thread::sleep(slower);
+    press(&mut app, shot.keys, start);
     let now = play(&mut app, &mut realtime, shot.play, start);
     let size = match shot.name {
         "project" => (WIDTH, PROJECT_HEIGHT),
@@ -464,7 +471,7 @@ fn take_explorer(folder: &Path) -> std::io::Result<PathBuf> {
     app.picker = Some(picker);
     app.mode = Mode::Picker;
     // Open the loops and the kit, and come back down to the kick, which is the track's.
-    press(&mut app, "kkkljjjljjj");
+    press(&mut app, "kkkljjjljjj", start);
     app.finish_loading();
     let path = folder.join("explorer.svg");
     write(&mut app, start, (WIDTH, HEIGHT), &path)?;
@@ -503,6 +510,28 @@ mod tests {
         let a = std::fs::read(take_explorer(&first).unwrap()).unwrap();
         let b = std::fs::read(take_explorer(&second).unwrap()).unwrap();
         assert!(a == b, "the explorer differs between runs");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The which-key popup shows once its delay has passed since `Space`, and the shot is drawn
+    /// four steps after the shot's clock starts. The keys used to be pressed at the wall clock's
+    /// time, so when a busy machine was slow to make the app they fell so late that the delay
+    /// hadn't passed by the drawing, and the popup was missing (#660). They're pressed on the
+    /// shot's own clock now, so a slow machine draws the same picture.
+    #[test]
+    fn which_key_is_the_same_on_a_slow_machine() {
+        let base = std::env::temp_dir().join(format!("vt-which-key-{}", std::process::id()));
+        let (quick, slow) = (base.join("quick"), base.join("slow"));
+        std::fs::create_dir_all(&quick).unwrap();
+        std::fs::create_dir_all(&slow).unwrap();
+        let shot = SHOTS
+            .iter()
+            .find(|shot| shot.name == "which-key")
+            .expect("the which-key shot");
+        let a = std::fs::read(take(shot, &quick).unwrap()).unwrap();
+        let slower = Duration::from_millis(400);
+        let b = std::fs::read(take_slowed(shot, &slow, slower).unwrap()).unwrap();
+        assert!(a == b, "which-key differs when the app is slow to make");
         let _ = std::fs::remove_dir_all(&base);
     }
 }
