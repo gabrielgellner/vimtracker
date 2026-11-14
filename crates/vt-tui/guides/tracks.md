@@ -1813,17 +1813,21 @@ a patch of yours with the same name comes first, and `:patch save` always saves 
 Each is tagged `generative` and with what it acts on, so `#generative` lists them and `#rhythm`
 finds `Euclid`.
 
-| Patch | What it is | Its macros |
+| Patch | From the song | Its macros |
 |---|---|---|
-| `Turing Machine` | A Steps slot on `Pitch in scale`, drifting | `Change`, `Length`, `Range` |
-| `Deja vu` | The same with Marbles' knob: up is more memory | `Deja vu`, `Spread` |
-| `Euclid` | `C-2` and `C-3` in turn on Euclid 7 of 16 | `Hits`, `Rotate` |
-| `Kria` | A pitch loop of 5, an octave loop of 3, and a lane of 4 note lengths on FX 1 | `Pitch loop`, `Octave loop` |
-| `Accents` | Velocity `7F` on Euclid 5 of the notes | `Hits`, `Rotate` |
-| `Acid line` | The `Acid` fill from `C-2` to `C-3` | `Density`, `Notes`, `Octave`, `Accent`, `Slide` |
-| `Drunk walk` | A `Walk` on Euclid 7 of 16, from `A-1` to `A-2` | `Step`, `Hits` |
-| `Marbles X` | Marbles' `Random` on every other row, from `D-3` to `D-5` | `Spread`, `Bias`, `Steps` |
-| `Variations` | A `Variation` of the line already there | `Order`, `Temperature` |
+| `Turing Machine` | `turing-machine` | `Change`, `Length`, `Range` |
+| `Deja vu` | `deja-vu` | `Deja vu`, `Spread` |
+| `Euclid` | `euclid`'s bass | `Hits`, `Rotate` |
+| `Kria` | `kria` | `Pitch loop`, `Octave loop` |
+| `Accents` | `live-generators`' hats | `Hits`, `Rotate` |
+| `Acid line` | `acid-lines` | `Density`, `Notes`, `Octave`, `Accent`, `Slide` |
+| `Drunk walk` | `walks`' bass | `Step`, `Hits` |
+| `Marbles X` | `marbles`' tune | `Spread`, `Bias`, `Steps` |
+| `Variations` | `variations` | `Order`, `Temperature` |
+
+Each is the part of that song's track that plays it, with its macros turned to where the song
+has them; the generators tutorial has a section on each. `Deja vu` is the Turing Machine with
+Marbles' knob, up for more memory, and `Kria`'s length loop comes with its lane of 4 on FX 1.
 
 **What's saved** goes by the macros, as they're the patch's knobs: each macro that holds
 something, with its name, value, mappings and ranges; every mod slot a macro maps to, the slots
