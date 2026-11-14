@@ -1616,8 +1616,8 @@ track's eight macros (see **Macros**), then the live columns.
 Each live column is a device, under the macros, in the phrase view's order: Note, Velocity, Nudge,
 Length, then the FX columns. Its title is its fill and its `Where`, as `K` chooses
 them, `Acid`'s `Pitches` after them and a `Follow`'s source in place of the
-`Where`, a `Variation`'s fill alone, as it learns its rows with its notes, and
-a `Divisions`' channel and bar, as it makes its own rhythm;
+`Where`, a `Variation`'s and a `Ring`'s fill alone, as each makes its rows with
+its notes, and a `Divisions`' channel and bar, as it makes its own rhythm;
 then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
 Note 00–0F`, or `FX1 CUT lane 0C` for a lane. A `Where` that's its column's own is
 dim too, and so is a `Vary` of `Once`. Its settings are the
@@ -1645,7 +1645,7 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 | `K` | List a setting's choices; switch one that's off or on |
 | `x` | Back to where it starts |
 | `r` | Roll the generator again, from anywhere in it, as in the panel |
-| `Space g a` | Apply it, as plain values; with `Vary` on, keep the pass heard |
+| `Space g a` | Apply it, as plain values; with `Vary` on, keep the pass heard; on a `Ring`, its loop |
 | `dd` | Take it away, putting back what was under it |
 | `Enter` | Open the shape panel on it, in the phrase view, as `gl` does |
 
@@ -1667,6 +1667,13 @@ generator's seed and `Vary` goes back to `Once`, so that variation plays every p
 and the phrase holds it, still live to turn, as one undo step. Before it's been
 heard varying, it says so. It's the Turing Machine's lock, as `Space g a` on a Steps
 slot's `Mutate` is.
+
+A `Ring` has no `Vary`: its register runs on from pass to pass by itself, each pass
+where the last left it, worked out from its seed and the pass so playing from bar 33
+hears what playing to it would. `Space g a` on one keeps the register as the pass
+just heard began, so that pass plays first and the ring runs on from there,
+`Change` where it was; turn `Change` to `0%` and that loop holds, every pass. `r`
+lets go of it and starts a new ring.
 
 **Making a column live.** The last device, `Empty`, has `K` list the columns of
 the phrase with nothing live on them. Choosing one makes it live over the phrase's
@@ -1825,7 +1832,7 @@ under `Factory` after your own, so `:patch` has some from the start. They're bui
 program rather than written into your folder, so they can't be changed, tagged or written over;
 a patch of yours with the same name comes first, and `:patch save` always saves one of yours.
 Each is tagged `generative` and with what it acts on, so `#generative` lists them and `#rhythm`
-finds `Euclid`.
+finds `Euclid` and `Noise Ring`.
 
 | Patch | From the song | Its macros |
 |---|---|---|
@@ -1836,6 +1843,7 @@ finds `Euclid`.
 | `Accents` | `live-generators`' hats | `Hits`, `Rotate` |
 | `Acid line` | `acid-lines` | `Density`, `Notes`, `Octave`, `Accent`, `Slide` |
 | `Drunk walk` | `walks`' bass | `Step`, `Hits` |
+| `Noise Ring` | `noise-ring`'s bell | `Change`, `Chance`, `Length` |
 | `Marbles X` | `marbles`' tune | `Spread`, `Bias`, `Steps` |
 | `Variations` | `variations` | `Order`, `Temperature` |
 
