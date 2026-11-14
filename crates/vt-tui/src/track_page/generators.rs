@@ -332,7 +332,8 @@ impl App {
 
     /// `Space g a`: apply the generator, leaving its values as plain ones, as last heard where
     /// something moved it; or, for one that varies, keep the variation last heard, as its seed,
-    /// with `Vary` back to `Once`, so it stays live.
+    /// with `Vary` back to `Once`, so it stays live. A `Cells` generation isn't a seed, so one
+    /// that evolves is applied as last heard, as one a macro moves is.
     pub(super) fn apply_gen(&mut self) {
         let Some((phrase, generator, _)) = self.gen_here() else {
             self.status = "Space g a applies a generator: go to one first".to_owned();
@@ -341,6 +342,7 @@ impl App {
         let name = self.gen_name(phrase, generator);
         if let Some(live) = self.live_generator(self.cursor.track, phrase, generator)
             && live.generator.heard().varies()
+            && !live.generator.heard().evolves()
         {
             self.keep_variation(phrase, generator, &name);
             return;

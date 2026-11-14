@@ -1724,8 +1724,8 @@ then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
 Note 00–0F`, or `FX1 CUT lane 0C` for a lane. A `Where` that's its column's own is
 dim too, and so is a `Vary` of `Once`. Its settings are the
 shape panel's, laid out by what they do: the fill's down the first two columns,
-and the `Where`'s, `Hits` and `Rotate`, an amount, `Complementary`'s amount and `Side`, or a
-named rhythm's `Rhythm`, `Part` and `Child`, at the foot of the third, so
+and the `Where`'s, `Hits` and `Rotate`, `Rule` and `Start`, an amount, `Complementary`'s amount
+and `Side`, or a named rhythm's `Rhythm`, `Part` and `Child`, at the foot of the third, so
 they stay put as the fill changes; where `Acid`'s `Density` or `Random`'s `Weights` takes the
 top of the third, `Rhythm` goes to the fourth. A `Follow`, which has no `Where`, has its
 `Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
@@ -1765,6 +1765,17 @@ render plays the same again, and playing from bar 33 hears what playing to it wo
 With `Acid`'s `Pitches` on `Keep`, it varies only the accents, slides and octaves,
 as `r` would. The phrase shows what's written, the first pass; what plays after it
 is the engine's.
+
+**A generation each pass.** Rows chosen by `Cells` have `Vary` on any fill, and
+it steps the automaton on rather than rolling a new seed: with `Each pass`, the
+first pass plays the row it starts from and each pass after it the next
+generation, or across tracks the next rows of generations, carrying on from the
+last; `Every 2 passes`, 4 or 8 holds each for that many. The fill's own values
+keep their seed. Each pass's generation is worked out from the row it starts
+from and which pass it is, so playing from bar 33 hears what playing to it
+would, and it starts again from that row after 256 passes on one column, and
+after 4096 generations across tracks, 256 passes of a 16-row phrase. `Space g a`
+applies it as last heard, as plain values, as a generation isn't a seed to keep.
 
 When you hear one you like, `Space g a` keeps it: the pass just heard becomes the
 generator's seed and `Vary` goes back to `Once`, so that variation plays every pass

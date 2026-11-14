@@ -15,10 +15,10 @@ use vt_model::lfo::Rate;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, Bar, Bits, Channel, Divisions, DrumPart, Edge, FillKind, Follow, GenCell, Grids, Kept,
-    MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_RING, MAX_VALUES, MAX_WEIGHT, Mutations, Pink, Random,
-    Ring, Role, RowView, Shape, ShapeColumn, Values, Variation, WAVES, Walk, WaveRate, Where,
-    World, render_into, written_from,
+    Acid, Across, Bar, Bits, CellStart, Cells, Channel, Divisions, DrumPart, Edge, FillKind,
+    Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_RING, MAX_VALUES,
+    MAX_WEIGHT, Mutations, Pink, Random, Ring, Role, RowView, Shape, ShapeColumn, Values,
+    Variation, WAVES, Walk, WaveRate, Where, World, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -396,7 +396,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
 /// of its own (decision 302), so its own line, with them as they start, stays as it was.
 type Variant = (&'static str, FillKind, fn(&mut Shape));
 
-const VARIANTS: [Variant; 10] = [
+const VARIANTS: [Variant; 13] = [
     ("Random shaped", FillKind::Random, shaped_random),
     ("Follow mutated", FillKind::Follow, mutated_follow),
     ("Acid shaped", FillKind::Acid, shaped_random),
@@ -411,7 +411,41 @@ const VARIANTS: [Variant; 10] = [
         world_rows,
     ),
     ("Acid, a named rhythm's rows", FillKind::Acid, world_rows),
+    ("Ramp on cells", FillKind::Ramp, on_cells),
+    ("Random on cells", FillKind::Random, on_cells),
+    ("List on cells", FillKind::List, on_cells),
 ];
+
+/// A `Where` of `Cells` (decision 326), drawn from the seed: any rule, any start, on one column
+/// or as one of up to eight tracks across, on any pass.
+fn on_cells(shape: &mut Shape) {
+    let mut more = Dice(shape.seed ^ 0xCE11);
+    let rule = if more.chance(40) {
+        more.pick(&[30, 90, 110, 184])
+    } else {
+        more.byte()
+    };
+    let start = more.pick(&CellStart::ALL);
+    let across = more.chance(40).then(|| {
+        let cells = 2 + more.below(7) as u8;
+        Across {
+            cell: more.below(u64::from(cells)) as u8,
+            cells,
+            row: more.next(),
+        }
+    });
+    let stepped = if more.chance(30) {
+        0
+    } else {
+        more.below(5000) as u16
+    };
+    shape.place = Where::Cells(Cells {
+        rule,
+        start,
+        across,
+        stepped,
+    });
+}
 
 /// A named rhythm as the `Where` (decision 327), its rhythm, part and `Child` drawn from the seed,
 /// some children at the ends.
