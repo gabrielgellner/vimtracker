@@ -174,6 +174,7 @@ These have no mark.
 | `CND` | Play the row only when condition `xx` holds: see **Conditions** |
 | `ACU` | Move the row's note on each time it plays: see **Accumulators** |
 | `ARP` | Go round the note, `x` up and `y` up: see **Arpeggios** |
+| `RND` | Vary the note, or the lock to its left, by chance: see **Variations** |
 
 A unit is a sixth of a step, so `DEL03` delays by half a step. The step is the
 track's own, so on a track at `1/8` it's half an eighth. They count from where
@@ -182,7 +183,7 @@ goes with the note whichever column it's in.
 
 For `RET`, `x` from `0` to `7` gets quieter on each repeat and `8` to `F`
 gets louder, except on an `Acid`, whose hits all play at the note's own level.
-Use `:seed 7` to choose which results `CHA` gives.
+Use `:seed 7` to choose which results `CHA` and `RND` give.
 
 ## Conditions
 
@@ -320,6 +321,49 @@ its own `ARP`, or none. Each pulse of a `MLT` is a new note, so it starts again 
 each. It starts where the note does, after the groove, the nudge and any `DEL`, and
 an `ACU` or the chain's transpose moves it with the note. One voice plays it, a
 note at a time, so it isn't a chord.
+
+## Variations
+
+`RND xy` gives what's to its left on the row a chance of varying each time the
+row plays, as the Eloquencer's controlled chance does, so a line wanders a little
+around what's written. `x` is the chance, `0` never and `F` always, so `8` is a
+little over half; `y` is how far. Type its two digits after choosing it with
+`K`; `=` and `-` move `y`, and `+` and `_` move `x`.
+
+What it varies is what's in the column to its left, and in the first FX column,
+the note:
+
+| To its left | It varies |
+|---|---|
+| Nothing, or an event | The note, by 1 to `y` scale degrees |
+| A lock, such as `CUT 40` | The lock's value, by up to `y` tens |
+| A `RET` | Whether it ratchets at all, and its units |
+
+A note that varies always moves, by 1 to `y` up or down, each as likely, in
+semitones with the scale off, and a note outside the scale lands on the next one
+in. `CUT 40 RND 83` plays `CUT` from `10` to `70`, never `40`, a little over
+half the time. Beside a `RET`, `x` is the chance the row ratchets at all, as the
+Eloquencer's ratchet probability, and `y` how far its units may vary when it does. A lock on a list, such as `PLY`
+or `SMP`, moves by `y` choices, and one in semitones, such as `PTCH`, by `y`
+semitones, so `SMP 04 RND F2` plays samples `02` to `06` but never `04`. For
+velocity, put it after a `VDLT 80`, which leaves the velocity as written, so
+`VDLT 80 RND 82` moves it up to `20` either way. Everything stays within its
+range. A `GRV` or `RATE` is read ahead of its row, so an `RND` beside one does
+nothing. Two `RND`s on a note add up.
+
+Each roll is worked out from the `:seed`, the track, how far it is into its
+chain and the column, rather than drawn in turn, so `CHA` rolls as it would
+without it, a render repeats, and playing from a step hears what playing up to
+it would. The chain starting again plays the same variations again, as a
+condition's passes start again. Each pulse of a `MLT` is a new note, so it
+rolls again on each.
+
+It moves the note from where an `ACU` has it, without adding to the walk, and
+an `ARP` goes round the note it moved to. A live generator's notes and values
+vary as written ones do. While playing, the row under the playhead shows the
+note heard, and the status line says it on the Note column. `Space g A` in
+the phrase view writes the notes as last heard into the phrase, or the
+selection, and takes their `RND`s out, so the pass you liked stays.
 
 ## Groove
 

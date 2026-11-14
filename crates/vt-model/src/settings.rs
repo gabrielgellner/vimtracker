@@ -9,15 +9,16 @@ use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::envelope::time_at;
 use crate::groove::GROOVE_CHOICES;
 use crate::insert::{
-    ALGORITHM_NAMES, CHORUS_PARAMS, CLOUDS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS, DELAY_PARAMS,
-    DISTORT_PARAMS, EQ_PARAMS, EXCITER_PARAMS, FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS,
-    INSERTS, Insert, LIMIT_PARAMS, LPG_PARAMS, PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param,
-    RESO_PARAMS, REVERB_PARAMS, ROTARY_PARAMS, SPACE_PARAMS, SPRING_PARAMS, STUTTER_PARAMS,
-    Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend,
-    attack_ms, ceiling_db, exciter_attack_ms, exciter_release_ms, exciter_tone_hz, fine_cents,
-    flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds, input_db,
-    limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms, repeat_decay_db,
-    shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db, vowel_blend,
+    ALGORITHM_NAMES, BEADS_PARAMS, CHORUS_PARAMS, CLOUDS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS,
+    DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS, EXCITER_PARAMS, FLANGER_PARAMS, FREQ_SHIFT_PARAMS,
+    GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, LPG_PARAMS, PHASER_PARAMS, PITCH_PARAMS,
+    PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, ROTARY_PARAMS, SPACE_PARAMS, SPRING_PARAMS,
+    STUTTER_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS,
+    algorithm_blend, attack_ms, ceiling_db, exciter_attack_ms, exciter_release_ms, exciter_tone_hz,
+    fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds,
+    input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms,
+    repeat_decay_db, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db,
+    vowel_blend,
 };
 use crate::macros::MACROS;
 use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
@@ -1290,10 +1291,11 @@ pub enum Effect {
     Exciter,
     Stutter,
     Clouds,
+    Beads,
 }
 
 impl Effect {
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 26] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -1319,6 +1321,7 @@ impl Effect {
         Self::Exciter,
         Self::Stutter,
         Self::Clouds,
+        Self::Beads,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -1347,6 +1350,7 @@ impl Effect {
             Self::Spring => &SPRING_PARAMS,
             Self::Stutter => &STUTTER_PARAMS,
             Self::Clouds => &CLOUDS_PARAMS,
+            Self::Beads => &BEADS_PARAMS,
             Self::Exciter => &EXCITER_PARAMS,
             Self::Rotary => &ROTARY_PARAMS,
             Self::Space => &SPACE_PARAMS,
@@ -1377,6 +1381,7 @@ impl Effect {
             Self::Spring => "spring",
             Self::Stutter => "stutter",
             Self::Clouds => "clouds",
+            Self::Beads => "beads",
             Self::Exciter => "exciter",
             Self::Rotary => "rotary",
             Self::Space => "space",
@@ -1407,6 +1412,7 @@ impl Effect {
             Self::Spring => "Spring",
             Self::Stutter => "Stutter",
             Self::Clouds => "Clouds",
+            Self::Beads => "Beads",
             Self::Exciter => "Exciter",
             Self::Rotary => "Rotary",
             Self::Space => "Space",
@@ -1439,6 +1445,7 @@ impl Effect {
             Insert::Spring(_) => Some(Self::Spring),
             Insert::Stutter(_) => Some(Self::Stutter),
             Insert::Clouds(_) => Some(Self::Clouds),
+            Insert::Beads(_) => Some(Self::Beads),
             Insert::Exciter(_) => Some(Self::Exciter),
             Insert::Rotary(_) => Some(Self::Rotary),
             Insert::Space(_) => Some(Self::Space),
@@ -2212,6 +2219,33 @@ const fn effect_start(effect: Effect) -> usize {
                 + EXCITER_PARAMS.len()
                 + STUTTER_PARAMS.len()
         }
+        Effect::Beads => {
+            DISTORT_PARAMS.len()
+                + DELAY_PARAMS.len()
+                + REVERB_PARAMS.len()
+                + CHORUS_PARAMS.len()
+                + EQ_PARAMS.len()
+                + COMPRESSOR_PARAMS.len()
+                + LIMIT_PARAMS.len()
+                + PHASER_PARAMS.len()
+                + FLANGER_PARAMS.len()
+                + TAPE_PARAMS.len()
+                + PLATE_PARAMS.len()
+                + PITCH_PARAMS.len()
+                + GRAINS_PARAMS.len()
+                + WARPS_PARAMS.len()
+                + LPG_PARAMS.len()
+                + RESO_PARAMS.len()
+                + COMB_PARAMS.len()
+                + VOWEL_PARAMS.len()
+                + FREQ_SHIFT_PARAMS.len()
+                + SPRING_PARAMS.len()
+                + SPACE_PARAMS.len()
+                + ROTARY_PARAMS.len()
+                + EXCITER_PARAMS.len()
+                + STUTTER_PARAMS.len()
+                + CLOUDS_PARAMS.len()
+        }
         Effect::Exciter => {
             DISTORT_PARAMS.len()
                 + DELAY_PARAMS.len()
@@ -2311,7 +2345,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + ROTARY_PARAMS.len()
     + EXCITER_PARAMS.len()
     + STUTTER_PARAMS.len()
-    + CLOUDS_PARAMS.len();
+    + CLOUDS_PARAMS.len()
+    + BEADS_PARAMS.len();
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
@@ -2667,7 +2702,7 @@ impl<'de> serde::Deserialize<'de> for SettingId {
 
 /// The events, which act on a note and aren't settings. Their labels share the grid with
 /// settings', so none may match one.
-pub const EVENTS: [FxCommand; 8] = [
+pub const EVENTS: [FxCommand; 9] = [
     FxCommand::Del,
     FxCommand::Kil,
     FxCommand::Off,
@@ -2676,6 +2711,7 @@ pub const EVENTS: [FxCommand; 8] = [
     FxCommand::Cnd,
     FxCommand::Acu,
     FxCommand::Arp,
+    FxCommand::Rnd,
 ];
 
 #[cfg(test)]

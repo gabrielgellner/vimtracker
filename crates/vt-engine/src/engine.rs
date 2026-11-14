@@ -38,7 +38,7 @@ pub struct TrackPlace {
     /// Whether the row heard skipped its note, as its `CHA` or `CND` decided.
     pub skipped: bool,
     /// The note the row heard was played at, before its chain's transpose, when an accumulator
-    /// moved it from the note as written.
+    /// or an `RND` moved it from the note as written.
     pub accumulated: Option<u8>,
 }
 

@@ -60,6 +60,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("fugue", fugue()),
         ("kria", kria()),
         ("metropolix", metropolix()),
+        ("eloquencer", eloquencer()),
         ("live-generators", live_generators()),
         ("acid-lines", acid_lines()),
         ("walks", walks()),
@@ -702,6 +703,63 @@ fn metropolix() -> Song {
     );
     set(&mut song, 3, "hat.decay", 0x30);
     song.tracks[3].level = 0xC8;
+    song
+}
+
+/// Winter Modular's Eloquencer: a written line whose rows each have a chance of moving their note
+/// and of a longer or shorter gate, and hats with a chance of ratcheting and a velocity that
+/// wanders, all with `RND` (decision 323).
+fn eloquencer() -> Song {
+    let mut song = song("eloquencer", 116, 2, ScaleKind::Minor, 3);
+    song.seed = 0xE1;
+    let root = "D-3 64 rnd:31 gate:60 rnd:A4";
+    voice(
+        &mut song,
+        0,
+        "EQ",
+        SynthVoice::VirtualAnalog,
+        &[
+            root,
+            REST,
+            "A-3 50 rnd:62 --- ---",
+            "F-3 50 --- --- ---",
+            root,
+            "C-4 50 rnd:A2 --- ---",
+            REST,
+            "A-3 50 rnd:62 --- ---",
+            root,
+            REST,
+            "E-3 50 rnd:83 --- ---",
+            "F-3 50 --- --- ---",
+            "G-3 64 rnd:62 gate:40 rnd:A6",
+            "A-3 50 rnd:A2 --- ---",
+            REST,
+            "C-4 50 rnd:F3 --- ---",
+        ],
+    );
+    let line = &mut song.tracks[0];
+    line.cutoff = 0x90;
+    line.level = 0xD0;
+    line.send_a = 0xA0;
+    line.send_b = 0x90;
+    pluck(&mut song, 0, 260, 45, 80);
+    // A hat on each off-beat whose velocity wanders, and one before each beat that ratchets now
+    // and then.
+    let wanders = "C-4 50 velocitydelta:80 rnd:F3 ---";
+    let ratchets = "C-4 40 ret:02 rnd:61 ---";
+    voice(
+        &mut song,
+        1,
+        "HH",
+        SynthVoice::Hat,
+        &[
+            REST, REST, wanders, ratchets, REST, REST, wanders, ratchets, REST, REST, wanders,
+            ratchets, REST, REST, wanders, ratchets,
+        ],
+    );
+    set(&mut song, 1, "hat.decay", 0x30);
+    song.tracks[1].level = 0xC8;
+    four_on_the_floor(&mut song, 2);
     song
 }
 
