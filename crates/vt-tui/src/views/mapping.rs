@@ -7,14 +7,13 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Clear, Paragraph};
+use ratatui::widgets::Paragraph;
 
 use crate::app::App;
 use crate::kitty::PanelKey;
 use crate::macroing::{MapField, MappingView, bend_text, end_text, macro_name};
 use crate::theme;
-use crate::views::widgets;
-use crate::views::widgets::image;
+use crate::views::widgets::{image, popup};
 
 /// How wide the setting's column is, each end's, and each bend's.
 const SETTING_WIDTH: usize = 26;
@@ -47,12 +46,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
     let width = (2 + table + RESPONSE_GAP + boxed + 1).max(KEYS.len() + 4) as u16;
     // A line above the drawing's box and one below it.
     let height = (held.maps.len() + 5).max(RESPONSE_HEIGHT + 2 + 4) as u16;
-    let window = Rect {
-        x: area.x + area.width.saturating_sub(width) / 2,
-        y: area.y + area.height.saturating_sub(height) / 2,
-        width: width.min(area.width),
-        height: height.min(area.height),
-    };
+    let window = popup::centred(area, width, height);
     let count = match held.maps.len() {
         1 => "1 mapping".to_owned(),
         count => format!("{count} mappings"),
@@ -64,13 +58,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, view: &MappingView) {
         ),
         Span::styled(format!(" {count} "), theme::dim()),
     ]);
-    let block = widgets::window_border()
-        .style(theme::window())
+    let border = popup::border()
         .title(title)
         .title_bottom(Line::styled(KEYS, theme::dim()));
-    let inner = block.inner(window);
-    frame.render_widget(Clear, window);
-    frame.render_widget(block, window);
+    let inner = popup::draw(frame, window, border);
     let mut heading = format!("  {:<SETTING_WIDTH$}", "Setting");
     for field in MapField::ALL {
         heading.push_str(&format!(

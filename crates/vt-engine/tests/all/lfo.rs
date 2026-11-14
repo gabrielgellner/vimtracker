@@ -6,11 +6,11 @@ use vt_engine::published::Published;
 use vt_engine::render::render_frames;
 use vt_engine::track_state::LiveValues;
 use vt_model::attractor::{System, attractor_at};
-use vt_model::insert::{Distort, DistortType, Insert};
+use vt_model::insert::{Distort, DistortType, EffectKind, Insert};
 use vt_model::lfo::{Fade, Lfo, LfoMode, Rate, Shape};
 use vt_model::modulation::{MOD_SLOTS, ModSlot};
 use vt_model::samples::SamplePool;
-use vt_model::settings::{Effect, SettingId};
+use vt_model::settings::SettingId;
 use vt_model::song::{Machine, Song, SynthVoice, level_gain};
 
 use crate::support::steady::flat;
@@ -603,8 +603,8 @@ fn with_distort(mut song: Song, kind: DistortType) -> Song {
 const AMOUNT: usize = 1;
 const MIX: usize = 2;
 const GAIN: usize = 3;
-const AMOUNT_TARGET: SettingId = SettingId::slot(0, Effect::Distort, 1).unwrap();
-const BITS_TARGET: SettingId = SettingId::slot(0, Effect::Distort, 2).unwrap();
+const AMOUNT_TARGET: SettingId = SettingId::slot(0, EffectKind::Distort, 1).unwrap();
+const BITS_TARGET: SettingId = SettingId::slot(0, EffectKind::Distort, 2).unwrap();
 
 fn slot_live(song: Song, steps: usize) -> [u8; vt_model::insert::MAX_PARAMS] {
     live_after(song, steps).inserts[0]
@@ -747,7 +747,7 @@ fn an_lfo_on_bits_lands_on_whole_bits_and_one_on_type_jumps_between_them() {
     let soft = with_distort(song(&["C-3 -- --- --- ---"]), DistortType::Soft);
     let kind = moved_by_lfo(
         soft,
-        SettingId::slot(0, Effect::Distort, 0).unwrap(),
+        SettingId::slot(0, EffectKind::Distort, 0).unwrap(),
         0x80,
         2,
     )[0];

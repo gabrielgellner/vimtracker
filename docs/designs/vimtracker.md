@@ -289,7 +289,11 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 *   **A new setting needs no new interface.** Every setting a step can lock or a modulator can move
     is registered once, in `vt-model`'s `settings.rs`, with the key songs store it by, a name, a
     label for the grid, a kind and a default. The track page, `K`, the grid and the engine all read
-    that table.
+    that table. An effect's settings come into it from the effect's own description: one
+    `EffectSpec` row each in `insert/kind.rs`'s `EFFECTS`, by `EffectKind`, with its key, name,
+    meaning and `Param`s, and each `Param` states its kind, with the units it reads in, and its
+    place in the effect, so the table, the slot's title and its usual grid take them as they are
+    (decision 339).
 
 **Decisions:** 29, 30, 59, 60, 158, 159 and 161, the [M14](#m14-design-one-list-of-settings) and
 [M14b](#m14b-design-kinds-of-setting) designs, and the three crates of the
@@ -811,10 +815,17 @@ built from, so a new page uses them rather than working out its layout again:
 
 *   `table`: `Columns`, a page's fixed column widths and the room between them, for ratatui
     `Table`s and for `Layout` cells that hold images.
-*   `bar`: `ValueBar`, a value's bar. `setting`: a setting's name and value. `meter`: a meter's
-    cells.
+*   `bar`: `ValueBar`, a value's bar. `meter`: a meter's cells.
+*   `setting`: a setting's name and value, drawn from a `CellLook`, a plain value the page builds
+    with `Ctx::look` or `Ctx::look_on`: where the cursor is on the cell (`Focus`), the mode, what
+    Insert has typed and a jump's query and labels. It reads nothing of `Ctx` itself (#739).
 *   `image`: an image's placeholder rows, and the faint box round the track page's curves.
 *   `hint`: a window's hint along its border. `window_border`: the rounded border every window has.
+*   `popup`: a window over the screen, as the picker, the command line's list of matches, the
+    guides, the keys, the shape panel and the mapping view are: `popup::draw` clears its area and
+    draws `popup::border`, the window's border in the window's colours, giving the area inside;
+    `centred`, `top_left`, `top_right`, `bottom_right` and `above` say where it goes in an area,
+    never bigger than the area (#739).
 *   `toggle`: the switch glyph pair, `nf-fa-toggle_on` green and `nf-fa-toggle_off` faint, each
     before two plain spaces, three cells, for everything that's on or off (decisions 140, 157 and
     256): a device's switch, a two-state setting's value on the Sound, FX, Mod, sample and audio

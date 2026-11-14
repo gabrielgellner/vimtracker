@@ -5,11 +5,11 @@
 use std::sync::Arc;
 
 use vt_engine::engine::Engine;
-use vt_model::insert::{Delay, Insert};
+use vt_model::insert::{Delay, EffectKind, Insert};
 use vt_model::lfo::{Lfo, Rate};
 use vt_model::macros::{MacroMap, MacroTarget};
 use vt_model::modulation::ModSlot;
-use vt_model::settings::{Effect, SettingId};
+use vt_model::settings::SettingId;
 use vt_model::song::Song;
 
 use crate::support::steady::version;
@@ -30,7 +30,7 @@ fn map(target: SettingId, min: u16, max: u16) -> MacroMap {
 
 /// The delay's `Feedback`, in slot 1.
 fn feedback() -> SettingId {
-    SettingId::slot(0, Effect::Delay, 1).unwrap()
+    SettingId::slot(0, EffectKind::Delay, 1).unwrap()
 }
 
 /// One track, with a delay in slot 1, and macro 1 holding `Cut` from `30` to `A0`, `Res` the
@@ -62,7 +62,7 @@ fn feedback_place() -> usize {
     Insert::Delay(Delay::DEFAULT)
         .params()
         .iter()
-        .position(|param| param.setting == Effect::Delay.params()[1].setting)
+        .position(|param| param.setting == EffectKind::Delay.params()[1].setting)
         .unwrap()
 }
 

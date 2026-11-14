@@ -56,6 +56,8 @@ impl StepsMode {
     }
 }
 
+crate::listed::listed!(StepsMode: meaning);
+
 /// How long each step lasts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StepRate {

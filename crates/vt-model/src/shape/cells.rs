@@ -82,6 +82,8 @@ impl Start {
     }
 }
 
+crate::listed::listed!(Start);
+
 /// The tracks a `Cells` plays across: which of them this one is, and how many there are, and the
 /// row they all start from, worked out once for all of them as the panel shapes them, so they
 /// play one automaton whatever each track's own seed.

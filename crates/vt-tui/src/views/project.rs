@@ -13,12 +13,12 @@ use vt_model::groove::{FULL_VELOCITY, MAX_PUSH};
 use crate::app::App;
 use crate::config::home_folder;
 use crate::explorer::place_name;
-use crate::input::mode::{Mode, View};
+use crate::input::mode::View;
 use crate::project_page::{PROJECT_PAGES, PROJECT_ROWS, ProjectControl};
 use crate::theme;
 use crate::views::status::grid_name;
 use crate::views::widgets::meter::{EIGHTHS, hanging_cell};
-use crate::views::widgets::setting;
+use crate::views::widgets::setting::{self, Focus};
 use crate::views::widgets::table::{Columns, blank_row, take_top};
 
 /// Room for a setting's name, and where the right column starts.
@@ -137,17 +137,15 @@ fn columns() -> Columns {
 /// its right has the rest of the row.
 fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static> {
     let here = app.project_control();
-    let typing = app.modes.mode == Mode::Insert;
     let mut cells = columns.row();
     for (index, control) in controls.iter().enumerate() {
         cells.to(control.column() * 2);
         let is_here = *control == here;
-        let on_fine = is_here && app.project_fine;
-        let on_value = is_here && !on_fine;
-        let text = setting::text(&app.ctx(), on_value, || value(app, *control));
+        let look = app.ctx().look(Focus::at(is_here, app.project_fine));
+        let text = setting::text(&look, || value(app, *control));
         let default = *control == ProjectControl::Root && !app.scale.on
             || *control == ProjectControl::Folder && app.services.folder.is_none();
-        let style = setting::style(&app.ctx(), on_value, default);
+        let style = setting::style(&look, default);
         // An action is its own name, so the cursor is on that rather than a value beside it, and
         // what it does is in the value's place.
         let mut spans = Vec::new();
@@ -158,15 +156,11 @@ fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static
             spans.push(Span::styled(text, style));
         }
         if *control == ProjectControl::Bpm {
-            let digits = if on_fine && typing {
-                format!(".{}_", app.modes.entry.text)
-            } else {
-                fine(app.song().millibpm)
+            let digits = match look.typed.filter(|_| look.focus == Focus::Fine) {
+                Some(typed) => format!(".{typed}_"),
+                None => fine(app.song().millibpm),
             };
-            spans.push(Span::styled(
-                digits,
-                setting::style(&app.ctx(), on_fine, true),
-            ));
+            spans.push(Span::styled(digits, setting::fine_style(&look)));
         }
         if let Some(note) = after(app, *control) {
             if !spans.is_empty() {
@@ -238,12 +232,13 @@ fn groove_rows(app: &App, columns: &Columns) -> Vec<Row<'static>> {
         for step in 0..steps {
             let field = control(step as u8);
             let is_here = field == here;
-            let text = setting::text(&app.ctx(), is_here, || value(app, field));
+            let look = app.ctx().look(Focus::at(is_here, false));
+            let text = setting::text(&look, || value(app, field));
             // What's left on the grid or at full velocity matters less.
             let default = field == ProjectControl::Push(0)
                 || matches!(field, ProjectControl::Velocity(_))
                     && text == FULL_VELOCITY.to_string();
-            let style = setting::style(&app.ctx(), is_here, default);
+            let style = setting::style(&look, default);
             cells.cell(Line::styled(text, style).right_aligned());
         }
         cells.skip(1).cell(Line::styled(units, theme::dim()));

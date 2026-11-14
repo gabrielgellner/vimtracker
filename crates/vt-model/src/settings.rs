@@ -9,17 +9,12 @@ use crate::constants::{DB_PER_LEVEL, MAX_LEVEL, UNITY_LEVEL};
 use crate::envelope::time_at;
 use crate::groove::GROOVE_CHOICES;
 use crate::insert::{
-    ALGORITHM_NAMES, BEADS_PARAMS, CHORUS_PARAMS, CLOUDS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS,
-    DELAY_PARAMS, DISTORT_PARAMS, ECHO_BASS, ECHO_PARAMS, ECHO_TREBLE, EQ_PARAMS, EXCITER_PARAMS,
-    FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, LPG_PARAMS,
-    PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, ROTARY_PARAMS,
-    SPACE_PARAMS, SPRING_PARAMS, STUTTER_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES,
-    VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db, echo_head_seconds,
-    echo_input_db, echo_shelf_db, exciter_attack_ms, exciter_release_ms, exciter_tone_hz,
-    fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds,
-    input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms,
-    repeat_decay_db, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db,
-    vowel_blend,
+    ALGORITHM_NAMES, ECHO_BASS, ECHO_TREBLE, EFFECTS, EffectKind, INSERTS, Triggering, VOWEL_NAMES,
+    algorithm_blend, attack_ms, ceiling_db, echo_head_seconds, echo_input_db, echo_shelf_db,
+    exciter_attack_ms, exciter_release_ms, exciter_tone_hz, fine_cents, flanger_delay_ms,
+    grain_density, grain_length, grain_ms, grain_time_seconds, input_db, limit_release_ms,
+    makeup_db, plate_size, range_db, ratio, release_ms, repeat_decay_db, shift_delay_ms,
+    shift_hertz, spread_hertz, tape_drive_db, threshold_db, vowel_blend,
 };
 use crate::macros::MACROS;
 use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
@@ -1275,265 +1270,6 @@ pub const fn voice_key(voice: SynthVoice) -> &'static str {
     }
 }
 
-/// An effect a slot can hold, apart from its settings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Effect {
-    Distort,
-    Delay,
-    Reverb,
-    Chorus,
-    Eq,
-    Compressor,
-    Limit,
-    Phaser,
-    Flanger,
-    Tape,
-    Plate,
-    Pitch,
-    Grains,
-    Warps,
-    Lpg,
-    Reso,
-    Comb,
-    Vowel,
-    FreqShift,
-    Spring,
-    Space,
-    Rotary,
-    Exciter,
-    Stutter,
-    Clouds,
-    Beads,
-    Echo,
-}
-
-impl Effect {
-    pub const ALL: [Self; 27] = [
-        Self::Distort,
-        Self::Delay,
-        Self::Reverb,
-        Self::Chorus,
-        Self::Eq,
-        Self::Compressor,
-        Self::Limit,
-        Self::Phaser,
-        Self::Flanger,
-        Self::Tape,
-        Self::Plate,
-        Self::Pitch,
-        Self::Grains,
-        Self::Warps,
-        Self::Lpg,
-        Self::Reso,
-        Self::Comb,
-        Self::Vowel,
-        Self::FreqShift,
-        Self::Spring,
-        Self::Space,
-        Self::Rotary,
-        Self::Exciter,
-        Self::Stutter,
-        Self::Clouds,
-        Self::Beads,
-        Self::Echo,
-    ];
-
-    /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
-    /// show only their own.
-    pub const fn params(self) -> &'static [Param] {
-        match self {
-            Self::Distort => &DISTORT_PARAMS,
-            Self::Delay => &DELAY_PARAMS,
-            Self::Reverb => &REVERB_PARAMS,
-            Self::Chorus => &CHORUS_PARAMS,
-            Self::Eq => &EQ_PARAMS,
-            Self::Compressor => &COMPRESSOR_PARAMS,
-            Self::Limit => &LIMIT_PARAMS,
-            Self::Phaser => &PHASER_PARAMS,
-            Self::Flanger => &FLANGER_PARAMS,
-            Self::Tape => &TAPE_PARAMS,
-            Self::Plate => &PLATE_PARAMS,
-            Self::Pitch => &PITCH_PARAMS,
-            Self::Grains => &GRAINS_PARAMS,
-            Self::Warps => &WARPS_PARAMS,
-            Self::Lpg => &LPG_PARAMS,
-            Self::Reso => &RESO_PARAMS,
-            Self::Comb => &COMB_PARAMS,
-            Self::Vowel => &VOWEL_PARAMS,
-            Self::FreqShift => &FREQ_SHIFT_PARAMS,
-            Self::Spring => &SPRING_PARAMS,
-            Self::Stutter => &STUTTER_PARAMS,
-            Self::Clouds => &CLOUDS_PARAMS,
-            Self::Beads => &BEADS_PARAMS,
-            Self::Echo => &ECHO_PARAMS,
-            Self::Exciter => &EXCITER_PARAMS,
-            Self::Rotary => &ROTARY_PARAMS,
-            Self::Space => &SPACE_PARAMS,
-        }
-    }
-
-    pub const fn key(self) -> &'static str {
-        match self {
-            Self::Distort => "distort",
-            Self::Delay => "delay",
-            Self::Reverb => "reverb",
-            Self::Chorus => "chorus",
-            Self::Eq => "eq3",
-            Self::Compressor => "comp",
-            Self::Limit => "limit",
-            Self::Phaser => "phaser",
-            Self::Flanger => "flanger",
-            Self::Tape => "tape",
-            Self::Plate => "plate",
-            Self::Pitch => "pitch",
-            Self::Grains => "grains",
-            Self::Warps => "warps",
-            Self::Lpg => "lpg",
-            Self::Reso => "reso",
-            Self::Comb => "comb",
-            Self::Vowel => "vowel",
-            Self::FreqShift => "freqshift",
-            Self::Spring => "spring",
-            Self::Stutter => "stutter",
-            Self::Clouds => "clouds",
-            Self::Beads => "beads",
-            Self::Echo => "echo",
-            Self::Exciter => "exciter",
-            Self::Rotary => "rotary",
-            Self::Space => "space",
-        }
-    }
-
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Distort => "Distort",
-            Self::Delay => "Delay",
-            Self::Reverb => "Reverb",
-            Self::Chorus => "Chorus",
-            Self::Eq => "EQ3",
-            Self::Compressor => "Comp",
-            Self::Limit => "Limit",
-            Self::Phaser => "Phaser",
-            Self::Flanger => "Flanger",
-            Self::Tape => "Tape",
-            Self::Plate => "Plate",
-            Self::Pitch => "Pitch",
-            Self::Grains => "Grains",
-            Self::Warps => "Warps",
-            Self::Lpg => "LPG",
-            Self::Reso => "Reso",
-            Self::Comb => "Comb",
-            Self::Vowel => "Vowel",
-            Self::FreqShift => "Freq Shift",
-            Self::Spring => "Spring",
-            Self::Stutter => "Stutter",
-            Self::Clouds => "Clouds",
-            Self::Beads => "Beads",
-            Self::Echo => "Space Echo",
-            Self::Exciter => "Exciter",
-            Self::Rotary => "Rotary",
-            Self::Space => "Space",
-        }
-    }
-
-    /// The effect a slot holds, if any.
-    pub fn of(insert: Insert) -> Option<Self> {
-        match insert {
-            Insert::Empty => None,
-            Insert::Distort(_) => Some(Self::Distort),
-            Insert::Delay(_) => Some(Self::Delay),
-            Insert::Reverb(_) => Some(Self::Reverb),
-            Insert::Chorus(_) => Some(Self::Chorus),
-            Insert::Eq(_) => Some(Self::Eq),
-            Insert::Compressor(_) => Some(Self::Compressor),
-            Insert::Limit(_) => Some(Self::Limit),
-            Insert::Phaser(_) => Some(Self::Phaser),
-            Insert::Flanger(_) => Some(Self::Flanger),
-            Insert::Tape(_) => Some(Self::Tape),
-            Insert::Plate(_) => Some(Self::Plate),
-            Insert::Pitch(_) => Some(Self::Pitch),
-            Insert::Grains(_) => Some(Self::Grains),
-            Insert::Warps(_) => Some(Self::Warps),
-            Insert::Lpg(_) => Some(Self::Lpg),
-            Insert::Reso(_) => Some(Self::Reso),
-            Insert::Comb(_) => Some(Self::Comb),
-            Insert::Vowel(_) => Some(Self::Vowel),
-            Insert::FreqShift(_) => Some(Self::FreqShift),
-            Insert::Spring(_) => Some(Self::Spring),
-            Insert::Stutter(_) => Some(Self::Stutter),
-            Insert::Clouds(_) => Some(Self::Clouds),
-            Insert::Beads(_) => Some(Self::Beads),
-            Insert::Echo(_) => Some(Self::Echo),
-            Insert::Exciter(_) => Some(Self::Exciter),
-            Insert::Rotary(_) => Some(Self::Rotary),
-            Insert::Space(_) => Some(Self::Space),
-        }
-    }
-}
-
-/// An effect's setting as an entry.
-fn param_entry(param: &Param) -> Entry {
-    Entry {
-        key: param.key,
-        name: param.name,
-        label: param.label,
-        kind: if param.choices.is_empty() {
-            let (middle, units) = match param.setting {
-                Setting::Gain => (false, Units::Decibels),
-                Setting::LowFrequency | Setting::MidFrequency | Setting::HighFrequency => {
-                    (false, Units::Hertz)
-                }
-                Setting::Low | Setting::Mid | Setting::High => (true, Units::Boost),
-                Setting::MidQ => (false, Units::Q),
-                Setting::Threshold => (false, Units::Threshold),
-                Setting::Ratio => (false, Units::Ratio),
-                Setting::Attack => (false, Units::Attack),
-                Setting::Release => (false, Units::Release),
-                Setting::Makeup => (false, Units::Makeup),
-                Setting::Range => (false, Units::Range),
-                Setting::Input => (false, Units::Input),
-                Setting::Ceiling => (false, Units::Ceiling),
-                Setting::LimitRelease => (false, Units::LimitRelease),
-                Setting::Centre => (false, Units::Hertz),
-                Setting::FlangerDelay => (false, Units::FlangerDelay),
-                Setting::FlangerFeedback | Setting::Tone | Setting::Bias => (true, Units::Percent),
-                Setting::TapeDrive => (true, Units::TapeDrive),
-                Setting::EchoRate => (false, Units::EchoRate),
-                Setting::EchoInput => (true, Units::EchoInput),
-                Setting::EchoBass => (true, Units::EchoBass),
-                Setting::EchoTreble => (true, Units::EchoTreble),
-                Setting::Size => (false, Units::PlateSize),
-                Setting::Fine => (true, Units::Cents),
-                Setting::Grain => (false, Units::Grain),
-                Setting::Position => (false, Units::GrainTime),
-                Setting::Length => (false, Units::GrainLength),
-                Setting::Density => (false, Units::Density),
-                Setting::Algorithm => (false, Units::Algorithm),
-                Setting::Vowel => (false, Units::Vowel),
-                Setting::ShiftHertz => (true, Units::ShiftHertz),
-                Setting::ShiftSpread => (false, Units::SpreadHertz),
-                Setting::LoopTime => (false, Units::LoopTime),
-                Setting::RepeatDecay => (false, Units::RepeatDecay),
-                Setting::ExciterTone => (false, Units::ExciterTone),
-                Setting::ExciterAttack => (false, Units::ExciterAttack),
-                Setting::ExciterRelease => (false, Units::ExciterRelease),
-                _ => (false, Units::Percent),
-            };
-            Kind::Continuous {
-                top: param.setting.highest(),
-                middle,
-                units,
-            }
-        } else {
-            Kind::Stepped {
-                choices: param.choices,
-                wraps: param.wraps,
-            }
-        },
-        default: param.default,
-    }
-}
-
 /// A mod slot's settings that steps can lock: its depth and polarity, whatever its type, and an
 /// LFO's phase and deform, in [`MOD_LOCKED_FIELDS`](crate::modulation::MOD_LOCKED_FIELDS)' order.
 const MOD: [Entry; 4] = [
@@ -1972,406 +1708,32 @@ const VOICE_OF: [u8; voices_size()] = {
     owners
 };
 
-const fn effect_start(effect: Effect) -> usize {
-    match effect {
-        Effect::Distort => 0,
-        Effect::Delay => DISTORT_PARAMS.len(),
-        Effect::Reverb => DISTORT_PARAMS.len() + DELAY_PARAMS.len(),
-        Effect::Chorus => DISTORT_PARAMS.len() + DELAY_PARAMS.len() + REVERB_PARAMS.len(),
-        Effect::Eq => {
-            DISTORT_PARAMS.len() + DELAY_PARAMS.len() + REVERB_PARAMS.len() + CHORUS_PARAMS.len()
-        }
-        Effect::Compressor => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-        }
-        Effect::Limit => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-        }
-        Effect::Phaser => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-        }
-        Effect::Flanger => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-        }
-        Effect::Tape => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-        }
-        Effect::Plate => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-        }
-        Effect::Pitch => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-        }
-        Effect::Grains => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-        }
-        Effect::Warps => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-        }
-        Effect::Lpg => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-        }
-        Effect::Reso => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-        }
-        Effect::Comb => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-                + RESO_PARAMS.len()
-        }
-        Effect::Vowel => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-                + RESO_PARAMS.len()
-                + COMB_PARAMS.len()
-        }
-        Effect::FreqShift => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-                + RESO_PARAMS.len()
-                + COMB_PARAMS.len()
-                + VOWEL_PARAMS.len()
-        }
-        Effect::Spring => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-                + RESO_PARAMS.len()
-                + COMB_PARAMS.len()
-                + VOWEL_PARAMS.len()
-                + FREQ_SHIFT_PARAMS.len()
-        }
-        Effect::Stutter => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-                + RESO_PARAMS.len()
-                + COMB_PARAMS.len()
-                + VOWEL_PARAMS.len()
-                + FREQ_SHIFT_PARAMS.len()
-                + SPRING_PARAMS.len()
-                + SPACE_PARAMS.len()
-                + ROTARY_PARAMS.len()
-                + EXCITER_PARAMS.len()
-        }
-        Effect::Clouds => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-                + RESO_PARAMS.len()
-                + COMB_PARAMS.len()
-                + VOWEL_PARAMS.len()
-                + FREQ_SHIFT_PARAMS.len()
-                + SPRING_PARAMS.len()
-                + SPACE_PARAMS.len()
-                + ROTARY_PARAMS.len()
-                + EXCITER_PARAMS.len()
-                + STUTTER_PARAMS.len()
-        }
-        Effect::Beads => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-                + RESO_PARAMS.len()
-                + COMB_PARAMS.len()
-                + VOWEL_PARAMS.len()
-                + FREQ_SHIFT_PARAMS.len()
-                + SPRING_PARAMS.len()
-                + SPACE_PARAMS.len()
-                + ROTARY_PARAMS.len()
-                + EXCITER_PARAMS.len()
-                + STUTTER_PARAMS.len()
-                + CLOUDS_PARAMS.len()
-        }
-        Effect::Exciter => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-                + RESO_PARAMS.len()
-                + COMB_PARAMS.len()
-                + VOWEL_PARAMS.len()
-                + FREQ_SHIFT_PARAMS.len()
-                + SPRING_PARAMS.len()
-                + SPACE_PARAMS.len()
-                + ROTARY_PARAMS.len()
-        }
-        Effect::Rotary => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-                + RESO_PARAMS.len()
-                + COMB_PARAMS.len()
-                + VOWEL_PARAMS.len()
-                + FREQ_SHIFT_PARAMS.len()
-                + SPRING_PARAMS.len()
-                + SPACE_PARAMS.len()
-        }
-        Effect::Space => {
-            DISTORT_PARAMS.len()
-                + DELAY_PARAMS.len()
-                + REVERB_PARAMS.len()
-                + CHORUS_PARAMS.len()
-                + EQ_PARAMS.len()
-                + COMPRESSOR_PARAMS.len()
-                + LIMIT_PARAMS.len()
-                + PHASER_PARAMS.len()
-                + FLANGER_PARAMS.len()
-                + TAPE_PARAMS.len()
-                + PLATE_PARAMS.len()
-                + PITCH_PARAMS.len()
-                + GRAINS_PARAMS.len()
-                + WARPS_PARAMS.len()
-                + LPG_PARAMS.len()
-                + RESO_PARAMS.len()
-                + COMB_PARAMS.len()
-                + VOWEL_PARAMS.len()
-                + FREQ_SHIFT_PARAMS.len()
-                + SPRING_PARAMS.len()
-        }
-        Effect::Echo => SLOT_SIZE - ECHO_PARAMS.len(),
+/// Where each effect's settings start in a slot's, by the effect's number, worked out as the
+/// program is built.
+const EFFECT_STARTS: [usize; EffectKind::COUNT] = {
+    let mut starts = [0; EffectKind::COUNT];
+    let mut start = 0;
+    let mut at = 0;
+    while at < EffectKind::COUNT {
+        starts[at] = start;
+        start += EFFECTS[at].params.len();
+        at += 1;
     }
+    starts
+};
+
+/// Where an effect's settings start in a slot's.
+const fn effect_start(effect: EffectKind) -> usize {
+    EFFECT_STARTS[effect as usize]
 }
 
 const VOICES_START: usize = TRACK.len();
 const SLOTS_START: usize = VOICES_START + voices_size();
 /// The places a slot's settings take: one for each setting of each effect it could hold.
-const SLOT_SIZE: usize = DISTORT_PARAMS.len()
-    + DELAY_PARAMS.len()
-    + REVERB_PARAMS.len()
-    + CHORUS_PARAMS.len()
-    + EQ_PARAMS.len()
-    + COMPRESSOR_PARAMS.len()
-    + LIMIT_PARAMS.len()
-    + PHASER_PARAMS.len()
-    + FLANGER_PARAMS.len()
-    + TAPE_PARAMS.len()
-    + PLATE_PARAMS.len()
-    + PITCH_PARAMS.len()
-    + GRAINS_PARAMS.len()
-    + WARPS_PARAMS.len()
-    + LPG_PARAMS.len()
-    + RESO_PARAMS.len()
-    + COMB_PARAMS.len()
-    + VOWEL_PARAMS.len()
-    + FREQ_SHIFT_PARAMS.len()
-    + SPRING_PARAMS.len()
-    + SPACE_PARAMS.len()
-    + ROTARY_PARAMS.len()
-    + EXCITER_PARAMS.len()
-    + STUTTER_PARAMS.len()
-    + CLOUDS_PARAMS.len()
-    + BEADS_PARAMS.len()
-    + ECHO_PARAMS.len();
+const SLOT_SIZE: usize = {
+    let last = EffectKind::COUNT - 1;
+    EFFECT_STARTS[last] + EFFECTS[last].params.len()
+};
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();
@@ -2387,7 +1749,7 @@ pub enum Owner {
     Voice(SynthVoice),
     Slot {
         slot: usize,
-        effect: Effect,
+        effect: EffectKind,
     },
     /// One of the track's mod slots, by its place, whatever its type.
     Mod(usize),
@@ -2507,7 +1869,7 @@ impl SettingId {
     }
 
     /// One of an effect's settings, in a slot.
-    pub const fn slot(slot: usize, effect: Effect, setting: usize) -> Option<Self> {
+    pub const fn slot(slot: usize, effect: EffectKind, setting: usize) -> Option<Self> {
         if slot < INSERTS && setting < effect.params().len() {
             Some(Self(
                 (SLOTS_START + slot * SLOT_SIZE + effect_start(effect) + setting) as u16,
@@ -2632,7 +1994,7 @@ impl SettingId {
         if at < MODS_START {
             let within = at - SLOTS_START;
             let (slot, within) = (within / SLOT_SIZE, within % SLOT_SIZE);
-            for effect in Effect::ALL {
+            for effect in EffectKind::ALL {
                 let start = effect_start(effect);
                 if within < start + effect.params().len() {
                     return (Owner::Slot { slot, effect }, within - start);
@@ -2648,7 +2010,7 @@ impl SettingId {
         match self.owner() {
             (Owner::Track, at) => TRACK[at],
             (Owner::Voice(voice), at) => voice_entries(voice)[at],
-            (Owner::Slot { effect, .. }, at) => param_entry(&effect.params()[at]),
+            (Owner::Slot { effect, .. }, at) => effect.params()[at].entry(),
             (Owner::Mod(_), at) => MOD[at],
             (Owner::Bypass(_), at) => SLOT_OWN[at],
             (Owner::Sampler, at) => SAMPLER[at],
@@ -2788,7 +2150,7 @@ mod tests {
         }
         assert_eq!(
             SettingId::from_key("2.delay.feedback"),
-            SettingId::slot(1, Effect::Delay, 1)
+            SettingId::slot(1, EffectKind::Delay, 1)
         );
         assert_eq!(
             SettingId::from_key("string.decay"),
@@ -2911,7 +2273,7 @@ mod tests {
         for label in track_and_events().chain(sampler) {
             assert!(seen.insert(label.clone()), "{label} twice on the sampler");
         }
-        for effect in Effect::ALL {
+        for effect in EffectKind::ALL {
             let mut seen = HashSet::from([SettingId::bypass(0).unwrap().label().unwrap()]);
             for at in 0..effect.params().len() {
                 let Some(label) = SettingId::slot(0, effect, at).unwrap().label() else {
@@ -2964,7 +2326,7 @@ mod tests {
         assert_eq!(shown(patch, 0x2000), "E.PIANO 1");
         let detune = SettingId::voice(SynthVoice::VirtualAnalog, 0).unwrap();
         assert_eq!(shown(detune, 0x8000), "+0 %");
-        let gain = SettingId::slot(0, Effect::Reverb, 6).unwrap();
+        let gain = SettingId::slot(0, EffectKind::Reverb, 6).unwrap();
         assert_eq!(shown(gain, 0xE000), "+0.0 dB");
         let (depth, phase) = (
             SettingId::modulator(0, 0).unwrap(),
@@ -2998,7 +2360,7 @@ mod tests {
             )
         );
         assert!(phase.entry().kind.wraps() && !depth.entry().kind.wraps());
-        let eq = |at| SettingId::slot(0, Effect::Eq, at).unwrap();
+        let eq = |at| SettingId::slot(0, EffectKind::Eq, at).unwrap();
         assert_eq!(shown(eq(0), 0x3B00), "99 Hz");
         assert_eq!(shown(eq(1), 0x8000), "+0.0 dB");
         assert_eq!(shown(eq(1), 0xFF00), "+15.0 dB");
@@ -3019,14 +2381,14 @@ mod tests {
         assert_eq!(shown(makeup, 0x0000), "+0.0 dB");
         assert_eq!(shown(makeup, 0x8000), "+12.0 dB");
         assert_eq!(shown(makeup, 0xFF00), "+24.0 dB");
-        let algo = SettingId::slot(0, Effect::Warps, 0).unwrap();
+        let algo = SettingId::slot(0, EffectKind::Warps, 0).unwrap();
         assert_eq!(shown(algo, 0x0000), "Xfade");
         assert_eq!(shown(algo, 0x6000), "Digital");
         assert_eq!(shown(algo, 0x7000), "Digital>XOR");
         assert_eq!(shown(algo, 0xB300), "Mod");
         assert_eq!(shown(algo, 0xD000), "Vocoder");
         assert_eq!(shown(algo, 0xFF00), "Vocoder hold");
-        let source = SettingId::slot(0, Effect::Warps, 2).unwrap();
+        let source = SettingId::slot(0, EffectKind::Warps, 2).unwrap();
         assert_eq!(shown(source, 0x0000), "Osc");
         assert_eq!(shown(source, 0x4100), "A");
     }
@@ -3037,7 +2399,7 @@ mod tests {
         assert_eq!(FxCommand::Del.name(), "DEL");
         let punch = SettingId::voice(SynthVoice::Kick, 0).unwrap();
         assert_eq!(FxCommand::Set(punch).name(), "PNCH");
-        let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
+        let feedback = SettingId::slot(1, EffectKind::Delay, 1).unwrap();
         assert_eq!(FxCommand::Set(feedback).name(), "2FDBK");
         assert_eq!(FxCommand::Set(feedback).key(), "2.delay.feedback");
         assert_eq!(

@@ -177,7 +177,7 @@ fn a_slots_settings_are_on_the_dest_list_only_while_it_holds_something() {
     // Choosing one saves it, and it reads back on the page.
     press(&mut app, "K/1 amount");
     special(&mut app, KeyCode::Enter);
-    let target = SettingId::slot(0, vt_model::settings::Effect::Distort, 1).unwrap();
+    let target = SettingId::slot(0, vt_model::insert::EffectKind::Distort, 1).unwrap();
     assert_eq!(app.song().tracks[0].mods[3].destination, Some(target));
     let lfo = |app: &App| device_title(app, "Mod 4");
     assert!(lfo(&app).contains("1 Amount"), "{}", lfo(&app));
@@ -201,19 +201,20 @@ fn stepping_dest_goes_through_a_slots_settings() {
     }
     assert_eq!(
         app.song().tracks[0].mods[3].destination,
-        Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 0).unwrap()),
+        Some(SettingId::slot(0, vt_model::insert::EffectKind::Distort, 0).unwrap()),
     );
 }
 
 #[test]
 fn a_slots_setting_is_chosen_for_a_step_by_its_label_and_saved_by_its_key() {
-    use vt_model::settings::{Effect, SettingId};
+    use vt_model::insert::EffectKind;
+    use vt_model::settings::SettingId;
     use vt_model::step::FxCommand;
     let (mut app, _realtime) = app();
     press(&mut app, " 5LL= 3");
     let command =
         |app: &App, step: usize| app.services.phrase_here().unwrap().steps()[step].fx[0].command;
-    let setting = |at| FxCommand::Set(SettingId::slot(0, Effect::Distort, at).unwrap());
+    let setting = |at| FxCommand::Set(SettingId::slot(0, EffectKind::Distort, at).unwrap());
 
     // The list has what's on the track, by label and then by group and name.
     press(&mut app, "lllllK");
@@ -473,7 +474,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.song().tracks[0].mods[3].destination,
-        Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 4).unwrap())
+        Some(SettingId::slot(0, vt_model::insert::EffectKind::Distort, 4).unwrap())
     );
 
     // It opens on what's chosen, inside its category, and Esc leaves it.
@@ -484,7 +485,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(
         app.song().tracks[0].mods[3].destination,
-        Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 4).unwrap()),
+        Some(SettingId::slot(0, vt_model::insert::EffectKind::Distort, 4).unwrap()),
         "changing nothing"
     );
 

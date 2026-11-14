@@ -25,7 +25,7 @@ use crate::views::widgets::device::{Device, rack_areas};
 use crate::views::widgets::grid::{CellSource, CellWidths, SettingsGrid, faded};
 use crate::views::widgets::image;
 use crate::views::widgets::panel::GraphicPanel;
-use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
+use crate::views::widgets::setting::{self, Focus, name_line, value_spans};
 
 use super::{at_default, value, value_line};
 
@@ -71,8 +71,8 @@ impl CellSource for ModCells<'_> {
     type Id = Control;
 
     fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let labels = jump_label(self.ctx, control);
-        name_line(self.ctx, control.label_on(self.track), &labels, room)
+        let look = self.ctx.look_on(control, Focus::Off);
+        name_line(&look, control.label_on(self.track), room)
     }
 
     fn value(&self, control: Control) -> Line<'static> {
@@ -116,12 +116,13 @@ fn title_controls(
         .flatten()
         .map(|control| {
             let here = *control == current;
-            let text = setting::text(ctx, here, || value(*control, track, ctx.song()));
+            let look = ctx.look_on(*control, Focus::at(here, false));
+            let text = setting::text(&look, || value(*control, track, ctx.song()));
             let nowhere = goes_nowhere(*control, track);
-            let style = setting::style(ctx, here, nowhere);
-            let mut spans = value_spans(ctx, *control, text, style);
+            let style = setting::style(&look, nowhere);
+            let mut spans = value_spans(&look, text, style);
             if matches!(control, Control::Mod(_, ModField::Destination)) {
-                let arrow = setting::style(ctx, false, nowhere);
+                let arrow = setting::resting(nowhere);
                 spans.insert(0, Span::styled(TO, arrow));
             }
             Line::from(spans)

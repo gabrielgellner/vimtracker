@@ -6,8 +6,8 @@ use crate::constants::UNITY_LEVEL;
 use crate::lfo::DIVISION_NAMES;
 
 use super::{
-    GAIN_PARAM, MIX_PARAM, OFF_ON, Param, RETIMES, Setting, WET_MIX_PARAM, from_middle, hex_param,
-    is_zero,
+    GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, RETIMES, Setting, Units, WET_MIX_PARAM,
+    from_middle, hex_param, is_zero,
 };
 
 /// A delay's, in the order the page shows them.
@@ -17,9 +17,12 @@ pub(crate) const DELAY_PARAMS: [Param; 11] = [
         key: "time",
         label: Some("TIME"),
         setting: Setting::Time,
-        choices: &DIVISION_NAMES,
-        wraps: false,
+        kind: Kind::Stepped {
+            choices: &DIVISION_NAMES,
+            wraps: false,
+        },
         default: Delay::DEFAULT.time,
+        place: Place::Own,
     },
     hex_param(
         "Feedback",
@@ -33,9 +36,12 @@ pub(crate) const DELAY_PARAMS: [Param; 11] = [
         key: "pingpong",
         label: Some("PING"),
         setting: Setting::PingPong,
-        choices: &OFF_ON,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: true,
+        },
         default: Delay::DEFAULT.ping_pong,
+        place: Place::Own,
     },
     hex_param(
         "Width",
@@ -70,9 +76,12 @@ pub(crate) const DELAY_PARAMS: [Param; 11] = [
         key: "retime",
         label: Some("RTIM"),
         setting: Setting::Retime,
-        choices: &RETIMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &RETIMES,
+            wraps: true,
+        },
         default: Delay::DEFAULT.retime,
+        place: Place::Own,
     },
     hex_param("Wow", "wow", "WOW", Setting::Wow, Delay::DEFAULT.wow),
     WET_MIX_PARAM,
@@ -272,9 +281,12 @@ pub(crate) const ECHO_PARAMS: [Param; 13] = [
         key: "mode",
         label: Some("MODE"),
         setting: Setting::EchoMode,
-        choices: &ECHO_MODE_NAMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &ECHO_MODE_NAMES,
+            wraps: true,
+        },
         default: Echo::DEFAULT.mode,
+        place: Place::Type,
     },
     hex_param(
         "Rate",
@@ -282,15 +294,19 @@ pub(crate) const ECHO_PARAMS: [Param; 13] = [
         "RATE",
         Setting::EchoRate,
         Echo::DEFAULT.rate,
-    ),
+    )
+    .units(Units::EchoRate),
     Param {
         name: "Sync",
         key: "sync",
         label: Some("SYNC"),
         setting: Setting::EchoSync,
-        choices: &ECHO_SYNC_NAMES,
-        wraps: false,
+        kind: Kind::Stepped {
+            choices: &ECHO_SYNC_NAMES,
+            wraps: false,
+        },
         default: Echo::DEFAULT.sync,
+        place: Place::Own,
     },
     hex_param(
         "Inertia",
@@ -312,7 +328,9 @@ pub(crate) const ECHO_PARAMS: [Param; 13] = [
         "INPT",
         Setting::EchoInput,
         Echo::DEFAULT.input,
-    ),
+    )
+    .units(Units::EchoInput)
+    .centred(),
     hex_param("Wow", "wow", "WOW", Setting::Wow, Echo::DEFAULT.wow),
     hex_param(
         "Bass",
@@ -320,14 +338,18 @@ pub(crate) const ECHO_PARAMS: [Param; 13] = [
         "BASS",
         Setting::EchoBass,
         Echo::DEFAULT.bass,
-    ),
+    )
+    .units(Units::EchoBass)
+    .centred(),
     hex_param(
         "Treble",
         "treble",
         "TREB",
         Setting::EchoTreble,
         Echo::DEFAULT.treble,
-    ),
+    )
+    .units(Units::EchoTreble)
+    .centred(),
     hex_param(
         "Reverb",
         "reverb",
@@ -566,7 +588,7 @@ pub(crate) const PLATE_PARAMS: [Param; 8] = [
         Setting::HighCut,
         Plate::DEFAULT.high_cut,
     ),
-    hex_param("Size", "size", "SIZE", Setting::Size, Plate::DEFAULT.size),
+    hex_param("Size", "size", "SIZE", Setting::Size, Plate::DEFAULT.size).units(Units::PlateSize),
     hex_param(
         "Mod",
         "mod",
@@ -698,9 +720,12 @@ pub(crate) const SPRING_PARAMS: [Param; 9] = [
         key: "knock",
         label: Some("KNCK"),
         setting: Setting::Knock,
-        choices: &OFF_ON,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: true,
+        },
         default: Spring::DEFAULT.knock,
+        place: Place::Own,
     },
     WET_MIX_PARAM,
     GAIN_PARAM,
@@ -918,27 +943,36 @@ pub(crate) const STUTTER_PARAMS: [Param; 6] = [
         key: "trig",
         label: Some("TRIG"),
         setting: Setting::Trig,
-        choices: &OFF_ON,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: true,
+        },
         default: Stutter::DEFAULT.trig,
+        place: Place::Own,
     },
     Param {
         name: "Length",
         key: "length",
         label: Some("LEN"),
         setting: Setting::RepeatLength,
-        choices: &REPEAT_LENGTH_NAMES,
-        wraps: false,
+        kind: Kind::Stepped {
+            choices: &REPEAT_LENGTH_NAMES,
+            wraps: false,
+        },
         default: Stutter::DEFAULT.length,
+        place: Place::Own,
     },
     Param {
         name: "Repeats",
         key: "repeats",
         label: Some("RPTS"),
         setting: Setting::Repeats,
-        choices: &REPEAT_NAMES,
-        wraps: false,
+        kind: Kind::Stepped {
+            choices: &REPEAT_NAMES,
+            wraps: false,
+        },
         default: Stutter::DEFAULT.repeats,
+        place: Place::Own,
     },
     hex_param(
         "Decay",
@@ -946,7 +980,8 @@ pub(crate) const STUTTER_PARAMS: [Param; 6] = [
         "DCAY",
         Setting::RepeatDecay,
         Stutter::DEFAULT.decay,
-    ),
+    )
+    .units(Units::RepeatDecay),
     Param {
         default: 0xFF,
         ..MIX_PARAM
