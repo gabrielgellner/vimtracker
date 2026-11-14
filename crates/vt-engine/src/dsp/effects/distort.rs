@@ -388,6 +388,12 @@ impl InsertState {
     /// Take what's now in the slot, with what it keeps coming from and going back to the pool. If
     /// there's none free yet, it's silent and asks again next time.
     pub fn hold(&mut self, insert: Insert, pool: &mut MemoryPool, song: SongPlace, frames: u64) {
+        // An empty slot taking an empty slot again has nothing to set: an empty slot's own
+        // settings are never heard, and an effect put in it starts afresh (#187).
+        if matches!((self.insert, insert), (Insert::Empty, Insert::Empty)) && self.memory.is_none()
+        {
+            return;
+        }
         let frames_per_tick = song.frames_per_tick;
         if !same_effect(self.insert, insert) {
             self.give_back(pool);
@@ -647,6 +653,10 @@ impl InsertState {
         if !self.on.value.same_bits(&self.on.target) || moves_by_itself || buffer_working {
             return None;
         }
+        // An empty slot keeps nothing, so there's nothing to try.
+        if let Some(passed) = self.passed_through(input, same) {
+            return Some(passed);
+        }
         let mut tried = self.without_memory();
         let out = tried.process_sides(input, same, smoothing, rate, keys);
         tried.kept_as(self).then_some(out)
@@ -872,6 +882,19 @@ impl InsertState {
     /// Whether the slot has no effect in it.
     pub fn is_empty(&self) -> bool {
         matches!(self.insert, Insert::Empty)
+    }
+
+    /// What an empty slot gives for a frame while it isn't fading, which is all
+    /// [`InsertState::process_sides`] does with one: the frame as it came, with a NaN or an
+    /// infinity heard as silence, and whether its sides are the same. It keeps nothing, so it's
+    /// passed by without working through the rest (#187). None for any other slot.
+    #[inline]
+    pub fn passed_through(&self, input: [f32; 2], same: bool) -> Option<([f32; 2], bool)> {
+        if !self.is_empty() || self.on.value != self.on.target {
+            return None;
+        }
+        let out = input.map(|sample| if sample.is_finite() { sample } else { 0.0 });
+        Some((out, same || same_sides(out)))
     }
 
     /// What its effect does with a sound that's the same on both sides (decision 147). Every
@@ -1176,6 +1199,43 @@ mod tests {
             ..Distort::default()
         }));
         state
+    }
+
+    #[test]
+    fn an_empty_slot_passed_by_gives_what_working_it_through_does() {
+        let keys = Keys::default();
+        let frames = [
+            [0.25, -0.5],
+            [0.3, 0.3],
+            [-0.0, 0.0],
+            [f32::NAN, 0.1],
+            [f32::INFINITY, f32::INFINITY],
+        ];
+        for bypassed in [false, true] {
+            let mut state = InsertState::default();
+            state.bypass(bypassed);
+            state.settle();
+            for frame in frames {
+                for same in [false, true] {
+                    let passed = state.passed_through(frame, same).unwrap();
+                    let worked = state.process_sides(frame, same, NO_SMOOTHING, RATE, &keys);
+                    assert_eq!(passed.0.map(f32::to_bits), worked.0.map(f32::to_bits));
+                    assert_eq!(passed.1, worked.1);
+                    assert_eq!(
+                        state.settled(frame, same, NO_SMOOTHING, RATE, &keys),
+                        Some(passed)
+                    );
+                }
+            }
+            // Fading in or out, it's worked through, as the fade moves.
+            state.bypass(!bypassed);
+            assert!(state.passed_through([0.1, 0.2], false).is_none());
+        }
+        assert!(
+            state(DistortType::Soft, 0x80, 0xFF)
+                .passed_through([0.1, 0.2], false)
+                .is_none()
+        );
     }
 
     fn sine(hertz: f32, level: f32, frames: usize) -> impl Iterator<Item = f32> {
