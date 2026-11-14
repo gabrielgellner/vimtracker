@@ -282,7 +282,7 @@ impl Divisions {
     }
 
     /// The earliest a strike is nudged, in 24ths of a sixteenth: a triplet's third of a row, `-8`
-    /// on a track at `1/16`, `-4` at `1/32` and `-40` at `1/2`.
+    /// on a track at `1/16`, `-4` at `1/32` and -64, `-40` as the grid shows it, at `1/2`.
     pub fn earliest(&self) -> i8 {
         self.nudge(-((self.bar.row_ticks() / 3) as i64))
     }
