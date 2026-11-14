@@ -10,15 +10,16 @@ use crate::envelope::time_at;
 use crate::groove::GROOVE_CHOICES;
 use crate::insert::{
     ALGORITHM_NAMES, BEADS_PARAMS, CHORUS_PARAMS, CLOUDS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS,
-    DELAY_PARAMS, DISTORT_PARAMS, ECHO_PARAMS, EQ_PARAMS, EXCITER_PARAMS, FLANGER_PARAMS,
-    FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, LPG_PARAMS, PHASER_PARAMS,
-    PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, ROTARY_PARAMS, SPACE_PARAMS,
-    SPRING_PARAMS, STUTTER_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS,
-    WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db, exciter_attack_ms, exciter_release_ms,
-    exciter_tone_hz, fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms,
-    grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio,
-    release_ms, repeat_decay_db, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db,
-    threshold_db, vowel_blend,
+    DELAY_PARAMS, DISTORT_PARAMS, ECHO_BASS, ECHO_PARAMS, ECHO_TREBLE, EQ_PARAMS, EXCITER_PARAMS,
+    FLANGER_PARAMS, FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, LPG_PARAMS,
+    PHASER_PARAMS, PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, ROTARY_PARAMS,
+    SPACE_PARAMS, SPRING_PARAMS, STUTTER_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES,
+    VOWEL_PARAMS, WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db, echo_head_seconds,
+    echo_input_db, echo_shelf_db, exciter_attack_ms, exciter_release_ms, exciter_tone_hz,
+    fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds,
+    input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms,
+    repeat_decay_db, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db,
+    vowel_blend,
 };
 use crate::macros::MACROS;
 use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
@@ -85,6 +86,11 @@ pub enum Units {
     FlangerDelay,
     /// A tape's drive, in dB either way of none.
     TapeDrive,
+    /// A Space Echo's first head's delay, its drive and its shelves, in ms and dB.
+    EchoRate,
+    EchoInput,
+    EchoBass,
+    EchoTreble,
     /// A plate's size, as so many times Dattorro's.
     PlateSize,
     /// A pitch shifter's fine shift in cents, and its grains' length in ms.
@@ -327,6 +333,12 @@ impl Kind {
                 Units::LimitRelease => milliseconds(limit_release_ms(coarse as f32)),
                 Units::FlangerDelay => format!("{:.1} ms", flanger_delay_ms(coarse as f32)),
                 Units::TapeDrive => format!("{:+.1} dB", tape_drive_db(coarse as f32)),
+                Units::EchoRate => milliseconds(echo_head_seconds(coarse as f32) * 1000.0),
+                Units::EchoInput => format!("{:+.1} dB", echo_input_db(coarse as f32)),
+                Units::EchoBass => format!("{:+.1} dB", echo_shelf_db(coarse as f32, ECHO_BASS)),
+                Units::EchoTreble => {
+                    format!("{:+.1} dB", echo_shelf_db(coarse as f32, ECHO_TREBLE))
+                }
                 Units::PlateSize => format!("{:.2}x", plate_size(coarse as f32)),
                 Units::Cents => format!("{:+.0} ct", fine_cents(coarse as f32)),
                 Units::Grain => milliseconds(grain_ms(coarse as f32)),
@@ -1486,6 +1498,10 @@ fn param_entry(param: &Param) -> Entry {
                 Setting::FlangerDelay => (false, Units::FlangerDelay),
                 Setting::FlangerFeedback | Setting::Tone | Setting::Bias => (true, Units::Percent),
                 Setting::TapeDrive => (true, Units::TapeDrive),
+                Setting::EchoRate => (false, Units::EchoRate),
+                Setting::EchoInput => (true, Units::EchoInput),
+                Setting::EchoBass => (true, Units::EchoBass),
+                Setting::EchoTreble => (true, Units::EchoTreble),
                 Setting::Size => (false, Units::PlateSize),
                 Setting::Fine => (true, Units::Cents),
                 Setting::Grain => (false, Units::Grain),
@@ -2987,6 +3003,16 @@ mod tests {
         assert_eq!(shown(eq(1), 0xFF00), "+15.0 dB");
         assert_eq!(shown(eq(1), 0x0000), "-15.0 dB");
         assert_eq!(shown(eq(6), 0x4000), "Q 0.71");
+        // A Space Echo's tape speed, drive and shelves, each on its own scale.
+        let echo = |key: &str| SettingId::from_key(&format!("1.echo.{key}")).unwrap();
+        assert_eq!(shown(echo("rate"), 0x6900), "150 ms");
+        assert_eq!(shown(echo("rate"), 0x0000), "1.00 s");
+        assert_eq!(shown(echo("input"), 0x8000), "+0.0 dB");
+        assert_eq!(shown(echo("input"), 0xFF00), "+24.0 dB");
+        assert_eq!(shown(echo("input"), 0x0000), "-24.0 dB");
+        assert_eq!(shown(echo("bass"), 0x8000), "+0.0 dB");
+        assert_eq!(shown(echo("bass"), 0xFF00), "+23.1 dB");
+        assert_eq!(shown(echo("treble"), 0x0000), "-15.4 dB");
         let makeup = SettingId::from_key("1.comp.makeup").unwrap();
         assert_eq!(makeup.label(), Some("1MKUP".into()));
         assert_eq!(shown(makeup, 0x0000), "+0.0 dB");

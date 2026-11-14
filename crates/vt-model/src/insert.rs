@@ -219,12 +219,16 @@ pub enum Setting {
     BeadsTime,
     BeadsDensity,
     Clock,
-    /// A Space Echo's: its mode, whether the tape's speed follows the song's tempo, and how loud
-    /// its repeats are. Its `Rate` is the chorus's, its `Intensity` the delay's `Feedback`, its
-    /// `Input` the limiter's, its `Inertia` the rotary's, its `Wow` the tape's, its `Bass` and
-    /// `Treble` the EQ's `Low` and `High`, and its `Reverb` Clouds'.
+    /// A Space Echo's: its mode, how fast its tape runs and whether that follows the song's tempo,
+    /// how hard it's driven, its tone and how loud its repeats are, each on its own scale. Its
+    /// `Intensity` is the delay's `Feedback`, its `Inertia` the rotary's, its `Wow` the tape's and
+    /// its `Reverb` Clouds'.
     EchoMode,
+    EchoRate,
     EchoSync,
+    EchoInput,
+    EchoBass,
+    EchoTreble,
     EchoLevel,
     Mix,
     Gain,
@@ -968,9 +972,9 @@ impl Insert {
             // The tape's speed and how it gets there; the loop; the tone and the reverb; then the
             // repeats' level over what comes out. Its mode is in the title.
             Self::Echo(_) => &[
-                &[S::Rate, S::EchoSync, S::Inertia],
-                &[S::Feedback, S::Input, S::Wow],
-                &[S::Low, S::High, S::ReverbAmount],
+                &[S::EchoRate, S::EchoSync, S::Inertia],
+                &[S::Feedback, S::EchoInput, S::Wow],
+                &[S::EchoBass, S::EchoTreble, S::ReverbAmount],
                 &[S::EchoLevel, S::Mix, S::Gain],
             ],
             _ => return self.default_grid(),

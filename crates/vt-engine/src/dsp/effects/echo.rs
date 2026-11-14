@@ -18,8 +18,8 @@
 use std::f64::consts::TAU;
 
 use vt_model::insert::{
-    ECHO_HEAD_SECONDS, Echo as Settings, MOST_ECHO_INPUT_DB, MOST_INTENSITY,
-    Spring as SpringSettings, echo_head_seconds, echo_mode, from_middle,
+    ECHO_BASS, ECHO_HEAD_SECONDS, ECHO_TREBLE, Echo as Settings, MOST_INTENSITY,
+    Spring as SpringSettings, echo_head_seconds, echo_input_db, echo_mode, from_middle,
 };
 use vt_model::lfo::DIVISION_TICKS;
 use vt_model::song::level_gain;
@@ -80,11 +80,9 @@ const DRIFT_SECONDS: f64 = 1.5;
 const MOTOR_FAST_SECONDS: f64 = 0.013;
 const MOTOR_SLOW_SECONDS: (f64, f64) = (0.19, 2.11);
 
-/// The tone controls, fitted to TAPE-201's `Bass` and `Treble`: a first-order shelf each, the
-/// bass's pole and the treble's zero where they're fixed, how far each lifts or cuts at its end in
-/// dB, and the power its knob is raised to, as a pot's taper.
-const BASS: (f32, f32, f32) = (24.0, 23.15, 1.161);
-const TREBLE: (f32, f32, f32) = (1038.0, 15.38, 2.077);
+/// The tone controls, the model's, so the page shows what they do.
+const BASS: (f32, f32, f32) = ECHO_BASS;
+const TREBLE: (f32, f32, f32) = ECHO_TREBLE;
 
 /// The spring tank the reverb is, set once, how long before it's heard, and how loud.
 const SPRING: SpringSettings = SpringSettings {
@@ -463,8 +461,7 @@ impl Echo {
             head.target = weight;
         }
         self.reverb_on.target = if reverb { 1.0 } else { 0.0 };
-        let input_db = from_middle(f32::from(settings.input)) * MOST_ECHO_INPUT_DB;
-        self.drive.target = 10_f32.powf(input_db / 20.0);
+        self.drive.target = 10_f32.powf(echo_input_db(f32::from(settings.input)) / 20.0);
         self.intensity.target = f32::from(settings.intensity) / 255.0 * MOST_INTENSITY;
         self.wow.target = f32::from(settings.wow) / 255.0;
         self.bass.target = from_middle(f32::from(settings.bass));
@@ -1228,6 +1225,44 @@ mod tests {
         let out = through(&mut echo, &[], RATE as usize * 6);
         assert!(out[RATE as usize..].iter().all(|s| s.is_finite()));
         assert!(out[out.len() - 100..].iter().all(|s| s.abs() < 1e-4));
+    }
+
+    #[test]
+    fn the_page_shows_what_the_input_and_the_shelves_do() {
+        use vt_model::settings::SettingId;
+        let shown_db = |key: &str, value: u8| -> f32 {
+            let id = SettingId::from_key(&format!("1.echo.{key}")).unwrap();
+            let text = id.entry().kind.shown(u16::from(value) << 8);
+            text.trim_end_matches(" dB").parse().unwrap()
+        };
+        for value in [0x00_u8, 0x30, 0x60, 0x80, 0xA0, 0xC0, 0xE0, 0xFF] {
+            // The drive as the effect takes it.
+            let mut echo = echo(Settings {
+                input: value,
+                ..PLAIN
+            });
+            echo.follow(
+                Settings {
+                    input: value,
+                    ..PLAIN
+                },
+                FRAMES_PER_TICK,
+            );
+            let drive = 20.0 * echo.drive.target.log10();
+            assert!((shown_db("input", value) - drive).abs() < 0.06, "{value:x}");
+            // Each shelf where it's flat again: the bass towards DC, the treble at the top.
+            let k = from_middle(f32::from(value));
+            let bass = tone_at(1e-6, k, 0.0, RATE).db();
+            let treble = tone_at(0.4999, 0.0, k, RATE).db();
+            assert!(
+                (shown_db("bass", value) - bass).abs() < 0.06,
+                "{value:x}: {bass}"
+            );
+            assert!(
+                (shown_db("treble", value) - treble).abs() < 0.06,
+                "{value:x}: {treble}"
+            );
+        }
     }
 
     #[test]

@@ -242,6 +242,26 @@ pub const MOST_INTENSITY: f32 = 1.2;
 /// How far a Space Echo's `Input` turns what goes in up or down at most, in dB.
 pub const MOST_ECHO_INPUT_DB: f32 = 24.0;
 
+/// How far a Space Echo's `Input` turns what goes in up or down, in dB, for a value on the `00`
+/// to `FF` scale: evenly from 24 dB down at `00`, through none at `80`, to 24 up at `FF`.
+pub fn echo_input_db(value: f32) -> f32 {
+    from_middle(value) * MOST_ECHO_INPUT_DB
+}
+
+/// A Space Echo's tone controls, fitted to TAPE-201's `Bass` and `Treble`: a first-order shelf
+/// each, the bass's pole and the treble's zero where they're fixed, in Hz, how far each lifts or
+/// cuts at its end in dB, and the power its knob is raised to, as a pot's taper.
+pub const ECHO_BASS: (f32, f32, f32) = (24.0, 23.15, 1.161);
+pub const ECHO_TREBLE: (f32, f32, f32) = (1038.0, 15.38, 2.077);
+
+/// How far a Space Echo's shelf lifts or cuts where it's flat again, past its corners, in dB,
+/// for a value on the `00` to `FF` scale: none at `80`, and as its taper goes to its most either
+/// way, so `C0` lifts the bass 10 dB and the treble 3.6.
+pub fn echo_shelf_db(value: f32, (_, most_db, power): (f32, f32, f32)) -> f32 {
+    let k = from_middle(value);
+    most_db * k.abs().powf(power) * k.signum()
+}
+
 /// A Space Echo's, in the order the slot keeps them: its mode, which the title shows; the tape's
 /// speed, whether it follows the song's tempo, and how slowly its motor gets there; the loop's
 /// feedback, how hard it's driven and how much the tape wobbles; the tone, the reverb, and the
@@ -256,7 +276,13 @@ pub(crate) const ECHO_PARAMS: [Param; 13] = [
         wraps: true,
         default: Echo::DEFAULT.mode,
     },
-    hex_param("Rate", "rate", "RATE", Setting::Rate, Echo::DEFAULT.rate),
+    hex_param(
+        "Rate",
+        "rate",
+        "RATE",
+        Setting::EchoRate,
+        Echo::DEFAULT.rate,
+    ),
     Param {
         name: "Sync",
         key: "sync",
@@ -284,16 +310,22 @@ pub(crate) const ECHO_PARAMS: [Param; 13] = [
         "Input",
         "input",
         "INPT",
-        Setting::Input,
+        Setting::EchoInput,
         Echo::DEFAULT.input,
     ),
     hex_param("Wow", "wow", "WOW", Setting::Wow, Echo::DEFAULT.wow),
-    hex_param("Bass", "bass", "BASS", Setting::Low, Echo::DEFAULT.bass),
+    hex_param(
+        "Bass",
+        "bass",
+        "BASS",
+        Setting::EchoBass,
+        Echo::DEFAULT.bass,
+    ),
     hex_param(
         "Treble",
         "treble",
         "TREB",
-        Setting::High,
+        Setting::EchoTreble,
         Echo::DEFAULT.treble,
     ),
     hex_param(
@@ -378,14 +410,14 @@ impl Echo {
     pub(super) fn read(self, setting: Setting) -> u8 {
         match setting {
             Setting::EchoMode => self.mode,
-            Setting::Rate => self.rate,
+            Setting::EchoRate => self.rate,
             Setting::EchoSync => self.sync,
             Setting::Inertia => self.inertia,
             Setting::Feedback => self.intensity,
-            Setting::Input => self.input,
+            Setting::EchoInput => self.input,
             Setting::Wow => self.wow,
-            Setting::Low => self.bass,
-            Setting::High => self.treble,
+            Setting::EchoBass => self.bass,
+            Setting::EchoTreble => self.treble,
             Setting::ReverbAmount => self.reverb,
             Setting::EchoLevel => self.echo,
             Setting::Mix => self.mix,
@@ -400,14 +432,14 @@ impl Echo {
         let mut echo = self;
         match setting {
             Setting::EchoMode => echo.mode = value,
-            Setting::Rate => echo.rate = value,
+            Setting::EchoRate => echo.rate = value,
             Setting::EchoSync => echo.sync = value,
             Setting::Inertia => echo.inertia = value,
             Setting::Feedback => echo.intensity = value,
-            Setting::Input => echo.input = value,
+            Setting::EchoInput => echo.input = value,
             Setting::Wow => echo.wow = value,
-            Setting::Low => echo.bass = value,
-            Setting::High => echo.treble = value,
+            Setting::EchoBass => echo.bass = value,
+            Setting::EchoTreble => echo.treble = value,
             Setting::ReverbAmount => echo.reverb = value,
             Setting::EchoLevel => echo.echo = value,
             Setting::Mix => echo.mix = value,
