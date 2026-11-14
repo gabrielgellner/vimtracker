@@ -42,6 +42,7 @@ mod play_start;
 mod quantise;
 mod rate_modulation;
 mod realign;
+mod recorder;
 mod render;
 mod resting;
 mod returns;
