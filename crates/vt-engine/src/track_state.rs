@@ -7,7 +7,7 @@ use vt_model::attractor::{Attractor, System, view};
 use vt_model::constants::{FX_SLOTS, MAX_TRACKS, UNITY_LEVEL};
 use vt_model::envelope::{Envelope, Lpg};
 use vt_model::groove::Groove;
-use vt_model::insert::{INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS, Setting};
+use vt_model::insert::{EffectKind, INSERTS, Insert, MAX_KEPT_PARAMS, MAX_PARAMS, Setting};
 use vt_model::lfo::{LfoMode, MAX_DEFORM, Rate, deformed_wave, phase_of};
 use vt_model::macros::{MACROS, MacroTarget};
 use vt_model::modulation::{
@@ -16,9 +16,8 @@ use vt_model::modulation::{
 use vt_model::playable::Playable;
 use vt_model::scale::Scale;
 use vt_model::settings::{
-    Effect, FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, MOD_OWN_SETTINGS, Owner, PLAYED_SETTINGS,
-    PlayMode, SAMPLER_SETTINGS, SettingId, gate_delta, gate_share, glide_ms, moved_velocity,
-    quantised_nudge,
+    FADER_COUNT, FADERS, MAX_MACHINE_SETTINGS, MOD_OWN_SETTINGS, Owner, PLAYED_SETTINGS, PlayMode,
+    SAMPLER_SETTINGS, SettingId, gate_delta, gate_share, glide_ms, moved_velocity, quantised_nudge,
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
 use vt_model::speed::Speed;
@@ -1129,7 +1128,7 @@ pub struct TrackState {
     /// Where each of the loaded voice's settings is in the registry, by its place among the
     /// voice's, looked up as it's loaded rather than at every update (#187).
     voice_settings: [Option<usize>; MAX_MACHINE_SETTINGS],
-    loaded_effects: [Option<Effect>; INSERTS],
+    loaded_effects: [Option<EffectKind>; INSERTS],
     /// Held `VOL`, `SNA` and `SNB`, as level values, so `E0` is exactly 0 dB. What's smoothed is the gain they come to, so the
     /// curve is only worked out when they or an LFO change.
     vol: f32,
@@ -1776,7 +1775,7 @@ impl TrackState {
             }
         }
         for slot in 0..INSERTS {
-            let effect = Effect::of(track.inserts[slot]);
+            let effect = track.inserts[slot].kind();
             if effect == self.loaded_effects[slot] {
                 continue;
             }
@@ -2051,7 +2050,7 @@ impl TrackState {
         for (slot, insert) in track.inserts.into_iter().enumerate() {
             let mut resolved = insert;
             self.slot_moving[slot] = false;
-            let effect = Effect::of(insert);
+            let effect = insert.kind();
             // A mode shows some of its effect's settings, so each is found by what it is.
             for found in insert.params() {
                 let setting = found.setting;
@@ -3399,7 +3398,7 @@ mod tests {
         let mut track = Track::default();
         track.inserts[1] = Insert::ALL[3];
         state.load(&track);
-        let feedback = SettingId::slot(1, Effect::Delay, 1).unwrap();
+        let feedback = SettingId::slot(1, EffectKind::Delay, 1).unwrap();
         state.set_value(feedback, 0x3000, Mark::Hold);
         assert_ne!(
             state.slot_values[1][1], 0x30 as f32,

@@ -7,8 +7,8 @@ use crate::lfo::SWEEP_NAMES;
 
 use super::pitch::{MOST_SHIFT, PITCH_PARAMS};
 use super::{
-    GAIN_PARAM, MIX_PARAM, OFF_ON, Param, SOURCE_NAMES, Setting, WET_MIX_PARAM, from_middle,
-    hex_param, source_track,
+    GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, SOURCE_NAMES, Setting, Units, WET_MIX_PARAM,
+    from_middle, hex_param, source_track,
 };
 
 /// How a chorus moves its copies: Mutable Instruments' Rings' two, then a Roland Juno's three.
@@ -53,9 +53,12 @@ pub(crate) const CHORUS_PARAMS: [Param; 5] = [
         // Choosing a mode chooses a sound, so steps don't lock it.
         label: None,
         setting: Setting::ChorusType,
-        choices: &CHORUS_TYPE_NAMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &CHORUS_TYPE_NAMES,
+            wraps: true,
+        },
         default: 0,
+        place: Place::Type,
     },
     hex_param("Rate", "rate", "RATE", Setting::Rate, Chorus::DEFAULT.rate),
     hex_param(
@@ -157,9 +160,12 @@ const fn sweep_param(default: u8) -> Param {
         key: "rate",
         label: Some("RATE"),
         setting: Setting::SweepRate,
-        choices: &SWEEP_NAMES,
-        wraps: false,
+        kind: Kind::Stepped {
+            choices: &SWEEP_NAMES,
+            wraps: false,
+        },
         default,
+        place: Place::Own,
     }
 }
 
@@ -179,7 +185,8 @@ pub(crate) const PHASER_PARAMS: [Param; 7] = [
         "CNTR",
         Setting::Centre,
         Phaser::DEFAULT.centre,
-    ),
+    )
+    .units(Units::Hertz),
     hex_param(
         "Feedback",
         "feedback",
@@ -192,9 +199,12 @@ pub(crate) const PHASER_PARAMS: [Param; 7] = [
         key: "stages",
         label: Some("STGS"),
         setting: Setting::Stages,
-        choices: &STAGE_NAMES,
-        wraps: false,
+        kind: Kind::Stepped {
+            choices: &STAGE_NAMES,
+            wraps: false,
+        },
         default: Phaser::DEFAULT.stages,
+        place: Place::Own,
     },
     WET_MIX_PARAM,
     GAIN_PARAM,
@@ -286,14 +296,16 @@ pub(crate) const FLANGER_PARAMS: [Param; 6] = [
         "DLAY",
         Setting::FlangerDelay,
         Flanger::DEFAULT.delay,
-    ),
+    )
+    .units(Units::FlangerDelay),
     hex_param(
         "Feedback",
         "feedback",
         "FDBK",
         Setting::FlangerFeedback,
         Flanger::DEFAULT.feedback,
-    ),
+    )
+    .centred(),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -376,9 +388,12 @@ pub(crate) const ROTARY_PARAMS: [Param; 8] = [
         key: "fast",
         label: Some("FAST"),
         setting: Setting::Fast,
-        choices: &OFF_ON,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &OFF_ON,
+            wraps: true,
+        },
         default: Rotary::DEFAULT.fast,
+        place: Place::Own,
     },
     hex_param(
         "Inertia",
@@ -561,7 +576,8 @@ pub(crate) const WARPS_PARAMS: [Param; 8] = [
         "ALGO",
         Setting::Algorithm,
         Warps::DEFAULT.algorithm,
-    ),
+    )
+    .units(Units::Algorithm),
     hex_param(
         "Timbre",
         "timbre",
@@ -575,9 +591,12 @@ pub(crate) const WARPS_PARAMS: [Param; 8] = [
         // What it hears is part of how it's set up, so steps don't change it.
         label: None,
         setting: Setting::Source,
-        choices: &WARPS_SOURCE_NAMES,
-        wraps: false,
+        kind: Kind::Stepped {
+            choices: &WARPS_SOURCE_NAMES,
+            wraps: false,
+        },
         default: Warps::DEFAULT.source,
+        place: Place::Own,
     },
     hex_param(
         "Level",
@@ -595,9 +614,12 @@ pub(crate) const WARPS_PARAMS: [Param; 8] = [
         key: "shape",
         label: Some("SHAP"),
         setting: Setting::Wave,
-        choices: &WAVE_NAMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &WAVE_NAMES,
+            wraps: true,
+        },
         default: Warps::DEFAULT.shape,
+        place: Place::Own,
     },
     Param {
         default: 0xFF,
