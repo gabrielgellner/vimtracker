@@ -21,6 +21,7 @@ mod random_shapes;
 mod sample;
 mod seeding;
 mod slices;
+mod stable_names;
 
 /// Every file here has its `mod` line, as one without isn't built, and only `render.rs` sits
 /// beside this folder, where a file links a binary of its own.
