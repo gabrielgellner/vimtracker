@@ -73,6 +73,8 @@ pub enum Pick {
         kind: vt_model::preset::PresetKind,
         path: PathBuf,
     },
+    /// Add the shipped patch of this name to the cursor's track (decision 318).
+    FactoryPatch(String),
     /// Open the command line with this typed, to finish there, as `:preset save ` is.
     Prompt(String),
     /// Put this command in an FX slot, or empty it.

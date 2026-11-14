@@ -1,0 +1,57 @@
+(
+    format: 1,
+    patch: (
+        mods: [
+            (
+                kind: Steps,
+                destination: Some("pitch"),
+                depth: 12,
+                in_scale: true,
+                steps: (
+                    values: (0, 0, 64, 0, -85, 170, 0, 149, 0, 0, 0, 0, 0, 0, 0, 0),
+                    mode: Note,
+                    mutate: 20,
+                ),
+            ),
+        ],
+        macros: [
+            (
+                name: Some("Change"),
+                value: 13056,
+                maps: [
+                    (
+                        target: Setting("mod1.mutate"),
+                        min: 0,
+                        max: 25600,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Length"),
+                value: 27904,
+                maps: [
+                    (
+                        target: Setting("mod1.length"),
+                        min: 256,
+                        max: 3840,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Range"),
+                value: 32512,
+                maps: [
+                    (
+                        target: Setting("mod1.depth"),
+                        min: 32768,
+                        max: 35840,
+                    ),
+                ],
+            ),
+        ],
+    ),
+    tags: [
+        "generative",
+        "pitch",
+    ],
+)
