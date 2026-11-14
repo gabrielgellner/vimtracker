@@ -8,8 +8,8 @@ use vt_model::action::{Action, edit};
 use vt_model::generator::{Generator, Span};
 use vt_model::scale::Scale;
 use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Random, Shape, ShapeColumn, Values,
-    Walk, Where,
+    Acid, Bits, DEFAULT_RATE, FillKind, Follow, GenParam, Pink, Random, Role, Shape, ShapeColumn,
+    Values, Walk, Where, World,
 };
 use vt_model::song::{Phrase, Song};
 use vt_model::step::Step;
@@ -81,6 +81,11 @@ fn every_generator_puts_each_setting_on_one_knob_and_the_app_keeps_what_it_is() 
         Where::Complementary {
             share: 50,
             second: true,
+        },
+        Where::Rhythm {
+            rhythm: World::Bembe,
+            part: Role::High,
+            child: 70,
         },
     ];
     for kind in FillKind::ALL {
@@ -223,6 +228,43 @@ fn knob_7_turns_the_amount_of_marbles_rhythms_and_the_app_keeps_complementarys_s
             param: GenParam::Side,
         };
         assert!(app_only(side, track));
+    }
+}
+
+#[test]
+fn knob_7_turns_a_rhythms_child_and_the_app_keeps_the_rhythm_and_its_part() {
+    let place = Where::Rhythm {
+        rhythm: World::Gahu,
+        part: Role::Low,
+        child: 40,
+    };
+    let song = song_with(shape(FillKind::Ramp, place));
+    let track = &song.tracks[0];
+    let device = track_devices(track, Some(0)).len() - 1;
+    let child = control_at(track, Some(0), device, 7, false).unwrap();
+    let Control::Gen { param, .. } = child else {
+        panic!("{child:?}");
+    };
+    assert_eq!(param, GenParam::Child);
+    let action = turned(child, 0, &song, KNOB_TOP).unwrap();
+    let next = edit(&Arc::new(song.clone()), &action).unwrap();
+    let shape = next.tracks[0].phrases[&0].generators()[0].shape;
+    assert_eq!(
+        shape.place,
+        Where::Rhythm {
+            rhythm: World::Gahu,
+            part: Role::Low,
+            child: 100,
+        }
+    );
+    // Which rhythm and which of its parts a track plays are what it is, as a `Grids`' part is.
+    for param in [GenParam::Rhythm, GenParam::Role] {
+        let control = Control::Gen {
+            phrase: 0,
+            generator: 0,
+            param,
+        };
+        assert!(app_only(control, track), "{param:?}");
     }
 }
 

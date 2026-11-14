@@ -20,6 +20,7 @@ mod render;
 mod rhythm;
 mod variation;
 mod walk;
+mod world;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
 pub use bits::{Bits, MAX_FACTOR, MAX_TURN};
@@ -41,6 +42,7 @@ pub use variation::{
     MAX_LEARNED, MAX_ORDER, MIN_NOTES as VARIATION_NOTES, Variation, notes as variation_notes,
 };
 pub use walk::{Edge, MAX_DEPTH, MIN_DEPTH, Pink, Walk, default_step};
+pub use world::{MAX_PULSES, Role, World};
 
 use crate::constants::{MAX_PHRASE_STEPS, TICKS_PER_QUARTER};
 use crate::lfo::{Rate, Shape as Wave};
@@ -155,6 +157,14 @@ const MARBLES: [Where; 4] = [
         second: false,
     },
 ];
+/// A named rhythm's `Child` as it starts: every hit of its part, the pattern as written.
+pub const CHILD: u8 = 100;
+/// A named rhythm as it starts, after Marbles' in a list of `Where`s.
+const RHYTHM: Where = Where::Rhythm {
+    rhythm: World::SonClave,
+    part: Role::Bell,
+    child: CHILD,
+};
 /// The most values a `List` fill goes through, so a shape stays plain data of a fixed size.
 pub const MAX_VALUES: usize = 8;
 
@@ -352,6 +362,13 @@ pub enum Where {
     /// One coin a row for two tracks, Marbles' complementary Bernoulli: the first takes the rows
     /// it lands under `share` on, as `Chance` would, and the `second` the rest.
     Complementary { share: u8, second: bool },
+    /// A named rhythm's `part`, each of its hits playing with the `child` percent chance, after
+    /// Zularic Repetitor: its pattern goes round from the first row, a pulse a row.
+    Rhythm {
+        rhythm: World,
+        part: Role,
+        child: u8,
+    },
 }
 
 impl Where {
@@ -369,6 +386,7 @@ impl Where {
             Self::Markov(_) => "Markov",
             Self::States(_) => "3 states",
             Self::Complementary { .. } => "Complementary",
+            Self::Rhythm { .. } => "Rhythm",
         }
     }
 
@@ -381,17 +399,28 @@ impl Where {
                 | Self::Markov(_)
                 | Self::States(_)
                 | Self::Complementary { .. }
+                | Self::Rhythm { .. }
         )
     }
 
     /// The rows it chooses on the `nth` of the tracks a shape fills at once, counted from 0: the
     /// same, but `Complementary` gives each pair of tracks its two sides, the first of the pair
-    /// the side chosen and the second the other.
+    /// the side chosen and the second the other, and a named rhythm gives each track the next
+    /// part, going round from the one chosen.
     pub fn on_track(self, nth: usize) -> Self {
         match self {
             Self::Complementary { share, second } => Self::Complementary {
                 share,
                 second: second != (nth % 2 == 1),
+            },
+            Self::Rhythm {
+                rhythm,
+                part,
+                child,
+            } => Self::Rhythm {
+                rhythm,
+                part: part.after(nth),
+                child,
             },
             place => place,
         }
@@ -561,11 +590,13 @@ impl ShapeColumn {
             } => [Where::AllRows, Where::Every(4), Where::Chance(50), EUCLID]
                 .into_iter()
                 .chain(MARBLES)
+                .chain([RHYTHM])
                 .collect(),
             Self::Note { .. } | Self::Velocity | Self::Nudge { .. } | Self::Length => {
                 [Where::Notes, Where::Every(4), Where::Chance(50), EUCLID]
                     .into_iter()
                     .chain(MARBLES)
+                    .chain([RHYTHM])
                     .collect()
             }
             Self::Fx { .. } => [
@@ -579,6 +610,7 @@ impl ShapeColumn {
             ]
             .into_iter()
             .chain(MARBLES)
+            .chain([RHYTHM])
             .collect(),
         }
     }
@@ -898,8 +930,8 @@ impl Shape {
 
     /// Whether anything it writes is drawn from its seed, so another seed would write something
     /// else: a random fill, a walk, `1/f`, `Acid`, `Shuffle`, `Grids`' chaos, a `Variation`, a
-    /// random wave or a `Follow` that mutates, or rows chosen by chance or one of Marbles'
-    /// rhythms.
+    /// random wave or a `Follow` that mutates, or rows chosen by chance, one of Marbles'
+    /// rhythms or a named rhythm's children.
     pub fn draws(&self) -> bool {
         let random_wave =
             self.kind == FillKind::Wave && matches!(self.wave, Wave::Random | Wave::Smooth);
