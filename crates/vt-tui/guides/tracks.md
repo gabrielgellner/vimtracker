@@ -1733,8 +1733,8 @@ whose three are full, its riff's `Spread` and `Bias` in the fourth. An `Acid`'s 
 (see **Acid lines** in the editing guide) are a device of their own under it, `Loops`:
 `Trig loop` and `Note loop` in its first column, `Oct loop`, `Acc loop` and `Sld loop` in
 its second, level with `Octave`, `Accent` and `Slide` above, and at the end of its
-title, dim, how long the whole line takes to come round, `the line comes round every
-420 rows, 105 passes`. A value with a bar is brief, as `9` for hits,
+title, dim, when the loops come round together and when the phrase plays the same pass
+again, `in step again every 420 rows, the phrase every 105 passes`. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 

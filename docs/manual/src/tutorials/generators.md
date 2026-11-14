@@ -443,8 +443,8 @@ length of their own, under a kick on every beat and hats in threes.
 
 Each part is drawn for its first rows, 12 or 7 or 3, and goes round them. The count runs on
 from pass to pass, so on a phrase of 16 the trigger loop starts the second pass four rows into
-its round, and the whole line comes back only after 420 rows, the loops' least common multiple:
-105 passes, over 26 bars.
+its round. The loops come round together only after 420 rows, their least common multiple,
+over 26 bars, and the phrase plays the same pass again only after 105 passes.
 
 **Build it.**
 

@@ -228,9 +228,9 @@ fn an_acids_loops_are_a_device_of_their_own_and_space_g_a_keeps_the_pass_heard()
         (12, 7)
     );
     let text = fx_page_text(&app).join("\n");
-    // 12, 7 and the span's 8 rows, as the parts with no loop come round with it.
+    // 12 and 7 together every 84 rows, which is 10 and a half of the span's 8.
     assert!(
-        text.contains("the line comes round every 168 rows, 21 passes"),
+        text.contains("in step again every 84 rows, the phrase every 21 passes"),
         "{text}"
     );
     let written = notes(&app);

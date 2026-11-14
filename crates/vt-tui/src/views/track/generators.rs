@@ -338,9 +338,9 @@ fn draw_generator(
     preview
 }
 
-/// An `Acid`'s `Loops`, under its device: each part's loop, and at the end of the title, dim, how
-/// long the whole line takes to come round again, the loops' least common multiple with the
-/// span's rows, as a part with no loop repeats with the span.
+/// An `Acid`'s `Loops`, under its device: each part's loop, and at the end of the title, dim,
+/// when the loops come round together, their least common multiple in rows, and when the
+/// phrase plays the same pass again, in passes of its span.
 fn draw_loops(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, focused: bool) {
     let Some(Control::Gen {
         phrase, generator, ..
@@ -354,9 +354,9 @@ fn draw_loops(frame: &mut Frame, area: Rect, app: &App, device: &DeviceSpec, foc
     let heard = live.generator.heard();
     let rows = live.generator.rows().map_or(1, |rows| rows.len()) as u64;
     let after = if heard.acid.loops() {
-        let whole = lcm(heard.acid.loops.period(), rows);
-        let passes = whole / rows.max(1);
-        format!("· the line comes round every {whole} rows, {passes} passes")
+        let period = heard.acid.loops.period();
+        let passes = lcm(period, rows) / rows.max(1);
+        format!("· in step again every {period} rows, the phrase every {passes} passes")
     } else {
         "· no loops: every pass the same".to_owned()
     };

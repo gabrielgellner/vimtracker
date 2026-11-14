@@ -595,8 +595,8 @@ and `1` to `64` draws it for that many rows and goes round them. A `Trig loop`
 of 12, a `Note loop` of 7 and an `Acc loop` of 3 play 12 rows of rhythm, 7
 notes and 3 accents, each round and round against the others. Kept live, the
 loops run on from pass to pass, so on a phrase of 16 rows the rhythm starts its
-second pass four rows into its round, and the whole line comes back only after
-the loops' least common multiple, 84 rows for those three. The phrase shows the
+second pass four rows into its round, and the loops come round together only
+after their least common multiple, 84 rows for those three. The phrase shows the
 first pass; the engine plays the rest. On notes already there the rhythm is
 theirs, so there's no `Trig loop`, and with Pitches on `Keep` there, no `Note
 loop` either.
