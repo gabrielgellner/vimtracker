@@ -1441,7 +1441,7 @@ fn a_slots_picture_is_sent_again_when_its_polarity_changes() {
         app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
         // Twice, as a picture changed a frame after another waits a frame.
         app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
-        mod_images(&app)
+        mod_images(app)
     };
     let first = ids(&mut app);
     let set = |app: &mut App, slot: usize, polarity: Polarity| {
@@ -1476,7 +1476,7 @@ fn an_envelopes_curve_is_its_mode_in_the_title_and_its_picture_follows_it() {
     let mut ids = |app: &mut App| {
         app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
         app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
-        mod_images(&app)
+        mod_images(app)
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
@@ -1531,7 +1531,7 @@ fn an_ahd_slot_holds_for_a_time_or_the_note_with_its_own_settings_and_picture() 
     let mut ids = |app: &mut App| {
         app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
         app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
-        mod_images(&app)
+        mod_images(app)
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
@@ -1630,7 +1630,7 @@ fn a_drum_slot_strikes_onto_a_body_with_its_own_settings_ratchet_and_picture() {
     let mut ids = |app: &mut App| {
         app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
         app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
-        mod_images(&app)
+        mod_images(app)
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
@@ -1704,7 +1704,7 @@ fn an_lpg_slot_has_no_mode_and_its_own_attack_decay_colour_and_reset() {
     let mut ids = |app: &mut App| {
         app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
         app.send_pictures(&mut graphics, &mut Vec::new()).unwrap();
-        mod_images(&app)
+        mod_images(app)
     };
     press(&mut app, " 5L");
     let first = ids(&mut app);
