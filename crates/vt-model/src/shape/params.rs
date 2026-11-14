@@ -21,7 +21,7 @@ use super::{
     Ring, Shape, ShapeColumn, Source, VARIES, Values, Variation, WAVES, WaveRate, Where,
     default_step, degree_count, degree_name, first_note,
 };
-use super::{CLUSTERS, MARKOV, SHARE, STATES};
+use super::{CHILD, CLUSTERS, MARKOV, Role, SHARE, STATES, World};
 
 /// How far a small and a large step move a curve, here and in a macro mapping's `Curve` and `S`.
 pub const BEND_NUDGE: i32 = 5;
@@ -137,6 +137,8 @@ pub enum Choice {
     Part(DrumPart),
     Channel(Channel),
     Bar(Bar),
+    World(World),
+    Role(Role),
     Vary(u8),
 }
 
@@ -152,6 +154,8 @@ impl Choice {
             Self::Part(part) => part.name().to_owned(),
             Self::Channel(channel) => channel.name().to_owned(),
             Self::Bar(bar) => bar.name().to_owned(),
+            Self::World(rhythm) => rhythm.name().to_owned(),
+            Self::Role(part) => part.name().to_owned(),
             Self::Vary(passes) => vary_name(passes),
         }
     }
@@ -163,6 +167,8 @@ impl Choice {
             Self::Part(part) => Some(part.description()),
             Self::Channel(channel) => Some(channel.description()),
             Self::Bar(bar) => Some(bar.description()),
+            Self::World(rhythm) => Some(rhythm.description()),
+            Self::Role(part) => Some(part.description()),
             _ => None,
         }
     }
@@ -178,6 +184,16 @@ impl Choice {
             Self::Part(part) => shape.grids.part = Some(part),
             Self::Channel(channel) => shape.divisions.channel = Some(channel),
             Self::Bar(bar) => shape.divisions = shape.divisions.with_bar(bar),
+            Self::World(chosen) => {
+                if let Where::Rhythm { rhythm, .. } = &mut shape.place {
+                    *rhythm = chosen;
+                }
+            }
+            Self::Role(chosen) => {
+                if let Where::Rhythm { part, .. } = &mut shape.place {
+                    *part = chosen;
+                }
+            }
             Self::Vary(passes) => shape.vary = passes,
         }
     }
@@ -354,6 +370,11 @@ pub enum GenParam {
     States,
     Share,
     Side,
+    /// A named rhythm's settings: which rhythm, which of its parts this track plays, and
+    /// `Child`, the chance each of the part's hits plays.
+    Rhythm,
+    Role,
+    Child,
     /// How many passes each of its variations lasts, a new seed each time, for a shape that
     /// draws from its seed: none, each pass, or every two, four or eight.
     Vary,
@@ -361,7 +382,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 80] = [
+    pub const ALL: [Self; 83] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -441,6 +462,9 @@ impl GenParam {
         Self::States,
         Self::Share,
         Self::Side,
+        Self::Rhythm,
+        Self::Role,
+        Self::Child,
         Self::Vary,
     ];
 
@@ -526,6 +550,9 @@ impl GenParam {
             Self::States => "states",
             Self::Share => "share",
             Self::Side => "side",
+            Self::Rhythm => "rhythm",
+            Self::Role => "role",
+            Self::Child => "child",
             Self::Vary => "vary",
         }
     }
@@ -616,6 +643,9 @@ impl GenParam {
             | Self::States
             | Self::Share => "Amount",
             Self::Side => "Side",
+            Self::Rhythm => "Rhythm",
+            Self::Role => "Part",
+            Self::Child => "Child",
             Self::Hits => "Hits",
             Self::Rotate => "Rotate",
             Self::Vary => "Vary",
@@ -653,6 +683,7 @@ impl GenParam {
             | Self::Markov
             | Self::States
             | Self::Share
+            | Self::Child
             | Self::Spread
             | Self::Temperature
             | Self::Change
@@ -694,6 +725,8 @@ impl GenParam {
             | Self::Part
             | Self::Rows
             | Self::Side
+            | Self::Rhythm
+            | Self::Role
             | Self::Channel
             | Self::Bar
             | Self::Vary => Units::Named,
@@ -834,6 +867,9 @@ impl GenParam {
             Self::Markov => rows && matches!(shape.place, Where::Markov(_)),
             Self::States => rows && matches!(shape.place, Where::States(_)),
             Self::Share | Self::Side => rows && matches!(shape.place, Where::Complementary { .. }),
+            Self::Rhythm | Self::Role | Self::Child => {
+                rows && matches!(shape.place, Where::Rhythm { .. })
+            }
             Self::Vary => shape.draws(),
         }
     }
@@ -978,15 +1014,22 @@ impl GenParam {
             super::Where::Markov(_) => [None, None, Some(Markov)],
             super::Where::States(_) => [None, None, Some(States)],
             super::Where::Complementary { .. } => [None, Some(Share), Some(Side)],
+            super::Where::Rhythm { .. } => [Some(Rhythm), Some(Role), Some(Child)],
             _ => none,
         };
         let mut more = none;
+        // A named rhythm's name, where the fill takes the top of the third column, goes to the
+        // fourth.
+        let rhythm = last[0];
         match shape.kind {
             FillKind::Acid => {
                 last[0] = Some(Density);
-                more = [Some(Spread), Some(Bias), None];
+                more = [Some(Spread), Some(Bias), rhythm];
             }
-            FillKind::Random => last[0] = Some(Weights),
+            FillKind::Random => {
+                last[0] = Some(Weights);
+                more[0] = rhythm;
+            }
             FillKind::Follow => {
                 last = [Some(Mutation), Some(Repitch), Some(Shift)];
                 more = [Some(Retro), Some(Ratchet), Some(DropAdd)];
@@ -1085,7 +1128,8 @@ impl GenParam {
             (Self::Clusters, Where::Clusters(amount))
             | (Self::Markov, Where::Markov(amount))
             | (Self::States, Where::States(amount))
-            | (Self::Share, Where::Complementary { share: amount, .. }) => Some(amount),
+            | (Self::Share, Where::Complementary { share: amount, .. })
+            | (Self::Child, Where::Rhythm { child: amount, .. }) => Some(amount),
             _ => None,
         }
     }
@@ -1140,12 +1184,20 @@ impl GenParam {
                 Where::Euclid { rotate, .. } => rotate.to_string(),
                 _ => String::new(),
             },
-            Self::Clusters | Self::Markov | Self::States | Self::Share => self
+            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => self
                 .marbles_amount(shape.place)
                 .map_or_else(String::new, |amount| format!("{amount}%")),
             Self::Side => match shape.place {
                 Where::Complementary { second: true, .. } => "Second".to_owned(),
                 Where::Complementary { .. } => "First".to_owned(),
+                _ => String::new(),
+            },
+            Self::Rhythm => match shape.place {
+                Where::Rhythm { rhythm, .. } => rhythm.name().to_owned(),
+                _ => String::new(),
+            },
+            Self::Role => match shape.place {
+                Where::Rhythm { part, .. } => part.name().to_owned(),
                 _ => String::new(),
             },
             Self::Notes => shape.acid.notes.to_string(),
@@ -1305,7 +1357,7 @@ impl GenParam {
             | Self::Masks
             | Self::Rows
             | Self::Side => Typing::Toggled,
-            Self::Part | Self::Channel | Self::Bar => Typing::Listed,
+            Self::Part | Self::Channel | Self::Bar | Self::Rhythm | Self::Role => Typing::Listed,
             Self::Axis | Self::Pitch => Typing::Named { list: false },
             Self::MapX
             | Self::MapY
@@ -1342,6 +1394,8 @@ impl GenParam {
             Self::Part => DrumPart::ALL.into_iter().map(Choice::Part).collect(),
             Self::Channel => Channel::ALL.into_iter().map(Choice::Channel).collect(),
             Self::Bar => Bar::ALL.into_iter().map(Choice::Bar).collect(),
+            Self::Rhythm => World::ALL.into_iter().map(Choice::World).collect(),
+            Self::Role => Role::ALL.into_iter().map(Choice::Role).collect(),
             Self::Vary => VARIES.into_iter().map(Choice::Vary).collect(),
             _ => return None,
         })
@@ -1363,6 +1417,12 @@ impl GenParam {
                 Choice::Part(part) => Some(part) == shape.grids.part,
                 Choice::Channel(channel) => Some(channel) == shape.divisions.channel,
                 Choice::Bar(bar) => bar == shape.divisions.bar,
+                Choice::World(chosen) => {
+                    matches!(shape.place, Where::Rhythm { rhythm, .. } if rhythm == chosen)
+                }
+                Choice::Role(chosen) => {
+                    matches!(shape.place, Where::Rhythm { part, .. } if part == chosen)
+                }
                 Choice::Vary(passes) => passes == shape.vary,
             })
     }
@@ -1394,6 +1454,8 @@ impl GenParam {
             | Self::Part
             | Self::Channel
             | Self::Bar
+            | Self::Rhythm
+            | Self::Role
             | Self::Vary => {
                 let choices = self.choices(context).unwrap_or_default();
                 if !choices.is_empty() {
@@ -1446,7 +1508,7 @@ impl GenParam {
                     shape.place = Where::Euclid { hits, rotate };
                 }
             }
-            Self::Clusters | Self::Markov | Self::States | Self::Share => {
+            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => {
                 if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
                     *amount = moved(i32::from(*amount), by(1, CHANCE_JUMP), 0, 100) as u8;
                 }
@@ -1728,19 +1790,22 @@ impl GenParam {
                     shape.place = Where::Euclid { hits, rotate: 0 };
                 }
             }
-            Self::Clusters | Self::Markov | Self::States | Self::Share => {
+            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => {
                 let start = match self {
                     Self::Clusters => CLUSTERS,
                     Self::Markov => MARKOV,
                     Self::States => STATES,
+                    Self::Child => CHILD,
                     _ => SHARE,
                 };
                 if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
                     *amount = start;
                 }
             }
-            // Which side of the coin a track is, so the other track of the two keeps its own.
-            Self::Side => {}
+            // Which side of the coin a track is, so the other track of the two keeps its own, and
+            // which part of a rhythm it plays, so the others keep theirs.
+            Self::Side | Self::Role => {}
+            Self::Rhythm => Choice::World(World::default()).apply(shape),
         }
     }
 
@@ -1802,7 +1867,7 @@ impl GenParam {
                 }
                 _ => return Err("Hits and Rotate are whole numbers"),
             },
-            Self::Clusters | Self::Markov | Self::States | Self::Share => {
+            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => {
                 let typed = text
                     .parse::<u16>()
                     .map_err(|_| "An amount runs from 0 to 100")?;
@@ -1983,6 +2048,8 @@ impl GenParam {
             | Self::Part
             | Self::Rows
             | Self::Side
+            | Self::Rhythm
+            | Self::Role
             | Self::Channel
             | Self::Bar
             | Self::Vary => {}
@@ -2023,9 +2090,11 @@ impl GenParam {
             | Self::HatDensity
             | Self::Chaos => (0, 0xFF),
             Self::Rows | Self::Side => (0, 1),
-            Self::Clusters | Self::Markov | Self::States | Self::Share => (0, 100),
+            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => (0, 100),
             // Its choices' places, without a list, so the engine can hold them.
             Self::Channel => (0, Channel::ALL.len() as i32 - 1),
+            Self::Rhythm => (0, World::ALL.len() as i32 - 1),
+            Self::Role => (0, Role::ALL.len() as i32 - 1),
             Self::Bar => (0, Bar::ALL.len() as i32 - 1),
             Self::Quarters
             | Self::Eighths
@@ -2160,11 +2229,19 @@ impl GenParam {
                 Where::Euclid { rotate, .. } => i32::from(rotate),
                 _ => return None,
             },
-            Self::Clusters | Self::Markov | Self::States | Self::Share => {
+            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => {
                 i32::from(self.marbles_amount(shape.place)?)
             }
             Self::Side => match shape.place {
                 Where::Complementary { second, .. } => i32::from(second),
+                _ => return None,
+            },
+            Self::Rhythm => match shape.place {
+                Where::Rhythm { rhythm, .. } => rhythm.index() as i32,
+                _ => return None,
+            },
+            Self::Role => match shape.place {
+                Where::Rhythm { part, .. } => part.index() as i32,
                 _ => return None,
             },
             Self::Notes => i32::from(shape.acid.notes),
@@ -2226,7 +2303,7 @@ impl GenParam {
                     };
                 }
             }
-            Self::Clusters | Self::Markov | Self::States | Self::Share => {
+            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => {
                 if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
                     *amount = number as u8;
                 }
@@ -2236,6 +2313,8 @@ impl GenParam {
                     *second = number != 0;
                 }
             }
+            Self::Rhythm => Choice::World(World::ALL[number as usize]).apply(shape),
+            Self::Role => Choice::Role(Role::ALL[number as usize]).apply(shape),
             Self::Notes => shape.acid.notes = number as u8,
             Self::Octave | Self::Density | Self::Accent | Self::Slide => {
                 if let Some(percent) = acid_chance_mut(&mut shape.acid, self) {
@@ -3163,5 +3242,93 @@ mod tests {
             param.reset(&mut random, &notes, Starts::default());
         }
         assert!(random.random.is_default());
+    }
+
+    #[test]
+    fn a_named_rhythm_has_its_rhythm_part_and_child() {
+        use GenParam::*;
+        let column = ShapeColumn::Velocity;
+        let context = context(column);
+        let mut ramp = shape(FillKind::Ramp);
+        ramp.place = super::Where::Rhythm {
+            rhythm: World::Bembe,
+            part: super::Role::Low,
+            child: 70,
+        };
+        let have = GenParam::of(&ramp, column, false);
+        for param in [Rhythm, Role, Child, Vary] {
+            assert!(have.contains(&param), "{param:?}");
+        }
+        assert_eq!(
+            (Rhythm.key(), Role.key(), Child.key()),
+            ("rhythm", "role", "child")
+        );
+        assert_eq!(
+            (Rhythm.name(), Role.name(), Child.name()),
+            ("Rhythm", "Part", "Child")
+        );
+        assert_eq!(Rhythm.shown(&ramp, &context), "Bembé");
+        assert_eq!(Role.shown(&ramp, &context), "Low drum");
+        assert_eq!(Child.shown(&ramp, &context), "70%");
+        assert_eq!(Rhythm.typing(column), Typing::Listed);
+        assert_eq!(Role.typing(column), Typing::Listed);
+        assert!(Rhythm.held_in_engine() && Role.held_in_engine() && Child.held_in_engine());
+        // As numbers, the choices' places, so a macro reaches them.
+        assert_eq!(
+            Rhythm.bounds(&context),
+            Some((0, World::ALL.len() as i32 - 1))
+        );
+        assert_eq!(
+            Rhythm.number(&ramp, &context),
+            Some(World::Bembe.index() as i32)
+        );
+        Rhythm.set_number(&mut ramp, &context, 0);
+        Role.set_number(&mut ramp, &context, 2);
+        Child.set_number(&mut ramp, &context, 500);
+        let son = |part, child| super::Where::Rhythm {
+            rhythm: World::SonClave,
+            part,
+            child,
+        };
+        assert_eq!(ramp.place, son(super::Role::High, 100));
+        Child.typed(&mut ramp, &context, "35").unwrap();
+        Child.step(&mut ramp, &context, 1, true).unwrap();
+        assert_eq!(ramp.place, son(super::Role::High, 45));
+        Rhythm.step(&mut ramp, &context, -1, false).unwrap();
+        assert!(matches!(
+            ramp.place,
+            super::Where::Rhythm {
+                rhythm: World::Motorik,
+                ..
+            }
+        ));
+        // `x` puts the rhythm and `Child` back and leaves the part, which the track's own is.
+        let starts = Starts::default();
+        Rhythm.reset(&mut ramp, &context, starts);
+        Child.reset(&mut ramp, &context, starts);
+        Role.reset(&mut ramp, &context, starts);
+        assert_eq!(ramp.place, son(super::Role::High, 100));
+        // At the foot of the third column; where a fill takes its top, the rhythm tops the fourth.
+        let grid = GenParam::grid(&ramp, column, false);
+        assert_eq!(grid[2], [Some(Rhythm), Some(Role), Some(Child)]);
+        let mut random = ramp;
+        random.kind = FillKind::Random;
+        let grid = GenParam::grid(&random, column, false);
+        assert_eq!(grid[2], [None, Some(Role), Some(Child)]);
+        assert_eq!(grid[3][0], Some(Rhythm));
+        let mut acid = ramp;
+        acid.kind = FillKind::Acid;
+        let notes = ShapeColumn::Note {
+            scale: Scale::default(),
+            writes: Some(0x64),
+        };
+        let grid = GenParam::grid(&acid, notes, true);
+        assert_eq!(grid[2], [Some(Density), Some(Role), Some(Child)]);
+        assert_eq!(grid[3], [Some(Spread), Some(Bias), Some(Rhythm)]);
+        // The list, each with where it's from.
+        let listed = Rhythm.choices(&context).unwrap();
+        assert_eq!(listed.len(), World::ALL.len());
+        assert!(listed.iter().all(|choice| choice.description().is_some()));
+        assert_eq!(Rhythm.chosen(&ramp, &context), Some(0));
     }
 }

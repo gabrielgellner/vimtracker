@@ -1694,8 +1694,10 @@ then `Vary` on a fill that draws, then where it acts, dim: `Ramp  Euclid ·
 Note 00–0F`, or `FX1 CUT lane 0C` for a lane. A `Where` that's its column's own is
 dim too, and so is a `Vary` of `Once`. Its settings are the
 shape panel's, laid out by what they do: the fill's down the first two columns,
-and the `Where`'s, `Hits` and `Rotate`, an amount, or `Complementary`'s amount and `Side`, at the foot of the third, so
-they stay put as the fill changes. A `Follow`, which has no `Where`, has its
+and the `Where`'s, `Hits` and `Rotate`, an amount, `Complementary`'s amount and `Side`, or a
+named rhythm's `Rhythm`, `Part` and `Child`, at the foot of the third, so
+they stay put as the fill changes; where `Acid`'s `Density` or `Random`'s `Weights` takes the
+top of the third, `Rhythm` goes to the fourth. A `Follow`, which has no `Where`, has its
 `Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
 whose three are full, its riff's `Spread` and `Bias` in the fourth. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
@@ -1724,7 +1726,7 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 **A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,
 `1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), `Divisions` (its dice), `Variation`, a
 `Wave` of `Random` or `Smooth`,
-a `Follow` that mutates, or any fill on rows chosen by `Chance` or one of Marbles' rhythms, has `Vary`: `Once`, as it's always been, the
+a `Follow` that mutates, or any fill on rows chosen by `Chance`, one of Marbles' rhythms or a named `Rhythm`, has `Vary`: `Once`, as it's always been, the
 same every time round; `Each pass`, a new roll each time the phrase comes round; or
 `Every 2 passes`, 4 or 8, so each variation plays that many times before the next,
 the way an Elektron's `1:4` condition keeps to the bars. Each pass's seed comes from
