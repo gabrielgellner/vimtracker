@@ -22,5 +22,6 @@ pub mod rotary;
 pub mod space;
 pub mod spring;
 pub mod stutter;
+pub mod tail;
 pub mod tape;
 pub mod warps;
