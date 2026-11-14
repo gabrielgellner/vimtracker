@@ -52,6 +52,8 @@ impl DistortType {
     }
 }
 
+crate::listed::listed!(DistortType);
+
 const DISTORT_TYPE_NAMES: [&str; 8] = [
     "Soft",
     "Hard",

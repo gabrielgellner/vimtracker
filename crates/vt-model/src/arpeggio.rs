@@ -95,6 +95,8 @@ impl ArpRate {
     }
 }
 
+crate::listed::listed!(ArpRate: meaning);
+
 /// The order an arpeggio goes round its notes in.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ArpMode {
@@ -141,6 +143,8 @@ impl ArpMode {
         }
     }
 }
+
+crate::listed::listed!(ArpMode: meaning);
 
 /// A track's arpeggio settings, which its `ARP`s share.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

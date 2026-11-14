@@ -1453,6 +1453,8 @@ impl Effect {
     }
 }
 
+crate::listed::listed!(Effect: key);
+
 /// An effect's setting as an entry.
 fn param_entry(param: &Param) -> Entry {
     Entry {

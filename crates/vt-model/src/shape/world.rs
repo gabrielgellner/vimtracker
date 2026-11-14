@@ -76,6 +76,8 @@ impl Role {
     }
 }
 
+crate::listed::listed!(Role);
+
 /// A named rhythm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum World {
@@ -251,6 +253,8 @@ impl World {
         self.pulses().is_multiple_of(3)
     }
 }
+
+crate::listed::listed!(World);
 
 /// Whether a part's hit on the row `offset` plays: `child` percent of them do, each by a draw
 /// from the seed, so at `100` every one and at `0` none.
