@@ -58,14 +58,16 @@ const FILTER: [&[Control]; 3] = [
 ];
 
 /// The output's, in the order the signal meets them down each column, as decision 136 has `Trim`
-/// before `Level`: its gain, fader and place, then what it sends and the group it goes through.
-const OUTPUT: [&[Control]; 2] = [
+/// before `Level`: its gain, fader and place, then what it sends and the group it goes through,
+/// then what it's for, which colours its name wherever it's named (decision 316).
+const OUTPUT: [&[Control]; 3] = [
     &[Control::Trim, Control::Level, base(TrackControl::Pan)],
     &[
         base(TrackControl::SendA),
         base(TrackControl::SendB),
         Control::Group,
     ],
+    &[Control::Role],
 ];
 
 /// A group's output: a sound track's, with a hole where `Group` is, as a group can't be in one.

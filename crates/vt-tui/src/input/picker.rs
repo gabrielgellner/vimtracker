@@ -24,7 +24,7 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::Field;
 use vt_model::settings::SettingId;
 use vt_model::shape::params::Choice;
-use vt_model::song::{FilterMode, FilterType, Machine};
+use vt_model::song::{FilterMode, FilterType, Machine, Role};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, GateKind};
 use vt_model::tag::Tag;
@@ -124,6 +124,11 @@ pub enum Pick {
     Speed {
         track: usize,
         speed: Speed,
+    },
+    /// Say what a track is for, which its colour shows.
+    Role {
+        track: usize,
+        role: Role,
     },
     /// A sound from the current kit, for this track.
     KitSound(KitChoice),

@@ -3,16 +3,22 @@
 
 use ratatui::style::{Color, Modifier, Style};
 
+use vt_model::song::Role;
+
 use crate::input::mode::Mode;
 
 pub const ROSEWATER: Color = Color::Rgb(0xf2, 0xd5, 0xcf);
+pub const PINK: Color = Color::Rgb(0xf4, 0xb8, 0xe4);
 pub const MAUVE: Color = Color::Rgb(0xca, 0x9e, 0xe6);
+pub const MAROON: Color = Color::Rgb(0xea, 0x99, 0x9c);
 pub const RED: Color = Color::Rgb(0xe7, 0x82, 0x84);
 pub const PEACH: Color = Color::Rgb(0xef, 0x9f, 0x76);
 pub const YELLOW: Color = Color::Rgb(0xe5, 0xc8, 0x90);
 pub const GREEN: Color = Color::Rgb(0xa6, 0xd1, 0x89);
 pub const TEAL: Color = Color::Rgb(0x81, 0xc8, 0xbe);
+pub const SKY: Color = Color::Rgb(0x99, 0xd1, 0xdb);
 pub const BLUE: Color = Color::Rgb(0x8c, 0xaa, 0xee);
+pub const LAVENDER: Color = Color::Rgb(0xba, 0xbb, 0xf1);
 pub const TEXT: Color = Color::Rgb(0xc6, 0xd0, 0xf5);
 pub const SUBTEXT1: Color = Color::Rgb(0xb5, 0xbf, 0xe2);
 pub const OVERLAY2: Color = Color::Rgb(0x94, 0x9c, 0xbb);
@@ -138,3 +144,22 @@ const GROUP_COLORS: [Color; 4] = [BLUE, PEACH, TEAL, MAUVE];
 pub fn group(number: u8) -> Color {
     GROUP_COLORS[usize::from(number.saturating_sub(1)) % GROUP_COLORS.len()]
 }
+
+/// The colour of what a sound track is for, the rule under its name wherever it's named
+/// (decision 316): five of the theme's calm shades, each a hue apart from the others and none a
+/// group's, the green of what's active, or the red of a warning, so a rule never reads as one of
+/// those. A track with no role has none.
+pub fn role(role: Role) -> Option<Color> {
+    Some(match role {
+        Role::Drums => MAROON,
+        Role::Bass => YELLOW,
+        Role::Synth => SKY,
+        Role::Pad => LAVENDER,
+        Role::Texture => PINK,
+        Role::Auto | Role::None => return None,
+    })
+}
+
+/// The rule under a bus's name, a return's, the master's, or a group's whose tracks are for
+/// different things: the grey of dim text, as a bus plays nothing of its own.
+pub const BUS: Color = OVERLAY2;

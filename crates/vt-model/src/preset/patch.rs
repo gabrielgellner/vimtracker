@@ -4,12 +4,13 @@
 //! Saving takes the macros that hold something and what they move: the mod slots they map to,
 //! the slots those go to in turn and the slots that go to any of them, the accumulator and the
 //! arpeggio if one is reached, and the live generators of the phrase under the cursor that a macro
-//! holds by its column. Nothing of the sound: a map to the machine, the filter or an effect is kept
-//! by the setting's key, for a track that has it.
+//! holds by its column, with any slot or macro an FX one of those locks (decision 317). Nothing of
+//! the sound: a map to the machine, the filter or an effect is kept by the setting's key, for a
+//! track that has it.
 //!
 //! Loading adds the parts to free mod slots and free macros, in order, renumbering every
-//! reference among them, and refuses when there are too few unless told to put them over the
-//! last ones (the study's §5.3).
+//! reference among them, its generators' locks too, and refuses when there are too few unless
+//! told to put them over the last ones (the study's §5.3).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -19,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{PRESET_FORMAT, Patch, PresetError, io_at, parse};
 use crate::constants::FX_SLOTS;
+use crate::generator::Generator;
 use crate::macros::{GenColumn, MACROS, Macro, MacroTarget};
 use crate::modulation::MOD_SLOTS;
 use crate::settings::{Owner, SettingId};
@@ -42,6 +44,15 @@ impl PatchGen {
     /// The command an FX generator writes, if it's one this build knows.
     pub fn fx_command(&self) -> Option<FxCommand> {
         self.command.as_deref().and_then(FxCommand::from_key)
+    }
+
+    /// The command an FX generator writes on a track, placed: a lock on one of the patch's slots
+    /// or macros, as `DEP1` or `MAC2`, renumbered to where that part went, so it plays there.
+    pub fn fx_command_on(&self, placement: &Placement) -> Option<FxCommand> {
+        Some(match self.fx_command()? {
+            FxCommand::Set(id) => FxCommand::Set(placement.setting(id)),
+            command => command,
+        })
     }
 
     /// What it is, for a list: `Note generator`, `FX1 generator`.
@@ -73,6 +84,16 @@ pub struct Placement {
     pub over_macros: Vec<usize>,
     /// An FX generator's column as saved, and the one it's put on.
     pub fx: BTreeMap<usize, usize>,
+}
+
+impl Placement {
+    /// A setting of the patch's on the track: one of its slots' or macros' renumbered to where
+    /// that went, and any other as it is.
+    pub fn setting(&self, id: SettingId) -> SettingId {
+        let mods = |at: usize| self.mods.get(at).copied();
+        let macros = |at: usize| self.macros.get(at).copied();
+        renumber(id, mods, macros).unwrap_or(id)
+    }
 }
 
 /// Why a patch doesn't fit: how many mod slots and macros it needs, and how many are free.
@@ -114,15 +135,19 @@ impl Parts {
         }
     }
 
-    /// The macros holding something and everything they move, and every slot going to any of
-    /// that, until nothing more is reached.
-    fn of(track: &Track) -> Self {
+    /// The macros holding something and everything they move, with the settings in `locked`,
+    /// which their generators lock, and every slot going to any of that, until nothing more is
+    /// reached.
+    fn of(track: &Track, locked: impl IntoIterator<Item = SettingId>) -> Self {
         let mut parts = Self {
             macros: (0..MACROS)
                 .filter(|at| !track.macros[*at].maps.is_empty())
                 .collect(),
             ..Self::default()
         };
+        for id in locked {
+            parts.reach(id);
+        }
         loop {
             let mut grew = false;
             for at in parts.macros.clone() {
@@ -189,9 +214,32 @@ fn choose(needed: usize, free: &[bool], over: bool) -> Option<(Vec<usize>, Vec<u
 impl Patch {
     /// A track's behaviour as a patch: its macros that hold something and what they move, with
     /// the live generators of `phrase` they hold by column, numbered from the first part in the
-    /// patch. None if no macro holds anything, as a patch is its macros' device.
+    /// patch. A slot or macro an FX generator locks comes too, as `DEP4` or `MAC2`, so its lock
+    /// follows the part when the patch is added. None if no macro holds anything, as a patch is
+    /// its macros' device.
     pub fn of_track(track: &Track, phrase: Option<&Phrase>) -> Option<Self> {
-        let parts = Parts::of(track);
+        let columns: BTreeSet<GenColumn> = track
+            .macros
+            .iter()
+            .flat_map(|held| &held.maps)
+            .filter_map(|map| match map.target {
+                MacroTarget::Gen { column, .. } => Some(column),
+                MacroTarget::Setting(_) => None,
+            })
+            .collect();
+        // A `Follow` reads another phrase, which a patch can't carry.
+        let held: Vec<&Generator> = phrase
+            .map(|phrase| phrase.generators())
+            .unwrap_or_default()
+            .iter()
+            .filter(|found| columns.contains(&GenColumn::of(found.column)))
+            .filter(|found| found.shape.kind != FillKind::Follow)
+            .collect();
+        let locked = held.iter().filter_map(|found| match found.column {
+            ShapeColumn::Fx { command, .. } => command.setting(),
+            _ => None,
+        });
+        let parts = Parts::of(track, locked);
         if parts.macros.is_empty() {
             return None;
         }
@@ -220,24 +268,15 @@ impl Patch {
                 held
             })
             .collect();
-        let columns: BTreeSet<GenColumn> = patch_macros
-            .iter()
-            .flat_map(|held| &held.maps)
-            .filter_map(|map| match map.target {
-                MacroTarget::Gen { column, .. } => Some(column),
-                MacroTarget::Setting(_) => None,
-            })
-            .collect();
-        // A `Follow` reads another phrase, which a patch can't carry.
-        let generators = phrase
-            .map(|phrase| phrase.generators())
-            .unwrap_or_default()
-            .iter()
-            .filter(|found| columns.contains(&GenColumn::of(found.column)))
-            .filter(|found| found.shape.kind != FillKind::Follow)
+        let generators = held
+            .into_iter()
             .map(|found| PatchGen {
                 column: GenColumn::of(found.column),
                 command: match found.column {
+                    ShapeColumn::Fx {
+                        command: FxCommand::Set(id),
+                        ..
+                    } => Some(FxCommand::Set(renumbered(id).unwrap_or(id)).key()),
                     ShapeColumn::Fx { command, .. } => Some(command.key()),
                     _ => None,
                 },
@@ -261,7 +300,8 @@ impl Patch {
         })
     }
 
-    /// Every setting its parts reach, by their slots' destinations and their macros' maps.
+    /// Every setting its parts reach, by their slots' destinations, their macros' maps and what
+    /// its FX generators lock.
     fn reaches(&self) -> impl Iterator<Item = SettingId> + '_ {
         let dests = self.mods.iter().filter_map(|held| held.destination);
         let maps = self
@@ -269,7 +309,11 @@ impl Patch {
             .iter()
             .flat_map(|held| &held.maps)
             .filter_map(|map| map.target.setting());
-        dests.chain(maps)
+        let locks = self
+            .generators
+            .iter()
+            .filter_map(|generator| generator.fx_command()?.setting());
+        dests.chain(maps).chain(locks)
     }
 
     /// Whether it holds the accumulator, as something in it reaches it.
@@ -387,11 +431,7 @@ impl Patch {
     /// an FX generator's column where its generator was put.
     fn target_on(&self, target: MacroTarget, placement: &Placement) -> MacroTarget {
         match target {
-            MacroTarget::Setting(id) => {
-                let mods = |at: usize| placement.mods.get(at).copied();
-                let macros = |at: usize| placement.macros.get(at).copied();
-                MacroTarget::Setting(renumber(id, mods, macros).unwrap_or(id))
-            }
+            MacroTarget::Setting(id) => MacroTarget::Setting(placement.setting(id)),
             MacroTarget::Gen {
                 column: GenColumn::Fx(slot),
                 param,
@@ -663,6 +703,99 @@ mod tests {
                 param: crate::shape::GenParam::Hits,
             }
         );
+    }
+
+    /// A ramp from `A0` to `A0` over every row, as an FX generator's shape.
+    fn level() -> Shape {
+        use crate::shape::{
+            Acid, Bits, DEFAULT_RATE, Follow, Grids, Pink, Random, Values, Variation, Walk, Where,
+        };
+        Shape {
+            from: 0xA0,
+            to: 0xA0,
+            curve: 0,
+            s: 0,
+            kind: FillKind::Ramp,
+            wave: crate::lfo::Shape::Sine,
+            rate: DEFAULT_RATE,
+            phase: 0,
+            run: 1,
+            values: Values::default(),
+            place: Where::AllRows,
+            seed: 1,
+            acid: Acid::default(),
+            follow: Follow::default(),
+            walk: Walk::default(),
+            pink: Pink::default(),
+            bits: Bits::default(),
+            grids: Grids::default(),
+            random: Random::default(),
+            vary: 0,
+            variation: Variation::default(),
+        }
+    }
+
+    #[test]
+    fn a_slot_or_macro_a_generator_locks_comes_along_and_the_lock_follows_it() {
+        use crate::generator::Span;
+        // Slot 4 is only reached by the `DEP4` FX1's generator writes, and macro 5, holding
+        // nothing, only by the `MAC5` FX2's writes; macro 1 holds both generators.
+        let depth = SettingId::modulator(3, 0).unwrap();
+        let mac5 = SettingId::macro_at(4).unwrap();
+        let mut track = Song::new(1).tracks[0].clone();
+        track.mods[3].destination = Some(SettingId::CUT);
+        let gen_on = |slot: usize| MacroTarget::Gen {
+            column: GenColumn::Fx(slot),
+            param: crate::shape::GenParam::To,
+        };
+        track.macros[0].maps = vec![
+            MacroMap::numbers(gen_on(0), (0xA0, 0xA0)),
+            MacroMap::numbers(gen_on(1), (0xA0, 0xA0)),
+        ];
+        let steps: Vec<crate::step::Step> = (0..8)
+            .map(|_| "C-3 -- --- --- ---".parse().unwrap())
+            .collect();
+        let mut phrase = Phrase::from_steps(steps);
+        for (slot, id) in [(0, depth), (1, mac5)] {
+            let column = ShapeColumn::Fx {
+                slot,
+                command: FxCommand::Set(id),
+            };
+            let generator = Generator::new(column, Span::Rows { first: 0, last: 7 }, level());
+            assert!(phrase.add_generator(generator, None));
+        }
+        let patch = Patch::of_track(&track, Some(&phrase)).unwrap();
+        assert_eq!(patch.mods.len(), 1, "slot 4 comes along");
+        assert_eq!(patch.mods[0].destination, Some(SettingId::CUT));
+        assert_eq!(patch.macros.len(), 2, "macro 5 comes along");
+        let commands: Vec<_> = patch.generators.iter().map(|g| g.command.clone()).collect();
+        assert_eq!(
+            commands,
+            [Some("mod1.depth".to_owned()), Some("macro2".to_owned())]
+        );
+        assert_eq!(patch.check_alone(), Ok(()));
+
+        // On a track whose macro 1 holds something, slot 1 lands in `Mod 3` and macro 2 in
+        // macro 3, and the locks with them.
+        let mut other = Song::new(1).tracks[0].clone();
+        other.macros[0].maps = vec![MacroMap::whole(MacroTarget::Setting(SettingId::PAN))];
+        let placement = patch.place(&other, false).unwrap();
+        assert_eq!(
+            (placement.mods.as_slice(), placement.macros.as_slice()),
+            (&[2][..], &[1, 2][..])
+        );
+        let placed: Vec<String> = patch
+            .generators
+            .iter()
+            .map(|g| g.fx_command_on(&placement).unwrap().name())
+            .collect();
+        assert_eq!(placed, ["DEP3", "MAC3"]);
+
+        // A patch file whose generator locks a slot it hasn't is named.
+        let mut outside = patch.clone();
+        outside.generators[0].command = Some("mod2.depth".to_owned());
+        let error = outside.check_alone().unwrap_err();
+        assert!(error.contains("mod2.depth"), "{error}");
     }
 
     #[test]

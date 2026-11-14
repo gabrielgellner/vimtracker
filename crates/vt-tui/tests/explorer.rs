@@ -437,6 +437,7 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
     assert!(sample_of(&app, 0).unwrap().ends_with("drums/snare.wav"));
     assert_eq!(app.song().tracks[0].name, "BD");
     assert_eq!(app.song().tracks[0].choke, Some(2));
+    assert_eq!(app.song().tracks[0].role, vt_model::song::Role::Drums);
     assert_eq!(app.song().bank.get(1).unwrap().edit.play.gain_db, -3.0);
     press(&mut app, "u");
 

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::link::Realtime;
 use vt_model::constants::MAX_GROUPS;
-use vt_model::song::TrackKind;
+use vt_model::song::{Role, TrackKind};
 use vt_model::step::Note;
 use vt_tui::app::App;
 use vt_tui::banking::group_name;
@@ -105,6 +105,9 @@ fn marked_sounds_load_as_new_tracks_after_the_last_in_a_folded_group_as_one_undo
     assert!(ends_with(&app, 3, "hat.wav"));
     assert_eq!(app.song().tracks[3].choke, Some(1));
     assert_eq!(app.song().tracks[2].choke, None);
+    // A kit's sounds are drums, and the tracks there before are left as they were.
+    assert_eq!(app.song().tracks[2].role, Role::Drums);
+    assert_eq!(app.song().tracks[0].role, Role::Auto);
     assert_eq!(app.song().bank.get(1).unwrap().title(), "BD Kick");
 
     // In the first group, named after the kit, folded.

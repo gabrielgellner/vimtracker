@@ -17,7 +17,7 @@ use vt_model::order::Order;
 use vt_model::sample::load_sample;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::settings::{SettingId, gate_percent};
-use vt_model::song::{FULL_GATE, Machine};
+use vt_model::song::{FULL_GATE, Machine, Role};
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark};
 
 use crate::app::{App, Entry, Field};
@@ -33,7 +33,7 @@ use crate::kitty;
 use crate::song_view::COLUMNS_BEFORE_TRACKS;
 use crate::track_page::Page;
 use crate::views::picker::{PREVIEW_WAVE_HEIGHT, PREVIEW_WAVE_WIDTH};
-use crate::views::widgets::group;
+use crate::views::widgets::{group, role};
 
 /// The lengths `K` lists on a gate cell's length, as shares of its last pulse: from a click, through
 /// a 303's half, to all of it.
@@ -350,13 +350,15 @@ impl App {
                 } else {
                     String::new()
                 };
-                // A group and the tracks in it are in its colour, as on the mixer.
+                // A group and the tracks in it are in its colour, and what each is for is the rule
+                // under it, as on the mixer.
+                let style = group::style(self.song(), track).unwrap_or_default();
                 Item::new(
                     format!("{number:<2}  {}", state.name).trim_end(),
                     Pick::Track(track),
                 )
                 .meaning(sound)
-                .styled(group::style(self.song(), track).unwrap_or_default())
+                .styled(style.patch(role::rule(self.song(), track)))
             })
             .collect();
         // Found by name or number, as Vim's buffers are, so it opens on the search.
@@ -849,6 +851,18 @@ impl App {
             }) => {
                 let track = self.cursor.track;
                 let mut more = vec![Action::SetTrackChoke { track, choke }];
+                // A kit's sound is a drum, unless the track's been told it's for something else.
+                if self
+                    .song()
+                    .tracks
+                    .get(track)
+                    .is_some_and(|t| t.role.is_auto())
+                {
+                    more.push(Action::SetTrackRole {
+                        track,
+                        role: Role::Drums,
+                    });
+                }
                 if !label.is_empty() {
                     more.push(Action::SetTrackName {
                         track,
@@ -916,6 +930,9 @@ impl App {
             }
             Pick::FilterMode { track, mode } => {
                 self.apply(&Action::SetFilterMode { track, mode });
+            }
+            Pick::Role { track, role } => {
+                self.apply(&Action::SetTrackRole { track, role });
             }
             Pick::Speed { track, speed } => {
                 self.apply(&Action::SetTrackSpeed { track, speed });

@@ -156,7 +156,7 @@ impl App {
                     );
                 }
             },
-            Control::Groove | Control::Speed => {}
+            Control::Groove | Control::Speed | Control::Role => {}
             Control::FilterType | Control::FilterMode | Control::Machine => {}
             Control::Accumulator(field @ (AccumulatorField::Up | AccumulatorField::Down)) => {
                 match text.trim().parse::<u8>() {
