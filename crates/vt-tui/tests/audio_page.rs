@@ -94,21 +94,30 @@ fn the_audio_page_shows_what_plays_and_when_it_stops() {
         "{lines:?}"
     );
     assert!(
-        lines[5].contains("Wheel") && lines[5].contains("Off: the terminal keeps its mouse"),
+        lines[5].contains("Input") && lines[5].contains("Off"),
         "{lines:?}"
     );
     assert!(
-        lines[6].contains("Direction") && lines[6].contains("With the fingers"),
+        lines[6].contains("Wheel") && lines[6].contains("Off: the terminal keeps its mouse"),
         "{lines:?}"
     );
     assert!(
-        lines[7].contains("Roto") && lines[7].contains("Off, so Live can have it"),
+        lines[7].contains("Direction") && lines[7].contains("With the fingers"),
         "{lines:?}"
     );
-    assert!(lines[9].contains("21.3 ms"), "{lines:?}");
+    assert!(
+        lines[8].contains("Roto") && lines[8].contains("Off, so Live can have it"),
+        "{lines:?}"
+    );
+    assert!(lines[10].contains("21.3 ms"), "{lines:?}");
     app.wheel.setting.on = true;
     assert!(
-        text(&app)[5].contains("Scrolling turns the setting under the cursor"),
+        text(&app)[6].contains("Scrolling turns the setting under the cursor"),
+        "{lines:?}"
+    );
+    app.audio.input = Some("Line in".to_owned());
+    assert!(
+        text(&app)[5].contains("Line in, heard only by the recorder"),
         "{lines:?}"
     );
     app.audio.running = false;

@@ -33,8 +33,7 @@ use crate::dsp::wavetable::Wavetable;
 use vt_model::constants::DECLICK_FRAMES;
 use vt_model::envelope::Envelope;
 use vt_model::playable::Span;
-use vt_model::sample::SampleData;
-use vt_model::samples::SampleId;
+use vt_model::samples::{Frames, SampleId};
 use vt_model::song::SynthVoice;
 
 use crate::dsp::smoother::fast_coefficient;
@@ -711,7 +710,7 @@ impl Voice {
 
     /// The next stereo frame, with reads bounds-checked. A voice past its sample's end stops.
     #[inline]
-    pub fn next(&mut self, data: Option<&SampleData>) -> [f32; 2] {
+    pub fn next(&mut self, data: Option<Frames<'_>>) -> [f32; 2] {
         if self.stage == Stage::Idle {
             return [0.0, 0.0];
         }

@@ -14,6 +14,7 @@ pub mod envelope;
 pub mod generator;
 pub mod grid;
 pub mod groove;
+pub mod growing;
 pub mod history;
 pub mod insert;
 pub mod kit;

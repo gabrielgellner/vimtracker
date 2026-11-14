@@ -581,6 +581,9 @@ impl App {
 
     /// A bank entry by its number, with its analysis, as the page would show it, or why it can't.
     pub fn shown_of(&self, number: u8, entry: &BankEntry) -> Result<Shown, String> {
+        if let Some(why) = self.still_recording(number) {
+            return Err(why);
+        }
         let Some(source) = entry.source() else {
             return Err(format!("Sample {number:02X} has no file"));
         };

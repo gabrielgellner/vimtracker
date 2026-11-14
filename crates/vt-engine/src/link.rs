@@ -8,9 +8,11 @@ use std::time::{Duration, Instant};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 use vt_model::constants::{
-    COMMAND_QUEUE, FILE_QUEUE, FX_SLOTS, GEN_HEARD_QUEUE, MAX_TRACKS, MEMORY_QUEUE,
-    NOTE_PITCH_QUEUE, PUBLISH_QUEUE, RETURN_QUEUE, SCOPE_QUEUE, TELEMETRY_QUEUE,
+    COMMAND_QUEUE, FILE_QUEUE, FX_SLOTS, GEN_HEARD_QUEUE, INPUT_MOST_WAITING, MAX_TRACKS,
+    MEMORY_QUEUE, NOTE_PITCH_QUEUE, PUBLISH_QUEUE, RECORDER_QUEUE, RETURN_QUEUE, SCOPE_QUEUE,
+    TAKE_QUEUE, TELEMETRY_QUEUE,
 };
+use vt_model::growing::Growing;
 
 use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
@@ -20,6 +22,7 @@ use crate::engine::{Engine, PLAYHEADS, Playhead, SectionLoop, TrackPlace, Transp
 use crate::gens::GenReport;
 use crate::mixer::Reading;
 use crate::published::{Published, Span};
+use crate::recorder::{RecordQuantise, RecordSource, RecorderEvent};
 #[cfg(test)]
 use crate::track_state::Drawn;
 use crate::track_state::{Faders, LiveValues, NotePitch};
@@ -108,6 +111,21 @@ pub enum Command {
     PlayFile { track: usize },
     /// Let go of any one-off file playing.
     StopFile,
+    /// Listen to a source, so a recording's margin before its start is of it.
+    ListenTo { source: RecordSource },
+    /// Record into the next sample sent with [`Handle::record`].
+    Record {
+        source: RecordSource,
+        quantise: RecordQuantise,
+        latency: u64,
+    },
+    /// Stop recording, at once or on the grid, so many frames later still.
+    StopRecording {
+        quantise: RecordQuantise,
+        latency: u64,
+    },
+    /// Take the recording back, to be dropped.
+    CancelRecording,
 }
 
 /// What one track is doing while jamming. The outer `None`s mean it's following its section and
@@ -183,6 +201,9 @@ pub struct Handle {
     /// with, to be freed here.
     files: Producer<(Arc<SampleData>, Option<Span>)>,
     heard: Consumer<Arc<SampleData>>,
+    /// Recordings to write into, and the recorder's starts and ends coming back.
+    takes: Producer<Arc<Growing>>,
+    recorded: Consumer<RecorderEvent>,
     /// Long buffers that can't go until there's room in the queue. A version waits for them.
     unsent: Vec<Memory>,
     /// How many long buffers the callback has or is getting, beyond any it's been told to release.
@@ -205,6 +226,10 @@ pub struct Realtime {
     freed: Producer<Memory>,
     files: Consumer<(Arc<SampleData>, Option<Span>)>,
     heard: Producer<Arc<SampleData>>,
+    takes: Consumer<Arc<Growing>>,
+    recorded: Producer<RecorderEvent>,
+    /// The audio input's samples, interleaved stereo, if an input is open.
+    input: Option<Consumer<f32>>,
     /// What the edit thread has been told about each track.
     reported: [JamState; MAX_TRACKS],
     /// The track whose live values are reported.
@@ -229,6 +254,8 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
     let (file_tx, file_rx) = RingBuffer::new(FILE_QUEUE);
     // Room for every file that can be queued, and one playing, so one always fits.
     let (heard_tx, heard_rx) = RingBuffer::new(FILE_QUEUE + 1);
+    let (take_tx, take_rx) = RingBuffer::new(TAKE_QUEUE);
+    let (recorded_tx, recorded_rx) = RingBuffer::new(RECORDER_QUEUE);
     let held = MemoryCount::of(&engine.current().song);
     let rate = engine.rate();
     (
@@ -246,6 +273,8 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             freed: freed_rx,
             files: file_tx,
             heard: heard_rx,
+            takes: take_tx,
+            recorded: recorded_rx,
             unsent: Vec::new(),
             held,
             rate,
@@ -264,6 +293,9 @@ pub fn connect(engine: Engine) -> (Handle, Realtime) {
             freed: freed_tx,
             files: file_rx,
             heard: heard_tx,
+            takes: take_rx,
+            recorded: recorded_tx,
+            input: None,
             reported: [JamState::default(); MAX_TRACKS],
             watched: 0,
             engine_time: Duration::ZERO,
@@ -403,6 +435,31 @@ impl Handle {
         self.files.push((file, span)).is_ok() && self.send(Command::PlayFile { track })
     }
 
+    /// Record a source into a sample that grows as it's written, at once or on the grid, so many
+    /// frames later still for the input's latency. The sample's chunks must be kept ahead of what's
+    /// written here, with [`Growing::make_room`]. If the queue is full, which means audio has
+    /// stopped, it's dropped here.
+    pub fn record(
+        &mut self,
+        take: Arc<Growing>,
+        source: RecordSource,
+        quantise: RecordQuantise,
+        latency: u64,
+    ) -> bool {
+        self.pump();
+        self.takes.push(take).is_ok()
+            && self.send(Command::Record {
+                source,
+                quantise,
+                latency,
+            })
+    }
+
+    /// The recorder's next start or end, an end with what it recorded.
+    pub fn recorder_event(&mut self) -> Option<RecorderEvent> {
+        self.recorded.pop().ok()
+    }
+
     /// The newest report from the callback, if there is one. Its reading covers every report
     /// since the last call, so a meter doesn't miss a hit that fell between two frames.
     pub fn latest(&mut self) -> Option<Telemetry> {
@@ -461,6 +518,46 @@ impl Handle {
 }
 
 impl Realtime {
+    /// Hear an audio input, its samples interleaved stereo, which the recorder can record. It's
+    /// set before the callback starts.
+    pub fn listen(&mut self, input: Consumer<f32>) {
+        self.input = Some(input);
+    }
+
+    /// Pass the recorder's events on, as far as there's room. What doesn't fit waits in the engine.
+    fn pass_recorder_events(&mut self) {
+        while !self.recorded.is_full()
+            && let Some(event) = self.engine.take_recorder_event()
+        {
+            let _ = self.recorded.push(event);
+        }
+    }
+
+    /// Give the recorder the input's frames for a block: as many as have come, up to the block's,
+    /// and silence for any that haven't. Too many waiting, as two devices' clocks drift apart,
+    /// and the oldest are dropped, so the input never falls further and further behind.
+    fn take_input(&mut self, frames: usize) {
+        let Some(input) = &mut self.input else {
+            return;
+        };
+        let waiting = input.slots() / 2;
+        let late = waiting.saturating_sub(frames.max(INPUT_MOST_WAITING));
+        if late > 0
+            && let Ok(chunk) = input.read_chunk(late * 2)
+        {
+            chunk.commit_all();
+        }
+        let room = self.engine.input_room(frames);
+        let count = room.len().min(input.slots() / 2);
+        if let Ok(chunk) = input.read_chunk(count * 2) {
+            let (first, second) = chunk.as_slices();
+            for (at, sample) in first.iter().chain(second).enumerate() {
+                room[at / 2][at % 2] = *sample;
+            }
+            chunk.commit_all();
+        }
+    }
+
     /// Fill one block of interleaved stereo output.
     pub fn process(&mut self, out: &mut [f32]) {
         // What a version needs comes ahead of it.
@@ -533,6 +630,28 @@ impl Realtime {
                     }
                 }
                 Command::StopFile => self.engine.stop_file(),
+                Command::ListenTo { source } => self.engine.listen_to(source),
+                // Taken only when what it ends can be sent back, so nothing is freed here.
+                Command::Record {
+                    source,
+                    quantise,
+                    latency,
+                } => {
+                    if self.recorded.slots() >= 2
+                        && let Ok(take) = self.takes.pop()
+                    {
+                        self.engine.record(take, source, quantise, latency);
+                    }
+                    self.pass_recorder_events();
+                }
+                Command::StopRecording { quantise, latency } => {
+                    self.engine.stop_recording(quantise, latency);
+                    self.pass_recorder_events();
+                }
+                Command::CancelRecording => {
+                    self.engine.cancel_recording();
+                    self.pass_recorder_events();
+                }
             }
         }
         while !self.freed.is_full()
@@ -540,9 +659,11 @@ impl Realtime {
         {
             let _ = self.freed.push(memory);
         }
+        self.take_input(out.len() / 2);
         let started = Instant::now();
         self.engine.process(out);
         self.engine_time = started.elapsed();
+        self.pass_recorder_events();
         // The scope's tap. The callback can't wait for room, so what doesn't fit is dropped.
         let frames = out.len() / 2;
         if let Ok(room) = self
@@ -623,6 +744,7 @@ mod tests {
     use vt_model::step::{Note, Step};
 
     use super::*;
+    use crate::recorder::RecordQuantise;
     use crate::rt_guard::forbidden;
 
     /// A limiter, which takes a short line from the pool.
@@ -1811,5 +1933,75 @@ mod tests {
             rt.process(&mut out);
             assert!(out.iter().any(|s| *s != 0.0), "{tracks} tracks");
         }
+    }
+
+    /// A sample with room for so many frames, its first chunks in place, as the edit thread makes
+    /// them ahead of the recorder.
+    fn take(frames: u64) -> Arc<Growing> {
+        let growing = Growing::new(frames);
+        growing.make_room(48_000);
+        Arc::new(growing)
+    }
+
+    #[test]
+    fn recording_and_playing_what_records_never_allocate_in_the_callback() {
+        // Track 2 plays the recording as it's written, while each source is recorded in turn.
+        let recording = take(48_000 * 20);
+        let mut pool = SamplePool::clone(&samples());
+        pool.insert_growing("recording", Arc::clone(&recording));
+        let pool = Arc::new(pool);
+        let mut song = song(4, 16);
+        song.sample_on(2, "recording");
+        let engine = Engine::new(48_000, published(song, &pool));
+        let (mut handle, mut rt) = connect(engine);
+        let (mut input, heard) = RingBuffer::new(vt_model::constants::INPUT_QUEUE);
+        rt.listen(heard);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        assert!(handle.record(
+            Arc::clone(&recording),
+            RecordSource::Track(0),
+            RecordQuantise::Bar,
+            0
+        ));
+        let mut violations = 0;
+        let mut ended = 0;
+        let sources = [
+            (RecordSource::Master, RecordQuantise::Now),
+            (RecordSource::Input, RecordQuantise::Beat),
+            (RecordSource::Track(1), RecordQuantise::Bar),
+            (RecordSource::Track(1), RecordQuantise::Now),
+        ];
+        for round in 0..400 {
+            // The edit thread keeps chunks ahead, and the input comes in.
+            recording.make_room(48_000);
+            for at in 0..BLOCK * 2 {
+                let _ = input.push((at as f32 * 0.01).sin());
+            }
+            if round % 50 == 25 {
+                let quantise = sources[(round / 50) % sources.len()].1;
+                assert!(handle.send(Command::StopRecording {
+                    quantise,
+                    latency: 64
+                }));
+            }
+            if round % 50 == 49 {
+                let (source, quantise) = sources[(round / 50) % sources.len()];
+                assert!(handle.send(Command::ListenTo { source }));
+                let fresh = take(48_000 * 4);
+                assert!(handle.record(fresh, source, quantise, 64));
+            }
+            if round == 390 {
+                assert!(handle.send(Command::CancelRecording));
+            }
+            violations += blocks(&mut rt, 2);
+            handle.pump();
+            while let Some(event) = handle.recorder_event() {
+                if let RecorderEvent::Ended(_) = event {
+                    ended += 1;
+                }
+            }
+        }
+        assert_eq!(violations, 0);
+        assert!(ended >= 8, "{ended} recordings ended");
     }
 }

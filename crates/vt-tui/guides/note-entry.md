@@ -129,6 +129,9 @@ Notes sound as you play them, chords too.
 | `Space r` | Arm or disarm recording, while playing in the phrase view |
 | `Tab` | Pausing disarms it, and so does leaving the phrase view |
 
+`Space R`, with a capital, records the sound rather than the notes: the master, a
+track or the input into a new sample. **Recording** in the sample editor guide has it.
+
 - **Where.** The note goes on the cursor's track, on the row that track is
   playing. Each track loops at its own length, so a 4-row phrase against a
   16-row one gets its own row. A key pressed past halfway through a row goes on

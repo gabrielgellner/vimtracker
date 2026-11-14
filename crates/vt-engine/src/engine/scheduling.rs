@@ -318,6 +318,7 @@ impl Engine {
         if !self.enter_section_if_due() {
             return;
         }
+        self.recorder_line();
         if self.past_reset(self.place) {
             self.realign();
         }
