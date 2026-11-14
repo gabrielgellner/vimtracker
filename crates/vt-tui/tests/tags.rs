@@ -303,7 +303,7 @@ fn a_presets_tags_are_kept_in_its_file_and_patch_lists_the_patches() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.services.status, "Plain: #sound #sampler #bass #dark");
     let path = presets.join("sounds/Plain.ron");
-    let read = vt_model::preset::load_sound(&path).unwrap();
+    let read = vt_model::preset::load::<vt_model::preset::SoundPreset>(&path).unwrap();
     assert_eq!(read.tags, ["bass", "dark"]);
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);

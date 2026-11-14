@@ -8,7 +8,9 @@
 use std::path::{Path, PathBuf};
 
 use vt_model::kit::{KitEntry, load_kit};
-use vt_model::preset::{PresetKind, load_effect, load_patch, load_sound, preset_name};
+use vt_model::preset::{
+    EffectPreset, PatchPreset, Preset, PresetKind, SoundPreset, load, preset_name,
+};
 use vt_model::project::is_project;
 use vt_model::sample::is_sample_file;
 use vt_model::tag::{self, Source, Tag, TagLibrary};
@@ -141,11 +143,11 @@ pub enum Icon {
 /// a warning, and why beside it.
 fn preset_listing(path: &Path, kind: PresetKind) -> (Icon, String, Vec<Tag>) {
     let read = match kind {
-        PresetKind::Sound => load_sound(path).map(|preset| {
+        PresetKind::Sound => load::<SoundPreset>(path).map(|preset| {
             let icon = Icon::Sound(preset.sound.machine);
             (icon, preset.summary(), preset.fixed_tags(), preset.tags)
         }),
-        PresetKind::Effect => load_effect(path).map(|preset| {
+        PresetKind::Effect => load::<EffectPreset>(path).map(|preset| {
             (
                 Icon::Effect,
                 preset.summary(),
@@ -153,7 +155,7 @@ fn preset_listing(path: &Path, kind: PresetKind) -> (Icon, String, Vec<Tag>) {
                 preset.tags,
             )
         }),
-        PresetKind::Patch => load_patch(path).map(|preset| {
+        PresetKind::Patch => load::<PatchPreset>(path).map(|preset| {
             (
                 Icon::Patch,
                 preset.summary(),
