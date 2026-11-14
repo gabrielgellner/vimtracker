@@ -509,6 +509,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         format!("  {}", keys.join(" "))
     };
     let dirty = if app.dirty { " *" } else { "" };
+    // After the changes' mark, as Vim's status line puts `[RO]` after `[+]`.
+    let read_only = if app.read_only { " [RO]" } else { "" };
     let typed = if app.entry.text.is_empty() {
         String::new()
     } else {
@@ -591,7 +593,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     ];
     status.extend(transport_spans(app));
     status.push(Span::raw(format!(
-        "  {} BPM  Groove {groove}  {reset}Oct {} Vel {:02X}{grid}{scale}  TVol {level:02X}{dirty}{pending}{typed}",
+        "  {} BPM  Groove {groove}  {reset}Oct {} Vel {:02X}{grid}{scale}  TVol {level:02X}{dirty}{read_only}{pending}{typed}",
         format_bpm(app.song().millibpm),
         app.octave,
         app.note_velocity,

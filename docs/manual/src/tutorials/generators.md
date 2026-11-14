@@ -42,8 +42,9 @@ and the folder from inside the program. Each folder is a whole project: its `son
 there is. Without a checkout, download the `song.ron` linked in each section into a folder of its
 own, and open that folder.
 
-They're the repository's own copies, so save your changes somewhere new with `:w` and a folder,
-such as `:w my-turing`, and then `:w` carries on saving there. To hear one without opening it,
+They're the repository's own copies, so each is read-only, `[RO]` on the status line, and `:w`
+refuses to write over it. Save your changes somewhere new with `:w` and a folder, such as
+`:w my-turing`: the copy isn't read-only, and `:w` carries on saving there. To hear one without opening it,
 `vimtracker render docs/manual/src/tutorials/songs/euclid euclid.wav --rows 128` writes eight
 bars of it.
 

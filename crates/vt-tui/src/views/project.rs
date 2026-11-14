@@ -72,6 +72,7 @@ fn value(app: &App, control: ProjectControl) -> String {
         ProjectControl::Root => app.scale.root_name().to_owned(),
         ProjectControl::Grid => grid_name(song.skip),
         ProjectControl::AutoJump => on_off(app.auto_jump),
+        ProjectControl::ReadOnly => on_off(app.read_only),
         ProjectControl::Audio if app.audio.device.is_empty() => "None".to_owned(),
         ProjectControl::Audio => format!("{}, {} Hz", app.audio.device, app.rate),
         ProjectControl::Save
@@ -98,6 +99,9 @@ fn after(app: &App, control: ProjectControl) -> Option<String> {
         ProjectControl::Folder if app.folder.is_none() => None,
         ProjectControl::Folder if app.dirty => Some("unsaved changes".to_owned()),
         ProjectControl::Folder => Some("saved".to_owned()),
+        ProjectControl::ReadOnly if app.read_only => {
+            Some(":w refuses, so Save as makes a copy to change".to_owned())
+        }
         // A reset belongs to a section, so with more than one it says which.
         ProjectControl::Reset if app.song().sections.len() > 1 => {
             Some(format!("in section {}", app.cursor.section + 1))
