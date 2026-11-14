@@ -41,7 +41,7 @@ const MOST_DRIVE_DB: f32 = 30.0;
 /// The longest `Down` holds a sample, in seconds, so it's the same at any device rate.
 const LONGEST_HOLD: f32 = 0.01;
 /// The note a slot's oscillator plays before the track has played one: middle C.
-const DEFAULT_NOTE: f32 = 60.0;
+pub const DEFAULT_NOTE: f32 = 60.0;
 /// How many octaves over the note `Down` holds at with `Track` on, at `00`. At `FF` it holds once
 /// a cycle of the note.
 const TRACKED_OCTAVES: f32 = 8.0;
@@ -593,6 +593,18 @@ impl InsertState {
             (Insert::Limit(_), Some(Memory::Limit(limiter))) => limiter.reduction(),
             _ => 0.0,
         }
+    }
+
+    /// How far a low-pass gate in the slot is open now, its level and cutoff from `0` to `1`, for
+    /// the FX page's zoom to draw. Any other effect has none.
+    pub fn opening(&self) -> Option<(f32, f32)> {
+        matches!(self.insert, Insert::Lpg(_)).then(|| self.gate.opening())
+    }
+
+    /// The track's note as it's heard, with its `Pitch`, which a resonator, comb, vowel filter or
+    /// oscillator in the slot follows.
+    pub fn note(&self) -> f32 {
+        self.note
     }
 
     /// Whether it's got something left to play with nothing going in.

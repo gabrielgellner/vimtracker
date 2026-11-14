@@ -40,6 +40,7 @@
 use vt_model::insert::{GateMode, LowPassGate as Settings};
 
 use crate::dsp::blocks::plaits_parts::{Svf, tan_accurate};
+use crate::dsp::blocks::response::{Gain, svf, warped};
 use crate::dsp::blocks::sides::{Sides, same_bits_by_eq, same_bits_by_fields};
 use crate::dsp::blocks::smoother::Smoothed;
 
@@ -421,9 +422,7 @@ impl LowPassGate {
         let filter_cutoff = base + span * followed;
         self.cutoff = gate * gate_cutoff + filter * filter_cutoff + vca;
         self.level = gate * lit + filter + vca * (base + span * followed);
-        let hertz = LOWEST_HERTZ * (self.cutoff.min(1.0) * OCTAVES).exp2();
-        let g = tan_accurate((hertz / rate as f32).min(0.45));
-        let q = LEAST_Q * (MOST_Q / LEAST_Q).powf(resonance);
+        let (g, q) = tuning(self.cutoff, resonance, rate);
         let (filtered, level) = (1.0 - vca, self.level);
         self.filters.process(input, same, |filter, sample| {
             // With nothing coming in, its state goes once it's tiny (#260).
@@ -434,6 +433,68 @@ impl LowPassGate {
             let low = filter.low_pass(sample);
             (low * filtered + sample * vca) * level
         })
+    }
+}
+
+/// The filter's `tan(pi f)` and Q for a cutoff and `Res`, each from `0` to `1`, at a rate.
+fn tuning(cutoff: f32, resonance: f32, rate: u32) -> (f32, f32) {
+    let hertz = LOWEST_HERTZ * (cutoff.min(1.0) * OCTAVES).exp2();
+    let g = tan_accurate((hertz / rate as f32).min(0.45));
+    (g, LEAST_Q * (MOST_Q / LEAST_Q).powf(resonance))
+}
+
+/// How far a gate's settings open it: from `Base` across this much of the rest of the way, and
+/// the most of it the vactrol keeps open as it closes.
+fn span(settings: Settings) -> (f32, f32, f32) {
+    let base = f32::from(settings.base) / 255.0;
+    let span = (1.0 - base) * f32::from(settings.amount) / 255.0;
+    (base, span, RINGING_TAIL.min(span))
+}
+
+/// Where a low-pass gate rests once it's heard nothing for a while, as [`LowPassGate::opening`]
+/// has it, its level and cutoff from `0` to `1`: as a gate, silent, its cutoff on the tail the
+/// vactrol keeps; as a filter, at `Base` and full level; as a VCA, at `Base`'s level.
+pub fn resting(settings: Settings) -> (f32, f32) {
+    let (base, _, tail) = span(settings);
+    match settings.mode {
+        GateMode::Gate => (gompertz(0.0), base + tail),
+        GateMode::Filter => (1.0, base),
+        GateMode::Vca => (base, 1.0),
+    }
+}
+
+/// Where it is opened all the way by what it hears: at full level, its cutoff `Amount` of the way
+/// from `Base` to the top, or as a VCA, its level there.
+pub fn opened(settings: Settings) -> (f32, f32) {
+    let (base, span, _) = span(settings);
+    match settings.mode {
+        GateMode::Gate | GateMode::Filter => (1.0, base + span),
+        GateMode::Vca => (base + span, 1.0),
+    }
+}
+
+/// How much a `LPG` slot leaves a quiet sine at each frequency, in Hz, in dB, open as far as
+/// `(level, cutoff)`,
+/// which [`LowPassGate::opening`] reports and [`resting`] and [`opened`] give the ends of: its
+/// filter's low-pass, from the tuning it plays with, or none as a VCA, at its level, and mixed
+/// with the sound by `Mix`, before `Gain`. For drawing its curve on the FX page's zoom (decision
+/// 333).
+pub fn response(settings: Settings, (level, cutoff): (f32, f32), rate: u32) -> impl Fn(f32) -> f32 {
+    let (g, q) = tuning(cutoff, f32::from(settings.resonance) / 255.0, rate);
+    let mix = f64::from(settings.mix) / 255.0;
+    move |hertz| {
+        let filtered = match settings.mode {
+            GateMode::Vca => Gain::ONE,
+            GateMode::Gate | GateMode::Filter => {
+                let along = warped(f64::from(hertz) / f64::from(rate));
+                let [low, _, _] = svf(along / f64::from(g), 1.0 / f64::from(q));
+                low
+            }
+        };
+        filtered
+            .scale(f64::from(level) * mix)
+            .plus(Gain::real(1.0 - mix))
+            .db()
     }
 }
 
@@ -462,6 +523,53 @@ mod tests {
             .map(|harmonic| sine(hertz * harmonic as f32, frame, rate) / harmonic as f32)
             .sum::<f32>()
             * 0.5
+    }
+
+    #[test]
+    fn its_curve_is_what_a_sweep_through_the_slot_measures() {
+        use vt_model::insert::Insert;
+
+        use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
+        use crate::track_state::Keys;
+        // It hears the second track: silent, or held at a steady level, so it rests or stays open
+        // part of the way as the sines go through.
+        let mut keys = Keys {
+            sounds: 2,
+            ..Keys::default()
+        };
+        let hearing = |mode: GateMode, base: u8, resonance: u8, mix: u8| Settings {
+            mode,
+            base,
+            resonance,
+            mix,
+            source: 2,
+            ..Settings::DEFAULT
+        };
+        let cases = [
+            (hearing(GateMode::Filter, 0x60, 0xC0, 0xFF), 0.0),
+            (hearing(GateMode::Gate, 0x20, 0x00, 0xFF), 0.0),
+            (hearing(GateMode::Filter, 0x30, 0xFF, 0xFF), 0.05),
+            (hearing(GateMode::Gate, 0x20, 0x80, 0xC0), 0.02),
+            (hearing(GateMode::Vca, 0x40, 0x80, 0xFF), 0.01),
+        ];
+        for (settings, key) in cases {
+            keys.frames[1] = [key; 2];
+            let mut state = slot(Insert::Lpg(settings), 60.0, RATE);
+            for hertz in across(30) {
+                let measured = measured_db(&mut state, hertz, 1.0, RATE, &keys);
+                let opening = state.opening().unwrap();
+                if key == 0.0 {
+                    let (level, cutoff) = resting(settings);
+                    assert!((opening.0 - level).abs() < 1e-6, "{opening:?}");
+                    assert!((opening.1 - cutoff).abs() < 1e-6, "{opening:?}");
+                }
+                let curve = response(settings, opening, RATE)(hertz);
+                assert!(
+                    agrees(curve, measured),
+                    "{settings:?} at {hertz} Hz open {opening:?}: {curve} dB against {measured}"
+                );
+            }
+        }
     }
 
     #[test]

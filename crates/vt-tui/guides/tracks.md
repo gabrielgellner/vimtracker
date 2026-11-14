@@ -299,10 +299,32 @@ the page's width, with its settings in the same places and bars nearly twice as 
 | `Limit` | Its gain reduction meter and the last two bars |
 | `EQ3` | Its curve, across the whole width |
 | `Distort` | Its transfer curve |
+| `LPG` | Its curve as far as it's open, and open all the way |
+| `Reso`, `Comb` | Its curve at the note playing |
+| `Vowel` | Its curve |
+| `Delay` | Its repeats over time, left up and right down |
+| `Reverb`, `Plate` | How its tail dies away |
+| `Spring`, `Space` | How its tail dies away |
 
 A `Comp`'s curve is square and 16 rows tall, and its meter as tall, 0 to 24 dB, with the last two
 bars of how far it turned down beside them. A `Distort`'s transfer curve, on `Soft`, `Hard`,
 `Fold`, `Sine` and `Crush`, is what each level coming in goes out as, with `Mix` in it.
+
+The filter effects' curves are what each lets through of a quiet sound at each frequency, from
+20 Hz to 20 kHz and -36 dB to +24 dB, as the Sound page's filter curve is, with `Mix` in them. A
+`Reso`'s and a `Comb`'s peaks sit on the note the track is playing, with `Tune`, and its
+harmonics, with a dashed line at that note, so the curve moves as the notes do; its narrowest peaks
+are drawn to their tops. An `LPG`'s moves as what it
+hears opens and closes it, with a dashed line at its cutoff; the dotted curve under it is where it
+goes opened all the way, so what lies between is how far it moves.
+
+A `Delay`'s repeats are lines along the time from the sound, as loud on the left as they reach up
+and on the right as they reach down, from -60 dB in the middle to 0 dB at the edges, so a
+ping-pong's cross from side to side. The sound itself, with `Mix`, is first, at the left, and
+fainter lines mark the beats. Each repeat is as loud as it is where `Low cut` and `High cut` pass
+the most. A reverb's tail falls from the top, after its pre-delay, 60 dB in its decay time at its
+lows, and a dotted line falls as its highs do, which `Damp` shortens. The box says how long each
+takes, and how far apart the lines down it are.
 
 The last two bars are a sweep, as an oscilloscope's: it writes from left to right as the song's
 tempo goes, with a gap after the newest, and starts again at the left after two bars, so a beat's

@@ -21,7 +21,7 @@ struct Part {
     lines: Vec<Line<'static>>,
     width: u16,
     boxed: bool,
-    caption: Option<&'static str>,
+    caption: Option<String>,
 }
 
 impl Part {
@@ -45,17 +45,12 @@ impl GraphicPanel {
     /// The same with a box after the others, round these lines, this wide inside, with a caption
     /// in its bottom border or not.
     #[must_use]
-    pub fn boxed(
-        mut self,
-        lines: Vec<Line<'static>>,
-        width: u16,
-        caption: Option<&'static str>,
-    ) -> Self {
+    pub fn boxed(mut self, lines: Vec<Line<'static>>, width: u16, caption: Option<&str>) -> Self {
         self.parts.push(Part {
             lines,
             width,
             boxed: true,
-            caption,
+            caption: caption.map(str::to_owned),
         });
         self
     }
@@ -133,7 +128,7 @@ impl Part {
             spans.push(Span::styled("│", edge));
             lines.push(Line::from(spans));
         }
-        let caption = self.caption.unwrap_or("");
+        let caption = self.caption.as_deref().unwrap_or("");
         let rest = "─".repeat(width.saturating_sub(caption.chars().count()));
         lines.push(Line::styled(format!("└{caption}{rest}┘"), edge));
         lines

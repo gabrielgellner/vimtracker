@@ -24,6 +24,7 @@
 use vt_model::insert::{Resonator as Settings, shift_semitones};
 
 use crate::dsp::blocks::plaits_parts::{CosineOscillator, STIFFNESS, interpolate, tan_fast};
+use crate::dsp::blocks::response::{Gain, svf, warped};
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::voices::drums::soft_clip;
 
@@ -174,6 +175,10 @@ fn at_rate(coefficient: f32, rate: u32) -> f32 {
     1.0 - (1.0 - coefficient).powf(MUTABLE_RATE / rate as f32)
 }
 
+/// What Rings' limiter turns everything down by before it turns down anything loud, so a quiet
+/// sound comes out at this.
+pub(in crate::dsp) const QUIET_GAIN: f32 = 0.8;
+
 /// Rings' limiter: it follows the loudest of the two sides and their difference, rising quickly
 /// and falling over about a second, turns both down together to keep that under full scale, and
 /// clips softly what gets past it first.
@@ -211,8 +216,69 @@ impl Limiter {
             self.release
         };
         self.peak += slope * (peak - self.peak);
-        let gain = self.gain() * 0.8;
+        let gain = self.gain() * QUIET_GAIN;
         [soft_clip(left * gain), soft_clip(right * gain)]
+    }
+}
+
+/// Tune the bank to a note, `Material`, `Bright` and `Decay`, and work out what the pickup at
+/// `position` hears of each mode, and the second, `wander` past where it starts; with how much
+/// it's all turned up, so a hit comes out about as loud as it went in.
+fn tuned(
+    modes: &mut Modes,
+    [note, material, bright, decay]: [f32; 4],
+    position: f32,
+    wander: f32,
+    rate: u32,
+) -> ([(f32, f32); MODES], f32) {
+    let hertz = (440.0 * semitones(note - 69.0)).clamp(LOWEST_HZ, HIGHEST_HZ);
+    let f0 = (hertz / rate as f32).min(0.45);
+    modes.tune(f0, material, bright, decay, rate as f32 / MUTABLE_RATE);
+    let mut centre = CosineOscillator::new(position);
+    let mut side = CosineOscillator::new(PICKUP_OFFSET + wander);
+    // A band-pass passes noise as loud as its frequency times its Q, and a hit as loud as its
+    // frequency times as many cycles as ring through it, so the level is matched for both by
+    // turning down what all the modes together would pass.
+    let hit_cycles = std::f32::consts::PI * HIT_SECONDS * rate as f32;
+    let mut heard = [(0.0, 0.0); MODES];
+    let mut power = 0.0;
+    for (mode, heard) in heard.iter_mut().enumerate() {
+        let attenuation = modes.attenuation[mode];
+        *heard = (centre.next() * attenuation, side.next() * attenuation);
+        let frequency = modes.frequency[mode];
+        let quality = modes.quality[mode].min(hit_cycles * frequency);
+        power += heard.0 * heard.0 * frequency * quality;
+    }
+    (heard, LEVEL / power.max(1e-12).sqrt())
+}
+
+/// How much a `Reso` slot leaves a quiet sine at each frequency, in Hz, in dB, once it's settled
+/// on its settings and the track's `note`, by the middle of its two sides, which `Width`'s wandering
+/// pickup leaves alone: its 24 modes' band-passes, from the tuning they play with, each as loud as
+/// its pickup hears it, added as it adds them, through the limiter's quiet 0.8, and mixed with the
+/// sound by `Mix`, before `Gain`. For drawing its curve on the FX page's zoom (decision 333).
+pub fn response(settings: Settings, note: f32, rate: u32) -> impl Fn(f32) -> f32 {
+    let mut modes = Modes::default();
+    let value = |setting: u8| f32::from(setting) / 255.0;
+    let tuning = [
+        note + shift_semitones(f32::from(settings.tune)),
+        value(settings.material),
+        value(settings.bright),
+        value(settings.decay),
+    ];
+    let position = value(settings.position) * 0.5;
+    let (heard, level) = tuned(&mut modes, tuning, position, 0.0, rate);
+    let mix = f64::from(value(settings.mix));
+    move |hertz| {
+        let along = warped(f64::from(hertz) / f64::from(rate));
+        let wet = (0..MODES).fold(Gain::ZERO, |sum, mode| {
+            let w = along / f64::from(modes.g[mode]);
+            let [_, band, _] = svf(w, 1.0 / f64::from(modes.quality[mode]));
+            sum.plus(band.scale(f64::from(heard[mode].0 * level)))
+        });
+        wet.scale(f64::from(QUIET_GAIN * INPUT_GAIN) * mix)
+            .plus(Gain::real(1.0 - mix))
+            .db()
     }
 }
 
@@ -246,7 +312,6 @@ pub struct Resonator {
     fresh: bool,
     /// The settings last followed, so the first jumps to them.
     settings: Option<Settings>,
-    q_scale: f32,
     rate: u32,
 }
 
@@ -270,7 +335,6 @@ impl Resonator {
             left: 0,
             fresh: true,
             settings: None,
-            q_scale: rate as f32 / MUTABLE_RATE,
             rate,
         }
     }
@@ -357,10 +421,6 @@ impl Resonator {
             }
             value.next(smoothing)
         });
-        let hertz = (440.0 * semitones(note - 69.0)).clamp(LOWEST_HZ, HIGHEST_HZ);
-        let f0 = (hertz / self.rate as f32).min(0.45);
-        self.modes.tune(f0, material, bright, decay, self.q_scale);
-
         // Elements' second pickup wanders on a slow triangle, and what it hears apart from the
         // first is spread across the sides.
         self.phase += self.increment;
@@ -372,22 +432,8 @@ impl Resonator {
         } else {
             self.phase
         };
-        let mut centre = CosineOscillator::new(position);
-        let mut side = CosineOscillator::new(PICKUP_OFFSET + wander);
-        // A band-pass passes noise as loud as its frequency times its Q, and a hit as loud as
-        // its frequency times as many cycles as ring through it, so the level is matched for
-        // both by turning down what all the modes together would pass.
-        let hit_cycles = std::f32::consts::PI * HIT_SECONDS * self.rate as f32;
-        let mut heard = [(0.0, 0.0); MODES];
-        let mut power = 0.0;
-        for (mode, heard) in heard.iter_mut().enumerate() {
-            let attenuation = self.modes.attenuation[mode];
-            *heard = (centre.next() * attenuation, side.next() * attenuation);
-            let frequency = self.modes.frequency[mode];
-            let quality = self.modes.quality[mode].min(hit_cycles * frequency);
-            power += heard.0 * heard.0 * frequency * quality;
-        }
-        let level = LEVEL / power.max(1e-12).sqrt();
+        let tuning = [note, material, bright, decay];
+        let (heard, level) = tuned(&mut self.modes, tuning, position, wander, self.rate);
         let previous = self.targets;
         let [left, right] = &mut self.targets;
         for ((left, right), (centre, side)) in left.iter_mut().zip(right).zip(heard) {
@@ -521,6 +567,67 @@ mod tests {
             imaginary += f64::from(*sample) * phase.sin();
         }
         ((real * real + imaginary * imaginary).sqrt() * 2.0 / samples.len() as f64) as f32
+    }
+
+    #[test]
+    fn its_curve_is_what_a_sweep_through_the_slot_measures() {
+        use vt_model::insert::Insert;
+
+        use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
+        use crate::track_state::Keys;
+        let cases = [
+            // Long enough for what rings longest, a third of a second at middle C, to settle within
+            // 0.01 dB.
+            (Settings::DEFAULT, 60.0, 3.0),
+            // A fifth up, a bell's partials, dark and short, heard from its middle, half wet.
+            (
+                Settings {
+                    tune: MOST_SHIFT + 7,
+                    material: 0xC0,
+                    bright: 0x30,
+                    decay: 0x40,
+                    position: 0xFF,
+                    mix: 0x80,
+                    ..Settings::DEFAULT
+                },
+                48.0,
+                3.0,
+            ),
+            // Bunched partials, bright and long, wide.
+            (
+                Settings {
+                    material: 0x10,
+                    bright: 0xE0,
+                    decay: 0xA0,
+                    width: 0xFF,
+                    ..Settings::DEFAULT
+                },
+                67.0,
+                9.0,
+            ),
+        ];
+        for (settings, note, settle) in cases {
+            let mut state = slot(Insert::Reso(settings), note, RATE);
+            // Its first few modes' peaks, where it's tuned them.
+            let mut modes = Modes::default();
+            let value = |setting: u8| f32::from(setting) / 255.0;
+            let tuning = [
+                note + shift_semitones(f32::from(settings.tune)),
+                value(settings.material),
+                value(settings.bright),
+                value(settings.decay),
+            ];
+            tuned(&mut modes, tuning, 0.0, 0.0, RATE);
+            let peaks = modes.frequency[..6].iter().map(|f| f * RATE as f32);
+            for hertz in across(30).chain(peaks) {
+                let measured = measured_db(&mut state, hertz, settle, RATE, &Keys::default());
+                let curve = response(settings, note, RATE)(hertz);
+                assert!(
+                    agrees(curve, measured),
+                    "{settings:?} at {hertz} Hz: {curve} dB against {measured}"
+                );
+            }
+        }
     }
 
     #[test]

@@ -505,6 +505,9 @@ fn live_values_are_the_settings_when_nothing_moves_them() {
         },
         inserts: Default::default(),
         reduction: Default::default(),
+        openings: Default::default(),
+        // `C-3`, the note the slots follow.
+        note: 60.0,
         bypassed: Default::default(),
         after_trim: Default::default(),
         mods: Default::default(),
