@@ -357,3 +357,27 @@ fn a_delay_has_its_repeats_and_each_reverb_its_tail_with_their_time_scales() {
         press(&mut app, "}");
     }
 }
+
+#[test]
+fn a_space_echo_has_its_repeats_drawn_as_a_delays_are() {
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "K");
+    press(&mut app, "Space Echo");
+    special(&mut app, KeyCode::Enter);
+    let mut graphics = vt_tui::kitty::Graphics::new();
+    let mut out = Vec::new();
+    graphics.sync(&mut app, &mut out).unwrap();
+    press(&mut app, "zi");
+    let mut out = Vec::new();
+    graphics.sync(&mut app, &mut out).unwrap();
+    let sent = vt_tui::screenshot::sent_images(&out);
+    assert_eq!(sent.len(), 1);
+    assert_eq!(png_size(&sent[&app.zoom_image.unwrap()]), (2100, 624));
+    let screen = zoomed_screen(&mut app, false);
+    assert!(
+        screen
+            .iter()
+            .any(|line| line.contains("s across, a line a beat")),
+        "{screen:#?}"
+    );
+}

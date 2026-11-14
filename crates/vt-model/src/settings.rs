@@ -10,15 +10,15 @@ use crate::envelope::time_at;
 use crate::groove::GROOVE_CHOICES;
 use crate::insert::{
     ALGORITHM_NAMES, BEADS_PARAMS, CHORUS_PARAMS, CLOUDS_PARAMS, COMB_PARAMS, COMPRESSOR_PARAMS,
-    DELAY_PARAMS, DISTORT_PARAMS, EQ_PARAMS, EXCITER_PARAMS, FLANGER_PARAMS, FREQ_SHIFT_PARAMS,
-    GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, LPG_PARAMS, PHASER_PARAMS, PITCH_PARAMS,
-    PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, ROTARY_PARAMS, SPACE_PARAMS, SPRING_PARAMS,
-    STUTTER_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS, WARPS_PARAMS,
-    algorithm_blend, attack_ms, ceiling_db, exciter_attack_ms, exciter_release_ms, exciter_tone_hz,
-    fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms, grain_time_seconds,
-    input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio, release_ms,
-    repeat_decay_db, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db, threshold_db,
-    vowel_blend,
+    DELAY_PARAMS, DISTORT_PARAMS, ECHO_PARAMS, EQ_PARAMS, EXCITER_PARAMS, FLANGER_PARAMS,
+    FREQ_SHIFT_PARAMS, GRAINS_PARAMS, INSERTS, Insert, LIMIT_PARAMS, LPG_PARAMS, PHASER_PARAMS,
+    PITCH_PARAMS, PLATE_PARAMS, Param, RESO_PARAMS, REVERB_PARAMS, ROTARY_PARAMS, SPACE_PARAMS,
+    SPRING_PARAMS, STUTTER_PARAMS, Setting, TAPE_PARAMS, Triggering, VOWEL_NAMES, VOWEL_PARAMS,
+    WARPS_PARAMS, algorithm_blend, attack_ms, ceiling_db, exciter_attack_ms, exciter_release_ms,
+    exciter_tone_hz, fine_cents, flanger_delay_ms, grain_density, grain_length, grain_ms,
+    grain_time_seconds, input_db, limit_release_ms, makeup_db, plate_size, range_db, ratio,
+    release_ms, repeat_decay_db, shift_delay_ms, shift_hertz, spread_hertz, tape_drive_db,
+    threshold_db, vowel_blend,
 };
 use crate::macros::MACROS;
 use crate::modulation::{MOD_SLOTS, depth_of, depth_text};
@@ -1292,10 +1292,11 @@ pub enum Effect {
     Stutter,
     Clouds,
     Beads,
+    Echo,
 }
 
 impl Effect {
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 27] = [
         Self::Distort,
         Self::Delay,
         Self::Reverb,
@@ -1322,6 +1323,7 @@ impl Effect {
         Self::Stutter,
         Self::Clouds,
         Self::Beads,
+        Self::Echo,
     ];
 
     /// Every setting it has in any mode, in the order its slot keeps them. Distort's modes each
@@ -1351,6 +1353,7 @@ impl Effect {
             Self::Stutter => &STUTTER_PARAMS,
             Self::Clouds => &CLOUDS_PARAMS,
             Self::Beads => &BEADS_PARAMS,
+            Self::Echo => &ECHO_PARAMS,
             Self::Exciter => &EXCITER_PARAMS,
             Self::Rotary => &ROTARY_PARAMS,
             Self::Space => &SPACE_PARAMS,
@@ -1382,6 +1385,7 @@ impl Effect {
             Self::Stutter => "stutter",
             Self::Clouds => "clouds",
             Self::Beads => "beads",
+            Self::Echo => "echo",
             Self::Exciter => "exciter",
             Self::Rotary => "rotary",
             Self::Space => "space",
@@ -1413,6 +1417,7 @@ impl Effect {
             Self::Stutter => "Stutter",
             Self::Clouds => "Clouds",
             Self::Beads => "Beads",
+            Self::Echo => "Space Echo",
             Self::Exciter => "Exciter",
             Self::Rotary => "Rotary",
             Self::Space => "Space",
@@ -1446,6 +1451,7 @@ impl Effect {
             Insert::Stutter(_) => Some(Self::Stutter),
             Insert::Clouds(_) => Some(Self::Clouds),
             Insert::Beads(_) => Some(Self::Beads),
+            Insert::Echo(_) => Some(Self::Echo),
             Insert::Exciter(_) => Some(Self::Exciter),
             Insert::Rotary(_) => Some(Self::Rotary),
             Insert::Space(_) => Some(Self::Space),
@@ -2315,6 +2321,7 @@ const fn effect_start(effect: Effect) -> usize {
                 + FREQ_SHIFT_PARAMS.len()
                 + SPRING_PARAMS.len()
         }
+        Effect::Echo => SLOT_SIZE - ECHO_PARAMS.len(),
     }
 }
 
@@ -2346,7 +2353,8 @@ const SLOT_SIZE: usize = DISTORT_PARAMS.len()
     + EXCITER_PARAMS.len()
     + STUTTER_PARAMS.len()
     + CLOUDS_PARAMS.len()
-    + BEADS_PARAMS.len();
+    + BEADS_PARAMS.len()
+    + ECHO_PARAMS.len();
 const MODS_START: usize = SLOTS_START + INSERTS * SLOT_SIZE;
 const BYPASS_START: usize = MODS_START + MOD_SLOTS * MOD.len();
 const SAMPLER_START: usize = BYPASS_START + INSERTS * SLOT_OWN.len();

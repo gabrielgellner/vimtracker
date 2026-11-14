@@ -12,7 +12,7 @@
 
 use vt_model::constants::UNITY_LEVEL;
 use vt_model::insert::{
-    Beads, Chorus, Clouds, Comb, Compressor, CompressorType, Delay, Distort, DistortType,
+    Beads, Chorus, Clouds, Comb, Compressor, CompressorType, Delay, Distort, DistortType, Echo,
     Equaliser, Exciter, Flanger, FreqShift, Grains, Insert, Limiter, LowPassGate, Phaser, Pitch,
     Plate, Resonator, Reverb, Rotary, Space, Spring, Stutter, Tape, Vowel, Warps,
 };
@@ -179,7 +179,8 @@ fn same_effect(before: Insert, after: Insert) -> bool {
         | (Insert::Exciter(_), Insert::Exciter(_))
         | (Insert::Stutter(_), Insert::Stutter(_))
         | (Insert::Clouds(_), Insert::Clouds(_))
-        | (Insert::Beads(_), Insert::Beads(_)) => true,
+        | (Insert::Beads(_), Insert::Beads(_))
+        | (Insert::Echo(_), Insert::Echo(_)) => true,
         _ => false,
     }
 }
@@ -491,6 +492,7 @@ impl InsertState {
             | Insert::Tape(Tape { mix, gain, .. })
             | Insert::Plate(Plate { mix, gain, .. })
             | Insert::Spring(Spring { mix, gain, .. })
+            | Insert::Echo(Echo { mix, gain, .. })
             | Insert::Stutter(Stutter { mix, gain, .. })
             | Insert::Exciter(Exciter { mix, gain, .. })
             | Insert::Rotary(Rotary { mix, gain, .. })
@@ -908,7 +910,8 @@ impl InsertState {
             | Insert::Rotary(_)
             | Insert::Stutter(_)
             | Insert::Clouds(_)
-            | Insert::Beads(_) => Mono::Stereo,
+            | Insert::Beads(_)
+            | Insert::Echo(_) => Mono::Stereo,
         }
     }
 
@@ -1089,7 +1092,8 @@ impl InsertState {
             | Insert::Pitch(_)
             | Insert::Grains(_)
             | Insert::Rotary(_)
-            | Insert::Stutter(_) => (None, Distort::DEFAULT),
+            | Insert::Stutter(_)
+            | Insert::Echo(_) => (None, Distort::DEFAULT),
         };
         let amount = self.amount.next(smoothing);
         let mix = self.mix.next(smoothing);

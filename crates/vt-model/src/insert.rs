@@ -54,6 +54,7 @@ pub enum Insert {
     Stutter(Stutter),
     Clouds(Clouds),
     Beads(Beads),
+    Echo(Echo),
 }
 
 /// What a slot's setting is, for what moves it to read and write it on its own scale.
@@ -218,6 +219,13 @@ pub enum Setting {
     BeadsTime,
     BeadsDensity,
     Clock,
+    /// A Space Echo's: its mode, whether the tape's speed follows the song's tempo, and how loud
+    /// its repeats are. Its `Rate` is the chorus's, its `Intensity` the delay's `Feedback`, its
+    /// `Input` the limiter's, its `Inertia` the rotary's, its `Wow` the tape's, its `Bass` and
+    /// `Treble` the EQ's `Low` and `High`, and its `Reverb` Clouds'.
+    EchoMode,
+    EchoSync,
+    EchoLevel,
     Mix,
     Gain,
     /// A place in the list of note divisions.
@@ -269,6 +277,8 @@ impl Setting {
             Self::CloudsMode => CloudsMode::ALL.len() as u8 - 1,
             Self::Quality => QUALITY_NAMES.len() as u8 - 1,
             Self::BeadsMode => BeadsMode::ALL.len() as u8 - 1,
+            Self::EchoMode => ECHO_MODE_NAMES.len() as u8 - 1,
+            Self::EchoSync => ECHO_SYNC_NAMES.len() as u8 - 1,
             _ => 0xFF,
         }
     }
@@ -305,6 +315,8 @@ impl Setting {
             Self::CloudsMode => (CloudsMode::ALL.len() - 1) as f32,
             Self::Quality => (QUALITY_NAMES.len() - 1) as f32,
             Self::BeadsMode => (BeadsMode::ALL.len() - 1) as f32,
+            Self::EchoMode => (ECHO_MODE_NAMES.len() - 1) as f32,
+            Self::EchoSync => (ECHO_SYNC_NAMES.len() - 1) as f32,
             _ => 255.0,
         }
     }
@@ -435,7 +447,7 @@ fn source_track(source: u8, sounds: usize) -> Option<usize> {
 
 impl Insert {
     /// Every effect a slot can hold, as it starts, in the order `+` goes through them.
-    pub const ALL: [Self; 27] = [
+    pub const ALL: [Self; 28] = [
         Self::Empty,
         Self::Distort(Distort::DEFAULT),
         Self::Delay(Delay::DEFAULT),
@@ -463,6 +475,7 @@ impl Insert {
         Self::Stutter(Stutter::DEFAULT),
         Self::Clouds(Clouds::DEFAULT),
         Self::Beads(Beads::DEFAULT),
+        Self::Echo(Echo::DEFAULT),
     ];
 
     /// What return `A` starts with: only what comes back, as what's sent still plays on its track.
@@ -507,6 +520,7 @@ impl Insert {
             Self::Space(_) => "Space",
             Self::Clouds(_) => "Clouds",
             Self::Beads(_) => "Beads",
+            Self::Echo(_) => "Space Echo",
         }
     }
 
@@ -544,6 +558,9 @@ impl Insert {
                 "Mutable's Clouds: grains, stretching or a looping delay, with reverb"
             }
             Self::Beads(_) => "Mutable's Beads: grains or a delay on tape or digital, with reverb",
+            Self::Echo(_) => {
+                "A Roland RE-201's tape loop: three heads, wow, darkening repeats, springs"
+            }
         }
     }
 
@@ -586,6 +603,7 @@ impl Insert {
             Self::Stutter(_) => &STUTTER_PARAMS,
             Self::Clouds(_) => &CLOUDS_PARAMS,
             Self::Beads(_) => &BEADS_PARAMS,
+            Self::Echo(_) => &ECHO_PARAMS,
         }
     }
 
@@ -762,6 +780,12 @@ impl Insert {
                     .any(|found| found.setting == setting)
                     .then(|| beads.read(setting));
             }
+            Self::Echo(echo) => {
+                return ECHO_PARAMS
+                    .iter()
+                    .any(|found| found.setting == setting)
+                    .then(|| echo.read(setting));
+            }
             Self::Empty => return None,
         };
         Some(match setting {
@@ -812,6 +836,7 @@ impl Insert {
             Self::Space(space) => return Self::Space(space.written(setting, whole)),
             Self::Clouds(clouds) => return Self::Clouds(clouds.written(setting, whole)),
             Self::Beads(beads) => return Self::Beads(beads.written(setting, whole)),
+            Self::Echo(echo) => return Self::Echo(echo.written(setting, whole)),
             Self::Empty => return self,
         };
         let mut distort = distort;
@@ -844,6 +869,7 @@ impl Insert {
                     | Setting::CombMode
                     | Setting::CloudsMode
                     | Setting::BeadsMode
+                    | Setting::EchoMode
             )
         })
     }
@@ -938,6 +964,14 @@ impl Insert {
                 &[S::Shift, S::Random, S::Freeze],
                 &[S::BeadsDensity, S::Clock, S::Feedback],
                 &[S::ReverbAmount, S::Mix, S::Gain],
+            ],
+            // The tape's speed and how it gets there; the loop; the tone and the reverb; then the
+            // repeats' level over what comes out. Its mode is in the title.
+            Self::Echo(_) => &[
+                &[S::Rate, S::EchoSync, S::Inertia],
+                &[S::Feedback, S::Input, S::Wow],
+                &[S::Low, S::High, S::ReverbAmount],
+                &[S::EchoLevel, S::Mix, S::Gain],
             ],
             _ => return self.default_grid(),
         };
