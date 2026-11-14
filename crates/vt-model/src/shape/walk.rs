@@ -498,7 +498,7 @@ mod tests {
                 })
             })
             .collect();
-        assert_eq!(steps, [1, 1, 2, 3, 5, 7, 11]);
+        assert_eq!(steps, [1, 1, 2, 3, 4, 5, 7, 8, 11, 17, 23, 31]);
         assert_eq!(default_step(ShapeColumn::Velocity), 0x10);
         assert_eq!(default_step(ShapeColumn::Length), 0x20);
     }

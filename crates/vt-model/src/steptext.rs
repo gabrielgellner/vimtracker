@@ -30,7 +30,7 @@ pub enum StepTextError {
     Slot(String),
     #[error("unknown FX command: {0:?}")]
     Command(String),
-    #[error("not a nudge: {0:?}, which is + or - and 1 to 2F 24ths of a sixteenth, like -3")]
+    #[error("not a nudge: {0:?}, which is + or - and 1 to 7F 24ths of a sixteenth, like -3")]
     Nudge(String),
     #[error("not a gate: {0:?}, which is a gate, 0 to 8 pulses and perhaps a length, like SGL1 80")]
     Gate(String),
@@ -382,7 +382,7 @@ mod tests {
     }
 
     #[test]
-    fn a_nudge_is_a_sign_and_up_to_2f_24ths() {
+    fn a_nudge_is_a_sign_and_up_to_7f_24ths() {
         let nudge = |text: &str| text.parse::<Step>().map(|step| step.nudge);
         assert_eq!(nudge("C-3 64 -3 SGL1"), Ok(-3));
         assert_eq!(nudge("C-3 -- +B cut:40"), Ok(11));
@@ -392,6 +392,11 @@ mod tests {
             Ok(11),
             "with a leading 0, as a slow track shows it"
         );
+        assert_eq!(
+            nudge("C-3 -- +7F"),
+            Ok(127),
+            "as far as a whole note's step goes"
+        );
         let far: Step = "C-3 -- -2F".parse().unwrap();
         assert_eq!(far.to_string(), "C-3 -- -2F");
         assert_eq!(
@@ -400,7 +405,7 @@ mod tests {
             "a row without one is on the grid"
         );
         for text in [
-            "C-3 -- +30",
+            "C-3 -- +80",
             "C-3 -- -0",
             "C-3 -- -00",
             "C-3 -- +b",

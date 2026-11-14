@@ -2480,11 +2480,18 @@ fn a_tracks_speed_on_the_page_is_chosen_from_a_list() {
     assert_eq!(value_shown(&app).as_deref(), Some("1/16"));
     press(&mut app, "=");
     assert_eq!(speed(&app), Speed::EighthTriplet);
+    press(&mut app, "=");
+    assert_eq!(speed(&app), Speed::DottedSixteenth);
+    assert!(line(&app).contains("1/16D"), "{}", line(&app));
     press(&mut app, "==");
     assert_eq!(speed(&app), Speed::QuarterTriplet);
-    press(&mut app, "====");
-    assert_eq!(speed(&app), Speed::Quarter, "it stops at the end");
-    assert!(line(&app).contains("1/4"), "{}", line(&app));
+    press(&mut app, "=====");
+    assert_eq!(speed(&app), Speed::Whole);
+    press(&mut app, "==");
+    assert_eq!(speed(&app), Speed::Whole, "it stops at the end");
+    assert!(line(&app).contains("1/1"), "{}", line(&app));
+    press(&mut app, "-");
+    assert_eq!(speed(&app), Speed::Half);
     press(&mut app, "x");
     assert_eq!(speed(&app), Speed::Sixteenth);
     press(&mut app, "K");
@@ -2494,6 +2501,10 @@ fn a_tracks_speed_on_the_page_is_chosen_from_a_list() {
     assert_eq!(speed(&app), Speed::EighthTriplet);
     press(&mut app, "u");
     assert_eq!(speed(&app), Speed::Sixteenth);
+    press(&mut app, "K");
+    press(&mut app, "/1/8d");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(speed(&app), Speed::DottedEighth);
 }
 
 #[test]

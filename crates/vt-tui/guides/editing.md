@@ -292,7 +292,7 @@ way notes are forced into the scale: playing never does. A note outside the
 scale shows in the panel in the grid's colour for one.
 
 On Nudge, the ends run as far as the track's nudges go, `-B` to `+B` at `1/16`
-and `-2F` to `+2F` at `1/4`, in 24ths of a sixteenth, so `Random` between `-3`
+`-2F` to `+2F` at `1/4` and `-7F` to `+7F` at `1/1`, in 24ths of a sixteenth, so `Random` between `-3`
 and `+3` is a humanise you can see, and a `Ramp` rushes or drags into a fill. A
 live one keeps the range it opened with. On a gate's length, a `Wave` or `List` of lengths shapes the
 phrasing; a row with no length of its own, `··`, keeps it unless filled.
@@ -421,6 +421,11 @@ either way. At `1/16` the eighth and quarter triplets take the odd rows, nudged
 `8`, which the sixteenths take too, so a row both strike plays the one on the
 row, and the panel says `16ths and triplets need 32nds to fit`. The panel
 starts `Bar` in 32nds on a `1/32` track.
+
+The track's steps are its clock, as the module counts the clock it's given. On a
+track at another speed the bar is as many of its rows, so at `1/2` the rhythm
+plays eight times as slow, and a triplet is nudged a third of the track's row:
+`10` at `1/8`, `40` at `1/2`, and `7F` at `1/1`, as far as a nudge goes.
 
 Select three tracks, `vGWW`, and `S`: the first plays channel `A`, the second
 `B`, with B's chances, and the third `A+B`, every row either of the others

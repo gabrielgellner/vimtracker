@@ -177,7 +177,7 @@ fn earliest_nudge(song: &Song) -> Option<i64> {
                 .filter_map(move |generator| match generator.column {
                     ShapeColumn::Nudge { most: own } => Some(-own.clamp(0, most)),
                     ShapeColumn::Note { .. } if generator.shape.kind == FillKind::Divisions => {
-                        Some(generator.shape.divisions.bar.earliest().clamp(-most, 0))
+                        Some(generator.shape.divisions.earliest().clamp(-most, 0))
                     }
                     _ => None,
                 });
