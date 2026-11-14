@@ -53,6 +53,12 @@ impl CellWidths {
         gap: 3,
     };
 
+    /// The FX page's zoomed in on a slot: the same, with bars nearly twice as long, 17 cells, so
+    /// four columns fill the device's width in the keyboard's box. That's 35 columns a cell.
+    pub const ZOOM: Self = Self {
+        bar_cells: 17,
+        ..Self::FX
+    };
     /// The Sound page's: four digits, a value's coarse ones and its fine ones set back, as `A000`,
     /// with the same bars, so a column lines up with the FX page's but for its value. That's 29
     /// columns a cell.

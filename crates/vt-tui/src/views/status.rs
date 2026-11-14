@@ -482,10 +482,12 @@ pub fn right_spans(app: &App) -> Vec<Span<'static>> {
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // The sample page's modes in their own colours: the keys mode's, Visual's, and with the focus
     // on the settings rows, the cursor's, as the setting it's on is drawn.
-    // Sections selected with `V` in the song view are Visual's too.
+    // Sections selected with `V` in the song view are Visual's too. The FX page zoomed in on a
+    // slot says so, in the page's own colour, but the keyboard's mode is named over it.
     let special = app
         .sample_mode()
-        .or_else(|| app.section_anchor.map(|_| Mode::VisualField.label()));
+        .or_else(|| app.section_anchor.map(|_| Mode::VisualField.label()))
+        .or_else(|| (app.fx_zoomed() && app.mode != Mode::Keys).then_some("ZOOM"));
     let badge = match special {
         Some("SETTINGS") => Some(theme::ROSEWATER),
         Some(mode) if mode == Mode::VisualField.label() => Some(theme::MAUVE),
@@ -615,7 +617,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     } else if let Some(jump) = &app.field_jump {
         format!("/{}", jump.query)
     } else if app.status.is_empty()
-        && let Some(hint) = app.sample_mode_hint().or_else(|| app.audio_page_hint())
+        && let Some(hint) = app
+            .sample_mode_hint()
+            .or_else(|| app.audio_page_hint())
+            .or_else(|| app.fx_zoom_hint())
     {
         hint
     } else if app.status.is_empty()

@@ -15,13 +15,16 @@ use crate::sample_wave::Thumbnail;
 
 /// A panel that draws an image: the Sound page's filter curve and sampler's thumbnail, a mod
 /// slot's picture on the Mod page, an envelope's shape, an LFO's cycle or a Track slot's map, an
-/// FX slot's curve, a live generator's preview, or the mapping view's response.
+/// FX slot's curve, or the zoomed one's, a live generator's preview, or the mapping view's
+/// response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PanelKey {
     Filter,
     Waveform,
     Mod(usize),
     Slot(usize),
+    /// The FX page's zoomed slot, whichever it is (decision 329).
+    Zoom,
     /// A live generator's preview on the Gen page, by its place in its phrase's list.
     Gen(usize),
     /// The response of the mapping under the mapping view's cursor (decision 314).

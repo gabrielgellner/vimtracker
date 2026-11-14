@@ -152,6 +152,18 @@ const SHOTS: &[Shot] = &[
         size: FULL,
         ..PLAIN
     },
+    // The FX page zoomed in on a Glue keyed from a kick on the next track, after two bars and a
+    // half of playing, so its last two bars of pumping fill its history (`sidechained`).
+    Shot {
+        name: "track-fx-zoom",
+        rows: LANE,
+        keys: " 7zi<Tab>",
+        play: 40,
+        voice: Some(SynthVoice::VirtualAnalog),
+        size: FULL,
+        song: Some(sidechained),
+        ..PLAIN
+    },
     Shot {
         name: "project",
         keys: " 9jjj=l+++:set scale=dorian<Enter>:groove pull<Enter>",
@@ -333,6 +345,44 @@ fn sends_to_b(song: &mut Song) {
     }
     let group = song.fixed_track(TrackKind::Group(1)).expect("a group");
     song.tracks[group].send_b = 0x18;
+}
+
+/// A pad ducked by a kick: the first track, `Pad`, through a Glue at 10:1 hearing the second,
+/// `Kick`, on every beat, then an EQ, a Soft distortion and a limiter.
+fn sidechained(song: &mut Song) {
+    use vt_model::insert::{Compressor, CompressorType, Distort, DistortType, Equaliser, Limiter};
+    song.tracks[0].name = "Pad".to_owned();
+    song.tracks[1].name = "Kick".to_owned();
+    song.tracks[1].machine = Machine::Plaits(SynthVoice::Kick);
+    let beats: Vec<&str> = (0..16)
+        .map(|row| match row % 4 {
+            0 => "C-3 64 --- --- ---",
+            _ => "--- -- --- --- ---",
+        })
+        .collect();
+    write_rows(song, 1, &beats);
+    song.tracks[0].inserts = [
+        Insert::Compressor(Compressor {
+            kind: CompressorType::Glue,
+            threshold: 0x40,
+            glue_ratio: 2,
+            glue_attack: 3,
+            glue_release: 1,
+            source: 2,
+            ..Compressor::DEFAULT
+        }),
+        Insert::Eq(Equaliser {
+            low: 0x60,
+            high: 0xA0,
+            ..Equaliser::DEFAULT
+        }),
+        Insert::Distort(Distort {
+            kind: DistortType::Soft,
+            amount: 0x90,
+            ..Distort::DEFAULT
+        }),
+        Insert::Limit(Limiter::DEFAULT),
+    ];
 }
 
 /// Seven tracks, each playing: four drums in group 1, named `909`, then an acid bass, a lead and

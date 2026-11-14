@@ -78,6 +78,9 @@ pub enum Cmd {
     /// Start the cursor's track's chain again at the next line of the launch grid, or take back
     /// one waiting for it.
     RealignTrack,
+    /// Rotate the speeds round the tracks selected or the cursor's group, or with `true` round
+    /// every track: each takes the next one's (decision 328).
+    RotateSpeeds(bool),
     /// Give the cursor's track's faders, or every track's, back to the steps' automation.
     GiveBack,
     GiveBackAll,
@@ -118,6 +121,10 @@ pub enum Cmd {
     Audition,
     /// Switch an FX slot out or back in.
     Bypass,
+    /// Zoom the FX page in on the cursor's slot, or back out to the rack (decision 329).
+    ZoomSlot,
+    /// Zoom the FX page back out to the rack.
+    ZoomRack,
     Replace,
     Substitute,
     /// Choose what's under the cursor from a list.
@@ -277,6 +284,16 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
         "Space a",
         Cmd::RealignTrack,
         "Realign this track on the launch grid, or take it back",
+    ),
+    (
+        "Space o",
+        Cmd::RotateSpeeds(false),
+        "Rotate the speeds round this group: each takes the next's",
+    ),
+    (
+        "Space O",
+        Cmd::RotateSpeeds(true),
+        "Rotate the speeds round every track: each takes the next's",
     ),
     (
         "Space e",
@@ -534,6 +551,16 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
         "b",
         Cmd::Bypass,
         "Switch this effect or modulator out, or back in",
+    ),
+    (
+        "z i",
+        Cmd::ZoomSlot,
+        "On the FX page, zoom in on this slot, or back out",
+    ),
+    (
+        "z o",
+        Cmd::ZoomRack,
+        "On the FX page, back out to every slot",
     ),
     ("/", Cmd::FieldJump, "Jump to a setting by its name"),
     (
@@ -1025,6 +1052,11 @@ const VISUAL: &[(&str, Cmd, &str)] = &[
         "Space g A",
         Cmd::BakeMods,
         "Write the pitch the mod slots played into the selected notes",
+    ),
+    (
+        "Space o",
+        Cmd::RotateSpeeds(false),
+        "Rotate the speeds round the tracks selected",
     ),
     (".", Cmd::Repeat, "Repeat the last change on the selection"),
     (

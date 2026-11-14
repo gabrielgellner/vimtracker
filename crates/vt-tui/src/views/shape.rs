@@ -154,6 +154,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         _ => None,
     };
     let speed = panel.speed();
+    let cells = panel.shape.evolves();
     let hint = match panel.shape.kind {
         // Each pair of tracks shares one coin (decision 321).
         _ if pairs && panel.shape.kind.has_where() => "Each row goes to one track or the other",
@@ -163,6 +164,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         _ if rhythm.is_some_and(World::ternary) && speed != Some(Speed::EighthTriplet) => {
             "Its 12 rows make a bar on a 1/8T track"
         }
+        _ if cells && panel.parts.len() > 1 => "Each track a cell, a row a generation",
+        _ if cells => "Each row a cell, stepped on by Vary",
         FillKind::Random | FillKind::Walk | FillKind::Pink if app.mode == Mode::Shape => {
             "~ swap  r reroll"
         }

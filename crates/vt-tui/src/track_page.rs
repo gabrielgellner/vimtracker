@@ -161,6 +161,9 @@ pub struct TrackPage {
     /// The phrase the Gen page shows: the one under the app's cursor, which the app gives it
     /// as each key comes, so the page itself holds no song.
     pub phrase: Option<u32>,
+    /// Whether the FX page is zoomed in on the cursor's slot, `z i`, rather than showing the rack
+    /// (decision 329). It's kept while other pages show, as the FX page's own.
+    pub zoomed: bool,
 }
 
 impl TrackPage {
@@ -298,6 +301,11 @@ impl TrackPage {
                 self.show(self.page.beside(cmd == Cmd::NextPage));
                 self.settle(track);
             }
+            Cmd::ZoomSlot | Cmd::ZoomRack if self.page != Page::Fx => {
+                return Outcome::Refused("z i zooms in on an effect, on the FX page");
+            }
+            Cmd::ZoomSlot => self.zoomed = !self.zoomed,
+            Cmd::ZoomRack => self.zoomed = false,
             _ => return Outcome::Passed,
         }
         Outcome::Done
