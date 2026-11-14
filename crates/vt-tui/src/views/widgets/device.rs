@@ -205,3 +205,162 @@ impl Widget for Device {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::mode::Mode;
+    use crate::views::widgets::pin::{assert_drawn, drawn};
+
+    /// A slot's controls: its effect under the cursor, and its type, dim.
+    fn controls() -> Vec<Line<'static>> {
+        vec![
+            Line::from(Span::styled("Comp", theme::cursor(Mode::Normal))),
+            Line::from(Span::styled("Glue", theme::dim())),
+        ]
+    }
+
+    #[test]
+    fn a_device_with_the_cursor_has_a_brighter_frame_and_its_controls_bold() {
+        let device = Device::new("1")
+            .switch(true)
+            .controls(controls())
+            .focused(true);
+        assert_drawn(
+            &drawn(device, 30, 3),
+            &[
+                "╭─ 1  \u{f205}   Comp  Glue ────────╮",
+                "aababbcccbddddbbeeeebaaaaaaaaa",
+                "│                            │",
+                "a............................a",
+                "╰────────────────────────────╯",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "a fg OVERLAY2",
+                "b fg TEXT",
+                "c fg GREEN",
+                "d fg BASE bg ROSEWATER +BOLD",
+                "e fg OVERLAY2 +BOLD",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_device_without_it_has_a_faint_frame_and_its_switch_off() {
+        let device = Device::new("1").switch(false).controls(controls());
+        assert_drawn(
+            &drawn(device, 30, 3),
+            &[
+                "╭─ 1  \u{f204}   Comp  Glue ────────╮",
+                "aabcbbdddbeeeebbccccbaaaaaaaaa",
+                "│                            │",
+                "a............................a",
+                "╰────────────────────────────╯",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "a fg SURFACE1",
+                "b fg TEXT",
+                "c fg OVERLAY2",
+                "d fg OVERLAY0",
+                "e fg BASE bg ROSEWATER",
+            ],
+        );
+    }
+
+    #[test]
+    fn room_for_a_switch_keeps_the_controls_where_they_are() {
+        let device = Device::new("2").switch_room().controls(controls());
+        assert_drawn(
+            &drawn(device, 30, 3),
+            &[
+                "╭─ 2      Comp  Glue ────────╮",
+                "aabcbbbbbbddddbbccccbaaaaaaaaa",
+                "│                            │",
+                "a............................a",
+                "╰────────────────────────────╯",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "a fg SURFACE1",
+                "b fg TEXT",
+                "c fg OVERLAY2",
+                "d fg BASE bg ROSEWATER",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_device_with_no_name_starts_with_its_controls_and_what_comes_after() {
+        let device = Device::new("")
+            .controls(vec![Line::raw("Euclid")])
+            .after(Line::from(Span::styled("· Note 00–0F", theme::dim())));
+        assert_drawn(
+            &drawn(device, 30, 3),
+            &[
+                "╭─ Euclid · Note 00–0F ──────╮",
+                "aabbbbbbbbccccccccccccbaaaaaaa",
+                "│                            │",
+                "a............................a",
+                "╰────────────────────────────╯",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "a fg SURFACE1",
+                "b fg TEXT",
+                "c fg OVERLAY2",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_title_stops_short_of_the_far_corner() {
+        let device = Device::new("1").switch(true).controls(controls());
+        assert_drawn(
+            &drawn(device, 14, 3),
+            &[
+                "╭─ 1  \u{f205}   Co─╮",
+                "aabcbbdddbeeaa",
+                "│            │",
+                "a............a",
+                "╰────────────╯",
+                "aaaaaaaaaaaaaa",
+                "a fg SURFACE1",
+                "b fg TEXT",
+                "c fg OVERLAY2",
+                "d fg GREEN",
+                "e fg BASE bg ROSEWATER",
+            ],
+        );
+    }
+
+    #[test]
+    fn its_settings_go_in_from_its_frame_after_a_blank_line_and_its_panel_against_its_right() {
+        let area = Rect::new(10, 4, 80, DEVICE_HEIGHT);
+        assert_eq!(DEVICE_HEIGHT, 9);
+        assert_eq!(Device::settings_area(area), Rect::new(13, 6, 76, 5));
+        assert_eq!(Device::panel_area(area, 20), Rect::new(67, 5, 20, 7));
+        assert_eq!(
+            Device::panel_area(Rect::new(0, 0, 10, 9), 20),
+            Rect::new(1, 1, 6, 7),
+            "no wider than the inside"
+        );
+    }
+
+    #[test]
+    fn a_rack_puts_bands_a_device_tall_and_halves_side_by_side_and_keeps_a_band_in_view() {
+        let area = Rect::new(0, 2, 100, 2 * DEVICE_HEIGHT + 3);
+        let places = [(0, None), (1, Some(0)), (1, Some(1)), (2, None)];
+        assert_eq!(
+            rack_areas(area, &places, 0),
+            [
+                Some(Rect::new(0, 2, 100, 9)),
+                Some(Rect::new(0, 11, 49, 9)),
+                Some(Rect::new(51, 11, 49, 9)),
+                None,
+            ]
+        );
+        assert_eq!(
+            rack_areas(area, &places, 2),
+            [
+                None,
+                Some(Rect::new(0, 2, 49, 9)),
+                Some(Rect::new(51, 2, 49, 9)),
+                Some(Rect::new(0, 11, 100, 9)),
+            ]
+        );
+    }
+}

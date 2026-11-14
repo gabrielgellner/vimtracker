@@ -156,3 +156,86 @@ impl Widget for GraphicPanel {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ratatui::style::Style;
+
+    use super::*;
+    use crate::views::widgets::image;
+    use crate::views::widgets::pin::{assert_drawn, drawn};
+
+    /// A picture three cells wide and two high, a meter of two rows captioned `GR`, and its scale
+    /// beside it.
+    fn panel() -> GraphicPanel {
+        let meter = vec![
+            Line::from(Span::styled("█", Style::new().fg(theme::PEACH))),
+            Line::from(Span::styled("▄", Style::new().fg(theme::PEACH))),
+        ];
+        let scale = vec![
+            Line::styled("0", theme::faint()),
+            Line::styled("-6", theme::faint()),
+        ];
+        GraphicPanel::new()
+            .boxed(
+                image::rows(3, 3, 2).into_iter().map(Line::from).collect(),
+                3,
+                None,
+            )
+            .boxed(meter, 1, Some("GR"))
+            .beside(scale, 2)
+    }
+
+    #[test]
+    fn a_panel_boxes_its_parts_side_by_side_in_the_middle_of_its_rows() {
+        let panel = panel();
+        assert_eq!((panel.width(), panel.height()), (12, 4));
+        assert_eq!(panel.inside_at(Rect::new(4, 10, 12, 7)), (5, 12));
+        assert_drawn(
+            &drawn(panel, 12, 6),
+            &[
+                "            ",
+                "............",
+                "┌───┐  ┌─┐  ",
+                "aaaaa..aaa..",
+                "│▒▒▒│  │█│0 ",
+                "abbba..acaaa",
+                "│▒▒▒│  │▄│-6",
+                "abbba..acaaa",
+                "└───┘  └GR  ",
+                "aaaaa..aaa..",
+                "            ",
+                "............",
+                "a fg OVERLAY0",
+                "b fg #000003",
+                "c fg PEACH",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_panel_is_cut_at_its_areas_right_edge() {
+        assert_drawn(
+            &drawn(panel(), 7, 4),
+            &[
+                "┌───┐  ",
+                "aaaaa..",
+                "│▒▒▒│  ",
+                "abbba..",
+                "│▒▒▒│  ",
+                "abbba..",
+                "└───┘  ",
+                "aaaaa..",
+                "a fg OVERLAY0",
+                "b fg #000003",
+            ],
+        );
+    }
+
+    #[test]
+    fn an_empty_panel_takes_no_room() {
+        let panel = GraphicPanel::new();
+        assert!(panel.is_empty());
+        assert_eq!((panel.width(), panel.height()), (0, 0));
+    }
+}

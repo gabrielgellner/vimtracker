@@ -177,3 +177,158 @@ pub fn faded(line: Line<'static>, keep: Style) -> Line<'static> {
             .collect::<Vec<_>>(),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use ratatui::text::Span;
+
+    use super::*;
+    use crate::input::mode::Mode;
+    use crate::views::widgets::pin::{assert_drawn, drawn};
+
+    /// Made-up cells: 0 under the cursor, 1 dim at its default, 2 a word with no bar, 3 a centred
+    /// bar playing away from where it's set, 4 a picture's placeholder.
+    struct Made;
+
+    impl CellSource for Made {
+        type Id = u8;
+
+        fn name(&self, id: u8, _room: u16) -> Line<'static> {
+            Line::styled(format!("Name {id}"), theme::dim())
+        }
+
+        fn value(&self, id: u8) -> Line<'static> {
+            match id {
+                0 => Line::from(Span::styled("A0", theme::cursor(Mode::Normal))),
+                1 => Line::from(Span::styled("00", theme::dim())),
+                2 => Line::raw("One-shot and on"),
+                4 => Line::from(Span::styled(
+                    kitty::PLACEHOLDER.to_string(),
+                    Style::new().fg(kitty::id_color(7)),
+                )),
+                _ => Line::raw("C0"),
+            }
+        }
+
+        fn bar(&self, id: u8) -> Option<ValueBar> {
+            match id {
+                0 => Some(ValueBar::new(0xA0, 9)),
+                1 => Some(ValueBar::new(0, 9)),
+                3 => Some(ValueBar::new(0xC0, 9).centred(true).playing(0x40)),
+                _ => None,
+            }
+        }
+    }
+
+    fn grid(widths: CellWidths) -> SettingsGrid<'static, Made> {
+        let rows = vec![
+            vec![Some(0), Some(1)],
+            vec![None, Some(2)],
+            vec![Some(3), Some(4)],
+        ];
+        SettingsGrid::new(&Made, rows, widths)
+    }
+
+    #[test]
+    fn each_width_makes_a_column_this_wide() {
+        let columns = [
+            CellWidths::FX,
+            CellWidths::ZOOM,
+            CellWidths::SOUND,
+            CellWidths::COMPACT,
+        ]
+        .map(CellWidths::column);
+        assert_eq!(columns, [27, 35, 29, 21]);
+    }
+
+    #[test]
+    fn a_grid_puts_each_cells_name_value_and_bar_in_its_column_and_steps_over_holes() {
+        let width = 2 * CellWidths::FX.column();
+        assert_drawn(
+            &drawn(grid(CellWidths::FX), width, GRID_HEIGHT),
+            &[
+                "Name 0    A0 ▕█████▋   ▏   Name 1    00 ▕         ▏   ",
+                "aaaaaaaaaabb.cdddddddddc...aaaaaaaaaaaa.cdddddddddc...",
+                "                                                      ",
+                "......................................................",
+                "                           Name 2    One-shot and on  ",
+                "...........................aaaaaaaaaa.................",
+                "                                                      ",
+                "......................................................",
+                "Name 3    C0 ▕  │ ┊ │  ▏   Name 4    ▒                ",
+                "aaaaaaaaaa...cddddcdcddc...aaaaaaaaaae................",
+                "a fg OVERLAY2",
+                "b fg BASE bg ROSEWATER",
+                "c fg OVERLAY0",
+                "d fg MAUVE",
+                "e fg #000007",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_grid_is_cut_at_its_right_edge_and_its_bottom() {
+        assert_drawn(
+            &drawn(grid(CellWidths::FX), 40, 3),
+            &[
+                "Name 0    A0 ▕█████▋   ▏   Name 1    00 ",
+                "aaaaaaaaaabb.cdddddddddc...aaaaaaaaaaaa.",
+                "                                        ",
+                "........................................",
+                "                           Name 2    One",
+                "...........................aaaaaaaaaa...",
+                "a fg OVERLAY2",
+                "b fg BASE bg ROSEWATER",
+                "c fg OVERLAY0",
+                "d fg MAUVE",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_compact_grid_has_no_bars_and_a_word_runs_on_short_of_the_next_column() {
+        let width = 2 * CellWidths::COMPACT.column();
+        assert_drawn(
+            &drawn(grid(CellWidths::COMPACT), width, GRID_HEIGHT),
+            &[
+                "Name 0    A0         Name 1    00         ",
+                "aaaaaaaaaabb.........aaaaaaaaaaaa.........",
+                "                                          ",
+                "..........................................",
+                "                     Name 2    One-shot a ",
+                ".....................aaaaaaaaaa...........",
+                "                                          ",
+                "..........................................",
+                "Name 3    C0         Name 4    ▒          ",
+                "aaaaaaaaaa...........aaaaaaaaaac..........",
+                "a fg OVERLAY2",
+                "b fg BASE bg ROSEWATER",
+                "c fg #000007",
+            ],
+        );
+    }
+
+    #[test]
+    fn a_faded_grid_keeps_the_cursor_and_a_pictures_colour() {
+        let faded = grid(CellWidths::FX).faded(Some(theme::cursor(Mode::Normal)));
+        let width = 2 * CellWidths::FX.column();
+        assert_drawn(
+            &drawn(faded, width, GRID_HEIGHT),
+            &[
+                "Name 0    A0 ▕█████▋   ▏   Name 1    00 ▕         ▏   ",
+                "aaaaaa....bb.aaaaaaaaaaa...aaaaaa....aa.aaaaaaaaaaa...",
+                "                                                      ",
+                "......................................................",
+                "                           Name 2    One-shot and on  ",
+                "...........................aaaaaa....aaaaaaaaaaaaaaa..",
+                "                                                      ",
+                "......................................................",
+                "Name 3    C0 ▕  │ ┊ │  ▏   Name 4    ▒                ",
+                "aaaaaa....aa.aaaaaaaaaaa...aaaaaa....c................",
+                "a fg OVERLAY0",
+                "b fg BASE bg ROSEWATER",
+                "c fg #000007",
+            ],
+        );
+    }
+}
