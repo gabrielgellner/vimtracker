@@ -295,10 +295,14 @@ the page's width, with its settings in the same places and bars nearly twice as 
 
 | Effect | Zoomed in, over its settings |
 |---|---|
-| `Comp` | Its curve, square and 16 rows tall; a gain reduction meter as tall, 0 to 24 dB; and the last two bars of how far it turned down |
-| `Limit` | The meter and the last two bars |
+| `Comp` | Its curve, its gain reduction meter and the last two bars |
+| `Limit` | Its gain reduction meter and the last two bars |
 | `EQ3` | Its curve, across the whole width |
-| `Distort` | `Soft`, `Hard`, `Fold`, `Sine` and `Crush`: its transfer curve, what each level coming in goes out as, with `Mix` in it |
+| `Distort` | Its transfer curve |
+
+A `Comp`'s curve is square and 16 rows tall, and its meter as tall, 0 to 24 dB, with the last two
+bars of how far it turned down beside them. A `Distort`'s transfer curve, on `Soft`, `Hard`,
+`Fold`, `Sine` and `Crush`, is what each level coming in goes out as, with `Mix` in it.
 
 The last two bars are a sweep, as an oscilloscope's: it writes from left to right as the song's
 tempo goes, with a gap after the newest, and starts again at the left after two bars, so a beat's
