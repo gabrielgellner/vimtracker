@@ -11,6 +11,7 @@ use vt_engine::gens::{GenHeard, GenReport};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop};
 use vt_model::action::{Action, edit};
+use vt_model::bloom::Bloom;
 use vt_model::generator::Span;
 use vt_model::lfo::Shape as Wave;
 use vt_model::samples::SamplePool;
@@ -678,5 +679,83 @@ fn a_variation_varies_by_pass_and_its_temperature_can_be_held() {
     let (held, _) = play(&still, &[cold], 16);
     let (written_out, _) = play(&reshaped(&still, cold), &[], 16);
     assert!(held == written_out, "a held temperature plays as written");
+    assert!(held != play(&still, &[], 16).0, "and not as before");
+}
+
+/// A Bloom branch (decision 307) on phrase `00`, grown from a trunk on phrase `10`: a `Follow` of
+/// the trunk making three changes, played nine times in its chain, with `Vary` set.
+fn bloom_branch(vary: u8) -> Song {
+    let mut song = Song::new(1);
+    song.millibpm = 128_000;
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    let line: Vec<Step> = [
+        "C-3 64 --- --- ---",
+        "--- -- --- --- ---",
+        "D#3 50 --- --- ---",
+        "G-3 64 --- --- ---",
+    ]
+    .iter()
+    .cycle()
+    .take(16)
+    .map(|row| row.parse().unwrap())
+    .collect();
+    song.tracks[0].phrases.clear();
+    song.tracks[0]
+        .phrases
+        .insert(0x10, Arc::new(Phrase::from_steps(line)));
+    Arc::make_mut(song.tracks[0].chains.get_mut(&0).unwrap()).entries[0].phrase = 0x10;
+    let mut song = apply(
+        song,
+        &Action::Bloom {
+            track: 0,
+            chain: 0,
+            slot: 0,
+            scale: vt_model::scale::Scale::default(),
+            bloom: Bloom {
+                branches: 1,
+                mutation: 3,
+                seed: 9,
+                ..Bloom::default()
+            },
+        },
+    );
+    let chain = Arc::make_mut(song.tracks[0].chains.get_mut(&0).unwrap());
+    assert_eq!(chain.entries[1].phrase, 0, "the branch is phrase 00");
+    chain.entries = vec![chain.entries[1]; 9];
+    let mut shape = written(&song, 0, notes());
+    shape.vary = vary;
+    reshape(&song, shape)
+}
+
+/// A branch draws its changes from its seed, so `Vary` mutates it again each pass, each pass as
+/// writing its seed would; and a macro holding its `Mutation` plays what writing it would.
+#[test]
+fn a_bloom_branch_that_varies_mutates_again_each_pass_and_a_macro_reaches_its_mutation() {
+    let song = bloom_branch(1);
+    let kept = |pass: i64| {
+        let mut shape = written(&song, 0, notes()).on_pass(pass);
+        shape.vary = 0;
+        reshape(&song, shape)
+    };
+    let (first, engine) = play_pass(&song, 0);
+    assert!(first == play_pass(&kept(0), 0).0, "pass 0 is as written");
+    assert!(heard(&engine, 0).iter().all(|run| run.renders == 0));
+    for pass in [1, 2] {
+        let (heard_out, engine) = play_pass(&song, pass);
+        assert!(
+            heard_out == play_pass(&kept(pass as i64), pass).0,
+            "pass {pass}"
+        );
+        assert!(
+            heard_out != play_pass(&kept(0), pass).0,
+            "pass {pass} differs"
+        );
+        assert_eq!(heard(&engine, 0)[0].renders, 1);
+    }
+    let more = (0, notes(), GenParam::Mutation, 8);
+    let still = kept(0);
+    let (held, _) = play(&still, &[more], 16);
+    let (written_out, _) = play(&reshaped(&still, more), &[], 16);
+    assert!(held == written_out, "a held mutation plays as written");
     assert!(held != play(&still, &[], 16).0, "and not as before");
 }

@@ -10,7 +10,7 @@ use ratatui::widgets::Paragraph;
 use vt_model::generator::{Generator, Span as Spanned};
 use vt_model::macros::{GenColumn, MacroTarget};
 use vt_model::shape::params::Units;
-use vt_model::shape::{Context, GenParam, ShapeColumn};
+use vt_model::shape::{Context, GEN_COLUMNS, GenParam, ShapeColumn};
 use vt_model::song::Track;
 
 use crate::app::App;
@@ -35,6 +35,14 @@ const PANEL_GAP: u16 = 2;
 /// The Gen page's cells, the Sound page's, so three columns fit beside the preview: a value with
 /// a bar is brief, as `9` for hits, whose bar shows how many of how many.
 const GEN_CELLS: CellWidths = CellWidths::SOUND;
+
+/// A device of four columns, a `Follow` that mutates (decision 307), has shorter bars, so the
+/// fourth fits beside the preview too: 22 columns a cell.
+const GEN_FOUR_CELLS: CellWidths = CellWidths {
+    bar_cells: 3,
+    gap: 2,
+    ..CellWidths::SOUND
+};
 
 /// The macros' cells: a name as long as the Roto's, four digits and the Sound page's bars.
 const MACRO_CELLS: CellWidths = CellWidths {
@@ -127,11 +135,13 @@ fn draw_macros(
 /// What `Empty` says, under its title.
 const EMPTY_HINT: &str = "  make a column of this phrase live";
 
-/// A generator's cells, read from its shape through the declared table.
+/// A generator's cells, read from its shape through the declared table, with bars this many
+/// cells long.
 struct GenCells<'a> {
     app: &'a App,
     live: &'a LiveGen,
     context: Context<'a>,
+    bar_cells: usize,
 }
 
 impl GenCells<'_> {
@@ -194,7 +204,7 @@ impl CellSource for GenCells<'_> {
             .and_then(|track| track.macro_holding(target))
             .map(|(_, map)| (place(map.number_at(0.0)), place(map.number_at(255.0))));
         Some(
-            ValueBar::new(place(number), BAR_CELLS)
+            ValueBar::new(place(number), self.bar_cells)
                 .centred(centred)
                 .range(range),
         )
@@ -289,10 +299,16 @@ fn draw_generator(
         return None;
     };
     let live = app.live_generator(app.cursor.track, phrase, generator)?;
+    let four = device
+        .grid
+        .iter()
+        .any(|row| row.get(GEN_COLUMNS - 1).is_some_and(Option::is_some));
+    let widths = if four { GEN_FOUR_CELLS } else { GEN_CELLS };
     let cells = GenCells {
         app,
         live: &live,
         context: live.context(),
+        bar_cells: widths.bar_cells,
     };
     let widget = Device::new(String::new())
         .controls(title_controls(app, &cells, device))
@@ -317,7 +333,7 @@ fn draw_generator(
         frame.render_widget(panel, at);
     }
     let rows = device.grid.iter().copied().map(Vec::from).collect();
-    let grid = SettingsGrid::new(&cells, rows, GEN_CELLS);
+    let grid = SettingsGrid::new(&cells, rows, widths);
     frame.render_widget(grid, settings);
     preview
 }

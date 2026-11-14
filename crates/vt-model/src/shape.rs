@@ -10,6 +10,7 @@ mod acid;
 mod bits;
 mod follow;
 mod grids;
+mod mutation;
 pub mod params;
 mod random;
 mod render;
@@ -21,6 +22,7 @@ pub use bits::{Bits, MAX_FACTOR, MAX_TURN};
 pub(crate) use follow::copy_fx;
 pub use follow::{Follow, MAX_TRANSPOSE, Source, first_note};
 pub use grids::{ACCENT_LEVEL, DrumPart, GRIDS_STEPS, Grids, parts as drum_parts};
+pub use mutation::{MAX_MUTATION, Mutations};
 pub use params::{Context, GEN_COLUMNS, GEN_ROWS, GenParam, Starts};
 pub use random::{
     Degrees, EVEN_SPREAD, MAX_BIAS, MAX_SPREAD, MAX_WEIGHT, Random, WEIGHTS, degree_count,
@@ -781,13 +783,42 @@ pub const VARIES: [u8; 5] = [0, 1, 2, 4, 8];
 const PASS_KEY: u64 = 0x7A55_0000;
 
 impl Shape {
+    /// A `Follow` of a phrase, with this seed and every other setting as the panel starts it, as
+    /// a Bloom branch is made (decision 307).
+    pub fn following(follow: Follow, seed: u64) -> Self {
+        Self {
+            from: 0,
+            to: 0,
+            curve: 0,
+            s: 0,
+            kind: FillKind::Follow,
+            wave: Wave::Sine,
+            rate: DEFAULT_RATE,
+            phase: 0,
+            run: 1,
+            values: Values::default(),
+            place: Where::AllRows,
+            seed,
+            acid: Acid::default(),
+            follow,
+            walk: Walk::default(),
+            pink: Pink::default(),
+            bits: Bits::default(),
+            grids: Grids::default(),
+            random: Random::default(),
+            vary: 0,
+            variation: Variation::default(),
+        }
+    }
+
     /// Whether anything it writes is drawn from its seed, so another seed would write something
-    /// else: a random fill, a walk, `1/f`, `Acid`, `Shuffle`, `Grids`' chaos, a `Variation` or a
-    /// random wave, or rows chosen by chance.
+    /// else: a random fill, a walk, `1/f`, `Acid`, `Shuffle`, `Grids`' chaos, a `Variation`, a
+    /// random wave or a `Follow` that mutates, or rows chosen by chance.
     pub fn draws(&self) -> bool {
         let random_wave =
             self.kind == FillKind::Wave && matches!(self.wave, Wave::Random | Wave::Smooth);
         random_wave
+            || self.kind == FillKind::Follow && self.follow.mutates()
             || matches!(self.place, Where::Chance(_)) && self.kind.has_where()
             || matches!(
                 self.kind,

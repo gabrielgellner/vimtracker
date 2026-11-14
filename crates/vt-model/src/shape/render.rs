@@ -303,7 +303,15 @@ pub(super) fn render(
     match shape.kind {
         FillKind::Follow => {
             if let Some(source) = source {
-                follow::render(steps, range, column, &shape.follow, source, out.cells);
+                follow::render(
+                    steps,
+                    range,
+                    column,
+                    &shape.follow,
+                    shape.seed,
+                    source,
+                    out.cells,
+                );
             }
         }
         FillKind::Acid => acid::render(steps, range, column, shape, &mut out),

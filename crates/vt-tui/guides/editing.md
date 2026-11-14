@@ -446,6 +446,54 @@ but never one that follows it back, directly or through others: those aren't
 offered, and `L` refuses one. Deleting the source's track with `:track del`
 leaves its followers as plain notes, and says so.
 
+### Mutating, and growing branches
+
+With `Mutation` above `Off`, a `Follow` changes what it copies so many times,
+drawn from its seed, as Qu-Bit's Bloom grows its branches. Each change is one of
+the kinds switched on, which show once it mutates:
+
+| Row | Does |
+|---|---|
+| Mutation | How many changes, `Off` up to 32 |
+| Repitch | Moves a note a degree or two, in the scale while it's on |
+| Shift | Moves every note together, one to four degrees. Off at first |
+| Retro | Plays two to four rows backwards |
+| Ratchet | Repeats a note in its row, by a `RET` in its first empty FX slot |
+| Drop/add | Takes a note away, or adds one on an empty row |
+
+The changes fall in the same places each time, so an edit to the source comes
+through everywhere but the rows they change, and `r` draws others. A note it
+moves lands in the scale while the scale is on. As it draws from its seed, the
+Gen page gives it `Vary`, so a new set of changes plays every pass or every few.
+
+`:bloom` grows branches from the phrase under the cursor, the trunk. Each branch
+is a new phrase on the same track, a copy of the trunk whose Note column follows
+the branch before it, the first the trunk, with `Mutation` on, FX and all. So
+each strays a little further from the trunk, and an edit to the trunk grows
+every branch again, in the same undo step. The trunk's row in its chain becomes
+the path through them, each row with the trunk's transpose.
+
+| Command | Does |
+|---|---|
+| `:bloom` | Choose a path from a list, and grow three branches |
+| `:bloom 5` | Five branches, with two changes each, played forward |
+| `:bloom 4 3 trunk` | Four branches, three changes each, the trunk before each |
+
+| Path | Plays, with three branches |
+|---|---|
+| `forward` | `T 1 2 3` |
+| `trunk` | `T 1 T 2 T 3` |
+| `pendulum` | `T 1 2 3 2 1` |
+| `ping-pong` | `T 1 2 3 3 2 1 T` |
+| `shuffle` | `T`, then each branch once, in an order drawn from the seed |
+
+Up to seven branches, on the lowest free phrase numbers. Each is a live column
+like any other: `gl` on one, or the Gen page, changes its Mutation and kinds,
+and the branches after it follow; `Space g a` freezes it as plain notes. A macro
+mapped to `Mutation` turns every branch at once, as it holds the Note column in
+every phrase of its track. Another `:bloom` draws other branches, and `u` takes
+the whole bloom back.
+
 ### Variations of a line
 
 `Variation`, on the Note column only, writes something like the line already

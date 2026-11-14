@@ -1,13 +1,17 @@
 //! Moving through tracks, chains and phrases: the chain view's keys, `gd`, cloning and the jump list.
 
+use std::sync::Arc;
+
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::Action;
+use vt_model::bloom::{Bloom, Path};
 use vt_model::constants::{MAX_TRANSPOSE, MIN_TRANSPOSE};
 use vt_model::selection::Motion;
 use vt_model::song::{ChainEntry, lowest_unused};
 
 use crate::app::{App, Cursor, Entry};
 use crate::input::bindings::Cmd;
+use crate::input::command::Line;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
 use crate::track_page::{Control, Page};
@@ -247,6 +251,91 @@ impl App {
         } else {
             format!("Cloned {old:02X} to {new:02X} here. Other uses keep {old:02X}")
         };
+    }
+
+    /// `:bloom`: grow branches from the phrase at the cursor's slot, the trunk, each a new phrase
+    /// following the one before it and mutating as it copies, and put the path through them in
+    /// the slot's place (decision 307). Each bloom draws a seed of its own, as `S` does.
+    pub(crate) fn grow_bloom(&mut self, branches: Option<u8>, mutation: Option<u8>, path: Path) {
+        let (Some(chain), Some(trunk)) = (self.chain_id(), self.phrase_id()) else {
+            self.status = "There is no phrase here to grow branches from".to_owned();
+            return;
+        };
+        self.shape_seed = self.shape_seed.wrapping_add(1);
+        let first = Bloom::default();
+        let bloom = Bloom {
+            branches: branches.unwrap_or(first.branches),
+            mutation: mutation.unwrap_or(first.mutation),
+            path,
+            seed: self.song().seed.wrapping_add(self.shape_seed),
+            ..first
+        };
+        let before = Arc::clone(self.song());
+        self.apply(&Action::Bloom {
+            track: self.cursor.track,
+            chain,
+            slot: self.cursor.slot,
+            scale: self.scale,
+            bloom,
+        });
+        if Arc::ptr_eq(&before, self.song()) {
+            return;
+        }
+        let grown: Vec<String> = self
+            .track_here()
+            .into_iter()
+            .flat_map(|track| track.phrases.keys())
+            .filter(|id| !before.tracks[self.cursor.track].phrases.contains_key(id))
+            .map(|id| format!("{id:02X}"))
+            .collect();
+        let shared = if self.chain_uses() > 1 {
+            ". This chain is shared, so all its uses play it"
+        } else {
+            ""
+        };
+        self.status = format!(
+            "{trunk:02X} grew {} {}, {}, each a mutation of the one before, played {path}{shared}",
+            grown.len(),
+            if grown.len() == 1 {
+                "branch"
+            } else {
+                "branches"
+            },
+            grown.join(" "),
+        );
+    }
+
+    /// `:bloom` alone: choose the path, each listed with what it plays for three branches.
+    pub(crate) fn open_bloom_picker(&mut self) {
+        self.count = None;
+        if self.phrase_id().is_none() {
+            self.status = "There is no phrase here to grow branches from".to_owned();
+            return;
+        }
+        let branches = Bloom::default().branches;
+        let items = Path::ALL
+            .map(|path| {
+                let plays: Vec<String> = path
+                    .places(usize::from(branches), 0)
+                    .into_iter()
+                    .map(|place| match place {
+                        0 => "T".to_owned(),
+                        branch => branch.to_string(),
+                    })
+                    .collect();
+                let line = Line::Bloom {
+                    branches: None,
+                    mutation: None,
+                    path: Some(path),
+                };
+                let meaning = match path {
+                    Path::Shuffle => path.meaning().to_owned(),
+                    _ => format!("{}: {}", path.meaning(), plays.join(" ")),
+                };
+                Item::new(path.word(), Pick::Line(line)).meaning(meaning)
+            })
+            .to_vec();
+        self.show_picker(Picker::new("Grow three branches, played", items));
     }
 
     /// `gC`: copy this track's chain and all its phrases, and point this track at the copy.

@@ -5,6 +5,7 @@ pub mod action;
 pub mod analysis;
 pub mod arpeggio;
 pub mod bank;
+pub mod bloom;
 pub mod condition;
 pub mod constants;
 pub mod convert;
