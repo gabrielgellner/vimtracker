@@ -70,7 +70,7 @@ impl CellSource for ModCells<'_> {
 
     fn name(&self, control: Control, room: u16) -> Line<'static> {
         let labels = jump_label(self.app, control);
-        name_line(self.app, control.label(), &labels, room)
+        name_line(self.app, control.label_on(self.track), &labels, room)
     }
 
     fn value(&self, control: Control) -> Line<'static> {

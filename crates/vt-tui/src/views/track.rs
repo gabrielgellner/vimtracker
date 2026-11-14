@@ -262,6 +262,13 @@ fn mod_value(track: &Track, slot: usize, field: ModField) -> String {
         ModField::Mutate => format!("{}%", steps.mutate),
         ModField::Smooth => depth_text(steps.smooth),
         ModField::Step(at) => depth_text(steps.values[usize::from(at)]),
+        // An attractor's is the axis heard, named where it's one alone.
+        ModField::Phase if lfo.shape.is_attractor() => match lfo.phase {
+            0 => "x".to_owned(),
+            120 => "y".to_owned(),
+            240 => "z".to_owned(),
+            phase => format!("{phase}°"),
+        },
         ModField::Phase => format!("{}°", lfo.phase),
         ModField::Deform => depth_text(lfo.deform),
         ModField::Fade => lfo.fade.to_string(),

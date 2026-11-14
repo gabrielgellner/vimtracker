@@ -1059,6 +1059,44 @@ mod tests {
     }
 
     #[test]
+    fn attractors_never_allocate_in_the_callback() {
+        use vt_model::lfo::{Lfo, LfoMode, Rate, Shape};
+        use vt_model::modulation::ModSlot;
+        // Lorenz and Rössler in every mode, at a fast rate, seeded at each note in `Trig`, with
+        // their shape flipping between them and a sine now and then, and their deform moving.
+        let pool = samples();
+        let changing = |round: usize| {
+            let mut next = song(4, 16);
+            for (index, track) in next.tracks.iter_mut().take(4).enumerate() {
+                for slot in [1, 3, 5] {
+                    let shape = [Shape::Lorenz, Shape::Rossler, Shape::Sine][(round + slot) % 3];
+                    let lfo = Lfo {
+                        shape,
+                        rate: Rate::Hertz(4000),
+                        mode: LfoMode::ALL[(index + slot) % 5],
+                        deform: (round as i16 * 37) % 0x1FF - 0xFF,
+                        ..Lfo::default()
+                    };
+                    track.mods[slot] = ModSlot::lfo(Some(SettingId::CUT), lfo).with_depth(0x40);
+                }
+            }
+            next
+        };
+        let engine = Engine::new(48_000, published(changing(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 40);
+        for round in 1..200 {
+            if round % 4 == 0 {
+                handle.publish(published(changing(round), &pool));
+            }
+            violations += blocks(&mut rt, 1);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
+    #[test]
     fn changing_a_slots_type_every_block_never_allocates_in_the_callback() {
         use vt_model::modulation::ModKind;
         let pool = samples();

@@ -4,6 +4,7 @@ pub mod accumulator;
 pub mod action;
 pub mod analysis;
 pub mod arpeggio;
+pub mod attractor;
 pub mod bank;
 pub mod bloom;
 pub mod condition;

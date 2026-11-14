@@ -28,6 +28,7 @@ there are no samples to find.
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 | `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
+| `turing-machine`, again | Nonlinear Circuits' Sloth, Ornament & Crime's Low-rents | A `Lorenz` LFO on `Pitch in scale`: a tune that drifts and never goes round |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -1371,6 +1372,45 @@ and a `Hat` on the off-beats. The finished song also makes the `VA` a pluck (`Mo
 *   Map a macro to `Mutation` on the Gen page with `M`, and one knob turns every branch at once.
 *   `Space g a` on a branch keeps it as plain notes, to edit by hand; it stops following.
 
+## Strange attractors
+
+Nonlinear Circuits' Sloth is a chaotic circuit so slow that one wander takes minutes, made to
+nudge a patch that never quite repeats. Ornament & Crime's Low-rents runs two textbook
+attractors, Lorenz's and Rössler's, side by side, with a knob for each one's chaos and a choice
+of which axis goes out. A point on one goes round and round and never retraces its path: a
+modulation that wanders, but smoothly, and keeps coming back near where it was.
+
+Here they're two LFO shapes, `Lorenz` and `Rössler`. A cycle of `Rate` is about one turn, its
+`Deform` is the chaos knob, and its `Phase`, shown as `Axis`, picks `x`, `y` or `z`.
+
+**Try it on the `turing-machine` song.** Its tune comes from a Steps slot in `Mod 4` on `Pitch
+in scale`; a `Lorenz` in its place writes a line that drifts without ever going round.
+
+1.  `Space 6` for the Mod page, and `$` `l` to `Mod 4`'s title. `b` switches the Steps slot out.
+2.  `}` down to `Mod 5`, an LFO going nowhere, and `l` `l` `l` to its `Dest`, then `K`
+    `pitch in` `Enter`, for `Pitch in scale`.
+3.  `j` `0` to its `Shape`, `K` `/lorenz` `Enter`. Its picture is the attractor seen side on,
+    its two wings an S, and `Axis` reads `x`.
+4.  `j` to its `Rate`, `K` `1 bar` `Enter`, and `j` to `Depth`, `i` `0C` `Enter`, for an octave
+    either way.
+5.  `Tab`. The tune circles a few notes for a bar or two, then flips to another register, as the
+    point flips from one wing to the other.
+
+The mode in its title is `Free`, so it runs on through the notes. `K` on the mode and `Hold`
+holds where it is at each note instead: one note of the scale each, the rhythm as written.
+
+**Try next.**
+
+*   `+` on `Axis` for `y`, then `z`, and the picture becomes the butterfly: `z` never flips
+    wings, it rises and falls once a turn, a line that climbs and drops back.
+*   `Rössler` for a line that swells and shrinks round one loop. `Deform` down to `-FF` makes it
+    a plain loop, the same few notes every bar; back up through `-80` it doubles to a loop of two
+    bars, then four, then chaos.
+*   A slower `Rate`, `4 bars`, on the `Acid`'s `Cut` rather than its pitch: a filter that
+    breathes and never quite repeats.
+*   When a pass is one you want, `Space 3` and `Space g A`: the notes it played are written in
+    and the slot is switched out, as with the Steps slot.
+
 ## Generators still to come
 
 These are planned, each its own issue, and this chapter grows a section as each lands:
@@ -1380,4 +1420,3 @@ These are planned, each its own issue, and this chapter grows a section as each 
 | [#589](https://github.com/gabrielgellner/vimtracker/issues/589) | Cellular automata rhythms from Wolfram's elementary rules |
 | [#590](https://github.com/gabrielgellner/vimtracker/issues/590) | Tonnetz chord movement: P, L and R moves |
 | [#591](https://github.com/gabrielgellner/vimtracker/issues/591) | Per-attribute loop lengths after Kria |
-| [#592](https://github.com/gabrielgellner/vimtracker/issues/592) | Strange attractors as LFO shapes: Lorenz and Rössler |

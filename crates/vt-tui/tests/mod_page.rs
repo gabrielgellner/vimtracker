@@ -2598,6 +2598,116 @@ fn space_g_capital_a_writes_what_a_random_lfo_held_at_each_note_played_in_scale(
 }
 
 #[test]
+fn an_attractors_phase_is_its_axis_and_its_shapes_are_found_by_name() {
+    let (mut app, _realtime) = with_lfos([
+        lfo_on(SettingId::CUT, Shape::Sine, 0, 0x40),
+        unassigned(),
+        unassigned(),
+    ]);
+    let lfo = |app: &App| app.song().tracks[0].mods[LFOS].lfo;
+    press(&mut app, &format!("{}j", to_lfo(0)));
+    assert_eq!(app.track_control(), Control::Mod(LFOS, ModField::Shape));
+    // Rössler's name is found without its umlaut.
+    press(&mut app, "K/ross");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(lfo(&app).shape, Shape::Rossler);
+    press(&mut app, "K/lorenz");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(lfo(&app).shape, Shape::Lorenz);
+    let shown = screen_cells(&mut app).join("\n");
+    assert!(shown.contains("Shape     Lorenz"), "{shown}");
+    assert!(shown.contains("Axis      x"), "{shown}");
+    // A large step goes from axis to axis, and between them it's in degrees.
+    press(&mut app, "l");
+    assert_eq!(app.track_control(), Control::Mod(LFOS, ModField::Phase));
+    press(&mut app, "+");
+    assert_eq!(lfo(&app).phase, 120);
+    assert!(screen_cells(&mut app).join("\n").contains("Axis      y"));
+    press(&mut app, "+");
+    assert!(screen_cells(&mut app).join("\n").contains("Axis      z"));
+    press(&mut app, "=");
+    assert!(screen_cells(&mut app).join("\n").contains("Axis      255°"));
+    assert!(status_line(&app).contains("Axis"), "{}", status_line(&app));
+    // A wave's is its phase, as before.
+    press(&mut app, "hK/sine");
+    special(&mut app, KeyCode::Enter);
+    let shown = screen_cells(&mut app).join("\n");
+    assert!(shown.contains("Phase     255°"), "{shown}");
+}
+
+#[test]
+fn the_tutorials_lorenz_on_the_turing_machines_tune_is_set_by_its_keys() {
+    let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/manual/src/tutorials/songs/turing-machine");
+    let song = vt_model::project::load_song(&folder).unwrap();
+    let samples = std::sync::Arc::new(vt_model::samples::SamplePool::default());
+    let version = std::sync::Arc::new(vt_engine::published::Published::new(
+        std::sync::Arc::new(song.clone()),
+        std::sync::Arc::clone(&samples),
+    ));
+    let (handle, _realtime) =
+        vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    // 1. The Steps slot switched out.
+    press(&mut app, " 6$lb");
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Type));
+    assert!(app.song().tracks[0].mods[3].bypassed);
+    // 2. `Mod 5` on `Pitch in scale`.
+    press(&mut app, "}lll");
+    assert_eq!(app.track_control(), Control::Mod(4, ModField::Destination));
+    press(&mut app, "Kpitch in");
+    special(&mut app, KeyCode::Enter);
+    // 3. to 4. A `Lorenz` a bar long, an octave either way.
+    press(&mut app, "j0");
+    assert_eq!(app.track_control(), Control::Mod(4, ModField::Shape));
+    press(&mut app, "K/lorenz");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "j");
+    assert_eq!(app.track_control(), Control::Mod(4, ModField::Rate));
+    press(&mut app, "K1 bar");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "j");
+    typed(&mut app, "0C");
+    let slot = app.song().tracks[0].mods[4];
+    assert_eq!(slot.destination, Some(SettingId::PITCH));
+    assert!(slot.in_scale);
+    assert_eq!(slot.lfo.shape, Shape::Lorenz);
+    assert_eq!(slot.lfo.rate, Rate::Note(3840));
+    assert_eq!(slot.depth, 0x0C);
+    let shown = screen_cells(&mut app).join("\n");
+    assert!(shown.contains("Axis      x"), "{shown}");
+}
+
+#[test]
+fn space_g_capital_a_writes_the_chaotic_line_a_lorenz_lfo_played_in_scale() {
+    // Held at each note, so each plays one note of the scale, never the same pass twice.
+    let lorenz = Lfo {
+        shape: Shape::Lorenz,
+        rate: Rate::Note(960),
+        mode: LfoMode::Hold,
+        ..Lfo::default()
+    };
+    let (mut app, mut realtime) = melody(Steps::default(), 0, true);
+    let slot = ModSlot {
+        in_scale: true,
+        ..ModSlot::lfo(Some(SettingId::PITCH), lorenz).with_depth(0x0C)
+    };
+    app.apply(&Action::SetMod {
+        track: 0,
+        slot: 3,
+        modulator: slot,
+    });
+    let before = app.song().as_ref().clone();
+    hear(&mut app, &mut realtime, 2 * LAP);
+    press(&mut app, " gA");
+    assert!(app.song().tracks[0].mods[3].bypassed);
+    assert_ne!(melody_notes(app.song()), [Some(60), Some(64), Some(67)]);
+    let (was, now) = (rendered(&before, 2 * LAP), rendered(app.song(), 2 * LAP));
+    let apart = most_apart(&was[2 * LAP..], &now[2 * LAP..]);
+    assert!(apart < 1e-3, "{apart}");
+}
+
+#[test]
 fn a_steps_slots_lists_find_a_name_before_a_meaning_and_each_word_on_its_own() {
     let (mut app, _realtime) = app();
     press(&mut app, " 5L");
