@@ -19,6 +19,7 @@ each machine.
 |---|---|
 | `H` `L` | The previous or next page, back where you left it |
 | `W` `B`, `]b` `[b` | Next or previous track |
+| `]g` `[g` | Next or previous group, folded or open |
 | `j` `k` | Next or previous row, back in the column they left |
 | `gg` `G` | The top or bottom of this column of devices |
 | `{` `}` | Previous or next device, on the same row and column. `2}` goes two |
@@ -937,31 +938,39 @@ track page put `G1` after a grouped track's name.
 
 ### Folding a group
 
-In the song view and on the mixer, a group can fold its tracks into its own column
-or strip, as Ableton folds a group track, to make room. The tracks keep their order;
-folding only hides them, and the group's name gets a mark, two arrows pushed together.
+A group can fold its tracks into itself, as Ableton folds a group track, to make room
+and to get past a kit in one move. The tracks keep their order; folding only hides
+them, and the group's name gets a mark, two arrows pushed together. The keys work in
+the song view, the chain and phrase views, on the track pages and on the mixer.
 
 | Keys | What they do |
 |---|---|
 | `z a` | Fold this group, or the one this track is in, or open it |
 | `z M` | Fold every group |
 | `z R` | Open every group, the empty ones too |
+| `]g` `[g` | Next or previous group, folded or open |
 
-The cursor steps over folded tracks: `h`, `l`, `0` and `$` there, and `W` and `B` in
-every view. Folding a group from one of its tracks puts the cursor on the group, as
-Vim's cursor stands on a closed fold, and so does putting the cursor's track in a
-folded group. Choosing a folded track from the track list (`Space f b`) opens its
-group again.
+A folded group is one stop for `W` and `B`, and `]b` and `[b`: they land on the group
+itself, its Sound page with its tracks and output and its FX page, where its tracks
+would be, then go on to the track after them. The phrase view's columns beside the
+grid show it there too, a column of its own, named and empty, in place of its
+tracks'. In the song view and on the mixer, the folded group keeps its own column or
+strip after the tracks, and the cursor goes along them as they're drawn, stepping
+over the folded tracks with `h`, `l`, `0` and `$` as well.
+
+Folding a group from one of its tracks puts the cursor on the group, as Vim's cursor
+stands on a closed fold; in the song view and on the mixer, so does putting the
+cursor's track in a folded group. Folding it from another view leaves the phrase or
+page you're on in front until you move off it. Choosing a folded track from the track
+list (`Space f b`) opens its group again.
 
 A group with no tracks in it is folded away, so it's left out of the song view and the
 mixer, and the cursor goes past it. It comes back as soon as a track joins it, or with
-`z R`, faint while it's empty. The phrase view folds the same groups: a folded one has
-a column of its own beside the grid, named and empty, in place of its tracks'. Its own
-`z a` collapses the timeline instead.
+`z R`, faint while it's empty.
 
-Folds are how the screen shows the song, so they aren't saved with it. They last until
-you quit or open another project, which starts with every group open and the empty ones
-folded away.
+Folds are saved with the song, so a project opens as you left it. They aren't changes
+to undo: `u` never opens or folds a group, but folding marks the song changed, so `:w`
+and the autosave keep it.
 
 Muting a group mutes its tracks. Soloing a track in a group keeps the group, so you
 hear it through the group's slots, and soloing a group plays all its tracks. A track

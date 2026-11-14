@@ -904,7 +904,7 @@ fn a_beat_row_is_one_that_starts_on_a_beat_in_time() {
     let (mut app, _realtime) = app();
     // Rows 00 and 01 last 2 pulses each, so row 02 starts on the second beat.
     // Collapsed, a row a line, as the timeline would put rows 00 and 01 over two lines each.
-    press(&mut app, "lllrSGL2jrSGL2ggza");
+    press(&mut app, "lllrSGL2jrSGL2ggzi");
     app.top = 0;
     let buffer = screen(&app);
     let number_colour = |row: u16| buffer[(5, row + 2)].fg;
@@ -943,7 +943,7 @@ fn the_rules_follow_rows_that_last_several_pulses() {
     let (mut app, _realtime) = app();
     // Rows 00 and 01 last 2 pulses each, so row 02 starts on the second beat.
     // Collapsed, a row a line, as the timeline would put rows 00 and 01 over two lines each.
-    press(&mut app, "lllrSGL2jrSGL2ggza");
+    press(&mut app, "lllrSGL2jrSGL2ggzi");
     app.top = 0;
     let buffer = screen(&app);
     assert_eq!(rule_under(&buffer, 2), None, "row 01 starts at step 2");

@@ -30,6 +30,7 @@ use crate::settings::{
 use crate::shape::{Shape, ShapeColumn, Source};
 use crate::speed::Speed;
 use crate::step::{FxCommand, FxSlot, Step};
+use crate::view::ViewState;
 
 /// The gain of a level value, on an even scale in dB like a fader's. `00` is silent, nothing goes
 /// past `MAX_LEVEL`, and the value can be between steps, as an LFO moves it.
@@ -2324,6 +2325,10 @@ pub struct Song {
     pub bank: Bank,
     pub tracks: Vec<Track>,
     pub sections: Vec<Section>,
+    /// How the views show the song: its folded groups. Not undone, and the app keeps it while
+    /// the song is open and writes it in when saving (decision 305).
+    #[serde(default, skip_serializing_if = "ViewState::is_empty")]
+    pub view: ViewState,
 }
 
 impl Song {
@@ -2344,6 +2349,7 @@ impl Song {
             bank: Bank::default(),
             tracks: Vec::new(),
             sections: vec![Section::default()],
+            view: ViewState::default(),
         };
         song.ensure_fixed_tracks();
         for _ in 0..tracks.max(1) {

@@ -40,6 +40,7 @@ if a row shows `10`, then `10j` or `10k` lands on it.
 | Keys | Does |
 |---|---|
 | `W` `B`, `]b` `[b` | Next or previous track |
+| `]g` `[g` | Next or previous group, folded or open |
 | `]p` `[p` | Next or previous phrase in the chain |
 | `]P` `[P` | Last or first phrase in the chain |
 | `Option-1` `Option-2` | Narrower or wider grid in Insert, as `l` `o` on notes |

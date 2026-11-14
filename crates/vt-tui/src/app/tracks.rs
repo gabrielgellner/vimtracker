@@ -29,9 +29,11 @@ impl App {
         }
     }
 
-    /// Move to the track as many along as `by`, stepping over those folded away (decision 128).
+    /// Move to the track as many along as `by`, stepping over those folded away, a folded group
+    /// one stop (decisions 128 and 305).
     pub(crate) fn move_track(&mut self, by: isize) {
-        let track = self.folds.step(self.song(), self.cursor.track, by);
+        let order = self.track_order();
+        let track = self.folds.step(self.song(), self.cursor.track, by, order);
         self.go_to_track_at(track);
     }
 

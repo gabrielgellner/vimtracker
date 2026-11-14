@@ -364,9 +364,12 @@ impl App {
     /// Go to a track chosen from the list, which `C-o` comes back from.
     fn go_to_track(&mut self, track: usize) {
         self.record_jump();
-        // A track folded away is shown again, as Vim opens a fold a jump lands in.
+        // A track folded away is shown again, as Vim opens a fold a jump lands in, and the song
+        // keeps the fold opened.
         let song = Arc::clone(self.song());
+        let was = self.folds;
         self.folds.open_over(&song, track);
+        self.folds_changed(was);
         self.go_to_track_at(track);
         self.song_column = COLUMNS_BEFORE_TRACKS + track;
     }
