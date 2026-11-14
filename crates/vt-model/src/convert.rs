@@ -219,7 +219,10 @@ mod tests {
             .iter()
             .map(|speed| converted_nudge(-6, *speed).0)
             .collect();
-        assert_eq!(converted, [-3, -4, -6, -8, -12, -16, -24]);
+        assert_eq!(
+            converted,
+            [-3, -4, -6, -8, -9, -12, -16, -18, -24, -36, -48, -96]
+        );
         assert_eq!(converted_nudge(11, Speed::Quarter), (44, false));
         assert_eq!(converted_nudge(11, Speed::ThirtySecond), (5, true));
         assert_eq!(converted_nudge(-11, Speed::EighthTriplet), (-15, false));

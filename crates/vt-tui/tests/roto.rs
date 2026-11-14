@@ -349,7 +349,7 @@ fn a_stepped_knob_turned_on_the_roto_shows_its_steps_name() {
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
     app.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
-    // The Play device, whose fifth knob is `Speed`, seven steps from `1/32` to `1/4`.
+    // The Play device, whose fifth knob is `Speed`, twelve steps from `1/32` to `1/1`.
     ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(PLAY))]);
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.shown == Some((PLAY, 0))
@@ -367,7 +367,7 @@ fn a_stepped_knob_turned_on_the_roto_shows_its_steps_name() {
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.received.iter().any(|message| {
             matches!(message, ToRoto::ShowControlValue { index: SPEED_KNOB, value, .. }
-                if value.as_str() == "1/4")
+                if value.as_str() == "1/1")
         })
     }));
 }

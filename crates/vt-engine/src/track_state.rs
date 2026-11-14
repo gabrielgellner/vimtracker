@@ -712,14 +712,14 @@ impl Part {
 /// How many parts of steps a track can have waiting. At one speed it's two steps' lanes and rows,
 /// as a nudged row can land after the next step is worked out, but never after the one after. A
 /// slow track's early groove works every track's steps out further ahead, so a fast track can
-/// have several steps worked out before the one heard has landed: at most ten of a 32nd's steps
-/// against a quarter's earliest groove and nudge.
-pub const PENDING_PARTS: usize = 24;
+/// have several steps worked out before the one heard has landed: at most 28 of a 32nd's steps
+/// against a whole note's earliest groove and nudge, 3190 ticks, each with two parts.
+pub const PENDING_PARTS: usize = 64;
 
 /// How many of the steps a track has worked out it keeps, to find the one heard while it works
-/// some out ahead: as many as a 32nd's steps worked out ahead of a quarter's earliest groove and
-/// nudge, and the one heard.
-const WORKED_KEPT: usize = 16;
+/// some out ahead: as many as a 32nd's steps worked out ahead of a whole note's earliest groove
+/// and nudge, and the one heard.
+const WORKED_KEPT: usize = 32;
 
 /// Where a track's own steps fall on the grid. Each track counts its own steps, so one at an
 /// eighth counts its eighths, and its groove swings them.

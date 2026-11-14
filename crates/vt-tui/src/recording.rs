@@ -583,6 +583,12 @@ mod tests {
         assert_eq!(quarter(0.1), 10);
         assert_eq!(quarter(-0.49), -47);
         assert_eq!(recorded_nudge(0.49, Speed::ThirtySecond.ticks(), 5), 5);
+        // On a whole note, a quarter of its step is 96, and a note played later than a third
+        // of it is written at `7F`, as far as a nudge goes.
+        let whole = |off| recorded_nudge(off, Speed::Whole.ticks(), Speed::Whole.most_nudge());
+        assert_eq!(whole(0.25), 96);
+        assert_eq!(whole(0.4), 127);
+        assert_eq!(whole(-0.49), -127);
     }
 
     #[test]
