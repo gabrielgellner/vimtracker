@@ -200,6 +200,10 @@ lowest and highest.
 | Every | Every so many rows, counting from the first selected |
 | Chance | Each row with this percent chance |
 | Euclid | `Hits` spread as evenly as they go, with `Rotate` below it |
+| Clusters | Runs of two to four rows, about this percent of them |
+| Markov | Each row's chance hanging on the rows before it |
+| 3 states | Each row a gate, a rest or a tie |
+| Complementary | One coin a row for two tracks, so never both |
 
 `Euclid` spreads its hits over the rows it could change, as the Euclidean
 rhythms do: 3 in 8 is `x..x..x.` and 5 in 8 is `x.xx.xx.`. On Velocity it
@@ -207,6 +211,34 @@ counts among the notes however they're spaced, so 5 hits over 16 hats accent 5
 of them. `Hits` shows how many rows it spreads them over, as in `5 of 16`.
 `Rotate` moves every hit that many of those rows later, going round, so 3 in 8
 rotated by 1 is `.x..x..x`.
+
+The last four are the rhythm models of Mutable Instruments' Marbles, its T
+section, each with an `Amount`. Like Euclid, they go through the rows the column
+could change in order, so on Velocity they count among the notes.
+
+- **Clusters** plays in bunches: a run of two to four rows, then a gap. Its
+  amount is about how many of the rows play, as `Chance`'s is, so swapping one
+  for the other keeps the density and bunches the hits.
+- **Markov** is Marbles' Markov model, its amount the module's Bias. Up from
+  about a third, it leans toward playing what played eight rows before and away
+  from two hits in a row, so at `80%`, where it starts, it plays an eight-row
+  loop that changes now and then, and at `100%` it repeats it. At a third it's
+  a sparse coin, and below it does the reverse, busier and never the same eight
+  rows twice. After more than 24 rests, a row is far likelier to play.
+- **3 states** makes each row a gate, a rest or a tie, its amount the module's
+  Bias: mostly gates at `0%`, mostly rests at `50%` and mostly ties at `100%`.
+  It starts at `25%`, half of the rows resting. A tie holds the value before it,
+  and on notes of its own, the note before is held into it with a `HLD` gate,
+  no new attack. After a rest, there's nothing to hold, so a tie rests too.
+- **Complementary** tosses one coin a row for two tracks. `S` across two tracks
+  gives each a side, `First` and `Second`, and the same seed, so every row goes
+  to one track or the other, never both, as a hat and a snare trading sixteenths.
+  `Amount` is the first track's share, and its rows are the ones `Chance` would
+  choose. Across more tracks, each pair has a coin of its own. `Side` shows
+  which side a track is, and `K` switches it.
+
+Each of them draws from the seed, so `r` draws again, and `Vary` gives each pass
+a rhythm of its own.
 
 The ramp's ends land on the first and last rows it changes, and rows keep their
 spacing along it. A velocity only ever goes on a note, so for Velocity, Every,
@@ -446,13 +478,14 @@ down to `0%` holds its loop, the Turing Machine's lock.
 
 On a Note column with no notes in the rows selected, `S` writes notes of its
 own, and the panel's title says `Generate`. `Where` gives the rhythm, from
-`All rows`, `Every`, `Chance` and `Euclid`, and the fill the pitches: a `Ramp`
-from the scale's root an octave up, in the octave notes are typed in, or a
+`All rows`, `Every`, `Chance`, `Euclid` and Marbles' four, and the fill the
+pitches: a `Ramp` from the scale's root an octave up, in the octave notes are
+typed in, or a
 `Random`, `Walk`, `1/f`, `Wave`, `Alternate` or `List`, in the scale's degrees
 while it's on.
 Each note takes the velocity notes are typed with and the track's gate, and an
 `OFF` there stays. `Euclid` with 3 hits over 8 rows is a tresillo to start a
-line from.
+line from, and `3 states` a line with some notes held into the next.
 
 On an FX column with no command in the rows selected, `S` first lists the
 commands, as `K` does, and the one you choose is written on the rows `Where`

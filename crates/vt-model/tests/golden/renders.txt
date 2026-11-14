@@ -28,6 +28,16 @@ da58da4c03e5b678 Acid shaped on Note of its own, in key
 00d88fbee669ea93 Acid shaped on Note, in key
 87e59c5569117b25 Acid shaped on Nudge
 87e59c5569117b25 Acid shaped on Velocity
+87e59c5569117b25 Acid, Marbles' rows on FX, event
+87e59c5569117b25 Acid, Marbles' rows on FX, fine
+87e59c5569117b25 Acid, Marbles' rows on FX, last slot
+87e59c5569117b25 Acid, Marbles' rows on Length
+836bfd9cf4ba5020 Acid, Marbles' rows on Note of its own, chromatic
+e2da9ee3e383e6b4 Acid, Marbles' rows on Note of its own, in key
+e3558c9e50c195c6 Acid, Marbles' rows on Note, chromatic
+def08b653d460d39 Acid, Marbles' rows on Note, in key
+87e59c5569117b25 Acid, Marbles' rows on Nudge
+87e59c5569117b25 Acid, Marbles' rows on Velocity
 cce56ab9ebd45da9 Alternate on FX, event
 483489bacf438830 Alternate on FX, fine
 669b8cf3908f707d Alternate on FX, last slot
@@ -138,6 +148,16 @@ a894db54bedba86b Ramp on Length
 2662eb42ba6c0742 Ramp on Note, in key
 aa89fa5fa5410262 Ramp on Nudge
 2e8e418bb64c737d Ramp on Velocity
+11a924d94491104b Ramp, Marbles' rows on FX, event
+7f900836a6d42132 Ramp, Marbles' rows on FX, fine
+83aaeb6e7ea073b4 Ramp, Marbles' rows on FX, last slot
+29ba8c0757b71ef4 Ramp, Marbles' rows on Length
+a5a673c14c403882 Ramp, Marbles' rows on Note of its own, chromatic
+0b2068bb95c169f8 Ramp, Marbles' rows on Note of its own, in key
+72214c2412d5fad1 Ramp, Marbles' rows on Note, chromatic
+522ac8caff2f61e1 Ramp, Marbles' rows on Note, in key
+b485f3f546a60b6c Ramp, Marbles' rows on Nudge
+c9da7499f785b5ae Ramp, Marbles' rows on Velocity
 42d600394983fa04 Random on FX, event
 7a77142b9097a4d5 Random on FX, fine
 3a34ab4c7e458b16 Random on FX, last slot
@@ -158,6 +178,16 @@ b40aeb5f8161937b Random shaped on Note of its own, in key
 f82d6cb86cf632b2 Random shaped on Note, in key
 f40da9d4067352c2 Random shaped on Nudge
 eb5adcfc79eb9fa0 Random shaped on Velocity
+22ce36b711be1eb0 Random, Marbles' rows on FX, event
+0ba6e38c35f64da3 Random, Marbles' rows on FX, fine
+178c2f96b14674d5 Random, Marbles' rows on FX, last slot
+12ebf16669ebb41e Random, Marbles' rows on Length
+4a781905d982aeae Random, Marbles' rows on Note of its own, chromatic
+b0bafd08cdee3164 Random, Marbles' rows on Note of its own, in key
+8a574de0ce2e2367 Random, Marbles' rows on Note, chromatic
+d78b761172b89bac Random, Marbles' rows on Note, in key
+509745ef701c4821 Random, Marbles' rows on Nudge
+c8bf5dba18ec992e Random, Marbles' rows on Velocity
 2ca67f2fbdfc6dfc Reverse on FX, event
 305ea3c7e0767856 Reverse on FX, fine
 11dc386aa55b9156 Reverse on FX, last slot
@@ -208,6 +238,16 @@ a70b77fc7d3b2aa6 Shuffle on Note, chromatic
 205bd04dabd56567 Shuffle on Note, in key
 c2d402fcb2722999 Shuffle on Nudge
 b87d8b862102b346 Shuffle on Velocity
+b929fb50358303ce Shuffle, Marbles' rows on FX, event
+6a803022cfede66d Shuffle, Marbles' rows on FX, fine
+a046b5b2be9366aa Shuffle, Marbles' rows on FX, last slot
+ac8c65dca5f2bdea Shuffle, Marbles' rows on Length
+87e59c5569117b25 Shuffle, Marbles' rows on Note of its own, chromatic
+87e59c5569117b25 Shuffle, Marbles' rows on Note of its own, in key
+4e39e71e921bf057 Shuffle, Marbles' rows on Note, chromatic
+52e8bd47f7c98a1e Shuffle, Marbles' rows on Note, in key
+9911a1674631188c Shuffle, Marbles' rows on Nudge
+ae2890cd272fc6ce Shuffle, Marbles' rows on Velocity
 8f952c332dd1c2fd Snap on FX, event
 676b1c5fbfe6f2ae Snap on FX, fine
 86b3ce9f17eb955e Snap on FX, last slot

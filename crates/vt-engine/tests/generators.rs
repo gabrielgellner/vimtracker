@@ -609,6 +609,49 @@ fn a_held_setting_hitting_fewer_rows_plays_whats_under_on_the_rest() {
     assert!(heard(&engine, 0).iter().any(|run| run.moving));
 }
 
+/// Each of Marbles' rhythms (decision 321) on the accents, its amount held at another number,
+/// plays what writing that number would, and with `Vary` each pass, its second pass plays what
+/// writing that pass's seed would: the engine renders its rows and its ties with the edit
+/// thread's code.
+#[test]
+fn a_marbles_rhythm_held_or_varied_plays_what_writing_it_would() {
+    let rhythms = [
+        (Where::Clusters(30), GenParam::Clusters),
+        (Where::Markov(80), GenParam::Markov),
+        (Where::States(60), GenParam::States),
+        (
+            Where::Complementary {
+                share: 50,
+                second: true,
+            },
+            GenParam::Share,
+        ),
+    ];
+    for (place, param) in rhythms {
+        let mut rhythm = shape(FillKind::Ramp, 0x40, 0x7F, place);
+        rhythm.seed = 11;
+        let song = reshape(&accents(), rhythm);
+        let column = ShapeColumn::Velocity;
+        let (_, other) = another(&written(&song, 0, column), column, param);
+        let hold = (0, column, param, other);
+        let (held, engine) = play(&song, &[hold], 16);
+        let (at_rest, _) = play(&song, &[], 16);
+        let (writes, _) = play(&reshaped(&song, hold), &[], 16);
+        assert!(held != at_rest, "{param:?} at {other} is heard");
+        assert!(held == writes, "{param:?} at {other} plays as written");
+        assert!(heard(&engine, 0).iter().any(|run| run.moving));
+        // A new seed each pass, over the nine passes.
+        let varied = reshape(&nine_passes(), Shape { vary: 1, ..rhythm });
+        let (second, _) = play_pass(&varied, 1);
+        let mut kept = written(&varied, 0, column).on_pass(1);
+        kept.vary = 0;
+        let (as_kept, _) = play_pass(&reshape(&varied, kept), 1);
+        assert!(second == as_kept, "{param:?}'s second pass plays its seed");
+        let (as_written, _) = play_pass(&reshape(&varied, rhythm), 1);
+        assert!(second != as_written, "{param:?}'s second pass is new rows");
+    }
+}
+
 /// The nine-pass song with a line of its own on the Note column, a live `Variation` of it at
 /// order 1, a new variation every pass.
 fn varying_line() -> Song {
