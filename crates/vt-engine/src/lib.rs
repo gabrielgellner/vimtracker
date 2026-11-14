@@ -8,6 +8,7 @@ pub mod mixer;
 mod preview;
 pub mod published;
 pub mod reader;
+pub mod recorder;
 pub mod render;
 pub mod rng;
 pub mod slowdown;

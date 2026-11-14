@@ -58,6 +58,9 @@ impl App {
             Line::BankClean => self.clean_bank(),
             Line::Normalize(level) => self.normalize_sample(level),
             Line::Trim => self.trim_sample(),
+            Line::Record { what, quantise } => self.record_command(what, quantise),
+            Line::RecordStop => self.stop_sampling(),
+            Line::RecordCancel => self.cancel_sampling(),
             Line::KitTracks(name) => self.load_kit(&self.kit_path(&name)),
             Line::Kit(None) => self.open_kit_picker(),
             Line::Name(name) => self.name_track(name),
@@ -262,6 +265,7 @@ impl App {
             self.status = self.unsaved(":q! to quit anyway");
         } else {
             self.forget_autosave();
+            self.drop_unkept_recordings();
             self.should_quit = true;
         }
     }

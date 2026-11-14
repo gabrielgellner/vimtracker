@@ -16,7 +16,7 @@ use ratatui::layout::{Constraint, Layout, Margin};
 use ratatui::widgets::Block;
 use thiserror::Error;
 use vt_engine::engine::{Engine, Transport};
-use vt_engine::link::connect;
+use vt_engine::link::{Realtime, connect};
 use vt_engine::published::Published;
 use vt_engine::render::{RenderOptions, render_loop, render_stems, write_wav};
 use vt_model::analysis;
@@ -26,7 +26,7 @@ use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
 use crate::app::App;
-use crate::audio::{self, AudioChoice, AudioError, AudioStats, Output};
+use crate::audio::{self, AudioChoice, AudioError, AudioStats, Input, Output};
 use crate::config::Settings;
 use crate::input::command_history::CommandHistory;
 use crate::input::keys::{KEYBOARD_FLAGS, Key};
@@ -194,12 +194,16 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     }
     let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
-    let (handle, realtime) = connect(Engine::new(rate, version));
+    let (handle, mut realtime) = connect(Engine::new(rate, version));
     let stats = Arc::new(AudioStats::default());
     let device = output.name.clone();
     let full_speed = full_speed.join().unwrap_or(Duration::MAX);
+    let heard = hear_input(&choice, rate, &mut realtime, &stats);
     let (stream, buffer) = output.start(realtime, Arc::clone(&stats), full_speed)?;
-    let mut stream = Some(stream);
+    let mut stream = Some(Streams {
+        output: stream,
+        input: heard.stream,
+    });
     let mut app = App::new(song, path, samples, handle, rate);
     app.use_analysis_cache(analysis::cache_folder());
     app.audio = crate::app::AudioState {
@@ -208,9 +212,16 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
         running: true,
         choice,
         devices: audio::devices(),
+        inputs: audio::input_devices(),
+        input: heard.name,
         full_speed,
         ..crate::app::AudioState::default()
     };
+    if let Some(note) = heard.note
+        && status.is_empty()
+    {
+        status = note;
+    }
     app.library = crate::ableton::default_samples();
     if let Some(path) = Settings::path() {
         let (settings, note) = Settings::load(&path);
@@ -368,7 +379,7 @@ fn main_loop(
     app: &mut App,
     stats: &Arc<AudioStats>,
     graphics: &mut Graphics,
-    stream: &mut Option<cpal::Stream>,
+    stream: &mut Option<Streams>,
 ) -> Result<(), RunError> {
     let frame_time = Duration::from_millis(FRAME_MS);
     // Set at start, and again when opening, saving as or starting a new project changes it.
@@ -401,10 +412,12 @@ fn main_loop(
                     .to_owned();
         }
         app.audio.latency_us = stats.latency.load(Ordering::Relaxed);
+        app.audio.input_latency_us = stats.input_latency.load(Ordering::Relaxed);
         app.audio.late = stats.late.load(Ordering::Relaxed);
         app.audio.xruns = stats.errors.load(Ordering::Relaxed);
         if std::mem::take(&mut app.audio.refresh) {
             app.audio.devices = audio::devices();
+            app.audio.inputs = audio::input_devices();
         }
         if let Some(choice) = app.audio_request.take() {
             // The old stream lets go of its device first.
@@ -475,18 +488,22 @@ fn switch_audio(
     app: &mut App,
     choice: &AudioChoice,
     stats: &Arc<AudioStats>,
-) -> Result<cpal::Stream, AudioError> {
+) -> Result<Streams, AudioError> {
     let output = Output::open(choice)?;
     let rate = output.rate();
     let mut pool = SamplePool::default();
     let errors = project::load_samples(app.folder.as_deref(), app.song(), rate, &mut pool);
     let samples = Arc::new(pool);
     let version = Arc::new(Published::new(Arc::clone(app.song()), Arc::clone(&samples)));
-    let (handle, realtime) = connect(Engine::new(rate, version));
+    let (handle, mut realtime) = connect(Engine::new(rate, version));
     let device = output.name.clone();
     let note = output.note.clone();
+    let heard = hear_input(choice, rate, &mut realtime, stats);
+    let note = note.or(heard.note);
     let (stream, buffer) = output.start(realtime, Arc::clone(stats), app.audio.full_speed)?;
     app.reconnect(handle, samples, rate);
+    app.audio.input = heard.name;
+    app.audio.inputs = audio::input_devices();
     app.audio.device = device;
     app.audio.buffer = buffer;
     app.audio.running = true;
@@ -500,7 +517,62 @@ fn switch_audio(
     if let Err(error) = choice.save() {
         app.status = format!("Playing, but the choice couldn't be kept: {error}");
     }
-    Ok(stream)
+    Ok(Streams {
+        output: stream,
+        input: heard.stream,
+    })
+}
+
+/// The output's stream, and the input's if one is open. Each stops when it's dropped.
+struct Streams {
+    #[allow(dead_code, reason = "held so it keeps playing")]
+    output: cpal::Stream,
+    #[allow(dead_code, reason = "held so it keeps listening")]
+    input: Option<cpal::Stream>,
+}
+
+/// The input chosen, if one is and it opens: its stream, its name, and what's to be said if it
+/// didn't open.
+struct Heard {
+    stream: Option<cpal::Stream>,
+    name: Option<String>,
+    note: Option<String>,
+}
+
+/// Open the input chosen at the output's rate, and have the callback hear it, so the recorder can
+/// record it. None is opened unless one's chosen.
+fn hear_input(
+    choice: &AudioChoice,
+    rate: u32,
+    realtime: &mut Realtime,
+    stats: &Arc<AudioStats>,
+) -> Heard {
+    let Some(id) = &choice.input else {
+        return Heard {
+            stream: None,
+            name: None,
+            note: None,
+        };
+    };
+    let opened = Input::open(id, rate).and_then(|input| {
+        let name = input.name.clone();
+        let (into, heard) = rtrb::RingBuffer::new(vt_model::constants::INPUT_QUEUE);
+        let stream = input.start(into, Arc::clone(stats))?;
+        realtime.listen(heard);
+        Ok((stream, name))
+    });
+    match opened {
+        Ok((stream, name)) => Heard {
+            stream: Some(stream),
+            name: Some(name),
+            note: None,
+        },
+        Err(error) => Heard {
+            stream: None,
+            name: None,
+            note: Some(format!("The input isn't heard: {error}")),
+        },
+    }
 }
 
 /// Draw the whole screen: the view, the meter, the status line, and whatever is open over them.
@@ -535,7 +607,7 @@ pub fn draw_screen(
             app.track_page.lfo_cycles_at = drawn.cycles;
             app.track_page.gen_panels_at = drawn.previews;
         }
-        View::Mixer => views::mixer::draw(frame, view, app),
+        View::Mixer => app.mixer_page.draw(frame, view, &app.ctx()),
         View::Audio => views::audio::draw(frame, view, app),
         View::Project => views::project::draw(frame, view, app),
         View::Sample => views::sample::draw(frame, view, app),

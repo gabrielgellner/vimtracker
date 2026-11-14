@@ -7,6 +7,7 @@ use vt_model::constants::{MAX_GROUPS, MAX_TRACKS, TICKS_PER_QUARTER, TICKS_PER_S
 
 use crate::mixer::{Reading, master};
 use crate::published::Bank;
+use crate::recorder::RecordSource;
 use crate::timing::{Part as TimedPart, PartTimes, SlotTimes};
 use crate::track_state::ShapedFrame;
 use crate::voice::Voice;
@@ -98,6 +99,7 @@ impl Engine {
             }
             written += run;
         }
+        self.recorder.end_block();
         self.stopwatch.lap(TimedPart::Sequencing);
     }
 
@@ -225,6 +227,11 @@ impl Engine {
         let (smoothing, fast, rate) = (self.smoothing, self.fast_smoothing, self.rate);
         let resting = self.resting_buses(&routes[..count], smoothing, fast, rate);
         self.rested = resting;
+        let tap = self.recorder.source();
+        let tap_track = match tap {
+            RecordSource::Track(index) => Some(index),
+            RecordSource::Master | RecordSource::Input => None,
+        };
         if let Some(rest) = resting.master {
             // Nothing in the mix moves, so every frame of the run is the same, nearly always
             // silence.
@@ -237,11 +244,24 @@ impl Engine {
             for frame in out.as_chunks_mut::<2>().0 {
                 *frame = finished;
             }
+            // Every track is silent, and the master gives the same frame throughout.
+            match tap {
+                RecordSource::Master => self.recorder.hear_steady(finished, frames),
+                RecordSource::Track(_) => self.recorder.hear_steady([0.0; 2], frames),
+                RecordSource::Input => {
+                    for _ in 0..frames {
+                        let input = self.recorder.next_input();
+                        self.recorder.hear(input);
+                    }
+                }
+            }
             self.stopwatch.lap(TimedPart::Mixing);
             return;
         }
         for frame in out.as_chunks_mut::<2>().0 {
             self.stopwatch.lap(TimedPart::Mixing);
+            // What the recorder hears of the track it listens to, silence unless it plays.
+            let mut tapped = [0.0_f32; 2];
             let mut mix = [0.0_f32; 2];
             let mut buses = [[0.0_f32; 2]; MAX_GROUPS];
             let mut send_a = [0.0_f32; 2];
@@ -254,8 +274,8 @@ impl Engine {
                     self.stopwatch.lap(TimedPart::Voice(index));
                     continue;
                 }
-                let main = track.voice.next(samples.get(track.voice.sample()));
-                let tail = track.tail.next(samples.get(track.tail.sample()));
+                let main = track.voice.next(samples.frames(track.voice.sample()));
+                let tail = track.tail.next(samples.frames(track.tail.sample()));
                 self.stopwatch.lap(TimedPart::Voice(index));
                 let preview = preview.unwrap_or([0.0; 2]);
                 let shaped = track.shape(
@@ -275,6 +295,9 @@ impl Engine {
                 let feeds = track.feeds.next(self.smoothing);
                 let dry = shaped.dry.map(|sample| sample * heard);
                 track.reading.add(dry, dry);
+                if tap_track == Some(index) {
+                    tapped = dry;
+                }
                 // A track in a group always goes to it, and the group decides what's heard. What
                 // it gives the group may be more than what's heard of it, while the group's heard
                 // by a compressor and is silent itself.
@@ -307,6 +330,9 @@ impl Engine {
                     keys.frames[index] = self.tracks[index].key;
                     shaped
                 };
+                if tap_track == Some(index) {
+                    tapped = shaped.dry;
+                }
                 if !wet_only || lit[group] {
                     mix[0] += shaped.dry[0];
                     mix[1] += shaped.dry[1];
@@ -326,6 +352,9 @@ impl Engine {
                     *from = self.tracks[index].process_return(send, smoothing, fast, rate, keys);
                     keys.frames[index] = self.tracks[index].key;
                 }
+                if tap_track == Some(index) {
+                    tapped = *from;
+                }
                 self.stopwatch.lap(TimedPart::Shaping(index));
             }
             let [from_a, from_b] = from;
@@ -340,6 +369,13 @@ impl Engine {
             self.tracks[master_track].reading.add(mastered, out);
             self.reading.add(mastered, out);
             *frame = out;
+            let heard = match tap {
+                RecordSource::Master => out,
+                RecordSource::Track(index) if index == master_track => mastered,
+                RecordSource::Track(_) => tapped,
+                RecordSource::Input => self.recorder.next_input(),
+            };
+            self.recorder.hear(heard);
             self.stopwatch.lap(TimedPart::Limiting);
         }
         self.stopwatch.lap(TimedPart::Mixing);

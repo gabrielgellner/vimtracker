@@ -7,7 +7,8 @@ use crate::app::App;
 use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
-use crate::track_page::{Control, MIXER_ROWS};
+use crate::mixer_page::MIXER_ROWS;
+use crate::track_page::Control;
 
 /// The labels, with the easiest keys first.
 const LABELS: &str = "asdfghjklqwertyuiopzxcvbnm";
@@ -98,7 +99,7 @@ impl App {
             return Vec::new();
         };
         let (from_row, from_field) = if self.view == View::Mixer {
-            (0, self.mixer_row)
+            (0, self.mixer_page.row)
         } else {
             (self.track_page.row, self.track_page.field)
         };
@@ -163,7 +164,7 @@ impl App {
         if let Some((row, field)) = place {
             self.record_jump();
             if self.view == View::Mixer {
-                self.mixer_row = field;
+                self.mixer_page.row = field;
             } else {
                 self.move_control(row, field);
             }
