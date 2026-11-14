@@ -26,3 +26,36 @@ pub fn hint_line(hint: &str, switches: &[Switch]) -> Line<'static> {
     spans.push(Span::raw(" "));
     Line::from(spans)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::views::widgets::pin::{assert_drawn, drawn};
+
+    #[test]
+    fn a_hint_is_dim_with_each_switch_in_its_own_colour() {
+        let switches = [
+            Switch {
+                key: 'p',
+                on: true,
+                name: "preview",
+            },
+            Switch {
+                key: 'r',
+                on: false,
+                name: "raw",
+            },
+        ];
+        let line = hint_line("o open", &switches);
+        assert_drawn(
+            &drawn(line, 34, 1),
+            &[
+                " o open  p \u{f205}   preview  r \u{f204}   raw ",
+                "aaaaaaaaaaabbbaaaaaaaaaaaacccaaaa.",
+                "a fg OVERLAY2",
+                "b fg GREEN",
+                "c fg OVERLAY0",
+            ],
+        );
+    }
+}

@@ -32,3 +32,30 @@ pub fn boxed(id: u32, width: usize, height: usize) -> Vec<Line<'static>> {
     lines.push(Line::styled(format!("└{rule}┘"), edge));
     lines
 }
+
+#[cfg(test)]
+mod tests {
+    use ratatui::text::Text;
+
+    use super::*;
+    use crate::views::widgets::pin::{assert_drawn, drawn};
+
+    #[test]
+    fn an_image_in_a_box_is_its_placeholders_in_its_colour_inside_a_faint_square() {
+        assert_drawn(
+            &drawn(Text::from(boxed(5, 4, 2)), 6, 4),
+            &[
+                "┌────┐",
+                "aaaaaa",
+                "│▒▒▒▒│",
+                "abbbba",
+                "│▒▒▒▒│",
+                "abbbba",
+                "└────┘",
+                "aaaaaa",
+                "a fg OVERLAY0",
+                "b fg #000005",
+            ],
+        );
+    }
+}
