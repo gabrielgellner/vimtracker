@@ -372,11 +372,35 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
 /// of its own (decision 302), so its own line, with them as they start, stays as it was.
 type Variant = (&'static str, FillKind, fn(&mut Shape));
 
-const VARIANTS: [Variant; 3] = [
+const VARIANTS: [Variant; 7] = [
     ("Random shaped", FillKind::Random, shaped_random),
     ("Follow mutated", FillKind::Follow, mutated_follow),
     ("Acid shaped", FillKind::Acid, shaped_random),
+    ("Ramp, Marbles' rows", FillKind::Ramp, marbles_rows),
+    ("Random, Marbles' rows", FillKind::Random, marbles_rows),
+    ("Acid, Marbles' rows", FillKind::Acid, marbles_rows),
+    ("Shuffle, Marbles' rows", FillKind::Shuffle, marbles_rows),
 ];
+
+/// One of Marbles' rhythms as the `Where` (decision 321), drawn from the seed, some at the ends of
+/// its amount.
+fn marbles_rows(shape: &mut Shape) {
+    let mut more = Dice(shape.seed ^ 0x7A11);
+    let amount = if more.chance(20) {
+        more.pick(&[0, 100])
+    } else {
+        more.below(101) as u8
+    };
+    shape.place = match more.below(4) {
+        0 => Where::Clusters(amount),
+        1 => Where::Markov(amount),
+        2 => Where::States(amount),
+        _ => Where::Complementary {
+            share: amount,
+            second: more.chance(50),
+        },
+    };
+}
 
 /// A `Follow`'s mutations (decision 307), drawn from its seed: up to the most, each kind on or
 /// off, as a Bloom branch's are.
@@ -633,6 +657,10 @@ fn every_fill_renders_on_every_column_without_allocating() {
                             hits: 1 + dice.below(64) as u16,
                             rotate: dice.below(64) as u16,
                         };
+                    }
+                    // And Marbles' rhythms, the longest phrase's among them.
+                    if nth % 4 == 0 {
+                        marbles_rows(&mut case.shape);
                     }
                     // Half of each fill's with its variants' settings drawn, weighed notes
                     // among them.

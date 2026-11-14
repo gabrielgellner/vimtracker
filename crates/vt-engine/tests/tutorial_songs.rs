@@ -37,7 +37,7 @@ use vt_model::settings::SettingId;
 use vt_model::shape::{
     Acid, Bar, Bits, DEFAULT_RATE, Divisions, DrumPart, Edge, FillKind, Follow, GenParam, Grids,
     Mutations, Pink, Random, Shape, ShapeColumn, Source, Values, Walk, WaveRate, Where,
-    divisions_seed, track_seed,
+    divisions_seed, on_track, track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -67,6 +67,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("grids", grids()),
         ("random-rhythm", random_rhythm()),
         ("marbles", marbles()),
+        ("marbles-t", marbles_t()),
         ("variations", variations()),
         ("rene", rene()),
         ("bloom", bloom()),
@@ -1138,6 +1139,71 @@ fn marbles() -> Song {
     song
 }
 
+/// Marbles' rhythms, after Mutable Instruments' Marbles' T section (decision 321), each the
+/// `Where` of a live generator writing notes of its own: a hat and a modal percussion line
+/// trading sixteenths on one `Complementary` coin, a kick on a `Markov` eight-row loop, a bass
+/// whose `3 states` hold some notes into the next, and a string's notes in `Clusters`.
+fn marbles_t() -> Song {
+    let mut song = song("marbles-t", 120, 9, ScaleKind::Minor, 5);
+    song.seed = 0x7B;
+    let blank = vec![REST; 16];
+    voice(&mut song, 0, "HH", SynthVoice::Hat, &blank);
+    set(&mut song, 0, "hat.decay", 0x2C);
+    song.tracks[0].level = 0xB8;
+    voice(&mut song, 1, "PC", SynthVoice::Modal, &blank);
+    song.tracks[1].level = 0xC0;
+    song.tracks[1].send_b = 0x70;
+    voice(&mut song, 2, "BD", SynthVoice::Kick, &blank);
+    set(&mut song, 2, "kick.decay", 0x70);
+    song.tracks[2].level = 0xF0;
+    voice(&mut song, 3, "BS", SynthVoice::VirtualAnalog, &blank);
+    song.tracks[3].cutoff = 0x48;
+    song.tracks[3].resonance = 0x30;
+    song.tracks[3].level = 0xC8;
+    voice(&mut song, 4, "ST", SynthVoice::String, &blank);
+    set(&mut song, 4, "string.decay", 0x80);
+    song.tracks[4].level = 0xB0;
+    song.tracks[4].send_a = 0x90;
+    song.tracks[4].send_b = 0x90;
+    let notes = empty_notes(&song);
+    // The hat and the percussion: one coin a row, the hat taking 65 rows in a hundred, `S` across
+    // both, then the percussion's fill made a `Random` between A-3 and A-4.
+    let coin = Where::Complementary {
+        share: 65,
+        second: false,
+    };
+    let mut hats = shape(FillKind::Ramp, note("C-4"), note("C-4"), coin);
+    hats.seed = 4;
+    let mut song = generate(song, 0, notes, 16, on_track(&hats, 0));
+    let mut tuned = on_track(&hats, 1);
+    tuned.kind = FillKind::Random;
+    (tuned.from, tuned.to) = (note("A-3"), note("A-4"));
+    song = generate(song, 1, notes, 16, tuned);
+    // The kick: Markov at 90%, an eight-row loop that changes now and then.
+    let mut kick = shape(FillKind::Ramp, note("C-1"), note("C-1"), Where::Markov(90));
+    kick.seed = 4;
+    song = generate(song, 2, notes, 16, kick);
+    // The bass: three states at 80%, mostly ties, between A-1 and A-2.
+    let mut bass = shape(
+        FillKind::Random,
+        note("A-1"),
+        note("A-2"),
+        Where::States(80),
+    );
+    bass.seed = 2;
+    song = generate(song, 3, notes, 16, bass);
+    // The string: clusters on a third of the rows, a `Random` between A-3 and A-5.
+    let mut string = shape(
+        FillKind::Random,
+        note("A-3"),
+        note("A-5"),
+        Where::Clusters(35),
+    );
+    string.seed = 0;
+    song = generate(song, 4, notes, 16, string);
+    song
+}
+
 /// An `Acid` line written by hand, and a live `Variation` of it at order 2, a new one every four
 /// passes: something like the line, learned from its own notes, accents and slides alone.
 fn variations() -> Song {
@@ -1706,6 +1772,44 @@ fn every_tutorial_song_renders_as_it_did_before_the_engine_ran_generators() {
         let out = render_loop(version, RATE, RenderOptions::default());
         support::golden(&format!("tutorial-{name}"), &out);
     }
+}
+
+/// In `marbles-t`, the hat and the percussion toss one coin, so every row is one's or the
+/// other's, and a turn of the share on both keeps it so, as the chapter's first thing to try
+/// says.
+#[test]
+fn marbles_t_hat_and_percussion_take_every_row_between_them() {
+    let song = load_song(&songs_folder().join("marbles-t")).unwrap();
+    let plays = |song: &Song, track: usize| -> Vec<bool> {
+        song.tracks[track].phrases[&0]
+            .steps()
+            .iter()
+            .map(|step| matches!(step.note, Note::On(_)))
+            .collect()
+    };
+    let between = |song: &Song| {
+        let (hat, percussion) = (plays(song, 0), plays(song, 1));
+        hat.iter().zip(&percussion).all(|(a, b)| a != b)
+    };
+    assert!(between(&song));
+    let mut turned = song.clone();
+    for track in 0..2 {
+        let mut shape = turned.tracks[track].phrases[&0].generators()[0].shape;
+        if let Where::Complementary { share, .. } = &mut shape.place {
+            *share = 30;
+        }
+        turned = apply(
+            turned,
+            &Action::Reshape {
+                track,
+                phrase: 0,
+                generator: 0,
+                shape,
+            },
+        );
+    }
+    assert!(between(&turned));
+    assert!(plays(&turned, 0).iter().filter(|hit| **hit).count() < 8);
 }
 
 /// The variation is something like the line under it, and order 3 at temperature 0 gives the

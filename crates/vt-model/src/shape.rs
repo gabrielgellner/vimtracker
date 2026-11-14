@@ -17,6 +17,7 @@ mod mutation;
 pub mod params;
 mod random;
 mod render;
+mod rhythm;
 mod variation;
 mod walk;
 
@@ -136,6 +137,24 @@ const EUCLID: Where = Where::Euclid {
     hits: EUCLID_HITS,
     rotate: 0,
 };
+/// The amounts Marbles' rhythms start with: for clusters half the rows; for Markov `80%`, an
+/// eight-row loop that changes now and then, as at noon on one track it's sparse; for three
+/// states a quarter, as at noon three rows in four rest; and half the rows each for the two
+/// tracks of `Complementary`.
+pub const CLUSTERS: u8 = 50;
+pub const MARKOV: u8 = 80;
+pub const STATES: u8 = 25;
+pub const SHARE: u8 = 50;
+/// Marbles' rhythms, as each starts, after Euclid in a list of `Where`s.
+const MARBLES: [Where; 4] = [
+    Where::Clusters(CLUSTERS),
+    Where::Markov(MARKOV),
+    Where::States(STATES),
+    Where::Complementary {
+        share: SHARE,
+        second: false,
+    },
+];
 /// The most values a `List` fill goes through, so a shape stays plain data of a fixed size.
 pub const MAX_VALUES: usize = 8;
 
@@ -322,6 +341,17 @@ pub enum Where {
     /// `hits` spread as evenly as they go among the rows it can change, then moved `rotate` of
     /// those rows later, going round.
     Euclid { hits: u16, rotate: u16 },
+    /// Runs of two to four rows with gaps between, about this percent of the rows, after Marbles'
+    /// clusters.
+    Clusters(u8),
+    /// Each row's chance hanging on the rows before it, by Marbles' Markov rules at this Bias.
+    Markov(u8),
+    /// Each row a gate, a rest or a tie, which holds the value before it, by Marbles' three
+    /// states at this Bias.
+    States(u8),
+    /// One coin a row for two tracks, Marbles' complementary Bernoulli: the first takes the rows
+    /// it lands under `share` on, as `Chance` would, and the `second` the rest.
+    Complementary { share: u8, second: bool },
 }
 
 impl Where {
@@ -335,6 +365,35 @@ impl Where {
             Self::Every(_) => "Every",
             Self::Chance(_) => "Chance",
             Self::Euclid { .. } => "Euclid",
+            Self::Clusters(_) => "Clusters",
+            Self::Markov(_) => "Markov",
+            Self::States(_) => "3 states",
+            Self::Complementary { .. } => "Complementary",
+        }
+    }
+
+    /// Whether the rows are drawn from the seed, so another seed would choose others.
+    pub fn draws(self) -> bool {
+        matches!(
+            self,
+            Self::Chance(_)
+                | Self::Clusters(_)
+                | Self::Markov(_)
+                | Self::States(_)
+                | Self::Complementary { .. }
+        )
+    }
+
+    /// The rows it chooses on the `nth` of the tracks a shape fills at once, counted from 0: the
+    /// same, but `Complementary` gives each pair of tracks its two sides, the first of the pair
+    /// the side chosen and the second the other.
+    pub fn on_track(self, nth: usize) -> Self {
+        match self {
+            Self::Complementary { share, second } => Self::Complementary {
+                share,
+                second: second != (nth % 2 == 1),
+            },
+            place => place,
         }
     }
 }
@@ -499,11 +558,17 @@ impl ShapeColumn {
             // Notes of its own go on rows without one, so the rows are only a rhythm.
             Self::Note {
                 writes: Some(_), ..
-            } => vec![Where::AllRows, Where::Every(4), Where::Chance(50), EUCLID],
+            } => [Where::AllRows, Where::Every(4), Where::Chance(50), EUCLID]
+                .into_iter()
+                .chain(MARBLES)
+                .collect(),
             Self::Note { .. } | Self::Velocity | Self::Nudge { .. } | Self::Length => {
-                vec![Where::Notes, Where::Every(4), Where::Chance(50), EUCLID]
+                [Where::Notes, Where::Every(4), Where::Chance(50), EUCLID]
+                    .into_iter()
+                    .chain(MARBLES)
+                    .collect()
             }
-            Self::Fx { .. } => vec![
+            Self::Fx { .. } => [
                 Where::Commands,
                 Where::AllRows,
                 Where::Notes,
@@ -511,7 +576,10 @@ impl ShapeColumn {
                 Where::Every(4),
                 Where::Chance(50),
                 EUCLID,
-            ],
+            ]
+            .into_iter()
+            .chain(MARBLES)
+            .collect(),
         }
     }
 
@@ -830,13 +898,14 @@ impl Shape {
 
     /// Whether anything it writes is drawn from its seed, so another seed would write something
     /// else: a random fill, a walk, `1/f`, `Acid`, `Shuffle`, `Grids`' chaos, a `Variation`, a
-    /// random wave or a `Follow` that mutates, or rows chosen by chance.
+    /// random wave or a `Follow` that mutates, or rows chosen by chance or one of Marbles'
+    /// rhythms.
     pub fn draws(&self) -> bool {
         let random_wave =
             self.kind == FillKind::Wave && matches!(self.wave, Wave::Random | Wave::Smooth);
         random_wave
             || self.kind == FillKind::Follow && self.follow.mutates()
-            || matches!(self.place, Where::Chance(_)) && self.kind.has_where()
+            || self.place.draws() && self.kind.has_where()
             || matches!(
                 self.kind,
                 FillKind::Random
@@ -923,6 +992,21 @@ pub fn track_seed(seed: u64, nth: usize) -> u64 {
         seed
     } else {
         seed ^ mix(0xC0FF_EE00, nth)
+    }
+}
+
+/// A shape as it goes on the `nth` of the tracks it shapes at once: with its own seed, as
+/// [`track_seed`] gives it, and its rows [on that track](Where::on_track). `Complementary` tosses
+/// one coin for each pair of tracks, so the two of a pair share a seed.
+pub fn on_track(shape: &Shape, nth: usize) -> Shape {
+    let shared = match shape.place {
+        Where::Complementary { .. } => nth - nth % 2,
+        _ => nth,
+    };
+    Shape {
+        seed: track_seed(shape.seed, shared),
+        place: shape.place.on_track(nth),
+        ..*shape
     }
 }
 

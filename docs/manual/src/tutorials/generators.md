@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds sixteen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds seventeen of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -22,6 +22,7 @@ there are no samples to find.
 | `grids` | Mutable Instruments' Grids | `S`'s `Grids` across the kick, snare and hat, one beat from a map |
 | `random-rhythm` | Vermona's randomRHYTHM | `S`'s `Divisions`: a chance per division, triplets nudged between the rows |
 | `marbles` | Mutable Instruments' Marbles' X, Vermona's meloDICER | `Random`'s `Spread`, `Bias`, `Steps` and `Weights` |
+| `marbles-t` | Mutable Instruments' Marbles' T | `S`'s `Complementary`, `Markov`, `3 states` and `Clusters` rows |
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 | `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
@@ -987,6 +988,76 @@ and `Steps` on macros; add it with `:patch`.
     `M` a macro: map both to one, and an LFO on it sweeps the tune from a drone to a scatter.
 *   `Vary` `Each pass` on the bass, and every pass draws a new pattern of octaves.
 
+## Marbles' T
+
+Marbles' T section is a random clock: its gates fire at random, and its models say how. In
+*complementary Bernoulli*, one coin a tick decides which of two outputs fires, so they never fire
+together; in *clusters*, hits bunch together, then leave gaps; in *Markov*, each tick's chance
+hangs on what fired before, leaning toward what fired eight ticks back; and in *three states*,
+each tick is one output, the other, or neither. One knob, Bias, shapes each model. These four are
+`Where` choices, each with an `Amount`: `Complementary` across two tracks, `Clusters`, `Markov`,
+and `3 states`, where on one track the two outputs are a gate and a tie, a note held into the
+next.
+
+**How the song does it.** Five tracks in A minor, each a live generator writing notes of its own
+on 16 rows:
+
+| Track | Where | Fill |
+|---|---|---|
+| `HH` | `Complementary` `65%`, `First` | `C-4` on every row it plays |
+| `PC` | `Complementary` `65%`, `Second` | `Random`, `A-3` to `A-4` |
+| `BD` | `Markov` `90%` | `C-1` on every row it plays |
+| `BS` | `3 states` `80%` | `Random`, `A-1` to `A-2` |
+| `ST` | `Clusters` `35%` | `Random`, `A-3` to `A-5` |
+
+The hat and the modal percussion share one coin, so every sixteenth is one's or the other's,
+never both, the hat on about two in three. The kick's Markov at `90%` keeps to an eight-row loop,
+here the same twice; lower, the second eight rows stray further from the first. The bass's three states at `80%` are mostly rests and ties,
+so it holds its notes, `~` below for a note held into the next (its gate `HLD`). The string plays
+in bunches of two to four. [`song.ron`](songs/marbles-t/song.ron)
+
+```text
+HH  x.xxx..x..xxx.x.
+PC  .x...xx.xx...x.x
+BD  x..x...xx..x...x
+BS  ...xx~x...~~x...
+ST  .xxxx..xxx......
+```
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 120`.
+2.  Tracks 1 to 5: on each Sound page, `Space 5`, the machines `/hat`, `/modal`, `/kick`, `va` and
+    `string` (`K`, the name, `Enter`), named `HH`, `PC`, `BD`, `BS` and `ST` with `:name`.
+3.  The hat and the percussion: on track 1, `Space 3`, `vG` on the Note column, `W` to reach
+    track 2, and `S`. `From` and `To` `c4` (`i`, the note, `Enter`). `j` down to `Where`, `K`
+    `/compl` `Enter`: the panel says `Each row goes to one track or the other`. `j` to `Amount`,
+    `i` `65` `Enter`, and `L`. Track 1 is the coin's `First` side and track 2 its `Second`.
+4.  On track 2, `gl` on one of its notes reopens its own generator. On `Fill`, `K` `random`
+    `Enter`, `From` `a3`, `To` `a4`, and `L`. Its rows stay the coin's.
+5.  The kick: track 3, `vG`, `S`, both ends `c1`, `Where` `Markov` with an `Amount` of 90, and
+    `L`.
+6.  The bass: track 4, `vG`, `S`, `Fill` `Random`, `From` `a1`, `To` `a2`, `Where` `3 states`
+    with 80, and `L`.
+7.  The string: track 5, `vG`, `S`, `Fill` `Random`, `From` `a3`, `To` `a5`, `Where` `Clusters`
+    with 35, and `L`.
+
+Each `S` draws a seed of its own, so your rhythms differ from the song's; `r` in the panel draws
+again. The finished song also sets the hat's and the kick's `Decay`, the string's, the bass's
+filter, the sends and the levels.
+
+**Try next.**
+
+*   `gl` on the hat and `Amount` `30`, then the same on the percussion: it takes most of the
+    rows now. Each generator keeps its own amount, so turn both, or map both to one macro.
+*   `K` on the percussion's `Side` makes it `First`: it plays the hat's rows, together.
+*   On the kick, `Amount` `100%` repeats its eight rows exactly; `33%` is a sparse coin; `0%` is
+    busier, and never plays the same eight rows twice.
+*   On the bass, `Amount` `0%` is mostly gates, short notes, and `50%` mostly rests.
+*   `Vary` `Each pass` on the string, and every pass bunches its notes anew.
+*   On the Gen page, `Space 8`, each `Amount` is a cell to turn while it plays, and on the Roto
+    knob 7.
+
 ## Variations of your own phrase
 
 Write a line, then ask for another one like it. A Markov chain does that by
@@ -1160,7 +1231,6 @@ These are planned, each its own issue, and this chapter grows a section as each 
 
 | Issue | Generator |
 |---|---|
-| [#586](https://github.com/gabrielgellner/vimtracker/issues/586) | Marbles' rhythm models as `Where` choices |
 | [#589](https://github.com/gabrielgellner/vimtracker/issues/589) | Cellular automata rhythms from Wolfram's elementary rules |
 | [#590](https://github.com/gabrielgellner/vimtracker/issues/590) | Tonnetz chord movement: P, L and R moves |
 | [#591](https://github.com/gabrielgellner/vimtracker/issues/591) | Per-attribute loop lengths after Kria |
