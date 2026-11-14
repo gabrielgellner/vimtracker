@@ -1,25 +1,30 @@
 //! Patches on the track page (decision 311): the cursor's track's macros and what they move saved
 //! with `:patch save` into the presets folder's `patches`, and added to a track from the browser
 //! or by name, into its free mod slots and macros, with their generators on the phrase under the
-//! cursor, as one undo step that keeps the track's sound.
+//! cursor, as one undo step that keeps the track's sound. The patches that come with the program
+//! are listed beside the folder's, under `Factory`, and read from the program itself (decision
+//! 318).
 
 use std::path::Path;
 
 use vt_model::action::Action;
 use vt_model::constants::FX_SLOTS;
+use vt_model::generator::Span;
 use vt_model::macros::GenColumn;
 use vt_model::preset::{
-    PatchGen, PatchPreset, Placement, PresetError, PresetKind, Short, load_patch, preset_name,
-    preset_path, save,
+    FACTORY, FACTORY_PATCHES, Patch, PatchGen, PatchPreset, Placement, PresetError, PresetKind,
+    Short, factory_patch, is_preset_name, load_patch, preset_name, preset_path, save,
 };
 use vt_model::selection::Field;
 use vt_model::shape::ShapeColumn;
+use vt_model::song::Lane;
 use vt_model::step::FxCommand;
 
 use crate::app::App;
 use crate::config::home_folder;
-use crate::explorer::{Purpose, place_name};
+use crate::explorer::{Icon, Purpose, place_name, preset_tags};
 use crate::input::command::PatchLine;
+use crate::input::picker::{Item, Pick, Root};
 
 /// What's said where a patch is wanted on a track that doesn't play sounds.
 const NOT_SOUND: &str = "Only a track that plays sounds takes a patch";
@@ -73,6 +78,30 @@ fn short_of(name: &str, track: usize, short: Short) -> String {
     )
 }
 
+/// The shipped patches, as the browser lists them after the presets folder: under `Factory`,
+/// each by its name with what it needs beside it and its tags, as a patch in the folder is.
+fn factory_root() -> Root {
+    let items = FACTORY_PATCHES
+        .iter()
+        .map(|(name, _)| {
+            let item = Item::new(*name, Pick::FactoryPatch((*name).to_owned()));
+            match factory_patch(name) {
+                Some(Ok(preset)) => item
+                    .meaning(preset.summary())
+                    .tagged(preset_tags(preset.fixed_tags(), preset.tags)),
+                Some(Err(error)) => item.meaning(error.to_string()),
+                None => item,
+            }
+        })
+        .collect();
+    Root::Group {
+        label: FACTORY.to_owned(),
+        meaning: "built in".to_owned(),
+        icon: Icon::Folder,
+        items,
+    }
+}
+
 impl App {
     /// `:patch`, `:patch save` and `:patch load`, and their `!`.
     pub(crate) fn patch_line(&mut self, line: PatchLine) {
@@ -97,28 +126,17 @@ impl App {
         sound.then_some(track)
     }
 
-    /// List the patches in the presets folder, to add one to the cursor's track; `over` puts it
-    /// over the last mod slots and macros where too few are free.
+    /// List the patches in the presets folder, once there is one, and the shipped ones under
+    /// `Factory`, to add one to the cursor's track; `over` puts it over the last mod slots and
+    /// macros where too few are free.
     pub(crate) fn open_patch_explorer(&mut self, over: bool) {
-        let Some(track) = self.patch_track() else {
-            return;
-        };
-        let Some(folder) = self.presets_folder() else {
-            return;
-        };
-        let folder = folder.join(PresetKind::Patch.folder());
-        if !folder.is_dir() {
-            let home = home_folder();
-            self.status = format!(
-                "No patches yet: :patch save name saves track {:02}'s macros and what they move in {}",
-                track + 1,
-                place_name(&folder, home.as_deref())
-            );
+        if self.patch_track().is_none() {
             return;
         }
         self.patch_over = over;
         let purpose = Purpose::Preset(PresetKind::Patch);
-        let roots = self.places(purpose);
+        let mut roots = self.places(purpose);
+        roots.push(factory_root());
         self.open_explorer(purpose, roots, None);
     }
 
@@ -169,49 +187,64 @@ impl App {
         }
     }
 
-    /// `:patch load name`: the patch of that name, added to the cursor's track.
+    /// `:patch load name`: the patch of that name in the presets folder, or else the shipped one,
+    /// added to the cursor's track.
     fn add_patch_named(&mut self, name: &str, over: bool) {
-        let Some(folder) = self.presets_folder() else {
-            return;
-        };
-        let path = match preset_path(&folder, PresetKind::Patch, name) {
-            Ok(path) => path,
-            Err(error) => {
-                self.status = error.to_string();
-                return;
-            }
-        };
-        if !path.is_file() {
-            let home = home_folder();
-            self.status = format!(
-                "There's no patch called {name} in {}",
-                place_name(&folder.join(PresetKind::Patch.folder()), home.as_deref())
-            );
+        if !is_preset_name(name) {
+            self.status = PresetError::Name.to_string();
             return;
         }
-        self.add_patch(&path, over);
+        let folder = self.settings.preset_folder();
+        let path = folder
+            .as_deref()
+            .and_then(|folder| preset_path(folder, PresetKind::Patch, name).ok())
+            .filter(|path| path.is_file());
+        if let Some(path) = path {
+            self.add_patch(&path, over);
+        } else if factory_patch(name).is_some() {
+            self.add_factory_patch(name, over);
+        } else {
+            let home = home_folder();
+            let place = folder.map_or_else(String::new, |folder| {
+                let patches = folder.join(PresetKind::Patch.folder());
+                format!(" in {}", place_name(&patches, home.as_deref()))
+            });
+            self.status = format!(
+                "There's no patch called {name}{place}, nor one that comes with vimtracker"
+            );
+        }
+    }
+
+    /// Add the patch in this file to the cursor's track, as [`App::add_loaded_patch`] does.
+    pub(crate) fn add_patch(&mut self, path: &Path, over: bool) {
+        match load_patch(path) {
+            Ok(preset) => self.add_loaded_patch(&preset_name(path), &preset.patch, over),
+            Err(error) => self.status = error.to_string(),
+        }
+    }
+
+    /// Add the shipped patch of this name to the cursor's track, as [`App::add_loaded_patch`]
+    /// does.
+    pub(crate) fn add_factory_patch(&mut self, name: &str, over: bool) {
+        match factory_patch(name) {
+            Some(Ok(preset)) => self.add_loaded_patch(name, &preset.patch, over),
+            Some(Err(error)) => self.status = error.to_string(),
+            None => self.status = format!("No patch called {name} comes with vimtracker"),
+        }
     }
 
     /// Add a patch to the cursor's track, as one undo step: its mod slots and macros into free
     /// ones, or with `over` the last ones where too few are free, and its generators onto the
-    /// phrase under the cursor. The track's sound is left alone. If any part can't go on, none
-    /// does, and the status line says why.
-    pub(crate) fn add_patch(&mut self, path: &Path, over: bool) {
+    /// phrase under the cursor, one on a lane with a lane as long. The track's sound is left
+    /// alone. If any part can't go on, none does, and the status line says why.
+    fn add_loaded_patch(&mut self, name: &str, patch: &Patch, over: bool) {
         let Some(track) = self.patch_track() else {
             return;
-        };
-        let name = preset_name(path);
-        let patch = match load_patch(path) {
-            Ok(preset) => preset.patch,
-            Err(error) => {
-                self.status = error.to_string();
-                return;
-            }
         };
         let mut placement = match patch.place(&self.song().tracks[track], over) {
             Ok(placement) => placement,
             Err(short) => {
-                self.status = short_of(&name, track, short);
+                self.status = short_of(name, track, short);
                 return;
             }
         };
@@ -226,20 +259,24 @@ impl App {
                     {
                         placement.fx.insert(saved, slot);
                     }
-                    self.patch_generator(field, command, generator.shape, live)
+                    let action = self.patch_generator(field, command, generator.shape, live)?;
+                    Ok(match (generator.lane, live) {
+                        (Some(length), None) => self.onto_lane(action, length),
+                        _ => vec![action],
+                    })
                 });
             match made {
-                Ok(action) => generators.push(action),
+                Ok(actions) => generators.extend(actions),
                 Err(why) => {
                     self.status = format!("{name} isn't added: {why}");
                     return;
                 }
             }
         }
-        let said = self.patch_added(&name, track, &patch.generators, &placement);
+        let said = self.patch_added(name, track, &patch.generators, &placement);
         let mut actions = vec![Action::LoadPatch {
             track,
-            patch: Box::new(patch),
+            patch: Box::new(patch.clone()),
             placement,
         }];
         actions.extend(generators);
@@ -314,6 +351,42 @@ impl App {
             .iter()
             .position(|found| GenColumn::of(found.column) == generator.column);
         Ok((field, None, at))
+    }
+
+    /// A patch's generator that fills a lane, going onto an FX column that isn't live: the column
+    /// given a lane of the length it had, from the first row of the phrase's loop, as `:lane` on
+    /// that row gives one, and the generator filling the lane rather than the loop. A column
+    /// already live keeps its own span, as it's reshaped in place.
+    fn onto_lane(&self, action: Action, length: usize) -> Vec<Action> {
+        let Action::Generate {
+            track,
+            phrase,
+            column: column @ ShapeColumn::Fx { slot, .. },
+            shape,
+            ..
+        } = action
+        else {
+            return vec![action];
+        };
+        let lane = Lane {
+            start: self.extent().start,
+            length,
+        };
+        vec![
+            Action::SetLane {
+                track,
+                phrase,
+                slot,
+                lane: Some(lane),
+            },
+            Action::Generate {
+                track,
+                phrase,
+                column,
+                span: Span::Lane,
+                shape,
+            },
+        ]
     }
 
     /// What the status line says once a patch is added: where its parts went, and what it put

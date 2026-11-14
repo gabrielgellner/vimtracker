@@ -163,18 +163,7 @@ fn preset_listing(path: &Path, kind: PresetKind) -> (Icon, String, Vec<Tag>) {
         }),
     };
     match read {
-        Ok((icon, meaning, fixed, own)) => {
-            let mut tags: Vec<Tag> = fixed
-                .into_iter()
-                .map(|name| Tag::new(name, Source::Fixed))
-                .collect();
-            for name in own {
-                if !tag::has(&tags, &name) {
-                    tags.push(Tag::new(name, Source::Own));
-                }
-            }
-            (icon, meaning, tags)
-        }
+        Ok((icon, meaning, fixed, own)) => (icon, meaning, preset_tags(fixed, own)),
         Err(error) => {
             let why = match error {
                 vt_model::preset::PresetError::Parse { detail, .. }
@@ -184,6 +173,20 @@ fn preset_listing(path: &Path, kind: PresetKind) -> (Icon, String, Vec<Tag>) {
             (Icon::Missing, why, Vec::new())
         }
     }
+}
+
+/// A preset's tags: those it always has, then its own that aren't among them.
+pub fn preset_tags(fixed: Vec<String>, own: Vec<String>) -> Vec<Tag> {
+    let mut tags: Vec<Tag> = fixed
+        .into_iter()
+        .map(|name| Tag::new(name, Source::Fixed))
+        .collect();
+    for name in own {
+        if !tag::has(&tags, &name) {
+            tags.push(Tag::new(name, Source::Own));
+        }
+    }
+    tags
 }
 
 /// A sample file's tags: what's guessed from where it is, its name and, for one of a kit's
