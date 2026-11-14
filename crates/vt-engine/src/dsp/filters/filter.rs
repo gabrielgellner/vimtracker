@@ -1145,6 +1145,17 @@ impl Trim {
     pub fn clear_low_cut(&mut self) {
         self.high_pass = Svf::default();
     }
+
+    /// How much the low cut and the high cut pass a frequency once settled, as gains, with these
+    /// coefficients at a rate, for a drawing of what they do: the state-variable filter's
+    /// high-pass and low-pass at its damping, through the bilinear transform as it runs.
+    pub fn gains(c: &Coefficients, rate: u32, hertz: f32) -> (f32, f32) {
+        let rate = rate as f32;
+        let w = (std::f32::consts::PI * hertz.min(rate * 0.499) / rate).tan() / c.g;
+        let (w2, k2) = (w * w, c.k * c.k);
+        let under = ((1.0 - w2) * (1.0 - w2) + k2 * w2).sqrt();
+        (w2 / under, 1.0 / under)
+    }
 }
 
 /// The output a type takes from a state-variable filter with damping `k`.

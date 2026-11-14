@@ -3,10 +3,9 @@
 //! alpha for each entry, so a pixel the line only grazes is the line's colour, part see-through,
 //! and nothing is stretched, as the picture is the size of the characters it covers.
 //!
-//! Every curve is drawn here: the compressor's, the EQ's and, zoomed, a distortion's on the FX
-//! page, the filter's on the
-//! Sound page, and the envelopes and the LFOs' cycles on the Mod page, with the dot that rides an
-//! LFO's.
+//! Every curve is drawn here: the compressor's, the EQ's and, zoomed, a distortion's and the
+//! filter effects' on the FX page, the filter's on the Sound page, and the envelopes and the LFOs'
+//! cycles on the Mod page, with the dot that rides an LFO's.
 
 use std::cmp::Ordering;
 
@@ -215,6 +214,35 @@ impl Plot {
         self.broken(from, to, mark, DOT);
     }
 
+    /// A dotted gridline along a curve of `level_at` across the picture, each `x` from 0 to 1, its
+    /// dots spaced along the curve, as a straight one's are.
+    pub fn traced(&mut self, level_at: impl Fn(f32) -> f32, mark: Mark) {
+        let (on, off) = DOT;
+        let mut along = 0.0_f32;
+        let mut last = self.at(0.0, level_at(0.0));
+        for step in 1..=self.width * POINTS_PER_PIXEL {
+            let x = step as f32 / (self.width * POINTS_PER_PIXEL) as f32;
+            let next = self.at(x, level_at(x));
+            let length = (next.0 - last.0).hypot(next.1 - last.1);
+            let pieces = length.ceil().max(1.0) as usize;
+            for piece in 0..pieces {
+                let share = piece as f32 / pieces as f32;
+                let point = (
+                    last.0 + (next.0 - last.0) * share,
+                    last.1 + (next.1 - last.1) * share,
+                );
+                let place = (along + length * share) as usize;
+                if place % (on + off) < on
+                    && let Some(pixel) = self.pixel(point)
+                {
+                    self.marks[pixel] = mark.entry();
+                }
+            }
+            along += length;
+            last = next;
+        }
+    }
+
     /// A dashed gridline up from the bottom at `x`, to a level.
     pub fn dashed_up(&mut self, x: f32, level: f32, mark: Mark) {
         self.broken((x, 0.0), (x, level), mark, DASH);
@@ -411,6 +439,144 @@ pub fn envelope_in(
         Envelope::Drum(drum) => plot.curve(|x| drum_level_at(drum, x), 0.0, &ends),
         Envelope::Lpg(lpg) => plot.curve(|x| lpg_level_at(lpg, x), 0.0, &ends),
     }
+    plot
+}
+
+/// How many times a peak found among a curve's points is narrowed down between its neighbours,
+/// each time to 0.618 of the way: to well under a thousandth of a pixel.
+const PEAK_STEPS: usize = 24;
+
+/// Where a curve across a picture `width` pixels wide peaks, each `x` from 0 to 1: every point of
+/// it worked out, as [`Plot::curve`] works them out, that's higher than both of its neighbours,
+/// found again more closely between them. A comb's or a resonator's peak can be narrower than the
+/// two points a pixel the curve has, and so would be drawn short of its top, or not at all.
+pub fn peaks(level_at: &impl Fn(f32) -> f32, width: usize) -> Vec<f32> {
+    let count = width * POINTS_PER_PIXEL;
+    let x = |step: usize| step as f32 / count as f32;
+    let levels: Vec<f32> = (0..=count).map(|step| level_at(x(step))).collect();
+    let golden = (5.0_f32.sqrt() - 1.0) / 2.0;
+    (1..count)
+        .filter(|&step| levels[step] > levels[step - 1] && levels[step] >= levels[step + 1])
+        .map(|step| {
+            // A golden-section search for the top between the neighbours.
+            let (mut low, mut high) = (x(step - 1), x(step + 1));
+            for _ in 0..PEAK_STEPS {
+                let one = high - golden * (high - low);
+                let other = low + golden * (high - low);
+                if level_at(one) < level_at(other) {
+                    low = one;
+                } else {
+                    high = other;
+                }
+            }
+            (low + high) / 2.0
+        })
+        .collect()
+}
+
+/// A slot effect that filters, as its curve on the FX page's zoom is drawn from (decision 333):
+/// what it does to a quiet sound at each frequency, in dB, and where its dashed line goes up, at
+/// the note it's tuned to or the cutoff it's at. A low-pass gate's has how far it opens too.
+pub struct Filtering<F, G> {
+    pub db_at: F,
+    pub marked: Option<f32>,
+    pub opened: Option<G>,
+}
+
+/// A slot effect's frequency curve, from 20 Hz to 20 kHz across and -36 dB to +24 dB up, as the
+/// Sound page's filter curve is, over a dotted line at 0 dB and fainter ones down it at 100 Hz,
+/// 1 kHz and 10 kHz. Its peaks are drawn to their tops however narrow, a dashed line rises to it
+/// at the frequency marked, and a low-pass gate's curve opened all the way is a fainter dotted
+/// curve, so what lies between is how far it moves.
+pub fn filtering<F: Fn(f32) -> f32, G: Fn(f32) -> f32>(
+    filtering: Filtering<F, G>,
+    (width, height): (usize, usize),
+) -> Plot {
+    let mut plot = Plot::new(width, height);
+    decades(&mut plot);
+    plot.across(filter_level(0.0), Mark::Grid);
+    if let Some(opened) = &filtering.opened {
+        plot.traced(|x| filter_level(opened(frequency_at(x))), Mark::Fainter);
+    }
+    let level = |x: f32| filter_level((filtering.db_at)(frequency_at(x)));
+    if let Some(hertz) = filtering.marked.filter(|hz| (20.0..=20_000.0).contains(hz)) {
+        let x = frequency_x(hertz);
+        plot.dashed_up(x, level(x), Mark::Grid);
+    }
+    let corners = peaks(&level, width);
+    plot.curve(level, level(0.0), &corners);
+    plot
+}
+
+/// How far down a delay's repeats and a reverb's tail are drawn, in dB: as far as a reverb's
+/// decay time measures.
+pub const TIME_RANGE_DB: f32 = 60.0;
+
+/// Where a level, as a gain, is up a time plot, from 0 at -60 dB to 1 at 0 dB and over.
+fn time_level(gain: f32) -> f32 {
+    (1.0 + 20.0 * gain.max(1e-9).log10() / TIME_RANGE_DB).clamp(0.0, 1.0)
+}
+
+/// A delay's repeats over `span` seconds across, each a line up from the middle, as loud as it is
+/// on the left, and down from it, as loud as it is on the right, from nothing at -60 dB in the
+/// middle to 0 dB at the top and bottom: a ping-pong's cross from side to side and a straight
+/// one's stand both ways. The sound itself, with `Mix`, is the first at the left. Fainter dotted
+/// lines down it mark the beats, `beat` seconds apart, so the repeats can be read against them.
+pub fn repeats(sounds: &[(f32, [f32; 2])], beat: f32, span: f32, size: (usize, usize)) -> Plot {
+    let mut plot = Plot::new(size.0, size.1);
+    plot.across(0.5, Mark::Grid);
+    let span = span.max(1e-3);
+    if beat > 0.0 {
+        let mut at = beat;
+        while at < span {
+            plot.down(at / span, Mark::Fainter);
+            at += beat;
+        }
+    }
+    for &(seconds, [left, right]) in sounds {
+        let x = seconds / span;
+        let up = 0.5 + 0.5 * time_level(left);
+        let down = 0.5 - 0.5 * time_level(right);
+        if up > 0.5 || down < 0.5 {
+            let points = [plot.at(x, up), plot.at(x, down)];
+            plot.line(&points);
+        }
+    }
+    plot
+}
+
+/// A reverb's tail over `span` seconds across, from 0 dB at the top to -60 dB at the bottom:
+/// nothing until its pre-delay, `pre`, then falling in a straight line, `seconds[0]` to fall all
+/// the way at its lows, with a dotted line falling as its highs do, in `seconds[1]`. Dotted lines
+/// across at -20 and -40 dB, as the compressor's, and fainter ones down it every `every` seconds.
+pub fn tail(pre: f32, seconds: [f32; 2], span: f32, every: f32, size: (usize, usize)) -> Plot {
+    let mut plot = Plot::new(size.0, size.1);
+    let span = span.max(1e-3);
+    for db in DYNAMICS_GRID_DB {
+        plot.across(1.0 + db / TIME_RANGE_DB, Mark::Grid);
+    }
+    if every > 0.0 {
+        let mut at = every;
+        while at < span {
+            plot.down(at / span, Mark::Fainter);
+            at += every;
+        }
+    }
+    let start = pre / span;
+    // Where a fall `seconds` long reaches the bottom, or the right edge on its way.
+    let fall = |seconds: f32| {
+        let end = (pre + seconds) / span;
+        if end <= 1.0 {
+            (end, 0.0)
+        } else {
+            (1.0, 1.0 - (1.0 - start) / (end - start))
+        }
+    };
+    let highs = fall(seconds[1]);
+    plot.dotted((start, 1.0), highs, Mark::Grid);
+    let lows = fall(seconds[0]);
+    let points = [(0.0, 0.0), (start, 0.0), (start, 1.0), lows].map(|(x, level)| plot.at(x, level));
+    plot.line(&points);
     plot
 }
 
@@ -862,6 +1028,138 @@ mod tests {
         // Above it the curve is flatter than the diagonal, so it ends below the top right.
         let end = middle(&plot, 193).unwrap();
         assert!(end > plot.at(1.0, 1.0).1 + 20.0, "{end}");
+    }
+
+    #[test]
+    fn a_combs_peaks_narrower_than_a_pixel_are_drawn_to_their_tops() {
+        use vt_engine::dsp::filters::comb;
+        use vt_model::insert::Comb;
+        // Ringing for seconds at middle C, its peaks are a few cents wide, and a pixel of 2100 is
+        // nearly six.
+        let settings = Comb {
+            feedback: 0xF8,
+            mix: 0xC0,
+            tone: 0xFF,
+            ..Comb::DEFAULT
+        };
+        let db_at = comb::response(settings, 60.0, 48_000);
+        let level = |x: f32| filter_level(db_at(frequency_at(x)));
+        let (width, height) = (2100, 624);
+        let found = peaks(&level, width);
+        let drawn = Filtering {
+            db_at: &db_at,
+            marked: Some(261.6),
+            opened: None::<fn(f32) -> f32>,
+        };
+        let plot = filtering(drawn, (width, height));
+        for harmonic in 1..=12 {
+            let hertz = 261.626 * harmonic as f32;
+            // Its top, as high as any found every tenth of a cent within 20 cents of the harmonic.
+            let top = (-200..=200)
+                .map(|tenth| level(frequency_x(hertz * (tenth as f32 / 12_000.0).exp2())))
+                .fold(f32::MIN, f32::max);
+            let at = found
+                .iter()
+                .copied()
+                .min_by(|a, b| {
+                    let off = |x: f32| (x - frequency_x(hertz)).abs();
+                    off(*a).total_cmp(&off(*b))
+                })
+                .unwrap();
+            assert!(level(at) > top - 0.5 / height as f32, "{harmonic}");
+            assert!(top < 1.0, "{harmonic} is in the picture: {top}");
+            // And the line goes up to it, within a pixel, unless it's past the top.
+            let (x, y) = plot.at(at, top);
+            let highest = (0..height)
+                .find(|row| plot.cover[row * width + x as usize] > 0)
+                .unwrap();
+            assert!(
+                (highest as f32 - y).abs() < 2.0,
+                "{harmonic}: {highest} against {y}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_delays_repeats_stand_up_for_the_left_and_down_for_the_right_as_loud_as_each_is() {
+        let (width, height) = (600, 200);
+        // The sound at full level both sides, a repeat on the left 20 dB down, and one on the
+        // right 40 dB down.
+        let sounds = [(0.0, [1.0, 1.0]), (0.5, [0.1, 0.0]), (1.0, [0.0, 0.01])];
+        let plot = repeats(&sounds, 0.25, 1.5, (width, height));
+        let column = |x: f32| plot.at(x, 0.5).0 as usize;
+        let covered = |x: usize| -> Vec<usize> {
+            (0..height)
+                .filter(|y| plot.cover[y * width + x] > 0)
+                .collect()
+        };
+        let reach = |x: f32| {
+            let rows = covered(column(x));
+            (*rows.first().unwrap() as f32, *rows.last().unwrap() as f32)
+        };
+        let (_, middle) = plot.at(0.0, 0.5);
+        // The sound reaches the top and the bottom.
+        let (top, bottom) = reach(0.0);
+        assert!(
+            top <= 1.0 && bottom >= height as f32 - 2.0,
+            "{top} {bottom}"
+        );
+        // -20 dB is two thirds of the way up the top half, and -40 a third of the way down.
+        let (top, bottom) = reach(0.5 / 1.5);
+        let (_, expected) = plot.at(0.0, 0.5 + 0.5 * (2.0 / 3.0));
+        assert!(
+            (top - expected).abs() < 2.0 && (bottom - middle).abs() < 2.0,
+            "{top} {bottom}"
+        );
+        let (top, bottom) = reach(1.0 / 1.5);
+        let (_, expected) = plot.at(0.0, 0.5 - 0.5 / 3.0);
+        assert!(
+            (bottom - expected).abs() < 2.0 && (top - middle).abs() < 2.0,
+            "{top} {bottom}"
+        );
+        // The beats are fainter lines down it.
+        let (beat, _) = plot.at(0.25 / 1.5, 0.0);
+        assert!((0..height).any(|y| plot.marks[y * width + beat as usize] == FAINTER));
+    }
+
+    #[test]
+    fn a_reverbs_tail_falls_60_db_in_its_decay_time_after_its_pre_delay() {
+        let (width, height) = (600, 200);
+        let plot = tail(0.5, [2.0, 1.0], 3.0, 1.0, (width, height));
+        // Before the pre-delay it's at the bottom, then it's at the top, and halfway through its
+        // fall it's halfway down.
+        let x = |seconds: f32| plot.at(seconds / 3.0, 0.0).0 as usize;
+        let first = |column: usize| (0..height).find(|y| plot.cover[y * width + column] > 0);
+        assert!(first(x(0.25)).unwrap() >= height - 3);
+        let (_, halfway) = plot.at(0.0, 0.5);
+        assert!((first(x(1.5)).unwrap() as f32 - halfway).abs() < 2.0);
+        // Past its decay time there's nothing.
+        assert_eq!(first(x(2.8)), None);
+        // The highs' dotted line is half way down after half a second.
+        let (_, half) = plot.at(0.0, 0.5);
+        assert!(
+            (0..height)
+                .filter(|y| (*y as f32 - half).abs() < 3.0)
+                .any(|y| plot.marks[y * width + x(1.0)] == GRID)
+        );
+    }
+
+    #[test]
+    fn a_gates_curve_opened_all_the_way_is_dotted_under_it() {
+        let flat = |_: f32| -12.0;
+        let drawn = Filtering {
+            db_at: flat,
+            marked: None,
+            opened: Some(|_: f32| 0.0),
+        };
+        let plot = filtering(drawn, (600, 200));
+        // The 0 dB line is a gridline too, so the opened curve is looked for a little above it.
+        let (_, y) = plot.at(0.5, filter_level(0.0));
+        let row: Vec<u8> = (0..600)
+            .map(|x| plot.marks[(y as usize) * 600 + x])
+            .collect();
+        assert!(row.contains(&FAINTER));
+        assert!(row.contains(&0), "dotted");
     }
 
     #[test]

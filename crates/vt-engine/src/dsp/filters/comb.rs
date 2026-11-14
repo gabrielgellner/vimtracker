@@ -39,8 +39,9 @@ use std::f32::consts::{FRAC_1_SQRT_2, PI, TAU};
 use vt_model::insert::{Comb as Settings, CombMode, from_middle, shift_semitones};
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::blocks::response::{Gain, one_pole, warped};
 use crate::dsp::blocks::smoother::Smoothed;
-use crate::dsp::effects::resonator::{Limiter, semitones};
+use crate::dsp::effects::resonator::{Limiter, QUIET_GAIN, semitones};
 
 /// How many frames it plays between workings-out of its loop, about a millisecond and a half at
 /// 48 kHz.
@@ -361,8 +362,7 @@ pub struct Comb {
 impl Comb {
     /// Lines long enough for a cycle of the lowest note, with the band's delay put back.
     pub fn new(rate: u32) -> Self {
-        let longest = 1.25 * rate as f32 / LOWEST_HZ;
-        let size = (longest.ceil() as usize + 8).next_power_of_two();
+        let size = mask_at(rate) + 1;
         Self {
             lines: [vec![0.0; size], vec![0.0; size]],
             mask: size - 1,
@@ -380,9 +380,7 @@ impl Comb {
             step: Loop::default(),
             target: Loop::default(),
             worked_from: [f32::NAN; 5],
-            warped: std::array::from_fn(|band| {
-                (PI * (band as f32 + 0.5) / (2 * BANDS) as f32).tan()
-            }),
+            warped: warped_bands(),
             limiter: Limiter::new(rate),
             left: 0,
             fresh: true,
@@ -516,7 +514,7 @@ impl Comb {
             .any(|(now, then)| (now - then).abs() >= 1e-4 || then.is_nan());
         if moved {
             self.worked_from = values;
-            self.target = self.worked_out(values);
+            self.target = worked_out(values, self.rate, self.mask, &self.target, &self.warped);
             // A read that wasn't heard starts where it's now going.
             if previous.polarity >= 1.0 {
                 previous.falling = self.target.falling;
@@ -536,129 +534,216 @@ impl Comb {
         }
     }
 
-    /// The loop for a note and settings.
-    fn worked_out(&self, [note, feedback, tone, spread, flange]: [f32; 5]) -> Loop {
-        let rate = self.rate as f32;
-        let hertz = (440.0 * semitones(note - 69.0))
-            .clamp(LOWEST_HZ, HIGHEST_HZ.min(rate / SHORTEST_CYCLE));
-        // As a fraction of the rate, and the frames in a cycle.
-        let f0 = hertz / rate;
-        let cycle = 1.0 / f0;
-
-        // The band's edges, in semitones from the note: `Tone` takes its low-pass from the note
-        // to eight octaves up, and `Spread` takes its high-pass from there down to eight octaves
-        // under the note.
-        let top = tone * HIGHEST_TONE;
-        let bottom = top + (LOWEST_CUT - top) * spread;
-        let warped =
-            |semitones_up: f32| (PI * (f0 * semitones(semitones_up)).min(HIGHEST_CUTOFF)).tan();
-        let low = warped(top);
-        let high = warped(bottom);
-        let cleaning = warped(COMB_CLEANING + (FLANGE_CLEANING - COMB_CLEANING) * flange);
-        // Vital's: the two one-poles together pass `1 / (1 + high / low)` at their peak.
-        let boost = 1.0 + high / low;
-
-        // Vital's curve, so more of `Feedback` is spent where it rings longest.
-        let amount = feedback.abs().sqrt() * MOST_FEEDBACK;
-        let polarity = (1.0 + feedback / POLARITY_SPAN).clamp(0.0, 1.0);
-
-        // The loop's peaks sit where it goes round in a whole number of cycles: a cycle less the
-        // band's delay, or half a cycle turned over for the odd harmonics alone. Each harmonic's
-        // turn a frame is found from the note's.
-        let (sin, cos) = (TAU * f0).sin_cos();
-        let tuned = |period: f32, harmonics: &[(f32, f32)]| {
-            // How long each harmonic rings, raised high enough that what rings longest decides.
-            let mut found = [([0.0; 2], (0.0, 0.0), 0.0); HARMONICS.len()];
-            let (mut turn, mut at) = ([sin, cos], 1.0);
-            for (found, &(harmonic, stands_for)) in found.iter_mut().zip(harmonics) {
-                if f0 * harmonic > HIGHEST_CUTOFF {
-                    break;
-                }
-                // Turning by the note's turn until it's at the harmonic's.
-                while at < harmonic {
-                    let [turn_sin, turn_cos] = turn;
-                    turn = [
-                        turn_sin * cos + turn_cos * sin,
-                        turn_cos * cos - turn_sin * sin,
-                    ];
-                    at += 1.0;
-                }
-                let response = band_response(turn, 1.0, low, high, boost);
-                let rings = response.0 / (1.001 - amount * response.0);
-                *found = (
-                    turn,
-                    response,
-                    stands_for * (rings * rings) * (rings * rings),
-                );
-            }
-            let most = found.iter().fold(0.0_f32, |most, found| most.max(found.2));
-            let (mut delay, mut frequency, mut total) = (0.0, 0.0, 0.0);
-            for (&(turn, response, weight), &(harmonic, _)) in found.iter().zip(harmonics) {
-                // Those that hardly ring make little difference, and cost as much.
-                if weight > most * 1e-3 {
-                    let omega = TAU * f0 * harmonic;
-                    let band = [low, high, boost];
-                    delay += weight * pole_delay(omega, turn, response, period, amount, band);
-                    frequency += weight * omega;
-                    total += weight;
-                }
-            }
-            read_for(delay / total, frequency / total).clamp(2.0, (self.mask - 3) as f32)
-        };
-        // A read that's not heard isn't worked out, and starts where it's first needed.
-        let rising = if polarity > 0.0 || self.target.polarity > 0.0 {
-            tuned(cycle, &HARMONICS)
-        } else {
-            self.target.rising
-        };
-        let falling = if polarity < 1.0 || self.target.polarity < 1.0 {
-            tuned(cycle * 0.5, &ODD_HARMONICS)
-        } else {
-            self.target.falling
-        };
-
-        // How loud a hit comes out, worked out from the power it passes across the band, with as
-        // many of its echoes as go round within a hit.
-        let echoes =
-            (HIT_SECONDS * rate / (rising * polarity + falling * (1.0 - polarity))).max(1.0);
-        let (mut combed, mut flanged) = (0.0, 0.0);
-        for &warped in &self.warped {
-            let gain = band_gain(warped, low, high, boost);
-            let passed = gain * gain;
-            // What's left of it after as many times round as fit in a hit, and one fewer.
-            let round = (amount * amount * passed).max(1e-12);
-            let left = round.powf(echoes);
-            combed += geometric(round, left, echoes);
-            flanged += passed * geometric(round, left / round, echoes - 1.0);
-        }
-        // Vital turns down what goes into a comb as its feedback rises, and what comes straight
-        // out of a flanger.
-        let comb_input = 1.0 - amount * amount * 0.5;
-        let flange_direct = 1.0 / (1.0 + amount);
-        let combed = comb_input * comb_input * combed / BANDS as f32;
-        let flanged = 0.5 * (flange_direct * flange_direct + flanged / BANDS as f32);
-        let power = combed + (flanged - combed) * flange;
-
-        Loop {
-            rising,
-            falling,
-            polarity,
-            low: low / (1.0 + low),
-            high: high / (1.0 + high),
-            boost,
-            feedback: amount,
-            input: comb_input + (FLANGE_SCALE - comb_input) * flange,
-            dry: comb_input + (FLANGE_SCALE * flange_direct - comb_input) * flange,
-            cleaning: cleaning / (1.0 + cleaning),
-            flange,
-            level: LEVEL / power.sqrt(),
-        }
-    }
-
     /// How far its limiter is turning down now, as a gain, for its tests.
     #[cfg(test)]
     fn limiting(&self) -> f32 {
         self.limiter.gain()
+    }
+}
+
+/// `tan(pi f)` at `BANDS` frequencies evenly across the band, for working out how loud it is.
+fn warped_bands() -> [f32; BANDS] {
+    std::array::from_fn(|band| (PI * (band as f32 + 0.5) / (2 * BANDS) as f32).tan())
+}
+
+/// How long the lines are at a rate, less one: a cycle of the lowest note, with room for the band's
+/// delay, rounded up to a power of two.
+fn mask_at(rate: u32) -> usize {
+    let longest = 1.25 * rate as f32 / LOWEST_HZ;
+    (longest.ceil() as usize + 8).next_power_of_two() - 1
+}
+
+/// The loop for a note and settings, at a rate, with lines `mask` long. A read that isn't heard
+/// is left where it was in `was`, unless it's being faded from.
+fn worked_out(
+    [note, feedback, tone, spread, flange]: [f32; 5],
+    rate: u32,
+    mask: usize,
+    was: &Loop,
+    warped_bands: &[f32; BANDS],
+) -> Loop {
+    let rate = rate as f32;
+    let hertz =
+        (440.0 * semitones(note - 69.0)).clamp(LOWEST_HZ, HIGHEST_HZ.min(rate / SHORTEST_CYCLE));
+    // As a fraction of the rate, and the frames in a cycle.
+    let f0 = hertz / rate;
+    let cycle = 1.0 / f0;
+
+    // The band's edges, in semitones from the note: `Tone` takes its low-pass from the note
+    // to eight octaves up, and `Spread` takes its high-pass from there down to eight octaves
+    // under the note.
+    let top = tone * HIGHEST_TONE;
+    let bottom = top + (LOWEST_CUT - top) * spread;
+    let warped =
+        |semitones_up: f32| (PI * (f0 * semitones(semitones_up)).min(HIGHEST_CUTOFF)).tan();
+    let low = warped(top);
+    let high = warped(bottom);
+    let cleaning = warped(COMB_CLEANING + (FLANGE_CLEANING - COMB_CLEANING) * flange);
+    // Vital's: the two one-poles together pass `1 / (1 + high / low)` at their peak.
+    let boost = 1.0 + high / low;
+
+    // Vital's curve, so more of `Feedback` is spent where it rings longest.
+    let amount = feedback.abs().sqrt() * MOST_FEEDBACK;
+    let polarity = (1.0 + feedback / POLARITY_SPAN).clamp(0.0, 1.0);
+
+    // The loop's peaks sit where it goes round in a whole number of cycles: a cycle less the
+    // band's delay, or half a cycle turned over for the odd harmonics alone. Each harmonic's
+    // turn a frame is found from the note's.
+    let (sin, cos) = (TAU * f0).sin_cos();
+    let tuned = |period: f32, harmonics: &[(f32, f32)]| {
+        // How long each harmonic rings, raised high enough that what rings longest decides.
+        let mut found = [([0.0; 2], (0.0, 0.0), 0.0); HARMONICS.len()];
+        let (mut turn, mut at) = ([sin, cos], 1.0);
+        for (found, &(harmonic, stands_for)) in found.iter_mut().zip(harmonics) {
+            if f0 * harmonic > HIGHEST_CUTOFF {
+                break;
+            }
+            // Turning by the note's turn until it's at the harmonic's.
+            while at < harmonic {
+                let [turn_sin, turn_cos] = turn;
+                turn = [
+                    turn_sin * cos + turn_cos * sin,
+                    turn_cos * cos - turn_sin * sin,
+                ];
+                at += 1.0;
+            }
+            let response = band_response(turn, 1.0, low, high, boost);
+            let rings = response.0 / (1.001 - amount * response.0);
+            *found = (
+                turn,
+                response,
+                stands_for * (rings * rings) * (rings * rings),
+            );
+        }
+        let most = found.iter().fold(0.0_f32, |most, found| most.max(found.2));
+        let (mut delay, mut frequency, mut total) = (0.0, 0.0, 0.0);
+        for (&(turn, response, weight), &(harmonic, _)) in found.iter().zip(harmonics) {
+            // Those that hardly ring make little difference, and cost as much.
+            if weight > most * 1e-3 {
+                let omega = TAU * f0 * harmonic;
+                let band = [low, high, boost];
+                delay += weight * pole_delay(omega, turn, response, period, amount, band);
+                frequency += weight * omega;
+                total += weight;
+            }
+        }
+        read_for(delay / total, frequency / total).clamp(2.0, (mask - 3) as f32)
+    };
+    // A read that's not heard isn't worked out, and starts where it's first needed.
+    let rising = if polarity > 0.0 || was.polarity > 0.0 {
+        tuned(cycle, &HARMONICS)
+    } else {
+        was.rising
+    };
+    let falling = if polarity < 1.0 || was.polarity < 1.0 {
+        tuned(cycle * 0.5, &ODD_HARMONICS)
+    } else {
+        was.falling
+    };
+
+    // How loud a hit comes out, worked out from the power it passes across the band, with as
+    // many of its echoes as go round within a hit.
+    let echoes = (HIT_SECONDS * rate / (rising * polarity + falling * (1.0 - polarity))).max(1.0);
+    let (mut combed, mut flanged) = (0.0, 0.0);
+    for &warped in warped_bands {
+        let gain = band_gain(warped, low, high, boost);
+        let passed = gain * gain;
+        // What's left of it after as many times round as fit in a hit, and one fewer.
+        let round = (amount * amount * passed).max(1e-12);
+        let left = round.powf(echoes);
+        combed += geometric(round, left, echoes);
+        flanged += passed * geometric(round, left / round, echoes - 1.0);
+    }
+    // Vital turns down what goes into a comb as its feedback rises, and what comes straight
+    // out of a flanger.
+    let comb_input = 1.0 - amount * amount * 0.5;
+    let flange_direct = 1.0 / (1.0 + amount);
+    let combed = comb_input * comb_input * combed / BANDS as f32;
+    let flanged = 0.5 * (flange_direct * flange_direct + flanged / BANDS as f32);
+    let power = combed + (flanged - combed) * flange;
+
+    Loop {
+        rising,
+        falling,
+        polarity,
+        low: low / (1.0 + low),
+        high: high / (1.0 + high),
+        boost,
+        feedback: amount,
+        input: comb_input + (FLANGE_SCALE - comb_input) * flange,
+        dry: comb_input + (FLANGE_SCALE * flange_direct - comb_input) * flange,
+        cleaning: cleaning / (1.0 + cleaning),
+        flange,
+        level: LEVEL / power.sqrt(),
+    }
+}
+
+/// What a read between samples `frames` back does to a sine `turn` cycles a frame: the
+/// Catmull-Rom weights on the four frames around it, as [`Comb::read`] has them.
+fn read_gain(turn: f64, frames: f32) -> Gain {
+    let whole = frames.floor();
+    let weights = weights(frames - whole);
+    (0..4).fold(Gain::ZERO, |sum, at| {
+        let back = f64::from(whole) - 1.0 + at as f64;
+        sum.plus(Gain::late(turn, back).scale(f64::from(weights[at])))
+    })
+}
+
+/// How much a `Comb` slot leaves a quiet sine at each frequency, in Hz, in dB, once it's settled
+/// on its settings and the track's `note`: the loop it plays with, its reads between samples, its band's
+/// one-poles and the high-passes cleaning what goes in, worked out from their own coefficients,
+/// heard as a comb or a flanger, through the limiter's quiet 0.8, and mixed with the sound by
+/// `Mix`, before `Gain`. For drawing its curve on the FX page's zoom (decision 333).
+pub fn response(settings: Settings, note: f32, rate: u32) -> impl Fn(f32) -> f32 {
+    let feedback = from_middle(f32::from(settings.feedback));
+    let values = [
+        note + shift_semitones(f32::from(settings.tune)),
+        feedback,
+        f32::from(settings.tone) / 255.0,
+        f32::from(settings.spread) / 255.0,
+        match settings.mode {
+            CombMode::Comb => 0.0,
+            CombMode::Flange => 1.0,
+        },
+    ];
+    // Both reads, so whichever is heard is there.
+    let was = Loop {
+        polarity: 0.5,
+        ..Loop::default()
+    };
+    let at = worked_out(values, rate, mask_at(rate), &was, &warped_bands());
+    let mix = f64::from(settings.mix) / 255.0;
+    move |hertz| at.response(hertz, rate, mix)
+}
+
+impl Loop {
+    /// What the loop does to a quiet sine at `hertz`, in dB, mixed with the sound by `mix`.
+    fn response(&self, hertz: f32, rate: u32, mix: f64) -> f32 {
+        let turn = f64::from(hertz) / f64::from(rate);
+        let along = warped(turn);
+        // The one-poles' `g`s, from the gains they play with, `g / (1 + g)`.
+        let analog = |gain: f32| f64::from(gain / (1.0 - gain));
+        let [low, _] = one_pole(along / analog(self.low));
+        let [_, high] = one_pole(along / analog(self.high));
+        let [_, cleaned] = one_pole(along / analog(self.cleaning));
+        let band = low.times(high).scale(f64::from(self.boost));
+        let read = read_gain(turn, self.rising)
+            .scale(f64::from(self.polarity))
+            .minus(read_gain(turn, self.falling).scale(f64::from(1.0 - self.polarity)));
+        // What goes into the line comes round through the read and the band, and again.
+        let round = band.times(read);
+        let line = cleaned
+            .times(cleaned)
+            .scale(f64::from(self.input))
+            .over(Gain::ONE.minus(round.scale(f64::from(self.feedback))));
+        // A comb is heard as what's fed back, and a flanger as all of what comes round.
+        let heard = f64::from(self.feedback + (1.0 - self.feedback) * self.flange);
+        let wet = round
+            .times(line)
+            .scale(heard)
+            .plus(Gain::real(f64::from(self.dry)))
+            .scale(f64::from(self.level * QUIET_GAIN));
+        wet.scale(mix).plus(Gain::real(1.0 - mix)).db()
     }
 }
 
@@ -794,6 +879,65 @@ mod tests {
             .unwrap();
         let wanted = hertz * harmonic as f32;
         (harmonic, cents(strongest_near(&tail, wanted, rate), wanted))
+    }
+
+    #[test]
+    fn its_curve_is_what_a_sweep_through_the_slot_measures() {
+        use vt_model::insert::Insert;
+
+        use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
+        use crate::track_state::Keys;
+        // Each long enough for its loop, ringing longest, to settle within 0.01 dB.
+        let cases = [
+            (Settings::DEFAULT, 60.0, 3.0),
+            // A flanger reading half a cycle back, turned over, half wet.
+            (
+                Settings {
+                    mode: CombMode::Flange,
+                    feedback: 0x30,
+                    mix: 0x80,
+                    ..Settings::DEFAULT
+                },
+                52.0,
+                2.0,
+            ),
+            // A fifth down, a narrow band high up, ringing long.
+            (
+                Settings {
+                    tune: MOST_SHIFT - 7,
+                    feedback: 0xF8,
+                    tone: 0xFF,
+                    spread: 0x60,
+                    ..Settings::DEFAULT
+                },
+                67.0,
+                6.0,
+            ),
+            // A dark comb ringing on the odd harmonics, low down.
+            (
+                Settings {
+                    feedback: 0x08,
+                    tone: 0x30,
+                    ..Settings::DEFAULT
+                },
+                40.0,
+                4.0,
+            ),
+        ];
+        for (settings, note, settle) in cases {
+            let mut state = slot(Insert::Comb(settings), note, RATE);
+            let hertz = 440.0 * semitones(note + shift_semitones(f32::from(settings.tune)) - 69.0);
+            // Its first few harmonics, where its peaks are, or its notches as a flanger.
+            let harmonics = (1..=6).map(|harmonic| hertz * harmonic as f32);
+            for hertz in across(30).chain(harmonics) {
+                let measured = measured_db(&mut state, hertz, settle, RATE, &Keys::default());
+                let curve = response(settings, note, RATE)(hertz);
+                assert!(
+                    agrees(curve, measured),
+                    "{settings:?} at {hertz} Hz: {curve} dB against {measured}"
+                );
+            }
+        }
     }
 
     #[test]

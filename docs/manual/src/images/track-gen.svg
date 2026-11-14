@@ -96,19 +96,24 @@
 <text x="27" y="261" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">From      </text>
 <text x="117" y="261" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">C-3  </text>
 <text x="162" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
-<text x="171" y="261" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">███▋     </text>
-<text x="252" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="288" y="261" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Octave    </text>
-<text x="378" y="261" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">20%  </text>
-<text x="423" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
-<text x="432" y="261" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█▊       </text>
-<text x="513" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="549" y="261" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Density   </text>
-<rect x="639" y="247" width="27" height="19" fill="#f2d5cf"/>
-<text x="639" y="261" fill="#303446" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">50%</text>
-<text x="684" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
-<text x="693" y="261" fill="#ca9ee6" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">████▌</text>
-<text x="738" y="261" fill="#737994" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">░░░░▏</text>
+<text x="171" y="261" fill="#ca9ee6" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█▏ </text>
+<text x="198" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="225" y="261" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Octave    </text>
+<text x="315" y="261" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">20%  </text>
+<text x="360" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="369" y="261" fill="#ca9ee6" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌  </text>
+<text x="396" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="423" y="261" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Density   </text>
+<text x="513" y="261" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">50%  </text>
+<text x="558" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="567" y="261" fill="#ca9ee6" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█▌ </text>
+<text x="594" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="621" y="261" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Spread    </text>
+<rect x="711" y="247" width="27" height="19" fill="#f2d5cf"/>
+<text x="711" y="261" fill="#303446" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">50%</text>
+<text x="756" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="765" y="261" fill="#ca9ee6" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█▌</text>
+<text x="783" y="261" fill="#737994" textLength="18" lengthAdjust="spacingAndGlyphs" xml:space="preserve">░▏</text>
 <text x="864" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="261" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="261" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│     </text>
@@ -126,13 +131,18 @@
 <text x="27" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">To        </text>
 <text x="117" y="299" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">C-4  </text>
 <text x="162" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
-<text x="171" y="299" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">████▋    </text>
-<text x="252" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="288" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Accent    </text>
-<text x="378" y="299" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">30%  </text>
-<text x="423" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
-<text x="432" y="299" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">██▋      </text>
-<text x="513" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="171" y="299" fill="#ca9ee6" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█▌ </text>
+<text x="198" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="225" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Accent    </text>
+<text x="315" y="299" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">30%  </text>
+<text x="360" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="369" y="299" fill="#ca9ee6" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▉  </text>
+<text x="396" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="621" y="299" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Bias      </text>
+<text x="711" y="299" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">0    </text>
+<text x="756" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="765" y="299" fill="#ca9ee6" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> │ </text>
+<text x="792" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="864" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="299" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="299" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│     </text>
@@ -150,13 +160,13 @@
 <text x="27" y="337" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Notes     </text>
 <text x="117" y="337" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">4    </text>
 <text x="162" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
-<text x="171" y="337" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">███▊     </text>
-<text x="252" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
-<text x="288" y="337" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Slide     </text>
-<text x="378" y="337" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">20%  </text>
-<text x="423" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
-<text x="432" y="337" fill="#ca9ee6" textLength="81" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█▊       </text>
-<text x="513" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="171" y="337" fill="#ca9ee6" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">█▎ </text>
+<text x="198" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
+<text x="225" y="337" fill="#949cbb" textLength="90" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Slide     </text>
+<text x="315" y="337" fill="#c6d0f5" textLength="45" lengthAdjust="spacingAndGlyphs" xml:space="preserve">20%  </text>
+<text x="360" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▕</text>
+<text x="369" y="337" fill="#ca9ee6" textLength="27" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▌  </text>
+<text x="396" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▏</text>
 <text x="864" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1314" y="337" fill="#737994" textLength="9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
 <text x="1341" y="337" fill="#949cbb" textLength="54" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│     </text>
@@ -300,10 +310,10 @@
 <text x="1350" y="755" fill="#949cbb" textLength="108" lengthAdjust="spacingAndGlyphs" xml:space="preserve">     L  R  G</text>
 <rect x="0" y="760" width="63" height="19" fill="#8caaee"/>
 <text x="0" y="774" fill="#303446" font-weight="bold" textLength="63" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> TRACK </text>
-<rect x="63" y="760" width="378" height="19" fill="#51576d"/>
-<text x="63" y="774" fill="#c6d0f5" font-weight="bold" textLength="378" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Density, 50%: on macro 2 Dense, 0 to 100 </text>
-<use href="#sf040a" transform="matrix(0.0043945313 0 0 -0.0043945313 450 772.19824)" fill="#a6d189"/>
-<text x="459" y="774" fill="#c6d0f5" textLength="1008" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  120 BPM  Groove Straight  Oct 3 Vel 64  TVol E0 *                                                             </text>
+<rect x="63" y="760" width="369" height="19" fill="#51576d"/>
+<text x="63" y="774" fill="#c6d0f5" font-weight="bold" textLength="369" lengthAdjust="spacingAndGlyphs" xml:space="preserve"> Spread, 50%: on macro 2 Dense, 0 to 100 </text>
+<use href="#sf040a" transform="matrix(0.0043945313 0 0 -0.0043945313 441 772.19824)" fill="#a6d189"/>
+<text x="450" y="774" fill="#c6d0f5" textLength="1017" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  120 BPM  Groove Straight  Oct 3 Vel 64  TVol E0 *                                                              </text>
 <image x="1359" y="0" width="108" height="57" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANgAAABsAQMAAAAyte7NAAAABlBMVEUAAACUnLveOgbxAAAAAXRSTlMAQObYZgAAC9tJREFUeAEB0Asv9AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///////////////////////////////////8A////////////////////////////////////AP///////////////////////////////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHPTULAMhoX3AAAAAElFTkSuQmCC"/>
 <image x="873" y="247" width="441" height="95" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAt8AAADDBAMAAACor2A+AAAAIVBMVEUAAACm0Ymm0Ymm0Ymm0Ymm0Ymm0Ymm0Ymm0YlzeZRzeZShUlc6AAAAC3RSTlMAHz9ff5+/3/+MWoKT++0AAADZSURBVHic7d29CsIwFAXg6w/OKrgXB2dHRydxdHQV0VfQWRD62O4XCq00g/b7HuAcuEsSCElET451UgUlGTgAAAAAAAAAAH9t+kguQUmzfCPpFRS1SOYBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEBrq3uyje4OKeMWNNnlfw1O0d0zh3irv9F4ncQXln2EAACt9bKAd5MbqxiSY95d7qOwSW58x5Bs8iGsisJGufEaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwk851UgUldRn4B3tBfUghMuu5AAAAAElFTkSuQmCC"/>
 <svg x="1021.8" y="337.6154" width="5.4" height="4.3846154" overflow="hidden"><image width="5.4" height="4.3846154" preserveAspectRatio="none" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJBAMAAAASvxsjAAAAIVBMVEUAAACm0Ymm0Ymm0Ymm0Ymm0Ymm0Ymm0Ymm0YlzeZRzeZShUlc6AAAAC3RSTlMAHz9ff5+/3/+MWoKT++0AAAAuSURBVHicLYohDgAgEIBIvsumzzEaTcqzvXkWxhjQToWiG7pamcFBwPU9ez7vv9E7ETUGGBKzAAAAAElFTkSuQmCC"/></svg>
