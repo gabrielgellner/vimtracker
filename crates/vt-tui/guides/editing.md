@@ -86,7 +86,7 @@ nothing to shape there, like a velocity with no notes, is left alone.
 
 | Row | Does |
 |---|---|
-| Fill | `Ramp`, `Random`, `Walk`, `Wave`, `Acid`, `Grids`, `Divisions`, `Ring`, `Tonnetz` and more |
+| Fill | `Ramp`, `Random`, `Walk`, `Wave`, `Acid`, `Grids`, `Ring`, `Tonnetz` and more |
 | From, To | The ends. `~` swaps them |
 | Curve | Bends a ramp. Above 0 it moves early, and below 0 late |
 | S | Eases a ramp's ends. Above 0 makes an S, and below 0 the reverse |
@@ -541,11 +541,11 @@ Tonnetz, the lattice of the twelve notes by fifths and thirds, after Ornament &
 Crime's Harrington 1200 and Automatonnetz. Each move keeps two notes of a major
 or minor triad and moves the third by a semitone or a tone:
 
-| Move | Does | From C major |
+| Move | Does | C major to |
 |---|---|---|
-| `P`, parallel | The third a semitone, major to minor on one root | C minor |
-| `L`, leading-tone | A major chord's root down a semitone, a minor's fifth up one | E minor |
-| `R`, relative | A major chord's fifth up a tone, a minor's root down one | A minor |
+| `P` | Parallel: the third a semitone | C minor |
+| `L` | Leading-tone: major root down a semitone, minor fifth up | E minor |
+| `R` | Relative: major fifth up a tone, minor root down | A minor |
 
 Each undoes itself: `L` from E minor is C major again. The first row `Where`
 chooses plays the chord on `From`, and each row it chooses after plays the next
@@ -557,8 +557,8 @@ a beat, and on a track at `1/2`, `All rows` is a chord each half note.
 | From | The first chord's root |
 | Triad | Whether the first chord is `Major` or `Minor` |
 | Voice | What the track writes: `Chord`, `Root`, `Low`, `Mid` or `High` |
-| Moves | `List`, the moves as typed, going round; `Random`, each drawn by its weight; or `Loop`, a loop of so many drawn by weight |
-| List | The moves, typed with `i` as letters, like `plrl` or `P L R L`, up to 8 |
+| Moves | `List`, as typed; `Random`, each by weight; `Loop`, a loop by weight |
+| List | The moves, typed with `i` as letters, like `plrl`, up to 8 |
 | P, L, R | Each move's weight, 0 to 9, for `Random` and `Loop` |
 | Length | How many moves a `Loop` draws before it goes round, 1 to 16 |
 | Scale | `Free`, or `In scale`: only moves that keep to the song's scale |
@@ -566,7 +566,7 @@ a beat, and on a track at `1/2`, `All rows` is a chord each half note.
 The panel's last line names the first chords, as `C Cm G# Fm C# C#m A F#m` for
 `P L R L` from `C-3`.
 
-**On the `Chord` voice.** `Voice` `Chord` writes each row's root, within a
+**On the Chord voice.** `Voice` `Chord` writes each row's root, within a
 tritone of `From`, and locks the voice's `Chord` to `M` or `m` in the first FX
 slot that's free, or the one that already locks it, so one track plays the whole
 progression; the row's other FX stay. On the `Chord` voice the panel starts on
