@@ -103,6 +103,10 @@ impl App {
     fn complete_line(&self) -> crate::input::completion::Completions {
         let kit_folders = self.settings.kit_folders();
         let presets = self.presets_here();
+        let patches = self
+            .settings
+            .preset_folder()
+            .map(|folder| folder.join(vt_model::preset::PresetKind::Patch.folder()));
         let home = home_folder();
         complete(
             &self.command_line,
@@ -110,6 +114,7 @@ impl App {
                 kit_folders: &kit_folders,
                 home: home.as_deref(),
                 presets: presets.as_deref(),
+                patches: patches.as_deref(),
             },
         )
     }

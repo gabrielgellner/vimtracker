@@ -14,7 +14,7 @@ use vt_model::tracking::{Source, Tracking};
 
 use crate::app::App;
 use crate::glyphs;
-use crate::input::command::{Line, PresetLine};
+use crate::input::command::{Line, PatchLine, PresetLine};
 use crate::input::picker::{Item, Pick, Picker};
 use crate::views::track::IN_SCALE_PITCH;
 use vt_model::preset::PresetKind;
@@ -77,13 +77,16 @@ use super::{AccumulatorField, ArpField, Control, ModField};
 /// The machines' list draws each with its icon, so these have the presets folder's, which also
 /// keeps a search for a machine, as `sa` for `Sampler`, from finding them first.
 fn with_presets(mut items: Vec<Item>, kind: PresetKind) -> Vec<Item> {
+    if kind == PresetKind::Patch {
+        return with_patches(items);
+    }
     let (what, icon) = match kind {
         PresetKind::Sound => ("sound preset", format!("{} ", glyphs::FOLDER)),
-        PresetKind::Effect => ("effect preset", String::new()),
+        _ => ("effect preset", String::new()),
     };
     let (load, into) = match kind {
         PresetKind::Sound => ("a", "keeping the track's phrases, level and sends"),
-        PresetKind::Effect => ("an", "into this slot"),
+        _ => ("an", "into this slot"),
     };
     items.push(
         Item::new(
@@ -103,6 +106,28 @@ fn with_presets(mut items: Vec<Item>, kind: PresetKind) -> Vec<Item> {
     );
     items
 }
+
+/// A list on the Mod page or the macros, with adding a patch and saving the track's as one after
+/// it (decision 311).
+pub(crate) fn with_patches(mut items: Vec<Item>) -> Vec<Item> {
+    items.push(
+        Item::new(
+            "Add a patch",
+            Pick::Line(Line::Patch(PatchLine::Browse { over: false })),
+        )
+        .meaning(":patch, into free mod slots and macros, keeping the sound")
+        .category(PATCHES),
+    );
+    items.push(
+        Item::new("Save as a patch", Pick::Prompt("patch save ".to_owned()))
+            .meaning(":patch save, the macros and what they move, then its name")
+            .category(PATCHES),
+    );
+    items
+}
+
+/// The heading the patch items are listed under.
+const PATCHES: &str = "Patches";
 
 /// The heading the preset items are listed under.
 const PRESETS: &str = "Presets";
@@ -170,6 +195,11 @@ impl App {
         }
         if let Control::Arpeggio(field) = self.track_control() {
             self.open_arpeggio_picker(field);
+            return;
+        }
+        // A macro is the patch's knob, so its list is adding a patch and saving one.
+        if let Control::Macro(_) = control {
+            self.show_picker(Picker::new("Patches", with_patches(Vec::new())));
             return;
         }
         let Control::Mod(slot, field) = self.track_control() else {
@@ -456,7 +486,7 @@ impl App {
                     Item::new(kind.name(), pick(ModSlot { kind, ..modulator }))
                         .meaning(kind.meaning())
                 });
-                (TYPE_TITLES[slot], kinds.to_vec())
+                (TYPE_TITLES[slot], with_patches(kinds.to_vec()))
             }
             ModField::Mode if modulator.kind == ModKind::Adsr => {
                 let curves = Curve::ALL.map(|curve| {

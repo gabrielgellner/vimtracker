@@ -179,6 +179,7 @@ impl App {
             Line::Label(label) => self.label_chain(label),
             Line::MacroName(name) => self.name_macro(&name),
             Line::Preset(line) => self.preset_line(line),
+            Line::Patch(line) => self.patch_line(line),
             Line::TrackLevel(level) => self.apply(&Action::SetTrackLevel {
                 track: self.cursor.track,
                 level,

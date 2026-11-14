@@ -1683,6 +1683,53 @@ the slots all start in; an effect replaces only the slot under the cursor. The l
 preset with what it is beside it, as `Acid · Distort Delay · 3 macros`, a sound by its machine's
 icon, and the folder you last saved in or loaded from at its top.
 
+## Patches
+
+A patch is what plays a sound without the sound: a track's macros and the parts they move, saved
+to add to any other track while it keeps its own machine, filter and effects, as Live's MIDI
+Effect Rack presets go in front of whatever instrument is there. A Steps slot with `Change`,
+`Length` and `Range` on it is a Turing Machine you can put on an `Acid`, a `VA` or a kick. Patches
+are kept in the presets folder's `patches`, beside `sounds` and `effects`.
+
+**What's saved** goes by the macros, as they're the patch's knobs: each macro that holds
+something, with its name, value, mappings and ranges; every mod slot a macro maps to, the slots
+those go to in turn, and any slot going to one of them, as an LFO on a macro or on a slot's
+`Depth`; the accumulator and the arpeggio if any of that reaches them; and the live generators of
+the phrase under the cursor that a macro holds by its column, with their shapes. Never the
+machine, the filter, the output or the effects: a macro mapped to one of those keeps the mapping
+by the setting's name, and on a track without that setting it does nothing. A track whose macros
+hold nothing has no patch to save; a sound preset (`:preset save`) keeps the whole track instead.
+
+| Command | Does |
+|---|---|
+| `:patch` | List the patches, to add one to this track |
+| `:patch!` | The same, over the last ones if too few are free |
+| `:patch save Turing` | Save the track's patch under that name |
+| `:patch! save Turing` | Save it, writing over one |
+| `:patch load Turing` | Add that one |
+| `:patch! load Turing` | Add it, over the last ones if too few are free |
+
+**Adding** one is one undo step. Its mod slots go into the track's free ones, a free slot being
+one going nowhere (`Dest` `---`) that nothing reaches, and its macros into free macros, ones
+holding nothing, each in order, so a slot still reaches the slots after it. Every mapping and
+`Dest` among them is renumbered to where they went: a Turing Machine saved from `Mod 4` and added
+to a track whose first two slots shape its note and cutoff goes into `Mod 3`, and `Change` turns
+`Mod 3`'s `Mutate`. A macro already holding something is never added to. A setting the patch's
+macros hold comes off any of the track's own macros, as a setting is on one macro at most. Its
+generators go onto the phrase under the cursor over its loop, as `S` would: an empty Note column
+is written, notes there are reshaped, and a column already live takes the new shape. An FX
+generator goes on the first FX column live with its command or holding it, else the first empty
+one. The status line says where everything went.
+
+With too few free, nothing is added, and the status line says how many the patch needs and how
+many the track has free. `!` puts it over the last ones that aren't free instead, saying which;
+anything that reached a slot or macro it replaced lets go of it.
+
+`K` on a mod slot's type, in the title of its device on the Mod page, lists `Add a patch` and
+`Save as a patch` after the types, and `K` on a macro of the Gen page's band lists the two alone.
+The patches' list shows what each needs beside its name, as `1 slot, 3 macros` or
+`Note generator, 2 macros`.
+
 ## The mixer
 
 Press `Space 4` for a strip for each track: its name, a meter of what it's playing

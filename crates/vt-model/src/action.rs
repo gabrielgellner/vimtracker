@@ -23,7 +23,7 @@ use crate::macros::{MACRO_NAME_LENGTH, MACROS, MacroMap, MacroTarget, valid_name
 use crate::modulation::ModSlot;
 use crate::names::is_project_name;
 use crate::order::Order;
-use crate::preset::SoundPreset;
+use crate::preset::{Patch, Placement, SoundPreset};
 use crate::scale::Scale;
 use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
@@ -273,6 +273,13 @@ pub enum Action {
         track: usize,
         preset: Box<SoundPreset>,
         sample: u8,
+    },
+    /// Add a patch preset's mod slots, macros, accumulator and arpeggio to a sound track where
+    /// `placement` says, keeping its sound (decision 311). Its generators go on with `Generate`.
+    LoadPatch {
+        track: usize,
+        patch: Box<Patch>,
+        placement: Placement,
     },
     /// Put an effect preset's effect in one of a track's slots, with the fine parts of its
     /// settings there, in place of the slot's own (decision 310).
@@ -1079,6 +1086,17 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 return Err(EditError::NotSound);
             }
             preset.apply(owner, *sample);
+        }
+        Action::LoadPatch {
+            track,
+            patch,
+            placement,
+        } => {
+            let owner = track_mut(&mut next, *track)?;
+            if !owner.is_sound() {
+                return Err(EditError::NotSound);
+            }
+            patch.add_to(owner, placement);
         }
         Action::LoadEffect {
             track,

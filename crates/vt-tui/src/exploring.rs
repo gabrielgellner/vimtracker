@@ -263,6 +263,10 @@ impl App {
             Purpose::Kit => "Enter use  L on tracks",
             Purpose::Project => "Enter open",
             Purpose::Save | Purpose::Render => "l open  Enter choose",
+            Purpose::Preset(vt_model::preset::PresetKind::Patch) if self.patch_over => {
+                "Enter add over the last"
+            }
+            Purpose::Preset(vt_model::preset::PresetKind::Patch) => "Enter add",
             Purpose::Preset(_) => "Enter load",
         };
         let mut picker = Picker::explorer(purpose, roots, home_folder())

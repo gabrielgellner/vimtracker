@@ -20,6 +20,8 @@ pub struct Places<'a> {
     pub home: Option<&'a Path>,
     /// The presets folder's `sounds` or `effects`, for what `:preset` acts on here.
     pub presets: Option<&'a Path>,
+    /// The presets folder's `patches`, for `:patch`.
+    pub patches: Option<&'a Path>,
 }
 
 /// One way to finish the word: the text that replaces it, and the name and meaning the list shows.
@@ -222,6 +224,7 @@ pub fn complete(line: &str, places: Places) -> Completions {
         Takes::Render => render(start, argument, places),
         Takes::Kit => kit(start, argument, places),
         Takes::Preset => preset(start, argument, command.name, places),
+        Takes::Patch => preset(start, argument, command.name, places),
         takes => value_of(takes, start, argument, command.name, places),
     }
 }
@@ -268,7 +271,7 @@ fn value_of(
         Takes::Sample => paths(start, typed, places.home, Files::Samples),
         Takes::Render => paths(start, typed, places.home, Files::Wav),
         Takes::Kit => paths(start, typed, places.home, Files::Kits),
-        Takes::Words(_) | Takes::Nothing | Takes::Setting | Takes::Preset => {
+        Takes::Words(_) | Takes::Nothing | Takes::Setting | Takes::Preset | Takes::Patch => {
             Completions::none(start)
         }
     }
@@ -331,10 +334,12 @@ fn kit(start: usize, argument: &str, places: Places) -> Completions {
 }
 
 /// `:preset`'s word, then a preset's name from the presets folder, by its folders and name without
-/// `.ron`, as `:kit` completes a kit's. `:preset!` only saves.
+/// `.ron`, as `:kit` completes a kit's. `:preset!` only saves; `:patch` and `:patch!` complete
+/// the patches' names, and both save and load.
 fn preset(start: usize, argument: &str, command: &'static str, places: Places) -> Completions {
+    let patch = command.starts_with("patch");
     let Some((word, name)) = argument.split_once(char::is_whitespace) else {
-        let list: &[&str] = if command.ends_with('!') {
+        let list: &[&str] = if command.ends_with('!') && !patch {
             &PRESET_WORDS[..1]
         } else {
             &PRESET_WORDS
@@ -346,7 +351,12 @@ fn preset(start: usize, argument: &str, command: &'static str, places: Places) -
     }
     let start = start + word.len() + 1;
     let (folder_typed, prefix) = split_path(name);
-    let candidates = places.presets.map_or_else(Vec::new, |root| {
+    let root = if patch {
+        places.patches
+    } else {
+        places.presets
+    };
+    let candidates = root.map_or_else(Vec::new, |root| {
         entries(&root.join(folder_typed), prefix, Files::KitNames)
             .into_iter()
             .map(|entry| entry.candidate(folder_typed))
@@ -354,7 +364,7 @@ fn preset(start: usize, argument: &str, command: &'static str, places: Places) -
     });
     Completions {
         start,
-        title: "Presets",
+        title: if patch { "Patches" } else { "Presets" },
         candidates,
     }
 }
@@ -504,6 +514,7 @@ mod tests {
             kit_folders: &[],
             home: None,
             presets: None,
+            patches: None,
         }
     }
 
@@ -637,6 +648,7 @@ mod tests {
             kit_folders: &[],
             home: Some(&home),
             presets: None,
+            patches: None,
         };
         assert_eq!(tab("e ~", places), "e ~/");
         assert_eq!(
@@ -686,6 +698,7 @@ mod tests {
             kit_folders: &folders,
             home: None,
             presets: None,
+            patches: None,
         };
         let found = complete("kit ", places);
         assert_eq!(found.title, "Kits");
@@ -743,7 +756,7 @@ mod tests {
                     let line = format!("{} ", command.name);
                     let found = complete(&line, nowhere());
                     // `:preset`'s words take a name after them.
-                    let name = if command.takes == Takes::Preset {
+                    let name = if matches!(command.takes, Takes::Preset | Takes::Patch) {
                         " Acid"
                     } else {
                         ""
@@ -762,6 +775,7 @@ mod tests {
                     | Takes::Groove { .. }
                     | Takes::Order
                     | Takes::Preset
+                    | Takes::Patch
             ) {
                 assert!(!lines.is_empty(), "{} completes something", command.name);
             }
@@ -783,6 +797,7 @@ mod tests {
             kit_folders: &[],
             home: None,
             presets: Some(&root),
+            patches: None,
         };
         assert_eq!(texts(&complete("preset ", places)), ["save", "load"]);
         assert_eq!(texts(&complete("preset! ", places)), ["save"]);

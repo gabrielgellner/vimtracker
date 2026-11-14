@@ -179,11 +179,25 @@ it has a `Rate` to map, for a register that steps in time rather than with the n
 *   To have the line as notes you can edit, `Space 3` and `Space g A`: each note becomes the
     one it was moved to the last time it was heard, and the slot is switched out, knobs and all.
 
-**A patch, later.** The Steps slot and the three macros that turn it are a Turing Machine you
-could put on any track. Saving them as a device of their own, without the `Acid` under them, is
-what `:patch save` will do once patches land
-([#619](https://github.com/gabrielgellner/vimtracker/issues/619)); `:patch` would then add it to
-another track, its macros and slot in whichever are free.
+**Save it as a patch.** The Steps slot and the three macros that turn it are a Turing Machine you
+can put on any track, keeping that track's sound (see **Patches** in **The track page**).
+
+1.  On track 1, `:patch save Turing Machine`. A patch is the track's macros that hold something
+    and what they move, so this one is `Mod 4` and the three macros, `1 slot, 3 macros` as the
+    status line says, and not the `Acid`, its filter or the other slots. It's kept in the presets
+    folder's `patches`, `~/Music/vimtracker/presets/patches` unless `settings.ron` says otherwise.
+2.  Track 2, the kick, and `:patch`. The list shows `Turing Machine` with `1 slot, 3 macros`
+    beside it; `Enter` adds it. The kick's first two slots shape its note and its cutoff, so the
+    Steps slot goes into `Mod 3`, the first going nowhere, and the macros into the first three
+    holding nothing, every mapping moved to match: `Change` turns `Mod 3`'s `Mutate` there. The
+    status line says where each part went, and `u` takes it all off at once.
+3.  `Tab`. The kick's beats now wander in pitch from the same kind of loop, through the kick's
+    own sound, and `Space 8` shows `Change`, `Length` and `Range` on its Gen page, to play as on
+    track 1.
+
+A track with too few free slots or macros refuses it, saying how many it needs and how many are
+free, and `:patch!` puts it over the last ones instead. `K` on a mod slot's type lists `Add a
+patch` and `Save as a patch` after the types.
 
 ## Marbles' Déjà vu
 
