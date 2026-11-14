@@ -925,7 +925,10 @@ answers never arrive as keys. A picture reaches the screen in one of two ways.
     panel, 49 by 5 characters, with frequency gridlines, a 0 dB line and a dashed mark at `Cut`.
     The Mod page's panels are the half size, 24 by 5: an envelope over its baseline and stage
     lines, one cycle of an LFO from its `Phase`, drawn from the engine's own `lfo::wave`, and a
-    Track slot's map across its source's span. The
+    Track slot's map across its source's span. Zoomed in on one slot (`z i`, decision 329), the
+    FX page draws its compressor's or distortion's curve 42 by 16 and its EQ's 140 by 16, the
+    zoomed slot's alone. Gain reduction, in the rack and zoomed, and its last two bars are text,
+    so pumping moves every frame without a picture. The
     scope and the pickers' waveforms stay solid dots.
 *   **Placed dots.** An LFO's dot is a small image of its own, stored once in each of two shades
     and placed with pixel offsets across and down (`Placement`'s `X=` and `Y=`) where

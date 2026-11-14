@@ -2,6 +2,7 @@
 //! can have one per track later.
 
 use vt_engine::mixer::Reading;
+use vt_model::insert::INSERTS;
 
 /// The bottom of the scale, in dB, where the meter reads silence.
 pub const FLOOR_DB: f32 = -65.0;
@@ -165,6 +166,84 @@ impl Meter {
     }
 }
 
+/// How many places a gain reduction history keeps across its sweep, finer than any box it's
+/// drawn in, so each column of one is the deepest of the places it covers.
+pub const HISTORY_PLACES: usize = 256;
+/// How long a gain reduction history's sweep is, in beats: two bars.
+pub const HISTORY_BEATS: f64 = 8.0;
+
+/// What each FX slot of the cursor's track turned down over the last two bars, for the FX page's
+/// zoom (decision 329). It's a sweep: a place a little over a sixtieth of a second wide at 120 BPM
+/// is written as the reports come in, left to right, and it starts again at the left after two
+/// bars at the song's tempo, so a steady beat's pumping stands still and the newest is where the
+/// sweep is. It's sampled from the engine's reports, a frame at a time, on the app's side, and
+/// holds all it will ever hold from the start.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReductionHistory {
+    /// Each slot's reduction in each place, in dB.
+    places: [[f32; HISTORY_PLACES]; INSERTS],
+    /// Where the sweep is, in places, from `0` up to [`HISTORY_PLACES`].
+    at: f64,
+    /// The track it's of, so another track's starts empty.
+    track: usize,
+}
+
+impl Default for ReductionHistory {
+    fn default() -> Self {
+        Self {
+            places: [[0.0; HISTORY_PLACES]; INSERTS],
+            at: 0.0,
+            track: 0,
+        }
+    }
+}
+
+impl ReductionHistory {
+    /// Move the sweep on by some seconds at a tempo in BPM, writing what each slot of a track is
+    /// turning down now into each place it passes into, or, if it's still in the same one, the
+    /// deepest there. A different track's starts again, empty.
+    pub fn update(&mut self, track: usize, reduction: [f32; INSERTS], seconds: f32, bpm: f64) {
+        if track != self.track {
+            *self = Self {
+                track,
+                ..Self::default()
+            };
+        }
+        let sweep = HISTORY_BEATS * 60.0 / bpm.max(1.0);
+        let moved = f64::from(seconds.max(0.0)) / sweep * HISTORY_PLACES as f64;
+        let first = self.at.floor() as usize;
+        // However long it was, the sweep goes round once at most.
+        let passed = ((self.at + moved).floor() as usize - first).min(HISTORY_PLACES);
+        for (slot, places) in self.places.iter_mut().enumerate() {
+            let now = reduction[slot].max(0.0);
+            if passed == 0 {
+                let here = &mut places[first % HISTORY_PLACES];
+                *here = here.max(now);
+            }
+            for step in 1..=passed {
+                places[(first + step) % HISTORY_PLACES] = now;
+            }
+        }
+        self.at = (self.at + moved) % HISTORY_PLACES as f64;
+    }
+
+    /// The column of a box this many wide the sweep is in.
+    pub fn head(&self, columns: usize) -> usize {
+        (self.at as usize * columns / HISTORY_PLACES).min(columns.saturating_sub(1))
+    }
+
+    /// The deepest a slot turned down in a column of a box this many wide, across the places it
+    /// covers, in dB.
+    pub fn column(&self, slot: usize, column: usize, columns: usize) -> f32 {
+        let columns = columns.max(1);
+        let from = column * HISTORY_PLACES / columns;
+        let to = ((column + 1) * HISTORY_PLACES / columns).max(from + 1);
+        self.places[slot][from..to.min(HISTORY_PLACES)]
+            .iter()
+            .fold(0.0, |deepest, db| deepest.max(*db))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,5 +342,66 @@ mod tests {
         assert_eq!(meter.top(), FLOOR_DB);
         assert_eq!(meter.channels[0].average(), FLOOR_DB);
         assert_eq!(meter.reduction.now, 0.0);
+    }
+
+    /// At 120 BPM two bars are 4 seconds, so a second is 64 places.
+    const SECOND: f32 = 1.0;
+
+    #[test]
+    fn a_reduction_history_sweeps_two_bars_and_writes_over_the_last_pass() {
+        let mut history = ReductionHistory::default();
+        assert_eq!(history.head(64), 0);
+        // A second of 6 dB on slot 1, then a second of nothing.
+        history.update(0, [0.0, 6.0, 0.0, 0.0], SECOND, 120.0);
+        assert_eq!(
+            history.head(64),
+            16,
+            "a quarter of the way, a second of four"
+        );
+        history.update(0, [0.0; INSERTS], SECOND, 120.0);
+        assert_eq!(history.head(64), 32);
+        // The first place held what it started with, and the next sixty-four the 6 dB.
+        assert_eq!(history.column(1, 0, HISTORY_PLACES), 0.0);
+        for place in 1..=64 {
+            assert_eq!(history.column(1, place, HISTORY_PLACES), 6.0, "{place}");
+        }
+        assert_eq!(history.column(1, 65, HISTORY_PLACES), 0.0);
+        assert_eq!(
+            history.column(0, 10, HISTORY_PLACES),
+            0.0,
+            "only its own slot"
+        );
+        // A box narrower than the places shows the deepest of those each column covers.
+        assert_eq!(history.column(1, 8, 64), 6.0);
+        assert_eq!(
+            history.column(1, 16, 64),
+            6.0,
+            "its first place is the last 6 dB"
+        );
+        assert_eq!(history.column(1, 17, 64), 0.0);
+        // Within one place the deepest is kept.
+        history.update(0, [0.0, 3.0, 0.0, 0.0], 0.001, 120.0);
+        history.update(0, [0.0, 1.0, 0.0, 0.0], 0.001, 120.0);
+        assert_eq!(history.column(1, 128, HISTORY_PLACES), 3.0);
+        // Round past the start, the next pass writes over the last.
+        history.update(0, [0.0, 2.0, 0.0, 0.0], 2.125, 120.0);
+        assert_eq!(history.head(64), 2);
+        assert_eq!(history.column(1, 4, HISTORY_PLACES), 2.0);
+        assert_eq!(
+            history.column(1, 40, HISTORY_PLACES),
+            6.0,
+            "not reached yet"
+        );
+        // At 60 BPM it goes half as fast.
+        let mut slow = ReductionHistory::default();
+        slow.update(0, [0.0; INSERTS], SECOND, 60.0);
+        assert_eq!(slow.head(64), 8);
+        // However long a frame took, it goes round once at most.
+        slow.update(0, [5.0, 0.0, 0.0, 0.0], 100.0, 60.0);
+        assert!((0..64).all(|column| slow.column(0, column, 64) == 5.0));
+        // Another track's starts empty.
+        slow.update(1, [0.0; INSERTS], 0.0, 60.0);
+        assert!((0..64).all(|column| slow.column(0, column, 64) == 0.0));
+        assert_eq!(slow.head(64), 0);
     }
 }

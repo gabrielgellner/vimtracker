@@ -1,4 +1,4 @@
-<!-- ANCHOR: before-clouds -->
+<!-- ANCHOR: before-zoom -->
 # The track page, envelopes and LFOs
 
 Press `Space 5` to `Space 8` for what a track holds apart from its steps, on four pages: Sound
@@ -261,6 +261,7 @@ with the cursor has the brighter frame. An empty slot keeps its frame, says `Emp
 | `dd` | Take the effect out of this slot |
 | `p` | Put it in this slot, swapping with what's there |
 | `b` | Bypass this slot, to hear without it, or bring it back |
+| `z i` `z o` | Zoom in on this slot, or back out to every slot |
 
 Each effect places its own settings: what comes out, `Mix` and `Gain`, is in its last column, a
 `Comp`'s detector, times and output each have a column, an `EQ3`'s bands are its columns, and a
@@ -283,6 +284,34 @@ A step switches a slot out for its note with `1BYP 01`, for slot 1, and back in 
 as a lock: the next note brings back what `b` set, and held with `h` it stays. While the song
 plays, the page fades the slot as it's heard, so it goes faint and comes back with the lock.
 `K` lists it with the slot's effect, and LFOs and envelopes can't move it.
+
+### Zooming in on a slot
+
+`z i` zooms the FX page in on the slot the cursor is in, and `z i` again or `z o` goes back to
+every slot. The status line says `ZOOM`. Across the top, a strip keeps the whole chain in sight:
+a tile for each slot, with its switch, its effect and its type, the first row of its settings by
+their short labels, and a `Comp`'s or `Limit`'s gain reduction as a bar. Under it is the slot,
+the page's width, with its settings in the same places and bars nearly twice as long.
+
+| Effect | Zoomed in, over its settings |
+|---|---|
+| `Comp` | Its curve, its gain reduction meter and the last two bars |
+| `Limit` | Its gain reduction meter and the last two bars |
+| `EQ3` | Its curve, across the whole width |
+| `Distort` | Its transfer curve |
+
+A `Comp`'s curve is square and 16 rows tall, and its meter as tall, 0 to 24 dB, with the last two
+bars of how far it turned down beside them. A `Distort`'s transfer curve, on `Soft`, `Hard`,
+`Fold`, `Sine` and `Crush`, is what each level coming in goes out as, with `Mix` in it.
+
+The last two bars are a sweep, as an oscilloscope's: it writes from left to right as the song's
+tempo goes, with a gap after the newest, and starts again at the left after two bars, so a beat's
+pumping stands still and the sweep shows where it is now. Any other effect, and `Down` and the
+pedals, which have no curve, shows its settings alone, so `{` and `}` go through the whole chain
+without leaving the zoom. `j` and `k` go on into the next slot's title as before, which zooms in
+on that one. The FX page stays zoomed while another page shows.
+<!-- ANCHOR_END: before-zoom -->
+<!-- ANCHOR: before-clouds -->
 
 `Distort` has a `Type`: `Soft` and `Hard` clip, `Fold` and `Sine` fold the sound back
 on itself, `Crush` lowers its bit depth, and `Down` lowers its sample rate. `Overdrive` and

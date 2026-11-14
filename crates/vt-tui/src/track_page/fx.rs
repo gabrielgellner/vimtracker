@@ -8,7 +8,8 @@ use vt_model::song::Track;
 
 use crate::app::App;
 
-use super::{Control, DEVICE_COLUMNS, DEVICE_ROWS, DeviceSpec};
+use super::{Control, DEVICE_COLUMNS, DEVICE_ROWS, DeviceSpec, Page};
+use crate::input::mode::View;
 
 /// The FX page's devices: a slot each, top to bottom.
 pub(super) fn devices(track: &Track) -> Vec<DeviceSpec> {
@@ -52,6 +53,22 @@ pub struct TakenInsert {
 }
 
 impl App {
+    /// Whether the FX page shows, zoomed in on the cursor's slot (decision 329).
+    pub fn fx_zoomed(&self) -> bool {
+        self.view == View::Track && self.track_page.page == Page::Fx && self.track_page.zoomed
+    }
+
+    /// What the keys do while the FX page is zoomed in, and how to leave it, for under the status
+    /// line while nothing else is said there, as the sample page's modes have.
+    pub fn fx_zoom_hint(&self) -> Option<String> {
+        self.fx_zoomed().then(|| {
+            format!(
+                "Slot {} zoomed in: {{ }} another slot, z o every slot",
+                self.fx_slot() + 1
+            )
+        })
+    }
+
     /// The slot the cursor is in, on the FX page.
     fn fx_slot(&self) -> usize {
         self.track_page
