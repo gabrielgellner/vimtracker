@@ -227,6 +227,213 @@ impl Grain {
     }
 }
 
+/// A grain to start: how far behind the recording it reads, how fast, for how many frames, under
+/// which envelope, a share of a frame late, how loud and where across the sides.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Launch {
+    pub delay: f64,
+    pub speed: f64,
+    pub frames: f64,
+    pub shape: f32,
+    pub late: f32,
+    pub amplitude: f32,
+    pub pan: f32,
+}
+
+/// Beads' grains reading a line: up to 32 of them, the order they're best stolen in, and how long
+/// since the last one started. `Grains` plays them over its own line, and `Beads` over its
+/// recording in whatever quality it's in.
+#[derive(Debug, Clone)]
+pub(crate) struct GrainPlayer {
+    grains: [Grain; GRAINS],
+    /// The grains, those best to steal first.
+    order: [u8; GRAINS],
+    /// Frames since the last grain started.
+    since: i32,
+    /// How far back a grain can read, in frames, and how near either end it fades.
+    longest: f64,
+    safety: f64,
+    /// The shortest attack and release, and the crossfades a stolen grain is given.
+    shortest: [f32; 2],
+    instant_crossfade: i32,
+    preemptive_crossfade: i32,
+    simple_scheduler: i32,
+}
+
+impl GrainPlayer {
+    /// Grains at a rate, over a line so many frames long, that fade so near its ends.
+    pub(crate) fn new(rate: f32, longest: f64, safety: f64) -> Self {
+        Self {
+            grains: [Grain::DONE; GRAINS],
+            order: std::array::from_fn(|index| index as u8),
+            since: 1,
+            longest,
+            safety,
+            shortest: [
+                SHORTEST_ATTACK_SECONDS * rate,
+                SHORTEST_RELEASE_SECONDS * rate,
+            ],
+            instant_crossfade: (INSTANT_CROSSFADE_SECONDS * rate) as i32,
+            preemptive_crossfade: (PREEMPTIVE_CROSSFADE_SECONDS * rate) as i32,
+            simple_scheduler: (SIMPLE_SCHEDULER_SECONDS * rate) as i32,
+        }
+    }
+
+    /// How far back a grain can read, in frames.
+    pub(crate) fn longest(&self) -> f64 {
+        self.longest
+    }
+
+    /// How near either end of the line a grain fades, in frames.
+    pub(crate) fn safety(&self) -> f64 {
+        self.safety
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.grains = [Grain::DONE; GRAINS];
+        self.order = std::array::from_fn(|index| index as u8);
+        self.since = 1;
+    }
+
+    /// How many grains are playing.
+    pub(crate) fn playing(&self) -> usize {
+        self.grains.iter().filter(|grain| !grain.done()).count()
+    }
+
+    /// Start a grain in the place of the best one to steal. How fast it moves through the line,
+    /// which also moves on as it records, keeps it from reaching the recording or the line's far
+    /// end before it's done.
+    pub(crate) fn launch(&mut self, launch: Launch, frozen: bool) {
+        let Launch {
+            mut delay,
+            speed,
+            mut frames,
+            shape,
+            late,
+            amplitude,
+            pan,
+        } = launch;
+        let consumed = speed - if frozen { 0.0 } else { 1.0 };
+        delay -= f64::from(late) * consumed;
+        if consumed != 0.0 {
+            frames = frames.min(self.longest / consumed.abs());
+        }
+        if consumed > 0.0 {
+            delay = delay.max(frames * consumed);
+        } else if consumed < 0.0 {
+            delay = delay.min(self.longest + frames * consumed);
+        }
+
+        // Roughly equal power, from the first-order square root, each side crossing to the other
+        // as it pans away from it.
+        let gains = if pan < 0.5 {
+            let pan = pan * 2.0;
+            [
+                [amplitude, (1.0 - pan) * (1.0 + pan) * amplitude],
+                [0.0, pan * (2.0 - pan) * amplitude],
+            ]
+        } else {
+            let pan = (1.0 - pan) * 2.0;
+            [
+                [pan * (2.0 - pan) * amplitude, 0.0],
+                [(1.0 - pan) * (1.0 + pan) * amplitude, amplitude],
+            ]
+        };
+
+        let grain = &mut self.grains[usize::from(self.order[0])];
+        grain.delay = delay;
+        grain.speed = speed;
+        grain.gains = gains;
+        grain
+            .envelope
+            .start(frames as f32, shape, late, self.shortest);
+        grain.remaining = frames as i32;
+        grain.stealing = 1.0;
+        grain.stealing_step = 0.0;
+        self.sort_grains();
+    }
+
+    /// Put the grains best to steal first, as a new one has started, and fade those out, so they
+    /// end quickly in case another starts soon. When grains come fast the one that's just
+    /// started goes to the back and the next in line is taken; otherwise the four with least left
+    /// come first.
+    fn sort_grains(&mut self) {
+        let mut fades;
+        if self.since < self.simple_scheduler {
+            self.order.rotate_left(1);
+            fades = [
+                self.since + 1,
+                self.instant_crossfade,
+                self.instant_crossfade,
+                self.preemptive_crossfade,
+            ];
+            if self.since > self.instant_crossfade {
+                fades.swap(0, 2);
+            }
+        } else {
+            for first in 0..SAFETY_GRAINS {
+                let least = (first..GRAINS)
+                    .min_by_key(|&at| self.grains[usize::from(self.order[at])].remaining)
+                    .unwrap_or(first);
+                self.order.swap(first, least);
+            }
+            fades = [
+                self.instant_crossfade,
+                self.instant_crossfade,
+                self.since,
+                self.preemptive_crossfade,
+            ];
+            if self.since > self.preemptive_crossfade {
+                fades.swap(2, 3);
+            }
+        }
+        for (at, fade) in fades.into_iter().enumerate() {
+            self.grains[usize::from(self.order[at])].fade_out(fade);
+        }
+        self.since = 0;
+    }
+
+    /// A frame of every grain playing, each read from the line by how far behind the newest it is.
+    #[inline]
+    pub(crate) fn render(&mut self, frozen: bool, read: impl Fn(f64) -> [f32; 2]) -> [f32; 2] {
+        let mut out = [0.0_f32; 2];
+        let still = if frozen { 0.0 } else { 1.0 };
+        for index in 0..GRAINS {
+            if self.grains[index].done() {
+                continue;
+            }
+            let grain = &mut self.grains[index];
+            grain.delay += still - grain.speed;
+            if grain.delay < 0.0 || grain.delay >= self.longest {
+                grain.delay = 0.0;
+                grain.envelope.stage = Stage::Done;
+            }
+            // It fades near the recording and the line's far end, where what's newest and oldest
+            // meet.
+            let delay = grain.delay;
+            let near = if delay >= self.longest * 0.5 {
+                self.longest - delay
+            } else {
+                delay
+            };
+            let fade = smooth_step((near / self.safety).min(1.0) as f32);
+            let sample = read(delay);
+            let grain = &mut self.grains[index];
+            grain.stealing -= grain.stealing_step;
+            let gain = fade * grain.envelope.next() * grain.stealing.max(0.0);
+            let [left, right] = [sample[0] * gain, sample[1] * gain];
+            out[0] += left * grain.gains[0][0] + right * grain.gains[0][1];
+            out[1] += left * grain.gains[1][0] + right * grain.gains[1][1];
+            grain.remaining -= 1;
+            if grain.done() {
+                grain.remaining = 0;
+            }
+        }
+        self.since = self.since.saturating_add(1);
+        out
+    }
+}
+
 /// When grains start, as Beads' trigger generator does with its seed held: a pulse that runs on
 /// by itself, evenly or at random intervals.
 #[derive(Debug, Clone, Copy)]
@@ -258,11 +465,7 @@ pub struct Granular {
     /// Whether it's frozen now, and whether it was last frame.
     frozen: bool,
     was_frozen: bool,
-    grains: [Grain; GRAINS],
-    /// The grains, those best to steal first.
-    order: [u8; GRAINS],
-    /// Frames since the last grain started.
-    since: i32,
+    player: GrainPlayer,
     trigger: Trigger,
     /// The settings, each on its own `00` to `FF` scale but `Pitch`, in semitones.
     time: Smoothed,
@@ -276,12 +479,6 @@ pub struct Granular {
     peak: f32,
     peak_smoothed: f32,
     release: f32,
-    /// Frames near either end of the line where grains fade, and the shortest attack and release.
-    safety: f64,
-    shortest: [f32; 2],
-    instant_crossfade: i32,
-    preemptive_crossfade: i32,
-    simple_scheduler: i32,
     random_state: u32,
     rate: u32,
     smoothing: f32,
@@ -304,9 +501,11 @@ impl Granular {
             tail_fade: 0,
             frozen: false,
             was_frozen: false,
-            grains: [Grain::DONE; GRAINS],
-            order: std::array::from_fn(|index| index as u8),
-            since: 1,
+            player: GrainPlayer::new(
+                rate_f,
+                longest as f64,
+                f64::from(SAFETY_FRAMES * at_beads),
+            ),
             trigger: Trigger {
                 phase: 0.0,
                 ratio: 1.0,
@@ -321,14 +520,6 @@ impl Granular {
             peak: 0.5,
             peak_smoothed: 0.5,
             release: 1.0 / (rate_f * LIMITER_RELEASE_SECONDS),
-            safety: f64::from(SAFETY_FRAMES * at_beads),
-            shortest: [
-                SHORTEST_ATTACK_SECONDS * rate_f,
-                SHORTEST_RELEASE_SECONDS * rate_f,
-            ],
-            instant_crossfade: (INSTANT_CROSSFADE_SECONDS * rate_f) as i32,
-            preemptive_crossfade: (PREEMPTIVE_CROSSFADE_SECONDS * rate_f) as i32,
-            simple_scheduler: (SIMPLE_SCHEDULER_SECONDS * rate_f) as i32,
             random_state: 0x2545_F491,
             rate,
             smoothing: coefficient(rate),
@@ -358,9 +549,7 @@ impl Granular {
         self.tail.fill([0.0; 2]);
         self.tail_written = 0;
         self.tail_fade = 0;
-        self.grains = [Grain::DONE; GRAINS];
-        self.order = std::array::from_fn(|index| index as u8);
-        self.since = 1;
+        self.player.clear();
         self.trigger.phase = 0.0;
         self.peak = 0.5;
         self.peak_smoothed = 0.5;
@@ -474,115 +663,48 @@ impl Granular {
         let size = self.strayed(self.size.value, random);
         let shape = self.strayed(self.shape.value, random);
         let (seconds, reversed) = grain_length(size * 255.0);
-        let mut frames = f64::from(seconds) * f64::from(self.rate);
+        let frames = f64::from(seconds) * f64::from(self.rate);
         let ratio = f64::from((self.semitones.value / 12.0).exp2());
         let speed = if reversed { -ratio } else { ratio };
 
         // As loud as one over the root of how many there'll be, and spread wider the more there
         // are.
-        let playing = self.grains.iter().filter(|grain| !grain.done()).count() + 1;
+        let playing = self.player.playing() + 1;
         let amplitude = 1.0 / (playing as f32).sqrt();
         let spread = 0.5 * playing as f32 * self.spread.value / 255.0;
         let (u, v) = (self.uniform(), self.uniform());
         let pan = 0.5 + (u - 0.5) * (spread * v).min(1.0);
 
-        // How fast it moves through the line, which also moves on as it records. It's kept from
-        // reaching the recording or the line's far end before it's done.
-        let consumed = speed - if self.frozen { 0.0 } else { 1.0 };
-        let mut delay = f64::from(time) * (self.longest - 2.0 * self.safety) + self.safety;
-        delay -= f64::from(late) * consumed;
-        if consumed != 0.0 {
-            frames = frames.min(self.longest / consumed.abs());
-        }
-        if consumed > 0.0 {
-            delay = delay.max(frames * consumed);
-        } else if consumed < 0.0 {
-            delay = delay.min(self.longest + frames * consumed);
-        }
-
-        // Roughly equal power, from the first-order square root, each side crossing to the other
-        // as it pans away from it.
-        let gains = if pan < 0.5 {
-            let pan = pan * 2.0;
-            [
-                [amplitude, (1.0 - pan) * (1.0 + pan) * amplitude],
-                [0.0, pan * (2.0 - pan) * amplitude],
-            ]
-        } else {
-            let pan = (1.0 - pan) * 2.0;
-            [
-                [pan * (2.0 - pan) * amplitude, 0.0],
-                [(1.0 - pan) * (1.0 + pan) * amplitude, amplitude],
-            ]
-        };
-
-        let grain = &mut self.grains[usize::from(self.order[0])];
-        grain.delay = delay;
-        grain.speed = speed;
-        grain.gains = gains;
-        grain
-            .envelope
-            .start(frames as f32, shape, late, self.shortest);
-        grain.remaining = frames as i32;
-        grain.stealing = 1.0;
-        grain.stealing_step = 0.0;
-        self.sort_grains();
-    }
-
-    /// Put the grains best to steal first, as a new one has started, and fade those out, so they
-    /// end quickly in case another starts soon. When grains come fast the one that's just
-    /// started goes to the back and the next in line is taken; otherwise the four with least left
-    /// come first.
-    fn sort_grains(&mut self) {
-        let mut fades;
-        if self.since < self.simple_scheduler {
-            self.order.rotate_left(1);
-            fades = [
-                self.since + 1,
-                self.instant_crossfade,
-                self.instant_crossfade,
-                self.preemptive_crossfade,
-            ];
-            if self.since > self.instant_crossfade {
-                fades.swap(0, 2);
-            }
-        } else {
-            for first in 0..SAFETY_GRAINS {
-                let least = (first..GRAINS)
-                    .min_by_key(|&at| self.grains[usize::from(self.order[at])].remaining)
-                    .unwrap_or(first);
-                self.order.swap(first, least);
-            }
-            fades = [
-                self.instant_crossfade,
-                self.instant_crossfade,
-                self.since,
-                self.preemptive_crossfade,
-            ];
-            if self.since > self.preemptive_crossfade {
-                fades.swap(2, 3);
-            }
-        }
-        for (at, fade) in fades.into_iter().enumerate() {
-            self.grains[usize::from(self.order[at])].fade_out(fade);
-        }
-        self.since = 0;
+        let (longest, safety) = (self.player.longest(), self.player.safety());
+        let delay = f64::from(time) * (longest - 2.0 * safety) + safety;
+        self.player.launch(
+            Launch {
+                delay,
+                speed,
+                frames,
+                shape,
+                late,
+                amplitude,
+                pan,
+            },
+            self.frozen,
+        );
     }
 
     /// The line a number of frames behind the newest, read between samples through four of them.
     #[inline]
-    fn read(&self, back: f64) -> [f32; 2] {
-        let back = back.clamp(1.0, self.longest + 1.0);
+    fn read(line: &[[f32; 2]], write: usize, longest: f64, back: f64) -> [f32; 2] {
+        let back = back.clamp(1.0, longest + 1.0);
         let whole = back as usize;
         let between = (back - whole as f64) as f32;
-        let length = self.line.len();
+        let length = line.len();
         let at = |frames: usize| {
-            let index = if frames > self.write {
-                self.write + length - frames
+            let index = if frames > write {
+                write + length - frames
             } else {
-                self.write - frames
+                write - frames
             };
-            self.line[index]
+            line[index]
         };
         let (newer, current, older, oldest) =
             (at(whole - 1), at(whole), at(whole + 1), at(whole + 2));
@@ -618,40 +740,10 @@ impl Granular {
             self.start_grain(late);
         }
 
-        let mut out = [0.0_f32; 2];
-        let still = if self.frozen { 0.0 } else { 1.0 };
-        for index in 0..GRAINS {
-            if self.grains[index].done() {
-                continue;
-            }
-            let grain = &mut self.grains[index];
-            grain.delay += still - grain.speed;
-            if grain.delay < 0.0 || grain.delay >= self.longest {
-                grain.delay = 0.0;
-                grain.envelope.stage = Stage::Done;
-            }
-            // It fades near the recording and the line's far end, where what's newest and oldest
-            // meet.
-            let delay = grain.delay;
-            let near = if delay >= self.longest * 0.5 {
-                self.longest - delay
-            } else {
-                delay
-            };
-            let fade = smooth_step((near / self.safety).min(1.0) as f32);
-            let sample = self.read(delay);
-            let grain = &mut self.grains[index];
-            grain.stealing -= grain.stealing_step;
-            let gain = fade * grain.envelope.next() * grain.stealing.max(0.0);
-            let [left, right] = [sample[0] * gain, sample[1] * gain];
-            out[0] += left * grain.gains[0][0] + right * grain.gains[0][1];
-            out[1] += left * grain.gains[1][0] + right * grain.gains[1][1];
-            grain.remaining -= 1;
-            if grain.done() {
-                grain.remaining = 0;
-            }
-        }
-        self.since = self.since.saturating_add(1);
+        let (line, write, longest) = (&self.line, self.write, self.longest);
+        let out = self
+            .player
+            .render(self.frozen, |back| Self::read(line, write, longest, back));
 
         // Beads' limiter: a fast peak follower that lets go slowly turns it down past the
         // ceiling, and a soft clip catches what gets through before it does.
