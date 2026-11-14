@@ -8,9 +8,10 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use vt_model::generator::{Generator, Span as Spanned};
+use vt_model::grid::GRID_COLUMNS;
 use vt_model::macros::{GenColumn, MacroTarget};
 use vt_model::shape::params::Units;
-use vt_model::shape::{Context, GEN_COLUMNS, GenParam, ShapeColumn};
+use vt_model::shape::{Context, GenParam, ShapeColumn};
 use vt_model::song::Track;
 
 use crate::app::App;
@@ -312,7 +313,7 @@ fn draw_generator(
     let four = device
         .grid
         .iter()
-        .any(|row| row.get(GEN_COLUMNS - 1).is_some_and(Option::is_some));
+        .any(|row| row.get(GRID_COLUMNS - 1).is_some_and(Option::is_some));
     let widths = if four { GEN_FOUR_CELLS } else { GEN_CELLS };
     let cells = GenCells {
         page,

@@ -113,9 +113,7 @@ impl DeviceSpec {
         }
         let columns = GenParam::grid(shape, generator.column, generates);
         let grid = std::array::from_fn(|row| {
-            std::array::from_fn(|column| {
-                columns.get(column).and_then(|places| control(places[row]))
-            })
+            std::array::from_fn(|column| control(columns.at(row, column)))
         });
         Self {
             identity: String::new(),
@@ -134,14 +132,11 @@ impl DeviceSpec {
         let columns = GenParam::loops_grid(&generator.shape, generator.column, generates)?;
         let grid = std::array::from_fn(|row| {
             std::array::from_fn(|column| {
-                columns
-                    .get(column)
-                    .and_then(|places| places[row])
-                    .map(|param| Control::Gen {
-                        phrase,
-                        generator: at,
-                        param,
-                    })
+                columns.at(row, column).map(|param| Control::Gen {
+                    phrase,
+                    generator: at,
+                    param,
+                })
             })
         });
         Some(Self {
