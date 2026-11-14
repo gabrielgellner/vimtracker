@@ -384,7 +384,10 @@ fn a_space_echo_has_its_repeats_drawn_as_a_delays_are() {
     graphics.sync(&mut app, &mut out).unwrap();
     let sent = vt_tui::screenshot::sent_images(&out);
     assert_eq!(sent.len(), 1);
-    assert_eq!(png_size(&sent[&app.track_page.zoom_image.unwrap()]), (2100, 624));
+    assert_eq!(
+        png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+        (2100, 624)
+    );
     let screen = zoomed_screen(&mut app, false);
     assert!(
         screen
