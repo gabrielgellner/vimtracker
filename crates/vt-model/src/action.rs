@@ -17,6 +17,7 @@ use crate::generator::{Generator, Span, reads};
 use crate::groove::{CUSTOM_GROOVES, Groove, GrooveId};
 use crate::insert::Insert;
 use crate::kit::CHOKE_GROUPS;
+use crate::label::{GROUP_NAME_CHARS, is_group_name};
 use crate::macros::{MACRO_NAME_LENGTH, MACROS, MacroMap, MacroTarget, valid_name};
 use crate::modulation::ModSlot;
 use crate::names::is_project_name;
@@ -678,6 +679,8 @@ pub enum EditError {
     Group(u8),
     #[error("only tracks that play sounds go in a group")]
     GroupMember,
+    #[error("a group's name is 1 to {GROUP_NAME_CHARS} letters or digits")]
+    GroupName,
     #[error(
         "an accumulator's limits go from 1 to {MOST_DEGREES}, and its loops from 1 to {MOST_LOOPS}"
     )]
@@ -1319,6 +1322,9 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 .tracks
                 .get_mut(*track)
                 .ok_or(EditError::NoTrack(*track))?;
+            if owner.is_group() && !name.is_empty() && !is_group_name(name) {
+                return Err(EditError::GroupName);
+            }
             // A fixed track without a name goes back to its letter.
             owner.name = if name.is_empty() {
                 owner.kind.letter().to_owned()
@@ -1560,8 +1566,10 @@ type Hold = (usize, Option<Shape>);
 /// they give, and every one they've let go of from its own again, as part of the edit (decision
 /// 294): so a turn of a macro, a mapping or a reshape of the generator is heard at once, as an
 /// edit, until the engine renders generators itself. A phrase nothing changes for is left as it
-/// is, shared with the version before.
-fn hold_generators(song: &mut Song) {
+/// is, shared with the version before. A song read from its file is held here too, as it loads
+/// (`crate::project`), so its generators are heard as held, and the engine left at rest, before
+/// the first edit.
+pub fn hold_generators(song: &mut Song) {
     for index in 0..song.tracks.len() {
         let track = &song.tracks[index];
         let mapped = track.has_gen_maps();

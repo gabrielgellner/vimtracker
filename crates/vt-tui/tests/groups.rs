@@ -141,7 +141,11 @@ fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_
     press(&mut app, " 1");
     let heading = |app: &App| song_text(app)[2].clone();
     // The empty groups are folded away, the others open.
-    assert!(heading(&app).contains("08  G1  G2  A"), "{}", heading(&app));
+    assert!(
+        heading(&app).contains("08  G1     G2     A"),
+        "{}",
+        heading(&app)
+    );
     // On a track in a group, `z a` folds the group, and the cursor stands on it.
     press(&mut app, "llll");
     assert_eq!(app.song_column, 3 + 1);
@@ -152,7 +156,7 @@ fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_
     let text = heading(&app);
     assert!(!text.contains("01") && !text.contains("03"), "{text}");
     assert!(
-        text.contains(&format!("08  G1{FOLDED}{ICON_SPACE}G2")),
+        text.contains(&format!("08  G1{FOLDED}{ICON_SPACE}   G2")),
         "{text}"
     );
     // The cursor steps over the folded tracks and the empty groups.
@@ -166,11 +170,11 @@ fn z_a_folds_a_group_into_its_column_in_the_song_view_and_the_cursor_steps_over_
     press(&mut app, "hhhh");
     assert_eq!(app.song_column, 3 + g1);
     press(&mut app, "za");
-    assert!(heading(&app).contains("01  02  03"), "{}", heading(&app));
+    assert!(heading(&app).contains("02  03  04"), "{}", heading(&app));
     // `zR` opens every group, the empty ones too, and `zM` folds them all.
     press(&mut app, "zR");
     assert!(
-        heading(&app).contains("G1  G2  G3  G4  A"),
+        heading(&app).contains("G1     G2     G3     G4     A"),
         "{}",
         heading(&app)
     );
@@ -239,7 +243,7 @@ fn the_phrase_views_overview_shows_a_folded_group_as_a_column_of_its_own() {
     let headings = drawn_lines(&drawn(&app, vt_tui::views::phrase::draw))[1].clone();
     let overview: String = headings.chars().skip(overview_start(&headings)).collect();
     assert!(
-        overview.contains(&format!(" G1{FOLDED}{ICON_SPACE} 04 ")),
+        overview.contains(&format!(" G1{FOLDED}{ICON_SPACE}    04 ")),
         "{overview}"
     );
     assert!(!overview.contains("01"), "{overview}");
@@ -400,4 +404,91 @@ fn folds_are_saved_with_the_song_and_undo_leaves_them() {
     command(&mut app, &format!("e {}", path.display()));
     assert!(!app.folds.hides(app.song(), g3));
     std::fs::remove_dir_all(&path).unwrap();
+}
+
+#[test]
+fn group_name_names_the_cursors_group_with_up_to_five_characters() {
+    let (mut app, _realtime) = grouped();
+    let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    command(&mut app, "group name drums");
+    assert_eq!(app.song().tracks[g1].name, "DRUMS", "from a track in it");
+    assert!(app.status.contains("Group 1 named DRUMS"), "{}", app.status);
+    command(&mut app, "group name drumss");
+    assert!(
+        app.status
+            .contains(":group name takes 1 to 5 letters or digits"),
+        "{}",
+        app.status
+    );
+    assert_eq!(app.song().tracks[g1].name, "DRUMS", "six are refused");
+    app.cursor.track = g1;
+    command(&mut app, "group name");
+    assert_eq!(
+        app.song().tracks[g1].name,
+        "G1",
+        "on the group, back to its letters"
+    );
+    press(&mut app, "u");
+    assert_eq!(app.song().tracks[g1].name, "DRUMS", "each is an undo step");
+    app.cursor.track = 3;
+    command(&mut app, "group name perc");
+    assert!(app.status.contains("in no group"), "{}", app.status);
+}
+
+#[test]
+fn a_group_with_five_characters_shows_its_whole_name_in_every_view() {
+    use vt_tui::glyphs::{FOLDED, GROUP, ICON_SPACE};
+    let (mut app, _realtime) = grouped();
+    let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    command(&mut app, "group name drums");
+    let mixer = |app: &App| mixer_text_at(app, 160)[2].clone();
+    let song = |app: &App| drawn_lines(&drawn(app, vt_tui::views::song::draw))[2].clone();
+
+    // Open, the song view's column holds it with a gap, and the mixer's strip leaves out the
+    // group's icon to fit it.
+    assert!(song(&app).contains("08  DRUMS  G2     A"), "{}", song(&app));
+    assert!(mixer(&app).contains(" DRUMS "), "{}", mixer(&app));
+    assert!(
+        !mixer(&app).contains(&format!("{GROUP}{ICON_SPACE}DRUMS")),
+        "{}",
+        mixer(&app)
+    );
+
+    // Folded, both have room for the mark beside it.
+    app.fold_group(1, true);
+    assert!(
+        song(&app).contains(&format!("08  DRUMS{FOLDED}{ICON_SPACE}G2")),
+        "{}",
+        song(&app)
+    );
+    assert!(
+        mixer(&app).contains(&format!("DRUMS{FOLDED}{ICON_SPACE}")),
+        "{}",
+        mixer(&app)
+    );
+
+    // The phrase view's overview gives the folded group a column wide enough.
+    app.cursor.track = 3;
+    press(&mut app, " 3");
+    let headings = drawn_lines(&drawn(&app, vt_tui::views::phrase::draw))[1].clone();
+    let overview: String = headings.chars().skip(overview_start(&headings)).collect();
+    assert!(
+        overview.contains(&format!(" DRUMS{FOLDED}{ICON_SPACE} 04 ")),
+        "{overview}"
+    );
+
+    // The track page's title, the track picker and the Roto's track list.
+    app.cursor.track = g1;
+    let page = drawn_lines(&drawn(&app, vt_tui::views::track::draw))[0].clone();
+    assert!(page.contains("Group 1 DRUMS"), "{page}");
+    let roto = vt_tui::roto::devices::live_tracks(app.song());
+    assert_eq!(roto[g1].name.as_str(), "G1 DRUMS");
+    assert_eq!(roto[g1 + 1].name.as_str(), "Group 2", "an unnamed group");
+    press(&mut app, " fb");
+    let items = app.picker.as_ref().unwrap().items();
+    assert!(
+        items.iter().any(|item| item.label.ends_with("DRUMS")),
+        "{:?}",
+        items.iter().map(|item| &item.label).collect::<Vec<_>>()
+    );
 }

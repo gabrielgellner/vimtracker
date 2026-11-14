@@ -9,7 +9,7 @@ use vt_model::bloom::{MAX_BRANCHES, PATH_WORDS, Path};
 use vt_model::constants::{MAX_GROUPS, MAX_LABEL_CHARS};
 use vt_model::groove::{GrooveId, SWING_PERCENTS};
 use vt_model::kit::MAX_TUNE;
-use vt_model::label::is_name;
+use vt_model::label::{GROUP_NAME_CHARS, is_group_name, is_name};
 use vt_model::order::Order;
 use vt_model::shape::MAX_MUTATION;
 use vt_model::song::{LAUNCH_WORDS, Launch};
@@ -90,6 +90,8 @@ pub enum Line {
         group: Option<u8>,
         tracks: Option<(usize, usize)>,
     },
+    /// Name the cursor's group, or the group the cursor's track is in, or clear its name.
+    GroupName(Option<String>),
     Mute,
     Solo,
     Double,
@@ -496,6 +498,8 @@ pub enum LineError {
         ":group takes a group from 1 to {MAX_GROUPS} or off, then tracks, as 1-4, or none for this one"
     )]
     Group,
+    #[error(":group name takes 1 to {GROUP_NAME_CHARS} letters or digits, or nothing to clear it")]
+    GroupName,
     #[error(":set takes skip=n, limiter=on or off, scale=dorian, on or off, or root=d")]
     Set,
     #[error(":scale takes fit, or nothing to choose from a list")]
@@ -572,6 +576,13 @@ pub fn groove_word(id: GrooveId) -> String {
 /// Read `:group`'s arguments: a group or `off`, then the tracks, by their numbers as one or a
 /// range, as `3` or `1-4`, or nothing for the cursor's.
 fn group(argument: &str) -> Result<Line, LineError> {
+    if let ["name", name @ ..] = &argument.split_whitespace().collect::<Vec<_>>()[..] {
+        return match name {
+            [] => Ok(Line::GroupName(None)),
+            [name] if is_group_name(name) => Ok(Line::GroupName(Some(name.to_ascii_uppercase()))),
+            _ => Err(LineError::GroupName),
+        };
+    }
     let mut words = argument.split_whitespace();
     let group = match words.next().ok_or(LineError::Group)? {
         "off" => None,
@@ -1057,8 +1068,8 @@ pub const COMMANDS: [Command; 43] = [
     },
     Command {
         name: "group",
-        meaning: "Put tracks in a group, or take them out",
-        takes: Takes::Words(&["off"]),
+        meaning: "Put tracks in a group, take them out, or name it",
+        takes: Takes::Words(&["off", "name"]),
         parse: group,
     },
     Command {
@@ -1240,6 +1251,22 @@ mod tests {
             "group 1 1 2",
         ] {
             assert_eq!(parse(wrong), Err(LineError::Group), "{wrong}");
+        }
+    }
+
+    #[test]
+    fn group_name_takes_up_to_five_letters_or_digits() {
+        assert_eq!(
+            parse("group name drums"),
+            Ok(Line::GroupName(Some("DRUMS".into())))
+        );
+        assert_eq!(
+            parse("group name 909"),
+            Ok(Line::GroupName(Some("909".into())))
+        );
+        assert_eq!(parse("group name"), Ok(Line::GroupName(None)), "clears it");
+        for wrong in ["group name DRUMSS", "group name KIT-8", "group name BD SD"] {
+            assert_eq!(parse(wrong), Err(LineError::GroupName), "{wrong}");
         }
     }
 

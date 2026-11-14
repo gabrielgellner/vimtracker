@@ -90,6 +90,7 @@ impl App {
             }
             Line::Chain(chain) => self.set_track_chain(chain),
             Line::Group { group, tracks } => self.set_group(group, tracks),
+            Line::GroupName(name) => self.name_group(name),
             Line::Render {
                 path: None,
                 rows,

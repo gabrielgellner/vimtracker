@@ -3,7 +3,7 @@
 
 use ratatui::style::Style;
 use ratatui::text::Span;
-use vt_model::song::{Song, TrackKind};
+use vt_model::song::{Song, Track, TrackKind};
 
 use crate::app::App;
 use crate::theme;
@@ -18,6 +18,21 @@ pub fn number(song: &Song, track: usize) -> Option<u8> {
     match song.tracks[group].kind {
         TrackKind::Group(number) => Some(number),
         _ => None,
+    }
+}
+
+/// A group's name, if it's been given one, rather than its letters, as `DRUMS` rather than `G1`.
+pub fn given_name(track: &Track) -> Option<&str> {
+    (track.is_group() && !track.name.is_empty() && track.name != track.kind.letter())
+        .then_some(track.name.as_str())
+}
+
+/// A fixed track's title, as `Group 1`, with a group's name after it once it has one, as
+/// `Group 1 DRUMS` (decision 308).
+pub fn title(track: &Track) -> String {
+    match given_name(track) {
+        Some(name) => format!("{} {name}", track.kind.title()),
+        None => track.kind.title(),
     }
 }
 

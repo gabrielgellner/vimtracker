@@ -968,9 +968,12 @@ another starts again there, and a sound whose file has gone can't be marked.
 tracks after the last, so nothing is written over. Each track plays one sound and is
 named by its label, such as `BD`, with its choke group, and the sound joins the bank
 with its gain and tune, as choosing it from `:sample` gives. The new tracks go in the
-first group with no tracks, named after the kit, by its first word up to three
-characters, so `909 Core Kit` makes `909`, and the group is folded (see **Folding
-a group** in **The track page, envelopes and LFOs**). One `u` undoes the whole load.
+first group with no tracks, named after the kit by its first word, up to five
+characters, so `909 Core Kit` makes `909` and `Rytm Analog` makes `RYTM`. A first
+word that only says it's a kit, such as `Kit` in `Kit-808`, gives way to the kit's
+category, or `DRUMS`. The group is folded (see **Folding a group** in **The track
+page, envelopes and LFOs**), and `:group name` renames it. One `u` undoes the whole
+load.
 If every group already has tracks, they go in none, and the status line says so.
 
 If the new tracks have a kick, a snare or a hat, by their labels as `S` with `Grids`

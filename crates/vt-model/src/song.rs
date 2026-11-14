@@ -405,7 +405,7 @@ pub struct Track {
     /// Whether it plays sounds, or is one of the fixed tracks at the end.
     #[serde(default)]
     pub kind: TrackKind,
-    /// Two characters, or empty for none.
+    /// Two characters, a group's up to five, or empty for none.
     #[serde(default)]
     pub name: String,
     /// What makes its sound.

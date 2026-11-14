@@ -1188,7 +1188,8 @@ pub fn device_switch(track: &Track, device: usize) -> Option<Control> {
 
 /// The song's tracks as the Roto's track list shows them, which PLUGIN mode's FUNC chooses from:
 /// a sound track by its number and name, as the grid's header has it, a fixed track by its
-/// title; each in its group's colour, and a group marked as one.
+/// title, or a named group by its letters and name; each in its group's colour, and a group
+/// marked as one.
 pub fn live_tracks(song: &Song) -> Vec<LiveTrack> {
     song.tracks
         .iter()
@@ -1197,7 +1198,9 @@ pub fn live_tracks(song: &Song) -> Vec<LiveTrack> {
             let name = match track.kind {
                 TrackKind::Sound if track.name.is_empty() => format!("Track {:02}", at + 1),
                 TrackKind::Sound => format!("{:02} {}", at + 1, track.name),
-                kind => kind.title(),
+                // A named group by its letters and name, as `G1 DRUMS`, in the Roto's twelve.
+                kind => crate::views::widgets::group::given_name(track)
+                    .map_or_else(|| kind.title(), |name| format!("{} {name}", kind.letter())),
             };
             let group = match track.kind {
                 TrackKind::Group(group) => Some(group),

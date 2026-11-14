@@ -295,10 +295,31 @@ fn the_kit_in_the_dialog_still_puts_its_sounds_on_tracks_from_the_first_with_l()
 
 #[test]
 fn a_group_is_named_by_the_first_word_of_its_kit() {
-    assert_eq!(group_name("909"), "909");
-    assert_eq!(group_name("808 Core Kit"), "808");
-    assert_eq!(group_name("Rytm drums"), "RYT");
-    assert_eq!(group_name(""), "");
+    assert_eq!(group_name("909", ""), "909");
+    assert_eq!(group_name("909 Core Kit", "Drum Machines"), "909");
+    assert_eq!(group_name("Rytm Analog", "Drum Machines"), "RYTM");
+    assert_eq!(group_name("Perc Kitchen Kit", "Acoustic"), "PERC");
+    assert_eq!(
+        group_name("Percussion Core Kit", "Acoustic"),
+        "PERCU",
+        "a long word is cut to five"
+    );
+}
+
+#[test]
+fn a_generic_first_word_gives_way_to_the_kits_category() {
+    assert_eq!(group_name("Kit-808", "Drum Machines"), "DRUMS");
+    assert_eq!(
+        group_name("Drum Machine Selector Kit", "Selector Kits"),
+        "DRUMS"
+    );
+    assert_eq!(group_name("Core Kit", "Perc"), "PERC", "a short category");
+    assert_eq!(
+        group_name("Kit 3", "Electronic"),
+        "DRUMS",
+        "a category too long for a name"
+    );
+    assert_eq!(group_name("", ""), "DRUMS");
 }
 
 #[test]
@@ -338,13 +359,12 @@ fn a_group_named_after_its_kit_fits_its_column_folded_or_open() {
             .collect::<Vec<_>>()
             .join("\n")
     };
-    // Folded, the song view cuts it to two for the mark, as the phrase view's labels are; the
-    // mixer's strip has room for all three.
+    // Whole, with the fold mark beside it, in the song view's group column and on the mixer.
     let song = text(&drawn(&app, vt_tui::views::song::draw));
-    assert!(song.contains("90\u{f084c}\u{a0}A"), "{song}");
+    assert!(song.contains("909\u{f084c}\u{a0}  A"), "{song}");
     let mixer = text(&drawn(&app, vt_tui::views::mixer::draw));
     assert!(mixer.contains("909\u{f084c}"), "{mixer}");
     app.fold_group(1, false);
     let song = text(&drawn(&app, vt_tui::views::song::draw));
-    assert!(song.contains("BD  909 A"), "{song}");
+    assert!(song.contains("BD  909    A"), "{song}");
 }

@@ -163,19 +163,27 @@ fn name_cell(app: &App, index: usize) -> Line<'static> {
     if index == app.cursor.track {
         style = style.add_modifier(Modifier::BOLD);
     }
-    let name = if track.is_sound() {
+    let folded = app.folds.holds(song, index);
+    // A group's whole name comes first: where the icon would leave no gap before the next strip,
+    // it's left out, as the group's colour and the rule over its part still say what it is. The
+    // space after the fold mark is a gap.
+    let mark = usize::from(folded);
+    let icon =
+        !track.is_sound() && 2 + track.name.chars().count() + mark < usize::from(STRIP_WIDTH);
+    let mut name = if track.is_sound() {
         format!("{:02} {}", index + 1, track.name)
-    } else {
+    } else if icon {
         format!(
             "{}{}{}",
             glyphs::track(track),
             glyphs::ICON_SPACE,
             track.name
         )
+    } else {
+        track.name.clone()
     };
-    if app.folds.holds(song, index) {
-        let mark = [glyphs::FOLDED, glyphs::ICON_SPACE];
-        return Line::styled(name.chars().chain(mark).collect::<String>(), style);
+    if folded {
+        name.extend([glyphs::FOLDED, glyphs::ICON_SPACE]);
     }
     Line::styled(name, style)
 }
