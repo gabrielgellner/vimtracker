@@ -1,5 +1,5 @@
-//! The effects that move a sound's pitch: a pitch shifter, a granular effect, Clouds and a
-//! frequency shifter.
+//! The effects that move a sound's pitch: a pitch shifter, a granular effect, Clouds, Beads and
+//! a frequency shifter.
 
 use serde::{Deserialize, Serialize};
 
@@ -560,6 +560,249 @@ impl Clouds {
             _ => {}
         }
         clouds
+    }
+}
+
+/// What Beads does with what it records, as the module's modes do: grains, or a delay whose taps
+/// play it back. Its third, a wavetable synth for when nothing's patched in, is left out.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BeadsMode {
+    /// Grains read the recording, as many and as often as `Density` says, each from where `Time`
+    /// says, as long as `Size` says, under `Shape`'s envelope.
+    #[default]
+    Granular,
+    /// The module with `Size` all the way up: taps read the recording at a delay `Density` sets
+    /// and `Time` multiplies, shaped by `Shape`, shifted by `Pitch`, filtered by `Size`; frozen, a
+    /// slice of it loops.
+    Delay,
+}
+
+impl BeadsMode {
+    pub const ALL: [Self; 2] = [Self::Granular, Self::Delay];
+}
+
+const BEADS_MODE_NAMES: [&str; 2] = ["Granular", "Delay"];
+
+/// Whether Beads' grains or delay go by themselves or follow the song's steps, as the module does
+/// with a clock in its `SEED` input.
+pub const CLOCK_NAMES: [&str; 2] = ["Free", "Steps"];
+
+/// Beads' four qualities, the module's, from the cleanest to the dirtiest, each holding a longer
+/// recording than the one before: 16 bits at 48 kHz, 12 bits at 32 kHz, 12 bits at 24 kHz, and
+/// 8-bit mu-law at 24 kHz with wow and flutter. The manual names the last three.
+pub const BEADS_QUALITY_NAMES: [&str; 4] =
+    ["Hi-fi", "Cold digital", "Sunny tape", "Scorched cassette"];
+
+/// Beads', in the order the slot keeps them: its mode, which the title shows, the module's four
+/// big knobs, its density, whether that follows the steps, the randomness its attenuverters
+/// give, its freeze button, its feedback, dry/wet and reverb knobs, its quality, which the title
+/// shows too, then the gain every slot has.
+pub(crate) const BEADS_PARAMS: [Param; 14] = [
+    Param {
+        name: "Mode",
+        key: "mode",
+        // Choosing a mode chooses a sound, so steps don't lock it.
+        label: None,
+        setting: Setting::BeadsMode,
+        choices: &BEADS_MODE_NAMES,
+        wraps: true,
+        default: 0,
+    },
+    hex_param(
+        "Time",
+        "time",
+        "TIME",
+        Setting::BeadsTime,
+        Beads::DEFAULT.time,
+    ),
+    hex_param("Size", "size", "SIZE", Setting::Length, Beads::DEFAULT.size),
+    hex_param(
+        "Shape",
+        "shape",
+        "SHAP",
+        Setting::Shape,
+        Beads::DEFAULT.shape,
+    ),
+    Param {
+        default: Beads::DEFAULT.pitch,
+        ..PITCH_PARAMS[0]
+    },
+    hex_param(
+        "Density",
+        "density",
+        "DENS",
+        Setting::BeadsDensity,
+        Beads::DEFAULT.density,
+    ),
+    Param {
+        name: "Clock",
+        key: "clock",
+        label: Some("CLK"),
+        setting: Setting::Clock,
+        choices: &CLOCK_NAMES,
+        wraps: true,
+        default: Beads::DEFAULT.clock,
+    },
+    hex_param(
+        "Random",
+        "random",
+        "RAND",
+        Setting::Random,
+        Beads::DEFAULT.random,
+    ),
+    Param {
+        name: "Freeze",
+        key: "freeze",
+        label: Some("FRZ"),
+        setting: Setting::Freeze,
+        choices: &OFF_ON,
+        wraps: true,
+        default: Beads::DEFAULT.freeze,
+    },
+    hex_param(
+        "Feedback",
+        "feedback",
+        "FDBK",
+        Setting::Feedback,
+        Beads::DEFAULT.feedback,
+    ),
+    Param {
+        name: "Blend",
+        key: "blend",
+        label: Some("BLND"),
+        default: Beads::DEFAULT.blend,
+        ..MIX_PARAM
+    },
+    hex_param(
+        "Reverb",
+        "reverb",
+        "VERB",
+        Setting::ReverbAmount,
+        Beads::DEFAULT.reverb,
+    ),
+    Param {
+        name: "Quality",
+        key: "quality",
+        // A new quality starts a new recording, so steps don't lock it.
+        label: None,
+        setting: Setting::Quality,
+        choices: &BEADS_QUALITY_NAMES,
+        wraps: true,
+        default: Beads::DEFAULT.quality,
+    },
+    GAIN_PARAM,
+];
+
+/// Beads' settings: Mutable Instruments' granular texture synthesizer as the module plays, with its
+/// granular and delay modes, its knobs, its buttons and its qualities. One a file doesn't have
+/// starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Beads {
+    pub mode: BeadsMode,
+    /// Where in the recording grains start, from what's just come in at `00` to the oldest at
+    /// `FF`; in `Delay`, how many times the delay `Density` sets the taps are.
+    pub time: u8,
+    /// How long each grain is, and below a third whether it plays backwards, as `Grains`' `Size`.
+    /// In `Delay`, the taps' tone: a low-pass below `80`, a high-pass above, open at `80`.
+    pub size: u8,
+    /// Each grain's envelope, from a square through a decay and a bell to a reversed decay; in
+    /// `Delay`, an envelope on each repeat, none at `00`.
+    pub shape: u8,
+    /// How far it shifts, as a place in the list from two octaves down to two up.
+    pub pitch: u8,
+    /// How often grains start: evenly below `80`, none in the middle, at random above. Following
+    /// the steps, a division of them below `80` and a chance of each above. In `Delay`, how long
+    /// it is.
+    pub density: u8,
+    /// Whether `Density` goes by itself, `0`, or follows the steps, `1`.
+    pub clock: u8,
+    /// How far each grain's time, size and shape stray at random, as the module's attenuverters do
+    /// with nothing patched; in `Delay`, how far its time and shape wander.
+    pub random: u8,
+    /// Whether it stops recording, `1`, so it keeps playing what it holds.
+    pub freeze: u8,
+    /// How much of what comes out goes back in to be recorded again.
+    pub feedback: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub blend: u8,
+    /// How much of Beads' own reverb is on what comes out.
+    pub reverb: u8,
+    /// Its recording's quality, a place in [`BEADS_QUALITY_NAMES`].
+    pub quality: u8,
+    pub gain: u8,
+}
+
+impl Default for Beads {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Beads {
+    /// As it starts: grains a quarter of the way back, about 150 ms long in a bell, no shift,
+    /// about seven a second at random, nothing straying, recording, no feedback, half wet, a
+    /// little reverb, in its cleanest quality.
+    pub const DEFAULT: Self = Self {
+        mode: BeadsMode::Granular,
+        time: 0x40,
+        size: 0xA8,
+        shape: 0xAA,
+        pitch: MOST_SHIFT,
+        density: 0xCC,
+        clock: 0,
+        random: 0,
+        freeze: 0,
+        feedback: 0,
+        blend: 0x80,
+        reverb: 0x40,
+        quality: 0,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    pub(super) fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::BeadsMode => self.mode as u8,
+            Setting::BeadsTime => self.time,
+            Setting::Length => self.size,
+            Setting::Shape => self.shape,
+            Setting::Shift => self.pitch,
+            Setting::BeadsDensity => self.density,
+            Setting::Clock => self.clock,
+            Setting::Random => self.random,
+            Setting::Freeze => self.freeze,
+            Setting::Feedback => self.feedback,
+            Setting::Mix => self.blend,
+            Setting::ReverbAmount => self.reverb,
+            Setting::Quality => self.quality,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut beads = self;
+        match setting {
+            Setting::BeadsMode => beads.mode = BeadsMode::ALL[usize::from(value)],
+            Setting::BeadsTime => beads.time = value,
+            Setting::Length => beads.size = value,
+            Setting::Shape => beads.shape = value,
+            Setting::Shift => beads.pitch = value,
+            Setting::BeadsDensity => beads.density = value,
+            Setting::Clock => beads.clock = value,
+            Setting::Random => beads.random = value,
+            Setting::Freeze => beads.freeze = value,
+            Setting::Feedback => beads.feedback = value,
+            Setting::Mix => beads.blend = value,
+            Setting::ReverbAmount => beads.reverb = value,
+            Setting::Quality => beads.quality = value,
+            Setting::Gain => beads.gain = value,
+            _ => {}
+        }
+        beads
     }
 }
 

@@ -130,7 +130,7 @@ const CROSSFADE_POINTS: usize = 16;
 
 /// stmlib's `SoftClip`: `soft_limit` up to 3, and 1 past it.
 #[inline]
-fn soft_clip(x: f32) -> f32 {
+pub(super) fn soft_clip(x: f32) -> f32 {
     if x < -3.0 {
         -1.0
     } else if x > 3.0 {
@@ -141,7 +141,7 @@ fn soft_clip(x: f32) -> f32 {
 }
 
 /// A sample's 8-bit mu-law code, as the module writes one.
-fn mu_law_encode(pcm: i16) -> u8 {
+pub(super) fn mu_law_encode(pcm: i16) -> u8 {
     let mut value = i32::from(pcm) >> 2;
     let mask = if value < 0 {
         value = -value;
@@ -160,7 +160,7 @@ fn mu_law_encode(pcm: i16) -> u8 {
 }
 
 /// What a mu-law code plays as, the module's `lut_ulaw`.
-fn mu_law_decode(code: u8) -> i16 {
+pub(super) fn mu_law_decode(code: u8) -> i16 {
     let code = !code;
     let magnitude = ((i32::from(code & 0x0F) << 3) + 0x84) << ((code & 0x70) >> 4);
     if code & 0x80 != 0 {
