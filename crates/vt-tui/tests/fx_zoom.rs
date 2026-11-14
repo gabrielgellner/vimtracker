@@ -385,14 +385,14 @@ fn a_space_echo_has_its_repeats_drawn_as_a_delays_are() {
     special(&mut app, KeyCode::Enter);
     let mut graphics = vt_tui::kitty::Graphics::new();
     let mut out = Vec::new();
-    graphics.sync(&mut app, &mut out).unwrap();
+    app.send_pictures(&mut graphics, &mut out).unwrap();
     press(&mut app, "zi");
     let mut out = Vec::new();
-    graphics.sync(&mut app, &mut out).unwrap();
+    app.send_pictures(&mut graphics, &mut out).unwrap();
     let sent = vt_tui::screenshot::sent_images(&out);
     assert_eq!(sent.len(), 1);
     assert_eq!(
-        png_size(&sent[&app.track_page.zoom_image.unwrap()]),
+        png_size(&sent[&app.track_page.images.get(PanelKey::Zoom).unwrap()]),
         (2100, 624)
     );
     let screen = zoomed_screen(&mut app, false);

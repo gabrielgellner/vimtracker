@@ -8,8 +8,8 @@ use vt_engine::dsp::effects::{delay, echo, plate, resonator, reverb, space, spri
 use vt_engine::dsp::filters::{comb, lpg, vowel};
 use vt_engine::track_state::LiveValues;
 use vt_model::insert::{
-    Comb, Compressor, Delay, Distort, Echo, Equaliser, GateMode, Insert, LowPassGate,
-    MAX_PARAMS, Resonator, Vowel, shift_semitones,
+    Comb, Compressor, Delay, Distort, Echo, Equaliser, GateMode, Insert, LowPassGate, MAX_PARAMS,
+    Resonator, Vowel, shift_semitones,
 };
 
 use super::plot::{self, Filtering, Plot};
