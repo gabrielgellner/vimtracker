@@ -73,6 +73,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("variations", variations()),
         ("rene", rene()),
         ("bloom", bloom()),
+        ("clock-multiplier", clock_multiplier()),
     ];
     songs
         .into_iter()
@@ -1511,6 +1512,106 @@ fn bloom() -> Song {
     song.tracks[1].level = 0xB4;
     four_on_the_floor(&mut song, 2);
     off_beat_hats(&mut song, 3);
+    song
+}
+
+/// The 4ms Shuffling Clock Multiplier's Rotate and Skip (decision 328): three tracks in group 1,
+/// each its own clock, at `1/16`, `1/8` and `1/8T`, which `Space o` turns round; and a hat on every
+/// sixteenth whose live column of `CHA 00` on the rows a `Chance` picks drops a seeded pattern of
+/// them, its amount on the hat's `Skip` macro.
+fn clock_multiplier() -> Song {
+    let mut song = song("clock-multiplier", 118, 9, ScaleKind::Minor, 5);
+    song.seed = 0x5C;
+    let tracks: [(&str, SynthVoice, Speed, [&str; 8]); 3] = [
+        (
+            "BL",
+            SynthVoice::Modal,
+            Speed::Sixteenth,
+            [
+                "A-4 64 --- --- ---",
+                "C-5 50 --- --- ---",
+                "E-5 64 --- --- ---",
+                REST,
+                "G-4 50 --- --- ---",
+                "E-5 64 --- --- ---",
+                "D-5 50 --- --- ---",
+                REST,
+            ],
+        ),
+        (
+            "PL",
+            SynthVoice::VirtualAnalog,
+            Speed::Eighth,
+            [
+                "A-3 64 --- --- ---",
+                "E-3 50 --- --- ---",
+                "C-4 64 --- --- ---",
+                "G-3 50 --- --- ---",
+                "A-3 64 --- --- ---",
+                "D-4 50 --- --- ---",
+                "E-3 64 --- --- ---",
+                "C-4 50 --- --- ---",
+            ],
+        ),
+        (
+            "BS",
+            SynthVoice::VirtualAnalog,
+            Speed::EighthTriplet,
+            [
+                "A-1 64 --- --- ---",
+                REST,
+                "A-2 50 --- --- ---",
+                "E-1 64 --- --- ---",
+                REST,
+                "G-1 64 --- --- ---",
+                "A-1 50 --- --- ---",
+                REST,
+            ],
+        ),
+    ];
+    for (track, (name, sound, speed, rows)) in tracks.into_iter().enumerate() {
+        voice(&mut song, track, name, sound, &rows);
+        song.tracks[track].speed = speed;
+        song.tracks[track].group = Some(1);
+    }
+    set(&mut song, 0, "modal.decay", 0x80);
+    song.tracks[0].level = 0xC0;
+    song.tracks[0].send_b = 0xA0;
+    song.tracks[0].pan = 0xA0;
+    song.tracks[1].cutoff = 0x78;
+    pluck(&mut song, 1, 260, 20, 120);
+    song.tracks[1].level = 0xB8;
+    song.tracks[1].send_a = 0x90;
+    song.tracks[1].pan = 0x60;
+    song.tracks[2].cutoff = 0x48;
+    song.tracks[2].resonance = 0x30;
+    song.tracks[2].level = 0xC8;
+    four_on_the_floor(&mut song, 3);
+    voice(
+        &mut song,
+        4,
+        "HH",
+        SynthVoice::Hat,
+        &texts(&hits("XxxxXxxxXxxxXxxx", "C-4")),
+    );
+    set(&mut song, 4, "hat.decay", 0x28);
+    song.tracks[4].level = 0xB0;
+    // The skip: `CHA 00`, never playing, on about a third of the hat's rows, the same each pass.
+    let mut skip = shape(FillKind::Ramp, 0, 0, Where::Chance(35));
+    skip.seed = 0x5C;
+    let cha = ShapeColumn::Fx {
+        slot: 0,
+        command: FxCommand::Cha,
+    };
+    song = generate(song, 4, cha, 16, skip);
+    gen_knob(
+        &mut song.tracks[4],
+        0,
+        "Skip",
+        (GenColumn::Fx(0), GenParam::Chance),
+        (0, 100),
+        35,
+    );
     song
 }
 

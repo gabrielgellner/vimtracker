@@ -20,6 +20,7 @@ use vt_model::settings::{
     quantised_nudge,
 };
 use vt_model::song::{DEFAULT_ACCENT, FilterMode, FilterType, SynthVoice, Track, level_gain};
+use vt_model::speed::Speed;
 use vt_model::step::{FxSlot, Mark, slice_letter};
 use vt_model::steps::{MAX_STEP, STEPS, StepRate, Steps, StepsMode, smoothed};
 
@@ -775,12 +776,14 @@ impl Clock {
 }
 
 /// A step a track has worked out, for where it's heard: where it falls on the grid, its running
-/// count and how long it lasts.
+/// count, how long it lasts and the speed it plays at, which a step cut short by a change of speed
+/// doesn't last the whole of.
 #[derive(Debug, Clone, Copy)]
 pub struct Worked {
     pub grid: u64,
     pub count: i64,
     pub ticks: u64,
+    pub speed: Speed,
 }
 
 /// A step, or one part of it, worked out but not yet played, as its groove or nudge lands it later

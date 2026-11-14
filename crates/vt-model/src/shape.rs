@@ -1446,6 +1446,28 @@ mod tests {
         assert_eq!(picked(100, 1).len(), 1000);
     }
 
+    /// A `CHA 00` written on the rows `Chance` picks, kept live, is the 4ms Shuffling Clock
+    /// Multiplier's Skip (decision 328): the rows it drops are the same each pass for a seed, and
+    /// turning the amount up only drops more of them.
+    #[test]
+    fn a_skip_of_cha_00_by_chance_repeats_and_only_drops_more_as_it_rises() {
+        let steps = notes(64);
+        let cha = ShapeColumn::Fx {
+            slot: 0,
+            command: FxCommand::Cha,
+        };
+        let picked = |percent| targets(&steps, all(&steps), cha, Where::Chance(percent), 9);
+        let mut before = picked(0);
+        assert!(before.is_empty());
+        for percent in 1..=100 {
+            let now = picked(percent);
+            assert_eq!(now, picked(percent), "the same rows every time");
+            assert!(before.iter().all(|row| now.contains(row)), "at {percent}%");
+            before = now;
+        }
+        assert_eq!(before.len(), 64);
+    }
+
     /// A pattern as `x` and `.`.
     fn drawn(pattern: &[bool]) -> String {
         pattern

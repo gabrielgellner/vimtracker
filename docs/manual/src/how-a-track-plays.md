@@ -350,6 +350,22 @@ rows:        00  01  02      03      04       RATE 04h, 1/8, on row 01
                  └ lasts to the next eighth
 ```
 
+`Space o` passes the speeds round a group's tracks, or the tracks selected, as the Rotate
+jack of 4ms' Shuffling Clock Multiplier passes its outputs' multiplications round: each
+track takes the next one's, so a group's three clocks stay the same three, only played by
+other tracks. Each change starts on the track's next step, which lasts to the next of its
+new speed's steps as a `RATE` does, so every track stays on its new grid:
+
+```text
+sixteenths:  0   1   2   3   4   5   6   7   8
+track 1:     00  01  02  03  04      05      06       1/16, then 1/8
+track 2:     00      01      02  03  04  05  06       1/8, then 1/16
+                             └ Space o during sixteenth 3, heard from 4
+```
+
+While recording, the same press writes each new speed as a held `RATE` on the track's next
+row, so the pass plays the turn back where it was pressed.
+
 ## Conditions count passes
 
 A `CND` plays its row only on some passes, as Elektron's trig conditions do. A pass

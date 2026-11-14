@@ -1,7 +1,7 @@
 # Generative sequencers, recreated
 
 Some of the best-loved sequencers don't play what you wrote: they play something near it, and
-let you steer. This chapter builds nineteen of them out of what vimtracker already has, each as a
+let you steer. This chapter builds twenty of them out of what vimtracker already has, each as a
 short song you can open, play and pull apart: a loop of a bar or two per track, synths only, so
 there are no samples to find.
 
@@ -28,6 +28,7 @@ there are no samples to find.
 | `variations` | aicd's acid n-grams | `S`'s `Variation`: a Markov chain learned from the line itself |
 | `rene` | Make Noise's René | The rows as a grid: `:order cartesian` on chords, `:order snake` on a bass |
 | `bloom` | Qu-Bit's Bloom | `:bloom`: branches grown from a trunk, each a mutation of the one before, on a path |
+| `clock-multiplier` | 4ms' Shuffling Clock Multiplier | `Space o` rotating a group's speeds, and a live `CHA 00` column as `Skip` |
 
 Each section says what the original does, how the song does it, how to build it yourself from an
 empty song, and which knob to turn next. The steps name the keys; **Selecting and editing**,
@@ -1370,6 +1371,56 @@ and a `Hat` on the off-beats. The finished song also makes the `VA` a pluck (`Mo
     eight bars, so the last branch is always new.
 *   Map a macro to `Mutation` on the Gen page with `M`, and one knob turns every branch at once.
 *   `Space g a` on a branch keeps it as plain notes, to edit by hand; it stops following.
+
+## Shuffling Clock Multiplier
+
+[4ms' Shuffling Clock Multiplier](https://4mscompany.com/) takes one clock and gives eight
+outputs at one to eight times its rate. `Shuffle` pushes some of their pulses early and `Slip`
+pushes them late; `Skip` drops beats in a pattern, so an output plays more of a pattern than a
+clock; and a voltage at its `Rotate` jack passes the multiplications round the outputs, so each
+output takes the next one's rate and the drums they play trade places.
+
+Each track here has its own clock already, its `Speed`, and a groove does what `Shuffle` and
+`Slip` do. Rotate is `Space o`, which passes the speeds round a group's tracks, and Skip is a live
+column of `CHA 00`, a chance that never comes up, on the rows a seeded `Chance` picks.
+
+**How the song does it.** Tracks 1 to 3, in group 1, are three clocks in A minor: a `Modal` bell at
+`1/16`, a plucked `VA` at `1/8` and a `VA` bass at `1/8T`, eight rows each. A kick keeps the beat,
+and a hat plays every sixteenth, its FX column a live `Chance` of `CHA 00` at `35%` that drops
+five of them, the same five every bar. The hat's first macro, `Skip`, holds that amount.
+[`song.ron`](songs/clock-multiplier/song.ron)
+
+```text
+    00  01  02  03  04  05  06  07  08  09  0A  0B  0C  0D  0E  0F
+HH  X   x   .   x   X   x   x   .   X   .   .   x   X   x   .   x       . is CHA 00
+```
+
+**Build it.**
+
+1.  `:set scale=minor`, `:set root=a` and `:bpm 118`.
+2.  Track 1: `K` `modal` `Enter`, `:name BL`, and eight rows of a tune, such as
+    `A-4 C-5 E-5 --- G-4 E-5 D-5 ---`, with `:len 8` on the Note column for a phrase of eight.
+3.  Track 2: a `VA`, `:name PL`, eight rows such as `A-3 E-3 C-4 G-3 A-3 D-4 E-3 C-4`, and
+    `/speed` `Enter`, then `K` to choose `1/8` from the list.
+4.  Track 3: a `VA`, `:name BS`, eight rows of bass on `A-1`, `E-1` and `G-1`, at `1/8T`.
+5.  `:group 1 1-3` puts the three in group 1.
+6.  A `Kick` on every beat, and on track 5 a `Hat` on every row. In the hat's phrase, `l` to its
+    first FX column, `vG` and `S`, and choose `CHA`. Set `From` and `To` to `00`, `Where` to
+    `Chance` and its `Amount` to `35%`, then `L`.
+7.  `Space 8` on the hat, `M` on the generator's `Amount`, and `:macro Skip` to name it.
+
+**Play it.**
+
+*   `Space o` on any of the first three tracks: the bell takes the eighths, the pluck the
+    triplets and the bass the sixteenths. Again, and they move on; a third time, and they're
+    back. Each press is heard from each track's next step, and `u` takes one back.
+*   `Space r`, then `Space o` on a bar line and again two bars later: the turns go in as held
+    `RATE`s on the rows where you pressed, so the loop plays them back each time round.
+*   Turn `Skip` up while it plays: the hat drops more steps, keeping the ones already gone, until at
+    `100%` it's silent; down to `0%` it's a clock again. `r` on the Gen page draws other steps.
+*   `Where` on `Euclid` with `Hits` as the amount spreads the dropped steps evenly instead.
+*   Give the group a groove of its own, `Swing 62` on each track's `Groove`, for the SCM's
+    `Shuffle`.
 
 ## Generators still to come
 
