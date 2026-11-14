@@ -222,7 +222,7 @@ fn a_level_knob_edits_its_own_track_whatever_the_cursor_is_on_one_undo_step_a_to
     assert!(tick_until(&mut app, &ports, |fake| fake
         .knob_position(7)
         .is_some()));
-    app.cursor.track = 6;
+    app.services.cursor.track = 6;
     let depth = app.services.history.undo_depth();
     roto_does(
         &ports,
@@ -252,7 +252,7 @@ fn a_level_knob_edits_its_own_track_whatever_the_cursor_is_on_one_undo_step_a_to
         depth + 1,
         "one undo step"
     );
-    assert_eq!(app.cursor.track, 6, "the cursor stays");
+    assert_eq!(app.services.cursor.track, 6, "the cursor stays");
     // Its value, as the app writes it.
     assert!(tick_until(&mut app, &ports, |fake| {
         values_shown(fake, 2)
@@ -286,7 +286,7 @@ fn a_mute_button_mutes_its_track_lit_while_muted_and_the_keys_light_it_too() {
     assert!(tick_until_app(&mut app, |app| !app.services.levels[3].mute));
     assert!(tick_until(&mut app, &ports, |fake| fake.light(3) == Some(false)));
     // The keys mute the cursor's track, and the Roto shows it.
-    app.cursor.track = 5;
+    app.services.cursor.track = 5;
     press(&mut app, " m");
     assert!(app.services.levels[5].mute, "{}", app.services.status);
     assert!(tick_until(&mut app, &ports, |fake| fake.light(5) == Some(true)));
@@ -397,7 +397,7 @@ fn func_focuses_one_track_level_pan_and_sends_and_plugin_mode_shows_it_too() {
     roto_says(&ports, FromRoto::SetPluginMode);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
     assert_eq!(app.services.roto.mode, RotoMode::Plugin);
-    assert_eq!(app.cursor.track, 0, "the cursor stays");
+    assert_eq!(app.services.cursor.track, 0, "the cursor stays");
 }
 
 #[test]

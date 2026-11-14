@@ -104,7 +104,7 @@ fn after(app: &App, control: ProjectControl) -> Option<String> {
         }
         // A reset belongs to a section, so with more than one it says which.
         ProjectControl::Reset if app.song().sections.len() > 1 => {
-            Some(format!("in section {}", app.cursor.section + 1))
+            Some(format!("in section {}", app.services.cursor.section + 1))
         }
         ProjectControl::Audio if !app.audio.running => Some("stopped".to_owned()),
         // The groove drawn says whether the project plays it, and one that comes with the program
@@ -133,7 +133,7 @@ fn columns() -> Columns {
 /// its right has the rest of the row.
 fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static> {
     let here = app.project_control();
-    let typing = app.mode == Mode::Insert;
+    let typing = app.modes.mode == Mode::Insert;
     let mut cells = columns.row();
     for (index, control) in controls.iter().enumerate() {
         cells.to(control.column() * 2);
@@ -155,7 +155,7 @@ fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static
         }
         if *control == ProjectControl::Bpm {
             let digits = if on_fine && typing {
-                format!(".{}_", app.entry.text)
+                format!(".{}_", app.modes.entry.text)
             } else {
                 fine(app.song().millibpm)
             };
@@ -271,7 +271,7 @@ pub fn title(app: &App) -> Line<'static> {
     let mut title = vec![Span::styled("Project ", bold)];
     title.extend(PROJECT_PAGES.map(|view| {
         let text = format!(" {} ", page_name(view));
-        if view == app.view {
+        if view == app.modes.view {
             Span::styled(text, bold)
         } else {
             Span::styled(text, theme::dim())

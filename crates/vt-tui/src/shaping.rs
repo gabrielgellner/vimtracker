@@ -766,7 +766,7 @@ impl App {
     /// commands first, to choose the one it writes.
     pub(crate) fn open_shape(&mut self) {
         let selection = self.current_selection();
-        let field = self.cursor.field;
+        let field = self.services.cursor.field;
         self.open_shape_on(selection, field, None);
     }
 
@@ -786,7 +786,7 @@ impl App {
             }
             Err(Refusal::Command(track)) => {
                 self.leave_selection(selection);
-                self.cursor.field = field;
+                self.services.cursor.field = field;
                 self.shape_command = Some((selection, field));
                 let (_, items) = self.fx_command_items(track, Pick::ShapeCommand);
                 self.show_picker(Picker::new("FX commands", items).searching(""));
@@ -796,9 +796,9 @@ impl App {
             }
         };
         self.leave_selection(selection);
-        self.cursor.field = field;
+        self.services.cursor.field = field;
         self.shape = Some(panel);
-        self.mode = Mode::Shape;
+        self.modes.mode = Mode::Shape;
         self.preview_shape();
     }
 
@@ -900,7 +900,7 @@ impl App {
     /// A column of the phrase under the cursor over its loop, as `vG` selects it.
     fn loop_selection(&self, field: Field) -> Selection {
         let extent = self.extent();
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         Selection {
             range: StepRange::between(extent.start, extent.start + extent.length.max(1) - 1),
             scope: Scope::column(field.group()),
@@ -919,7 +919,7 @@ impl App {
         shape: Shape,
         live: Option<usize>,
     ) -> Result<Action, String> {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let phrase = self
             .phrase_id()
             .ok_or("This track has no phrase here for the patch's generators")?;
@@ -1029,7 +1029,7 @@ impl App {
         let Some(panel) = self.shape.take() else {
             return;
         };
-        self.mode = Mode::Normal;
+        self.modes.mode = Mode::Normal;
         let part = panel.parts[0];
         let action = match (panel.live, live) {
             (None, false) | (Some(_), true) => None,
@@ -1093,12 +1093,12 @@ impl App {
     /// cursor's column, it's the one covering the cursor's row, or else the nearest.
     pub(crate) fn generator_here(&self) -> Option<(u32, usize)> {
         let phrase = self.phrase_id()?;
-        let step = self.cursor.step;
+        let step = self.services.cursor.step;
         self.phrase_here()?
             .generators()
             .iter()
             .enumerate()
-            .filter(|(_, generator)| on_column(self.cursor.field, generator.column))
+            .filter(|(_, generator)| on_column(self.services.cursor.field, generator.column))
             .filter_map(|(index, generator)| {
                 let rows = generator.rows()?;
                 let away = if step < rows.first {
@@ -1120,7 +1120,7 @@ impl App {
             return;
         };
         let base = Arc::clone(self.song());
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let found = &base.tracks[track].phrases[&phrase];
         let generator = &found.generators()[index];
         let Some(range) = generator.rows() else {
@@ -1144,7 +1144,7 @@ impl App {
         self.shape = Some(ShapePanel {
             selection: Selection {
                 range,
-                scope: Scope::column(self.cursor.field.group()),
+                scope: Scope::column(self.services.cursor.field.group()),
                 tracks: TrackSpan::between(track, track),
             },
             parts: vec![part],
@@ -1158,7 +1158,7 @@ impl App {
             sources,
             default_source,
         });
-        self.mode = Mode::Shape;
+        self.modes.mode = Mode::Shape;
         self.preview_shape();
     }
 
@@ -1169,7 +1169,7 @@ impl App {
             self.services.status = "No live column here to apply".to_owned();
             return;
         };
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let name =
             generator_label(&self.song().tracks[track].phrases[&phrase].generators()[generator]);
         self.apply_generator(track, phrase, generator, &name);
@@ -1180,7 +1180,7 @@ impl App {
         let Some(panel) = self.shape.take() else {
             return;
         };
-        self.mode = Mode::Normal;
+        self.modes.mode = Mode::Normal;
         self.services.history.replace_current(panel.base);
         self.services.publish();
     }

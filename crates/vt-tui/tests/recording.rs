@@ -74,7 +74,7 @@ fn a_recorded_note_goes_on_the_row_its_own_track_is_playing_as_long_as_its_held(
     assert_eq!(rows[1].note, Note::On(60), "{rows:?}");
     assert_eq!(rows[1].velocity, Some(app.note_velocity));
     assert_eq!(rows[1].nudge, 6);
-    assert_eq!(app.cursor.step, 0, "the cursor stays");
+    assert_eq!(app.services.cursor.step, 0, "the cursor stays");
     // Until it's let go, it holds on the row's pulse until something ends it.
     assert_eq!(length_of(&rows[1]), Some((1, Some(0xFF))));
 

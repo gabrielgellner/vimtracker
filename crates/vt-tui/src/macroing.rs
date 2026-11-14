@@ -158,7 +158,7 @@ impl App {
     /// The setting under the cursor on the track page, if it's one a macro can hold: one of the
     /// registry's, or a live generator's on the Gen page, by its column.
     fn setting_here(&self) -> Option<MacroTarget> {
-        let track = self.song().tracks.get(self.cursor.track)?;
+        let track = self.song().tracks.get(self.services.cursor.track)?;
         let target = match self.track_control() {
             Control::Gen {
                 phrase,
@@ -186,7 +186,7 @@ impl App {
         else {
             return None;
         };
-        let live = self.live_generator(self.cursor.track, phrase, generator)?;
+        let live = self.live_generator(self.services.cursor.track, phrase, generator)?;
         let context = live.context();
         let bounds = param.bounds(&context)?;
         let now = param.number(&live.generator.heard(), &context)?;
@@ -196,7 +196,7 @@ impl App {
     /// The macro holding the setting under the cursor, and its mapping there, if one does.
     pub(crate) fn macro_here(&self) -> Option<(MacroTarget, usize, MacroMap)> {
         let target = self.setting_here()?;
-        let track = self.song().tracks.get(self.cursor.track)?;
+        let track = self.song().tracks.get(self.services.cursor.track)?;
         let (at, map) = track.macro_holding(target)?;
         Some((target, at, *map))
     }
@@ -266,7 +266,7 @@ impl App {
         };
         let track = self.page_track();
         let name = target.name_on(&track);
-        let index = self.cursor.track;
+        let index = self.services.cursor.track;
         let held = &track.macros[at];
         match track.macro_holding(target) {
             Some((on, _)) if on == at => {
@@ -359,7 +359,7 @@ impl App {
             row,
             ..MappingView::default()
         });
-        self.mode = Mode::Mapping;
+        self.modes.mode = Mode::Mapping;
         self.say_mapping();
     }
 
@@ -423,7 +423,7 @@ impl App {
             return;
         };
         self.services.apply(&Action::MapMacro {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             at: view.at,
             map,
         });
@@ -502,7 +502,7 @@ impl App {
             _ => key,
         };
         let Some(view) = self.mapping.clone() else {
-            self.mode = Mode::Normal;
+            self.modes.mode = Mode::Normal;
             return;
         };
         if let Some(typed) = view.typing.clone() {
@@ -517,7 +517,7 @@ impl App {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => {
                 self.mapping = None;
-                self.mode = Mode::Normal;
+                self.modes.mode = Mode::Normal;
                 self.services.status.clear();
             }
             KeyCode::Char('j') | KeyCode::Down => self.mapping_move(|row| (row + 1).min(count - 1)),
@@ -654,7 +654,7 @@ impl App {
         let track = self.page_track();
         let name = map.target.name_on(&track);
         self.services.apply(&Action::UnmapMacro {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             target: map.target,
         });
         self.keep_mapping_open();
@@ -676,14 +676,14 @@ impl App {
             .history
             .current()
             .tracks
-            .get(self.cursor.track)
+            .get(self.services.cursor.track)
             .map_or(0, |track| track.macros[view.at].maps.len());
         if count == 0 {
             self.mapping = None;
-            self.mode = Mode::Normal;
+            self.modes.mode = Mode::Normal;
         } else {
             view.row = view.row.min(count - 1);
-            self.mode = Mode::Mapping;
+            self.modes.mode = Mode::Mapping;
         }
     }
 
@@ -695,9 +695,9 @@ impl App {
             (None, Control::Macro(at)) => Some(at),
             (None, _) => self.macro_here().map(|(_, at, _)| at),
         };
-        let Some(at) =
-            at.filter(|_| self.view == crate::input::mode::View::Track || self.mapping.is_some())
-        else {
+        let Some(at) = at.filter(|_| {
+            self.modes.view == crate::input::mode::View::Track || self.mapping.is_some()
+        }) else {
             self.services.status =
                 ":macro names the macro under the cursor, on the track page".to_owned();
             return;
@@ -708,7 +708,7 @@ impl App {
             return;
         }
         self.services.apply(&Action::NameMacro {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             at,
             name: (!name.is_empty()).then(|| name.to_owned()),
         });

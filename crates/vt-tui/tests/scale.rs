@@ -44,11 +44,11 @@ fn with_a_scale_the_other_keys_are_silent_and_note_off_and_octave_still_work() {
     let (mut app, _realtime) = app();
     command(&mut app, "set scale=major");
     entering_steps_down(&mut app);
-    let start = app.cursor.step;
+    let start = app.services.cursor.step;
     press(&mut app, "iip;");
     press(&mut app, ";");
     assert!(written_notes(&app).is_empty());
-    assert_eq!(app.cursor.step, start, "and it doesn't move");
+    assert_eq!(app.services.cursor.step, start, "and it doesn't move");
     press(&mut app, "1");
     assert_eq!(written_notes(&app), [Note::Off]);
     press(&mut app, "xa");
@@ -78,7 +78,7 @@ fn option_s_turns_the_scale_off_and_on_and_remembers_it() {
     press(&mut app, "i");
     alt(&mut app, "M-s");
     assert!(!app.scale.on);
-    assert_eq!(app.mode, Mode::Insert, "in Insert, it stays");
+    assert_eq!(app.modes.mode, Mode::Insert, "in Insert, it stays");
     press(&mut app, "s");
     assert_eq!(written_notes(&app), [Note::On(62)], "the piano again");
     app.key_released(Key::char('s'), Instant::now());
@@ -182,7 +182,7 @@ fn scale_fit_moves_a_phrases_notes_and_can_be_undone() {
 fn the_scale_list_sets_the_kind_and_turns_it_on() {
     let (mut app, _realtime) = app();
     command(&mut app, "scale");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     press(&mut app, "dorian");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.scale.kind.name(), "Dorian");

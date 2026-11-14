@@ -87,7 +87,7 @@ fn the_turing_machine_saved_as_a_patch_goes_onto_another_track_keeping_its_sound
     );
 
     // On the kick, whose first two slots shape its note and cutoff.
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     let before = app.song().tracks[1].clone();
     let depth = app.services.history.undo_depth();
     command(&mut app, "patch load Turing");
@@ -150,7 +150,7 @@ fn too_few_free_is_refused_saying_how_many_and_bang_puts_it_over_the_last() {
         preset: Box::new(vt_model::preset::SoundPreset::of(&track, None)),
         sample: 0,
     });
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     let before = app.song().tracks[1].clone();
     command(&mut app, "patch load Turing");
     assert_eq!(
@@ -175,7 +175,7 @@ fn the_browser_and_k_add_a_patch() {
     let (mut app, _realtime, presets) = turing_machine();
     // Before any is saved, the browser lists the shipped ones, under `Factory`.
     command(&mut app, "patch");
-    assert_eq!(app.mode, Mode::Picker, "{}", app.services.status);
+    assert_eq!(app.modes.mode, Mode::Picker, "{}", app.services.status);
     let rows = explorer_rows(&app);
     assert_eq!(rows[..2], ["v built in", "    Turing Machine"], "{rows:?}");
     special(&mut app, KeyCode::Esc);
@@ -183,7 +183,7 @@ fn the_browser_and_k_add_a_patch() {
     assert!(presets.join("patches").is_dir());
 
     // `K` on the Mod page's Type lists adding one, which opens the browser on the patches.
-    app.cursor.track = 2;
+    app.services.cursor.track = 2;
     press(&mut app, " 6");
     press(&mut app, "K");
     let picker = app.picker.as_ref().unwrap();
@@ -196,7 +196,7 @@ fn the_browser_and_k_add_a_patch() {
     );
     press(&mut app, "/add a p");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Picker, "{}", app.services.status);
+    assert_eq!(app.modes.mode, Mode::Picker, "{}", app.services.status);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Patches");
     let rows = explorer_rows(&app);
@@ -218,7 +218,7 @@ fn the_browser_and_k_add_a_patch() {
     press(&mut app, "K");
     press(&mut app, "/save as a p");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Command);
+    assert_eq!(app.modes.mode, Mode::Command);
     assert_eq!(app.command_line, "patch save ");
 
     // And on a macro, the patch's knob, on the Gen page.
@@ -274,7 +274,7 @@ fn a_live_generator_a_macro_holds_goes_onto_the_phrase_under_the_cursor() {
         app.services.status
     );
 
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     command(&mut app, "patch load Euclid");
     assert!(
         app.services
@@ -424,7 +424,7 @@ fn a_lock_a_patchs_generator_writes_plays_on_the_slot_its_slot_went_to() {
 
     // The second track's first two slots shape its note and cutoff, so slot 4 lands in `Mod 3`
     // and its lock with it: left as `DEP4`, it would lock a slot going nowhere.
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     assert_eq!(cutoff_heard(app.song(), 1), 0x80);
     command(&mut app, "patch load Lock");
     assert!(
@@ -458,7 +458,7 @@ fn bang_puts_a_patch_over_the_last_slot_and_its_lock_follows_leaving_the_tracks_
     *phrase.step_mut(0).unwrap() = "C-3 -- --- mod5.depth:90 ---".parse().unwrap();
     let (mut app, _realtime, _presets) = app_on(song);
     command(&mut app, "patch save Lock");
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     let own = app.song().tracks[1].phrases[&0].steps()[0].fx[1].to_string();
     assert!(own.starts_with("mod5.depth:90"), "{own}");
 
@@ -646,7 +646,7 @@ fn the_shipped_patches_are_found_by_their_tags_and_cant_be_tagged() {
         .collect();
     assert_eq!(tags, ["patch", "generative", "pitch"]);
     press(&mut app, "T");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert!(
         app.picker.as_ref().unwrap().taggable().is_none(),
         "a shipped patch is read-only"
@@ -671,7 +671,7 @@ fn a_patch_of_the_users_own_comes_before_a_shipped_one_of_the_same_name() {
     let (mut app, _realtime, presets) = turing_machine();
     command(&mut app, "patch save Euclid");
     assert!(presets.join("patches/Euclid.ron").is_file());
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     command(&mut app, "patch load Euclid");
     assert!(
         app.services

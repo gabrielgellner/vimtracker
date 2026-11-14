@@ -117,9 +117,9 @@ impl App {
             return;
         };
         let held = self.held_flags.remove(at);
-        let writing = self.mode == Mode::Insert
-            && self.view == View::Phrase
-            && self.cursor.field == Field::Note;
+        let writing = self.modes.mode == Mode::Insert
+            && self.modes.view == View::Phrase
+            && self.services.cursor.field == Field::Note;
         if held.used || !writing {
             return;
         }
@@ -204,10 +204,14 @@ impl App {
     /// that left it, and otherwise the cursor's.
     fn flag_target(&self) -> Option<(usize, u32, usize)> {
         match self.last_written {
-            Some(written) if written.cursor == self.cursor => {
+            Some(written) if written.cursor == self.services.cursor => {
                 Some((written.track, written.phrase, written.step))
             }
-            _ => Some((self.cursor.track, self.phrase_id()?, self.cursor.step)),
+            _ => Some((
+                self.services.cursor.track,
+                self.phrase_id()?,
+                self.services.cursor.step,
+            )),
         }
     }
 

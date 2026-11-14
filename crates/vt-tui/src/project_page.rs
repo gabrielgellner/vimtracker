@@ -342,7 +342,7 @@ impl App {
     pub(crate) fn show_project_page_beside(&mut self, next: bool) {
         let at = PROJECT_PAGES
             .iter()
-            .position(|view| *view == self.view)
+            .position(|view| *view == self.modes.view)
             .unwrap_or(0);
         let to = if next { at + 1 } else { at.saturating_sub(1) };
         self.show_view(PROJECT_PAGES[to.min(PROJECT_PAGES.len() - 1)]);
@@ -350,7 +350,7 @@ impl App {
 
     /// Run a command on the project page. Returns false if it means the same as anywhere.
     pub(crate) fn run_project_page(&mut self, cmd: Cmd) -> bool {
-        let count = self.count.take();
+        let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1);
         let last = PROJECT_ROWS.len() - 1;
         match cmd {
@@ -381,7 +381,7 @@ impl App {
                 self.show_project_page_beside(cmd == Cmd::NextPage);
             }
             _ => {
-                self.count = count;
+                self.modes.count = count;
                 return false;
             }
         }
@@ -498,7 +498,7 @@ impl App {
                 }
             }
             ProjectControl::Reset => {
-                let section = self.cursor.section;
+                let section = self.services.cursor.section;
                 let from = song
                     .sections
                     .get(section)
@@ -764,11 +764,11 @@ impl App {
             self.choose_project_control();
             return;
         }
-        self.entry = Entry::default();
+        self.modes.entry = Entry::default();
         if control == ProjectControl::Name {
-            self.entry.text = self.project_name();
+            self.modes.entry.text = self.project_name();
         }
-        self.mode = Mode::Insert;
+        self.modes.mode = Mode::Insert;
     }
 
     /// A key while typing on the project page: `Enter` sets what's typed, `Esc` leaves it, and on
@@ -777,8 +777,8 @@ impl App {
         let control = self.project_control();
         match key.code {
             KeyCode::Esc => {
-                self.entry = Entry::default();
-                self.mode = Mode::Normal;
+                self.modes.entry = Entry::default();
+                self.modes.mode = Mode::Normal;
             }
             KeyCode::Char('r') if key.ctrl && control == ProjectControl::Name => {
                 let taken = self
@@ -787,15 +787,15 @@ impl App {
                     .as_deref()
                     .and_then(std::path::Path::parent)
                     .map_or_else(std::collections::HashSet::new, crate::exploring::taken_in);
-                self.entry.text = self.names.fresh(|name| taken.contains(name));
+                self.modes.entry.text = self.names.fresh(|name| taken.contains(name));
             }
-            KeyCode::Char('u') if key.ctrl => self.entry.text.clear(),
+            KeyCode::Char('u') if key.ctrl => self.modes.entry.text.clear(),
             KeyCode::Backspace => {
-                self.entry.text.pop();
+                self.modes.entry.text.pop();
             }
             KeyCode::Enter => {
-                let text = std::mem::take(&mut self.entry.text);
-                self.mode = Mode::Normal;
+                let text = std::mem::take(&mut self.modes.entry.text);
+                self.modes.mode = Mode::Normal;
                 self.commit_project_control(control, text.trim());
             }
             KeyCode::Char(c) if !key.ctrl && !key.alt => {
@@ -804,8 +804,8 @@ impl App {
                 } else {
                     LONGEST_TYPED
                 };
-                if self.entry.text.chars().count() < room {
-                    self.entry.text.push(c);
+                if self.modes.entry.text.chars().count() < room {
+                    self.modes.entry.text.push(c);
                 }
             }
             _ => {}

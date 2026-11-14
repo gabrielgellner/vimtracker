@@ -56,8 +56,8 @@ impl App {
     /// What `:preset` acts on here: on the FX page with the cursor on a slot, its effect, and
     /// anywhere else the cursor's track's sound.
     fn preset_target(&self) -> Target {
-        let track = self.cursor.track;
-        if self.view == View::Track
+        let track = self.services.cursor.track;
+        if self.modes.view == View::Track
             && self.track_page.page == Page::Fx
             && let Control::Insert(slot) | Control::InsertParam(slot, _) = self.track_control()
         {

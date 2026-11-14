@@ -18,17 +18,17 @@ use common::*;
 fn insert_mode_writes_notes_where_the_cursor_is() {
     let (mut app, _rt) = app();
     tap(&mut app, "i");
-    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.modes.mode, Mode::Insert);
     tap(&mut app, "a");
     assert_eq!(notes(&app)[0], Note::On(60));
-    assert_eq!(app.cursor.step, 0, "it stays, to play another in");
+    assert_eq!(app.services.cursor.step, 0, "it stays, to play another in");
     tap(&mut app, "s");
     assert_eq!(notes(&app)[0], Note::On(62));
     special(&mut app, KeyCode::Backspace);
     assert_eq!(notes(&app)[0], Note::Empty, "Backspace clears it there");
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
 }
 
 #[test]
@@ -48,15 +48,15 @@ fn semicolon_turns_auto_jump_on_and_entering_moves_on_by_the_grid() {
     assert_eq!(written[0], Note::On(60));
     assert_eq!(written[4], Note::On(71));
     assert_eq!(written[8], Note::Off);
-    assert_eq!(app.cursor.step, 12);
+    assert_eq!(app.services.cursor.step, 12);
     // Back to the last entry, and clear it.
     special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.cursor.step, 8);
+    assert_eq!(app.services.cursor.step, 8);
     assert_eq!(notes(&app)[8], Note::Empty);
     tap(&mut app, ";");
     assert!(!app.auto_jump);
     tap(&mut app, "a");
-    assert_eq!(app.cursor.step, 8);
+    assert_eq!(app.services.cursor.step, 8);
 
     // It's kept with the song.
     tap(&mut app, ";");
@@ -130,11 +130,11 @@ fn undo_and_redo_keys_restore_notes() {
 fn the_cursor_stops_at_phrase_edges() {
     let (mut app, _rt) = app();
     press(&mut app, "k");
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
     for _ in 0..40 {
         press(&mut app, "j");
     }
-    assert_eq!(app.cursor.step, 15);
+    assert_eq!(app.services.cursor.step, 15);
 }
 
 #[test]
@@ -142,20 +142,20 @@ fn arrows_move_in_insert_without_writing() {
     let (mut app, _realtime) = app();
     press(&mut app, "i");
     special(&mut app, KeyCode::Down);
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     special(&mut app, KeyCode::Right);
-    assert_eq!(app.cursor.step, 5);
+    assert_eq!(app.services.cursor.step, 5);
     special(&mut app, KeyCode::Right);
-    assert_eq!(app.cursor.step, 9);
+    assert_eq!(app.services.cursor.step, 9);
     special(&mut app, KeyCode::Up);
-    assert_eq!(app.cursor.step, 8);
+    assert_eq!(app.services.cursor.step, 8);
     special(&mut app, KeyCode::Left);
-    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.services.cursor.step, 4);
     special(&mut app, KeyCode::Left);
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
     special(&mut app, KeyCode::Left);
-    assert_eq!(app.cursor.step, 0);
-    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.services.cursor.step, 0);
+    assert_eq!(app.modes.mode, Mode::Insert);
     assert!(notes(&app).iter().all(|note| *note == Note::Empty));
     assert!(!app.services.dirty);
 
@@ -163,7 +163,7 @@ fn arrows_move_in_insert_without_writing() {
     command(&mut app, "set skip=3");
     press(&mut app, "i");
     special(&mut app, KeyCode::Right);
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
 }
 
 #[test]
@@ -171,9 +171,9 @@ fn an_arrow_drops_a_half_typed_value() {
     let (mut app, _realtime) = app();
     press(&mut app, "li8");
     special(&mut app, KeyCode::Down);
-    assert_eq!(app.mode, Mode::Insert);
-    assert_eq!(app.cursor.step, 1);
-    assert!(app.entry.text.is_empty());
+    assert_eq!(app.modes.mode, Mode::Insert);
+    assert_eq!(app.services.cursor.step, 1);
+    assert!(app.modes.entry.text.is_empty());
     press(&mut app, "40");
     let velocities: Vec<_> = app.song().tracks[0].phrases[&0]
         .steps()
@@ -239,7 +239,7 @@ fn a_note_then_right_lands_on_the_next_beat() {
         tap(&mut app, "a");
         special(&mut app, KeyCode::Right);
     }
-    assert_eq!(app.cursor.step, 15);
+    assert_eq!(app.services.cursor.step, 15);
     let written: Vec<usize> = notes(&app)
         .iter()
         .enumerate()
@@ -286,19 +286,19 @@ fn left_and_right_move_by_the_grid_from_the_cursor() {
     tap(&mut app, "a");
     assert_eq!(written_steps(&app), [0, 8]);
     special(&mut app, KeyCode::Left);
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
 
     // With auto-jump the cursor is already on the next cell, and an arrow goes on from there.
     let (mut app, _realtime) = self::app();
     app.auto_jump = true;
     tap(&mut app, "8Gi");
     tap(&mut app, "a");
-    assert_eq!(app.cursor.step, 11);
+    assert_eq!(app.services.cursor.step, 11);
     special(&mut app, KeyCode::Right);
-    assert_eq!(app.cursor.step, 15);
+    assert_eq!(app.services.cursor.step, 15);
     special(&mut app, KeyCode::Left);
     special(&mut app, KeyCode::Left);
-    assert_eq!(app.cursor.step, 7);
+    assert_eq!(app.services.cursor.step, 7);
 }
 
 #[test]
@@ -306,16 +306,16 @@ fn shift_arrows_snap_to_the_grid() {
     let (mut app, _realtime) = app();
     press(&mut app, "jji");
     press(&mut app, "a");
-    assert_eq!(app.cursor.step, 2);
+    assert_eq!(app.services.cursor.step, 2);
     shifted(&mut app, KeyCode::Right);
-    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.services.cursor.step, 4);
     shifted(&mut app, KeyCode::Right);
-    assert_eq!(app.cursor.step, 8);
+    assert_eq!(app.services.cursor.step, 8);
     special(&mut app, KeyCode::Up);
     shifted(&mut app, KeyCode::Left);
-    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.services.cursor.step, 4);
     shifted(&mut app, KeyCode::Left);
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
 }
 
 #[test]
@@ -331,9 +331,9 @@ fn backspace_clears_a_note_with_what_it_was_written_with_but_keeps_fx() {
     let (mut app, _realtime) = self::app();
     entering_steps_down(&mut app);
     press(&mut app, "ia");
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     special(&mut app, KeyCode::Backspace);
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
     let first = &app.song().tracks[0].phrases[&0].steps()[0];
     assert_eq!(first.note, Note::Empty);
     assert_eq!(first.velocity, None);
@@ -443,7 +443,7 @@ fn option_keys_narrow_and_widen_the_grid_in_normal_and_insert() {
     app.key(key("M-1"), Instant::now());
     assert_eq!(app.song().skip, 1, "it stops at 1/16");
     press(&mut app, "j");
-    assert_eq!(app.cursor.step, 1, "the 1 isn't a count");
+    assert_eq!(app.services.cursor.step, 1, "the 1 isn't a count");
     press(&mut app, "k");
     for _ in 0..6 {
         app.key(key("M-2"), Instant::now());
@@ -468,8 +468,8 @@ fn option_keys_narrow_and_widen_the_grid_in_normal_and_insert() {
     press(&mut app, "i");
     app.key(key("M-1"), Instant::now());
     assert_eq!(app.song().skip, 2);
-    assert_eq!(app.mode, Mode::Insert);
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.modes.mode, Mode::Insert);
+    assert_eq!(app.services.cursor.step, 0);
     let notes = |app: &App| {
         app.phrase_here()
             .unwrap()
@@ -484,7 +484,7 @@ fn option_keys_narrow_and_widen_the_grid_in_normal_and_insert() {
     app.key(key("M-2"), Instant::now());
     assert_eq!(app.song().skip, 4);
     special(&mut app, KeyCode::Right);
-    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.services.cursor.step, 4);
 }
 
 #[test]
@@ -535,7 +535,7 @@ fn a_tapped_accent_goes_on_the_note_just_written_and_off_again() {
     command(&mut app, "set skip=4");
     app.auto_jump = true;
     tap(&mut app, "ia");
-    assert_eq!(app.cursor.step, 4, "auto-jump moved on");
+    assert_eq!(app.services.cursor.step, 4, "auto-jump moved on");
     let depth = app.services.history.undo_depth();
     tap(&mut app, "'");
     let rows = rows_here(&app);
@@ -547,7 +547,7 @@ fn a_tapped_accent_goes_on_the_note_just_written_and_off_again() {
         depth + 1,
         "one change to undo"
     );
-    assert_eq!(app.cursor.step, 4, "the cursor stays");
+    assert_eq!(app.services.cursor.step, 4, "the cursor stays");
 
     // Again takes it off, back to the velocity notes are written with.
     tap(&mut app, "'");
@@ -591,7 +591,7 @@ fn with_the_cursor_moved_off_a_tapped_flag_goes_on_the_cursors_row() {
     let (mut app, _rt) = app();
     entering_steps_down(&mut app);
     tap(&mut app, "iasd");
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
     special(&mut app, KeyCode::Up);
     tap(&mut app, "'");
     let rows = rows_here(&app);
@@ -599,7 +599,7 @@ fn with_the_cursor_moved_off_a_tapped_flag_goes_on_the_cursors_row() {
     assert_eq!(rows[1].velocity, Some(0x64));
     // Leaving Insert and coming back forgets the note just written.
     tap(&mut app, "f");
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
     special(&mut app, KeyCode::Esc);
     press(&mut app, "k");
     tap(&mut app, "i");
@@ -773,7 +773,7 @@ fn a_tapped_octave_key_moves_the_note_just_written_and_again_puts_it_back() {
         depth + 1,
         "one change to undo"
     );
-    assert_eq!(app.cursor.step, 4, "the cursor stays");
+    assert_eq!(app.services.cursor.step, 4, "the cursor stays");
     assert_eq!(app.octave, 3, "the octave written in is as it was");
     tap(&mut app, "k");
     assert_eq!(
@@ -881,14 +881,14 @@ fn o_and_l_widen_and_narrow_the_grid_on_the_note_column() {
     assert_eq!(app.song().skip, 8, "o, above l, is wider");
     tap(&mut app, "ll");
     assert_eq!(app.song().skip, 2);
-    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.modes.mode, Mode::Insert);
     assert!(written_notes(&app).is_empty(), "neither is a note");
     // On another column, they're typed, as an FX label is.
     special(&mut app, KeyCode::Esc);
     press(&mut app, "lllll");
     tap(&mut app, "ilen");
     assert_eq!(app.song().skip, 2);
-    assert_eq!(app.entry.text.to_lowercase(), "len");
+    assert_eq!(app.modes.entry.text.to_lowercase(), "len");
 }
 
 #[test]

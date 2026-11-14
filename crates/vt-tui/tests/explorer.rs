@@ -28,7 +28,7 @@ fn a_folder_opens_the_sample_explorer_and_choosing_loads_the_sample() {
         &mut app,
         &format!("sample {}", folder.join("kit").display()),
     );
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(
         explorer_rows(&app)[1..],
         ["    kick.wav", "    snare.WAV"],
@@ -36,7 +36,7 @@ fn a_folder_opens_the_sample_explorer_and_choosing_loads_the_sample() {
     );
     press(&mut app, "/sn");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     let chosen = sample_of(&app, 0).unwrap();
     assert!(chosen.ends_with("snare.WAV"), "{chosen}");
     std::fs::remove_dir_all(&folder).unwrap();
@@ -109,7 +109,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
         presets: String::new(),
     };
     command(&mut app, "kit");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Kits");
     assert!(picker.hint.unwrap().contains("L on tracks"));
@@ -139,7 +139,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     // Enter makes it the kit :sample lists first, and adds nothing.
     let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(app.kit.len(), 2);
     assert_eq!(app.services.history.undo_depth(), depth);
     assert!(
@@ -167,7 +167,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     assert_eq!(picker.marked(), picker.current_index());
     assert_eq!(explorer_roots(&app)[0].1, "recent");
     press(&mut app, "L");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert!(sample_of(&app, 0).unwrap().ends_with("kick.wav"));
     assert!(sample_of(&app, 1).unwrap().ends_with("snare.wav"));
     assert_eq!(app.song().tracks[1].name, "SD");
@@ -278,7 +278,7 @@ fn the_sample_explorer_starts_from_the_project_the_settings_here_and_home() {
         presets: String::new(),
     };
     command(&mut app, "sample");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     let meanings: Vec<String> = explorer_roots(&app)
         .into_iter()
         .map(|(_, meaning)| meaning)
@@ -381,7 +381,7 @@ fn the_sample_explorer_opens_a_kit_like_a_folder_and_plays_and_chooses_its_sound
 
     // Choosing it is choosing from the kit in use: its label names the track.
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert!(sample_of(&app, 0).unwrap().ends_with("drums/snare.wav"));
     assert_eq!(app.song().tracks[0].name, "SD");
     assert_eq!(app.song().bank.get(1).unwrap().title(), "SD Snare 808");
@@ -451,7 +451,7 @@ fn a_kit_sound_opens_to_its_variants_and_layers_and_a_missing_one_says_so() {
     press(&mut app, "jjl");
     assert_eq!(app.picker.as_ref().unwrap().current().unwrap().label, "BD");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert!(sample_of(&app, 0).unwrap().ends_with("drums/kick.wav"));
     press(&mut app, "u");
 

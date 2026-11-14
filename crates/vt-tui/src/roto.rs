@@ -732,7 +732,7 @@ impl App {
                     self.services.roto.connection = Connection::Connected { firmware: None };
                     self.services.roto.mode = RotoMode::Unknown;
                     if !self.services.roto.has_track {
-                        self.services.roto.track = self.cursor.track;
+                        self.services.roto.track = self.services.cursor.track;
                         self.services.roto.has_track = true;
                     }
                     // It doesn't say its mode on connecting, so the lists go now, which show at

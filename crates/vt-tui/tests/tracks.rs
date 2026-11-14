@@ -17,17 +17,17 @@ fn track_keys_move_and_keep_the_section_position() {
     let (mut app, _rt) = app();
     press(&mut app, "jjj");
     press(&mut app, "W");
-    assert_eq!(app.cursor.track, 1);
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.track, 1);
+    assert_eq!(app.services.cursor.step, 3);
     assert_eq!(app.phrase_id(), Some(0), "its own first phrase");
     press(&mut app, &"W".repeat(3 + MAX_GROUPS));
     assert_eq!(
-        app.cursor.track,
+        app.services.cursor.track,
         4 + MAX_GROUPS,
         "the master stops the cursor"
     );
     press(&mut app, &"B".repeat(5 + MAX_GROUPS));
-    assert_eq!(app.cursor.track, 0);
+    assert_eq!(app.services.cursor.track, 0);
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn added_tracks_save_load_and_play() {
     assert_eq!(app.song().sound_tracks(), 5);
     assert_eq!(app.services.levels.len(), 5 + FIXED_TRACKS);
     press(&mut app, "WWWW");
-    assert_eq!(app.cursor.track, 4);
+    assert_eq!(app.services.cursor.track, 4);
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     let path = folder();
@@ -57,7 +57,7 @@ fn only_the_last_track_can_be_removed_and_one_stays() {
     press(&mut app, "W");
     command(&mut app, "track del");
     assert_eq!(app.song().sound_tracks(), 1);
-    assert_eq!(app.cursor.track, 0);
+    assert_eq!(app.services.cursor.track, 0);
     assert_eq!(app.phrase_id(), Some(0));
     command(&mut app, "track del");
     assert_eq!(app.song().sound_tracks(), 1);
@@ -72,13 +72,13 @@ fn the_fixed_tracks_stay_after_new_ones_and_cant_be_removed() {
     let (mut app, _rt) = app();
     let master = 4 + MAX_GROUPS;
     press(&mut app, &"W".repeat(master));
-    assert_eq!(app.cursor.track, master);
+    assert_eq!(app.services.cursor.track, master);
     command(&mut app, "track add 2");
-    assert_eq!(app.cursor.track, master + 2, "still on the master");
+    assert_eq!(app.services.cursor.track, master + 2, "still on the master");
     assert_eq!(app.song().tracks[master + 2].name, "M");
     assert_eq!(app.song().sound_tracks(), 4);
     command(&mut app, "track del");
-    assert_eq!(app.cursor.track, master + 1, "still on the master");
+    assert_eq!(app.services.cursor.track, master + 1, "still on the master");
     assert_eq!(app.song().tracks[master + 1].name, "M");
 }
 
@@ -88,7 +88,7 @@ fn a_fixed_tracks_mute_stays_with_it_as_tracks_come_and_go() {
     let return_a = 2 + MAX_GROUPS;
     // Past the groups, which are empty and so folded away.
     press(&mut app, "WW");
-    assert_eq!(app.song().tracks[app.cursor.track].name, "A");
+    assert_eq!(app.song().tracks[app.services.cursor.track].name, "A");
     press(&mut app, " m");
     assert!(app.services.levels[return_a].mute);
     command(&mut app, "track add");
@@ -222,12 +222,12 @@ fn brackets_move_between_tracks_from_every_view() {
         let (mut app, _realtime) = app();
         press(&mut app, view);
         press(&mut app, "]b");
-        assert_eq!(app.cursor.track, 1, "from {view:?}");
+        assert_eq!(app.services.cursor.track, 1, "from {view:?}");
         press(&mut app, "[b");
-        assert_eq!(app.cursor.track, 0, "from {view:?}");
+        assert_eq!(app.services.cursor.track, 0, "from {view:?}");
         // It stops at the first track, rather than going round.
         press(&mut app, "[b");
-        assert_eq!(app.cursor.track, 0, "from {view:?}");
+        assert_eq!(app.services.cursor.track, 0, "from {view:?}");
     }
 }
 

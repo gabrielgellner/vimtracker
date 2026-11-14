@@ -166,7 +166,7 @@ fn it_isnt_a_target_yet() {
         "{}",
         app.services.status
     );
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
 }
 
 #[test]
@@ -243,24 +243,24 @@ fn a_counted_paste_is_one_undo_and_dot_repeats_the_count() {
 fn gp_lands_just_after_what_it_pasted() {
     let (mut app, _rt) = app_with(&[A, B, E, E, E, E, E, E]);
     keys(&mut app, "Vjyggjjgp");
-    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.services.cursor.step, 4);
     keys(&mut app, "gp");
-    assert_eq!(app.cursor.step, 6);
+    assert_eq!(app.services.cursor.step, 6);
     assert_eq!(steps(&app), [A, B, A, B, A, B, E, E]);
     keys(&mut app, ".");
-    assert_eq!(app.cursor.step, 7, "stays on the phrase");
+    assert_eq!(app.services.cursor.step, 7, "stays on the phrase");
     assert_eq!(steps(&app), [A, B, A, B, A, B, A, B]);
 
     let (mut app, _rt) = app_with(&[A, E, E, E, E]);
     keys(&mut app, "yyj2gp");
-    assert_eq!(app.cursor.step, 3, "a count moves past all of it");
+    assert_eq!(app.services.cursor.step, 3, "a count moves past all of it");
 }
 
 #[test]
 fn gp_doesnt_move_when_the_paste_is_refused() {
     let (mut app, _rt) = app_with(&[A, B]);
     keys(&mut app, "y1kjlgp");
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     assert_eq!(steps(&app), [A, B]);
 }
 
@@ -432,9 +432,9 @@ fn esc_leaves_visual_and_operator_pending_with_no_change() {
     check(&[A, B], "Vj<Esc>d<Esc>", &[A, B]);
     let (mut app, _rt) = app_with(&[A]);
     keys(&mut app, "V<Esc>");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     keys(&mut app, "d<Esc>");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
 }
 
 #[test]
@@ -450,7 +450,11 @@ fn transposing_a_beat_then_repeating_on_the_next_beat() {
     expected.extend(vec![up_d; 4]);
     let (mut app, _rt) = app_with(&start);
     keys(&mut app, "Vib>");
-    assert_eq!(app.mode, Mode::VisualStep, "the selection stays until Esc");
+    assert_eq!(
+        app.modes.mode,
+        Mode::VisualStep,
+        "the selection stays until Esc"
+    );
     keys(&mut app, "<Esc>}Vib.");
     assert_eq!(steps(&app), expected);
     keys(&mut app, "u");
@@ -462,9 +466,9 @@ fn transposing_a_beat_then_repeating_on_the_next_beat() {
 fn reselect_restores_the_last_selection() {
     let (mut app, _rt) = app_with(&[A, B, C]);
     keys(&mut app, "Vj><Esc>");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     keys(&mut app, "gv");
-    assert_eq!(app.mode, Mode::VisualStep);
+    assert_eq!(app.modes.mode, Mode::VisualStep);
     assert_eq!(app.current_selection().range.last, 1);
     keys(&mut app, "<Esc>");
 }
@@ -474,52 +478,52 @@ fn motions_move_the_cursor_and_stop_at_edges() {
     let start = notes("C-3", 16);
     let (mut app, _rt) = app_with(&refs(&start));
     keys(&mut app, "}");
-    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.services.cursor.step, 4);
     keys(&mut app, "2}");
-    assert_eq!(app.cursor.step, 12);
+    assert_eq!(app.services.cursor.step, 12);
     keys(&mut app, "{");
-    assert_eq!(app.cursor.step, 8);
+    assert_eq!(app.services.cursor.step, 8);
     keys(&mut app, "G");
-    assert_eq!(app.cursor.step, 15);
+    assert_eq!(app.services.cursor.step, 15);
     keys(&mut app, "gg");
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
     keys(&mut app, "5G");
-    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.services.cursor.step, 4);
     keys(&mut app, "99j");
-    assert_eq!(app.cursor.step, 15);
+    assert_eq!(app.services.cursor.step, 15);
     keys(&mut app, "h");
-    assert_eq!(app.cursor.field, Field::Note);
+    assert_eq!(app.services.cursor.field, Field::Note);
     // `w` and `b` go between the note part and each FX slot, as the headings name them.
     keys(&mut app, "w");
-    assert_eq!(app.cursor.field, Field::FxCommand(0));
+    assert_eq!(app.services.cursor.field, Field::FxCommand(0));
     keys(&mut app, "l");
-    assert_eq!(app.cursor.field, Field::FxValue(0));
+    assert_eq!(app.services.cursor.field, Field::FxValue(0));
     keys(&mut app, "w");
-    assert_eq!(app.cursor.field, Field::FxCommand(1));
+    assert_eq!(app.services.cursor.field, Field::FxCommand(1));
     keys(&mut app, "ww");
     assert_eq!(
-        app.cursor.field,
+        app.services.cursor.field,
         Field::FxCommand(2),
         "it stops at the last slot"
     );
     keys(&mut app, "b");
-    assert_eq!(app.cursor.field, Field::FxCommand(1));
+    assert_eq!(app.services.cursor.field, Field::FxCommand(1));
     keys(&mut app, "bb");
-    assert_eq!(app.cursor.field, Field::Note);
+    assert_eq!(app.services.cursor.field, Field::Note);
     keys(&mut app, "llb");
     assert_eq!(
-        app.cursor.field,
+        app.services.cursor.field,
         Field::Note,
         "from the gate, back to the note"
     );
     keys(&mut app, "l2w");
     assert_eq!(
-        app.cursor.field,
+        app.services.cursor.field,
         Field::FxCommand(1),
         "a count goes further"
     );
     keys(&mut app, "20l");
-    assert_eq!(app.cursor.field, Field::FxValue(2));
+    assert_eq!(app.services.cursor.field, Field::FxValue(2));
 }
 
 #[test]
@@ -528,21 +532,24 @@ fn viewport_keys_move_within_the_screen() {
     let (mut app, _rt) = app_with(&refs(&start));
     app.follow_cursor(20);
     keys(&mut app, "^d");
-    assert_eq!(app.cursor.step, 10);
+    assert_eq!(app.services.cursor.step, 10);
     keys(&mut app, "^u");
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
     keys(&mut app, "L");
-    assert_eq!(app.cursor.step, 19);
+    assert_eq!(app.services.cursor.step, 19);
     keys(&mut app, "H");
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
     keys(&mut app, "M");
-    assert_eq!(app.cursor.step, 10);
+    assert_eq!(app.services.cursor.step, 10);
     keys(&mut app, "^e");
     assert_eq!(app.top, 3);
-    assert_eq!(app.cursor.step, 10, "the cursor stays while it's on screen");
+    assert_eq!(
+        app.services.cursor.step, 10,
+        "the cursor stays while it's on screen"
+    );
     keys(&mut app, "H^y");
     assert_eq!(app.top, 0);
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
 }
 
 #[test]
@@ -551,7 +558,7 @@ fn value_entry_commits_two_digits_and_stays() {
     let (mut app, _rt) = app_with(&[E, E]);
     keys(&mut app, "li2B<Esc>");
     assert_eq!(steps(&app)[0], "--- 2B --- --- ---");
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
 }
 
 #[test]
@@ -578,7 +585,7 @@ fn a_typed_command_takes_effect_only_with_its_value() {
         E,
         "CUT must not be written before its value"
     );
-    assert_eq!(app.cursor.field, Field::FxValue(0));
+    assert_eq!(app.services.cursor.field, Field::FxValue(0));
     keys(&mut app, "40<Esc>");
     assert_eq!(steps(&app)[0], "--- -- cut:40 --- ---");
 }
@@ -601,7 +608,7 @@ fn an_invalid_command_is_refused() {
     assert_eq!(app.picker.as_ref().unwrap().query, "xyz");
     keys(&mut app, "<Esc>");
     assert_eq!(steps(&app), [A]);
-    assert_eq!(app.cursor.field, Field::FxCommand(0));
+    assert_eq!(app.services.cursor.field, Field::FxCommand(0));
 }
 
 #[test]
@@ -609,7 +616,7 @@ fn esc_after_a_command_writes_nothing() {
     let (mut app, _rt) = app_with(&[A]);
     keys(&mut app, "llllliVOL<Enter><Esc>");
     assert_eq!(steps(&app), [A]);
-    assert_eq!(app.cursor.field, Field::FxCommand(0));
+    assert_eq!(app.services.cursor.field, Field::FxCommand(0));
     assert!(app.services.status.contains("needs a value"));
 }
 
@@ -630,24 +637,24 @@ fn a_value_on_an_existing_command_keeps_the_command() {
 fn auto_jump_moves_entry_on_by_the_grid() {
     let (mut app, _rt) = app_with(&[E, E, E, E]);
     keys(&mut app, ":set skip=2<Enter>i;a");
-    assert_eq!(app.cursor.step, 2);
+    assert_eq!(app.services.cursor.step, 2);
     keys(&mut app, "<Esc>li40");
     assert_eq!(steps(&app)[2], "--- 40 --- --- ---", "values move on too");
-    assert_eq!(app.cursor.step, 3, "clamped at the last row");
+    assert_eq!(app.services.cursor.step, 3, "clamped at the last row");
 }
 
 #[test]
 fn slides_keep_the_row_and_scroll_the_notes_under_it() {
     let (mut app, _rt) = app_with(&[A, B, C, E, E, E, E, E]);
     keys(&mut app, ":len 4<Enter>j");
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     keys(&mut app, "]l");
     assert_eq!(app.song().tracks[0].phrases[&0].start(), 1);
-    assert_eq!(app.cursor.step, 2, "still row 01");
+    assert_eq!(app.services.cursor.step, 2, "still row 01");
     assert_eq!(app.top, 1, "and the screen moved with it");
     keys(&mut app, "[l");
     assert_eq!(app.song().tracks[0].phrases[&0].start(), 0);
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     keys(&mut app, "]L");
     assert_eq!(app.song().tracks[0].phrases[&0].start(), 4);
     keys(&mut app, "[L");
@@ -666,7 +673,7 @@ fn a_slide_keeps_row_zero_still_when_the_phrase_fits_on_screen() {
     keys(&mut app, "2]l");
     app.follow_cursor(24);
     assert_eq!(app.top, 2, "row 00 is still the top row");
-    assert_eq!(app.cursor.step, 2);
+    assert_eq!(app.services.cursor.step, 2);
     // Scrolling up still shows what is above the loop, and it stays there.
     keys(&mut app, "^y");
     app.follow_cursor(24);
@@ -680,13 +687,13 @@ fn a_slide_keeps_row_zero_still_when_the_phrase_fits_on_screen() {
 fn undoing_a_slide_keeps_the_row() {
     let (mut app, _rt) = app_with(&[A, B, C, E, E, E, E, E]);
     keys(&mut app, ":len 4<Enter>j2]l");
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
     keys(&mut app, "u");
     assert_eq!(app.song().tracks[0].phrases[&0].start(), 0);
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     keys(&mut app, "^r");
     assert_eq!(app.song().tracks[0].phrases[&0].start(), 2);
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
 }
 
 #[test]
@@ -696,7 +703,7 @@ fn sliding_above_the_first_step_adds_room_and_keeps_the_notes() {
     let phrase = &app.song().tracks[0].phrases[&0];
     assert_eq!((phrase.start(), phrase.len()), (0, 2));
     assert_eq!(steps(&app), [E, E, A, B]);
-    assert_eq!(app.cursor.step, 0, "still row 00");
+    assert_eq!(app.services.cursor.step, 0, "still row 00");
     keys(&mut app, "u");
     assert_eq!(steps(&app), [A, B]);
 }
@@ -706,7 +713,7 @@ fn gs_starts_the_loop_on_the_cursor_and_leaves_the_notes_on_screen() {
     let (mut app, _rt) = app_with(&[A, B, C, E, E, E, E, E]);
     keys(&mut app, ":len 4<Enter>jjgs");
     assert_eq!(app.song().tracks[0].phrases[&0].start(), 2);
-    assert_eq!(app.cursor.step, 2, "the cursor stays on its note");
+    assert_eq!(app.services.cursor.step, 2, "the cursor stays on its note");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 4);
 }
 
@@ -715,19 +722,22 @@ fn motions_go_by_the_loop_and_can_leave_it() {
     let (mut app, _rt) = app_with(&[E; 32]);
     keys(&mut app, ":len 8<Enter>6]l");
     keys(&mut app, "gg");
-    assert_eq!(app.cursor.step, 6, "row 00");
+    assert_eq!(app.services.cursor.step, 6, "row 00");
     keys(&mut app, "G");
-    assert_eq!(app.cursor.step, 13, "the loop's last row");
+    assert_eq!(app.services.cursor.step, 13, "the loop's last row");
     keys(&mut app, "j");
-    assert_eq!(app.cursor.step, 14, "out of the loop");
+    assert_eq!(app.services.cursor.step, 14, "out of the loop");
     keys(&mut app, "ggk");
-    assert_eq!(app.cursor.step, 5, "and above it");
+    assert_eq!(app.services.cursor.step, 5, "and above it");
     keys(&mut app, "gg}");
-    assert_eq!(app.cursor.step, 10, "a beat from the loop start");
+    assert_eq!(app.services.cursor.step, 10, "a beat from the loop start");
     keys(&mut app, "{{");
-    assert_eq!(app.cursor.step, 2, "a beat above it");
+    assert_eq!(app.services.cursor.step, 2, "a beat above it");
     keys(&mut app, "3G");
-    assert_eq!(app.cursor.step, 8, "a count counts from the loop start");
+    assert_eq!(
+        app.services.cursor.step, 8,
+        "a count counts from the loop start"
+    );
 }
 
 #[test]
@@ -741,7 +751,7 @@ fn whole_phrase_targets_cover_only_what_plays() {
 fn notes_can_be_written_outside_the_loop() {
     let (mut app, _rt) = app_with(&[E, E, E, E]);
     keys(&mut app, ":len 2<Enter>Gjj");
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
     keys(&mut app, "ia<Esc>");
     assert_ne!(steps(&app)[3], E);
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 2);
@@ -751,9 +761,9 @@ fn notes_can_be_written_outside_the_loop() {
 fn going_to_a_phrase_lands_on_its_loop_start() {
     let (mut app, _rt) = app_with(&[E; 8]);
     keys(&mut app, ":len 4<Enter>]Lj");
-    assert_eq!(app.cursor.step, 5);
+    assert_eq!(app.services.cursor.step, 5);
     keys(&mut app, "]P[P");
-    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.services.cursor.step, 4);
     assert_eq!(app.top, 4);
 }
 
@@ -800,7 +810,7 @@ fn the_popup_waits_and_lists_next_keys() {
 fn help_lists_keys_from_the_table_and_any_key_closes_it() {
     let (mut app, _rt) = app_with(&[A]);
     keys(&mut app, " k");
-    assert_eq!(app.mode, Mode::Help);
+    assert_eq!(app.modes.mode, Mode::Help);
     let rows = app.help_rows();
     assert!(
         rows.iter()
@@ -810,7 +820,7 @@ fn help_lists_keys_from_the_table_and_any_key_closes_it() {
     keys(&mut app, "j");
     assert_eq!(app.help_scroll, 1);
     keys(&mut app, "q");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
 }
 
 const FULL: &str = "C-3 70 vol:10 pan:20 cut:30";
@@ -819,23 +829,23 @@ const FULL: &str = "C-3 70 vol:10 pan:20 cut:30";
 fn zero_and_dollar_go_to_the_ends_of_the_row() {
     let (mut app, _rt) = app_with(&[FULL, FULL]);
     keys(&mut app, "ll0");
-    assert_eq!(app.cursor.field, Field::Note);
+    assert_eq!(app.services.cursor.field, Field::Note);
     // The last field is a setting's fine digits.
     keys(&mut app, "$");
-    assert_eq!(app.cursor.field, Field::FxFine(2));
+    assert_eq!(app.services.cursor.field, Field::FxFine(2));
     keys(&mut app, "$");
-    assert_eq!(app.cursor.field, Field::FxFine(2));
+    assert_eq!(app.services.cursor.field, Field::FxFine(2));
     keys(&mut app, "0");
-    assert_eq!(app.cursor.field, Field::Note);
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.field, Field::Note);
+    assert_eq!(app.services.cursor.step, 0);
 }
 
 #[test]
 fn zero_is_still_part_of_a_count() {
     let (mut app, _rt) = app_with(&[E; 16]);
     keys(&mut app, "10j");
-    assert_eq!(app.cursor.step, 10);
-    assert_eq!(app.cursor.field, Field::Note);
+    assert_eq!(app.services.cursor.step, 10);
+    assert_eq!(app.services.cursor.field, Field::Note);
 }
 
 #[test]
@@ -861,9 +871,9 @@ fn r_replaces_a_note_and_keeps_everything_else() {
     let (mut app, _rt) = app_with(&[FULL, E]);
     keys(&mut app, "rj");
     assert_eq!(steps(&app)[0], "B-3 70 vol:10 pan:20 cut:30");
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.cursor.step, 0);
-    assert_eq!(app.cursor.field, Field::Note);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert_eq!(app.services.cursor.step, 0);
+    assert_eq!(app.services.cursor.field, Field::Note);
     keys(&mut app, "r1");
     assert_eq!(steps(&app)[0], "OFF 70 vol:10 pan:20 cut:30");
     keys(&mut app, "uu");
@@ -892,16 +902,16 @@ fn r_takes_a_whole_value_in_the_other_columns() {
     );
     let (mut app, _rt) = app_with(&[FULL]);
     keys(&mut app, "lllllrres<Enter>7f");
-    assert_eq!(app.cursor.field, Field::FxCommand(0));
-    assert_eq!(app.cursor.step, 0);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.services.cursor.field, Field::FxCommand(0));
+    assert_eq!(app.services.cursor.step, 0);
+    assert_eq!(app.modes.mode, Mode::Normal);
 }
 
 #[test]
 fn r_needs_a_command_before_an_fx_value() {
     let (mut app, _rt) = app_with(&[E]);
     keys(&mut app, "llllllr");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert!(
         app.services.status.contains("FX command"),
         "{}",
@@ -917,19 +927,19 @@ fn escape_or_a_bad_value_leaves_r_unchanged() {
     check(&[FULL], "lllllrres<Esc>", &[FULL]);
     let (mut app, _rt) = app_with(&[FULL]);
     keys(&mut app, "lllllrres<Esc>");
-    assert_eq!(app.cursor.field, Field::FxCommand(0));
-    assert_eq!(app.mode, Mode::Normal);
-    assert!(app.entry.text.is_empty());
+    assert_eq!(app.services.cursor.field, Field::FxCommand(0));
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert!(app.modes.entry.text.is_empty());
 
     let (mut app, _rt) = app_with(&[FULL]);
     keys(&mut app, "rb");
     assert_eq!(
-        app.mode,
+        app.modes.mode,
         Mode::Replace,
         "b is not a note, so it keeps waiting"
     );
     keys(&mut app, "a");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
 }
 
 #[test]
@@ -941,8 +951,8 @@ fn backspace_edits_a_replace_and_never_moves() {
     );
     let (mut app, _rt) = app_with(&[FULL, FULL]);
     keys(&mut app, "jlr<BS>");
-    assert_eq!(app.cursor.step, 1);
-    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(app.services.cursor.step, 1);
+    assert_eq!(app.modes.mode, Mode::Replace);
 }
 
 #[test]
@@ -978,12 +988,12 @@ fn s_clears_the_field_and_starts_insert_there() {
     let (mut app, _rt) = app_with(&[FULL, E]);
     keys(&mut app, "s");
     assert_eq!(steps(&app)[0], "--- 70 vol:10 pan:20 cut:30");
-    assert_eq!(app.mode, Mode::Insert);
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.modes.mode, Mode::Insert);
+    assert_eq!(app.services.cursor.step, 0);
     // A note typed in Insert takes the current velocity, as it always does.
     keys(&mut app, "j");
     assert_eq!(steps(&app)[0], "B-3 64 vol:10 pan:20 cut:30");
-    assert_eq!(app.cursor.step, 0, "Insert stays put as usual");
+    assert_eq!(app.services.cursor.step, 0, "Insert stays put as usual");
     keys(&mut app, "<Esc>uu");
     assert_eq!(steps(&app)[0], FULL);
 }
@@ -1010,8 +1020,8 @@ fn s_on_an_fx_value_keeps_its_command_for_the_new_value() {
     let (mut app, _rt) = app_with(&[FULL, E]);
     keys(&mut app, "lllllls<Esc>");
     assert_eq!(steps(&app)[0], "C-3 70 --- pan:20 cut:30");
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.cursor.field, Field::FxCommand(0));
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert_eq!(app.services.cursor.field, Field::FxCommand(0));
     assert!(
         app.services.status.contains("VOL needs a value"),
         "{}",
@@ -1053,11 +1063,14 @@ fn visual_r_fills_notes_on_every_selected_step() {
     keys(&mut app, "vGra");
     assert_eq!(steps(&app), [C3, C3, C3, C3]);
     assert_eq!(
-        app.mode,
+        app.modes.mode,
         Mode::VisualField,
         "the selection stays, for another"
     );
-    assert_eq!(app.cursor.step, 3, "the cursor's back where it was");
+    assert_eq!(
+        app.services.cursor.step, 3,
+        "the cursor's back where it was"
+    );
     assert_eq!(app.current_selection().range.len(), 4);
 }
 
@@ -1099,11 +1112,11 @@ fn visual_r_writes_note_offs() {
 fn escape_leaves_a_selection_replace_with_nothing_written() {
     let (mut app, _rt) = app_with(&[E, E, E]);
     keys(&mut app, "vG");
-    assert_eq!(app.cursor.step, 2);
+    assert_eq!(app.services.cursor.step, 2);
     keys(&mut app, "r<Esc>");
     assert_eq!(steps(&app), [E, E, E]);
-    assert_eq!(app.mode, Mode::VisualField, "back to the selection");
-    assert_eq!(app.cursor.step, 2);
+    assert_eq!(app.modes.mode, Mode::VisualField, "back to the selection");
+    assert_eq!(app.services.cursor.step, 2);
     // A later single replace isn't mistaken for the selection's.
     keys(&mut app, "<Esc>ra");
     assert_eq!(steps(&app), [E, E, C3]);
@@ -1122,7 +1135,7 @@ fn visual_r_puts_a_velocity_only_on_notes() {
 
     let (mut app, _rt) = app_with(&[E, E]);
     keys(&mut app, "lvjr");
-    assert_eq!(app.mode, Mode::VisualField, "nothing to replace");
+    assert_eq!(app.modes.mode, Mode::VisualField, "nothing to replace");
     assert!(
         app.services.status.contains("no notes"),
         "{}",
@@ -1147,7 +1160,7 @@ fn visual_r_fills_fx_commands_and_keeps_commands_for_values() {
         steps(&app),
         [E, "--- -- res:7F --- ---", E, "--- -- cut:7F --- ---",]
     );
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
 }
 
 #[test]
@@ -1173,7 +1186,7 @@ fn rotating_wraps_within_the_loop_and_counts() {
     let (mut app, _rt) = app_with(&[A, B, E, E]);
     keys(&mut app, "]r");
     assert_eq!(steps(&app), [E, A, B, E]);
-    assert_eq!(app.cursor.step, 0, "the cursor stays on its row");
+    assert_eq!(app.services.cursor.step, 0, "the cursor stays on its row");
     keys(&mut app, "2]r");
     assert_eq!(steps(&app), [B, E, E, A]);
     keys(&mut app, "[r");
@@ -1230,7 +1243,7 @@ fn ge_ends_the_loop_on_the_cursor_and_keeps_what_is_stored() {
     keys(&mut app, "jjge");
     assert_eq!(length(&app), 3);
     assert_eq!(steps(&app).len(), 6, "nothing is lost");
-    assert_eq!(app.cursor.step, 2);
+    assert_eq!(app.services.cursor.step, 2);
 
     // Below the loop, it brings the steps in.
     keys(&mut app, "jjge");
@@ -1252,7 +1265,7 @@ fn ge_refuses_above_the_start_and_leaves_no_undo_when_nothing_changes() {
     let (mut app, _rt) = app_with(&[E, E, E, E]);
     keys(&mut app, ":len 2<Enter>]l");
     let depth = app.services.history.undo_depth();
-    app.cursor.step = 0;
+    app.services.cursor.step = 0;
     keys(&mut app, "ge");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 2);
     assert!(
@@ -1260,7 +1273,7 @@ fn ge_refuses_above_the_start_and_leaves_no_undo_when_nothing_changes() {
         "{}",
         app.services.status
     );
-    app.cursor.step = 2;
+    app.services.cursor.step = 2;
     keys(&mut app, "ge");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 2);
     assert_eq!(app.services.history.undo_depth(), depth);
@@ -1330,20 +1343,20 @@ fn large_steps_work_on_a_selection_and_repeat() {
 fn k_chooses_an_fx_command_and_an_empty_slot_waits_for_its_value() {
     let (mut app, _rt) = app_with(&[E, E]);
     keys(&mut app, "lllllK");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(
         app.picker.as_ref().unwrap().items().len(),
         55,
         "on a sample track with nothing in its slots: empty, its own 16, SMP, SLI, STA, SLEN and PLY, the mod slots' 16, the 8 macros and 9 events"
     );
     keys(&mut app, "cut<Enter>");
-    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(app.modes.mode, Mode::Replace);
     assert_eq!(steps(&app)[0], E, "nothing until the value is typed");
     keys(&mut app, "40");
     assert_eq!(steps(&app)[0], "--- -- cut:40 --- ---");
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.cursor.step, 0, "it stays on this step");
-    assert_eq!(app.cursor.field, Field::FxValue(0));
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert_eq!(app.services.cursor.step, 0, "it stays on this step");
+    assert_eq!(app.services.cursor.field, Field::FxValue(0));
 }
 
 #[test]
@@ -1362,7 +1375,7 @@ fn k_keeps_a_value_when_changing_the_command() {
     );
     keys(&mut app, "res<Enter>");
     assert_eq!(steps(&app)[0], "C-3 40 res:20 --- ---");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     keys(&mut app, "u");
     assert_eq!(steps(&app)[0], A);
 
@@ -1377,10 +1390,10 @@ fn k_can_empty_a_slot_and_esc_leaves_it() {
     let (mut app, _rt) = app_with(&[A]);
     // The list opens on its search: the first Esc goes to the list, the second leaves it.
     keys(&mut app, "lllllK<Esc>");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     keys(&mut app, "<Esc>");
     assert_eq!(steps(&app)[0], A);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     keys(&mut app, "K---<Enter>");
     assert_eq!(steps(&app)[0], "C-3 40 --- --- ---");
 
@@ -1388,7 +1401,7 @@ fn k_can_empty_a_slot_and_esc_leaves_it() {
     let (mut app, _rt) = app_with(&[E]);
     keys(&mut app, "lllllKcut<Enter><Esc>");
     assert_eq!(steps(&app)[0], E);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
 }
 
 /// Notes on rows 0, 1 and 3 of 4, at the velocities given, with the second row's slot holding `CUT`.
@@ -1416,7 +1429,7 @@ fn s_opens_on_the_first_and_last_values_and_previews_a_ramp() {
     let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
     let depth = app.services.history.undo_depth();
     keys(&mut app, "lvGS");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     let shape = app.shape.as_ref().unwrap().shape;
     assert_eq!((shape.from, shape.to), (0x10, 0x40));
     // Heard straight away, only on notes, and spaced by row. Nothing is in the undo list yet.
@@ -1429,11 +1442,11 @@ fn enter_keeps_a_shape_as_one_undo_and_esc_puts_it_back() {
     let start = velocities("10", "7F", "40");
     let (mut app, _rt) = app_of(&start);
     keys(&mut app, "lvGSj+=<Enter>");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert!(app.shape.is_none());
     assert_eq!(vel(&app), ["21", "2B", "--", "40"]);
     assert!(app.services.dirty);
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
     keys(&mut app, "u");
     assert_eq!(steps(&app), start);
     keys(&mut app, "^r");
@@ -1443,7 +1456,7 @@ fn enter_keeps_a_shape_as_one_undo_and_esc_puts_it_back() {
     let depth = app.services.history.undo_depth();
     keys(&mut app, "lvGS+++<Esc>");
     assert_eq!(steps(&app), start);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(app.services.history.undo_depth(), depth);
     assert!(!app.services.dirty);
 }
@@ -1502,7 +1515,7 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
     assert_eq!(fx(&app), ["cut:10", "---", "---", "cut:30"]);
 
     keys(&mut app, "jK");
-    assert_eq!(app.mode, Mode::Shape, "K isn't a list on From");
+    assert_eq!(app.modes.mode, Mode::Shape, "K isn't a list on From");
     assert!(
         app.services.status.contains("Fill"),
         "{}",
@@ -1511,7 +1524,7 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
 
     // Where, from Commands to All rows, writes the command on the empty rows.
     keys(&mut app, "jjjjjKall<Enter>");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     // A ramp on a setting fills its fine part, so it moves evenly.
     assert_eq!(fx(&app), ["cut:10", "cut:1AAB", "cut:2555", "cut:30"]);
 
@@ -1543,11 +1556,11 @@ fn k_chooses_fill_and_where_and_returns_to_the_panel() {
 
     // An Esc from a picker goes back to the panel.
     keys(&mut app, "gvS");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     keys(&mut app, "jjjjjjK<Esc>");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     keys(&mut app, "<Esc>");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
 }
 
 #[test]
@@ -1688,7 +1701,7 @@ fn random_fill_stays_in_range_and_rerolls() {
     let (mut app, _rt) = app_of(&rows);
     keys(&mut app, "lvGS");
     keys(&mut app, "Krandom<Enter>jji20");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     let before = vel(&app);
     assert!(
         before
@@ -1750,7 +1763,7 @@ fn the_panel_fills_with_a_wave_and_shows_only_its_settings() {
     assert_eq!(panel(&app).shape.phase, 0);
 
     keys(&mut app, "<Enter>");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(app.services.history.undo_depth(), 1);
 }
 
@@ -1866,7 +1879,7 @@ fn a_list_fill_types_its_values_and_goes_round_them() {
     keys(&mut app, "kx");
     assert_eq!(list(&app), "10 40", "the default is the two ends");
     keys(&mut app, "i704055<Enter><Enter>");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(app.services.history.undo_depth(), 1);
 
     // `.` keeps the list, as Alternate keeps its values.
@@ -1894,7 +1907,7 @@ fn shape_on_the_note_column_re_pitches_in_degrees_and_snaps() {
     let (mut app, _rt) = app_with(&start);
     app.scale.on = true;
     keys(&mut app, "vGS");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     let panel = |app: &App| app.shape.clone().unwrap();
     // It opens on the first and last notes, and keeps the rhythm, velocities, offs and rests.
     assert_eq!((panel(&app).shape.from, panel(&app).shape.to), (60, 61));
@@ -1985,7 +1998,7 @@ fn shape_refuses_what_it_cannot_fill() {
     let reason = |rows: &[&str], typed: &str| {
         let (mut app, _rt) = app_with(rows);
         keys(&mut app, typed);
-        assert_ne!(app.mode, Mode::Shape, "{typed}");
+        assert_ne!(app.modes.mode, Mode::Shape, "{typed}");
         app.services.status.clone()
     };
     let notes = ["C-3 -- --- --- ---"; 3];
@@ -2012,7 +2025,7 @@ fn s_on_an_empty_note_column_writes_notes_in_key_with_the_rhythm_where_picks() {
     app.note_velocity = 0x50;
     let depth = app.services.history.undo_depth();
     keys(&mut app, "vGS");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     let panel = app.shape.clone().unwrap();
     assert!(panel.generates());
     assert_eq!(panel.verb(), "Generate");
@@ -2106,14 +2119,14 @@ fn s_on_an_empty_fx_column_chooses_a_command_then_writes_it() {
     let depth = app.services.history.undo_depth();
     keys(&mut app, "lllllvjjjS");
     // The command comes first, from the K list.
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert!(app.shape.is_none());
     // Esc gives up, with nothing changed.
     keys(&mut app, "<Esc><Esc>");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(steps(&app), start);
     keys(&mut app, "vjjjScut<Enter>");
-    assert_eq!(app.mode, Mode::Shape, "{}", app.services.status);
+    assert_eq!(app.modes.mode, Mode::Shape, "{}", app.services.status);
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Generate");
     assert_eq!(panel.shape.place, vt_model::shape::Where::AllRows);
@@ -2140,7 +2153,7 @@ fn s_on_an_empty_fx_column_chooses_a_command_then_writes_it() {
     // With a command already there, it reshapes that one, as ever.
     let (mut app, _rt) = app_with(&["C-3 40 cut:00 --- ---", E, "C-3 40 cut:40 --- ---"]);
     keys(&mut app, "lllllvjjS");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     assert_eq!(app.shape.as_ref().unwrap().verb(), "Reshape");
 }
 
@@ -2179,7 +2192,7 @@ fn s_across_tracks_generates_on_each_empty_column_and_reshapes_the_rest() {
     // An FX column: the empty track takes the command chosen, the other keeps its own.
     let (mut app, _rt) = tracks_with(&[&[N, N], &[GONE, GONE]]);
     keys(&mut app, "lllllvjWSres<Enter>");
-    assert_eq!(app.mode, Mode::Shape, "{}", app.services.status);
+    assert_eq!(app.modes.mode, Mode::Shape, "{}", app.services.status);
     keys(&mut app, "ji00ji40<Enter>");
     assert!(
         track_steps(&app, 0)[1].contains("cut:40"),
@@ -2206,7 +2219,7 @@ fn l_keeps_generated_notes_live_and_gl_reopens_them() {
     let depth = app.services.history.undo_depth();
     // `gl` reopens it generating, and turning its Rotate moves the notes, velocities and all.
     keys(&mut app, "jjgl");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Generate");
     assert_eq!(panel.shape.place, Where::Euclid { hits: 3, rotate: 0 });
@@ -2323,7 +2336,7 @@ fn acid_kept_live_rolls_again_through_gl() {
     let first = steps(&app);
     let depth = app.services.history.undo_depth();
     keys(&mut app, "gl");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.verb(), "Generate");
     assert_eq!(panel.shape.kind, FillKind::Acid);
@@ -2560,7 +2573,7 @@ fn dot_applies_the_same_shape_with_ends_from_what_is_there() {
     // On a new selection, its own ends.
     keys(&mut app, "3jvjj.");
     assert_eq!(vel(&app)[3..], ["10", "20", "30"]);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     keys(&mut app, "u");
     assert_eq!(vel(&app)[3..], ["10", "00", "30"]);
     // In Normal, as many rows as before, from the cursor, stopping at the end.
@@ -2573,7 +2586,7 @@ fn the_transport_keys_work_with_the_panel_open() {
     let (mut app, _rt) = app_of(&velocities("10", "7F", "40"));
     keys(&mut app, "lvGS");
     app.key(Key::new(KeyCode::Tab), Instant::now());
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
 }
 
 #[test]
@@ -2698,7 +2711,7 @@ fn moving_a_slot_carries_its_mark_and_clearing_removes_it() {
 fn w_stops_at_the_last_slot_and_a_row_end_operator_covers_it() {
     let (mut app, _rt) = app_with(&[FULL]);
     keys(&mut app, "wwwwwwww");
-    assert_eq!(app.cursor.field, Field::FxCommand(2));
+    assert_eq!(app.services.cursor.field, Field::FxCommand(2));
     check(&[FULL], "d$", &["--- -- --- --- ---"]);
 }
 
@@ -2737,7 +2750,7 @@ fn a_selection_reaches_other_tracks_and_clears_them_as_one_undo() {
     assert_eq!(track_steps(&app, 1), [GONE, GONE, N]);
     assert_eq!(track_steps(&app, 2), [N, N, N], "the third wasn't reached");
     assert_eq!(app.services.history.undo_depth(), depth + 1);
-    assert_eq!(app.cursor.track, 0, "it lands on the first track");
+    assert_eq!(app.services.cursor.track, 0, "it lands on the first track");
     keys(&mut app, "u");
     assert_eq!(track_steps(&app, 1), [N, N, N]);
 }
@@ -2747,7 +2760,7 @@ fn b_reaches_backwards_and_operators_change_each_track() {
     let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
     keys(&mut app, "WlvB=");
     assert_eq!(
-        app.cursor.track, 1,
+        app.services.cursor.track, 1,
         "the selection stays, and the cursor in it"
     );
     assert_eq!(track_steps(&app, 0), ["C-3 41 cut:20 --- ---"]);
@@ -2803,7 +2816,7 @@ fn yank_and_paste_keep_each_tracks_part() {
     let b = "D-3 50 --- --- ---";
     let (mut app, _rt) = tracks_with(&[&[a, GONE], &[b, GONE], &[GONE, GONE]]);
     keys(&mut app, "VWy");
-    assert_eq!(app.cursor.track, 0);
+    assert_eq!(app.services.cursor.track, 0);
     keys(&mut app, "jp");
     assert_eq!(track_steps(&app, 0), [a, a]);
     assert_eq!(track_steps(&app, 1), [b, b]);
@@ -2825,10 +2838,10 @@ fn dot_repeats_across_as_many_tracks_and_gv_comes_back() {
     assert_eq!(track_steps(&app, 2), [N, N]);
     let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
     keys(&mut app, "VW<Esc>");
-    assert_eq!(app.cursor.track, 0, "Esc stays where it is");
+    assert_eq!(app.services.cursor.track, 0, "Esc stays where it is");
     let (mut app, _rt) = tracks_with(&[&[N], &[N]]);
     keys(&mut app, "VW><Esc>gv");
-    assert!(app.mode.is_visual());
+    assert!(app.modes.mode.is_visual());
     assert_eq!(app.current_selection().tracks.count(), 2);
 }
 
@@ -2845,7 +2858,7 @@ fn shape_across_tracks_gives_each_the_same_settings_and_a_seed_of_its_own() {
     let depth = app.services.history.undo_depth();
     // A ramp from 00 to 70 on both tracks; the third has no notes, so it's passed over.
     keys(&mut app, "lvGWWSji00ji70");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     assert_eq!(app.shape.as_ref().unwrap().parts.len(), 2);
     let ramp = ["00", "10", "20", "30", "40", "50", "60", "70"];
     assert_eq!(velocities(&app, 0), ramp);
@@ -2876,7 +2889,7 @@ fn shape_across_tracks_takes_each_tracks_own_fx_command_and_refuses_when_none_ha
         &["C-3 40 res:00 --- ---", "C-3 40 res:40 --- ---"],
     ]);
     keys(&mut app, "lllllvjWS");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     keys(&mut app, "<Enter>");
     assert_eq!(track_steps(&app, 0)[0], "C-3 40 cut:00 --- ---");
     assert!(
@@ -2886,7 +2899,7 @@ fn shape_across_tracks_takes_each_tracks_own_fx_command_and_refuses_when_none_ha
     );
     let (mut app, _rt) = tracks_with(&[&[GONE, GONE], &[GONE, GONE]]);
     keys(&mut app, "lvjWS");
-    assert_ne!(app.mode, Mode::Shape);
+    assert_ne!(app.modes.mode, Mode::Shape);
     assert!(
         app.services.status.contains("no notes"),
         "{}",
@@ -2998,7 +3011,7 @@ fn a_gates_length_is_filled_on_notes_and_copied_with_its_cell() {
     // `K` on the gate chooses the gate, which keeps the length.
     let (mut app, _rt) = app_with(&[short]);
     keys(&mut app, "lllK");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     keys(&mut app, "/hld<Enter>");
     assert_eq!(steps(&app), ["C-3 40 HLD2 40 cut:20 --- ---"]);
     // And on the length, a length, which keeps the gate.
@@ -3089,11 +3102,19 @@ fn the_fine_digits_are_typed_replaced_and_cleared_on_their_own() {
 fn a_list_or_an_event_has_no_fine_digits_and_a_list_doesnt_glide() {
     let (mut app, _rt) = app_with(&["--- -- 1.distort.bits:03 del:10 cut:40"]);
     keys(&mut app, "lllllll");
-    assert_eq!(app.cursor.field, Field::FxCommand(1), "past the list's");
+    assert_eq!(
+        app.services.cursor.field,
+        Field::FxCommand(1),
+        "past the list's"
+    );
     keys(&mut app, "ll");
-    assert_eq!(app.cursor.field, Field::FxCommand(2), "and the event's");
+    assert_eq!(
+        app.services.cursor.field,
+        Field::FxCommand(2),
+        "and the event's"
+    );
     keys(&mut app, "hh");
-    assert_eq!(app.cursor.field, Field::FxCommand(1));
+    assert_eq!(app.services.cursor.field, Field::FxCommand(1));
     check(
         &["--- -- 1.distort.bits:03 --- ---"],
         "llllll~",
@@ -3157,8 +3178,8 @@ fn a_nudge_is_typed_as_a_sign_and_a_digit_and_cleared_on_its_own() {
     let (mut app, _rt) = app_with(&[A, A]);
     assert!(!app.auto_jump);
     keys(&mut app, "lli;4");
-    assert_eq!(app.cursor.step, 1);
-    assert_eq!(app.cursor.field, Field::Nudge);
+    assert_eq!(app.services.cursor.step, 1);
+    assert_eq!(app.services.cursor.field, Field::Nudge);
 }
 
 /// Run keys on steps of a track at a speed, and its steps after.
@@ -3231,7 +3252,11 @@ fn a_selection_stays_through_repeated_adjusts_across_two_tracks() {
     keys(&mut app, "vjW");
     for key in ["+", "+", "-"] {
         keys(&mut app, key);
-        assert_eq!(app.mode, Mode::VisualField, "still selected after {key}");
+        assert_eq!(
+            app.modes.mode,
+            Mode::VisualField,
+            "still selected after {key}"
+        );
     }
     let up = "B-4 40 cut:20 --- ---";
     assert_eq!(track_steps(&app, 0), [up, up]);
@@ -3245,7 +3270,7 @@ fn a_selection_stays_through_repeated_adjusts_across_two_tracks() {
     assert_eq!(app.services.status, "+23 semitones");
     // `>` and `<`, `C-a` and `C-x` keep it too, and count.
     keys(&mut app, "<<^a");
-    assert_eq!(app.mode, Mode::VisualField);
+    assert_eq!(app.modes.mode, Mode::VisualField);
     assert_eq!(app.services.status, "+22 semitones");
 }
 
@@ -3284,7 +3309,7 @@ fn undo_while_selected_takes_back_one_press_and_keeps_the_selection() {
     keys(&mut app, "u");
     assert_eq!(track_steps(&app, 0), [octave]);
     assert_eq!(track_steps(&app, 1), [octave]);
-    assert_eq!(app.mode, Mode::VisualField, "still selected");
+    assert_eq!(app.modes.mode, Mode::VisualField, "still selected");
     assert_eq!(app.current_selection().tracks.count(), 2);
     assert_eq!(app.services.status, "+12 semitones");
     keys(&mut app, "u");
@@ -3308,7 +3333,7 @@ fn undo_past_the_selections_own_changes_keeps_it_and_redo_comes_back_in_step() {
     assert_eq!(app.adjusted_total(), None);
     keys(&mut app, "u");
     assert_eq!(steps(&app), [N], "the change from before the selection");
-    assert_eq!(app.mode, Mode::VisualField);
+    assert_eq!(app.modes.mode, Mode::VisualField);
     keys(&mut app, "^r");
     assert_eq!(
         app.adjusted_total(),
@@ -3323,26 +3348,26 @@ fn undo_past_the_selections_own_changes_keeps_it_and_redo_comes_back_in_step() {
 fn d_x_and_y_end_a_kept_selection_and_gv_brings_it_back() {
     let (mut app, _rt) = app_with(&[N, N, N]);
     keys(&mut app, "vj+d");
-    assert_eq!(app.mode, Mode::Normal, "d ends it");
+    assert_eq!(app.modes.mode, Mode::Normal, "d ends it");
     let cleared = "--- 40 cut:20 --- ---";
     assert_eq!(steps(&app), [cleared, cleared, N], "the notes it covered");
     keys(&mut app, "gv");
-    assert_eq!(app.mode, Mode::VisualField);
+    assert_eq!(app.modes.mode, Mode::VisualField);
     assert_eq!(app.current_selection().range.len(), 2);
     assert_eq!(app.adjusted_total(), None, "gv starts a new total");
     keys(&mut app, "y");
-    assert_eq!(app.mode, Mode::Normal, "y ends it");
+    assert_eq!(app.modes.mode, Mode::Normal, "y ends it");
     keys(&mut app, "Vx");
-    assert_eq!(app.mode, Mode::Normal, "x ends it");
+    assert_eq!(app.modes.mode, Mode::Normal, "x ends it");
 }
 
 #[test]
 fn dot_on_a_selection_repeats_a_press_and_keeps_it() {
     let (mut app, _rt) = app_with(&[N, N]);
     keys(&mut app, "vj+<Esc>");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     keys(&mut app, "gv.");
-    assert_eq!(app.mode, Mode::VisualField);
+    assert_eq!(app.modes.mode, Mode::VisualField);
     assert_eq!(steps(&app), ["C-5 40 cut:20 --- ---"; 2]);
     assert_eq!(app.services.status, "+12 semitones");
 }
@@ -3354,7 +3379,7 @@ fn cmd_with_the_movement_keys_keeps_the_selection_as_the_keys_they_stand_for() {
     with_cmd(&mut app, "D-k");
     with_cmd(&mut app, "D-k");
     with_cmd(&mut app, "D-h");
-    assert_eq!(app.mode, Mode::VisualField);
+    assert_eq!(app.modes.mode, Mode::VisualField);
     assert_eq!(steps(&app), ["B-4 40 cut:20 --- ---"; 2], "as + + -");
     assert_eq!(app.services.status, "+23 semitones");
     with_cmd(&mut app, "D-l");
@@ -3404,7 +3429,7 @@ fn live_tresillo() -> (App, Realtime) {
 fn l_keeps_a_shape_live_as_one_undo_and_gl_turns_its_rotate() {
     use vt_model::shape::Where;
     let (mut app, _rt) = live_tresillo();
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(generators(&app, 0).len(), 1);
     assert!(
         app.services.status.contains("live"),
@@ -3414,7 +3439,7 @@ fn l_keeps_a_shape_live_as_one_undo_and_gl_turns_its_rotate() {
     let depth = app.services.history.undo_depth();
     // `gl` from another row of the column opens the panel on its saved shape.
     keys(&mut app, "jjjgl");
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.mode, Mode::Shape);
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.live, Some(0));
     assert_eq!(panel.shape.place, Where::Euclid { hits: 3, rotate: 0 });
@@ -3446,7 +3471,7 @@ fn l_keeps_a_shape_live_as_one_undo_and_gl_turns_its_rotate() {
         app.services.status
     );
     keys(&mut app, "gl");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert!(
         app.services.status.contains("No live column"),
         "{}",

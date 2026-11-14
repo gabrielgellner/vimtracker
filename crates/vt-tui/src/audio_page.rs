@@ -64,7 +64,7 @@ impl App {
     /// leaf before the CPU figure means, while it shows, as `󰌪 CPU slowed ×3.6 by power saving,
     /// about 8% at full speed`.
     pub fn audio_page_hint(&self) -> Option<String> {
-        if self.view != View::Audio {
+        if self.modes.view != View::Audio {
             return None;
         }
         let meaning = self.slowdown.explanation(self.cpu.percent())?;
@@ -265,7 +265,7 @@ impl App {
 
     /// Run a command on the audio page. Returns false if it means the same as anywhere.
     pub(crate) fn run_audio_page(&mut self, cmd: Cmd) -> bool {
-        let count = self.count.take();
+        let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1);
         let last = AudioRow::ALL.len() - 1;
         if matches!(cmd, Cmd::PreviousPage | Cmd::NextPage) {
@@ -328,7 +328,7 @@ impl App {
             }
             Cmd::PickValue | Cmd::EnterInsert => self.open_audio_picker(),
             _ => {
-                self.count = count;
+                self.modes.count = count;
                 return false;
             }
         }

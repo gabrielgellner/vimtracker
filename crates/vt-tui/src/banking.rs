@@ -219,7 +219,7 @@ impl App {
             problems,
         } = banked;
         self.services.samples = Arc::new(pool);
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let mut actions = Vec::new();
         if new {
             actions.push(Action::SetBankEntry {
@@ -535,8 +535,8 @@ impl App {
         }
         self.fit_levels();
         // A cursor on a fixed track stays on it.
-        if self.cursor.track >= first {
-            self.cursor.track += count;
+        if self.services.cursor.track >= first {
+            self.services.cursor.track += count;
         }
         if let Some(number) = group {
             self.fold_group(number, true);
@@ -622,12 +622,12 @@ impl App {
     /// Choose what the current track's sampler plays, from the bank. With nothing in the bank yet,
     /// the explorer opens to add a file.
     pub(crate) fn open_bank_picker(&mut self) {
-        self.count = None;
+        self.modes.count = None;
         if self.song().bank.is_empty() {
             self.open_default_sample_picker();
             return;
         }
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let current = self
             .song()
             .tracks
@@ -644,7 +644,7 @@ impl App {
 
     /// Choose the sample a step's `SMP` locks, from the bank.
     pub(crate) fn open_sample_lock_picker(&mut self, slot: usize) {
-        self.count = None;
+        self.modes.count = None;
         let current = self
             .current_slot(slot)
             .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SAMPLE)))
@@ -660,7 +660,7 @@ impl App {
             .current_slot(slot)
             .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SAMPLE)))
             .map_or(Mark::default(), |cell| cell.mark);
-        self.cursor.field = Field::FxValue(slot);
+        self.services.cursor.field = Field::FxValue(slot);
         self.set_field(FieldValue::Slot(
             slot,
             FxSlot {

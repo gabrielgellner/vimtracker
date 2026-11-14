@@ -13,7 +13,7 @@ impl App {
     pub(super) fn double(&mut self) {
         if let Some(phrase) = self.phrase_id() {
             self.services.apply(&Action::Double {
-                track: self.cursor.track,
+                track: self.services.cursor.track,
                 phrase,
             });
         }
@@ -32,7 +32,7 @@ impl App {
             return;
         }
         let by = self.extent().start as isize - old as isize;
-        self.cursor.step = self.cursor.step.saturating_add_signed(by);
+        self.services.cursor.step = self.services.cursor.step.saturating_add_signed(by);
         self.top = self.top.saturating_add_signed(by);
     }
 
@@ -40,7 +40,7 @@ impl App {
         if let Some(phrase) = self.phrase_id() {
             let before = self.loop_place();
             self.services.apply(&Action::SlideLoop {
-                track: self.cursor.track,
+                track: self.services.cursor.track,
                 phrase,
                 by,
             });
@@ -58,7 +58,7 @@ impl App {
             && let Some(phrase) = self.phrase_id()
         {
             self.services.apply(&Action::RotateLoop {
-                track: self.cursor.track,
+                track: self.services.cursor.track,
                 phrase,
                 by,
             });
@@ -67,7 +67,7 @@ impl App {
 
     /// The FX column the cursor is on.
     pub(super) fn fx_column(&self) -> Option<usize> {
-        match self.cursor.field {
+        match self.services.cursor.field {
             Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => Some(slot),
             Field::Note | Field::Velocity | Field::Nudge | Field::Gate | Field::GateLength => None,
         }
@@ -101,7 +101,7 @@ impl App {
             return;
         }
         self.services.apply(&Action::SetLane {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             phrase,
             slot,
             lane,
@@ -117,16 +117,16 @@ impl App {
     pub(super) fn start_loop_here(&mut self) {
         if let Some(slot) = self.lane_slot() {
             let length = self.lane_here(slot).length;
-            let start = self.cursor.step;
+            let start = self.services.cursor.step;
             self.set_lane(slot, Some(Lane { start, length }));
             return;
         }
-        let by = self.extent().row(self.cursor.step);
+        let by = self.extent().row(self.services.cursor.step);
         if by != 0
             && let Some(phrase) = self.phrase_id()
         {
             self.services.apply(&Action::SlideLoop {
-                track: self.cursor.track,
+                track: self.services.cursor.track,
                 phrase,
                 by,
             });
@@ -138,7 +138,10 @@ impl App {
     pub(super) fn end_loop_here(&mut self) {
         if let Some(slot) = self.lane_slot() {
             let start = self.lane_here(slot).start;
-            let Some(length) = (self.cursor.step + 1).checked_sub(start).filter(|l| *l > 0) else {
+            let Some(length) = (self.services.cursor.step + 1)
+                .checked_sub(start)
+                .filter(|l| *l > 0)
+            else {
                 self.services.status = "A lane can't end above its start".to_owned();
                 return;
             };
@@ -146,7 +149,7 @@ impl App {
             return;
         }
         let extent = self.extent();
-        let Ok(row) = usize::try_from(extent.row(self.cursor.step)) else {
+        let Ok(row) = usize::try_from(extent.row(self.services.cursor.step)) else {
             self.services.status = "The loop can't end above its start".to_owned();
             return;
         };
@@ -155,7 +158,7 @@ impl App {
             && length != extent.length
         {
             self.services.apply(&Action::SetLength {
-                track: self.cursor.track,
+                track: self.services.cursor.track,
                 phrase,
                 length,
             });
@@ -171,7 +174,7 @@ impl App {
         }
         let Some(step) = self
             .phrase_here()
-            .and_then(|phrase| phrase.steps().get(self.cursor.step))
+            .and_then(|phrase| phrase.steps().get(self.services.cursor.step))
         else {
             return;
         };
@@ -181,17 +184,17 @@ impl App {
         let velocity = step.velocity.unwrap_or(MAX_VELOCITY);
         let transpose = self
             .chain_entries()
-            .get(self.cursor.slot)
+            .get(self.services.cursor.slot)
             .map_or(0, |entry| entry.transpose);
         let note = (i16::from(midi) + i16::from(transpose))
             .clamp(i16::from(MIN_NOTE), i16::from(MAX_NOTE)) as u8;
         self.services.handle.send(Command::HoldPreview {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             note,
             velocity,
         });
         self.started = Some(Momentary::AuditionNote {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             note,
         });
     }

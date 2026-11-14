@@ -157,13 +157,13 @@ impl App {
         let song = self.song();
         let found = song
             .tracks
-            .get(self.cursor.track)
+            .get(self.services.cursor.track)
             .and_then(|track| tuning(song, track))
             .map(|tuning| (tuning.number, tuning.entry.clone(), tuning.of));
         if found.is_none() {
             self.services.status = format!(
                 "Track {:02} plays no sample to tune: K on Sample chooses one",
-                self.cursor.track + 1
+                self.services.cursor.track + 1
             );
         }
         found

@@ -156,9 +156,9 @@ fn k_lists_a_settings_choices_and_i_types_a_value() {
     assert_eq!(generators(&app)[0].shape.kind, FillKind::Alternate);
     // `i` on `To` types a note.
     keys(&mut app, "jji");
-    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.modes.mode, Mode::Insert);
     keys(&mut app, "G-3<Enter>");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(here(&app), Some(GenParam::To));
     assert_eq!(notes(&app)[3], "G-3");
     let text = fx_page_text(&app).join("\n");
@@ -343,8 +343,8 @@ fn space_g_a_applies_it_and_dd_takes_it_away() {
 fn enter_opens_the_shape_panel_on_it_in_the_phrase_view() {
     let (mut app, _rt) = on_gen_page();
     keys(&mut app, "<Enter>");
-    assert_eq!(app.view, View::Phrase);
-    assert_eq!(app.mode, Mode::Shape);
+    assert_eq!(app.modes.view, View::Phrase);
+    assert_eq!(app.modes.mode, Mode::Shape);
     assert_eq!(app.shape.as_ref().unwrap().live, Some(0));
 }
 

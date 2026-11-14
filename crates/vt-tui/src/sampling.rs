@@ -149,7 +149,7 @@ impl App {
         if self.sampling.live.is_some() {
             self.stop_sampling();
         } else {
-            let from_page = self.view == View::Sample;
+            let from_page = self.modes.view == View::Sample;
             self.start_sampling(from_page);
         }
     }
@@ -171,7 +171,7 @@ impl App {
             None => None,
             Some(RecordWhat::Master) => Some(Source::Master),
             Some(RecordWhat::Input) => Some(Source::Input),
-            Some(RecordWhat::ThisTrack) => Some(Source::Track(self.cursor.track)),
+            Some(RecordWhat::ThisTrack) => Some(Source::Track(self.services.cursor.track)),
             Some(RecordWhat::Track(number)) => {
                 let sounds = self.song().sound_tracks();
                 if number == 0 || number > sounds {
@@ -187,7 +187,7 @@ impl App {
         if let Some(quantise) = quantise {
             self.sampling.quantise = quantise;
         }
-        let from_page = self.view == View::Sample;
+        let from_page = self.modes.view == View::Sample;
         self.start_sampling(from_page);
     }
 
@@ -435,8 +435,8 @@ impl App {
         });
         self.services.dirty = true;
         self.after_history();
-        if live.from_page || self.view == View::Sample {
-            self.sample_page.pinned = Some((self.cursor.track, number));
+        if live.from_page || self.modes.view == View::Sample {
+            self.sample_page.pinned = Some((self.services.cursor.track, number));
         }
         let seconds = (end - recorded.before) as f64 / f64::from(self.services.rate);
         let channels = if mono { "mono" } else { "stereo" };

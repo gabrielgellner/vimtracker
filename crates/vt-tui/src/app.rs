@@ -8,7 +8,6 @@ use std::time::{Duration, Instant};
 use crate::accent_slide::{HeldFlag, Moved, Written};
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
 use crate::exploring::Naming;
-use crate::folding::Folds;
 use crate::glyphs;
 use crate::loading::Loader;
 use crate::places::RecentPlaces;
@@ -94,6 +93,31 @@ pub struct Entry {
     pub text: String,
     /// A command name waiting for its value, so the command doesn't take effect until then.
     pub command: Option<FxCommand>,
+}
+
+/// What spans the pages as keys are typed: the view on screen, the mode the keys are in, what
+/// Insert has typed, a field jump under way and the count typed before a command. A page's keys
+/// read them.
+#[derive(Debug, Clone)]
+pub struct Modes {
+    pub view: View,
+    pub mode: Mode,
+    pub entry: Entry,
+    /// The search for a setting under way.
+    pub field_jump: Option<FieldJump>,
+    pub(crate) count: Option<usize>,
+}
+
+impl Default for Modes {
+    fn default() -> Self {
+        Self {
+            view: View::Phrase,
+            mode: Mode::Normal,
+            entry: Entry::default(),
+            field_jump: None,
+            count: None,
+        }
+    }
 }
 
 /// Where the cursor is: a step in a chain slot on a track.
@@ -201,8 +225,10 @@ pub struct AudioState {
 
 /// The whole program's state.
 pub struct App {
-    /// What every page shares: the song, the engine, the samples, the status line.
+    /// What every page shares: the song and the cursor, the engine, the samples, the status line.
     pub services: Services,
+    /// The view and the mode the keys are in, and what spans the pages as they're typed.
+    pub modes: Modes,
     /// The audio output as it plays, and what the audio page chooses from.
     pub audio: AudioState,
     /// A different output the audio page has chosen, for the main loop to open.
@@ -214,8 +240,6 @@ pub struct App {
     /// The sample library the sample explorer lists, such as Ableton Live's, if this machine has
     /// one: found as the program starts, and none in tests.
     pub library: Option<PathBuf>,
-    pub mode: Mode,
-    pub view: View,
     /// The mixer: the row its cursor is on.
     pub mixer_page: MixerPage,
     pub song_column: usize,
@@ -249,7 +273,6 @@ pub struct App {
     pub(crate) jumped_from: Option<Place>,
     pub(crate) last_autosave: Option<Instant>,
     pub(crate) autosaved: Option<Arc<Song>>,
-    pub cursor: Cursor,
     /// The octave the keys play and enter notes in, as note names number it: 3, where `a` is
     /// `C-3`, middle C.
     pub octave: i8,
@@ -304,7 +327,6 @@ pub struct App {
     momentary: Option<Held>,
     /// What the press being handled started, for [`App::press`] to tie to its key.
     pub(crate) started: Option<Momentary>,
-    pub entry: Entry,
     /// The first step on screen, and how many lines fit.
     pub top: usize,
     pub view_height: usize,
@@ -313,9 +335,6 @@ pub struct App {
     /// The phrase view shows the row inspector right of the overview, for this session
     /// (decision 255).
     pub inspector: bool,
-    /// Which groups are folded, read from the song's `view` when it opens and written into it
-    /// when it's saved, not undone (decisions 128 and 305).
-    pub folds: Folds,
     pub help_scroll: usize,
     /// The open guide, how far it has scrolled, and how many of its rows fit.
     pub guide: Option<Guide>,
@@ -325,7 +344,6 @@ pub struct App {
     pub(crate) table: Table,
     pub(crate) pending: Vec<Key>,
     pub(crate) pending_since: Option<Instant>,
-    pub(crate) count: Option<usize>,
     pub(crate) operator: Option<Op>,
     pub(crate) operator_count: Option<usize>,
     pub(crate) register: Option<char>,
@@ -347,8 +365,6 @@ pub struct App {
     pub mapping: Option<crate::macroing::MappingView>,
     /// A selection to shape once the command for its empty FX column is chosen, and its field.
     pub(crate) shape_command: Option<(Selection, Field)>,
-    /// The search for a setting under way.
-    pub field_jump: Option<FieldJump>,
     /// Changes each time random values are wanted anew.
     pub(crate) shape_seed: u64,
     /// The sounds of the kit in use, to choose from for a track.
@@ -417,14 +433,12 @@ impl App {
         let scale = song.scale;
         let auto_jump = song.auto_jump;
         let read_only = song.read_only;
-        let folds = Folds::from_view(&song.view);
         let mut names = Names::from_clock();
         let mut song = song;
         name_song(&mut song, folder.as_deref(), &mut names);
         let mut app = Self {
             services: Services::new(song, folder, samples, handle, rate),
-            mode: Mode::Normal,
-            view: View::Phrase,
+            modes: Modes::default(),
             mixer_page: MixerPage::default(),
             song_column: 0,
             looping: None,
@@ -452,13 +466,6 @@ impl App {
             jumped_from: None,
             last_autosave: None,
             autosaved: None,
-            cursor: Cursor {
-                section: 0,
-                track: 0,
-                slot: 0,
-                step: 0,
-                field: Field::Note,
-            },
             octave: 3,
             note_velocity: DEFAULT_NOTE_VELOCITY,
             replacing: None,
@@ -485,12 +492,10 @@ impl App {
             octave_moved: None,
             momentary: None,
             started: None,
-            entry: Entry::default(),
             top: 0,
             view_height: 16,
             rows_collapsed: false,
             inspector: false,
-            folds,
             help_scroll: 0,
             guide: None,
             guide_scroll: 0,
@@ -499,7 +504,6 @@ impl App {
             table: Table::default(),
             pending: Vec::new(),
             pending_since: None,
-            count: None,
             operator: None,
             operator_count: None,
             register: None,
@@ -513,7 +517,6 @@ impl App {
             shape: None,
             mapping: None,
             shape_command: None,
-            field_jump: None,
             shape_seed: 0,
             kit: Vec::new(),
             kit_file: None,
@@ -592,7 +595,7 @@ impl App {
         song.scale = self.scale;
         song.auto_jump = self.auto_jump;
         song.read_only = self.read_only;
-        song.view = self.folds.view();
+        song.view = self.services.folds.view();
         for (track, live) in song.tracks.iter_mut().zip(&self.services.levels) {
             track.mute = live.mute;
             track.solo = live.solo;
@@ -628,7 +631,9 @@ impl App {
     /// The section being edited.
     pub fn section_here(&self) -> Option<&Section> {
         let sections = &self.song().sections;
-        sections.get(self.cursor.section).or(sections.last())
+        sections
+            .get(self.services.cursor.section)
+            .or(sections.last())
     }
 
     /// How far a track is through this chain, if it's playing it.
@@ -670,18 +675,21 @@ impl App {
 
     /// The track under the cursor.
     pub fn track_here(&self) -> Option<&Track> {
-        self.song().tracks.get(self.cursor.track)
+        self.song().tracks.get(self.services.cursor.track)
     }
 
     /// The phrase under the cursor.
     pub fn phrase_id(&self) -> Option<u32> {
-        let chain = (*self.section_here()?.chains.get(self.cursor.track)?)?;
+        let chain = (*self
+            .section_here()?
+            .chains
+            .get(self.services.cursor.track)?)?;
         Some(
             self.track_here()?
                 .chains
                 .get(&chain)?
                 .entries
-                .get(self.cursor.slot)?
+                .get(self.services.cursor.slot)?
                 .phrase,
         )
     }
@@ -700,7 +708,7 @@ impl App {
     /// otherwise. Beats always go by the phrase's loop.
     pub(crate) fn motion_extent(&self, motion: Motion) -> Extent {
         let extent = self.extent();
-        let lane = match (motion, self.cursor.field) {
+        let lane = match (motion, self.services.cursor.field) {
             (
                 Motion::First | Motion::Last,
                 Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot),
@@ -727,7 +735,7 @@ impl App {
         };
         let Some(chain) = self
             .section_here()
-            .and_then(|s| s.chains.get(self.cursor.track).copied().flatten())
+            .and_then(|s| s.chains.get(self.services.cursor.track).copied().flatten())
             .and_then(|id| track.chains.get(&id))
         else {
             return 0;
@@ -735,7 +743,7 @@ impl App {
         chain
             .entries
             .iter()
-            .take(self.cursor.slot)
+            .take(self.services.cursor.slot)
             .filter_map(|e| track.phrases.get(&e.phrase))
             .map(|p| p.time())
             .sum()
@@ -744,13 +752,13 @@ impl App {
     /// The cursor's position within the section. Only the loop has one, so a step outside it
     /// counts as the loop's first.
     pub fn section_step(&self) -> usize {
-        if self.view == View::Song {
+        if self.modes.view == View::Song {
             return 0;
         }
         let extent = self.extent();
         // The chain view has no step of its own, so it plays from the row's first.
-        let row = if self.view != View::Chain && extent.plays(self.cursor.step) {
-            self.cursor.step - extent.start
+        let row = if self.modes.view != View::Chain && extent.plays(self.services.cursor.step) {
+            self.services.cursor.step - extent.start
         } else {
             0
         };
@@ -763,7 +771,7 @@ impl App {
     /// Put the cursor on the first step that plays, at the top of the screen.
     pub(crate) fn go_to_loop_start(&mut self) {
         let start = self.extent().start;
-        self.cursor.step = start;
+        self.services.cursor.step = start;
         self.top = start;
     }
 
@@ -775,7 +783,7 @@ impl App {
             .live_song
             .as_ref()
             .unwrap_or_else(|| self.song());
-        song.tracks.get(self.cursor.track)
+        song.tracks.get(self.services.cursor.track)
     }
 
     /// Do the work due each frame: send waiting versions and read the callback's report.
@@ -791,7 +799,7 @@ impl App {
             .saturating_duration_since(self.services.last_tick)
             .as_secs_f32();
         self.services.last_tick = now;
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         if self.services.watched != track && self.services.handle.send(Command::Watch { track }) {
             self.services.watched = track;
         }

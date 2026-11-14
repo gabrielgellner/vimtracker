@@ -1205,8 +1205,8 @@ impl Graphics {
         for id in self.retired.drain(..) {
             command(out, &format!("a=d,d=I,i={id},q=2"), &[])?;
         }
-        if app.view == View::Track
-            && let Some(track) = app.song().tracks.get(app.cursor.track).cloned()
+        if app.modes.view == View::Track
+            && let Some(track) = app.song().tracks.get(app.services.cursor.track).cloned()
         {
             match app.track_page.page {
                 Page::Sound if track.is_sound() => self.sync_sound(app, &track, out)?,
@@ -1217,7 +1217,7 @@ impl Graphics {
             }
             self.sync_mapping(app, &track, out)?;
         }
-        if app.view == View::Sample {
+        if app.modes.view == View::Sample {
             // So `h` and `l` move the cursor's line by a pixel of these.
             app.sample_page.cell_width = Some(self.cell.0);
             self.sync_sample(app, out)?;
@@ -1310,16 +1310,17 @@ impl Graphics {
     /// slot's goes on its map at its last note. One switched
     /// out or going nowhere has none, and while the song is stopped none has.
     fn dots_wanted(&self, app: &App) -> [Option<(Shade, Placement)>; MOD_SLOTS] {
-        if app.view == View::Track && app.track_page.page == Page::Gen {
+        if app.modes.view == View::Track && app.track_page.page == Page::Gen {
             return self.gen_dots_wanted(app);
         }
         let mut wanted = [None; MOD_SLOTS];
-        let shown = app.view == View::Track
+        let shown = app.modes.view == View::Track
             && app.track_page.page == Page::Mod
             && !overlaid(app, std::time::Instant::now());
-        let (Some(track), Some(live)) =
-            (app.song().tracks.get(app.cursor.track), app.services.live)
-        else {
+        let (Some(track), Some(live)) = (
+            app.song().tracks.get(app.services.cursor.track),
+            app.services.live,
+        ) else {
             return wanted;
         };
         if !shown {
@@ -1356,7 +1357,7 @@ impl Graphics {
         let Some(phrase) = app.track_page.phrase.and_then(|phrase| {
             app.song()
                 .tracks
-                .get(app.cursor.track)?
+                .get(app.services.cursor.track)?
                 .phrases
                 .get(&phrase)
         }) else {
@@ -1856,7 +1857,7 @@ impl Graphics {
         let height = usize::from(WAVE_ROWS) * self.cell.1;
         let wanted = match &page.on_screen {
             Some(screen)
-                if app.view == View::Sample
+                if app.modes.view == View::Sample
                     && page.cursor_line
                     && app.sample_images.is_some()
                     && !overlaid(app, std::time::Instant::now()) =>
@@ -1867,7 +1868,7 @@ impl Graphics {
         };
         // With the focus on the settings rows, `h` and `l` go along them, so the line is set back
         // to show it isn't what moves.
-        let dimmed = page.setting.is_some() && app.mode != Mode::Keys;
+        let dimmed = page.setting.is_some() && app.modes.mode != Mode::Keys;
         if wanted == self.cursor_placed && dimmed == self.cursor_dimmed {
             return Ok(());
         }

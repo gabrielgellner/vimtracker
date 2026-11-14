@@ -79,13 +79,13 @@ impl App {
         let number = self
             .song()
             .tracks
-            .get(self.cursor.track)
+            .get(self.services.cursor.track)
             .filter(|track| track.machine == vt_model::song::Machine::Sampler)
             .map_or(0, |track| track.sample());
         let Some(mut entry) = self.song().bank.get(number).cloned() else {
             self.services.status = format!(
                 "Track {:02} plays no sample to change: K on Sample chooses one",
-                self.cursor.track + 1
+                self.services.cursor.track + 1
             );
             return;
         };
@@ -186,13 +186,13 @@ impl App {
         let number = self
             .song()
             .tracks
-            .get(self.cursor.track)
+            .get(self.services.cursor.track)
             .filter(|track| track.machine == vt_model::song::Machine::Sampler)
             .map_or(0, |track| track.sample());
         let Some(mut entry) = self.song().bank.get(number).cloned() else {
             self.services.status = format!(
                 "Track {:02} plays no sample to take a tempo from: K on Sample chooses one",
-                self.cursor.track + 1
+                self.services.cursor.track + 1
             );
             return;
         };

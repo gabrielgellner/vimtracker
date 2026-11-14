@@ -69,7 +69,7 @@ impl App {
     }
 
     fn leave_command_line(&mut self) {
-        self.mode = Mode::Normal;
+        self.modes.mode = Mode::Normal;
         self.command_menu = None;
         self.command_history.stop();
     }
@@ -152,7 +152,10 @@ impl App {
         };
         let kept = menu.highlighted().map(str::to_owned);
         let found = self.complete_line();
-        if found.start != menu.start || found.candidates.is_empty() || self.mode != Mode::Command {
+        if found.start != menu.start
+            || found.candidates.is_empty()
+            || self.modes.mode != Mode::Command
+        {
             self.command_menu = None;
             return;
         }

@@ -203,7 +203,7 @@ impl App {
 
     /// The bank entry the current track plays, and its number, or why there's none.
     fn track_entry(&self) -> Result<(u8, BankEntry), String> {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let number = self
             .song()
             .tracks

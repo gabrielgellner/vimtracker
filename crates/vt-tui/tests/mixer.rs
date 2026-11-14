@@ -17,7 +17,7 @@ fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
     // Past the groups, which are empty and so folded away.
     press(&mut app, "ll");
     press(&mut app, "jj");
-    assert_eq!(app.cursor.track, return_a);
+    assert_eq!(app.services.cursor.track, return_a);
     press(&mut app, "i40");
     assert_eq!(
         app.song().tracks[return_a].send_a,
@@ -25,7 +25,7 @@ fn the_mixer_leaves_out_what_a_fixed_track_doesnt_have() {
         "a return sends nowhere"
     );
     press(&mut app, "ll");
-    assert_eq!(app.cursor.track, return_a + 2);
+    assert_eq!(app.services.cursor.track, return_a + 2);
     press(&mut app, "ki40");
     assert_eq!(
         app.song().tracks[return_a + 2].pan,
@@ -42,10 +42,10 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     press(&mut app, " 4zRjj");
     assert_eq!(column_name(&app), "Send A");
     press(&mut app, "ll");
-    assert_eq!(app.cursor.track, 2);
+    assert_eq!(app.services.cursor.track, 2);
     assert_eq!(column_name(&app), "Send A", "a group sends");
     press(&mut app, &"l".repeat(MAX_GROUPS));
-    assert_eq!(app.cursor.track, 2 + MAX_GROUPS);
+    assert_eq!(app.services.cursor.track, 2 + MAX_GROUPS);
     assert_eq!(
         column_name(&app),
         "Pan",
@@ -60,7 +60,7 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     press(&mut app, "jG");
     assert_eq!(column_name(&app), "Level");
     press(&mut app, &"h".repeat(4 + MAX_GROUPS));
-    assert_eq!(app.cursor.track, 0);
+    assert_eq!(app.services.cursor.track, 0);
     assert_eq!(column_name(&app), "Level", "where it went is where it is");
     press(&mut app, "jjl");
     assert_eq!(column_name(&app), "Send A");
@@ -70,24 +70,24 @@ fn the_mixers_cursor_stays_on_rows_a_track_has_and_comes_back() {
     // `$` and `0` go to the last and first tracks that have the row.
     press(&mut app, "$");
     assert_eq!(
-        (app.cursor.track, column_name(&app)),
+        (app.services.cursor.track, column_name(&app)),
         (1 + MAX_GROUPS, "Send A".to_owned()),
         "the last group"
     );
     press(&mut app, "0");
     assert_eq!(
-        (app.cursor.track, column_name(&app)),
+        (app.services.cursor.track, column_name(&app)),
         (0, "Send A".to_owned())
     );
     press(&mut app, "k$");
     assert_eq!(
-        (app.cursor.track, column_name(&app)),
+        (app.services.cursor.track, column_name(&app)),
         (3 + MAX_GROUPS, "Pan".to_owned()),
         "B, as M has none"
     );
     press(&mut app, "k$");
     assert_eq!(
-        (app.cursor.track, column_name(&app)),
+        (app.services.cursor.track, column_name(&app)),
         (4 + MAX_GROUPS, "Level".to_owned())
     );
 }
@@ -109,7 +109,7 @@ fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     use vt_tui::views::status::column_name;
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
-    assert_eq!(app.view, View::Mixer);
+    assert_eq!(app.modes.view, View::Mixer);
     let depth = app.services.history.undo_depth();
     press(&mut app, "=");
     assert_eq!(app.song().tracks[0].level, 0xE1);
@@ -118,7 +118,7 @@ fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     assert_eq!(app.song().tracks[0].level, 0xE0);
 
     press(&mut app, "lj");
-    assert_eq!(app.cursor.track, 1);
+    assert_eq!(app.services.cursor.track, 1);
     press(&mut app, "i40");
     assert_eq!(app.song().tracks[1].pan, 0x40);
     assert_eq!(app.song().tracks[0].pan, 0x80, "only this track");
@@ -129,10 +129,14 @@ fn the_mixer_edits_each_tracks_settings_as_the_track_page_does() {
     press(&mut app, "j");
     assert_eq!(column_name(&app), "Send B");
     press(&mut app, "Gk0");
-    assert_eq!(app.cursor.track, 0);
+    assert_eq!(app.services.cursor.track, 0);
     assert_eq!(column_name(&app), "Mute");
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 3 + MAX_GROUPS, "B, the last with a mute");
+    assert_eq!(
+        app.services.cursor.track,
+        3 + MAX_GROUPS,
+        "B, the last with a mute"
+    );
     press(&mut app, "gg");
     assert_eq!(
         column_name(&app),
@@ -171,7 +175,11 @@ fn the_mixers_mute_and_solo_reach_the_engine() {
     assert!(mixer_line(&app, "Solo").contains(vt_tui::glyphs::SOLO));
     press(&mut app, "i");
     assert!(!app.services.levels[0].solo);
-    assert_eq!(app.mode, Mode::Normal, "it switches rather than typing");
+    assert_eq!(
+        app.modes.mode,
+        Mode::Normal,
+        "it switches rather than typing"
+    );
 }
 
 #[test]
@@ -186,7 +194,7 @@ fn a_long_mixer_scrolls_to_keep_the_track_in_view() {
         mixer_text(&app)[2]
     );
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 31 + FIXED_TRACKS);
+    assert_eq!(app.services.cursor.track, 31 + FIXED_TRACKS);
     let names = &mixer_text(&app)[2];
     assert!(names.contains("32"), "{names}");
     assert!(
@@ -451,6 +459,6 @@ fn the_mixer_has_a_trim_above_each_fader_and_opens_on_the_fader() {
     assert!(text[trim].contains("81") && text[trim].contains("80"));
     // Every strip has one, the groups', the returns' and the master's too.
     press(&mut app, "$");
-    assert_eq!(app.cursor.track, 4 + MAX_GROUPS, "the master");
+    assert_eq!(app.services.cursor.track, 4 + MAX_GROUPS, "the master");
     assert_eq!(column_name(&app), "Trim");
 }

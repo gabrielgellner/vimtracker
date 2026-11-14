@@ -292,7 +292,7 @@ fn the_roto_is_off_until_turned_on_on_the_audio_page() {
         "nothing is sent while it's off"
     );
     press(&mut app, " 9LG");
-    assert_eq!(app.view, View::Audio);
+    assert_eq!(app.modes.view, View::Audio);
     assert_eq!(vt_tui::views::status::column_name(&app), "Roto");
     press(&mut app, "=");
     assert!(app.services.roto.setting.on);
@@ -567,14 +567,14 @@ fn a_knob_edits_its_own_track_whatever_the_cursor_is_on() {
     let (mut app, _realtime, ports) = showing(OUTPUT);
     assert_eq!(app.services.roto.track, 0);
     // The cursor goes to the second track, and to the phrase view.
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     press(&mut app, " 3");
     let other = app.song().tracks[1].level;
     let top = SettingId::VOL.entry().kind.top();
     turn(&ports, LEVEL_KNOB, KNOB_TOP);
     assert!(tick_until_song(&mut app, |song| song.tracks[0].level == top));
     assert_eq!(app.song().tracks[1].level, other, "not the cursor's track");
-    assert_eq!(app.cursor.track, 1, "the cursor stays");
+    assert_eq!(app.services.cursor.track, 1, "the cursor stays");
     // Its value, as the app writes it.
     let text = value_text(Control::Level, &app.song().tracks[0], app.song());
     assert!(text.ends_with("dB"), "{text}");
@@ -851,7 +851,7 @@ fn func_chooses_the_track_the_roto_shows_and_the_cursor_stays() {
             .is_some_and(|p| p.name.as_str() == machine.name())
     }));
     assert_eq!(app.services.roto.track, 1);
-    assert_eq!(app.cursor.track, 0, "the cursor stays");
+    assert_eq!(app.services.cursor.track, 0, "the cursor stays");
     assert_eq!(
         app.services.roto.view.selected_index(),
         OUTPUT,

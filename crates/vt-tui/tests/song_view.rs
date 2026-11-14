@@ -18,11 +18,11 @@ use common::*;
 fn the_song_view_adds_copies_and_removes_sections() {
     let (mut app, _realtime) = app();
     press(&mut app, " 1");
-    assert_eq!(app.view, View::Song);
+    assert_eq!(app.modes.view, View::Song);
     assert_eq!(app.song().sections.len(), 1);
     press(&mut app, "a");
     assert_eq!(app.song().sections.len(), 2);
-    assert_eq!(app.cursor.section, 1);
+    assert_eq!(app.services.cursor.section, 1);
     assert_eq!(
         app.song().sections[1].chains,
         vec![None; app.song().tracks.len()],
@@ -31,7 +31,7 @@ fn the_song_view_adds_copies_and_removes_sections() {
     assert_eq!(app.song().tracks[0].chains.len(), 1, "none made");
     press(&mut app, "gc");
     assert_eq!(app.song().sections.len(), 3);
-    assert_eq!(app.cursor.section, 2);
+    assert_eq!(app.services.cursor.section, 2);
     assert_eq!(
         app.song().sections[2].chains,
         app.song().sections[1].chains,
@@ -39,7 +39,7 @@ fn the_song_view_adds_copies_and_removes_sections() {
     );
     press(&mut app, "dd");
     assert_eq!(app.song().sections.len(), 2);
-    assert_eq!(app.cursor.section, 1);
+    assert_eq!(app.services.cursor.section, 1);
     press(&mut app, "u");
     assert_eq!(app.song().sections.len(), 3);
     press(&mut app, "ddddddd");
@@ -49,7 +49,7 @@ fn the_song_view_adds_copies_and_removes_sections() {
         "{}",
         app.services.status
     );
-    assert_eq!(app.cursor.section, 0);
+    assert_eq!(app.services.cursor.section, 0);
     let text = song_text(&app);
     assert!(text[2].contains("Length") && text[2].contains("Start"));
     assert!(text[3].contains("16") && text[3].contains("new"));
@@ -157,7 +157,7 @@ fn other_views_edit_the_section_under_the_cursor() {
     assert_eq!(app.song().sections[1].reset, Some(8));
     assert_eq!(app.song().sections[0].reset, None, "only this section");
     press(&mut app, " 1k");
-    assert_eq!(app.cursor.section, 0);
+    assert_eq!(app.services.cursor.section, 0);
     assert_eq!(app.phrase_id(), Some(0));
 }
 
@@ -210,7 +210,7 @@ fn an_empty_section_can_be_visited_from_every_view_and_filled() {
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.song().sections[1].chains[0], None);
     press(&mut app, " 1lllgd");
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
     assert!(app.song().sections[1].chains[0].is_some());
     assert_eq!(app.song().sections[1].chains[1], None, "only this track");
 }
@@ -219,13 +219,13 @@ fn an_empty_section_can_be_visited_from_every_view_and_filled() {
 fn gd_in_the_song_view_opens_a_new_chains_phrase_as_one_undo() {
     let (mut app, _realtime) = app();
     press(&mut app, " 1gd");
-    assert_eq!(app.view, View::Song, "{}", app.services.status);
+    assert_eq!(app.modes.view, View::Song, "{}", app.services.status);
     assert!(app.services.status.contains("track"));
     press(&mut app, "llllx");
     let depth = app.services.history.undo_depth();
     press(&mut app, "gd");
-    assert_eq!(app.view, View::Phrase);
-    assert_eq!(app.cursor.track, 1);
+    assert_eq!(app.modes.view, View::Phrase);
+    assert_eq!(app.services.cursor.track, 1);
     assert!(app.chain_id().is_some());
     assert_eq!(app.chain_entries().len(), 1);
     assert_eq!(app.services.history.undo_depth(), depth + 1);
@@ -235,13 +235,13 @@ fn gd_in_the_song_view_opens_a_new_chains_phrase_as_one_undo() {
 fn gd_in_the_song_view_goes_by_how_many_phrases_a_chain_has() {
     let (mut app, _realtime) = app();
     press(&mut app, " 1lllgd");
-    assert_eq!(app.view, View::Phrase, "one phrase");
+    assert_eq!(app.modes.view, View::Phrase, "one phrase");
     press(&mut app, " 2jgd");
     assert_eq!(app.chain_entries().len(), 2);
     press(&mut app, " 1gd");
-    assert_eq!(app.view, View::Chain, "several");
+    assert_eq!(app.modes.view, View::Chain, "several");
     app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
-    assert_eq!(app.view, View::Song, "C-o comes back");
+    assert_eq!(app.modes.view, View::Song, "C-o comes back");
 }
 
 #[test]
@@ -287,7 +287,7 @@ fn a_playhead_follows_the_chain_a_track_is_on_whichever_row_shows_it() {
     let (mut app, mut realtime) = jamming();
     play_on(&mut app, &mut realtime, 3);
     assert_eq!(app.services.playing_section, 0);
-    assert_eq!(app.cursor.section, 1);
+    assert_eq!(app.services.cursor.section, 1);
     assert_eq!(
         app.chain_playhead(0, 1),
         None,
@@ -439,7 +439,7 @@ fn g_upper_c_copies_the_chain_in_the_cursors_column_alone() {
     press(&mut app, " 1llll");
     command(&mut app, "label bass");
     press(&mut app, "gc");
-    assert_eq!(app.cursor.section, 1);
+    assert_eq!(app.services.cursor.section, 1);
     let depth = app.services.history.undo_depth();
     let old = app.song().tracks[1].chains[&0].clone();
     press(&mut app, "gC");
@@ -620,7 +620,7 @@ fn jamming() -> (App, Realtime) {
 #[test]
 fn enter_cues_this_chain_on_one_track_and_holds_the_section() {
     let (mut app, mut realtime) = jamming();
-    assert_eq!(app.cursor.section, 1);
+    assert_eq!(app.services.cursor.section, 1);
     assert_eq!(app.services.playing_section, 0);
     press(&mut app, "0lll");
     special(&mut app, KeyCode::Enter);
@@ -695,7 +695,7 @@ fn c_captures_what_each_track_is_playing_as_one_undo() {
         Some(16),
         "the row it came from"
     );
-    assert_eq!(app.cursor.section, 1);
+    assert_eq!(app.services.cursor.section, 1);
     assert_eq!(app.looping, Some(SectionLoop::one(1)));
     play_on(&mut app, &mut realtime, 1);
     assert_eq!(

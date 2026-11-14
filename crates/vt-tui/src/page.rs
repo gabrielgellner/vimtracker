@@ -2,9 +2,9 @@
 //! (#320). A page, such as the track page or the mixer, keeps its own state, its cursor, its
 //! images and where it last drew them, and reaches everything else through what it's given.
 //!
-//! - **[`CtxMut`]**, to run a key: the [`Services`], borrowed mutably apart from the page itself,
-//!   so a key can change the page and apply an action at once, with what it reads of the program
-//!   across pages, the cursor, the view and the mode, beside them.
+//! - **[`CtxMut`]**, to run a key: the [`Services`], the song, the cursor and the rest, borrowed
+//!   mutably apart from the page itself, so a key can change the page and apply an action at once,
+//!   and the [`Modes`] that span the pages, the view and the mode among them, to read.
 //! - **[`Ctx`]**, to be drawn: everything a page reads, the song, the cursor's place in it, the
 //!   view and the modes that span pages, which groups are folded, and what the engine last
 //!   reported, the tracks' meters among it. It only reads, and reads through `App`, as drawing is
@@ -22,15 +22,14 @@ use vt_engine::track_state::{Faders, LiveValues};
 use vt_model::order::Dealer;
 use vt_model::song::{Song, Track};
 
-use crate::app::{App, Cursor, Entry, TrackLive};
+use crate::app::{App, Cursor, Entry, Modes, TrackLive};
 use crate::folding::Folds;
 use crate::input::mode::{Mode, View};
 use crate::jumping::FieldJump;
 use crate::meter::Meter;
-use crate::mixer_page::MixerPage;
 use crate::services::Services;
 use crate::shaping::LiveGen;
-use crate::track_page::{Control, TrackPage};
+use crate::track_page::Control;
 
 /// What a page reads of the program, borrowed from it while the page is drawn.
 #[derive(Clone, Copy)]
@@ -38,44 +37,17 @@ pub struct Ctx<'a> {
     app: &'a App,
 }
 
-/// What a page is given to run a key: the shared services, to change, and what it reads of the
-/// program across pages, borrowed apart from the page.
+/// What a page is given to run a key: the shared services, to read and change, and the modes that
+/// span the pages, to read, borrowed apart from the page.
 pub struct CtxMut<'a> {
     pub services: &'a mut Services,
-    cursor: Cursor,
-    view: View,
-    mode: Mode,
-    folds: &'a Folds,
+    pub modes: &'a Modes,
 }
 
 impl App {
     /// What a page reads, to be drawn with.
     pub fn ctx(&self) -> Ctx<'_> {
         Ctx { app: self }
-    }
-
-    /// The track page, and what it's given to run a key with.
-    pub(crate) fn track_page_ctx(&mut self) -> (&mut TrackPage, CtxMut<'_>) {
-        let ctx = CtxMut {
-            services: &mut self.services,
-            cursor: self.cursor,
-            view: self.view,
-            mode: self.mode,
-            folds: &self.folds,
-        };
-        (&mut self.track_page, ctx)
-    }
-
-    /// The mixer, and what it's given to run a key with.
-    pub(crate) fn mixer_page_ctx(&mut self) -> (&mut MixerPage, CtxMut<'_>) {
-        let ctx = CtxMut {
-            services: &mut self.services,
-            cursor: self.cursor,
-            view: self.view,
-            mode: self.mode,
-            folds: &self.folds,
-        };
-        (&mut self.mixer_page, ctx)
     }
 }
 
@@ -85,29 +57,9 @@ impl CtxMut<'_> {
         self.services.song()
     }
 
-    /// Where the cursor is in the song: its section, track, chain slot, step and field.
-    pub fn cursor(&self) -> Cursor {
-        self.cursor
-    }
-
     /// The track under the cursor.
     pub fn track_here(&self) -> Option<&Track> {
-        self.song().tracks.get(self.cursor.track)
-    }
-
-    /// Which groups are folded, so their tracks are left out where tracks are drawn side by side.
-    pub fn folds(&self) -> &Folds {
-        self.folds
-    }
-
-    /// The view on screen.
-    pub fn view(&self) -> View {
-        self.view
-    }
-
-    /// The mode the keys are in.
-    pub fn mode(&self) -> Mode {
-        self.mode
+        self.song().tracks.get(self.services.cursor.track)
     }
 }
 
@@ -119,7 +71,7 @@ impl<'a> Ctx<'a> {
 
     /// Where the cursor is in the song: its section, track, chain slot, step and field.
     pub fn cursor(&self) -> Cursor {
-        self.app.cursor
+        self.app.services.cursor
     }
 
     /// The track under the cursor.
@@ -129,27 +81,27 @@ impl<'a> Ctx<'a> {
 
     /// Which groups are folded, so their tracks are left out where tracks are drawn side by side.
     pub fn folds(&self) -> &'a Folds {
-        &self.app.folds
+        &self.app.services.folds
     }
 
     /// The view on screen.
     pub fn view(&self) -> View {
-        self.app.view
+        self.app.modes.view
     }
 
     /// The mode the keys are in.
     pub fn mode(&self) -> Mode {
-        self.app.mode
+        self.app.modes.mode
     }
 
     /// What's been typed in Insert and not yet written.
     pub fn entry(&self) -> &'a Entry {
-        &self.app.entry
+        &self.app.modes.entry
     }
 
     /// The search for a setting under way, whose labels go over the settings it finds.
     pub fn field_jump(&self) -> Option<&'a FieldJump> {
-        self.app.field_jump.as_ref()
+        self.app.modes.field_jump.as_ref()
     }
 
     /// Whether the song plays, as the engine last said.

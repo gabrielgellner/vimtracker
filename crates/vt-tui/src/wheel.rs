@@ -378,9 +378,9 @@ impl App {
         if let Some(finer) = finer {
             self.step_onto_fine(finer, true);
         }
-        self.count = (count > 1).then_some(count as usize);
+        self.modes.count = (count > 1).then_some(count as usize);
         self.press(key, self.services.now);
-        self.count = None;
+        self.modes.count = None;
         if let Some(finer) = finer {
             self.step_onto_fine(finer, false);
         }
@@ -397,7 +397,7 @@ impl App {
         if self.services.history.undo_depth() > gesture.depth + 1 {
             self.services.history.squash_to(gesture.depth);
         }
-        if self.mode.is_visual() {
+        if self.modes.mode.is_visual() {
             self.adjustments.join_from(gesture.adjusted);
         }
     }
@@ -463,7 +463,7 @@ impl App {
         if !self.pending.is_empty() {
             return false;
         }
-        match self.mode {
+        match self.modes.mode {
             Mode::Shape | Mode::Mapping => true,
             Mode::OperatorPending => false,
             _ => matches!(
@@ -479,13 +479,13 @@ impl App {
     /// sample page; with the cursor on the fine part itself, its own `=`. A selection moves by
     /// `=`'s step, as its values are whole.
     fn finer_here(&self) -> Option<FinerStep> {
-        if self.mode.is_visual() || self.mode == Mode::Shape {
+        if self.modes.mode.is_visual() || self.modes.mode == Mode::Shape {
             return None;
         }
         // A fine part is a 256th of its setting's step.
         const FINE_STEPS: u64 = 256;
         let step = |finer, least, most| Some(FinerStep { finer, least, most });
-        match (self.key_scope(), self.view) {
+        match (self.key_scope(), self.modes.view) {
             (Mode::Track, View::Track) => {
                 let has_fine = self.track_page.has_fine_here(self.track_here());
                 match (has_fine, self.track_page.fine) {
@@ -495,14 +495,15 @@ impl App {
                 }
             }
             (Mode::Normal, View::Phrase) => {
-                let (Field::FxValue(slot) | Field::FxFine(slot)) = self.cursor.field else {
+                let (Field::FxValue(slot) | Field::FxFine(slot)) = self.services.cursor.field
+                else {
                     return None;
                 };
                 let sweeps = self
                     .current_slot(slot)
                     .and_then(|fx| fx.command)
                     .is_some_and(|command| command.has_fine());
-                match self.cursor.field {
+                match self.services.cursor.field {
                     Field::FxFine(_) if sweeps => step(Finer::Already, 1, FINE_STEPS),
                     Field::FxValue(_) if sweeps => {
                         step(Finer::PhraseFine(slot), feel::FINE_LEAST, FINE_STEPS)
@@ -541,7 +542,7 @@ impl App {
         match finer {
             Finer::TrackFine => self.track_page.fine = onto,
             Finer::PhraseFine(slot) => {
-                self.cursor.field = if onto {
+                self.services.cursor.field = if onto {
                     Field::FxFine(slot)
                 } else {
                     Field::FxValue(slot)

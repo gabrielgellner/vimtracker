@@ -72,8 +72,8 @@ impl App {
                 self.services.apply(&Action::AddTracks(count));
                 self.fit_levels();
                 // A cursor on a fixed track stays on it.
-                if self.cursor.track >= was {
-                    self.cursor.track += self.song().sound_tracks() - was;
+                if self.services.cursor.track >= was {
+                    self.services.cursor.track += self.song().sound_tracks() - was;
                 }
             }
             Line::TrackDel => {
@@ -81,11 +81,11 @@ impl App {
                 self.services.apply(&Action::RemoveLastTrack);
                 self.fit_levels();
                 let now = self.song().sound_tracks();
-                if self.cursor.track >= was {
-                    self.cursor.track -= was - now;
-                } else if self.cursor.track >= now {
-                    self.cursor.track = now - 1;
-                    self.cursor.slot = 0;
+                if self.services.cursor.track >= was {
+                    self.services.cursor.track -= was - now;
+                } else if self.services.cursor.track >= now {
+                    self.services.cursor.track = now - 1;
+                    self.services.cursor.slot = 0;
                     self.clamp_cursor();
                 }
             }
@@ -169,7 +169,7 @@ impl App {
             Line::TrackGroove(groove) => self.set_track_groove(groove),
             Line::PickGroove { track } => self.open_groove_picker(track),
             Line::Reset(reset) => self.services.apply(&Action::SetReset {
-                section: self.cursor.section,
+                section: self.services.cursor.section,
                 reset,
             }),
             Line::Loop => self.toggle_loop(),
@@ -186,7 +186,7 @@ impl App {
             Line::Preset(line) => self.preset_line(line),
             Line::Patch(line) => self.patch_line(line),
             Line::TrackLevel(level) => self.services.apply(&Action::SetTrackLevel {
-                track: self.cursor.track,
+                track: self.services.cursor.track,
                 level,
             }),
             Line::Mute => self.toggle_mute(),
@@ -198,7 +198,7 @@ impl App {
             }
             Line::Lane(length) => match self.fx_column() {
                 Some(slot) => {
-                    let start = self.cursor.step;
+                    let start = self.services.cursor.step;
                     self.set_lane(slot, length.map(|length| Lane { start, length }));
                 }
                 None => self.services.status = ":lane works on an FX column".to_owned(),
@@ -218,7 +218,7 @@ impl App {
             Line::Len(length) => {
                 if let Some(phrase) = self.phrase_id() {
                     self.services.apply(&Action::SetLength {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         phrase,
                         length,
                     });
@@ -401,7 +401,7 @@ impl App {
         self.scale = song.scale;
         self.auto_jump = song.auto_jump;
         self.read_only = song.read_only;
-        self.folds = Folds::from_view(&song.view);
+        self.services.folds = Folds::from_view(&song.view);
         self.send_live();
         self.services.history = History::new(Arc::new(song));
         // Another song's rows and generators aren't these.
@@ -409,13 +409,13 @@ impl App {
         self.services.heard_passes.clear();
         self.services.heard_rows.clear();
         self.services.folder = folder;
-        self.cursor = Cursor {
-            step: self.cursor.step,
-            ..self.cursor
+        self.services.cursor = Cursor {
+            step: self.services.cursor.step,
+            ..self.services.cursor
         };
         if self.phrase_id().is_none() {
-            self.cursor.track = 0;
-            self.cursor.slot = 0;
+            self.services.cursor.track = 0;
+            self.services.cursor.slot = 0;
         }
         self.clamp_cursor();
         if let Some(first) = notes.first() {
@@ -451,7 +451,7 @@ impl App {
     /// Put a file in the bank, have the current track play it, and name the track after it, if
     /// there's a name, as one undo step.
     pub(crate) fn sample_named(&mut self, source: &Path, name: Option<&str>) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let more = name
             .map(|name| Action::SetTrackName {
                 track,

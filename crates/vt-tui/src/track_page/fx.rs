@@ -55,7 +55,7 @@ pub struct TakenInsert {
 impl App {
     /// Whether the FX page shows, zoomed in on the cursor's slot (decision 329).
     pub fn fx_zoomed(&self) -> bool {
-        self.view == View::Track && self.track_page.page == Page::Fx && self.track_page.zoomed
+        self.modes.view == View::Track && self.track_page.page == Page::Fx && self.track_page.zoomed
     }
 
     /// What the keys do while the FX page is zoomed in, and how to leave it, for under the status
@@ -87,7 +87,7 @@ impl App {
         }
         let bypassed = !track.bypassed[slot];
         self.services.apply(&Action::SetBypass {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             slot,
             bypassed,
         });
@@ -109,7 +109,7 @@ impl App {
         self.set_insert(slot, Insert::Empty);
         self.track_page.taken_insert = Some(TakenInsert {
             insert,
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             slot,
             undo_depth: self.services.history.undo_depth(),
         });
@@ -124,7 +124,7 @@ impl App {
             self.services.status = "dd takes an effect out of a slot first".to_owned();
             return;
         };
-        let (track, slot) = (self.cursor.track, self.fx_slot());
+        let (track, slot) = (self.services.cursor.track, self.fx_slot());
         let displaced = self.page_track().inserts[slot];
         let mut actions = vec![Action::SetInsert {
             track,
@@ -172,7 +172,7 @@ impl App {
 
     pub(super) fn set_insert(&mut self, slot: usize, insert: Insert) {
         self.services.apply(&Action::SetInsert {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             slot,
             insert,
         });

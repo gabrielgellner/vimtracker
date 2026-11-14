@@ -162,7 +162,7 @@ pub fn marks(shown: &Shown) -> Vec<Mark> {
 /// drawing each as `▾` over its column: when the pictures are drawn and nothing is drawn over the
 /// page, which a placed image would show through.
 pub fn marks_placed(app: &App, now: Instant) -> bool {
-    app.view == View::Sample
+    app.modes.view == View::Sample
         && app.sample_images.is_some()
         && app.sample_page.cell_width.is_some()
         && !overlaid(app, now)
@@ -191,8 +191,8 @@ pub fn overlaid(app: &App, now: Instant) -> bool {
     app.picker.is_some()
         || app.guide.is_some()
         || app.shape.is_some()
-        || matches!(app.mode, Mode::Help | Mode::Picker | Mode::Guide)
-        || (app.mode == Mode::Command && app.command_menu.is_some())
+        || matches!(app.modes.mode, Mode::Help | Mode::Picker | Mode::Guide)
+        || (app.modes.mode == Mode::Command && app.command_menu.is_some())
         || !app.popup_rows(now, POPUP_DELAY).is_empty()
 }
 
@@ -376,7 +376,7 @@ fn draw_page(buffer: &mut Buffer, page: Rect, app: &App, shown: &Shown) {
                 buffer[(MARGIN + *column as u16, y)].set_bg(playhead_column());
             }
             if let Some(column) = cursor {
-                let color = if state.setting.is_some() && app.mode != Mode::Keys {
+                let color = if state.setting.is_some() && app.modes.mode != Mode::Keys {
                     theme::dimmed(cursor_column())
                 } else {
                     cursor_column()

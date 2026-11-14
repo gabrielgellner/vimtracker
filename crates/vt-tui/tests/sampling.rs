@@ -269,7 +269,7 @@ fn r_on_the_sample_page_records_and_shows_the_recording_once_it_stops() {
     // Back out, and in again from the sample page.
     command(&mut app, "record cancel");
     tap(&mut app, " 0");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
     tap(&mut app, "R");
     let number = app.sampling.live.as_ref().unwrap().number;
     play(&mut app);

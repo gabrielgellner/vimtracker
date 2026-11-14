@@ -48,7 +48,7 @@ fn the_audio_page_chooses_a_buffer_a_rate_and_a_device() {
     press(&mut app, "jjx");
     assert_eq!(app.audio_request.take().unwrap().buffer, None);
     press(&mut app, "K");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     let labels: Vec<String> = app
         .picker
         .as_ref()

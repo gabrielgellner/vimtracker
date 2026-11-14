@@ -17,7 +17,7 @@ use common::*;
 fn on_cut() -> (App, vt_engine::link::Realtime) {
     let (mut app, realtime) = tracks_of_different_lengths();
     press(&mut app, " 5}j");
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
     assert_eq!(
         app.track_control(),
         Control::Base(vt_model::action::TrackControl::Cutoff)
@@ -48,10 +48,10 @@ fn m_and_a_digit_map_a_setting_to_a_macro_turned_to_where_it_is() {
     let (mut app, _realtime) = on_cut();
     press(&mut app, "i40");
     press(&mut app, "M");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(app.picker.as_ref().unwrap().items().len(), 8);
     press(&mut app, "5");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     let track = &app.song().tracks[0];
     let (at, map) = track.macro_holding(cut()).unwrap();
     assert_eq!(at, 4);
@@ -84,7 +84,7 @@ fn a_mapped_setting_refuses_a_turn_and_says_where_to_turn_it() {
     let before = app.song().clone();
     for keys in ["=", "-", "+", "x", "i"] {
         press(&mut app, keys);
-        assert_eq!(app.mode, Mode::Normal, "{keys}");
+        assert_eq!(app.modes.mode, Mode::Normal, "{keys}");
         assert_eq!(
             app.song().tracks[0].cutoff,
             before.tracks[0].cutoff,
@@ -127,7 +127,7 @@ fn gm_opens_the_mapping_and_moves_swaps_types_and_unmaps_its_ends() {
     // Res, beside it, on the same macro.
     press(&mut app, "jM1");
     press(&mut app, "kgm");
-    assert_eq!(app.mode, Mode::Mapping);
+    assert_eq!(app.modes.mode, Mode::Mapping);
     let map = |app: &App, target| *app.song().tracks[0].macro_holding(target).unwrap().1;
     // On Cut's Min: up a large step and one, then to Max and type it.
     press(&mut app, "+=");
@@ -149,14 +149,14 @@ fn gm_opens_the_mapping_and_moves_swaps_types_and_unmaps_its_ends() {
     let res = MacroTarget::Setting(SettingId::RES);
     press(&mut app, "jdd");
     assert!(app.song().tracks[0].macro_holding(res).is_none());
-    assert_eq!(app.mode, Mode::Mapping, "Cut is still on it");
+    assert_eq!(app.modes.mode, Mode::Mapping, "Cut is still on it");
     press(&mut app, "u");
     assert!(app.song().tracks[0].macro_holding(res).is_some());
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     // gm on a setting on no macro says so.
     press(&mut app, "jjgm");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert!(
         app.services.status.contains("isn't on a macro"),
         "{}",
@@ -196,7 +196,7 @@ fn gm_bends_a_mappings_response_with_curve_and_s_as_the_shape_panel_does() {
     assert_eq!(map(&app).s, 0, "l stays on S, the row's last");
     press(&mut app, "u");
     assert_eq!(map(&app).s, 100, "each change is an undo step");
-    assert_eq!(app.mode, Mode::Mapping);
+    assert_eq!(app.modes.mode, Mode::Mapping);
     // The ends are as they were, and the status line on one says the bend.
     assert_eq!((map(&app).min, map(&app).max), (0, 0xFF00));
     press(&mut app, "hhh");
@@ -322,7 +322,7 @@ fn the_macros_band_turns_a_macro_and_colon_macro_names_it() {
         app.services.status
     );
     press(&mut app, "gm");
-    assert_eq!(app.mode, Mode::Mapping);
+    assert_eq!(app.modes.mode, Mode::Mapping);
 }
 
 /// Eight empty rows with a tresillo of notes kept live on them, then the Gen page, on its `Hits`.
@@ -502,7 +502,7 @@ fn m_on_an_lfos_rate_maps_it_and_its_ends_read_as_rates() {
         "turned to where 1/4 is, so it doesn't jump"
     );
     press(&mut app, "gm");
-    assert_eq!(app.mode, Mode::Mapping);
+    assert_eq!(app.modes.mode, Mode::Mapping);
     assert!(
         app.services
             .status

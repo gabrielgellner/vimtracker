@@ -104,7 +104,7 @@ fn a_kit_adds_nothing_until_a_sound_is_chosen_for_a_track() {
 
     press(&mut app, "WW");
     command(&mut app, "sample");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     let labels: Vec<String> = app
         .picker
         .as_ref()
@@ -163,7 +163,7 @@ fn a_missing_kit_says_so_and_a_missing_kit_folder_isnt_listed() {
         app.services.status
     );
     command(&mut app, "kit");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     let roots = explorer_roots(&app);
     assert!(
         roots.iter().all(|(_, meaning)| meaning != "kits"),

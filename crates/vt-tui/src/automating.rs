@@ -170,7 +170,7 @@ impl App {
         let which: Vec<usize> = if every {
             (0..tracks).collect()
         } else {
-            vec![self.cursor.track]
+            vec![self.services.cursor.track]
         };
         let taken: Vec<(usize, usize)> = which
             .iter()
@@ -180,13 +180,13 @@ impl App {
         let name = if every {
             "Every track".to_owned()
         } else {
-            self.track_name(self.cursor.track)
+            self.track_name(self.services.cursor.track)
         };
         if taken.is_empty() {
             self.services.status = format!("{name} has no fader taken over from the steps");
             return;
         }
-        let track = (!every).then_some(self.cursor.track);
+        let track = (!every).then_some(self.services.cursor.track);
         if !self.services.handle.send(Command::GiveBack { track }) {
             return;
         }

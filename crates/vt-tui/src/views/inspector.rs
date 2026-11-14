@@ -163,7 +163,7 @@ fn lines(app: &App, step: &Step) -> Vec<Line<'static>> {
 pub fn draw(frame: &mut Frame, area: Rect, app: &App, row: &str) {
     let Some(step) = app
         .phrase_here()
-        .and_then(|phrase| phrase.steps().get(app.cursor.step))
+        .and_then(|phrase| phrase.steps().get(app.services.cursor.step))
     else {
         return;
     };

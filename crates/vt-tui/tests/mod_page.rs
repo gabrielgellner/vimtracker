@@ -442,7 +442,7 @@ fn the_mod_page_fills_the_keys_box_at_163_by_42() {
     press(&mut app, " 5L");
     for keys_mode in [false, true] {
         if keys_mode {
-            app.mode = Mode::Keys;
+            app.modes.mode = Mode::Keys;
         }
         let lines = screen_cells(&mut app);
         let text = lines.join("\n");
@@ -1137,11 +1137,11 @@ fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_pla
     assert_eq!(dot_middles(&all).len(), 2, "{placed:?}");
 
     // Under the help, no dot shows through.
-    app.mode = Mode::Help;
+    app.modes.mode = Mode::Help;
     let (_, placed) = frame(&mut app, &mut graphics);
     all.push_str(&placed);
     assert!(dot_middles(&all).is_empty(), "{placed:?}");
-    app.mode = Mode::Normal;
+    app.modes.mode = Mode::Normal;
     let (_, placed) = frame(&mut app, &mut graphics);
     all.push_str(&placed);
 

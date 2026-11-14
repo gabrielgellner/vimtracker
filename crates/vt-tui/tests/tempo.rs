@@ -52,7 +52,7 @@ fn app_with(frames: usize, edit: impl FnOnce(&mut BankEntry)) -> (App, Realtime)
     let (handle, realtime) = connect(Engine::new(RATE, version));
     let mut app = App::new(song, None, samples, handle, RATE);
     keys(&mut app, "Space 0");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
     (app, realtime)
 }
 

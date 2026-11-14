@@ -114,7 +114,7 @@ impl App {
 
     /// The cursor's track, if it plays sounds, saying so if it doesn't.
     fn patch_track(&mut self) -> Option<usize> {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let sound = self
             .song()
             .tracks

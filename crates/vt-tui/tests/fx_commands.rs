@@ -449,7 +449,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     assert_eq!(current(&app), "Cut");
     press(&mut app, "j");
     assert_eq!(current(&app), "Res");
-    assert_eq!(app.mode, Mode::Picker, "moving doesn't choose");
+    assert_eq!(app.modes.mode, Mode::Picker, "moving doesn't choose");
 
     // h closes it and goes up to it.
     press(&mut app, "h");
@@ -477,7 +477,7 @@ fn dest_is_a_tree_of_categories_that_fold_and_a_search_flattens() {
     assert_eq!(current(&app), "1 Mix");
     press(&mut app, "hk");
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(
         app.song().tracks[0].mods[3].destination,
         Some(SettingId::slot(0, vt_model::settings::Effect::Distort, 4).unwrap()),
@@ -554,7 +554,11 @@ fn a_plain_list_opens_on_the_list_and_typing_searches() {
     assert_eq!(app.picker.as_ref().unwrap().query, "pl");
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal, "Esc clears the search, then closes");
+    assert_eq!(
+        app.modes.mode,
+        Mode::Normal,
+        "Esc clears the search, then closes"
+    );
     press(&mut app, "K/j");
     assert_eq!(app.picker.as_ref().unwrap().query, "j");
 }
@@ -568,7 +572,7 @@ fn lane_makes_an_fx_column_a_lane_and_the_loop_keys_then_set_it() {
     use vt_model::song::Lane;
     let (mut app, _realtime) = app();
     press(&mut app, "llllljj");
-    assert_eq!(app.cursor.field, vt_tui::app::Field::FxCommand(0));
+    assert_eq!(app.services.cursor.field, vt_tui::app::Field::FxCommand(0));
     command(&mut app, "lane 3");
     assert_eq!(
         lane_of(&app, 0),
@@ -684,20 +688,23 @@ fn gg_and_g_on_a_column_with_a_lane_go_by_the_lane() {
     press(&mut app, "lllll4j");
     command(&mut app, "lane 3");
     press(&mut app, "G");
-    assert_eq!(app.cursor.step, 6, "the lane's last step");
+    assert_eq!(app.services.cursor.step, 6, "the lane's last step");
     press(&mut app, "gg");
-    assert_eq!(app.cursor.step, 4, "the lane's first");
+    assert_eq!(app.services.cursor.step, 4, "the lane's first");
     press(&mut app, "2G");
-    assert_eq!(app.cursor.step, 5, "a count goes by the lane too");
+    assert_eq!(app.services.cursor.step, 5, "a count goes by the lane too");
     press(&mut app, "hhG");
-    assert_eq!(app.cursor.step, 15, "the notes go by the phrase's loop");
+    assert_eq!(
+        app.services.cursor.step, 15,
+        "the notes go by the phrase's loop"
+    );
 }
 
 #[test]
 fn k_on_the_gate_column_chooses_a_gate_and_keeps_its_pulses() {
     let (mut app, _realtime) = app();
     press(&mut app, "lllrMLT3ggK");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     // `h` is a key in the list, so `/` starts the search.
     press(&mut app, "/hld");
     special(&mut app, KeyCode::Enter);
@@ -760,14 +767,14 @@ fn k_on_a_gate_lists_gates_and_on_its_length_lists_lengths() {
     let gate = |app: &App| app.phrase_here().unwrap().steps()[0].gate;
     // On the gate, the gate types.
     press(&mut app, "lllK");
-    assert_eq!(app.cursor.field, vt_tui::app::Field::Gate);
+    assert_eq!(app.services.cursor.field, vt_tui::app::Field::Gate);
     assert_eq!(app.picker.as_ref().unwrap().title, "Gates");
     special(&mut app, KeyCode::Esc);
     assert!(app.picker.is_none());
 
     // On its length, some lengths, with the track's first and marked on an empty cell.
     press(&mut app, "lK");
-    assert_eq!(app.cursor.field, vt_tui::app::Field::GateLength);
+    assert_eq!(app.services.cursor.field, vt_tui::app::Field::GateLength);
     let picker = app.picker.as_ref().expect("the lengths are listed");
     assert_eq!(picker.title, "Lengths");
     let labels: Vec<&str> = picker
@@ -1038,7 +1045,7 @@ fn k_chooses_arp_and_its_value_is_typed_as_two_digits() {
     );
     special(&mut app, KeyCode::Enter);
     // As `RET`'s, its two digits are typed, and nothing goes in until they are.
-    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(app.modes.mode, Mode::Replace);
     assert_eq!(slot(&app).command, None);
     let depth = app.services.history.undo_depth();
     press(&mut app, "47");
@@ -1091,7 +1098,7 @@ fn k_chooses_rnd_and_the_status_line_says_what_it_varies() {
     );
     special(&mut app, KeyCode::Enter);
     // As `ARP`'s, its two digits are typed, and nothing goes in until they are.
-    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(app.modes.mode, Mode::Replace);
     assert_eq!(slot(&app, 1).command, None);
     press(&mut app, "84");
     assert_eq!(slot(&app, 1).command, Some(FxCommand::Rnd));
@@ -1111,12 +1118,12 @@ fn k_chooses_rnd_and_the_status_line_says_what_it_varies() {
         Some("100% of the times it plays, moves the note up to 6 scale degrees either way")
     );
     // Beside a lock, it varies the lock.
-    app.cursor.field = vt_tui::app::Field::FxCommand(0);
+    app.services.cursor.field = vt_tui::app::Field::FxCommand(0);
     press(&mut app, "K");
     press(&mut app, "CUT");
     special(&mut app, KeyCode::Enter);
     press(&mut app, "40");
-    app.cursor.field = vt_tui::app::Field::FxValue(1);
+    app.services.cursor.field = vt_tui::app::Field::FxValue(1);
     assert_eq!(
         value_shown(&app).as_deref(),
         Some("100% of the times it plays, moves CUT up to 60 either way")
@@ -1311,7 +1318,7 @@ fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
     press(&mut app, "delay");
     special(&mut app, KeyCode::Enter);
     press(&mut app, " 3");
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
     let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
     press(&mut app, "1byp");
@@ -1320,7 +1327,7 @@ fn k_lists_a_slots_bypass_with_its_effect_and_a_step_locks_it() {
     assert_eq!(listed(item), "1BYP  1 Bypass");
     assert_eq!(item.category, "FX 1 Delay", "with the slot's effect");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Replace);
+    assert_eq!(app.modes.mode, Mode::Replace);
     press(&mut app, "01");
     let bypass = SettingId::bypass(0).unwrap();
     assert_eq!(slot(&app).command, Some(FxCommand::Set(bypass)));

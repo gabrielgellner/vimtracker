@@ -726,24 +726,26 @@ where they were written and are borrowed across folders; #260 may move shared sh
 
 **`App`** (`app.rs`) is the program's state and what each key does. It needs no terminal, so tests
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
-`mixer_page`, `sample_page` and the project page's fields), the view and the mode, the cursor, the
-picker, the command line, help, the jump list and the keys' own state: 105 fields, and 49 files
+`mixer_page`, `sample_page` and the project page's fields), `App::modes`, the picker, the command
+line, help, the jump list and the keys' own state: 99 fields, and 49 files
 besides `app.rs` add an `impl App` block each, such as `track_page.rs`, `banking.rs`, `slicing.rs`,
 `shaping.rs`, `picking.rs`, `recording.rs` (live recording, `Space r`), `project_page.rs`,
 `audio_page.rs` and `sample_page.rs`.
 
 **`Services`** (`services.rs`, #320) is what every page shares: the history, with
-`Services::apply` running an action on it and `Services::publish` sending the result, the project's
-folder and whether it's changed, the status line, the sample pool and its `Analyst`, this
+`Services::apply` running an action on it and `Services::publish` sending the result, the
+program's cursor and the folds, the project's folder and whether it's changed, the status line,
+the sample pool and its `Analyst`, this
 machine's `Settings`, the Roto, and the engine's `Handle` with everything it last reported (the
 transport and playheads, where each track is and what it's launched onto, the live mutes and solos,
 the live values, the faders, the live generators' rows as heard, and the meters and the scope).
-`App::song` reads the song through it. A page reads and changes the program through two borrows,
-in `page.rs`: `CtxMut`, which a page's keys are run with, lends the services mutably apart from the
-page, so a key can change the page and apply an action at once, with the cursor, the view, the
-mode and the folds beside them (`App::track_page_ctx` and `App::mixer_page_ctx` split the two
-borrows); `Ctx`, which a page is drawn with, only reads, and reads through `App`, as drawing is
-given `&App` and some of what's drawn, such as a live generator's sources, is `App`'s to work out.
+`App::song` reads the song through it. **`Modes`** (`app.rs`) is what spans the pages as keys are
+typed: the view, the mode, what Insert has typed, a field jump under way and the count. A page
+reads and changes the program through two borrows, in `page.rs`: `CtxMut`, which a page's keys are
+run with, is the services, lent mutably apart from the page, so a key can change the page and
+apply an action at once, and the modes to read; `Ctx`, which a page is drawn with, only reads, and
+reads through `App`, as drawing is given `&App` and some of what's drawn, such as a live
+generator's sources, is `App`'s to work out.
 
 **Pages and modes** (`input/mode.rs`). A `View` is a page: the song view (`Space 1`), the chain view
 (`Space 2`), the phrase view (`Space 3`), the mixer (`Space 4`), the track page with its Sound, Mod, FX
@@ -912,8 +914,9 @@ and `control` are given the cursor's track, as `TrackPage`'s are. `MixerPage::ru
 keys, `j`, `k`, `gg` and `G` down and up a strip, returning an `Outcome`, given a `CtxMut`, and
 `MixerPage::draw` draws it (`views/mixer.rs`) through a `Ctx`. `App::run_mixer` hands each key to
 it, as the track page's are, and does the rest itself: `h` and `l` move the program's cursor, and
-`0` and `$` go to the strip `MixerPage::end_track` finds, as the cursor is `App`'s, which a
-`CtxMut` only lends a copy of; an edit goes to `App::run_track_page`.
+`0` and `$` go to the strip `MixerPage::end_track` finds, through `App::move_track` and
+`App::go_to_track_at`, which keep the cursor's place in the section; an edit goes to
+`App::run_track_page`.
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 The guides (`guides.rs`) are the Markdown files in `crates/vt-tui/guides/`, built into the program
@@ -930,7 +933,7 @@ The cursor, counts, selections and `App::top` stay in rows, so only scrolling co
 row-to-line helpers there are what `App::follow_cursor`, `H`, `M`, `L`, `Ctrl-d`, `Ctrl-u` and the
 view's furthest scroll go by.
 
-**Folding groups** (`folding.rs`). `App::folds` says which groups are folded, `z a`, `zM` and `zR`
+**Folding groups** (`folding.rs`). `Services::folds` says which groups are folded, `z a`, `zM` and `zR`
 setting each, and a group none has set is folded while it's empty. `Folds::hides` is what the song
 view, the mixer and the phrase view's overview leave out: a folded group's tracks, and a folded
 group with none. Those views draw `Folds::shown` rather than every track, and the moves between
@@ -940,7 +943,7 @@ a folded group in its first track's place, by `Folds::place`, which the overview
 columns by too. After each key, `App::keep_cursor_shown` puts a song view or mixer cursor left on
 a hidden track on what `Folds::stand_in` gives, its group or the next shown. Folds are view state,
 kept out of the undo history: the song's `view` (`vt_model::view::ViewState`) is read into
-`App::folds` when a song opens and written back by `song_to_save`, and `App::fold_group` sets one
+`Services::folds` when a song opens and written back by `song_to_save`, and `App::fold_group` sets one
 from code (decision 305).
 
 **Where it's going** (#320, the track page's and the mixer's state, own keys and drawing done, and
@@ -952,10 +955,9 @@ pages, the current view, the modes and popups that span pages (the picker, the c
 help) and the jump list, and the feature files become methods on the page or service they belong
 to. It goes a page per PR, the track page first, with keys, drawing and screenshots unchanged.
 `TrackPage` and `MixerPage` have their state, their own keys and their drawing, and run their keys
-with a `CtxMut`, which can apply actions; their edits are still `impl App` blocks, which the two
-share, and move onto the pages, or onto functions over a `CtxMut`, next, with the mixer's moves
-across tracks where they don't need the jump list. `Graphics::sync` still reads the pages through
-`App` (#728);
+with a `CtxMut`, which can apply actions and move the cursor; their edits are still `impl App`
+blocks, which the two share, and move onto the pages, or onto functions over a `CtxMut`, next, with
+the mixer's moves across tracks. `Graphics::sync` still reads the pages through `App` (#728);
 `SamplePage` is half there too: it keeps its own cursor, zoom, scroll,
 selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
 in `placing.rs` and `sample_settings.rs` for editing its points and settings.

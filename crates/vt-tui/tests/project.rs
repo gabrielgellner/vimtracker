@@ -35,7 +35,7 @@ fn saving_needs_a_folder_then_round_trips() {
     special(&mut app, KeyCode::Esc);
     command(&mut app, "w");
     assert!(app.services.dirty);
-    assert_eq!(app.mode, Mode::Picker, "the explorer chooses where");
+    assert_eq!(app.modes.mode, Mode::Picker, "the explorer chooses where");
     assert_eq!(app.picker.as_ref().unwrap().title, "Save in");
     special(&mut app, KeyCode::Esc);
     assert_eq!(app.naming, None, "nothing waits for a name");
@@ -255,7 +255,7 @@ mod autosave {
         crashed(&path);
         let (mut app, _realtime) = app();
         command(&mut app, &format!("e {}", path.display()));
-        assert_eq!(app.mode, Mode::Restore);
+        assert_eq!(app.modes.mode, Mode::Restore);
         assert_eq!(
             app.song().tracks[0].phrases[&0].steps()[0].note,
             Note::Empty
@@ -263,9 +263,9 @@ mod autosave {
         // Other keys don't answer.
         press(&mut app, "q");
         special(&mut app, KeyCode::Esc);
-        assert_eq!(app.mode, Mode::Restore);
+        assert_eq!(app.modes.mode, Mode::Restore);
         press(&mut app, "y");
-        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.modes.mode, Mode::Normal);
         assert_eq!(
             app.song().tracks[0].phrases[&0].steps()[0].note,
             Note::On(60)
@@ -284,7 +284,7 @@ mod autosave {
         let (mut app, _realtime) = app();
         command(&mut app, &format!("e {}", path.display()));
         press(&mut app, "n");
-        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.modes.mode, Mode::Normal);
         assert!(!path.join(AUTOSAVE).exists());
         assert_eq!(
             app.song().tracks[0].phrases[&0].steps()[0].note,
@@ -302,7 +302,7 @@ mod autosave {
         let (mut app, _realtime) = app();
         command(&mut app, &format!("e {}", path.display()));
         press(&mut app, "y");
-        assert_eq!(app.mode, Mode::Normal);
+        assert_eq!(app.modes.mode, Mode::Normal);
         assert!(
             app.services.status.contains("kept"),
             "{}",
@@ -383,7 +383,7 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
         Some(root.join("one").as_path())
     );
     command(&mut app, "e");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(app.picker.as_ref().unwrap().title, "Open a project");
     assert_eq!(
         explorer_rows(&app)[..4],
@@ -399,7 +399,7 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
     assert_eq!(shown.note, "137.63 BPM  4 tracks");
     assert_eq!(shown.details, ["Saved just now"]);
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(
         app.services.folder.as_deref(),
         Some(root.join("two").as_path())
@@ -414,7 +414,7 @@ fn e_with_no_folder_opens_a_project_from_beside_this_one_with_its_preview() {
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     command(&mut app, "e");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert!(
         app.services.status.contains("Unsaved"),
         "{}",
@@ -456,7 +456,7 @@ fn e_bang_opens_a_project_and_discards_unsaved_changes() {
     command(&mut app, &format!("e! {}", root.join("two").display()));
     assert_eq!(app.song().millibpm, 137_630);
     assert!(!app.services.dirty);
-    assert_eq!(app.mode, Mode::Normal, "with nothing to restore");
+    assert_eq!(app.modes.mode, Mode::Normal, "with nothing to restore");
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -467,11 +467,11 @@ fn e_bang_with_no_folder_opens_what_the_explorer_chooses_without_refusing() {
     command(&mut app, &format!("e {}", root.join("one").display()));
     command(&mut app, "bpm 90");
     command(&mut app, "e!");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(app.picker.as_ref().unwrap().title, "Open a project");
     press(&mut app, "j");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(
         app.services.folder.as_deref(),
         Some(root.join("two").as_path())
@@ -507,15 +507,15 @@ fn new_bang_starts_a_project_and_discards_unsaved_changes() {
         app.services.status,
         "Unsaved changes: :w to save, or :new! to discard them"
     );
-    assert_ne!(app.mode, Mode::Picker);
+    assert_ne!(app.modes.mode, Mode::Picker);
     command(&mut app, &format!("new {}", path.display()));
     assert!(!path.exists());
 
     // Without a folder, :new! chooses one, and its name line is :new!'s.
     command(&mut app, "new!");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Command);
+    assert_eq!(app.modes.mode, Mode::Command);
     assert!(
         app.command_line.starts_with("new! "),
         "{}",
@@ -553,7 +553,7 @@ fn saving_a_new_project_chooses_a_folder_then_names_it_on_the_command_line() {
     // l opens a folder, and Enter chooses one.
     press(&mut app, "k");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Command);
+    assert_eq!(app.modes.mode, Mode::Command);
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
     let shown = vt_tui::explorer::place_name(&root, Some(&home));
     // The project's random name is filled in after the folder, so Enter saves it.
@@ -649,7 +649,7 @@ fn ctrl_r_rolls_a_new_name_on_a_name_line() {
     assert!(random_name_like(&first[folder.len()..]), "{first}");
     app.key(roll, Instant::now());
     assert_ne!(app.command_line, first, "each press rolls again");
-    assert_eq!(app.mode, Mode::Command);
+    assert_eq!(app.modes.mode, Mode::Command);
     special(&mut app, KeyCode::Enter);
     let saved = app.services.folder.clone().unwrap();
     assert_eq!(
@@ -738,7 +738,7 @@ fn render_with_no_path_chooses_a_folder_and_keeps_its_flags_after_the_name() {
 fn on_the_project_page() -> (App, Realtime) {
     let (mut app, realtime) = app();
     tap(&mut app, " 9");
-    assert_eq!(app.view, View::Project);
+    assert_eq!(app.modes.view, View::Project);
     assert_eq!(app.key_scope(), Mode::Project);
     (app, realtime)
 }
@@ -807,7 +807,7 @@ fn the_project_page_edits_the_values_its_commands_set() {
     tap(&mut app, "=");
     assert_eq!(app.song().groove, GrooveId::swing(52).unwrap());
     tap(&mut app, "K");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     tap(&mut app, "/mpc 66");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().groove, GrooveId::named("MPC 66").unwrap());
@@ -825,7 +825,7 @@ fn the_project_page_edits_the_values_its_commands_set() {
     tap(&mut app, "=");
     assert_eq!(app.song().launch, Launch::named("2bar").unwrap());
     tap(&mut app, "K");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     tap(&mut app, "/chain");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().launch, Launch::ChainEnd);
@@ -908,7 +908,7 @@ fn the_project_page_sets_the_scale_its_root_and_auto_jump() {
     assert!(!app.scale.on, "off is the first choice");
     // i lists them, as K does.
     tap(&mut app, "i");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     tap(&mut app, "/dorian");
     special(&mut app, KeyCode::Enter);
     assert!(app.scale.on);
@@ -951,8 +951,8 @@ fn the_project_page_names_the_project_and_the_window_title_says_it() {
     assert_eq!(app.project_control(), ProjectControl::Name);
     // i starts with the name as it is.
     tap(&mut app, "i");
-    assert_eq!(app.mode, Mode::Insert);
-    assert_eq!(app.entry.text, random);
+    assert_eq!(app.modes.mode, Mode::Insert);
+    assert_eq!(app.modes.entry.text, random);
     app.key(parse_sequence("C-u").unwrap()[0], Instant::now());
     tap(&mut app, "Verse Ideas");
     special(&mut app, KeyCode::Enter);
@@ -964,7 +964,7 @@ fn the_project_page_names_the_project_and_the_window_title_says_it() {
     // C-r while typing rolls a new name.
     tap(&mut app, "i");
     app.key(parse_sequence("C-r").unwrap()[0], Instant::now());
-    let rolled = app.entry.text.clone();
+    let rolled = app.modes.entry.text.clone();
     assert!(random_name_like(&rolled), "{rolled}");
     assert_ne!(rolled, random);
     special(&mut app, KeyCode::Enter);
@@ -1061,16 +1061,20 @@ fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page(
     ] {
         project_cursor_on(&mut app, action);
         special(&mut app, KeyCode::Enter);
-        assert_eq!(app.mode, Mode::Picker, "{action:?}");
+        assert_eq!(app.modes.mode, Mode::Picker, "{action:?}");
         assert_eq!(app.picker.as_ref().unwrap().title, title, "{action:?}");
         special(&mut app, KeyCode::Esc);
-        assert_eq!(app.view, View::Project, "{action:?} comes back to the page");
+        assert_eq!(
+            app.modes.view,
+            View::Project,
+            "{action:?} comes back to the page"
+        );
     }
     // A folder chosen goes on to the name line, as :w's does.
     project_cursor_on(&mut app, ProjectControl::SaveAs);
     tap(&mut app, "K");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Command);
+    assert_eq!(app.modes.mode, Mode::Command);
     let name = app.project_name();
     assert!(
         app.command_line.starts_with("w ") && app.command_line.ends_with(&format!("/{name}")),
@@ -1083,7 +1087,7 @@ fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page(
     tap(&mut app, "=");
     project_cursor_on(&mut app, ProjectControl::Open);
     special(&mut app, KeyCode::Enter);
-    assert_ne!(app.mode, Mode::Picker);
+    assert_ne!(app.modes.mode, Mode::Picker);
     assert!(
         app.services.status.contains("Unsaved"),
         "{}",
@@ -1092,7 +1096,7 @@ fn the_project_pages_actions_open_the_explorer_and_its_audio_row_the_audio_page(
 
     project_cursor_on(&mut app, ProjectControl::Audio);
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.view, View::Audio);
+    assert_eq!(app.modes.view, View::Audio);
     assert!(app.audio.refresh, "it lists the devices afresh");
 }
 
@@ -1253,7 +1257,7 @@ fn changing_a_groove_that_comes_with_it_makes_one_of_the_projects_own() {
     // Edit chooses which is drawn, and x goes back to the project's.
     project_cursor_on(&mut app, ProjectControl::GrooveShown);
     tap(&mut app, "K");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     tap(&mut app, "/pull");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.shown_groove().0, GrooveId::named("Pull").unwrap());
@@ -1273,31 +1277,31 @@ fn the_project_page_has_the_songs_settings_then_this_machines_audio_on_h_and_l()
             .and_then(|row| row.split("    ").next().map(str::to_owned))
     };
     press(&mut app, " 9");
-    assert_eq!(app.view, View::Project, "Song first");
+    assert_eq!(app.modes.view, View::Project, "Song first");
     assert_eq!(
         title(&mut app).as_deref(),
         Some("Project  Song  Audio · this machine")
     );
     press(&mut app, "jj");
     press(&mut app, "L");
-    assert_eq!(app.view, View::Audio);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.view, View::Audio);
+    assert_eq!(app.modes.mode, Mode::Normal);
     press(&mut app, "jL");
-    assert_eq!(app.view, View::Audio, "L stops at the last");
+    assert_eq!(app.modes.view, View::Audio, "L stops at the last");
     assert_eq!(app.audio_row, 1);
     press(&mut app, "H");
-    assert_eq!(app.view, View::Project);
+    assert_eq!(app.modes.view, View::Project);
     assert_eq!(app.project_row, 2, "each keeps its cursor");
     press(&mut app, "HL");
-    assert_eq!((app.view, app.audio_row), (View::Audio, 1));
+    assert_eq!((app.modes.view, app.audio_row), (View::Audio, 1));
 
     // Space 9 opens whichever showed last, as a jump C-o comes back from.
     press(&mut app, " 3 9");
-    assert_eq!(app.view, View::Audio);
+    assert_eq!(app.modes.view, View::Audio);
     press(&mut app, "H 3 9");
-    assert_eq!(app.view, View::Project);
+    assert_eq!(app.modes.view, View::Project);
     app.key(parse_sequence("C-o").unwrap()[0], Instant::now());
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
 }
 
 /// A saved project made read-only, as the tutorial's songs are, opened in a fresh app.
@@ -1487,7 +1491,7 @@ fn a_read_only_song_autosaves_and_restoring_never_writes_over_it() {
     // As after a crash: opened again, the work is offered back, unsaved.
     let (mut other, _rt2) = self::app();
     command(&mut other, &format!("e {}", path.display()));
-    assert_eq!(other.mode, Mode::Restore);
+    assert_eq!(other.modes.mode, Mode::Restore);
     press(&mut other, "y");
     assert!(other.services.dirty);
     assert!(other.read_only);

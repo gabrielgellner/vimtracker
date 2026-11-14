@@ -46,7 +46,11 @@ impl App {
     /// The chain on the cursor's track.
     pub fn chain_id(&self) -> Option<u32> {
         let section = self.section_here()?;
-        section.chains.get(self.cursor.track).copied().flatten()
+        section
+            .chains
+            .get(self.services.cursor.track)
+            .copied()
+            .flatten()
     }
 
     /// The rows in the cursor's chain.
@@ -58,8 +62,8 @@ impl App {
 
     fn here(&self) -> Place {
         Place {
-            view: self.view,
-            cursor: self.cursor,
+            view: self.modes.view,
+            cursor: self.services.cursor,
             track_page: self.track_page.page,
             track_row: self.track_page.row,
             track_field: self.track_page.field,
@@ -81,9 +85,9 @@ impl App {
     }
 
     fn restore(&mut self, place: Place) {
-        self.view = place.view;
+        self.modes.view = place.view;
         self.note_view(place.view);
-        self.cursor = place.cursor;
+        self.services.cursor = place.cursor;
         self.clamp_cursor();
         if place.view == View::Track {
             self.track_page.show(place.track_page);
@@ -135,7 +139,7 @@ impl App {
 
     /// `gd`: open the item under the cursor, creating it on an empty reference.
     fn open_item(&mut self) {
-        match self.view {
+        match self.modes.view {
             View::Chain => self.open_row(),
             View::Song => self.open_section_chain(),
             View::Track if self.track_control() == Control::Sample => {
@@ -160,7 +164,7 @@ impl App {
             self.services.status = "This track has no chain".to_owned();
             return;
         };
-        let slot = self.cursor.slot;
+        let slot = self.services.cursor.slot;
         self.record_jump();
         self.enter_row(chain, slot);
     }
@@ -172,7 +176,7 @@ impl App {
                 .track_here()
                 .map_or(0, |track| lowest_unused(&track.phrases));
             self.services.apply(&Action::InsertChainEntry {
-                track: self.cursor.track,
+                track: self.services.cursor.track,
                 chain,
                 at: slot,
                 entry: ChainEntry {
@@ -182,7 +186,7 @@ impl App {
             });
             self.services.status = format!("New phrase {phrase:02X}");
         }
-        self.view = View::Phrase;
+        self.modes.view = View::Phrase;
         self.note_view(View::Phrase);
         self.go_to_loop_start();
         self.say_if_shared();
@@ -195,7 +199,11 @@ impl App {
         };
         let mut uses = Vec::new();
         for (number, section) in self.song().sections.iter().enumerate() {
-            let chain = section.chains.get(self.cursor.track).copied().flatten();
+            let chain = section
+                .chains
+                .get(self.services.cursor.track)
+                .copied()
+                .flatten();
             let Some(chain) = chain.and_then(|id| track.chains.get(&id)) else {
                 continue;
             };
@@ -216,7 +224,7 @@ impl App {
         let sections = &self.song().sections;
         let chains = sections
             .iter()
-            .filter_map(|section| section.chains.get(self.cursor.track));
+            .filter_map(|section| section.chains.get(self.services.cursor.track));
         chains.filter(|c| **c == Some(chain)).count()
     }
 
@@ -241,9 +249,9 @@ impl App {
             .track_here()
             .map_or(0, |track| lowest_unused(&track.phrases));
         self.services.apply(&Action::ClonePhrase {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             chain,
-            slot: self.cursor.slot,
+            slot: self.services.cursor.slot,
             new,
         });
         self.services.status = if self.chain_uses() > 1 {
@@ -274,9 +282,9 @@ impl App {
         };
         let before = Arc::clone(self.song());
         self.services.apply(&Action::Bloom {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             chain,
-            slot: self.cursor.slot,
+            slot: self.services.cursor.slot,
             scale: self.scale,
             bloom,
         });
@@ -287,7 +295,11 @@ impl App {
             .track_here()
             .into_iter()
             .flat_map(|track| track.phrases.keys())
-            .filter(|id| !before.tracks[self.cursor.track].phrases.contains_key(id))
+            .filter(|id| {
+                !before.tracks[self.services.cursor.track]
+                    .phrases
+                    .contains_key(id)
+            })
             .map(|id| format!("{id:02X}"))
             .collect();
         let shared = if self.chain_uses() > 1 {
@@ -309,7 +321,7 @@ impl App {
 
     /// `:bloom` alone: choose the path, each listed with what it plays for three branches.
     pub(crate) fn open_bloom_picker(&mut self) {
-        self.count = None;
+        self.modes.count = None;
         if self.phrase_id().is_none() {
             self.services.status = "There is no phrase here to grow branches from".to_owned();
             return;
@@ -347,8 +359,8 @@ impl App {
             return;
         };
         self.services.apply(&Action::CloneChain {
-            section: self.cursor.section,
-            track: self.cursor.track,
+            section: self.services.cursor.section,
+            track: self.services.cursor.track,
         });
         if let Some(new) = self.chain_id() {
             self.services.status =
@@ -362,7 +374,7 @@ impl App {
             self.services.status = "There is no phrase here".to_owned();
             return;
         };
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let items = self
             .phrase_uses(phrase)
             .into_iter()
@@ -383,17 +395,17 @@ impl App {
     /// Go to a slot from the picker.
     pub(crate) fn open_use(&mut self, section: usize, track: usize, slot: usize) {
         self.record_jump();
-        self.cursor.section = section;
-        self.cursor.track = track;
-        self.cursor.slot = slot;
-        self.view = View::Phrase;
+        self.services.cursor.section = section;
+        self.services.cursor.track = track;
+        self.services.cursor.slot = slot;
+        self.modes.view = View::Phrase;
         self.note_view(View::Phrase);
         self.go_to_loop_start();
         self.clamp_cursor();
     }
 
     fn move_slot(&mut self, to: usize) {
-        self.cursor.slot = to;
+        self.services.cursor.slot = to;
         self.go_to_loop_start();
         self.clamp_cursor();
     }
@@ -408,13 +420,13 @@ impl App {
             Cmd::ListUses => self.list_uses(),
             Cmd::ClonePhrase => self.clone_phrase(),
             Cmd::CloneChain => self.clone_chain(),
-            Cmd::NextSlot => self.move_slot((self.cursor.slot + 1).min(last)),
-            Cmd::PreviousSlot => self.move_slot(self.cursor.slot.saturating_sub(1)),
+            Cmd::NextSlot => self.move_slot((self.services.cursor.slot + 1).min(last)),
+            Cmd::PreviousSlot => self.move_slot(self.services.cursor.slot.saturating_sub(1)),
             Cmd::LastSlot => self.move_slot(last),
             Cmd::FirstSlot => self.move_slot(0),
             _ => return false,
         }
-        self.count = None;
+        self.modes.count = None;
         true
     }
 
@@ -422,7 +434,7 @@ impl App {
     fn adjust_row(&mut self, by: i32, large: bool) {
         let (Some(chain), Some(entry)) = (
             self.chain_id(),
-            self.chain_entries().get(self.cursor.slot).copied(),
+            self.chain_entries().get(self.services.cursor.slot).copied(),
         ) else {
             return;
         };
@@ -455,9 +467,9 @@ impl App {
             }
         };
         self.services.apply(&Action::SetChainEntry {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             chain,
-            slot: self.cursor.slot,
+            slot: self.services.cursor.slot,
             entry,
         });
     }
@@ -471,13 +483,13 @@ impl App {
         }
         if let (Some(chain), Some(entry)) = (
             self.chain_id(),
-            self.chain_entries().get(self.cursor.slot).copied(),
+            self.chain_entries().get(self.services.cursor.slot).copied(),
         ) && entry.transpose != 0
         {
             self.services.apply(&Action::SetChainEntry {
-                track: self.cursor.track,
+                track: self.services.cursor.track,
                 chain,
-                slot: self.cursor.slot,
+                slot: self.services.cursor.slot,
                 entry: ChainEntry {
                     transpose: 0,
                     ..entry
@@ -496,7 +508,10 @@ impl App {
             self.services.status = "This track has no chain".to_owned();
             return;
         };
-        let current = self.chain_entries().get(self.cursor.slot).map(|e| e.phrase);
+        let current = self
+            .chain_entries()
+            .get(self.services.cursor.slot)
+            .map(|e| e.phrase);
         let phrases: Vec<(u32, usize)> = self.track_here().map_or_else(Vec::new, |track| {
             track
                 .phrases
@@ -525,16 +540,16 @@ impl App {
         let Some(chain) = self.chain_id() else {
             return;
         };
-        let slot = self.cursor.slot;
+        let slot = self.services.cursor.slot;
         let action = match self.chain_entries().get(slot).copied() {
             Some(entry) => Action::SetChainEntry {
-                track: self.cursor.track,
+                track: self.services.cursor.track,
                 chain,
                 slot,
                 entry: ChainEntry { phrase, ..entry },
             },
             None => Action::InsertChainEntry {
-                track: self.cursor.track,
+                track: self.services.cursor.track,
                 chain,
                 at: slot,
                 entry: ChainEntry {
@@ -548,16 +563,20 @@ impl App {
 
     /// Run a command in the chain view. Returns false if it means the same as anywhere.
     pub(crate) fn run_chain(&mut self, cmd: Cmd) -> bool {
-        let count = self.count.take();
+        let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1);
         let rows = self.chain_entries().len();
         let chain = self.chain_id();
         match cmd {
-            Cmd::Move(Motion::Down) => self.move_slot((self.cursor.slot + times).min(rows)),
-            Cmd::Move(Motion::Up) => self.move_slot(self.cursor.slot.saturating_sub(times)),
+            Cmd::Move(Motion::Down) => {
+                self.move_slot((self.services.cursor.slot + times).min(rows))
+            }
+            Cmd::Move(Motion::Up) => {
+                self.move_slot(self.services.cursor.slot.saturating_sub(times))
+            }
             Cmd::Move(Motion::First) => self.move_slot(0),
             Cmd::Move(Motion::Last) => self.move_slot(rows),
-            Cmd::Audition if self.cursor.slot < rows => {
+            Cmd::Audition if self.services.cursor.slot < rows => {
                 let section_step = self.section_step();
                 self.audition(section_step);
             }
@@ -573,47 +592,49 @@ impl App {
             Cmd::ClearField => self.reset_row(),
             Cmd::PickValue => self.open_phrase_picker(),
             Cmd::RemoveRow => {
-                if let (Some(chain), Some(entry)) =
-                    (chain, self.chain_entries().get(self.cursor.slot).copied())
-                {
+                if let (Some(chain), Some(entry)) = (
+                    chain,
+                    self.chain_entries().get(self.services.cursor.slot).copied(),
+                ) {
                     self.yanked_row = Some(entry);
                     self.services.apply(&Action::RemoveChainEntry {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         chain,
-                        at: self.cursor.slot,
+                        at: self.services.cursor.slot,
                     });
                     self.clamp_cursor();
                 }
             }
             Cmd::CopyRow => {
-                if let Some(entry) = self.chain_entries().get(self.cursor.slot).copied() {
+                if let Some(entry) = self.chain_entries().get(self.services.cursor.slot).copied() {
                     self.yanked_row = Some(entry);
                     self.services.status = format!("Copied phrase {:02X}", entry.phrase);
                 }
             }
             Cmd::Paste => match (chain, self.yanked_row) {
                 (Some(chain), Some(entry)) => {
-                    let at = (self.cursor.slot + 1).min(rows);
+                    let at = (self.services.cursor.slot + 1).min(rows);
                     self.services.apply(&Action::InsertChainEntry {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         chain,
                         at,
                         entry,
                     });
-                    self.cursor.slot = at;
+                    self.services.cursor.slot = at;
                 }
                 _ => self.services.status = "No chain row copied yet".to_owned(),
             },
             Cmd::EnterInsert => {
-                if self.chain_column == ChainColumn::Transpose && self.cursor.slot >= rows {
+                if self.chain_column == ChainColumn::Transpose && self.services.cursor.slot >= rows
+                {
                     self.services.status = "Add a phrase to this row first".to_owned();
                 } else {
-                    self.entry = Entry::default();
-                    self.mode = Mode::Insert;
+                    self.modes.entry = Entry::default();
+                    self.modes.mode = Mode::Insert;
                 }
             }
             _ => {
-                self.count = count;
+                self.modes.count = count;
                 return false;
             }
         }
@@ -625,35 +646,37 @@ impl App {
         let phrase = self.chain_column == ChainColumn::Phrase;
         match key {
             KeyCode::Esc => {
-                self.entry = Entry::default();
-                self.mode = Mode::Normal;
+                self.modes.entry = Entry::default();
+                self.modes.mode = Mode::Normal;
             }
             KeyCode::Backspace => {
-                self.entry.text.pop();
+                self.modes.entry.text.pop();
             }
             KeyCode::Enter => self.commit_chain_row(),
-            KeyCode::Char(c) if phrase && c.is_ascii_hexdigit() && self.entry.text.len() < 8 => {
-                self.entry.text.push(c.to_ascii_uppercase());
+            KeyCode::Char(c)
+                if phrase && c.is_ascii_hexdigit() && self.modes.entry.text.len() < 8 =>
+            {
+                self.modes.entry.text.push(c.to_ascii_uppercase());
             }
             KeyCode::Char(c)
                 if !phrase
-                    && self.entry.text.len() < 4
+                    && self.modes.entry.text.len() < 4
                     && (c.is_ascii_digit()
-                        || (self.entry.text.is_empty() && matches!(c, '-' | '+'))) =>
+                        || (self.modes.entry.text.is_empty() && matches!(c, '-' | '+'))) =>
             {
-                self.entry.text.push(c);
+                self.modes.entry.text.push(c);
             }
             _ => {}
         }
     }
 
     fn commit_chain_row(&mut self) {
-        let text = std::mem::take(&mut self.entry.text);
-        self.mode = Mode::Normal;
+        let text = std::mem::take(&mut self.modes.entry.text);
+        self.modes.mode = Mode::Normal;
         let Some(chain) = self.chain_id() else {
             return;
         };
-        let slot = self.cursor.slot;
+        let slot = self.services.cursor.slot;
         let existing = self.chain_entries().get(slot).copied();
         let action = match self.chain_column {
             ChainColumn::Phrase => {
@@ -662,13 +685,13 @@ impl App {
                 };
                 match existing {
                     Some(entry) => Action::SetChainEntry {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         chain,
                         slot,
                         entry: ChainEntry { phrase, ..entry },
                     },
                     None => Action::InsertChainEntry {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         chain,
                         at: slot,
                         entry: ChainEntry {
@@ -688,7 +711,7 @@ impl App {
                     return;
                 };
                 Action::SetChainEntry {
-                    track: self.cursor.track,
+                    track: self.services.cursor.track,
                     chain,
                     slot,
                     entry: ChainEntry { transpose, ..entry },
@@ -701,12 +724,12 @@ impl App {
     /// `:chain n`: point this track at a chain, creating it if needed.
     pub(crate) fn set_track_chain(&mut self, chain: u32) {
         self.services.apply(&Action::SetTrackChain {
-            section: self.cursor.section,
-            track: self.cursor.track,
+            section: self.services.cursor.section,
+            track: self.services.cursor.track,
             chain,
         });
-        self.cursor.slot = 0;
-        self.cursor.step = 0;
+        self.services.cursor.slot = 0;
+        self.services.cursor.step = 0;
         self.clamp_cursor();
     }
 }

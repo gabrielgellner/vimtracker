@@ -128,7 +128,7 @@ fn mutes_armed_on_two_tracks_land_together_and_space_capital_m_takes_them_back()
     special(&mut app, KeyCode::Tab);
     block(&mut rt, &mut app);
     tap(&mut app, " gm");
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     tap(&mut app, " gm");
     block(&mut rt, &mut app);
     assert!(app.services.jam[0].mute_waiting && app.services.jam[1].mute_waiting);
@@ -137,7 +137,7 @@ fn mutes_armed_on_two_tracks_land_together_and_space_capital_m_takes_them_back()
     assert!(!rt.engine().mute_waiting(0) && !rt.engine().mute_waiting(1));
 
     tap(&mut app, " gm");
-    app.cursor.track = 0;
+    app.services.cursor.track = 0;
     tap(&mut app, " gm");
     let mut landed = None;
     for blocks in 0..400 {
@@ -158,7 +158,7 @@ fn space_a_on_a_return_says_it_has_no_chain() {
     special(&mut app, KeyCode::Tab);
     block(&mut rt, &mut app);
     let returns = app.song().sound_tracks() + MAX_GROUPS;
-    app.cursor.track = returns;
+    app.services.cursor.track = returns;
     tap(&mut app, " a");
     assert_eq!(app.services.status, "Return A plays no chain to realign");
 }

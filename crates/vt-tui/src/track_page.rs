@@ -392,7 +392,7 @@ impl TrackPage {
     pub fn run(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
         let track = ctx.track_here();
         let braces = matches!(cmd, Cmd::Move(Motion::NextBeat | Motion::PreviousBeat));
-        if !braces && ctx.view() != View::Mixer {
+        if !braces && ctx.modes.view != View::Mixer {
             self.settle(track);
         }
         self.key(cmd, times, track)
@@ -575,7 +575,7 @@ fn steps_played(track: Option<&Track>, slot: usize) -> u8 {
 impl App {
     /// What the cursor is on, on the track page or the mixer.
     pub fn track_control(&self) -> Control {
-        if self.view == View::Mixer {
+        if self.modes.view == View::Mixer {
             return self.mixer_page.control_here(&self.ctx());
         }
         self.track_page.control(self.track_here())
@@ -585,20 +585,21 @@ impl App {
     pub(crate) fn move_control(&mut self, row: usize, field: usize) {
         let song = Arc::clone(self.song());
         self.track_page
-            .move_to(song.tracks.get(self.cursor.track), row, field);
+            .move_to(song.tracks.get(self.services.cursor.track), row, field);
     }
 
     /// Run a command on the track page. Returns false if it means the same as anywhere.
     /// `Space 5` to `Space 8`: the track page on one of its pages, where its cursor was left, as a
     /// jump `C-o` comes back from.
     pub(crate) fn show_track_page(&mut self, page: Page) {
-        if self.view != View::Track || self.track_page.page != page {
+        if self.modes.view != View::Track || self.track_page.page != page {
             self.record_jump();
         }
         self.track_page.show(page);
         self.track_page.phrase = self.phrase_id();
         let song = Arc::clone(self.song());
-        self.track_page.settle(song.tracks.get(self.cursor.track));
+        self.track_page
+            .settle(song.tracks.get(self.services.cursor.track));
         self.show_view(View::Track);
     }
 
@@ -606,10 +607,13 @@ impl App {
         self.track_page.phrase = self.phrase_id();
         // What a key that means what it does elsewhere leaves the page as.
         let kept = self.track_page.clone();
-        let count = self.count.take();
+        let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1);
-        let (page, mut ctx) = self.track_page_ctx();
-        let outcome = page.run(cmd, times, &mut ctx);
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        let outcome = self.track_page.run(cmd, times, &mut ctx);
         match outcome {
             Outcome::Done => return true,
             Outcome::Refused(why) => {
@@ -627,7 +631,7 @@ impl App {
             Cmd::MapMacro => self.open_macro_picker(),
             Cmd::MacroMapping => self.open_mapping(),
             Cmd::Audition => {
-                self.mode = Mode::Keys;
+                self.modes.mode = Mode::Keys;
                 self.services.status = "a w s e d f play, < > change octave, ; stops".to_owned();
             }
             // The macros' band, first on the Gen page, turns as the other pages' settings do.
@@ -673,14 +677,14 @@ impl App {
                 self.open_control_picker();
             }
             Cmd::EnterInsert => {
-                self.entry = Entry::default();
-                self.mode = Mode::Insert;
+                self.modes.entry = Entry::default();
+                self.modes.mode = Mode::Insert;
             }
             _ => {
                 // What it means elsewhere, such as going to another track, keeps the cursor
                 // where it was kept.
                 self.track_page = kept;
-                self.count = count;
+                self.modes.count = count;
                 return false;
             }
         }

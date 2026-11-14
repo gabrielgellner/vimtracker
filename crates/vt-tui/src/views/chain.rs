@@ -34,11 +34,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     title.push(Span::styled("Track ", bold));
     title.extend(role::ruled(
         song,
-        app.cursor.track,
-        &track_name(app, app.cursor.track),
+        app.services.cursor.track,
+        &track_name(app, app.services.cursor.track),
         bold,
     ));
-    if let Some(mark) = group::mark(song, app.cursor.track) {
+    if let Some(mark) = group::mark(song, app.services.cursor.track) {
         title.extend([Span::raw(" "), mark.patch_style(bold)]);
     }
     title.push(Span::styled(format!("  Chain {chain:02X}"), bold));
@@ -52,20 +52,20 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     ];
     let playing = app
         .services
-        .playing_place(app.cursor.track, chain)
+        .playing_place(app.services.cursor.track, chain)
         .and_then(|playhead| {
-            song.tracks[app.cursor.track].chain_position(
+            song.tracks[app.services.cursor.track].chain_position(
                 chain,
                 playhead,
-                app.services.dealer(app.cursor.track),
+                app.services.dealer(app.services.cursor.track),
             )
         })
         .map(|position| position.slot);
     let entries = app.chain_entries();
     let room = usize::from(area.height.saturating_sub(2)).max(1);
-    let first = (app.cursor.slot + 1).saturating_sub(room);
-    let typing = app.mode == Mode::Insert;
-    let cursor = theme::cursor(app.mode);
+    let first = (app.services.cursor.slot + 1).saturating_sub(room);
+    let typing = app.modes.mode == Mode::Insert;
+    let cursor = theme::cursor(app.modes.mode);
     for slot in (first..=entries.len()).take(room) {
         let entry = entries.get(slot);
         let marker = if playing == Some(slot) { ">" } else { " " };
@@ -85,10 +85,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         );
         let after = if linked { glyphs::ICON_SPACE } else { ' ' };
         let transpose = entry.map_or_else(String::new, |entry| format!("{:+03}", entry.transpose));
-        let here = slot == app.cursor.slot;
+        let here = slot == app.services.cursor.slot;
         let shown = |column: ChainColumn, text: String| {
             if here && typing && app.chain_column == column {
-                format!("{}_", app.entry.text)
+                format!("{}_", app.modes.entry.text)
             } else {
                 text
             }
@@ -101,7 +101,11 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             }
         };
         let steps = entry
-            .and_then(|entry| song.tracks[app.cursor.track].phrases.get(&entry.phrase))
+            .and_then(|entry| {
+                song.tracks[app.services.cursor.track]
+                    .phrases
+                    .get(&entry.phrase)
+            })
             .map_or_else(String::new, |phrase| phrase.len().to_string());
         lines.push(Line::from(vec![
             Span::styled(format!("{slot:02X}"), theme::dim()),

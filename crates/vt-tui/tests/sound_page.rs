@@ -99,7 +99,7 @@ fn the_four_devices_fill_the_page_and_the_keys_box_at_163_by_42() {
         let (mut app, _realtime) = playing(machine);
         app.track_page.filter_image = Some(0x01_02_03);
         for (mode, top, frame) in [(Mode::Normal, 2, ""), (Mode::Keys, 3, "│")] {
-            app.mode = mode;
+            app.modes.mode = mode;
             let screen = full_screen(&mut app);
             let lines = lines(&screen);
             let found = titles(&lines);
@@ -302,7 +302,7 @@ fn image_cells(buffer: &Buffer, color: Color) -> Vec<(u16, u16)> {
 fn the_filter_curve_stays_in_its_panel_in_the_filter() {
     for mode in [Mode::Normal, Mode::Keys] {
         let (mut app, _realtime) = playing(Machine::Sampler);
-        app.mode = mode;
+        app.modes.mode = mode;
         // Without an image, there's no box in the Filter.
         let plain = lines(&full_screen(&mut app));
         let (top, _) = titles(&plain)[1];
@@ -416,7 +416,7 @@ fn the_output_meter_shows_each_side_after_the_trim_with_its_held_peak_and_scale(
     use vt_tui::meter::{FLOOR_DB, Held};
     for mode in [Mode::Normal, Mode::Keys] {
         let (mut app, _realtime) = playing(Machine::Plaits(SynthVoice::Kick));
-        app.mode = mode;
+        app.modes.mode = mode;
         // Silent, the bars are empty and only the scale shows.
         let text = lines(&full_screen(&mut app));
         let (top, title) = titles(&text)[2].clone();
@@ -599,7 +599,7 @@ fn on_fixed(kind: TrackKind) -> (App, Realtime) {
     let version = Arc::new(Published::new(Arc::new(song.clone()), Arc::clone(&samples)));
     let (handle, realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
-    app.cursor.track = at;
+    app.services.cursor.track = at;
     press(&mut app, " 5gg0j");
     (app, realtime)
 }
@@ -615,7 +615,7 @@ fn a_fixed_tracks_output_and_what_feeds_it_fit_the_page_and_the_keys_box_at_163_
         let (mut app, _realtime) = on_fixed(kind);
         assert_eq!(app.track_control(), Control::Level);
         for (mode, top, frame) in [(Mode::Normal, 2, ""), (Mode::Keys, 3, "│")] {
-            app.mode = mode;
+            app.modes.mode = mode;
             let screen = full_screen(&mut app);
             let lines = lines(&screen);
             let found = titles(&lines);
@@ -712,7 +712,7 @@ fn the_masters_limiter_is_a_toggle_after_its_level_and_switches_the_songs_with_u
     assert!(app.song().limiter, "= puts it on");
     press(&mut app, "i");
     assert!(!app.song().limiter, "i switches it too");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     press(&mut app, "x");
     assert!(app.song().limiter, "x puts it back as a new song has it");
     press(&mut app, "u");

@@ -75,7 +75,7 @@ fn space_o_rotates_the_groups_speeds_and_as_many_presses_as_tracks_bring_them_ba
         .song()
         .fixed_track(vt_model::song::TrackKind::Group(1))
         .unwrap();
-    while app.cursor.track != group {
+    while app.services.cursor.track != group {
         press(&mut app, "W");
     }
     press(&mut app, " o");
@@ -87,7 +87,7 @@ fn space_o_rotates_the_tracks_selected_and_space_capital_o_every_track() {
     let (mut app, _rt) = at_speeds([Sixteenth, Eighth, Quarter, EighthTriplet]);
     press(&mut app, "vWW o");
     assert_eq!(speeds(&app), [Eighth, Quarter, Sixteenth, EighthTriplet]);
-    assert!(!app.mode.is_visual(), "the selection is left");
+    assert!(!app.modes.mode.is_visual(), "the selection is left");
 
     press(&mut app, " O");
     assert_eq!(speeds(&app), [Quarter, Sixteenth, EighthTriplet, Eighth]);

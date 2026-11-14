@@ -1,6 +1,6 @@
 //! What every page shares (#320): the song and its history, which actions are applied to, the
-//! engine and what it last reported, the sample pool and its analyses, this machine's settings,
-//! the Roto and the status line. `App` holds them beside the pages, so a page running a key can
+//! program's cursor in it and which groups are folded, the engine and what it last reported, the
+//! sample pool and its analyses, this machine's settings, the Roto and the status line. `App` holds them beside the pages, so a page running a key can
 //! borrow them mutably while it borrows itself, and an edit on a page applies an action as one in
 //! `App` does.
 
@@ -22,8 +22,9 @@ use vt_model::samples::SamplePool;
 use vt_model::song::Song;
 
 use crate::analysing::Analyst;
-use crate::app::TrackLive;
+use crate::app::{Cursor, Field, TrackLive};
 use crate::config::Settings;
+use crate::folding::Folds;
 use crate::meter::Meter;
 
 /// How many versions sent are kept for a report to be of. The callback takes each within a block,
@@ -33,6 +34,11 @@ const SENT_KEPT: usize = 64;
 /// The program's shared services.
 pub struct Services {
     pub history: History,
+    /// Where the cursor is in the song, which every page reads and some move.
+    pub cursor: Cursor,
+    /// Which groups are folded, read from the song's `view` when it opens and written into it
+    /// when it's saved, not undone (decisions 128 and 305).
+    pub folds: Folds,
     pub folder: Option<PathBuf>,
     pub dirty: bool,
     pub status: String,
@@ -121,8 +127,17 @@ impl Services {
         rate: u32,
     ) -> Self {
         let levels = live_from(&song);
+        let folds = Folds::from_view(&song.view);
         Self {
             history: History::new(Arc::new(song)),
+            cursor: Cursor {
+                section: 0,
+                track: 0,
+                slot: 0,
+                step: 0,
+                field: Field::Note,
+            },
+            folds,
             folder,
             dirty: false,
             status: String::new(),

@@ -116,7 +116,8 @@ impl MixerPage {
         let row = self.row_here(ctx.track_here());
         let tracks = &ctx.song().tracks;
         let mut shown = ctx
-            .folds()
+            .services
+            .folds
             .shown(ctx.song())
             .filter(|&track| MIXER[row].exists_on(&tracks[track]));
         let found = if last { shown.last() } else { shown.next() };
@@ -132,23 +133,30 @@ impl App {
     /// `h` and `l` between them, moving the program's cursor. Everything else means what it does
     /// on the track page.
     pub(crate) fn run_mixer(&mut self, cmd: Cmd) -> bool {
-        let times = self.count.unwrap_or(1).max(1);
-        let (page, mut ctx) = self.mixer_page_ctx();
-        let outcome = page.run(cmd, times, &mut ctx);
+        let times = self.modes.count.unwrap_or(1).max(1);
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        let outcome = self.mixer_page.run(cmd, times, &mut ctx);
         if outcome == Outcome::Passed {
             match cmd {
                 Cmd::Move(Motion::Right) => self.move_track(times as isize),
                 Cmd::Move(Motion::Left) => self.move_track(-(times as isize)),
                 Cmd::Move(Motion::RowStart | Motion::RowEnd) => {
-                    let (page, ctx) = self.mixer_page_ctx();
-                    if let Some(to) = page.end_track(cmd == Cmd::Move(Motion::RowEnd), &ctx) {
+                    let ctx = CtxMut {
+                        services: &mut self.services,
+                        modes: &self.modes,
+                    };
+                    let last = cmd == Cmd::Move(Motion::RowEnd);
+                    if let Some(to) = self.mixer_page.end_track(last, &ctx) {
                         self.go_to_track_at(to);
                     }
                 }
                 _ => return self.run_track_page(cmd),
             }
         }
-        self.count = None;
+        self.modes.count = None;
         true
     }
 }

@@ -143,7 +143,7 @@ impl App {
     pub(crate) fn track_sample_number(&self) -> u8 {
         self.song()
             .tracks
-            .get(self.cursor.track)
+            .get(self.services.cursor.track)
             .filter(|track| track.machine == Machine::Sampler)
             .map_or(0, |track| track.sample())
     }
@@ -153,11 +153,11 @@ impl App {
     pub(crate) fn slice_here(&self, number: u8, entry: &BankEntry) -> usize {
         let points = &entry.edit.points;
         let shown = self.sample_page.shown.map(|(shown, _)| shown);
-        let page = self.view == View::Sample && shown == Some(number);
+        let page = self.modes.view == View::Sample && shown == Some(number);
         let slice = if page {
             points.slice_at(self.sample_page.cursor)
         } else {
-            let track = self.song().tracks.get(self.cursor.track);
+            let track = self.song().tracks.get(self.services.cursor.track);
             usize::from(track.map_or(0, |track| track.setting(SettingId::SLICE)))
         };
         slice.min(points.slices.len().saturating_sub(1))
@@ -171,7 +171,7 @@ impl App {
         let Some(entry) = self.song().bank.get(number).cloned() else {
             self.services.status = format!(
                 "Track {:02} plays no sample to slice: K on Sample chooses one",
-                self.cursor.track + 1
+                self.services.cursor.track + 1
             );
             return;
         };
@@ -464,8 +464,8 @@ impl App {
 
     /// Choose the slice the current track's sampler plays, from its sample's slices.
     pub(crate) fn open_slice_picker(&mut self) {
-        self.count = None;
-        let track = self.cursor.track;
+        self.modes.count = None;
+        let track = self.services.cursor.track;
         let number = self.track_sample_number();
         let current = self
             .song()
@@ -485,7 +485,7 @@ impl App {
     fn step_entry(&self) -> u8 {
         let step = self
             .phrase_here()
-            .and_then(|phrase| phrase.steps().get(self.cursor.step));
+            .and_then(|phrase| phrase.steps().get(self.services.cursor.step));
         entry_of_step(step, self.track_sample_number())
     }
 
@@ -561,7 +561,7 @@ impl App {
     /// by each letter naming one, as `'a  03  0.214 s`, which keeps to its slice as slices before
     /// it come and go, and then by number.
     pub(crate) fn open_slice_lock_picker(&mut self, slot: usize) {
-        self.count = None;
+        self.modes.count = None;
         let current = self
             .current_slot(slot)
             .filter(|cell| cell.command == Some(FxCommand::Set(SettingId::SLICE)));
@@ -611,7 +611,7 @@ impl App {
     /// Put a chosen slice in a slot as an `SLI`, keeping its mark.
     pub(crate) fn pick_slice_lock(&mut self, slot: usize, number: u8) {
         let mark = self.slice_lock_mark(slot);
-        self.cursor.field = Field::FxValue(slot);
+        self.services.cursor.field = Field::FxValue(slot);
         self.set_field(FieldValue::Slot(
             slot,
             FxSlot {
@@ -625,7 +625,7 @@ impl App {
     /// Put a slice chosen by a letter in a slot as an `SLI 'a`, keeping its mark.
     pub(crate) fn pick_slice_mark_lock(&mut self, slot: usize, letter: char) {
         let mark = self.slice_lock_mark(slot);
-        self.cursor.field = Field::FxValue(slot);
+        self.services.cursor.field = Field::FxValue(slot);
         self.set_field(FieldValue::Slot(slot, FxSlot::slice_by_mark(letter, mark)));
     }
 
@@ -639,7 +639,7 @@ impl App {
         let own = self
             .song()
             .tracks
-            .get(self.cursor.track)
+            .get(self.services.cursor.track)
             .map_or(0, |track| track.setting(SettingId::SLICE));
         self.song()
             .bank
@@ -652,7 +652,7 @@ impl App {
     /// `g d` on a step's `SLI` value: the sample page on the slice it locks, of the sample the step
     /// plays, as a jump `C-o` comes back from. Whether the cursor was on one.
     pub(crate) fn open_slice_of_step(&mut self) -> bool {
-        let Field::FxValue(slot) = self.cursor.field else {
+        let Field::FxValue(slot) = self.services.cursor.field else {
             return false;
         };
         let Some(cell) = self
@@ -662,7 +662,7 @@ impl App {
             return false;
         };
         let number = self.step_entry();
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         self.jump_to_view(View::Sample);
         self.sample_page.pinned = (number != self.track_sample_number()).then_some((track, number));
         let slice = self.slice_of_lock(cell).unwrap_or_else(|own| own);

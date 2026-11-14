@@ -119,7 +119,7 @@ impl App {
 
     /// Play a span of the entry's frames through the cursor's track, held while its key is down.
     fn hear(&mut self, shown: &Shown, playable: &Playable, span: Span) -> bool {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let Some(frames) = playable.sound.loaded().map(std::sync::Arc::clone) else {
             self.services.status = format!("{} is still recording", shown.entry.title());
             return false;
@@ -177,7 +177,7 @@ impl App {
     /// `i` on the sample page: its keys mode, where two rows of keys play the slices. The status
     /// line says `PADS` while it's on, and what the keys play under it.
     pub(crate) fn start_pads(&mut self) {
-        self.mode = Mode::Keys;
+        self.modes.mode = Mode::Keys;
         self.services.status.clear();
     }
 
@@ -211,7 +211,7 @@ impl App {
         let shown = self.sample_page_here();
         match (key.code, shown) {
             (KeyCode::Esc, _) if self.pending.is_empty() => {
-                self.mode = Mode::Normal;
+                self.modes.mode = Mode::Normal;
                 self.services.status.clear();
             }
             (KeyCode::Char(c @ ('<' | '>')), Ok(shown)) if plain => {
@@ -225,16 +225,16 @@ impl App {
                 };
             }
             (KeyCode::Char(c), Ok(shown)) if plain && pad_key(c).is_some() => {
-                self.count = None;
+                self.modes.count = None;
                 let number = self.sample_page.pads_from + pad_key(c).unwrap_or(0);
                 self.play_pad(&shown, number);
             }
             _ => {
-                let view = self.view;
+                let view = self.modes.view;
                 self.command_key_normal(key, now);
                 // The keys only play on the page they started on.
-                if self.mode == Mode::Keys && self.view != view {
-                    self.mode = Mode::Normal;
+                if self.modes.mode == Mode::Keys && self.modes.view != view {
+                    self.modes.mode = Mode::Normal;
                 }
             }
         }

@@ -132,9 +132,9 @@ fn a_slower_track_leaves_lines_blank_and_a_faster_one_marks_them() {
 fn j_and_k_skip_continuation_lines_and_counts_count_rows() {
     let (mut app, _realtime) = timeline_song(&UNEVEN, 16, vt_model::speed::Speed::Sixteenth);
     press(&mut app, "j");
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     press(&mut app, "2j");
-    assert_eq!(app.cursor.step, 3, "a count counts rows");
+    assert_eq!(app.services.cursor.step, 3, "a count counts rows");
     let buffer = screen(&app);
     // Relative numbers count rows too, and continuation lines have none.
     let gutter = |y: u16| -> String { (0..6).map(|x| buffer[(x, y)].symbol()).collect() };
@@ -145,11 +145,11 @@ fn j_and_k_skip_continuation_lines_and_counts_count_rows() {
     assert_eq!(gutter(8), "    03");
     assert_eq!(
         Some(buffer[(9, 8)].bg),
-        vt_tui::theme::cursor(app.mode).bg,
+        vt_tui::theme::cursor(app.modes.mode).bg,
         "the cursor is on row 03's own line"
     );
     press(&mut app, "3k");
-    assert_eq!(app.cursor.step, 0);
+    assert_eq!(app.services.cursor.step, 0);
     // A selection covers rows, and their continuation lines with them.
     press(&mut app, "Vj");
     let buffer = screen(&app);
@@ -169,11 +169,11 @@ fn the_view_scrolls_by_the_lines_rows_take() {
     );
     press(&mut app, "L");
     assert_eq!(
-        app.cursor.step, 3,
+        app.services.cursor.step, 3,
         "L goes to the last row whose lines all fit"
     );
     press(&mut app, "H");
-    assert_eq!(app.cursor.step, 2);
+    assert_eq!(app.services.cursor.step, 2);
     press(&mut app, "G");
     app.follow_cursor(21);
     assert_eq!(app.top, 14, "the last two rows fill 16 of the lines");

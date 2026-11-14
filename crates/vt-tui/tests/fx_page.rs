@@ -93,12 +93,16 @@ fn a_slot_takes_an_effect_and_shows_its_settings_from_its_list() {
     press(&mut app, "-");
     assert!(fx_line(&app, 0).contains("Distort  Overdrive"));
     press(&mut app, "K");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     press(&mut app, "fold");
     special(&mut app, KeyCode::Enter);
     assert!(fx_line(&app, 0).contains("Distort  Fold"));
     press(&mut app, "i");
-    assert_eq!(app.mode, Mode::Picker, "typing a choice is the list too");
+    assert_eq!(
+        app.modes.mode,
+        Mode::Picker,
+        "typing a choice is the list too"
+    );
     special(&mut app, KeyCode::Esc);
 
     // Under the type is the grid's second column, what comes out.
@@ -163,7 +167,7 @@ fn the_effect_list_chooses_one_and_keeps_settings_if_it_is_already_there() {
     use vt_model::insert::Insert;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "K");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     press(&mut app, "dist");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().tracks[0].inserts[0], Insert::ALL[1]);
@@ -186,14 +190,14 @@ fn a_jump_finds_a_slots_settings_only_where_they_exist() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "/amo");
     assert_eq!(
-        app.field_jump.as_ref().unwrap().query,
+        app.modes.field_jump.as_ref().unwrap().query,
         "",
         "nothing to find yet"
     );
     special(&mut app, KeyCode::Esc);
     press(&mut app, "=}=");
     press(&mut app, "/amo");
-    let jump = app.field_jump.as_ref().unwrap();
+    let jump = app.modes.field_jump.as_ref().unwrap();
     assert!(jump.label(Control::InsertParam(0, 1)).is_some());
     let second = jump.label(Control::InsertParam(1, 1)).unwrap();
     assert!(jump.label(Control::InsertParam(2, 1)).is_none());
@@ -406,7 +410,7 @@ fn a_jump_labels_a_slots_effect_once() {
     use vt_tui::track_page::Control;
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "/effect");
-    let jump = app.field_jump.as_ref().unwrap();
+    let jump = app.modes.field_jump.as_ref().unwrap();
     let labels: Vec<char> = (0..3)
         .map(|slot| jump.label(Control::Insert(slot)).unwrap())
         .collect();
@@ -451,7 +455,7 @@ fn crush_shows_whole_bits_that_step_and_stop_at_each_end() {
     );
     // It's a list to choose from, and not typed.
     press(&mut app, "i");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     press(&mut app, "6");
     special(&mut app, KeyCode::Enter);
     assert!(
@@ -583,7 +587,7 @@ fn dd_and_p_say_why_when_there_is_nothing_to_move() {
         "{}",
         app.services.status
     );
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
     assert_eq!(app.song().tracks[0].inserts[0], Insert::Empty);
     // It's still there to put, across tracks too.
     press(&mut app, "LW");
@@ -1209,7 +1213,7 @@ fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
     app.track_page.slot_images = [Some(0x01_02_03), Some(0x04_05_06), None, None];
     // Each row's text, with an image's placeholder, which is several characters, as `#`.
     let rows = |app: &mut App, keys: bool| {
-        app.mode = if keys { Mode::Keys } else { Mode::Normal };
+        app.modes.mode = if keys { Mode::Keys } else { Mode::Normal };
         let backend = ratatui::backend::TestBackend::new(163, 42);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal
@@ -1295,7 +1299,7 @@ fn four_devices_fit_beside_the_main_meter_and_inside_the_keys_box_at_163x42() {
     assert!(boxed[39].starts_with('╰'), "{}", boxed[39]);
     // Down Glue's last column the cursor reaches Peak Clip, picked from its two with `K`, which
     // switches the clip in.
-    app.mode = Mode::Normal;
+    app.modes.mode = Mode::Normal;
     press(&mut app, "ggj$j");
     assert_eq!(app.track_control(), Control::InsertParam(0, 10));
     press(&mut app, "K");

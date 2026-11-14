@@ -58,7 +58,7 @@ impl App {
         if project::newer_autosave(folder) {
             self.services.status =
                 "Found newer unsaved work: y restores it, n deletes it".to_owned();
-            self.mode = Mode::Restore;
+            self.modes.mode = Mode::Restore;
         }
     }
 
@@ -66,12 +66,12 @@ impl App {
     pub(crate) fn restore_key(&mut self, key: Key) {
         match key.code {
             KeyCode::Char('y') => {
-                self.mode = Mode::Normal;
+                self.modes.mode = Mode::Normal;
                 self.services.status.clear();
                 self.restore_autosave();
             }
             KeyCode::Char('n') => {
-                self.mode = Mode::Normal;
+                self.modes.mode = Mode::Normal;
                 self.services.status = "Deleted the unsaved work".to_owned();
                 self.forget_autosave();
             }

@@ -240,7 +240,8 @@ pub struct SelectionPlace {
 impl App {
     /// What the changes kept on the selection add up to, while it's selected.
     pub fn adjusted_total(&self) -> Option<String> {
-        self.mode
+        self.modes
+            .mode
             .is_visual()
             .then(|| self.adjustments.total())
             .flatten()
@@ -280,8 +281,8 @@ impl App {
 
     fn selection_place(&self) -> SelectionPlace {
         SelectionPlace {
-            mode: self.mode,
-            cursor: self.cursor,
+            mode: self.modes.mode,
+            cursor: self.services.cursor,
             anchor: self.anchor,
             anchor_track: self.anchor_track,
             scope: self.selection_scope,
@@ -290,8 +291,8 @@ impl App {
     }
 
     fn return_to(&mut self, place: SelectionPlace) {
-        self.mode = place.mode;
-        self.cursor = place.cursor;
+        self.modes.mode = place.mode;
+        self.services.cursor = place.cursor;
         self.anchor = place.anchor;
         self.anchor_track = place.anchor_track;
         self.selection_scope = place.scope;
@@ -313,7 +314,7 @@ impl App {
             self.section_anchor = None;
             // `Esc` is what ends a selection kept through its changes, and `gv` brings it back,
             // as in Vim. Its total goes with it.
-            if self.mode.is_visual() {
+            if self.modes.mode.is_visual() {
                 self.last_selection = Some(self.current_selection());
                 if self
                     .adjusted_total()
@@ -323,12 +324,12 @@ impl App {
                 }
                 self.adjustments = Adjustments::default();
             }
-            if self.mode.is_visual() || self.mode == Mode::OperatorPending {
-                self.mode = Mode::Normal;
+            if self.modes.mode.is_visual() || self.modes.mode == Mode::OperatorPending {
+                self.modes.mode = Mode::Normal;
             }
             // On the sample page it also lets go of what the page is playing, ends a selection
             // and leaves the settings row, and what was said in them goes with them.
-            if self.view == View::Sample {
+            if self.modes.view == View::Sample {
                 self.stop_sample_audition();
                 if self.sample_page.anchor.is_some() || self.sample_page.setting.is_some() {
                     self.services.status.clear();
@@ -363,10 +364,10 @@ impl App {
                 return;
             }
             if let Some(digit) = c.to_digit(10)
-                && (digit > 0 || self.count.is_some())
+                && (digit > 0 || self.modes.count.is_some())
             {
-                let count = self.count.unwrap_or(0).saturating_mul(10);
-                self.count = Some(count.saturating_add(digit as usize));
+                let count = self.modes.count.unwrap_or(0).saturating_mul(10);
+                self.modes.count = Some(count.saturating_add(digit as usize));
                 return;
             }
         }
@@ -380,8 +381,8 @@ impl App {
                 let keys: Vec<String> = self.pending.iter().map(Key::to_string).collect();
                 self.services.status = format!("{} isn't bound here", keys.join(" "));
                 self.reset_pending();
-                if self.mode == Mode::OperatorPending {
-                    self.mode = Mode::Normal;
+                if self.modes.mode == Mode::OperatorPending {
+                    self.modes.mode = Mode::Normal;
                 }
             }
             Resolved::Command(cmd) => {
@@ -396,7 +397,7 @@ impl App {
     pub(crate) fn reset_pending(&mut self) {
         self.pending.clear();
         self.pending_since = None;
-        self.count = None;
+        self.modes.count = None;
         self.operator = None;
         self.register = None;
         self.awaiting_register = false;
@@ -416,11 +417,11 @@ impl App {
             Cmd::ClearField => {
                 self.do_change(&Change::ClearField);
                 self.last_change = Some(Change::ClearField);
-                self.count = None;
+                self.modes.count = None;
             }
             Cmd::CycleMark => self.cycle_mark_key(),
-            Cmd::NextTrack if self.mode.is_visual() => self.reach_track(1),
-            Cmd::PreviousTrack if self.mode.is_visual() => self.reach_track(-1),
+            Cmd::NextTrack if self.modes.mode.is_visual() => self.reach_track(1),
+            Cmd::PreviousTrack if self.modes.mode.is_visual() => self.reach_track(-1),
             Cmd::Paste | Cmd::PasteAfter | Cmd::PasteMerge => {
                 let change = Change::Paste {
                     register: self.register,
@@ -448,7 +449,7 @@ impl App {
     }
 
     fn take_count(&mut self) -> Option<usize> {
-        let count = self.count.take();
+        let count = self.modes.count.take();
         match (self.operator_count.take(), count) {
             (Some(a), Some(b)) => Some(a.saturating_mul(b)),
             (a, b) => a.or(b),
@@ -456,25 +457,26 @@ impl App {
     }
 
     fn motion(&mut self, motion: Motion) {
-        if self.mode == Mode::OperatorPending {
+        if self.modes.mode == Mode::OperatorPending {
             let count = self.take_count();
             self.finish_operator(Cover::Motion(motion, count));
             return;
         }
-        let count = self.count.take();
+        let count = self.modes.count.take();
         if motion.is_horizontal() {
             for _ in 0..count.unwrap_or(1) {
                 self.move_horizontal(motion);
             }
         } else {
-            self.cursor.step = motion.step(self.cursor.step, count, self.motion_extent(motion));
+            self.services.cursor.step =
+                motion.step(self.services.cursor.step, count, self.motion_extent(motion));
         }
     }
 
     fn operator_key(&mut self, op: Op) {
-        if self.mode.is_visual() {
+        if self.modes.mode.is_visual() {
             let selection = self.current_selection();
-            self.count = None;
+            self.modes.count = None;
             let before = Arc::clone(self.song());
             self.apply_operator(op, selection.range, selection.scope, selection.tracks);
             self.last_change = Some(Change::Operator {
@@ -498,17 +500,17 @@ impl App {
             return;
         }
         self.operator = Some(op);
-        self.operator_count = self.count.take();
-        self.mode = Mode::OperatorPending;
+        self.operator_count = self.modes.count.take();
+        self.modes.mode = Mode::OperatorPending;
     }
 
     fn target(&mut self, target: Target) {
-        if self.mode.is_visual() {
-            let count = self.count.take();
+        if self.modes.mode.is_visual() {
+            let count = self.modes.count.take();
             let (range, scope) = self.target_range(target, count);
             self.anchor = Some((range.first, scope));
-            self.cursor.step = range.last;
-            self.mode = if scope.is_whole() {
+            self.services.cursor.step = range.last;
+            self.modes.mode = if scope.is_whole() {
                 Mode::VisualStep
             } else {
                 Mode::VisualField
@@ -522,8 +524,8 @@ impl App {
 
     fn target_range(&self, target: Target, count: Option<usize>) -> (StepRange, Scope) {
         target.resolve(
-            self.cursor.step,
-            self.cursor.field.group(),
+            self.services.cursor.step,
+            self.services.cursor.field.group(),
             count,
             self.extent(),
         )
@@ -531,22 +533,22 @@ impl App {
 
     /// The steps and columns a cover means at the cursor.
     fn resolve_cover(&self, cover: Cover) -> (StepRange, Scope) {
-        let step = self.cursor.step;
+        let step = self.services.cursor.step;
         let extent = self.extent();
-        let column = Scope::column(self.cursor.field.group());
+        let column = Scope::column(self.services.cursor.field.group());
         match cover {
             Cover::Cursor => (StepRange::between(step, step), column),
             Cover::Motion(Motion::RowStart, _) => (
                 StepRange::between(step, step),
                 Scope {
                     first: 0,
-                    last: self.cursor.field.group(),
+                    last: self.services.cursor.field.group(),
                 },
             ),
             Cover::Motion(Motion::RowEnd, _) => (
                 StepRange::between(step, step),
                 Scope {
-                    first: self.cursor.field.group(),
+                    first: self.services.cursor.field.group(),
                     last: 2 + self.slots(),
                 },
             ),
@@ -570,8 +572,8 @@ impl App {
         let Some(op) = self.operator.take() else {
             return;
         };
-        self.mode = Mode::Normal;
-        self.count = None;
+        self.modes.mode = Mode::Normal;
+        self.modes.count = None;
         self.operator_count = None;
         let (range, scope) = self.resolve_cover(cover);
         self.apply_operator(op, range, scope, self.span_of(cover));
@@ -589,15 +591,15 @@ impl App {
         };
         let last = (self.song().tracks.len()).saturating_sub(1);
         TrackSpan {
-            first: self.cursor.track,
-            last: (self.cursor.track + tracks - 1).min(last),
+            first: self.services.cursor.track,
+            last: (self.services.cursor.track + tracks - 1).min(last),
         }
     }
 
     /// The phrase a track is on, level with the cursor, and where its loop starts.
     pub(crate) fn phrase_beside(&self, track: usize) -> Option<(u32, usize)> {
         let song = self.song();
-        let id = if track == self.cursor.track {
+        let id = if track == self.services.cursor.track {
             self.phrase_id()?
         } else {
             let chain = (*self.section_here()?.chains.get(track)?)?;
@@ -701,8 +703,8 @@ impl App {
     }
 
     fn cycle_mark_key(&mut self) {
-        self.count = None;
-        if self.mode.is_visual() {
+        self.modes.count = None;
+        if self.modes.mode.is_visual() {
             let selection = self.current_selection();
             self.cycle_mark(selection.range, selection.scope, selection.tracks);
             self.last_change = Some(Change::CycleMark {
@@ -747,7 +749,7 @@ impl App {
 
     fn increment(&mut self, sign: i32, kind: Shift) {
         // On a value's fine digits, the same keys move its fine part.
-        let kind = match (self.cursor.field, kind) {
+        let kind = match (self.services.cursor.field, kind) {
             (Field::FxFine(_), Shift::Large) => Shift::FineLarge,
             (Field::FxFine(_), Shift::Increment | Shift::Chromatic) => Shift::Fine,
             // On a gate's length, they move the length rather than the pulses.
@@ -758,10 +760,10 @@ impl App {
             (Field::Nudge, Shift::Increment | Shift::Chromatic) => Shift::Nudge,
             _ => kind,
         };
-        let amount = self.count.take().unwrap_or(1) as i32;
+        let amount = self.modes.count.take().unwrap_or(1) as i32;
         let by = sign.saturating_mul(amount);
         // On a selection, it stays selected for the next press, until `Esc`.
-        if self.mode.is_visual() {
+        if self.modes.mode.is_visual() {
             let selection = self.current_selection();
             let before = Arc::clone(self.song());
             self.apply_increment(by, selection.range, selection.scope, selection.tracks, kind);
@@ -790,18 +792,18 @@ impl App {
     /// Wait for what replaces the field under the cursor, as Vim's `r` does: no move, and back
     /// to Normal once it's written.
     pub(crate) fn begin_replace(&mut self) {
-        self.count = None;
-        if self.mode.is_visual() {
+        self.modes.count = None;
+        if self.modes.mode.is_visual() {
             self.begin_selection_replace();
             return;
         }
-        if let Field::FxValue(slot) = self.cursor.field
+        if let Field::FxValue(slot) = self.services.cursor.field
             && self.current_slot(slot).and_then(|s| s.command).is_none()
         {
             self.services.status = "Type an FX command first".to_owned();
             return;
         }
-        if let Field::FxFine(slot) = self.cursor.field
+        if let Field::FxFine(slot) = self.services.cursor.field
             && !self
                 .current_slot(slot)
                 .and_then(|s| s.command)
@@ -810,16 +812,16 @@ impl App {
             self.services.status = "Only a setting that sweeps has a fine part".to_owned();
             return;
         }
-        self.entry = Entry::default();
-        self.replacing = Some(self.cursor.field);
-        self.mode = Mode::Replace;
+        self.modes.entry = Entry::default();
+        self.replacing = Some(self.services.cursor.field);
+        self.modes.mode = Mode::Replace;
     }
 
     /// Replace across a selection: the value is typed as usual on its first step that can take it,
     /// then goes on the rest. A velocity needs a note, and an FX value a command.
     fn begin_selection_replace(&mut self) {
         let selection = self.current_selection();
-        let field = self.cursor.field;
+        let field = self.services.cursor.field;
         let Some(phrase) = self.phrase_here().cloned() else {
             return;
         };
@@ -852,49 +854,49 @@ impl App {
         let place = self.selection_place();
         self.leave_visual(selection);
         self.replace_returns_to = Some(place);
-        self.cursor.step = first;
-        self.cursor.field = field;
-        self.entry = Entry::default();
+        self.services.cursor.step = first;
+        self.services.cursor.field = field;
+        self.modes.entry = Entry::default();
         self.replacing = Some(field);
         self.replacing_selection = Some((selection, self.services.history.undo_depth()));
-        self.mode = Mode::Replace;
+        self.modes.mode = Mode::Replace;
     }
 
     /// Clear the field under the cursor and start Insert there, as Vim's `s` does. An FX value
     /// keeps its command for the value about to be typed, and the slot does nothing until then.
     /// As with any Insert, `.` doesn't repeat what is typed.
     pub(crate) fn substitute(&mut self) {
-        self.count = None;
-        let command = match self.cursor.field {
+        self.modes.count = None;
+        let command = match self.services.cursor.field {
             Field::FxValue(slot) => self.current_slot(slot).and_then(|s| s.command),
             // The fine part goes back to 00 and is typed again.
             Field::FxFine(_) => {
                 self.do_change(&Change::ClearField);
-                self.entry = Entry::default();
-                self.mode = Mode::Insert;
+                self.modes.entry = Entry::default();
+                self.modes.mode = Mode::Insert;
                 return;
             }
             _ => None,
         };
         self.do_change(&Change::ClearField);
-        self.entry = Entry {
+        self.modes.entry = Entry {
             command,
             ..Entry::default()
         };
-        self.mode = Mode::Insert;
+        self.modes.mode = Mode::Insert;
     }
 
     /// Back to where the replace started, and remember it for `.`.
     pub(crate) fn finish_replace(&mut self) {
-        self.mode = Mode::Normal;
+        self.modes.mode = Mode::Normal;
         let Some(field) = self.replacing.take() else {
             return;
         };
-        self.cursor.field = field;
+        self.services.cursor.field = field;
         let value = self
             .phrase_here()
             .cloned()
-            .and_then(|phrase| phrase.steps().get(self.cursor.step).cloned());
+            .and_then(|phrase| phrase.steps().get(self.services.cursor.step).cloned());
         let Some(value) = value else {
             return;
         };
@@ -902,7 +904,7 @@ impl App {
         if let Some((selection, depth)) = self.replacing_selection.take() {
             self.fill(selection.range, selection.tracks, field, &value);
             self.services.history.squash_to(depth);
-            self.cursor.step = selection.range.first;
+            self.services.cursor.step = selection.range.first;
             steps = selection.range.len();
             if let Some(place) = self.replace_returns_to.take() {
                 self.return_to(place);
@@ -976,24 +978,29 @@ impl App {
             }
             // `x` on a value's fine digits sets them back to 00, and keeps the value.
             Change::ClearField
-                if !self.mode.is_visual() && matches!(self.cursor.field, Field::FxFine(_)) =>
+                if !self.modes.mode.is_visual()
+                    && matches!(self.services.cursor.field, Field::FxFine(_)) =>
             {
-                if let Field::FxFine(slot) = self.cursor.field {
+                if let Field::FxFine(slot) = self.services.cursor.field {
                     self.set_fine(slot, 0);
                 }
             }
             // `x` on a gate's length takes the row's own away, and keeps the gate.
             Change::ClearField
-                if !self.mode.is_visual() && self.cursor.field == Field::GateLength =>
+                if !self.modes.mode.is_visual()
+                    && self.services.cursor.field == Field::GateLength =>
             {
                 self.set_length(None);
             }
             // `x` on a velocity or a nudge clears just that one, as they share a column group.
-            Change::ClearField if !self.mode.is_visual() && self.cursor.field == Field::Nudge => {
+            Change::ClearField
+                if !self.modes.mode.is_visual() && self.services.cursor.field == Field::Nudge =>
+            {
                 self.set_nudge(0);
             }
             Change::ClearField
-                if !self.mode.is_visual() && self.cursor.field == Field::Velocity =>
+                if !self.modes.mode.is_visual()
+                    && self.services.cursor.field == Field::Velocity =>
             {
                 self.set_field(FieldValue::Velocity(None));
             }
@@ -1001,7 +1008,7 @@ impl App {
                 let (range, scope) = self.resolve_cover(Cover::Cursor);
                 if let Some(phrase) = self.phrase_id() {
                     self.services.apply(&Action::Clear {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         phrase,
                         range,
                         scope,
@@ -1015,14 +1022,19 @@ impl App {
                 tracks,
             } => {
                 let last = self.extent().last_stored();
-                let end = self.cursor.step.saturating_add(*steps - 1).min(last);
+                let end = self
+                    .services
+                    .cursor
+                    .step
+                    .saturating_add(*steps - 1)
+                    .min(last);
                 let tracks = self.span_of(Cover::Sized {
                     steps: *steps,
                     scope: Scope::WHOLE,
                     tracks: *tracks,
                 });
                 self.shape_again(
-                    StepRange::between(self.cursor.step, end),
+                    StepRange::between(self.services.cursor.step, end),
                     tracks,
                     *column,
                     **shape,
@@ -1034,10 +1046,16 @@ impl App {
                 steps,
             } if *steps > 1 => {
                 let last = self.extent().last_stored();
-                let end = self.cursor.step.saturating_add(*steps - 1).min(last);
-                let one = TrackSpan::between(self.cursor.track, self.cursor.track);
+                let end = self
+                    .services
+                    .cursor
+                    .step
+                    .saturating_add(*steps - 1)
+                    .min(last);
+                let one =
+                    TrackSpan::between(self.services.cursor.track, self.services.cursor.track);
                 self.fill(
-                    StepRange::between(self.cursor.step, end),
+                    StepRange::between(self.services.cursor.step, end),
                     one,
                     *field,
                     value,
@@ -1053,35 +1071,35 @@ impl App {
                 let Some(phrase) = self.phrase_id() else {
                     return;
                 };
-                let step = self.cursor.step;
+                let step = self.services.cursor.step;
                 let action = match field {
                     Field::Note => Action::SetNote {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         phrase,
                         step,
                         note: value.note,
                     },
                     Field::Velocity => Action::SetField {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         phrase,
                         step,
                         value: FieldValue::Velocity(value.velocity),
                     },
                     Field::Nudge => Action::SetField {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         phrase,
                         step,
                         value: FieldValue::Nudge(value.nudge),
                     },
                     Field::Gate | Field::GateLength => Action::SetField {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         phrase,
                         step,
                         value: FieldValue::Gate(value.gate),
                     },
                     Field::FxCommand(slot) | Field::FxValue(slot) | Field::FxFine(slot) => {
                         Action::SetField {
-                            track: self.cursor.track,
+                            track: self.services.cursor.track,
                             phrase,
                             step,
                             value: FieldValue::Slot(*slot, value.fx[*slot]),
@@ -1104,12 +1122,12 @@ impl App {
                 if let Some(phrase) = self.phrase_id() {
                     let length = block.steps.len().saturating_mul(*times);
                     let before = Arc::clone(self.song());
-                    let group = self.cursor.field.group();
-                    let row = self.cursor.step as isize - self.extent().start as isize;
+                    let group = self.services.cursor.field.group();
+                    let row = self.services.cursor.step as isize - self.extent().start as isize;
                     let mut actions = vec![Action::Paste {
-                        track: self.cursor.track,
+                        track: self.services.cursor.track,
                         phrase,
-                        at: self.cursor.step,
+                        at: self.services.cursor.step,
                         group,
                         block: Block {
                             other_tracks: Vec::new(),
@@ -1120,7 +1138,7 @@ impl App {
                     }];
                     // Further tracks take theirs at the same row, and past the last are dropped.
                     for (offset, steps) in block.other_tracks.iter().enumerate() {
-                        let track = self.cursor.track + offset + 1;
+                        let track = self.services.cursor.track + offset + 1;
                         if let Some((phrase, start)) = self.phrase_beside(track)
                             && let Ok(at) = usize::try_from(start as isize + row)
                         {
@@ -1158,8 +1176,8 @@ impl App {
             self.services.status = "Nothing to repeat".to_owned();
             return;
         };
-        self.count = None;
-        if self.mode.is_visual() {
+        self.modes.count = None;
+        if self.modes.mode.is_visual() {
             let selection = self.current_selection();
             let before = Arc::clone(self.song());
             // What moves the values, or fills them, keeps the selection, as it did the first time.
@@ -1218,7 +1236,7 @@ impl App {
     /// tracks of different lengths doesn't change which rows are selected.
     fn reach_track(&mut self, by: isize) {
         let last = self.song().tracks.len() as isize - 1;
-        let from = self.anchor_track.unwrap_or(self.cursor.track) as isize;
+        let from = self.anchor_track.unwrap_or(self.services.cursor.track) as isize;
         self.anchor_track = Some((from + by).clamp(0, last) as usize);
     }
 
@@ -1226,37 +1244,38 @@ impl App {
         let scope = if mode == Mode::VisualStep {
             Scope::WHOLE
         } else {
-            Scope::column(self.cursor.field.group())
+            Scope::column(self.services.cursor.field.group())
         };
-        self.anchor = Some((self.cursor.step, scope));
-        self.anchor_track = Some(self.cursor.track);
+        self.anchor = Some((self.services.cursor.step, scope));
+        self.anchor_track = Some(self.services.cursor.track);
         self.selection_scope = None;
         self.adjustments = Adjustments::default();
-        self.mode = mode;
-        self.count = None;
+        self.modes.mode = mode;
+        self.modes.count = None;
     }
 
     /// The current selection in a Visual mode.
     pub fn current_selection(&self) -> Selection {
-        let (start, start_scope) = self
-            .anchor
-            .unwrap_or((self.cursor.step, Scope::column(self.cursor.field.group())));
-        let scope = match (self.mode, self.selection_scope) {
+        let (start, start_scope) = self.anchor.unwrap_or((
+            self.services.cursor.step,
+            Scope::column(self.services.cursor.field.group()),
+        ));
+        let scope = match (self.modes.mode, self.selection_scope) {
             (_, Some(fixed)) => fixed,
             (Mode::VisualStep, _) => Scope::WHOLE,
             _ => {
-                let here = self.cursor.field.group();
+                let here = self.services.cursor.field.group();
                 Scope {
                     first: start_scope.first.min(here),
                     last: start_scope.last.max(here),
                 }
             }
         };
-        let anchor_track = self.anchor_track.unwrap_or(self.cursor.track);
+        let anchor_track = self.anchor_track.unwrap_or(self.services.cursor.track);
         Selection {
-            range: StepRange::between(start, self.cursor.step),
+            range: StepRange::between(start, self.services.cursor.step),
             scope,
-            tracks: TrackSpan::between(anchor_track, self.cursor.track),
+            tracks: TrackSpan::between(anchor_track, self.services.cursor.track),
         }
     }
 
@@ -1278,8 +1297,8 @@ impl App {
     fn leave_visual(&mut self, selection: Selection) {
         self.last_selection = Some(selection);
         self.adjustments = Adjustments::default();
-        self.cursor.step = selection.range.first;
-        self.mode = Mode::Normal;
+        self.services.cursor.step = selection.range.first;
+        self.modes.mode = Mode::Normal;
         self.anchor = None;
         self.anchor_track = None;
         self.go_to_track_at(selection.tracks.first);
@@ -1297,8 +1316,8 @@ impl App {
         self.selection_scope = Some(selection.scope);
         self.adjustments = Adjustments::default();
         self.go_to_track_at(selection.tracks.first);
-        self.cursor.step = selection.range.last;
-        self.mode = if selection.scope.is_whole() {
+        self.services.cursor.step = selection.range.last;
+        self.modes.mode = if selection.scope.is_whole() {
             Mode::VisualStep
         } else {
             Mode::VisualField
@@ -1311,8 +1330,8 @@ impl App {
     fn move_horizontal(&mut self, motion: Motion) {
         let slots = self.slots();
         let last = FIRST_FX_ORDER - 1 + slots * 3;
-        let order = self.cursor.field.order();
-        let group = self.cursor.field.group();
+        let order = self.services.cursor.field.order();
+        let group = self.services.cursor.field.group();
         // A value with no fine part has no fine digits to land on, so they're passed over.
         let landable = |field: Field| match field {
             Field::FxFine(slot) => self
@@ -1336,10 +1355,10 @@ impl App {
                 Field::from_order(next.saturating_sub(1))
             }
         };
-        self.cursor.field = match motion {
+        self.services.cursor.field = match motion {
             Motion::Right => step(order, true),
             Motion::Left => step(order, false),
-            Motion::NextGroup if slots == 0 => self.cursor.field,
+            Motion::NextGroup if slots == 0 => self.services.cursor.field,
             Motion::NextGroup => {
                 Field::of_group(group.max(FX_GROUP - 1).saturating_add(1).min(2 + slots))
             }

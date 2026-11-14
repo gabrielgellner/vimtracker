@@ -260,7 +260,7 @@ impl App {
 
     /// Open the explorer, with these at the top, on a file or folder if it's listed.
     pub(crate) fn open_explorer(&mut self, purpose: Purpose, roots: Vec<Root>, on: Option<&Path>) {
-        self.count = None;
+        self.modes.count = None;
         // `H`, `P` and `A` are drawn after these, with their switches.
         let hint = match purpose {
             Purpose::Sample => "Enter choose  T tag",
@@ -386,7 +386,7 @@ impl App {
         let folder = folder.trim_end_matches('/');
         self.command_line = format!("{} {folder}/{name}{}", naming.command, naming.after);
         self.command_menu = None;
-        self.mode = Mode::Command;
+        self.modes.mode = Mode::Command;
         self.services.status = "Type a name, or C-r for another, then Enter".to_owned();
     }
 
@@ -482,7 +482,7 @@ impl App {
         match self.loader.want(&path) {
             Some(Ok(loaded)) => {
                 self.note_heard(&path, loaded.heard);
-                let track = self.cursor.track;
+                let track = self.services.cursor.track;
                 if self
                     .services
                     .handle
@@ -529,7 +529,7 @@ impl App {
         let song = self.song();
         let sample = song
             .tracks
-            .get(self.cursor.track)
+            .get(self.services.cursor.track)
             .and_then(|track| song.bank.get(track.sample()))
             .and_then(BankEntry::source)
             .map(|source| project::resolve_sample(self.services.folder.as_deref(), &source.path));

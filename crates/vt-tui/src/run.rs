@@ -591,7 +591,7 @@ pub fn draw_screen(
         body.height.saturating_sub(views::phrase::ROWS_AROUND_STEPS),
     ));
     // The sample page's waveform has the whole width, as a sample editor's does.
-    let (view, meter) = if app.view == View::Sample {
+    let (view, meter) = if app.modes.view == View::Sample {
         (body, None)
     } else {
         views::meter::split(body)
@@ -600,7 +600,7 @@ pub fn draw_screen(
     // place.
     app.track_page.lfo_cycles_at = Default::default();
     app.track_page.gen_panels_at = Vec::new();
-    match app.view {
+    match app.modes.view {
         View::Chain => views::chain::draw(frame, view, app),
         View::Phrase => views::phrase::draw(frame, view, app),
         View::Track => {
@@ -615,7 +615,7 @@ pub fn draw_screen(
         View::Song => views::song::draw(frame, view, app),
     }
     // Inside the box the track page has while the keyboard plays it.
-    let free = if app.mode == Mode::Keys && app.view == View::Track {
+    let free = if app.modes.mode == Mode::Keys && app.modes.view == View::Track {
         view.inner(Margin::new(1, 1))
     } else {
         view
@@ -632,7 +632,7 @@ pub fn draw_screen(
     }
     views::status::draw(frame, status, app);
     views::help::draw_popup(frame, body, app, now);
-    if app.mode == Mode::Help {
+    if app.modes.mode == Mode::Help {
         views::help::draw_help(frame, body, app);
     }
     app.guide_page = views::guide::page(body.height);
@@ -650,7 +650,7 @@ pub fn draw_screen(
         views::picker::draw(frame, body, picker);
     }
     if let Some(menu) = &mut app.command_menu
-        && app.mode == Mode::Command
+        && app.modes.mode == Mode::Command
     {
         // Under the names it finishes, after the `:`.
         let column = 1 + menu.column(&app.command_line);

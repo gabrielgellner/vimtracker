@@ -43,7 +43,7 @@ fn kit_in_folder(app: &mut App) -> PathBuf {
 /// Open the dialog and go into the kit, on its first sound.
 fn open_kit(app: &mut App) {
     command(app, "kit");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(
         explorer_rows(app)[..3],
         ["v kits", "  > drums", "  > 909"],
@@ -113,7 +113,7 @@ fn marked_sounds_load_as_new_tracks_after_the_last_in_a_folded_group_as_one_undo
     // In the first group, named after the kit, folded.
     assert_eq!(group_of(&app, 2), Some((1, "909".to_owned())));
     assert_eq!(group_of(&app, 3), Some((1, "909".to_owned())));
-    assert!(app.folds.is_closed(app.song(), 1));
+    assert!(app.services.folds.is_closed(app.song(), 1));
     assert_eq!(
         app.services.history.undo_depth(),
         depth + 1,
@@ -124,7 +124,7 @@ fn marked_sounds_load_as_new_tracks_after_the_last_in_a_folded_group_as_one_undo
     // The beat is offered, and Esc leaves the tracks empty.
     assert_eq!(app.picker.as_ref().unwrap().title, KIT_BEAT_PICKER);
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert!(!has_notes(&app, 2) && !has_notes(&app, 3));
     assert_eq!(app.services.history.undo_depth(), depth + 1);
 
@@ -304,7 +304,7 @@ fn enter_with_nothing_marked_loads_the_sound_under_the_cursor() {
     assert_eq!(group_of(&app, 2), Some((1, "909".to_owned())));
     assert_eq!(app.services.status, "Kit 909: track 03 in G1, folded");
     // A pad isn't a drum, so no beat is offered.
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
 
     // Loading again goes after it, in the next group, and never over a track. The dialog opens
     // on the kit last loaded from, open.

@@ -31,7 +31,9 @@ impl App {
     /// else the one the current track plays.
     pub(crate) fn marked_entry(&self) -> u8 {
         match self.sample_page.pinned {
-            Some((track, number)) if self.view == View::Sample && track == self.cursor.track => {
+            Some((track, number))
+                if self.modes.view == View::Sample && track == self.services.cursor.track =>
+            {
                 number
             }
             _ => self.track_sample_number(),
@@ -46,7 +48,7 @@ impl App {
         let Some(mut entry) = self.song().bank.get(number).cloned() else {
             self.services.status = format!(
                 "Track {:02} plays no sample to mark: K on Sample chooses one",
-                self.cursor.track + 1
+                self.services.cursor.track + 1
             );
             return;
         };
@@ -126,7 +128,7 @@ impl App {
     /// `:marks`: list the letters naming slices, in the order of their slices, with each slice's
     /// number and where it starts, to go to one on the sample page.
     pub(crate) fn open_marks_picker(&mut self) {
-        self.count = None;
+        self.modes.count = None;
         let number = self.marked_entry();
         let items = self.mark_items(number, Pick::Mark);
         if items.is_empty() {
@@ -135,7 +137,10 @@ impl App {
                     "No slice of {} has a name: :mark a names the slice here",
                     sample_text(self.song(), number)
                 ),
-                None => format!("Track {:02} plays no sample", self.cursor.track + 1),
+                None => format!(
+                    "Track {:02} plays no sample",
+                    self.services.cursor.track + 1
+                ),
             };
             return;
         }
@@ -146,7 +151,10 @@ impl App {
     pub(crate) fn delete_marks(&mut self, letters: Option<&[char]>) {
         let number = self.marked_entry();
         let Some(mut entry) = self.song().bank.get(number).cloned() else {
-            self.services.status = format!("Track {:02} plays no sample", self.cursor.track + 1);
+            self.services.status = format!(
+                "Track {:02} plays no sample",
+                self.services.cursor.track + 1
+            );
             return;
         };
         let marks = &mut entry.edit.points.marks;
@@ -233,7 +241,7 @@ impl App {
 
     /// Put the sample page's cursor on a slice's start, as a jump.
     fn go_to_slice(&mut self, number: u8, slice: usize) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         self.record_jump();
         self.show_view(View::Sample);
         self.sample_page.pinned = (number != self.track_sample_number()).then_some((track, number));

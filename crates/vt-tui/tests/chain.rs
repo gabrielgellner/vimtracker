@@ -16,12 +16,12 @@ fn cuj_5_reuse_and_vary_a_phrase() {
     let (mut app, _realtime) = app();
     // Add the same phrase twice to this chain, then open the second use.
     press(&mut app, " 2");
-    assert_eq!(app.view, View::Chain);
+    assert_eq!(app.modes.view, View::Chain);
     press(&mut app, "yyp");
     assert_eq!(app.chain_entries().len(), 2);
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.services.cursor.slot, 1);
     press(&mut app, "gd");
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
     assert!(
         app.services.status.contains("used 2 times"),
         "{}",
@@ -44,10 +44,10 @@ fn cuj_5_reuse_and_vary_a_phrase() {
     // Ctrl-O returns to where the jump started, and Ctrl-I goes forward again.
     let back = parse_sequence("C-o").unwrap()[0];
     app.key(back, Instant::now());
-    assert_eq!(app.view, View::Chain);
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.modes.view, View::Chain);
+    assert_eq!(app.services.cursor.slot, 1);
     app.key(parse_sequence("C-i").unwrap()[0], Instant::now());
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
     // Undo removes the clone's use again.
     press(&mut app, "uu");
     assert_eq!(app.chain_entries()[1].phrase, 0);
@@ -57,15 +57,15 @@ fn cuj_5_reuse_and_vary_a_phrase() {
 fn gd_on_the_empty_row_adds_the_lowest_unused_phrase() {
     let (mut app, _realtime) = app();
     press(&mut app, " 2G");
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.services.cursor.slot, 1);
     assert_eq!(app.phrase_id(), None);
     press(&mut app, "gd");
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
     assert_eq!(app.phrase_id(), Some(1));
     assert_eq!(app.chain_entries().len(), 2);
     // Leaving the chain view never leaves the cursor on the empty row.
     press(&mut app, " 2G 3");
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.services.cursor.slot, 1);
     assert_eq!(app.phrase_id(), Some(1));
     assert_eq!(notes(&app).len(), 16);
 }
@@ -104,7 +104,7 @@ fn the_chain_view_edits_rows_and_keeps_one() {
     // Removing the row copies it, so it can be pasted back.
     press(&mut app, "dd");
     assert_eq!(app.chain_entries().len(), 1);
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.services.cursor.slot, 1);
     press(&mut app, "kp");
     assert_eq!(app.chain_entries()[1].phrase, 0x1F);
 }
@@ -113,17 +113,17 @@ fn the_chain_view_edits_rows_and_keeps_one() {
 fn phrase_view_keys_move_through_the_chain_and_grr_lists_uses() {
     let (mut app, _realtime) = app();
     press(&mut app, " 2yyp 3");
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.services.cursor.slot, 1);
     press(&mut app, "[P");
-    assert_eq!(app.cursor.slot, 0);
+    assert_eq!(app.services.cursor.slot, 0);
     press(&mut app, "]p");
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.services.cursor.slot, 1);
     press(&mut app, "]p");
-    assert_eq!(app.cursor.slot, 1, "motions stop at the edge");
+    assert_eq!(app.services.cursor.slot, 1, "motions stop at the edge");
     press(&mut app, "[p]P");
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.services.cursor.slot, 1);
     press(&mut app, "grr");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     let uses: Vec<String> = app
         .picker
         .as_ref()
@@ -134,8 +134,8 @@ fn phrase_view_keys_move_through_the_chain_and_grr_lists_uses() {
         .collect();
     assert_eq!(uses, ["Section 01 slot 00", "Section 01 slot 01"]);
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.cursor.slot, 0);
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.services.cursor.slot, 0);
+    assert_eq!(app.modes.view, View::Phrase);
 }
 
 #[test]
@@ -158,9 +158,9 @@ fn a_shared_chain_warns_on_clone_and_gc_big_separates_it() {
 fn undo_keeps_the_cursor_on_a_row_that_exists() {
     let (mut app, _realtime) = app();
     press(&mut app, " 2yyp 3");
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.services.cursor.slot, 1);
     press(&mut app, "u");
-    assert_eq!(app.cursor.slot, 0);
+    assert_eq!(app.services.cursor.slot, 0);
     assert_eq!(app.phrase_id(), Some(0));
 }
 
@@ -173,7 +173,7 @@ fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
     let start = row(&app, 0).phrase;
 
     press(&mut app, "K");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     let picker = app.picker.as_ref().unwrap();
     let count = picker.shown().count();
     assert!(count >= 2);
@@ -191,7 +191,7 @@ fn k_chooses_a_chain_rows_phrase_and_large_steps_work_there() {
 
     // Transpose isn't a list, and moves by octaves.
     press(&mut app, "lK");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert!(
         app.services.status.contains("Phrase"),
         "{}",

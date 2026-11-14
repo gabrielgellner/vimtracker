@@ -103,8 +103,8 @@ fn a_sound_saved_loads_on_another_track_as_one_undo_step_keeping_its_place() {
             name: "ZZ".to_owned(),
         },
     ]));
-    app.cursor.track = 1;
-    assert_eq!(app.cursor.track, 1);
+    app.services.cursor.track = 1;
+    assert_eq!(app.services.cursor.track, 1);
     let phrases = app.song().tracks[1].phrases.clone();
     let depth = app.services.history.undo_depth();
     command(&mut app, "preset load bass/Acid Bite");
@@ -165,7 +165,7 @@ fn a_sampled_sound_plays_the_same_file_in_another_song() {
     );
 
     let (mut other, _realtime) = vt_tui_app_with(&presets);
-    other.cursor.track = 1;
+    other.services.cursor.track = 1;
     command(&mut other, "preset load Tone");
     let played = file_of(other.song(), 1).unwrap_or_else(|| panic!("{}", other.services.status));
     assert_eq!(
@@ -174,7 +174,7 @@ fn a_sampled_sound_plays_the_same_file_in_another_song() {
     );
     assert_eq!(other.song().bank.iter().count(), 1);
     // Loaded again, it's the same entry in the bank.
-    other.cursor.track = 0;
+    other.services.cursor.track = 0;
     command(&mut other, "preset load Tone");
     assert_eq!(other.song().bank.iter().count(), 1);
     assert_eq!(
@@ -230,7 +230,7 @@ fn an_effect_saved_from_one_slot_loads_into_another() {
     // Into the last slot, from the browser.
     press(&mut app, "}}");
     command(&mut app, "preset");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(app.picker.as_ref().unwrap().title, "Effect presets");
     let rows = explorer_rows(&app);
     assert!(rows.iter().any(|row| row.contains("Dub Delay")), "{rows:?}");
@@ -276,7 +276,7 @@ fn k_on_the_machine_lists_the_presets_and_the_browser_loads_one() {
     let (mut app, _realtime, presets) = presets_app();
     acid_on_first(&mut app);
     command(&mut app, "preset save Acid Bite");
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     press(&mut app, " 5gg");
     press(&mut app, "K");
     let picker = app.picker.as_ref().unwrap();
@@ -291,7 +291,7 @@ fn k_on_the_machine_lists_the_presets_and_the_browser_loads_one() {
     // Typing finds it, and Enter opens the browser on the presets folder's sounds.
     press(&mut app, "/load");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Picker, "{}", app.services.status);
+    assert_eq!(app.modes.mode, Mode::Picker, "{}", app.services.status);
     let picker = app.picker.as_ref().unwrap();
     assert_eq!(picker.title, "Sound presets");
     let rows = explorer_rows(&app);
@@ -313,7 +313,7 @@ fn k_on_the_machine_lists_the_presets_and_the_browser_loads_one() {
     press(&mut app, "K");
     press(&mut app, "/save");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Command);
+    assert_eq!(app.modes.mode, Mode::Command);
     assert_eq!(app.command_line, "preset save ");
 }
 
@@ -341,8 +341,8 @@ fn with_no_presets_yet_or_no_folder_it_says_so() {
 fn a_fixed_track_has_no_sound_preset() {
     let (mut app, _realtime, _presets) = presets_app();
     let master = app.song().tracks.len() - 1;
-    app.cursor.track = master;
-    assert_eq!(app.cursor.track, master);
+    app.services.cursor.track = master;
+    assert_eq!(app.services.cursor.track, master);
     command(&mut app, "preset save X");
     assert!(
         app.services

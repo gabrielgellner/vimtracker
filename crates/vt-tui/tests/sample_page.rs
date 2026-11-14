@@ -118,7 +118,7 @@ fn keys(app: &mut App, names: &str) {
 fn on_page() -> (App, Realtime) {
     let (mut app, realtime) = app();
     keys(&mut app, "Space 0");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
     (app, realtime)
 }
 
@@ -136,20 +136,20 @@ fn space_0_opens_the_page_on_the_tracks_sample_whole_with_the_cursor_on_its_star
     assert_eq!(view(&app), (FIT, 0));
     assert_eq!(cursor(&app), 1000);
     keys(&mut app, "C-o");
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
 }
 
 #[test]
 fn g_d_on_the_sound_pages_sample_row_opens_it_and_c_o_comes_back() {
     let (mut app, _realtime) = app();
     keys(&mut app, "Space 5 l g d");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
     assert_eq!(cursor(&app), 1000);
     keys(&mut app, "C-o");
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
     // Elsewhere on the Sound page, it says where it works.
     keys(&mut app, "j g d");
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
     assert!(
         app.services.status.contains("Machine's title"),
         "{}",
@@ -162,7 +162,7 @@ fn w_and_b_show_the_next_and_previous_tracks_sample_afresh() {
     let (mut app, _realtime) = on_page();
     keys(&mut app, "z i l l");
     keys(&mut app, "W");
-    assert_eq!(app.cursor.track, 1);
+    assert_eq!(app.services.cursor.track, 1);
     assert_eq!(app.sample_shown().unwrap().number, 2);
     // Another sample starts whole, with the cursor on its start.
     let _ = app.sample_page_here();
@@ -945,7 +945,7 @@ fn a_track_with_no_sample_says_so() {
     let (handle, _realtime) = connect(Engine::new(RATE, version));
     let mut app = App::new(song, None, samples, handle, RATE);
     keys(&mut app, "Space 0 l");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
     assert!(
         app.services.status.contains("plays no sample"),
         "{}",
@@ -981,8 +981,8 @@ fn step_with(app: &mut App, step: usize, text: &str) {
         step,
         value: text.parse().unwrap(),
     });
-    app.cursor.step = step;
-    app.cursor.field = Field::FxValue(1);
+    app.services.cursor.step = step;
+    app.services.cursor.field = Field::FxValue(1);
 }
 
 #[test]
@@ -993,11 +993,11 @@ fn g_d_on_a_steps_sli_opens_the_page_on_its_slice_and_c_o_comes_back() {
     let shown = value_shown(&app).unwrap_or_default();
     assert!(shown.contains("02 of 4: from 0.948 s"), "{shown}");
     keys(&mut app, "g d");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
     assert_eq!(cursor(&app), QUARTERS[2]);
     assert_eq!(app.sample_shown().unwrap().number, 1);
     keys(&mut app, "C-o");
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
     // Under an `SMP` of its own, it's that sample's slice, and `Space 0` is the track's again.
     let mut sliced = app.song().bank.get(2).unwrap().clone();
     sliced.edit.points.reslice(&[0, 48_000]);
@@ -1013,9 +1013,9 @@ fn g_d_on_a_steps_sli_opens_the_page_on_its_slice_and_c_o_comes_back() {
     assert_eq!(app.sample_shown().unwrap().number, 1);
     // Elsewhere in the phrase, it says where it works.
     keys(&mut app, "C-o");
-    app.cursor.field = Field::Note;
+    app.services.cursor.field = Field::Note;
     keys(&mut app, "g d");
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
     assert!(
         app.services.status.contains("SLI"),
         "{}",
@@ -1407,7 +1407,7 @@ fn mark_names_a_slice_and_quote_goes_to_it_as_a_jump() {
     keys(&mut app, "' a");
     assert_eq!(cursor(&app), QUARTERS[2]);
     keys(&mut app, "C-o");
-    assert_eq!((app.view, cursor(&app)), (View::Sample, 0));
+    assert_eq!((app.modes.view, cursor(&app)), (View::Sample, 0));
     keys(&mut app, "' z");
     assert!(
         app.services.status.contains("is named z"),
@@ -1454,9 +1454,9 @@ fn mark_names_a_slice_and_quote_goes_to_it_as_a_jump() {
         .collect();
     assert_eq!(labels, ["'a  02  0.948 s", "'b  03  1.411 s"]);
     keys(&mut app, "j Enter");
-    assert_eq!((app.view, cursor(&app)), (View::Sample, QUARTERS[3]));
+    assert_eq!((app.modes.view, cursor(&app)), (View::Sample, QUARTERS[3]));
     keys(&mut app, "C-o");
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.view, View::Phrase);
 }
 
 #[test]
@@ -1723,7 +1723,7 @@ fn the_keys_mode_plays_slices_in_order_from_the_home_row_and_moves_the_cursor() 
     let (mut app, mut realtime) = on_page();
     command(&mut app, "slice 20");
     keys(&mut app, "i");
-    assert_eq!(app.mode, Mode::Keys);
+    assert_eq!(app.modes.mode, Mode::Keys);
     assert_eq!(app.key_scope(), Mode::Sample);
     let shown = app.sample_shown().unwrap();
     for (name, number) in [("a", 0), ("s", 1), ("k", 7), ("q", 8), ("i", 15), ("d", 2)] {
@@ -1753,7 +1753,7 @@ fn the_keys_mode_plays_slices_in_order_from_the_home_row_and_moves_the_cursor() 
     keys(&mut app, "0");
     assert_eq!(cursor(&app), shown.slice(19).start);
     keys(&mut app, "Esc");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     keys(&mut app, "a");
     assert_eq!(cursor(&app), shown.slice(19).start, "a plays nothing now");
 }
@@ -2390,7 +2390,7 @@ fn semicolon_and_space_c_are_heard_from_a_file_loaded_at_another_rate() {
     app.finish_analysis();
     assert!(app.sample_shown().is_ok(), "analysed");
     keys(&mut app, "Space 0");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
     assert!(
         loudness(&mut realtime, &mut app, 4800) < 1e-6,
         "silent at first"
@@ -2438,9 +2438,9 @@ fn an_audition_a_mute_or_a_solo_silences_says_so() {
     );
     // Another track soloed silences it too.
     keys(&mut app, "Esc Space m");
-    app.cursor.track = 1;
+    app.services.cursor.track = 1;
     keys(&mut app, "Space s");
-    app.cursor.track = 0;
+    app.services.cursor.track = 0;
     loudness(&mut realtime, &mut app, RATE as usize / 2);
     keys(&mut app, "Space c");
     assert!(loudness(&mut realtime, &mut app, 4800) < 1e-6, "soloed out");

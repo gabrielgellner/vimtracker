@@ -226,7 +226,7 @@ impl App {
         let mut modulator = self.page_track().mods[slot];
         modulator.bypassed = !modulator.bypassed;
         self.services.apply(&Action::SetMod {
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             slot,
             modulator,
         });
@@ -296,12 +296,12 @@ impl App {
     /// (`NotePitch`), and each generator's row as it plays. A move of part of a semitone goes to
     /// the nearest note, as the Note column has no finer step.
     pub(crate) fn bake_pitch_mods(&mut self) {
-        let selected = self.mode.is_visual().then(|| {
+        let selected = self.modes.mode.is_visual().then(|| {
             let selection = self.current_selection();
             self.leave_selection(selection);
             selection.range
         });
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let Some(phrase) = self.phrase_id() else {
             self.services.status = "No phrase here to write the pitch into".to_owned();
             return;

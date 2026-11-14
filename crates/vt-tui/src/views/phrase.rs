@@ -170,7 +170,9 @@ fn step_text(step: &Step, track: Option<&Track>) -> String {
 /// The step as it will be once the value being typed is in: a command chosen in Insert waits for
 /// its value before it's written, but shows in its cell meanwhile.
 fn pending_step(app: &App, step: &Step, typing: bool) -> Option<Step> {
-    let (Field::FxValue(slot), Some(command)) = (app.cursor.field, app.entry.command) else {
+    let (Field::FxValue(slot), Some(command)) =
+        (app.services.cursor.field, app.modes.entry.command)
+    else {
         return None;
     };
     if !typing {
@@ -242,27 +244,36 @@ pub(crate) fn playhead_step(app: &App) -> Option<usize> {
 /// phrase.
 pub(crate) fn playhead_place(app: &App) -> Option<(usize, usize)> {
     let owner = app.track_here()?;
-    let chain = (*app.section_here()?.chains.get(app.cursor.track)?)?;
-    let playhead = app.services.playing_place(app.cursor.track, chain)?;
-    let position = owner.chain_position(chain, playhead, app.services.dealer(app.cursor.track))?;
+    let chain = (*app.section_here()?.chains.get(app.services.cursor.track)?)?;
+    let playhead = app
+        .services
+        .playing_place(app.services.cursor.track, chain)?;
+    let position = owner.chain_position(
+        chain,
+        playhead,
+        app.services.dealer(app.services.cursor.track),
+    )?;
     let start = owner.phrases.get(&position.phrase)?.start();
-    (position.slot == app.cursor.slot && Some(position.phrase) == app.phrase_id())
+    (position.slot == app.services.cursor.slot && Some(position.phrase) == app.phrase_id())
         .then_some((start + position.step, position.pulse))
 }
 
 /// The note the cursor's track's row playing was heard at, before its chain's transpose, where an
 /// accumulator or an `RND` moved it.
 pub(crate) fn heard_note(app: &App) -> Option<u8> {
-    app.services.places.get(app.cursor.track)?.accumulated
+    app.services
+        .places
+        .get(app.services.cursor.track)?
+        .accumulated
 }
 
 /// Where each FX column with a lane of its own is reading, if this phrase is the one playing.
 pub(crate) fn lane_playheads(app: &App, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
     let mut playheads = [None; FX_SLOTS];
-    let Some(jam) = playhead_step(app).and(app.services.jam.get(app.cursor.track)) else {
+    let Some(jam) = playhead_step(app).and(app.services.jam.get(app.services.cursor.track)) else {
         return playheads;
     };
-    let count = app.services.places[app.cursor.track].count - jam.started;
+    let count = app.services.places[app.services.cursor.track].count - jam.started;
     for (slot, playhead) in playheads.iter_mut().enumerate() {
         *playhead = phrase
             .lane(slot)
@@ -343,7 +354,7 @@ fn heard_over(
         if !playing {
             continue;
         }
-        let Some((heard, _)) = app.heard_cell(app.cursor.track, id, at, index) else {
+        let Some((heard, _)) = app.heard_cell(app.services.cursor.track, id, at, index) else {
             continue;
         };
         let heard: Vec<char> = step_text(&heard, app.track_here()).chars().collect();
@@ -380,17 +391,17 @@ fn neighbours(app: &App, width: usize) -> Vec<usize> {
     let song = app.song();
     let mut tracks: Vec<usize> = (0..song.tracks.len())
         .filter(|&index| {
-            index == app.cursor.track
-                || (song.tracks[index].is_sound() && !app.folds.hides(song, index))
-                || app.folds.holds(song, index)
+            index == app.services.cursor.track
+                || (song.tracks[index].is_sound() && !app.services.folds.hides(song, index))
+                || app.services.folds.holds(song, index)
         })
         .collect();
     // In the order `W` and `B` go through them (decision 305).
-    tracks.sort_by_key(|&track| app.folds.place(song, track, Order::Stops));
+    tracks.sort_by_key(|&track| app.services.folds.place(song, track, Order::Stops));
     let centre = tracks
         .iter()
-        .position(|&track| track == app.cursor.track)
-        .unwrap_or_else(|| tracks.partition_point(|&track| track < app.cursor.track));
+        .position(|&track| track == app.services.cursor.track)
+        .unwrap_or_else(|| tracks.partition_point(|&track| track < app.services.cursor.track));
     let widths: Vec<usize> = tracks
         .iter()
         .map(|&track| neighbour_width(song, track))
@@ -495,13 +506,14 @@ impl Column<'_> {
 /// The phrase a track is on now, or the one that would play from the cursor while stopped. A
 /// group its tracks are folded into has none to show.
 fn column(app: &App, track: usize) -> Option<Column<'_>> {
-    if track != app.cursor.track && app.folds.holds(app.song(), track) {
+    if track != app.services.cursor.track && app.services.folds.holds(app.song(), track) {
         return None;
     }
     let owner = app.song().tracks.get(track)?;
     let chain = (*app.section_here()?.chains.get(track)?)?;
     let moving = app.services.playing_place(track, chain);
-    let place = moving.unwrap_or_else(|| app.step_on(track, app.cursor.track, app.section_step()));
+    let place =
+        moving.unwrap_or_else(|| app.step_on(track, app.services.cursor.track, app.section_step()));
     let position = owner.chain_position(chain, place, app.services.dealer(track))?;
     let held = owner.phrases.get(&position.phrase)?;
     let steps = held.loop_steps();
@@ -665,7 +677,7 @@ fn chain_strip(app: &App, room: usize) -> Vec<Span<'static>> {
         .iter()
         .map(|(text, _)| text.chars().count() + 1)
         .collect();
-    let shown = strip_window(&widths, app.cursor.slot, room);
+    let shown = strip_window(&widths, app.services.cursor.slot, room);
     let here = Style::new()
         .fg(theme::ROSEWATER)
         .add_modifier(Modifier::BOLD);
@@ -675,7 +687,7 @@ fn chain_strip(app: &App, room: usize) -> Vec<Span<'static>> {
     }
     for at in shown.clone() {
         let (text, linked) = &items[at];
-        let look = if at == app.cursor.slot {
+        let look = if at == app.services.cursor.slot {
             here
         } else {
             theme::dim()
@@ -753,7 +765,9 @@ pub(crate) fn level_glyph(ctx: &Ctx, track: usize) -> Option<(char, Style)> {
 fn column_label(app: &App, track: usize) -> (String, Option<(char, Style)>) {
     let name = track_name(app, track);
     let cells = neighbour_width(app.song(), track) - 2;
-    let folded = (track != app.cursor.track && app.folds.holds(app.song(), track)).then(|| {
+    let folded = (track != app.services.cursor.track
+        && app.services.folds.holds(app.song(), track))
+    .then(|| {
         let style = group::style(app.song(), track).unwrap_or_default();
         (glyphs::FOLDED, style)
     });
@@ -821,7 +835,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     };
     let height = usize::from(area.height.saturating_sub(ROWS_AROUND_STEPS)).max(1);
     let top = app.top;
-    let selection = app.mode.is_visual().then(|| app.current_selection());
+    let selection = app.modes.mode.is_visual().then(|| app.current_selection());
     let selection = selection
         .or(app.replacing_selection.map(|(selection, _)| selection))
         .or(app.shape.as_ref().map(|panel| panel.selection));
@@ -942,7 +956,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .map(|(at, generator)| {
             let moving = app
                 .phrase_id()
-                .is_some_and(|id| app.generator_moving(app.cursor.track, id, at));
+                .is_some_and(|id| app.generator_moving(app.services.cursor.track, id, at));
             let name = crate::shaping::generator_label(generator);
             if moving { format!("{name}~") } else { name }
         })
@@ -952,7 +966,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let followers = app.phrase_id().map_or(0, |id| {
         app.song()
             .followers(Source {
-                track: app.cursor.track,
+                track: app.services.cursor.track,
                 phrase: id,
             })
             .len()
@@ -976,15 +990,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     title.push(Span::styled("Track ", bold));
     title.extend(role::ruled(
         app.song(),
-        app.cursor.track,
-        &track_name(app, app.cursor.track),
+        app.services.cursor.track,
+        &track_name(app, app.services.cursor.track),
         bold,
     ));
     // A track in a group carries its mark, in the group's colour, as on the mixer.
-    if let Some(mark) = group::mark(app.song(), app.cursor.track) {
+    if let Some(mark) = group::mark(app.song(), app.services.cursor.track) {
         title.extend([Span::raw(" "), mark.patch_style(bold)]);
     }
-    if let Some((glyph, style)) = level_glyph(&app.ctx(), app.cursor.track) {
+    if let Some((glyph, style)) = level_glyph(&app.ctx(), app.services.cursor.track) {
         title.push(Span::styled(format!(" {glyph}"), style));
     }
     let chain = app.chain_id().unwrap_or(0);
@@ -1021,12 +1035,12 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .saturating_sub(cells(&title) + cells(&after) + system.chars().count() + 2);
     title.extend(chain_strip(app, room));
     title.extend(after);
-    let cursor_style = theme::cursor(app.mode);
+    let cursor_style = theme::cursor(app.modes.mode);
     // The grid is a device, framed as the track page's are, its parts named in its top edge: dim
     // while it's looked at, as a device without the cursor is, and green in Insert, so Insert
     // lights the frame rather than drawing a box that wasn't there. It's always there, so nothing
     // moves when Insert starts.
-    let insert = app.mode == Mode::Insert;
+    let insert = app.modes.mode == Mode::Insert;
     let edge = Style::new().fg(if insert {
         theme::GREEN
     } else {
@@ -1052,7 +1066,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         // and a group and its tracks are in its colour.
         let (label, glyph) = column_label(app, *track);
         top_rule.push(Span::raw(" "));
-        let marked = (*track == app.cursor.track).then(|| bold.fg(theme::BASE).bg(theme::GREEN));
+        let marked =
+            (*track == app.services.cursor.track).then(|| bold.fg(theme::BASE).bg(theme::GREEN));
         let named = group::style(app.song(), *track).map_or(bold, |tint| bold.patch(tint));
         let used = label.chars().count() + usize::from(glyph.is_some());
         top_rule.extend(role::ruled(
@@ -1145,38 +1160,39 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             lines.push(Line::from(spans));
             continue;
         }
-        let typing = index == app.cursor.step && matches!(app.mode, Mode::Insert | Mode::Replace);
+        let typing = index == app.services.cursor.step
+            && matches!(app.modes.mode, Mode::Insert | Mode::Replace);
         let pending = pending_step(app, step, typing);
         let step = pending.as_ref().unwrap_or(step);
         let mut text = step_text(step, app.track_here());
         // A label being typed shows in its command's place, and the first digit of a value in its.
         if typing
-            && let Field::FxCommand(_) = app.cursor.field
-            && !app.entry.text.is_empty()
+            && let Field::FxCommand(_) = app.services.cursor.field
+            && !app.modes.entry.text.is_empty()
         {
-            let (start, end) = field_range(app.cursor.field);
+            let (start, end) = field_range(app.services.cursor.field);
             if end <= text.len() {
-                let typed = format!("{}_", app.entry.text);
+                let typed = format!("{}_", app.modes.entry.text);
                 text.replace_range(start..end, &format!("{typed:<width$}", width = end - start));
             }
         }
         // The first digit of a value being typed shows in its place, and a nudge's sign and its
         // first digit where it takes two.
-        let nudge = app.cursor.field == Field::Nudge && !app.entry.text.is_empty();
+        let nudge = app.services.cursor.field == Field::Nudge && !app.modes.entry.text.is_empty();
         if typing
             && matches!(
-                app.cursor.field,
+                app.services.cursor.field,
                 Field::FxValue(_)
                     | Field::FxFine(_)
                     | Field::Velocity
                     | Field::Nudge
                     | Field::GateLength
             )
-            && (app.entry.text.len() == 1 || nudge)
+            && (app.modes.entry.text.len() == 1 || nudge)
         {
-            let (start, end) = field_range(app.cursor.field);
+            let (start, end) = field_range(app.services.cursor.field);
             if end <= text.len() {
-                let typed = format!("{}_", app.entry.text);
+                let typed = format!("{}_", app.modes.entry.text);
                 text.replace_range(start..end, &format!("{typed:<width$}", width = end - start));
             }
         }
@@ -1213,7 +1229,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             (false, false) => theme::faint(),
         };
         let mut spans = vec![
-            Span::styled(relative_number(index, app.cursor.step), theme::faint()),
+            Span::styled(
+                relative_number(index, app.services.cursor.step),
+                theme::faint(),
+            ),
             Span::styled(row_number(row), number),
             Span::styled(format!(" {marker}"), theme::active()),
             Span::styled(side, edge),
@@ -1223,7 +1242,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let skipped = app
             .services
             .places
-            .get(app.cursor.track)
+            .get(app.services.cursor.track)
             .is_some_and(|place| place.skipped);
         let body = if playhead == Some(index) && skipped {
             theme::faint()
@@ -1395,8 +1414,8 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             styles[start..end].fill(theme::selected());
         }
         // The cursor stays visible inside a selection, so the moving end can be seen.
-        if index == app.cursor.step {
-            let (start, end) = field_range(app.cursor.field);
+        if index == app.services.cursor.step {
+            let (start, end) = field_range(app.services.cursor.field);
             let end = end.min(text.len());
             let start = start.min(end);
             let (first, last) = selected.map_or((start, end), |selected| {
@@ -1441,7 +1460,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             width as u16,
             inspector::HEIGHT.min(area.height.saturating_sub(1)),
         );
-        let row = row_number(extent.row(app.cursor.step));
+        let row = row_number(extent.row(app.services.cursor.step));
         inspector::draw(frame, at, app, row.trim_start());
     }
 }

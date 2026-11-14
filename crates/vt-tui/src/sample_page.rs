@@ -561,7 +561,7 @@ impl App {
     /// The bank entry the cursor's track plays, or one a jump chose for it, with its analysis, or
     /// why the page can't show it.
     pub fn sample_shown(&self) -> Result<Shown, String> {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let number = match self.sample_page.pinned {
             Some((pinned, number)) if pinned == track => number,
             _ => self
@@ -610,10 +610,10 @@ impl App {
     /// mode, `VISUAL` while selecting, and `SETTINGS` with the focus on the settings rows, where
     /// `h` and `l` go along the rows rather than the waveform. None on the waveform.
     pub fn sample_mode(&self) -> Option<&'static str> {
-        if self.view != View::Sample {
+        if self.modes.view != View::Sample {
             return None;
         }
-        if self.mode == Mode::Keys {
+        if self.modes.mode == Mode::Keys {
             Some("PADS")
         } else if self.sample_page.anchor.is_some() {
             Some(Mode::VisualField.label())
@@ -627,10 +627,10 @@ impl App {
     /// What the keys do in the sample page's mode, and how to leave it, for under the status
     /// line while nothing else is said there, so a mode is never on without a word.
     pub fn sample_mode_hint(&self) -> Option<String> {
-        if self.view != View::Sample {
+        if self.modes.view != View::Sample {
             return None;
         }
-        if self.mode == Mode::Keys {
+        if self.modes.mode == Mode::Keys {
             let shown = self.sample_shown().ok()?;
             return Some(self.pads_hint(&shown));
         }
@@ -666,7 +666,7 @@ impl App {
             Err(why) => {
                 if is_sample_motion(cmd) {
                     self.services.status = why;
-                    self.count = None;
+                    self.modes.count = None;
                     return true;
                 }
                 None
@@ -675,7 +675,7 @@ impl App {
         let Some(shown) = shown else {
             return false;
         };
-        let count = self.count.take();
+        let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1) as u64;
         let length = shown.length();
         let beat = beat_frames(shown.rate(), self.song().millibpm);
@@ -846,7 +846,7 @@ impl App {
                 self.services.status = "That doesn't work on the sample page yet".to_owned();
             }
             _ => {
-                self.count = count;
+                self.modes.count = count;
                 return false;
             }
         }

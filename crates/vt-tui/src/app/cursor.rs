@@ -25,14 +25,14 @@ impl App {
         self.view_height = height.max(1);
         let last_top = self.last_top();
         let counts = self.row_line_counts();
-        if self.cursor.step < self.top {
-            self.top = self.cursor.step;
+        if self.services.cursor.step < self.top {
+            self.top = self.services.cursor.step;
         } else {
-            let end = self.cursor.step + 1;
+            let end = self.services.cursor.step + 1;
             self.top = self
                 .top
                 .max(timeline::row_lines_before(&counts, end, self.view_height))
-                .min(self.cursor.step);
+                .min(self.services.cursor.step);
         }
         self.top = self.top.min(last_top);
     }
@@ -42,7 +42,7 @@ impl App {
         let all = timeline::lines_over(&counts, 0..self.stored_steps().max(1));
         let height = self.view_height.min(all);
         // The bottom is the last row whose lines all fit, so the view doesn't move to show it.
-        self.cursor.step = match cmd {
+        self.services.cursor.step = match cmd {
             Cmd::ViewTop => self.top,
             Cmd::ViewMiddle => timeline::row_at_line(&counts, self.top, height / 2),
             _ => timeline::row_at_line(&counts, self.top, height)
@@ -55,10 +55,11 @@ impl App {
     pub(super) fn half_page(&mut self, sign: isize) {
         let counts = self.row_line_counts();
         let half = (self.view_height / 2).max(1);
-        let rows = timeline::rows_over(&counts, self.cursor.step, half, sign > 0).max(1);
+        let rows = timeline::rows_over(&counts, self.services.cursor.step, half, sign > 0).max(1);
         self.move_step(sign * rows as isize);
         let counts = self.row_line_counts();
-        self.top = timeline::row_lines_before(&counts, self.cursor.step, self.view_height / 2);
+        self.top =
+            timeline::row_lines_before(&counts, self.services.cursor.step, self.view_height / 2);
     }
 
     /// Scroll the view. The cursor only moves if it would leave the screen.
@@ -69,21 +70,21 @@ impl App {
         let bottom = timeline::row_at_line(&counts, self.top, self.view_height)
             .saturating_sub(1)
             .max(self.top);
-        self.cursor.step = self.cursor.step.clamp(self.top, bottom);
+        self.services.cursor.step = self.services.cursor.step.clamp(self.top, bottom);
         self.clamp_cursor();
     }
 
     pub(crate) fn after_history(&mut self) {
         self.services.dirty = true;
         self.fit_levels();
-        self.cursor.track = self.cursor.track.min(self.song().tracks.len() - 1);
+        self.services.cursor.track = self.services.cursor.track.min(self.song().tracks.len() - 1);
         self.clamp_cursor();
         self.services.publish();
     }
 
     pub(crate) fn slots(&self) -> usize {
         self.phrase_here()
-            .and_then(|p| p.steps().get(self.cursor.step))
+            .and_then(|p| p.steps().get(self.services.cursor.step))
             .map_or(0, |step| step.fx.len())
     }
 
@@ -92,20 +93,21 @@ impl App {
             return;
         };
         let last = phrase.steps().len() as isize - 1;
-        self.cursor.step = (self.cursor.step as isize + by).clamp(0, last) as usize;
+        self.services.cursor.step =
+            (self.services.cursor.step as isize + by).clamp(0, last) as usize;
     }
 
     /// Keep the cursor on something that exists. Only the chain view has a row past the end.
     pub(crate) fn clamp_cursor(&mut self) {
         let sections = self.song().sections.len();
-        self.cursor.section = self.cursor.section.min(sections.saturating_sub(1));
+        self.services.cursor.section = self.services.cursor.section.min(sections.saturating_sub(1));
         let rows = self.chain_entries().len();
-        let last = if self.view == View::Chain {
+        let last = if self.modes.view == View::Chain {
             rows
         } else {
             rows.saturating_sub(1)
         };
-        self.cursor.slot = self.cursor.slot.min(last);
+        self.services.cursor.slot = self.services.cursor.slot.min(last);
         self.move_step(0);
     }
 }

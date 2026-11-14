@@ -92,7 +92,7 @@ impl App {
         if self.recording.is_some() {
             self.stop_recording();
             self.services.status = "Recording off".to_owned();
-        } else if self.view != View::Phrase {
+        } else if self.modes.view != View::Phrase {
             self.services.status = "Recording arms in the phrase view".to_owned();
         } else if self.services.transport != Transport::Playing {
             self.services.status = "Recording arms while playing".to_owned();
@@ -125,7 +125,7 @@ impl App {
 
     /// Record a note on the row the cursor's track is playing, or the next if it's nearer.
     pub(crate) fn record_note(&mut self, key: Key, note: u8) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let now = self.heard_steps(track);
         let Some(row) = self.row_to_record(track, now) else {
             self.services.status = "This track isn't playing".to_owned();
@@ -330,7 +330,7 @@ impl App {
         if self.recording.is_none() {
             return;
         }
-        if self.services.transport != Transport::Playing || self.view != View::Phrase {
+        if self.services.transport != Transport::Playing || self.modes.view != View::Phrase {
             self.stop_recording();
             return;
         }

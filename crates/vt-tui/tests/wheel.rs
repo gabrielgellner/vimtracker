@@ -170,7 +170,7 @@ fn up_or_right_raises_down_or_left_lowers_and_shift_takes_the_large_step() {
     );
     // The cutoff's value, a hex digit's large step.
     press(&mut app, "llllll");
-    assert_eq!(app.cursor.field, Field::FxValue(0));
+    assert_eq!(app.services.cursor.field, Field::FxValue(0));
     report_at(&mut app, MouseEventKind::ScrollDown, true, next());
     assert_eq!(steps(&app), ["B-2 40 cut:10 --- ---"]);
 }
@@ -242,7 +242,7 @@ fn clicks_and_drags_do_nothing() {
     }
     assert_eq!(steps(&app), [NOTE]);
     assert_eq!(app.services.history.undo_depth(), depth);
-    assert_eq!(app.cursor.field, Field::Note, "the cursor stays");
+    assert_eq!(app.services.cursor.field, Field::Note, "the cursor stays");
 }
 
 #[test]
@@ -282,7 +282,7 @@ fn a_gesture_is_one_undo_step_ended_by_a_pause_or_a_key() {
 fn a_tick_on_an_fx_value_moves_its_fine_digits_and_quick_ticks_more_of_them() {
     let (mut app, _realtime) = app_with(&["--- -- cut:40 --- ---"]);
     press(&mut app, "llllll");
-    assert_eq!(app.cursor.field, Field::FxValue(0));
+    assert_eq!(app.services.cursor.field, Field::FxValue(0));
     let start = Instant::now();
     let end = slow_ticks(&mut app, true, 2, start);
     assert_eq!(
@@ -290,7 +290,11 @@ fn a_tick_on_an_fx_value_moves_its_fine_digits_and_quick_ticks_more_of_them() {
         ["--- -- cut:4020 --- ---"],
         "a slow tick is a 16th of a step, a fine digit that's seen to move"
     );
-    assert_eq!(app.cursor.field, Field::FxValue(0), "the cursor stays");
+    assert_eq!(
+        app.services.cursor.field,
+        Field::FxValue(0),
+        "the cursor stays"
+    );
     slow_ticks(&mut app, false, 3, end + Duration::from_secs(1));
     assert_eq!(steps(&app), ["--- -- cut:3FF0 --- ---"], "it carries");
     // Shift is `+` where the cursor is, a step of the value.
@@ -303,7 +307,7 @@ fn a_tick_on_an_fx_value_moves_its_fine_digits_and_quick_ticks_more_of_them() {
     assert_eq!(steps(&app), ["--- -- cut:4FF0 --- ---"]);
     // On the fine digits themselves, a slow tick is their own `=`.
     press(&mut app, "l");
-    assert_eq!(app.cursor.field, Field::FxFine(0));
+    assert_eq!(app.services.cursor.field, Field::FxFine(0));
     slow_ticks(&mut app, true, 2, end + Duration::from_secs(3));
     assert_eq!(steps(&app), ["--- -- cut:4FF2 --- ---"]);
     // A burst grows in a straight line with its speed, up to one of `=`'s steps a tick, and
@@ -447,7 +451,7 @@ fn a_tick_on_a_sound_page_setting_moves_its_fine_digits() {
     let (mut app, _realtime) = app_with(&[NOTE]);
     // Cut, the Filter's first setting, open at the top.
     press(&mut app, " 5}j");
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
     let cut = |app: &App| {
         let track = &app.song().tracks[0];
         (track.cutoff, track.fine(SettingId::CUT))
@@ -490,7 +494,7 @@ fn a_tick_moves_a_locked_selection_and_a_gesture_is_one_undo_with_its_total() {
     let end = slow_ticks(&mut app, true, 3, Instant::now());
     let up = "D#3 40 cut:20 --- ---";
     assert_eq!(steps(&app), [up, up, up, NOTE]);
-    assert_eq!(app.mode, Mode::VisualStep, "it stays selected");
+    assert_eq!(app.modes.mode, Mode::VisualStep, "it stays selected");
     assert_eq!(app.adjusted_total().as_deref(), Some("+3 semitones"));
     app.tick_at(end + Duration::from_secs(1));
     assert_eq!(app.services.history.undo_depth(), depth + 1);
@@ -502,7 +506,7 @@ fn a_tick_moves_a_locked_selection_and_a_gesture_is_one_undo_with_its_total() {
     assert_eq!(app.adjusted_total().as_deref(), Some("+3 semitones"));
     press(&mut app, "u");
     assert_eq!(steps(&app), [NOTE, NOTE, NOTE, NOTE]);
-    assert_eq!(app.mode, Mode::VisualStep);
+    assert_eq!(app.modes.mode, Mode::VisualStep);
     let redo = vt_tui::input::keys::Key {
         ctrl: true,
         ..vt_tui::input::keys::Key::char('r')
@@ -522,13 +526,13 @@ fn the_wheel_waits_for_keys_typed_before_it_and_types_nothing() {
     press(&mut app, "d");
     scroll(&mut app, true, Instant::now());
     assert_eq!(steps(&app), [NOTE], "an operator waiting for its motion");
-    assert_eq!(app.mode, Mode::OperatorPending);
+    assert_eq!(app.modes.mode, Mode::OperatorPending);
     special(&mut app, KeyCode::Esc);
     press(&mut app, "i");
-    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.modes.mode, Mode::Insert);
     scroll(&mut app, true, Instant::now());
     assert_eq!(steps(&app), [NOTE], "Insert has no = to stand for");
-    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.modes.mode, Mode::Insert);
 }
 
 #[test]

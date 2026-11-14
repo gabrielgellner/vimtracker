@@ -25,7 +25,10 @@ fn commands_change_tempo_and_length() {
     command(&mut app, "len 4");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 4);
     assert_eq!(notes(&app).len(), 16, "the rest is kept");
-    assert_eq!(app.cursor.step, 10, "and the cursor can stay on it");
+    assert_eq!(
+        app.services.cursor.step, 10,
+        "and the cursor can stay on it"
+    );
 }
 
 /// Press and let go of a key that isn't a character.
@@ -100,7 +103,7 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.command_line, "set", "Enter takes it");
     assert!(app.command_menu.is_none());
-    assert_eq!(app.mode, Mode::Command, "and the line stays open");
+    assert_eq!(app.modes.mode, Mode::Command, "and the line stays open");
     // Esc closes the list and keeps what's typed.
     press(&mut app, " ");
     tap_special(&mut app, KeyCode::Tab);
@@ -114,7 +117,7 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     special(&mut app, KeyCode::Esc);
     assert!(app.command_menu.is_none());
     assert_eq!(
-        (app.mode, app.command_line.as_str()),
+        (app.modes.mode, app.command_line.as_str()),
         (Mode::Command, "set r")
     );
     // Shift-Tab opens on the last, and a new word closes the list.

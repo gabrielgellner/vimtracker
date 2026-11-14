@@ -77,7 +77,7 @@ fn app() -> (App, Realtime) {
     let (handle, realtime) = connect(Engine::new(RATE, version));
     let mut app = App::new(song, None, samples, handle, RATE);
     keys(&mut app, "Space 0");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
     (app, realtime)
 }
 
@@ -201,7 +201,7 @@ fn is_selects_the_sound_here_and_ip_the_slice() {
     keys(&mut app, "v");
     assert_eq!(app.key_scope(), Mode::SampleVisual);
     keys(&mut app, "i s");
-    assert_eq!(app.mode, Mode::Normal, "i doesn't start the pads");
+    assert_eq!(app.modes.mode, Mode::Normal, "i doesn't start the pads");
     let selected = app.sample_page.selection().unwrap();
     assert!(near(selected.start, HITS[1]), "{selected:?}");
     assert!(selected.end > HITS[1] + HIT_FRAMES / 3 && selected.end < HITS[1] + HIT_FRAMES);
@@ -213,7 +213,7 @@ fn is_selects_the_sound_here_and_ip_the_slice() {
     assert_eq!(app.sample_page.selection(), Some(slice));
     // Off a selection, `i` plays pads as before.
     keys(&mut app, "Esc i");
-    assert_eq!(app.mode, Mode::Keys);
+    assert_eq!(app.modes.mode, Mode::Keys);
 }
 
 /// Where the sample's slices start.

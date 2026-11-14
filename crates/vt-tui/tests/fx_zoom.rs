@@ -14,9 +14,9 @@ use common::*;
 
 /// The screen at the author's 163 by 42, with the keyboard's mode or not.
 fn zoomed_screen(app: &mut App, keys: bool) -> Vec<String> {
-    app.mode = if keys { Mode::Keys } else { Mode::Normal };
+    app.modes.mode = if keys { Mode::Keys } else { Mode::Normal };
     let screen = screen_cells(app);
-    app.mode = Mode::Normal;
+    app.modes.mode = Mode::Normal;
     screen
 }
 

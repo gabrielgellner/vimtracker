@@ -63,7 +63,7 @@ fn second_of_wav(path: &std::path::Path) {
 
 /// The current track's bank entry.
 fn entry_of(app: &App) -> vt_model::bank::BankEntry {
-    let number = app.song().tracks[app.cursor.track].sample();
+    let number = app.song().tracks[app.services.cursor.track].sample();
     app.song().bank.get(number).unwrap().clone()
 }
 
@@ -282,13 +282,13 @@ fn a_step_locks_a_sample_from_the_bank() {
     press(&mut app, "smp");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.mode,
+        app.modes.mode,
         Mode::Picker,
         "an SMP with no value lists the bank"
     );
     press(&mut app, "/kick");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     assert_eq!(slot(&app).command, Some(FxCommand::Set(SettingId::SAMPLE)));
     assert_eq!(slot(&app).coarse(), 2);
     assert_eq!(value_shown(&app).as_deref(), Some("02 kick: kick.wav"));
@@ -354,10 +354,10 @@ fn sample_chooses_a_sample_for_the_current_track() {
     let (mut app, _realtime) = app();
     // With nothing to list it asks for a path, and either way the view stays.
     command(&mut app, "sample");
-    assert_ne!(app.mode, Mode::Normal);
+    assert_ne!(app.modes.mode, Mode::Normal);
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
-    assert_eq!(app.view, View::Phrase);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert_eq!(app.modes.view, View::Phrase);
 }
 
 #[test]
