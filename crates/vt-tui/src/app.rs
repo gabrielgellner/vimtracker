@@ -34,6 +34,7 @@ use crate::input::completion::CommandMenu;
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
+use crate::input::typed::TypedValue;
 use crate::jumping::FieldJump;
 use crate::mixer_page::MixerPage;
 use crate::recording::Recording;
@@ -90,7 +91,7 @@ const NOTE_VELOCITY_STEP: u8 = 0x10;
 /// Typed characters not yet written, in Insert mode.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Entry {
-    pub text: String,
+    pub text: TypedValue,
     /// A command name waiting for its value, so the command doesn't take effect until then.
     pub command: Option<FxCommand>,
 }
@@ -249,8 +250,6 @@ pub struct App {
     pub section_anchor: Option<usize>,
     /// The track page: which of its pages shows, where its cursor is, and the images it shows.
     pub track_page: TrackPage,
-    /// The image of the mapping view's response the terminal has, while the view is open.
-    pub mapping_image: Option<u32>,
     /// Where the sample page is, and the ids of the images of its waveform and its overview.
     pub sample_page: crate::sample_page::SamplePage,
     pub sample_images: Option<(u32, u32)>,
@@ -444,7 +443,6 @@ impl App {
             looping: None,
             section_anchor: None,
             track_page: TrackPage::default(),
-            mapping_image: None,
             sample_page: crate::sample_page::SamplePage::default(),
             sample_images: None,
             project_row: 0,

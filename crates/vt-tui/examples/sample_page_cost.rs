@@ -3,7 +3,7 @@
 //! scrolling a column, and moving the cursor, drawn as a line or as its column. The results are in
 //! decision 102.
 //!
-//! The program's own path is timed: the key, `Graphics::sync` drawing and sending the pictures,
+//! The program's own path is timed: the key, `App::send_pictures` drawing and sending the pictures,
 //! and ratatui drawing the screen, written to memory. In kitty or Ghostty it then sends each
 //! zoom's waveform to the terminal and times until the terminal says it has decoded it, which is
 //! the rest of the way to the image on screen. Run it at the size the program is used at:
@@ -170,11 +170,13 @@ fn frame(
         app.key(key, Instant::now());
         app.key_released(key, Instant::now());
     }
-    graphics.sync(app, &mut sent).expect("writing to memory");
+    app.send_pictures(graphics, &mut sent)
+        .expect("writing to memory");
     screen
         .draw(|frame| draw_screen(frame, app, None, Instant::now()))
         .expect("writing to memory");
-    graphics.place(app, &mut sent).expect("writing to memory");
+    app.place_pictures(graphics, &mut sent)
+        .expect("writing to memory");
     let time = started.elapsed();
     (
         time,

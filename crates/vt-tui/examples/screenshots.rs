@@ -550,10 +550,10 @@ fn app_on(song: Song, pool: SamplePool) -> (App, Realtime) {
 fn write(app: &mut App, now: Instant, size: (u16, u16), path: &Path) -> std::io::Result<()> {
     let mut sent = Vec::new();
     let mut graphics = Graphics::new();
-    graphics.sync(app, &mut sent)?;
+    app.send_pictures(&mut graphics, &mut sent)?;
     let Ok(mut terminal) = Terminal::new(TestBackend::new(size.0, size.1));
     let Ok(_) = terminal.draw(|frame| draw_screen(frame, app, None, now));
-    graphics.place(app, &mut sent)?;
+    app.place_pictures(&mut graphics, &mut sent)?;
     std::fs::write(
         path,
         to_svg_placed(

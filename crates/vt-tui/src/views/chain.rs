@@ -88,7 +88,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let here = slot == app.services.cursor.slot;
         let shown = |column: ChainColumn, text: String| {
             if here && typing && app.chain_column == column {
-                format!("{}_", app.modes.entry.text)
+                app.modes.entry.text.shown()
             } else {
                 text
             }
