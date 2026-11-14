@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 
 use vt_model::action::Action;
 use vt_model::preset::{
-    EffectPreset, PresetError, PresetKind, SoundPreset, load_effect, load_sound, preset_name,
-    preset_path, save,
+    EffectPreset, PresetError, PresetKind, SoundPreset, load, preset_name, preset_path, save,
 };
 
 use crate::app::App;
@@ -257,7 +256,7 @@ impl App {
         if !self.takes_sound(Target::Sound(track)) {
             return;
         }
-        let preset = match load_sound(path) {
+        let preset = match load::<SoundPreset>(path) {
             Ok(preset) => preset,
             Err(error) => {
                 self.services.status = error.to_string();
@@ -294,7 +293,7 @@ impl App {
     }
 
     fn load_effect_preset(&mut self, track: usize, slot: usize, path: &Path, name: &str) {
-        let preset = match load_effect(path) {
+        let preset = match load::<EffectPreset>(path) {
             Ok(preset) => preset,
             Err(error) => {
                 self.services.status = error.to_string();
