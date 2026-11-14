@@ -16,7 +16,7 @@ use crate::config::home_folder;
 use crate::explorer::{Purpose, place_name};
 use crate::input::command;
 use crate::input::mode::Mode;
-use crate::input::picker::{Item, Pick, Picker, Preview, Root, Shown};
+use crate::input::picker::{Item, KitChoice, Pick, Picker, Preview, Root, Shown};
 use crate::loading::Read;
 use crate::views::status::format_bpm;
 
@@ -440,7 +440,7 @@ impl App {
             return None;
         }
         match &picker.current()?.pick {
-            Pick::Sample(path) | Pick::KitSound { path, .. } => Some(path.clone()),
+            Pick::Sample(path) | Pick::KitSound(KitChoice { path, .. }) => Some(path.clone()),
             _ => None,
         }
     }
@@ -523,7 +523,7 @@ impl App {
         // The kit's sounds come after their group's heading.
         let in_kit = kit
             .iter()
-            .position(|item| matches!(&item.pick, Pick::KitSound { path, .. } if same(path)))
+            .position(|item| matches!(&item.pick, Pick::KitSound(sound) if same(&sound.path)))
             .map(|at| at + 1);
         let first_sound = (!kit.is_empty()).then_some(1);
         let mut roots = Vec::new();

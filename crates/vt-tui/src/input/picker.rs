@@ -43,6 +43,17 @@ pub use tree::{Root, Tree};
 /// fit a short list, as snacks' list shrinks the window's `scrolloff`.
 pub const SCROLL_MARGIN: usize = 3;
 
+/// One of a kit's sounds as it's chosen: its file, what its bank entry is called and how it
+/// plays, and the label its track takes as its name and its choke group.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KitChoice {
+    pub path: PathBuf,
+    pub label: String,
+    pub name: String,
+    pub play: PlayParams,
+    pub choke: Option<u8>,
+}
+
 /// What choosing a row does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pick {
@@ -106,15 +117,16 @@ pub enum Pick {
         track: usize,
         speed: Speed,
     },
-    /// A sound from the current kit, for this track: what its bank entry is called and how it
-    /// plays, and the label the track takes as its name and its choke group.
-    KitSound {
-        path: PathBuf,
-        label: String,
-        name: String,
-        play: PlayParams,
-        choke: Option<u8>,
+    /// A sound from the current kit, for this track.
+    KitSound(KitChoice),
+    /// Some of a kit's sounds, each on a new track after the last, in a new group named after
+    /// the kit, folded: the kit dialog's `Enter`.
+    KitLoad {
+        kit: PathBuf,
+        sounds: Vec<KitChoice>,
     },
+    /// Write a beat from Grids' map on these tracks, each its own part, or nothing for none.
+    KitBeat(Vec<usize>),
     /// A bank entry for a track's sampler to play, or `00` for none.
     BankSample {
         track: usize,
@@ -861,6 +873,11 @@ impl Picker {
             {
                 tree.audition = !tree.audition;
             }
+            // The kit dialog marks sounds to load, as nnn's `Space` and `a` select files.
+            KeyCode::Char(' ' | 'x') if self.marks_sounds() => {
+                self.toggle_marks(count.unwrap_or(1));
+            }
+            KeyCode::Char('a') if self.marks_sounds() => self.mark_all(),
             KeyCode::Char('h') => self.close_category(),
             KeyCode::Char('/') => self.focus = Focus::Search,
             // A count, a `g` or a `z` is let go first, as in Vim.

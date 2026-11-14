@@ -964,6 +964,9 @@ cursor's track in a folded group. Folding it from another view leaves the phrase
 page you're on in front until you move off it. Choosing a folded track from the track
 list (`Space f b`) opens its group again.
 
+Loading a kit's sounds from `:kit` puts them in a new group, named after the kit and
+folded (see **Starting from a kit** in **Sounds, samples and kits**).
+
 A group with no tracks in it is folded away, so it's left out of the song view and the
 mixer, and the cursor goes past it. It comes back as soon as a track joins it, or with
 `z R`, faint while it's empty.

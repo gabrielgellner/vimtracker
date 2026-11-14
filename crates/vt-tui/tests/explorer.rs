@@ -111,7 +111,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     assert!(picker.hint.unwrap().contains("L on tracks"));
     assert_eq!(
         explorer_rows(&app)[..4],
-        ["v kits", "  > Ableton", "  > drums", "    909"]
+        ["v kits", "  > Ableton", "  > drums", "  > 909"]
     );
     // The kit under the cursor is shown beside the list, each sound with its waveform.
     press(&mut app, "jj");
@@ -301,7 +301,7 @@ fn kits_in_folders_are_found_in_the_explorer_and_named_by_their_path() {
     command(&mut app, "kit");
     assert_eq!(
         explorer_rows(&app)[..4],
-        ["v kits", "  > Ableton", "  > drums", "    909"],
+        ["v kits", "  > Ableton", "  > drums", "  > 909"],
         "the first kit folder open, its folders first"
     );
     press(&mut app, "ll");
@@ -311,7 +311,7 @@ fn kits_in_folders_are_found_in_the_explorer_and_named_by_their_path() {
             "v kits",
             "  v Ableton",
             "    v Drum Machines",
-            "        808 Core Kit",
+            "      > 808 Core Kit",
             "  > drums"
         ]
     );

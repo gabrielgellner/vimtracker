@@ -126,7 +126,9 @@ it starts from, each with why it's there: `recent` for the last few you chose fr
 then the project, your sample or kit folders, `here` for where the program was run
 from, and `home`. It opens on the current file, with its folders open. Only what fits is
 listed: samples and folders, kits and folders, or projects and folders, and hidden files
-are left out. Choosing a sample, a kit opens like a folder to its sounds.
+are left out. A kit opens like a folder to its sounds, whether choosing a sample or a
+kit; in `:kit` they can be marked and loaded as new tracks (see **Starting from a kit**
+in **Sounds, samples and kits**).
 <!-- ANCHOR_END: top -->
 <!-- ANCHOR: rest -->
 
@@ -140,6 +142,7 @@ green, and a warning is red.
 | 󰕰 | A kit, as a grid of pads |
 | 󱓻 | One of a kit's sounds, as a pad |
 | 󰄶 | A kit's sound with variants or layers, which `l` opens |
+| 󰄲 󰄷 | A kit's sound marked to load, in `:kit` |
 | 󱑽 | A sample |
 | 󰑖 | A loop: under a `Loops` folder, or with a tempo in its name |
 | 󰀦 | A file that has gone, or won't read |
