@@ -12,7 +12,7 @@ use crate::constants::UNITY_LEVEL;
 use crate::generator::Generator;
 use crate::lfo::phase_value;
 use crate::modulation::{ModKind, Polarity, depth_of, depth_value};
-use crate::settings::{Effect, Kind, Owner, SettingId};
+use crate::settings::{Kind, Owner, SettingId};
 use crate::shape::{GenParam, MAX_BEND, Shape, ShapeColumn, curved};
 use crate::song::{FilterMode, Track};
 use crate::speed::Speed;
@@ -452,7 +452,7 @@ impl Track {
                 let insert = self.inserts[slot];
                 // A distortion keeps every mode's settings, so one its mode doesn't show still
                 // reads.
-                if Effect::of(insert) == Some(effect) {
+                if insert.kind() == Some(effect) {
                     insert.read(effect.params()[at].setting).unwrap_or(0)
                 } else {
                     id.entry().default
@@ -492,7 +492,7 @@ impl Track {
             }
             (Owner::Slot { slot, effect }, at) => {
                 let insert = self.inserts[slot];
-                if Effect::of(insert) == Some(effect) {
+                if insert.kind() == Some(effect) {
                     self.inserts[slot] =
                         insert.write(effect.params()[at].setting, f32::from(coarse));
                 }

@@ -289,7 +289,11 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 *   **A new setting needs no new interface.** Every setting a step can lock or a modulator can move
     is registered once, in `vt-model`'s `settings.rs`, with the key songs store it by, a name, a
     label for the grid, a kind and a default. The track page, `K`, the grid and the engine all read
-    that table.
+    that table. An effect's settings come into it from the effect's own description: one
+    `EffectSpec` row each in `insert/kind.rs`'s `EFFECTS`, by `EffectKind`, with its key, name,
+    meaning and `Param`s, and each `Param` states its kind, with the units it reads in, and its
+    place in the effect, so the table, the slot's title and its usual grid take them as they are
+    (decision 339).
 
 **Decisions:** 29, 30, 59, 60, 158, 159 and 161, the [M14](#m14-design-one-list-of-settings) and
 [M14b](#m14b-design-kinds-of-setting) designs, and the three crates of the

@@ -874,8 +874,9 @@ fn a_pitch_shifter_up_twelve_plays_an_octave_up_and_down_twelve_an_octave_down()
 
 #[test]
 fn granular_frozen_keeps_playing_a_tone_after_it_stops_and_free_goes_quiet() {
+    use vt_model::insert::EffectKind;
     use vt_model::insert::Grains;
-    use vt_model::settings::{Effect, SettingId};
+    use vt_model::settings::SettingId;
     use vt_model::step::{FxCommand, FxSlot, Mark};
     // Half a second of a tone, then nothing.
     let tone = (0..RATE as usize * 4).map(|frame| {
@@ -902,7 +903,7 @@ fn granular_frozen_keeps_playing_a_tone_after_it_stops_and_free_goes_quiet() {
             let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
             phrase.step_mut(8).unwrap().fx = vec![FxSlot {
                 command: Some(FxCommand::Set(
-                    SettingId::slot(0, Effect::Grains, 4).unwrap(),
+                    SettingId::slot(0, EffectKind::Grains, 4).unwrap(),
                 )),
                 value: 0x0100,
                 mark: Mark::Hold,

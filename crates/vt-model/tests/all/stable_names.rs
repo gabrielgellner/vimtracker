@@ -8,9 +8,9 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use vt_model::insert::Insert;
+use vt_model::insert::{EffectKind, Insert};
 use vt_model::modulation::ModKind;
-use vt_model::settings::{Effect, SettingId};
+use vt_model::settings::SettingId;
 use vt_model::shape::{FillKind, GenParam};
 use vt_model::song::{FilterMode, Machine};
 use vt_model::speed::Speed;
@@ -56,7 +56,7 @@ fn every_setting_keeps_its_place_and_key() {
 fn every_effect_keeps_its_key_and_name() {
     golden(
         "effects",
-        Effect::ALL.map(|effect| format!("{} | {}", effect.key(), effect.name())),
+        EffectKind::ALL.map(|effect| format!("{} | {}", effect.key(), effect.name())),
     );
 }
 

@@ -7,7 +7,8 @@ use crate::constants::UNITY_LEVEL;
 
 use super::pitch::{MOST_SHIFT, PITCH_PARAMS};
 use super::{
-    AMOUNT_PARAM, GAIN_PARAM, MIX_PARAM, Param, SOURCE_NAMES, Setting, hex_param, source_track,
+    AMOUNT_PARAM, GAIN_PARAM, Kind, MIX_PARAM, Param, Place, SOURCE_NAMES, Setting, Units,
+    hex_param, source_track,
 };
 
 /// An EQ's, in the order the page shows them.
@@ -18,30 +19,39 @@ pub(crate) const EQ_PARAMS: [Param; 8] = [
         "LFRQ",
         Setting::LowFrequency,
         Equaliser::DEFAULT.low_frequency,
-    ),
-    hex_param("Low", "low", "LOW", Setting::Low, Equaliser::DEFAULT.low),
+    )
+    .units(Units::Hertz),
+    hex_param("Low", "low", "LOW", Setting::Low, Equaliser::DEFAULT.low)
+        .units(Units::Boost)
+        .centred(),
     hex_param(
         "Mid freq",
         "midfreq",
         "MFRQ",
         Setting::MidFrequency,
         Equaliser::DEFAULT.mid_frequency,
-    ),
-    hex_param("Mid", "mid", "MID", Setting::Mid, Equaliser::DEFAULT.mid),
+    )
+    .units(Units::Hertz),
+    hex_param("Mid", "mid", "MID", Setting::Mid, Equaliser::DEFAULT.mid)
+        .units(Units::Boost)
+        .centred(),
     hex_param(
         "High freq",
         "highfreq",
         "HFRQ",
         Setting::HighFrequency,
         Equaliser::DEFAULT.high_frequency,
-    ),
+    )
+    .units(Units::Hertz),
     hex_param(
         "High",
         "high",
         "HIGH",
         Setting::High,
         Equaliser::DEFAULT.high,
-    ),
+    )
+    .units(Units::Boost)
+    .centred(),
     // After the bands, so the page shows each band's frequency over its boost.
     hex_param(
         "Mid Q",
@@ -49,7 +59,8 @@ pub(crate) const EQ_PARAMS: [Param; 8] = [
         "MIDQ",
         Setting::MidQ,
         Equaliser::DEFAULT.mid_q,
-    ),
+    )
+    .units(Units::Q),
     GAIN_PARAM,
 ];
 
@@ -152,9 +163,12 @@ pub(crate) const LPG_PARAMS: [Param; 8] = [
         // Choosing a mode chooses a sound, so steps don't lock it.
         label: None,
         setting: Setting::GateMode,
-        choices: &GATE_MODE_NAMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &GATE_MODE_NAMES,
+            wraps: true,
+        },
         default: 0,
+        place: Place::Type,
     },
     Param {
         default: LowPassGate::DEFAULT.amount,
@@ -187,9 +201,12 @@ pub(crate) const LPG_PARAMS: [Param; 8] = [
         // What it hears is part of how it's set up, so steps don't change it.
         label: None,
         setting: Setting::Source,
-        choices: &SOURCE_NAMES,
-        wraps: false,
+        kind: Kind::Stepped {
+            choices: &SOURCE_NAMES,
+            wraps: false,
+        },
         default: LowPassGate::DEFAULT.source,
+        place: Place::Own,
     },
     Param {
         default: 0xFF,
@@ -439,9 +456,12 @@ pub(crate) const COMB_PARAMS: [Param; 7] = [
         // Choosing a mode chooses a sound, so steps don't lock it.
         label: None,
         setting: Setting::CombMode,
-        choices: &COMB_MODE_NAMES,
-        wraps: true,
+        kind: Kind::Stepped {
+            choices: &COMB_MODE_NAMES,
+            wraps: true,
+        },
         default: 0,
+        place: Place::Type,
     },
     Param {
         name: "Tune",
@@ -456,7 +476,8 @@ pub(crate) const COMB_PARAMS: [Param; 7] = [
         "FDBK",
         Setting::FlangerFeedback,
         Comb::DEFAULT.feedback,
-    ),
+    )
+    .centred(),
     hex_param("Tone", "tone", "TONE", Setting::Bright, Comb::DEFAULT.tone),
     hex_param(
         "Spread",
@@ -573,7 +594,8 @@ pub(crate) const VOWEL_PARAMS: [Param; 6] = [
         "VOWL",
         Setting::Vowel,
         Vowel::DEFAULT.vowel,
-    ),
+    )
+    .units(Units::Vowel),
     hex_param(
         "Size",
         "size",

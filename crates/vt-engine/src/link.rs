@@ -1199,7 +1199,8 @@ mod tests {
         let pool = samples();
         let mut song = song(1, 16);
         let target =
-            vt_model::settings::SettingId::slot(0, vt_model::settings::Effect::Distort, 1).unwrap();
+            vt_model::settings::SettingId::slot(0, vt_model::insert::EffectKind::Distort, 1)
+                .unwrap();
         song.tracks[0].inserts = [Insert::ALL[1]; INSERTS];
         song.tracks[0].mods[3].destination = Some(target);
         song.tracks[0].mods[3].depth = 0x80;
@@ -1885,7 +1886,7 @@ mod tests {
                 let targets = [
                     SettingId::CUT,
                     SettingId::voice(SynthVoice::VirtualAnalog, 0).unwrap(),
-                    SettingId::slot(0, vt_model::settings::Effect::Flanger, 0).unwrap(),
+                    SettingId::slot(0, vt_model::insert::EffectKind::Flanger, 0).unwrap(),
                     SettingId::mod_own(1, 1).unwrap(),
                     SettingId::mod_own(4, 7).unwrap(),
                     // Steps' and an LFO's `Rate`, which keep a running phase (decision 301).

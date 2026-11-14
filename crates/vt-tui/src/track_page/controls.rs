@@ -6,7 +6,7 @@ use vt_model::lfo::phase_value;
 use vt_model::macros::MACROS;
 pub use vt_model::modulation::ModField;
 use vt_model::modulation::depth_value;
-use vt_model::settings::{Effect, SettingId};
+use vt_model::settings::SettingId;
 use vt_model::shape::GenParam;
 use vt_model::song::{FilterType, Machine, Track, TrackKind};
 
@@ -284,7 +284,7 @@ impl Control {
             Self::InsertParam(slot, param) => {
                 let insert = track.inserts[slot];
                 let setting = insert.params().get(param)?.setting;
-                let effect = Effect::of(insert)?;
+                let effect = insert.kind()?;
                 let at = effect
                     .params()
                     .iter()
@@ -414,7 +414,7 @@ impl Control {
             return track.inserts[slot]
                 .params()
                 .get(param)
-                .is_some_and(|found| !found.choices.is_empty());
+                .is_some_and(|found| !found.choices().is_empty());
         }
         matches!(
             self,

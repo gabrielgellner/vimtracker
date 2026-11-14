@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::constants::UNITY_LEVEL;
 
-use super::{GAIN_PARAM, MIX_PARAM, OFF_ON, Param, SOURCE_NAMES, Setting, hex_param, source_track};
+use super::{
+    GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, SOURCE_NAMES, Setting, Units, hex_param,
+    source_track,
+};
 
 /// A compressor's character, each modelled on its own reference and tuned against it (#338).
 /// `VCA`, `FET` and `Diode` come after these, in this order, so a song's types keep their places.
@@ -93,9 +96,12 @@ const COMPRESSOR_TYPE_PARAM: Param = Param {
     // Choosing a type chooses a sound, so steps don't lock it.
     label: None,
     setting: Setting::CompressorType,
-    choices: &COMPRESSOR_TYPE_NAMES,
-    wraps: true,
+    kind: Kind::Stepped {
+        choices: &COMPRESSOR_TYPE_NAMES,
+        wraps: true,
+    },
     default: 0,
+    place: Place::Type,
 };
 const SOURCE_PARAM: Param = Param {
     name: "Source",
@@ -103,9 +109,12 @@ const SOURCE_PARAM: Param = Param {
     // What it hears is part of how it's set up, so steps don't change it.
     label: None,
     setting: Setting::Source,
-    choices: &SOURCE_NAMES,
-    wraps: false,
+    kind: Kind::Stepped {
+        choices: &SOURCE_NAMES,
+        wraps: false,
+    },
     default: 0,
+    place: Place::Own,
 };
 const THRESHOLD_PARAM: Param = hex_param(
     "Threshold",
@@ -113,36 +122,43 @@ const THRESHOLD_PARAM: Param = hex_param(
     "THRS",
     Setting::Threshold,
     Compressor::DEFAULT.threshold,
-);
+)
+.units(Units::Threshold);
 const RATIO_PARAM: Param = hex_param(
     "Ratio",
     "ratio",
     "RTIO",
     Setting::Ratio,
     Compressor::DEFAULT.ratio,
-);
+)
+.units(Units::Ratio);
 const ATTACK_PARAM: Param = hex_param(
     "Attack",
     "attack",
     "ATK",
     Setting::Attack,
     Compressor::DEFAULT.attack,
-);
+)
+.units(Units::Attack);
 const RELEASE_PARAM: Param = hex_param(
     "Release",
     "release",
     "REL",
     Setting::Release,
     Compressor::DEFAULT.release,
-);
+)
+.units(Units::Release);
 const AUTO_GAIN_PARAM: Param = Param {
     name: "Auto",
     key: "auto",
     label: Some("AUTO"),
     setting: Setting::AutoGain,
-    choices: &OFF_ON,
-    wraps: true,
+    kind: Kind::Stepped {
+        choices: &OFF_ON,
+        wraps: true,
+    },
     default: 0,
+    place: Place::Own,
 };
 /// Every type's makeup, from 0 dB at `00` to [`MOST_MAKEUP_DB`] at `FF`, on top of what `Auto`
 /// gives back.
@@ -152,7 +168,8 @@ const MAKEUP_PARAM: Param = hex_param(
     "MKUP",
     Setting::Makeup,
     Compressor::DEFAULT.makeup,
-);
+)
+.units(Units::Makeup);
 /// The bus type's switches, shown by the same names as the clean type's knobs. Their labels are
 /// their own, as a slot's labels name one setting each.
 const CONSOLE_RATIO_PARAM: Param = Param {
@@ -160,27 +177,36 @@ const CONSOLE_RATIO_PARAM: Param = Param {
     key: "consoleratio",
     label: Some("CRTO"),
     setting: Setting::ConsoleRatio,
-    choices: &CONSOLE_RATIO_NAMES,
-    wraps: false,
+    kind: Kind::Stepped {
+        choices: &CONSOLE_RATIO_NAMES,
+        wraps: false,
+    },
     default: Compressor::DEFAULT.console_ratio,
+    place: Place::Own,
 };
 const CONSOLE_ATTACK_PARAM: Param = Param {
     name: "Attack",
     key: "consoleattack",
     label: Some("CATK"),
     setting: Setting::ConsoleAttack,
-    choices: &CONSOLE_ATTACK_NAMES,
-    wraps: false,
+    kind: Kind::Stepped {
+        choices: &CONSOLE_ATTACK_NAMES,
+        wraps: false,
+    },
     default: Compressor::DEFAULT.console_attack,
+    place: Place::Own,
 };
 const CONSOLE_RELEASE_PARAM: Param = Param {
     name: "Release",
     key: "consolerelease",
     label: Some("CREL"),
     setting: Setting::ConsoleRelease,
-    choices: &CONSOLE_RELEASE_NAMES,
-    wraps: false,
+    kind: Kind::Stepped {
+        choices: &CONSOLE_RELEASE_NAMES,
+        wraps: false,
+    },
     default: Compressor::DEFAULT.console_release,
+    place: Place::Own,
 };
 /// Glue's switches, shown by the same names again, with labels of their own.
 const GLUE_RATIO_PARAM: Param = Param {
@@ -188,27 +214,36 @@ const GLUE_RATIO_PARAM: Param = Param {
     key: "glueratio",
     label: Some("GRTO"),
     setting: Setting::GlueRatio,
-    choices: &GLUE_RATIO_NAMES,
-    wraps: false,
+    kind: Kind::Stepped {
+        choices: &GLUE_RATIO_NAMES,
+        wraps: false,
+    },
     default: Compressor::DEFAULT.glue_ratio,
+    place: Place::Own,
 };
 const GLUE_ATTACK_PARAM: Param = Param {
     name: "Attack",
     key: "glueattack",
     label: Some("GATK"),
     setting: Setting::GlueAttack,
-    choices: &GLUE_ATTACK_NAMES,
-    wraps: false,
+    kind: Kind::Stepped {
+        choices: &GLUE_ATTACK_NAMES,
+        wraps: false,
+    },
     default: Compressor::DEFAULT.glue_attack,
+    place: Place::Own,
 };
 const GLUE_RELEASE_PARAM: Param = Param {
     name: "Release",
     key: "gluerelease",
     label: Some("GREL"),
     setting: Setting::GlueRelease,
-    choices: &GLUE_RELEASE_NAMES,
-    wraps: false,
+    kind: Kind::Stepped {
+        choices: &GLUE_RELEASE_NAMES,
+        wraps: false,
+    },
     default: Compressor::DEFAULT.glue_release,
+    place: Place::Own,
 };
 /// Glue's `Range`, the most it turns down, from none at `00` to [`MOST_RANGE_DB`] at `FF`.
 const RANGE_PARAM: Param = hex_param(
@@ -217,7 +252,8 @@ const RANGE_PARAM: Param = hex_param(
     "RNGE",
     Setting::Range,
     Compressor::DEFAULT.range,
-);
+)
+.units(Units::Range);
 /// Glue's soft clip at the very end, after its makeup and its mix, as Live's `Peak Clip In` is:
 /// off, as Live loads it, or on.
 const PEAK_CLIP_PARAM: Param = Param {
@@ -225,9 +261,12 @@ const PEAK_CLIP_PARAM: Param = Param {
     key: "peakclip",
     label: Some("PCLP"),
     setting: Setting::PeakClip,
-    choices: &OFF_ON,
-    wraps: true,
+    kind: Kind::Stepped {
+        choices: &OFF_ON,
+        wraps: true,
+    },
     default: Compressor::DEFAULT.peak_clip,
+    place: Place::Own,
 };
 /// A compressor's whole mix, which it starts at, for compressing in parallel when turned down.
 const COMPRESSOR_MIX_PARAM: Param = Param {
@@ -460,21 +499,24 @@ pub(crate) const LIMIT_PARAMS: [Param; 5] = [
         "INPT",
         Setting::Input,
         Limiter::DEFAULT.input,
-    ),
+    )
+    .units(Units::Input),
     hex_param(
         "Ceiling",
         "ceiling",
         "CEIL",
         Setting::Ceiling,
         Limiter::DEFAULT.ceiling,
-    ),
+    )
+    .units(Units::Ceiling),
     hex_param(
         "Release",
         "release",
         "REL",
         Setting::LimitRelease,
         Limiter::DEFAULT.release,
-    ),
+    )
+    .units(Units::LimitRelease),
     Param {
         default: 0xFF,
         ..MIX_PARAM
