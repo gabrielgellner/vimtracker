@@ -1775,7 +1775,8 @@ are kept in the presets folder's `patches`, beside `sounds` and `effects`.
 something, with its name, value, mappings and ranges; every mod slot a macro maps to, the slots
 those go to in turn, and any slot going to one of them, as an LFO on a macro or on a slot's
 `Depth`; the accumulator and the arpeggio if any of that reaches them; and the live generators of
-the phrase under the cursor that a macro holds by its column, with their shapes. Never the
+the phrase under the cursor that a macro holds by its column, with their shapes, and any slot or
+macro an FX one locks, as `DEP4`, so the lock has its slot wherever the patch goes. Never the
 machine, the filter, the output or the effects: a macro mapped to one of those keeps the mapping
 by the setting's name, and on a track without that setting it does nothing. A track whose macros
 hold nothing has no patch to save; a sound preset (`:preset save`) keeps the whole track instead.
@@ -1799,7 +1800,10 @@ macros hold comes off any of the track's own macros, as a setting is on one macr
 generators go onto the phrase under the cursor over its loop, as `S` would: an empty Note column
 is written, notes there are reshaped, and a column already live takes the new shape. An FX
 generator goes on the first FX column live with its command or holding it, else the first empty
-one. The status line says where everything went.
+one. One that locks a slot's or macro's setting by its number, as `DEP4` or `MAC2`, locks the
+slot or macro where it went: a generator saved writing `DEP4` writes `DEP3` on a track where
+that slot went into `Mod 3`. Locks already on the track's own rows stay as they are. The status line
+says where everything went.
 
 With too few free, nothing is added, and the status line says how many the patch needs and how
 many the track has free. `!` puts it over the last ones that aren't free instead, saying which;

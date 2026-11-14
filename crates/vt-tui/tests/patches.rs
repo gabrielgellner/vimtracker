@@ -275,3 +275,194 @@ fn a_live_generator_a_macro_holds_goes_onto_the_phrase_under_the_cursor() {
     assert_eq!(track.macro_holding(hits).map(|(at, _)| at), Some(0));
     assert_eq!(notes(&app, 1), notes_first, "the same tresillo");
 }
+
+/// A ramp from `A0` to `A0` over every row, as an FX generator's shape: a depth of `+40` when it
+/// locks a slot's.
+fn level() -> vt_model::shape::Shape {
+    use vt_model::shape::{
+        Acid, Bits, DEFAULT_RATE, FillKind, Follow, Grids, Pink, Random, Shape, Values, Variation,
+        Walk,
+    };
+    Shape {
+        from: 0xA0,
+        to: 0xA0,
+        curve: 0,
+        s: 0,
+        kind: FillKind::Ramp,
+        wave: vt_model::lfo::Shape::Sine,
+        rate: DEFAULT_RATE,
+        phase: 0,
+        run: 1,
+        values: Values::default(),
+        place: Where::AllRows,
+        seed: 1,
+        acid: Acid::default(),
+        follow: Follow::default(),
+        walk: Walk::default(),
+        pink: Pink::default(),
+        bits: Bits::default(),
+        grids: Grids::default(),
+        random: Random::default(),
+        vary: 0,
+        variation: Variation::default(),
+    }
+}
+
+/// An envelope held full while a note plays.
+fn held() -> vt_model::envelope::Adsr {
+    vt_model::envelope::Adsr {
+        attack_ms: 0,
+        decay_ms: 0,
+        sustain: 100,
+        ..vt_model::envelope::Adsr::decay()
+    }
+}
+
+/// Two tracks playing a flat sample at `CUT 80`, eight notes each. The first's slot 4 is held
+/// full on `Cut` with no depth of its own, and its FX1 is kept live writing `DEP4` at `+40` on
+/// every row, a generator macro 1 holds, so its patch is that slot, the macro and the generator.
+fn lock_on_slot_4() -> Song {
+    use vt_model::generator::{Generator, Span};
+    use vt_model::modulation::ModSlot;
+    use vt_model::shape::ShapeColumn;
+    use vt_model::step::FxCommand;
+    let mut song = Song::new(2);
+    for track in 0..2 {
+        song.sample_on(track, "s");
+        let owner = &mut song.tracks[track];
+        owner.cutoff = 0x80;
+        let steps: Vec<Step> = (0..8)
+            .map(|_| "C-3 -- --- --- ---".parse().unwrap())
+            .collect();
+        owner.phrases.insert(0, Arc::new(Phrase::from_steps(steps)));
+    }
+    let first = &mut song.tracks[0];
+    first.mods[3] = ModSlot::adsr(Some(SettingId::CUT), held());
+    first.macros[0].maps = vec![MacroMap::numbers(
+        MacroTarget::Gen {
+            column: GenColumn::Fx(0),
+            param: GenParam::To,
+        },
+        (0xA0, 0xA0),
+    )];
+    let column = ShapeColumn::Fx {
+        slot: 0,
+        command: FxCommand::Set(SettingId::modulator(3, 0).unwrap()),
+    };
+    let generator = Generator::new(column, Span::Rows { first: 0, last: 7 }, level());
+    let phrase = Arc::make_mut(first.phrases.get_mut(&0).unwrap());
+    assert!(phrase.add_generator(generator, None));
+    let written = phrase.steps()[0].to_string();
+    assert!(written.contains("mod4.depth:A0"), "{written}");
+    song
+}
+
+/// The cutoff a track plays with half way through its second note, rendered from the top on a
+/// flat sample.
+fn cutoff_heard(song: &Song, track: usize) -> u8 {
+    let mut pool = vt_model::samples::SamplePool::default();
+    pool.insert(
+        "s",
+        vt_model::sample::SampleData {
+            frames: vec![[1.0, 1.0]; 48_000 * 4],
+        },
+    );
+    let version = Arc::new(vt_engine::published::Published::new(
+        Arc::new(song.clone()),
+        Arc::new(pool),
+    ));
+    let mut engine = vt_engine::engine::Engine::new(48_000, version);
+    engine.play_from(0);
+    // A 16th at 120 BPM is 6000 frames.
+    let mut out = vec![0.0; 9000 * 2];
+    engine.process(&mut out);
+    engine.live(track).cutoff
+}
+
+/// The FX1 cells of a track's phrase `00`.
+fn fx1(app: &App, track: usize) -> Vec<String> {
+    app.song().tracks[track].phrases[&0]
+        .steps()
+        .iter()
+        .map(|step| step.fx[0].to_string())
+        .collect()
+}
+
+#[test]
+fn a_lock_a_patchs_generator_writes_plays_on_the_slot_its_slot_went_to() {
+    let (mut app, _realtime, _presets) = app_on(lock_on_slot_4());
+    assert_eq!(cutoff_heard(app.song(), 0), 0xC0, "slot 4 opens it by +40");
+    command(&mut app, "patch save Lock");
+    assert!(
+        app.status.contains("FX1 generator, 1 slot, 1 macro"),
+        "{}",
+        app.status
+    );
+
+    // The second track's first two slots shape its note and cutoff, so slot 4 lands in `Mod 3`
+    // and its lock with it: left as `DEP4`, it would lock a slot going nowhere.
+    app.cursor.track = 1;
+    assert_eq!(cutoff_heard(app.song(), 1), 0x80);
+    command(&mut app, "patch load Lock");
+    assert!(
+        app.status
+            .starts_with("Track 02 has Lock in mod slot 3, macro 1 and live FX1 on phrase 00"),
+        "{}",
+        app.status
+    );
+    let track = &app.song().tracks[1];
+    assert_eq!(track.mods[2].destination, Some(SettingId::CUT));
+    assert_eq!(track.mods[3].destination, None);
+    let cells = fx1(&app, 1);
+    assert!(
+        cells.iter().all(|cell| cell.starts_with("mod3.depth:A0")),
+        "{cells:?}"
+    );
+    assert_eq!(cutoff_heard(app.song(), 1), 0xC0, "the lock plays on Mod 3");
+}
+
+#[test]
+fn bang_puts_a_patch_over_the_last_slot_and_its_lock_follows_leaving_the_tracks_own() {
+    // Every slot of the second track goes somewhere, so none is free, and a step of its own
+    // locks its slot 5's depth on FX2.
+    let mut song = lock_on_slot_4();
+    let second = &mut song.tracks[1];
+    for held in &mut second.mods[2..] {
+        held.destination = Some(SettingId::PAN);
+    }
+    let phrase = Arc::make_mut(second.phrases.get_mut(&0).unwrap());
+    *phrase.step_mut(0).unwrap() = "C-3 -- --- mod5.depth:90 ---".parse().unwrap();
+    let (mut app, _realtime, _presets) = app_on(song);
+    command(&mut app, "patch save Lock");
+    app.cursor.track = 1;
+    let own = app.song().tracks[1].phrases[&0].steps()[0].fx[1].to_string();
+    assert!(own.starts_with("mod5.depth:90"), "{own}");
+
+    command(&mut app, "patch load Lock");
+    assert!(
+        app.status.contains(":patch! puts it over"),
+        "{}",
+        app.status
+    );
+    command(&mut app, "patch! load Lock");
+    assert!(
+        app.status.starts_with(
+            "Track 02 has Lock in mod slot 6, macro 1 and live FX1 on phrase 00, over mod slot 6"
+        ),
+        "{}",
+        app.status
+    );
+    let track = &app.song().tracks[1];
+    assert_eq!(track.mods[5].destination, Some(SettingId::CUT));
+    let cells = fx1(&app, 1);
+    assert!(
+        cells.iter().all(|cell| cell.starts_with("mod6.depth:A0")),
+        "{cells:?}"
+    );
+    let own = track.phrases[&0].steps()[0].fx[1].to_string();
+    assert!(
+        own.starts_with("mod5.depth:90"),
+        "the track's own lock stays: {own}"
+    );
+    assert_eq!(cutoff_heard(app.song(), 1), 0xC0, "the lock plays on Mod 6");
+}

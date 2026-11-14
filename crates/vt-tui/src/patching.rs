@@ -218,16 +218,16 @@ impl App {
         let mut generators = Vec::new();
         let mut taken = Vec::new();
         for generator in &patch.generators {
-            let made =
-                self.patch_column(generator, &mut taken)
-                    .and_then(|(field, command, live)| {
-                        if let (GenColumn::Fx(saved), Field::FxCommand(slot)) =
-                            (generator.column, field)
-                        {
-                            placement.fx.insert(saved, slot);
-                        }
-                        self.patch_generator(field, command, generator.shape, live)
-                    });
+            let made = self
+                .patch_column(generator, &placement, &mut taken)
+                .and_then(|(field, command, live)| {
+                    if let (GenColumn::Fx(saved), Field::FxCommand(slot)) =
+                        (generator.column, field)
+                    {
+                        placement.fx.insert(saved, slot);
+                    }
+                    self.patch_generator(field, command, generator.shape, live)
+                });
             match made {
                 Ok(action) => generators.push(action),
                 Err(why) => {
@@ -253,10 +253,12 @@ impl App {
     /// Where a patch's generator goes on the phrase under the cursor: its column, an FX one's
     /// command, and the generator already live there, if one is. An FX generator goes on the
     /// first FX column live with its command, or holding it, or else empty, and none other of
-    /// the patch's has taken.
+    /// the patch's has taken; its command is the one `placement` makes it, a lock on one of the
+    /// patch's slots or macros on the one that part went to.
     fn patch_column(
         &self,
         generator: &PatchGen,
+        placement: &Placement,
         taken: &mut Vec<usize>,
     ) -> Result<(Field, Option<FxCommand>, Option<usize>), String> {
         let phrase = self
@@ -270,7 +272,7 @@ impl App {
             GenColumn::Length => Field::GateLength,
             GenColumn::Fx(_) => {
                 let command = generator
-                    .fx_command()
+                    .fx_command_on(placement)
                     .ok_or("its FX generator's command isn't known")?;
                 let open = |slot: &usize| !taken.contains(slot);
                 let live_with = (0..FX_SLOTS).filter(open).find_map(|slot| {
