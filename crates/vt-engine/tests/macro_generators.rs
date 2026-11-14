@@ -10,10 +10,12 @@ use vt_engine::engine::Engine;
 use vt_engine::gens::{GenReport, GenRow};
 use vt_engine::published::Published;
 use vt_model::action::{Action, edit};
+use vt_model::bloom::Bloom;
 use vt_model::generator::Span;
 use vt_model::lfo::{Lfo, Rate, Shape as Wave};
 use vt_model::macros::{GenColumn, MacroMap, MacroTarget};
 use vt_model::modulation::ModSlot;
+use vt_model::project::{load_song, save_song};
 use vt_model::samples::SamplePool;
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
@@ -175,6 +177,149 @@ fn a_macro_at_its_turn_leaves_its_generator_at_rest() {
     assert!(engine.generators_heard(0).all(|run| run.renders == 0));
     assert_eq!(rows.len(), 32, "each row is reported");
     assert!(rows.iter().all(|row| row.cell.is_none()), "as written");
+}
+
+/// A song saved and read back from a scratch folder of its own.
+fn loaded(song: &Song, name: &str) -> Song {
+    let folder = std::env::temp_dir().join(format!("vt-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    save_song(&folder, song).unwrap();
+    let loaded = load_song(&folder).unwrap();
+    let _ = std::fs::remove_dir_all(&folder);
+    loaded
+}
+
+/// A Bloom branch on phrase `00`, a `Follow` of the trunk on `10` making three changes, with
+/// macro 1 holding its `Mutation` from 0 to 32, turned to 8 (decision 307).
+fn bloom_branch() -> Song {
+    let mut song = Song::new(1);
+    song.millibpm = 128_000;
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    let line: Vec<Step> = [
+        "C-3 64 --- --- ---",
+        "--- -- --- --- ---",
+        "D#3 50 --- --- ---",
+    ]
+    .iter()
+    .cycle()
+    .take(16)
+    .map(|row| row.parse().unwrap())
+    .collect();
+    song.tracks[0].phrases.clear();
+    song.tracks[0]
+        .phrases
+        .insert(0x10, Arc::new(Phrase::from_steps(line)));
+    Arc::make_mut(song.tracks[0].chains.get_mut(&0).unwrap()).entries[0].phrase = 0x10;
+    let song = apply(
+        song,
+        &Action::Bloom {
+            track: 0,
+            chain: 0,
+            slot: 0,
+            scale: vt_model::scale::Scale::default(),
+            bloom: Bloom {
+                branches: 1,
+                mutation: 3,
+                seed: 9,
+                ..Bloom::default()
+            },
+        },
+    );
+    let mutation = MacroTarget::Gen {
+        column: GenColumn::Note,
+        param: GenParam::Mutation,
+    };
+    let song = apply(
+        song,
+        &Action::MapMacro {
+            track: 0,
+            at: 0,
+            map: MacroMap::numbers(mutation, (0, 32)),
+        },
+    );
+    apply(
+        song,
+        &Action::SetMacro {
+            track: 0,
+            at: 0,
+            value: 0x4000,
+        },
+    )
+}
+
+/// What a song's generators hold on a phrase of its first track, as they're heard.
+fn heard_shapes(song: &Song, phrase: u32) -> Vec<Shape> {
+    song.tracks[0].phrases[&phrase]
+        .generators()
+        .iter()
+        .map(|generator| generator.heard())
+        .collect()
+}
+
+/// A song just loaded has its generators held as its macros hold them, with no edit first, so the
+/// engine has nothing of theirs to render at rest (#651): the held shapes aren't saved, and
+/// without them it renders every mapped generator at the macro's turn each pass.
+#[test]
+fn a_song_loaded_holds_its_generators_and_leaves_them_at_rest() {
+    // 1 + 15 × 0x44 / 0xFF is 5, so the macro holds `Hits` away from the shape's own 3.
+    let song = apply(
+        song(&[]),
+        &Action::SetMacro {
+            track: 0,
+            at: 0,
+            value: 0x4400,
+        },
+    );
+    let hits = written(&song)
+        .iter()
+        .filter(|step| step.velocity == Some(0x7F))
+        .count();
+    assert_eq!(hits, 5, "the macro's turn is written");
+    let loaded = loaded(&song, "held-on-load");
+    let generator = &loaded.tracks[0].phrases[&0].generators()[0];
+    let held = generator.held().expect("held as it loads, with no edit");
+    assert!(matches!(held.place, Where::Euclid { hits: 5, .. }));
+    assert!(matches!(
+        generator.shape.place,
+        Where::Euclid { hits: 3, .. }
+    ));
+    assert_eq!(heard_shapes(&loaded, 0), heard_shapes(&song, 0));
+    assert_eq!(
+        written(&loaded),
+        written(&song),
+        "loading writes nothing new"
+    );
+    let (out, rows, engine) = play(&loaded, 32);
+    let (as_written, ..) = play(&plain(&song, written(&song)), 32);
+    assert!(out == as_written, "it plays sample for sample as written");
+    assert!(
+        engine.generators_heard(0).all(|run| run.renders == 0),
+        "nothing renders at rest"
+    );
+    assert!(rows.iter().all(|row| row.cell.is_none()), "as written");
+}
+
+/// A Bloom branch's `Mutation`, held by a macro, is held again as it loads, from the trunk it
+/// follows.
+#[test]
+fn a_bloom_branch_loaded_holds_its_mutation_and_leaves_it_at_rest() {
+    let song = bloom_branch();
+    let branch = &song.tracks[0].phrases[&0].generators()[0];
+    assert_eq!(branch.shape.follow.mutation, 3);
+    assert_ne!(branch.heard().follow.mutation, 3, "the macro holds it");
+    let loaded = loaded(&song, "bloom-held-on-load");
+    assert!(loaded.tracks[0].phrases[&0].generators()[0].is_held());
+    assert_eq!(heard_shapes(&loaded, 0), heard_shapes(&song, 0));
+    assert_eq!(
+        loaded.tracks[0].phrases[&0].steps(),
+        song.tracks[0].phrases[&0].steps(),
+        "loading writes nothing new"
+    );
+    let (_, _, engine) = play(&loaded, 32);
+    assert!(
+        engine.generators_heard(0).all(|run| run.renders == 0),
+        "nothing renders at rest"
+    );
 }
 
 #[test]
