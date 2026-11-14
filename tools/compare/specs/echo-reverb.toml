@@ -1,0 +1,60 @@
+# The Space Echo's spring reverb against Delay TAPE-201's (#712, decision 337): a click through the
+# reverb alone, mode 12 and TAPE-201's `Reverb Only`, all wet at full `Reverb`, for when it's first
+# heard, how loud it is and how long it rings.
+#
+#   uv run run.py specs/echo-reverb.toml --report out/echo-reverb.html
+
+rate = 48000
+
+[input]
+signal = "impulse"
+level = -12.0
+seconds = 6.0
+
+[ours]
+effects = ["echo"]
+
+[ours.settings]
+1.echo.mode = 11
+1.echo.reverb = 0xFF
+1.echo.wow = 0x00
+1.echo.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Delay TAPE-201.vst3"
+buffer_size = 512
+preset = "Default"
+preroll = 3.0
+
+[reference.parameters]
+rates_sync = false
+rates_link = true
+mode_selector = "Reverb Only"
+repeat_rate_left_ms = 150.0
+repeat_rate_right_ms = 150.0
+dry_wet = 1.0
+echo_amount = 1.0
+reverb_amount = 1.0
+intensity = 0.35
+flutter = 0.0
+noise = 0.0
+input_drive_db = 0.0
+stereo_width = 0.0
+stereo_rate_offset = 0.0
+bass = 0.0
+treble = 0.0
+delay_type = "L/R"
+input_eq_on_off = false
+lfo_destination = "None"
+
+[report]
+kind = "echo"
+measure = "decay"
+at = 0.0
+title = "Space Echo's spring against TAPE-201"
+about = """
+A click at -12 dBFS through the reverb alone, all wet, at full `Reverb`: mode 12 against \
+TAPE-201's `Reverb Only`. Ours is this program's `Spring`, ChowDSP's tank, at one setting; \
+TAPE-201's is its own. The table gives when each is first heard, within 40 dB of its loudest, how \
+loud it is from 0.1 to 0.6 s, and how fast it falls after half a second.
+"""

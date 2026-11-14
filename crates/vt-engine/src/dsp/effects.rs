@@ -7,6 +7,7 @@ pub mod chorus;
 pub mod clouds;
 pub mod delay;
 pub mod distort;
+pub mod echo;
 pub mod exciter;
 pub mod flanger;
 pub mod freq_shifter;

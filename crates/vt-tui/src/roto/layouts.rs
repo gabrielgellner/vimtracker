@@ -1393,6 +1393,40 @@ const BEADS: DeviceLayout = stored(
         ),
     ],
 );
+/// The RE-201's front panel in its order: the tape's speed and the loop's feedback, the echo's
+/// and the reverb's levels, the tone, then what comes out; then the tape's other workings on a
+/// page of their own. Its mode chooses what it is, so it's chosen in the app, as a type is.
+const ECHO: DeviceLayout = live(
+    "fx/echo",
+    &[
+        knobs(
+            "Space Echo",
+            [
+                s("rate"),
+                s("intensity"),
+                s("echo"),
+                s("reverb"),
+                s("bass"),
+                s("treble"),
+                s("mix"),
+                s("gain"),
+            ],
+        ),
+        knobs(
+            "Tape",
+            [
+                s("sync"),
+                s("inertia"),
+                s("input"),
+                s("wow"),
+                __,
+                __,
+                __,
+                __,
+            ],
+        ),
+    ],
+);
 const WARPS: DeviceLayout = live(
     "fx/warps",
     &[knobs(
@@ -2028,7 +2062,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
 }
 
 /// Every kind of device's layout, for the tests and the stored setups.
-pub const ALL: [&DeviceLayout; 102] = [
+pub const ALL: [&DeviceLayout; 103] = [
     &SAMPLER,
     &VA,
     &VA_VCF,
@@ -2131,6 +2165,7 @@ pub const ALL: [&DeviceLayout; 102] = [
     &STUTTER,
     &CLOUDS,
     &BEADS,
+    &ECHO,
 ];
 
 /// A machine's layout.
@@ -2229,6 +2264,7 @@ pub fn effect_layout(insert: Insert) -> &'static DeviceLayout {
         Insert::Stutter(_) => &STUTTER,
         Insert::Clouds(_) => &CLOUDS,
         Insert::Beads(_) => &BEADS,
+        Insert::Echo(_) => &ECHO,
         Insert::Rotary(_) => &ROTARY,
         Insert::Exciter(_) => &EXCITER,
         Insert::Space(_) => &SPACE,
