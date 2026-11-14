@@ -1148,7 +1148,7 @@ These need no terminal and no sound device, so they run anywhere.
 
 ### Testing
 
-About 3,000 tests. `just ci` runs `cargo fmt --check`, `cargo clippy` and the tests on Apple
+About 3,500 tests. `just ci` runs `cargo fmt --check`, `cargo clippy` and the tests on Apple
 silicon macOS, the one platform the golden hashes hold on: under cargo-nextest when it's installed,
 a test to a process, and under `cargo test` when it isn't. The `dev` profile builds `vt-engine` and
 `vt-model` at `opt-level = 2`, with debug assertions and overflow checks still on, as the DSP takes
