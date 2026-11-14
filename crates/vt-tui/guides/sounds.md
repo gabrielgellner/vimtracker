@@ -945,7 +945,7 @@ there; otherwise they don't yet change what you hear.
 
 | Command | Does |
 |---|---|
-| `:kit` | Choose a kit from the kit folders, or load its sounds as tracks |
+| `:kit` | Choose a kit, or load its sounds as tracks |
 | `:kit 909` | Choose sounds from that kit |
 | `:kit path/drums.ron` | Choose sounds from a kit file anywhere |
 | `:kit 909 all` | Put every sound on tracks from the first, in order |
@@ -982,9 +982,9 @@ its own, and `S` on its notes changes it.
 | Keys | Does |
 |---|---|
 | `l` on a kit | Open it to its sounds |
-| `Space` `x` | Mark this sound, or take its mark off, and go to the next |
+| `Space` `x` | Mark this sound, or take the mark off, and go to the next |
 | `a` | Mark every sound in this kit, or take the marks off |
-| `Enter` | Load the marked sounds, or this one, as new tracks in a new folded group |
+| `Enter` | Load the marked sounds, or this one, as new tracks |
 | `Enter` on a kit | Use it, for `:sample` to list first |
 | `L` on a kit | Put every sound on tracks from the first, as `all` does |
 
