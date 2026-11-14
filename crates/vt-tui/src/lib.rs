@@ -28,6 +28,7 @@ pub mod loading;
 pub mod macroing;
 pub mod marking;
 pub mod meter;
+pub mod patching;
 pub mod picking;
 pub mod places;
 pub mod placing;

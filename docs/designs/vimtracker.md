@@ -537,7 +537,11 @@ Song                               song.ron, refused unless format_version is FO
     fine parts by key. Each is a RON file with its own `format`, read with serde's defaults for
     what's left out and refusing what it doesn't know. `Action::LoadSound` and
     `Action::LoadEffect` load one as an edit; `presetting.rs` in `vt-tui` saves and loads them
-    for the cursor's track or slot, and banks a sound's sample (decision 310).
+    for the cursor's track or slot, and banks a sound's sample (decision 310). A patch on its own,
+    `preset/patch.rs`'s `PatchPreset`, holds only the macros and what they move, with the live
+    generators they hold; `Patch::place` finds free slots and macros for it and
+    `Action::LoadPatch` adds it, and `patching.rs` saves and adds one with its generators on the
+    phrase under the cursor (decision 311).
 
 **Decisions:** 2, 5, 8, 10, 11, 15, 17, 29, 30, 37, 70, 78 to 82, 84 to 88, 91, 94, 95, 105, 111,
 123, 126, 136 and 138;

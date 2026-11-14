@@ -6,8 +6,13 @@
 //! A sound preset is the sound and its patch: [`Sound`], what makes the sound, from the machine to
 //! the slots' effects, and [`Patch`], what plays it, the mod slots, the accumulator, the arpeggio
 //! and the eight macros. Loading one replaces both, which makes it a whole device with its knobs.
-//! A patch will also be a preset of its own (#619), in `patches/`, which adds its parts to a track
-//! and keeps the track's sound; it's the same [`Patch`], holding only the parts it moves.
+//! A patch is also a preset of its own (decision 311), in `patches/`, which adds its parts to a
+//! track and keeps the track's sound; it's the same [`Patch`], holding only the parts its macros
+//! move, with the live generators they reach ([`patch`]).
+
+mod patch;
+
+pub use patch::{PatchGen, PatchPreset, Placement, Short, load_patch};
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -40,6 +45,8 @@ pub enum PresetKind {
     Sound,
     /// One slot's effect and its settings.
     Effect,
+    /// What plays a sound without the sound: macros and the parts they move.
+    Patch,
 }
 
 impl PresetKind {
@@ -48,6 +55,7 @@ impl PresetKind {
         match self {
             Self::Sound => "sounds",
             Self::Effect => "effects",
+            Self::Patch => "patches",
         }
     }
 
@@ -56,6 +64,7 @@ impl PresetKind {
         match self {
             Self::Sound => "sound",
             Self::Effect => "effect",
+            Self::Patch => "patch",
         }
     }
 }
@@ -225,7 +234,9 @@ pub struct Sound {
 
 /// What plays a sound rather than what it is: the mod slots, the accumulator, the arpeggio and
 /// the macros, as the study's §5.2 has a patch. In a sound preset it holds every slot and macro in
-/// order; on its own (#619) it will hold only the parts it moves, which go into free ones.
+/// order, numbered as the track's; on its own (decision 311) it holds only the parts its macros
+/// move, numbered from the first in the patch, which go into free ones, and the live generators
+/// they reach.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Patch {
@@ -240,6 +251,10 @@ pub struct Patch {
     /// none holds anything.
     #[serde(default, skip_serializing_if = "no_macros")]
     pub macros: Vec<Macro>,
+    /// The live generators its macros reach, by column, from the phrase it was saved on. A sound
+    /// preset holds none, as it holds no phrases.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub generators: Vec<PatchGen>,
 }
 
 fn is_default_accumulation(accumulation: &Accumulation) -> bool {
@@ -312,6 +327,7 @@ impl SoundPreset {
             accumulation: track.accumulation,
             arpeggio: track.arpeggio,
             macros: track.macros.to_vec(),
+            generators: Vec::new(),
         };
         Self {
             format: PRESET_FORMAT,

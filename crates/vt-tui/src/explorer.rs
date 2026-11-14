@@ -2,12 +2,13 @@
 //! in tree mode (`input/picker.rs`) over the folders it starts from, read a folder at a time as
 //! they're opened. A kit opens like a folder, to its sounds, and a sound with variants or layers
 //! opens to those; in the kit explorer, the kit dialog, its sounds are marked to load as tracks.
-//! The preset browser lists the presets folder's sounds or effects (decision 310).
+//! The preset browser lists the presets folder's sounds or effects (decision 310), or its patches
+//! (decision 311).
 
 use std::path::{Path, PathBuf};
 
 use vt_model::kit::{KitEntry, load_kit};
-use vt_model::preset::{PresetKind, load_effect, load_sound, preset_name};
+use vt_model::preset::{PresetKind, load_effect, load_patch, load_sound, preset_name};
 use vt_model::project::is_project;
 use vt_model::sample::is_sample_file;
 
@@ -59,6 +60,7 @@ impl Purpose {
             Self::Render => "Render into",
             Self::Preset(PresetKind::Sound) => "Sound presets",
             Self::Preset(PresetKind::Effect) => "Effect presets",
+            Self::Preset(PresetKind::Patch) => "Patches",
         }
     }
 }
@@ -119,6 +121,8 @@ pub enum Icon {
     Sound(vt_model::song::Machine),
     /// An effect preset.
     Effect,
+    /// A patch, behaviour without a sound.
+    Patch,
     /// A file that isn't there, or a file or folder that couldn't be read.
     Missing,
 }
@@ -130,6 +134,7 @@ fn preset_icon(path: &Path, kind: PresetKind) -> Icon {
             load_sound(path).map_or(Icon::Missing, |preset| Icon::Sound(preset.sound.machine))
         }
         PresetKind::Effect => load_effect(path).map_or(Icon::Missing, |_| Icon::Effect),
+        PresetKind::Patch => load_patch(path).map_or(Icon::Missing, |_| Icon::Patch),
     }
 }
 
@@ -138,6 +143,7 @@ fn preset_meaning(path: &Path, kind: PresetKind) -> String {
     let read = match kind {
         PresetKind::Sound => load_sound(path).map(|preset| preset.summary()),
         PresetKind::Effect => load_effect(path).map(|preset| preset.summary()),
+        PresetKind::Patch => load_patch(path).map(|preset| preset.summary()),
     };
     read.unwrap_or_else(|error| match error {
         vt_model::preset::PresetError::Parse { detail, .. }

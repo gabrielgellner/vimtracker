@@ -89,7 +89,7 @@ impl App {
     }
 
     /// The presets folder, or none, saying so.
-    fn presets_folder(&mut self) -> Option<PathBuf> {
+    pub(crate) fn presets_folder(&mut self) -> Option<PathBuf> {
         let folder = self.settings.preset_folder();
         if folder.is_none() {
             self.status = NO_FOLDER.to_owned();
@@ -227,6 +227,11 @@ impl App {
     /// Load a preset on what's under the cursor, as one undo step: a sound on its track, keeping
     /// the track's level, pan, sends, name and phrases, or an effect into the slot under it.
     pub(crate) fn load_preset(&mut self, kind: PresetKind, path: &Path) {
+        if kind == PresetKind::Patch {
+            let over = std::mem::take(&mut self.patch_over);
+            self.add_patch(path, over);
+            return;
+        }
         let target = self.preset_target();
         let name = preset_name(path);
         match (kind, target) {
@@ -242,6 +247,7 @@ impl App {
             (PresetKind::Sound, Target::Effect { track, .. }) => {
                 self.load_sound_preset(track, path, &name);
             }
+            (PresetKind::Patch, _) => {}
         }
     }
 

@@ -471,6 +471,9 @@ pub struct App {
     pub naming: Option<Naming>,
     /// Whether the project the explorer opens throws away unsaved changes, as after `:e!`.
     pub(crate) opening_discards: bool,
+    /// Whether the patch the explorer adds goes over the last mod slots and macros where there
+    /// are too few free, as after `:patch!`.
+    pub(crate) patch_over: bool,
     /// Makes the random names that name lines start with and `C-r` rolls, seeded from the clock.
     pub(crate) names: Names,
     /// The selection a replace will fill, and the undo depth from before it started.
@@ -649,6 +652,7 @@ impl App {
             recent_places: RecentPlaces::default(),
             naming: None,
             opening_discards: false,
+            patch_over: false,
             names,
             replacing_selection: None,
             selection_scope: None,

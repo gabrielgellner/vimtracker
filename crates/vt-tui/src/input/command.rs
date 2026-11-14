@@ -46,6 +46,40 @@ fn preset(argument: &str, force: bool) -> Result<Line, LineError> {
     Ok(Line::Preset(line))
 }
 
+/// What `:patch` does, on the cursor's track (decision 311).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PatchLine {
+    /// List the presets folder's patches, to add one; `over` puts it over the last mod slots and
+    /// macros where there are too few free, as `:patch!`.
+    Browse { over: bool },
+    /// Save the track's macros and what they move under a name, writing over a patch of that
+    /// name only if forced.
+    Save { name: String, force: bool },
+    /// Add one by its name.
+    Load { name: String, over: bool },
+}
+
+/// Read `:patch`'s argument, or `:patch!`'s, which writes over a patch saved or puts one loaded
+/// over the last slots and macros.
+fn patch(argument: &str, force: bool) -> Result<Line, LineError> {
+    let (word, name) = argument
+        .split_once(char::is_whitespace)
+        .map_or((argument, ""), |(word, name)| (word, name.trim()));
+    let line = match (word, name.is_empty()) {
+        ("", _) => PatchLine::Browse { over: force },
+        ("save", false) => PatchLine::Save {
+            name: name.to_owned(),
+            force,
+        },
+        ("load", false) => PatchLine::Load {
+            name: name.to_owned(),
+            over: force,
+        },
+        _ => return Err(LineError::Patch),
+    };
+    Ok(Line::Patch(line))
+}
+
 /// A parsed command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Line {
@@ -163,6 +197,8 @@ pub enum Line {
     MacroName(String),
     /// Browse, save or load a preset for what's under the cursor (decision 310).
     Preset(PresetLine),
+    /// Browse, save or add a patch on the cursor's track (decision 311).
+    Patch(PatchLine),
     Reset(Option<usize>),
     /// Set when launched chains start, or show it.
     Launch(Option<Launch>),
@@ -501,6 +537,10 @@ pub enum LineError {
     )]
     Preset,
     #[error(
+        ":patch lists the patches, :patch save name saves the track's macros and what they move, :patch load name adds one, and :patch! puts one over the last slots and macros, or writes over one saved"
+    )]
+    Patch,
+    #[error(
         ":order takes forward, reverse, up-down, up-down-inc, down-up, down-up-inc, odd-even, hopscotch, converge, diverge, growing, shrinking, pedal, brownian, shuffle, quasi-random, random, jump and how many rows on 2 to 16, arp and how many rows a run takes 2 to 16 and how far on each starts 1 to 16, snake and a snake or its number 1 to 8, or cartesian and its X and Y rates 1 to 16 with X and Y lengths 1 to 8, the numbers if you like, or nothing to choose"
     )]
     Order,
@@ -738,6 +778,8 @@ pub enum Takes {
     Order,
     /// `:preset`'s word, then a preset's name.
     Preset,
+    /// `:patch`'s word, then a patch's name.
+    Patch,
 }
 
 /// A command: its name, what it does, what it takes, and how its argument is read.
@@ -804,7 +846,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 45] = [
+pub const COMMANDS: [Command; 47] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -1038,6 +1080,18 @@ pub const COMMANDS: [Command; 45] = [
         meaning: "Save a preset, writing over one of the same name",
         takes: Takes::Preset,
         parse: |argument| preset(argument, true),
+    },
+    Command {
+        name: "patch",
+        meaning: "Add a patch to this track, keeping its sound, or save or add one by name",
+        takes: Takes::Patch,
+        parse: |argument| patch(argument, false),
+    },
+    Command {
+        name: "patch!",
+        meaning: "Add a patch over the last mod slots and macros, or save over one",
+        takes: Takes::Patch,
+        parse: |argument| patch(argument, true),
     },
     Command {
         name: "macro",

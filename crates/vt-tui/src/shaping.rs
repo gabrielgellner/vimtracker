@@ -57,6 +57,27 @@ fn generating(place: Where, column: ShapeColumn) -> Where {
     }
 }
 
+/// A shape saved elsewhere, as a patch's generator, made to fit a column: a `Where` the column
+/// doesn't offer becomes the one it starts with, as a reshape's `Notes` is a generated column's
+/// `All rows`. A fill it doesn't offer is refused, saying so.
+fn fitted(shape: Shape, column: ShapeColumn) -> Result<Shape, String> {
+    if !column.fills().contains(&shape.kind) {
+        return Err(format!(
+            "The patch's {} generator can't go on {}",
+            shape.kind.name(),
+            column_label(column)
+        ));
+    }
+    let same =
+        |place: &Where| std::mem::discriminant(place) == std::mem::discriminant(&shape.place);
+    let place = if column.wheres().iter().any(same) {
+        shape.place
+    } else {
+        column.default_where()
+    };
+    Ok(Shape { place, ..shape })
+}
+
 /// The open panel. The song underneath it is a preview until `Enter` keeps it.
 #[derive(Debug, Clone)]
 pub struct ShapePanel {
@@ -773,13 +794,7 @@ impl App {
     /// shape the panel opens with, as `vG`, `S` and `L` would, for the Gen page's `Empty`. An
     /// empty FX column lists the commands first. Says whether it did.
     pub(crate) fn make_live(&mut self, field: Field, command: Option<FxCommand>) -> bool {
-        let extent = self.extent();
-        let track = self.cursor.track;
-        let selection = Selection {
-            range: StepRange::between(extent.start, extent.start + extent.length.max(1) - 1),
-            scope: Scope::column(field.group()),
-            tracks: TrackSpan::between(track, track),
-        };
+        let selection = self.loop_selection(field);
         let panel = match self.new_panel(selection, field, command) {
             Ok(panel) => panel,
             Err(Refusal::Reason(reason)) => {
@@ -798,6 +813,57 @@ impl App {
         let name = column_label(panel.parts[0].column);
         self.status = format!("{name} is live: turn it here, Enter opens the panel on it");
         true
+    }
+
+    /// A column of the phrase under the cursor over its loop, as `vG` selects it.
+    fn loop_selection(&self, field: Field) -> Selection {
+        let extent = self.extent();
+        let track = self.cursor.track;
+        Selection {
+            range: StepRange::between(extent.start, extent.start + extent.length.max(1) - 1),
+            scope: Scope::column(field.group()),
+            tracks: TrackSpan::between(track, track),
+        }
+    }
+
+    /// The edit that puts a patch's generator live on a column of the phrase under the cursor,
+    /// over its loop or its lane, judged as `S` judges the column: an empty Note column is
+    /// generated and notes are reshaped, and the generator already live there, `live`, is
+    /// reshaped in place (decision 311). Or why it can't go there.
+    pub(crate) fn patch_generator(
+        &mut self,
+        field: Field,
+        command: Option<FxCommand>,
+        shape: Shape,
+        live: Option<usize>,
+    ) -> Result<Action, String> {
+        let track = self.cursor.track;
+        let phrase = self
+            .phrase_id()
+            .ok_or("This track has no phrase here for the patch's generators")?;
+        if let Some(generator) = live {
+            let column = self
+                .phrase_here()
+                .and_then(|found| found.generators().get(generator))
+                .map(|found| found.column)
+                .ok_or("That generator has gone")?;
+            return Ok(Action::Reshape {
+                track,
+                phrase,
+                generator,
+                shape: fitted(shape, column)?,
+            });
+        }
+        let selection = self.loop_selection(field);
+        let mut panel = match self.new_panel(selection, field, command) {
+            Ok(panel) => panel,
+            Err(Refusal::Reason(reason)) => return Err(reason.to_owned()),
+            Err(Refusal::Command(_)) => {
+                return Err("The patch's FX generator has no command".to_owned());
+            }
+        };
+        panel.shape = fitted(shape, panel.parts[0].column)?;
+        Ok(panel.live_action())
     }
 
     /// The phrases these parts can follow, and the one to start on: the phrase beside them on the

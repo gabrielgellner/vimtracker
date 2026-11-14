@@ -25,6 +25,7 @@ struct Lists {
     renders: Vec<PathBuf>,
     sounds: Vec<PathBuf>,
     effects: Vec<PathBuf>,
+    patches: Vec<PathBuf>,
 }
 
 /// The folders used recently, and where they're kept.
@@ -73,6 +74,7 @@ impl RecentPlaces {
             Purpose::Render => &self.lists.renders,
             Purpose::Preset(PresetKind::Sound) => &self.lists.sounds,
             Purpose::Preset(PresetKind::Effect) => &self.lists.effects,
+            Purpose::Preset(PresetKind::Patch) => &self.lists.patches,
         }
     }
 
@@ -84,6 +86,7 @@ impl RecentPlaces {
             Purpose::Render => &mut self.lists.renders,
             Purpose::Preset(PresetKind::Sound) => &mut self.lists.sounds,
             Purpose::Preset(PresetKind::Effect) => &mut self.lists.effects,
+            Purpose::Preset(PresetKind::Patch) => &mut self.lists.patches,
         }
     }
 
