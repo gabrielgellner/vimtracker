@@ -15,13 +15,13 @@ use ratatui::crossterm::terminal;
 use ratatui::style::Color;
 use vt_engine::dsp::distort::{DEFAULT_NOTE, transfer};
 use vt_engine::dsp::effects::tail::Tail;
-use vt_engine::dsp::effects::{delay, plate, resonator, reverb, space, spring};
+use vt_engine::dsp::effects::{delay, echo, plate, resonator, reverb, space, spring};
 use vt_engine::dsp::filters::{comb, lpg, vowel};
 use vt_engine::engine::PLAYHEADS;
 use vt_engine::track_state::{LfoNow, LiveValues};
 use vt_model::bank::{ContentHash, Points};
 use vt_model::insert::{
-    Comb, Compressor, Delay, Distort, Equaliser, GateMode, INSERTS, Insert, LowPassGate,
+    Comb, Compressor, Delay, Distort, Echo, Equaliser, GateMode, INSERTS, Insert, LowPassGate,
     MAX_PARAMS, Resonator, Vowel, shift_semitones,
 };
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
@@ -713,8 +713,9 @@ pub(crate) enum SlotDrawing {
     Reso(Resonator, Cents),
     Comb(Comb, Cents),
     Vowel(Vowel, Cents),
-    /// A delay's repeats, at the song's tempo in thousandths of a BPM.
+    /// A delay's repeats, at the song's tempo in thousandths of a BPM, and a Space Echo's.
     Delay(Delay, u32),
+    Echo(Echo, u32),
     /// A reverb's tail: a `Reverb`, `Plate`, `Spring` or `Space`.
     Tail(Insert),
 }
@@ -730,6 +731,16 @@ struct Repeated {
 impl Repeated {
     fn of(settings: Delay, millibpm: u32, rate: u32) -> Self {
         let shown = delay::repeats(settings, delay::frames_per_tick(millibpm, rate), rate);
+        Self::shown(&shown, millibpm)
+    }
+
+    /// A Space Echo's, whose repeats come at each of its heads and as they go round.
+    fn of_echo(settings: Echo, millibpm: u32, rate: u32) -> Self {
+        let shown = echo::repeats(settings, delay::frames_per_tick(millibpm, rate), rate);
+        Self::shown(&shown, millibpm)
+    }
+
+    fn shown(shown: &delay::Repeats, millibpm: u32) -> Self {
         let mut sounds = vec![(0.0, [shown.dry; 2])];
         sounds.extend(shown.taps.iter().map(|tap| (tap.seconds, tap.levels)));
         // A repeat's time past the last, so it isn't on the edge.
@@ -877,6 +888,7 @@ impl SlotDrawing {
             Insert::Comb(settings) => Some(Self::Comb(settings, note)),
             Insert::Vowel(settings) => Some(Self::Vowel(settings, note)),
             Insert::Delay(settings) => Some(Self::Delay(settings, millibpm)),
+            Insert::Echo(settings) => Some(Self::Echo(settings, millibpm)),
             playing @ (Insert::Reverb(_)
             | Insert::Plate(_)
             | Insert::Spring(_)
@@ -895,6 +907,7 @@ impl SlotDrawing {
             | Self::Comb(..)
             | Self::Vowel(..)
             | Self::Delay(..)
+            | Self::Echo(..)
             | Self::Tail(_) => EQ_CURVE_WIDTH,
         }
     }
@@ -910,6 +923,7 @@ impl SlotDrawing {
             | Self::Comb(..)
             | Self::Vowel(..)
             | Self::Delay(..)
+            | Self::Echo(..)
             | Self::Tail(_) => ZOOM_EQ_WIDTH,
         };
         (width, ZOOM_PANEL_HEIGHT)
@@ -955,6 +969,10 @@ impl SlotDrawing {
                 let shown = Repeated::of(settings, millibpm, rate);
                 plot::repeats(&shown.sounds, shown.beat, shown.span, size)
             }
+            Self::Echo(settings, millibpm) => {
+                let shown = Repeated::of_echo(settings, millibpm, rate);
+                plot::repeats(&shown.sounds, shown.beat, shown.span, size)
+            }
             Self::Tail(insert) => match tail_of(insert, rate) {
                 Some(tail) => {
                     let (span, every) = tail_span(tail);
@@ -980,6 +998,9 @@ impl SlotDrawing {
         match self {
             Self::Delay(settings, millibpm) => {
                 Some(Repeated::of(settings, millibpm, rate).caption())
+            }
+            Self::Echo(settings, millibpm) => {
+                Some(Repeated::of_echo(settings, millibpm, rate).caption())
             }
             Self::Tail(insert) => tail_of(insert, rate).map(tail_caption),
             _ => None,

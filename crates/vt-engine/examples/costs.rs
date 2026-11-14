@@ -16,7 +16,7 @@ use vt_engine::published::Published;
 use vt_model::bank::{BankEntry, ContentHash};
 use vt_model::insert::{
     BEADS_QUALITY_NAMES, Beads, BeadsMode, Chorus, ChorusType, Clouds, CloudsMode, Compressor,
-    CompressorType, Distort, DistortType, Exciter, FreqShift, Grains, INSERTS, Insert, Pitch,
+    CompressorType, Distort, DistortType, Echo, Exciter, FreqShift, Grains, INSERTS, Insert, Pitch,
     Plate, QUALITY_NAMES, Rotary, Space, Spring, Stutter, Warps,
 };
 use vt_model::modulation::{MOD_SLOTS, ModKind};
@@ -259,6 +259,21 @@ fn effects() -> Vec<(String, Insert)> {
         ..delay
     };
     all.push(("Beads Delay shifted".to_owned(), Insert::Beads(shifted)));
+    // The Space Echo with all three heads and its spring, wobbling, as fed back as it goes before
+    // it runs away, its tone moving: the most it does at once.
+    let echo = Echo {
+        mode: 10,
+        intensity: 0xD0,
+        wow: 0xFF,
+        reverb: 0xFF,
+        bass: 0xC0,
+        treble: 0x40,
+        ..Echo::DEFAULT
+    };
+    all.push((
+        "Space Echo, three heads, wow, spring".to_owned(),
+        Insert::Echo(echo),
+    ));
     all
 }
 
