@@ -1159,7 +1159,7 @@ mod tests {
             .map(|x| plot.marks[(y as usize) * 600 + x])
             .collect();
         assert!(row.contains(&FAINTER));
-        assert!(row.iter().any(|mark| *mark == 0), "dotted");
+        assert!(row.contains(&0), "dotted");
     }
 
     #[test]
