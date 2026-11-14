@@ -1,6 +1,6 @@
 //! What songs and presets store things by, which a refactor mustn't move: each setting's place
 //! and key, each effect's, machine's, fill's and mod type's name, and each generator setting's key
-//! (the device-interface plan's §2.6, #718).
+//! (`docs/designs/device-interface.md` §2.6, #718).
 //!
 //! Each list is kept in `golden/`, one line to a thing, in order. `VT_BLESS=1` writes them again
 //! after an intended change, which then shows in the diff.
