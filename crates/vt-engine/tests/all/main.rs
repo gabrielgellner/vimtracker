@@ -1,6 +1,8 @@
 //! The engine's behaviour tests, a module for each feature, built as one binary so that they link
 //! once rather than once a file (#719). A new file of tests needs its `mod` line here.
 
+use std::path::Path;
+
 mod support;
 
 mod accumulators;
@@ -67,3 +69,33 @@ mod trim;
 mod tutorial_songs;
 mod variations;
 mod velocity_delta;
+
+/// Every file here has its `mod` line, as one without isn't built, and none sits beside this
+/// folder, where it would link a binary of its own.
+#[test]
+fn every_file_of_tests_is_in_this_binary() {
+    let tests = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let main = include_str!("main.rs");
+    for name in rust_files(&tests.join("all")) {
+        assert!(
+            name == "main" || main.contains(&format!("\nmod {name};\n")),
+            "tests/all/{name}.rs isn't built without `mod {name};` in main.rs"
+        );
+    }
+    let alone = rust_files(&tests);
+    assert!(
+        alone.is_empty(),
+        "{alone:?} in tests/ each link a binary of their own: move them into tests/all/"
+    );
+}
+
+/// The names of the Rust files in a folder, without `.rs`.
+fn rust_files(folder: &Path) -> Vec<String> {
+    std::fs::read_dir(folder)
+        .unwrap()
+        .filter_map(|entry| {
+            let path = entry.unwrap().path();
+            Some(path.file_name()?.to_str()?.strip_suffix(".rs")?.to_owned())
+        })
+        .collect()
+}
