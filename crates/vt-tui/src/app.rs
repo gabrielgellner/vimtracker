@@ -45,9 +45,10 @@ use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::Picker;
 use crate::jumping::FieldJump;
+use crate::mixer_page::MixerPage;
 use crate::recording::Recording;
 use crate::shaping::ShapePanel;
-use crate::track_page::{MIXER_START, TrackPage};
+use crate::track_page::TrackPage;
 use crate::tree::{ChainColumn, Place};
 
 mod commands;
@@ -239,8 +240,8 @@ pub struct App {
     pub library: Option<PathBuf>,
     pub mode: Mode,
     pub view: View,
-    /// The mixer's row.
-    pub mixer_row: usize,
+    /// The mixer: the row its cursor is on.
+    pub mixer_page: MixerPage,
     pub song_column: usize,
     /// The section the engine is on.
     pub playing_section: usize,
@@ -511,7 +512,7 @@ impl App {
             rate,
             mode: Mode::Normal,
             view: View::Phrase,
-            mixer_row: MIXER_START,
+            mixer_page: MixerPage::default(),
             song_column: 0,
             playing_section: 0,
             looping: None,
