@@ -657,29 +657,29 @@ const ACCENT: Entry = level("accent", "Accent", "ACC", DEFAULT_ACCENT);
 /// always runs free, where its oscillators start (decision 190).
 const DRIFT: Entry = level("drift", "Drift", "DRFT", 0x00);
 
-const VA: [Entry; 4] = [
+pub(crate) const VA: [Entry; 4] = [
     centred("detune", "Detune", "DTUN"),
     level("square", "Square", "SQR", 0x00),
     level("saw", "Saw", "SAW", 0x80),
     DRIFT,
 ];
-const FM: [Entry; 3] = [
+pub(crate) const FM: [Entry; 3] = [
     level("ratio", "Ratio", "RAT", 0x80),
     level("index", "Index", "INDX", 0x00),
     centred("feedback", "Feedback", "FDBK"),
 ];
-const VCF: [Entry; 4] = [
+pub(crate) const VCF: [Entry; 4] = [
     centred("resonance", "Resonance", "RESO"),
     level("frequency", "Frequency", "FREQ", 0x80),
     level("wave", "Wave", "WAVE", 0x40),
     DRIFT,
 ];
-const PD: [Entry; 3] = [
+pub(crate) const PD: [Entry; 3] = [
     level("ratio", "Ratio", "RAT", 0x80),
     level("amount", "Amount", "AMNT", 0x80),
     level("skew", "Skew", "SKEW", 0x40),
 ];
-const FORMANT: [Entry; 3] = [
+pub(crate) const FORMANT: [Entry; 3] = [
     Entry {
         default: 0x99,
         ..centred("interval", "Interval", "INTV")
@@ -687,12 +687,12 @@ const FORMANT: [Entry; 3] = [
     level("formant", "Formant", "FRMT", 0x80),
     level("width", "Width", "WDTH", 0x80),
 ];
-const ADDITIVE: [Entry; 3] = [
+pub(crate) const ADDITIVE: [Entry; 3] = [
     level("bumps", "Bumps", "BMPS", 0x00),
     level("peak", "Peak", "PEAK", 0x4D),
     level("shape", "Shape", "SHPE", 0x80),
 ];
-const SWARM: [Entry; 3] = [
+pub(crate) const SWARM: [Entry; 3] = [
     level("spread", "Spread", "SPRD", 0x66),
     level("density", "Density", "DENS", 0x80),
     level("overlap", "Overlap", "OVLP", 0x99),
@@ -704,7 +704,7 @@ const SAW_COUNTS: [&str; 8] = ["1", "2", "3", "4", "5", "6", "7", "8"];
 const SUPERSAW_MODES: [&str; 3] = ["Unison", "Fifths", "Sub"];
 /// `Supersaw`'s: seven saws a little apart, as Roland's has, all as loud, half wide, each starting
 /// anywhere in its cycle.
-const SUPERSAW: [Entry; 9] = [
+pub(crate) const SUPERSAW: [Entry; 9] = [
     Entry {
         key: "stack",
         name: "Stack",
@@ -753,7 +753,7 @@ const fn in_units(
 /// The acid voice's waves: the saw, and the square a TB-303 shapes from it.
 const ACID_WAVES: [&str; 2] = ["Saw", "Square"];
 /// The acid voice's, in the order of a TB-303's knobs, then two of the Devil Fish's, then `Drift`.
-const ACID: [Entry; 9] = [
+pub(crate) const ACID: [Entry; 9] = [
     Entry {
         key: "wave",
         name: "Wave",
@@ -788,33 +788,33 @@ const CHORD_TYPE: Entry = Entry {
     },
     default: 10,
 };
-const TERRAIN: [Entry; 3] = [
+pub(crate) const TERRAIN: [Entry; 3] = [
     level("terrain", "Terrain", "TERR", 0x00),
     level("size", "Size", "SIZE", 0x80),
     level("offset", "Offset", "OFST", 0x80),
 ];
-const CHORD: [Entry; 3] = [
+pub(crate) const CHORD: [Entry; 3] = [
     CHORD_TYPE,
     level("inversion", "Inversion", "INV", 0x66),
     level("wave", "Wave", "WAVE", 0x40),
 ];
-const CHIPTUNE: [Entry; 4] = [
+pub(crate) const CHIPTUNE: [Entry; 4] = [
     CHORD_TYPE,
     level("inversion", "Inversion", "INV", 0x66),
     centred("shape", "Shape", "SHPE"),
     DRIFT,
 ];
-const FOLD: [Entry; 3] = [
+pub(crate) const FOLD: [Entry; 3] = [
     centred("shape", "Shape", "SHPE"),
     level("fold", "Fold", "FOLD", 0x00),
     level("slope", "Slope", "SLPE", 0x80),
 ];
-const WAVES: [Entry; 3] = [
+pub(crate) const WAVES: [Entry; 3] = [
     level("bank", "Bank", "BANK", 0x80),
     level("wave", "Wave", "WAVE", 0x00),
     level("row", "Row", "ROW", 0x80),
 ];
-const SIX_OP: [Entry; 4] = [
+pub(crate) const SIX_OP: [Entry; 4] = [
     Entry {
         key: "patch",
         name: "Patch",
@@ -831,29 +831,29 @@ const SIX_OP: [Entry; 4] = [
     ACCENT,
 ];
 /// A string's or a bar's: Material starts where it's in tune.
-const STRUCK: [Entry; 4] = [
+pub(crate) const STRUCK: [Entry; 4] = [
     level("material", "Material", "MATL", 0x40),
     level("bright", "Bright", "BRT", 0x00),
     level("decay", "Decay", "DCAY", 0x80),
     ACCENT,
 ];
-const DUST: [Entry; 3] = [
+pub(crate) const DUST: [Entry; 3] = [
     level("spread", "Spread", "SPRD", 0x80),
     level("density", "Density", "DENS", 0x00),
     centred("filter", "Filter", "FILT"),
 ];
-const NOISE: [Entry; 3] = [
+pub(crate) const NOISE: [Entry; 3] = [
     centred("type", "Type", "TYPE"),
     level("clock", "Clock", "CLCK", 0x00),
     level("ring", "Ring", "RING", 0x80),
 ];
-const KICK: [Entry; 4] = [
+pub(crate) const KICK: [Entry; 4] = [
     level("punch", "Punch", "PNCH", 0x80),
     level("tone", "Tone", "TONE", 0x00),
     level("decay", "Decay", "DCAY", 0x80),
     ACCENT,
 ];
-const SNARE: [Entry; 4] = [
+pub(crate) const SNARE: [Entry; 4] = [
     level("snappy", "Snappy", "SNAP", 0x80),
     level("tone", "Tone", "TONE", 0x00),
     level("decay", "Decay", "DCAY", 0x80),
@@ -861,14 +861,14 @@ const SNARE: [Entry; 4] = [
 ];
 /// Plaits' speech: its three knobs, then its prosody and speed, the attenuverters it takes them
 /// from, none at `80`. It starts on the first bank of words.
-const SPEECH: [Entry; 5] = [
+pub(crate) const SPEECH: [Entry; 5] = [
     level("model", "Model", "MODL", 0x80),
     level("species", "Species", "SPCS", 0x80),
     level("word", "Word", "WORD", 0x00),
     centred("prosody", "Prosody", "PROS"),
     centred("speed", "Speed", "SPED"),
 ];
-const HAT: [Entry; 4] = [
+pub(crate) const HAT: [Entry; 4] = [
     level("noise", "Noise", "NOIS", 0x80),
     level("tone", "Tone", "TONE", 0x00),
     level("decay", "Decay", "DCAY", 0x80),
@@ -876,21 +876,21 @@ const HAT: [Entry; 4] = [
 ];
 
 /// Braids' models have its `Timbre` and `Color` first, named for what they do on each.
-const CSAW: [Entry; 2] = [
+pub(crate) const CSAW: [Entry; 2] = [
     level("notch", "Notch", "NTCH", 0x40),
     level("depth", "Depth", "DPTH", 0x80),
 ];
-const MORPH: [Entry; 2] = [
+pub(crate) const MORPH: [Entry; 2] = [
     level("shape", "Shape", "SHPE", 0x55),
     level("fuzz", "Fuzz", "FUZZ", 0x00),
 ];
-const SAW_SQUARE: [Entry; 2] = [
+pub(crate) const SAW_SQUARE: [Entry; 2] = [
     level("width", "Width", "WDTH", 0x00),
     level("mix", "Mix", "MIX", 0x80),
 ];
 /// The waves `Sync` plays both of its oscillators with.
 const SYNC_WAVES: [&str; 2] = ["Square", "Saw"];
-const SYNC: [Entry; 3] = [
+pub(crate) const SYNC: [Entry; 3] = [
     Entry {
         key: "wave",
         name: "Wave",
@@ -907,7 +907,7 @@ const SYNC: [Entry; 3] = [
 /// The waves `Triple` plays all three of its oscillators with.
 const TRIPLE_WAVES: [&str; 4] = ["Saw", "Square", "Triangle", "Sine"];
 /// Its second and third oscillators start a fifth and an octave up.
-const TRIPLE: [Entry; 3] = [
+pub(crate) const TRIPLE: [Entry; 3] = [
     Entry {
         key: "wave",
         name: "Wave",
@@ -921,11 +921,11 @@ const TRIPLE: [Entry; 3] = [
     level("second", "Second", "SCND", 0xA8),
     level("third", "Third", "THRD", 0xC0),
 ];
-const RING: [Entry; 2] = [
+pub(crate) const RING: [Entry; 2] = [
     level("first", "First", "FRST", 0xA0),
     level("second", "Second", "SCND", 0xB0),
 ];
-const SAW_COMB: [Entry; 2] = [
+pub(crate) const SAW_COMB: [Entry; 2] = [
     level("tune", "Tune", "TUNE", 0xA0),
     Entry {
         default: 0xC0,
@@ -934,7 +934,7 @@ const SAW_COMB: [Entry; 2] = [
 ];
 /// The filters `Z Filter` sounds like.
 const Z_FILTER_TYPES: [&str; 4] = ["LP", "Peak", "BP", "HP"];
-const Z_FILTER: [Entry; 3] = [
+pub(crate) const Z_FILTER: [Entry; 3] = [
     Entry {
         key: "type",
         name: "Type",
@@ -949,70 +949,70 @@ const Z_FILTER: [Entry; 3] = [
     level("shape", "Shape", "SHPE", 0x40),
 ];
 /// Feedback and chaotic FM start at 1:1, where `Ratio` holds from `6C` to `6F`.
-const FEEDBACK_FM: [Entry; 2] = [
+pub(crate) const FEEDBACK_FM: [Entry; 2] = [
     level("amount", "Amount", "AMNT", 0x60),
     level("ratio", "Ratio", "RAT", 0x6E),
 ];
 /// `VOSIM`'s sines sit at pitches of their own, as MIDI notes from `00` to `FF`.
-const VOSIM: [Entry; 2] = [
+pub(crate) const VOSIM: [Entry; 2] = [
     level("formant", "Formant", "FRMT", 0xA0),
     level("second", "Second", "SCND", 0xC0),
 ];
-const FOF: [Entry; 2] = [
+pub(crate) const FOF: [Entry; 2] = [
     level("vowel", "Vowel", "VOWL", 0x00),
     level("voice", "Voice", "VOIC", 0x40),
 ];
-const BOWED: [Entry; 2] = [
+pub(crate) const BOWED: [Entry; 2] = [
     level("pressure", "Pressure", "PRES", 0x80),
     level("position", "Position", "POSN", 0x40),
 ];
 /// A reed speaks most readily with little noise in its breath.
-const BLOWN: [Entry; 2] = [
+pub(crate) const BLOWN: [Entry; 2] = [
     level("breath", "Breath", "BRTH", 0xC0),
     level("tone", "Tone", "TONE", 0x40),
 ];
-const FLUTED: [Entry; 2] = [
+pub(crate) const FLUTED: [Entry; 2] = [
     level("breath", "Breath", "BRTH", 0x80),
     level("jet", "Jet", "JET", 0x80),
 ];
 /// The struck ones ring on without dying away from `FA` up.
-const STRUCK_BELL: [Entry; 2] = [
+pub(crate) const STRUCK_BELL: [Entry; 2] = [
     level("decay", "Decay", "DCAY", 0xA0),
     level("detune", "Detune", "DTUN", 0x20),
 ];
-const STRUCK_DRUM: [Entry; 2] = [
+pub(crate) const STRUCK_DRUM: [Entry; 2] = [
     level("decay", "Decay", "DCAY", 0x80),
     level("tone", "Tone", "TONE", 0x40),
 ];
-const WAVE_MAP: [Entry; 2] = [
+pub(crate) const WAVE_MAP: [Entry; 2] = [
     level("across", "Across", "ACRS", 0x40),
     level("down", "Down", "DOWN", 0x40),
 ];
-const WAVE_LINE: [Entry; 2] = [
+pub(crate) const WAVE_LINE: [Entry; 2] = [
     level("scan", "Scan", "SCAN", 0x40),
     level("steps", "Steps", "STEP", 0x60),
 ];
-const PARAPHONIC: [Entry; 2] = [
+pub(crate) const PARAPHONIC: [Entry; 2] = [
     level("wave", "Wave", "WAVE", 0x40),
     level("chord", "Chord", "CHRD", 0x88),
 ];
-const TWIN_PEAKS: [Entry; 2] = [
+pub(crate) const TWIN_PEAKS: [Entry; 2] = [
     level("sharpness", "Sharpness", "SHRP", 0xA0),
     level("spacing", "Spacing", "SPAC", 0xA0),
 ];
-const CLOCKED: [Entry; 2] = [
+pub(crate) const CLOCKED: [Entry; 2] = [
     level("loop", "Loop", "LOOP", 0x00),
     level("steps", "Steps", "STEP", 0xFF),
 ];
-const GRAIN_CLOUD: [Entry; 2] = [
+pub(crate) const GRAIN_CLOUD: [Entry; 2] = [
     level("length", "Length", "LENG", 0x80),
     level("spread", "Spread", "SPRD", 0x40),
 ];
-const MODEM: [Entry; 2] = [
+pub(crate) const MODEM: [Entry; 2] = [
     level("baud", "Baud", "BAUD", 0xC0),
     level("data", "Data", "DATA", 0x80),
 ];
-const TOY: [Entry; 2] = [
+pub(crate) const TOY: [Entry; 2] = [
     level("clock", "Clock", "CLCK", 0xC0),
     level("bend", "Bend", "BEND", 0x00),
 ];
@@ -1130,7 +1130,7 @@ macro_rules! operator {
 
 /// `4-op`'s: its algorithm, feedback, ring modulation and beating, then each operator's. It
 /// starts as a stack with only operator 2 bending 1, a little, for a plain, warm tone.
-const FOUR_OP: [Entry; MAX_MACHINE_SETTINGS] = {
+pub(crate) const FOUR_OP: [Entry; MAX_MACHINE_SETTINGS] = {
     let shared = [
         listed("algorithm", "Algorithm", "ALGO", &FOUR_OP_ALGORITHMS, 0),
         centred("feedback", "Feedback", "FDBK"),
@@ -1164,110 +1164,12 @@ const FOUR_OP: [Entry; MAX_MACHINE_SETTINGS] = {
 
 /// A voice's settings, in the order it takes them.
 pub const fn voice_entries(voice: SynthVoice) -> &'static [Entry] {
-    match voice {
-        SynthVoice::VirtualAnalog => &VA,
-        SynthVoice::VirtualAnalogVcf => &VCF,
-        SynthVoice::Acid => &ACID,
-        SynthVoice::Fm => &FM,
-        SynthVoice::PhaseDistortion => &PD,
-        SynthVoice::Waveshaping => &FOLD,
-        SynthVoice::Formant => &FORMANT,
-        SynthVoice::Additive => &ADDITIVE,
-        SynthVoice::Swarm => &SWARM,
-        SynthVoice::Supersaw => &SUPERSAW,
-        SynthVoice::WaveTerrain => &TERRAIN,
-        SynthVoice::Chord => &CHORD,
-        SynthVoice::Chiptune => &CHIPTUNE,
-        SynthVoice::Wavetable => &WAVES,
-        SynthVoice::SixOp => &SIX_OP,
-        SynthVoice::FourOp => &FOUR_OP,
-        SynthVoice::String | SynthVoice::Modal => &STRUCK,
-        SynthVoice::Dust => &DUST,
-        SynthVoice::Noise => &NOISE,
-        SynthVoice::Kick => &KICK,
-        SynthVoice::Snare => &SNARE,
-        SynthVoice::Hat => &HAT,
-        SynthVoice::CSaw => &CSAW,
-        SynthVoice::Morph => &MORPH,
-        SynthVoice::SawSquare => &SAW_SQUARE,
-        SynthVoice::HardSync => &SYNC,
-        SynthVoice::Triple => &TRIPLE,
-        SynthVoice::Ring => &RING,
-        SynthVoice::SawComb => &SAW_COMB,
-        SynthVoice::Toy => &TOY,
-        SynthVoice::ZFilter => &Z_FILTER,
-        SynthVoice::FeedbackFm | SynthVoice::ChaoticFm => &FEEDBACK_FM,
-        SynthVoice::Vosim => &VOSIM,
-        SynthVoice::Fof => &FOF,
-        SynthVoice::Bowed => &BOWED,
-        SynthVoice::Blown => &BLOWN,
-        SynthVoice::Fluted => &FLUTED,
-        SynthVoice::Bell => &STRUCK_BELL,
-        SynthVoice::Drum => &STRUCK_DRUM,
-        SynthVoice::WaveMap => &WAVE_MAP,
-        SynthVoice::WaveLine => &WAVE_LINE,
-        SynthVoice::Paraphonic => &PARAPHONIC,
-        SynthVoice::TwinPeaks => &TWIN_PEAKS,
-        SynthVoice::Clocked => &CLOCKED,
-        SynthVoice::GrainCloud => &GRAIN_CLOUD,
-        SynthVoice::Modem => &MODEM,
-        SynthVoice::Speech => &SPEECH,
-    }
+    voice.spec().params
 }
 
 /// The name a voice's settings are stored under.
 pub const fn voice_key(voice: SynthVoice) -> &'static str {
-    match voice {
-        SynthVoice::VirtualAnalog => "va",
-        SynthVoice::VirtualAnalogVcf => "vcf",
-        SynthVoice::Acid => "acid",
-        SynthVoice::Fm => "fm",
-        SynthVoice::PhaseDistortion => "pd",
-        SynthVoice::Waveshaping => "fold",
-        SynthVoice::Formant => "formant",
-        SynthVoice::Additive => "additive",
-        SynthVoice::Swarm => "swarm",
-        SynthVoice::Supersaw => "supersaw",
-        SynthVoice::WaveTerrain => "terrain",
-        SynthVoice::Chord => "chord",
-        SynthVoice::Chiptune => "chiptune",
-        SynthVoice::Wavetable => "waves",
-        SynthVoice::SixOp => "6op",
-        SynthVoice::FourOp => "4op",
-        SynthVoice::String => "string",
-        SynthVoice::Modal => "modal",
-        SynthVoice::Dust => "dust",
-        SynthVoice::Noise => "noise",
-        SynthVoice::Kick => "kick",
-        SynthVoice::Snare => "snare",
-        SynthVoice::Hat => "hat",
-        SynthVoice::CSaw => "csaw",
-        SynthVoice::Morph => "morph",
-        SynthVoice::SawSquare => "sawsquare",
-        SynthVoice::HardSync => "sync",
-        SynthVoice::Triple => "triple",
-        SynthVoice::Ring => "ring",
-        SynthVoice::SawComb => "sawcomb",
-        SynthVoice::Toy => "toy",
-        SynthVoice::ZFilter => "zfilter",
-        SynthVoice::FeedbackFm => "fbfm",
-        SynthVoice::ChaoticFm => "chaosfm",
-        SynthVoice::Vosim => "vosim",
-        SynthVoice::Fof => "fof",
-        SynthVoice::Bowed => "bowed",
-        SynthVoice::Blown => "blown",
-        SynthVoice::Fluted => "fluted",
-        SynthVoice::Bell => "bell",
-        SynthVoice::Drum => "drum",
-        SynthVoice::WaveMap => "wavemap",
-        SynthVoice::WaveLine => "waveline",
-        SynthVoice::Paraphonic => "paraphonic",
-        SynthVoice::TwinPeaks => "twinpeaks",
-        SynthVoice::Clocked => "clocked",
-        SynthVoice::GrainCloud => "graincloud",
-        SynthVoice::Modem => "modem",
-        SynthVoice::Speech => "speech",
-    }
+    voice.spec().key
 }
 
 /// A mod slot's settings that steps can lock: its depth and polarity, whatever its type, and an
