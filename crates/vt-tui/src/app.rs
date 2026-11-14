@@ -408,8 +408,8 @@ pub struct App {
     /// The phrase view shows the row inspector right of the overview, for this session
     /// (decision 255).
     pub inspector: bool,
-    /// Which groups are folded in the song view, the mixer and the phrase view's overview, for
-    /// this song and this session (decision 128).
+    /// Which groups are folded, read from the song's `view` when it opens and written into it
+    /// when it's saved, not undone (decisions 128 and 305).
     pub folds: Folds,
     pub help_scroll: usize,
     /// The open guide, how far it has scrolled, and how many of its rows fit.
@@ -498,6 +498,7 @@ impl App {
         let levels = live_from(&song);
         let scale = song.scale;
         let auto_jump = song.auto_jump;
+        let folds = Folds::from_view(&song.view);
         let mut names = Names::from_clock();
         let mut song = song;
         name_song(&mut song, folder.as_deref(), &mut names);
@@ -611,7 +612,7 @@ impl App {
             view_height: 16,
             rows_collapsed: false,
             inspector: false,
-            folds: Folds::default(),
+            folds,
             help_scroll: 0,
             guide: None,
             guide_scroll: 0,
@@ -702,11 +703,12 @@ impl App {
         }
     }
 
-    /// The song as saved: with live mute, solo and the scale written into it.
+    /// The song as saved: with live mute, solo, the scale and the folds written into it.
     pub(crate) fn song_to_save(&self) -> Arc<Song> {
         let mut song = Song::clone(self.song());
         song.scale = self.scale;
         song.auto_jump = self.auto_jump;
+        song.view = self.folds.view();
         for (track, live) in song.tracks.iter_mut().zip(&self.levels) {
             track.mute = live.mute;
             track.solo = live.solo;

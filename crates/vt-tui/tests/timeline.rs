@@ -178,7 +178,7 @@ fn the_view_scrolls_by_the_lines_rows_take() {
     app.follow_cursor(21);
     assert_eq!(app.top, 14, "the last two rows fill 16 of the lines");
     // Collapsed, a row a line again, so every row fits.
-    press(&mut app, "za");
+    press(&mut app, "zi");
     app.follow_cursor(21);
     assert_eq!(app.top, 0);
 }
@@ -197,19 +197,19 @@ fn the_playheads_follow_the_timeline() {
 }
 
 #[test]
-fn z_a_collapses_the_timeline_to_a_line_a_row_and_opens_it_again() {
+fn z_i_collapses_the_timeline_to_a_line_a_row_and_opens_it_again() {
     let (mut app, _realtime) = timeline_song(&UNEVEN, 16, vt_model::speed::Speed::Sixteenth);
     assert!(app.timeline_on(), "the timeline is the default");
-    press(&mut app, "za");
+    press(&mut app, "zi");
     assert!(!app.timeline_on());
-    assert!(app.status.contains("z a"), "{}", app.status);
+    assert!(app.status.contains("z i"), "{}", app.status);
     let buffer = screen(&app);
     for row in 0..7 {
         assert_eq!(row_number_at(&buffer, row + 2), format!(" {row:02}"));
     }
     // Collapsed, the other tracks' columns go by row number, as before the timeline.
     assert_eq!(beside(&buffer, 0, 3).0, format!(" {}", note_name(3)));
-    press(&mut app, "za");
+    press(&mut app, "zi");
     assert!(app.timeline_on());
     assert_eq!(row_number_at(&screen(&app), 5), " 02");
 }
@@ -218,6 +218,6 @@ fn z_a_collapses_the_timeline_to_a_line_a_row_and_opens_it_again() {
 fn a_view_with_nothing_to_lay_out_in_time_looks_as_it_did() {
     let (mut app, _realtime) = timeline_song(&[1; 16], 16, vt_model::speed::Speed::Sixteenth);
     let timeline = screen(&app);
-    press(&mut app, "za");
+    press(&mut app, "zi");
     assert_eq!(screen(&app), timeline);
 }

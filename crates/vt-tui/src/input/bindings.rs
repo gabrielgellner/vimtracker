@@ -60,6 +60,9 @@ pub enum Cmd {
     Quit,
     NextTrack,
     PreviousTrack,
+    /// Go to the next group, or the previous one, folded or open.
+    NextGroupTrack,
+    PreviousGroupTrack,
     ToggleMute,
     ToggleSolo,
     /// Switch the cursor's track's mute, or its solo, at the next line of the launch grid, or
@@ -159,7 +162,7 @@ pub enum Cmd {
     ToggleTimeline,
     /// Show the row inspector beside the phrase view's overview, or hide it.
     ToggleInspector,
-    /// Fold the group the cursor is on or in, or open it, in the song view and the mixer.
+    /// Fold the group the cursor is on or in, or open it.
     ToggleFold,
     /// Fold every group, or open every one.
     FoldAll(bool),
@@ -330,6 +333,12 @@ const EVERY_VIEW: &[(&str, Cmd, &str)] = &[
     ("B", Cmd::PreviousTrack, "Previous track"),
     ("] b", Cmd::NextTrack, "Next track"),
     ("[ b", Cmd::PreviousTrack, "Previous track"),
+    ("] g", Cmd::NextGroupTrack, "Next group, folded or open"),
+    (
+        "[ g",
+        Cmd::PreviousGroupTrack,
+        "Previous group, folded or open",
+    ),
 ];
 
 /// One beat, as a slide.
@@ -399,7 +408,7 @@ const NORMAL: &[(&str, Cmd, &str)] = &[
     ("M-2", Cmd::WidenGrid, "Wider grid for the arrows in Insert"),
     ("M-s", Cmd::ToggleScale, "Scale on or off"),
     (
-        "z a",
+        "z i",
         Cmd::ToggleTimeline,
         "Collapse the timeline to a line a row, or open it again",
     ),
@@ -948,8 +957,8 @@ const MIXER: &[(&str, Cmd, &str)] = &[
     ("/", Cmd::FieldJump, "Jump to a setting by its name"),
 ];
 
-/// Keys for the views that fold a group's tracks into it, the song view and the mixer, after Vim's
-/// folds (decision 128).
+/// Keys to fold a group's tracks into it, after Vim's folds, in every view that shows tracks
+/// (decisions 128 and 305).
 const FOLDS: &[(&str, Cmd, &str)] = &[
     (
         "z a",
@@ -1079,11 +1088,14 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Normal, MOTIONS);
     add(Mode::Normal, VIEWPORT);
     add(Mode::Normal, NORMAL);
+    add(Mode::Normal, FOLDS);
     add(Mode::Normal, EVERY_VIEW);
     add(Mode::Insert, INSERT_NOTE);
     add(Mode::Chain, CHAIN);
+    add(Mode::Chain, FOLDS);
     add(Mode::Chain, EVERY_VIEW);
     add(Mode::Track, TRACK_PAGE);
+    add(Mode::Track, FOLDS);
     add(Mode::Track, EVERY_VIEW);
     add(Mode::Song, SONG);
     add(Mode::Song, FOLDS);

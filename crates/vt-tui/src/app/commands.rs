@@ -357,6 +357,7 @@ impl App {
         self.levels = live_from(&song);
         self.scale = song.scale;
         self.auto_jump = song.auto_jump;
+        self.folds = Folds::from_view(&song.view);
         self.send_live();
         self.history = History::new(Arc::new(song));
         // Another song's rows and generators aren't these.
@@ -364,7 +365,6 @@ impl App {
         self.heard_passes.clear();
         self.heard_rows.clear();
         self.folder = folder;
-        self.folds = Folds::default();
         self.cursor = Cursor {
             step: self.cursor.step,
             ..self.cursor

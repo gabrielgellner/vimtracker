@@ -120,9 +120,9 @@ impl App {
         self.count = None;
         self.rows_collapsed = !self.rows_collapsed;
         self.status = if self.rows_collapsed {
-            "Rows: a line each, beside the other tracks' rows. z a lays them out in time"
+            "Rows: a line each, beside the other tracks' rows. z i lays them out in time"
         } else {
-            "Timeline: a line for each pulse, beside the other tracks in time. z a collapses it"
+            "Timeline: a line for each pulse, beside the other tracks in time. z i collapses it"
         }
         .to_owned();
     }

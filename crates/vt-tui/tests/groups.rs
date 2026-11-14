@@ -243,22 +243,161 @@ fn the_phrase_views_overview_shows_a_folded_group_as_a_column_of_its_own() {
         "{overview}"
     );
     assert!(!overview.contains("01"), "{overview}");
-    // `W` steps over the folded tracks in every view.
-    press(&mut app, "BW");
-    assert_eq!(app.cursor.track, 4);
+}
+
+/// Each track `key` reaches from where the cursor is, one after another, until it stops.
+fn stops(app: &mut App, key: &str) -> Vec<usize> {
+    let mut reached = vec![app.cursor.track];
+    loop {
+        press(app, key);
+        if reached.last() == Some(&app.cursor.track) {
+            return reached;
+        }
+        reached.push(app.cursor.track);
+    }
 }
 
 #[test]
-fn folds_are_not_saved_and_a_project_opens_with_its_groups_open() {
+fn w_and_b_make_a_folded_group_one_stop_in_its_tracks_place() {
+    let (mut app, _realtime) = grouped();
+    let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    let (g2, a) = (g1 + 1, g1 + 4);
+    // `z a` in the phrase view, from a track in the group, folds it and stands on it.
+    press(&mut app, " 3W");
+    assert_eq!(app.cursor.track, 1);
+    press(&mut app, "za");
+    assert_eq!(app.cursor.track, g1);
+    assert!(app.folds.hides(app.song(), 1));
+    assert!(app.status.contains("G1 folded: 01-03"), "{}", app.status);
+    // The group comes where its tracks would, then the track after them, and not again later.
+    let forward = [g1, 3, 4, 5, 6, 7, g2, a, a + 1, a + 2];
+    assert_eq!(stops(&mut app, "W"), forward);
+    let mut back = forward;
+    back.reverse();
+    assert_eq!(stops(&mut app, "B"), back);
+    // The same on the track pages, where the group's own page is the stop.
+    press(&mut app, " 5W");
+    assert_eq!(app.cursor.track, 3);
+    press(&mut app, "B");
+    assert_eq!(app.cursor.track, g1);
+    let title = track_page_text(&app)[0].clone();
+    assert!(title.contains("Group 1"), "{title}");
+    assert_eq!(stops(&mut app, "]b"), forward);
+    press(&mut app, "[b");
+    assert_eq!(app.cursor.track, a + 1);
+    // `z a` on the group opens it, and every track is a stop again.
+    press(&mut app, " fbG1");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "za");
+    assert!(app.status.contains("G1 open"), "{}", app.status);
+    assert_eq!(app.cursor.track, g1);
+    press(&mut app, " fb01");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(
+        stops(&mut app, "W"),
+        [0, 1, 2, 3, 4, 5, 6, 7, g1, g2, a, a + 1, a + 2]
+    );
+    // `zM` and `zR` work on the track pages too.
+    press(&mut app, "zM");
+    assert!(app.folds.hides(app.song(), 0) && app.folds.hides(app.song(), 4));
+    press(&mut app, "zR");
+    assert!(
+        !app.folds.hides(app.song(), g1 + 2),
+        "G3 shown, though empty"
+    );
+}
+
+#[test]
+fn a_track_folded_in_another_view_stays_in_front_until_the_cursor_leaves_it() {
+    let (mut app, _realtime) = grouped();
+    press(&mut app, " 3W");
+    assert_eq!(app.cursor.track, 1);
+    // Folded in the song view, whose column is Length, the phrase view keeps the track.
+    press(&mut app, " 10zM 3j");
+    assert!(app.folds.hides(app.song(), 1));
+    assert_eq!(app.cursor.track, 1);
+    // `W` goes on past the group.
+    press(&mut app, "W");
+    assert_eq!(app.cursor.track, 3);
+}
+
+#[test]
+fn bracket_g_goes_to_the_next_or_previous_group_folded_or_open() {
+    let (mut app, _realtime) = grouped();
+    let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    let g2 = g1 + 1;
+    // Open, the groups are after the tracks.
+    press(&mut app, " 3]g");
+    assert_eq!(app.cursor.track, g1);
+    press(&mut app, "]g");
+    assert_eq!(app.cursor.track, g2);
+    press(&mut app, "]g");
+    assert_eq!(app.cursor.track, g2, "G3 and G4 are folded away");
+    assert!(app.status.contains("No group after"), "{}", app.status);
+    press(&mut app, "[g");
+    assert_eq!(app.cursor.track, g1);
+    // Folded, a group is where its tracks are.
+    press(&mut app, "zaWW");
+    assert_eq!(app.cursor.track, 4);
+    press(&mut app, "[g");
+    assert_eq!(app.cursor.track, g1);
+    press(&mut app, "]g");
+    assert_eq!(app.cursor.track, g2);
+    press(&mut app, "2[g");
+    assert_eq!(app.cursor.track, g2, "there's only one before it");
+    // The mixer goes by its strips, where the group stays after the tracks.
+    press(&mut app, " 40");
+    assert_eq!(app.cursor.track, 3);
+    press(&mut app, "]g");
+    assert_eq!(app.cursor.track, g1);
+    // The song view moves its column.
+    press(&mut app, " 102]g");
+    assert_eq!(app.song_column, 3 + g2);
+}
+
+#[test]
+fn folds_are_saved_with_the_song_and_undo_leaves_them() {
     let (mut app, _realtime) = grouped();
     let path = folder();
+    let saved = || std::fs::read_to_string(path.join("song.ron")).unwrap();
     command(&mut app, &format!("w {}", path.display()));
-    press(&mut app, " 4zM");
+    assert!(!saved().contains("view:"), "no view until a fold is set");
+    command(&mut app, "group 2 4");
+    command(&mut app, "w");
+    assert!(!app.dirty);
+    press(&mut app, " 4lza");
     assert!(app.folds.hides(app.song(), 0));
-    assert!(!app.dirty, "a fold isn't a change to the song");
-    command(&mut app, &format!("e {}", path.display()));
-    assert!(!app.folds.hides(app.song(), 0));
+    assert!(app.dirty, "a fold is kept with the song");
+    // Undo takes back the change before it, and leaves the fold.
+    press(&mut app, "u");
+    assert_eq!(app.song().tracks[3].group, None, "{}", app.status);
+    assert!(app.folds.hides(app.song(), 0));
+    app.key(
+        Key {
+            ctrl: true,
+            ..Key::char('r')
+        },
+        Instant::now(),
+    );
+    assert_eq!(app.song().tracks[3].group, Some(2));
+    assert!(app.folds.hides(app.song(), 0));
+    command(&mut app, "w");
+    let text = saved();
+    assert!(text.contains("view:") && text.contains("folded:"), "{text}");
+    assert!(!text.contains("opened:"), "{text}");
+    // Opened again, the project has its folds, and undo still can't open them.
+    command(&mut app, "group off 1-3");
+    command(&mut app, &format!("e! {}", path.display()));
+    assert!(app.folds.hides(app.song(), 0) && !app.folds.hides(app.song(), 4));
     let g3 = app.song().fixed_track(TrackKind::Group(3)).unwrap();
     assert!(app.folds.hides(app.song(), g3), "an empty group still is");
+    assert!(!app.dirty);
+    press(&mut app, "u");
+    assert!(app.folds.hides(app.song(), 0));
+    // An opened group is kept too, so the empty groups `zR` showed come back with it.
+    press(&mut app, " 1zR");
+    command(&mut app, "w");
+    command(&mut app, &format!("e {}", path.display()));
+    assert!(!app.folds.hides(app.song(), g3));
     std::fs::remove_dir_all(&path).unwrap();
 }
