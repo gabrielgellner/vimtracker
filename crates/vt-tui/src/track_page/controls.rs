@@ -4,89 +4,11 @@
 use vt_model::action::TrackControl;
 use vt_model::lfo::phase_value;
 use vt_model::macros::MACROS;
-use vt_model::modulation::{ModKind, depth_value};
+pub use vt_model::modulation::ModField;
+use vt_model::modulation::depth_value;
 use vt_model::settings::{Effect, SettingId};
 use vt_model::shape::GenParam;
 use vt_model::song::{FilterType, Machine, Track, TrackKind};
-
-/// One setting of a mod slot: its type, its mode, where it goes and how far, which every type has
-/// in its own way, then each type's own, which mean what they do under the slot's type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModField {
-    Type,
-    /// The type's mode, as an envelope's curve or an LFO's `Free`, `Trig`, `Hold`, `One` or
-    /// `Half`, for a type that has one.
-    Mode,
-    /// Whether it moves what it reaches one way or both (#434).
-    Polarity,
-    Destination,
-    Depth,
-    /// An envelope's: an ADSR's and an AHD's attack, decay and reset, an ADSR's sustain and
-    /// release, and an AHD's hold.
-    Attack,
-    Decay,
-    Sustain,
-    Release,
-    Reset,
-    Hold,
-    /// A drum envelope's: how long its peak takes, the level it falls to, and how many times it
-    /// strikes. Its `Decay` is the body's.
-    Peak,
-    Body,
-    Ratchet,
-    /// A low-pass gate's: how far its fall closes the filter. Its `Attack`, `Decay` and `Reset`
-    /// are its own.
-    Colour,
-    /// An LFO's. `Rate` is Steps' too.
-    Shape,
-    Rate,
-    Phase,
-    Deform,
-    Fade,
-    /// Steps': how many it plays, where each note starts it, and what it does at the end, which
-    /// is in its title.
-    Length,
-    Start,
-    Loop,
-    /// Steps': the chance each value is drawn again as it comes round, and how it goes from one
-    /// to the next.
-    Mutate,
-    Smooth,
-    /// One of Steps' values, by its place, counted from 0: what the cursor is on in its panel.
-    Step(u8),
-    /// Track's: where its map starts and ends, in its source's values, a note or hex.
-    Low,
-    High,
-}
-
-impl ModField {
-    /// Whether a slot of this type has it.
-    pub fn on(self, kind: ModKind) -> bool {
-        match self {
-            Self::Type | Self::Destination | Self::Depth => true,
-            Self::Polarity => kind.has_polarity(),
-            Self::Mode => kind.has_mode(),
-            Self::Decay => kind.is_envelope(),
-            // A drum always strikes from full, so it has no attack to reset.
-            Self::Attack | Self::Reset => {
-                matches!(kind, ModKind::Adsr | ModKind::Ahd | ModKind::Lpg)
-            }
-            Self::Peak | Self::Body | Self::Ratchet => kind == ModKind::Drum,
-            Self::Colour => kind == ModKind::Lpg,
-            Self::Sustain | Self::Release => kind == ModKind::Adsr,
-            Self::Hold => kind == ModKind::Ahd,
-            Self::Shape | Self::Phase | Self::Deform | Self::Fade => kind == ModKind::Lfo,
-            Self::Rate => matches!(kind, ModKind::Lfo | ModKind::Steps),
-            Self::Length
-            | Self::Start
-            | Self::Loop
-            | Self::Mutate
-            | Self::Smooth
-            | Self::Step(_) => kind == ModKind::Steps,
-            Self::Low | Self::High => kind == ModKind::Track,
-        }
-    }
-}
 
 /// One of the track's accumulator settings, which its `ACU`s share.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
