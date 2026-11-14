@@ -616,6 +616,10 @@ impl App {
                 self.realign_track();
                 self.repeats_ignored = true;
             }
+            Cmd::RotateSpeeds(every) => {
+                self.rotate_speeds(every);
+                self.repeats_ignored = true;
+            }
             Cmd::GiveBack => self.give_back_faders(false),
             Cmd::GiveBackAll => self.give_back_faders(true),
             Cmd::ClearMutes => {

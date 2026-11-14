@@ -7,6 +7,7 @@ use vt_model::constants::{
 };
 use vt_model::scale::Scale;
 use vt_model::song::{Song, trim_gain};
+use vt_model::speed::Speed;
 
 use crate::dsp::memory::MemoryPool;
 use crate::dsp::smoother::{coefficient, fast_coefficient};
@@ -35,6 +36,9 @@ pub struct TrackPlace {
     pub progress: f32,
     /// How long that step is, in ticks.
     pub ticks: u32,
+    /// The speed that step plays at, as its `RATE`, a hold or the track's own gives it, which
+    /// rotating the speeds while recording turns from (decision 328).
+    pub speed: Speed,
     /// Whether the row heard skipped its note, as its `CHA` or `CND` decided.
     pub skipped: bool,
     /// The note the row heard was played at, before its chain's transpose, when an accumulator
@@ -348,10 +352,17 @@ impl Engine {
             return TrackPlace::default();
         };
         let ticks = self.speed_ticks(index);
+        let speed = self
+            .current
+            .song
+            .tracks
+            .get(index)
+            .map_or(Speed::Sixteenth, |track| track.speed);
         let waiting = TrackPlace {
             count: state.clock.count,
             progress: 0.0,
             ticks: ticks as u32,
+            speed,
             skipped: false,
             accumulated: None,
         };
@@ -365,6 +376,7 @@ impl Engine {
             progress: ((now - worked.grid as f64) / worked.ticks.max(1) as f64).clamp(0.0, 1.0)
                 as f32,
             ticks: worked.ticks as u32,
+            speed: worked.speed,
             skipped: !state.row.note,
             accumulated: state.accumulated,
         })

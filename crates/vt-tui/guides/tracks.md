@@ -1032,7 +1032,8 @@ it, and on the Roto it's the first knob of the Play device's second page. See
 triplets between, so one track can play eighths or triplets against the others'
 sixteenths. `=` and `-` move through the list, `K` and `i` choose from it, and
 `x` goes back to `1/16`, which is dimmed. Its rows, pulses, groove and timing
-commands all follow its step. See **Speed** in the FX guide.
+commands all follow its step. `Space o` rotates the speeds round a group's tracks,
+each taking the next one's. See **Speed** in the FX guide.
 
 `Glide` is how long a `HLD` tie glides into the next note, from 2 ms to 2 s, on
 every voice: a synth by its pitch, a sample by its speed. `Off`, dimmed, jumps, or

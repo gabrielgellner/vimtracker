@@ -56,7 +56,7 @@ mod cursor;
 mod entry;
 mod keys;
 mod loops;
-mod tracks;
+pub(crate) mod tracks;
 
 /// A run of steps and columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -807,11 +807,13 @@ impl App {
         self.playhead = step;
         let tracks = self.song().tracks.len().min(MAX_TRACKS);
         for track in 0..tracks {
-            let ticks = self.song().tracks[track].speed.ticks();
+            let speed = self.song().tracks[track].speed;
+            let ticks = speed.ticks();
             self.places[track] = TrackPlace {
                 count: (step as u64 * TICKS_PER_STEP / ticks) as i64,
                 progress: 0.0,
                 ticks: ticks as u32,
+                speed,
                 skipped: false,
                 accumulated: None,
             };

@@ -235,6 +235,27 @@ note, as it always has.
 `Space l` turns fill on or off, and held, it's on until you let go. The status
 line says `FILL` while it's on.
 
+### Skipping steps in a pattern
+
+4ms' Shuffling Clock Multiplier has a `Skip` knob that drops beats from a clock in
+a fixed pattern, more of them as it turns, giving more of a pattern than a clock.
+`CHA 00`, a chance that never comes up, drops a row's note, and a live column of
+them is that knob:
+
+1.  On an FX column with nothing in it, select the rows, `vG`, and `S`. Choose
+    `CHA` from the list.
+2.  Set `From` and `To` to `00`, `Where` to `Chance`, and its `Amount` to how many
+    rows to drop, then `L` to keep it live.
+3.  `Space 8`, and `M` on the device's `Amount` puts it on a macro: the track's
+    `Skip`, reaching that column in every phrase of the track that has one.
+
+The rows it drops come from the generator's seed, so they're the same each pass,
+and turning the amount up only drops more of them, keeping those already dropped.
+`r` draws another pattern. `Euclid` in place of `Chance` drops evenly spread rows,
+with `Hits` the amount, and `Clusters` drops them in bunches. With `Vary` on `Each pass` it drops
+a new pattern every pass instead, which is `CHA` with a die on every row. A `CND`
+drops whole passes, where this drops steps within one.
+
 ## Accumulators
 
 `ACU` moves its row's note on each time the row plays, as the Metropolix's
@@ -440,3 +461,26 @@ the second sixteenth lasts one sixteenth, and the track then plays on the
 eighths. A track lines up again wherever its chain starts: at the song's start,
 a reset, a section that gives it a new chain, or a launch. LFOs keep to the
 song's time whatever the speed.
+
+### Rotating speeds
+
+`Space o` rotates the speeds round the tracks of the cursor's group, as the Rotate
+jack of 4ms' Shuffling Clock Multiplier passes its outputs' multiplications along:
+each track takes the next one's `Speed`, and the last the first's. On a track in
+no group it says so; in Visual, after `W` has reached the tracks you want, it
+rotates those, and `Space O` rotates every track that plays sounds.
+
+| Before | `Space o` | Again | Again |
+|---|---|---|---|
+| `1/16` `1/8` `1/8T` | `1/8` `1/8T` `1/16` | `1/8T` `1/16` `1/8` | `1/16` `1/8` `1/8T` |
+
+So as many presses as tracks bring them back, and a count, `2 Space o`, turns
+that many at once. Each press is one undo step, heard from each track's next step,
+as a change on the track page is.
+
+While recording, `Space r`, a press writes the rotation into the phrases rather
+than the tracks: each track's next row gets a held `RATE` of the speed it takes, in
+the FX column holding a `RATE` already, or else the first empty one, so the pass
+plays it back where you pressed, from the tracks' own speeds at its start. A
+track whose next row has no FX column free is left as it is, and the status line
+names it. The `RATE`s go into the pass's one undo step.

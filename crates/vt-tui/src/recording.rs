@@ -9,12 +9,14 @@ use std::time::Duration;
 use ratatui::crossterm::event::KeyCode;
 use vt_engine::engine::{TrackPlace, Transport};
 use vt_model::action::Action;
-use vt_model::constants::{NUDGE_TICKS, TICKS_PER_QUARTER, TICKS_PER_STEP};
+use vt_model::constants::{FX_SLOTS, NUDGE_TICKS, TICKS_PER_QUARTER, TICKS_PER_STEP};
 use vt_model::groove::Groove;
+use vt_model::settings::SettingId;
 use vt_model::speed::Speed;
-use vt_model::step::{Gate, GateKind, Note};
+use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
 use crate::app::App;
+use crate::app::tracks::{rotated, speeds_said};
 use crate::input::keys::Key;
 use crate::input::mode::View;
 
@@ -188,6 +190,136 @@ impl App {
         self.follow_recording();
     }
 
+    /// Rotate the speeds round these tracks into the recording (decision 328): each track's next
+    /// row gets a held `RATE` of the speed the track after it would play there, so the pass plays
+    /// the rotation back where it fell, and the tracks' own speeds stay as they were for the start.
+    /// What a track would play on its next row is that row's own `RATE`, as an earlier press or
+    /// pass wrote it, or else the speed it's playing at. The `RATE` goes in the column holding
+    /// one, or else the first empty one; a column with a lane is left alone. The rows go into the
+    /// pass's one undo step.
+    pub(crate) fn record_rotation(&mut self, tracks: &[usize], times: usize) {
+        struct Next {
+            track: usize,
+            phrase: u32,
+            stored: usize,
+            step: Step,
+            column: Option<usize>,
+        }
+        let song = Arc::clone(self.song());
+        let mut rows = Vec::new();
+        let mut speeds = Vec::new();
+        for &track in tracks {
+            let now = self.carried_by(self.places[track], Duration::ZERO);
+            let Some((phrase, stored)) = self.next_row(track, now) else {
+                continue;
+            };
+            let Some(held) = song.tracks[track].phrases.get(&phrase) else {
+                continue;
+            };
+            let Some(mut step) = held.steps().get(stored).cloned() else {
+                continue;
+            };
+            step.fx.resize(FX_SLOTS, FxSlot::default());
+            let free = |column: &usize| held.lane(*column).is_none();
+            let rate = (0..FX_SLOTS)
+                .filter(free)
+                .find(|&column| step.fx[column].command == Some(FxCommand::Set(SettingId::SPEED)));
+            let column = rate.or_else(|| {
+                (0..FX_SLOTS)
+                    .filter(free)
+                    .find(|&c| step.fx[c].command.is_none())
+            });
+            speeds.push(rate.map_or(self.places[track].speed, |column| {
+                Speed::from_index(usize::from(step.fx[column].coarse()))
+            }));
+            rows.push(Next {
+                track,
+                phrase,
+                stored,
+                step,
+                column,
+            });
+        }
+        if rows.len() < 2 {
+            self.status = "Rotating while recording needs two of these tracks playing".to_owned();
+            return;
+        }
+        let turned = rotated(&speeds, times);
+        let mut changes = Vec::new();
+        let mut full = Vec::new();
+        for (row, speed) in rows.iter().zip(&turned) {
+            let Some(column) = row.column else {
+                full.push(format!("{:02}", row.track + 1));
+                continue;
+            };
+            let mut step = row.step.clone();
+            step.fx[column] = FxSlot {
+                command: Some(FxCommand::Set(SettingId::SPEED)),
+                value: u16::from(speed.index()) << 8,
+                mark: Mark::Hold,
+            };
+            if step != row.step {
+                changes.push(Action::SetStep {
+                    track: row.track,
+                    phrase: row.phrase,
+                    step: row.stored,
+                    value: step,
+                });
+            }
+        }
+        if !changes.is_empty() {
+            let before = Arc::clone(self.song());
+            let was = self.history.undo_depth();
+            self.apply(&Action::Batch(changes));
+            if !Arc::ptr_eq(&before, self.song()) {
+                let depth = self
+                    .recording
+                    .as_ref()
+                    .and_then(|recording| recording.depth);
+                match depth {
+                    Some(start) if start <= was => self.history.squash_to(start),
+                    _ => {
+                        if let Some(recording) = self.recording.as_mut() {
+                            recording.depth = Some(was);
+                        }
+                    }
+                }
+            }
+        }
+        let tracks: Vec<usize> = rows.iter().map(|row| row.track).collect();
+        self.status = format!("RATE recorded: {}", speeds_said(&tracks, &turned));
+        if !full.is_empty() {
+            self.status = format!(
+                "{}; no FX column free on the next row of {}",
+                self.status,
+                full.join(", ")
+            );
+        }
+    }
+
+    /// The row a track plays next after this point in its own steps, as its phrase and stored
+    /// step, found in its own chain as [`row_to_record`](Self::row_to_record) finds a row.
+    fn next_row(&self, track: usize, now: f64) -> Option<(u32, usize)> {
+        let jam = self.jam.get(track)?;
+        let chain = jam.chain?;
+        let song = self.song();
+        let owner = song.tracks.get(track)?;
+        let length = owner.chain_steps(chain);
+        if length == 0 {
+            return None;
+        }
+        let from = (now - jam.started as f64).max(0.0);
+        let into = from.rem_euclid(length as f64) as usize;
+        let lap = from.div_euclid(length as f64) as usize;
+        let dealer = self.dealer(track);
+        let at = |place: usize| owner.chain_position(chain, lap * length + place, dealer);
+        let position = at(into)?;
+        let next = into.saturating_sub(position.pulse) + owner.step_at(position)?.pulses();
+        let position = at(next)?;
+        let phrase = owner.phrases.get(&position.phrase)?;
+        Some((position.phrase, phrase.start() + position.step))
+    }
+
     /// Write what's due as the song plays: a note once its row has started, so it isn't played a
     /// second time as it's heard, and its length once it's let go, or once its row comes round
     /// again. Stopping, or leaving the phrase view, disarms.
@@ -241,6 +373,7 @@ impl App {
             count: self.playhead as i64,
             progress: self.progress,
             ticks: TICKS_PER_STEP as u32,
+            speed: Speed::Sixteenth,
             skipped: false,
             accumulated: None,
         };
@@ -256,11 +389,16 @@ impl App {
     /// Where a place the engine last reported has got to at the frame or key being handled, less
     /// the output's latency.
     fn carried_on(&self, place: TrackPlace) -> f64 {
+        self.carried_by(place, Duration::from_micros(self.audio.latency_us))
+    }
+
+    /// Where a place the engine last reported has got to at the frame or key being handled, less
+    /// this long: the output's latency for where it's heard, none for where the engine is.
+    fn carried_by(&self, place: TrackPlace, latency: Duration) -> f64 {
         let elapsed = self
             .now
             .saturating_duration_since(self.report_at)
             .min(MOST_ELAPSED);
-        let latency = Duration::from_micros(self.audio.latency_us);
         let steps_per_quarter = TICKS_PER_QUARTER as f64 / f64::from(place.ticks.max(1));
         let steps_per_second = f64::from(self.song().millibpm) / 60_000.0 * steps_per_quarter;
         let since = elapsed.as_secs_f64() - latency.as_secs_f64();

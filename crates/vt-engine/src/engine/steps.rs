@@ -37,7 +37,8 @@ impl Engine {
         self.tracks[index].playing = self.track_chain(index);
         // The groove counts the track's own steps from the start or the last reset, not its
         // loop, so an odd length stays on the beat, and a track at an eighth swings its eighths.
-        let (groove, ticks) = self.step_choices(index, running);
+        let (groove, speed) = self.step_choices(index, running);
+        let ticks = speed.ticks();
         let humanise = self.tracks[index].humanise(groove.humanise());
         let at = running.max(0) as usize;
         let push = (i64::from(groove.push(at)) + humanise).clamp(-groove_lead, i64::from(MAX_PUSH));
@@ -91,6 +92,7 @@ impl Engine {
             grid,
             count: running,
             ticks: next - grid,
+            speed,
         });
         state.clock.advance(ticks);
         for part in parts.into_iter().flatten() {
@@ -224,10 +226,10 @@ impl Engine {
         chosen.unwrap_or_else(|| self.tracks[index].held_choice(id, note))
     }
 
-    /// The groove a track's step plays with and how long it is, in ticks, worked out before it's
-    /// played, as each says when the step lands: a `GRV` or `RATE` on its row or in a lane at it,
-    /// or else what the track holds (`chosen_ahead`). A `GRV` of `00` is the project's.
-    fn step_choices(&mut self, index: usize, running: i64) -> (Groove, u64) {
+    /// The groove a track's step plays with and its speed, worked out before it's played, as each
+    /// says when the step lands: a `GRV` or `RATE` on its row or in a lane at it, or else what the
+    /// track holds (`chosen_ahead`). A `GRV` of `00` is the project's.
+    fn step_choices(&mut self, index: usize, running: i64) -> (Groove, Speed) {
         // With no `GRV` or `RATE` in the song, there's no row to look on, and the track holds its
         // own.
         let row = if self.current.groove_steps || self.current.speed_steps {
@@ -242,8 +244,7 @@ impl Engine {
             Some(at) => GrooveId::from_index(at).unwrap_or(GrooveId::STRAIGHT),
             None => song.groove,
         };
-        let speed = Speed::from_index(usize::from(speed));
-        (song.groove(groove), speed.ticks())
+        (song.groove(groove), Speed::from_index(usize::from(speed)))
     }
 
     /// Start or stop a track's note for a step, and run its FX left to right: all of it, or the
