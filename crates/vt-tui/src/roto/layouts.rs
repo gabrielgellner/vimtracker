@@ -1586,8 +1586,9 @@ const SPACE: DeviceLayout = live(
 // Live generators, after the Mod page's devices: a layout a fill, from the declared table
 // (`GenParam`), its settings in their musical order, and its `Where`'s on knobs 7 and 8 as an
 // effect's `Mix` and `Gain` are, `where1` being Euclid's `Hits`, an `Every`, a `Chance`, the
-// amount of one of Marbles' rhythms or a named rhythm's `Child`, and `where2` Euclid's `Rotate`.
-// The fill and the `Where`, and a `Follow`'s source, are what the device is, so they're chosen in the app (the generators study, `generators-page.md` §6). A
+// amount of one of Marbles' rhythms, a named rhythm's `Child` or a `Cells`' `Rule`, and `where2`
+// Euclid's `Rotate` or a `Cells`' `Start`. The fill and the `Where`, and a `Follow`'s source, are
+// what the device is, so they're chosen in the app (the generators study, `generators-page.md` §6). A
 // generator has no off/on settings of its own, so it's live, and `Acid`'s `Pitches` is a
 // two-step knob. `Vary` is knob 6, beside the `Where`, on every fill; `Wave`, `Acid` and
 // `Follow`, which draws only once it mutates, have it on a second page. A setting the shape hasn't now, as `Hits`
@@ -2306,8 +2307,9 @@ pub fn resolve(setting: &Setting, spec: &DeviceSpec, track: &Track) -> Option<Co
             GenParam::States,
             GenParam::Share,
             GenParam::Child,
+            GenParam::Rule,
         ],
-        WHERE_SECOND => &[GenParam::Rotate],
+        WHERE_SECOND => &[GenParam::Rotate, GenParam::CellStart],
         PART_DENSITY => &[
             GenParam::KickDensity,
             GenParam::SnareDensity,

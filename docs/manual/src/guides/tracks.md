@@ -1,3 +1,7 @@
+{{#include ../../../../crates/vt-tui/guides/tracks.md:before-zoom}}
+
+![The FX page zoomed in on a Glue that a kick on the next track ducks, z i: the strip of the four slots across the top, then the Glue's curve, its gain reduction meter 16 rows tall and the last two bars of its pumping, over its settings with long bars](../images/track-fx-zoom.svg)
+
 {{#include ../../../../crates/vt-tui/guides/tracks.md:before-clouds}}
 
 ![Clouds in a track's first FX slot, on Granular: its knobs in the first two columns, what its Blend knob also does in the third, its Quality, Blend and Gain in the last, and the other three slots empty](../images/track-clouds.svg)

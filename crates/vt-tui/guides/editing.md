@@ -205,6 +205,7 @@ lowest and highest.
 | 3 states | Each row a gate, a rest or a tie |
 | Complementary | One coin a row for two tracks, so never both |
 | Rhythm | A named rhythm's part, each hit by `Child`'s chance |
+| Cells | A cellular automaton's cells, by `Rule` from `Start` |
 
 `Euclid` spreads its hits over the rows it could change, as the Euclidean
 rhythms do: 3 in 8 is `x..x..x.` and 5 in 8 is `x.xx.xx.`. On Velocity it
@@ -213,9 +214,10 @@ of them. `Hits` shows how many rows it spreads them over, as in `5 of 16`.
 `Rotate` moves every hit that many of those rows later, going round, so 3 in 8
 rotated by 1 is `.x..x..x`.
 
-The last four are the rhythm models of Mutable Instruments' Marbles, its T
-section, each with an `Amount`. Like Euclid, they go through the rows the column
-could change in order, so on Velocity they count among the notes.
+`Clusters`, `Markov`, `3 states` and `Complementary` are the rhythm models of
+Mutable Instruments' Marbles, its T section, each with an `Amount`. Like Euclid,
+they go through the rows the column could change in order, so on Velocity they
+count among the notes.
 
 - **Clusters** plays in bunches: a run of two to four rows, then a gap. Its
   amount is about how many of the rows play, as `Chance`'s is, so swapping one
@@ -277,6 +279,21 @@ the panel says so on any other. `S` across tracks gives each the next part,
 `Bell`, `Low drum`, `High drum` and round again, from the one the panel shows,
 each with a seed of its own, so its children are its own; the panel says `Each
 track plays the next part`.
+`Cells` is an elementary cellular automaton, one of Stephen Wolfram's 256
+rules, as dan derks' *less concepts* plays them: a row of cells, each on or
+off, makes its next generation cell by cell from the cell and its two
+neighbours, by the rule. `Rule` runs from `0` to `255`: 30 is chaotic, 90
+draws Sierpiński's triangle, 110 is complex, 184 moves its cells along like
+traffic. On one column each row is a cell, so the rows chosen are the cells
+that are on; across tracks each track is a cell and each row a generation, so
+the tracks play the automaton's picture down the rows. `Start` is the row it
+starts from: `Seed`, cells drawn from the seed, which `r` rolls again; `One`,
+one cell in the middle, as Wolfram's pictures start; or `Hits`, the rows with
+a note on them, or across tracks the tracks with a note on the first row. The
+row is a ring, so the first cell's neighbour is the last. Across tracks, every
+track plays one automaton, the row they start from worked out once for all of
+them, so a track's `gl` has `Rule` and no `Start`. Kept live, `Vary` steps it
+on: see **The Gen page** in **The track page**.
 
 The ramp's ends land on the first and last rows it changes, and rows keep their
 spacing along it. A velocity only ever goes on a note, so for Velocity, Every,

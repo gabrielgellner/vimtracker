@@ -35,9 +35,9 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
-    Acid, Bar, Bits, DEFAULT_RATE, Divisions, DrumPart, Edge, FillKind, Follow, GenParam, Grids,
-    Loops, Mutations, Pink, Random, Ring, Role, Shape, ShapeColumn, Source, Values, Walk, WaveRate,
-    Where, World, divisions_seed, on_track, track_seed,
+    Acid, Bar, Bits, CellStart, Cells, DEFAULT_RATE, Divisions, DrumPart, Edge, FillKind, Follow,
+    GenParam, Grids, Loops, Mutations, Pink, Random, Ring, Role, Shape, ShapeColumn, Source,
+    Values, Walk, WaveRate, Where, World, divisions_seed, on_track, track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -74,6 +74,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("rene", rene()),
         ("bloom", bloom()),
         ("clock-multiplier", clock_multiplier()),
+        ("cells", cells()),
     ];
     songs
         .into_iter()
@@ -1619,6 +1620,91 @@ fn clock_multiplier() -> Song {
     song
 }
 
+/// The five percussion tracks `cells` plays across, each a cell of one automaton: its name, its
+/// voice and its note.
+const CELL_TRACKS: [(&str, SynthVoice, &str); 5] = [
+    ("HH", SynthVoice::Hat, "C-4"),
+    ("RS", SynthVoice::Snare, "C-3"),
+    ("WB", SynthVoice::Modal, "E-4"),
+    ("SH", SynthVoice::Dust, "C-5"),
+    ("LT", SynthVoice::Modal, "A-2"),
+];
+
+/// After dan derks' *less concepts*, rhythms from Wolfram's elementary cellular automata (decision
+/// 326): a plucked lead whose rows are rule 30's cells, growing from one in the middle a
+/// generation each pass; five percussion tracks, each a cell of rule 26 and each row a
+/// generation, carrying on from pass to pass; over a written kick and bass.
+fn cells() -> Song {
+    let mut song = song("cells", 112, 9, ScaleKind::Minor, 8);
+    song.seed = 0xCA;
+    voice(&mut song, 0, "LD", SynthVoice::String, &[REST; 16]);
+    let lead = &mut song.tracks[0];
+    lead.level = 0xC0;
+    lead.send_a = 0x90;
+    lead.send_b = 0x70;
+    let mut grows = shape(FillKind::Random, note("A-3"), note("A-5"), Where::AllRows);
+    grows.seed = 0x30;
+    grows.place = Where::Cells(Cells {
+        rule: 30,
+        start: CellStart::One,
+        ..Cells::default()
+    });
+    grows.vary = 1;
+    let column = empty_notes(&song);
+    let mut song = generate(song, 0, column, 16, grows);
+    let levels = [0xA8, 0xA0, 0xA0, 0x90, 0xB8];
+    for (nth, (name, machine, _)) in CELL_TRACKS.into_iter().enumerate() {
+        voice(&mut song, 1 + nth, name, machine, &[REST; 16]);
+        song.tracks[1 + nth].level = levels[nth];
+    }
+    set(&mut song, 1, "hat.decay", 0x28);
+    song.tracks[3].send_b = 0x70;
+    // The panel across the five: rule 26 from one cell in the middle, each a cell, a note of its
+    // own as `gl` gives it on each.
+    let across = Cells {
+        rule: 26,
+        start: CellStart::One,
+        ..Cells::default()
+    };
+    let mut hits = shape(FillKind::Ramp, 0, 0, Where::AllRows);
+    hits.seed = 0x1A;
+    hits.vary = 1;
+    for (nth, (_, _, pitch)) in CELL_TRACKS.into_iter().enumerate() {
+        let shape = Shape {
+            from: note(pitch),
+            to: note(pitch),
+            seed: track_seed(hits.seed, nth),
+            place: Where::Cells(across.for_track(hits.seed, nth, &[false; 5])),
+            ..hits
+        };
+        song = generate(song, 1 + nth, column, 16, shape);
+    }
+    four_on_the_floor(&mut song, 6);
+    let bass = [
+        "A-1 64 --- --- ---",
+        REST,
+        REST,
+        "A-1 50 --- --- ---",
+        REST,
+        REST,
+        "E-1 64 --- --- ---",
+        REST,
+        "A-1 64 --- --- ---",
+        REST,
+        REST,
+        "C-2 50 --- --- ---",
+        REST,
+        "G-1 64 --- --- ---",
+        REST,
+        REST,
+    ];
+    voice(&mut song, 7, "BS", SynthVoice::VirtualAnalog, &bass);
+    song.tracks[7].cutoff = 0x50;
+    song.tracks[7].resonance = 0x30;
+    song.tracks[7].level = 0xC4;
+    song
+}
+
 // The shipped patches.
 
 /// Where the shipped patches are kept, a file each, which the program includes as it's built.
@@ -2228,6 +2314,58 @@ fn the_random_rhythms_hats_play_the_kicks_and_the_woodblocks_strikes() {
     assert_eq!(
         channels,
         [Some(Channel::A), Some(Channel::B), Some(Channel::Both)]
+    );
+}
+
+/// Read down the five percussion tracks, row by row, `cells` plays rule 26's picture from one
+/// cell, and the next pass carries on from the last row; the lead's first pass is rule 30's one
+/// cell in the middle, and each pass after it a generation more, as the chapter shows.
+#[test]
+fn the_cells_tracks_play_one_automaton_and_the_lead_grows_from_one_cell() {
+    let song = load_song(&songs_folder().join("cells")).unwrap();
+    let on = |track: usize, pass: i64| -> String {
+        let phrase = &song.tracks[track].phrases[&0];
+        let generator = &phrase.generators()[0];
+        let under = generator.under(phrase.steps());
+        let rows = generator.rows().unwrap();
+        vt_model::shape::written(
+            &under,
+            rows,
+            generator.column,
+            &generator.shape.on_pass(pass),
+        )
+        .into_iter()
+        .fold(vec!['.'; 16], |mut bar, (row, _)| {
+            bar[row] = 'x';
+            bar
+        })
+        .into_iter()
+        .collect()
+    };
+    let picture = |pass: i64| -> Vec<String> {
+        let tracks: Vec<String> = (1..6).map(|track| on(track, pass)).collect();
+        (0..16)
+            .map(|row| tracks.iter().map(|track| &track[row..=row]).collect())
+            .collect()
+    };
+    let rule_26 = [
+        "..x..", ".x.x.", "x...x", ".x.xx", "...x.", "..x.x", "xx...", "x.x.x", "....x", "x..x.",
+        ".xx..", "xx.x.", "x....", ".x..x", "..xx.", ".xx.x", ".x...", "x.x..", "...xx", "x.xx.",
+    ];
+    assert_eq!(picture(0), rule_26[..16]);
+    assert_eq!(picture(1)[..4], rule_26[16..]);
+    assert_eq!(picture(1)[4..], rule_26[..12], "and round its cycle of 20");
+    assert_eq!(on(0, 0), "........x.......");
+    assert_eq!(on(0, 1), ".......xxx......");
+    assert_eq!(on(0, 2), "......xx..x.....");
+    // What's written is the first pass, and each track is a generator of its own.
+    assert_eq!(
+        song.tracks[0].phrases[&0]
+            .steps()
+            .iter()
+            .filter(|step| matches!(step.note, Note::On(_)))
+            .count(),
+        1
     );
 }
 

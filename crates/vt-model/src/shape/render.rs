@@ -439,14 +439,14 @@ impl<F: FnMut(usize, &Shaped)> Out<'_, F> {
 }
 
 /// The words of a bitset of a span's rows.
-const WORDS: usize = MAX_PHRASE_STEPS / 64;
+pub(super) const WORDS: usize = MAX_PHRASE_STEPS / 64;
 
 /// A bitset of up to `MAX_PHRASE_STEPS` bits, 512 bytes: the rows of a span a shape fills, by
 /// their offset in it, or a Euclidean pattern.
 #[derive(Clone, Copy)]
 pub(super) struct Rows {
-    words: [u64; WORDS],
-    len: usize,
+    pub(super) words: [u64; WORDS],
+    pub(super) len: usize,
 }
 
 impl Rows {
@@ -596,7 +596,8 @@ pub(super) fn chosen(
             | Where::Euclid { .. }
             | Where::Clusters(_)
             | Where::Markov(_)
-            | Where::States(_) => true,
+            | Where::States(_)
+            | Where::Cells(_) => true,
             Where::Every(every) => offset.is_multiple_of(usize::from(every.max(1))),
             Where::Chance(percent) => mix(seed ^ 0x5555, offset) % 100 < u64::from(percent),
             // The same coin as `Chance`'s, the second track taking the rows the first leaves.
@@ -618,6 +619,7 @@ pub(super) fn chosen(
         Where::Clusters(percent) => return rhythm::clusters(&rows, percent, seed),
         Where::Markov(bias) => return rhythm::markov(&rows, bias, seed),
         Where::States(bias) => return rhythm::states(&rows, bias, seed).0,
+        Where::Cells(cells) => return cells.chosen(steps, range, seed, &rows, len),
         _ => return rows,
     };
     // Counted among the rows it can change, as `Alternate` counts, so on Velocity it's among the

@@ -13,10 +13,11 @@ use base64::engine::general_purpose::STANDARD;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::terminal;
 use ratatui::style::Color;
+use vt_engine::dsp::distort::transfer;
 use vt_engine::engine::PLAYHEADS;
 use vt_engine::track_state::LfoNow;
 use vt_model::bank::{ContentHash, Points};
-use vt_model::insert::{Compressor, Equaliser, INSERTS, Insert, MAX_PARAMS};
+use vt_model::insert::{Compressor, Distort, Equaliser, INSERTS, Insert, MAX_PARAMS};
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
 use vt_model::song::{FilterMode, FilterType, Machine, Track};
 
@@ -39,8 +40,9 @@ use crate::views::sample::{
 use crate::views::track::{
     DYNAMICS_CURVE_WIDTH, EQ_CURVE_WIDTH, FILTER_CURVE_HEIGHT, FILTER_CURVE_WIDTH,
     LARGE_PANEL_HEIGHT, LARGE_PANEL_WIDTH, MOD_PANEL_HEIGHT, MOD_PANEL_WIDTH, SLOT_DRAWING_HEIGHT,
-    WAVEFORM_HEIGHT, WAVEFORM_WIDTH, filter_being_edited, gen_playing_row, heard_bypassed,
-    machine_being_edited, mod_being_edited, slot_being_edited,
+    WAVEFORM_HEIGHT, WAVEFORM_WIDTH, ZOOM_CURVE_WIDTH, ZOOM_EQ_WIDTH, ZOOM_PANEL_HEIGHT,
+    filter_being_edited, gen_playing_row, heard_bypassed, machine_being_edited, mod_being_edited,
+    slot_being_edited,
 };
 
 mod encoding;
@@ -696,17 +698,23 @@ pub(crate) enum SlotDrawing {
     Compressor(Compressor),
     /// An EQ's curve, from all of its settings.
     Eq(Equaliser),
+    /// A distortion's transfer curve, which only the FX page's zoom draws (decision 329).
+    Distort(Distort),
+}
+
+/// An effect as it's playing with these values, which a step or an LFO can move from what's set.
+fn playing(insert: Insert, live: Option<[u8; MAX_PARAMS]>) -> Insert {
+    live.map_or(insert, |values| {
+        (0..insert.params().len()).fold(insert, |playing, param| {
+            playing.with_value(param, values[param])
+        })
+    })
 }
 
 impl SlotDrawing {
-    /// The drawing for an effect playing with these values, if it has one.
+    /// The drawing for an effect playing with these values in the FX page's rack, if it has one.
     fn of(insert: Insert, live: Option<[u8; MAX_PARAMS]>) -> Option<Self> {
-        let playing = live.map_or(insert, |values| {
-            (0..insert.params().len()).fold(insert, |playing, param| {
-                playing.with_value(param, values[param])
-            })
-        });
-        match playing {
+        match playing(insert, live) {
             Insert::Compressor(settings) => Some(Self::Compressor(Compressor {
                 kind: settings.kind,
                 threshold: settings.threshold,
@@ -725,12 +733,31 @@ impl SlotDrawing {
         }
     }
 
-    /// How many characters across it is.
+    /// The drawing for an effect playing with these values zoomed in on, if it has one: the
+    /// rack's, or a distortion's transfer curve for a type that shapes each sample alone.
+    fn zoomed(insert: Insert, live: Option<[u8; MAX_PARAMS]>) -> Option<Self> {
+        match playing(insert, live) {
+            Insert::Distort(settings) => transfer(settings, 0.0).map(|_| Self::Distort(settings)),
+            _ => Self::of(insert, live),
+        }
+    }
+
+    /// How many characters across it is in the rack.
     fn width(self) -> usize {
         match self {
-            Self::Compressor(_) => DYNAMICS_CURVE_WIDTH,
+            Self::Compressor(_) | Self::Distort(_) => DYNAMICS_CURVE_WIDTH,
             Self::Eq(_) => EQ_CURVE_WIDTH,
         }
+    }
+
+    /// How many characters across and down it is zoomed in on: a square for a curve of a level
+    /// in against a level out, and the whole width for an EQ's.
+    fn zoomed_size(self) -> (usize, usize) {
+        let width = match self {
+            Self::Compressor(_) | Self::Distort(_) => ZOOM_CURVE_WIDTH,
+            Self::Eq(_) => ZOOM_EQ_WIDTH,
+        };
+        (width, ZOOM_PANEL_HEIGHT)
     }
 
     /// Its picture, this many pixels across and down.
@@ -738,6 +765,7 @@ impl SlotDrawing {
         match self {
             Self::Eq(settings) => plot::eq(settings, rate, size),
             Self::Compressor(settings) => plot::compressor(settings, size),
+            Self::Distort(settings) => plot::distort(settings, size),
         }
     }
 }
@@ -1366,11 +1394,35 @@ impl Graphics {
     }
 
     /// Send the drawings of the FX page's slots, if the terminal lacks them: a compressor's or an
-    /// EQ's curve, faint while its slot is switched out.
+    /// EQ's curve, faint while its slot is switched out, or, zoomed in, the zoomed slot's alone,
+    /// bigger, which can be a distortion's transfer curve too.
     /// Each is drawn from the settings it shows, so it's sent again only when they change.
     fn sync_fx(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
         let edited = slot_being_edited(app);
         let mut ids = [None; INSERTS];
+        app.zoom_image = None;
+        if app.track_page.zoomed {
+            let slot = app
+                .track_page
+                .device_cursor(Some(track))
+                .map_or(0, |cursor| cursor.device)
+                .min(INSERTS - 1);
+            let live = app.live.map(|live| live.inserts[slot]);
+            if let Some(shown) = SlotDrawing::zoomed(track.inserts[slot], live) {
+                // The zoomed slot always has the cursor.
+                let shade = Shade::of(true, heard_bypassed(app, track, slot));
+                let rate = app.rate;
+                app.zoom_image = Some(self.panel(
+                    out,
+                    (PanelKey::Zoom, shade),
+                    Shape::Slot(shown),
+                    shown.zoomed_size(),
+                    |size| shown.plot(rate, size).png(shade.color()),
+                )?);
+            }
+            app.slot_images = ids;
+            return Ok(());
+        }
         for (slot, insert) in track.inserts.iter().enumerate() {
             // It shows what's playing, as a value's bar does.
             let live = app.live.map(|live| live.inserts[slot]);
