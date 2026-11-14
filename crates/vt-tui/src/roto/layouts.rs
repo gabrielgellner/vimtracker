@@ -1724,6 +1724,24 @@ const GEN_ACID: DeviceLayout = live(
         ),
     ],
 );
+/// An `Acid`'s loops, its own device as on the Gen page: the rhythm's, then the notes', octaves',
+/// accents' and slides', in the order the fill's chances come.
+const GEN_ACID_LOOPS: DeviceLayout = live(
+    "gen/acid-loops",
+    &[knobs(
+        "Loops",
+        [
+            s("trigloop"),
+            s("noteloop"),
+            s("octloop"),
+            s("accloop"),
+            s("slideloop"),
+            GAP,
+            GAP,
+            GAP,
+        ],
+    )],
+);
 /// A canon's moves; it writes every row, so it has no `Where`. Then its mutations, a Bloom
 /// branch's, on a page of their own, with `Vary` on knob 6 as elsewhere, as it draws once it
 /// mutates (decision 307).
@@ -1963,13 +1981,14 @@ const GEN_REWORK: DeviceLayout = live(
 
 /// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
 /// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 18] = [
+pub const GENERATORS: [&DeviceLayout; 19] = [
     &GEN_RAMP,
     &GEN_RANDOM,
     &GEN_WAVE,
     &GEN_ALTERNATE,
     &GEN_LIST,
     &GEN_ACID,
+    &GEN_ACID_LOOPS,
     &GEN_FOLLOW,
     &GEN_SCALE,
     &GEN_WALK,
@@ -2241,6 +2260,8 @@ pub fn layout_of(spec: &DeviceSpec, track: &Track) -> &'static DeviceLayout {
         Some(Control::Accumulator(_)) => &ACCUMULATOR,
         Some(Control::Arpeggio(_)) => &ARPEGGIO,
         Some(Control::Macro(_)) => &MACROS,
+        // An `Acid`'s loops, on a device of their own.
+        Some(Control::Gen { param, .. }) if param.is_loop() => &GEN_ACID_LOOPS,
         Some(Control::Gen {
             phrase, generator, ..
         }) => generator_layout(

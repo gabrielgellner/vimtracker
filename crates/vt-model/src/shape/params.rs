@@ -17,10 +17,10 @@ use crate::step::Step;
 use super::{
     Acid, Bar, Bits, CellStart, Channel, DEFAULT_RATE, DEFAULT_RULE, Degrees, Division, Divisions,
     DrumPart, EUCLID_HITS, Edge, FillKind, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH,
-    MAX_FACTOR, MAX_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION, MAX_ORDER, MAX_RING, MAX_SPREAD,
-    MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, MoveList, Moves, Mutations, Pink, Quality, Random, Ring,
-    Shape, ShapeColumn, Source, Tonnetz, TonnetzVoice, VARIES, Values, Variation, WAVES, WaveRate,
-    Where, default_step, degree_count, degree_name, first_note,
+    MAX_FACTOR, MAX_LOOP, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION, MAX_ORDER, MAX_RING,
+    MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, MoveList, Moves, Mutations, Pink, Quality,
+    Random, Ring, Shape, ShapeColumn, Source, Tonnetz, TonnetzVoice, VARIES, Values, Variation,
+    WAVES, WaveRate, Where, default_step, degree_count, degree_name, first_note,
 };
 use super::{CHILD, CLUSTERS, MARKOV, Role, SHARE, STATES, World};
 
@@ -294,6 +294,13 @@ pub enum GenParam {
     Accent,
     Slide,
     Pitches,
+    /// How many rows each part of an `Acid` line loops on, after Kria: its rhythm on an empty
+    /// column, its notes, octaves, accents and slides; none for a part drawn afresh each row.
+    TrigLoop,
+    NoteLoop,
+    OctaveLoop,
+    AccentLoop,
+    SlideLoop,
     /// A `Follow` fill's own: the phrase it follows, the canon's moves on the way (transposed,
     /// inverted about a note, backwards and late), and whether it copies the FX columns too.
     Source,
@@ -420,7 +427,7 @@ pub enum GenParam {
 
 impl GenParam {
     /// Every setting, in the order the shape panel lists them.
-    pub const ALL: [Self; 94] = [
+    pub const ALL: [Self; 99] = [
         Self::Fill,
         Self::From,
         Self::To,
@@ -432,6 +439,11 @@ impl GenParam {
         Self::Accent,
         Self::Slide,
         Self::Pitches,
+        Self::TrigLoop,
+        Self::NoteLoop,
+        Self::OctaveLoop,
+        Self::AccentLoop,
+        Self::SlideLoop,
         Self::Source,
         Self::Transpose,
         Self::Invert,
@@ -529,6 +541,11 @@ impl GenParam {
             Self::Accent => "accent",
             Self::Slide => "slide",
             Self::Pitches => "pitches",
+            Self::TrigLoop => "trigloop",
+            Self::NoteLoop => "noteloop",
+            Self::OctaveLoop => "octloop",
+            Self::AccentLoop => "accloop",
+            Self::SlideLoop => "slideloop",
             Self::Source => "source",
             Self::Transpose => "transpose",
             Self::Invert => "invert",
@@ -635,6 +652,11 @@ impl GenParam {
             Self::Accent => "Accent",
             Self::Slide => "Slide",
             Self::Pitches => "Pitches",
+            Self::TrigLoop => "Trig loop",
+            Self::NoteLoop => "Note loop",
+            Self::OctaveLoop => "Oct loop",
+            Self::AccentLoop => "Acc loop",
+            Self::SlideLoop => "Sld loop",
             Self::Source => "Source",
             Self::Transpose => "Transpose",
             Self::Invert => "Invert",
@@ -741,6 +763,11 @@ impl GenParam {
             | Self::Order
             | Self::Mutation
             | Self::Rule
+            | Self::TrigLoop
+            | Self::NoteLoop
+            | Self::OctaveLoop
+            | Self::AccentLoop
+            | Self::SlideLoop
             | Self::PWeight
             | Self::LWeight
             | Self::RWeight
@@ -900,7 +927,9 @@ impl GenParam {
             }
             Self::Notes => riff,
             Self::Octave | Self::Accent | Self::Slide | Self::Pitches => acid,
-            Self::Density => acid && generates,
+            Self::Density | Self::TrigLoop => acid && generates,
+            Self::NoteLoop => riff,
+            Self::OctaveLoop | Self::AccentLoop | Self::SlideLoop => acid,
             Self::Step | Self::Edge => kind == FillKind::Walk,
             Self::Depth => kind == FillKind::Pink,
             Self::Spread | Self::Bias => riff || kind == FillKind::Random,
@@ -1155,6 +1184,42 @@ impl GenParam {
         ]
     }
 
+    /// Whether it's one of an `Acid` line's loops.
+    pub fn is_loop(self) -> bool {
+        matches!(
+            self,
+            Self::TrigLoop | Self::NoteLoop | Self::OctaveLoop | Self::AccentLoop | Self::SlideLoop
+        )
+    }
+
+    /// Where an `Acid` line's loops sit on the Gen page, on a device of their own under the
+    /// fill's, as its own grid is full: the rhythm's and the notes' first, then the octaves',
+    /// accents' and slides', each level with its chance in the device above. Only the loops the
+    /// shape has on its `column` are placed, and a fill with no loops has none.
+    pub fn loops_grid(
+        shape: &Shape,
+        column: ShapeColumn,
+        generates: bool,
+    ) -> Option<[[Option<Self>; GEN_ROWS]; GEN_COLUMNS]> {
+        if shape.kind != FillKind::Acid {
+            return None;
+        }
+        let has =
+            |param: Option<Self>| param.filter(|param| param.exists_for(shape, column, generates));
+        let none = [None; GEN_ROWS];
+        let grid = [
+            [Some(Self::TrigLoop), Some(Self::NoteLoop), None],
+            [
+                Some(Self::OctaveLoop),
+                Some(Self::AccentLoop),
+                Some(Self::SlideLoop),
+            ],
+            none,
+            none,
+        ];
+        Some(grid.map(|column| column.map(has)))
+    }
+
     /// A part's density.
     pub fn density_of(part: DrumPart) -> Self {
         match part {
@@ -1342,6 +1407,15 @@ impl GenParam {
             }
             Self::Pitches if shape.acid.keep => "Keep".to_owned(),
             Self::Pitches => "Roll".to_owned(),
+            Self::TrigLoop
+            | Self::NoteLoop
+            | Self::OctaveLoop
+            | Self::AccentLoop
+            | Self::SlideLoop => match acid_loop(shape.acid, self).unwrap_or(0) {
+                0 => "Off".to_owned(),
+                1 => "1 row".to_owned(),
+                rows => format!("{rows} rows"),
+            },
             Self::Source => shape.follow.source.to_string(),
             Self::Transpose => {
                 let by = shape.follow.transpose;
@@ -1477,6 +1551,10 @@ impl GenParam {
     pub fn brief(self, shape: &Shape, context: &Context) -> String {
         let number = || self.number(shape, context);
         match self.units() {
+            _ if self.is_loop() => match number() {
+                Some(0) | None => "Off".to_owned(),
+                Some(rows) => rows.to_string(),
+            },
             Units::Count | Units::Rows | Units::OfRows => {
                 number().map_or_else(String::new, |number| number.to_string())
             }
@@ -1709,6 +1787,16 @@ impl GenParam {
                 }
             }
             Self::Pitches => shape.acid.keep = !shape.acid.keep,
+            Self::TrigLoop
+            | Self::NoteLoop
+            | Self::OctaveLoop
+            | Self::AccentLoop
+            | Self::SlideLoop => {
+                if let Some(rows) = acid_loop_mut(&mut shape.acid, self) {
+                    let most = i32::from(MAX_LOOP);
+                    *rows = moved(i32::from(*rows), by(1, EUCLID_JUMP), 0, most) as u8;
+                }
+            }
             Self::Transpose => {
                 let octave = match column {
                     ShapeColumn::Note { scale, .. } if scale.on => {
@@ -1853,7 +1941,7 @@ impl GenParam {
             }
             Self::LoopLength => {
                 let length = i32::from(shape.tonnetz.length);
-                let most = i32::from(MAX_LOOP);
+                let most = i32::from(MAX_MOVE_LOOP);
                 shape.tonnetz.length = moved(length, by(1, LOOP_JUMP), 1, most) as u8;
             }
             Self::Flip => shape.bits.flip = moved_byte(shape.bits.flip, by(1, HEX_JUMP)),
@@ -1899,6 +1987,15 @@ impl GenParam {
                 }
             }
             Self::Pitches => shape.acid.keep = false,
+            Self::TrigLoop
+            | Self::NoteLoop
+            | Self::OctaveLoop
+            | Self::AccentLoop
+            | Self::SlideLoop => {
+                if let Some(rows) = acid_loop_mut(&mut shape.acid, self) {
+                    *rows = 0;
+                }
+            }
             Self::Source => {
                 if let Some(source) = starts.source {
                     shape.follow.source = source;
@@ -2114,6 +2211,14 @@ impl GenParam {
                     _ => return Err("A chance runs from 0 to 100"),
                 }
             }
+            Self::TrigLoop
+            | Self::NoteLoop
+            | Self::OctaveLoop
+            | Self::AccentLoop
+            | Self::SlideLoop => match (acid_loop_mut(&mut shape.acid, self), text.parse::<u8>()) {
+                (Some(rows), Ok(typed)) if typed <= MAX_LOOP => *rows = typed,
+                _ => return Err("A loop runs from 0, off, to 64 rows"),
+            },
             Self::Run => match text.parse::<i16>() {
                 Ok(run) if run > 0 => shape.run = (run as u16).min(MAX_RUN),
                 _ => return Err("Run is a whole number above 0"),
@@ -2243,7 +2348,9 @@ impl GenParam {
                 }
             }
             Self::LoopLength => match text.parse::<u8>() {
-                Ok(length) if (1..=MAX_LOOP).contains(&length) => shape.tonnetz.length = length,
+                Ok(length) if (1..=MAX_MOVE_LOOP).contains(&length) => {
+                    shape.tonnetz.length = length
+                }
                 _ => return Err("Length runs from 1 to 16"),
             },
             Self::Quarters
@@ -2368,7 +2475,7 @@ impl GenParam {
             Self::Voice => (0, TonnetzVoice::ALL.len() as i32 - 1),
             Self::MoveList => return None,
             Self::PWeight | Self::LWeight | Self::RWeight => (0, i32::from(MAX_MOVE_WEIGHT)),
-            Self::LoopLength => (1, i32::from(MAX_LOOP)),
+            Self::LoopLength => (1, i32::from(MAX_MOVE_LOOP)),
             Self::Step => (1, i32::from(longest_step(column))),
             Self::Depth => (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH)),
             Self::Spread => (0, i32::from(MAX_SPREAD)),
@@ -2387,6 +2494,11 @@ impl GenParam {
             Self::Rotate => (0, (open - 1).max(0)),
             Self::Notes => (1, i32::from(MAX_ACID_NOTES)),
             Self::Pitches => (0, 1),
+            Self::TrigLoop
+            | Self::NoteLoop
+            | Self::OctaveLoop
+            | Self::AccentLoop
+            | Self::SlideLoop => (0, i32::from(MAX_LOOP)),
             // Its choices' places, worked out without listing them, so the engine can hold it.
             Self::Vary => (0, VARIES.len() as i32 - 1),
         })
@@ -2510,6 +2622,11 @@ impl GenParam {
                 i32::from(acid_chance(shape.acid, self)?)
             }
             Self::Pitches => i32::from(shape.acid.keep),
+            Self::TrigLoop
+            | Self::NoteLoop
+            | Self::OctaveLoop
+            | Self::AccentLoop
+            | Self::SlideLoop => i32::from(acid_loop(shape.acid, self)?),
             Self::Vary => VARIES.iter().position(|passes| *passes == shape.vary)? as i32,
         })
     }
@@ -2593,6 +2710,15 @@ impl GenParam {
                 }
             }
             Self::Pitches => shape.acid.keep = number != 0,
+            Self::TrigLoop
+            | Self::NoteLoop
+            | Self::OctaveLoop
+            | Self::AccentLoop
+            | Self::SlideLoop => {
+                if let Some(rows) = acid_loop_mut(&mut shape.acid, self) {
+                    *rows = number as u8;
+                }
+            }
             Self::Axis => shape.follow.axis = Some(number as u8),
             Self::Transpose => shape.follow.transpose = number as i8,
             Self::Late => shape.follow.rotate = number as u16,
@@ -2810,6 +2936,24 @@ fn acid_chance_mut(acid: &mut Acid, param: GenParam) -> Option<&mut u8> {
     }
 }
 
+/// How many rows a part of an `Acid` line loops on, by its setting.
+fn acid_loop(acid: Acid, param: GenParam) -> Option<u8> {
+    let mut acid = acid;
+    acid_loop_mut(&mut acid, param).map(|rows| *rows)
+}
+
+fn acid_loop_mut(acid: &mut Acid, param: GenParam) -> Option<&mut u8> {
+    let loops = &mut acid.loops;
+    match param {
+        GenParam::TrigLoop => Some(&mut loops.trigs),
+        GenParam::NoteLoop => Some(&mut loops.notes),
+        GenParam::OctaveLoop => Some(&mut loops.octaves),
+        GenParam::AccentLoop => Some(&mut loops.accents),
+        GenParam::SlideLoop => Some(&mut loops.slides),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2915,14 +3059,18 @@ mod tests {
             of(FillKind::Acid, true),
             [
                 Fill, From, To, Notes, Spread, Bias, Octave, Density, Accent, Slide, Pitches,
-                Where, Vary
+                TrigLoop, NoteLoop, OctaveLoop, AccentLoop, SlideLoop, Where, Vary
             ]
         );
         let mut kept = shape(FillKind::Acid);
         kept.acid.keep = true;
         assert_eq!(
             GenParam::of(&kept, note(), false),
-            [Fill, Octave, Accent, Slide, Pitches, Where, Vary]
+            [
+                Fill, Octave, Accent, Slide, Pitches, OctaveLoop, AccentLoop, SlideLoop, Where,
+                Vary
+            ],
+            "keeping the pitches there leaves no notes to loop, and no rows to loop on"
         );
         // An `Acid` riff's `Spread` and `Bias` take the Gen page's fourth column, as its three are
         // full with Euclid's, and keeping the pitches there leaves them nothing to lean.
@@ -3351,6 +3499,13 @@ mod tests {
                                 .into_iter()
                                 .flatten(),
                         )
+                        // An `Acid`'s loops, on a device of their own under it.
+                        .chain(
+                            GenParam::loops_grid(&base, note(), generates)
+                                .into_iter()
+                                .flatten()
+                                .flatten(),
+                        )
                         .flatten()
                         .collect();
                     let mut wanted = GenParam::of(&base, note(), generates);
@@ -3479,6 +3634,75 @@ mod tests {
         assert_eq!(GenParam::From.typing(ShapeColumn::Velocity), Typing::Hex);
         assert_eq!(GenParam::From.typing(note()), Typing::Named { list: false });
         assert_eq!(GenParam::Where.typing(note()), Typing::Listed);
+    }
+
+    #[test]
+    fn an_acids_loops_read_in_rows_and_off_and_sit_on_a_device_of_their_own() {
+        let generated = Context {
+            generates: true,
+            ..context(note())
+        };
+        let mut acid = shape(FillKind::Acid);
+        let shown = |acid: &Shape, param: GenParam| {
+            (param.shown(acid, &generated), param.brief(acid, &generated))
+        };
+        assert_eq!(
+            shown(&acid, GenParam::NoteLoop),
+            ("Off".into(), "Off".into())
+        );
+        GenParam::NoteLoop
+            .typed(&mut acid, &generated, "7")
+            .unwrap();
+        assert_eq!(acid.acid.loops.notes, 7);
+        assert_eq!(
+            shown(&acid, GenParam::NoteLoop),
+            ("7 rows".into(), "7".into())
+        );
+        GenParam::TrigLoop
+            .step(&mut acid, &generated, 1, false)
+            .unwrap();
+        assert_eq!(
+            shown(&acid, GenParam::TrigLoop),
+            ("1 row".into(), "1".into())
+        );
+        assert!(
+            GenParam::TrigLoop
+                .typed(&mut acid, &generated, "65")
+                .is_err()
+        );
+        GenParam::TrigLoop
+            .typed(&mut acid, &generated, "64")
+            .unwrap();
+        GenParam::TrigLoop
+            .step(&mut acid, &generated, 1, true)
+            .unwrap();
+        assert_eq!(acid.acid.loops.trigs, 64, "64 rows at most");
+        GenParam::TrigLoop.reset(&mut acid, &generated, Starts::default());
+        assert_eq!(acid.acid.loops.trigs, 0, "x turns it off");
+        assert_eq!(GenParam::NoteLoop.bounds(&generated), Some((0, 64)));
+        // The fill's own grid is full, so they're a device of their own; none for another fill.
+        assert_eq!(
+            GenParam::loops_grid(&acid, note(), true),
+            Some([
+                [Some(GenParam::TrigLoop), Some(GenParam::NoteLoop), None],
+                [
+                    Some(GenParam::OctaveLoop),
+                    Some(GenParam::AccentLoop),
+                    Some(GenParam::SlideLoop)
+                ],
+                [None; GEN_ROWS],
+                [None; GEN_ROWS],
+            ])
+        );
+        assert_eq!(
+            GenParam::loops_grid(&acid, note(), false).unwrap()[0],
+            [None, Some(GenParam::NoteLoop), None],
+            "on notes there, the rhythm is theirs"
+        );
+        assert_eq!(
+            GenParam::loops_grid(&shape(FillKind::Random), note(), true),
+            None
+        );
     }
 
     #[test]

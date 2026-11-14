@@ -98,45 +98,51 @@ fn every_generator_puts_each_setting_on_one_knob_and_the_app_keeps_what_it_is() 
             let song = song_with(shape);
             let track = &song.tracks[0];
             let devices = track_devices(track, Some(0));
-            let (page, _, spec) = devices.last().unwrap();
+            let (page, _, _) = devices.last().unwrap();
             assert_eq!(*page, Page::Gen, "{}", kind.name());
-            let layout = layout_of(spec, track);
-            used.insert(layout.kind);
-            let wanted: Vec<Control> = spec
-                .rows()
-                .flatten()
-                .flatten()
-                .filter(|control| !app_only(*control, track))
-                .collect();
-            let shown: Vec<Control> = placement(spec, track, false)
-                .knobs
-                .iter()
-                .flatten()
-                .map(|(control, _)| *control)
-                .collect();
-            for control in &wanted {
-                let times = shown.iter().filter(|found| *found == control).count();
-                assert_eq!(times, 1, "{control:?} on {}", kind.name());
-                assert!(knob(*control, track, &song).is_some(), "{control:?}");
-            }
-            assert_eq!(shown.len(), wanted.len(), "{} {place:?}", kind.name());
-            // A key the device hasn't is the `Where`'s, which comes and goes with it, or a setting
-            // the shape hasn't now, as `Density` where nothing is generated.
-            let shape = track.phrases[&0].generators()[0].shape;
-            for setting in layout.layout.settings() {
-                if resolve(setting, spec, track).is_none() {
-                    let absent = GenParam::by_key(setting.key)
-                        .is_some_and(|param| !param.exists_for(&shape, note(), false));
-                    assert!(
-                        absent || [WHERE_FIRST, WHERE_SECOND].contains(&setting.key),
-                        "{} has no {}",
-                        kind.name(),
-                        setting.key
-                    );
+            // The generator's device, and an `Acid`'s `Loops` after it.
+            let generators = devices.iter().filter(|(page, _, spec)| {
+                *page == Page::Gen && !matches!(spec.grid[0][0], Some(Control::Macro(_)))
+            });
+            for (_, _, spec) in generators {
+                let layout = layout_of(spec, track);
+                used.insert(layout.kind);
+                let wanted: Vec<Control> = spec
+                    .rows()
+                    .flatten()
+                    .flatten()
+                    .filter(|control| !app_only(*control, track))
+                    .collect();
+                let shown: Vec<Control> = placement(spec, track, false)
+                    .knobs
+                    .iter()
+                    .flatten()
+                    .map(|(control, _)| *control)
+                    .collect();
+                for control in &wanted {
+                    let times = shown.iter().filter(|found| *found == control).count();
+                    assert_eq!(times, 1, "{control:?} on {}", kind.name());
+                    assert!(knob(*control, track, &song).is_some(), "{control:?}");
                 }
+                assert_eq!(shown.len(), wanted.len(), "{} {place:?}", kind.name());
+                // A key the device hasn't is the `Where`'s, which comes and goes with it, or a setting
+                // the shape hasn't now, as `Density` where nothing is generated.
+                let shape = track.phrases[&0].generators()[0].shape;
+                for setting in layout.layout.settings() {
+                    if resolve(setting, spec, track).is_none() {
+                        let absent = GenParam::by_key(setting.key)
+                            .is_some_and(|param| !param.exists_for(&shape, note(), false));
+                        assert!(
+                            absent || [WHERE_FIRST, WHERE_SECOND].contains(&setting.key),
+                            "{} has no {}",
+                            kind.name(),
+                            setting.key
+                        );
+                    }
+                }
+                // Live, as a generator has no buttons.
+                assert!(!layout.stored);
             }
-            // Live, as a generator has no buttons.
-            assert!(!layout.stored);
         }
     }
     let all: std::collections::BTreeSet<&str> =
@@ -271,10 +277,43 @@ fn knob_7_turns_a_rhythms_child_and_the_app_keeps_the_rhythm_and_its_part() {
 }
 
 #[test]
+fn an_acids_loops_are_a_device_of_their_own_after_it() {
+    let song = song_with(shape(FillKind::Acid, Where::Notes));
+    let track = &song.tracks[0];
+    let devices = live_devices(track, Some(0), &song, false);
+    let names: Vec<String> = devices
+        .iter()
+        .rev()
+        .take(2)
+        .map(|device| device.name.to_string())
+        .collect();
+    assert_eq!(names, ["Note Loops", "Note Acid"]);
+    // Its knobs in the order the fill's chances come; on notes there, no rhythm of its own.
+    let last = track_devices(track, Some(0)).len() - 1;
+    let at = |index| control_at(track, Some(0), last, index, false);
+    assert_eq!(at(1), None, "the rhythm is the notes'");
+    let Some(Control::Gen { param, .. }) = at(2) else {
+        panic!("the notes' loop");
+    };
+    assert_eq!(param, GenParam::NoteLoop);
+    let action = turned(at(4).unwrap(), 0, &song, KNOB_TOP).unwrap();
+    let next = edit(&Arc::new(song.clone()), &action).unwrap();
+    assert_eq!(
+        next.tracks[0].phrases[&0].generators()[0]
+            .shape
+            .acid
+            .loops
+            .accents,
+        64
+    );
+}
+
+#[test]
 fn acids_pitches_is_a_two_step_knob() {
     let song = song_with(shape(FillKind::Acid, Where::Notes));
     let track = &song.tracks[0];
-    let device = track_devices(track, Some(0)).len() - 1;
+    // Before its `Loops`, the last device.
+    let device = track_devices(track, Some(0)).len() - 2;
     let pitches = control_at(track, Some(0), device, 6, false).unwrap();
     let Feel::Steps(names) = knob(pitches, track, &song).unwrap().feel else {
         panic!("a list");

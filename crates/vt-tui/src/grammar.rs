@@ -46,10 +46,11 @@ pub enum Change {
         /// Land just after what was pasted.
         advance: bool,
     },
-    /// A column shaped, whose ends are chosen again from what's there.
+    /// A column shaped, whose ends are chosen again from what's there. The shape is boxed, as it's
+    /// far larger than any other change.
     Shape {
         column: ShapeColumn,
-        shape: Shape,
+        shape: Box<Shape>,
         steps: usize,
         tracks: usize,
     },
@@ -1024,7 +1025,7 @@ impl App {
                     StepRange::between(self.cursor.step, end),
                     tracks,
                     *column,
-                    *shape,
+                    **shape,
                 );
             }
             Change::Replace {
@@ -1200,7 +1201,7 @@ impl App {
                     self.fill(selection.range, selection.tracks, field, &value);
                 }
                 Change::Shape { column, shape, .. } => {
-                    self.shape_again(selection.range, selection.tracks, column, shape);
+                    self.shape_again(selection.range, selection.tracks, column, *shape);
                 }
                 Change::Paste { .. } => {}
             }
@@ -1268,7 +1269,7 @@ impl App {
     pub(crate) fn remember_shape(&mut self, panel: &ShapePanel) {
         self.last_change = Some(Change::Shape {
             column: panel.column,
-            shape: panel.shape,
+            shape: Box::new(panel.shape),
             steps: panel.selection.range.len(),
             tracks: panel.selection.tracks.count(),
         });

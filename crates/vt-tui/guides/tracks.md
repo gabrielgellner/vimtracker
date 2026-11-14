@@ -1759,7 +1759,12 @@ they stay put as the fill changes; where `Acid`'s `Density` or `Random`'s `Weigh
 top of the third, `Rhythm` goes to the fourth. A `Follow`, which has no `Where`, has its
 `Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
 whose three are full, its riff's `Spread` and `Bias` in the fourth, as a `Tonnetz` has its
-moves' weights, `P`, `L` and `R`. A value with a bar is brief, as `9` for hits,
+moves' weights, `P`, `L` and `R`. An `Acid`'s loops
+(see **Acid lines** in the editing guide) are a device of their own under it, `Loops`:
+`Trig loop` and `Note loop` in its first column, `Oct loop`, `Acc loop` and `Sld loop` in
+its second, level with `Octave`, `Accent` and `Slide` above, and at the end of its
+title, dim, when the loops come round together and when the phrase plays the same pass
+again, `in step again every 420 rows, the phrase every 105 passes`. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 
@@ -1820,6 +1825,11 @@ hears what playing to it would. `Space g a` on one keeps the register as the pas
 just heard began, so that pass plays first and the ring runs on from there,
 `Change` where it was; turn `Change` to `0%` and that loop holds, every pass. `r`
 lets go of it and starts a new ring.
+
+An `Acid` with a loop on runs on from pass to pass the same way, each loop where the
+last pass left it, with or without `Vary`. `Space g a` on one keeps the pass just
+heard as the one written, and its loops go on from there; `r` starts them from
+their first rows again.
 
 **Making a column live.** The last device, `Empty`, has `K` list the columns of
 the phrase with nothing live on them. Choosing one makes it live over the phrase's
@@ -1978,7 +1988,7 @@ under `Factory` after your own, so `:patch` has some from the start. They're bui
 program rather than written into your folder, so they can't be changed, tagged or written over;
 a patch of yours with the same name comes first, and `:patch save` always saves one of yours.
 Each is tagged `generative` and with what it acts on, so `#generative` lists them and `#rhythm`
-finds `Euclid` and `Noise Ring`.
+finds `Euclid`, `Acid loops` and `Noise Ring`.
 
 | Patch | From the song | Its macros |
 |---|---|---|
@@ -1986,6 +1996,7 @@ finds `Euclid` and `Noise Ring`.
 | `Deja vu` | `deja-vu` | `Deja vu`, `Spread` |
 | `Euclid` | `euclid`'s bass | `Hits`, `Rotate` |
 | `Kria` | `kria` | `Pitch loop`, `Octave loop` |
+| `Acid loops` | `kria`'s bass | `Trig loop` to `Sld loop`, all five |
 | `Accents` | `live-generators`' hats | `Hits`, `Rotate` |
 | `Acid line` | `acid-lines` | `Density`, `Notes`, `Octave`, `Accent`, `Slide` |
 | `Drunk walk` | `walks`' bass | `Step`, `Hits` |

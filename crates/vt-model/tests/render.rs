@@ -16,10 +16,10 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
     Acid, Across, Bar, Bits, CellStart, Cells, Channel, Divisions, DrumPart, Edge, FillKind,
-    Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION,
-    MAX_RING, MAX_VALUES, MAX_WEIGHT, MoveList, Moves, Mutations, Pink, Quality, Random, Ring,
-    Role, RowView, Shape, ShapeColumn, Tonnetz, TonnetzMove, TonnetzVoice, Values, Variation,
-    WAVES, Walk, WaveRate, Where, World, render_into, written_from,
+    Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT,
+    MAX_MUTATION, MAX_RING, MAX_VALUES, MAX_WEIGHT, MoveList, Moves, Mutations, Pink, Quality,
+    Random, Ring, Role, RowView, Shape, ShapeColumn, Tonnetz, TonnetzMove, TonnetzVoice, Values,
+    Variation, WAVES, Walk, WaveRate, Where, World, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -300,6 +300,8 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
             slide: dice.below(101) as u8,
             keep: dice.chance(40),
             roll: if dice.chance(50) { 0 } else { dice.next() },
+            // The loops are newer than the hashes, and tested in `shape/acid.rs`.
+            ..Acid::default()
         },
         follow: Follow {
             source: Default::default(),
@@ -400,7 +402,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         moves: more.pick(&Moves::ALL),
         list: MoveList::new(&moves),
         weights: std::array::from_fn(|_| more.below(u64::from(MAX_MOVE_WEIGHT) + 1) as u8),
-        length: 1 + more.below(u64::from(MAX_LOOP)) as u8,
+        length: 1 + more.below(u64::from(MAX_MOVE_LOOP)) as u8,
         voice: Some(more.pick(&TonnetzVoice::ALL)),
         in_scale: more.chance(50),
     };

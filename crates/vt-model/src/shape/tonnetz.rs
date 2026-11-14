@@ -43,7 +43,7 @@ pub const MAX_MOVES: usize = 8;
 /// The heaviest a move's weight goes.
 pub const MAX_MOVE_WEIGHT: u8 = 9;
 /// The longest loop of moves drawn from the seed.
-pub const MAX_LOOP: u8 = 16;
+pub const MAX_MOVE_LOOP: u8 = 16;
 /// The dice of a random walk's moves, so they don't follow another fill's.
 const DICE: u64 = 0x7044_0590;
 /// The dice of a loop's moves.
@@ -509,7 +509,7 @@ impl Walk {
     fn listed(&self, at: usize) -> (Option<Move>, usize) {
         match self.tonnetz.moves {
             Moves::Loop => {
-                let len = usize::from(self.tonnetz.length.clamp(1, MAX_LOOP));
+                let len = usize::from(self.tonnetz.length.clamp(1, MAX_MOVE_LOOP));
                 let die = mix(self.seed ^ LOOPED, at % len);
                 (self.weighed(die, |_| true), len)
             }
