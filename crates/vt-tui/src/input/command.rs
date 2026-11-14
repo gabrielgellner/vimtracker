@@ -522,7 +522,9 @@ fn slice(argument: &str) -> Result<Line, LineError> {
 pub enum LineError {
     #[error("unknown command: {0}")]
     Unknown(String),
-    #[error(":name takes two characters, the first a letter, or nothing to clear it")]
+    #[error(
+        ":name takes two characters, the first a letter, or on a group 1 to {GROUP_NAME_CHARS} letters or digits, or nothing to clear it"
+    )]
     Name,
     #[error(":bpm takes a number from 20 to 400, or sample for the track's sample's own tempo")]
     Bpm,
@@ -1182,9 +1184,12 @@ pub const COMMANDS: [Command; 47] = [
         name: "name",
         meaning: "Name this track",
         takes: Takes::Nothing,
+        // A group's longer name is refused off a group as the line runs, by the cursor's track.
         parse: |argument| match argument {
             "" => Ok(Line::Name(None)),
-            _ if is_name(argument) => Ok(Line::Name(Some(argument.to_ascii_uppercase()))),
+            _ if is_name(argument) || is_group_name(argument) => {
+                Ok(Line::Name(Some(argument.to_ascii_uppercase())))
+            }
             _ => Err(LineError::Name),
         },
     },
@@ -1504,7 +1509,11 @@ mod tests {
         assert_eq!(parse("track add 0"), Err(LineError::Track));
         assert_eq!(parse("name bd"), Ok(Line::Name(Some("BD".into()))));
         assert_eq!(parse("name"), Ok(Line::Name(None)));
-        assert_eq!(parse("name 1A"), Err(LineError::Name));
+        // A group's name parses, and only a group's track takes it.
+        assert_eq!(parse("name drums"), Ok(Line::Name(Some("DRUMS".into()))));
+        assert_eq!(parse("name 1A"), Ok(Line::Name(Some("1A".into()))));
+        assert_eq!(parse("name drumss"), Err(LineError::Name));
+        assert_eq!(parse("name B-"), Err(LineError::Name));
         assert_eq!(
             parse("sample a b.wav"),
             Ok(Line::Sample(Some("a b.wav".into())))

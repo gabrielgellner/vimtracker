@@ -13,7 +13,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
-use crate::explorer::Icon;
+use crate::explorer::{Icon, Purpose};
 use crate::glyphs;
 use crate::input::picker::{Picker, Row};
 use crate::theme;
@@ -46,6 +46,9 @@ const PREVIEW_LABEL_WIDTH: usize = 4;
 /// sample explorer's hint, with its three three-cell switches, fits under it with the preview off,
 /// with a dash of the border to spare.
 const EXPLORER_WIDTH: usize = 60;
+/// The kit dialog's list is wider, so its marking hint, `Space mark  a all  Enter load`, fits
+/// with the same three switches, and a dash to spare, with the preview off.
+const KIT_EXPLORER_WIDTH: usize = 77;
 /// Room for a relative line number in the explorer, and the space after it.
 const NUMBER_WIDTH: usize = 3;
 /// Where an item's name starts: after a category's arrow, the mark on the item already chosen, or
@@ -61,8 +64,11 @@ pub fn draw(frame: &mut Frame, area: Rect, picker: &mut Picker) {
     let columns = Columns::of(picker);
     let preview = picker.has_previews();
     let explorer = picker.tree().is_some();
-    let list_width = if explorer {
-        EXPLORER_WIDTH
+    let list_width = if let Some(tree) = picker.tree() {
+        match tree.purpose {
+            Purpose::Kit => KIT_EXPLORER_WIDTH,
+            _ => EXPLORER_WIDTH,
+        }
     } else {
         (GUTTER + columns.indent + columns.label + columns.meaning + columns.category)
             .clamp(MIN_LIST_WIDTH, MAX_LIST_WIDTH)

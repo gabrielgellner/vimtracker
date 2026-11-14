@@ -436,6 +436,38 @@ fn group_name_names_the_cursors_group_with_up_to_five_characters() {
 }
 
 #[test]
+fn name_on_a_groups_own_track_takes_five_characters_and_a_sound_track_two() {
+    let (mut app, _realtime) = grouped();
+    let g1 = app.song().fixed_track(TrackKind::Group(1)).unwrap();
+    app.cursor.track = g1;
+    command(&mut app, "name drums");
+    assert_eq!(app.song().tracks[g1].name, "DRUMS");
+    assert!(app.status.contains("Group 1 named DRUMS"), "{}", app.status);
+    command(&mut app, "name drumss");
+    assert!(
+        app.status.contains(":name takes two characters"),
+        "{}",
+        app.status
+    );
+    assert_eq!(app.song().tracks[g1].name, "DRUMS", "six are refused");
+    command(&mut app, "name");
+    assert_eq!(app.song().tracks[g1].name, "G1", "back to its letters");
+
+    // A sound track, even in the group, keeps to two, and its group's name is left alone.
+    app.cursor.track = 0;
+    command(&mut app, "name bd");
+    assert_eq!(app.song().tracks[0].name, "BD");
+    command(&mut app, "name kick");
+    assert!(
+        app.status.contains(":name takes two characters"),
+        "{}",
+        app.status
+    );
+    assert_eq!(app.song().tracks[0].name, "BD", "{}", app.status);
+    assert_eq!(app.song().tracks[g1].name, "G1");
+}
+
+#[test]
 fn a_group_with_five_characters_shows_its_whole_name_in_every_view() {
     use vt_tui::glyphs::{FOLDED, GROUP, ICON_SPACE};
     let (mut app, _realtime) = grouped();

@@ -45,9 +45,9 @@ impl Purpose {
         !self.chooses_folder() && !matches!(self, Self::Preset(_))
     }
 
-    /// Whether moving onto a file plays it.
+    /// Whether moving onto a file plays it: a sample, or a kit's sound in either explorer.
     pub fn auditions(self) -> bool {
-        self == Self::Sample
+        matches!(self, Self::Sample | Self::Kit)
     }
 
     /// The picker's title.

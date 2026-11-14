@@ -60,10 +60,7 @@ impl App {
             Line::Trim => self.trim_sample(),
             Line::KitTracks(name) => self.load_kit(&self.kit_path(&name)),
             Line::Kit(None) => self.open_kit_picker(),
-            Line::Name(name) => self.apply(&Action::SetTrackName {
-                track: self.cursor.track,
-                name: name.unwrap_or_default(),
-            }),
+            Line::Name(name) => self.name_track(name),
             Line::Bpm(millibpm) => self.apply(&Action::SetMilliBpm(millibpm)),
             Line::GrabTempo => self.grab_tempo(),
             Line::TrackAdd(count) => {

@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use ratatui::crossterm::event::KeyCode;
+use vt_engine::link::Realtime;
 use vt_model::constants::MAX_GROUPS;
 use vt_model::song::TrackKind;
 use vt_model::step::Note;
@@ -126,6 +127,95 @@ fn marked_sounds_load_as_new_tracks_after_the_last_in_a_folded_group_as_one_undo
     assert!(app.song().bank.is_empty());
     let group = app.song().fixed_track(TrackKind::Group(1)).unwrap();
     assert_eq!(app.song().tracks[group].name, "G1");
+}
+
+#[test]
+fn moving_onto_a_kits_sound_plays_it_and_marking_plays_nothing_more() {
+    let (mut app, mut realtime) = app();
+    let kit = kit_in_folder(&mut app);
+    // Sounds of 50 ms, long enough to be sounding after a short block.
+    for file in ["kick.wav", "snare.wav", "hat.wav"] {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let path = kit.parent().unwrap().join("drums").join(file);
+        let mut writer = hound::WavWriter::create(path, spec).unwrap();
+        for _ in 0..2400 {
+            writer.write_sample(8000_i16).unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+    // Whether a preview is sounding after a short block, which a play just sent would be.
+    let sounding = |realtime: &mut Realtime, app: &mut App| {
+        let mut out = vec![0.0; 128];
+        realtime.process(&mut out);
+        app.tick();
+        realtime.engine().previews_sounding()
+    };
+    // Let the one-sample sound play out.
+    let play_out = |realtime: &mut Realtime, app: &mut App| {
+        for _ in 0..200 {
+            if sounding(realtime, app) == 0 {
+                break;
+            }
+        }
+        assert_eq!(realtime.engine().previews_sounding(), 0);
+    };
+    let playing = |app: &App| app.file_playing.clone().unwrap_or_default();
+    open_kit(&mut app);
+    app.finish_loading();
+    assert!(
+        playing(&app).ends_with("drums/kick.wav"),
+        "{:?}",
+        playing(&app)
+    );
+    assert_eq!(
+        sounding(&mut realtime, &mut app),
+        1,
+        "it plays as the cursor lands"
+    );
+    play_out(&mut realtime, &mut app);
+
+    press(&mut app, "j");
+    app.finish_loading();
+    assert!(playing(&app).ends_with("drums/snare.wav"));
+    assert_eq!(sounding(&mut realtime, &mut app), 1);
+    play_out(&mut realtime, &mut app);
+
+    // x marks the snare and moves on to the closed hat, which plays for the move alone.
+    press(&mut app, "x");
+    app.finish_loading();
+    assert!(playing(&app).ends_with("drums/hat.wav"));
+    assert_eq!(sounding(&mut realtime, &mut app), 1);
+    play_out(&mut realtime, &mut app);
+
+    // a marks them all, and takes the marks off, where the cursor is: nothing plays again.
+    press(&mut app, "a");
+    assert_eq!(app.picker.as_ref().unwrap().marked_count(), 5);
+    assert_eq!(sounding(&mut realtime, &mut app), 0, "a plays nothing");
+    press(&mut app, "a");
+    assert_eq!(sounding(&mut realtime, &mut app), 0);
+    assert!(playing(&app).ends_with("drums/hat.wav"));
+
+    // The hint shows its switch, and with the preview off the box is wide enough for it all.
+    let (on, off) = (vt_tui::glyphs::SWITCH_ON, vt_tui::glyphs::SWITCH_OFF);
+    press(&mut app, "P");
+    let text = picker_text(&app, 163, 42);
+    assert!(
+        text.contains(&format!(
+            "╰ Space mark  a all  Enter load  H {off}   hidden  P {off}   preview  A {on}   audition ─╯"
+        )),
+        "{text}"
+    );
+    // A turns it off, as in the sample explorer.
+    press(&mut app, "A");
+    assert_eq!(app.file_playing, None);
+    press(&mut app, "j");
+    assert_eq!(app.file_wanted, None, "nothing plays while it's off");
+    assert_eq!(sounding(&mut realtime, &mut app), 0);
 }
 
 #[test]
