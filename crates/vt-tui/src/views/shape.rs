@@ -6,7 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 use vt_model::lfo::Shape as Wave;
-use vt_model::shape::{Context, FillKind, GenParam, ShapeColumn, written_from};
+use vt_model::shape::{Context, FillKind, GenParam, ShapeColumn, Where, written_from};
 use vt_model::step::Note;
 
 use crate::app::App;
@@ -143,7 +143,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         lines.push(Line::from(line));
     }
     let too_few = panel.too_few_notes();
+    let pairs = panel.parts.len() > 1 && matches!(panel.shape.place, Where::Complementary { .. });
     let hint = match panel.shape.kind {
+        // Each pair of tracks shares one coin (decision 321).
+        _ if pairs && panel.shape.kind.has_where() => "Each row goes to one track or the other",
         FillKind::Random | FillKind::Walk | FillKind::Pink if app.mode == Mode::Shape => {
             "~ swap  r reroll"
         }

@@ -189,9 +189,9 @@ not like the screen, the same way for every device:
     type or a mod slot's type with `K` in the app. Each would swap the device's whole
     layout under your hand, as a mod slot's layout is its type's.
 *   A live column's knobs are its fill's settings in the order they shape the line, its
-    rows' (`Hits` and `Rotate`, or an `Every`'s or a `Chance`'s amount) on knobs 7 and 8.
-    Its fill, its rows' kind and a `Follow`'s source are chosen in the app, and a list's
-    values are typed there. `Acid`'s `Pitches` is a knob of two steps, `Roll` and `Keep`.
+    rows' (`Hits` and `Rotate`, or the amount of an `Every`, a `Chance` or one of Marbles'
+    rhythms) on knobs 7 and 8. Its fill, its rows' kind, a `Follow`'s source and
+    `Complementary`'s `Side` are chosen in the app, and a list's values are typed there. `Acid`'s `Pitches` is a knob of two steps, `Roll` and `Keep`.
     A `Follow` has its canon's moves on the first page and its `Mutation`, its kinds and
     `Vary` on the second.
 
