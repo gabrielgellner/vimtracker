@@ -413,6 +413,8 @@ Song                               song.ron, refused unless format_version is FO
  |   |                             and Master
  |   |- kind, name, mute, solo     kind: Sound, Group(n), ReturnA, ReturnB or Master
  |   |- machine                    Sampler, or Plaits(voice)
+ |   |- role                       what it's for, which colours its name: Auto, by its machine,
+ |   |                             None, Drums, Bass, Synth, Pad or Texture; saved unless Auto
  |   |- settings{id}, fine{id}     machine settings changed from their defaults
  |   |- filter, filter_mode, cutoff, resonance, drive, punch, safe, low_cut, high_cut
  |   |- inserts[4], bypassed[4]    an effect and its settings in each slot

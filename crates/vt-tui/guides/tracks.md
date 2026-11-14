@@ -60,7 +60,7 @@ and its settings in up to four columns of three.
 |---|---|---|
 | Machine | Machine, type | The machine's own; a sample's `Tune` `Cents` |
 | Filter | Type, mode | `Cut` `Res` `Drive`; `Punch` `Safe`; `Low cut` `High cut` |
-| Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group` |
+| Output | | `Trim` `Level` `Pan`; `Send A` `Send B` `Group`; `Role` |
 | Play | | `Pitch` `Glide` `Gate`; `Speed` `Groove` `Reset`; |
 | | | `Choke` `Velocity` `Quantise` |
 
@@ -972,6 +972,35 @@ bar while the others drift. `Off`, the default, plays on. `=` and `-` move it a 
 bars as `2bar`, or `off`, and `x` turns it off. For a one-off, `Space a` starts the
 chain again at the next line of the launch grid: see **Jamming** in **Phrases and
 chains**.
+
+## Track colours
+
+What a track is for is a thin rule under its name, in a colour of its own, so drums,
+bass and synths stand apart at a glance: in the song view's columns, on the mixer's
+strips, in the phrase view's columns and titles, in the track list (`Space f b`) and in
+the track page's title. The name keeps its own colour, a group's, so the rule says what
+a track is and the name's colour which group it's in.
+
+| Role | Colour | What it's for |
+|---|---|---|
+| `Drums` | maroon | Drums and percussion |
+| `Bass` | yellow | A bass line |
+| `Synth` | sky blue | A lead, an arpeggio or a melody |
+| `Pad` | lavender | Chords and pads |
+| `Texture` | pink | Noise, risers and atmosphere |
+| `None` | none | Nothing to say |
+
+`Role`, at the end of the Output, sets it. It starts on `Auto`, which goes by the
+machine and shows what that makes it, dimmed: the drum voices are `Drums`, `Acid` is
+`Bass`, `Chord` and `Paraphonic` are `Pad`, the noise voices are `Texture` and every
+other voice is `Synth`. A sampler could be playing anything, so it has no colour until
+you say, but a kit's sounds are `Drums`, whether `:kit` puts them on tracks or `:sample`
+chooses one for a track left on `Auto`. `K` lists the
+roles in their colours, `=` and `-` go through them, and `x` goes back to `Auto`.
+
+A group takes the colour its tracks all share, so a folded kit still reads as drums;
+with tracks for different things, and on the returns and the master, the rule is grey,
+as they play nothing of their own.
 
 ## Groups
 

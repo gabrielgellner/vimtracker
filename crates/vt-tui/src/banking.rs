@@ -14,7 +14,7 @@ use vt_model::project;
 use vt_model::samples::SamplePool;
 use vt_model::seeding;
 use vt_model::settings::SettingId;
-use vt_model::song::{Song, TrackKind};
+use vt_model::song::{Role, Song, TrackKind};
 use vt_model::step::{FxCommand, FxSlot, Mark};
 
 use crate::app::{App, Field};
@@ -496,6 +496,11 @@ impl App {
             adds.push(Action::SetTrackChoke {
                 track,
                 choke: sound.choke,
+            });
+            // A kit's sounds are drums, which a sampler alone can't say (decision 316).
+            adds.push(Action::SetTrackRole {
+                track,
+                role: Role::Drums,
             });
             if !sound.label.is_empty() {
                 adds.push(Action::SetTrackName {

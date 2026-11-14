@@ -12,7 +12,7 @@ use vt_model::kit::CHOKE_GROUPS;
 use vt_model::lfo::{LfoMode, MAX_DEFORM, Shape};
 use vt_model::modulation::{MAX_DEPTH, ModKind, ModSlot, default_mod};
 use vt_model::settings::{SettingId, gate_percent, gate_value};
-use vt_model::song::{FilterType, Machine, Track};
+use vt_model::song::{FilterType, Machine, Role, Track};
 use vt_model::speed::Speed;
 use vt_model::steps::{Loop, MAX_MUTATE, MAX_STEP, STEPS, Steps, StepsMode};
 use vt_model::tracking::{Source, Tracking};
@@ -655,6 +655,13 @@ impl App {
                 let moved = moved.min(u32::from(MAX_TRACK_RESET)) as u16;
                 self.set_reset((moved > 0).then_some(moved));
             }
+            Control::Role => {
+                let role = next_in(&Role::ALL, track.role, up);
+                self.apply(&Action::SetTrackRole {
+                    track: self.cursor.track,
+                    role,
+                });
+            }
             Control::Speed => {
                 // One way at a time, stopping at either end, as the list runs short to long.
                 let at = usize::from(track.speed.index());
@@ -893,6 +900,13 @@ impl App {
             Control::Choke => {}
             Control::Group if track.group.is_some() => self.set_group_here(None),
             Control::Group => {}
+            Control::Role if !track.role.is_auto() => {
+                self.apply(&Action::SetTrackRole {
+                    track: self.cursor.track,
+                    role: Role::Auto,
+                });
+            }
+            Control::Role => {}
             Control::GateLength if track.gate_length.is_some() => {
                 self.apply(&Action::SetTrackGateLength {
                     track: self.cursor.track,
