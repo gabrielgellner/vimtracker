@@ -8,6 +8,7 @@ use vt_model::lfo::DIVISION_TICKS;
 use vt_model::song::Song;
 
 use crate::dsp::dynamics::limiter::Limiter;
+use crate::dsp::effects::beads::Beads;
 use crate::dsp::effects::chorus::Chorus;
 use crate::dsp::effects::clouds::Clouds;
 use crate::dsp::effects::delay::Delay;
@@ -26,6 +27,24 @@ use crate::dsp::effects::tape::Tape;
 use crate::dsp::effects::warps::Warps;
 use crate::dsp::filters::comb::Comb;
 use crate::engine::sample_of_tick;
+
+/// Where the song is, for the effects that keep time with it: its tick, whether it's playing,
+/// and how many frames a tick takes.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SongPlace {
+    pub tick: f64,
+    pub playing: bool,
+    pub frames_per_tick: f64,
+}
+
+impl SongPlace {
+    /// A song that isn't playing, for an effect that's only just started.
+    pub const STILL: Self = Self {
+        tick: 0.0,
+        playing: false,
+        frames_per_tick: 1.0,
+    };
+}
 
 /// How long a reverb or plate has to stay below `SILENT` to be done, in seconds. It's longer than the way
 /// round its loops and its longest pre-delay, so nothing louder is still on its way.
@@ -54,6 +73,7 @@ pub enum Memory {
     Rotary(Box<Rotary>),
     Stutter(Box<Stutter>),
     Clouds(Box<Clouds>),
+    Beads(Box<Beads>),
 }
 
 impl Memory {
@@ -149,6 +169,11 @@ impl Memory {
         Self::Clouds(Box::new(Clouds::new(rate)))
     }
 
+    /// Beads', which records the longest of the module's qualities too.
+    pub fn beads(rate: u32) -> Self {
+        Self::Beads(Box::new(Beads::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -171,6 +196,7 @@ impl Memory {
             Self::Rotary(rotary) => rotary.process_alone(input),
             Self::Space(space) => space.process(input),
             Self::Clouds(clouds) => clouds.process(input),
+            Self::Beads(beads) => beads.process(input),
         }
     }
 
@@ -194,12 +220,14 @@ impl Memory {
             Self::Stutter(stutter) => stutter.quiet_frames(),
             Self::Rotary(rotary) => rotary.frames() as u32,
             Self::Clouds(clouds) => clouds.quiet_frames(),
+            Self::Beads(beads) => beads.quiet_frames(),
         }
     }
 
-    /// Take what's set now, at a tempo.
+    /// Take what's set now, where the song is and at its tempo.
     #[inline]
-    pub fn follow(&mut self, insert: Insert, frames_per_tick: f64, frames: u64) {
+    pub fn follow(&mut self, insert: Insert, song: SongPlace, frames: u64) {
+        let frames_per_tick = song.frames_per_tick;
         match (self, insert) {
             (Self::Delay(delay), Insert::Delay(settings)) => {
                 delay.follow(settings, frames_per_tick);
@@ -225,25 +253,31 @@ impl Memory {
             (Self::Rotary(rotary), Insert::Rotary(settings)) => rotary.follow(settings),
             (Self::Space(space), Insert::Space(settings)) => space.follow(settings),
             (Self::Clouds(clouds), Insert::Clouds(settings)) => clouds.follow(settings, frames),
+            (Self::Beads(beads), Insert::Beads(settings)) => beads.follow(settings, song, frames),
             _ => {}
         }
     }
 
     /// Move what goes by the frame rather than by what it's done to where it is this many frames
-    /// in, as taking its settings does: a reverb's and a plate's wobbles, and Clouds' reverb's.
-    pub fn keep_time(&mut self, frames: u64) {
+    /// in, as taking its settings does: a reverb's and a plate's wobbles, Clouds' and Beads'
+    /// reverbs', and the song's steps Beads follows.
+    pub fn keep_time(&mut self, frames: u64, song: SongPlace) {
         match self {
             Self::Reverb(reverb) => reverb.keep_time(frames),
             Self::Plate(plate) => plate.keep_time(frames),
             Self::Clouds(clouds) => clouds.keep_time(frames),
+            Self::Beads(beads) => beads.keep_time(frames, song),
             _ => {}
         }
     }
 
-    /// Give what draws random numbers its own generator, from the track's: Clouds' grains.
+    /// Give what draws random numbers its own generator, from the track's: Clouds' and Beads'
+    /// grains.
     pub fn seed(&mut self, rng: crate::rng::Pcg32) {
-        if let Self::Clouds(clouds) = self {
-            clouds.seed(rng);
+        match self {
+            Self::Clouds(clouds) => clouds.seed(rng),
+            Self::Beads(beads) => beads.seed(rng),
+            _ => {}
         }
     }
 
@@ -300,6 +334,7 @@ impl Memory {
             Self::Rotary(rotary) => rotary.settle(),
             Self::Space(space) => space.settle(),
             Self::Clouds(clouds) => clouds.settle(),
+            Self::Beads(beads) => beads.settle(),
         }
     }
 
@@ -323,6 +358,7 @@ impl Memory {
             Self::Rotary(rotary) => rotary.clear(),
             Self::Space(space) => space.clear(),
             Self::Clouds(clouds) => clouds.clear(),
+            Self::Beads(beads) => beads.clear(),
         }
     }
 }
@@ -348,6 +384,7 @@ pub struct MemoryCount {
     pub rotary: u16,
     pub stutter: u16,
     pub clouds: u16,
+    pub beads: u16,
 }
 
 impl MemoryCount {
@@ -374,6 +411,7 @@ impl MemoryCount {
                 Insert::Rotary(_) => count.rotary += 1,
                 Insert::Space(_) => count.space += 1,
                 Insert::Clouds(_) => count.clouds += 1,
+                Insert::Beads(_) => count.beads += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Exciter(_)
@@ -409,6 +447,7 @@ pub struct MemoryPool {
     rotaries: Vec<Memory>,
     spaces: Vec<Memory>,
     clouds: Vec<Memory>,
+    beads: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -438,6 +477,7 @@ impl MemoryPool {
             rotaries: Vec::with_capacity(POOL_CAPACITY),
             spaces: Vec::with_capacity(POOL_CAPACITY),
             clouds: Vec::with_capacity(POOL_CAPACITY),
+            beads: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -495,6 +535,9 @@ impl MemoryPool {
         for _ in 0..needed.clouds {
             pool.put(Memory::clouds(rate));
         }
+        for _ in 0..needed.beads {
+            pool.put(Memory::beads(rate));
+        }
         pool
     }
 
@@ -519,6 +562,7 @@ impl MemoryPool {
             Memory::Rotary(_) => &mut self.rotaries,
             Memory::Space(_) => &mut self.spaces,
             Memory::Clouds(_) => &mut self.clouds,
+            Memory::Beads(_) => &mut self.beads,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -550,6 +594,7 @@ impl MemoryPool {
             Insert::Rotary(_) => &mut self.rotaries,
             Insert::Space(_) => &mut self.spaces,
             Insert::Clouds(_) => &mut self.clouds,
+            Insert::Beads(_) => &mut self.beads,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Exciter(_)
@@ -586,6 +631,7 @@ impl MemoryPool {
         self.owed.rotary += count.rotary;
         self.owed.space += count.space;
         self.owed.clouds += count.clouds;
+        self.owed.beads += count.beads;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -698,6 +744,12 @@ impl MemoryPool {
             self.owed.clouds -= 1;
             return Some(memory);
         }
+        if self.owed.beads > 0
+            && let Some(memory) = self.beads.pop()
+        {
+            self.owed.beads -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -721,6 +773,7 @@ impl MemoryPool {
             + self.rotaries.len()
             + self.spaces.len()
             + self.clouds.len()
+            + self.beads.len()
     }
 }
 
@@ -741,7 +794,11 @@ mod tests {
                 time: 17,
                 ..DelaySettings::DEFAULT
             };
-            memory.follow(Insert::Delay(settings), frames as f64 / 3840.0, 0);
+            let song = SongPlace {
+                frames_per_tick: frames as f64 / 3840.0,
+                ..SongPlace::STILL
+            };
+            memory.follow(Insert::Delay(settings), song, 0);
             memory.settle();
             assert_eq!(memory.process([1.0, 1.0]), [0.0, 0.0]);
             for _ in 1..frames {

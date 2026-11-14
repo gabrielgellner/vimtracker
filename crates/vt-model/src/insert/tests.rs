@@ -69,7 +69,10 @@ fn every_effects_grid_places_each_of_its_settings_once_with_what_comes_out_last(
         let grid = effect.grid();
         let params = effect.params();
         assert!(
-            grid.places_each_once(params.len(), effect.type_param()),
+            grid.places_each_once(
+                params.len(),
+                effect.type_param().into_iter().chain(effect.title_param())
+            ),
             "{effect:?}: {grid:?}"
         );
         // The column of what comes out is the last one used.

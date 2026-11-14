@@ -40,12 +40,17 @@ impl Grid {
         self.0.into_iter().flatten().flatten()
     }
 
-    /// Whether it places each of a device's settings exactly once, apart from one shown elsewhere,
-    /// such as an effect's type in its title, and nothing that isn't one of them.
-    pub fn places_each_once(self, count: usize, elsewhere: Option<usize>) -> bool {
+    /// Whether it places each of a device's settings exactly once, apart from those shown
+    /// elsewhere, such as an effect's type in its title, and nothing that isn't one of them.
+    pub fn places_each_once(
+        self,
+        count: usize,
+        elsewhere: impl IntoIterator<Item = usize>,
+    ) -> bool {
         let mut placed: Vec<usize> = self.settings().collect();
         placed.sort_unstable();
-        let wanted: Vec<usize> = (0..count).filter(|at| Some(*at) != elsewhere).collect();
+        let elsewhere: Vec<usize> = elsewhere.into_iter().collect();
+        let wanted: Vec<usize> = (0..count).filter(|at| !elsewhere.contains(at)).collect();
         placed == wanted
     }
 }

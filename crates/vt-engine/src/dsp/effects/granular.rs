@@ -501,11 +501,7 @@ impl Granular {
             tail_fade: 0,
             frozen: false,
             was_frozen: false,
-            player: GrainPlayer::new(
-                rate_f,
-                longest as f64,
-                f64::from(SAFETY_FRAMES * at_beads),
-            ),
+            player: GrainPlayer::new(rate_f, longest as f64, f64::from(SAFETY_FRAMES * at_beads)),
             trigger: Trigger {
                 phase: 0.0,
                 ratio: 1.0,
