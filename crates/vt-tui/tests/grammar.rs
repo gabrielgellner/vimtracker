@@ -2195,6 +2195,11 @@ fn acid_writes_a_riff_with_accents_and_slides_and_keeps_its_pitches_on_a_roll() 
             GenParam::Accent,
             GenParam::Slide,
             GenParam::Pitches,
+            GenParam::TrigLoop,
+            GenParam::NoteLoop,
+            GenParam::OctaveLoop,
+            GenParam::AccentLoop,
+            GenParam::SlideLoop,
             GenParam::Where,
             GenParam::Vary,
         ]
@@ -2317,6 +2322,9 @@ fn acid_on_notes_keeps_their_rhythm_and_with_keep_their_pitches() {
             GenParam::Accent,
             GenParam::Slide,
             GenParam::Pitches,
+            GenParam::OctaveLoop,
+            GenParam::AccentLoop,
+            GenParam::SlideLoop,
             GenParam::Where,
             GenParam::Vary,
         ]

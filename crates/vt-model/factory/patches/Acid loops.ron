@@ -1,0 +1,117 @@
+(
+    format: 1,
+    patch: (
+        macros: [
+            (
+                name: Some("Trig loop"),
+                value: 47872,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "trigloop",
+                        ),
+                        min: 32769,
+                        max: 32784,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Note loop"),
+                value: 26112,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "noteloop",
+                        ),
+                        min: 32769,
+                        max: 32784,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Oct loop"),
+                value: 17408,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "octloop",
+                        ),
+                        min: 32769,
+                        max: 32784,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Acc loop"),
+                value: 8704,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "accloop",
+                        ),
+                        min: 32769,
+                        max: 32784,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Sld loop"),
+                value: 13056,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "slideloop",
+                        ),
+                        min: 32769,
+                        max: 32784,
+                    ),
+                ],
+            ),
+        ],
+        generators: [
+            (
+                column: Note,
+                shape: (
+                    from: 52,
+                    to: 64,
+                    curve: 0,
+                    s: 0,
+                    kind: Acid,
+                    wave: Sine,
+                    rate: Time(Note(1920)),
+                    phase: 0,
+                    run: 1,
+                    values: [],
+                    place: AllRows,
+                    seed: 3,
+                    acid: (
+                        notes: 4,
+                        octave: 30,
+                        density: 60,
+                        accent: 40,
+                        slide: 30,
+                        keep: false,
+                        roll: 0,
+                        loops: (
+                            trigs: 12,
+                            notes: 7,
+                            octaves: 5,
+                            accents: 3,
+                            slides: 4,
+                        ),
+                    ),
+                ),
+            ),
+        ],
+    ),
+    tags: [
+        "generative",
+        "303",
+        "rhythm",
+    ],
+)

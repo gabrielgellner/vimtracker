@@ -571,6 +571,11 @@ already there it keeps their rhythm.
 | Accent | The chance a note is accented, written as `7F` |
 | Slide | The chance a note slides into the next, written as `HLD` |
 | Pitches | `Roll` gives new pitches on each `r`, `Keep` keeps them |
+| Trig loop | On an empty column, how many rows the rhythm goes round |
+| Note loop | How many rows the riff's notes go round |
+| Oct loop | How many rows the octaves go round |
+| Acc loop | How many rows the accents go round |
+| Sld loop | How many rows the slides go round |
 
 The riff's notes come from the scale while it's on, so a set of four in C minor
 might be `C-3 D#3 G-3 A#3`, and the root plays more often than the others.
@@ -585,6 +590,18 @@ selected: beats play most, then every third row, then the other even rows, and
 the rest least, so at `50%` half the rows play, most of them on the beat. A
 plain note takes the velocity notes are typed with, and an accent `7F`, as `'`
 writes it; a slide is `HLD` on the gate, as `/` writes it.
+
+**Loops.** Each part of the line can go round a loop of its own, after monome's
+Kria: `Off`, as it starts, draws the part afresh on every row, the same each pass,
+and `1` to `64` draws it for that many rows and goes round them. A `Trig loop`
+of 12, a `Note loop` of 7 and an `Acc loop` of 3 play 12 rows of rhythm, 7
+notes and 3 accents, each round and round against the others. Kept live, the
+loops run on from pass to pass, so on a phrase of 16 rows the rhythm starts its
+second pass four rows into its round, and the loops come round together only
+after their least common multiple, 84 rows for those three. The phrase shows the
+first pass; the engine plays the rest. On notes already there the rhythm is
+theirs, so there's no `Trig loop`, and with Pitches on `Keep` there, no `Note
+loop` either.
 
 `r` rolls a new riff, rhythm and all. With Pitches on `Keep`, `r` rolls only
 the accents, slides and octaves, and the notes and rhythm stay: Roland's second

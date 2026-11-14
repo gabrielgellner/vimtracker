@@ -68,19 +68,21 @@ pub(crate) fn macros_device() -> DeviceSpec {
 }
 
 /// The Gen page's devices for a phrase of a track: the track's macros first, then a device each
-/// for its live generators, then `Empty`. With no phrase there are only the macros.
+/// for its live generators, an `Acid`'s with its `Loops` under it, then `Empty`. With no phrase
+/// there are only the macros.
 pub(super) fn devices(track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
     let Some((id, found)) = phrase.and_then(|id| Some((id, track.phrases.get(&id)?))) else {
         return vec![macros_device()];
     };
     let generators = found.generators();
     let mut devices = vec![macros_device()];
-    devices.extend(order(generators).into_iter().map(|at| {
+    devices.extend(order(generators).into_iter().flat_map(|at| {
         let generator = &generators[at];
         let generates = generator
             .rows()
             .is_some_and(|rows| is_empty(&generator.under(found.steps()), rows, generator.column));
-        DeviceSpec::generator(id, at, generator, generates)
+        let loops = DeviceSpec::loops(id, at, generator, generates);
+        std::iter::once(DeviceSpec::generator(id, at, generator, generates)).chain(loops)
     }));
     let mut title = [None; DEVICE_COLUMNS];
     title[0] = Some(Control::NewGenerator(id));
@@ -124,6 +126,47 @@ impl DeviceSpec {
         }
     }
 }
+
+impl DeviceSpec {
+    /// An `Acid`'s loops as a device of their own, `Loops`, with nothing in its title, as the
+    /// fill's grid is full; none for a fill without them.
+    fn loops(phrase: u32, at: usize, generator: &Generator, generates: bool) -> Option<Self> {
+        let columns = GenParam::loops_grid(&generator.shape, generator.column, generates)?;
+        let grid = std::array::from_fn(|row| {
+            std::array::from_fn(|column| {
+                columns
+                    .get(column)
+                    .and_then(|places| places[row])
+                    .map(|param| Control::Gen {
+                        phrase,
+                        generator: at,
+                        param,
+                    })
+            })
+        });
+        Some(Self {
+            identity: LOOPS.to_owned(),
+            switchable: false,
+            width: DeviceWidth::Full,
+            title: [None; DEVICE_COLUMNS],
+            grid,
+        })
+    }
+
+    /// Whether it's an `Acid`'s `Loops`.
+    pub(crate) fn is_loops(&self) -> bool {
+        self.identity == LOOPS
+            && self
+                .grid
+                .iter()
+                .flatten()
+                .flatten()
+                .any(|control| matches!(control, Control::Gen { param, .. } if param.is_loop()))
+    }
+}
+
+/// What an `Acid`'s loops' device is called.
+pub(crate) const LOOPS: &str = "Loops";
 
 /// The phrase view's field for a column, where the cursor goes to open the panel on it.
 fn field_of(column: ShapeColumn) -> Field {
@@ -356,7 +399,8 @@ impl App {
     /// 293). The engine reports each pass as it's first heard; one reported from another
     /// generator, on another column, isn't kept. A `Ring` keeps its register as that pass began,
     /// so the pass heard plays first and the ring runs on from there, holding that loop once
-    /// `Change` is down (decision 324).
+    /// `Change` is down (decision 324); an `Acid` with loops keeps the count that pass began at,
+    /// so the pass heard plays first and its loops go on from there (decision 331).
     fn keep_variation(&mut self, phrase: u32, generator: usize, name: &str) {
         let track = self.cursor.track;
         let Some(live) = self.live_generator(track, phrase, generator) else {
@@ -380,6 +424,9 @@ impl App {
         if let Some(kept) = heard.ring {
             shape.ring.kept = Some(kept);
         }
+        if let Some(at) = heard.acid_at {
+            shape.acid.at = at;
+        }
         live.settle(&mut shape);
         self.apply(&Action::Reshape {
             track,
@@ -390,6 +437,11 @@ impl App {
         self.status = if heard.ring.is_some() {
             format!(
                 "Kept {name}'s loop as pass {} began it: Change at 0 holds it",
+                heard.pass + 1
+            )
+        } else if heard.acid_at.is_some() {
+            format!(
+                "Kept {name} as pass {} played it: its loops go on from there",
                 heard.pass + 1
             )
         } else {
