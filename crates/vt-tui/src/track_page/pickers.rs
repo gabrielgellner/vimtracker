@@ -14,8 +14,10 @@ use vt_model::tracking::{Source, Tracking};
 
 use crate::app::App;
 use crate::glyphs;
+use crate::input::command::{Line, PresetLine};
 use crate::input::picker::{Item, Pick, Picker};
 use crate::views::track::IN_SCALE_PITCH;
+use vt_model::preset::PresetKind;
 
 use super::controls::no_modes;
 
@@ -69,6 +71,41 @@ const DESTINATION_TITLES: [&str; MOD_SLOTS] = [
     "Mod 6 destination",
 ];
 use super::{AccumulatorField, ArpField, Control, ModField};
+
+/// A list of what a machine or a slot can be, with loading and saving a preset of it after them,
+/// as Ableton's hot-swap is on a device's title (decision 310).
+/// The machines' list draws each with its icon, so these have the presets folder's, which also
+/// keeps a search for a machine, as `sa` for `Sampler`, from finding them first.
+fn with_presets(mut items: Vec<Item>, kind: PresetKind) -> Vec<Item> {
+    let (what, icon) = match kind {
+        PresetKind::Sound => ("sound preset", format!("{} ", glyphs::FOLDER)),
+        PresetKind::Effect => ("effect preset", String::new()),
+    };
+    let (load, into) = match kind {
+        PresetKind::Sound => ("a", "keeping the track's phrases, level and sends"),
+        PresetKind::Effect => ("an", "into this slot"),
+    };
+    items.push(
+        Item::new(
+            format!("{icon}Load {load} {what}"),
+            Pick::Line(Line::Preset(PresetLine::Browse)),
+        )
+        .meaning(format!(":preset, {into}"))
+        .category(PRESETS),
+    );
+    items.push(
+        Item::new(
+            format!("{icon}Save as {load} {what}"),
+            Pick::Prompt("preset save ".to_owned()),
+        )
+        .meaning(":preset save, then its name")
+        .category(PRESETS),
+    );
+    items
+}
+
+/// The heading the preset items are listed under.
+const PRESETS: &str = "Presets";
 
 impl App {
     pub(super) fn open_control_picker(&mut self) {
@@ -167,6 +204,7 @@ impl App {
                 .meaning(insert.meaning())
             })
             .to_vec();
+        let items = with_presets(items, PresetKind::Effect);
         let position = Insert::ALL
             .iter()
             .position(|insert| insert.name() == current.name());
@@ -368,6 +406,7 @@ impl App {
                     .category(machine.category())
             })
             .to_vec();
+        let items = with_presets(items, PresetKind::Sound);
         let position = Machine::ALL.iter().position(|machine| *machine == current);
         self.show_picker(Picker::new("Machine", items).opened_on(position));
     }

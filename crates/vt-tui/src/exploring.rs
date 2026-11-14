@@ -183,8 +183,8 @@ pub fn project_preview(item: usize, folder: &Path) -> Shown {
 impl App {
     /// The folders the explorer starts from for a purpose, at the top of its list: the recent
     /// ones, then the project's, the settings' own, for samples the kit folders and the sample
-    /// library too, where the program was run from and the home folder. Each is listed once, and
-    /// one that isn't there is passed over.
+    /// library too, and but for presets where the program was run from and the home folder. Each
+    /// is listed once, and one that isn't there is passed over.
     pub(crate) fn places(&self, purpose: Purpose) -> Vec<Root> {
         let mut found: Vec<(PathBuf, &str)> = self
             .recent_places
@@ -226,9 +226,17 @@ impl App {
                 found.extend(around.map(|folder| (folder.to_path_buf(), "projects")));
             }
             Purpose::Render => found.extend(project.map(|folder| (folder, "project"))),
+            Purpose::Preset(kind) => found.extend(
+                self.settings
+                    .preset_folder()
+                    .map(|folder| (folder.join(kind.folder()), kind.folder())),
+            ),
         }
-        found.extend(std::env::current_dir().ok().map(|folder| (folder, "here")));
-        found.extend(home_folder().map(|folder| (folder, "home")));
+        // Presets are kept in their own folder, so the browser lists only it and those used lately.
+        if !matches!(purpose, Purpose::Preset(_)) {
+            found.extend(std::env::current_dir().ok().map(|folder| (folder, "here")));
+            found.extend(home_folder().map(|folder| (folder, "home")));
+        }
         let mut seen: Vec<PathBuf> = Vec::new();
         found
             .into_iter()
@@ -255,6 +263,7 @@ impl App {
             Purpose::Kit => "Enter use  L on tracks",
             Purpose::Project => "Enter open",
             Purpose::Save | Purpose::Render => "l open  Enter choose",
+            Purpose::Preset(_) => "Enter load",
         };
         let mut picker = Picker::explorer(purpose, roots, home_folder())
             .following(on)

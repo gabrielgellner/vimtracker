@@ -14,6 +14,38 @@ use vt_model::order::Order;
 use vt_model::shape::MAX_MUTATION;
 use vt_model::song::{LAUNCH_WORDS, Launch};
 
+/// What `:preset` does: a sound preset for the cursor's track, or on the FX page an effect preset
+/// for the slot under the cursor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PresetLine {
+    /// List the presets folder's, to load one.
+    Browse,
+    /// Save it under a name, with folders before it, writing over one of that name only if forced.
+    Save { name: String, force: bool },
+    /// Load one by its name.
+    Load(String),
+}
+
+/// `:preset`'s words.
+pub const PRESET_WORDS: [&str; 2] = ["save", "load"];
+
+/// Read `:preset`'s argument, or `:preset!`'s, which only saves.
+fn preset(argument: &str, force: bool) -> Result<Line, LineError> {
+    let (word, name) = argument
+        .split_once(char::is_whitespace)
+        .map_or((argument, ""), |(word, name)| (word, name.trim()));
+    let line = match (word, name.is_empty()) {
+        ("", _) if !force => PresetLine::Browse,
+        ("save", false) => PresetLine::Save {
+            name: name.to_owned(),
+            force,
+        },
+        ("load", false) if !force => PresetLine::Load(name.to_owned()),
+        _ => return Err(LineError::Preset),
+    };
+    Ok(Line::Preset(line))
+}
+
 /// A parsed command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Line {
@@ -129,6 +161,8 @@ pub enum Line {
     TrackLevel(u8),
     /// Name the macro under the cursor, or with nothing give it back its first mapping's name.
     MacroName(String),
+    /// Browse, save or load a preset for what's under the cursor (decision 310).
+    Preset(PresetLine),
     Reset(Option<usize>),
     /// Set when launched chains start, or show it.
     Launch(Option<Launch>),
@@ -463,6 +497,10 @@ pub enum LineError {
     #[error(":gen takes apply, to apply the live column under the cursor")]
     Gen,
     #[error(
+        ":preset lists the presets, :preset save name saves one, :preset load name loads one, and :preset! save name writes over one"
+    )]
+    Preset,
+    #[error(
         ":order takes forward, reverse, up-down, up-down-inc, down-up, down-up-inc, odd-even, hopscotch, converge, diverge, growing, shrinking, pedal, brownian, shuffle, quasi-random, random, jump and how many rows on 2 to 16, arp and how many rows a run takes 2 to 16 and how far on each starts 1 to 16, snake and a snake or its number 1 to 8, or cartesian and its X and Y rates 1 to 16 with X and Y lengths 1 to 8, the numbers if you like, or nothing to choose"
     )]
     Order,
@@ -698,6 +736,8 @@ pub enum Takes {
     Groove { off: bool },
     /// An order's word, and after `snake` a snake's.
     Order,
+    /// `:preset`'s word, then a preset's name.
+    Preset,
 }
 
 /// A command: its name, what it does, what it takes, and how its argument is read.
@@ -764,7 +804,7 @@ fn optional_path(argument: &str) -> Option<PathBuf> {
 }
 
 /// Every command, in the order Tab lists them, which the parser reads and Tab completes.
-pub const COMMANDS: [Command; 43] = [
+pub const COMMANDS: [Command; 45] = [
     Command {
         name: "w",
         meaning: "Save, or save to a new folder",
@@ -986,6 +1026,18 @@ pub const COMMANDS: [Command; 43] = [
                 .map(Line::TrackLevel)
                 .map_err(|_| LineError::TrackLevel)
         },
+    },
+    Command {
+        name: "preset",
+        meaning: "Load a preset of this sound or FX slot, or save or load one by name",
+        takes: Takes::Preset,
+        parse: |argument| preset(argument, false),
+    },
+    Command {
+        name: "preset!",
+        meaning: "Save a preset, writing over one of the same name",
+        takes: Takes::Preset,
+        parse: |argument| preset(argument, true),
     },
     Command {
         name: "macro",

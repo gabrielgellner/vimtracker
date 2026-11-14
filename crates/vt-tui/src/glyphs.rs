@@ -160,6 +160,9 @@ pub const KIT_SOUND_MARKED: char = '\u{f0132}';
 pub const KIT_SOUND_LAYERED_MARKED: char = '\u{f0137}';
 /// A sample: `nf-md-waveform`, U+F147D, as Ableton's browser shows one.
 pub const SAMPLE: char = '\u{f147d}';
+/// An effect preset, as a slot's faders: `nf-md-tune_vertical`, U+F066A. A sound preset is drawn
+/// with its machine's icon.
+pub const EFFECT: char = '\u{f066a}';
 /// A sample that's a loop, by its folder or the tempo in its name: `nf-md-repeat`, U+F0456.
 pub const LOOP: char = '\u{f0456}';
 /// A file that isn't there, or a file or folder that couldn't be read: `nf-md-alert`, U+F0026,

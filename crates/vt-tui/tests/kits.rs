@@ -136,6 +136,7 @@ fn a_missing_kit_says_so_and_a_missing_kit_folder_isnt_listed() {
     app.settings = Settings {
         kits: vec!["/nowhere/kits".to_owned(), "/nowhere/else".to_owned()],
         samples: Vec::new(),
+        presets: String::new(),
     };
     command(&mut app, "kit nothing-here");
     assert!(
@@ -176,6 +177,7 @@ fn kits_come_from_every_folder_in_the_settings_and_the_first_wins() {
     app.settings = Settings {
         kits: folders.iter().map(|f| f.display().to_string()).collect(),
         samples: Vec::new(),
+        presets: String::new(),
     };
 
     command(&mut app, "kit 808");

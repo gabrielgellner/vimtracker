@@ -269,7 +269,7 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 
 | Crate | Owns | May depend on |
 |---|---|---|
-| `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
+| `vt-model` | The song and everything in it, `Action`s and `edit`, undo history, the settings registry, the bank and `Playable`, the step text format, saving and loading, kits, presets, sample decoding and resampling, sample analysis, and reading WAV markers and `.ot` files | No audio device, terminal or other vimtracker crate: `serde`, `ron`, `hound`, `symphonia`, `rubato`, `thiserror` and `xxhash-rust` |
 | `vt-engine` | `Published`, the queues to and from the callback (`link.rs`), transport and sequencing (`engine.rs` and `engine/`), each track's playing state, voices and the sample reader, the preview voices, the DSP (`dsp/`, [below](#dsp-layout)), the limiter, the slowdown check's kernel (`slowdown.rs`), and rendering offline | `vt-model`, with `rtrb` for the queues, `hound` to write WAVs and `wide` for `Supersaw`'s four lanes |
 | `vt-roto` | Melbourne Instruments' Roto-Control: its SysEx, CC and serial protocols, typed each way (`sysex.rs`, `cc.rs`, `serial.rs`), the handshake (`session.rs`), the link's thread with finding the ports and reconnecting (`link.rs`, `transport.rs`), devices in PLUGIN mode, live or stored, with their buttons' lights, the Roto's track list and what changed sent back (`live.rs`), MIX mode's banks, track focus, lights and meters (`mix.rs`), a device's pages of eight knobs and eight buttons as data (`layout.rs`), vimtracker's own stored setups, written only under its own hashes and only when they change (`store.rs`), a fake Roto in memory (`fake.rs`), and `roto-probe` | No other vimtracker crate: `midir` for MIDI, `serialport` (without `libudev`) for the serial port, `thiserror` and `xxhash-rust` |
 | `vt-tui` | The `vimtracker` program and its subcommands, the terminal and the audio device, `App` and its keys, the views, kitty graphics, the helper threads, kits from Ableton Live, the mouse wheel as a knob (`wheel.rs`), the Roto's setting, every kind of device's layout on it (`roto/layouts.rs`), its devices as the Roto shows them, and its knobs' and buttons' moves as edits (`roto.rs`, `roto/devices.rs`, `roto/edits.rs`), the song as MIX mode's strips (`roto/mix.rs`), the faders as the steps automate them and a hand takes them over (`automating.rs`), and `probe` | `vt-model`, `vt-engine` and `vt-roto`, with `ratatui`, `cpal`, `clap` and the rest |
@@ -525,12 +525,19 @@ Song                               song.ron, refused unless format_version is FO
     launched chains start.
 *   **Saving.** A project is a folder holding `song.ron`. Loading reads `format_version` first and
     refuses any other version, with no migration. What belongs to the machine rather than the song
-    is in the config folder, `$XDG_CONFIG_HOME/vimtracker` or `~/.config/vimtracker`: where kits
-    and samples are (`settings.ron`, `config.rs`), the audio choice (`audio.ron`), the command
+    is in the config folder, `$XDG_CONFIG_HOME/vimtracker` or `~/.config/vimtracker`: where kits,
+    samples and presets are (`settings.ron`, `config.rs`), the audio choice (`audio.ron`), the command
     history (`history.ron`) and the explorer's last folders (`places.ron`). The cache folder,
     `$XDG_CACHE_HOME/vimtracker` or `~/Library/Caches/vimtracker` on macOS, holds the sample
     analyses and `full-speed.txt`. Autosave (`autosave.rs`) writes `song.autosave.ron` beside
     `song.ron` every `AUTOSAVE_SECONDS`, and offers it back after a crash.
+*   **Presets.** `vt-model`'s `preset.rs` reads and writes a sound preset, a `Sound` (the machine
+    to the slots' effects, and a sampler's bank entry by its full path) and a `Patch` (the mod
+    slots, accumulator, arpeggio and macros), and an effect preset, one slot's `Insert` with its
+    fine parts by key. Each is a RON file with its own `format`, read with serde's defaults for
+    what's left out and refusing what it doesn't know. `Action::LoadSound` and
+    `Action::LoadEffect` load one as an edit; `presetting.rs` in `vt-tui` saves and loads them
+    for the cursor's track or slot, and banks a sound's sample (decision 310).
 
 **Decisions:** 2, 5, 8, 10, 11, 15, 17, 29, 30, 37, 70, 78 to 82, 84 to 88, 91, 94, 95, 105, 111,
 123, 126, 136 and 138;

@@ -67,6 +67,13 @@ pub enum Pick {
     Kit(PathBuf),
     /// Put a kit's sounds on tracks from the first.
     KitTracks(PathBuf),
+    /// Load a preset on the cursor's track: a sound, or an effect into the slot under the cursor.
+    Preset {
+        kind: vt_model::preset::PresetKind,
+        path: PathBuf,
+    },
+    /// Open the command line with this typed, to finish there, as `:preset save ` is.
+    Prompt(String),
     /// Put this command in an FX slot, or empty it.
     FxCommand {
         slot: usize,

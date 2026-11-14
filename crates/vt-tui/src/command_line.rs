@@ -98,15 +98,18 @@ impl App {
         true
     }
 
-    /// Where completion looks: the settings' kit folders, and the home folder for `~`.
+    /// Where completion looks: the settings' kit folders, the presets of what `:preset` acts on
+    /// here, and the home folder for `~`.
     fn complete_line(&self) -> crate::input::completion::Completions {
         let kit_folders = self.settings.kit_folders();
+        let presets = self.presets_here();
         let home = home_folder();
         complete(
             &self.command_line,
             Places {
                 kit_folders: &kit_folders,
                 home: home.as_deref(),
+                presets: presets.as_deref(),
             },
         )
     }

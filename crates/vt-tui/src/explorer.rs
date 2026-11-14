@@ -2,10 +2,12 @@
 //! in tree mode (`input/picker.rs`) over the folders it starts from, read a folder at a time as
 //! they're opened. A kit opens like a folder, to its sounds, and a sound with variants or layers
 //! opens to those; in the kit explorer, the kit dialog, its sounds are marked to load as tracks.
+//! The preset browser lists the presets folder's sounds or effects (decision 310).
 
 use std::path::{Path, PathBuf};
 
 use vt_model::kit::{KitEntry, load_kit};
+use vt_model::preset::{PresetKind, load_effect, load_sound, preset_name};
 use vt_model::project::is_project;
 use vt_model::sample::is_sample_file;
 
@@ -25,6 +27,9 @@ pub enum Purpose {
     Kit,
     /// A folder to render into, before the file's name is typed.
     Render,
+    /// A preset to load on the cursor's track: its sound, or the effect in the slot under the
+    /// cursor.
+    Preset(PresetKind),
 }
 
 impl Purpose {
@@ -33,9 +38,10 @@ impl Purpose {
         matches!(self, Self::Save | Self::Render)
     }
 
-    /// Whether the preview starts open: only where there's something to show.
+    /// Whether the preview starts open: only where there's something to show. A preset says
+    /// what it is beside its name instead.
     pub fn previews(self) -> bool {
-        !self.chooses_folder()
+        !self.chooses_folder() && !matches!(self, Self::Preset(_))
     }
 
     /// Whether moving onto a file plays it.
@@ -51,6 +57,8 @@ impl Purpose {
             Self::Sample => "Samples",
             Self::Kit => "Kits",
             Self::Render => "Render into",
+            Self::Preset(PresetKind::Sound) => "Sound presets",
+            Self::Preset(PresetKind::Effect) => "Effect presets",
         }
     }
 }
@@ -67,6 +75,8 @@ pub enum Kind {
     Kit,
     /// A kit in the sample explorer, which opens like a folder to list its sounds.
     KitFolder,
+    /// A preset of this kind, which `Enter` loads.
+    Preset(PresetKind),
 }
 
 impl Kind {
@@ -84,6 +94,7 @@ impl Kind {
             Self::Sample if is_loop(path) => Icon::Loop,
             Self::Sample => Icon::Sample,
             Self::Kit | Self::KitFolder => Icon::Kit,
+            Self::Preset(kind) => preset_icon(path, kind),
         }
     }
 }
@@ -104,8 +115,35 @@ pub enum Icon {
     Sample,
     /// A sample that's a loop, as far as its folders and name say.
     Loop,
+    /// A sound preset, by what its machine is: a sampler, a drum voice or another synth voice.
+    Sound(vt_model::song::Machine),
+    /// An effect preset.
+    Effect,
     /// A file that isn't there, or a file or folder that couldn't be read.
     Missing,
+}
+
+/// A preset's icon: a sound's by its machine, an effect's, or a warning if it won't read.
+fn preset_icon(path: &Path, kind: PresetKind) -> Icon {
+    match kind {
+        PresetKind::Sound => {
+            load_sound(path).map_or(Icon::Missing, |preset| Icon::Sound(preset.sound.machine))
+        }
+        PresetKind::Effect => load_effect(path).map_or(Icon::Missing, |_| Icon::Effect),
+    }
+}
+
+/// What a preset is, beside its name in the browser, or why it won't read.
+fn preset_meaning(path: &Path, kind: PresetKind) -> String {
+    let read = match kind {
+        PresetKind::Sound => load_sound(path).map(|preset| preset.summary()),
+        PresetKind::Effect => load_effect(path).map(|preset| preset.summary()),
+    };
+    read.unwrap_or_else(|error| match error {
+        vt_model::preset::PresetError::Parse { detail, .. }
+        | vt_model::preset::PresetError::Holds { detail, .. } => detail,
+        error => error.to_string(),
+    })
 }
 
 /// The icon for a sample file a kit names: a loop's, or a warning if it isn't there.
@@ -195,6 +233,7 @@ pub fn kind_of(path: &Path, purpose: Purpose) -> Option<Kind> {
         Purpose::Kit if kit => Some(Kind::Kit),
         // Only a file that reads as a kit, so a project's `song.ron` isn't one.
         Purpose::Sample if kit && load_kit(path).is_ok() => Some(Kind::KitFolder),
+        Purpose::Preset(preset) if kit => Some(Kind::Preset(preset)),
         _ => None,
     }
 }
@@ -256,6 +295,15 @@ pub fn item(path: &Path, kind: Kind) -> Item {
             Pick::Folder(path.clone()),
         )
         .preview(Preview::Kit(path)),
+        // By the name `:preset load` takes, with what it is beside it.
+        Kind::Preset(preset) => Item::new(
+            preset_name(&path),
+            Pick::Preset {
+                kind: preset,
+                path: path.clone(),
+            },
+        )
+        .meaning(preset_meaning(&path, preset)),
     }
 }
 

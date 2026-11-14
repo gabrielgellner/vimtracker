@@ -1,5 +1,6 @@
 //! Recorded edits. `edit` is the only path that changes a song.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use thiserror::Error;
@@ -22,11 +23,12 @@ use crate::macros::{MACRO_NAME_LENGTH, MACROS, MacroMap, MacroTarget, valid_name
 use crate::modulation::ModSlot;
 use crate::names::is_project_name;
 use crate::order::Order;
+use crate::preset::SoundPreset;
 use crate::scale::Scale;
 use crate::selection::{
     Block, Scope, Shift, StepRange, clear_step, mark_step, merge_step, paste_step, shift_step,
 };
-use crate::settings::SettingId;
+use crate::settings::{Owner, SettingId};
 use crate::shape::{FillKind, Shape, ShapeColumn, Source, written_from};
 use crate::song::{
     Chain, ChainEntry, FilterMode, FilterType, Lane, Launch, Machine, Phrase, Repeat, Section,
@@ -264,6 +266,21 @@ pub enum Action {
         track: usize,
         slot: usize,
         insert: Insert,
+    },
+    /// Make a sound track's sound and patch a sound preset's, its sampler playing this bank
+    /// entry, keeping its place in the song and its phrases (decision 310).
+    LoadSound {
+        track: usize,
+        preset: Box<SoundPreset>,
+        sample: u8,
+    },
+    /// Put an effect preset's effect in one of a track's slots, with the fine parts of its
+    /// settings there, in place of the slot's own (decision 310).
+    LoadEffect {
+        track: usize,
+        slot: usize,
+        insert: Insert,
+        fine: BTreeMap<SettingId, u8>,
     },
     /// Switch one of a track's slots out, or back in.
     SetBypass {
@@ -695,6 +712,8 @@ pub enum EditError {
         "a project's name is up to {MAX_PROJECT_NAME_CHARS} characters, with no / and not starting with a dot"
     )]
     SongName,
+    #[error("only a track that plays sounds takes a sound preset")]
+    NotSound,
 }
 
 /// Apply an action, returning a new song that shares everything unchanged with the old one.
@@ -1048,6 +1067,34 @@ pub fn edit(song: &Arc<Song>, action: &Action) -> Result<Arc<Song>, EditError> {
                 && let Some(bypassed) = next.tracks[*track].bypassed.get_mut(*slot)
             {
                 *bypassed = false;
+            }
+        }
+        Action::LoadSound {
+            track,
+            preset,
+            sample,
+        } => {
+            let owner = track_mut(&mut next, *track)?;
+            if !owner.is_sound() {
+                return Err(EditError::NotSound);
+            }
+            preset.apply(owner, *sample);
+        }
+        Action::LoadEffect {
+            track,
+            slot,
+            insert,
+            fine,
+        } => {
+            let owner = track_mut(&mut next, *track)?;
+            if let Some(held) = owner.inserts.get_mut(*slot) {
+                *held = *insert;
+                owner.fine.retain(
+                    |id, _| !matches!(id.owner().0, Owner::Slot { slot: at, .. } if at == *slot),
+                );
+                for (id, value) in fine {
+                    owner.set_fine(*id, *value);
+                }
             }
         }
         Action::SetBypass {

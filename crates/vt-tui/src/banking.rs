@@ -263,6 +263,39 @@ impl App {
         self.status = said;
     }
 
+    /// Find a sound preset's bank entry in the bank, or load its file to add it: the number it's at,
+    /// and the edit that adds it if it's new. Its file is kept as a sample added from where it is
+    /// would be, inside the project by its place there, and an entry the same in every way is the
+    /// same entry, so loading a preset twice adds it once (decision 310).
+    pub(crate) fn bank_preset_sample(
+        &mut self,
+        entry: &BankEntry,
+    ) -> Result<(u8, Option<Action>), String> {
+        let mut entry = entry.clone();
+        for source in entry.sources_mut() {
+            let file = Path::new(&source.path);
+            let bytes = fs::read(file).map_err(|error| format!("{}: {error}", file.display()))?;
+            source.hash = ContentHash::of(&bytes);
+            source.path = self.store_sample(file).map_err(|error| error.to_string())?;
+        }
+        if let Some((number, _)) = self.song().bank.iter().find(|(_, own)| **own == entry) {
+            return Ok((number, None));
+        }
+        let number = self.song().bank.free().ok_or_else(|| FULL.to_owned())?;
+        let mut pool = SamplePool::clone(&self.samples);
+        for source in entry.sources() {
+            let resolved = project::resolve_sample(self.folder.as_deref(), &source.path);
+            pool.load(&source.path, &resolved, self.rate)
+                .map_err(|error| error.to_string())?;
+        }
+        self.samples = Arc::new(pool);
+        let add = Action::SetBankEntry {
+            number,
+            entry: Some(entry),
+        };
+        Ok((number, Some(add)))
+    }
+
     /// Put a kit's sounds, each as its file and what the kit says of it, in a copy of the bank,
     /// loading their files: the entry each plays, the edits that add the new ones, and the points
     /// their files say as edits of their own. Any that won't load stops it, with the file named.

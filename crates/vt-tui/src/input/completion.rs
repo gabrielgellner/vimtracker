@@ -10,7 +10,7 @@ use vt_model::sample::is_sample_file;
 use vt_model::scale::{ROOTS, ScaleKind};
 
 use crate::config::expand_from;
-use crate::input::command::{self, COMMANDS, KIT_ALL, RENDER_FLAGS, SETTINGS, Takes};
+use crate::input::command::{self, COMMANDS, KIT_ALL, PRESET_WORDS, RENDER_FLAGS, SETTINGS, Takes};
 use crate::input::picker::{Item, Pick, Picker};
 
 /// Where completion looks for files: the kit folders, and the home folder `~` stands for.
@@ -18,6 +18,8 @@ use crate::input::picker::{Item, Pick, Picker};
 pub struct Places<'a> {
     pub kit_folders: &'a [PathBuf],
     pub home: Option<&'a Path>,
+    /// The presets folder's `sounds` or `effects`, for what `:preset` acts on here.
+    pub presets: Option<&'a Path>,
 }
 
 /// One way to finish the word: the text that replaces it, and the name and meaning the list shows.
@@ -219,6 +221,7 @@ pub fn complete(line: &str, places: Places) -> Completions {
         },
         Takes::Render => render(start, argument, places),
         Takes::Kit => kit(start, argument, places),
+        Takes::Preset => preset(start, argument, command.name, places),
         takes => value_of(takes, start, argument, command.name, places),
     }
 }
@@ -265,7 +268,9 @@ fn value_of(
         Takes::Sample => paths(start, typed, places.home, Files::Samples),
         Takes::Render => paths(start, typed, places.home, Files::Wav),
         Takes::Kit => paths(start, typed, places.home, Files::Kits),
-        Takes::Words(_) | Takes::Nothing | Takes::Setting => Completions::none(start),
+        Takes::Words(_) | Takes::Nothing | Takes::Setting | Takes::Preset => {
+            Completions::none(start)
+        }
     }
 }
 
@@ -321,6 +326,35 @@ fn kit(start: usize, argument: &str, places: Places) -> Completions {
     Completions {
         start,
         title: "Kits",
+        candidates,
+    }
+}
+
+/// `:preset`'s word, then a preset's name from the presets folder, by its folders and name without
+/// `.ron`, as `:kit` completes a kit's. `:preset!` only saves.
+fn preset(start: usize, argument: &str, command: &'static str, places: Places) -> Completions {
+    let Some((word, name)) = argument.split_once(char::is_whitespace) else {
+        let list: &[&str] = if command.ends_with('!') {
+            &PRESET_WORDS[..1]
+        } else {
+            &PRESET_WORDS
+        };
+        return words(start, command, argument, list.iter().copied());
+    };
+    if !PRESET_WORDS.contains(&word) {
+        return Completions::none(start);
+    }
+    let start = start + word.len() + 1;
+    let (folder_typed, prefix) = split_path(name);
+    let candidates = places.presets.map_or_else(Vec::new, |root| {
+        entries(&root.join(folder_typed), prefix, Files::KitNames)
+            .into_iter()
+            .map(|entry| entry.candidate(folder_typed))
+            .collect()
+    });
+    Completions {
+        start,
+        title: "Presets",
         candidates,
     }
 }
@@ -469,6 +503,7 @@ mod tests {
         Places {
             kit_folders: &[],
             home: None,
+            presets: None,
         }
     }
 
@@ -601,6 +636,7 @@ mod tests {
         let places = Places {
             kit_folders: &[],
             home: Some(&home),
+            presets: None,
         };
         assert_eq!(tab("e ~", places), "e ~/");
         assert_eq!(
@@ -649,6 +685,7 @@ mod tests {
         let places = Places {
             kit_folders: &folders,
             home: None,
+            presets: None,
         };
         let found = complete("kit ", places);
         assert_eq!(found.title, "Kits");
@@ -705,16 +742,26 @@ mod tests {
                 _ => {
                     let line = format!("{} ", command.name);
                     let found = complete(&line, nowhere());
+                    // `:preset`'s words take a name after them.
+                    let name = if command.takes == Takes::Preset {
+                        " Acid"
+                    } else {
+                        ""
+                    };
                     found
                         .candidates
                         .iter()
-                        .map(|candidate| replaced(&line, found.start, &candidate.text))
+                        .map(|candidate| replaced(&line, found.start, &candidate.text) + name)
                         .collect()
                 }
             };
             if matches!(
                 command.takes,
-                Takes::Words(_) | Takes::Setting | Takes::Groove { .. } | Takes::Order
+                Takes::Words(_)
+                    | Takes::Setting
+                    | Takes::Groove { .. }
+                    | Takes::Order
+                    | Takes::Preset
             ) {
                 assert!(!lines.is_empty(), "{} completes something", command.name);
             }
@@ -724,6 +771,29 @@ mod tests {
             }
         }
         assert!(checked > 30, "only {checked} lines");
+    }
+
+    #[test]
+    fn preset_completes_its_words_then_the_presets_names() {
+        let root = folder("presets");
+        std::fs::create_dir_all(root.join("bass")).unwrap();
+        std::fs::write(root.join("Pad.ron"), "").unwrap();
+        std::fs::write(root.join("bass/Acid Bite.ron"), "").unwrap();
+        let places = Places {
+            kit_folders: &[],
+            home: None,
+            presets: Some(&root),
+        };
+        assert_eq!(texts(&complete("preset ", places)), ["save", "load"]);
+        assert_eq!(texts(&complete("preset! ", places)), ["save"]);
+        let found = complete("preset load ", places);
+        assert_eq!(found.title, "Presets");
+        assert_eq!(texts(&found), ["bass/", "Pad"]);
+        assert_eq!(
+            texts(&complete("preset save bass/", places)),
+            ["bass/Acid Bite"]
+        );
+        assert!(complete("preset wobble ", places).candidates.is_empty());
     }
 
     #[test]

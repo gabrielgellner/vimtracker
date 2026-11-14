@@ -32,6 +32,7 @@ pub mod picking;
 pub mod places;
 pub mod placing;
 pub mod points;
+pub mod presetting;
 pub mod probe;
 pub mod project_page;
 pub mod recording;

@@ -814,6 +814,17 @@ impl App {
                 self.use_kit(&path);
             }
             Pick::Folder(folder) => self.name_in(&folder),
+            Pick::Preset { kind, path } => {
+                self.note_place_of(Purpose::Preset(kind), &path);
+                self.load_preset(kind, &path);
+            }
+            Pick::Prompt(text) => {
+                self.command_line = text;
+                self.command_menu = None;
+                self.mode = Mode::Command;
+                self.status =
+                    "Type a name, with folders before it if you like, then Enter".to_owned();
+            }
             Pick::Project(folder) => {
                 self.note_place_of(Purpose::Project, &folder);
                 let force = std::mem::take(&mut self.opening_discards);

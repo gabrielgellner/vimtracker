@@ -1642,6 +1642,45 @@ holds, as `MAC3 80`. A mod slot's `Dest` lists the eight under `Macros`, so an L
 sweeps every setting it holds, each across its own range. A step's lock of a setting the macro
 holds still wins on its row, and modulation of that setting goes on top.
 
+## Presets
+
+A preset saves a track's sound, or one slot's effect, to load on any track of any song, as
+Elektron's sounds, the M8's instrument files and Ableton's device presets do. Each is a small
+file in the presets folder, `~/Music/vimtracker/presets` unless `settings.ron` says otherwise
+(see **Kit and sample folders** in **Sounds, samples and kits**): sounds in `sounds`, effects
+in `effects`, and folders below those for sorting, such as `sounds/bass`.
+
+**A sound preset** is the whole device: the machine and its settings, the filter, `Pitch`,
+`Glide`, `Gate` and `Velocity`, the four slots' effects, the six mod slots, the accumulator, the
+arpeggio, and the eight macros with their names, mappings and ranges. It leaves out the track's
+place in the song: its `Level`, `Trim`, `Pan`, sends, group, choke group, groove, `Speed`,
+`Reset`, `Quantise`, mute, solo, name, and its phrases and chains. A sampler's sound keeps its
+sample, with its slices and how it plays, and its file by its full path, so loading it in another
+song puts the same file in that song's bank, or finds it there.
+
+**An effect preset** is one slot's effect and its settings, a Distort with every mode's, and
+loads into any slot.
+
+| Command | Does |
+|---|---|
+| `:preset` | List the presets of what's here |
+| `:preset save bass/Bite` | Save it under that name |
+| `:preset! save bass/Bite` | Save it, writing over one |
+| `:preset load bass/Bite` | Load that one |
+
+What a preset is depends on where the cursor is: on the FX page on a slot, it's that slot's
+effect, and anywhere else the cursor's track's sound. `K` on `Machine`, the Sound page's first
+setting, and on an effect's name on the FX page, lists `Load a sound preset` or `Load an effect
+preset` after the machines or effects, which opens the list on the presets folder, and `Save as a
+sound preset` or `Save as an effect preset`, which types `:preset save ` for the name. A name is
+letters, digits, spaces and `-` `_` `.` `(` `)`, with `/` before a folder; `Tab` completes one. A
+name that's taken is refused, so nothing is written over by mistake.
+
+**Loading** is one undo step. A sound keeps the track's level, pan, sends, name and phrases, and
+the slots all start in; an effect replaces only the slot under the cursor. The list shows each
+preset with what it is beside it, as `Acid · Distort Delay · 3 macros`, a sound by its machine's
+icon, and the folder you last saved in or loaded from at its top.
+
 ## The mixer
 
 Press `Space 4` for a strip for each track: its name, a meter of what it's playing
