@@ -202,7 +202,7 @@ impl App {
     fn tapped_frame(&self, shown: &Shown) -> Option<u64> {
         let (_, rates) = shown.frames.as_ref()?;
         let heard = self.sample_page.heard == Some((shown.number, shown.analysis.hash));
-        let heads: Vec<_> = self.playheads.iter().flatten().collect();
+        let heads: Vec<_> = self.services.playheads.iter().flatten().collect();
         let own = heads.iter().find(|head| head.entry.is_none() && heard);
         let note = heads.iter().find(|head| head.entry == Some(shown.number));
         own.or(note).map(|head| rates.file_frame(head.frame))
@@ -219,7 +219,7 @@ impl App {
         let points = &shown.entry.edit.points;
         let rate = shown.rate();
         if points.split_starts(at).is_none() {
-            self.status = if points.slices.iter().any(|slice| slice.start == at) {
+            self.services.status = if points.slices.iter().any(|slice| slice.start == at) {
                 format!("A slice already starts at {}", time(at, rate))
             } else {
                 "Slices split between the start and the end".to_owned()
@@ -227,14 +227,14 @@ impl App {
             return;
         }
         let number = shown.number;
-        self.apply(&Action::SplitSlice { number, at });
+        self.services.apply(&Action::SplitSlice { number, at });
         let Some(entry) = self.song().bank.get(number) else {
             return;
         };
         let slice = entry.edit.points.slice_at(at);
         let count = entry.edit.points.slices.len();
         let by = if tapped { "the playhead" } else { "the cursor" };
-        self.status = format!(
+        self.services.status = format!(
             "Slice {slice:02X} of {count} from {} at {by}: u to undo",
             time(at, rate)
         );
@@ -244,15 +244,16 @@ impl App {
     pub(crate) fn join_here(&mut self, shown: &Shown) {
         let points = &shown.entry.edit.points;
         if points.slices.is_empty() {
-            self.status = format!("{} has no slices to join", shown.entry.title());
+            self.services.status = format!("{} has no slices to join", shown.entry.title());
             return;
         }
         let (slice, _) = shown.slice_at(self.sample_page.cursor);
         if slice + 1 >= points.slices.len() {
-            self.status = format!("Slice {slice:02X} is the last: there's none after to join");
+            self.services.status =
+                format!("Slice {slice:02X} is the last: there's none after to join");
             return;
         }
-        self.apply(&Action::JoinSlices {
+        self.services.apply(&Action::JoinSlices {
             number: shown.number,
             slice: slice as u8,
         });
@@ -261,7 +262,7 @@ impl App {
             .bank
             .get(shown.number)
             .map_or(0, |entry| entry.edit.points.slices.len());
-        self.status = format!(
+        self.services.status = format!(
             "Joined slices {slice:02X} and {:02X}, so there are {count}: u to undo",
             slice + 1
         );
@@ -272,7 +273,7 @@ impl App {
     /// point takes the loop away.
     pub(crate) fn remove_point(&mut self, shown: &Shown) {
         let Some(point) = self.point_here(shown) else {
-            self.status = "No point under the cursor: ]] and [[ go to one".to_owned();
+            self.services.status = "No point under the cursor: ]] and [[ go to one".to_owned();
             return;
         };
         let number = shown.number;
@@ -281,32 +282,32 @@ impl App {
         let points = &mut entry.edit.points;
         let said = match point {
             Point::Slice(0) if points.slices.len() == 1 => {
-                self.apply(&Action::SetSlices {
+                self.services.apply(&Action::SetSlices {
                     number,
                     starts: Vec::new(),
                 });
-                self.status = format!("{name} plays as one again: u to undo");
+                self.services.status = format!("{name} plays as one again: u to undo");
                 return;
             }
             Point::Slice(0) => {
-                self.status =
+                self.services.status =
                     "Slice 00 is where the slices start: J joins it with 01, or :slice clear"
                         .to_owned();
                 return;
             }
             Point::Slice(slice) => {
-                self.apply(&Action::JoinSlices {
+                self.services.apply(&Action::JoinSlices {
                     number,
                     slice: (slice - 1) as u8,
                 });
-                self.status = format!(
+                self.services.status = format!(
                     "Took slice {slice:02X}'s start away, so {:02X} plays on through it: u to undo",
                     slice - 1
                 );
                 return;
             }
             Point::Edge(Edge::Start) if points.start == 0 => {
-                self.status = "The start is already the file's".to_owned();
+                self.services.status = "The start is already the file's".to_owned();
                 return;
             }
             Point::Edge(Edge::Start) => {
@@ -314,7 +315,7 @@ impl App {
                 "starts with its file again"
             }
             Point::Edge(Edge::End) if points.end.is_none() => {
-                self.status = "The end is already the file's".to_owned();
+                self.services.status = "The end is already the file's".to_owned();
                 return;
             }
             Point::Edge(Edge::End) => {
@@ -326,11 +327,11 @@ impl App {
                 "has no loop of its own"
             }
         };
-        self.apply(&Action::SetBankEntry {
+        self.services.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
-        self.status = format!("{name} {said}: u to undo");
+        self.services.status = format!("{name} {said}: u to undo");
     }
 
     /// `=` `-`, `+` `_` and Cmd-h/l: move the point under the cursor by a pixel, a column or a
@@ -339,7 +340,8 @@ impl App {
     /// zero crossing that way; a frame's never snaps, as it's for placing by hand.
     pub(crate) fn nudge_point(&mut self, shown: &Shown, by: Nudge, later: bool, times: u64) {
         let Some(point) = self.point_here(shown) else {
-            self.status = "No point under the cursor to nudge: ]] and [[ go to one".to_owned();
+            self.services.status =
+                "No point under the cursor to nudge: ]] and [[ go to one".to_owned();
             return;
         };
         let Some(from) = shown.point_frame(point) else {
@@ -365,15 +367,15 @@ impl App {
         let to = to.clamp(*bounds.start(), *bounds.end());
         let length = shown.length();
         if to == from {
-            self.status = format!("{} can't go further that way", point_name(point));
+            self.services.status = format!("{} can't go further that way", point_name(point));
             return;
         }
-        self.apply(&Action::SetBankEntry {
+        self.services.apply(&Action::SetBankEntry {
             number: shown.number,
             entry: Some(shown.moved(point, to)),
         });
         self.sample_page.go(to, length);
-        self.status = format!(
+        self.services.status = format!(
             "{} at {}, frame {to}: u to undo",
             point_name(point),
             time(to, shown.rate())
@@ -421,14 +423,14 @@ impl App {
             }
         };
         if let Some(why) = refused {
-            self.status = why.to_owned();
+            self.services.status = why.to_owned();
             return;
         }
-        self.apply(&Action::SetBankEntry {
+        self.services.apply(&Action::SetBankEntry {
             number: shown.number,
             entry: Some(entry),
         });
-        self.status = format!(
+        self.services.status = format!(
             "{} at {}, frame {at}: u to undo",
             edge.name(),
             time(at, shown.rate())

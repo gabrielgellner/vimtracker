@@ -134,6 +134,7 @@ impl App {
             return name.to_path_buf();
         }
         let candidates: Vec<PathBuf> = self
+            .services
             .settings
             .kit_folders()
             .iter()
@@ -151,7 +152,7 @@ impl App {
     /// track page is listed by the page it shows, where it's in the order, and then its other
     /// pages after every view; each item has the key that shows it beside it, from the table.
     pub(crate) fn open_view_picker(&mut self) {
-        self.count = None;
+        self.modes.count = None;
         let key = |cmd: Cmd| {
             self.table
                 .rows()
@@ -191,14 +192,14 @@ impl App {
     /// Show a picker, and its preview if it has one.
     pub(crate) fn show_picker(&mut self, picker: Picker) {
         self.picker = Some(picker);
-        self.mode = Mode::Picker;
+        self.modes.mode = Mode::Picker;
         self.refresh_preview();
     }
 
     /// Load the preview of the item under the picker's cursor, if it has one and it isn't already
     /// shown. A sample's is read in the background, and shows it's loading until it's in.
     pub(crate) fn refresh_preview(&mut self) {
-        let rate = self.rate;
+        let rate = self.services.rate;
         let Some(picker) = self.picker.as_mut() else {
             return;
         };
@@ -232,9 +233,12 @@ impl App {
     /// Open the list of grooves for the project, or for the cursor's track, which can also
     /// follow the project's, with the one playing highlighted.
     pub(crate) fn open_groove_picker(&mut self, track: bool) {
-        self.count = None;
+        self.modes.count = None;
         let song = self.song();
-        let own = song.tracks.get(self.cursor.track).and_then(|t| t.groove);
+        let own = song
+            .tracks
+            .get(self.services.cursor.track)
+            .and_then(|t| t.groove);
         let mut items = Vec::new();
         if track {
             let follow = format!("Project's, {}", song.groove);
@@ -262,9 +266,9 @@ impl App {
 
     /// Open the list of orders the cursor's phrase's rows can play in, on the one they play in.
     pub(crate) fn open_order_picker(&mut self) {
-        self.count = None;
+        self.modes.count = None;
         let Some(phrase) = self.phrase_here() else {
-            self.status = "This track has no phrase here".to_owned();
+            self.services.status = "This track has no phrase here".to_owned();
             return;
         };
         // An order that takes numbers is listed with the phrase's own, if it plays in one.
@@ -289,27 +293,28 @@ impl App {
     /// Play the cursor's phrase's rows in an order.
     pub(crate) fn set_order(&mut self, order: Order) {
         let Some(phrase) = self.phrase_id() else {
-            self.status = "This track has no phrase here".to_owned();
+            self.services.status = "This track has no phrase here".to_owned();
             return;
         };
         let rows = self.phrase_here().map_or(0, |phrase| phrase.len());
-        self.apply(&Action::SetOrder {
-            track: self.cursor.track,
+        self.services.apply(&Action::SetOrder {
+            track: self.services.cursor.track,
             phrase,
             order,
         });
-        self.status = format!("This phrase plays {}: {}", order, order.describe(rows));
+        self.services.status = format!("This phrase plays {}: {}", order, order.describe(rows));
     }
 
     /// Give the cursor's track its own groove, or have it follow the project's again.
     pub(crate) fn set_track_groove(&mut self, groove: Option<GrooveId>) {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         if !self.song().tracks.get(track).is_some_and(|t| t.is_sound()) {
-            self.status = "Only a track with notes has a groove of its own".to_owned();
+            self.services.status = "Only a track with notes has a groove of its own".to_owned();
             return;
         }
-        self.apply(&Action::SetTrackGroove { track, groove });
-        self.status = match groove {
+        self.services
+            .apply(&Action::SetTrackGroove { track, groove });
+        self.services.status = match groove {
             Some(groove) => format!("This track plays with {groove}"),
             None => format!("This track follows the project's {}", self.song().groove),
         };
@@ -317,7 +322,7 @@ impl App {
 
     /// Open the list of scales, with this one highlighted.
     pub(crate) fn open_scale_picker(&mut self) {
-        self.count = None;
+        self.modes.count = None;
         let items = ScaleKind::ALL
             .map(|kind| Item::new(kind.name(), Pick::Scale(kind)))
             .to_vec();
@@ -329,7 +334,7 @@ impl App {
 
     /// Open the list of tracks, like Vim's buffers, with this one highlighted.
     pub(crate) fn open_track_picker(&mut self) {
-        self.count = None;
+        self.modes.count = None;
         let items = self
             .song()
             .tracks
@@ -364,7 +369,7 @@ impl App {
         // Found by name or number, as Vim's buffers are, so it opens on the search.
         self.show_picker(
             Picker::new("Tracks", items)
-                .opened_on(Some(self.cursor.track))
+                .opened_on(Some(self.services.cursor.track))
                 .searching(""),
         );
     }
@@ -375,8 +380,8 @@ impl App {
         // A track folded away is shown again, as Vim opens a fold a jump lands in, and the song
         // keeps the fold opened.
         let song = Arc::clone(self.song());
-        let was = self.folds;
-        self.folds.open_over(&song, track);
+        let was = self.services.folds;
+        self.services.folds.open_over(&song, track);
         self.folds_changed(was);
         self.go_to_track_at(track);
         self.song_column = COLUMNS_BEFORE_TRACKS + track;
@@ -401,10 +406,10 @@ impl App {
     pub(crate) fn use_kit(&mut self, path: &Path) {
         match load_kit(path) {
             Ok(kit) if kit.sounds.is_empty() => {
-                self.status = format!("{} has no sounds", path.display());
+                self.services.status = format!("{} has no sounds", path.display());
             }
             Ok(kit) => {
-                self.status = format!(
+                self.services.status = format!(
                     "Kit {}: {} sounds. :sample chooses one for this track",
                     kit.name,
                     kit.sounds.len()
@@ -412,13 +417,13 @@ impl App {
                 self.kit = kit.sounds;
                 self.kit_file = Some(path.to_path_buf());
             }
-            Err(error) => self.status = error.to_string(),
+            Err(error) => self.services.status = error.to_string(),
         }
     }
 
     /// Choose this field from a list, in the columns that are one.
     pub(crate) fn open_field_picker(&mut self) {
-        match self.cursor.field {
+        match self.services.cursor.field {
             // A condition's value is one of a list, so `K` on it lists them.
             Field::FxValue(slot)
                 if self.current_slot(slot).and_then(|s| s.command) == Some(FxCommand::Cnd) =>
@@ -451,7 +456,7 @@ impl App {
             Field::Gate => self.open_gate_picker(),
             Field::GateLength => self.open_length_picker(),
             Field::Note | Field::Velocity | Field::Nudge => {
-                self.status = "K chooses on the gate and FX columns".to_owned();
+                self.services.status = "K chooses on the gate and FX columns".to_owned();
             }
         }
     }
@@ -485,7 +490,7 @@ impl App {
         let track = self
             .song()
             .tracks
-            .get(self.cursor.track)
+            .get(self.services.cursor.track)
             .map_or(FULL_GATE, |track| track.gate_length());
         let empty = Item::new("--", Pick::Length(None))
             .meaning(format!("The track's Gate, now {}%", gate_percent(track)));
@@ -531,7 +536,7 @@ impl App {
         )
         .meaning("Empty");
         let (commands, listed) =
-            self.fx_command_items(self.cursor.track, |command| Pick::FxCommand {
+            self.fx_command_items(self.services.cursor.track, |command| Pick::FxCommand {
                 slot,
                 command: Some(command),
             });
@@ -580,10 +585,10 @@ impl App {
     fn pick_fx_command(&mut self, slot: usize, command: Option<FxCommand>) {
         let Some(command) = command else {
             self.set_field(FieldValue::Slot(slot, FxSlot::default()));
-            self.cursor.field = Field::FxCommand(slot);
+            self.services.cursor.field = Field::FxCommand(slot);
             return;
         };
-        self.cursor.field = Field::FxValue(slot);
+        self.services.cursor.field = Field::FxValue(slot);
         let current = self.current_slot(slot);
         let has_condition = current
             .filter(|s| s.command.is_some())
@@ -619,12 +624,12 @@ impl App {
             ));
             return;
         }
-        self.entry = Entry {
+        self.modes.entry = Entry {
             command: Some(command),
             ..Entry::default()
         };
         self.replacing = Some(Field::FxValue(slot));
-        self.mode = Mode::Replace;
+        self.modes.mode = Mode::Replace;
     }
 
     /// List the conditions a `CND` can hold, in Elektron's order and by Elektron's names, in
@@ -705,18 +710,18 @@ impl App {
         if given {
             modulator.depth = MAX_DEPTH;
         }
-        self.apply(&Action::SetMod {
+        self.services.apply(&Action::SetMod {
             track,
             slot,
             modulator,
         });
         if given {
-            self.status = format!(
+            self.services.status = format!(
                 "Mod {} is Steps now, at a depth of +FF so its values are heard as written",
                 slot + 1
             );
         } else if changed {
-            self.status = format!(
+            self.services.status = format!(
                 "Mod {} is {} now, with its destination, depth and switch kept",
                 slot + 1,
                 modulator.kind.name()
@@ -726,7 +731,7 @@ impl App {
 
     /// Put a chosen amount in a slot as an `ACU`.
     fn pick_amount(&mut self, slot: usize, value: u8) {
-        self.cursor.field = Field::FxValue(slot);
+        self.services.cursor.field = Field::FxValue(slot);
         self.set_field(FieldValue::Slot(
             slot,
             FxSlot {
@@ -739,7 +744,7 @@ impl App {
 
     /// Put a chosen condition in a slot as a `CND`.
     fn pick_condition(&mut self, slot: usize, value: u8) {
-        self.cursor.field = Field::FxValue(slot);
+        self.services.cursor.field = Field::FxValue(slot);
         self.set_field(FieldValue::Slot(
             slot,
             FxSlot {
@@ -764,7 +769,7 @@ impl App {
 
     pub(crate) fn picker_key(&mut self, key: Key) {
         let Some(picker) = self.picker.as_mut() else {
-            self.mode = Mode::Normal;
+            self.modes.mode = Mode::Normal;
             return;
         };
         // A digit chooses a macro at once, as `M5` does.
@@ -772,7 +777,7 @@ impl App {
             && let KeyCode::Char(digit @ '1'..='8') = key.code
         {
             self.picker = None;
-            self.mode = self.mode_after_picker();
+            self.modes.mode = self.mode_after_picker();
             self.map_to_macro(usize::from(digit as u8 - b'1'));
             return;
         }
@@ -785,7 +790,7 @@ impl App {
                 self.picker = None;
                 // A shape waiting for its command is given up.
                 self.shape_command = None;
-                self.mode = self.mode_after_picker();
+                self.modes.mode = self.mode_after_picker();
                 self.leave_explorer();
             }
             Outcome::Tag { item, tags } => {
@@ -795,7 +800,7 @@ impl App {
             Outcome::Choose(pick) => {
                 let naming = self.naming.take();
                 self.picker = None;
-                self.mode = self.mode_after_picker();
+                self.modes.mode = self.mode_after_picker();
                 self.leave_explorer();
                 self.naming = naming;
                 self.choose(pick);
@@ -834,8 +839,8 @@ impl App {
             Pick::Prompt(text) => {
                 self.command_line = text;
                 self.command_menu = None;
-                self.mode = Mode::Command;
-                self.status =
+                self.modes.mode = Mode::Command;
+                self.services.status =
                     "Type a name, with folders before it if you like, then Enter".to_owned();
             }
             Pick::Project(folder) => {
@@ -853,7 +858,7 @@ impl App {
                 play,
                 choke,
             }) => {
-                let track = self.cursor.track;
+                let track = self.services.cursor.track;
                 let mut more = vec![Action::SetTrackChoke { track, choke }];
                 // A kit's sound is a drum, unless the track's been told it's for something else.
                 if self
@@ -877,7 +882,7 @@ impl App {
                 self.sample_with(&path, Some(&seed), more);
             }
             Pick::BankSample { track, number } => {
-                self.apply(&Action::SetTrackSample {
+                self.services.apply(&Action::SetTrackSample {
                     track,
                     sample: number,
                 });
@@ -902,13 +907,14 @@ impl App {
                 track,
                 accumulation,
             } => {
-                self.apply(&Action::SetAccumulation {
+                self.services.apply(&Action::SetAccumulation {
                     track,
                     accumulation,
                 });
             }
             Pick::Arpeggio { track, arpeggio } => {
-                self.apply(&Action::SetArpeggio { track, arpeggio });
+                self.services
+                    .apply(&Action::SetArpeggio { track, arpeggio });
             }
             Pick::Mod {
                 track,
@@ -916,30 +922,32 @@ impl App {
                 modulator,
             } => self.pick_mod(track, slot, modulator),
             Pick::Machine { track, machine } => {
-                self.apply(&Action::SetTrackMachine { track, machine });
+                self.services
+                    .apply(&Action::SetTrackMachine { track, machine });
             }
             Pick::Setting {
                 track,
                 setting,
                 value,
             } => {
-                self.apply(&Action::SetTrackSetting {
+                self.services.apply(&Action::SetTrackSetting {
                     track,
                     setting,
                     value,
                 });
             }
             Pick::FilterType { track, filter } => {
-                self.apply(&Action::SetFilterType { track, filter });
+                self.services
+                    .apply(&Action::SetFilterType { track, filter });
             }
             Pick::FilterMode { track, mode } => {
-                self.apply(&Action::SetFilterMode { track, mode });
+                self.services.apply(&Action::SetFilterMode { track, mode });
             }
             Pick::Role { track, role } => {
-                self.apply(&Action::SetTrackRole { track, role });
+                self.services.apply(&Action::SetTrackRole { track, role });
             }
             Pick::Speed { track, speed } => {
-                self.apply(&Action::SetTrackSpeed { track, speed });
+                self.services.apply(&Action::SetTrackSpeed { track, speed });
             }
             Pick::RowPhrase(phrase) => self.pick_row_phrase(phrase),
             Pick::SectionChain(chain) => self.pick_section_chain(chain),
@@ -947,7 +955,7 @@ impl App {
                 track,
                 slot,
                 insert,
-            } => self.apply(&Action::SetInsert {
+            } => self.services.apply(&Action::SetInsert {
                 track,
                 slot,
                 insert,
@@ -972,7 +980,7 @@ impl App {
             Pick::Guide(guide) => {
                 self.guide = Some(guide);
                 self.guide_scroll = 0;
-                self.mode = Mode::Guide;
+                self.modes.mode = Mode::Guide;
             }
             Pick::KitTracks(path) => {
                 self.note_place_of(Purpose::Kit, &path);

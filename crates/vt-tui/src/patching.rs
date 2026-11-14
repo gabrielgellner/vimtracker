@@ -114,14 +114,14 @@ impl App {
 
     /// The cursor's track, if it plays sounds, saying so if it doesn't.
     fn patch_track(&mut self) -> Option<usize> {
-        let track = self.cursor.track;
+        let track = self.services.cursor.track;
         let sound = self
             .song()
             .tracks
             .get(track)
             .is_some_and(vt_model::song::Track::is_sound);
         if !sound {
-            self.status = NOT_SOUND.to_owned();
+            self.services.status = NOT_SOUND.to_owned();
         }
         sound.then_some(track)
     }
@@ -153,13 +153,13 @@ impl App {
         let path = match preset_path(&folder, PresetKind::Patch, name) {
             Ok(path) => path,
             Err(error) => {
-                self.status = error.to_string();
+                self.services.status = error.to_string();
                 return;
             }
         };
         let phrase = self.phrase_here().map(|phrase| &**phrase);
         let Some(preset) = PatchPreset::of(&self.song().tracks[track], phrase) else {
-            self.status = format!(
+            self.services.status = format!(
                 "No macro of track {:02} holds anything, so there's no patch to save: M on a setting maps one",
                 track + 1
             );
@@ -171,7 +171,7 @@ impl App {
                     self.note_place(Purpose::Preset(PresetKind::Patch), saved_in);
                 }
                 let home = home_folder();
-                self.status = format!(
+                self.services.status = format!(
                     "Saved track {:02}'s patch as {name}, {}, in {}",
                     track + 1,
                     preset.summary(),
@@ -179,11 +179,11 @@ impl App {
                 );
             }
             Err(PresetError::Taken(_)) => {
-                self.status = format!(
+                self.services.status = format!(
                     "There's a patch called {name} already: :patch! save {name} writes over it"
                 );
             }
-            Err(error) => self.status = error.to_string(),
+            Err(error) => self.services.status = error.to_string(),
         }
     }
 
@@ -191,10 +191,10 @@ impl App {
     /// added to the cursor's track.
     fn add_patch_named(&mut self, name: &str, over: bool) {
         if !is_preset_name(name) {
-            self.status = PresetError::Name.to_string();
+            self.services.status = PresetError::Name.to_string();
             return;
         }
-        let folder = self.settings.preset_folder();
+        let folder = self.services.settings.preset_folder();
         let path = folder
             .as_deref()
             .and_then(|folder| preset_path(folder, PresetKind::Patch, name).ok())
@@ -209,7 +209,7 @@ impl App {
                 let patches = folder.join(PresetKind::Patch.folder());
                 format!(" in {}", place_name(&patches, home.as_deref()))
             });
-            self.status = format!(
+            self.services.status = format!(
                 "There's no patch called {name}{place}, nor one that comes with vimtracker"
             );
         }
@@ -219,7 +219,7 @@ impl App {
     pub(crate) fn add_patch(&mut self, path: &Path, over: bool) {
         match load_patch(path) {
             Ok(preset) => self.add_loaded_patch(&preset_name(path), &preset.patch, over),
-            Err(error) => self.status = error.to_string(),
+            Err(error) => self.services.status = error.to_string(),
         }
     }
 
@@ -228,8 +228,8 @@ impl App {
     pub(crate) fn add_factory_patch(&mut self, name: &str, over: bool) {
         match factory_patch(name) {
             Some(Ok(preset)) => self.add_loaded_patch(name, &preset.patch, over),
-            Some(Err(error)) => self.status = error.to_string(),
-            None => self.status = format!("No patch called {name} comes with vimtracker"),
+            Some(Err(error)) => self.services.status = error.to_string(),
+            None => self.services.status = format!("No patch called {name} comes with vimtracker"),
         }
     }
 
@@ -244,7 +244,7 @@ impl App {
         let mut placement = match patch.place(&self.song().tracks[track], over) {
             Ok(placement) => placement,
             Err(short) => {
-                self.status = short_of(name, track, short);
+                self.services.status = short_of(name, track, short);
                 return;
             }
         };
@@ -268,7 +268,7 @@ impl App {
             match made {
                 Ok(actions) => generators.extend(actions),
                 Err(why) => {
-                    self.status = format!("{name} isn't added: {why}");
+                    self.services.status = format!("{name} isn't added: {why}");
                     return;
                 }
             }
@@ -280,10 +280,10 @@ impl App {
             placement,
         }];
         actions.extend(generators);
-        self.status.clear();
-        self.apply(&Action::Batch(actions));
-        if self.status.is_empty() {
-            self.status = said;
+        self.services.status.clear();
+        self.services.apply(&Action::Batch(actions));
+        if self.services.status.is_empty() {
+            self.services.status = said;
         }
     }
 

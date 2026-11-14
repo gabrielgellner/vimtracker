@@ -33,31 +33,31 @@ fn the_transport_keys_play_pause_and_restart() {
     // Space c plays from the cursor, and restarts there.
     space_c(&mut app);
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.playhead, 3);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.playhead, 3);
 
     // Tab pauses, and carries on from there even if the cursor moves.
     hit(&mut app, &mut rt, tab);
-    assert_eq!(app.transport, Transport::Paused);
+    assert_eq!(app.services.transport, Transport::Paused);
     press(&mut app, "jj");
     hit(&mut app, &mut rt, tab);
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.playhead, 3);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.playhead, 3);
 
     // Shift-Tab plays from the start, playing or paused.
     hit(&mut app, &mut rt, back_tab);
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.playhead, 0);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.playhead, 0);
     hit(&mut app, &mut rt, tab);
-    assert_eq!(app.transport, Transport::Paused);
+    assert_eq!(app.services.transport, Transport::Paused);
     hit(&mut app, &mut rt, back_tab);
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.playhead, 0);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.playhead, 0);
 
     // Enter is only for confirming.
     hit(&mut app, &mut rt, Key::new(KeyCode::Enter));
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.modes.mode, Mode::Normal);
 }
 
 #[test]
@@ -68,10 +68,10 @@ fn ctrl_i_jumps_forward_and_tab_still_plays() {
     // nothing.
     app.key(parse_sequence("C-i").unwrap()[0], now);
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Stopped);
+    assert_eq!(app.services.transport, Transport::Stopped);
     app.key(Key::new(KeyCode::Tab), now + Duration::from_millis(1000));
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
 }
 
 #[test]
@@ -82,8 +82,8 @@ fn enter_does_not_play_from_any_mode() {
     press(&mut app, "i");
     app.key(enter, Instant::now() + Duration::from_millis(1000));
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Stopped);
-    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.services.transport, Transport::Stopped);
+    assert_eq!(app.modes.mode, Mode::Insert);
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn a_held_transport_key_is_ignored_while_it_repeats() {
     app.key(tab, now);
     block(&mut rt, &mut app);
     assert_eq!(
-        app.transport,
+        app.services.transport,
         Transport::Playing,
         "only the first press counts"
     );
@@ -108,7 +108,7 @@ fn a_held_transport_key_is_ignored_while_it_repeats() {
     app.key(tab, now);
     app.key_repeated(tab, now);
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Paused);
+    assert_eq!(app.services.transport, Transport::Paused);
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn quick_taps_of_tab_all_count() {
         app.key(tab, now);
         app.key_released(tab, Instant::now());
         block(&mut rt, &mut app);
-        assert_eq!(app.transport, expected);
+        assert_eq!(app.services.transport, expected);
         expected = if expected == Transport::Playing {
             Transport::Paused
         } else {
@@ -139,10 +139,13 @@ fn shift_tab_let_go_after_shift_still_counts_as_let_go() {
     for _ in 0..100 {
         block(&mut rt, &mut app);
     }
-    assert!(app.playhead > 0);
+    assert!(app.services.playhead > 0);
     app.key(Key::new(KeyCode::BackTab), now);
     block(&mut rt, &mut app);
-    assert_eq!(app.playhead, 0, "the next Shift-Tab plays from the start");
+    assert_eq!(
+        app.services.playhead, 0,
+        "the next Shift-Tab plays from the start"
+    );
 }
 
 #[test]
@@ -155,7 +158,7 @@ fn repeats_after_a_leader_transport_key_dont_reach_normal_keys() {
         app.key_repeated(Key::char('c'), now);
     }
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
     assert!(app.pending().is_empty());
 }
 
@@ -168,10 +171,10 @@ fn a_held_motion_repeats() {
     app.key_repeated(j, now);
     // A press of the key that's down is a repeat too, and still moves.
     app.key(j, now);
-    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.services.cursor.step, 4);
     app.key_released(j, Instant::now());
     app.key(j, now);
-    assert_eq!(app.cursor.step, 5);
+    assert_eq!(app.services.cursor.step, 5);
 }
 
 #[test]
@@ -191,19 +194,19 @@ fn keys_from_the_terminal_reach_the_app_as_their_characters() {
         KeyModifiers::SHIFT,
     );
     send(&mut app, KeyCode::CapsLock, KeyModifiers::NONE);
-    assert!(app.status.is_empty(), "{}", app.status);
+    assert!(app.services.status.is_empty(), "{}", app.services.status);
     // Shift-; as kitty's remote control sends it, with no shifted key.
     send(&mut app, KeyCode::Char(';'), KeyModifiers::SHIFT);
-    assert_eq!(app.mode, Mode::Command);
+    assert_eq!(app.modes.mode, Mode::Command);
     send(&mut app, KeyCode::Esc, KeyModifiers::NONE);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     // Shift-g goes to the last step, and Shift-4 to the last field.
     send(&mut app, KeyCode::Char('g'), KeyModifiers::SHIFT);
-    assert_eq!(app.cursor.step, 15);
+    assert_eq!(app.services.cursor.step, 15);
     send(&mut app, KeyCode::Char('4'), KeyModifiers::SHIFT);
-    let last = app.cursor.field;
+    let last = app.services.cursor.field;
     send(&mut app, KeyCode::Char('0'), KeyModifiers::NONE);
-    assert_ne!(app.cursor.field, last);
+    assert_ne!(app.services.cursor.field, last);
 }
 
 #[test]
@@ -213,7 +216,7 @@ fn the_leader_waits_and_an_unbound_key_cancels_it() {
     assert_eq!(app.pending().len(), 1);
     press(&mut app, "z");
     assert!(app.pending().is_empty());
-    assert!(app.status.contains("isn't bound"));
+    assert!(app.services.status.contains("isn't bound"));
     press(&mut app, " ");
     special(&mut app, KeyCode::Esc);
     assert!(app.pending().is_empty());
@@ -226,22 +229,22 @@ fn tab_plays_and_pauses_from_insert_and_keeps_writing() {
     let start = Instant::now();
     app.key(Key::new(KeyCode::Tab), start);
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.modes.mode, Mode::Insert);
     press(&mut app, "a");
     assert_eq!(notes(&app)[0], Note::On(60));
     app.key(Key::new(KeyCode::Tab), start + Duration::from_millis(1000));
     app.key_released(Key::new(KeyCode::Tab), Instant::now());
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Paused);
-    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.services.transport, Transport::Paused);
+    assert_eq!(app.modes.mode, Mode::Insert);
     app.key(
         Key::new(KeyCode::BackTab),
         start + Duration::from_millis(2000),
     );
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
-    assert_eq!(app.mode, Mode::Insert);
+    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.modes.mode, Mode::Insert);
 }
 
 #[test]
@@ -263,7 +266,7 @@ fn semicolon_auditions_in_every_view_and_changes_nothing() {
         "the phrase view auditions a row"
     );
     assert!(Arc::ptr_eq(&version, app.song()));
-    assert_eq!(app.transport, Transport::Stopped);
+    assert_eq!(app.services.transport, Transport::Stopped);
 
     press(&mut app, "j");
     tap(&mut app, ";");
@@ -348,29 +351,32 @@ fn a_held_mute_or_solo_goes_back_when_let_go_and_a_tap_stays() {
     press(&mut app, " ");
     let now = Instant::now();
     app.key(Key::char('m'), now);
-    assert!(app.levels[0].mute, "it mutes at once");
+    assert!(app.services.levels[0].mute, "it mutes at once");
     app.key_repeated(Key::char('m'), now + Duration::from_millis(500));
-    assert!(app.levels[0].mute, "a repeat doesn't switch it back");
+    assert!(
+        app.services.levels[0].mute,
+        "a repeat doesn't switch it back"
+    );
     app.key_released(Key::char('m'), now + Duration::from_millis(600));
-    assert!(!app.levels[0].mute, "held, it goes back");
+    assert!(!app.services.levels[0].mute, "held, it goes back");
 
     press(&mut app, " ");
     hold_for(&mut app, 'm', 100);
-    assert!(app.levels[0].mute, "tapped, it stays");
+    assert!(app.services.levels[0].mute, "tapped, it stays");
     // Held from muted, it unmutes until it's let go.
     press(&mut app, " ");
     hold_for(&mut app, 'm', 400);
-    assert!(app.levels[0].mute);
+    assert!(app.services.levels[0].mute);
 
     press(&mut app, " ");
     let now = Instant::now();
     app.key(Key::char('s'), now);
-    assert!(app.levels[0].solo);
+    assert!(app.services.levels[0].solo);
     app.key_released(Key::char('s'), now + Duration::from_millis(400));
-    assert!(!app.levels[0].solo, "a held solo goes back too");
+    assert!(!app.services.levels[0].solo, "a held solo goes back too");
     press(&mut app, " ");
     hold_for(&mut app, 's', 100);
-    assert!(app.levels[0].solo);
+    assert!(app.services.levels[0].solo);
 }
 
 #[test]
@@ -384,11 +390,11 @@ fn a_save_while_a_mute_key_is_down_keeps_it_as_it_was() {
     command(&mut app, "w");
     let saved = vt_model::project::load_song(&path).unwrap();
     assert!(!saved.tracks[0].mute, "it may yet go back");
-    assert!(!app.dirty);
+    assert!(!app.services.dirty);
     // Let go as a tap, it stays muted, and the song has changed since the save.
     app.key_released(Key::char('m'), now + Duration::from_millis(100));
-    assert!(app.levels[0].mute);
-    assert!(app.dirty);
+    assert!(app.services.levels[0].mute);
+    assert!(app.services.dirty);
     command(&mut app, "w");
     assert!(vt_model::project::load_song(&path).unwrap().tracks[0].mute);
     std::fs::remove_dir_all(&path).unwrap();
@@ -401,10 +407,13 @@ fn losing_focus_lets_go_of_a_held_mute() {
     let now = Instant::now();
     app.key(Key::char('m'), now);
     app.focus_lost(now + Duration::from_millis(400));
-    assert!(!app.levels[0].mute, "held past the hold time, it goes back");
+    assert!(
+        !app.services.levels[0].mute,
+        "held past the hold time, it goes back"
+    );
     // Its release, if it comes after all, does nothing more.
     app.key_released(Key::char('m'), now + Duration::from_millis(500));
-    assert!(!app.levels[0].mute);
+    assert!(!app.services.levels[0].mute);
 }
 
 #[test]
@@ -412,9 +421,13 @@ fn semicolon_while_playing_says_why_it_did_nothing() {
     let (mut app, mut rt) = app();
     special(&mut app, KeyCode::Tab);
     block(&mut rt, &mut app);
-    assert_eq!(app.transport, Transport::Playing);
+    assert_eq!(app.services.transport, Transport::Playing);
     press(&mut app, ";");
-    assert!(app.status.contains("stopped"), "{}", app.status);
+    assert!(
+        app.services.status.contains("stopped"),
+        "{}",
+        app.services.status
+    );
 }
 
 #[test]
@@ -454,27 +467,27 @@ fn cmd_keys_do_as_their_adjust_keys(app: &mut App, place: &str) {
     let start = Song::clone(app.song());
     let mut changed = false;
     for (plain, cmd) in CMD_ADJUSTS {
-        let where_it_was = (app.cursor, app.track_page.clone(), app.mode);
+        let where_it_was = (app.services.cursor, app.track_page.clone(), app.modes.mode);
         press(app, plain);
         let by_plain = Song::clone(app.song());
-        let left_at = (app.cursor, app.track_page.clone(), app.mode);
+        let left_at = (app.services.cursor, app.track_page.clone(), app.modes.mode);
         changed |= by_plain != start;
         if by_plain != start {
             press(app, "u");
         }
         assert_eq!(**app.song(), start, "{plain} undone {place}");
-        (app.cursor, app.track_page) = (where_it_was.0, where_it_was.1.clone());
+        (app.services.cursor, app.track_page) = (where_it_was.0, where_it_was.1.clone());
         with_cmd(app, cmd);
         assert_eq!(**app.song(), by_plain, "{cmd} as {plain} {place}");
         assert_eq!(
-            (app.cursor, app.track_page.clone(), app.mode),
+            (app.services.cursor, app.track_page.clone(), app.modes.mode),
             left_at,
             "{cmd} leaves the cursor as {plain} does {place}"
         );
         if by_plain != start {
             press(app, "u");
         }
-        (app.cursor, app.track_page) = (where_it_was.0, where_it_was.1);
+        (app.services.cursor, app.track_page) = (where_it_was.0, where_it_was.1);
     }
     assert!(changed, "the keys change something {place}");
 }
@@ -491,26 +504,26 @@ fn cmd_with_the_movement_keys_does_as_the_adjust_keys_on_every_page() {
     cmd_keys_do_as_their_adjust_keys(&mut app, "on a velocity");
     press(&mut app, "hV");
     cmd_keys_do_as_their_adjust_keys(&mut app, "on a selection");
-    assert_eq!(app.mode, Mode::VisualStep);
+    assert_eq!(app.modes.mode, Mode::VisualStep);
     special(&mut app, KeyCode::Esc);
 
     // The chain's phrase and transpose columns, on a second row with a phrase of its own, so
     // there's another to go to.
     press(&mut app, " 2Ggd 2");
-    assert_eq!(app.view, View::Chain);
-    assert_eq!(app.cursor.slot, 1);
+    assert_eq!(app.modes.view, View::Chain);
+    assert_eq!(app.services.cursor.slot, 1);
     cmd_keys_do_as_their_adjust_keys(&mut app, "on a chain's phrase");
     press(&mut app, "l");
     cmd_keys_do_as_their_adjust_keys(&mut app, "on a chain's transpose");
 
     // The song's length and a track's chain.
     press(&mut app, " 1");
-    assert_eq!(app.view, View::Song);
+    assert_eq!(app.modes.view, View::Song);
     cmd_keys_do_as_their_adjust_keys(&mut app, "on a section's length");
 
     // The project page's tempo.
     press(&mut app, " 9");
-    assert_eq!(app.view, View::Project);
+    assert_eq!(app.modes.view, View::Project);
     project_cursor_on(&mut app, vt_tui::project_page::ProjectControl::Bpm);
     cmd_keys_do_as_their_adjust_keys(&mut app, "on the tempo");
     project_cursor_on(&mut app, vt_tui::project_page::ProjectControl::Groove);
@@ -518,7 +531,7 @@ fn cmd_with_the_movement_keys_does_as_the_adjust_keys_on_every_page() {
 
     // The mixer's Trim, Level and Pan.
     press(&mut app, " 4");
-    assert_eq!(app.view, View::Mixer);
+    assert_eq!(app.modes.view, View::Mixer);
     cmd_keys_do_as_their_adjust_keys(&mut app, "on Level");
     press(&mut app, "k");
     cmd_keys_do_as_their_adjust_keys(&mut app, "on Trim");
@@ -527,7 +540,7 @@ fn cmd_with_the_movement_keys_does_as_the_adjust_keys_on_every_page() {
 
     // The track page's Sound and Mod pages.
     press(&mut app, " 5jjjjjjjj");
-    assert_eq!(app.view, View::Track);
+    assert_eq!(app.modes.view, View::Track);
     cmd_keys_do_as_their_adjust_keys(&mut app, "on the Sound page");
     press(&mut app, "L0l");
     cmd_keys_do_as_their_adjust_keys(&mut app, "on the Mod page");
@@ -617,7 +630,7 @@ fn a_held_key_on_the_keyboard_holds_its_note() {
     press(&mut app, "a");
     let _ = loudest(&mut realtime, 4800);
     press(&mut app, ";");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     let _ = loudest(&mut realtime, 48_000);
     assert!(loudest(&mut realtime, 4800) < 1e-3);
 }
@@ -689,7 +702,7 @@ fn a_held_note_key_in_insert_writes_once_and_holds_its_note() {
     entering_steps_down(&mut app);
     press(&mut app, "ia");
     assert_eq!(written_notes(&app), [Note::On(60)]);
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     let _ = loudest(&mut realtime, 48_000);
     assert!(
         loudest(&mut realtime, 4800) > 0.01,
@@ -701,7 +714,7 @@ fn a_held_note_key_in_insert_writes_once_and_holds_its_note() {
     press(&mut app, "a");
     app.key_released(Key::char('s'), Instant::now());
     assert_eq!(written_notes(&app), [Note::On(60)]);
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     let _ = loudest(&mut realtime, 4800);
     assert!(loudest(&mut realtime, 4800) > 0.01);
     app.key_released(Key::char('a'), Instant::now());
@@ -713,7 +726,7 @@ fn a_held_note_key_in_insert_writes_once_and_holds_its_note() {
     assert_eq!(written_notes(&app), [Note::On(60), Note::On(60)]);
     let _ = loudest(&mut realtime, 4800);
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     let _ = loudest(&mut realtime, 48_000);
     assert!(loudest(&mut realtime, 4800) < 1e-3);
 }
@@ -726,7 +739,7 @@ fn in_insert_off_and_scale_degrees_are_written_once_and_other_keys_repeat() {
     app.key_repeated(Key::char('1'), Instant::now());
     press(&mut app, "1");
     assert_eq!(written_notes(&app), [Note::Off], "OFF is written once");
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     app.key_released(Key::char('1'), Instant::now());
     special(&mut app, KeyCode::Esc);
 
@@ -736,20 +749,20 @@ fn in_insert_off_and_scale_degrees_are_written_once_and_other_keys_repeat() {
     press(&mut app, "j");
     app.key_repeated(Key::char('j'), Instant::now());
     assert_eq!(written_notes(&app).len(), 2);
-    assert_eq!(app.cursor.step, 2);
+    assert_eq!(app.services.cursor.step, 2);
     app.key_released(Key::char('j'), Instant::now());
 
     // The arrows and Backspace repeat.
     let down = Key::new(KeyCode::Down);
     special(&mut app, KeyCode::Down);
     app.key_repeated(down, Instant::now());
-    assert_eq!(app.cursor.step, 4);
+    assert_eq!(app.services.cursor.step, 4);
     app.key_released(down, Instant::now());
     let backspace = Key::new(KeyCode::Backspace);
     special(&mut app, KeyCode::Backspace);
     app.key_repeated(backspace, Instant::now());
     app.key_repeated(backspace, Instant::now());
-    assert_eq!(app.cursor.step, 1);
+    assert_eq!(app.services.cursor.step, 1);
     assert_eq!(
         written_notes(&app),
         [Note::Off],
@@ -762,7 +775,7 @@ fn in_insert_off_and_scale_degrees_are_written_once_and_other_keys_repeat() {
     press(&mut app, "4");
     app.key_repeated(Key::char('4'), Instant::now());
     let id = app.phrase_id().unwrap();
-    let velocity = app.song().tracks[0].phrases[&id].steps()[app.cursor.step - 1].velocity;
+    let velocity = app.song().tracks[0].phrases[&id].steps()[app.services.cursor.step - 1].velocity;
     assert_eq!(velocity, Some(0x44), "the repeat typed the second digit");
 }
 
@@ -789,7 +802,7 @@ fn losing_focus_lets_go_of_a_held_note() {
     press(&mut app, " 3ia");
     let _ = loudest(&mut realtime, 4800);
     app.focus_lost(Instant::now());
-    assert_eq!(app.mode, Mode::Insert, "it stays in Insert");
+    assert_eq!(app.modes.mode, Mode::Insert, "it stays in Insert");
     let _ = loudest(&mut realtime, 48_000);
     assert!(loudest(&mut realtime, 4800) < 1e-3, "Insert's note ends");
     press(&mut app, "s");
@@ -837,7 +850,7 @@ fn the_keyboard_plays_a_chord_and_each_key_lets_go_of_its_own_note() {
     press(&mut app, "as");
     assert_eq!(voices(&mut realtime), 2);
     press(&mut app, ";");
-    assert_eq!(app.mode, Mode::Normal);
+    assert_eq!(app.modes.mode, Mode::Normal);
     let _ = loudest(&mut realtime, 48_000);
     assert_eq!(voices(&mut realtime), 0);
 }
@@ -856,13 +869,13 @@ fn in_insert_every_note_key_writes_and_held_keys_sound_together() {
         written_notes(&app),
         [Note::On(60), Note::On(64), Note::On(67)]
     );
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
     assert_eq!(voices(&mut realtime), 3);
     // Their repeats, and presses of a key that's down, write nothing more.
     app.key_repeated(Key::char('g'), Instant::now());
     press(&mut app, "a");
     assert_eq!(written_notes(&app).len(), 3);
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
     assert_eq!(voices(&mut realtime), 3);
     let_go(&mut app, &mut realtime, "a");
     assert_eq!(voices(&mut realtime), 2, "the other two still sound");
@@ -873,7 +886,7 @@ fn in_insert_every_note_key_writes_and_held_keys_sound_together() {
     app.auto_jump = false;
     press(&mut app, "sf");
     assert_eq!(written_notes(&app)[3], Note::On(65));
-    assert_eq!(app.cursor.step, 3);
+    assert_eq!(app.services.cursor.step, 3);
     assert_eq!(voices(&mut realtime), 2);
     let_go(&mut app, &mut realtime, "sf");
 
@@ -913,7 +926,7 @@ fn the_transport_is_glyphs_with_the_waits_named() {
     block(&mut rt, &mut app);
     assert!(status_line(&app).contains(&format!(" {PLAY}  120 BPM")));
     // A launch cued on any track waits for the grid too.
-    app.jam[2].cued = Some(Some(1));
+    app.services.jam[2].cued = Some(Some(1));
     assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} LAUNCH  ")));
 }
 
@@ -922,7 +935,7 @@ fn the_space_digits_show_the_mixer_each_track_page_and_the_project() {
     use vt_tui::track_page::Page;
     let (mut app, _realtime) = app();
     press(&mut app, " 4");
-    assert_eq!(app.view, View::Mixer);
+    assert_eq!(app.modes.view, View::Mixer);
     for (digit, page) in [
         ('5', Page::Sound),
         ('6', Page::Mod),
@@ -930,8 +943,8 @@ fn the_space_digits_show_the_mixer_each_track_page_and_the_project() {
         ('8', Page::Gen),
     ] {
         press(&mut app, &format!(" {digit}"));
-        assert_eq!(app.mode, Mode::Normal, "no list opens");
-        assert_eq!((app.view, app.track_page.page), (View::Track, page));
+        assert_eq!(app.modes.mode, Mode::Normal, "no list opens");
+        assert_eq!((app.modes.view, app.track_page.page), (View::Track, page));
     }
     // Each page keeps its cursor, and H and L still go between them.
     press(&mut app, " 5j");
@@ -945,19 +958,19 @@ fn the_space_digits_show_the_mixer_each_track_page_and_the_project() {
     assert_eq!(app.track_page.page, Page::Sound);
     assert_eq!(app.track_control(), sound);
     press(&mut app, " 9");
-    assert_eq!(app.view, View::Project);
+    assert_eq!(app.modes.view, View::Project);
     press(&mut app, " 0");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
 }
 
 #[test]
 fn the_kit_and_sample_lists_open_from_their_commands() {
     let (mut app, _realtime) = app();
     command(&mut app, "sample");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);
     command(&mut app, "kit");
-    assert_eq!(app.mode, Mode::Picker);
+    assert_eq!(app.modes.mode, Mode::Picker);
     assert_eq!(app.picker.as_ref().unwrap().title, "Kits");
 }

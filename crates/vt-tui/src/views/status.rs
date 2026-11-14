@@ -55,7 +55,7 @@ fn fx_name(app: &App, slot: usize) -> String {
             format!("{}: {}, not on this track", id.group(), id.name())
         }
         (Some(event), _) => event.meaning(),
-        (None, _) if matches!(app.cursor.field, Field::FxValue(_)) => {
+        (None, _) if matches!(app.services.cursor.field, Field::FxValue(_)) => {
             format!("FX{} value", slot + 1)
         }
         (None, _) => format!("FX{} command", slot + 1),
@@ -64,14 +64,14 @@ fn fx_name(app: &App, slot: usize) -> String {
 
 /// The name of what the cursor is on, for the status line.
 pub fn column_name(app: &App) -> String {
-    match app.view {
+    match app.modes.view {
         View::Audio => app.audio_row_here().name().to_owned(),
         View::Sample => match app.sample_page.setting {
             Some(setting) => format!("Sample: {}", setting.name()),
             None => "Sample".to_owned(),
         },
         View::Project => app.project_control().label().to_owned(),
-        View::Phrase => match app.cursor.field {
+        View::Phrase => match app.services.cursor.field {
             Field::Note => "Note".to_owned(),
             Field::Velocity => "Velocity".to_owned(),
             Field::Nudge => "Nudge".to_owned(),
@@ -90,10 +90,13 @@ pub fn column_name(app: &App) -> String {
         },
         View::Track | View::Mixer => {
             let control = app.track_control();
-            app.song().tracks.get(app.cursor.track).map_or_else(
-                || control.label().to_owned(),
-                |track| control.name_on(track).to_owned(),
-            )
+            app.song()
+                .tracks
+                .get(app.services.cursor.track)
+                .map_or_else(
+                    || control.label().to_owned(),
+                    |track| control.name_on(track).to_owned(),
+                )
         }
         View::Song => match app.song_column {
             LENGTH_COLUMN => "Length".to_owned(),
@@ -120,20 +123,21 @@ pub fn column_name(app: &App) -> String {
 /// track has: a lock in the grid, or a row of the track page.
 pub fn value_shown(app: &App) -> Option<String> {
     let track = app.track_here()?;
-    if app.view == View::Phrase {
-        return heard_shown(app, app.cursor.field).or_else(|| phrase_value(app, app.cursor.field));
+    if app.modes.view == View::Phrase {
+        return heard_shown(app, app.services.cursor.field)
+            .or_else(|| phrase_value(app, app.services.cursor.field));
     }
-    if app.view == View::Track
+    if app.modes.view == View::Track
         && let Control::Accumulator(field) = app.track_control()
     {
         return Some(accumulator_shown(field, track.accumulation, app.scale.on));
     }
-    if app.view == View::Track
+    if app.modes.view == View::Track
         && let Control::Arpeggio(field) = app.track_control()
     {
         return Some(arpeggio_shown(field, track.arpeggio));
     }
-    if app.view == View::Track
+    if app.modes.view == View::Track
         && let Control::Gen {
             phrase,
             generator,
@@ -142,39 +146,43 @@ pub fn value_shown(app: &App) -> Option<String> {
     {
         return Some(gen_shown(app, phrase, generator, param));
     }
-    if app.view == View::Track && app.track_control() == Control::Glide {
+    if app.modes.view == View::Track && app.track_control() == Control::Glide {
         return Some(glide_shown(track));
     }
-    if app.view == View::Track && app.track_control() == Control::Sample {
+    if app.modes.view == View::Track && app.track_control() == Control::Sample {
         return Some(sample_shown(app.song(), track.sample()));
     }
-    if app.view == View::Track && matches!(app.track_control(), Control::Tune | Control::Cents) {
+    if app.modes.view == View::Track
+        && matches!(app.track_control(), Control::Tune | Control::Cents)
+    {
         return Some(tuning_shown(app.song(), track, app.track_control()));
     }
-    if app.view == View::Track && app.track_control() == Control::Limiter {
+    if app.modes.view == View::Track && app.track_control() == Control::Limiter {
         let on = if app.song().limiter { "on" } else { "off" };
         return Some(on.to_owned());
     }
-    if app.view == View::Track && app.track_control() == Control::Safe {
+    if app.modes.view == View::Track && app.track_control() == Control::Safe {
         return Some(safe_shown(track));
     }
-    if app.view == View::Track && app.track_control() == Control::Reset {
+    if app.modes.view == View::Track && app.track_control() == Control::Reset {
         return Some(reset_shown(track.reset));
     }
-    if matches!(app.view, View::Track | View::Mixer) && app.track_control() == Control::Trim {
+    if matches!(app.modes.view, View::Track | View::Mixer) && app.track_control() == Control::Trim {
         return Some(trim_text(track.trim));
     }
-    if !matches!(app.view, View::Track | View::Mixer) {
+    if !matches!(app.modes.view, View::Track | View::Mixer) {
         return None;
     }
     // A fader the steps drive reads where they have it, and says so, as one a hand has taken over
     // from them does (decision 174).
     let control = app.track_control();
-    let heard = app.track_as_heard(app.cursor.track)?;
+    let heard = app.services.track_as_heard(app.services.cursor.track)?;
     // A setting a macro holds reads where the macro puts it, and says which and how far.
     let heard = heard.with_macros();
     let (id, value) = control.value_on(&heard)?;
-    let note = app.fader_note(app.cursor.track, control).unwrap_or("");
+    let note = app
+        .fader_note(app.services.cursor.track, control)
+        .unwrap_or("");
     let held = match control {
         Control::Macro(at) => format!(": holds {}", crate::macroing::holds(track, at)),
         _ => crate::macroing::held_text(track, vt_model::macros::MacroTarget::Setting(id))
@@ -189,7 +197,7 @@ pub fn value_shown(app: &App) -> Option<String> {
 fn heard_shown(app: &App, field: Field) -> Option<String> {
     let id = app.phrase_id()?;
     let phrase = app.phrase_here()?;
-    let row = app.cursor.step;
+    let row = app.services.cursor.step;
     let (at, generator) = phrase
         .generators()
         .iter()
@@ -200,7 +208,7 @@ fn heard_shown(app: &App, field: Field) -> Option<String> {
                     .rows()
                     .is_some_and(|rows| (rows.first..=rows.last).contains(&row))
         })?;
-    let (heard, pass) = app.heard_cell(app.cursor.track, id, at, row)?;
+    let (heard, pass) = app.heard_cell(app.services.cursor.track, id, at, row)?;
     let written = phrase.steps().get(row)?;
     let shown = |step| generator_cell_text(step, &heard, generator.column, app.track_here());
     Some(format!(
@@ -425,13 +433,13 @@ pub(crate) fn grid_name(skip: u32) -> String {
 /// while it's on, and a realign, a cued launch, a mute or solo armed for the grid and a loop are
 /// named, with the glyph for waiting, until the launch grid comes round.
 pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
-    let (glyph, style) = match app.transport {
+    let (glyph, style) = match app.services.transport {
         Transport::Playing => (glyphs::PLAY, theme::active()),
         Transport::Paused => (glyphs::PAUSE, theme::dim()),
         Transport::Stopped => (glyphs::STOP, theme::dim()),
     };
     let mut spans = vec![Span::raw(" "), Span::styled(glyph.to_string(), style)];
-    if app.transport == Transport::Playing && app.recording() {
+    if app.services.transport == Transport::Playing && app.recording() {
         spans.push(Span::raw(" "));
         spans.push(Span::styled(
             glyphs::RECORD.to_string(),
@@ -458,16 +466,16 @@ pub fn transport_spans(app: &App) -> Vec<Span<'static>> {
     if app.fill {
         spans.push(Span::raw(" FILL"));
     }
-    let realigning = app.realigning || app.realigning_tracks.contains(&true);
-    let cued = app.jam.iter().any(|jam| jam.cued.is_some());
-    let muting = app.jam.iter().any(|jam| jam.mute_waiting);
-    let soloing = app.jam.iter().any(|jam| jam.solo_waiting);
+    let realigning = app.services.realigning || app.services.realigning_tracks.contains(&true);
+    let cued = app.services.jam.iter().any(|jam| jam.cued.is_some());
+    let muting = app.services.jam.iter().any(|jam| jam.mute_waiting);
+    let soloing = app.services.jam.iter().any(|jam| jam.solo_waiting);
     for (waiting, name) in [
         (realigning, "REALIGN"),
         (cued, "LAUNCH"),
         (muting, "MUTE"),
         (soloing, "SOLO"),
-        (app.loop_waiting, "LOOP"),
+        (app.services.loop_waiting, "LOOP"),
     ] {
         if waiting {
             spans.push(Span::raw(" "));
@@ -505,7 +513,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let special = app
         .sample_mode()
         .or_else(|| app.section_anchor.map(|_| Mode::VisualField.label()))
-        .or_else(|| (app.fx_zoomed() && app.mode != Mode::Keys).then_some("ZOOM"));
+        .or_else(|| (app.fx_zoomed() && app.modes.mode != Mode::Keys).then_some("ZOOM"));
     let badge = match special {
         Some("SETTINGS") => Some(theme::ROSEWATER),
         Some(mode) if mode == Mode::VisualField.label() => Some(theme::MAUVE),
@@ -513,7 +521,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     };
     let mode_style = Style::new()
         .fg(theme::BASE)
-        .bg(badge.unwrap_or(match app.mode {
+        .bg(badge.unwrap_or(match app.modes.mode {
             Mode::Normal
             | Mode::OperatorPending
             | Mode::Chain
@@ -540,19 +548,19 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         let keys: Vec<String> = app.pending().iter().map(Key::to_string).collect();
         format!("  {}", keys.join(" "))
     };
-    let dirty = if app.dirty { " *" } else { "" };
+    let dirty = if app.services.dirty { " *" } else { "" };
     // After the changes' mark, as Vim's status line puts `[RO]` after `[+]`.
     let read_only = if app.read_only { " [RO]" } else { "" };
-    let typed = if app.entry.text.is_empty() {
+    let typed = if app.modes.entry.text.is_empty() {
         String::new()
     } else {
-        format!("  typed {}", app.entry.text)
+        format!("  typed {}", app.modes.entry.text)
     };
     // The cursor's track shows its own groove, marked so it isn't mistaken for the project's.
     let groove = match app
         .song()
         .tracks
-        .get(app.cursor.track)
+        .get(app.services.cursor.track)
         .and_then(|t| t.groove)
     {
         Some(own) => format!("{own} (track)"),
@@ -561,7 +569,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let level = app
         .song()
         .tracks
-        .get(app.cursor.track)
+        .get(app.services.cursor.track)
         .map_or(0, |t| t.level);
     // Only shown when on, since it changes what you hear and tracks otherwise run freely.
     let reset = app
@@ -577,19 +585,22 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Some(_) => " loop".to_owned(),
             None => String::new(),
         };
-        format!("Sec {}/{sections}{looping}  ", app.cursor.section + 1)
+        format!(
+            "Sec {}/{sections}{looping}  ",
+            app.services.cursor.section + 1
+        )
     } else {
         String::new()
     };
     let reset = format!("{section}{reset}");
     // The grid only means something where notes are entered.
-    let grid = if app.view == View::Phrase {
+    let grid = if app.modes.view == View::Phrase {
         let jump = if app.auto_jump { " Jump" } else { "" };
         format!("  Grid {}{jump}", grid_name(app.song().skip))
     } else {
         String::new()
     };
-    let scale = if app.view == View::Phrase && app.scale.on {
+    let scale = if app.modes.view == View::Phrase && app.scale.on {
         format!(
             "  Scale {} {}",
             app.scale.root_name(),
@@ -607,7 +618,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 // pad or a setting's move without the badge saying so.
                 if let Some(mode) = special {
                     mode
-                } else if app.mode == Mode::Keys {
+                } else if app.modes.mode == Mode::Keys {
                     Mode::Keys.label()
                 } else {
                     app.key_scope().label()
@@ -630,24 +641,24 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         app.octave,
         app.note_velocity,
     )));
-    let message = if app.mode == Mode::Command {
+    let message = if app.modes.mode == Mode::Command {
         format!(":{}", app.command_line)
-    } else if let Some(jump) = &app.field_jump {
+    } else if let Some(jump) = &app.modes.field_jump {
         format!("/{}", jump.query)
-    } else if app.status.is_empty()
+    } else if app.services.status.is_empty()
         && let Some(hint) = app
             .sample_mode_hint()
             .or_else(|| app.audio_page_hint())
             .or_else(|| app.fx_zoom_hint())
     {
         hint
-    } else if app.status.is_empty()
+    } else if app.services.status.is_empty()
         && let Some(total) = app.adjusted_total()
     {
         // What the changes kept on the selection add up to stays in sight as it moves.
         total
     } else {
-        app.status.clone()
+        app.services.status.clone()
     };
     frame.render_widget(
         Paragraph::new(vec![Line::from(status), Line::raw(message)]),
@@ -664,7 +675,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
 
 /// A generator's setting in its units, as `9 of the 16 rows` for Euclid's hits.
 fn gen_shown(app: &App, phrase: u32, generator: usize, param: GenParam) -> String {
-    let Some(live) = app.live_generator(app.cursor.track, phrase, generator) else {
+    let Some(live) = app.live_generator(app.services.cursor.track, phrase, generator) else {
         return String::new();
     };
     let context = live.context();

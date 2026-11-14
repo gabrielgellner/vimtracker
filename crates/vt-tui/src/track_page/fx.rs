@@ -55,7 +55,7 @@ pub struct TakenInsert {
 impl App {
     /// Whether the FX page shows, zoomed in on the cursor's slot (decision 329).
     pub fn fx_zoomed(&self) -> bool {
-        self.view == View::Track && self.track_page.page == Page::Fx && self.track_page.zoomed
+        self.modes.view == View::Track && self.track_page.page == Page::Fx && self.track_page.zoomed
     }
 
     /// What the keys do while the FX page is zoomed in, and how to leave it, for under the status
@@ -82,16 +82,16 @@ impl App {
         let track = self.page_track();
         let insert = track.inserts[slot];
         if insert == Insert::Empty {
-            self.status = "There's nothing in this slot to bypass".to_owned();
+            self.services.status = "There's nothing in this slot to bypass".to_owned();
             return;
         }
         let bypassed = !track.bypassed[slot];
-        self.apply(&Action::SetBypass {
-            track: self.cursor.track,
+        self.services.apply(&Action::SetBypass {
+            track: self.services.cursor.track,
             slot,
             bypassed,
         });
-        self.status = if bypassed {
+        self.services.status = if bypassed {
             format!("Bypassed {}: b brings it back", insert.name())
         } else {
             format!("{} is back in", insert.name())
@@ -103,28 +103,28 @@ impl App {
         let slot = self.fx_slot();
         let insert = self.page_track().inserts[slot];
         if insert == Insert::Empty {
-            self.status = "There's nothing in this slot to take".to_owned();
+            self.services.status = "There's nothing in this slot to take".to_owned();
             return;
         }
         self.set_insert(slot, Insert::Empty);
         self.track_page.taken_insert = Some(TakenInsert {
             insert,
-            track: self.cursor.track,
+            track: self.services.cursor.track,
             slot,
-            undo_depth: self.history.undo_depth(),
+            undo_depth: self.services.history.undo_depth(),
         });
         self.move_control(slot * DEVICE_ROWS, 0);
-        self.status = format!("Took {}: p puts it in a slot", insert.name());
+        self.services.status = format!("Took {}: p puts it in a slot", insert.name());
     }
 
     /// `p`: put what was taken into this slot. What's there goes where it came from, if that's still
     /// empty, so two slots swap. Straight after `dd`, the whole move is one undo step.
     pub(super) fn put_insert(&mut self) {
         let Some(taken) = self.track_page.taken_insert.take() else {
-            self.status = "dd takes an effect out of a slot first".to_owned();
+            self.services.status = "dd takes an effect out of a slot first".to_owned();
             return;
         };
-        let (track, slot) = (self.cursor.track, self.fx_slot());
+        let (track, slot) = (self.services.cursor.track, self.fx_slot());
         let displaced = self.page_track().inserts[slot];
         let mut actions = vec![Action::SetInsert {
             track,
@@ -160,19 +160,19 @@ impl App {
                 next = edited;
             }
         }
-        if taken.undo_depth == self.history.undo_depth() {
-            self.history.replace_current(next);
+        if taken.undo_depth == self.services.history.undo_depth() {
+            self.services.history.replace_current(next);
         } else {
-            self.history.commit(next);
+            self.services.history.commit(next);
         }
-        self.dirty = true;
-        self.publish();
-        self.status = format!("Put {} in slot {}", taken.insert.name(), slot + 1);
+        self.services.dirty = true;
+        self.services.publish();
+        self.services.status = format!("Put {} in slot {}", taken.insert.name(), slot + 1);
     }
 
     pub(super) fn set_insert(&mut self, slot: usize, insert: Insert) {
-        self.apply(&Action::SetInsert {
-            track: self.cursor.track,
+        self.services.apply(&Action::SetInsert {
+            track: self.services.cursor.track,
             slot,
             insert,
         });

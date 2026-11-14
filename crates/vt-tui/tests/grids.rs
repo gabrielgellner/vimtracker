@@ -93,7 +93,7 @@ fn grids_across_a_kits_tracks_writes_one_beat_each_its_own_part() {
         ("", Machine::Plaits(SynthVoice::Kick)),
         ("Pad", Machine::Sampler),
     ]);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vGWWSK/grids<Enter>");
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Grids);
@@ -133,7 +133,7 @@ fn grids_across_a_kits_tracks_writes_one_beat_each_its_own_part() {
     assert_eq!(rhythm(&app, 1), "X...X...X...X...");
     keys(&mut app, "<Enter>");
     assert_eq!(
-        app.history.undo_depth(),
+        app.services.history.undo_depth(),
         depth + 1,
         "one undo for all three"
     );

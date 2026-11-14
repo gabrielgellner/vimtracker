@@ -197,16 +197,16 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         }
         _ if cells && panel.parts.len() > 1 => "Each track a cell, a row a generation",
         _ if cells => "Each row a cell, stepped on by Vary",
-        FillKind::Random | FillKind::Walk | FillKind::Pink if app.mode == Mode::Shape => {
+        FillKind::Random | FillKind::Walk | FillKind::Pink if app.modes.mode == Mode::Shape => {
             "~ swap  r reroll"
         }
-        FillKind::Wave if panel.shape.wave == Wave::Smooth && app.mode == Mode::Shape => {
+        FillKind::Wave if panel.shape.wave == Wave::Smooth && app.modes.mode == Mode::Shape => {
             "~ swap  r reroll"
         }
-        FillKind::Shuffle if app.mode == Mode::Shape => "r deals again",
+        FillKind::Shuffle if app.modes.mode == Mode::Shape => "r deals again",
         FillKind::Acid if panel.shape.acid.keep => "r rolls the accents, slides and octaves",
         FillKind::Acid => "r rolls a new riff  ~ swap the ends",
-        FillKind::Follow if panel.shape.follow.mutates() && app.mode == Mode::Shape => {
+        FillKind::Follow if panel.shape.follow.mutates() && app.modes.mode == Mode::Shape => {
             "r other changes  L keeps it in step"
         }
         FillKind::Follow => "L keeps it in step with its source",
@@ -226,15 +226,17 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         FillKind::Divisions if panel.shape.divisions.crowded() => {
             "16ths and triplets need 32nds to fit"
         }
-        FillKind::Divisions if app.mode == Mode::Shape => "r rolls the dice  a chance only adds",
+        FillKind::Divisions if app.modes.mode == Mode::Shape => {
+            "r rolls the dice  a chance only adds"
+        }
         FillKind::Divisions => "A chance only adds strikes",
         FillKind::Ring if panel.shape.ring.kept.is_some() => "Its loop kept  r starts a new one",
-        FillKind::Ring if app.mode == Mode::Shape => "r a new ring  L runs it on each pass",
+        FillKind::Ring if app.modes.mode == Mode::Shape => "r a new ring  L runs it on each pass",
         FillKind::Ring => "Bit 0 plays, the byte is the pitch",
         FillKind::Tonnetz => chords.as_str(),
         FillKind::Variation => match &too_few {
             Some(why) => why.as_str(),
-            None if app.mode == Mode::Shape => "r another  Order 3 copies closely",
+            None if app.modes.mode == Mode::Shape => "r another  Order 3 copies closely",
             None => "Learned from the notes there",
         },
         FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => match panel.column {

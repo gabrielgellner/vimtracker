@@ -101,7 +101,7 @@ fn drawn(app: &App) -> String {
 #[test]
 fn variation_writes_a_line_like_the_one_there_and_order_3_cold_writes_it_back() {
     let (mut app, _rt) = app_with(&LINE);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vGSK/variation<Enter>");
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Variation);
@@ -132,7 +132,7 @@ fn variation_writes_a_line_like_the_one_there_and_order_3_cold_writes_it_back() 
     let written = texts(&app);
     keys(&mut app, "L");
     assert!(app.shape.is_none());
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     assert_eq!(texts(&app), written);
     let generators = app.song().tracks[0].phrases[&0].generators();
     assert_eq!(generators.len(), 1);
@@ -147,7 +147,7 @@ fn a_line_of_too_few_notes_is_refused_with_a_message() {
     rows[8] = "G-3 40 --- --- ---";
     let (mut app, _rt) = app_with(&rows);
     let before = texts(&app);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vGSK/variation<Enter>");
     let message = "Variation needs 4 notes to learn from, and there are 3";
     assert!(
@@ -157,9 +157,9 @@ fn a_line_of_too_few_notes_is_refused_with_a_message() {
     );
     assert_eq!(texts(&app), before, "nothing is written");
     keys(&mut app, "<Enter>");
-    assert_eq!(app.status, message);
+    assert_eq!(app.services.status, message);
     assert!(app.shape.is_some(), "the panel stays open");
     keys(&mut app, "L");
-    assert_eq!(app.status, message);
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.status, message);
+    assert_eq!(app.services.history.undo_depth(), depth);
 }

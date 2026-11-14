@@ -111,7 +111,7 @@ fn heard_to_row_8() -> (App, Realtime) {
     let (handle, mut realtime) = connect(Engine::new(48_000, version));
     let mut app = App::new(song, None, samples, handle, 48_000);
     block(&mut realtime, &mut app);
-    app.handle.send(Command::PlayFrom { step: 0 });
+    app.services.handle.send(Command::PlayFrom { step: 0 });
     for _ in 0..(STEP * 17 / 2) / 256 {
         block(&mut realtime, &mut app);
     }
@@ -164,7 +164,7 @@ fn space_g_a_keeps_what_was_heard_as_one_undo_step() {
     let (mut app, _realtime) = heard_to_row_8();
     let written = velocities(app.song());
     press(&mut app, "l");
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     press(&mut app, " ga");
     assert!(app.song().tracks[0].phrases[&0].generators().is_empty());
     let mut wanted = written.clone();
@@ -174,9 +174,17 @@ fn space_g_a_keeps_what_was_heard_as_one_undo_step() {
         wanted,
         "row 8 as heard, the rest as written"
     );
-    assert!(app.status.contains("applied as heard"), "{}", app.status);
-    assert!(app.status.contains("not heard yet"), "{}", app.status);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert!(
+        app.services.status.contains("applied as heard"),
+        "{}",
+        app.services.status
+    );
+    assert!(
+        app.services.status.contains("not heard yet"),
+        "{}",
+        app.services.status
+    );
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     press(&mut app, "u");
     assert_eq!(velocities(app.song()), written);
     assert_eq!(app.song().tracks[0].phrases[&0].generators().len(), 1);
@@ -189,8 +197,8 @@ fn space_g_capital_a_writes_in_the_moving_generators_as_heard() {
     assert!(app.song().tracks[0].phrases[&0].generators().is_empty());
     assert_eq!(velocities(app.song())[8], Some(0x7F));
     assert!(
-        app.status.contains("Applied Vel as heard"),
+        app.services.status.contains("Applied Vel as heard"),
         "{}",
-        app.status
+        app.services.status
     );
 }

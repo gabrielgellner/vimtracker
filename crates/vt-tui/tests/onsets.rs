@@ -77,7 +77,7 @@ fn app() -> (App, Realtime) {
     let (handle, realtime) = connect(Engine::new(RATE, version));
     let mut app = App::new(song, None, samples, handle, RATE);
     keys(&mut app, "Space 0");
-    assert_eq!(app.view, View::Sample);
+    assert_eq!(app.modes.view, View::Sample);
     (app, realtime)
 }
 
@@ -128,7 +128,11 @@ fn w_and_b_step_through_the_hits_and_counts_skip_some() {
     }
     keys(&mut app, "w");
     assert!(near(cursor(&app), HITS[3]));
-    assert!(app.status.contains("No sound further"), "{}", app.status);
+    assert!(
+        app.services.status.contains("No sound further"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "b");
     assert!(near(cursor(&app), HITS[2]));
     keys(&mut app, "2 b");
@@ -144,10 +148,18 @@ fn sens_finds_the_quiet_hits_too_as_it_rises() {
     keys(&mut app, "K j Enter");
     assert_eq!(app.sample_page.setting, Some(SampleSetting::Sens));
     keys(&mut app, "+");
-    assert!(app.status.contains("finding 4 sounds"), "{}", app.status);
+    assert!(
+        app.services.status.contains("finding 4 sounds"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "+ + + + + +");
     assert_eq!(sens(&app), 100);
-    assert!(app.status.contains("finding 7 sounds"), "{}", app.status);
+    assert!(
+        app.services.status.contains("finding 7 sounds"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "Esc g g");
     let mut all: Vec<u64> = HITS.iter().chain(&GHOSTS).copied().collect();
     all.sort_unstable();
@@ -189,7 +201,7 @@ fn is_selects_the_sound_here_and_ip_the_slice() {
     keys(&mut app, "v");
     assert_eq!(app.key_scope(), Mode::SampleVisual);
     keys(&mut app, "i s");
-    assert_eq!(app.mode, Mode::Normal, "i doesn't start the pads");
+    assert_eq!(app.modes.mode, Mode::Normal, "i doesn't start the pads");
     let selected = app.sample_page.selection().unwrap();
     assert!(near(selected.start, HITS[1]), "{selected:?}");
     assert!(selected.end > HITS[1] + HIT_FRAMES / 3 && selected.end < HITS[1] + HIT_FRAMES);
@@ -201,7 +213,7 @@ fn is_selects_the_sound_here_and_ip_the_slice() {
     assert_eq!(app.sample_page.selection(), Some(slice));
     // Off a selection, `i` plays pads as before.
     keys(&mut app, "Esc i");
-    assert_eq!(app.mode, Mode::Keys);
+    assert_eq!(app.modes.mode, Mode::Keys);
 }
 
 /// Where the sample's slices start.
@@ -215,11 +227,20 @@ fn slice_transients_puts_a_slice_on_each_hit_and_sens_changes_how_many() {
     let (mut app, _realtime) = loud_only();
     command(&mut app, "slice transients");
     let found = starts(&app);
-    assert_eq!(found.len(), HITS.len(), "{found:?}: {}", app.status);
+    assert_eq!(
+        found.len(),
+        HITS.len(),
+        "{found:?}: {}",
+        app.services.status
+    );
     for (start, hit) in found.iter().zip(HITS) {
         assert!(near(*start, hit), "{start} for {hit}");
     }
-    assert!(app.status.contains("4 slices"), "{}", app.status);
+    assert!(
+        app.services.status.contains("4 slices"),
+        "{}",
+        app.services.status
+    );
     // Every hit, the quiet ones too, at a higher Sens; and `u` takes it back.
     keys(&mut app, "K j Enter + + + + + + + Esc");
     assert_eq!(sens(&app), 100);
@@ -235,7 +256,7 @@ fn slice_beat_cuts_a_bar_into_sixteenths_at_the_tempo_or_by_its_length_in_bars()
     let (mut app, _realtime) = app();
     command(&mut app, "slice beat 1/16");
     let expected: Vec<u64> = (0..16).map(|at| at * 6000).collect();
-    assert_eq!(starts(&app), expected, "{}", app.status);
+    assert_eq!(starts(&app), expected, "{}", app.services.status);
     // Said to be two bars long, eighths are as long as sixteenths.
     command(&mut app, "sample bars 2");
     assert_eq!(app.song().bank.get(1).unwrap().edit.hints.bars, Some(2));
@@ -252,7 +273,7 @@ fn slice_silence_gives_one_slice_per_hit() {
     let mut all: Vec<u64> = HITS.iter().chain(&GHOSTS).copied().collect();
     all.sort_unstable();
     let found = starts(&app);
-    assert_eq!(found.len(), all.len(), "{found:?}: {}", app.status);
+    assert_eq!(found.len(), all.len(), "{found:?}: {}", app.services.status);
     for (start, hit) in found.iter().zip(all) {
         assert!(near(*start, hit), "{start} for {hit}");
     }
@@ -269,7 +290,7 @@ fn a_range_limits_re_slicing_to_the_slices_inside_it() {
     let mut expected = vec![0];
     expected.extend((0..8).map(|at| 24_000 + at * 6000));
     expected.push(72_000);
-    assert_eq!(starts(&app), expected, "{}", app.status);
+    assert_eq!(starts(&app), expected, "{}", app.services.status);
     // The marks follow: 'a and 'b both start where they did, and 'c is still on the last.
     let points = &app.song().bank.get(1).unwrap().edit.points;
     assert_eq!(points.marked('a'), Some(1));

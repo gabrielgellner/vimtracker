@@ -118,7 +118,7 @@ fn son(part: Role, child: u8) -> Where {
 #[test]
 fn a_rhythm_across_three_tracks_gives_each_the_next_part() {
     let (mut app, _rt) = app_with(3, Speed::Sixteenth);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vGWWS");
     down_to(&mut app, GenParam::Where);
     keys(&mut app, "K/rhythm<Enter>");
@@ -162,7 +162,7 @@ fn a_rhythm_across_three_tracks_gives_each_the_next_part() {
     assert!(played > 0 && played < 13, "{played} of 13");
     keys(&mut app, "L");
     assert_eq!(
-        app.history.undo_depth(),
+        app.services.history.undo_depth(),
         depth + 1,
         "one undo for all three"
     );
@@ -220,11 +220,11 @@ fn the_gen_page_has_the_rhythm_its_part_and_child() {
     // the rhythm above that.
     keys(&mut app, "jjj$");
     assert_eq!(here(&app), Some(GenParam::Child));
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "i0<Enter>");
     assert_eq!(generators(&app, 0)[0].shape.place, son(Role::Bell, 0));
     assert_eq!(rhythm(&app, 0), ".".repeat(16));
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     // `x` puts it back to every hit.
     keys(&mut app, "x");
     assert_eq!(generators(&app, 0)[0].shape.place, son(Role::Bell, 100));

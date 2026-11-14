@@ -79,7 +79,7 @@ impl App {
     /// The settings a search looks through. The mixer's are those of the cursor's track, whose row
     /// the cursor stays on.
     fn jump_rows(&self) -> Vec<Vec<Option<Control>>> {
-        if self.view == View::Mixer {
+        if self.modes.view == View::Mixer {
             MIXER_ROWS
                 .iter()
                 .map(|row| row.iter().copied().map(Some).collect())
@@ -95,10 +95,10 @@ impl App {
         if query.is_empty() {
             return Vec::new();
         }
-        let Some(track) = self.song().tracks.get(self.cursor.track) else {
+        let Some(track) = self.song().tracks.get(self.services.cursor.track) else {
             return Vec::new();
         };
-        let (from_row, from_field) = if self.view == View::Mixer {
+        let (from_row, from_field) = if self.modes.view == View::Mixer {
             (0, self.mixer_page.row)
         } else {
             (self.track_page.row, self.track_page.field)
@@ -128,14 +128,14 @@ impl App {
 
     /// Start a search.
     pub(crate) fn open_field_jump(&mut self) {
-        self.count = None;
-        self.field_jump = Some(FieldJump::default());
-        self.mode = Mode::Jump;
+        self.modes.count = None;
+        self.modes.field_jump = Some(FieldJump::default());
+        self.modes.mode = Mode::Jump;
     }
 
     fn close_field_jump(&mut self) {
-        self.field_jump = None;
-        self.mode = Mode::Normal;
+        self.modes.field_jump = None;
+        self.modes.mode = Mode::Normal;
     }
 
     /// Search for this, if anything on the page matches it. A typing slip doesn't lose the search.
@@ -144,7 +144,7 @@ impl App {
         if hits.is_empty() && !query.is_empty() {
             return;
         }
-        if let Some(jump) = &mut self.field_jump {
+        if let Some(jump) = &mut self.modes.field_jump {
             jump.labels = labelled(&hits, &query, &jump.labels);
             jump.query = query;
         }
@@ -163,7 +163,7 @@ impl App {
             });
         if let Some((row, field)) = place {
             self.record_jump();
-            if self.view == View::Mixer {
+            if self.modes.view == View::Mixer {
                 self.mixer_page.row = field;
             } else {
                 self.move_control(row, field);
@@ -173,7 +173,7 @@ impl App {
 
     /// Handle a key during a search.
     pub(crate) fn jump_key(&mut self, key: Key) {
-        let Some(jump) = self.field_jump.clone() else {
+        let Some(jump) = self.modes.field_jump.clone() else {
             return;
         };
         match key.code {

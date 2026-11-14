@@ -95,7 +95,7 @@ fn ringing() -> (App, Realtime) {
 #[test]
 fn the_panel_writes_a_rings_rhythm_and_pitch_and_keeps_it_live() {
     let (mut app, _rt) = app_with(16);
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, "vGSK/ring<Enter>");
     let panel = app.shape.clone().unwrap();
     assert_eq!(panel.shape.kind, FillKind::Ring);
@@ -119,9 +119,9 @@ fn the_panel_writes_a_rings_rhythm_and_pitch_and_keeps_it_live() {
     keys(&mut app, "jjjji100<Enter>");
     keys(&mut app, "<Enter>");
     assert!(notes(&app).iter().all(|note| matches!(note, Note::On(_))));
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
     keys(&mut app, "u");
-    assert_eq!(app.history.undo_depth(), depth);
+    assert_eq!(app.services.history.undo_depth(), depth);
     // Kept live with `L`, as one undo step.
     let (app, _rt) = ringing();
     let played = notes(&app);
@@ -130,7 +130,7 @@ fn the_panel_writes_a_rings_rhythm_and_pitch_and_keeps_it_live() {
     let generator = &generators(&app)[0];
     assert_eq!(generator.shape.kind, FillKind::Ring);
     assert_eq!(generator.shape.ring.change, 60);
-    assert_eq!(app.history.undo_depth(), depth + 1);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
 }
 
 #[test]
@@ -150,18 +150,22 @@ fn space_g_a_on_the_gen_page_keeps_the_loop_a_pass_heard_began_with() {
     // Nothing's been heard, so there's nothing to keep.
     keys(&mut app, " ga");
     assert_eq!(generators(&app)[0].shape, written_shape);
-    assert!(app.status.contains("hasn't been heard"), "{}", app.status);
+    assert!(
+        app.services.status.contains("hasn't been heard"),
+        "{}",
+        app.services.status
+    );
 
     // Two and a half times round its 16 rows.
     for _ in 0..4 {
         block(&mut realtime, &mut app);
     }
-    app.handle.send(Command::PlayFrom { step: 0 });
+    app.services.handle.send(Command::PlayFrom { step: 0 });
     let pass = 16 * 6000;
     for _ in 0..(pass * 5 / 2) / 256 {
         block(&mut realtime, &mut app);
     }
-    let depth = app.history.undo_depth();
+    let depth = app.services.history.undo_depth();
     keys(&mut app, " ga");
     let kept = generators(&app)[0].shape;
     let third = written_shape.on_pass(2);
@@ -182,8 +186,12 @@ fn space_g_a_on_the_gen_page_keeps_the_loop_a_pass_heard_began_with() {
     assert_eq!(notes(&app), heard);
     assert_ne!(notes(&app), first, "a pass of its own");
     assert_eq!(generators(&app).len(), 1, "still live");
-    assert_eq!(app.history.undo_depth(), depth + 1);
-    assert!(app.status.contains("pass 3"), "{}", app.status);
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+    assert!(
+        app.services.status.contains("pass 3"),
+        "{}",
+        app.services.status
+    );
     keys(&mut app, "u");
     assert_eq!(generators(&app)[0].shape, written_shape);
     // `r` starts a new ring, letting the loop kept go.

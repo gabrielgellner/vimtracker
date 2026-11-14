@@ -43,14 +43,17 @@ impl App {
     pub(crate) fn hear_generator(&mut self, track: usize, report: GenReport) {
         match report {
             GenReport::Pass(pass) => {
-                self.heard_passes
+                self.services
+                    .heard_passes
                     .insert((track, pass.phrase, pass.generator), pass);
             }
             GenReport::Row(row) => {
-                self.heard_rows
+                self.services
+                    .heard_rows
                     .insert((track, row.phrase, row.generator, row.row), row);
             }
             GenReport::Rest { phrase } => self
+                .services
                 .heard_rows
                 .retain(|(on, at, ..), _| (*on, *at) != (track, phrase)),
         }
@@ -65,7 +68,10 @@ impl App {
         generator: usize,
         row: usize,
     ) -> Option<(Step, i64)> {
-        let heard = self.heard_rows.get(&(track, phrase, generator, row))?;
+        let heard = self
+            .services
+            .heard_rows
+            .get(&(track, phrase, generator, row))?;
         let owner = self.song().tracks.get(track)?;
         let held = owner.phrases.get(&phrase)?;
         let live = held.generators().get(generator)?;
@@ -85,7 +91,7 @@ impl App {
         let mut moved = false;
         for (index, generator) in held.generators().iter().enumerate() {
             if self.heard_cell(track, phrase, index, row).is_some()
-                && let Some(cell) = self.heard_rows[&(track, phrase, index, row)].cell
+                && let Some(cell) = self.services.heard_rows[&(track, phrase, index, row)].cell
             {
                 generator.lay_heard(row, cell, &mut step);
                 moved = true;
@@ -97,10 +103,13 @@ impl App {
     /// Whether a live generator was heard otherwise than written on any of its rows, which the
     /// phrase's title marks with `~`.
     pub(crate) fn generator_moving(&self, track: usize, phrase: u32, generator: usize) -> bool {
-        self.heard_rows.keys().any(|&(on, at, index, row)| {
-            (on, at, index) == (track, phrase, generator)
-                && self.heard_cell(track, phrase, generator, row).is_some()
-        })
+        self.services
+            .heard_rows
+            .keys()
+            .any(|&(on, at, index, row)| {
+                (on, at, index) == (track, phrase, generator)
+                    && self.heard_cell(track, phrase, generator, row).is_some()
+            })
     }
 
     /// A live generator's rows as last heard, if any was heard otherwise than written.
@@ -114,7 +123,11 @@ impl App {
         let span = held.generators().get(generator)?.rows()?;
         let (mut rows, mut heard, mut pass) = (Vec::new(), 0, 0);
         for row in span.first..=span.last {
-            let Some(report) = self.heard_rows.get(&(track, phrase, generator, row)) else {
+            let Some(report) = self
+                .services
+                .heard_rows
+                .get(&(track, phrase, generator, row))
+            else {
                 continue;
             };
             heard += 1;
@@ -165,21 +178,21 @@ impl App {
         name: &str,
     ) {
         let Some((action, heard)) = self.apply_as_heard(track, phrase, generator) else {
-            self.apply(&Action::ApplyGenerator {
+            self.services.apply(&Action::ApplyGenerator {
                 track,
                 phrase,
                 generator,
             });
-            self.status = format!("{name} is applied, as plain values");
+            self.services.status = format!("{name} is applied, as plain values");
             return;
         };
-        self.apply(&action);
+        self.services.apply(&action);
         let unheard = match heard.unheard {
             0 => String::new(),
             1 => ", and 1 not heard yet as written".to_owned(),
             count => format!(", and {count} not heard yet as written"),
         };
-        self.status = format!(
+        self.services.status = format!(
             "{name} is applied as heard: {} rows as last heard, the last on pass {}{unheard}",
             heard.heard,
             heard.pass + 1

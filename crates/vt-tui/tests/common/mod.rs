@@ -530,7 +530,7 @@ pub fn explorer_roots(app: &App) -> Vec<(String, String)> {
 
 pub fn notes(app: &App) -> Vec<Note> {
     let id = app.phrase_id().unwrap();
-    app.song().tracks[app.cursor.track].phrases[&id]
+    app.song().tracks[app.services.cursor.track].phrases[&id]
         .steps()
         .iter()
         .map(|s| s.note)
@@ -610,7 +610,7 @@ pub fn song_text(app: &App) -> Vec<String> {
 /// Have each track report the chain of the row being edited, for setting a playhead by hand.
 pub fn on_the_row_being_edited(app: &mut App) {
     let chains = app.section_here().unwrap().chains.clone();
-    for (jam, chain) in app.jam.iter_mut().zip(chains) {
+    for (jam, chain) in app.services.jam.iter_mut().zip(chains) {
         jam.chain = chain;
     }
 }
@@ -657,7 +657,7 @@ pub fn on_the_audio_page() -> (App, Realtime) {
     app.audio.buffer = Some(512);
     app.audio.running = true;
     press(&mut app, " 9L");
-    assert_eq!(app.view, View::Audio);
+    assert_eq!(app.modes.view, View::Audio);
     assert!(app.audio.refresh, "it lists the devices afresh");
     (app, realtime)
 }

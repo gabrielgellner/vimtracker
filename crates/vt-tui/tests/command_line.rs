@@ -18,14 +18,17 @@ fn commands_change_tempo_and_length() {
     assert_eq!(app.song().millibpm, 137_630);
     command(&mut app, "bpm 900");
     assert_eq!(app.song().millibpm, 137_630);
-    assert!(!app.status.is_empty());
+    assert!(!app.services.status.is_empty());
     for _ in 0..10 {
         press(&mut app, "j");
     }
     command(&mut app, "len 4");
     assert_eq!(app.song().tracks[0].phrases[&0].len(), 4);
     assert_eq!(notes(&app).len(), 16, "the rest is kept");
-    assert_eq!(app.cursor.step, 10, "and the cursor can stay on it");
+    assert_eq!(
+        app.services.cursor.step, 10,
+        "and the cursor can stay on it"
+    );
 }
 
 /// Press and let go of a key that isn't a character.
@@ -62,7 +65,7 @@ fn tab_completes_a_command_name_in_place() {
     tap_special(&mut app, KeyCode::Tab);
     assert_eq!(app.command_line, "set scale=dorian");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.status, "Scale C Dorian", "it parses and runs");
+    assert_eq!(app.services.status, "Scale C Dorian", "it parses and runs");
     assert!(app.scale.on);
 }
 
@@ -100,7 +103,7 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.command_line, "set", "Enter takes it");
     assert!(app.command_menu.is_none());
-    assert_eq!(app.mode, Mode::Command, "and the line stays open");
+    assert_eq!(app.modes.mode, Mode::Command, "and the line stays open");
     // Esc closes the list and keeps what's typed.
     press(&mut app, " ");
     tap_special(&mut app, KeyCode::Tab);
@@ -114,7 +117,7 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     special(&mut app, KeyCode::Esc);
     assert!(app.command_menu.is_none());
     assert_eq!(
-        (app.mode, app.command_line.as_str()),
+        (app.modes.mode, app.command_line.as_str()),
         (Mode::Command, "set r")
     );
     // Shift-Tab opens on the last, and a new word closes the list.
@@ -158,7 +161,7 @@ fn paths_and_kits_complete_from_the_disk() {
     assert_eq!(menu(&app).0, ["kick.wav", "kits/"], "the list shows names");
     special(&mut app, KeyCode::Esc);
     special(&mut app, KeyCode::Esc);
-    app.settings = Settings {
+    app.services.settings = Settings {
         kits: vec![root.join("kits").display().to_string()],
         samples: Vec::new(),
         presets: String::new(),

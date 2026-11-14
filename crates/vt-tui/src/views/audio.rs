@@ -24,7 +24,7 @@ fn value(app: &App, row: AudioRow) -> String {
     match row {
         AudioRow::Device if audio.device.is_empty() => "None".to_owned(),
         AudioRow::Device => audio.device.clone(),
-        AudioRow::Rate => format!("{} Hz", app.rate),
+        AudioRow::Rate => format!("{} Hz", app.services.rate),
         AudioRow::Buffer => {
             let own = if audio.choice.buffer.is_none() {
                 ", the device's own"
@@ -34,7 +34,7 @@ fn value(app: &App, row: AudioRow) -> String {
             match audio.buffer.or(audio.choice.buffer) {
                 Some(frames) => format!(
                     "{frames} frames, {:.1} ms{own}",
-                    buffer_ms(frames, app.rate)
+                    buffer_ms(frames, app.services.rate)
                 ),
                 None => "The device's own".to_owned(),
             }
@@ -44,7 +44,7 @@ fn value(app: &App, row: AudioRow) -> String {
             (None, Some(_)) => "Chosen, but it couldn't be opened".to_owned(),
             (None, None) => "Off".to_owned(),
         },
-        AudioRow::Roto => app.roto.connection.describe(),
+        AudioRow::Roto => app.services.roto.connection.describe(),
         AudioRow::Wheel if app.wheel.setting.on => {
             "Scrolling turns the setting under the cursor. Shift-drag selects text".to_owned()
         }
@@ -63,7 +63,7 @@ fn value(app: &App, row: AudioRow) -> String {
 fn switch_value(app: &App, row: AudioRow, here: bool) -> Line<'static> {
     let on = match row {
         AudioRow::Wheel => app.wheel.setting.on,
-        _ => app.roto.setting.on,
+        _ => app.services.roto.setting.on,
     };
     let switch = if here {
         Span::styled(toggle::text(on), setting::style(&app.ctx(), true, false))
