@@ -1903,6 +1903,28 @@ const GEN_RING: DeviceLayout = live(
         ],
     )],
 );
+/// Chords on the Tonnetz: the first one's root and whether it's major or minor, where the moves
+/// come from and whether they keep to the scale, then on a second page each move's weight and a
+/// loop's length. Its list of moves is typed, and its voice is what it is, chosen in the app.
+const GEN_TONNETZ: DeviceLayout = live(
+    "gen/tonnetz",
+    &[
+        knobs(
+            "Tonnetz",
+            [
+                s("from"),
+                s("triad"),
+                s("moves"),
+                s("inscale"),
+                GAP,
+                s("vary"),
+                s(WHERE_FIRST),
+                s(WHERE_SECOND),
+            ],
+        ),
+        knobs("Moves", [s("p"), s("l"), s("r"), s("loop"), __, __, __, __]),
+    ],
+);
 /// A Markov chain learned from the notes there: how closely it copies them and how far it strays;
 /// it learns its rows with its notes, so it has no `Where`.
 const GEN_VARIATION: DeviceLayout = live(
@@ -1959,7 +1981,7 @@ const GEN_REWORK: DeviceLayout = live(
 
 /// Every live generator's layout, a fill each, apart from [`ALL`], as a generator is a phrase's
 /// rather than a kind of device a track always has.
-pub const GENERATORS: [&DeviceLayout; 18] = [
+pub const GENERATORS: [&DeviceLayout; 19] = [
     &GEN_RAMP,
     &GEN_RANDOM,
     &GEN_WAVE,
@@ -1975,6 +1997,7 @@ pub const GENERATORS: [&DeviceLayout; 18] = [
     &GEN_GRIDS,
     &GEN_DIVISIONS,
     &GEN_RING,
+    &GEN_TONNETZ,
     &GEN_VARIATION,
     &GEN_BITS,
     &GEN_REWORK,
@@ -1997,6 +2020,7 @@ pub fn generator_layout(kind: FillKind) -> &'static DeviceLayout {
         FillKind::Grids => &GEN_GRIDS,
         FillKind::Divisions => &GEN_DIVISIONS,
         FillKind::Ring => &GEN_RING,
+        FillKind::Tonnetz => &GEN_TONNETZ,
         FillKind::Variation => &GEN_VARIATION,
         FillKind::InvertBits | FillKind::MaskBits | FillKind::RotateBits => &GEN_BITS,
         FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => &GEN_REWORK,
@@ -2264,8 +2288,8 @@ pub fn app_only(control: Control, track: &Track) -> bool {
         Control::Machine | Control::Insert(_) | Control::Mod(_, ModField::Type) => true,
         // A generator's fill and rows, what a `Follow` follows, which part a `Grids` plays, which
         // channel a `Divisions` plays, which side of `Complementary`'s coin a track is and which
-        // named rhythm and part it plays are what it is, and a `List`'s values and a `Random`'s
-        // weights are typed.
+        // named rhythm and part it plays are what it is, as is the voice of a `Tonnetz`' chords it
+        // plays, and a `List`'s values, a `Random`'s weights and a `Tonnetz`' moves are typed.
         Control::Gen { param, .. } => matches!(
             param,
             GenParam::Fill
@@ -2278,6 +2302,8 @@ pub fn app_only(control: Control, track: &Track) -> bool {
                 | GenParam::Rhythm
                 | GenParam::Role
                 | GenParam::Weights
+                | GenParam::Voice
+                | GenParam::MoveList
         ),
         Control::InsertParam(slot, param) => track.inserts[slot].type_param() == Some(param),
         _ => false,

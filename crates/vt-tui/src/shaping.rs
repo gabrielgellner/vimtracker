@@ -13,11 +13,11 @@ use vt_model::selection::{Field, Scope, StepRange};
 use vt_model::shape::params::{Choice, Typing};
 use vt_model::shape::{
     Acid, Bits, Channel, Context, DEFAULT_RATE, DrumPart, FillKind, Follow, GenParam, Grids,
-    MAX_VALUES, Pink, Random, Shape, ShapeColumn, Source, Starts, VARIATION_NOTES, Values, WEIGHTS,
-    Walk, Where, default_ends, default_step, divisions_seed, drum_parts, is_empty, on_track,
-    open_rows, track_seed, variation_notes,
+    MAX_VALUES, Pink, Random, Shape, ShapeColumn, Source, Starts, TonnetzVoice, VARIATION_NOTES,
+    Values, WEIGHTS, Walk, Where, default_ends, default_step, divisions_seed, drum_parts, is_empty,
+    on_track, open_rows, track_seed, variation_notes,
 };
-use vt_model::song::{Song, Track};
+use vt_model::song::{Machine, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
 use vt_model::step::{FxCommand, MAX_NOTE, Note, Step};
 
@@ -32,6 +32,8 @@ pub const KIT_BEAT_PICKER: &str = "Start a beat";
 
 /// The longest rate that can be typed, like `64 bars`.
 const RATE_TEXT: usize = 8;
+/// The longest list of a `Tonnetz`' moves that can be typed: eight and the spaces between.
+const MOVES_TEXT: usize = 15;
 
 /// One track's part of what the panel shapes: the phrase it's on, its rows, and its column, whose
 /// FX command is the first on its own rows, or the one chosen for a column with none.
@@ -181,8 +183,8 @@ impl ShapePanel {
     /// generates on, every row where the panel chooses the notes or commands there, and across
     /// tracks, its own part of Grids' beat, its own channel of `Divisions`, each three tracks
     /// sharing a seed so the third plays the strikes of the other two, its side of
-    /// `Complementary`'s coin, which each pair of tracks shares, or its own cell of one `Cells`
-    /// automaton.
+    /// `Complementary`'s coin, which each pair of tracks shares, its own cell of one `Cells`
+    /// automaton, or its own voice of a `Tonnetz`' chords, every track walking from one seed.
     pub fn shape_of(&self, nth: usize) -> Shape {
         let part = &self.parts[nth];
         let channels =
@@ -214,6 +216,7 @@ impl ShapePanel {
                 part: self.shape.grids.part.or(Some(part.drum)),
                 ..self.shape.grids
             },
+            tonnetz: placed.tonnetz,
             ..self.shape
         }
     }
@@ -421,6 +424,7 @@ fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Sh
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
         ring: vt_model::shape::Ring::default(),
+        tonnetz: vt_model::shape::Tonnetz::default(),
     }
 }
 
@@ -828,6 +832,12 @@ impl App {
         shape.divisions = shape
             .divisions
             .for_step(base.tracks[first.track].speed.ticks());
+        // A `Tonnetz` on the `Chord` voice writes its chords for it, and on any other its roots;
+        // across tracks, each takes a voice of the triad (decision 332).
+        shape.tonnetz.voice = alone.then(|| match base.tracks[first.track].machine {
+            Machine::Plaits(SynthVoice::Chord) => TonnetzVoice::Chord,
+            _ => TonnetzVoice::Root,
+        });
         Ok(ShapePanel {
             selection,
             parts,
@@ -1232,6 +1242,11 @@ impl App {
         let tracks: Vec<usize> = places.iter().map(|place| place.0).collect();
         let drums = self.drums_of(&tracks);
         let channels = shape.kind == FillKind::Divisions && tracks.len() > 1;
+        // A `Tonnetz` across tracks gives each a voice of the triad, as `S` does.
+        let mut shape = shape;
+        if tracks.len() > 1 {
+            shape.tonnetz.voice = None;
+        }
         let hits: Vec<bool> = places
             .iter()
             .map(|(track, phrase, range, ..)| first_hit(steps_on(*track, *phrase), *range))
@@ -1277,6 +1292,7 @@ impl App {
                             },
                             ..shape.grids
                         },
+                        tonnetz: placed.tonnetz,
                         ..shape
                     },
                 }
@@ -1548,6 +1564,13 @@ impl App {
                 }
             }
             (KeyCode::Char(c), Typing::HexList) => type_list(text, c),
+            // A `Tonnetz`' moves, `P`, `L` and `R`, with spaces between as wanted.
+            (KeyCode::Char(c), Typing::Moves)
+                if text.len() < MOVES_TEXT
+                    && (matches!(c.to_ascii_uppercase(), 'P' | 'L' | 'R') || c == ' ') =>
+            {
+                text.push(c.to_ascii_uppercase());
+            }
             // A hex digit a degree, at most one for each semitone.
             (KeyCode::Char(c), Typing::Weights)
                 if c.is_ascii_hexdigit() && text.len() < WEIGHTS =>

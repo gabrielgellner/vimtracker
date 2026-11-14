@@ -484,6 +484,10 @@ them by name.
 | `Inversion` | Moves the lowest note up an octave at a time. At pitch at `66` |
 | `Wave` | Organ and string registrations below `80`, then waves above it |
 
+A row's `CHRD` lock changes the chord for its note, `0A` major and `03` minor, so a
+column of notes and locks is a progression. `S`'s `Tonnetz` writes one: see **Chords
+on the Tonnetz**.
+
 `VOSIM` is two sines at pitches of their own, in a bell-shaped window that starts again each
 cycle of the note, for nasal, vocal and buzzy leads. The note sets how often it repeats; the
 sines stay where they're set, as a voice's formants do.

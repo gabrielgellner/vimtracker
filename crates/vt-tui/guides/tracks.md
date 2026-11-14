@@ -1809,7 +1809,8 @@ and `Side`, or a named rhythm's `Rhythm`, `Part` and `Child`, at the foot of the
 they stay put as the fill changes; where `Acid`'s `Density` or `Random`'s `Weights` takes the
 top of the third, `Rhythm` goes to the fourth. A `Follow`, which has no `Where`, has its
 `Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
-whose three are full, its riff's `Spread` and `Bias` in the fourth. An `Acid`'s loops
+whose three are full, its riff's `Spread` and `Bias` in the fourth, as a `Tonnetz` has its
+moves' weights, `P`, `L` and `R`. An `Acid`'s loops
 (see **Acid lines** in the editing guide) are a device of their own under it, `Loops`:
 `Trig loop` and `Note loop` in its first column, `Oct loop`, `Acc loop` and `Sld loop` in
 its second, level with `Octave`, `Accent` and `Slide` above, and at the end of its
@@ -1841,7 +1842,8 @@ phrase as it is, so it changes as you turn a setting or edit a row.
 **A new variation each pass.** A fill that draws from its seed, `Random`, `Walk`,
 `1/f`, `Acid`, `Shuffle`, `Grids` (its `Chaos`), `Divisions` (its dice), `Variation`, a
 `Wave` of `Random` or `Smooth`,
-a `Follow` that mutates, or any fill on rows chosen by `Chance`, one of Marbles' rhythms or a named `Rhythm`, has `Vary`: `Once`, as it's always been, the
+a `Follow` that mutates, a `Tonnetz` whose moves are `Random` or a `Loop`, or any fill on
+rows chosen by `Chance`, one of Marbles' rhythms or a named `Rhythm`, has `Vary`: `Once`, as it's always been, the
 same every time round; `Each pass`, a new roll each time the phrase comes round; or
 `Every 2 passes`, 4 or 8, so each variation plays that many times before the next,
 the way an Elektron's `1:4` condition keeps to the bars. Each pass's seed comes from
