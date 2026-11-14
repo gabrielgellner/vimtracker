@@ -13,6 +13,7 @@ use vt_model::step::Note;
 
 use crate::app::App;
 use crate::input::mode::Mode;
+use crate::input::typed::TypedValue;
 use crate::shaping::ShapePanel;
 use crate::theme;
 use crate::views::widgets::popup;
@@ -156,10 +157,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         let typing = current.then_some(panel.typing.as_ref()).flatten();
         let mut line = vec![Span::raw(format!("{:<labels$}", row.name()))];
         if current {
-            let text = typing.map_or_else(
-                || row.shown(&panel.shape, &context),
-                |text| format!("{text}_"),
-            );
+            let text = typing.map_or_else(|| row.shown(&panel.shape, &context), TypedValue::shown);
             let style = theme::cursor(if panel.typing.is_some() {
                 Mode::Insert
             } else {

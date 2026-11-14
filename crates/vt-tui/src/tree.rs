@@ -675,7 +675,7 @@ impl App {
     }
 
     fn commit_chain_row(&mut self) {
-        let text = std::mem::take(&mut self.modes.entry.text);
+        let text = self.modes.entry.text.take();
         self.modes.mode = Mode::Normal;
         let Some(chain) = self.chain_id() else {
             return;
