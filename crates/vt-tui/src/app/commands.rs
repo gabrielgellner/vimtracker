@@ -18,7 +18,7 @@ use vt_model::song::{Lane, Song};
 
 use crate::input::command::Line;
 
-use super::{App, Cursor, UNSAVED_NEW, UNSAVED_OPEN, folder_name, live_from, name_song};
+use super::{App, Cursor, READ_ONLY, UNSAVED_NEW, UNSAVED_OPEN, folder_name, live_from, name_song};
 
 impl App {
     /// Run a command line.
@@ -26,10 +26,10 @@ impl App {
         self.status.clear();
         match line {
             Line::Quit { force } => self.quit(force),
-            Line::Write(None) if self.folder.is_none() => {
+            Line::Write { path: None, .. } if self.folder.is_none() => {
                 self.open_naming_explorer(Purpose::Save, "w", String::new());
             }
-            Line::Write(path) => self.write(path),
+            Line::Write { path, force } => self.write(path, force),
             Line::Edit {
                 path: Some(path),
                 force,
@@ -156,6 +156,7 @@ impl App {
                         .to_owned()
                 };
             }
+            Line::ReadOnly(on) => self.set_read_only(on),
             Line::Seed(seed) => self.apply(&Action::SetSeed(seed)),
             Line::Groove(groove) => {
                 self.apply(&Action::SetGroove(groove));
@@ -265,10 +266,17 @@ impl App {
         }
     }
 
-    fn write(&mut self, path: Option<PathBuf>) {
+    /// Save, or save a copy to a new folder, which isn't read-only, so it can be carried on in. A
+    /// read-only song is written over in its own folder only when forced, as Vim's `:w!`, and stays
+    /// read-only (decision 313).
+    fn write(&mut self, path: Option<PathBuf>, force: bool) {
         let same = path
             .as_deref()
             .is_none_or(|p| Some(p) == self.folder.as_deref());
+        if same && self.read_only && !force {
+            self.status = READ_ONLY.to_owned();
+            return;
+        }
         let result = if same {
             match self.folder.clone() {
                 Some(folder) => {
@@ -285,6 +293,7 @@ impl App {
             let target = path.expect("a different path is present");
             let mut song = Song::clone(&self.song_to_save());
             song.name = folder_name(&target);
+            song.read_only = false;
             project::save_as(self.folder.as_deref(), &target, &song)
                 .map(|saved| (target, Some(saved)))
         };
@@ -296,10 +305,28 @@ impl App {
                 self.folder = Some(folder.clone());
                 self.dirty = false;
                 self.forget_autosave();
-                self.status = format!("Saved {}", folder.display());
+                self.status = if self.read_only {
+                    format!("Saved {}, which stays read-only", folder.display())
+                } else {
+                    format!("Saved {}", folder.display())
+                };
             }
             Err(error) => self.status = error.to_string(),
         }
+    }
+
+    /// `:set readonly` and `:set noreadonly`. Like the scale, it isn't an edit to undo, but it's
+    /// saved with the song, so switching it marks the song changed.
+    fn set_read_only(&mut self, on: bool) {
+        if self.read_only != on {
+            self.read_only = on;
+            self.dirty = true;
+        }
+        self.status = if on {
+            "Read-only: :w path saves a copy, :w! writes over it".to_owned()
+        } else {
+            "Not read-only: :w saves over it again".to_owned()
+        };
     }
 
     /// Open a project. Forced, unsaved changes are thrown away, autosave and all, as `:q!` does.
@@ -367,6 +394,7 @@ impl App {
         self.levels = live_from(&song);
         self.scale = song.scale;
         self.auto_jump = song.auto_jump;
+        self.read_only = song.read_only;
         self.folds = Folds::from_view(&song.view);
         self.send_live();
         self.history = History::new(Arc::new(song));

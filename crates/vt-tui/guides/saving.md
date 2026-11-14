@@ -5,6 +5,8 @@
 |---|---|
 | `:w` | Save |
 | `:w path` | Save to a new folder, with a copy of every sample |
+| `:w!` | Save, even over a read-only song |
+| `:set ro`, `:set noro` | Make the song read-only, or not |
 | `:e path` | Open a project |
 | `:e` | Choose a project to open |
 | `:e! path`, `:e!` | The same, discarding changes |
@@ -44,6 +46,25 @@ Renaming a project on the project page keeps its folder: `:w` still saves there,
 Save as starts with the new name. A project saved before it had a name takes its
 folder's.
 
+## Read-only songs
+
+A song can be parked read-only, so it can't be changed by accident, as Vim's `readonly`
+keeps a file. The tutorial's songs are, so a stray `:w` can't change the copies in the
+repository. `[RO]` on the status line, after the `*` for unsaved changes, and in the
+window's title says so.
+
+*   `:w` refuses: `This song is read-only: :w path saves a copy, :w! writes over it`.
+*   `:w path` saves a copy in a new folder, which isn't read-only, so you carry on in it
+    and `:w` saves there from then on.
+*   `:w!` writes over it anyway, on purpose, and it stays read-only.
+*   `:set readonly` or `:set ro` makes a song read-only, and `:set noreadonly` or
+    `:set noro` lets `:w` write over it again. Either is an unsaved change, saved with
+    the song, and isn't undone with `u`. The project page's `Read-only` row does the same.
+
+It's kept in `song.ron` rather than as the file's permission, which git doesn't keep.
+Autosave still writes a read-only song's work beside it, and restoring it after a crash
+puts it back as unsaved changes, never over the song: `:w path` or `:w!` keeps it.
+
 ## The project page
 
 `Space 9` opens the project page, which has two pages, as the track page has four, and
@@ -64,6 +85,7 @@ The Song page's rows:
 |---|---|---|
 | Name | The project's name | |
 | Folder | Where it's saved, and if it has changes | |
+| Read-only | Whether `:w` refuses to write over it | `:set ro` |
 | BPM | The tempo, and its fine part | `:bpm` |
 | Groove | The groove for tracks without their own | `:groove` |
 | Launch | When launched chains start | `:launch` |
@@ -86,7 +108,7 @@ It moves as the track page does: `j` `k` go between rows and keep their column,
 `gg` `G` to the first or last row, or row n with a count, `h` `l` between settings
 and `0` `$` to the first or last. `=` `-` `+` `_` change a value, as do `C-a` `C-x`
 and Cmd with `l` `h` `k` `j`, `i` types one, as its command takes it, `K` lists the choices on Groove, Edit, Launch, Scale, Root and Grid,
-and switches Auto-jump, and `x` puts one back as a new project has it.
+and switches Auto-jump and Read-only, and `x` puts one back as a new project has it.
 
 At the bottom are Save, Save as, Render, Open and New, which `Enter` does: they are
 `:w`, `:w` to a new folder, `:render`, `:e` and `:new`, and open the file explorer
@@ -206,6 +228,6 @@ and kits** has `kits import-ableton`.
 ## Autosave
 
 Unsaved work is written to `song.autosave.ron` every minute once the project
-has a folder. After a crash you are asked whether to restore it. `:w`, any
+has a folder, a read-only one too. After a crash you are asked whether to restore it. `:w`, any
 quit, `:e!`, `:new!` and answering no all remove it.
 <!-- ANCHOR_END: rest -->

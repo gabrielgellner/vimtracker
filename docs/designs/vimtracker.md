@@ -402,7 +402,7 @@ reloads.
 
 ```text
 Song                               song.ron, refused unless format_version is FORMAT_VERSION
- |- name, millibpm, seed, scale, limiter, launch, auto_jump, skip
+ |- name, millibpm, seed, scale, limiter, launch, auto_jump, skip, read_only
  |- groove, grooves[]              the project's groove, and up to 8 of its own
  |- bank                           01..FF -> BankEntry: label, name, edit
  |   '- SampleEdit                 timeline (one whole file for now), points, play, hints
@@ -1341,7 +1341,7 @@ the full `Song`. A different version is refused with a message naming both versi
 updating. There is no migration code. Steps are saved as one readable string per step.
 
 **Autosave.** Every 60 seconds, if changed, `song.autosave.ron` is written beside `song.ron` on the edit thread. On opening,
-if it is newer, the program offers to restore it.
+if it is newer, the program offers to restore it, as unsaved changes, so a read-only song (decision 313) is never written over by it.
 
 ### Risks
 

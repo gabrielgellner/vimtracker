@@ -134,7 +134,7 @@ const SHOTS: &[Shot] = &[
     Shot {
         name: "project",
         rows: GATES,
-        keys: " 9jj=l+++:set scale=dorian<Enter>:groove pull<Enter>",
+        keys: " 9jjj=l+++:set scale=dorian<Enter>:groove pull<Enter>",
         play: 0,
         voice: None,
         kick: false,

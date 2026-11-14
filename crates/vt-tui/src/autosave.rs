@@ -83,8 +83,15 @@ impl App {
                 self.replace_song(song, Some(folder));
                 self.dirty = true;
                 self.autosaved = Some(Arc::clone(self.song()));
+                // Restoring only puts the work back unsaved, so a read-only song's file is left as
+                // it is until it's written over on purpose (decision 313).
                 if self.status.is_empty() {
-                    self.status = "Restored unsaved work: :w keeps it".to_owned();
+                    self.status = if self.read_only {
+                        "Restored unsaved work to a read-only song: :w path keeps a copy, :w! writes over it"
+                    } else {
+                        "Restored unsaved work: :w keeps it"
+                    }
+                    .to_owned();
                 }
             }
             Err(error) => {
