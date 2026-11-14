@@ -1,0 +1,78 @@
+(
+    format: 1,
+    patch: (
+        macros: [
+            (
+                name: Some("Change"),
+                value: 9792,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "change",
+                        ),
+                        min: 32768,
+                        max: 32868,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Chance"),
+                value: 35904,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "ones",
+                        ),
+                        min: 32768,
+                        max: 32868,
+                    ),
+                ],
+            ),
+            (
+                name: Some("Length"),
+                value: 30464,
+                maps: [
+                    (
+                        target: Gen(
+                            column: Note,
+                            param: "length",
+                        ),
+                        min: 32769,
+                        max: 32784,
+                    ),
+                ],
+            ),
+        ],
+        generators: [
+            (
+                column: Note,
+                shape: (
+                    from: 62,
+                    to: 86,
+                    curve: 0,
+                    s: 0,
+                    kind: Ring,
+                    wave: Sine,
+                    rate: Time(Note(1920)),
+                    phase: 0,
+                    run: 1,
+                    values: [],
+                    place: AllRows,
+                    seed: 12,
+                    ring: (
+                        change: 15,
+                        chance: 55,
+                        length: 8,
+                    ),
+                ),
+            ),
+        ],
+    ),
+    tags: [
+        "generative",
+        "pitch",
+        "rhythm",
+    ],
+)

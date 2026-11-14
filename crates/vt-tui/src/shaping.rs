@@ -388,6 +388,7 @@ fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Sh
         vary: 0,
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
+        ring: vt_model::shape::Ring::default(),
     }
 }
 
@@ -1300,7 +1301,8 @@ impl App {
     }
 
     /// Roll a shape's seed again, as `r` does: with `Acid`'s pitches kept, only its second die,
-    /// the accents, slides and octaves.
+    /// the accents, slides and octaves; and a `Ring` starts again from its new seed, letting go of
+    /// a register it kept.
     pub(crate) fn roll(&mut self, shape: &mut Shape) {
         self.shape_seed = self.shape_seed.wrapping_add(1);
         let seed = self.shape_seed;
@@ -1308,6 +1310,7 @@ impl App {
             shape.acid.roll = shape.acid.roll.wrapping_add(seed).wrapping_add(1);
         } else {
             shape.seed = self.song().seed.wrapping_add(seed);
+            shape.ring.kept = None;
         }
     }
 

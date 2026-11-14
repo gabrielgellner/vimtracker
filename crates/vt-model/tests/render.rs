@@ -15,9 +15,10 @@ use vt_model::lfo::Rate;
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
-    Acid, Bar, Bits, Channel, Divisions, DrumPart, Edge, FillKind, Follow, GenCell, Grids,
-    MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_VALUES, MAX_WEIGHT, Mutations, Pink, Random, RowView,
-    Shape, ShapeColumn, Values, Variation, WAVES, Walk, WaveRate, Where, render_into, written_from,
+    Acid, Bar, Bits, Channel, Divisions, DrumPart, Edge, FillKind, Follow, GenCell, Grids, Kept,
+    MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_RING, MAX_VALUES, MAX_WEIGHT, Mutations, Pink, Random,
+    Ring, RowView, Shape, ShapeColumn, Values, Variation, WAVES, Walk, WaveRate, Where,
+    render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -317,6 +318,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         vary: 0,
         variation: Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
+        ring: vt_model::shape::Ring::default(),
     };
     // Settings added since are drawn from the seed, so the other draws, and the other fills'
     // hashes, stay as they were.
@@ -366,6 +368,26 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         bar: more.pick(&Bar::ALL),
         // At 1/16 or 1/32, whose rows are the bar's, so every fill writes what it wrote before.
         ticks: None,
+    };
+    // A ring at any pass, kept on one now and then.
+    let percent = |more: &mut Dice| match more.below(4) {
+        0 => 0,
+        1 => 100,
+        _ => more.below(101) as u8,
+    };
+    shape.ring = Ring {
+        change: percent(&mut more),
+        chance: percent(&mut more),
+        length: 1 + more.below(u64::from(MAX_RING)) as u8,
+        kept: more.chance(20).then(|| Kept {
+            bits: more.next() as u16,
+            pass: more.below(1000) as u32,
+        }),
+        pass: if more.chance(30) {
+            0
+        } else {
+            more.below(100_000) as u32
+        },
     };
     shape
 }
