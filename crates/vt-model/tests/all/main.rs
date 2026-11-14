@@ -16,6 +16,7 @@ mod kit;
 mod macro_generators;
 mod macros;
 mod marks;
+mod mod_fields;
 mod project;
 mod random_shapes;
 mod sample;

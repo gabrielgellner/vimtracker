@@ -8,8 +8,12 @@ use serde::{Deserialize, Serialize};
 use crate::envelope::{Adsr, Ahd, Drum, Envelope, Lpg, time_at, time_value};
 use crate::lfo::Lfo;
 use crate::settings::SettingId;
-use crate::steps::{MAX_MUTATE, MAX_STEP, STEPS, Steps};
+use crate::steps::Steps;
 use crate::tracking::Tracking;
+
+mod fields;
+
+pub use fields::*;
 
 /// How many mod slots a track has.
 pub const MOD_SLOTS: usize = 6;
@@ -43,66 +47,48 @@ impl ModKind {
         Self::Track,
     ];
 
+    /// Its description, which the rest of these read.
+    pub fn spec(self) -> &'static ModSpec {
+        &MOD_SPECS[self as usize]
+    }
+
     /// The name in the slot's title.
     pub fn name(self) -> &'static str {
-        match self {
-            Self::Adsr => "ADSR",
-            Self::Ahd => "AHD",
-            Self::Drum => "Drum",
-            Self::Lpg => "LPG",
-            Self::Lfo => "LFO",
-            Self::Steps => "Steps",
-            Self::Track => "Track",
-        }
+        self.spec().name
     }
 
     /// What it does, for the type picker.
     pub fn meaning(self) -> &'static str {
-        match self {
-            Self::Adsr => "held while the note is",
-            Self::Ahd => "a hold at full, for a time or the note",
-            Self::Drum => "a fast peak onto a body that decays",
-            Self::Lpg => "a vactrol's fall, closing the filter",
-            Self::Lfo => "a cycle, free or from each note",
-            Self::Steps => "up to 16 values, in time or a note each",
-            Self::Track => "the note, its velocity or a roll, each note",
-        }
+        self.spec().meaning
     }
 
     /// Whether it's an envelope, which each note starts and which can shape the notes themselves.
     pub fn is_envelope(self) -> bool {
-        matches!(self, Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg)
+        self.spec().envelope
     }
 
     /// Whether it has a mode, which its title shows after it: an envelope's curve, an LFO's and
     /// Steps' mode, and Track's source. A low-pass gate has none, as its curve is the point of it.
     pub fn has_mode(self) -> bool {
-        !matches!(self, Self::Lpg)
+        self.spec().title.contains(&ModField::Mode)
     }
 
     /// Whether it has a polarity to choose. Steps' values are signed, so they say which way
     /// themselves.
     pub fn has_polarity(self) -> bool {
-        self != Self::Steps
+        self.spec().title.contains(&ModField::Polarity)
     }
 
     /// What its mode is called, as the status line and the Roto name it.
     pub fn mode_label(self) -> &'static str {
-        match self {
-            Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg => "Curve",
-            Self::Lfo | Self::Steps => "Mode",
-            Self::Track => "Source",
-        }
+        self.spec().mode_label
     }
 
     /// Which way it moves what it reaches unless its slot says otherwise: an envelope rises from
     /// the setting, and an LFO swings around it, as before slots had a polarity. Track rises from
     /// it, as a velocity of none moves nothing.
     pub fn polarity(self) -> Polarity {
-        match self {
-            Self::Adsr | Self::Ahd | Self::Drum | Self::Lpg | Self::Track => Polarity::Uni,
-            Self::Lfo | Self::Steps => Polarity::Bi,
-        }
+        self.spec().polarity
     }
 }
 
@@ -360,35 +346,24 @@ impl ModSlot {
     }
 
     /// One of its type's own settings that macros and modulation move, by its place among the
-    /// registry's ([`SettingId::mod_own`]), as a value on the `00` to `FF` scale with a coarse byte
+    /// registry's ([`MOD_OWN_FIELDS`]), as a value on the `00` to `FF` scale with a coarse byte
     /// and a fine one, or none if its type hasn't that setting.
     pub fn own_value(&self, at: usize) -> Option<u16> {
-        let whole = |value: u8| u16::from(value) << 8;
-        let kind = self.kind;
-        Some(match at {
-            0 => time_value(match kind {
-                ModKind::Adsr => self.adsr.attack_ms,
-                ModKind::Ahd => self.ahd.attack_ms,
-                ModKind::Lpg => self.lpg.attack_ms,
+        let field = *MOD_OWN_FIELDS.get(at)?;
+        // Each of these is a byte, kept within its bounds.
+        let whole = |value: i32| (value.max(0) as u16) << 8;
+        Some(match field {
+            ModField::Attack | ModField::Decay | ModField::Release => {
+                time_value(self.field(field)? as u16)
+            }
+            ModField::Length => whole(self.field(field)? - 1),
+            ModField::Smooth => depth_value(self.field(field)? as i16),
+            ModField::Rate => match self.kind {
+                ModKind::Lfo => self.lfo.rate.place(),
+                ModKind::Steps => self.steps.rate.place()?,
                 _ => return None,
-            }),
-            1 => time_value(match kind {
-                ModKind::Adsr => self.adsr.decay_ms,
-                ModKind::Ahd => self.ahd.decay_ms,
-                ModKind::Drum => self.drum.decay_ms,
-                ModKind::Lpg => self.lpg.decay_ms,
-                _ => return None,
-            }),
-            2 if kind == ModKind::Adsr => whole(self.adsr.sustain),
-            3 if kind == ModKind::Adsr => time_value(self.adsr.release_ms),
-            4 if kind == ModKind::Drum => whole(self.drum.body),
-            5 if kind == ModKind::Lpg => whole(self.lpg.colour),
-            6 if kind == ModKind::Steps => whole(self.steps.length.saturating_sub(1)),
-            7 if kind == ModKind::Steps => whole(self.steps.mutate),
-            8 if kind == ModKind::Steps => depth_value(self.steps.smooth),
-            9 if kind == ModKind::Lfo => self.lfo.rate.place(),
-            9 if kind == ModKind::Steps => self.steps.rate.place()?,
-            _ => return None,
+            },
+            _ => whole(self.field(field)?),
         })
     }
 
@@ -398,9 +373,9 @@ impl ModSlot {
     pub fn own_shown(&self, at: usize, value: u16) -> Option<String> {
         let mut moved = *self;
         moved.set_own(at, f32::from(value) / 256.0);
-        match (at, self.kind) {
-            (9, ModKind::Lfo) => Some(moved.lfo.rate.to_string()),
-            (9, ModKind::Steps) => Some(moved.steps.rate.to_string()),
+        match (MOD_OWN_FIELDS.get(at)?, self.kind) {
+            (ModField::Rate, ModKind::Lfo) => Some(moved.lfo.rate.to_string()),
+            (ModField::Rate, ModKind::Steps) => Some(moved.steps.rate.to_string()),
             _ => None,
         }
     }
@@ -408,34 +383,26 @@ impl ModSlot {
     /// Set one of its type's own settings from a value on the `00` to `FF` scale, with any fine
     /// part as the fraction, kept to what the setting takes. One its type hasn't is left alone.
     pub fn set_own(&mut self, at: usize, value: f32) {
-        let whole = |top: u8| value.round().clamp(0.0, f32::from(top)) as u8;
-        let kind = self.kind;
-        match (at, kind) {
-            (0, ModKind::Adsr) => self.adsr.attack_ms = time_at(value),
-            (0, ModKind::Ahd) => self.ahd.attack_ms = time_at(value),
-            (0, ModKind::Lpg) => self.lpg.attack_ms = time_at(value),
-            (1, ModKind::Adsr) => self.adsr.decay_ms = time_at(value),
-            (1, ModKind::Ahd) => self.ahd.decay_ms = time_at(value),
-            (1, ModKind::Drum) => self.drum.decay_ms = time_at(value),
-            (1, ModKind::Lpg) => self.lpg.decay_ms = time_at(value),
-            (2, ModKind::Adsr) => self.adsr.sustain = whole(100),
-            (3, ModKind::Adsr) => self.adsr.release_ms = time_at(value),
-            (4, ModKind::Drum) => self.drum.body = whole(100),
-            (5, ModKind::Lpg) => self.lpg.colour = whole(0xFF),
-            (6, ModKind::Steps) => self.steps.length = whole(STEPS as u8 - 1) + 1,
-            (7, ModKind::Steps) => self.steps.mutate = whole(MAX_MUTATE),
-            (8, ModKind::Steps) => {
-                self.steps.smooth = depth_of(value).round().clamp(-MAX_STEP_F, MAX_STEP_F) as i16;
+        let Some(&field) = MOD_OWN_FIELDS.get(at) else {
+            return;
+        };
+        let whole = value.round() as i32;
+        match field {
+            ModField::Attack | ModField::Decay | ModField::Release => {
+                self.set_field(field, i32::from(time_at(value)));
             }
-            (9, ModKind::Lfo) => self.lfo.rate = self.lfo.rate.placed(value),
-            (9, ModKind::Steps) => self.steps.rate = self.steps.rate.placed(value),
-            _ => {}
+            // `00` is one step, as the registry lists them from 1.
+            ModField::Length => self.set_field(field, whole.saturating_add(1)),
+            ModField::Smooth => self.set_field(field, depth_of(value).round() as i32),
+            ModField::Rate => match self.kind {
+                ModKind::Lfo => self.lfo.rate = self.lfo.rate.placed(value),
+                ModKind::Steps => self.steps.rate = self.steps.rate.placed(value),
+                _ => {}
+            },
+            _ => self.set_field(field, whole),
         }
     }
 }
-
-/// The furthest a Steps value or its smoothing goes, as a float.
-const MAX_STEP_F: f32 = MAX_STEP as f32;
 
 /// What a new track's slots start as, today's three envelopes and three LFOs: the first envelope
 /// shapes each note and the second waits on the filter, and the rest start with nowhere to go.

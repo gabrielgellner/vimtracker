@@ -489,7 +489,11 @@ Song                               song.ron, refused unless format_version is FO
     Mod page, each a `ModSlot` of a type, `ModKind::Adsr`, `Ahd`, `Drum`, `Lpg`, `Lfo`, `Steps` or `Track`, with a destination
     setting, a depth, a switch and a polarity (`Uni` or `Bi`, its type's until one is chosen),
     which every type shares, and each type's own settings, which a
-    slot keeps while another type plays. The defaults are three ADSRs, then three LFOs. An LFO's
+    slot keeps while another type plays. Each type is described once, in `MOD_SPECS`
+    (`modulation/fields.rs`): its name, its mode's label, its polarity, and the `ModField`s of its
+    title and grid. `ModSlot::field` and `set_field` read and set a setting by what it is, the one
+    place that knows an ADSR's `Attack` from an AHD's, and `MOD_OWN_FIELDS` is the registry's order
+    of a type's own settings (#726). The defaults are three ADSRs, then three LFOs. An LFO's
     rate is a note division or bars, a count of steps, or hertz, its mode `Free`, `Trig`, `Hold`,
     `One` or `Half`, and its fade `Off` or in or out over a sweep's length after each note. An
     ADSR is in milliseconds, with a reset and a curve (`Exp`, `Lin` or `Snap`, its mode), and an
