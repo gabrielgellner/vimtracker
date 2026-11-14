@@ -51,6 +51,10 @@ pub struct Published {
     /// Whether any track can play at another speed than a sixteenth, so a fast track's steps can
     /// be worked out before the one before has landed.
     pub speeds: bool,
+    /// Whether any section has a length, so there's a next step to fire, which the engine asks
+    /// several times a run. One with a length and no chains is a rest, and one with neither is
+    /// skipped.
+    pub has_steps: bool,
     /// The steps under each live generator, which the engine renders a moving one from.
     pub(crate) unders: Unders,
     /// What the engine renders moving generators into, until it takes it.
@@ -91,6 +95,7 @@ impl Published {
                     .tracks
                     .iter()
                     .any(|track| track.speed != Speed::Sixteenth),
+            has_steps: song.sections.iter().any(|s| song.section_length(s) > 0),
             unders: Unders::of(&song, last.map(|last| (&*last.song, &last.unders))),
             scratch: ScratchSlot::new(GenScratch::for_song(&song)),
             song,

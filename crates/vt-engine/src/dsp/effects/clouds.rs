@@ -1,7 +1,8 @@
 //! Mutable Instruments' Clouds as the module plays: what comes in, with what's fed back, is
 //! recorded all the time into a buffer of the module's length for its quality, and one of three
 //! players reads it back: grains (`Granular`), two windows lined up where they match best
-//! (`Stretch`, WSOLA) or a delay that loops what it holds when frozen (`Looping`). After the
+//! (`Stretch`, WSOLA) or a delay that loops what it holds when frozen (`Looping`). Or its fourth
+//! mode, `Spectral`, takes what comes in apart with its phase vocoder (`spectral.rs`). After the
 //! player come Clouds' diffuser, its pitch shifter in `Looping`, its filters in `Stretch` and
 //! `Looping`, and its reverb, then the blend of what came in with all that.
 //!
@@ -10,7 +11,7 @@
 //! record and play at half the rate, through the module's resampling filter, as the module's do
 //! at 16 kHz, so their mu-law grit is band-limited as the module's is. The reverb is this
 //! program's `Reverb`, which is Clouds' own, tuned as the module tunes it, and the pitch shifter
-//! after the looping delay is `Pitch`'s, Clouds' own too. Its spectral mode is left out.
+//! after the looping delay is `Pitch`'s, Clouds' own too.
 //!
 //! Adapted from Clouds' `clouds/dsp/granular_processor.cc`, `granular_sample_player.h`,
 //! `grain.h`, `wsola_sample_player.h`, `window.h`, `correlator.cc`, `looping_sample_player.h`,
@@ -34,6 +35,8 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
 //! OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+mod spectral;
+
 use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2, PI, SQRT_2};
 
 use vt_model::insert::{Clouds as Settings, CloudsMode, shift_semitones};
@@ -43,6 +46,7 @@ use crate::dsp::blocks::smoother::{Smoothed, coefficient};
 use crate::dsp::effects::pitch_shifter::PitchShifter;
 use crate::dsp::effects::reverb::Reverb;
 use crate::rng::Pcg32;
+use spectral::{Spectral, SpectralControl};
 
 /// The rate the module runs at, which its times in samples are for.
 const CLOUDS_RATE: f32 = 32_000.0;
@@ -53,6 +57,12 @@ const RECORDING_SAMPLES: [usize; 4] = [32_696, 59_384, 65_400, 118_776];
 const MOST_RECORDED: usize = 130_800;
 /// How many grains can play at once in each quality, as the module has them.
 const GRAINS_OF_QUALITY: [usize; 4] = [32, 40, 46, 57];
+/// How many spectra `Spectral` keeps in each quality, as the module's memory holds them: two a side
+/// in stereo, six in mono.
+const TEXTURES_OF_QUALITY: [usize; 4] = [2, 6, 2, 6];
+/// How long what's playing fades out before `Spectral` starts or stops, and the next fades in, in
+/// seconds.
+const MODE_FADE: f32 = 0.01;
 const MOST_GRAINS: usize = 64;
 /// How much of what comes in is kept while frozen, to fade the recording back in when it starts
 /// again, and how long a frozen loop's ends fade, in the module's samples.
@@ -632,6 +642,7 @@ struct Control {
     /// How much of the fed back sound goes in, and how much reverb comes out.
     feedback_gain: f32,
     reverb_mix: f32,
+    spectral: SpectralControl,
 }
 
 /// Clouds: its recording, its players, what comes after them, and what moves them.
@@ -639,6 +650,10 @@ struct Control {
 pub struct Clouds {
     recording: Recording,
     mode: CloudsMode,
+    /// The mode it's going to, once what's playing has faded out, and how far faded in it is.
+    next_mode: CloudsMode,
+    fade: f32,
+    fade_step: f32,
     quality: u8,
     frozen: bool,
     grains: [Grain; MOST_GRAINS],
@@ -657,6 +672,7 @@ pub struct Clouds {
     search_source: i64,
     search_target: i64,
     correlator: Correlator,
+    spectral: Spectral,
     /// The looping delay: where it reads, and its loop and the fade from the last one.
     delay: f32,
     loop_phase: f32,
@@ -732,6 +748,9 @@ impl Clouds {
         let mut clouds = Self {
             recording: Recording::new(most, tail),
             mode: CloudsMode::Granular,
+            next_mode: CloudsMode::Granular,
+            fade: 1.0,
+            fade_step: 1.0 / (MODE_FADE * rate_f),
             quality: 0,
             frozen: false,
             grains: [Grain::IDLE; MOST_GRAINS],
@@ -748,6 +767,7 @@ impl Clouds {
             search_source: 0,
             search_target: 0,
             correlator: Correlator::new(),
+            spectral: Spectral::new(rate),
             delay: 0.0,
             loop_phase: 0.0,
             loop_point: 0.0,
@@ -825,12 +845,28 @@ impl Clouds {
     }
 
     /// How many quiet frames in a row mean nothing's left in it: its recording, its reverb's tail
-    /// and its pitch shifter's window. Frozen, what it holds can always come back, so it never is.
+    /// and its pitch shifter's window. Frozen, what it holds can always come back, so it never is;
+    /// nor in `Spectral`, whose kept spectra can hold a bin for minutes with `Density` low.
     pub fn quiet_frames(&self) -> u32 {
-        if self.frozen {
+        if self.frozen
+            || self.mode == CloudsMode::Spectral
+            || self.next_mode == CloudsMode::Spectral
+        {
             u32::MAX
         } else {
             ((self.seconds() + 1.5) * self.rate as f32) as u32
+        }
+    }
+
+    /// How many frames late what it makes comes out: in `Spectral`, a frame and a hop of its phase
+    /// vocoder, 160 ms, or 320 at 8 bits, as the module's; nothing to speak of in the others. The
+    /// blend's dry sound isn't delayed, and nothing else in the program waits for it.
+    pub fn latency(&self) -> u32 {
+        if self.mode == CloudsMode::Spectral {
+            let core = self.spectral.latency() as u32;
+            if self.low_fidelity() { core * 2 } else { core }
+        } else {
+            0
         }
     }
 
@@ -842,6 +878,8 @@ impl Clouds {
 
     pub fn clear(&mut self) {
         self.start_recording(self.quality);
+        self.switch_mode(self.next_mode);
+        self.fade = 1.0;
         self.reverb.clear();
         self.shifter.clear();
         for side in &mut self.diffuser {
@@ -883,6 +921,8 @@ impl Clouds {
         self.up = Resampler::QUIET;
         self.odd = false;
         self.ahead = [0.0; 2];
+        self.spectral
+            .reset(if self.mono() { 1 } else { 2 }, TEXTURES_OF_QUALITY[at]);
         let block = self.block as f32 * if self.low_fidelity() { 0.5 } else { 1.0 };
         self.playing_up = per_frame(0.9, block);
         self.playing_down = per_frame(0.2, block);
@@ -911,12 +951,11 @@ impl Clouds {
                 }
             }
         }
-        if settings.mode != self.mode {
+        self.next_mode = settings.mode;
+        if self.next_mode != CloudsMode::Spectral && self.mode != CloudsMode::Spectral {
             // Between these modes the module keeps its recording, and starts its filters and pitch
-            // shifter afresh.
-            self.mode = settings.mode;
-            self.reset_filters();
-            self.shifter.clear();
+            // shifter afresh. To or from `Spectral`, what's playing fades out first.
+            self.switch_mode(self.next_mode);
         }
         self.frozen = settings.freeze != 0;
         self.position.target = f32::from(settings.position) / 255.0;
@@ -928,6 +967,36 @@ impl Clouds {
         self.spread.target = f32::from(settings.spread) / 255.0;
         self.feedback.target = f32::from(settings.feedback) / 255.0;
         self.reverb_amount.target = f32::from(settings.reverb) / 255.0;
+    }
+
+    /// Start playing a mode, with its filters and pitch shifter afresh, and the phase vocoder empty.
+    fn switch_mode(&mut self, mode: CloudsMode) {
+        if mode == self.mode {
+            return;
+        }
+        self.mode = mode;
+        self.reset_filters();
+        self.shifter.clear();
+        if mode == CloudsMode::Spectral {
+            self.spectral.reset(
+                if self.mono() { 1 } else { 2 },
+                TEXTURES_OF_QUALITY[usize::from(self.quality)],
+            );
+        }
+        self.work_out_control();
+    }
+
+    /// Fade out what's playing before changing to or from `Spectral`, then fade the next in.
+    #[inline]
+    fn fade_modes(&mut self) {
+        if self.next_mode == self.mode {
+            self.fade = (self.fade + self.fade_step).min(1.0);
+        } else {
+            self.fade = (self.fade - self.fade_step).max(0.0);
+            if self.fade == 0.0 {
+                self.switch_mode(self.next_mode);
+            }
+        }
     }
 
     /// Move the reverb's wobbles to where they are this many frames in.
@@ -951,6 +1020,8 @@ impl Clouds {
             setting.settle();
         }
         self.freeze_fade = if self.frozen { 1.0 } else { 0.0 };
+        self.switch_mode(self.next_mode);
+        self.fade = 1.0;
         self.work_out_control();
         self.until_control = self.block;
         self.reverb.settle();
@@ -989,15 +1060,19 @@ impl Clouds {
         };
         let texture = control.texture;
         control.window_shape = if texture < 0.75 { texture * 1.333 } else { 1.0 };
-        control.diffusion = if self.mode == CloudsMode::Granular {
-            if texture > 0.75 {
-                (texture - 0.75) * 4.0
-            } else {
-                0.0
-            }
-        } else {
-            density
+        control.diffusion = match self.mode {
+            CloudsMode::Granular if texture > 0.75 => (texture - 0.75) * 4.0,
+            CloudsMode::Granular | CloudsMode::Spectral => 0.0,
+            CloudsMode::Stretch | CloudsMode::Looping => density,
         };
+        control.spectral = SpectralControl::new(
+            control.position,
+            control.size,
+            control.semitones,
+            density,
+            texture,
+            self.frozen,
+        );
 
         let feedback = control.feedback;
         control.feedback_gain = feedback * (1.0 - self.freeze_fade);
@@ -1377,6 +1452,10 @@ impl Clouds {
             CloudsMode::Granular => self.play_grains(),
             CloudsMode::Stretch => self.play_windows(),
             CloudsMode::Looping => self.play_loop(),
+            CloudsMode::Spectral => {
+                let control = self.control.spectral;
+                self.spectral.process(input, &control, &mut self.rng)
+            }
         }
     }
 
@@ -1388,6 +1467,12 @@ impl Clouds {
             self.until_control = self.block;
         }
         self.until_control -= 1;
+        // To or from `Spectral`, what's playing fades out, all that comes after its player too, so
+        // the pitch shifter's and filters' tails don't stop short, then the next mode fades in.
+        let fading = self.next_mode != self.mode || self.fade < 1.0;
+        if fading {
+            self.fade_modes();
+        }
         let control = self.control;
 
         let mut sound = input;
@@ -1422,13 +1507,15 @@ impl Clouds {
             self.core(sound)
         };
 
-        // The diffuser, which `Texture` or `Density` turns up.
-        for (side, allpasses) in self.diffuser.iter_mut().enumerate() {
-            let mut wet = out[side];
-            for allpass in allpasses {
-                wet = allpass.process(wet, DIFFUSER_SPREAD);
+        // The diffuser, which `Texture` or `Density` turns up, and `Spectral` doesn't have.
+        if self.mode != CloudsMode::Spectral {
+            for (side, allpasses) in self.diffuser.iter_mut().enumerate() {
+                let mut wet = out[side];
+                for allpass in allpasses {
+                    wet = allpass.process(wet, DIFFUSER_SPREAD);
+                }
+                out[side] += control.diffusion * (wet - out[side]);
             }
-            out[side] += control.diffusion * (wet - out[side]);
         }
         if self.mode == CloudsMode::Looping && !self.frozen {
             let window = (128.0 + 1919.0 * control.size * control.size * control.size) * self.scale;
@@ -1442,6 +1529,9 @@ impl Clouds {
                 }
                 out[side] = self.high_pass[side].process_all(out[side]).0;
             }
+        }
+        if fading {
+            out = out.map(|side| side * self.fade);
         }
         self.fed[self.fed_at] = out;
         self.fed_at += 1;
@@ -1613,7 +1703,11 @@ mod tests {
         // wobbles in phase as it does in `Pitch`.
         let window = 2047.0 / CLOUDS_RATE;
         let octave_hertz = (880.0 * window * 0.5_f32).round() * 2.0 / window;
-        for mode in CloudsMode::ALL {
+        for mode in [
+            CloudsMode::Granular,
+            CloudsMode::Stretch,
+            CloudsMode::Looping,
+        ] {
             let up = through(
                 Settings {
                     pitch: MOST_SHIFT + 12,
@@ -1635,6 +1729,108 @@ mod tests {
             );
             assert!(octave > 0.05, "{mode:?}: {octave}");
             assert!(left < octave * 0.3, "{mode:?}: {octave} {left}");
+        }
+    }
+
+    /// `Spectral` with its warp, updates and levels left as they are, and no random phases.
+    fn plain_spectral() -> Settings {
+        Settings {
+            size: 0x80,
+            density: 0x80,
+            texture: 0x80,
+            ..wet(CloudsMode::Spectral)
+        }
+    }
+
+    #[test]
+    fn spectral_shifts_an_octave() {
+        // A tone on a bin, whose phase turns a whole number of times a hop, so its bins an octave
+        // up turn as they should.
+        let hertz = 437.5;
+        for (shift, wanted) in [(12, hertz * 2.0), (-12, hertz / 2.0)] {
+            let out = through(
+                Settings {
+                    pitch: MOST_SHIFT.wrapping_add_signed(shift),
+                    ..plain_spectral()
+                },
+                hertz,
+            );
+            let (shifted, left) = (strength(&out, wanted), strength(&out, hertz));
+            assert!(shifted > 0.1, "{shift}: {shifted}");
+            assert!(left < shifted * 0.1, "{shift}: {shifted} {left}");
+        }
+    }
+
+    #[test]
+    fn spectral_comes_out_a_frame_and_a_hop_late() {
+        for quality in [0, 2] {
+            let settings = Settings {
+                quality,
+                ..plain_spectral()
+            };
+            let mut clouds = clouds(settings, RATE);
+            let late = clouds.latency() as usize;
+            let expected = if quality == 0 { 0.16 } else { 0.32 };
+            assert!(
+                (late as f32 / RATE as f32 - expected).abs() < 0.002,
+                "{quality}: {late}"
+            );
+            let start = RATE as usize / 4;
+            let out: Vec<f32> = (0..start + late * 2)
+                .map(|frame| {
+                    let tone = if frame < start {
+                        0.0
+                    } else {
+                        sine(frame, 330.0, RATE)
+                    };
+                    clouds.process([tone; 2])[0]
+                })
+                .collect();
+            // Within a few ms either side, as the 8-bit qualities' resampling filter delays it a
+            // little more.
+            let slack = RATE as usize / 200;
+            let before = rms(&out[start..start + late - slack]);
+            let after = rms(&out[start + late + slack..]);
+            // What comes before is the little the module's coarse phases smear ahead of it.
+            assert!(before < after * 0.03, "{quality}: {before} {after}");
+            assert!(after > 0.2, "{quality}: {after}");
+        }
+        assert_eq!(clouds(Settings::DEFAULT, RATE).latency(), 0);
+    }
+
+    #[test]
+    fn changing_to_and_from_spectral_fades_rather_than_clicks() {
+        for (from, to) in [
+            (CloudsMode::Granular, CloudsMode::Spectral),
+            (CloudsMode::Spectral, CloudsMode::Granular),
+            (CloudsMode::Looping, CloudsMode::Spectral),
+        ] {
+            let settings = |mode| Settings {
+                position: 0,
+                ..wet(mode)
+            };
+            let mut clouds = clouds(settings(from), RATE);
+            let mut frame = 0;
+            let mut largest_step = |clouds: &mut Clouds, frames: usize| {
+                let mut last = clouds.process([sine(frame, 110.0, RATE); 2])[0];
+                frame += 1;
+                let mut largest = 0.0_f32;
+                for _ in 1..frames {
+                    let out = clouds.process([sine(frame, 110.0, RATE); 2])[0];
+                    largest = largest.max((out - last).abs());
+                    last = out;
+                    frame += 1;
+                }
+                largest
+            };
+            let playing = largest_step(&mut clouds, RATE as usize);
+            clouds.follow(settings(to), 0);
+            let changing = largest_step(&mut clouds, RATE as usize / 20);
+            assert!(
+                changing <= playing * 1.5,
+                "{from:?} to {to:?}: {changing} {playing}"
+            );
+            assert_eq!(clouds.mode, to);
         }
     }
 

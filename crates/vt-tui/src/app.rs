@@ -27,7 +27,6 @@ use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::groove::GrooveId;
 use vt_model::history::History;
 use vt_model::kit::KitEntry;
-use vt_model::modulation::MOD_SLOTS;
 use vt_model::names::Names;
 use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
@@ -48,7 +47,7 @@ use crate::input::picker::Picker;
 use crate::jumping::FieldJump;
 use crate::recording::Recording;
 use crate::shaping::ShapePanel;
-use crate::track_page::{MIXER_START, TakenInsert, TrackPage};
+use crate::track_page::{MIXER_START, TrackPage};
 use crate::tree::{ChainColumn, Place};
 
 mod commands;
@@ -258,32 +257,10 @@ pub struct App {
     pub section_anchor: Option<usize>,
     /// What each track is launched onto and cued to, as the engine last said.
     pub jam: Vec<JamState>,
-    /// The track page: which of its pages shows, and where its cursor is.
+    /// The track page: which of its pages shows, where its cursor is, and the images it shows.
     pub track_page: TrackPage,
-    /// The terminal's images of the Mod page's slots, an envelope's shape or an LFO's cycle each,
-    /// by slot.
-    pub mod_images: Option<[u32; MOD_SLOTS]>,
-    /// Where each LFO's cycle was last drawn, for the terminal to place its dot on.
-    pub lfo_cycles_at: crate::views::track::CyclesAt,
-    /// The id of the image of the filter's curve, likewise.
-    pub filter_image: Option<u32>,
-    /// The id of the image of the waveform of the sample the cursor's track plays, if it has one.
-    pub waveform_image: Option<u32>,
-    /// The ids of the images of the FX page's slots, for those that have a drawing.
-    pub slot_images: [Option<u32>; vt_model::insert::INSERTS],
-    /// The id of the image of the zoomed slot's drawing, while the FX page is zoomed on one that
-    /// has one.
-    pub zoom_image: Option<u32>,
-    /// What's said under the zoomed slot's box: a delay's or a reverb's time scale.
-    pub zoom_caption: Option<String>,
-    /// The images of the Gen page's previews the terminal has, by each generator's place in its
-    /// phrase's list.
-    pub gen_images: Vec<Option<u32>>,
     /// The image of the mapping view's response the terminal has, while the view is open.
     pub mapping_image: Option<u32>,
-    /// Where each preview the Gen page drew is, its generator's place and its picture's top left,
-    /// for the terminal to place the row playing on.
-    pub gen_panels_at: Vec<(usize, (u16, u16))>,
     /// Where the sample page is, and the ids of the images of its waveform and its overview.
     pub sample_page: crate::sample_page::SamplePage,
     pub sample_images: Option<(u32, u32)>,
@@ -361,15 +338,6 @@ pub struct App {
     pub sampling: crate::sampling::Sampling,
     /// The main output's level.
     pub meter: Meter,
-    /// How far each FX slot of the cursor's track has turned down lately, in dB, for the mark its
-    /// gain reduction meter holds at the deepest.
-    pub slot_reduction: [crate::meter::Held; vt_model::insert::INSERTS],
-    /// What each FX slot of the cursor's track turned down over the last two bars, for the FX
-    /// page's zoom.
-    pub reduction_history: crate::meter::ReductionHistory,
-    /// The cursor's track's level right after its trim, each side's in dB, for the meter in its
-    /// Output device: where it is now and the highest it was lately.
-    pub after_trim: [crate::meter::Held; 2],
     /// The main output's recent sound, for the scope above the meter.
     pub scope: crate::scope::Scope,
     /// The id of the scope's image, and whether the last screen drawn had room for it.
@@ -463,8 +431,6 @@ pub struct App {
     pub(crate) shape_command: Option<(Selection, Field)>,
     /// The search for a setting under way.
     pub field_jump: Option<FieldJump>,
-    /// An effect taken out of a slot with `dd`, for `p` to put somewhere.
-    pub(crate) taken_insert: Option<TakenInsert>,
     /// Changes each time random values are wanted anew.
     pub(crate) shape_seed: u64,
     /// The sounds of the kit in use, to choose from for a track.
@@ -560,16 +526,7 @@ impl App {
             section_anchor: None,
             jam: vec![JamState::default(); MAX_TRACKS],
             track_page: TrackPage::default(),
-            mod_images: None,
-            lfo_cycles_at: Default::default(),
-            filter_image: None,
-            waveform_image: None,
-            slot_images: [None; vt_model::insert::INSERTS],
-            zoom_image: None,
-            zoom_caption: None,
-            gen_images: Vec::new(),
             mapping_image: None,
-            gen_panels_at: Vec::new(),
             sample_page: crate::sample_page::SamplePage::default(),
             sample_images: None,
             live: None,
@@ -624,9 +581,6 @@ impl App {
             recording: None,
             sampling: crate::sampling::Sampling::default(),
             meter: Meter::default(),
-            slot_reduction: [crate::meter::Held::new(0.0); vt_model::insert::INSERTS],
-            reduction_history: crate::meter::ReductionHistory::default(),
-            after_trim: [crate::meter::Held::new(crate::meter::FLOOR_DB); 2],
             scope: crate::scope::Scope::new(rate),
             scope_image: None,
             scope_shown: true,
@@ -680,7 +634,6 @@ impl App {
             mapping: None,
             shape_command: None,
             field_jump: None,
-            taken_insert: None,
             shape_seed: 0,
             kit: Vec::new(),
             kit_file: None,
@@ -1037,17 +990,18 @@ impl App {
         let reduction = self
             .live
             .map_or([0.0; vt_model::insert::INSERTS], |live| live.reduction);
-        for (held, now) in self.slot_reduction.iter_mut().zip(reduction) {
+        for (held, now) in self.track_page.slot_reduction.iter_mut().zip(reduction) {
             held.update(now, seconds);
         }
         let bpm = f64::from(self.song().millibpm) / 1000.0;
-        self.reduction_history
+        self.track_page
+            .reduction_history
             .update(track, reduction, seconds, bpm);
         // Only what was reported this frame, for this track, so it falls once nothing is.
         let trimmed = report
             .filter(|report| report.watched == track)
             .map_or([0.0; 2], |report| report.live.after_trim);
-        for (held, level) in self.after_trim.iter_mut().zip(trimmed) {
+        for (held, level) in self.track_page.after_trim.iter_mut().zip(trimmed) {
             held.update(crate::meter::to_db(level), seconds);
         }
         while let Some((track, pitch)) = self.handle.note_pitch() {

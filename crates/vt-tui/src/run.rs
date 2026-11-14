@@ -597,15 +597,15 @@ pub fn draw_screen(
     };
     // Only the Mod page's LFO cycles and the Gen page's previews have dots for the terminal to
     // place.
-    app.lfo_cycles_at = Default::default();
-    app.gen_panels_at = Vec::new();
+    app.track_page.lfo_cycles_at = Default::default();
+    app.track_page.gen_panels_at = Vec::new();
     match app.view {
         View::Chain => views::chain::draw(frame, view, app),
         View::Phrase => views::phrase::draw(frame, view, app),
         View::Track => {
-            let drawn = views::track::draw_finding_cycles(frame, view, app);
-            app.lfo_cycles_at = drawn.cycles;
-            app.gen_panels_at = drawn.previews;
+            let drawn = app.track_page.draw(frame, view, &app.ctx());
+            app.track_page.lfo_cycles_at = drawn.cycles;
+            app.track_page.gen_panels_at = drawn.previews;
         }
         View::Mixer => views::mixer::draw(frame, view, app),
         View::Audio => views::audio::draw(frame, view, app),

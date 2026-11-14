@@ -66,7 +66,7 @@ fn switch_value(app: &App, row: AudioRow, here: bool) -> Line<'static> {
         _ => app.roto.setting.on,
     };
     let switch = if here {
-        Span::styled(toggle::text(on), setting::style(app, true, false))
+        Span::styled(toggle::text(on), setting::style(&app.ctx(), true, false))
     } else {
         toggle::span(on)
     };
@@ -102,7 +102,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             AudioRow::WheelDirection if !app.wheel.setting.on && !here => {
                 Line::styled(value(app, row), theme::dim())
             }
-            _ => Line::styled(value(app, row), setting::style(app, here, false)),
+            _ => Line::styled(value(app, row), setting::style(&app.ctx(), here, false)),
         };
         rows.push(named(row.name(), line));
     }

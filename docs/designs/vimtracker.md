@@ -697,7 +697,7 @@ module per file, each keeping its port's licence notice:
 |---|---|---|
 | `voices/` | What makes a track's sound from its notes, and the parts only voices use | `acid`, `additive`, `braids_analog`, `braids_digital`, `braids_filter_fm`, `braids_noise`, `braids_physical`, `braids_parts` (how Braids' models run at twice the rate, its analog oscillator and waveshapers), `braids_vocal`, `braids_waves`, `chiptune`, `chord`, `chord_bank`, `drums`, `fm`, `four_op` (four operators in `wide`'s `f32x4` lanes, an operator a lane), `grain`, `kick`, `modal`, `noise`, `particle`, `phase_distortion`, `six_op`, `speech`, `string_model`, `supersaw` (its saws four at a time in `wide`'s `f32x4` lanes), `swarm`, `variable_shape`, `virtual_analog`, `virtual_analog_vcf`, `wave_terrain`, `waveshaping`, `waveshaping_tables`, `wavetable`, and `tables/` with Plaits' waves, DX7 patches and words and Braids' waves |
 | `filters/` | The track's filter and the character filters it switches between, and the slot effects that are filters | `filter`, `diode_filter`, `dirty_filter`, `korg35`, `comb`, `lpg`, `vowel` |
-| `effects/` | The other slot effects, and what plays a slot | `beads` (Mutable Instruments' Beads, whose grains are `granular`'s and whose wow and flutter are `tape`'s), `chorus`, `clouds` (Mutable Instruments' Clouds, whose reverb and pitch shifter are `reverb`'s and `pitch_shifter`'s), `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `space`, `spring`, `stutter`, `tape`, `warps`, and `tables/` with Warps' fold |
+| `effects/` | The other slot effects, and what plays a slot | `beads` (Mutable Instruments' Beads, whose grains are `granular`'s and whose wow and flutter are `tape`'s), `chorus`, `clouds` (Mutable Instruments' Clouds, whose reverb and pitch shifter are `reverb`'s and `pitch_shifter`'s, with its phase vocoder in `clouds/spectral`, on `realfft`), `delay`, `distort` (also `InsertState`, which plays whichever effect a slot has, and `Mono`, what each effect says it does with a sound the same on both sides, decision 147), `exciter`, `flanger`, `freq_shifter`, `granular`, `memory` (the pool of long buffers effects take), `pedal` (`Distort`'s guitar pedals, `Overdrive` and `Distortion`), `phaser`, `pitch_shifter`, `plate`, `resonator`, `reverb`, `rotary`, `space`, `spring`, `stutter`, `tape`, `warps`, and `tables/` with Warps' fold |
 | `dynamics/` | The mixing tools | `compressor` (the `Comp` slot, an enum of its types, the `Auto` and `Makeup` they share, and `Clean`), `console` (its `Console` type, fitted to Bus FORCE), `glue` (its `Glue` type, fitted to Live's Glue Compressor, and the `Peak Clip` the slot runs after its mix), `limiter`, `eq` |
 | `blocks/` | Small parts the others share, which use nothing else in `dsp` | `oversampler` (also its `Decimator`, for a sound made at twice the rate), `sides` (a state for each side, worked out once for both while a sound is the same on both, as every `OneSide` effect keeps its own), `smoother`, `sine_table`, `plaits_parts` |
 
@@ -814,17 +814,32 @@ built from, so a new page uses them rather than working out its layout again:
         meter's cells inside and a caption in the bottom border, such as `GR`.
 
 **The track page** (`track_page.rs` and `track_page/`, decision 145) is the first page that's a
-component (#320). `App::track_page` is a `TrackPage`: the page showing (`Page`: Sound, Mod or FX),
-the cursor's row and field, the field `j` and `k` aim for, whether it's on a value's fine
+component (#320). `App::track_page` is a `TrackPage`: the page showing (`Page`: Sound, Mod, FX or
+Gen), the cursor's row and field, the field `j` and `k` aim for, whether it's on a value's fine
 digits, and where it was left on each of the other pages, which `TrackPage::show` goes back to
-(decision 209). Its methods are given the cursor's track (`App::track_here`) and read no `App`:
-`TrackPage::rows`, `place`, `control`, `devices` and `device_cursor` say where the cursor is and on
-what, and `TrackPage::key` runs the page's own keys, the moves, `{` and `}` and the pages either
-side, returning an `Outcome`: done, refused with a reason for the status line, or passed back.
-`App::run_track_page` settles the cursor, hands each key to `TrackPage::key`, and runs what's passed
-back itself, the edits, which change the song: `editing.rs` (`=`, `-`, the fine digits and `x`),
-`pickers.rs` (`K`) and `typing.rs` (`i`), with `b`, `dd` and `p` in `fx.rs`. `App::track_control`
-is the control under the cursor on the track page or the mixer, whose own cursor is in `mixer.rs`.
+(decision 209); whether the FX page is zoomed; the ids of the terminal's images it shows (the Mod
+page's slots, the filter's curve, the sample's thumbnail, the FX page's slots and zoom, the Gen
+page's previews), which `Graphics::sync` fills in, and where it last drew the pictures that carry a
+dot; the effect `dd` took, for `p`; and the cursor's track's meters it shows, held as they fall
+(each slot's gain reduction and its two bars of history, and the level after the trim), which
+`App::tick` brings up to date from the engine's report. Its methods are given the cursor's track
+(`App::track_here`) and read no `App`: `TrackPage::rows`, `place`, `control`, `devices` and
+`device_cursor` say where the cursor is and on what, and `TrackPage::key` runs the page's own keys,
+the moves, `{` and `}` and the pages either side, returning an `Outcome`: done, refused with a
+reason for the status line, or passed back. What else it reads of the program comes through a `Ctx`
+(`page.rs`), which borrows the shared services: the song and the cursor's place in it, the view
+and the modes that span pages (the mode, what Insert has typed, a field jump's labels), and what
+the engine last reported (the transport, the live values, where each track is and what it's
+launched onto, the faders, the live generators). `App::ctx` lends one. `TrackPage::run` puts the
+cursor where it's seen and runs one of its own keys, and `TrackPage::draw` draws the page
+(`views/track.rs` and `views/track/`), giving back where its pictures with dots are;
+`views::track::draw` draws the program's own from an `App`, as the tests do.
+`App::run_track_page` hands each key to `TrackPage::run`, on a copy of the page as the `Ctx` it's
+given reads the rest of the program, and runs what's passed back itself, the edits, which change
+the song: `editing.rs` (`=`, `-`, the fine digits and `x`), `pickers.rs` (`K`) and `typing.rs`
+(`i`), with `b`, `dd` and `p` in `fx.rs`. They're shared with the mixer, which turns the same
+controls. `App::track_control` is the control under the cursor on the track page or the mixer,
+whose own cursor is in `mixer.rs`.
 
 *   **Each page's settings in its own file:** `sound.rs` has the Sound page's devices on a sound
     track and the fixed tracks' Outputs, `modulation.rs` the Mod page's devices, and
@@ -903,7 +918,7 @@ kept out of the undo history: the song's `view` (`vt_model::view::ViewState`) is
 `App::folds` when a song opens and written back by `song_to_save`, and `App::fold_group` sets one
 from code (decision 305).
 
-**Where it's going** (#320, the track page's cursor and moves done). Each page becomes a component that owns its state, keys
+**Where it's going** (#320, the track page's state, its own keys and its drawing done). Each page becomes a component that owns its state, keys
 and drawing, `TrackPage`, `ProjectPage`, `MixerPage`, `SamplePage`, `SongView` and the phrase and
 chain views among them, with `fn key(&mut self, key, ctx: &mut Ctx) -> Outcome` and
 `fn draw(&self, frame, area, ctx: &Ctx)`. `Ctx` borrows the services every page shares: the song and
@@ -911,8 +926,10 @@ history, the engine's handle, the sample pool and analyses, graphics, settings a
 `App` shrinks to those services, the current view, the modes and popups that span pages (the picker,
 the command line and help) and the jump list, and the feature files become methods on the page or
 service they belong to. It goes a page per PR, the track page first, with keys, drawing and
-screenshots unchanged. `TrackPage` has its state and the keys that need only the cursor's track,
-given to it rather than borrowed through a `Ctx`, while its edits are still `impl App` blocks;
+screenshots unchanged. `TrackPage` has its state, its own keys and its drawing, with a `Ctx` that
+reads the shared services through `App` for now, so the page can be drawn while `App` still holds
+it; its edits are still `impl App` blocks, shared with the mixer, and moving them needs a `Ctx`
+that can apply actions;
 `SamplePage` is half there too: it keeps its own cursor, zoom, scroll,
 selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
 in `placing.rs` and `sample_settings.rs` for editing its points and settings.
@@ -1634,6 +1651,7 @@ These applied to every issue of M1 to M3, as first written. Some rows have been 
 | `ron` | 0.12.3 | `vt-model` |
 | `hound` | 3.5.1 | `vt-model`, `vt-engine` |
 | `rubato` | 5.0.0 | `vt-model` |
+| `realfft` | 3.5.1 | `vt-model`, `vt-engine` |
 | `thiserror` | 2.0.20 | `vt-model`, `vt-engine` |
 | `rtrb` | 0.4.1 | `vt-engine` |
 | `wide` | 1.7.1 | `vt-engine` |

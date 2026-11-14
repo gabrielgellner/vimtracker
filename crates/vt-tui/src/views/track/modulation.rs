@@ -14,10 +14,10 @@ use vt_model::modulation::{MOD_SLOTS, ModKind};
 use vt_model::song::Track;
 use vt_model::steps::MAX_STEP;
 
-use crate::app::App;
+use crate::page::Ctx;
 use crate::theme;
 use crate::track_page::{
-    Control, DeviceSpec, DeviceWidth, ModField, Page, modulator_bypassed, rack_places,
+    Control, DeviceSpec, DeviceWidth, ModField, Page, TrackPage, modulator_bypassed, rack_places,
 };
 use crate::views::widgets::bar::ValueBar;
 use crate::views::widgets::device::{Device, rack_areas};
@@ -43,8 +43,8 @@ const ARPEGGIO_CELLS: CellWidths = CellWidths {
 };
 
 /// Which mod slot the cursor is on, if any.
-pub(crate) fn mod_being_edited(app: &App) -> Option<usize> {
-    match app.track_control() {
+pub(crate) fn mod_being_edited(page: &TrackPage, ctx: &Ctx) -> Option<usize> {
+    match page.control_here(ctx) {
         Control::Mod(slot, _) => Some(slot),
         _ => None,
     }
@@ -61,7 +61,8 @@ const TO: &str = "→ ";
 
 /// What the Mod page's cells show for a modulator's settings.
 struct ModCells<'a> {
-    app: &'a App,
+    page: &'a TrackPage,
+    ctx: &'a Ctx<'a>,
     track: &'a Track,
 }
 
@@ -69,14 +70,14 @@ impl CellSource for ModCells<'_> {
     type Id = Control;
 
     fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let labels = jump_label(self.app, control);
-        name_line(self.app, control.label_on(self.track), &labels, room)
+        let labels = jump_label(self.ctx, control);
+        name_line(self.ctx, control.label_on(self.track), &labels, room)
     }
 
     fn value(&self, control: Control) -> Line<'static> {
-        let here = control == self.app.track_control();
+        let here = control == self.page.control_here(self.ctx);
         value_line(
-            self.app,
+            self.ctx,
             self.track,
             control,
             here,
@@ -101,20 +102,25 @@ fn goes_nowhere(control: Control, track: &Track) -> bool {
 
 /// A slot's title controls, each in its own style: its type, its mode, and its destination after
 /// an arrow in the destination's style.
-fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'static>> {
-    let current = app.track_control();
+fn title_controls(
+    page: &TrackPage,
+    ctx: &Ctx,
+    track: &Track,
+    device: &DeviceSpec,
+) -> Vec<Line<'static>> {
+    let current = page.control_here(ctx);
     device
         .title
         .iter()
         .flatten()
         .map(|control| {
             let here = *control == current;
-            let text = setting::text(app, here, || value(*control, track, app.song()));
+            let text = setting::text(ctx, here, || value(*control, track, ctx.song()));
             let nowhere = goes_nowhere(*control, track);
-            let style = setting::style(app, here, nowhere);
-            let mut spans = value_spans(app, *control, text, style);
+            let style = setting::style(ctx, here, nowhere);
+            let mut spans = value_spans(ctx, *control, text, style);
             if matches!(control, Control::Mod(_, ModField::Destination)) {
-                let arrow = setting::style(app, false, nowhere);
+                let arrow = setting::style(ctx, false, nowhere);
                 spans.insert(0, Span::styled(TO, arrow));
             }
             Line::from(spans)
@@ -201,15 +207,16 @@ fn bar_cell(value: i16, row: usize) -> char {
 fn draw_device(
     frame: &mut Frame,
     area: Rect,
-    app: &App,
+    page: &TrackPage,
+    ctx: &Ctx,
     track: &Track,
     device: &DeviceSpec,
     focused: bool,
 ) -> Option<(u16, u16)> {
     let bypassed = device.switchable
         && device.title[0].and_then(|control| modulator_bypassed(control, track)) == Some(true);
-    let fade = bypassed.then(|| theme::cursor(app.mode));
-    let mut controls = title_controls(app, track, device);
+    let fade = bypassed.then(|| theme::cursor(ctx.mode()));
+    let mut controls = title_controls(page, ctx, track, device);
     if let Some(keep) = fade {
         controls = controls.into_iter().map(|line| faded(line, keep)).collect();
     }
@@ -222,9 +229,9 @@ fn draw_device(
     let mut marked = None;
     let (panel, lfo) = match device.title[0] {
         Some(Control::Mod(slot, _)) if track.mods[slot].kind == ModKind::Steps => {
-            let playing = app.live.and_then(|live| live.steps[slot]);
+            let playing = ctx.live().and_then(|live| live.steps[slot]);
             let (panel, first) = steps_panel(track, slot, playing, bypassed);
-            if let Control::Mod(at, ModField::Step(step)) = app.track_control()
+            if let Control::Mod(at, ModField::Step(step)) = page.control_here(ctx)
                 && at == slot
             {
                 marked = Some(first + usize::from(step));
@@ -232,7 +239,7 @@ fn draw_device(
             (panel, false)
         }
         Some(Control::Mod(slot, _)) => (
-            panel(app.mod_images.map(|ids| ids[slot])),
+            panel(page.mod_images.map(|ids| ids[slot])),
             matches!(track.mods[slot].kind, ModKind::Lfo | ModKind::Track),
         ),
         _ => (GraphicPanel::new(), false),
@@ -254,7 +261,7 @@ fn draw_device(
         if let Some(column) = marked {
             let place = (inside.0 + column as u16, inside.1 + MOD_PANEL_HEIGHT as u16);
             if let Some(cell) = frame.buffer_mut().cell_mut(place) {
-                let colour = theme::cursor(app.mode).bg.unwrap_or(theme::ROSEWATER);
+                let colour = theme::cursor(ctx.mode()).bg.unwrap_or(theme::ROSEWATER);
                 cell.set_char('▲').set_style(Style::new().fg(colour));
             }
         }
@@ -275,7 +282,7 @@ fn draw_device(
                 .collect()
         })
         .collect();
-    let source = ModCells { app, track };
+    let source = ModCells { page, ctx, track };
     let grid = SettingsGrid::new(&source, rows, widths).faded(fade);
     frame.render_widget(grid, settings);
     cycle_at
@@ -284,11 +291,16 @@ fn draw_device(
 /// The Mod page: its devices in their rack, two to a band. Four bands fill the rows inside the
 /// keyboard's box; where fewer fit, the page goes by whole bands to keep the cursor's in view. It
 /// gives back where each LFO's cycle is drawn.
-pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) -> CyclesAt {
+pub(super) fn draw(
+    frame: &mut Frame,
+    area: Rect,
+    page: &TrackPage,
+    ctx: &Ctx,
+    track: &Track,
+) -> CyclesAt {
     let devices = Page::Mod.devices(track);
     let places = rack_places(&devices);
-    let cursor = app
-        .track_page
+    let cursor = page
         .device_cursor(Some(track))
         .map_or(0, |cursor| cursor.device);
     let keep = places.get(cursor).map_or(0, |place| place.band);
@@ -309,7 +321,7 @@ pub(super) fn draw(frame: &mut Frame, area: Rect, app: &App, track: &Track) -> C
         let Some(shown) = shown else {
             continue;
         };
-        let cycle_at = draw_device(frame, shown, app, track, device, at == cursor);
+        let cycle_at = draw_device(frame, shown, page, ctx, track, device, at == cursor);
         if let Some(Control::Mod(slot, _)) = device.title[0] {
             cycles[slot] = cycle_at;
         }

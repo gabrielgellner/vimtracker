@@ -344,8 +344,7 @@ impl Engine {
     /// Whether any section has a length, so there's a next step to fire. One with a length and no
     /// chains is a rest, and one with neither is skipped.
     pub(super) fn has_steps(&self) -> bool {
-        let song = &self.current.song;
-        song.sections.iter().any(|s| song.section_length(s) > 0)
+        self.current.has_steps
     }
 
     /// The section playing. Removing one while playing moves to whichever takes its place.
