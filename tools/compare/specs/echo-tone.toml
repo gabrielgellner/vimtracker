@@ -1,0 +1,95 @@
+# How the Space Echo's repeats darken against Delay TAPE-201's (#712, decision 337): a quiet click
+# through the first head fed back at 0.8, each repeat's spectrum against the click's, so the first
+# repeat shows the head and each after it what a trip round the loop takes; at the tape's 400 ms,
+# where the head's low-pass is at its darkest, at 150 ms, at 100 ms, where it has opened, and
+# with the tone controls at their ends.
+#
+#   uv run run.py specs/echo-tone.toml --report out/echo-tone.html
+
+rate = 48000
+
+[input]
+signal = "impulse"
+level = -34.0
+seconds = 2.5
+
+[ours]
+effects = ["echo"]
+
+[ours.settings]
+1.echo.mode = 0
+1.echo.rate = 0x33
+1.echo.intensity = 0xAA
+1.echo.wow = 0x00
+1.echo.reverb = 0x00
+1.echo.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Delay TAPE-201.vst3"
+buffer_size = 512
+preset = "Default"
+preroll = 3.0
+
+[reference.parameters]
+rates_sync = false
+rates_link = true
+mode_selector = "1"
+repeat_rate_left_ms = 400.0
+repeat_rate_right_ms = 400.0
+dry_wet = 1.0
+echo_amount = 1.0
+reverb_amount = 0.0
+intensity = 0.8
+flutter = 0.0
+noise = 0.0
+input_drive_db = 0.0
+stereo_width = 0.0
+stereo_rate_offset = 0.0
+bass = 0.0
+treble = 0.0
+delay_type = "L/R"
+input_eq_on_off = false
+lfo_destination = "None"
+
+[report]
+kind = "echo"
+measure = "tone"
+at = 0.0
+period = 0.4
+count = 3
+title = "Space Echo's darkening against TAPE-201"
+about = """
+A click at -34 dBFS, too quiet to saturate, through the first head alone, all wet, fed back at \
+TAPE-201's `Intensity` 0.8, our `AA`, with no wow. The first repeat has been through the tape \
+once, its record and playback heads; each after it once more round the loop. The tape runs at \
+400 ms, our `Rate` `33`, where the head is darkest, and the tone controls are flat but in the \
+last two cases, at their ends.
+"""
+
+[[cases]]
+name = "flat"
+
+[[cases]]
+name = "bass-up"
+ours = { 1.echo.bass = 0xFF }
+reference = { bass = 1.0 }
+
+[[cases]]
+name = "bass-down"
+ours = { 1.echo.bass = 0x00 }
+reference = { bass = -1.0 }
+
+[[cases]]
+name = "treble-up"
+ours = { 1.echo.treble = 0xFF }
+reference = { treble = 1.0 }
+
+[[cases]]
+name = "treble-down"
+ours = { 1.echo.treble = 0x00 }
+reference = { treble = -1.0 }
+
+[[cases]]
+name = "treble-half"
+ours = { 1.echo.treble = 0xC0 }
+reference = { treble = 0.5 }

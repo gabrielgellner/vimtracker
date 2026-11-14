@@ -150,6 +150,13 @@ edited.
 | `live-pedal-overdrive-drive` | `Overdrive` at five `Amount`s, stepped levels from -60 dBFS at 110 Hz, 300 Hz and 1 kHz | Pedal, Overdrive, at five Drives | THD and the 2nd and 3rd harmonics (`distortion`) |
 | `live-pedal-distortion` | Distort's `Distortion`, the same | Pedal, Distortion, and Dist OPAMP-21 | the same |
 | `live-pedal-riff` | the same song line through `Overdrive` and `Distortion` | Pedal in both modes | the long-term spectrum and dynamics (`spectrum`) |
+| `echo-taps` | the Space Echo's modes at 150 ms, and its first head at its slowest and fastest | Delay TAPE-201 | each repeat of a click, its time and level (`echo`, `taps`) |
+| `echo-tone` | the first head fed back at 0.8, flat and with `Bass` and `Treble` at their ends | Delay TAPE-201 | each repeat's spectrum, and what a trip round the loop takes (`echo`, `tone`) |
+| `echo-speed` | the first head alone at first heads from 1 s to 10 ms | Delay TAPE-201 | the one repeat's spectrum, as the head opens with speed (`echo`, `tone`) |
+| `echo-saturation` | the first head at 10 ms, stepped levels at 110 Hz and 1 kHz, `Input` at `80` and `C0` | Delay TAPE-201, `Input Drive` 0 and 12 dB | THD and the 2nd and 3rd harmonics (`distortion`) |
+| `echo-wow` | a held 1 kHz sine at four `Wow`s, and at the full amount at 500 and 50 ms | Delay TAPE-201's `Flutter` | the pitch over time, its RMS and its strongest wobble (`echo`, `wow`) |
+| `echo-runaway` | a click at `Intensity` from 0.5 to 1.2 on TAPE-201's scale | Delay TAPE-201 | the level after it, for where it runs away (`echo`, `growth`) |
+| `echo-reverb` | the reverb alone, mode `12` | Delay TAPE-201's `Reverb Only` | when it's heard, how loud and how long it rings (`echo`, `decay`) |
 
 The `filter-taper-*` specs are written by `taper_specs.py`, which sets our Res against Cytomic's
 The Drop's: our knob's first 85%, `00` to `D9`, against its 0 to 100%, and the rest against its
@@ -275,11 +282,34 @@ difference is taken out. Its input is usually a `file` that `made_by` renders fi
 another spec's case, such as `nuance-chirp-riff`'s song line, written where the input reads it, so
 every side is given the same samples and only the effect differs.
 
+An `echo` report reads a tape delay by its `measure` (decision 337): `taps`, every peak of a
+click's output within 40 dB of its loudest and 4 ms from a louder one, as each repeat's time and
+level (`measure.echo_taps`); `tone`, each repeat's power in third octaves over 0.3 s around it,
+`period` apart, against the click's, so the first shows the heads and the change from each to the
+next what a trip round the loop takes, or with a `period` of 0 the whole of one repeat
+(`tap_tones`); `growth`, the RMS over each half second after a click, and how fast it changes
+from 1 to 5 s while it's above -130 dBFS; `wow`, a held tone's pitch every millisecond from its
+analytic signal's phase, its RMS in cents and the rate of its strongest wobble (`pitch_cents`); and
+`decay`, a reverb's RMS over each 50 ms, when it's first heard, how loud early on and how fast it
+falls after half a second.
+
 The Arturia distortions are started from their `Default` preset as Acid V is. Dist OPAMP-21, after
 Tech 21's SansAmp, is compared in its `Modern` mode, which Arturia describes as having no colouring
 or EQ, with its post EQ off, so its clip is heard alone, and in its `Normal` mode, the SansAmp's own
 voicing, for its EQ. Its output falls back from an offset over about 120 ms once a note stops, as
 a coupling capacitor of about 1.3 Hz would.
+
+Arturia's Delay TAPE-201 is started from its `Default` preset too, with `rates_sync` off so its
+`Repeat Rate` is in ms, `noise` 0, `delay_type` `L/R`, its stereo offsets, input EQ and LFO off,
+and `dry_wet` at 1. Its names against the Space Echo's: `repeat_rate_left_ms` and `_right_ms`,
+the first head's delay, are `Rate` (`69` is 150 ms; `rates_link` keeps the sides together);
+`mode_selector` is `Mode`, its `Reverb Only` our `12`; `intensity`, 0 to 1.2, is `Intensity`, `00`
+to `FF`; `echo_amount` and `reverb_amount` are `Echo` and `Reverb`; `input_drive_db` is `Input`,
+±24 dB around `80` where TAPE-201's goes from -60; `flutter` is `Wow`; `motor_inertia` is
+`Inertia`; and `bass` and `treble`, -1 to 1, are `Bass` and `Treble` around `80`. Its motor glides
+to a new `Repeat Rate` from one case to the next even after a reset, so its specs give it three
+seconds' `preroll` to get there. It never falls quite silent: a click that dies away levels off at
+about -122 dBFS, which the `echo` report's `growth` reads past.
 
 ### The consensus
 

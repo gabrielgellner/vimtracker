@@ -1,0 +1,94 @@
+# Where the Space Echo runs away against Delay TAPE-201 (#712, decision 337): one click through the
+# first head at 150 ms, then twelve seconds of silence, at `Intensity` from TAPE-201's 0.8 to its
+# top, 1.2: below about 1.05 the repeats die away, past it they grow until the tape holds them.
+#
+#   uv run run.py specs/echo-runaway.toml --report out/echo-runaway.html
+
+rate = 48000
+
+[input]
+signal = "impulse"
+level = -12.0
+seconds = 12.0
+
+[ours]
+effects = ["echo"]
+
+[ours.settings]
+1.echo.mode = 0
+1.echo.rate = 0x69
+1.echo.wow = 0x00
+1.echo.reverb = 0x00
+1.echo.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Delay TAPE-201.vst3"
+buffer_size = 512
+preset = "Default"
+preroll = 3.0
+
+[reference.parameters]
+rates_sync = false
+rates_link = true
+mode_selector = "1"
+repeat_rate_left_ms = 150.0
+repeat_rate_right_ms = 150.0
+dry_wet = 1.0
+echo_amount = 1.0
+reverb_amount = 0.0
+flutter = 0.0
+noise = 0.0
+input_drive_db = 0.0
+stereo_width = 0.0
+stereo_rate_offset = 0.0
+bass = 0.0
+treble = 0.0
+delay_type = "L/R"
+input_eq_on_off = false
+lfo_destination = "None"
+
+[report]
+kind = "echo"
+measure = "growth"
+title = "Where the Space Echo runs away, against TAPE-201"
+about = """
+A click at -12 dBFS through the first head alone at 150 ms, all wet, with no wow, then silence, at \
+TAPE-201's `Intensity` 0.8, 0.95, 1.0, 1.05, 1.1 and 1.2, our `AA`, `CA`, `D5`, `DF`, `EA` and \
+`FF`, its 0 to 1.2 on our `00` to `FF`. Where the loop keeps more than it loses at the frequency it \
+keeps most, the repeats grow, until the record head's saturation holds them.
+"""
+
+[[cases]]
+name = "0.50"
+ours = { 1.echo.intensity = 0x6A }
+reference = { intensity = 0.5 }
+
+[[cases]]
+name = "0.80"
+ours = { 1.echo.intensity = 0xAA }
+reference = { intensity = 0.8 }
+
+[[cases]]
+name = "0.95"
+ours = { 1.echo.intensity = 0xCA }
+reference = { intensity = 0.95 }
+
+[[cases]]
+name = "1.00"
+ours = { 1.echo.intensity = 0xD5 }
+reference = { intensity = 1.0 }
+
+[[cases]]
+name = "1.05"
+ours = { 1.echo.intensity = 0xDF }
+reference = { intensity = 1.05 }
+
+[[cases]]
+name = "1.10"
+ours = { 1.echo.intensity = 0xEA }
+reference = { intensity = 1.1 }
+
+[[cases]]
+name = "1.20"
+ours = { 1.echo.intensity = 0xFF }
+reference = { intensity = 1.2 }
