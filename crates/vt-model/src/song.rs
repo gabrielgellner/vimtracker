@@ -3267,6 +3267,29 @@ mod tests {
     }
 
     #[test]
+    fn a_phrase_saves_a_snake_by_name_and_cartesian_with_its_numbers() {
+        use crate::order::{Cartesian, Snake};
+        let mut phrase = Phrase::new(16);
+        for (order, text) in [
+            (Order::Snake(Snake::SpiralOut), "order:Snake(SpiralOut)"),
+            (
+                Order::Cartesian(Cartesian::new(1, 3)),
+                "order:Cartesian((x_rate:1,y_rate:3))",
+            ),
+            (
+                Order::Cartesian(Cartesian::new(2, 5).sized(4, 3)),
+                "order:Cartesian((x_rate:2,y_rate:5,x_length:4,y_length:3))",
+            ),
+        ] {
+            phrase.set_order(order);
+            let saved = ron::to_string(&phrase).unwrap();
+            assert!(saved.contains(text), "{saved}");
+            let loaded: Phrase = ron::from_str(&saved).unwrap();
+            assert_eq!(loaded.order(), order);
+        }
+    }
+
+    #[test]
     fn a_dealt_order_is_dealt_by_the_time_round_the_chain_and_the_slot() {
         let mut song = Song::new(1);
         let mut phrase = Phrase::new(8);

@@ -1,19 +1,31 @@
 //! The order a phrase's rows play in, after the Metropolix's ORDER: forward as written, reverse,
 //! four ways of going up and down, four that visit the rows out of turn, and two that are dealt at
-//! random from the project's seed.
+//! random from the project's seed; and after Make Noise's René, which reads the rows as a grid,
+//! snakes that wind through it and a Cartesian order of two counters (`rene`).
 //!
 //! An order is a walk the track keeps taking over the rows, while a pass of the phrase stays the
 //! phrase's length in steps, what its rows' pulses add up to, as it is forward. A round of an
 //! order is the visits it makes before it repeats. Most visit each row once, so a round is a pass.
 //! `Up-down`, `Down-up`, their `-inc` forms and `Pedal` visit some rows twice, so their rounds are
 //! longer than a pass and drift across the passes, as a polymeter does. `Shuffle` deals a new
-//! round each pass, and `Random` picks rows until the pass is full.
+//! round each pass, and `Random` picks rows until the pass is full. A round is a list of places,
+//! each a visit to a row, but for the grid orders, whose places on cells past the last row are
+//! passed over.
+//!
+//! A new order is a variant of [`Order`], with its own data in it if it has any, its places and
+//! the row at each worked out in [`Order::places`] and [`Order::row`], and its name, its words and
+//! what it means beside the others'. A family of them with parts of its own, as René's, has a
+//! module of its own.
+
+mod rene;
 
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
 use crate::step::Step;
+
+pub use rene::{Cartesian, Grid, MAX_LENGTH, MAX_RATE, Snake};
 
 /// The order a phrase's rows play in.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -43,11 +55,16 @@ pub enum Order {
     Shuffle,
     /// Any row each time, picked as a die is rolled.
     Random,
+    /// A path through the rows read as a grid, after René's snake patterns.
+    Snake(Snake),
+    /// Two counters, one along a line of the grid and one down the lines, each at its own rate,
+    /// after René's Cartesian channel.
+    Cartesian(Cartesian),
 }
 
 impl Order {
-    /// Every order, as lists show them.
-    pub const ALL: [Self; 12] = [
+    /// Every order, as lists show them, Cartesian with the rates it starts from.
+    pub const ALL: [Self; 21] = [
         Self::Forward,
         Self::Reverse,
         Self::UpDown,
@@ -60,9 +77,19 @@ impl Order {
         Self::Pedal,
         Self::Shuffle,
         Self::Random,
+        Self::Snake(Snake::Zigzag),
+        Self::Snake(Snake::Columns),
+        Self::Snake(Snake::ColumnZigzag),
+        Self::Snake(Snake::Diagonal),
+        Self::Snake(Snake::DiagonalZigzag),
+        Self::Snake(Snake::Spiral),
+        Self::Snake(Snake::SpiralOut),
+        Self::Snake(Snake::Checker),
+        Self::Cartesian(Cartesian::START),
     ];
 
-    /// What it's called, as the phrase view's header and lists show it.
+    /// What its kind is called: its whole name but for a snake's word and Cartesian's numbers,
+    /// which [`fmt::Display`] adds, as the phrase view's header and lists show it.
     pub const fn name(self) -> &'static str {
         match self {
             Self::Forward => "Forward",
@@ -77,20 +104,34 @@ impl Order {
             Self::Pedal => "Pedal",
             Self::Shuffle => "Shuffle",
             Self::Random => "Random",
+            Self::Snake(_) => "Snake",
+            Self::Cartesian(_) => "Cartesian",
         }
     }
 
-    /// The order a name such as `up-down` gives, ignoring case.
-    pub fn named(name: &str) -> Option<Self> {
-        let name = name.trim();
-        Self::ALL
-            .into_iter()
-            .find(|order| order.name().eq_ignore_ascii_case(name))
-    }
-
-    /// The word `:order` takes for it.
-    pub const fn word(self) -> &'static str {
-        ORDER_WORDS[self as usize]
+    /// The order words such as `up-down`, `snake spiral`, `snake 6` or `cartesian 1 3 4 2` give,
+    /// ignoring case: what `:order` takes, which is its name in lower case.
+    pub fn named(text: &str) -> Option<Self> {
+        let mut words = text.split_whitespace();
+        let first = words.next()?;
+        let rest: Vec<&str> = words.collect();
+        if first.eq_ignore_ascii_case("snake") {
+            return match rest[..] {
+                [] => Some(Self::Snake(Snake::default())),
+                [snake] => Snake::named(snake).map(Self::Snake),
+                _ => None,
+            };
+        }
+        if first.eq_ignore_ascii_case("cartesian") {
+            return Cartesian::named(&rest).map(Self::Cartesian);
+        }
+        if !rest.is_empty() {
+            return None;
+        }
+        Self::ALL.into_iter().find(|order| {
+            !matches!(order, Self::Snake(_) | Self::Cartesian(_))
+                && order.name().eq_ignore_ascii_case(first)
+        })
     }
 
     /// What it plays over two passes of a phrase of four rows, counted from 1.
@@ -108,7 +149,25 @@ impl Order {
             Self::Pedal => "The first row between the others: 1 2 1 3 1 4 1 2",
             Self::Shuffle => "Every row once a pass, in an order dealt again each pass",
             Self::Random => "Any row each time, so rows can repeat or be left out",
+            Self::Snake(snake) => snake.meaning(),
+            Self::Cartesian(_) => {
+                "X along a line, Y down the lines, each every so many rows: 1 2 3 8 5 6 11 12 …"
+            }
         }
+    }
+
+    /// What it plays, in words, for a phrase of this many rows: its meaning, or for Cartesian
+    /// what its counters do on the grid the rows make.
+    pub fn describe(self, rows: usize) -> String {
+        match self {
+            Self::Cartesian(cartesian) => cartesian.describe(Grid::of(rows)),
+            _ => self.meaning().to_owned(),
+        }
+    }
+
+    /// Whether it's of the same kind as another, whatever their snakes or numbers.
+    pub fn is_like(self, other: Self) -> bool {
+        std::mem::discriminant(&self) == std::mem::discriminant(&other)
     }
 
     /// Whether it's dealt from the project's seed, so which row plays when depends on the pass.
@@ -123,25 +182,29 @@ impl Order {
         *self == Self::Forward
     }
 
-    /// How many visits a round of this many rows makes before it repeats, for every order but
-    /// `Random`, which picks until the pass is full.
-    pub const fn visits(self, rows: usize) -> usize {
+    /// How many places a round of this many rows has before it repeats, for every order but
+    /// `Random`, which picks until the pass is full. Each is a visit to a row, but for a grid
+    /// order's places on cells past the last row.
+    pub fn places(self, rows: usize) -> usize {
         match self {
             Self::UpDown | Self::DownUp | Self::Pedal if rows > 1 => 2 * rows - 2,
             Self::UpDownInc | Self::DownUpInc => 2 * rows,
+            Self::Snake(_) if rows > 1 => Grid::of(rows).cells(),
+            Self::Cartesian(cartesian) if rows > 1 => cartesian.places(Grid::of(rows)),
             _ => rows,
         }
     }
 
-    /// The row a visit of a round plays, for a phrase of this many rows, with the visit below
-    /// [`Order::visits`]. `Random` picks among every row here; a round leaves out those that take
-    /// no time.
-    pub fn row(self, rows: usize, visit: usize, deal: Deal) -> usize {
+    /// The row a place of a round plays, for a phrase of this many rows, with the place below
+    /// [`Order::places`], or none for a grid order's cell past the last row. `Random` picks among
+    /// every row here; a round leaves out those that take no time.
+    pub fn row(self, rows: usize, place: usize, deal: Deal) -> Option<usize> {
         if rows <= 1 {
-            return 0;
+            return Some(0);
         }
+        let visit = place;
         let last = rows - 1;
-        match self {
+        let row = match self {
             Self::Forward => visit,
             Self::Reverse => last - visit,
             Self::UpDown if visit < rows => visit,
@@ -168,12 +231,16 @@ impl Order {
             Self::Pedal => visit.div_ceil(2),
             Self::Shuffle => shuffled(deal, rows, visit),
             Self::Random => picked(deal, rows, visit, 0),
-        }
+            Self::Snake(snake) => snake.cell(Grid::of(rows), place),
+            Self::Cartesian(cartesian) => cartesian.cell(Grid::of(rows), place),
+        };
+        (row < rows).then_some(row)
     }
 }
 
-/// The words `:order` takes, one for each order in the order lists show them.
-pub const ORDER_WORDS: [&str; 12] = [
+/// The words `:order` starts with, in the order lists show them: each order's, then `snake` and
+/// `cartesian`, which take a snake or numbers after them.
+pub const ORDER_WORDS: [&str; 14] = [
     "forward",
     "reverse",
     "up-down",
@@ -186,11 +253,26 @@ pub const ORDER_WORDS: [&str; 12] = [
     "pedal",
     "shuffle",
     "random",
+    "snake",
+    "cartesian",
 ];
 
 impl fmt::Display for Order {
+    /// Its name, with a snake's word or Cartesian's numbers as `:order` takes them: `Snake
+    /// spiral`, `Cartesian 1 3`, or `Cartesian 1 3 4 2` with its lengths.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.name())
+        f.write_str(self.name())?;
+        match self {
+            Self::Snake(snake) => write!(f, " {}", snake.word()),
+            Self::Cartesian(cartesian) => {
+                write!(f, " {} {}", cartesian.x_rate, cartesian.y_rate)?;
+                if !cartesian.is_whole() {
+                    write!(f, " {} {}", cartesian.x_length, cartesian.y_length)?;
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
     }
 }
 
@@ -270,7 +352,10 @@ pub struct Round<'a> {
     steps: &'a [Step],
     order: Order,
     deal: Deal,
+    /// The place the round is at, which for `Random` is its visit.
     visit: usize,
+    /// How many places the round has, for every order but `Random`.
+    places: usize,
     /// How many steps `Random` has still to fill, as it stops when the pass is full.
     left: usize,
 }
@@ -283,6 +368,7 @@ impl<'a> Round<'a> {
             order,
             deal,
             visit: 0,
+            places: order.places(steps.len()),
             left: steps.iter().map(Step::pulses).sum(),
         }
     }
@@ -326,10 +412,20 @@ impl Iterator for Round<'_> {
             self.left = self.left.saturating_sub(self.steps[row].pulses());
             row
         } else {
-            if visit >= self.order.visits(rows) {
-                return None;
-            }
-            self.order.row(rows, visit, self.deal)
+            // A grid order's cells past the last row are passed over.
+            let mut place = visit;
+            let row = loop {
+                if place >= self.places {
+                    self.visit = place;
+                    return None;
+                }
+                if let Some(row) = self.order.row(rows, place, self.deal) {
+                    break row;
+                }
+                place += 1;
+            };
+            self.visit = place;
+            row
         };
         self.visit += 1;
         Some(row)
@@ -388,6 +484,10 @@ mod tests {
                 let mut played = rows(order, length);
                 if order == Order::Random {
                     assert_eq!(played.len(), length, "{order} picks as many as there are");
+                    continue;
+                }
+                if matches!(order, Order::Cartesian(_)) {
+                    // Its counters can leave cells out, as René's do.
                     continue;
                 }
                 played.sort_unstable();
@@ -474,11 +574,78 @@ mod tests {
     #[test]
     fn orders_are_named_ignoring_case() {
         for order in Order::ALL {
-            assert_eq!(Order::named(order.word()), Some(order));
-            assert_eq!(order.word(), order.name().to_lowercase());
+            assert_eq!(Order::named(&order.to_string().to_lowercase()), Some(order));
+            assert!(ORDER_WORDS.contains(&order.name().to_lowercase().as_str()));
         }
         assert_eq!(Order::named("UP-DOWN-INC"), Some(Order::UpDownInc));
         assert_eq!(Order::named("pendulum"), None, "the old names are gone");
         assert_eq!(Order::named("sideways"), None);
+        assert_eq!(Order::named("up-down 2"), None);
+    }
+
+    #[test]
+    fn snakes_are_named_by_word_or_number_and_cartesian_by_its_numbers() {
+        assert_eq!(Order::named("snake"), Some(Order::Snake(Snake::Zigzag)));
+        assert_eq!(Order::named("snake 6"), Some(Order::Snake(Snake::Spiral)));
+        assert_eq!(
+            Order::named("Snake Spiral"),
+            Some(Order::Snake(Snake::Spiral))
+        );
+        assert_eq!(Order::named("snake 9"), None);
+        assert_eq!(Order::named("snake 0"), None);
+        assert_eq!(Order::named("snake wiggle"), None);
+        assert_eq!(
+            Order::named("cartesian"),
+            Some(Order::Cartesian(Cartesian::START))
+        );
+        let rates = Order::named("cartesian 2 5").unwrap();
+        assert_eq!(rates, Order::Cartesian(Cartesian::new(2, 5)));
+        assert_eq!(rates.to_string(), "Cartesian 2 5");
+        let sized = Order::named("cartesian 1 3 4 2").unwrap();
+        assert_eq!(sized, Order::Cartesian(Cartesian::new(1, 3).sized(4, 2)));
+        assert_eq!(sized.to_string(), "Cartesian 1 3 4 2");
+        for wrong in [
+            "cartesian 1",
+            "cartesian 0 3",
+            "cartesian 1 17",
+            "cartesian 1 3 9 2",
+            "cartesian 1 3 4",
+            "cartesian a b",
+        ] {
+            assert_eq!(Order::named(wrong), None, "{wrong}");
+        }
+        assert_eq!(
+            Order::Snake(Snake::ColumnZigzag).to_string(),
+            "Snake column-zigzag"
+        );
+    }
+
+    #[test]
+    fn a_snake_passes_over_the_cells_past_the_last_row() {
+        // Six rows are a grid four wide and two high, its last two cells empty.
+        assert_eq!(rows(Order::Snake(Snake::Zigzag), 6), manual("1 2 3 4 6 5"));
+        assert_eq!(rows(Order::Snake(Snake::Columns), 6), manual("1 5 2 6 3 4"));
+        assert_eq!(rows(Order::Snake(Snake::Spiral), 16), {
+            manual("1 2 3 4 8 12 16 15 14 13 9 5 6 7 11 10")
+        });
+    }
+
+    #[test]
+    fn cartesian_rounds_visit_its_cells_in_the_rows_there_are() {
+        assert_eq!(
+            rows(Order::Cartesian(Cartesian::new(1, 3)), 16),
+            manual("1 2 3 8 5 6 11 12 9 14 15 16")
+        );
+        // On six rows, a grid of four by two: X every row, Y every row, so the diagonal, whose
+        // second cell is row 6.
+        assert_eq!(
+            rows(Order::Cartesian(Cartesian::new(1, 1)), 6),
+            manual("1 6 3")
+        );
+        assert_eq!(
+            Order::Cartesian(Cartesian::new(1, 1)).places(6),
+            4,
+            "its fourth place, row 8, is past the last"
+        );
     }
 }
