@@ -862,6 +862,8 @@ pub struct Accumulating {
     pub amount: i8,
     /// The note as written, which it's moved from.
     pub written: u8,
+    /// How far the row's `RND`s moved it on top, in degrees or semitones.
+    pub varied: i16,
     /// Its chain's transpose, added after.
     pub transpose: i8,
     pub epoch: Epoch,
@@ -879,12 +881,15 @@ pub struct RowKey {
 }
 
 /// How far each mod slot moved a row's note on `Pitch` as it started, in semitones, as it was
-/// heard, `Pitch in scale`'s snap and a slot's switch included: what `Space g A` writes into the
-/// notes (#569). The row is counted from the phrase's first step, not its loop's.
+/// heard, `Pitch in scale`'s snap and a slot's switch included, and how far the row's own `RND`s
+/// moved it: what `Space g A` writes into the notes (#569, decision 323). The row is counted from
+/// the phrase's first step, not its loop's.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NotePitch {
     pub row: RowKey,
     pub moves: [f32; MOD_SLOTS],
+    /// How far the row's own `RND`s moved its note, in semitones, before the slots.
+    pub varied: i8,
 }
 
 /// Which start of a track's chain, and which group of loops round it, a track's accumulators are
@@ -1003,7 +1008,7 @@ pub struct TrackState {
     /// Where its `ACU`s have moved its notes.
     pub accumulators: Accumulators,
     /// The note the row playing was heard at, before its chain's transpose, when an accumulator
-    /// moved it.
+    /// or an `RND` moved it.
     pub accumulated: Option<u8>,
     /// The rolls a `Random` accumulator takes, apart from `rng` so `CHA` rolls as it did.
     pub accumulator_rng: Pcg32,
@@ -1130,9 +1135,12 @@ pub struct TrackState {
     /// Whether the voice was started afresh since the modulation was last worked out, so one that
     /// follows the note can give it its pitch from its first frame rather than slew to it.
     pub fresh_voice: bool,
-    /// The row of a note just started, on a track with a slot on `Pitch`, whose moves the next
-    /// working out of the modulation reports, as that's the first to hear the note.
+    /// The row of a note just started, on a track with a slot on `Pitch` or a row with an `RND` on
+    /// its note, whose moves the next working out of the modulation reports, as that's the first
+    /// to hear the note.
     pub pitch_row: Option<RowKey>,
+    /// How far that row's own `RND`s moved its note, in semitones, for the report.
+    pub pitch_varied: i8,
     /// What each slot moved that note's pitch by, until the report takes it.
     pitched: Option<NotePitch>,
     /// What the LFOs add to each held value, by setting. Separate from the held values, so a
@@ -1424,6 +1432,7 @@ impl TrackState {
             new_note: false,
             fresh_voice: false,
             pitch_row: None,
+            pitch_varied: 0,
             pitched: None,
             offsets: [0.0; SettingId::COUNT],
             offset_marks: [None; MOVED],
@@ -1914,6 +1923,7 @@ impl TrackState {
             let on_pitch = |at: usize| track.mods[at].destination == Some(SettingId::PITCH);
             self.pitched = Some(NotePitch {
                 row,
+                varied: self.pitch_varied,
                 moves: std::array::from_fn(|at| {
                     if on_pitch(at) {
                         self.slots[at].out * 255.0

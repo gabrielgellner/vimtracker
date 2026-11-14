@@ -16,6 +16,7 @@ use vt_model::settings::{SettingId, glide_ms};
 use vt_model::shape::{GenParam, Where};
 use vt_model::song::{SynthVoice, Track, trim_text};
 use vt_model::step::{FxCommand, Note};
+use vt_model::variation::{self, Varies};
 
 use crate::app::{App, Field};
 use crate::banking::sample_shown;
@@ -211,14 +212,14 @@ fn heard_shown(app: &App, field: Field) -> Option<String> {
 }
 
 /// A field of the row under the cursor in its setting's units, where it has them: the nudge, the
-/// note heard where an accumulator moved the row playing, an FX value, or the gate's length. The
+/// note heard where an accumulator or an `RND` moved the row playing, an FX value, or the gate's length. The
 /// status line says it for the cursor's field and the row inspector for each of the row's.
 pub(crate) fn phrase_value(app: &App, field: Field) -> Option<String> {
     let track = app.track_here()?;
     let (id, value) = match field {
         Field::Nudge => return Some(nudge_shown(app.current_nudge())),
-        // While an accumulator moves the row playing, the Note column says what it's heard as, as
-        // the grid shows notes as written.
+        // While an accumulator or an `RND` moves the row playing, the Note column says what it's
+        // heard as, as the grid shows notes as written.
         Field::Note => {
             playhead_step(app)?;
             let heard = heard_note(app)?;
@@ -231,6 +232,17 @@ pub(crate) fn phrase_value(app: &App, field: Field) -> Option<String> {
             }
             if cell.command == Some(FxCommand::Arp) {
                 return Some(arp_shown(cell.coarse(), track.arpeggio, app.scale.on));
+            }
+            // What an `RND` varies is what's to its left.
+            if cell.command == Some(FxCommand::Rnd) {
+                let left = slot
+                    .checked_sub(1)
+                    .map(|left| app.current_slot(left).unwrap_or_default());
+                return Some(variation::text(
+                    cell.coarse(),
+                    Varies::of(left),
+                    app.scale.on,
+                ));
             }
             if cell.command == Some(FxCommand::Acu) {
                 return Some(amount_shown(

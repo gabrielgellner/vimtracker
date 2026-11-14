@@ -683,6 +683,39 @@ fn a_variation_varies_by_pass_and_its_temperature_can_be_held() {
     assert!(held != play(&still, &[], 16).0, "and not as before");
 }
 
+/// An `RND` beside a moving generator's notes varies them as it would the same notes written, so
+/// each pass plays, sample for sample, as writing that pass's seed in would with the `RND` there
+/// (decision 323).
+#[test]
+fn an_rnd_varies_a_moving_generators_notes_as_it_would_them_written() {
+    let plain = varying_line();
+    let mut song = plain.clone();
+    let phrase = Arc::make_mut(song.tracks[0].phrases.get_mut(&0).unwrap());
+    for row in 0..16 {
+        phrase.step_mut(row).unwrap().fx[0] = vt_model::step::FxSlot {
+            command: Some(FxCommand::Rnd),
+            value: 0xA200,
+            mark: vt_model::step::Mark::Lock,
+        };
+    }
+    let kept = |pass: i64| {
+        let mut shape = written(&song, 0, notes()).on_pass(pass);
+        shape.vary = 0;
+        reshape(&song, shape)
+    };
+    for pass in [1, 2] {
+        let (heard_out, _) = play_pass(&song, pass);
+        assert!(
+            heard_out == play_pass(&kept(pass as i64), pass).0,
+            "pass {pass} varies its seed's notes as written"
+        );
+        assert!(
+            heard_out != play_pass(&plain, pass).0,
+            "pass {pass} is varied"
+        );
+    }
+}
+
 /// A Bloom branch (decision 307) on phrase `00`, grown from a trunk on phrase `10`: a `Follow` of
 /// the trunk making three changes, played nine times in its chain, with `Vary` set.
 fn bloom_branch(vary: u8) -> Song {

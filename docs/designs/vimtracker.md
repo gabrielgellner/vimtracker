@@ -474,7 +474,7 @@ Song                               song.ron, refused unless format_version is FO
 *   **Steps and FX slots.** A step has a note or `OFF`, a velocity, a nudge in 24ths of a
     sixteenth whatever the track's speed, up to just under half the track's step (decision 299), a
     gate of pulses and a length, and `FX_SLOTS` (3) FX slots, and is saved as one line of text. A
-    slot holds an event (`DEL`, `KIL`, `OFF`, `RET`, `CHA`), `CND`, `ACU`, `ARP`, or a lock of any
+    slot holds an event (`DEL`, `KIL`, `OFF`, `RET`, `CHA`), `CND`, `ACU`, `ARP`, `RND`, or a lock of any
     registered setting, `FxCommand::Set`. Its value is a coarse and a fine byte, with a lock, hold or
     glide mark.
 *   **Mod slots** (`modulation.rs`, decision 165). Each track has `MOD_SLOTS` (6) slots on its
@@ -1795,6 +1795,7 @@ The subcommands are `vimtracker render <project> <out.wav> [--rate n] [--rows n]
 | `OFF xx` | Start release after `xx` groove units | Once |
 | `RET xy` | Retrigger every `y` groove units. `y=0` does nothing. `x` of 0-7 gets quieter and 8-F louder, in 10% steps per retrigger | Once |
 | `CHA xx` | Play this step's note with chance `xx/FF`, drawing one random number. The step's other FX still apply | Once |
+| `RND xy` | A chance `x` of `F` that what's to its left varies by up to `y`: the note in scale degrees, a lock's value, or whether a `RET` ratchets (decision 323) | Once |
 
 A timed value past the step's end keeps running across the next step, and a new note on the track cancels it. An unknown command in a loaded file is a load error.
 
