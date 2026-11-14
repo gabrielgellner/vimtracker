@@ -198,25 +198,35 @@ fn play(song: fn() -> Song, rest: bool) -> (Vec<u32>, usize) {
     (heard, rested)
 }
 
+/// Plays `song` with resting and without, and checks they sound the same and the master rested
+/// for at least `least` blocks.
+fn rests_without_a_change(song: fn() -> Song, least: usize) {
+    let ((resting, rested), (worked, none)) = (play(song, true), play(song, false));
+    assert!(
+        resting
+            .iter()
+            .any(|&bits| f32::from_bits(bits).abs() > 0.01),
+        "it plays"
+    );
+    assert!(resting == worked, "resting changed the sound");
+    assert!(
+        rested >= least && none == 0,
+        "the master rested for {rested} blocks"
+    );
+}
+
 #[test]
 fn resting_tracks_change_nothing_heard() {
     // A compressor's `Auto` follows the level over a second whether it's on or not, so a master
-    // with one rests only until it has heard something, for the length of this. One without
-    // rests again once what it heard has died away.
-    for (song, least) in [(song as fn() -> Song, 20), (settling_mix, 100)] {
-        let ((resting, rested), (worked, none)) = (play(song, true), play(song, false));
-        assert!(
-            resting
-                .iter()
-                .any(|&bits| f32::from_bits(bits).abs() > 0.01),
-            "it plays"
-        );
-        assert!(resting == worked, "resting changed the sound");
-        assert!(
-            rested >= least && none == 0,
-            "the master rested for {rested} blocks"
-        );
-    }
+    // with one rests only until it has heard something, for the length of this.
+    rests_without_a_change(song, 20);
+}
+
+#[test]
+fn resting_tracks_change_nothing_heard_in_a_mix_that_settles() {
+    // A master whose slots settle soon after a sound rests again once what it heard has died
+    // away.
+    rests_without_a_change(settling_mix, 100);
 }
 
 #[test]

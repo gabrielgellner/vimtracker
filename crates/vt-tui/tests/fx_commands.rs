@@ -1095,6 +1095,49 @@ fn order_plays_the_phrases_rows_in_an_order_from_a_word_or_a_list() {
 }
 
 #[test]
+fn order_takes_a_snake_and_cartesian_numbers_and_the_title_shows_them() {
+    use vt_model::order::{Cartesian, Order, Snake};
+    use vt_tui::input::command::Line;
+    let (mut app, _realtime) = app();
+    let order = |app: &App| app.phrase_here().unwrap().order();
+    let heading = |app: &App| -> String {
+        let buffer = screen(app);
+        (0..80).map(|x| buffer[(x, 0)].symbol()).collect()
+    };
+    command(&mut app, "order snake spiral");
+    assert_eq!(order(&app), Order::Snake(Snake::Spiral));
+    assert!(heading(&app).contains("Snake spiral"), "{}", heading(&app));
+    assert!(app.status.contains("Round the edge"), "{}", app.status);
+    command(&mut app, "order snake 2");
+    assert_eq!(order(&app), Order::Snake(Snake::Columns));
+    command(&mut app, "order cartesian 1 3 4 2");
+    let cartesian = Order::Cartesian(Cartesian::new(1, 3).sized(4, 2));
+    assert_eq!(order(&app), cartesian);
+    assert!(
+        heading(&app).contains("Cartesian 1 3 4 2"),
+        "{}",
+        heading(&app)
+    );
+    assert!(
+        app.status
+            .contains("X moves every row over 4, Y every 3 rows over 2"),
+        "{}",
+        app.status
+    );
+    command(&mut app, "order cartesian 0 3");
+    assert_eq!(order(&app), cartesian, "a rate of 0 is refused");
+    assert!(app.status.contains(":order takes"), "{}", app.status);
+    // The list shows the phrase's own Cartesian numbers, and opens on them.
+    command(&mut app, "order");
+    let picker = app.picker.as_ref().expect("the list is open");
+    assert_eq!(
+        picker.current().map(|item| item.pick.clone()),
+        Some(Pick::Line(Line::Order(Some(cartesian))))
+    );
+    assert_eq!(picker.shown().count(), Order::ALL.len());
+}
+
+#[test]
 fn playing_from_a_row_starts_at_its_step_with_the_walk_where_it_is_then() {
     let (mut app, _realtime) = app();
     command(&mut app, "len 4");

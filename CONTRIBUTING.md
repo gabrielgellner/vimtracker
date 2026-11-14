@@ -6,6 +6,9 @@
 - [just](https://github.com/casey/just), which runs the recipes in the `justfile`. Run `just`
   to list them.
 - [mdBook](https://rust-lang.github.io/mdBook/), for the manual.
+- [cargo-nextest](https://nexte.st/), optional, which runs the tests about three times as fast
+  as `cargo test`: `cargo install cargo-nextest --locked`. `just test` and `just ci` use it when
+  it's installed and `cargo test` when it isn't.
 - For releases only:
   - [git-cliff](https://git-cliff.org/), which writes the changelog;
   - [cargo-edit](https://github.com/killercup/cargo-edit), which adds `cargo set-version`;
@@ -54,16 +57,23 @@ Every change reaches `main` through a pull request from its own branch. Merge wi
 commit, not a squash or a rebase. The changelog skips merge commits and lists the branch's own
 commits, so their types matter (see below).
 
-Every pull request and every push to `main` runs the `ci` workflow, which runs:
+Before a pull request merges, `just ci` runs on the author's machine:
 
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
+cargo nextest run --workspace --locked    # or cargo test --workspace --locked, without nextest
+cargo test --workspace --locked --doc     # nextest doesn't run doctests
 ```
 
-Run the same before pushing. `--locked` fails if `Cargo.lock` is out of date with the
-manifests.
+`--locked` fails if `Cargo.lock` is out of date with the manifests. The `ci` workflow runs the
+same checks on GitHub, by hand only.
+
+The tests run with `vt-engine` and `vt-model` optimised, as the `dev` profile in `Cargo.toml`
+sets, with debug assertions and overflow checks still on. A few sweeps over every extreme of an
+effect run in full only in a release build, and `cargo test --workspace --release` runs them, with
+the real-time guard against optimised code and the hashes made in release builds. Run it too
+after a change to the engine.
 
 A pull request that makes a choice the issue left open appends it to
 [docs/designs/decisions.md](docs/designs/decisions.md) as the next numbered decision. One that
