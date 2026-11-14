@@ -28,6 +28,7 @@ pub mod loading;
 pub mod macroing;
 pub mod marking;
 pub mod meter;
+pub mod mixer_page;
 pub mod page;
 pub mod patching;
 pub mod picking;

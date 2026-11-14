@@ -63,7 +63,7 @@ impl App {
             track_page: self.track_page.page,
             track_row: self.track_page.row,
             track_field: self.track_page.field,
-            mixer_row: self.mixer_row,
+            mixer_row: self.mixer_page.row,
             sample_cursor: self.sample_page.cursor,
             sample_pinned: self.sample_page.pinned,
         }
@@ -90,7 +90,7 @@ impl App {
             self.move_control(place.track_row, place.track_field);
         }
         if place.view == View::Mixer {
-            self.mixer_row = place.mixer_row;
+            self.mixer_page.row = place.mixer_row;
         }
         if place.view == View::Sample {
             self.sample_page.pinned = place.sample_pinned;

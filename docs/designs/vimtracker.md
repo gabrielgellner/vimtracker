@@ -818,8 +818,7 @@ cursor where it's seen and runs one of its own keys, and `TrackPage::draw` draws
 given reads the rest of the program, and runs what's passed back itself, the edits, which change
 the song: `editing.rs` (`=`, `-`, the fine digits and `x`), `pickers.rs` (`K`) and `typing.rs`
 (`i`), with `b`, `dd` and `p` in `fx.rs`. They're shared with the mixer, which turns the same
-controls. `App::track_control` is the control under the cursor on the track page or the mixer,
-whose own cursor is in `mixer.rs`.
+controls. `App::track_control` is the control under the cursor on the track page or the mixer.
 
 *   **Each page's settings in its own file:** `sound.rs` has the Sound page's devices on a sound
     track and the fixed tracks' Outputs, `modulation.rs` the Mod page's devices, and
@@ -870,6 +869,18 @@ whose own cursor is in `mixer.rs`.
     half-width devices), its panel (`widgets::panel`), and, for the Mod page's two columns,
     `widgets::device::rack_areas`.
 
+**The mixer** (`mixer_page.rs`, decision 25) is a component the same way (#320).
+`App::mixer_page` is a `MixerPage`: the row its cursor is on, `MIXER`'s `Level` to start with,
+kept on a track that hasn't it and kept while other views show; the track it's on is the program's
+cursor, and nothing else is the mixer's own, as which strips show follows from the cursor and the
+folds each time it's drawn, and the tracks' meters are the Roto's too. `MixerPage::row_here`
+and `control` are given the cursor's track, as `TrackPage`'s are. `MixerPage::run` runs its own
+keys, `j`, `k`, `gg` and `G` down and up a strip, returning an `Outcome`, and `MixerPage::draw`
+draws it (`views/mixer.rs`), both through a `Ctx`. `App::run_mixer` hands each key to it, on a copy
+as the track page's is, and does the rest itself: `h` and `l` move the program's cursor, and `0`
+and `$` go to the strip `MixerPage::end_track` finds, as a page can't move the cursor through a
+`Ctx` that only reads; an edit goes to `App::run_track_page`.
+
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 The guides (`guides.rs`) are the Markdown files in `crates/vt-tui/guides/`, built into the program
 with `include_str!` and opened with `Space ?`; the manual includes the same files, so the two can't
@@ -898,7 +909,7 @@ kept out of the undo history: the song's `view` (`vt_model::view::ViewState`) is
 `App::folds` when a song opens and written back by `song_to_save`, and `App::fold_group` sets one
 from code (decision 305).
 
-**Where it's going** (#320, the track page's state, its own keys and its drawing done). Each page becomes a component that owns its state, keys
+**Where it's going** (#320, the track page's and the mixer's state, own keys and drawing done). Each page becomes a component that owns its state, keys
 and drawing, `TrackPage`, `ProjectPage`, `MixerPage`, `SamplePage`, `SongView` and the phrase and
 chain views among them, with `fn key(&mut self, key, ctx: &mut Ctx) -> Outcome` and
 `fn draw(&self, frame, area, ctx: &Ctx)`. `Ctx` borrows the services every page shares: the song and
@@ -906,10 +917,11 @@ history, the engine's handle, the sample pool and analyses, graphics, settings a
 `App` shrinks to those services, the current view, the modes and popups that span pages (the picker,
 the command line and help) and the jump list, and the feature files become methods on the page or
 service they belong to. It goes a page per PR, the track page first, with keys, drawing and
-screenshots unchanged. `TrackPage` has its state, its own keys and its drawing, with a `Ctx` that
-reads the shared services through `App` for now, so the page can be drawn while `App` still holds
-it; its edits are still `impl App` blocks, shared with the mixer, and moving them needs a `Ctx`
-that can apply actions;
+screenshots unchanged. `TrackPage` and `MixerPage` have their state, their own keys and their
+drawing, with a `Ctx` that reads the shared services through `App` for now, so a page can be
+drawn while `App` still holds it; their edits are still `impl App` blocks, which the two share,
+and moving them needs a `Ctx` that can apply actions, as do the mixer's moves across tracks, which
+move the program's cursor;
 `SamplePage` is half there too: it keeps its own cursor, zoom, scroll,
 selection and settings focus, while its keys are still `impl App` blocks, in `sample_page.rs`, and
 in `placing.rs` and `sample_settings.rs` for editing its points and settings.
