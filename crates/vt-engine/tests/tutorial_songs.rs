@@ -1433,19 +1433,27 @@ fn variations_patch() -> PatchPreset {
     patch_of(&track)
 }
 
-/// Every shipped patch, by its name, in the chapter's order.
+/// Every shipped patch, by its name, in the chapter's order, each tagged `generative` and with
+/// what it acts on, as the study's §5.4 has them.
 fn patches() -> Vec<(&'static str, PatchPreset)> {
-    vec![
-        ("Turing Machine", turing_machine_patch()),
-        ("Deja vu", deja_vu_patch()),
-        ("Euclid", euclid_patch()),
-        ("Kria", kria_patch()),
-        ("Accents", accents_patch()),
-        ("Acid line", acid_line_patch()),
-        ("Drunk walk", drunk_walk_patch()),
-        ("Marbles X", marbles_x_patch()),
-        ("Variations", variations_patch()),
-    ]
+    let patches = [
+        ("Turing Machine", turing_machine_patch(), "pitch"),
+        ("Deja vu", deja_vu_patch(), "pitch"),
+        ("Euclid", euclid_patch(), "rhythm"),
+        ("Kria", kria_patch(), "pitch"),
+        ("Accents", accents_patch(), "accent"),
+        ("Acid line", acid_line_patch(), "303"),
+        ("Drunk walk", drunk_walk_patch(), "pitch"),
+        ("Marbles X", marbles_x_patch(), "pitch"),
+        ("Variations", variations_patch(), "pitch"),
+    ];
+    patches
+        .into_iter()
+        .map(|(name, preset, acts_on)| {
+            let tags = vec!["generative".to_owned(), acts_on.to_owned()];
+            (name, PatchPreset { tags, ..preset })
+        })
+        .collect()
 }
 
 // The tests.

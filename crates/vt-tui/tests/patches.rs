@@ -586,6 +586,39 @@ fn the_browser_adds_a_shipped_patch_and_kria_brings_its_lane() {
 }
 
 #[test]
+fn the_shipped_patches_are_found_by_their_tags_and_cant_be_tagged() {
+    let (mut app, _realtime, _presets) = app_on(fresh_track());
+    command(&mut app, "patch");
+    press(&mut app, "/#rhythm");
+    let rows = explorer_rows(&app);
+    assert_eq!(rows, ["v built in", "    Euclid"], "{rows:?}");
+    special(&mut app, KeyCode::Esc);
+    special(&mut app, KeyCode::Esc);
+    command(&mut app, "patch");
+    press(&mut app, "/#generative");
+    let rows = explorer_rows(&app);
+    assert_eq!(rows.len(), 10, "all nine: {rows:?}");
+    special(&mut app, KeyCode::Esc);
+    let tags: Vec<String> = app
+        .picker
+        .as_ref()
+        .unwrap()
+        .current()
+        .unwrap()
+        .tags
+        .iter()
+        .map(|tag| tag.name.clone())
+        .collect();
+    assert_eq!(tags, ["patch", "generative", "pitch"]);
+    press(&mut app, "T");
+    assert_eq!(app.mode, Mode::Picker);
+    assert!(
+        app.picker.as_ref().unwrap().taggable().is_none(),
+        "a shipped patch is read-only"
+    );
+}
+
+#[test]
 fn a_patch_of_the_users_own_comes_before_a_shipped_one_of_the_same_name() {
     let (mut app, _realtime, presets) = turing_machine();
     command(&mut app, "patch save Euclid");

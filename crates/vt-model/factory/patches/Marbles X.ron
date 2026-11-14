@@ -71,4 +71,8 @@
             ),
         ],
     ),
+    tags: [
+        "generative",
+        "pitch",
+    ],
 )

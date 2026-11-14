@@ -22,7 +22,7 @@ use vt_model::step::FxCommand;
 
 use crate::app::App;
 use crate::config::home_folder;
-use crate::explorer::{Icon, Purpose, place_name};
+use crate::explorer::{Icon, Purpose, place_name, preset_tags};
 use crate::input::command::PatchLine;
 use crate::input::picker::{Item, Pick, Root};
 
@@ -79,17 +79,19 @@ fn short_of(name: &str, track: usize, short: Short) -> String {
 }
 
 /// The shipped patches, as the browser lists them after the presets folder: under `Factory`,
-/// each by its name with what it needs beside it, as a patch in the folder is.
+/// each by its name with what it needs beside it and its tags, as a patch in the folder is.
 fn factory_root() -> Root {
     let items = FACTORY_PATCHES
         .iter()
         .map(|(name, _)| {
-            let meaning = match factory_patch(name) {
-                Some(Ok(preset)) => preset.summary(),
-                Some(Err(error)) => error.to_string(),
-                None => String::new(),
-            };
-            Item::new(*name, Pick::FactoryPatch((*name).to_owned())).meaning(meaning)
+            let item = Item::new(*name, Pick::FactoryPatch((*name).to_owned()));
+            match factory_patch(name) {
+                Some(Ok(preset)) => item
+                    .meaning(preset.summary())
+                    .tagged(preset_tags(preset.fixed_tags(), preset.tags)),
+                Some(Err(error)) => item.meaning(error.to_string()),
+                None => item,
+            }
         })
         .collect();
     Root::Group {

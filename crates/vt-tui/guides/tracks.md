@@ -1808,8 +1808,10 @@ are kept in the presets folder's `patches`, beside `sounds` and `effects`. Each 
 
 **Shipped patches** come with vimtracker, made from the generators tutorial's songs, and are listed
 under `Factory` after your own, so `:patch` has some from the start. They're built into the
-program rather than written into your folder, so they can't be changed or written over; a patch
-of yours with the same name comes first, and `:patch save` always saves one of yours.
+program rather than written into your folder, so they can't be changed, tagged or written over;
+a patch of yours with the same name comes first, and `:patch save` always saves one of yours.
+Each is tagged `generative` and with what it acts on, so `#generative` lists them and `#rhythm`
+finds `Euclid`.
 
 | Patch | What it is | Its macros |
 |---|---|---|
