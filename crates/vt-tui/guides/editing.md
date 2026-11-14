@@ -204,6 +204,7 @@ lowest and highest.
 | Markov | Each row's chance hanging on the rows before it |
 | 3 states | Each row a gate, a rest or a tie |
 | Complementary | One coin a row for two tracks, so never both |
+| Rhythm | A named rhythm's part, each hit by `Child`'s chance |
 
 `Euclid` spreads its hits over the rows it could change, as the Euclidean
 rhythms do: 3 in 8 is `x..x..x.` and 5 in 8 is `x.xx.xx.`. On Velocity it
@@ -239,6 +240,43 @@ could change in order, so on Velocity they count among the notes.
 
 Each of them draws from the seed, so `r` draws again, and `Vary` gives each pass
 a rhythm of its own.
+
+`Rhythm` plays a traditional pattern, after Noise Engineering's Zularic
+Repetitor. `Rhythm` under it picks the pattern with `K`, each listed with where
+it's from and how many rows it goes round in; `Part` which of its three parts
+the rows are; and `Child` the chance each of the part's hits plays, from `100%`,
+the pattern as written, down to `0%`, none. A child never plays where the
+pattern rests, and draws from the seed, so `r` and `Vary` give it other hits.
+
+| Rhythm | Bell | Rows |
+|---|---|---|
+| Son clave | `x..x..x...x.x...` | 16 |
+| Rumba clave | `x..x...x..x.x...` | 16 |
+| Bossa nova | `x..x..x...x..x..` | 16 |
+| Gahu | `x..x..x...x...x.` | 16 |
+| Shiko | `x...x.x...x.x...` | 16 |
+| Soukous | `x..x..x...xx....` | 16 |
+| Samba | `x.x..x.x.x..x.x.` | 16 |
+| Tresillo | `x..x..x.` | 8 |
+| Cinquillo | `x.xx.xx.` | 8 |
+| Bembé | `x.x.xx.x.x.x` | 12 |
+| Motorik | `x.x.x.x.x.x.x.x.` | 16 |
+
+The bells are Godfried Toussaint's transcriptions in his papers on the clave and
+bell timelines. The son's `Low drum` is the bass's tumbao, `...x..x....x..x.`, and
+its `High drum` the conga's open tones, `......xx......xx`. Motorik is a kit: the
+bell is its hats, the low drum its kick, `x.x...x.x.x...x.`, and the high drum its
+snare on 2 and 4. For the rest, the low drum is the beat, a row in four, and the
+high drum the offbeats between; the bembé's low drum is its four beats and its
+high drum the six quarters across them, `x.x.x.x.x.x.`.
+
+A rhythm plays a pulse a row, going round from the first row selected, on any
+column; on Velocity it accents the notes on its hits. The bembé's twelve pulses
+are a bar's triplet eighths, so on a track at `1/8T` twelve rows are a bar, and
+the panel says so on any other. `S` across tracks gives each the next part,
+`Bell`, `Low drum`, `High drum` and round again, from the one the panel shows,
+each with a seed of its own, so its children are its own; the panel says `Each
+track plays the next part`.
 
 The ramp's ends land on the first and last rows it changes, and rows keep their
 spacing along it. A velocity only ever goes on a note, so for Velocity, Every,
@@ -483,14 +521,15 @@ down to `0%` holds its loop, the Turing Machine's lock.
 
 On a Note column with no notes in the rows selected, `S` writes notes of its
 own, and the panel's title says `Generate`. `Where` gives the rhythm, from
-`All rows`, `Every`, `Chance`, `Euclid` and Marbles' four, and the fill the
-pitches: a `Ramp` from the scale's root an octave up, in the octave notes are
-typed in, or a
+`All rows`, `Every`, `Chance`, `Euclid`, Marbles' four and `Rhythm`, and the
+fill the pitches: a `Ramp` from the scale's root an octave up, in the octave
+notes are typed in, or a
 `Random`, `Walk`, `1/f`, `Wave`, `Alternate` or `List`, in the scale's degrees
 while it's on.
 Each note takes the velocity notes are typed with and the track's gate, and an
 `OFF` there stays. `Euclid` with 3 hits over 8 rows is a tresillo to start a
-line from, and `3 states` a line with some notes held into the next.
+line from, `3 states` a line with some notes held into the next, and `Rhythm`
+a clave or a bell.
 
 On an FX column with no command in the rows selected, `S` first lists the
 commands, as `K` does, and the one you choose is written on the rows `Where`
