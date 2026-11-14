@@ -26,7 +26,7 @@ take *args:
 
 # Write the generators tutorial's songs and the shipped patches again from their builders, after a change to the song format
 tutorial-songs:
-    VT_BLESS=1 cargo test -q -p vt-engine --test tutorial_songs each_tutorial_song
+    VT_BLESS=1 cargo test -q -p vt-engine --test all tutorial_songs::each_tutorial_song
 
 # Make the manual's screenshots of the interface, as SVGs in docs/manual/src/images
 screenshots:
