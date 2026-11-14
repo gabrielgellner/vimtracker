@@ -108,6 +108,16 @@ dc3245cdef2b319d List on Note of its own, in key
 918022d726d34bef List on Note, in key
 b7e4fec82f941b23 List on Nudge
 93c4bef9a62d4bef List on Velocity
+9a4e095305c69a40 List on cells on FX, event
+43dc42790006b404 List on cells on FX, fine
+a5bc6e6c5bfb7a35 List on cells on FX, last slot
+0391178338e0b74c List on cells on Length
+5d98a443c058aeb9 List on cells on Note of its own, chromatic
+6660b0bb95643cd6 List on cells on Note of its own, in key
+7dacbe8e3a4823d3 List on cells on Note, chromatic
+1bdf77d1652ef93f List on cells on Note, in key
+b683f80034b64b60 List on cells on Nudge
+6334e8ca0bc56567 List on cells on Velocity
 e4bd9007cbe9f92b Mask bits on FX, event
 084b8193950bad90 Mask bits on FX, fine
 d99dd3412a417df2 Mask bits on FX, last slot
@@ -138,6 +148,16 @@ a894db54bedba86b Ramp on Length
 2662eb42ba6c0742 Ramp on Note, in key
 aa89fa5fa5410262 Ramp on Nudge
 2e8e418bb64c737d Ramp on Velocity
+64deba0118d2c6e6 Ramp on cells on FX, event
+07d8a304dd7f4c1e Ramp on cells on FX, fine
+a687f5815b8b849f Ramp on cells on FX, last slot
+9e979558d29bc1ca Ramp on cells on Length
+c35e813e08889b9a Ramp on cells on Note of its own, chromatic
+6a3ae53232764e95 Ramp on cells on Note of its own, in key
+778b9f1f9ff7ddd3 Ramp on cells on Note, chromatic
+cdd20fe51843c1af Ramp on cells on Note, in key
+7a984b50a4bccd0f Ramp on cells on Nudge
+4eec24978a21c645 Ramp on cells on Velocity
 42d600394983fa04 Random on FX, event
 7a77142b9097a4d5 Random on FX, fine
 3a34ab4c7e458b16 Random on FX, last slot
@@ -148,6 +168,16 @@ eca88f2939af50ec Random on Note, chromatic
 06781fe63f70e44a Random on Note, in key
 19a32dbe4b550625 Random on Nudge
 be8fda7cc1220b2f Random on Velocity
+5e70828c27edef99 Random on cells on FX, event
+3b54c98f78f7da39 Random on cells on FX, fine
+80e5da88879ad709 Random on cells on FX, last slot
+7642beaff664bfe5 Random on cells on Length
+4f27a2e77111e129 Random on cells on Note of its own, chromatic
+b46633b08309d5ff Random on cells on Note of its own, in key
+e95bef9569e0cd80 Random on cells on Note, chromatic
+c69cd42137ade84f Random on cells on Note, in key
+f9e88c2ffd535d3d Random on cells on Nudge
+2321506a60ec0e92 Random on cells on Velocity
 d29c6fa5ed187365 Random shaped on FX, event
 676a2fcebb1e3dfe Random shaped on FX, fine
 09cca6d5be3a5898 Random shaped on FX, last slot

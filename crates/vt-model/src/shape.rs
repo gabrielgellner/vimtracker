@@ -6,10 +6,12 @@
 //! bits, and `Grids` writes a drum part from a map of real patterns, one part a track across a
 //! kit's. `Variation` writes something like the notes there, from a Markov chain learned from them.
 //! `Divisions` writes a rhythm from a chance for each note division, straight and triplet, to
-//! strike, after Vermona's randomRHYTHM, its triplets nudged between the rows.
+//! strike, after Vermona's randomRHYTHM, its triplets nudged between the rows. A `Where` of
+//! `Cells` chooses the rows from an elementary cellular automaton, as Wolfram's rules evolve it.
 
 mod acid;
 mod bits;
+mod cells;
 mod divisions;
 mod follow;
 mod grids;
@@ -22,6 +24,10 @@ mod walk;
 
 pub use acid::{Acid, MAX_ACID_NOTES, chance as acid_chance, weight as acid_weight};
 pub use bits::{Bits, MAX_FACTOR, MAX_TURN};
+pub use cells::{
+    ACROSS_GENERATIONS, Across, COLUMN_GENERATIONS, Cells, DEFAULT_RULE, MAX_CELLS,
+    Start as CellStart,
+};
 pub use divisions::{
     Bar, Channel, DIVISIONS, Division, Divisions, Strike, track_seed as divisions_seed,
 };
@@ -136,6 +142,13 @@ const EUCLID: Where = Where::Euclid {
     hits: EUCLID_HITS,
     rotate: 0,
 };
+/// A `Cells` `Where` as it starts: rule 30, from a row drawn from the seed.
+const CELLS: Where = Where::Cells(Cells {
+    rule: cells::DEFAULT_RULE,
+    start: CellStart::Seed,
+    across: None,
+    stepped: 0,
+});
 /// The most values a `List` fill goes through, so a shape stays plain data of a fixed size.
 pub const MAX_VALUES: usize = 8;
 
@@ -322,6 +335,9 @@ pub enum Where {
     /// `hits` spread as evenly as they go among the rows it can change, then moved `rotate` of
     /// those rows later, going round.
     Euclid { hits: u16, rotate: u16 },
+    /// The cells an elementary cellular automaton has on: a row a cell on one column, each pass a
+    /// generation, or across tracks, a track a cell and a row a generation.
+    Cells(Cells),
 }
 
 impl Where {
@@ -335,6 +351,7 @@ impl Where {
             Self::Every(_) => "Every",
             Self::Chance(_) => "Chance",
             Self::Euclid { .. } => "Euclid",
+            Self::Cells(_) => "Cells",
         }
     }
 }
@@ -499,9 +516,21 @@ impl ShapeColumn {
             // Notes of its own go on rows without one, so the rows are only a rhythm.
             Self::Note {
                 writes: Some(_), ..
-            } => vec![Where::AllRows, Where::Every(4), Where::Chance(50), EUCLID],
+            } => vec![
+                Where::AllRows,
+                Where::Every(4),
+                Where::Chance(50),
+                EUCLID,
+                CELLS,
+            ],
             Self::Note { .. } | Self::Velocity | Self::Nudge { .. } | Self::Length => {
-                vec![Where::Notes, Where::Every(4), Where::Chance(50), EUCLID]
+                vec![
+                    Where::Notes,
+                    Where::Every(4),
+                    Where::Chance(50),
+                    EUCLID,
+                    CELLS,
+                ]
             }
             Self::Fx { .. } => vec![
                 Where::Commands,
@@ -511,6 +540,7 @@ impl ShapeColumn {
                 Where::Every(4),
                 Where::Chance(50),
                 EUCLID,
+                CELLS,
             ],
         }
     }
@@ -830,13 +860,18 @@ impl Shape {
 
     /// Whether anything it writes is drawn from its seed, so another seed would write something
     /// else: a random fill, a walk, `1/f`, `Acid`, `Shuffle`, `Grids`' chaos, a `Variation`, a
-    /// random wave or a `Follow` that mutates, or rows chosen by chance.
+    /// random wave or a `Follow` that mutates, or rows chosen by chance, or by cells drawn from
+    /// it on one column.
     pub fn draws(&self) -> bool {
         let random_wave =
             self.kind == FillKind::Wave && matches!(self.wave, Wave::Random | Wave::Smooth);
+        let drawn_cells = matches!(
+            self.place,
+            Where::Cells(cells) if cells.start == CellStart::Seed && cells.across.is_none()
+        );
         random_wave
             || self.kind == FillKind::Follow && self.follow.mutates()
-            || matches!(self.place, Where::Chance(_)) && self.kind.has_where()
+            || (matches!(self.place, Where::Chance(_)) || drawn_cells) && self.kind.has_where()
             || matches!(
                 self.kind,
                 FillKind::Random
@@ -850,9 +885,20 @@ impl Shape {
             )
     }
 
+    /// Whether its rows are a cellular automaton's, which `Vary` steps on a generation at a time
+    /// rather than drawing a new seed.
+    pub fn evolves(&self) -> bool {
+        matches!(self.place, Where::Cells(_)) && self.kind.has_where()
+    }
+
+    /// Whether it has `Vary`: it draws from its seed, or it evolves.
+    pub fn can_vary(&self) -> bool {
+        self.draws() || self.evolves()
+    }
+
     /// Whether it plays a variation of its own on some passes, so the engine renders it.
     pub fn varies(&self) -> bool {
-        self.vary > 0 && self.draws()
+        self.vary > 0 && self.can_vary()
     }
 
     /// The shape a pass of its phrase plays, counted from 0: itself unless it [varies], and
@@ -860,9 +906,11 @@ impl Shape {
     /// it is, as `r` would roll it (with `Acid`'s pitches kept, only the second die). The first
     /// is the seed as written, so what's written is what the first pass plays, and since it's
     /// worked out from the pass alone, a render repeats and playing from anywhere hears what
-    /// playing to there would.
+    /// playing to there would. A shape that [evolves] keeps its seed, and each `vary` passes step
+    /// its automaton on instead, so its rhythm grows from its seed row and its values stay.
     ///
     /// [varies]: Shape::varies
+    /// [evolves]: Shape::evolves
     pub fn on_pass(&self, pass: i64) -> Shape {
         if !self.varies() {
             return *self;
@@ -870,6 +918,14 @@ impl Shape {
         let which = pass.div_euclid(i64::from(self.vary));
         if which == 0 {
             return *self;
+        }
+        if let Where::Cells(cells) = self.place
+            && self.evolves()
+        {
+            return Shape {
+                place: Where::Cells(cells.stepped_by(which)),
+                ..*self
+            };
         }
         // Mixed rather than added, as `track_seed` is, so the next pass isn't the rows moved on.
         let new = |seed: u64| seed ^ mix(PASS_KEY, which as usize);
@@ -2195,5 +2251,51 @@ mod tests {
         let varied = acid.on_pass(2);
         assert_eq!(varied.seed, acid.seed);
         assert_ne!(varied.acid.roll, acid.acid.roll);
+    }
+
+    /// Rows a cellular automaton chooses evolve with `Vary` rather than drawing a new seed: each
+    /// group of passes steps it a generation on, the first its seed row, and a fill's own values
+    /// keep their seed; with `Vary` off it plays its seed row every pass.
+    #[test]
+    fn rows_from_cells_step_a_generation_each_group_of_passes() {
+        let cells = Shape {
+            kind: FillKind::Random,
+            place: CELLS,
+            vary: 2,
+            ..ramp(0x10, 0x70, 0, 0)
+        };
+        assert!(cells.evolves() && cells.varies());
+        let stepped = |pass| match cells.on_pass(pass).place {
+            Where::Cells(cells) => cells.stepped,
+            _ => unreachable!(),
+        };
+        assert_eq!((0..6).map(stepped).collect::<Vec<_>>(), [0, 0, 1, 1, 2, 2]);
+        assert_eq!(cells.on_pass(0), cells, "the first pass is as written");
+        assert!((0..9).all(|pass| cells.on_pass(pass).seed == cells.seed));
+        assert_eq!(
+            Shape { vary: 0, ..cells }.on_pass(7),
+            Shape { vary: 0, ..cells }
+        );
+        // A ramp that draws nothing still has its rows to evolve, so it has `Vary`.
+        let ramp = Shape {
+            kind: FillKind::Ramp,
+            ..cells
+        };
+        assert!(ramp.can_vary());
+        // From one cell in the middle it draws nothing from its seed; from the seed it does.
+        let one = |start| Shape {
+            place: Where::Cells(Cells {
+                start,
+                ..Cells::default()
+            }),
+            ..ramp
+        };
+        assert!(!one(CellStart::One).draws() && one(CellStart::Seed).draws());
+        // A fill that makes its own rhythm has no `Where`, so nothing to evolve.
+        let grids = Shape {
+            kind: FillKind::Grids,
+            ..cells
+        };
+        assert!(!grids.evolves());
     }
 }

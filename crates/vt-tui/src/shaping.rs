@@ -57,6 +57,24 @@ fn generating(place: Where, column: ShapeColumn) -> Where {
     }
 }
 
+/// A `Where` of `Cells` on the `nth` of the tracks shaped at once, each its own cell of one
+/// automaton, the row they start from worked out once for all of them, from `seed` or from
+/// `hits`, whether each has a note on its first row (decision 326). Any other is as it is.
+fn cells_across(place: Where, seed: u64, nth: usize, hits: &[bool]) -> Where {
+    match place {
+        Where::Cells(cells) => Where::Cells(cells.for_track(seed, nth, hits)),
+        place => place,
+    }
+}
+
+/// Whether a phrase's steps have a note on a range's first row, which a `Cells` across tracks
+/// can start from.
+fn first_hit(steps: &[Step], range: StepRange) -> bool {
+    steps
+        .get(range.first)
+        .is_some_and(|step| matches!(step.note, Note::On(_)))
+}
+
 /// A shape saved elsewhere, as a patch's generator, made to fit a column: a `Where` the column
 /// doesn't offer becomes the one it starts with, as a reshape's `Notes` is a generated column's
 /// `All rows`. A fill it doesn't offer is refused, saying so.
@@ -161,11 +179,22 @@ impl ShapePanel {
     /// The shape each part takes: the panel's, with the part's own seed, on a column it
     /// generates on, every row where the panel chooses the notes or commands there, and across
     /// tracks, its own part of Grids' beat, or its own channel of `Divisions`, each three tracks
-    /// sharing a seed so the third plays the strikes of the other two.
+    /// sharing a seed so the third plays the strikes of the other two, or its own cell of one
+    /// `Cells` automaton.
     pub fn shape_of(&self, nth: usize) -> Shape {
         let part = &self.parts[nth];
         let channels =
             self.shape.kind == FillKind::Divisions && self.shape.divisions.channel.is_none();
+        let hits: Vec<bool> = self
+            .parts
+            .iter()
+            .map(|part| first_hit(self.base_steps(part), part.range))
+            .collect();
+        let place = if part.generate {
+            generating(self.shape.place, part.column)
+        } else {
+            self.shape.place
+        };
         Shape {
             seed: if channels {
                 divisions_seed(self.shape.seed, nth)
@@ -177,11 +206,7 @@ impl ShapePanel {
             } else {
                 self.shape.divisions
             },
-            place: if part.generate {
-                generating(self.shape.place, part.column)
-            } else {
-                self.shape.place
-            },
+            place: cells_across(place, self.shape.seed, nth, &hits),
             grids: Grids {
                 part: self.shape.grids.part.or(Some(part.drum)),
                 ..self.shape.grids
@@ -1195,6 +1220,10 @@ impl App {
         let tracks: Vec<usize> = places.iter().map(|place| place.0).collect();
         let drums = self.drums_of(&tracks);
         let channels = shape.kind == FillKind::Divisions && tracks.len() > 1;
+        let hits: Vec<bool> = places
+            .iter()
+            .map(|(track, phrase, range, ..)| first_hit(steps_on(*track, *phrase), *range))
+            .collect();
         let mut actions: Vec<Action> = places
             .into_iter()
             .enumerate()
@@ -1217,11 +1246,16 @@ impl App {
                         } else {
                             shape.divisions
                         },
-                        place: if generate {
-                            generating(shape.place, column)
-                        } else {
-                            shape.place
-                        },
+                        place: cells_across(
+                            if generate {
+                                generating(shape.place, column)
+                            } else {
+                                shape.place
+                            },
+                            seed,
+                            nth,
+                            &hits,
+                        ),
                         grids: Grids {
                             part: match shape.grids.part {
                                 Some(part) if tracks.len() == 1 => Some(part),

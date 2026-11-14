@@ -990,4 +990,80 @@ mod tests {
             assert!(step < real / 2, "{step:?} a step to make {real:?}");
         }
     }
+
+    /// The most a `Cells` render steps (decision 326): on a column of 4,096 rows, 255
+    /// generations of 4,096 cells, and across tracks on 4,095 rows, 8,190 generations of 64
+    /// cells, the pass's first row just short of going round. Nothing allocates, and in a release
+    /// build each takes a sliver of the shortest step, at 400 BPM.
+    #[test]
+    fn the_longest_cells_render_keeps_up() {
+        use vt_model::shape::{Across, COLUMN_GENERATIONS, CellStart, Cells};
+        let song = song(MAX_PHRASE_STEPS);
+        let frames = step_frames(&song);
+        let real = Duration::from_secs_f64(frames as f64 / f64::from(RATE));
+        let steps = vec![Step::default(); MAX_PHRASE_STEPS];
+        let column = ShapeColumn::Note {
+            scale: song.scale,
+            writes: Some(0x64),
+        };
+        let mut cells = vec![GenCell::Under; MAX_PHRASE_STEPS];
+        let column_cells = Cells {
+            rule: 30,
+            start: CellStart::Seed,
+            across: None,
+            stepped: (COLUMN_GENERATIONS - 1) as u16,
+        };
+        let across_cells = Cells {
+            across: Some(Across {
+                cell: 31,
+                cells: 64,
+                row: 0x9E37_79B9_7F4A_7C15,
+            }),
+            stepped: 1,
+            ..column_cells
+        };
+        let cases = [
+            (StepRange::between(0, MAX_PHRASE_STEPS - 1), column_cells),
+            (StepRange::between(0, MAX_PHRASE_STEPS - 2), across_cells),
+        ];
+        for (range, chosen) in cases {
+            let ramp = shape(FillKind::Ramp, 36, 48, Where::Cells(chosen));
+            let times = 8;
+            let ((), count) = forbidden(|| {
+                render_into(
+                    &steps,
+                    range,
+                    column,
+                    &ramp,
+                    None,
+                    &mut cells[..range.len()],
+                );
+            });
+            assert_eq!(count, 0);
+            let started = Instant::now();
+            for _ in 0..times {
+                render_into(
+                    &steps,
+                    range,
+                    column,
+                    &ramp,
+                    None,
+                    &mut cells[..range.len()],
+                );
+            }
+            let render = started.elapsed() / times;
+            println!("{chosen:?} over {} rows: {render:?} a render", range.len());
+            assert!(
+                cells[..range.len()]
+                    .iter()
+                    .any(|cell| *cell != GenCell::Under)
+            );
+            if !cfg!(debug_assertions) {
+                assert!(
+                    render < real / 20,
+                    "{render:?} a render, for {real:?} of sound"
+                );
+            }
+        }
+    }
 }

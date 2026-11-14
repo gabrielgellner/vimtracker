@@ -426,19 +426,19 @@ impl<F: FnMut(usize, &Shaped)> Out<'_, F> {
 }
 
 /// The words of a bitset of a span's rows.
-const WORDS: usize = MAX_PHRASE_STEPS / 64;
+pub(super) const WORDS: usize = MAX_PHRASE_STEPS / 64;
 
 /// A bitset of up to `MAX_PHRASE_STEPS` bits, 512 bytes: the rows of a span a shape fills, by
 /// their offset in it, or a Euclidean pattern.
 #[derive(Clone, Copy)]
 pub(super) struct Rows {
-    words: [u64; WORDS],
-    len: usize,
+    pub(super) words: [u64; WORDS],
+    pub(super) len: usize,
 }
 
 impl Rows {
     /// `len` bits, all clear.
-    fn new(len: usize) -> Self {
+    pub(super) fn new(len: usize) -> Self {
         Self {
             words: [0; WORDS],
             len: len.min(MAX_PHRASE_STEPS),
@@ -449,7 +449,7 @@ impl Rows {
         at < self.len && self.words[at / 64] & (1 << (at % 64)) != 0
     }
 
-    fn set(&mut self, at: usize) {
+    pub(super) fn set(&mut self, at: usize) {
         if at < self.len {
             self.words[at / 64] |= 1 << (at % 64);
         }
@@ -574,7 +574,7 @@ pub(super) fn chosen(
             Where::Notes => has_note,
             Where::NoNotes => !has_note,
             Where::Commands => column.value(step).is_some(),
-            Where::AllRows | Where::Euclid { .. } => true,
+            Where::AllRows | Where::Euclid { .. } | Where::Cells(_) => true,
             Where::Every(every) => offset.is_multiple_of(usize::from(every.max(1))),
             Where::Chance(percent) => mix(seed ^ 0x5555, offset) % 100 < u64::from(percent),
         };
@@ -582,8 +582,10 @@ pub(super) fn chosen(
             rows.set(offset);
         }
     }
-    let Where::Euclid { hits, rotate } = place else {
-        return rows;
+    let (hits, rotate) = match place {
+        Where::Euclid { hits, rotate } => (hits, rotate),
+        Where::Cells(cells) => return cells.chosen(steps, range, seed, &rows, len),
+        _ => return rows,
     };
     // Counted among the rows it can change, as `Alternate` counts, so on Velocity it's among the
     // notes however they're spaced.

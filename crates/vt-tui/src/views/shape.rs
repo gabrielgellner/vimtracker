@@ -143,7 +143,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, panel: &ShapePanel) {
         lines.push(Line::from(line));
     }
     let too_few = panel.too_few_notes();
+    let cells = panel.shape.evolves();
     let hint = match panel.shape.kind {
+        _ if cells && panel.parts.len() > 1 => "Each track a cell, a row a generation",
+        _ if cells => "Each row a cell, stepped on by Vary",
         FillKind::Random | FillKind::Walk | FillKind::Pink if app.mode == Mode::Shape => {
             "~ swap  r reroll"
         }
