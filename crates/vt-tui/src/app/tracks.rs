@@ -7,9 +7,11 @@ use vt_engine::engine::Transport;
 use vt_engine::link::Command;
 use vt_model::action::Action;
 use vt_model::constants::FIXED_TRACKS;
+use vt_model::label::is_name;
 use vt_model::song::{Launch, TrackKind};
 
 use super::{App, TrackLive};
+use crate::input::command::LineError;
 
 impl App {
     /// Keep one set of live controls per track as tracks come and go.
@@ -267,6 +269,23 @@ impl App {
             Some(group) => format!("{which} in group {group}"),
             None => format!("{which} in no group"),
         };
+    }
+
+    /// `:name`: name the cursor's track, in two characters, or on a group's own track up to
+    /// five, as `:group name` does (decision 308).
+    pub(super) fn name_track(&mut self, name: Option<String>) {
+        if self.song().tracks[self.cursor.track].is_group() {
+            self.name_group(name);
+            return;
+        }
+        if name.as_deref().is_some_and(|name| !is_name(name)) {
+            self.status = LineError::Name.to_string();
+            return;
+        }
+        self.apply(&Action::SetTrackName {
+            track: self.cursor.track,
+            name: name.unwrap_or_default(),
+        });
     }
 
     /// Name the cursor's group, or the group the cursor's track is in, as one undo step, or with

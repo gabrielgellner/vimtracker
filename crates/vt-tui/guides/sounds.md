@@ -892,7 +892,9 @@ it, name its slices and set its points by eye and by ear; `C-o` comes back.
 ## Names
 
 `:name BD` names the current track, in place of its number. A name is two
-characters and starts with a letter. `:name` on its own clears it.
+characters and starts with a letter. `:name` on its own clears it. On a group's own
+track it takes up to five letters or digits, as `:group name` does, so `:name drums`
+names the group `DRUMS`.
 
 ## Kits
 
@@ -963,6 +965,8 @@ mark off, and goes on to the next, so `4x` marks four, and `a` marks every sound
 the kit, or takes the marks off if they're all marked. A marked sound's pad has a tick,
 and the title says how many are marked. Marks stay in one kit, so marking a sound in
 another starts again there, and a sound whose file has gone can't be marked.
+Moving onto a sound plays it, as in `:sample`, and `A` stops that or starts it again
+in both; marking plays only the sound the cursor moves on to.
 
 `Enter` loads the marked sounds, or the one under the cursor if none are, as new
 tracks after the last, so nothing is written over. Each track plays one sound and is
@@ -987,6 +991,7 @@ its own, and `S` on its notes changes it.
 | `l` on a kit | Open it to its sounds |
 | `Space` `x` | Mark this sound, or take the mark off, and go to the next |
 | `a` | Mark every sound in this kit, or take the marks off |
+| `A` | Stop playing each sound as the cursor moves onto it, or start again |
 | `Enter` | Load the marked sounds, or this one, as new tracks |
 | `Enter` on a kit | Use it, for `:sample` to list first |
 | `L` on a kit | Put every sound on tracks from the first, as `all` does |
