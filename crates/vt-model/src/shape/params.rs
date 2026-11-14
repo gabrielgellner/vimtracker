@@ -176,7 +176,7 @@ impl Choice {
             Self::Source(source) => shape.follow.source = source,
             Self::Part(part) => shape.grids.part = Some(part),
             Self::Channel(channel) => shape.divisions.channel = Some(channel),
-            Self::Bar(bar) => shape.divisions.bar = bar,
+            Self::Bar(bar) => shape.divisions = shape.divisions.with_bar(bar),
             Self::Vary(passes) => shape.vary = passes,
         }
     }
@@ -1569,7 +1569,7 @@ impl GenParam {
             }
             Self::Rows => shape.grids.fine = Grids::default().fine,
             Self::Channel => shape.divisions.channel = Some(Channel::default()),
-            Self::Bar => shape.divisions.bar = Bar::default(),
+            Self::Bar => shape.divisions = shape.divisions.with_bar(Bar::default()),
             Self::Quarters
             | Self::Eighths
             | Self::Sixteenths
@@ -2111,7 +2111,7 @@ impl GenParam {
             }
             Self::Rows => shape.grids.fine = number != 0,
             Self::Channel => shape.divisions.channel = Some(Channel::ALL[number as usize]),
-            Self::Bar => shape.divisions.bar = Bar::ALL[number as usize],
+            Self::Bar => shape.divisions = shape.divisions.with_bar(Bar::ALL[number as usize]),
             Self::Quarters
             | Self::Eighths
             | Self::Sixteenths

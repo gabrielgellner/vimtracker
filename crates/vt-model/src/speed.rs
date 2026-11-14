@@ -1,6 +1,7 @@
 //! A track's speed: how long each of its steps is, as a note division, so one track can run in
-//! eighths or triplets against the others' sixteenths. It's the Metropolix's clock division and
-//! Elektron's per-track scale, whose ×3/2 and ×3/4 are the sixteenth and eighth triplets.
+//! eighths, triplets or whole notes against the others' sixteenths. It's the Metropolix's clock
+//! division and Elektron's per-track scale, whose ×3/2 and ×3/4 are the sixteenth and eighth
+//! triplets, with Fugue Machine's half and double time and dotted values, for a canon's slow voice.
 
 use std::fmt;
 
@@ -20,41 +21,60 @@ pub enum Speed {
     #[default]
     Sixteenth,
     EighthTriplet,
+    DottedSixteenth,
     Eighth,
     QuarterTriplet,
+    DottedEighth,
     Quarter,
+    DottedQuarter,
+    Half,
+    Whole,
 }
 
 /// What each speed is called, in order, as `RATE` lists them.
-pub const SPEED_NAMES: [&str; 7] = ["1/32", "1/16T", "1/16", "1/8T", "1/8", "1/4T", "1/4"];
+pub const SPEED_NAMES: [&str; 12] = [
+    "1/32", "1/16T", "1/16", "1/8T", "1/16D", "1/8", "1/4T", "1/8D", "1/4", "1/4D", "1/2", "1/1",
+];
 
 impl Speed {
     /// Every speed, from the shortest step to the longest.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 12] = [
         Self::ThirtySecond,
         Self::SixteenthTriplet,
         Self::Sixteenth,
         Self::EighthTriplet,
+        Self::DottedSixteenth,
         Self::Eighth,
         Self::QuarterTriplet,
+        Self::DottedEighth,
         Self::Quarter,
+        Self::DottedQuarter,
+        Self::Half,
+        Self::Whole,
     ];
 
-    /// How long a step is, in ticks, 240 to a sixteenth.
+    /// How long a step is, in ticks, 240 to a sixteenth: from 120 at `1/32` to 3840 at `1/1`, each
+    /// a whole number of nudges.
     pub const fn ticks(self) -> u64 {
         match self {
             Self::ThirtySecond => TICKS_PER_STEP / 2,
             Self::SixteenthTriplet => TICKS_PER_STEP * 2 / 3,
             Self::Sixteenth => TICKS_PER_STEP,
             Self::EighthTriplet => TICKS_PER_STEP * 4 / 3,
+            Self::DottedSixteenth => TICKS_PER_STEP * 3 / 2,
             Self::Eighth => TICKS_PER_STEP * 2,
             Self::QuarterTriplet => TICKS_PER_STEP * 8 / 3,
+            Self::DottedEighth => TICKS_PER_STEP * 3,
             Self::Quarter => TICKS_PER_STEP * 4,
+            Self::DottedQuarter => TICKS_PER_STEP * 6,
+            Self::Half => TICKS_PER_STEP * 8,
+            Self::Whole => TICKS_PER_STEP * 16,
         }
     }
 
     /// The furthest a row's nudge goes either way at this speed, just under half its step: from
-    /// `5` at `1/32` to `2F` at `1/4`.
+    /// `5` at `1/32` to `2F` at `1/4` and `5F` at `1/2`. At `1/1` it's `7F`, a third of the step,
+    /// as far as a nudge's byte goes.
     pub const fn most_nudge(self) -> i8 {
         most_nudge(self.ticks())
     }
@@ -90,9 +110,14 @@ impl Speed {
             Self::SixteenthTriplet => "Three steps in two sixteenths",
             Self::Sixteenth => "The song's own steps",
             Self::EighthTriplet => "Three steps in four sixteenths",
+            Self::DottedSixteenth => "Two steps in three sixteenths",
             Self::Eighth => "Half as fast, a step to two sixteenths",
             Self::QuarterTriplet => "Three steps in eight sixteenths",
+            Self::DottedEighth => "A step to three sixteenths",
             Self::Quarter => "A quarter as fast, a step to a beat",
+            Self::DottedQuarter => "Two steps in three beats",
+            Self::Half => "An eighth as fast, a step to two beats",
+            Self::Whole => "A sixteenth as fast, a step to a bar",
         }
     }
 
@@ -112,17 +137,30 @@ impl fmt::Display for Speed {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::NUDGE_TICKS;
 
     #[test]
     fn speeds_are_note_divisions() {
         let ticks: Vec<u64> = Speed::ALL.iter().map(|speed| speed.ticks()).collect();
-        assert_eq!(ticks, [120, 160, 240, 320, 480, 640, 960]);
+        assert_eq!(
+            ticks,
+            [
+                120, 160, 240, 320, 360, 480, 640, 720, 960, 1440, 1920, 3840
+            ]
+        );
+        for speed in Speed::ALL {
+            assert_eq!(speed.ticks() % NUDGE_TICKS, 0, "{speed} is whole nudges");
+        }
         let most: Vec<i8> = Speed::ALL.iter().map(|speed| speed.most_nudge()).collect();
-        assert_eq!(most, [5, 7, 11, 15, 23, 31, 47]);
+        assert_eq!(most, [5, 7, 11, 15, 17, 23, 31, 35, 47, 71, 95, 127]);
+        assert!(Speed::ALL.is_sorted_by_key(|speed| speed.ticks()));
+        assert!(Speed::ALL.is_sorted());
         assert_eq!(Speed::default(), Speed::Sixteenth);
-        assert_eq!(Speed::from_index(4), Speed::Eighth);
-        assert_eq!(Speed::from_index(99), Speed::Quarter);
+        assert_eq!(Speed::from_index(5), Speed::Eighth);
+        assert_eq!(Speed::from_index(99), Speed::Whole);
         assert_eq!(Speed::named("1/8t"), Some(Speed::EighthTriplet));
+        assert_eq!(Speed::named("1/8d"), Some(Speed::DottedEighth));
+        assert_eq!(Speed::named("1/1"), Some(Speed::Whole));
         assert_eq!(Speed::named("1/12"), None);
         for (at, speed) in Speed::ALL.iter().enumerate() {
             assert_eq!(usize::from(speed.index()), at);
@@ -135,5 +173,8 @@ mod tests {
         assert_eq!(Speed::SixteenthTriplet.song_steps(24), 16);
         assert_eq!(Speed::SixteenthTriplet.song_steps(16), 11);
         assert_eq!(Speed::ThirtySecond.song_steps(3), 2);
+        assert_eq!(Speed::DottedSixteenth.song_steps(3), 5);
+        assert_eq!(Speed::Half.song_steps(4), 32);
+        assert_eq!(Speed::Whole.song_steps(4), 64);
     }
 }

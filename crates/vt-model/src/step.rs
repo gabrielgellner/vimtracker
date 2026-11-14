@@ -344,13 +344,20 @@ pub const MAX_PULSES: u8 = 8;
 
 /// The furthest a row's nudge moves it either way on a step this many ticks long, in 24ths of a
 /// sixteenth: just under half the step, as Elektron's micro-timing goes, so a row's note can't
-/// pass the next row's. It's `B` at a sixteenth and `2F` at a quarter.
+/// pass the next row's. It's `B` at a sixteenth, `2F` at a quarter and `5F` at a half, and no more
+/// than `7F`, the most a nudge's byte holds, which a whole note's step stops at a third of the way
+/// (decision 325).
 pub const fn most_nudge(step: u64) -> i8 {
-    (step / NUDGE_TICKS / 2).saturating_sub(1) as i8
+    let most = (step / NUDGE_TICKS / 2).saturating_sub(1);
+    if most > i8::MAX as u64 {
+        i8::MAX
+    } else {
+        most as i8
+    }
 }
 
-/// The furthest any row's nudge goes, on a track at a quarter, the longest step.
-pub const MOST_NUDGE: i8 = crate::speed::Speed::Quarter.most_nudge();
+/// The furthest any row's nudge goes, `7F`, on a track at a whole note, the longest step.
+pub const MOST_NUDGE: i8 = crate::speed::Speed::Whole.most_nudge();
 
 /// How many hex digits a nudge takes on a track whose nudges go this far: one up to `F`, and two
 /// past it.

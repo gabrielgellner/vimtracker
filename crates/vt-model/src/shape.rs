@@ -483,8 +483,8 @@ impl ShapeColumn {
                     b'+' => (1, &text[1..]),
                     _ => (1, text),
                 };
-                let size = u8::from_str_radix(digits, 16).ok()?.min(most.max(0) as u8) as i8;
-                Some((sign * size + most) as u8)
+                let size = u8::from_str_radix(digits, 16).ok()?.min(most.max(0) as u8);
+                Some((sign * i16::from(size) + i16::from(most)) as u8)
             }
             _ => u8::from_str_radix(text, 16)
                 .ok()
@@ -525,7 +525,9 @@ impl ShapeColumn {
                 _ => None,
             },
             Self::Velocity => note.then(|| step.velocity.unwrap_or(MAX_VELOCITY)),
-            Self::Nudge { most } => note.then(|| (step.nudge.clamp(-most, most) + most) as u8),
+            Self::Nudge { most } => {
+                note.then(|| (i16::from(step.nudge.clamp(-most, most)) + i16::from(most)) as u8)
+            }
             Self::Length => step.length().filter(|_| note),
             Self::Fx { slot, command } => step
                 .fx
@@ -2056,6 +2058,21 @@ mod tests {
         slow.write(&mut step, 0);
         assert_eq!(step.nudge, -47);
         assert_eq!(nudge.value(&step), Some(0), "kept to a sixteenth's range");
+
+        // On a track at a whole note, `7F` either way, the whole of the column's byte.
+        let whole = ShapeColumn::Nudge { most: 127 };
+        assert_eq!(whole.highest(), 254);
+        assert_eq!(whole.show(0), "-7F");
+        assert_eq!(whole.show(254), "+7F");
+        assert_eq!(whole.parse("-7f"), Some(0));
+        assert_eq!(whole.parse("+FF"), Some(254), "kept at 7F");
+        let mut step = steps[2].clone();
+        step.nudge = 127;
+        assert_eq!(whole.value(&step), Some(254));
+        whole.write(&mut step, 0);
+        assert_eq!(step.nudge, -127);
+        whole.write(&mut step, 254);
+        assert_eq!(step.nudge, 127);
 
         // A length fills every note, and a transform leaves `--` as it is.
         let length = ShapeColumn::Length;

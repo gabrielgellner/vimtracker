@@ -287,7 +287,8 @@ step as the groove makes it. A step's `GRV` chooses its groove before it lands.
 
 A row's nudge moves its note part off where the groove lands its step, in 24ths of
 a sixteenth, 96 to a quarter note as on the MPC, up to just under half the track's
-step either way: `B` at `1/16`, `5` at `1/32` and `2F` at `1/4`. A 24th is the same
+step either way: `B` at `1/16`, `5` at `1/32`, `2F` at `1/4` and `5F` at `1/2`. At
+`1/1` it stops at `7F`, a third of the step, as far as a nudge goes. A 24th is the same
 time on every track, so the same nudge pushes a slow part as much as a fast one. The
 order is grid, then groove, then nudge:
 
@@ -313,7 +314,9 @@ row waits for the earlier one, and is the note left sounding.
 ## Speed: a track's own step
 
 A track's `Speed` is how long its step is, as a note division: `1/32`, `1/16T`,
-`1/16`, `1/8T`, `1/8`, `1/4T` or `1/4`. Everything on the track counts its own
+`1/16`, `1/8T`, `1/16D`, `1/8`, `1/4T`, `1/8D`, `1/4`, `1/4D`, `1/2` or `1/1`, `D`
+being dotted, half as long again. A canon's slow voice, the theme at a quarter of
+its speed, is a track at `1/2` beside one at `1/8`. Everything on the track counts its own
 steps, so at `1/8` it moves down its rows half as fast, and its playhead is drawn
 where it is:
 

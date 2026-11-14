@@ -451,13 +451,15 @@ const FUGUE_THEME: [&str; 8] = [
     "B-3 50 --- --- ---",
 ];
 
-/// Fugue Machine: one theme on the first track, and three tracks following it live with `Follow`,
-/// each at its own speed and turned its own way: a fifth up, inverted and an octave down, and
-/// backwards and two rows late. An edit to the theme reaches all three.
+/// Fugue Machine: one theme on the first track, in eighths, and three tracks following it live
+/// with `Follow`, each at its own speed and turned its own way: a fifth up at double time,
+/// inverted and an octave down at a quarter of the speed, the canon's slow voice, and backwards
+/// and two rows late in triplets. An edit to the theme reaches all three.
 fn fugue() -> Song {
     let mut song = song("fugue", 92, 9, ScaleKind::HarmonicMinor, 4);
     song.seed = 0xF0;
     voice(&mut song, 0, "V1", SynthVoice::Fm, &FUGUE_THEME);
+    song.tracks[0].speed = Speed::Eighth;
     let theme = Source::default();
     let voices = [
         (
@@ -472,7 +474,7 @@ fn fugue() -> Song {
         (
             "V3",
             SynthVoice::VirtualAnalog,
-            Speed::Quarter,
+            Speed::Half,
             Follow {
                 invert: true,
                 transpose: -7,
@@ -998,6 +1000,7 @@ fn random_rhythm() -> Song {
         chances: [[90, 20, 10, 0, 10, 0], [0, 25, 0, 35, 40, 10]],
         channel: None,
         bar: Bar::FourFine,
+        ticks: None,
     };
     let column = ShapeColumn::Note {
         scale: song.scale,
@@ -1748,6 +1751,18 @@ fn the_fugues_three_voices_follow_its_theme_and_an_edit_to_it_reaches_them() {
             .map(|step| step.to_string()[..3].to_owned())
             .collect()
     };
+    // The theme in eighths, the answer at double time, the slow voice at half notes, a quarter of
+    // the theme's speed, and the backwards one in triplets.
+    let speeds: Vec<Speed> = song.tracks[..4].iter().map(|track| track.speed).collect();
+    assert_eq!(
+        speeds,
+        [
+            Speed::Eighth,
+            Speed::Sixteenth,
+            Speed::Half,
+            Speed::EighthTriplet
+        ]
+    );
     // A fifth up in A harmonic minor, four degrees.
     assert_eq!(
         notes(&song, 1),

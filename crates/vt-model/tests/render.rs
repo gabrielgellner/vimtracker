@@ -364,6 +364,8 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         chances,
         channel: more.chance(90).then(|| more.pick(&Channel::ALL)),
         bar: more.pick(&Bar::ALL),
+        // At 1/16 or 1/32, whose rows are the bar's, so every fill writes what it wrote before.
+        ticks: None,
     };
     shape
 }
