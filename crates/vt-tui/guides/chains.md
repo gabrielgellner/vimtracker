@@ -30,7 +30,7 @@ go by rows.
 
 | Keys | Does |
 |---|---|
-| `z a` | Collapse the view to a line a row, or lay it out in time again |
+| `z i` | Collapse the view to a line a row, or lay it out in time again |
 
 Collapsed, the columns go by row number, so notes on one row don't always
 sound together: follow the `>` marks to see how tracks line up.

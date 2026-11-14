@@ -108,7 +108,7 @@ row 00 takes three. Its first line is the row, and the rest are dim, with `│` 
 note it holds and a `MLT`'s note again on each of its pulses. `j` and `k` still go a
 row at a time, and counts, selections and the numbers beside the rows count rows.
 The other tracks' columns beside the grid line up by time too, so each line shows
-what they start in it. `z a` collapses the view to a line a row, and opens it again.
+what they start in it. `z i` collapses the view to a line a row, and opens it again.
 
 ![A phrase with a gate column](images/gates.svg)
 
