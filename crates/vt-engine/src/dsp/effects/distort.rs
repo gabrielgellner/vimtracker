@@ -358,6 +358,32 @@ fn shaped(kind: DistortType, driven: f32) -> f32 {
     }
 }
 
+/// What a steady input level comes out as through a distortion that shapes each sample alone, wet
+/// and dry mixed as `Mix` has them, before `Gain`: its transfer curve, for a drawing of it. `Soft`,
+/// `Hard`, `Fold` and `Sine` are driven by `Amount`, and `Crush` rounds to its `Bits`, through
+/// mu-law if it's on. `Down` holds samples over time, and the pedals filter round their clip, so
+/// none of them has one.
+pub fn transfer(settings: Distort, input: f32) -> Option<f32> {
+    let amount = f32::from(settings.amount) / 255.0;
+    let wet = match settings.kind {
+        DistortType::Soft => {
+            let (pre, post) = overdrive_gains(amount);
+            soft_clip(input * pre) * post
+        }
+        DistortType::Hard | DistortType::Fold | DistortType::Sine => {
+            shaped(settings.kind, input * drive_of(amount))
+        }
+        DistortType::Crush => crushed(
+            input,
+            crush_step(f32::from(settings.bits)),
+            settings.mu_law != 0,
+        ),
+        DistortType::Down | DistortType::Overdrive | DistortType::Distortion => return None,
+    };
+    let mix = f32::from(settings.mix) / 255.0;
+    Some(wet * mix + input * (1.0 - mix))
+}
+
 impl InsertState {
     /// Take what's now in the slot, with what it keeps coming from and going back to the pool. If
     /// there's none free yet, it's silent and asks again next time.
@@ -1172,6 +1198,43 @@ mod tests {
         seen.sort_unstable();
         seen.dedup();
         seen.len()
+    }
+
+    #[test]
+    fn a_steady_level_comes_out_where_the_transfer_curve_says() {
+        for kind in DistortType::ALL {
+            for (amount, mix, mu_law) in [(0x40, 0xFF, 0), (0xC0, 0xFF, 1), (0xA0, 0x80, 0)] {
+                let settings = Distort {
+                    kind,
+                    amount,
+                    bits: 4,
+                    mix,
+                    mu_law,
+                    ..Distort::DEFAULT
+                };
+                let curve = transfer(settings, 0.3);
+                if matches!(
+                    kind,
+                    DistortType::Down | DistortType::Overdrive | DistortType::Distortion
+                ) {
+                    assert_eq!(curve, None, "{kind:?}");
+                    continue;
+                }
+                for level in [-0.9, -0.3, 0.05, 0.3, 0.7] {
+                    let mut state = InsertState::default();
+                    state.set(Insert::Distort(settings));
+                    let mut out = 0.0;
+                    for _ in 0..512 {
+                        out = state.process([level; 2], NO_SMOOTHING, RATE, &Keys::default())[0];
+                    }
+                    let curve = transfer(settings, level).unwrap();
+                    assert!(
+                        (out - curve).abs() < 1e-3,
+                        "{kind:?} {amount:02X} at {level}: {out} against {curve}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

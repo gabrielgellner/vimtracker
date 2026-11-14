@@ -118,6 +118,10 @@ pub enum Cmd {
     Audition,
     /// Switch an FX slot out or back in.
     Bypass,
+    /// Zoom the FX page in on the cursor's slot, or back out to the rack (decision 329).
+    ZoomSlot,
+    /// Zoom the FX page back out to the rack.
+    ZoomRack,
     Replace,
     Substitute,
     /// Choose what's under the cursor from a list.
@@ -534,6 +538,16 @@ const TRACK_PAGE: &[(&str, Cmd, &str)] = &[
         "b",
         Cmd::Bypass,
         "Switch this effect or modulator out, or back in",
+    ),
+    (
+        "z i",
+        Cmd::ZoomSlot,
+        "On the FX page, zoom in on this slot, or back out",
+    ),
+    (
+        "z o",
+        Cmd::ZoomRack,
+        "On the FX page, back out to every slot",
     ),
     ("/", Cmd::FieldJump, "Jump to a setting by its name"),
     (

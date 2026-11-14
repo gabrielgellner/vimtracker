@@ -65,6 +65,20 @@ pub fn hanging_cell(filled: usize, color: Color, behind: Color, width: usize) ->
 /// Partial blocks filling a cell from the left, from one eighth of it to seven.
 const LEFT_EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 
+/// An amount as a bar going right in one colour, filled in eighths, for a share of its whole length
+/// from 0 to 1, this many cells long: a gain reduction meter laid on its side.
+pub fn amount_across(share: f32, cells: usize, style: Style) -> Span<'static> {
+    let total = (share.clamp(0.0, 1.0) * (cells * 8) as f32).round() as usize;
+    let text: String = (0..cells)
+        .map(|cell| match total.saturating_sub(cell * 8).min(8) {
+            0 => ' ',
+            8 => '█',
+            part => LEFT_EIGHTHS[part - 1],
+        })
+        .collect();
+    Span::styled(text, style)
+}
+
 /// A level as a bar across, a character for each `per_cell` dB up from `floor`, each filled in
 /// eighths and in the level colour at its middle, with a faint mark in the cell of the highest it
 /// was lately, `held`, while the bar is below it.

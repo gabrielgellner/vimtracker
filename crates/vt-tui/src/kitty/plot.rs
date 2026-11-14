@@ -3,17 +3,19 @@
 //! alpha for each entry, so a pixel the line only grazes is the line's colour, part see-through,
 //! and nothing is stretched, as the picture is the size of the characters it covers.
 //!
-//! Every curve is drawn here: the compressor's and the EQ's on the FX page, the filter's on the
+//! Every curve is drawn here: the compressor's, the EQ's and, zoomed, a distortion's on the FX
+//! page, the filter's on the
 //! Sound page, and the envelopes and the LFOs' cycles on the Mod page, with the dot that rides an
 //! LFO's.
 
 use std::cmp::Ordering;
 
 use vt_engine::dsp::compressor::curve_db;
+use vt_engine::dsp::distort::transfer;
 use vt_engine::dsp::eq::response_db as eq_response_db;
 use vt_engine::dsp::filter::track_response_db;
 use vt_model::envelope::{Adsr, Envelope};
-use vt_model::insert::{Compressor, Equaliser, threshold_db};
+use vt_model::insert::{Compressor, Distort, Equaliser, threshold_db};
 use vt_model::lfo::{self, Lfo, LfoMode, deformed_wave};
 use vt_model::macros::{MacroMap, response};
 use vt_model::modulation::{ModSlot, Polarity};
@@ -317,6 +319,23 @@ pub fn eq(settings: Equaliser, rate: u32, (width, height): (usize, usize)) -> Pl
     decades(&mut plot);
     plot.across(eq_level(0.0), Mark::Grid);
     let level = |x: f32| eq_level(eq_response_db(settings, rate, frequency_at(x)));
+    plot.curve(level, level(0.0), &[]);
+    plot
+}
+
+/// A distortion's transfer curve, this many pixels across and down: what a steady level from -1
+/// to 1 comes out as, across, from -1 to 1 up, as [`transfer`] has it, `Mix` and all, over dotted
+/// lines through nothing both ways and a fainter 1:1 diagonal, so how far the curve leaves it is
+/// what the distortion does. A type without a curve draws its gridlines alone.
+pub fn distort(settings: Distort, (width, height): (usize, usize)) -> Plot {
+    let mut plot = Plot::new(width, height);
+    plot.across(0.5, Mark::Grid);
+    plot.down(0.5, Mark::Grid);
+    plot.dotted((0.0, 0.0), (1.0, 1.0), Mark::Fainter);
+    if transfer(settings, 0.0).is_none() {
+        return plot;
+    }
+    let level = |x: f32| transfer(settings, 2.0 * x - 1.0).map_or(0.5, |out| 0.5 + 0.5 * out);
     plot.curve(level, level(0.0), &[]);
     plot
 }
@@ -798,6 +817,42 @@ mod tests {
         // Above it the curve is flatter than the diagonal, so it ends below the top right.
         let end = middle(&plot, 193).unwrap();
         assert!(end > plot.at(1.0, 1.0).1 + 20.0, "{end}");
+    }
+
+    #[test]
+    fn a_distortions_curve_is_its_transfer_and_a_type_without_one_has_its_gridlines_alone() {
+        use vt_model::insert::DistortType;
+        for kind in [DistortType::Soft, DistortType::Hard, DistortType::Sine] {
+            let settings = Distort {
+                kind,
+                amount: 0x60,
+                mix: 0xC0,
+                ..Distort::DEFAULT
+            };
+            let plot = distort(settings, (630, 624));
+            // Where it's not steep, the line's middle is within a pixel of the curve.
+            for x in (10..620).step_by(20) {
+                let share = (x as f32 + 0.5 - 1.0) / (630.0 - LINE_PIXELS);
+                let out = transfer(settings, 2.0 * share - 1.0).unwrap();
+                let expected = plot.at(share, 0.5 + 0.5 * out).1;
+                let next = transfer(settings, 2.0 * share - 1.0 + 0.01).unwrap();
+                if (next - out).abs() > 0.02 {
+                    continue;
+                }
+                let found = middle(&plot, x).unwrap();
+                assert!(
+                    (found - expected).abs() < 1.0,
+                    "{kind:?} {x}: {found} against {expected}"
+                );
+            }
+        }
+        let down = Distort {
+            kind: DistortType::Down,
+            ..Distort::DEFAULT
+        };
+        let plot = distort(down, (630, 624));
+        assert!(plot.cover.iter().all(|cover| *cover == 0));
+        assert!(plot.pixels().contains(&GRID));
     }
 
     #[test]
