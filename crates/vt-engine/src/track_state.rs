@@ -1308,6 +1308,15 @@ fn accumulator_rng(seed: u64, index: usize) -> Pcg32 {
     )
 }
 
+/// The generator for what a track's slot draws at random, Clouds' grains, on streams after every
+/// track's `Random` accumulators.
+fn effect_rng(seed: u64, index: usize, slot: usize) -> Pcg32 {
+    Pcg32::new(
+        seed,
+        (4 * MAX_TRACKS + 2 * MAX_TRACKS * MOD_SLOTS + MAX_TRACKS + index * INSERTS + slot) as u64,
+    )
+}
+
 /// What's heard of a value: its lock over its base. A glide is moved along by the song.
 /// On the `00` to `FF` scale, with the fine part as the fraction.
 fn heard(layers: &ValueLayers) -> f32 {
@@ -1392,7 +1401,11 @@ impl TrackState {
             safe: Smoothed::at(0.0),
             trim: [Trim::default(); 2],
             low_cut: Smoothed::at(0.0),
-            inserts: std::array::from_fn(|_| InsertState::default()),
+            inserts: std::array::from_fn(|slot| {
+                let mut insert = InsertState::default();
+                insert.reseed(effect_rng(seed, index, slot));
+                insert
+            }),
             gliding: 0,
             slot_values: [[0.0; MAX_KEPT_PARAMS]; INSERTS],
             resolved: [Insert::Empty; INSERTS],
@@ -1638,6 +1651,9 @@ impl TrackState {
         self.arp_rng = arp_rng(seed, index);
         self.drift_rng = drift_rng(seed, index);
         self.accumulator_rng = accumulator_rng(seed, index);
+        for (slot, insert) in self.inserts.iter_mut().enumerate() {
+            insert.reseed(effect_rng(seed, index, slot));
+        }
         self.arp = None;
         self.last_note = None;
         self.chain_pass = 0;

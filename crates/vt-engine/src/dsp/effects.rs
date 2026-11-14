@@ -3,6 +3,7 @@
 //! effects take. The table Warps reads is in `effects/tables/`.
 
 pub mod chorus;
+pub mod clouds;
 pub mod delay;
 pub mod distort;
 pub mod exciter;

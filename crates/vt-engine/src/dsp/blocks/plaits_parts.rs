@@ -115,6 +115,11 @@ impl Svf {
         }
     }
 
+    /// Forget what it's heard, keeping its frequency and resonance.
+    pub(in crate::dsp) fn reset(&mut self) {
+        (self.state_1, self.state_2) = (0.0, 0.0);
+    }
+
     #[inline]
     pub(in crate::dsp) fn low_pass(&mut self, input: f32) -> f32 {
         self.process_all(input).2
@@ -224,8 +229,9 @@ impl Limiter {
     }
 }
 
+/// stmlib's `SoftLimit`: a gentle curve near unity for quiet signals, reaching 1 at 3.
 #[inline]
-fn soft_limit(x: f32) -> f32 {
+pub(in crate::dsp) fn soft_limit(x: f32) -> f32 {
     x * (27.0 + x * x) / (27.0 + 9.0 * x * x)
 }
 
