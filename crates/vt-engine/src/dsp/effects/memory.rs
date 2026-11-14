@@ -11,6 +11,7 @@ use crate::dsp::effects::beads::Beads;
 use crate::dsp::effects::chorus::Chorus;
 use crate::dsp::effects::clouds::Clouds;
 use crate::dsp::effects::delay::{self, Delay};
+use crate::dsp::effects::echo::Echo;
 use crate::dsp::effects::flanger::Flanger;
 use crate::dsp::effects::freq_shifter::FreqShifter;
 use crate::dsp::effects::granular::Granular;
@@ -72,6 +73,7 @@ pub enum Memory {
     Stutter(Box<Stutter>),
     Clouds(Box<Clouds>),
     Beads(Box<Beads>),
+    Echo(Box<Echo>),
 }
 
 impl Memory {
@@ -170,6 +172,11 @@ impl Memory {
         Self::Beads(Box::new(Beads::new(rate)))
     }
 
+    /// A Space Echo's, whose tape holds its slowest speed, and its spring.
+    pub fn echo(rate: u32) -> Self {
+        Self::Echo(Box::new(Echo::new(rate)))
+    }
+
     /// Feed one frame in and get what's wet out.
     #[inline]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
@@ -193,6 +200,7 @@ impl Memory {
             Self::Space(space) => space.process(input),
             Self::Clouds(clouds) => clouds.process(input),
             Self::Beads(beads) => beads.process(input),
+            Self::Echo(echo) => echo.process(input),
         }
     }
 
@@ -217,6 +225,7 @@ impl Memory {
             Self::Rotary(rotary) => rotary.frames() as u32,
             Self::Clouds(clouds) => clouds.quiet_frames(),
             Self::Beads(beads) => beads.quiet_frames(),
+            Self::Echo(echo) => echo.quiet_frames(),
         }
     }
 
@@ -250,6 +259,7 @@ impl Memory {
             (Self::Space(space), Insert::Space(settings)) => space.follow(settings),
             (Self::Clouds(clouds), Insert::Clouds(settings)) => clouds.follow(settings, frames),
             (Self::Beads(beads), Insert::Beads(settings)) => beads.follow(settings, song, frames),
+            (Self::Echo(echo), Insert::Echo(settings)) => echo.follow(settings, frames_per_tick),
             _ => {}
         }
     }
@@ -268,11 +278,12 @@ impl Memory {
     }
 
     /// Give what draws random numbers its own generator, from the track's: Clouds' and Beads'
-    /// grains.
+    /// grains, and the Space Echo's wobble.
     pub fn seed(&mut self, rng: crate::rng::Pcg32) {
         match self {
             Self::Clouds(clouds) => clouds.seed(rng),
             Self::Beads(beads) => beads.seed(rng),
+            Self::Echo(echo) => echo.seed(rng),
             _ => {}
         }
     }
@@ -331,6 +342,7 @@ impl Memory {
             Self::Space(space) => space.settle(),
             Self::Clouds(clouds) => clouds.settle(),
             Self::Beads(beads) => beads.settle(),
+            Self::Echo(echo) => echo.settle(),
         }
     }
 
@@ -355,6 +367,7 @@ impl Memory {
             Self::Space(space) => space.clear(),
             Self::Clouds(clouds) => clouds.clear(),
             Self::Beads(beads) => beads.clear(),
+            Self::Echo(echo) => echo.clear(),
         }
     }
 }
@@ -381,6 +394,7 @@ pub struct MemoryCount {
     pub stutter: u16,
     pub clouds: u16,
     pub beads: u16,
+    pub echo: u16,
 }
 
 impl MemoryCount {
@@ -408,6 +422,7 @@ impl MemoryCount {
                 Insert::Space(_) => count.space += 1,
                 Insert::Clouds(_) => count.clouds += 1,
                 Insert::Beads(_) => count.beads += 1,
+                Insert::Echo(_) => count.echo += 1,
                 Insert::Empty
                 | Insert::Distort(_)
                 | Insert::Exciter(_)
@@ -444,6 +459,7 @@ pub struct MemoryPool {
     spaces: Vec<Memory>,
     clouds: Vec<Memory>,
     beads: Vec<Memory>,
+    echoes: Vec<Memory>,
     /// How many to send back to be freed, once they're free.
     owed: MemoryCount,
 }
@@ -474,6 +490,7 @@ impl MemoryPool {
             spaces: Vec::with_capacity(POOL_CAPACITY),
             clouds: Vec::with_capacity(POOL_CAPACITY),
             beads: Vec::with_capacity(POOL_CAPACITY),
+            echoes: Vec::with_capacity(POOL_CAPACITY),
             owed: MemoryCount::default(),
         };
         let needed = MemoryCount::of(song);
@@ -534,6 +551,9 @@ impl MemoryPool {
         for _ in 0..needed.beads {
             pool.put(Memory::beads(rate));
         }
+        for _ in 0..needed.echo {
+            pool.put(Memory::echo(rate));
+        }
         pool
     }
 
@@ -559,6 +579,7 @@ impl MemoryPool {
             Memory::Space(_) => &mut self.spaces,
             Memory::Clouds(_) => &mut self.clouds,
             Memory::Beads(_) => &mut self.beads,
+            Memory::Echo(_) => &mut self.echoes,
         };
         // It can't be this full, as the edit thread sends what's needed. Letting it leak is better
         // than growing or freeing in the callback.
@@ -591,6 +612,7 @@ impl MemoryPool {
             Insert::Space(_) => &mut self.spaces,
             Insert::Clouds(_) => &mut self.clouds,
             Insert::Beads(_) => &mut self.beads,
+            Insert::Echo(_) => &mut self.echoes,
             Insert::Empty
             | Insert::Distort(_)
             | Insert::Exciter(_)
@@ -628,6 +650,7 @@ impl MemoryPool {
         self.owed.space += count.space;
         self.owed.clouds += count.clouds;
         self.owed.beads += count.beads;
+        self.owed.echo += count.echo;
     }
 
     /// The next to send back to be freed, if any is owed and free.
@@ -746,6 +769,12 @@ impl MemoryPool {
             self.owed.beads -= 1;
             return Some(memory);
         }
+        if self.owed.echo > 0
+            && let Some(memory) = self.echoes.pop()
+        {
+            self.owed.echo -= 1;
+            return Some(memory);
+        }
         None
     }
 
@@ -770,6 +799,7 @@ impl MemoryPool {
             + self.spaces.len()
             + self.clouds.len()
             + self.beads.len()
+            + self.echoes.len()
     }
 }
 

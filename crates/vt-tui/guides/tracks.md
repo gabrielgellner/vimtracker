@@ -302,7 +302,7 @@ the page's width, with its settings in the same places and bars nearly twice as 
 | `LPG` | Its curve as far as it's open, and open all the way |
 | `Reso`, `Comb` | Its curve at the note playing |
 | `Vowel` | Its curve |
-| `Delay` | Its repeats over time, left up and right down |
+| `Delay`, `Space Echo` | Its repeats over time, left up and right down |
 | `Reverb`, `Plate` | How its tail dies away |
 | `Spring`, `Space` | How its tail dies away |
 
@@ -396,6 +396,56 @@ time that a step locks, changing the rhythm without a swoop. Its fade lasts half
 from 10 ms to half a second, and a change that comes while it fades waits for it to finish.
 `Wow` bends the two sides' pitch opposite ways, by up to about 9 cents, going round once every
 two seconds.
+
+`Space Echo` is a Roland RE-201's tape loop: a record head, three playback heads behind it and a
+spring reverb, fitted to Arturia's Delay TAPE-201. It starts half wet, as TAPE-201's `Default`
+does: the first head and the spring, 150 ms behind, fed back a third of the way to running away.
+Its `Mode` is in the slot's title, the RE-201's selector, by its number, the heads it plays and
+whether the reverb's on:
+
+| Mode | Plays |
+|---|---|
+| `1: H1`, `2: H2`, `3: H3` | The first, second or third head |
+| `4: H2 H3` | The second and third |
+| `5: H1 +R`, `6: H2 +R`, `7: H3 +R` | The first, second or third, with the reverb |
+| `8: H1 H2 +R` | The first and second, with the reverb |
+| `9: H2 H3 +R` | The second and third, with the reverb |
+| `10: H1 H3 +R` | The first and third, with the reverb |
+| `11: H1 H2 H3 +R` | All three, with the reverb |
+| `12: R` | The reverb alone |
+
+The second head is twice as far from the record head as the first, and the third three times, so
+a mode of two or three heads plays a rhythm: `4`'s repeats come on two and three, then on four,
+five and six as they go round. Each head of two or three is heard at a half or a third, so every
+mode is as loud.
+
+| Setting | Does |
+|---|---|
+| `Rate` | The tape's speed: the first head 1 s behind to 10 ms |
+| `Sync` | `Free`, or a note division the first head keeps to |
+| `Inertia` | How slowly the motor gets to a new speed |
+| `Intensity` | How much goes round again. From about `DC` it runs away |
+| `Input` | How hard the tape's driven, ±24 dB, as it comes at `80` |
+| `Wow` | How far the tape's speed wavers |
+| `Bass`, `Treble` | Lift or cut what comes out, flat at `80` |
+| `Reverb` | How much of the spring, in the modes that have it |
+| `Echo` | How loud the repeats are |
+
+`Rate` moves the tape, not a delay time, so a change bends what's already on it: slowing the tape
+drops the repeats' pitch until the motor gets there, as the machine's does, and `Inertia` makes
+that slower and gentler. A step's lock of `Rate` is the classic swoop. `Sync` sets the first
+head to a note division at the song's tempo instead, up to two seconds, and a new tempo moves
+the tape the same way.
+
+Each repeat goes through the tape once more than the last: darker, as the playback head takes its
+highs, a little thinner in the lows, and saturated, as the record head holds what's loud under a
+soft ceiling, so loud repeats thicken rather than clip. A faster tape keeps more highs. Turned up
+past where the loop gives back what it takes, the repeats grow by themselves until the tape holds
+them, a sound of their own that `Rate` then bends. `Wow` wavers as the capstan does, faster as
+the tape runs faster, by up to about 21 cents, with a little drift that comes from the track's
+seed, so a render is the same each time. `Bass` and `Treble` are on what comes out, the repeats
+and the reverb, and not in the loop. The reverb is a `Spring` at one setting, fed from what comes
+in.
 
 `Chorus` thickens a sound with copies of it that drift in time. It starts half wet,
 which is the classic sound. Its first two types are after Mutable Instruments' Rings:

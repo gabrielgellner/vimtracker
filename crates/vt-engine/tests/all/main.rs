@@ -13,6 +13,7 @@ mod choke;
 mod clouds;
 mod compressors;
 mod conditions;
+mod echo;
 mod engine;
 mod envelope;
 mod exciter;

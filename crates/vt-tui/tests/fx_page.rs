@@ -1534,3 +1534,38 @@ fn beads_shows_its_mode_and_quality_in_its_title_and_the_cursor_reaches_both() {
     assert!(fx_line(&app, 0).starts_with(&title), "{}", fx_line(&app, 0));
     println!("{}", fx_line(&app, 0));
 }
+
+#[test]
+fn a_space_echo_shows_its_mode_in_its_title_and_the_re_201s_controls_in_its_grid() {
+    use vt_model::insert::Insert;
+    use vt_tui::views::status::column_name;
+    let (mut app, _realtime) = on_fx_page();
+    press(&mut app, "K");
+    press(&mut app, "Space Echo");
+    special(&mut app, KeyCode::Enter);
+    assert!(matches!(app.song().tracks[0].inserts[0], Insert::Echo(_)));
+    let device = fx_line(&app, 0);
+    let title = slot_title(0, Some(true), "Space Echo  5: H1 +R ─");
+    assert!(device.starts_with(&title), "{device}");
+    for name in [
+        "Rate",
+        "Intensity",
+        "Bass",
+        "Echo",
+        "Sync",
+        "Input",
+        "Treble",
+        "Mix",
+        "Inertia",
+        "Wow",
+        "Reverb",
+        "Gain",
+    ] {
+        assert!(device.contains(name), "{name}: {device}");
+    }
+    press(&mut app, "l");
+    assert_eq!(column_name(&app), "Mode");
+    press(&mut app, "=");
+    let title = slot_title(0, Some(true), "Space Echo  6: H2 +R ─");
+    assert!(fx_line(&app, 0).starts_with(&title), "{}", fx_line(&app, 0));
+}

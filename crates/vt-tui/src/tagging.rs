@@ -113,7 +113,8 @@ impl App {
             .filter(|name| !fixed.contains(name))
             .cloned()
             .collect();
-        preset::set_tags(path, kind, own).map_err(|error| error.to_string())?;
+        kind.set_tags(path, own)
+            .map_err(|error| error.to_string())?;
         let (read, _) = explorer::item(path, Kind::Preset(kind), &self.tag_library);
         if let Some(picker) = self.picker.as_mut() {
             picker.set_tags(item, read.tags);

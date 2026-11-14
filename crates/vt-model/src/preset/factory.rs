@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{PatchPreset, PresetError, patch::read_patch};
+use super::{PatchPreset, PresetError, read};
 
 /// What the shipped patches are listed under, and what names one in a message.
 pub const FACTORY: &str = "Factory";
@@ -58,7 +58,7 @@ pub fn factory_patch(name: &str) -> Option<Result<PatchPreset, PresetError>> {
     FACTORY_PATCHES
         .iter()
         .find(|(shipped, _)| *shipped == name)
-        .map(|(name, text)| read_patch(text, &origin(name)))
+        .map(|(name, text)| read(text, &origin(name)))
 }
 
 #[cfg(test)]

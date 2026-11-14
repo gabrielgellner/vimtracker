@@ -818,7 +818,7 @@ fn take_presets(folder: &Path) -> std::io::Result<PathBuf> {
         vt_model::preset::save(&path, &preset, true).map_err(std::io::Error::other)?;
         if !tags.is_empty() {
             let tags = tags.iter().map(|tag| (*tag).to_owned()).collect();
-            set_tags(&path, PresetKind::Sound, tags).map_err(std::io::Error::other)?;
+            set_tags::<SoundPreset>(&path, tags).map_err(std::io::Error::other)?;
         }
     }
     let start = Instant::now();

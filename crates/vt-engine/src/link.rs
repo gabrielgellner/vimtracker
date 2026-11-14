@@ -371,6 +371,9 @@ impl Handle {
         for _ in self.held.beads..needed.beads {
             self.unsent.push(Memory::beads(self.rate));
         }
+        for _ in self.held.echo..needed.echo {
+            self.unsent.push(Memory::echo(self.rate));
+        }
         let spare = MemoryCount {
             delay: self.held.delay.saturating_sub(needed.delay),
             reverb: self.held.reverb.saturating_sub(needed.reverb),
@@ -391,6 +394,7 @@ impl Handle {
             space: self.held.space.saturating_sub(needed.space),
             clouds: self.held.clouds.saturating_sub(needed.clouds),
             beads: self.held.beads.saturating_sub(needed.beads),
+            echo: self.held.echo.saturating_sub(needed.echo),
         };
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
@@ -788,6 +792,8 @@ mod tests {
     const CLOUDS: Insert = Insert::Clouds(vt_model::insert::Clouds::DEFAULT);
     /// Beads, which takes its recording from the pool.
     const BEADS: Insert = Insert::Beads(vt_model::insert::Beads::DEFAULT);
+    /// A Space Echo, which takes its tape and spring from the pool.
+    const ECHO: Insert = Insert::Echo(vt_model::insert::Echo::DEFAULT);
 
     const BLOCK: usize = 256;
 
@@ -1014,6 +1020,7 @@ mod tests {
         more.tracks[3].inserts = [Insert::Empty, PITCH, SPRING, SPACE];
         more.tracks[4].inserts = [Insert::Empty, BEADS, STUTTER, GRAINS];
         more.tracks[5].inserts = [WARPS, COMB, RESO, SHIFT];
+        more.tracks[0].inserts[3] = ECHO;
         handle.publish(published(more, &pool));
         assert_eq!(
             handle.held,
@@ -1037,6 +1044,7 @@ mod tests {
                 stutter: needed.stutter + 1,
                 clouds: needed.clouds + 1,
                 beads: needed.beads + 1,
+                echo: needed.echo + 1,
             }
         );
         blocks(&mut rt, 1);
@@ -1051,7 +1059,7 @@ mod tests {
         while handle.freed.pop().is_ok() {
             freed += 1;
         }
-        assert_eq!(freed, 19);
+        assert_eq!(freed, 20);
     }
 
     #[test]
@@ -1140,6 +1148,38 @@ mod tests {
             });
             next.tracks[0].inserts = [beads, Insert::Empty, beads, Insert::Empty];
             next.tracks[1].inserts = [BEADS; INSERTS];
+            next
+        };
+        let engine = Engine::new(48_000, published(changing(0), &pool));
+        let (mut handle, mut rt) = connect(engine);
+        assert!(handle.send(Command::PlayFrom { step: 0 }));
+        let mut violations = blocks(&mut rt, 4);
+        for round in 1..200 {
+            handle.publish(published(changing(round), &pool));
+            violations += blocks(&mut rt, 2);
+            handle.pump();
+        }
+        assert_eq!(violations, 0);
+    }
+
+    #[test]
+    fn a_space_echo_changing_mode_speed_and_sync_never_allocates_in_the_callback() {
+        use vt_model::insert::Echo;
+        let pool = samples();
+        let changing = |round: usize| {
+            let mut next = song(2, 16);
+            let echo = Insert::Echo(Echo {
+                mode: (round % 12) as u8,
+                rate: (round * 37 % 256) as u8,
+                sync: (round / 3 % 4) as u8 * 5,
+                intensity: (round * 53 % 256) as u8,
+                wow: (round * 29 % 256) as u8,
+                bass: (round * 91 % 256) as u8,
+                reverb: 0xC0,
+                ..Echo::DEFAULT
+            });
+            next.tracks[0].inserts = [echo, Insert::Empty, echo, Insert::Empty];
+            next.tracks[1].inserts = [ECHO; INSERTS];
             next
         };
         let engine = Engine::new(48_000, published(changing(0), &pool));
