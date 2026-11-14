@@ -1,0 +1,99 @@
+fill | Fill
+from | From
+to | To
+notes | Notes
+spread | Spread
+bias | Bias
+octave | Octave
+density | Density
+accent | Accent
+slide | Slide
+pitches | Pitches
+trigloop | Trig loop
+noteloop | Note loop
+octloop | Oct loop
+accloop | Acc loop
+slideloop | Sld loop
+source | Source
+transpose | Transpose
+invert | Invert
+axis | About
+reverse | Reverse
+late | Rotate
+fx | FX
+mutation | Mutation
+repitch | Repitch
+shift | Shift
+retro | Retro
+ratchet | Ratchet
+drop | Drop/add
+step | Step
+edge | Edge
+depth | Depth
+steps | Steps
+weights | Weights
+factor | Factor
+masks | Masks
+part | Part
+note | Note
+x | X
+y | Y
+bd | BD fill
+sd | SD fill
+hh | HH fill
+chaos | Chaos
+rows | Rows
+channel | Channel
+bar | Bar
+d4 | 1/4
+d8 | 1/8
+d16 | 1/16
+d4t | 1/4T
+d8t | 1/8T
+d16t | 1/16T
+b4 | B 1/4
+b8 | B 1/8
+b16 | B 1/16
+b4t | B 1/4T
+b8t | B 1/8T
+b16t | B 1/16T
+change | Change
+ones | Chance
+length | Length
+triad | Triad
+voice | Voice
+moves | Moves
+list | List
+p | P
+l | L
+r | R
+loop | Length
+inscale | Scale
+order | Order
+temperature | Temp
+flip | Flip
+keep | Keep
+turn | Turn
+curve | Curve
+s | S
+wave | Shape
+rate | Rate
+phase | Phase
+values | Values
+run | Run
+where | Where
+every | Amount
+chance | Amount
+hits | Hits
+rotate | Rotate
+clusters | Amount
+markov | Amount
+states | Amount
+share | Amount
+side | Side
+rhythm | Rhythm
+role | Part
+child | Child
+rule | Rule
+start | Start
+vary | Vary

@@ -1,0 +1,7 @@
+Adsr | ADSR
+Ahd | AHD
+Drum | Drum
+Lpg | LPG
+Lfo | LFO
+Steps | Steps
+Track | Track

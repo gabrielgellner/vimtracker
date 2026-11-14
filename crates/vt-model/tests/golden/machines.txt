@@ -1,0 +1,50 @@
+Sampler | Sampler
+Plaits(VirtualAnalog) | VA
+Plaits(VirtualAnalogVcf) | VA VCF
+Plaits(Acid) | Acid
+Plaits(Supersaw) | Supersaw
+Plaits(Chiptune) | Chip
+Plaits(CSaw) | CSaw
+Plaits(Morph) | Morph
+Plaits(SawSquare) | Saw Sq
+Plaits(HardSync) | Sync
+Plaits(Triple) | Triple
+Plaits(Fm) | FM
+Plaits(SixOp) | 6-op
+Plaits(FourOp) | 4-op
+Plaits(FeedbackFm) | FB FM
+Plaits(ChaoticFm) | Chaos FM
+Plaits(PhaseDistortion) | PD
+Plaits(Waveshaping) | Fold
+Plaits(Additive) | Additive
+Plaits(Ring) | Ring
+Plaits(SawComb) | Saw Comb
+Plaits(Toy) | Toy
+Plaits(ZFilter) | Z Filter
+Plaits(Wavetable) | Waves
+Plaits(WaveTerrain) | Terrain
+Plaits(WaveMap) | Wave Map
+Plaits(WaveLine) | Wave Line
+Plaits(Paraphonic) | Paraphonic
+Plaits(String) | String
+Plaits(Modal) | Modal
+Plaits(Bowed) | Bowed
+Plaits(Blown) | Blown
+Plaits(Fluted) | Fluted
+Plaits(Bell) | Bell
+Plaits(Drum) | Drum
+Plaits(Formant) | Formant
+Plaits(Speech) | Speech
+Plaits(Chord) | Chord
+Plaits(Vosim) | VOSIM
+Plaits(Fof) | FOF
+Plaits(Dust) | Dust
+Plaits(Noise) | Noise
+Plaits(Swarm) | Swarm
+Plaits(TwinPeaks) | Twin Peaks
+Plaits(Clocked) | Clocked
+Plaits(GrainCloud) | Grain Cloud
+Plaits(Modem) | Modem
+Plaits(Kick) | Kick
+Plaits(Snare) | Snare
+Plaits(Hat) | Hat
