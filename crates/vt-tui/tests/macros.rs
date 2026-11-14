@@ -164,7 +164,11 @@ fn gm_bends_a_mappings_response_with_curve_and_s_as_the_shape_panel_does() {
     );
     // Across to Curve: a large step and a small one, 25 and 5, as the shape panel's.
     press(&mut app, "ll");
-    assert!(app.status.contains("Curve 0 bends"), "{}", app.status);
+    assert!(
+        app.status.contains("Curve 0 bends Cut from Min"),
+        "{}",
+        app.status
+    );
     press(&mut app, "+=");
     assert_eq!(map(&app).curve, 30);
     // S: down, then typed as a signed number and Enter, kept to 100, and straight again with x.

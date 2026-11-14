@@ -388,7 +388,7 @@ impl App {
         };
         if view.field.bends() {
             self.status = format!(
-                "Curve {} bends {}'s way from Min to Max, above 0 early and below late; S {} eases both ends, above 0 an S",
+                "Curve {} bends {} from Min to Max, early above 0 and late below; S {} shapes both ends, an S above 0 and the reverse below",
                 bend_text(map.curve),
                 target.name(),
                 bend_text(map.s)
