@@ -7,6 +7,8 @@
 use ratatui::widgets::{Block, BorderType, Borders};
 
 pub mod bar;
+#[cfg(test)]
+mod cells;
 pub mod device;
 pub mod grid;
 pub mod group;
@@ -14,6 +16,8 @@ pub mod hint;
 pub mod image;
 pub mod meter;
 pub mod panel;
+#[cfg(test)]
+mod pin;
 pub mod role;
 pub mod setting;
 pub mod table;

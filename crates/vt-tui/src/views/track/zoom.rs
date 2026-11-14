@@ -310,6 +310,7 @@ fn zoom_panel(page: &TrackPage, ctx: &Ctx, track: &Track, slot: usize) -> Graphi
         | Insert::Comb(_)
         | Insert::Vowel(_)
         | Insert::Delay(_)
+        | Insert::Echo(_)
         | Insert::Reverb(_)
         | Insert::Plate(_)
         | Insert::Spring(_)

@@ -1,0 +1,82 @@
+# How the Space Echo's record head saturates against Delay TAPE-201's (#712, decision 337): a sine
+# stepped from -36 to 0 dBFS through the first head at its fastest, 10 ms, so each step's repeat
+# lands inside its hold, with nothing fed back, at 110 Hz and 1 kHz, and with `Input` 12 dB up.
+#
+#   uv run run.py specs/echo-saturation.toml --report out/echo-saturation.html
+
+rate = 48000
+
+[input]
+signal = "steps"
+frequency = 1000.0
+from = -36.0
+to = 0.0
+step = 6.0
+hold = 0.4
+
+[ours]
+effects = ["echo"]
+
+[ours.settings]
+1.echo.mode = 0
+1.echo.rate = 0xFF
+1.echo.intensity = 0x00
+1.echo.wow = 0x00
+1.echo.reverb = 0x00
+1.echo.mix = 0xFF
+
+[reference]
+plugin = "/Library/Audio/Plug-Ins/VST3/Delay TAPE-201.vst3"
+buffer_size = 512
+preset = "Default"
+preroll = 3.0
+
+[reference.parameters]
+rates_sync = false
+rates_link = true
+mode_selector = "1"
+repeat_rate_left_ms = 10.0
+repeat_rate_right_ms = 10.0
+dry_wet = 1.0
+echo_amount = 1.0
+reverb_amount = 0.0
+intensity = 0.0
+flutter = 0.0
+noise = 0.0
+input_drive_db = 0.0
+stereo_width = 0.0
+stereo_rate_offset = 0.0
+bass = 0.0
+treble = 0.0
+delay_type = "L/R"
+input_eq_on_off = false
+lfo_destination = "None"
+
+[report]
+kind = "distortion"
+title = "Space Echo's saturation against TAPE-201"
+about = """
+A sine stepped from -36 to 0 dBFS in 6 dB steps through the first head alone, all wet, the tape \
+at its fastest so each repeat falls in its own step, with nothing fed back: at 1 kHz and 110 Hz, \
+with `Input` at `80`, as it comes, and at `C0`, 12 dB up, against TAPE-201's `Input Drive` at 0 \
+and 12 dB. The tape holds what it's given under a soft ceiling, adding odd harmonics, and the \
+high-pass after the heads leaves the lows' third harmonic stronger.
+"""
+
+[[cases]]
+name = "1kHz"
+
+[[cases]]
+name = "110Hz"
+input = { frequency = 110.0 }
+
+[[cases]]
+name = "1kHz-driven"
+ours = { 1.echo.input = 0xC0 }
+reference = { input_drive_db = 12.0 }
+
+[[cases]]
+name = "110Hz-driven"
+ours = { 1.echo.input = 0xC0 }
+reference = { input_drive_db = 12.0 }
+input = { frequency = 110.0 }

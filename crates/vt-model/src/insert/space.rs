@@ -170,6 +170,286 @@ impl Delay {
     }
 }
 
+/// The Space Echo's modes, as the RE-201's mode selector has them: its playback heads alone and
+/// together, from the first, the closest to the record head, to the third, then the same with the
+/// spring reverb, and the reverb alone. Each is named by its number on the selector, the heads it
+/// plays and whether the reverb is on.
+pub const ECHO_MODE_NAMES: [&str; 12] = [
+    "1: H1",
+    "2: H2",
+    "3: H3",
+    "4: H2 H3",
+    "5: H1 +R",
+    "6: H2 +R",
+    "7: H3 +R",
+    "8: H1 H2 +R",
+    "9: H2 H3 +R",
+    "10: H1 H3 +R",
+    "11: H1 H2 H3 +R",
+    "12: R",
+];
+
+/// Which of the three heads each mode plays, and whether its reverb is on.
+const ECHO_MODES: [([bool; 3], bool); 12] = [
+    ([true, false, false], false),
+    ([false, true, false], false),
+    ([false, false, true], false),
+    ([false, true, true], false),
+    ([true, false, false], true),
+    ([false, true, false], true),
+    ([false, false, true], true),
+    ([true, true, false], true),
+    ([false, true, true], true),
+    ([true, false, true], true),
+    ([true, true, true], true),
+    ([false, false, false], true),
+];
+
+/// The heads a Space Echo's mode plays, the first to the third, and whether its reverb is on.
+pub fn echo_mode(mode: u8) -> ([bool; 3], bool) {
+    ECHO_MODES[usize::from(mode).min(ECHO_MODES.len() - 1)]
+}
+
+/// How many choices a Space Echo's `Sync` has: `Free`, then every note division.
+pub const ECHO_SYNCS: usize = DIVISION_NAMES.len() + 1;
+/// Their names: `Free`, where `Rate` sets the tape's speed, then the divisions the first head can
+/// be timed to.
+pub const ECHO_SYNC_NAMES: [&str; ECHO_SYNCS] = {
+    let mut names = ["Free"; ECHO_SYNCS];
+    let mut at = 0;
+    while at < DIVISION_NAMES.len() {
+        names[at + 1] = DIVISION_NAMES[at];
+        at += 1;
+    }
+    names
+};
+
+/// The first head's delay at the Space Echo's fastest and slowest `Rate`, in seconds, as
+/// Arturia's Delay TAPE-201's `Repeat Rate` goes; the second and third are two and three times it.
+pub const ECHO_HEAD_SECONDS: (f32, f32) = (0.01, 1.0);
+
+/// The first head's delay in seconds, for a `Rate` on the `00` to `FF` scale: the tape at its
+/// slowest at `00`, a second, to its fastest at `FF`, 10 ms, evenly in ratio, so `69` is 150 ms,
+/// TAPE-201's own, and the RE-201's 69 to 177 ms, as Universal Audio measured it, is `60` to `93`.
+pub fn echo_head_seconds(rate: f32) -> f32 {
+    let (fastest, slowest) = ECHO_HEAD_SECONDS;
+    slowest * (fastest / slowest).powf((rate / 255.0).clamp(0.0, 1.0))
+}
+
+/// How much a Space Echo's `Intensity` feeds back at most, on TAPE-201's scale, where it starts to
+/// run away a little past 1.
+pub const MOST_INTENSITY: f32 = 1.2;
+/// How far a Space Echo's `Input` turns what goes in up or down at most, in dB.
+pub const MOST_ECHO_INPUT_DB: f32 = 24.0;
+
+/// How far a Space Echo's `Input` turns what goes in up or down, in dB, for a value on the `00`
+/// to `FF` scale: evenly from 24 dB down at `00`, through none at `80`, to 24 up at `FF`.
+pub fn echo_input_db(value: f32) -> f32 {
+    from_middle(value) * MOST_ECHO_INPUT_DB
+}
+
+/// A Space Echo's tone controls, fitted to TAPE-201's `Bass` and `Treble`: a first-order shelf
+/// each, the bass's pole and the treble's zero where they're fixed, in Hz, how far each lifts or
+/// cuts at its end in dB, and the power its knob is raised to, as a pot's taper.
+pub const ECHO_BASS: (f32, f32, f32) = (24.0, 23.15, 1.161);
+pub const ECHO_TREBLE: (f32, f32, f32) = (1038.0, 15.38, 2.077);
+
+/// How far a Space Echo's shelf lifts or cuts where it's flat again, past its corners, in dB,
+/// for a value on the `00` to `FF` scale: none at `80`, and as its taper goes to its most either
+/// way, so `C0` lifts the bass 10 dB and the treble 3.6.
+pub fn echo_shelf_db(value: f32, (_, most_db, power): (f32, f32, f32)) -> f32 {
+    let k = from_middle(value);
+    most_db * k.abs().powf(power) * k.signum()
+}
+
+/// A Space Echo's, in the order the slot keeps them: its mode, which the title shows; the tape's
+/// speed, whether it follows the song's tempo, and how slowly its motor gets there; the loop's
+/// feedback, how hard it's driven and how much the tape wobbles; the tone, the reverb, and the
+/// echo's level, the mix and the gain.
+pub(crate) const ECHO_PARAMS: [Param; 13] = [
+    Param {
+        name: "Mode",
+        key: "mode",
+        label: Some("MODE"),
+        setting: Setting::EchoMode,
+        choices: &ECHO_MODE_NAMES,
+        wraps: true,
+        default: Echo::DEFAULT.mode,
+    },
+    hex_param(
+        "Rate",
+        "rate",
+        "RATE",
+        Setting::EchoRate,
+        Echo::DEFAULT.rate,
+    ),
+    Param {
+        name: "Sync",
+        key: "sync",
+        label: Some("SYNC"),
+        setting: Setting::EchoSync,
+        choices: &ECHO_SYNC_NAMES,
+        wraps: false,
+        default: Echo::DEFAULT.sync,
+    },
+    hex_param(
+        "Inertia",
+        "inertia",
+        "INRT",
+        Setting::Inertia,
+        Echo::DEFAULT.inertia,
+    ),
+    hex_param(
+        "Intensity",
+        "intensity",
+        "INTS",
+        Setting::Feedback,
+        Echo::DEFAULT.intensity,
+    ),
+    hex_param(
+        "Input",
+        "input",
+        "INPT",
+        Setting::EchoInput,
+        Echo::DEFAULT.input,
+    ),
+    hex_param("Wow", "wow", "WOW", Setting::Wow, Echo::DEFAULT.wow),
+    hex_param(
+        "Bass",
+        "bass",
+        "BASS",
+        Setting::EchoBass,
+        Echo::DEFAULT.bass,
+    ),
+    hex_param(
+        "Treble",
+        "treble",
+        "TREB",
+        Setting::EchoTreble,
+        Echo::DEFAULT.treble,
+    ),
+    hex_param(
+        "Reverb",
+        "reverb",
+        "VERB",
+        Setting::ReverbAmount,
+        Echo::DEFAULT.reverb,
+    ),
+    hex_param(
+        "Echo",
+        "echo",
+        "ECHO",
+        Setting::EchoLevel,
+        Echo::DEFAULT.echo,
+    ),
+    WET_MIX_PARAM,
+    GAIN_PARAM,
+];
+
+/// A Space Echo's settings: a Roland RE-201's tape loop, three playback heads and spring reverb,
+/// fitted to Arturia's Delay TAPE-201. One a file doesn't have starts as new.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Echo {
+    /// A place in [`ECHO_MODE_NAMES`]: which heads play, and whether the reverb does.
+    pub mode: u8,
+    /// How fast the tape runs, from its slowest at `00`, the first head a second behind the record
+    /// head, to its fastest at `FF`, 10 ms. Moving it moves the tape, so the repeats bend in pitch.
+    pub rate: u8,
+    /// `0`, `Free`, where `Rate` sets the speed, or a place among the note divisions after it, the
+    /// first head's delay at the song's tempo.
+    pub sync: u8,
+    /// How slowly the motor comes to a new speed, from about a fifth of a second at `00` to two.
+    pub inertia: u8,
+    /// How much of what the heads play goes round again: the repeats run away from about `DC`,
+    /// 1.03 on TAPE-201's scale.
+    pub intensity: u8,
+    /// How hard what goes in drives the tape, from 24 dB down at `00`, through as it is at `80`,
+    /// to 24 dB up at `FF`.
+    pub input: u8,
+    /// How far the tape's speed wavers, from not at all at `00`.
+    pub wow: u8,
+    /// The tone of what comes out: a low and a high shelf, flat at `80`.
+    pub bass: u8,
+    pub treble: u8,
+    /// How much of the spring reverb is heard, in the modes that have it.
+    pub reverb: u8,
+    /// How loud the repeats are.
+    pub echo: u8,
+    /// From `00`, all dry, to `FF`, all wet.
+    pub mix: u8,
+    pub gain: u8,
+}
+
+impl Default for Echo {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Echo {
+    /// As it starts: TAPE-201's `Default`, the first head with the reverb at 150 ms, a third of the
+    /// way to running away, a little wow, flat, and half wet, with a little reverb in.
+    pub const DEFAULT: Self = Self {
+        mode: 4,
+        rate: 0x69,
+        sync: 0,
+        inertia: 0,
+        intensity: 0x4A,
+        input: 0x80,
+        wow: 0x0D,
+        bass: 0x80,
+        treble: 0x80,
+        reverb: 0x40,
+        echo: 0xFF,
+        mix: 0x80,
+        gain: UNITY_LEVEL,
+    };
+
+    /// A setting's value. One it doesn't have reads as nothing.
+    pub(super) fn read(self, setting: Setting) -> u8 {
+        match setting {
+            Setting::EchoMode => self.mode,
+            Setting::EchoRate => self.rate,
+            Setting::EchoSync => self.sync,
+            Setting::Inertia => self.inertia,
+            Setting::Feedback => self.intensity,
+            Setting::EchoInput => self.input,
+            Setting::Wow => self.wow,
+            Setting::EchoBass => self.bass,
+            Setting::EchoTreble => self.treble,
+            Setting::ReverbAmount => self.reverb,
+            Setting::EchoLevel => self.echo,
+            Setting::Mix => self.mix,
+            Setting::Gain => self.gain,
+            _ => 0,
+        }
+    }
+
+    /// The same with a setting changed, within its range.
+    pub(super) fn written(self, setting: Setting, value: u8) -> Self {
+        let value = value.min(setting.highest());
+        let mut echo = self;
+        match setting {
+            Setting::EchoMode => echo.mode = value,
+            Setting::EchoRate => echo.rate = value,
+            Setting::EchoSync => echo.sync = value,
+            Setting::Inertia => echo.inertia = value,
+            Setting::Feedback => echo.intensity = value,
+            Setting::EchoInput => echo.input = value,
+            Setting::Wow => echo.wow = value,
+            Setting::EchoBass => echo.bass = value,
+            Setting::EchoTreble => echo.treble = value,
+            Setting::ReverbAmount => echo.reverb = value,
+            Setting::EchoLevel => echo.echo = value,
+            Setting::Mix => echo.mix = value,
+            Setting::Gain => echo.gain = value,
+            _ => {}
+        }
+        echo
+    }
+}
+
 /// A reverb's, in the order the page shows them.
 pub(crate) const REVERB_PARAMS: [Param; 7] = [
     hex_param("Pre", "pre", "PRE", Setting::Pre, Reverb::DEFAULT.pre),
