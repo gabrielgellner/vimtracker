@@ -463,7 +463,13 @@ The finished song also sets the `Acid`'s `Cutoff` `50`, `Resonance` `C0`, `Env m
 
 **Try next.**
 
-*   Other orders on track 1: `:order pedal`, `converge`, `odd-even` or `random`.
+*   Other orders on track 1: `:order pedal`, `converge`, `odd-even`, `hopscotch`, `growing`,
+    `jump 3`, `arp 3 1` or `random`, each as the Metropolix's ORDER plays it.
+*   `:order brownian`, the Metropolix's drunken walk: from the first stage each bar, a stage on
+    half the time, the same a quarter and back a quarter.
+*   On the `Accumulator` device, `Limit` `Bounce bi`: row `03` climbs four degrees, turns, and
+    goes on down past its note to four below, and row `07` does the same upside down. `Random`
+    walks them drunkenly instead, mostly each `ACU`'s way, and `Random bi` between both limits.
 *   On the `Accumulator` device, `Moves` `Track`: every row climbs together with each `ACU`.
 *   `Reset` every 4 loops, so the line climbs for four bars and starts again.
 *   Track 2's `ARP` to `13` or `35` for other shapes, `Mode` `Random`, or `Oct` 3.

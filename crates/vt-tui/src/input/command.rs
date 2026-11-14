@@ -463,7 +463,7 @@ pub enum LineError {
     #[error(":gen takes apply, to apply the live column under the cursor")]
     Gen,
     #[error(
-        ":order takes forward, reverse, up-down, up-down-inc, down-up, down-up-inc, odd-even, converge, diverge, pedal, shuffle, random, snake and a snake or its number 1 to 8, or cartesian and its X and Y rates 1 to 16 with X and Y lengths 1 to 8 if you like, or nothing to choose"
+        ":order takes forward, reverse, up-down, up-down-inc, down-up, down-up-inc, odd-even, hopscotch, converge, diverge, growing, shrinking, pedal, brownian, shuffle, quasi-random, random, jump and how many rows on 2 to 16, arp and how many rows a run takes 2 to 16 and how far on each starts 1 to 16, snake and a snake or its number 1 to 8, or cartesian and its X and Y rates 1 to 16 with X and Y lengths 1 to 8, the numbers if you like, or nothing to choose"
     )]
     Order,
     #[error(

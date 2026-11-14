@@ -264,11 +264,14 @@ impl App {
             self.status = "This track has no phrase here".to_owned();
             return;
         };
-        // A Cartesian order is listed with the phrase's own numbers, if it has one.
+        // An order that takes numbers is listed with the phrase's own, if it plays in one.
         let playing = phrase.order();
-        let orders = Order::ALL.map(|order| match order {
-            Order::Cartesian(_) if order.is_like(playing) => playing,
-            _ => order,
+        let orders = Order::ALL.map(|order| {
+            if order.takes_numbers() && order.is_like(playing) {
+                playing
+            } else {
+                order
+            }
         });
         let at = orders.iter().position(|order| *order == playing);
         let items = orders

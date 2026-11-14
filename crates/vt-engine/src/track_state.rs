@@ -934,9 +934,9 @@ impl Accumulators {
         }
     }
 
-    /// Add a row's amount as it plays, to its own accumulator or the track's. Its first play since
-    /// they started again is as written, and adds nothing.
-    pub fn add(&mut self, key: RowKey, amount: i8, settings: Accumulation) {
+    /// Add a row's amount as it plays, to its own accumulator or the track's, a `Random` one
+    /// rolling on `rng`. Its first play since they started again is as written, and adds nothing.
+    pub fn add(&mut self, key: RowKey, amount: i8, settings: Accumulation, rng: &mut Pcg32) {
         let found = self
             .rows
             .iter()
@@ -954,9 +954,10 @@ impl Accumulators {
             row.played = true;
             return;
         }
+        let roll = &mut || rng.next_u32();
         match settings.moves {
-            Moves::Row => row.walk.add(amount, settings),
-            Moves::Track => self.track.add(amount, settings),
+            Moves::Row => row.walk.add(amount, settings, roll),
+            Moves::Track => self.track.add(amount, settings, roll),
         }
     }
 
@@ -1004,6 +1005,8 @@ pub struct TrackState {
     /// The note the row playing was heard at, before its chain's transpose, when an accumulator
     /// moved it.
     pub accumulated: Option<u8>,
+    /// The rolls a `Random` accumulator takes, apart from `rng` so `CHA` rolls as it did.
+    pub accumulator_rng: Pcg32,
     /// What's added to the count for each FX column's lane, so a lane changed while playing stays
     /// on its step. Anything that sets `started` again sets these back to 0.
     pub lane_offsets: [i64; FX_SLOTS],
@@ -1296,6 +1299,15 @@ fn drift_rng(seed: u64, index: usize) -> Pcg32 {
     Pcg32::new(seed, (3 * MAX_TRACKS + index) as u64)
 }
 
+/// The generator for a track's `Random` accumulators, on streams after every Track mod slot's
+/// `Random`.
+fn accumulator_rng(seed: u64, index: usize) -> Pcg32 {
+    Pcg32::new(
+        seed,
+        (4 * MAX_TRACKS + 2 * MAX_TRACKS * MOD_SLOTS + index) as u64,
+    )
+}
+
 /// What's heard of a value: its lock over its base. A glide is moved along by the song.
 /// On the `00` to `FF` scale, with the fine part as the fraction.
 fn heard(layers: &ValueLayers) -> f32 {
@@ -1323,6 +1335,7 @@ impl TrackState {
             realign_waiting: false,
             accumulators: Accumulators::default(),
             accumulated: None,
+            accumulator_rng: accumulator_rng(seed, index),
             voice: Voice::default(),
             tail: Voice::default(),
             reading: Reading::default(),
@@ -1624,6 +1637,7 @@ impl TrackState {
         self.groove_rng = groove_rng(seed, index);
         self.arp_rng = arp_rng(seed, index);
         self.drift_rng = drift_rng(seed, index);
+        self.accumulator_rng = accumulator_rng(seed, index);
         self.arp = None;
         self.last_note = None;
         self.chain_pass = 0;

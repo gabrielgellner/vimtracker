@@ -1493,7 +1493,7 @@ just heard.
 The `Accumulator` device, under the envelopes, says how the track's `ACU`s move its
 notes from pass to pass: `Up` and `Down`, how far from the note as written, in scale degrees with
 the scale on and semitones with it off; `Moves`, `Row` for only the row with the
-`ACU` or `Track` for every row; `Limit`, `Wrap` `Bounce` or `Hold`; `Adds`, once a
+`ACU` or `Track` for every row; `Limit`, `Wrap`, `Bounce`, `Hold` or `Random`, or one of the `bi` ones between both limits; `Adds`, once a
 row, on each `MLT` pulse or on each `RET` hit; and `Reset`, when it goes back to
 the notes as written. `=` and `-` move each, `+` and `_` move a limit by 7, `i`
 types a limit and `K` lists the others. See **FX commands**.

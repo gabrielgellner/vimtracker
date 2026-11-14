@@ -2630,6 +2630,12 @@ fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
         Some("every row on the track moves with the ACUs")
     );
     press(&mut app, "kkl=");
+    assert_eq!(accumulation(&app).at_limit, AtLimit::WrapBi);
+    assert_eq!(
+        value_shown(&app).as_deref(),
+        Some("past one limit, carry on from the other")
+    );
+    press(&mut app, "=");
     assert_eq!(accumulation(&app).at_limit, AtLimit::Bounce);
     press(&mut app, "jj==");
     assert_eq!(accumulation(&app).reset, Reset::Loops(1));
@@ -2645,6 +2651,14 @@ fn the_mod_page_sets_the_accumulator_and_says_what_each_setting_does() {
     assert_eq!(
         value_shown(&app).as_deref(),
         Some("each time round the chain")
+    );
+    // The longest of the limits' names fits beside its label.
+    press(&mut app, "kk====");
+    assert_eq!(accumulation(&app).at_limit, AtLimit::RandomBi);
+    let [first, ..] = rows(&mut app);
+    assert!(
+        first.starts_with("│  Up        7          Limit     Random bi  "),
+        "{first}"
     );
 }
 
