@@ -9,6 +9,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use vt_model::insert::{EffectKind, Insert};
+use vt_model::listed::choices_of;
 use vt_model::modulation::ModKind;
 use vt_model::settings::SettingId;
 use vt_model::shape::{FillKind, GenParam};
@@ -108,13 +109,11 @@ fn every_mod_type_keeps_its_name() {
 /// The filter's mode and the step's speed are saved as places in their lists.
 #[test]
 fn every_listed_value_keeps_its_place() {
-    let modes = FilterMode::ALL
-        .iter()
+    let modes = choices_of::<FilterMode>()
         .enumerate()
-        .map(|(at, mode)| format!("filter mode {at} {}", mode.name()));
-    let speeds = Speed::ALL
-        .iter()
+        .map(|(at, name)| format!("filter mode {at} {name}"));
+    let speeds = choices_of::<Speed>()
         .enumerate()
-        .map(|(at, speed)| format!("speed {at} {}", speed.name()));
+        .map(|(at, name)| format!("speed {at} {name}"));
     golden("listed_values", modes.chain(speeds));
 }

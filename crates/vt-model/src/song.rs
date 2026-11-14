@@ -216,6 +216,8 @@ impl FilterType {
     }
 }
 
+crate::listed::listed!(FilterType: meaning);
+
 /// How a track's filter type responds: how steep the clean types are, which of their responses the
 /// ladder, `Dirty` and `OB-X` give out, or where the diode's low cut sits. Each type offers some of these.
 /// A track keeps its mode when its type changes, and a type that doesn't offer it plays its own
@@ -333,6 +335,8 @@ impl FilterMode {
         Self::ALL.get(usize::from(index)).copied()
     }
 }
+
+crate::listed::listed!(FilterMode: meaning);
 
 /// Each mode's name, in the list's order, for a step's value to show.
 pub const FILTER_MODE_NAMES: [&str; 24] = [
@@ -1141,6 +1145,8 @@ impl Machine {
     }
 }
 
+crate::listed::listed!(Machine: meaning, category);
+
 /// What a sound track is for, which its colour shows wherever it's named (decision 316). `Auto`,
 /// where every track starts, goes by its machine; `None` has no colour.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1197,6 +1203,8 @@ impl Role {
         *self == Self::Auto
     }
 }
+
+crate::listed::listed!(Role: meaning);
 
 /// How many patches 6-op has, which its `Patch` counts from `00`.
 pub const SIX_OP_PATCHES: u8 = 96;
@@ -1646,6 +1654,8 @@ impl SynthVoice {
         )
     }
 }
+
+crate::listed::listed!(SynthVoice: meaning);
 
 /// When a launched chain starts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

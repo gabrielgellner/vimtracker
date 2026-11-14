@@ -99,6 +99,8 @@ impl EffectKind {
     }
 }
 
+crate::listed::listed!(EffectKind: key);
+
 /// One effect, described once.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EffectSpec {

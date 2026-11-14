@@ -128,6 +128,8 @@ impl Speed {
     }
 }
 
+crate::listed::listed!(Speed: meaning);
+
 impl fmt::Display for Speed {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name())
