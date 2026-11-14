@@ -311,6 +311,7 @@ fn level() -> vt_model::shape::Shape {
         variation: Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
         ring: vt_model::shape::Ring::default(),
+        tonnetz: vt_model::shape::Tonnetz::default(),
     }
 }
 

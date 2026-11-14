@@ -16,9 +16,10 @@ use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
 use vt_model::shape::{
     Acid, Across, Bar, Bits, CellStart, Cells, Channel, Divisions, DrumPart, Edge, FillKind,
-    Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_MUTATION, MAX_RING, MAX_VALUES,
-    MAX_WEIGHT, Mutations, Pink, Random, Ring, Role, RowView, Shape, ShapeColumn, Values,
-    Variation, WAVES, Walk, WaveRate, Where, World, render_into, written_from,
+    Follow, GenCell, Grids, Kept, MAX_DEPTH, MAX_FACTOR, MAX_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION,
+    MAX_RING, MAX_VALUES, MAX_WEIGHT, MoveList, Moves, Mutations, Pink, Quality, Random, Ring,
+    Role, RowView, Shape, ShapeColumn, Tonnetz, TonnetzMove, TonnetzVoice, Values, Variation,
+    WAVES, Walk, WaveRate, Where, World, render_into, written_from,
 };
 use vt_model::step::{FxCommand, FxSlot, Gate, GateKind, Mark, Note, Step};
 
@@ -319,6 +320,7 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         variation: Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
         ring: vt_model::shape::Ring::default(),
+        tonnetz: vt_model::shape::Tonnetz::default(),
     };
     // Settings added since are drawn from the seed, so the other draws, and the other fills'
     // hashes, stay as they were.
@@ -388,6 +390,19 @@ fn shape(dice: &mut Dice, kind: FillKind, column: ShapeColumn) -> Shape {
         } else {
             more.below(100_000) as u32
         },
+    };
+    // A Tonnetz with any moves, voice and first chord, in scale or free.
+    let moves: Vec<TonnetzMove> = (0..1 + more.below(8))
+        .map(|_| more.pick(&TonnetzMove::ALL))
+        .collect();
+    shape.tonnetz = Tonnetz {
+        quality: more.pick(&[Quality::Major, Quality::Minor]),
+        moves: more.pick(&Moves::ALL),
+        list: MoveList::new(&moves),
+        weights: std::array::from_fn(|_| more.below(u64::from(MAX_MOVE_WEIGHT) + 1) as u8),
+        length: 1 + more.below(u64::from(MAX_LOOP)) as u8,
+        voice: Some(more.pick(&TonnetzVoice::ALL)),
+        in_scale: more.chance(50),
     };
     shape
 }

@@ -55,6 +55,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
         ring: vt_model::shape::Ring::default(),
+        tonnetz: vt_model::shape::Tonnetz::default(),
     }
 }
 
@@ -1073,4 +1074,57 @@ fn cells_step_a_generation_each_pass_from_wherever_the_song_plays() {
     let (held, _) = play(&song, &[ninety], 32);
     assert!(held == play(&reshaped(&song, ninety), &[], 32).0);
     assert!(held != play(&song, &[], 32).0, "rule 90 isn't rule 30");
+}
+
+/// The nine-pass song as a pad on the `Chord` voice, its notes reshaped by a live `Tonnetz` at
+/// random, a new walk every pass, each row's chord locked.
+fn walking() -> Song {
+    let mut song = nine_passes();
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::Chord);
+    let hit: Step = "C-3 64 --- --- ---".parse().unwrap();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(Phrase::from_steps(vec![hit; 16])));
+    let mut walk = shape(FillKind::Tonnetz, 60, 60, Where::Every(4));
+    walk.tonnetz.moves = vt_model::shape::Moves::Random;
+    walk.vary = 1;
+    generate(song, 0, notes(), rows(15), walk)
+}
+
+/// A `Tonnetz` drawing its moves walks another way each pass with `Vary`, each pass playing,
+/// sample for sample, what writing that pass's seed would, its roots and its locked chords; and
+/// it owns its rows' FX, so the chords it locks are put back with what was under it.
+#[test]
+fn a_tonnetz_walks_anew_each_pass_on_the_chord_voice() {
+    let song = walking();
+    let kept = |pass: i64| {
+        let mut shape = written(&song, 0, notes()).on_pass(pass);
+        shape.vary = 0;
+        reshape(&song, shape)
+    };
+    let (first, _) = play_pass(&song, 0);
+    assert!(first == play_pass(&kept(0), 0).0, "pass 0 is as written");
+    let locks = |song: &Song| {
+        song.tracks[0].phrases[&0]
+            .steps()
+            .iter()
+            .filter(|step| {
+                step.fx
+                    .iter()
+                    .any(|fx| fx.command == Some(FxCommand::Set(vt_model::shape::CHORD_SETTING)))
+            })
+            .count()
+    };
+    assert_eq!(locks(&song), 4, "a chord locked every four rows");
+    for pass in [1, 2] {
+        let (heard_out, _) = play_pass(&song, pass);
+        assert!(
+            heard_out == play_pass(&kept(pass as i64), pass).0,
+            "pass {pass}"
+        );
+        assert!(
+            heard_out != play_pass(&kept(0), pass).0,
+            "pass {pass} walks another way"
+        );
+    }
 }

@@ -9,6 +9,8 @@
 //! strike, after Vermona's randomRHYTHM, its triplets nudged between the rows. `Ring` writes a
 //! rhythm and a melody together from one shift register, after the Wiard Noise Ring. A `Where` of
 //! `Cells` chooses the rows from an elementary cellular automaton, as Wolfram's rules evolve it.
+//! `Tonnetz` writes chords walking the Tonnetz by P, L and R, one note changing at a time, as a
+//! root and a chord for the `Chord` voice or as a voice of the triad a track.
 
 mod acid;
 mod bits;
@@ -22,6 +24,7 @@ mod random;
 mod render;
 mod rhythm;
 mod ring;
+mod tonnetz;
 mod variation;
 mod walk;
 mod world;
@@ -47,6 +50,10 @@ pub use random::{
 pub use render::{GenCell, RowView, render_into};
 pub use ring::{Kept, MAX_RING, Ring};
 use serde::{Deserialize, Serialize};
+pub use tonnetz::{
+    CHORD_SETTING, MAX_LOOP, MAX_MOVE_WEIGHT, MAX_MOVES, Move as TonnetzMove, MoveList, Moves,
+    Quality, Tonnetz, Triad, Voice as TonnetzVoice,
+};
 pub use variation::{
     MAX_LEARNED, MAX_ORDER, MIN_NOTES as VARIATION_NOTES, Variation, notes as variation_notes,
 };
@@ -212,6 +219,9 @@ pub enum FillKind {
     /// A rhythm and a melody from one shift register going round, a row playing on its newest
     /// bit at the pitch of its byte, after the Wiard Noise Ring.
     Ring,
+    /// Chords walking the Tonnetz by P, L and R moves, each changing one note, after Ornament &
+    /// Crime's Harrington 1200.
+    Tonnetz,
     /// Another phrase's notes, with their velocities and gates, turned on the way as a canon's
     /// voices are.
     Follow,
@@ -240,7 +250,7 @@ pub enum FillKind {
 
 impl FillKind {
     /// Every fill, in the order `+` goes through them.
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 23] = [
         Self::Ramp,
         Self::Random,
         Self::Walk,
@@ -252,6 +262,7 @@ impl FillKind {
         Self::Grids,
         Self::Divisions,
         Self::Ring,
+        Self::Tonnetz,
         Self::Follow,
         Self::Variation,
         Self::Scale,
@@ -279,6 +290,7 @@ impl FillKind {
             Self::Grids => "Grids",
             Self::Divisions => "Divisions",
             Self::Ring => "Ring",
+            Self::Tonnetz => "Tonnetz",
             Self::Follow => "Follow",
             Self::Variation => "Variation",
             Self::Scale => "Scale",
@@ -307,6 +319,7 @@ impl FillKind {
             Self::Grids => "A drum part from Grids' map",
             Self::Divisions => "A chance for each note division",
             Self::Ring => "A noise ring's rhythm and pitch",
+            Self::Tonnetz => "Chords moving by P, L and R",
             Self::Follow => "Another track's phrase, kept in step",
             Self::Variation => "Something like the notes there",
             Self::Scale => "The values there onto the two",
@@ -531,8 +544,8 @@ impl ShapeColumn {
         }
     }
 
-    /// The fills it offers: `Snap`, `Acid`, `Grids`, `Divisions`, `Ring`, `Follow` and `Variation`
-    /// only mean something for notes, `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform
+    /// The fills it offers: `Snap`, `Acid`, `Grids`, `Divisions`, `Ring`, `Tonnetz`, `Follow` and
+    /// `Variation` only mean something for notes, `Multiply` for notes and FX commands, whose rows are a rhythm, and a transform
     /// or a `Variation` nothing for notes of its own, as there are none to rework or learn from.
     pub fn fills(self) -> Vec<FillKind> {
         FillKind::ALL
@@ -545,6 +558,7 @@ impl ShapeColumn {
                         | FillKind::Grids
                         | FillKind::Divisions
                         | FillKind::Ring
+                        | FillKind::Tonnetz
                         | FillKind::Follow
                         | FillKind::Variation
                 ) || matches!(self, Self::Note { .. })
@@ -916,6 +930,9 @@ pub struct Shape {
     /// plays. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Ring::is_default")]
     pub ring: Ring,
+    /// A `Tonnetz` fill's first chord, its moves and what it writes. Saved only once it's changed.
+    #[serde(default, skip_serializing_if = "Tonnetz::is_default")]
+    pub tonnetz: Tonnetz,
     /// How a `Random` fill spreads and leans its values, and on notes which degrees it lets
     /// through and how often each comes. Saved only once it's changed.
     #[serde(default, skip_serializing_if = "Random::is_default")]
@@ -969,18 +986,21 @@ impl Shape {
             variation: Variation::default(),
             divisions: Divisions::default(),
             ring: Ring::default(),
+            tonnetz: Tonnetz::default(),
         }
     }
 
     /// Whether anything it writes is drawn from its seed, so another seed would write something
     /// else: a random fill, a walk, `1/f`, `Acid`, `Shuffle`, `Grids`' chaos, a `Variation`, a
-    /// random wave or a `Follow` that mutates, or rows chosen by chance, one of Marbles' rhythms,
-    /// a named rhythm's children or cells drawn from it on one column.
+    /// random wave, a `Follow` that mutates or a `Tonnetz` drawing its moves, or rows chosen by
+    /// chance, one of Marbles' rhythms, a named rhythm's children or cells drawn from it on one
+    /// column.
     pub fn draws(&self) -> bool {
         let random_wave =
             self.kind == FillKind::Wave && matches!(self.wave, Wave::Random | Wave::Smooth);
         random_wave
             || self.kind == FillKind::Follow && self.follow.mutates()
+            || self.kind == FillKind::Tonnetz && self.tonnetz.draws()
             || self.place.draws() && self.kind.has_where()
             || matches!(
                 self.kind,
@@ -1101,8 +1121,17 @@ pub fn track_seed(seed: u64, nth: usize) -> u64 {
 
 /// A shape as it goes on the `nth` of the tracks it shapes at once: with its own seed, as
 /// [`track_seed`] gives it, and its rows [on that track](Where::on_track). `Complementary` tosses
-/// one coin for each pair of tracks, so the two of a pair share a seed.
+/// one coin for each pair of tracks, so the two of a pair share a seed. A `Tonnetz` walks one
+/// progression on every track, so they all share its seed, each playing a voice of its own unless
+/// it was given one (decision 332).
 pub fn on_track(shape: &Shape, nth: usize) -> Shape {
+    if shape.kind == FillKind::Tonnetz {
+        return Shape {
+            place: shape.place.on_track(nth),
+            tonnetz: shape.tonnetz.on_track(nth),
+            ..*shape
+        };
+    }
     let shared = match shape.place {
         Where::Complementary { .. } => nth - nth % 2,
         _ => nth,
@@ -1360,6 +1389,7 @@ mod tests {
             variation: crate::shape::Variation::default(),
             divisions: Divisions::default(),
             ring: Ring::default(),
+            tonnetz: Tonnetz::default(),
         }
     }
 

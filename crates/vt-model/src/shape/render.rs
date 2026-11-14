@@ -11,7 +11,7 @@ use super::mix;
 use super::random::{Odds, unit};
 use super::{
     FillKind, Ladder, Shape, ShapeColumn, WaveRate, Where, acid, bits, curved, divisions, follow,
-    grids, rhythm, ring, variation, walk, world,
+    grids, rhythm, ring, tonnetz, variation, walk, world,
 };
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS, TICKS_PER_STEP};
 use crate::lfo::wave;
@@ -378,6 +378,20 @@ pub(super) fn render(
         ),
         FillKind::Variation => {
             variation::render(steps, range, column, shape.variation, shape.seed, out.cells)
+        }
+        FillKind::Tonnetz => {
+            let rows = chosen(steps, range, column, shape.place, shape.seed, len);
+            tonnetz::render(
+                steps,
+                range,
+                column,
+                shape.from,
+                shape.seed,
+                shape.tonnetz,
+                &rows,
+                out.cells,
+            );
+            tied(steps, range, column, shape, out.cells);
         }
         _ => {
             let rows = chosen(steps, range, column, shape.place, shape.seed, len);
@@ -831,6 +845,7 @@ fn filled<F: FnMut(usize, &Shaped)>(
             FillKind::Grids => unreachable!("rendered by `grids::render`"),
             FillKind::Divisions => unreachable!("rendered by `divisions::render`"),
             FillKind::Ring => unreachable!("rendered by `ring::render`"),
+            FillKind::Tonnetz => unreachable!("rendered by `tonnetz::render`"),
             FillKind::Acid => unreachable!("rendered by `acid::render`"),
             FillKind::Variation => unreachable!("rendered by `variation::render`"),
             FillKind::Follow => unreachable!("read from what it follows"),

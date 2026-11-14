@@ -36,8 +36,9 @@ use vt_model::selection::StepRange;
 use vt_model::settings::SettingId;
 use vt_model::shape::{
     Acid, Bar, Bits, CellStart, Cells, DEFAULT_RATE, Divisions, DrumPart, Edge, FillKind, Follow,
-    GenParam, Grids, Mutations, Pink, Random, Ring, Role, Shape, ShapeColumn, Source, Values, Walk,
-    WaveRate, Where, World, divisions_seed, on_track, track_seed,
+    GenParam, Grids, MoveList, Mutations, Pink, Random, Ring, Role, Shape, ShapeColumn, Source,
+    Tonnetz, TonnetzMove, TonnetzVoice, Values, Walk, WaveRate, Where, World, divisions_seed,
+    on_track, track_seed,
 };
 use vt_model::song::{Lane, Machine, Phrase, Song, SynthVoice, Track};
 use vt_model::speed::Speed;
@@ -75,6 +76,7 @@ fn songs() -> Vec<(&'static str, Song)> {
         ("bloom", bloom()),
         ("clock-multiplier", clock_multiplier()),
         ("cells", cells()),
+        ("tonnetz", tonnetz()),
     ];
     songs
         .into_iter()
@@ -217,6 +219,7 @@ fn shape(kind: FillKind, from: u8, to: u8, place: Where) -> Shape {
         variation: vt_model::shape::Variation::default(),
         divisions: vt_model::shape::Divisions::default(),
         ring: vt_model::shape::Ring::default(),
+        tonnetz: vt_model::shape::Tonnetz::default(),
     }
 }
 
@@ -1701,6 +1704,91 @@ fn cells() -> Song {
     song
 }
 
+/// The walk `tonnetz` plays, `L R L R R L R L`: from C major by a leading-tone exchange, a
+/// relative, and so on up to D major and back down the same way, eight chords that end where they
+/// began, in G major.
+fn tonnetz_walk() -> Tonnetz {
+    use TonnetzMove::{L, R};
+    Tonnetz {
+        list: MoveList::new(&[L, R, L, R, R, L, R, L]),
+        in_scale: true,
+        ..Tonnetz::default()
+    }
+}
+
+/// After Ornament & Crime's Harrington 1200 and Automatonnetz (decision 332): one walk on the
+/// Tonnetz, played three ways. A pad on the `Chord` voice, a chord each half note with its root
+/// and its chord locked; three plucked strings across, each a voice of the triad, an arpeggio that
+/// moves one note at a time; and a bass on the roots; over a kick and hats.
+fn tonnetz() -> Song {
+    let mut song = song("tonnetz", 92, 7, ScaleKind::Major, 7);
+    song.seed = 0x590;
+    let walk = Shape {
+        tonnetz: tonnetz_walk(),
+        seed: 0x59,
+        ..shape(FillKind::Tonnetz, note("C-3"), note("C-3"), Where::AllRows)
+    };
+    // The pad: eight half notes, a chord each.
+    voice(&mut song, 0, "CH", SynthVoice::Chord, &[REST; 8]);
+    song.tracks[0].speed = Speed::Half;
+    song.tracks[0].level = 0xA0;
+    song.tracks[0].send_b = 0x70;
+    set(&mut song, 0, "chord.wave", 0x30);
+    let column = empty_notes(&song);
+    let pad = Shape {
+        tonnetz: Tonnetz {
+            voice: Some(TonnetzVoice::Chord),
+            ..walk.tonnetz
+        },
+        ..walk
+    };
+    let mut song = generate(song, 0, column, 8, pad);
+    // The three strings across, as `S` shapes them: each a voice, from C-4, on a Euclidean eight
+    // of 64 sixteenths, the middle two and the top four rows later, so each chord goes up.
+    let across = Shape {
+        from: note("C-4"),
+        to: note("C-4"),
+        place: Where::Euclid { hits: 8, rotate: 0 },
+        tonnetz: Tonnetz {
+            voice: None,
+            ..walk.tonnetz
+        },
+        ..walk
+    };
+    for (nth, name) in ["LO", "MD", "HI"].into_iter().enumerate() {
+        let track = 1 + nth;
+        voice(&mut song, track, name, SynthVoice::String, &[REST; 64]);
+        song.tracks[track].level = 0x98;
+        song.tracks[track].send_a = 0x60;
+        let shape = Shape {
+            place: Where::Euclid {
+                hits: 8,
+                rotate: 2 * nth as u16,
+            },
+            ..on_track(&across, nth)
+        };
+        song = generate(song, track, column, 64, shape);
+    }
+    // The bass, on the roots.
+    voice(&mut song, 4, "BS", SynthVoice::VirtualAnalog, &[REST; 8]);
+    song.tracks[4].speed = Speed::Half;
+    song.tracks[4].cutoff = 0x48;
+    song.tracks[4].level = 0xB8;
+    let bass = Shape {
+        from: note("C-1"),
+        to: note("C-1"),
+        tonnetz: Tonnetz {
+            voice: Some(TonnetzVoice::Root),
+            ..walk.tonnetz
+        },
+        ..walk
+    };
+    song = generate(song, 4, column, 8, bass);
+    four_on_the_floor(&mut song, 5);
+    off_beat_hats(&mut song, 6);
+    song
+}
+
 // The shipped patches.
 
 /// Where the shipped patches are kept, a file each, which the program includes as it's built.
@@ -2242,6 +2330,60 @@ fn the_noise_rings_bell_drifts_and_its_bass_comes_in_a_row_earlier_each_bar() {
     assert!(first.iter().any(|note| matches!(note, Note::On(_))));
     assert_eq!(second[..15], first[1..], "a row earlier");
     assert_eq!(notes(1, 5), first, "and round again on the sixth bar");
+}
+
+/// `tonnetz`'s pad, strings and bass play one walk: the pad's roots are the bass's two octaves
+/// up and its chords locked as the walk's, the strings between them its three notes, and from one
+/// chord to the next exactly one string moves, by a semitone or a tone, as the chapter says.
+#[test]
+fn tonnetz_plays_one_walk_three_ways_one_note_moving_at_a_time() {
+    use vt_model::shape::CHORD_SETTING;
+    let song = load_song(&songs_folder().join("tonnetz")).unwrap();
+    let steps = |track: usize| first_phrase(&song.tracks[track]).steps().to_vec();
+    let pitch = |step: &Step| match step.note {
+        Note::On(note) => note,
+        _ => panic!("a note on every chord's row"),
+    };
+    let scale = song.scale;
+    let chords = tonnetz_walk().chords(note("C-3"), 0x59, scale, 9);
+    let names: Vec<String> = chords.iter().map(|chord| chord.name()).collect();
+    assert_eq!(names, ["C", "Em", "G", "Bm", "D", "Bm", "G", "Em", "C"]);
+    let (pad, bass) = (steps(0), steps(4));
+    let lock = FxCommand::Set(CHORD_SETTING);
+    for (row, chord) in chords[..8].iter().enumerate() {
+        assert_eq!(pitch(&pad[row]) % 12, chord.root, "row {row}");
+        assert_eq!(pitch(&bass[row]) % 12, chord.root, "row {row}");
+        let locked = pad[row]
+            .fx
+            .iter()
+            .find(|fx| fx.command == Some(lock))
+            .unwrap();
+        assert_eq!(locked.coarse(), chord.chord(), "row {row}");
+    }
+    let strings: Vec<Vec<u8>> = (1..=3)
+        .map(|track| {
+            let steps = steps(track);
+            (0..8)
+                .map(|chord| pitch(&steps[chord * 8 + (track - 1) * 2]))
+                .collect()
+        })
+        .collect();
+    for chord in 0..8 {
+        let mut heard: Vec<u8> = strings.iter().map(|voice| voice[chord] % 12).collect();
+        let mut wanted = chords[chord].notes().to_vec();
+        heard.sort();
+        wanted.sort();
+        assert_eq!(heard, wanted, "chord {chord}");
+        if chord > 0 {
+            let moved: Vec<i16> = strings
+                .iter()
+                .map(|voice| i16::from(voice[chord]) - i16::from(voice[chord - 1]))
+                .filter(|by| *by != 0)
+                .collect();
+            assert_eq!(moved.len(), 1, "chord {chord}: {moved:?}");
+            assert!(matches!(moved[0].abs(), 1 | 2), "chord {chord}: {moved:?}");
+        }
+    }
 }
 
 /// The kick plays channel A and the woodblock B, each with triplets nudged between the rows,

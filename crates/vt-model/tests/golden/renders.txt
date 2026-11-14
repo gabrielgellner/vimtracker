@@ -318,6 +318,16 @@ f482f2082077303b Snap on Length
 4b8c9d807a062de2 Snap on Note, in key
 57e990fdecb3718e Snap on Nudge
 f189bcb9422a1bf4 Snap on Velocity
+87e59c5569117b25 Tonnetz on FX, event
+87e59c5569117b25 Tonnetz on FX, fine
+87e59c5569117b25 Tonnetz on FX, last slot
+87e59c5569117b25 Tonnetz on Length
+6d1b00cb6480d914 Tonnetz on Note of its own, chromatic
+e30212b0a6318bf4 Tonnetz on Note of its own, in key
+93da6b831b72bff5 Tonnetz on Note, chromatic
+7b7a056c4ea547f7 Tonnetz on Note, in key
+87e59c5569117b25 Tonnetz on Nudge
+87e59c5569117b25 Tonnetz on Velocity
 87e59c5569117b25 Variation on FX, event
 87e59c5569117b25 Variation on FX, fine
 87e59c5569117b25 Variation on FX, last slot
