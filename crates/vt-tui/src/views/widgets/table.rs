@@ -2,6 +2,8 @@
 //! with a value that needs more room spanning the columns beside it, and one too long even for
 //! those cut with `…` rather than pushing on what follows.
 
+use std::ops::Range;
+
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
@@ -239,6 +241,21 @@ pub fn fitted(line: Line<'static>, width: usize) -> Line<'static> {
     Line { spans, ..line }
 }
 
+/// Which of a row of columns of these widths fit in the room, as many as can, around the one at
+/// `at`: half of them before it where there are, as many as are left after. Empty if not even one
+/// fits.
+pub fn centred_run(widths: &[usize], at: usize, room: usize) -> Range<usize> {
+    let count = widths.len();
+    (1..=count)
+        .rev()
+        .map(|shown| {
+            let first = at.saturating_sub(shown / 2).min(count - shown);
+            first..first + shown
+        })
+        .find(|run| widths[run.clone()].iter().sum::<usize>() <= room)
+        .unwrap_or(0..0)
+}
+
 /// The top rows of an area, taken off it, as far as it goes.
 pub fn take_top(area: &mut Rect, rows: u16) -> Rect {
     let rows = rows.min(area.height);
@@ -254,6 +271,24 @@ pub fn take_top(area: &mut Rect, rows: u16) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_centred_run_fits_as_many_columns_as_it_can_around_one() {
+        assert_eq!(
+            centred_run(&[4; 10], 5, 12),
+            4..7,
+            "three, the cursor's in the middle"
+        );
+        assert_eq!(centred_run(&[4; 10], 0, 12), 0..3);
+        assert_eq!(centred_run(&[4; 10], 9, 12), 7..10);
+        assert_eq!(centred_run(&[4; 10], 5, 100), 0..10);
+        assert_eq!(
+            centred_run(&[4, 4, 7, 4], 3, 11),
+            2..4,
+            "a wide one takes more room"
+        );
+        assert_eq!(centred_run(&[4; 3], 1, 3), 0..0, "not even one fits");
+    }
 
     fn text(line: &Line) -> String {
         line.spans

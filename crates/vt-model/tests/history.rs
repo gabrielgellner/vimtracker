@@ -4,7 +4,7 @@ use vt_model::action::{Action, EditError, KitSound, edit};
 use vt_model::bank::{BankEntry, ContentHash};
 use vt_model::constants::{MAX_SOUND_TRACKS, UNITY_LEVEL};
 use vt_model::history::History;
-use vt_model::song::{Launch, Song};
+use vt_model::song::{Launch, Song, TrackKind};
 use vt_model::step::Note;
 
 fn set_note(phrase: u32, step: usize, midi: u8) -> Action {
@@ -155,6 +155,22 @@ fn a_tracks_sample_and_name_are_set_on_it() {
         sample: 0,
     };
     assert_eq!(edit(&next, &bad), Err(EditError::NoTrack(9)));
+}
+
+#[test]
+fn a_group_is_named_with_up_to_five_letters_or_digits() {
+    let song = Arc::new(Song::new(1));
+    let group = song.fixed_track(TrackKind::Group(1)).unwrap();
+    let name = |name: &str| Action::SetTrackName {
+        track: group,
+        name: name.into(),
+    };
+    let named = edit(&song, &name("DRUMS")).unwrap();
+    assert_eq!(named.tracks[group].name, "DRUMS");
+    assert_eq!(edit(&song, &name("DRUMSS")), Err(EditError::GroupName));
+    assert_eq!(edit(&song, &name("K-8")), Err(EditError::GroupName));
+    let cleared = edit(&named, &name("")).unwrap();
+    assert_eq!(cleared.tracks[group].name, "G1", "back to its letter");
 }
 
 #[test]

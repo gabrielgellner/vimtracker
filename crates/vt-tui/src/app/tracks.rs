@@ -268,4 +268,31 @@ impl App {
             None => format!("{which} in no group"),
         };
     }
+
+    /// Name the cursor's group, or the group the cursor's track is in, as one undo step, or with
+    /// none give it back its letters, as `G1`.
+    pub(super) fn name_group(&mut self, name: Option<String>) {
+        let song = self.song();
+        let here = &song.tracks[self.cursor.track];
+        let number = match here.kind {
+            TrackKind::Group(number) => Some(number),
+            _ => here.group,
+        };
+        let Some((number, track)) =
+            number.and_then(|number| Some((number, song.fixed_track(TrackKind::Group(number))?)))
+        else {
+            self.status = "This track is in no group".to_owned();
+            return;
+        };
+        let name = name.unwrap_or_default();
+        self.apply(&Action::SetTrackName {
+            track,
+            name: name.clone(),
+        });
+        self.status = if name.is_empty() {
+            format!("Group {number} unnamed")
+        } else {
+            format!("Group {number} named {name}")
+        };
+    }
 }

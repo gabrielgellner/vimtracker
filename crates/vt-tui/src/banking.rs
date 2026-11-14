@@ -9,6 +9,7 @@ use vt_model::action::{Action, FieldValue, KitSound};
 use vt_model::bank::{Bank, BankEntry, ContentHash, PlayParams, Source};
 use vt_model::constants::{MAX_GROUPS, MAX_SOUND_TRACKS};
 use vt_model::kit::load_kit;
+use vt_model::label::GROUP_NAME_CHARS;
 use vt_model::project;
 use vt_model::samples::SamplePool;
 use vt_model::seeding;
@@ -91,20 +92,40 @@ fn free_group(song: &Song) -> Option<u8> {
     })
 }
 
-/// A group's name from its kit's: its first word, in capitals, up to the three characters a
-/// column's label holds, so `909 Core Kit` names it `909`.
-pub fn group_name(kit: &str) -> String {
-    kit.split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .chars()
-        .take(GROUP_NAME_CHARS)
-        .collect::<String>()
-        .to_uppercase()
+/// Words that say a kit is a kit rather than which one, so they don't name its group.
+const GENERIC_WORDS: [&str; 12] = [
+    "kit", "kits", "drum", "drums", "core", "pack", "packs", "rack", "racks", "set", "the", "vol",
+];
+
+/// What a group whose kit's name says nothing better is called (decision 308).
+pub const KIT_GROUP_NAME: &str = "DRUMS";
+
+/// A name's words, split at spaces and punctuation, leaving out those that only say it's a kit.
+fn telling_words(name: &str) -> impl Iterator<Item = &str> {
+    name.split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .filter(|word| !GENERIC_WORDS.contains(&word.to_ascii_lowercase().as_str()))
 }
 
-/// The most characters a group named after its kit takes.
-pub const GROUP_NAME_CHARS: usize = 3;
+/// A group's name from its kit's: the first word of its name, in capitals, up to the five
+/// characters a group's name holds, so `909 Core Kit` names it `909` and `Rytm Analog` `RYTM`.
+/// A first word that's generic, as `Kit-808`'s `Kit` is, gives way to the kit's category, by its
+/// first word that isn't and fits whole, or else `DRUMS`, as `Drum Machines` gives (decision 308).
+pub fn group_name(kit: &str, category: &str) -> String {
+    let first = kit
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .find(|word| !word.is_empty());
+    let name = match first {
+        Some(word) if telling_words(word).next().is_some() => word,
+        _ => telling_words(category)
+            .find(|word| word.len() <= GROUP_NAME_CHARS)
+            .unwrap_or(KIT_GROUP_NAME),
+    };
+    name.chars()
+        .take(GROUP_NAME_CHARS)
+        .collect::<String>()
+        .to_ascii_uppercase()
+}
 
 impl App {
     /// Put a file in a bank, loading it into a pool, unless the bank already plays it. A kit's
@@ -458,7 +479,7 @@ impl App {
                 group: Some(number),
             });
             // The group moves along with the fixed tracks, past the new ones.
-            let name = group_name(&kit.name);
+            let name = group_name(&kit.name, &kit.category);
             if let Some(at) = self.song().fixed_track(TrackKind::Group(number))
                 && !name.is_empty()
             {
