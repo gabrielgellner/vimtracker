@@ -1,0 +1,110 @@
+# The Space Echo's heads against Arturia's Delay TAPE-201 (#712, decision 337): a click through
+# every mode at TAPE-201's own 150 ms, and the first head alone at the slowest and fastest tape,
+# a little fed back, so the repeats show where each head is, how loud a mode of two or three
+# heads plays each, and how the loop's repeats fall.
+#
+#   uv run run.py specs/echo-taps.toml --report out/echo-taps.html
+
+rate = 48000
+
+[input]
+signal = "impulse"
+level = -12.0
+seconds = 4.0
+
+[ours]
+effects = ["echo"]
+
+[ours.settings]
+1.echo.rate = 0x69
+1.echo.intensity = 0x4A
+1.echo.wow = 0x00
+1.echo.reverb = 0x00
+1.echo.mix = 0xFF
+
+[reference]
+name = "TAPE-201"
+plugin = "/Library/Audio/Plug-Ins/VST3/Delay TAPE-201.vst3"
+buffer_size = 512
+preset = "Default"
+# Played first and cut, so its motor has come to the case's speed from the last case's.
+preroll = 3.0
+
+[reference.parameters]
+rates_sync = false
+rates_link = true
+repeat_rate_left_ms = 150.0
+repeat_rate_right_ms = 150.0
+dry_wet = 1.0
+echo_amount = 1.0
+reverb_amount = 0.0
+intensity = 0.35
+flutter = 0.0
+noise = 0.0
+input_drive_db = 0.0
+stereo_width = 0.0
+stereo_rate_offset = 0.0
+bass = 0.0
+treble = 0.0
+delay_type = "L/R"
+input_eq_on_off = false
+lfo_destination = "None"
+
+[report]
+kind = "echo"
+measure = "taps"
+at = 0.0
+title = "Space Echo's heads against TAPE-201"
+about = """
+A click at -12 dBFS through our Space Echo and Arturia's Delay TAPE-201, all wet, at TAPE-201's \
+Repeat Rate of 150 ms, our `Rate` `69`, with `Intensity` at TAPE-201's 0.35, our `4A`, and no wow \
+or reverb. Each mode plays its heads; the second and third come two and three times as late as \
+the first. A mode of two or three heads plays each at a half or a third, on both sides, so it's \
+as loud as one. Then the first head alone at the tape's slowest, a second, `Rate` `00`, and its \
+fastest, 10 ms, `FF`.
+"""
+
+[[cases]]
+name = "mode-1"
+ours = { 1.echo.mode = 0 }
+reference = { mode_selector = "1" }
+
+[[cases]]
+name = "mode-2"
+ours = { 1.echo.mode = 1 }
+reference = { mode_selector = "2" }
+
+[[cases]]
+name = "mode-3"
+ours = { 1.echo.mode = 2 }
+reference = { mode_selector = "3" }
+
+[[cases]]
+name = "mode-4"
+ours = { 1.echo.mode = 3 }
+reference = { mode_selector = "4" }
+
+[[cases]]
+name = "mode-8"
+ours = { 1.echo.mode = 7 }
+reference = { mode_selector = "8" }
+
+[[cases]]
+name = "mode-10"
+ours = { 1.echo.mode = 9 }
+reference = { mode_selector = "10" }
+
+[[cases]]
+name = "mode-11"
+ours = { 1.echo.mode = 10 }
+reference = { mode_selector = "11" }
+
+[[cases]]
+name = "slowest"
+ours = { 1.echo.mode = 0, 1.echo.rate = 0x00 }
+reference = { mode_selector = "1", repeat_rate_left_ms = 1000.0, repeat_rate_right_ms = 1000.0 }
+
+[[cases]]
+name = "fastest"
+ours = { 1.echo.mode = 0, 1.echo.rate = 0xFF }
+reference = { mode_selector = "1", repeat_rate_left_ms = 10.0, repeat_rate_right_ms = 10.0 }

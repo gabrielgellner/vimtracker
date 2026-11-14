@@ -2076,17 +2076,16 @@ impl GenParam {
                 .parse::<i16>()
                 .map_err(|_| "Curve and S run from -100 to 100")?
                 .into(),
-            Self::Every | Self::Chance => match (shape.place, text.parse::<u16>()) {
-                (Where::Every(_), Ok(every)) if every > 0 => {
-                    shape.place = Where::Every(every);
-                    return Ok(());
-                }
-                (Where::Chance(_), Ok(percent)) => {
-                    Self::Chance.put(shape, context, percent.into());
-                    return Ok(());
-                }
-                _ => return Err("That amount isn't a whole number above 0"),
-            },
+            // The amount of the `Where` it has, whichever of the two was typed into.
+            Self::Every | Self::Chance => {
+                let (param, amount) = match (shape.place, text.parse::<u16>()) {
+                    (Where::Every(_), Ok(every)) if every > 0 => (Self::Every, every),
+                    (Where::Chance(_), Ok(percent)) => (Self::Chance, percent),
+                    _ => return Err("That amount isn't a whole number above 0"),
+                };
+                param.put(shape, context, amount.into());
+                return Ok(());
+            }
             Self::Hits | Self::Rotate => match (shape.place, text.parse::<u16>()) {
                 (Where::Euclid { .. }, Ok(number)) => number.into(),
                 _ => return Err("Hits and Rotate are whole numbers"),
@@ -3510,6 +3509,11 @@ mod tests {
         GenParam::Curve.typed(&mut ramp, &velocity, "-500").unwrap();
         assert_eq!(ramp.curve, -100);
         assert!(GenParam::Phase.typed(&mut ramp, &velocity, "360").is_err());
+        // An `Every` typed past the most rows it can skip stops there, as a step does.
+        ramp.place = Where::Every(4);
+        GenParam::Every.typed(&mut ramp, &velocity, "1000").unwrap();
+        assert_eq!(ramp.place, Where::Every(MAX_EVERY));
+        assert!(GenParam::Every.typed(&mut ramp, &velocity, "0").is_err());
         GenParam::From.typed(&mut ramp, &velocity, "4a").unwrap();
         assert_eq!(ramp.from, 0x4A);
         let starts = Starts {
@@ -3617,6 +3621,48 @@ mod tests {
                             param.key(),
                             kind.name()
                         );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn whatever_is_typed_lands_within_its_bounds() {
+        let columns = [
+            note(),
+            ShapeColumn::Velocity,
+            ShapeColumn::Nudge { most: 11 },
+            ShapeColumn::Length,
+        ];
+        let texts = [
+            "0", "1", "-1", "8", "17", "65", "101", "256", "257", "360", "1000", "40000", "-200",
+            "FF", "C-3", "C-9",
+        ];
+        for column in columns {
+            let typing = context(column);
+            for kind in column.fills() {
+                for place in column.wheres() {
+                    let mut base = shape(kind);
+                    base.place = place;
+                    for param in GenParam::of(&base, column, false) {
+                        let Some((low, high)) = param.bounds(&typing) else {
+                            continue;
+                        };
+                        for text in texts {
+                            let mut typed = base;
+                            if param.typed(&mut typed, &typing, text).is_err() {
+                                continue;
+                            }
+                            if let Some(number) = param.number(&typed, &typing) {
+                                assert!(
+                                    (low..=high).contains(&number),
+                                    "{} typed {text} on {} is {number}",
+                                    param.key(),
+                                    kind.name()
+                                );
+                            }
+                        }
                     }
                 }
             }

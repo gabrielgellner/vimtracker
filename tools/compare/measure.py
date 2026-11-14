@@ -649,3 +649,86 @@ def passage_gaps(ours: dict, theirs: dict) -> dict:
         "quiet dB": ours["quiet dBFS"] - theirs["quiet dBFS"],
         "level dB": float(np.sqrt(np.mean(over_time**2))) if over_time.size else float("nan"),
     }
+
+
+def echo_taps(samples: np.ndarray, rate: int, at: float, floor_db: float = -40.0, gap: float = 0.004):
+    """A delay's repeats of a click at `at` seconds: each peak of the output's magnitude that's
+    within `floor_db` of the loudest and at least `gap` seconds from a louder one, in time order,
+    as (seconds after the click, dB of full scale)."""
+    magnitude = np.abs(mono(samples))
+    top = magnitude.max(initial=0.0)
+    if top <= 0.0:
+        return []
+    least = top * 10.0 ** (floor_db / 20.0)
+    apart = max(1, int(gap * rate))
+    taken = np.zeros(magnitude.size, dtype=bool)
+    found = []
+    for index in np.argsort(-magnitude)[:20_000]:
+        if magnitude[index] < least:
+            break
+        low, high = max(0, index - apart), min(magnitude.size, index + apart)
+        if taken[low:high].any():
+            continue
+        taken[low:high] = True
+        found.append((index / rate - at, db(float(magnitude[index]))))
+    return sorted(found)
+
+
+def tap_tones(samples: np.ndarray, given: np.ndarray, rate: int, at: float, period: float, count: int,
+              width: float = 0.3):
+    """Each repeat's tone, for a delay given a click at `at` whose repeats come every `period`
+    seconds: the power in third-octave bands from 31.5 Hz to 16 kHz over `width` seconds around
+    each, against the click's own, in dB. Gives the bands and a row for each repeat. With a
+    `period` of 0 there's one repeat, read whole: everything from the click on."""
+    signal, click = mono(samples), mono(given)
+    if period <= 0.0:
+        width, count = signal.size / rate - at, 1
+    size = 1 << int(math.ceil(math.log2(width * rate * 2)))
+    bins = np.fft.rfftfreq(size, 1.0 / rate)
+
+    def bands_of(part):
+        power = np.abs(np.fft.rfft(part, size)) ** 2
+        return np.array([
+            10.0 * np.log10(power[(bins > centre / 2 ** (1 / 6)) & (bins < centre * 2 ** (1 / 6))].mean() + 1e-30)
+            for centre in THIRD_OCTAVES
+        ])
+
+    frames = int(width * rate)
+    start = int(at * rate)
+    flat = bands_of(click[start : start + frames])
+    rows = []
+    for repeat in range(1, count + 1):
+        begin = max(0, int((at + repeat * period - width / 6) * rate)) if period > 0.0 else start
+        rows.append(bands_of(signal[begin : begin + frames]) - flat)
+    return THIRD_OCTAVES.copy(), rows
+
+
+def level_track(samples: np.ndarray, rate: int, width: float = 0.5):
+    """The RMS level in dBFS over each `width` seconds, as (times at their middles, levels)."""
+    signal = mono(samples)
+    size = int(width * rate)
+    count = signal.size // size
+    parts = signal[: count * size].reshape(count, size)
+    levels = [db(float(np.sqrt(np.mean(part**2)))) for part in parts]
+    return (np.arange(count) + 0.5) * width, np.array(levels)
+
+
+def pitch_cents(samples: np.ndarray, rate: int, frequency: float, start: float, end: float, smoothing: float = 0.003):
+    """A held tone's pitch over time, in cents from its own mean, by the derivative of its analytic
+    signal's phase smoothed over `smoothing` seconds, every millisecond; with its RMS and the rate
+    of its strongest wobble, in Hz."""
+    signal = mono(samples)[int(start * rate) : int(end * rate)]
+    phase = np.unwrap(np.angle(hilbert(signal)))
+    hertz = np.diff(phase) * rate / (2.0 * np.pi)
+    taps = max(1, int(smoothing * rate))
+    hertz = np.convolve(hertz, np.ones(taps) / taps, mode="same")[taps:-taps]
+    cents = CENTS * np.log2(np.maximum(hertz, 1.0) / frequency)
+    cents = cents - cents.mean()
+    every = max(1, rate // 1000)
+    sampled = cents[::every]
+    spectrum = np.abs(np.fft.rfft(sampled * np.hanning(sampled.size)))
+    rates = np.fft.rfftfreq(sampled.size, every / rate)
+    inside = (rates > 0.05) & (rates < 60.0)
+    strongest = float(rates[inside][np.argmax(spectrum[inside])]) if inside.any() else float("nan")
+    times = start + (np.arange(sampled.size) * every + taps) / rate
+    return times, sampled, float(np.std(cents)), strongest

@@ -16,12 +16,10 @@
 //! track it's added to (decision 318, for Kria's length loop).
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::{PRESET_FORMAT, Patch, PresetError, io_at, parse};
+use super::{PRESET_FORMAT, Patch, Preset, PresetKind};
 use crate::constants::{FX_SLOTS, MAX_PHRASE_STEPS};
 use crate::generator::{Generator, Span};
 use crate::macros::{GenColumn, MACROS, Macro, MacroTarget};
@@ -578,39 +576,36 @@ impl PatchPreset {
             tags: Vec::new(),
         })
     }
+}
 
-    /// The tag it always has: `patch`, so `#patch` lists them all, beside `sound` and `effect`.
-    pub fn fixed_tags(&self) -> Vec<String> {
-        vec![super::PresetKind::Patch.noun().to_owned()]
-    }
+impl Preset for PatchPreset {
+    const KIND: PresetKind = PresetKind::Patch;
 
-    /// What it is, for a list.
-    pub fn summary(&self) -> String {
+    /// What it needs of a track.
+    fn summary(&self) -> String {
         self.patch.needs()
     }
-}
 
-/// Read a patch preset.
-pub fn load_patch(path: &Path) -> Result<PatchPreset, PresetError> {
-    let text = fs::read_to_string(path).map_err(io_at(path))?;
-    read_patch(&text, path)
-}
+    /// `patch`, so `#patch` lists them all, beside `sound` and `effect`.
+    fn fixed_tags(&self) -> Vec<String> {
+        vec![Self::KIND.noun().to_owned()]
+    }
 
-/// A patch preset from its file's text, `path` naming it in what's said if it won't read.
-pub(super) fn read_patch(text: &str, path: &Path) -> Result<PatchPreset, PresetError> {
-    let preset: PatchPreset = parse(text, path)?;
-    preset
-        .patch
-        .check_alone()
-        .map_err(|detail| PresetError::Holds {
-            path: path.display().to_string(),
-            detail,
-        })?;
-    Ok(preset)
+    /// That it fits a track and refers only to its own parts.
+    fn check(&self) -> Result<(), String> {
+        self.patch.check_alone()
+    }
+
+    fn tags(&mut self) -> &mut Vec<String> {
+        &mut self.tags
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
+    use super::super::{load, preset_path, save, set_tags};
     use super::*;
     use crate::macros::MacroMap;
     use crate::modulation::{ModKind, ModSlot, default_mods};
@@ -897,22 +892,20 @@ mod tests {
     fn a_patch_reads_back_and_one_reaching_outside_itself_is_named() {
         let root = std::env::temp_dir().join(format!("vt-patch-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        let path =
-            super::super::preset_path(&root, super::super::PresetKind::Patch, "Turing").unwrap();
+        let path = preset_path(&root, PresetKind::Patch, "Turing").unwrap();
         // `Range` bent, so its curve is seen to come along, added and renumbered (decision 314).
         let mut bent = turing();
         bent.macros[2].maps[0] = bent.macros[2].maps[0].bent(-60, 30);
         let preset = PatchPreset::of(&bent, None).unwrap();
-        super::super::save(&path, &preset, false).unwrap();
-        let loaded = load_patch(&path).unwrap();
+        save(&path, &preset, false).unwrap();
+        let loaded: PatchPreset = load(&path).unwrap();
         assert_eq!(loaded, preset);
         let text = fs::read_to_string(&path).unwrap();
         assert!(!text.contains("cutoff"), "{text}");
         assert!(text.contains("curve: -60"), "{text}");
         assert_eq!(loaded.fixed_tags(), ["patch"]);
-        super::super::set_tags(&path, super::super::PresetKind::Patch, vec!["pitch".into()])
-            .unwrap();
-        assert_eq!(load_patch(&path).unwrap().tags, ["pitch"]);
+        set_tags::<PatchPreset>(&path, vec!["pitch".into()]).unwrap();
+        assert_eq!(load::<PatchPreset>(&path).unwrap().tags, ["pitch"]);
         let mut track = Song::new(2).tracks[1].clone();
         let placement = loaded.patch.place(&track, false).unwrap();
         loaded.patch.add_to(&mut track, &placement);
@@ -924,7 +917,7 @@ mod tests {
             r#"(format: 1, patch: (macros: [(maps: [(target: Setting("mod2.depth"), min: 0, max: 1)])]))"#,
         )
         .unwrap();
-        let error = load_patch(&path).unwrap_err().to_string();
+        let error = load::<PatchPreset>(&path).unwrap_err().to_string();
         assert!(error.contains("mod2.depth"), "{error}");
         fs::remove_dir_all(&root).unwrap();
     }
