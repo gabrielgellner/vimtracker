@@ -1624,7 +1624,8 @@ dim too, and so is a `Vary` of `Once`. Its settings are the
 shape panel's, laid out by what they do: the fill's down the first two columns,
 and the `Where`'s, `Hits` and `Rotate` or an amount, at the foot of the third, so
 they stay put as the fill changes. A `Follow`, which has no `Where`, has its
-`Mutation` and the kinds it may make in the third column and the fourth. A value with a bar is brief, as `9` for hits,
+`Mutation` and the kinds it may make in the third column and the fourth, and `Acid`,
+whose three are full, its riff's `Spread` and `Bias` in the fourth. A value with a bar is brief, as `9` for hits,
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 
@@ -1840,7 +1841,9 @@ finds `Euclid`.
 
 Each is the part of that song's track that plays it, with its macros turned to where the song
 has them; the generators tutorial has a section on each. `Deja vu` is the Turing Machine with
-Marbles' knob, up for more memory, and `Kria`'s length loop comes with its lane of 4 on FX 1.
+the left half of Marbles' knob, up for more memory; the right half, the loop played out of
+order, is the phrase's `:order random`, which a patch doesn't hold. `Kria`'s length loop comes
+with its lane of 4 on FX 1.
 
 **What's saved** goes by the macros, as they're the patch's knobs: each macro that holds
 something, with its name, value, mappings and ranges; every mod slot a macro maps to, the slots

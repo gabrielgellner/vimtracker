@@ -175,6 +175,25 @@ fn r_rolls_a_random_fill_again() {
     assert_ne!(generators(&app)[0].shape.seed, seed);
 }
 
+/// An `Acid` riff's `Spread` and `Bias` are in the fourth column (decision 322), and a turn of
+/// one writes the column again.
+#[test]
+fn an_acid_riffs_spread_and_bias_are_in_the_fourth_column() {
+    let (mut app, _rt) = on_gen_page();
+    keys(&mut app, "Kacid<Enter>");
+    assert_eq!(generators(&app)[0].shape.kind, FillKind::Acid);
+    let text = fx_page_text(&app).join("\n");
+    assert!(text.contains("Spread") && text.contains("Bias"), "{text}");
+    keys(&mut app, "j$");
+    assert_eq!(here(&app), Some(GenParam::Spread));
+    keys(&mut app, "j");
+    assert_eq!(here(&app), Some(GenParam::Bias));
+    let depth = app.history.undo_depth();
+    keys(&mut app, "k_____");
+    assert_eq!(generators(&app)[0].shape.random.spread, 0);
+    assert_eq!(app.history.undo_depth(), depth + 5);
+}
+
 /// `Vary` sits last in a drawing fill's title, `K` lists how long each variation lasts, and
 /// `Space g a` keeps the pass last heard as its seed, `Vary` back to `Once`, as one undo step.
 #[test]

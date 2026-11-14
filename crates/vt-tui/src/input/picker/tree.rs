@@ -81,6 +81,9 @@ pub const MARKING_HINT: &str = "Space mark  a all  Enter load";
 /// The hint while `T` types an item's tags.
 pub const TAGGING_HINT: &str = "Enter tag  Tab complete  Esc back";
 
+/// The end of a hint that says `T` tags, left off where it can't: on a shipped patch.
+pub const TAG_HINT: &str = "  T tag";
+
 /// Where the cursor was and which folders were open, kept while the tree is read again.
 struct Remembered {
     open: Vec<PathBuf>,
@@ -969,7 +972,8 @@ impl Picker {
     }
 
     /// The hint under the list: the kit dialog's marking keys while the cursor is in a kit's
-    /// sounds or any are marked, and otherwise the list's own.
+    /// sounds or any are marked, and otherwise the list's own, without `T tag` on a shipped
+    /// patch or their `Factory` group, which `T` passes over (decision 318).
     pub fn shown_hint(&self) -> Option<&'static str> {
         if self.focus == super::Focus::Tags {
             return Some(TAGGING_HINT);
@@ -979,10 +983,23 @@ impl Picker {
                 .current_index()
                 .is_some_and(|item| self.kit_of(item).is_some_and(|kit| kit != item));
         if inside || self.marked_count() > 0 {
-            Some(MARKING_HINT)
-        } else {
-            self.hint
+            return Some(MARKING_HINT);
         }
+        let hint = self.hint?;
+        if self.current_index().is_some_and(|item| self.shipped(item)) {
+            return Some(hint.strip_suffix(TAG_HINT).unwrap_or(hint));
+        }
+        Some(hint)
+    }
+
+    /// Whether an item is a shipped patch, or the group listing them.
+    fn shipped(&self, item: usize) -> bool {
+        let factory = |at: usize| matches!(self.items[at].pick, Pick::FactoryPatch(_));
+        factory(item)
+            || self
+                .node(item)
+                .and_then(|node| node.folder.as_ref()?.children.as_ref()?.first().copied())
+                .is_some_and(factory)
     }
 
     /// `Space` or `x` in the kit dialog: mark the sound under the cursor, or take its mark off,
