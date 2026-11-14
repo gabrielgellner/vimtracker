@@ -6,16 +6,16 @@
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
-use crate::app::App;
 use crate::input::mode::Mode;
+use crate::page::Ctx;
 use crate::theme;
 use crate::track_page::Control;
 
 /// A setting's value or fine part as text: while Insert has the cursor on it, what's been typed,
 /// with a `_` where the next character goes, and otherwise what it's set to.
-pub fn text(app: &App, here: bool, value: impl FnOnce() -> String) -> String {
-    if here && app.mode == Mode::Insert {
-        format!("{}_", app.entry.text)
+pub fn text(ctx: &Ctx, here: bool, value: impl FnOnce() -> String) -> String {
+    if here && ctx.mode() == Mode::Insert {
+        format!("{}_", ctx.entry().text)
     } else {
         value()
     }
@@ -23,9 +23,9 @@ pub fn text(app: &App, here: bool, value: impl FnOnce() -> String) -> String {
 
 /// A setting's value's style: the cursor's under the cursor, dim where it's left at its default,
 /// which matters less, and plain otherwise.
-pub fn style(app: &App, here: bool, default: bool) -> Style {
+pub fn style(ctx: &Ctx, here: bool, default: bool) -> Style {
     if here {
-        theme::cursor(app.mode)
+        theme::cursor(ctx.mode())
     } else if default {
         theme::dim()
     } else {
@@ -34,16 +34,15 @@ pub fn style(app: &App, here: bool, default: bool) -> Style {
 }
 
 /// The label a jump has put on a setting, or nothing.
-pub fn jump_label(app: &App, control: Control) -> String {
-    app.field_jump
-        .as_ref()
+pub fn jump_label(ctx: &Ctx, control: Control) -> String {
+    ctx.field_jump()
         .and_then(|jump| jump.label(control))
         .map_or_else(String::new, String::from)
 }
 
 /// A setting's value, with a jump's label over its first letter if it has one.
-pub fn value_spans(app: &App, control: Control, text: String, style: Style) -> Vec<Span<'static>> {
-    let label = app.field_jump.as_ref().and_then(|jump| jump.label(control));
+pub fn value_spans(ctx: &Ctx, control: Control, text: String, style: Style) -> Vec<Span<'static>> {
+    let label = ctx.field_jump().and_then(|jump| jump.label(control));
     match label {
         Some(label) => vec![
             Span::styled(label.to_string(), theme::jump_label()),
@@ -56,9 +55,9 @@ pub fn value_spans(app: &App, control: Control, text: String, style: Style) -> V
 /// A setting's name in its column, with any labels from a jump over the letters just after what's
 /// been typed, as flash.nvim draws them, since that's where the eye is while searching. The labels
 /// stay inside the room the column has.
-pub fn name_line(app: &App, name: &str, labels: &str, room: u16) -> Line<'static> {
+pub fn name_line(ctx: &Ctx, name: &str, labels: &str, room: u16) -> Line<'static> {
     let letters: Vec<char> = name.chars().collect();
-    let typed = app.field_jump.as_ref().and_then(|jump| {
+    let typed = ctx.field_jump().and_then(|jump| {
         let at = name.to_lowercase().find(&jump.query)?;
         Some(at + jump.query.len())
     });

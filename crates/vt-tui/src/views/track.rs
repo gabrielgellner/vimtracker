@@ -20,10 +20,13 @@ use crate::app::App;
 use crate::banking::sample_text;
 use crate::glyphs;
 use crate::input::mode::Mode;
+use crate::page::Ctx;
 use crate::shaping::live_shown;
 use crate::theme;
 use crate::track_page::tuning::{tuning, tuning_text};
-use crate::track_page::{AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page};
+use crate::track_page::{
+    AccumulatorField, ArpField, Control, DeviceSpec, ModField, Page, TrackPage,
+};
 use crate::views::phrase::level_glyph;
 use crate::views::widgets;
 use crate::views::widgets::bar::{ValueBar, moved_since};
@@ -308,47 +311,47 @@ pub(crate) fn toggle_on(control: Control, track: &Track, song: &Song) -> Option<
 /// place, a toggle in its own colour if it's off or on, or its value in the cursor's colour under
 /// the cursor and dim at its default.
 fn value_line(
-    app: &App,
+    ctx: &Ctx,
     track: &Track,
     control: Control,
     here: bool,
     default: bool,
 ) -> Line<'static> {
-    let typing = here && app.mode == Mode::Insert;
-    let (text, style) = match toggle_on(control, track, app.song()) {
+    let typing = here && ctx.mode() == Mode::Insert;
+    let (text, style) = match toggle_on(control, track, ctx.song()) {
         Some(on) if !typing => {
             // One that does nothing on this track, as `Safe` on a clean filter, is dim.
             let style = if here {
-                theme::cursor(app.mode)
+                theme::cursor(ctx.mode())
             } else if default {
-                setting::style(app, false, true)
+                setting::style(ctx, false, true)
             } else {
                 toggle::style(on)
             };
             (toggle::text(on), style)
         }
         _ => (
-            setting::text(app, here, || value(control, track, app.song())),
-            setting::style(app, here, default),
+            setting::text(ctx, here, || value(control, track, ctx.song())),
+            setting::style(ctx, here, default),
         ),
     };
-    Line::from(value_spans(app, control, text, style))
+    Line::from(value_spans(ctx, control, text, style))
 }
 
 /// Whether the cursor is in a sound track's Machine device, on the machine, its type, its
 /// sample or one of its settings, so its thumbnail is the focused one.
-pub(crate) fn machine_being_edited(app: &App) -> bool {
-    app.track_page.page == Page::Sound
+pub(crate) fn machine_being_edited(page: &TrackPage, ctx: &Ctx) -> bool {
+    page.page == Page::Sound
         && matches!(
-            app.track_control(),
+            page.control_here(ctx),
             Control::Machine | Control::Sample | Control::Setting(_)
         )
 }
 
 /// Whether the cursor is on something the filter's curve shows.
-pub(crate) fn filter_being_edited(app: &App) -> bool {
+pub(crate) fn filter_being_edited(page: &TrackPage, ctx: &Ctx) -> bool {
     matches!(
-        app.track_control(),
+        page.control_here(ctx),
         Control::FilterType
             | Control::FilterMode
             | Control::Safe
@@ -364,8 +367,8 @@ pub(crate) fn filter_being_edited(app: &App) -> bool {
 }
 
 /// Which FX slot the cursor is on, if any.
-pub(crate) fn slot_being_edited(app: &App) -> Option<usize> {
-    match app.track_control() {
+pub(crate) fn slot_being_edited(page: &TrackPage, ctx: &Ctx) -> Option<usize> {
+    match page.control_here(ctx) {
         Control::Insert(slot) | Control::InsertParam(slot, _) => Some(slot),
         _ => None,
     }
@@ -373,9 +376,9 @@ pub(crate) fn slot_being_edited(app: &App) -> Option<usize> {
 
 /// Whether a slot is switched out as it's heard: while the song plays, a step's lock of its bypass
 /// counts, so the slot fades and comes back with the lock, and otherwise it's the slot's own.
-pub(crate) fn heard_bypassed(app: &App, track: &Track, slot: usize) -> bool {
-    match app.live {
-        Some(live) if app.transport == Transport::Playing => live.bypassed[slot],
+pub(crate) fn heard_bypassed(ctx: &Ctx, track: &Track, slot: usize) -> bool {
+    match ctx.live() {
+        Some(live) if ctx.transport() == Transport::Playing => live.bypassed[slot],
         _ => track.bypassed[slot],
     }
 }
@@ -383,7 +386,8 @@ pub(crate) fn heard_bypassed(app: &App, track: &Track, slot: usize) -> bool {
 /// What the FX page's cells show for a slot's settings, read from what's in the slot, with bars
 /// this many cells long.
 struct SlotCells<'a> {
-    app: &'a App,
+    page: &'a TrackPage,
+    ctx: &'a Ctx<'a>,
     track: &'a Track,
     bar_cells: usize,
 }
@@ -392,13 +396,13 @@ impl CellSource for SlotCells<'_> {
     type Id = Control;
 
     fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let labels = jump_label(self.app, control);
-        name_line(self.app, control.name_on(self.track), &labels, room)
+        let labels = jump_label(self.ctx, control);
+        name_line(self.ctx, control.name_on(self.track), &labels, room)
     }
 
     fn value(&self, control: Control) -> Line<'static> {
-        let here = control == self.app.track_control();
-        value_line(self.app, self.track, control, here, false)
+        let here = control == self.page.control_here(self.ctx);
+        value_line(self.ctx, self.track, control, here, false)
     }
 
     fn bar(&self, control: Control) -> Option<ValueBar> {
@@ -412,11 +416,11 @@ impl CellSource for SlotCells<'_> {
         let set = insert.value(param);
         // Only from a report of the same effect, as another's settings mean something else.
         let then = self
-            .app
+            .ctx
             .reported_track()
             .map(|track| track.with_macros().inserts[slot])
             .filter(|then| std::mem::discriminant(then) == std::mem::discriminant(&insert));
-        let live = match (self.app.live, then) {
+        let live = match (self.ctx.live(), then) {
             (Some(live), Some(then)) => {
                 moved_since(live.inserts[slot][param], then.value(param), set)
             }
@@ -439,8 +443,13 @@ pub(crate) fn macro_range(control: Control, track: &Track) -> Option<(u8, u8)> {
 
 /// A device's title controls, each in its own style: on a slot, its effect, `Empty` when there's
 /// none, and its type if it has one.
-fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'static>> {
-    let current = app.track_control();
+fn title_controls(
+    page: &TrackPage,
+    ctx: &Ctx,
+    track: &Track,
+    device: &DeviceSpec,
+) -> Vec<Line<'static>> {
+    let current = page.control_here(ctx);
     device
         .title
         .iter()
@@ -449,12 +458,12 @@ fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'st
             let here = *control == current;
             let empty =
                 matches!(*control, Control::Insert(slot) if track.inserts[slot] == Insert::Empty);
-            let text = setting::text(app, here, || match empty {
+            let text = setting::text(ctx, here, || match empty {
                 true => EMPTY_SLOT.to_owned(),
-                false => value(*control, track, app.song()),
+                false => value(*control, track, ctx.song()),
             });
-            let style = setting::style(app, here, empty);
-            Line::from(value_spans(app, *control, text, style))
+            let style = setting::style(ctx, here, empty);
+            Line::from(value_spans(ctx, *control, text, style))
         })
         .collect()
 }
@@ -462,21 +471,28 @@ fn title_controls(app: &App, track: &Track, device: &DeviceSpec) -> Vec<Line<'st
 /// A slot as a device: its frame and its title, with its bypass's toggle, then its settings in its
 /// effect's grid, or a hint if it's empty, and its graphic panel. A bypassed slot's contents are
 /// faint but for the cursor and its images.
-fn draw_slot(frame: &mut Frame, area: Rect, app: &App, track: &Track, device: &DeviceSpec) {
-    let Some(slot) = slot_frame(frame, area, app, track, device) else {
+fn draw_slot(
+    frame: &mut Frame,
+    area: Rect,
+    page: &TrackPage,
+    ctx: &Ctx,
+    track: &Track,
+    device: &DeviceSpec,
+) {
+    let Some(slot) = slot_frame(frame, area, page, ctx, track, device) else {
         return;
     };
     slot_grid(
         frame,
         Device::settings_area(area),
-        (app, track),
+        (page, ctx, track),
         device,
         CellWidths::FX,
     );
     if track.inserts[slot] == Insert::Empty {
         return;
     }
-    let panel = slot_panel(app, track, slot);
+    let panel = slot_panel(page, ctx, track, slot);
     if !panel.is_empty() {
         let at = Device::panel_area(area, panel.width());
         frame.render_widget(panel, at);
@@ -488,16 +504,17 @@ fn draw_slot(frame: &mut Frame, area: Rect, app: &App, track: &Track, device: &D
 fn slot_frame(
     frame: &mut Frame,
     area: Rect,
-    app: &App,
+    page: &TrackPage,
+    ctx: &Ctx,
     track: &Track,
     device: &DeviceSpec,
 ) -> Option<usize> {
     let Some(Control::Insert(slot)) = device.title[0] else {
         return None;
     };
-    let cursor = theme::cursor(app.mode);
-    let fade = heard_bypassed(app, track, slot).then_some(cursor);
-    let mut controls = title_controls(app, track, device);
+    let cursor = theme::cursor(ctx.mode());
+    let fade = heard_bypassed(ctx, track, slot).then_some(cursor);
+    let mut controls = title_controls(page, ctx, track, device);
     if let Some(keep) = fade {
         controls = controls.into_iter().map(|line| faded(line, keep)).collect();
     }
@@ -509,7 +526,7 @@ fn slot_frame(
     };
     let frame_widget = frame_widget
         .controls(controls)
-        .focused(slot_being_edited(app) == Some(slot));
+        .focused(slot_being_edited(page, ctx) == Some(slot));
     frame.render_widget(frame_widget, area);
     Some(slot)
 }
@@ -519,7 +536,7 @@ fn slot_frame(
 fn slot_grid(
     frame: &mut Frame,
     settings: Rect,
-    (app, track): (&App, &Track),
+    (page, ctx, track): (&TrackPage, &Ctx, &Track),
     device: &DeviceSpec,
     widths: CellWidths,
 ) {
@@ -536,10 +553,11 @@ fn slot_grid(
         frame.render_widget(hint, take_top(&mut row, 1));
         return;
     }
-    let fade = heard_bypassed(app, track, slot).then_some(theme::cursor(app.mode));
+    let fade = heard_bypassed(ctx, track, slot).then_some(theme::cursor(ctx.mode()));
     let rows = device.grid.iter().copied().map(Vec::from).collect();
     let source = SlotCells {
-        app,
+        page,
+        ctx,
         track,
         bar_cells: widths.bar_cells,
     };
@@ -551,21 +569,20 @@ fn slot_grid(
 /// so four fill the rows inside the keyboard's box. Where fewer fit, the page goes by whole devices
 /// to keep the cursor's in view. Zoomed, it's the cursor's slot alone, bigger, under a strip of
 /// them all.
-fn draw_fx(frame: &mut Frame, area: Rect, app: &App, track: &Track) {
-    if app.track_page.zoomed {
-        zoom::draw(frame, area, app, track);
+fn draw_fx(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx, track: &Track) {
+    if page.zoomed {
+        zoom::draw(frame, area, page, ctx, track);
         return;
     }
     let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
-    let cursor = app
-        .track_page
+    let cursor = page
         .device_cursor(Some(track))
         .map_or(0, |cursor| cursor.device);
     let first = (cursor + 1).saturating_sub(fit);
     let mut rest = area;
     for device in Page::Fx.devices(track).iter().skip(first).take(fit) {
         let area = take_top(&mut rest, DEVICE_HEIGHT);
-        draw_slot(frame, area, app, track, device);
+        draw_slot(frame, area, page, ctx, track, device);
     }
 }
 
@@ -625,24 +642,24 @@ fn reduction_cell(
 /// limiter's meter alone, or an EQ's curve, each in its box, with the meter's scale beside it. A
 /// curve's box is left out until its image has been sent. A bypassed slot's meter is faint, and
 /// so is its curve, which is an image of its own.
-fn slot_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
-    let style = if slot_being_edited(app) == Some(slot) {
+fn slot_panel(page: &TrackPage, ctx: &Ctx, track: &Track, slot: usize) -> GraphicPanel {
+    let style = if slot_being_edited(page, ctx) == Some(slot) {
         theme::active()
     } else {
         theme::dim()
     };
     let color = style.fg.unwrap_or(theme::TEXT);
-    let bypassed = heard_bypassed(app, track, slot);
-    let reduction = app
-        .live
+    let bypassed = heard_bypassed(ctx, track, slot);
+    let reduction = ctx
+        .live()
         .filter(|_| !bypassed)
         .map_or(0.0, |live| live.reduction[slot]);
     let held = if bypassed {
         0.0
     } else {
-        app.slot_reduction[slot].top
+        page.slot_reduction[slot].top
     };
-    let cursor = theme::cursor(app.mode);
+    let cursor = theme::cursor(ctx.mode());
     let fade = |line: Line<'static>| if bypassed { faded(line, cursor) } else { line };
     let meter = || {
         let lines = (0..SLOT_DRAWING_HEIGHT)
@@ -654,7 +671,7 @@ fn slot_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
         (lines, REDUCTION_METER_WIDTH as u16, Some(REDUCTION_CAPTION))
     };
     let curve = |width: usize| {
-        app.slot_images[slot].map(|id| {
+        page.slot_images[slot].map(|id| {
             let lines = image::rows(id, width, SLOT_DRAWING_HEIGHT)
                 .into_iter()
                 .map(Line::from)
@@ -684,9 +701,9 @@ fn slot_panel(app: &App, track: &Track, slot: usize) -> GraphicPanel {
     panel.beside(scale, REDUCTION_SCALE_WIDTH)
 }
 
-/// Draw the view.
+/// Draw the view: the program's track page, given the rest of the program.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
-    draw_finding_cycles(frame, area, app);
+    app.track_page.draw(frame, area, &app.ctx());
 }
 
 /// Where the pictures that carry a dot are, as the track page drew them.
@@ -698,11 +715,18 @@ pub struct Drawn {
     pub previews: Vec<(usize, (u16, u16))>,
 }
 
-/// Draw the view, giving back where the Mod page's LFO cycles and the Gen page's previews are,
-/// for their dots.
-pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> Drawn {
+impl TrackPage {
+    /// Draw the page, giving back where the Mod page's LFO cycles and the Gen page's previews
+    /// are, for their dots.
+    pub fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) -> Drawn {
+        draw_page(frame, area, self, ctx)
+    }
+}
+
+/// Draw the page, as [`TrackPage::draw`].
+fn draw_page(frame: &mut Frame, area: Rect, page: &TrackPage, ctx: &Ctx) -> Drawn {
     // While the keyboard plays the sound, the page sits in a box of that mode's colour.
-    let area = if app.mode == Mode::Keys {
+    let area = if ctx.mode() == Mode::Keys {
         let block = widgets::window_border()
             .border_style(Style::new().fg(theme::YELLOW))
             .title(" Keys ");
@@ -712,7 +736,7 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> Drawn {
     } else {
         area
     };
-    let Some(track) = app.song().tracks.get(app.cursor.track) else {
+    let Some(track) = ctx.song().tracks.get(ctx.cursor().track) else {
         frame.render_widget(Paragraph::new("This track doesn't exist."), area);
         return Drawn::default();
     };
@@ -720,9 +744,9 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> Drawn {
     let shown = track.with_macros();
     let track = shown.as_ref();
     let bold = Style::new().add_modifier(Modifier::BOLD);
-    let tabs = Page::ALL.map(|page| {
-        let text = format!(" {} ", page.name());
-        if page == app.track_page.page {
+    let tabs = Page::ALL.map(|tab| {
+        let text = format!(" {} ", tab.name());
+        if tab == page.page {
             Span::styled(text, bold)
         } else {
             Span::styled(text, theme::dim())
@@ -731,7 +755,7 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> Drawn {
     // A sound track's number and name, with what it's for as the rule under them, as on the mixer,
     // or a fixed track's title over its rule.
     let (lead, name) = if track.is_sound() {
-        let name = format!("{:02} {}", app.cursor.track + 1, track.name);
+        let name = format!("{:02} {}", ctx.cursor().track + 1, track.name);
         ("Track ", name.trim_end().to_owned())
     } else {
         ("", group::title(track))
@@ -739,45 +763,45 @@ pub fn draw_finding_cycles(frame: &mut Frame, area: Rect, app: &App) -> Drawn {
     // The track's machine or kind as a glyph before it, a group's in its colour, and whether it's
     // muted or soloed after.
     let icon = match track.kind {
-        TrackKind::Group(_) => group::style(app.song(), app.cursor.track).unwrap_or_default(),
+        TrackKind::Group(_) => group::style(ctx.song(), ctx.cursor().track).unwrap_or_default(),
         _ => theme::dim(),
     };
     let mut title = vec![
         Span::styled(format!("{} ", glyphs::track(track)), icon),
         Span::styled(lead, bold),
     ];
-    title.extend(role::ruled(app.song(), app.cursor.track, &name, bold));
+    title.extend(role::ruled(ctx.song(), ctx.cursor().track, &name, bold));
     title.push(Span::styled(" ", bold));
     // A track in a group carries its mark, in the group's colour, as on the mixer.
-    if let Some(mark) = group::mark(app.song(), app.cursor.track) {
+    if let Some(mark) = group::mark(ctx.song(), ctx.cursor().track) {
         title.extend([mark.patch_style(bold), Span::raw(" ")]);
     }
-    if let Some((glyph, style)) = level_glyph(app, app.cursor.track) {
+    if let Some((glyph, style)) = level_glyph(ctx, ctx.cursor().track) {
         title.push(Span::styled(format!("{glyph} "), style));
     }
     title.extend(tabs);
-    if app.track_page.page == Page::Gen
-        && let Some(phrase) = app.track_page.phrase
+    if page.page == Page::Gen
+        && let Some(phrase) = page.phrase
     {
         title.push(Span::styled(format!("  Phrase {phrase:02X}"), bold));
-        if let Some(playing) = generators::playing_phrase(app).filter(|id| *id != phrase) {
+        if let Some(playing) = generators::playing_phrase(ctx).filter(|id| *id != phrase) {
             title.push(Span::styled(format!("  ▶ {playing:02X}"), theme::dim()));
         }
     }
     let mut rest = area;
     frame.render_widget(Paragraph::new(Line::from(title)), take_top(&mut rest, 2));
-    match app.track_page.page {
-        Page::Sound => sound::draw(frame, rest, app, track),
-        Page::Fx => draw_fx(frame, rest, app, track),
+    match page.page {
+        Page::Sound => sound::draw(frame, rest, page, ctx, track),
+        Page::Fx => draw_fx(frame, rest, page, ctx, track),
         Page::Mod => {
             return Drawn {
-                cycles: modulation::draw(frame, rest, app, track),
+                cycles: modulation::draw(frame, rest, page, ctx, track),
                 ..Drawn::default()
             };
         }
         Page::Gen => {
             return Drawn {
-                previews: generators::draw(frame, rest, app, track),
+                previews: generators::draw(frame, rest, page, ctx, track),
                 ..Drawn::default()
             };
         }

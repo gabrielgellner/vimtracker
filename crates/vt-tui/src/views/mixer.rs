@@ -295,6 +295,7 @@ fn meter_row(
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let song = app.song();
+    let ctx = app.ctx();
     // Room is kept for both gaps, whether or not they're in view.
     let room = area.width.saturating_sub(LABEL_WIDTH + 2 * SECTION_GAP);
     let count = usize::from(room / STRIP_WIDTH).max(1);
@@ -333,13 +334,13 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     let current = app.track_control();
     for control in MIXER {
         let mut cells = columns.row();
-        let labels = jump_label(app, control);
-        cells.span(name_line(app, control.label(), &labels, LABEL_WIDTH), 2);
+        let labels = jump_label(&ctx, control);
+        cells.span(name_line(&ctx, control.label(), &labels, LABEL_WIDTH), 2);
         strips.fill(&mut cells, |index| {
             // A fader the steps drive shows where they have it.
             let heard = app.track_as_heard(index);
             let track = heard.as_deref().unwrap_or(&song.tracks[index]);
-            let muted = group::muted(app, index);
+            let muted = group::muted(&ctx, index);
             let automated = app.follows_steps(index, control);
             let taken = app.taken_over(index, control);
             let here = index == app.cursor.track;
@@ -348,7 +349,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             // in its group's colour for its group's.
             let switched = match control {
                 Control::Mute => Some((muted, glyphs::MUTE)),
-                Control::Solo => Some((group::soloed(app, index), glyphs::SOLO)),
+                Control::Solo => Some((group::soloed(&ctx, index), glyphs::SOLO)),
                 _ => None,
             };
             // One waiting for the launch grid is the glyph for waiting until it switches.
@@ -363,7 +364,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
                 _ if waiting => glyphs::WAITING.to_string(),
                 (_, Some((Switched::Off, _))) => "-".to_owned(),
                 (_, Some((_, glyph))) => glyph.to_string(),
-                _ => setting::text(app, selected, || value(control, track, song)),
+                _ => setting::text(&ctx, selected, || value(control, track, song)),
             };
             let style = match switched {
                 _ if selected => theme::cursor(app.mode),
@@ -376,7 +377,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             };
             // A jump's labels go on the cursor's track, which it stays on.
             let mut line = if here {
-                Line::from(value_spans(app, control, text, style))
+                Line::from(value_spans(&ctx, control, text, style))
             } else {
                 Line::styled(text, style)
             };

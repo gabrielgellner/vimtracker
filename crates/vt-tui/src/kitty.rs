@@ -1323,10 +1323,11 @@ impl Graphics {
         if !shown {
             return wanted;
         }
-        let edited = mod_being_edited(app);
+        let edited = mod_being_edited(&app.track_page, &app.ctx());
         let diameter = dot_pixels(self.cell);
         for (slot, modulator) in track.mods.iter().enumerate() {
-            let (Some(corner), Some(now)) = (app.lfo_cycles_at[slot], live.mods[slot]) else {
+            let (Some(corner), Some(now)) = (app.track_page.lfo_cycles_at[slot], live.mods[slot])
+            else {
                 continue;
             };
             if !matches!(modulator.kind, ModKind::Lfo | ModKind::Track)
@@ -1362,7 +1363,7 @@ impl Graphics {
         let edited = app.gen_here().map(|(_, generator, _)| generator);
         let diameter = dot_pixels(self.cell);
         let size = (LARGE_PANEL_WIDTH, LARGE_PANEL_HEIGHT);
-        for (place, (at, corner)) in wanted.iter_mut().zip(&app.gen_panels_at) {
+        for (place, (at, corner)) in wanted.iter_mut().zip(&app.track_page.gen_panels_at) {
             let Some(generator) = phrase.generators().get(*at) else {
                 continue;
             };
@@ -1568,7 +1569,7 @@ impl Graphics {
             track.low_cut,
             track.high_cut,
         );
-        let shade = Shade::of(filter_being_edited(app), false);
+        let shade = Shade::of(filter_being_edited(&app.track_page, &app.ctx()), false);
         let rate = app.rate;
         let id = self.panel(
             out,
@@ -1584,8 +1585,8 @@ impl Graphics {
                 plot::filter(&playing, rate, size).png(shade.color())
             },
         )?;
-        app.filter_image = Some(id);
-        app.waveform_image = None;
+        app.track_page.filter_image = Some(id);
+        app.track_page.waveform_image = None;
         if track.machine == Machine::Sampler {
             self.sync_waveform(app, track, out)?;
         }
@@ -1604,7 +1605,7 @@ impl Graphics {
         let Some(thumbnail) = thumbnail(app, track) else {
             return Ok(());
         };
-        let shade = Shade::of(machine_being_edited(app), false);
+        let shade = Shade::of(machine_being_edited(&app.track_page, &app.ctx()), false);
         let cell = self.cell;
         let id = self.panel(
             out,
@@ -1618,7 +1619,7 @@ impl Graphics {
                     .png()
             },
         )?;
-        app.waveform_image = Some(id);
+        app.track_page.waveform_image = Some(id);
         Ok(())
     }
 
@@ -1627,9 +1628,9 @@ impl Graphics {
     /// bigger, which can be a distortion's transfer curve too.
     /// Each is drawn from the settings it shows, so it's sent again only when they change.
     fn sync_fx(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
-        let edited = slot_being_edited(app);
+        let edited = slot_being_edited(&app.track_page, &app.ctx());
         let mut ids = [None; INSERTS];
-        app.zoom_image = None;
+        app.track_page.zoom_image = None;
         if app.track_page.zoomed {
             let slot = app
                 .track_page
@@ -1643,15 +1644,15 @@ impl Graphics {
             if self.zoom_caption.as_ref().map(|(of, _)| of) != shown.as_ref() {
                 self.zoom_caption = shown.map(|shown| (shown, shown.caption(app.rate)));
             }
-            app.zoom_caption = self
+            app.track_page.zoom_caption = self
                 .zoom_caption
                 .as_ref()
                 .and_then(|(_, caption)| caption.clone());
             if let Some(shown) = shown {
                 // The zoomed slot always has the cursor.
-                let shade = Shade::of(true, heard_bypassed(app, track, slot));
+                let shade = Shade::of(true, heard_bypassed(&app.ctx(), track, slot));
                 let rate = app.rate;
-                app.zoom_image = Some(self.panel(
+                app.track_page.zoom_image = Some(self.panel(
                     out,
                     (PanelKey::Zoom, shade),
                     Shape::Slot(shown),
@@ -1659,7 +1660,7 @@ impl Graphics {
                     |size| shown.plot(rate, size).png(shade.color()),
                 )?);
             }
-            app.slot_images = ids;
+            app.track_page.slot_images = ids;
             return Ok(());
         }
         for (slot, insert) in track.inserts.iter().enumerate() {
@@ -1668,7 +1669,10 @@ impl Graphics {
             let Some(shown) = SlotDrawing::of(*insert, live) else {
                 continue;
             };
-            let shade = Shade::of(edited == Some(slot), heard_bypassed(app, track, slot));
+            let shade = Shade::of(
+                edited == Some(slot),
+                heard_bypassed(&app.ctx(), track, slot),
+            );
             let rate = app.rate;
             ids[slot] = Some(self.panel(
                 out,
@@ -1678,7 +1682,7 @@ impl Graphics {
                 |size| shown.plot(rate, size).png(shade.color()),
             )?);
         }
-        app.slot_images = ids;
+        app.track_page.slot_images = ids;
         Ok(())
     }
 
@@ -1709,7 +1713,7 @@ impl Graphics {
                 |size| drawing.plot(size).png(shade.color()),
             )?));
         }
-        app.gen_images = ids;
+        app.track_page.gen_images = ids;
         Ok(())
     }
 
@@ -1983,7 +1987,7 @@ impl Graphics {
     /// its type does.
     fn sync_mod(&mut self, app: &mut App, track: &Track, out: &mut impl Write) -> io::Result<()> {
         let size = (MOD_PANEL_WIDTH, MOD_PANEL_HEIGHT);
-        let edited = mod_being_edited(app);
+        let edited = mod_being_edited(&app.track_page, &app.ctx());
         let mut ids = [0; MOD_SLOTS];
         for (slot, modulator) in track.mods.iter().enumerate() {
             let shade = Shade::of(edited == Some(slot), modulator.bypassed);
@@ -2017,7 +2021,7 @@ impl Graphics {
                 ModKind::Steps => 0,
             };
         }
-        app.mod_images = Some(ids);
+        app.track_page.mod_images = Some(ids);
         Ok(())
     }
 
