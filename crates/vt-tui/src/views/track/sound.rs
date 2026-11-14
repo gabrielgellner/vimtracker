@@ -28,7 +28,7 @@ use crate::views::widgets::group;
 use crate::views::widgets::image;
 use crate::views::widgets::meter::level_across;
 use crate::views::widgets::panel::GraphicPanel;
-use crate::views::widgets::setting::{self, jump_label, name_line, value_spans};
+use crate::views::widgets::setting::{self, CellLook, Focus, name_line, value_spans};
 use crate::views::widgets::table::take_top;
 
 use super::{
@@ -104,10 +104,10 @@ fn bar_value(control: Control, track: &Track) -> Option<(u8, bool)> {
 /// A setting's value's style on the Sound page: as any page's, but the group a track is in is in
 /// its colour, as on the mixer, its role is in the role's, set back while it's `Auto`, and a fader
 /// the steps drive is in the playing colour.
-fn value_style(ctx: &Ctx, track: &Track, control: Control, here: bool) -> Style {
+fn value_style(ctx: &Ctx, look: &CellLook, track: &Track, control: Control) -> Style {
+    let here = look.focus == Focus::Value;
     let style = setting::style(
-        ctx,
-        here,
+        look,
         at_default(control, track) || untuned(ctx, track, control),
     );
     let role = theme::role(track.role()).filter(|_| control == Control::Role && !here);
@@ -153,8 +153,8 @@ impl CellSource for SoundCells<'_> {
 
     /// Its name, with a fader a hand has taken over from the steps marked after it.
     fn name(&self, control: Control, room: u16) -> Line<'static> {
-        let labels = jump_label(self.ctx, control);
-        let mut line = name_line(self.ctx, control.label_on(self.track), &labels, room);
+        let look = self.ctx.look_on(control, Focus::Off);
+        let mut line = name_line(&look, control.label_on(self.track), room);
         if self.ctx.taken_over(self.ctx.cursor().track, control) {
             line.push_span(Span::raw(" "));
             line.push_span(Span::styled(glyphs::TAKEN.to_string(), theme::taken()));
@@ -172,15 +172,14 @@ impl CellSource for SoundCells<'_> {
         if matches!(control, Control::Limiter | Control::Safe) {
             return value_line(ctx, track, control, here, at_default(control, track));
         }
-        let on_fine = here && page.fine;
-        let on_value = here && !on_fine;
-        let style = value_style(ctx, track, control, on_value);
+        let look = ctx.look_on(control, Focus::at(here, page.fine));
+        let style = value_style(ctx, &look, track, control);
         let slice = control.setting_on(track) == Some(SettingId::SLICE);
         let word = match control.setting_on(track).map(|id| id.entry().kind) {
             Some(Kind::Stepped { .. }) if !slice => choice_name(control, track),
             _ => None,
         };
-        let text = setting::text(ctx, on_value, || {
+        let text = setting::text(&look, || {
             word.unwrap_or_else(|| value(control, track, ctx.song()))
         });
         let fine = control.fine_on(track);
@@ -189,10 +188,10 @@ impl CellSource for SoundCells<'_> {
             Some(_) => format!("{text:<COARSE_WIDTH$}"),
             None => text,
         };
-        let mut spans = value_spans(ctx, control, text, style);
+        let mut spans = value_spans(&look, text, style);
         if let Some(id) = fine {
-            let fine = setting::text(ctx, on_fine, || format!("{:02X}", track.fine(id)));
-            spans.push(Span::styled(fine, setting::style(ctx, on_fine, true)));
+            let fine = setting::fine_text(&look, || format!("{:02X}", track.fine(id)));
+            spans.push(Span::styled(fine, setting::fine_style(&look)));
         }
         if control == Control::Tune
             && let Some(owner) = tune_owner(ctx, track)
@@ -256,11 +255,12 @@ fn title_controls(
         .flatten()
         .map(|control| {
             let here = *control == current;
-            let text = setting::text(ctx, here, || {
+            let look = ctx.look_on(*control, Focus::at(here, false));
+            let text = setting::text(&look, || {
                 choice_name(*control, track).unwrap_or_else(|| value(*control, track, ctx.song()))
             });
-            let style = setting::style(ctx, here, at_default(*control, track));
-            Line::from(value_spans(ctx, *control, text, style))
+            let style = setting::style(&look, at_default(*control, track));
+            Line::from(value_spans(&look, text, style))
         })
         .collect()
 }
@@ -486,11 +486,8 @@ impl CellSource for SendsIn<'_> {
         };
         let (coarse, fine) = self.amount(track);
         Line::from(vec![
-            Span::styled(
-                format!("{coarse:02X}"),
-                setting::style(self.ctx, false, false),
-            ),
-            Span::styled(format!("{fine:02X}"), setting::style(self.ctx, false, true)),
+            Span::styled(format!("{coarse:02X}"), setting::resting(false)),
+            Span::styled(format!("{fine:02X}"), setting::resting(true)),
         ])
     }
 
