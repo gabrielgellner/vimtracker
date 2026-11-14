@@ -17,6 +17,7 @@ use vt_model::action::{Action, edit};
 use vt_model::arpeggio::{ArpMode, ArpRate, Arpeggio};
 use vt_model::generator::Span;
 use vt_model::lfo::Shape as Wave;
+use vt_model::macros::{MacroMap, MacroTarget};
 use vt_model::modulation::ModKind;
 use vt_model::order::Order;
 use vt_model::project::{load_song, save_song};
@@ -137,6 +138,20 @@ fn steps_on_pitch(
     slot.steps.length = values.len() as u8;
     slot.steps.values[..values.len()].copy_from_slice(values);
     slot.steps.mutate = mutate;
+}
+
+/// Put one of track 1's settings, by its key, on a macro with a name, between two ends in the
+/// setting's own values, as `M`, `gm` and `:macro` do, with the macro turned to `value`.
+fn knob(song: &mut Song, at: usize, name: &str, key: &str, ends: (u16, u16), value: u16) {
+    let id = SettingId::from_key(key).unwrap_or_else(|| panic!("no setting {key}"));
+    let held = &mut song.tracks[0].macros[at];
+    held.name = Some(name.to_owned());
+    held.value = value;
+    held.maps.push(MacroMap {
+        target: MacroTarget::Setting(id),
+        min: ends.0,
+        max: ends.1,
+    });
 }
 
 /// Run an edit on the song, as a key in the program would.
@@ -262,6 +277,18 @@ fn turing_machine() -> Song {
         &[0x00, 0x00, 0x40, 0x00, -0x55, 0xAA, 0x00, 0x95],
         20,
     );
+    // Its knobs, as the hardware's: `Change` its big knob, from locked to every step new;
+    // `Length` its switch, from 2 steps to 16; and `Range` its scale knob, how far the line goes,
+    // from none to two octaves either way. Each is turned to where the slot is, so the macros
+    // play the loop as it was kept.
+    let knobs = [
+        ("Change", "mod4.mutate", (0x0000, 0x6400), 0x3300),
+        ("Length", "mod4.length", (0x0100, 0x0F00), 0x6D00),
+        ("Range", "mod4.depth", (0x8000, 0x8C00), 0x7F00),
+    ];
+    for (at, (name, key, ends, value)) in knobs.into_iter().enumerate() {
+        knob(&mut song, at, name, key, ends, value);
+    }
     four_on_the_floor(&mut song, 1);
     off_beat_hats(&mut song, 2);
     song

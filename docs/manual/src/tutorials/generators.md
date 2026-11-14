@@ -7,7 +7,7 @@ there are no samples to find.
 
 | Song | After | The trick |
 |---|---|---|
-| `turing-machine` | Music Thing's Turing Machine | A Steps slot's `Mutate` on `Pitch in scale` |
+| `turing-machine` | Music Thing's Turing Machine | A Steps slot's `Mutate` on `Pitch in scale`, played from three macros |
 | `deja-vu` | Mutable Instruments' Marbles | `Mutate` for new notes, `:order random` to replay old ones |
 | `euclid` | Euclidean rhythms | `S`'s `Euclid`, kept live, with `Rotate` |
 | `fugue` | Fugue Machine | One theme and three tracks following it live with `Follow`, each at its own `Speed` |
@@ -68,14 +68,18 @@ cursor back on the Note column before you type notes.
 [Music Thing's Turing Machine](https://www.musicthing.co.uk/Turing-Machine/) is a looping random
 sequencer. A shift register of up to 16 bits goes round, and its one big knob is the chance that
 a bit is flipped as it comes round: at noon every bit is new, turned to the right less and less
-changes, and fully right the loop is locked. Run its voltage through a quantiser and it writes
+changes, and fully right the loop is locked. A switch sets how many steps the loop has, from 2 to
+16, and a `Scale` knob how wide its voltage goes. Run that through a quantiser and it writes
 melodies that drift, a little at a time, until you hear one you want to keep and lock it.
 
 **How the song does it.** Track 1, an `Acid`, plays a written rhythm, every note a `C-2`. A
 `Steps` slot in `Note` mode, which moves on one step with each note, chooses each note's pitch:
 its eight values are the register, and its `Dest` is `Pitch in scale`, so every move lands in C
-minor. `Mutate` is the big knob: the chance each value is drawn again as it comes round. A
-kick and hats keep time under it. [`song.ron`](songs/turing-machine/song.ron)
+minor. `Mutate` is the big knob: the chance each value is drawn again as it comes round. Three
+macros are the module's panel: `Change` turns `Mutate` from `0%`, locked, to `100%`, every step
+new, the big knob's right half the other way round; `Length` turns the slot's `Length` from 2
+steps to 16, the switch; and `Range` turns its `Depth` from none to two octaves either way, the
+`Scale` knob. A kick and hats keep time under it. [`song.ron`](songs/turing-machine/song.ron)
 
 ```text
 00  C-2 7F          08  C-2 7F
@@ -88,7 +92,7 @@ kick and hats keep time under it. [`song.ron`](songs/turing-machine/song.ron)
 07  C-2 64  HLD1    0F  ---
 ```
 
-The song has a loop already kept, and `Mutate` at `20%`, so it wanders away from it and back.
+The song has a loop already kept, and `Change` at `20%`, so it wanders away from it and back.
 
 **Build it.**
 
@@ -110,8 +114,6 @@ The song has a loop already kept, and `Mutate` at `20%`, so it wanders away from
     on the slot to keep it: what it drew is written in as its values. Then `x` on `Mutate`
     puts it back to `0%`, and the loop you heard plays every time. That's the Turing Machine's
     lock.
-9.  To have the line as notes you can edit, `Space 3` and `Space g A`: each note becomes the
-    one it was moved to the last time it was heard, and the slot is switched out.
 
 Then the drums: on track 2, `/kick` for a `Kick`, and a `C-1` on each beat (with `Option-2`
 twice for a grid of a beat, `i`, `z` to octave 1, `a a a a`); on track 3, `/hat` for a `Hat`
@@ -120,14 +122,66 @@ rows `00` and `08` (`'` after the note, in Insert), slides from `07` into `08` (
 `Acid`'s `Cutoff` `58`, `Resonance` `B0`, `Env mod` `A0` and `Decay` `60`, `Send A` `A0` for
 some delay, a shorter hat (`Decay` `30`), and the tracks' `Level`s.
 
+**Give it knobs.** A macro is one knob that turns any of the track's settings, each between a
+`Min` and a `Max` of its own (see **Macros** in **The track page**). Three make the slot a panel,
+all on track 1's Mod page, `Space 6`:
+
+1.  `/mutate` `Enter` puts the cursor on `Mod 4`'s `Mutate`. `M` lists the track's eight
+    macros, and `1` maps `Mutate` to the first, from its bottom to its top: `0%` to `100%`, all
+    `Change` needs. The first setting on a macro turns the macro to where the setting is, so
+    nothing jumps. `:macro Change` names it.
+2.  `h` to `Length`, `M` `2`, and `:macro Length`. `gm` opens its mapping, `Min` `1` and `Max`
+    `16`, on `Min`: `=` makes it `2`, as a loop of one step plays one note. The macro stays
+    where it was, so the slot now plays 9 steps. `Esc`.
+3.  `j` to `Depth`, `M` `3`, and `:macro Range`. `gm`, then `i` `80` for its `Min` and `l` `i`
+    `8C` for its `Max`. A depth's ends are typed on its own scale, where `80` is none and `8C`
+    is `+18`, two octaves either way, as the status line says. `Esc`.
+
+Now `Mutate`, `Length` and `Depth` show where their macros put them, with how far each can go
+drawn faint behind its bar, and won't turn on their own: `=` on one says to turn its macro
+instead, or `gm` for its range. The song's macros are what these keys make.
+
+**Play it.** `Space 8` for the Gen page. Its first band is the `Macros`, with `Change`,
+`Length` and `Range` along the top row, each with its value in four digits and a bar. `h` and
+`l` go between them, `=` and `-` turn one a little, `+` and `_` by `10`, about a step of
+`Length`, `i` types two hex digits, and `x` takes one to `00`. To put it as the song has it,
+`Length` `i` `6D` for 8 steps and `Range` `i` `7F` for `+0C`.
+
+*   `Change` up, `i` `40`, and the line drifts. When it's somewhere you like, `Space 6` and
+    `Space g a` on the slot keeps it, then `Space 8` and `x` on `Change` locks it there.
+*   `Length` up to 16 steps for a line longer than the bar. A step past the eighth has no value
+    of its own yet, so it plays C until `Change` draws one.
+*   `Range` to `00` and every note is the written `C-2`, the rhythm alone; turned up, the line
+    opens out to two octaves.
+
+On the Roto, a track's first device is `Macros`, so its first three knobs are `Change`,
+`Length` and `Range`, named, the module's panel under your hands.
+
+There's no `Rate` knob. In `Note` mode the slot moves on with each note, so the written rhythm is
+its clock, as a Turing Machine's clock input is, and its `Rate` shows `--`. In `Free` or `Trig`
+it has a `Rate` to map, for a register that steps in time rather than with the notes.
+
 **Try next.**
 
-*   `Mutate` all the way up, then back down to `5%` once it's somewhere good: it barely moves.
-*   `Length` on the slot: 3 or 7 against the ten notes in the bar, and the loop no longer lines
-    up with it, so a short register makes a long melody.
+*   **Let it drift by itself:** a slow LFO on `Change`. On the Mod page, `/mutate` `Enter`, `h`
+    `j` to `Depth`, then `}` down to `Mod 5`'s `Depth`, `i` `40` `Enter`. `k` to its `Rate`, `K`
+    `8 bars` `Enter`. `k` `k` to its type in the title and `l` `l` `l` to its `Dest`, then `K`
+    `change` `Enter`, for `Macro 1 Change`. `Space 8`, and on `Change`, `i` `20`. `Tab`: `Change`
+    swings from below `00` to `60` and back every 8 bars, the band showing where it's heard with
+    a mark where you set it. At `00` the slot plays its values as written, so for two bars in
+    eight the line is the loop you kept; then it wanders off a new way, and comes home again.
+*   `Length` 3 or 7 against the ten notes in the bar, and the loop no longer lines up with it,
+    so a short register makes a long melody.
 *   Another scale: `:scale` and choose one. The register stays; every note moves into the new
     scale.
-*   `Depth` `18` for two octaves either way, a wider, wilder line.
+*   To have the line as notes you can edit, `Space 3` and `Space g A`: each note becomes the
+    one it was moved to the last time it was heard, and the slot is switched out, knobs and all.
+
+**A patch, later.** The Steps slot and the three macros that turn it are a Turing Machine you
+could put on any track. Saving them as a device of their own, without the `Acid` under them, is
+what `:patch save` will do once patches land
+([#619](https://github.com/gabrielgellner/vimtracker/issues/619)); `:patch` would then add it to
+another track, its macros and slot in whichever are free.
 
 ## Marbles' Déjà vu
 

@@ -78,6 +78,37 @@
                 destination: None,
                 depth: 0,
             )),
+            macros: ((
+                name: Some("Change"),
+                value: 13056,
+                maps: [
+                    (
+                        target: Setting("mod4.mutate"),
+                        min: 0,
+                        max: 25600,
+                    ),
+                ],
+            ), (
+                name: Some("Length"),
+                value: 27904,
+                maps: [
+                    (
+                        target: Setting("mod4.length"),
+                        min: 256,
+                        max: 3840,
+                    ),
+                ],
+            ), (
+                name: Some("Range"),
+                value: 32512,
+                maps: [
+                    (
+                        target: Setting("mod4.depth"),
+                        min: 32768,
+                        max: 35840,
+                    ),
+                ],
+            ), (), (), (), (), ()),
             chains: {
                 0: (
                     entries: [
