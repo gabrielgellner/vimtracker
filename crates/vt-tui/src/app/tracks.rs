@@ -32,49 +32,6 @@ impl App {
         }
     }
 
-    /// Move to the track as many along as `by`, stepping over those folded away, a folded group
-    /// one stop (decisions 128 and 305).
-    pub(crate) fn move_track(&mut self, by: isize) {
-        let order = self.track_order();
-        let track = self
-            .services
-            .folds
-            .step(self.song(), self.services.cursor.track, by, order);
-        self.go_to_track_at(track);
-    }
-
-    /// Go to another track, staying at the same position in the section.
-    pub(crate) fn go_to_track_at(&mut self, track: usize) {
-        let track = track.min(self.song().tracks.len() - 1);
-        if track == self.services.cursor.track {
-            return;
-        }
-        let section_step = self.section_step();
-        let extent = self.extent();
-        // A row outside the loop has no place in the section, so it keeps its number instead.
-        let outside = (!extent.plays(self.services.cursor.step))
-            .then(|| extent.row(self.services.cursor.step));
-        let from = self.services.cursor.track;
-        self.services.cursor.track = track;
-        let song = Arc::clone(self.song());
-        let position = song
-            .sections
-            .get(self.services.cursor.section)
-            .and_then(|s| s.chains.get(track).copied().flatten())
-            .and_then(|chain| {
-                let place = self.step_on(track, from, section_step);
-                song.tracks[track].chain_position(chain, place, self.services.dealer(track))
-            });
-        match position {
-            Some(position) => {
-                self.services.cursor.slot = position.slot;
-                let row = outside.unwrap_or(position.step as isize);
-                self.services.cursor.step = self.extent().step_of(row);
-            }
-            None => self.services.cursor.slot = 0,
-        }
-    }
-
     /// Whether this track can be muted and soloed, saying so if not.
     fn can_silence(&mut self) -> bool {
         let master = self

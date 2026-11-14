@@ -45,7 +45,7 @@ pub struct Place {
 impl App {
     /// The chain on the cursor's track.
     pub fn chain_id(&self) -> Option<u32> {
-        let section = self.section_here()?;
+        let section = self.services.section_here()?;
         section
             .chains
             .get(self.services.cursor.track)
@@ -56,7 +56,7 @@ impl App {
     /// The rows in the cursor's chain.
     pub fn chain_entries(&self) -> &[ChainEntry] {
         self.chain_id()
-            .and_then(|id| self.track_here()?.chains.get(&id))
+            .and_then(|id| self.services.track_here()?.chains.get(&id))
             .map_or(&[], |chain| chain.entries.as_slice())
     }
 
@@ -173,6 +173,7 @@ impl App {
     pub(crate) fn enter_row(&mut self, chain: u32, slot: usize) {
         if slot >= self.chain_entries().len() {
             let phrase = self
+                .services
                 .track_here()
                 .map_or(0, |track| lowest_unused(&track.phrases));
             self.services.apply(&Action::InsertChainEntry {
@@ -194,7 +195,7 @@ impl App {
 
     /// Which sections and slots play a phrase of the cursor's track.
     pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize)> {
-        let Some(track) = self.track_here() else {
+        let Some(track) = self.services.track_here() else {
             return Vec::new();
         };
         let mut uses = Vec::new();
@@ -229,7 +230,7 @@ impl App {
     }
 
     fn say_if_shared(&mut self) {
-        let Some(phrase) = self.phrase_id() else {
+        let Some(phrase) = self.services.phrase_id() else {
             return;
         };
         let uses = self.phrase_uses(phrase).len();
@@ -241,11 +242,12 @@ impl App {
 
     /// `gc`: copy the phrase at the cursor's slot to a new ID, and point this slot at the copy.
     fn clone_phrase(&mut self) {
-        let (Some(chain), Some(old)) = (self.chain_id(), self.phrase_id()) else {
+        let (Some(chain), Some(old)) = (self.chain_id(), self.services.phrase_id()) else {
             self.services.status = "There is no phrase here to clone".to_owned();
             return;
         };
         let new = self
+            .services
             .track_here()
             .map_or(0, |track| lowest_unused(&track.phrases));
         self.services.apply(&Action::ClonePhrase {
@@ -267,7 +269,7 @@ impl App {
     /// following the one before it and mutating as it copies, and put the path through them in
     /// the slot's place (decision 307). Each bloom draws a seed of its own, as `S` does.
     pub(crate) fn grow_bloom(&mut self, branches: Option<u8>, mutation: Option<u8>, path: Path) {
-        let (Some(chain), Some(trunk)) = (self.chain_id(), self.phrase_id()) else {
+        let (Some(chain), Some(trunk)) = (self.chain_id(), self.services.phrase_id()) else {
             self.services.status = "There is no phrase here to grow branches from".to_owned();
             return;
         };
@@ -292,6 +294,7 @@ impl App {
             return;
         }
         let grown: Vec<String> = self
+            .services
             .track_here()
             .into_iter()
             .flat_map(|track| track.phrases.keys())
@@ -322,7 +325,7 @@ impl App {
     /// `:bloom` alone: choose the path, each listed with what it plays for three branches.
     pub(crate) fn open_bloom_picker(&mut self) {
         self.modes.count = None;
-        if self.phrase_id().is_none() {
+        if self.services.phrase_id().is_none() {
             self.services.status = "There is no phrase here to grow branches from".to_owned();
             return;
         }
@@ -370,7 +373,7 @@ impl App {
 
     /// `grr`: list where the phrase at the cursor plays.
     fn list_uses(&mut self) {
-        let Some(phrase) = self.phrase_id() else {
+        let Some(phrase) = self.services.phrase_id() else {
             self.services.status = "There is no phrase here".to_owned();
             return;
         };
@@ -446,7 +449,7 @@ impl App {
                 ..entry
             },
             ChainColumn::Phrase => {
-                let Some(phrases) = self.track_here().map(|track| &track.phrases) else {
+                let Some(phrases) = self.services.track_here().map(|track| &track.phrases) else {
                     return;
                 };
                 let distance = if large { by.unsigned_abs() * 0x10 } else { 1 };
@@ -512,13 +515,14 @@ impl App {
             .chain_entries()
             .get(self.services.cursor.slot)
             .map(|e| e.phrase);
-        let phrases: Vec<(u32, usize)> = self.track_here().map_or_else(Vec::new, |track| {
-            track
-                .phrases
-                .iter()
-                .map(|(id, phrase)| (*id, phrase.len()))
-                .collect()
-        });
+        let phrases: Vec<(u32, usize)> =
+            self.services.track_here().map_or_else(Vec::new, |track| {
+                track
+                    .phrases
+                    .iter()
+                    .map(|(id, phrase)| (*id, phrase.len()))
+                    .collect()
+            });
         let position = phrases.iter().position(|(id, _)| Some(*id) == current);
         let items = phrases
             .iter()
@@ -577,7 +581,7 @@ impl App {
             Cmd::Move(Motion::First) => self.move_slot(0),
             Cmd::Move(Motion::Last) => self.move_slot(rows),
             Cmd::Audition if self.services.cursor.slot < rows => {
-                let section_step = self.section_step();
+                let section_step = self.services.section_step(self.modes.view);
                 self.audition(section_step);
             }
             Cmd::Audition => {}

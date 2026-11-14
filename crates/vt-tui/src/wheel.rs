@@ -487,7 +487,7 @@ impl App {
         let step = |finer, least, most| Some(FinerStep { finer, least, most });
         match (self.key_scope(), self.modes.view) {
             (Mode::Track, View::Track) => {
-                let has_fine = self.track_page.has_fine_here(self.track_here());
+                let has_fine = self.track_page.has_fine_here(self.services.track_here());
                 match (has_fine, self.track_page.fine) {
                     (true, true) => step(Finer::Already, 1, FINE_STEPS),
                     (true, false) => step(Finer::TrackFine, feel::FINE_LEAST, FINE_STEPS),

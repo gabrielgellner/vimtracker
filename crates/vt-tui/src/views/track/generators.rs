@@ -283,7 +283,7 @@ pub(crate) fn playing_row(app: &App, generator: &Generator) -> Option<usize> {
     let rows = generator.rows()?;
     let step = match (generator.span, generator.column) {
         (Spanned::Lane, ShapeColumn::Fx { slot, .. }) => {
-            let phrase = app.phrase_here()?;
+            let phrase = app.services.phrase_here()?;
             lane_playheads(app, phrase)[slot]?
         }
         _ => playhead_step(app)?,

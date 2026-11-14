@@ -302,7 +302,7 @@ impl App {
             selection.range
         });
         let track = self.services.cursor.track;
-        let Some(phrase) = self.phrase_id() else {
+        let Some(phrase) = self.services.phrase_id() else {
             self.services.status = "No phrase here to write the pitch into".to_owned();
             return;
         };

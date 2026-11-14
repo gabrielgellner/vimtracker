@@ -267,7 +267,7 @@ impl App {
     /// Open the list of orders the cursor's phrase's rows can play in, on the one they play in.
     pub(crate) fn open_order_picker(&mut self) {
         self.modes.count = None;
-        let Some(phrase) = self.phrase_here() else {
+        let Some(phrase) = self.services.phrase_here() else {
             self.services.status = "This track has no phrase here".to_owned();
             return;
         };
@@ -292,11 +292,11 @@ impl App {
 
     /// Play the cursor's phrase's rows in an order.
     pub(crate) fn set_order(&mut self, order: Order) {
-        let Some(phrase) = self.phrase_id() else {
+        let Some(phrase) = self.services.phrase_id() else {
             self.services.status = "This track has no phrase here".to_owned();
             return;
         };
-        let rows = self.phrase_here().map_or(0, |phrase| phrase.len());
+        let rows = self.services.phrase_here().map_or(0, |phrase| phrase.len());
         self.services.apply(&Action::SetOrder {
             track: self.services.cursor.track,
             phrase,
@@ -383,7 +383,7 @@ impl App {
         let was = self.services.folds;
         self.services.folds.open_over(&song, track);
         self.folds_changed(was);
-        self.go_to_track_at(track);
+        self.services.go_to_track_at(track, self.modes.view);
         self.song_column = COLUMNS_BEFORE_TRACKS + track;
     }
 

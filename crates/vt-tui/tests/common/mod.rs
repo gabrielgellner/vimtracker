@@ -529,7 +529,7 @@ pub fn explorer_roots(app: &App) -> Vec<(String, String)> {
 }
 
 pub fn notes(app: &App) -> Vec<Note> {
-    let id = app.phrase_id().unwrap();
+    let id = app.services.phrase_id().unwrap();
     app.song().tracks[app.services.cursor.track].phrases[&id]
         .steps()
         .iter()
@@ -609,14 +609,15 @@ pub fn song_text(app: &App) -> Vec<String> {
 /// Run enough audio for reports and a step or more to arrive.
 /// Have each track report the chain of the row being edited, for setting a playhead by hand.
 pub fn on_the_row_being_edited(app: &mut App) {
-    let chains = app.section_here().unwrap().chains.clone();
+    let chains = app.services.section_here().unwrap().chains.clone();
     for (jam, chain) in app.services.jam.iter_mut().zip(chains) {
         jam.chain = chain;
     }
 }
 
 pub fn written_notes(app: &App) -> Vec<Note> {
-    app.phrase_here()
+    app.services
+        .phrase_here()
         .unwrap()
         .steps()
         .iter()

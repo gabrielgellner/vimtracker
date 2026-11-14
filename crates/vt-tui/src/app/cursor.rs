@@ -9,7 +9,7 @@ use super::App;
 
 impl App {
     fn stored_steps(&self) -> usize {
-        self.extent().stored
+        self.services.extent().stored
     }
 
     /// The furthest the view can scroll: to the end of what is stored, or with the loop's start at
@@ -17,7 +17,8 @@ impl App {
     /// several lines in the timeline count each of them.
     fn last_top(&self) -> usize {
         let counts = self.row_line_counts();
-        timeline::row_lines_before(&counts, counts.len(), self.view_height).max(self.extent().start)
+        timeline::row_lines_before(&counts, counts.len(), self.view_height)
+            .max(self.services.extent().start)
     }
 
     /// Keep the cursor's row on screen, moving the view rather than the cursor.
@@ -83,13 +84,14 @@ impl App {
     }
 
     pub(crate) fn slots(&self) -> usize {
-        self.phrase_here()
+        self.services
+            .phrase_here()
             .and_then(|p| p.steps().get(self.services.cursor.step))
             .map_or(0, |step| step.fx.len())
     }
 
     pub(crate) fn move_step(&mut self, by: isize) {
-        let Some(phrase) = self.phrase_here().cloned() else {
+        let Some(phrase) = self.services.phrase_here().cloned() else {
             return;
         };
         let last = phrase.steps().len() as isize - 1;

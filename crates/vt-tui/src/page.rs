@@ -76,7 +76,7 @@ impl<'a> Ctx<'a> {
 
     /// The track under the cursor.
     pub fn track_here(&self) -> Option<&'a Track> {
-        self.app.track_here()
+        self.app.services.track_here()
     }
 
     /// Which groups are folded, so their tracks are left out where tracks are drawn side by side.

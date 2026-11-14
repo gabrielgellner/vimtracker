@@ -19,7 +19,7 @@ fn track_keys_move_and_keep_the_section_position() {
     press(&mut app, "W");
     assert_eq!(app.services.cursor.track, 1);
     assert_eq!(app.services.cursor.step, 3);
-    assert_eq!(app.phrase_id(), Some(0), "its own first phrase");
+    assert_eq!(app.services.phrase_id(), Some(0), "its own first phrase");
     press(&mut app, &"W".repeat(3 + MAX_GROUPS));
     assert_eq!(
         app.services.cursor.track,
@@ -58,7 +58,7 @@ fn only_the_last_track_can_be_removed_and_one_stays() {
     command(&mut app, "track del");
     assert_eq!(app.song().sound_tracks(), 1);
     assert_eq!(app.services.cursor.track, 0);
-    assert_eq!(app.phrase_id(), Some(0));
+    assert_eq!(app.services.phrase_id(), Some(0));
     command(&mut app, "track del");
     assert_eq!(app.song().sound_tracks(), 1);
     assert!(app.services.status.contains("at least one"));

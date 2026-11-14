@@ -39,6 +39,18 @@ pub enum Order {
     Stops,
 }
 
+impl Order {
+    /// The order `W`, `B`, `]g` and `[g` go through the tracks in on a view: the song view's columns
+    /// and the mixer's strips as they're drawn, and elsewhere with a folded group in its tracks'
+    /// place, as the phrase view's overview draws it.
+    pub(crate) fn of(view: View) -> Self {
+        match view {
+            View::Song | View::Mixer => Self::Columns,
+            _ => Self::Stops,
+        }
+    }
+}
+
 impl Folds {
     /// The folds a song was saved with.
     pub fn from_view(view: &ViewState) -> Self {
@@ -221,16 +233,6 @@ impl App {
         }
     }
 
-    /// The order `W`, `B`, `]g` and `[g` go through the tracks in here: the song view's columns
-    /// and the mixer's strips as they're drawn, and elsewhere with a folded group in its tracks'
-    /// place, as the phrase view's overview draws it.
-    pub(crate) fn track_order(&self) -> Order {
-        match self.modes.view {
-            View::Song | View::Mixer => Order::Columns,
-            _ => Order::Stops,
-        }
-    }
-
     /// Fold a group, by its number from 1, or open it, as a key would but saying nothing: for
     /// whatever makes a group, as loading a kit does. The fold is kept with the song, so it marks
     /// it changed, and it isn't an undo step. A song view or mixer cursor it closes over stands on
@@ -302,7 +304,7 @@ impl App {
     /// `]g` and `[g`: go to the next or previous group, folded or open, as many along as `by`.
     pub(crate) fn move_to_group(&mut self, by: isize) {
         let times = self.modes.count.take().unwrap_or(1).max(1) as isize;
-        let order = self.track_order();
+        let order = Order::of(self.modes.view);
         // The song view's cursor is its column, which may be one before the tracks'.
         let from = match self.modes.view {
             View::Song => self.folding_track().unwrap_or(0),
@@ -316,7 +318,7 @@ impl App {
             Some(group) if self.modes.view == View::Song => {
                 self.song_column = COLUMNS_BEFORE_TRACKS + group;
             }
-            Some(group) => self.go_to_track_at(group),
+            Some(group) => self.services.go_to_track_at(group, self.modes.view),
             None if by > 0 => self.services.status = "No group after this track".to_owned(),
             None => self.services.status = "No group before this track".to_owned(),
         }
@@ -332,7 +334,7 @@ impl App {
         let to = self.services.folds.stand_in(self.song(), track);
         match self.modes.view {
             View::Song => self.song_column = COLUMNS_BEFORE_TRACKS + to,
-            _ if to != track => self.go_to_track_at(to),
+            _ if to != track => self.services.go_to_track_at(to, self.modes.view),
             _ => {}
         }
     }

@@ -61,7 +61,11 @@ fn value(app: &App, control: ProjectControl) -> String {
             format!("{}", app.shown_groove().1.velocity(usize::from(step)))
         }
         ProjectControl::Launch => song.launch.to_string(),
-        ProjectControl::Reset => match app.section_here().and_then(|section| section.reset) {
+        ProjectControl::Reset => match app
+            .services
+            .section_here()
+            .and_then(|section| section.reset)
+        {
             Some(1) => "1 step".to_owned(),
             Some(steps) => format!("{steps} steps"),
             None => "off".to_owned(),

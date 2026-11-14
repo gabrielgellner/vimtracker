@@ -158,7 +158,7 @@ fn other_views_edit_the_section_under_the_cursor() {
     assert_eq!(app.song().sections[0].reset, None, "only this section");
     press(&mut app, " 1k");
     assert_eq!(app.services.cursor.section, 0);
-    assert_eq!(app.phrase_id(), Some(0));
+    assert_eq!(app.services.phrase_id(), Some(0));
 }
 
 #[test]
@@ -167,7 +167,7 @@ fn each_track_numbers_its_own_chains_and_phrases() {
     press(&mut app, "ia");
     special(&mut app, KeyCode::Esc);
     press(&mut app, "W");
-    assert_eq!(app.phrase_id(), Some(0));
+    assert_eq!(app.services.phrase_id(), Some(0));
     assert_eq!(
         notes(&app)[0],
         Note::Empty,
@@ -475,7 +475,7 @@ fn a_chain_used_by_another_section_counts_as_shared() {
     assert_eq!(app.chain_uses(), 1);
     press(&mut app, " 1gc");
     assert_eq!(app.chain_uses(), 2);
-    assert_eq!(app.phrase_uses(app.phrase_id().unwrap()).len(), 2);
+    assert_eq!(app.phrase_uses(app.services.phrase_id().unwrap()).len(), 2);
 }
 
 #[test]

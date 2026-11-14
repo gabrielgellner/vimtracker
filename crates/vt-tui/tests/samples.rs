@@ -277,7 +277,7 @@ fn a_step_locks_a_sample_from_the_bank() {
     let kit = kit_file();
     command(&mut app, &format!("kit {} all", kit.display()));
     press(&mut app, " 3");
-    let slot = |app: &App| app.phrase_here().unwrap().steps()[0].fx[0];
+    let slot = |app: &App| app.services.phrase_here().unwrap().steps()[0].fx[0];
     press(&mut app, "lllllK");
     press(&mut app, "smp");
     special(&mut app, KeyCode::Enter);
@@ -292,7 +292,7 @@ fn a_step_locks_a_sample_from_the_bank() {
     assert_eq!(slot(&app).command, Some(FxCommand::Set(SettingId::SAMPLE)));
     assert_eq!(slot(&app).coarse(), 2);
     assert_eq!(value_shown(&app).as_deref(), Some("02 kick: kick.wav"));
-    let step = app.phrase_here().unwrap().steps()[0].to_string();
+    let step = app.services.phrase_here().unwrap().steps()[0].to_string();
     assert!(step.contains("sampler.sample:02"), "{step}");
 
     // K on its value lists the bank again, on the one it locks.

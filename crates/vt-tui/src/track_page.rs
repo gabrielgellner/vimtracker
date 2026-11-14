@@ -578,7 +578,7 @@ impl App {
         if self.modes.view == View::Mixer {
             return self.mixer_page.control_here(&self.ctx());
         }
-        self.track_page.control(self.track_here())
+        self.track_page.control(self.services.track_here())
     }
 
     /// Put the track page's cursor at the place nearest a row and field that holds a setting.
@@ -596,7 +596,7 @@ impl App {
             self.record_jump();
         }
         self.track_page.show(page);
-        self.track_page.phrase = self.phrase_id();
+        self.track_page.phrase = self.services.phrase_id();
         let song = Arc::clone(self.song());
         self.track_page
             .settle(song.tracks.get(self.services.cursor.track));
@@ -604,7 +604,7 @@ impl App {
     }
 
     pub(crate) fn run_track_page(&mut self, cmd: Cmd) -> bool {
-        self.track_page.phrase = self.phrase_id();
+        self.track_page.phrase = self.services.phrase_id();
         // What a key that means what it does elsewhere leaves the page as.
         let kept = self.track_page.clone();
         let count = self.modes.count.take();

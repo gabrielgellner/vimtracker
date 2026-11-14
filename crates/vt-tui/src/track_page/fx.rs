@@ -72,7 +72,7 @@ impl App {
     /// The slot the cursor is in, on the FX page.
     fn fx_slot(&self) -> usize {
         self.track_page
-            .device_cursor(self.track_here())
+            .device_cursor(self.services.track_here())
             .map_or(0, |cursor| cursor.device)
     }
 

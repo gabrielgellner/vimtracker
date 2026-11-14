@@ -216,7 +216,7 @@ impl App {
                 path,
             } => self.grow_bloom(branches, mutation, path.unwrap_or_default()),
             Line::Len(length) => {
-                if let Some(phrase) = self.phrase_id() {
+                if let Some(phrase) = self.services.phrase_id() {
                     self.services.apply(&Action::SetLength {
                         track: self.services.cursor.track,
                         phrase,
@@ -413,7 +413,7 @@ impl App {
             step: self.services.cursor.step,
             ..self.services.cursor
         };
-        if self.phrase_id().is_none() {
+        if self.services.phrase_id().is_none() {
             self.services.cursor.track = 0;
             self.services.cursor.slot = 0;
         }

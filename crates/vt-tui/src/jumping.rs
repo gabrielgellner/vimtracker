@@ -85,7 +85,7 @@ impl App {
                 .map(|row| row.iter().copied().map(Some).collect())
                 .collect()
         } else {
-            self.track_page.rows(self.track_here())
+            self.track_page.rows(self.services.track_here())
         }
     }
 

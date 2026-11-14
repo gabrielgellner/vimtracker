@@ -371,7 +371,7 @@ fn empty_makes_another_column_live() {
     // Its device comes after Note's, and the cursor is on it.
     assert_eq!(
         app.track_page
-            .device_cursor(app.track_here())
+            .device_cursor(app.services.track_here())
             .unwrap()
             .device,
         1
@@ -385,7 +385,7 @@ fn a_phrase_with_none_has_only_the_macros_and_empty() {
     let (mut app, _rt) = app_with(&[E; 8]);
     keys(&mut app, " 5LLL");
     assert_eq!(app.track_control(), Control::Macro(0));
-    assert_eq!(app.track_page.devices(app.track_here()).len(), 2);
+    assert_eq!(app.track_page.devices(app.services.track_here()).len(), 2);
     keys(&mut app, "}");
     assert!(matches!(app.track_control(), Control::NewGenerator(0)));
     keys(&mut app, "=");

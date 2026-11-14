@@ -15,16 +15,18 @@ use vt_engine::link::{Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::track_state::{Faders, LiveValues, NotePitch};
 use vt_model::action::{Action, edit};
-use vt_model::constants::MAX_TRACKS;
+use vt_model::constants::{MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::history::History;
 use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
-use vt_model::song::Song;
+use vt_model::selection::Extent;
+use vt_model::song::{Phrase, Section, Song, Track};
 
 use crate::analysing::Analyst;
 use crate::app::{Cursor, Field, TrackLive};
 use crate::config::Settings;
-use crate::folding::Folds;
+use crate::folding::{Folds, Order};
+use crate::input::mode::View;
 use crate::meter::Meter;
 
 /// How many versions sent are kept for a report to be of. The callback takes each within a block,
@@ -244,6 +246,132 @@ impl Services {
     /// What a track's dealt orders are dealt from, as the engine deals them.
     pub fn dealer(&self, track: usize) -> Dealer {
         Dealer::new(self.song().seed, track)
+    }
+
+    /// The section being edited.
+    pub fn section_here(&self) -> Option<&Section> {
+        let sections = &self.song().sections;
+        sections.get(self.cursor.section).or(sections.last())
+    }
+
+    /// The step of its own that one track is at when another is at this one of its own, at their
+    /// own speeds: the step playing then.
+    pub fn step_on(&self, track: usize, from: usize, step: usize) -> usize {
+        let ticks = |index: usize| {
+            self.song()
+                .tracks
+                .get(index)
+                .map_or(TICKS_PER_STEP, |track| track.speed.ticks())
+        };
+        (step as u64 * ticks(from) / ticks(track)) as usize
+    }
+
+    /// The track under the cursor.
+    pub fn track_here(&self) -> Option<&Track> {
+        self.song().tracks.get(self.cursor.track)
+    }
+
+    /// The phrase under the cursor.
+    pub fn phrase_id(&self) -> Option<u32> {
+        let chain = (*self.section_here()?.chains.get(self.cursor.track)?)?;
+        Some(
+            self.track_here()?
+                .chains
+                .get(&chain)?
+                .entries
+                .get(self.cursor.slot)?
+                .phrase,
+        )
+    }
+
+    /// The contents of the phrase under the cursor.
+    pub fn phrase_here(&self) -> Option<&Arc<Phrase>> {
+        self.track_here()?.phrases.get(&self.phrase_id()?)
+    }
+
+    /// Where the cursor's phrase's loop sits.
+    pub fn extent(&self) -> Extent {
+        self.phrase_here()
+            .map_or(Extent::whole(0), |phrase| phrase.extent())
+    }
+
+    /// The position in the section where the cursor's phrase starts playing.
+    pub fn slot_start(&self) -> usize {
+        let Some(track) = self.track_here() else {
+            return 0;
+        };
+        let Some(chain) = self
+            .section_here()
+            .and_then(|s| s.chains.get(self.cursor.track).copied().flatten())
+            .and_then(|id| track.chains.get(&id))
+        else {
+            return 0;
+        };
+        chain
+            .entries
+            .iter()
+            .take(self.cursor.slot)
+            .filter_map(|e| track.phrases.get(&e.phrase))
+            .map(|p| p.time())
+            .sum()
+    }
+
+    /// The cursor's position within the section, on a view. Only the loop has one, so a step
+    /// outside it counts as the loop's first.
+    pub fn section_step(&self, view: View) -> usize {
+        if view == View::Song {
+            return 0;
+        }
+        let extent = self.extent();
+        // The chain view has no step of its own, so it plays from the row's first.
+        let row = if view != View::Chain && extent.plays(self.cursor.step) {
+            self.cursor.step - extent.start
+        } else {
+            0
+        };
+        // Rows above it last their pulses. In another order, the walk is wherever it is at that
+        // step, worked out from the count as everything else is.
+        let time = self.phrase_here().map_or(row, |phrase| phrase.time_to(row));
+        self.slot_start() + time
+    }
+
+    /// Move to the track as many along as `by`, stepping over those folded away, a folded group
+    /// one stop on a view that has them (decisions 128 and 305).
+    pub(crate) fn move_track(&mut self, by: isize, view: View) {
+        let order = Order::of(view);
+        let track = self.folds.step(self.song(), self.cursor.track, by, order);
+        self.go_to_track_at(track, view);
+    }
+
+    /// Go to another track, staying at the same position in the section as a view has it.
+    pub(crate) fn go_to_track_at(&mut self, track: usize, view: View) {
+        let track = track.min(self.song().tracks.len() - 1);
+        if track == self.cursor.track {
+            return;
+        }
+        let section_step = self.section_step(view);
+        let extent = self.extent();
+        // A row outside the loop has no place in the section, so it keeps its number instead.
+        let outside = (!extent.plays(self.cursor.step)).then(|| extent.row(self.cursor.step));
+        let from = self.cursor.track;
+        self.cursor.track = track;
+        let song = Arc::clone(self.song());
+        let position = song
+            .sections
+            .get(self.cursor.section)
+            .and_then(|s| s.chains.get(track).copied().flatten())
+            .and_then(|chain| {
+                let place = self.step_on(track, from, section_step);
+                song.tracks[track].chain_position(chain, place, self.dealer(track))
+            });
+        match position {
+            Some(position) => {
+                self.cursor.slot = position.slot;
+                let row = outside.unwrap_or(position.step as isize);
+                self.cursor.step = self.extent().step_of(row);
+            }
+            None => self.cursor.slot = 0,
+        }
     }
 }
 
