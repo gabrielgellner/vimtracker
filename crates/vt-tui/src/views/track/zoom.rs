@@ -168,7 +168,7 @@ fn draw_tile(
                 true => EMPTY_SLOT.to_owned(),
                 false => value(*control, track, ctx.song()),
             };
-            fade(Line::styled(text, setting::style(ctx, false, empty)))
+            fade(Line::styled(text, setting::resting(empty)))
         })
         .collect();
     let tile = Device::new(device.identity.clone());
