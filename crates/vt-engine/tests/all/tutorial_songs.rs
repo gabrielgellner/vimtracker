@@ -519,21 +519,54 @@ fn fugue() -> Song {
     song
 }
 
-/// Kria: each part of a note, its trigger, pitch, octave and length, a loop of its own length,
-/// drifting against the others; and a second line from one `Acid` fill whose five parts loop on
-/// lengths of their own (decision 331).
+/// Kria's length loop, a lane of 4 on FX 1, a row a step: short, long, a stab, nearly legato.
+const KRIA_LENGTHS: [&str; 4] = ["20", "C0", "08", "E6"];
+
+/// Kria's ratchet loop, a lane of 3 on FX 2 at `/3`: two hits, one, three.
+const KRIA_RATCHETS: [&str; 3] = ["03", "", "02"];
+
+/// Kria's probability loop, a lane of 7 on FX 3 at `/2`, at Kria's own chances: 50%, 100%
+/// twice, 25%, 100% twice, 50%.
+const KRIA_CHANCES: [&str; 7] = ["80", "", "", "40", "", "", "80"];
+
+/// A lane from the phrase's first row, each of its rows lasting `division` steps.
+fn slow_lane(length: usize, division: usize) -> Lane {
+    Lane {
+        division,
+        ..Lane::new(0, length)
+    }
+}
+
+/// Kria: each part of a note, its trigger, pitch, octave, length, ratchet and probability, a loop
+/// of its own length, some at a division of their own, drifting against the others; and a second
+/// line from one `Acid` fill whose five parts loop on lengths of their own (decision 331).
 fn kria() -> Song {
     let mut song = song("kria", 120, 4, ScaleKind::MinorPentatonic, 4);
     song.seed = 0x4B;
-    // The trigger loop, 16 steps, its notes all the scale's root.
-    let mut lead = hits("x.x.xx.x.xx.x.xx", "E-3");
-    // The length loop, a lane of 4 on FX 1: short, long, a stab, nearly legato.
-    for (row, length) in ["20", "C0", "08", "E6"].iter().enumerate() {
-        lead[row] = lead[row].replacen(" --- --- ---", &format!(" gate:{length} --- ---"), 1);
-    }
+    // The trigger loop, 16 steps, its notes all the scale's root, and three loops on the FX
+    // columns' lanes beside it.
+    let lead: Vec<String> = hits("x.x.xx.x.xx.x.xx", "E-3")
+        .iter()
+        .enumerate()
+        .map(|(row, written)| {
+            let cell = |loop_values: &[&str], command: &str| match loop_values.get(row) {
+                Some(value) if !value.is_empty() => format!("{command}:{value}"),
+                _ => "---".to_owned(),
+            };
+            format!(
+                "{} {} {} {}",
+                &written[..6],
+                cell(&KRIA_LENGTHS, "gate"),
+                cell(&KRIA_RATCHETS, "ret"),
+                cell(&KRIA_CHANCES, "cha"),
+            )
+        })
+        .collect();
     voice(&mut song, 0, "KR", SynthVoice::VirtualAnalog, &texts(&lead));
     let mut phrase = (*song.tracks[0].phrases[&0]).clone();
-    phrase.set_lane(0, Some(Lane::new(0, 4)));
+    phrase.set_lane(0, Some(Lane::new(0, KRIA_LENGTHS.len())));
+    phrase.set_lane(1, Some(slow_lane(KRIA_RATCHETS.len(), 3)));
+    phrase.set_lane(2, Some(slow_lane(KRIA_CHANCES.len(), 2)));
     song.tracks[0].phrases.insert(0, Arc::new(phrase));
     pluck(&mut song, 0, 300, 50, 80);
     song.tracks[0].cutoff = 0x90;
@@ -1870,33 +1903,51 @@ fn deja_vu_patch() -> PatchPreset {
 }
 
 /// Kria: the pitch loop and the octave loop, `Steps` slots in `Free`, each with its loop's
-/// length on a macro from 1 step to 16; and the length loop, the lane of 4 on FX 1, made live as
-/// the `List` of its four values, which comes with its lane, its length on a macro of its own,
-/// `Length loop`, turning `FX1 Length` from -3 to +12, a lane of 1 to 16 (decision 347).
+/// length on a macro from 1 step to 16; and the length, ratchet and probability loops, the lanes
+/// on FX 1 to 3, each made live as a `List` of its values on the rows that hold one, which comes
+/// with its lane, its length on a macro of its own, `Length loop`, `Ratchet loop` and
+/// `Chance loop`, turning the column's `Length` to a lane of 1 to 16 (decision 347). A patch
+/// carries a lane's length and not its division, so the ratchet and probability loops come a row
+/// a step.
 fn kria_patch() -> PatchPreset {
-    let song = kria();
+    let mut song = kria();
     let written = first_phrase(&song.tracks[0]).steps().to_vec();
     let gate = FxCommand::Set(SettingId::from_key("gate").unwrap());
-    let mut lengths = shape(FillKind::List, 0, 0, Where::AllRows);
-    lengths.values = Values::new(&[0x20, 0xC0, 0x08, 0xE6]);
-    let song = apply(
-        song,
-        &Action::Generate {
-            track: 0,
-            phrase: 0,
-            column: ShapeColumn::Fx {
-                slot: 0,
-                command: gate,
+    let loops = [
+        (gate, &KRIA_LENGTHS[..]),
+        (FxCommand::Ret, &KRIA_RATCHETS[..]),
+        (FxCommand::Cha, &KRIA_CHANCES[..]),
+    ];
+    for (slot, (command, cells)) in loops.into_iter().enumerate() {
+        let values: Vec<u8> = cells
+            .iter()
+            .filter(|cell| !cell.is_empty())
+            .map(|cell| u8::from_str_radix(cell, 16).unwrap())
+            .collect();
+        // The rows holding a value come at an even spacing on each lane, from its first.
+        let every = cells.len().div_ceil(values.len()) as u16;
+        let place = match values.len() == cells.len() {
+            true => Where::AllRows,
+            false => Where::Every(every),
+        };
+        let mut list = shape(FillKind::List, 0, 0, place);
+        list.values = Values::new(&values);
+        song = apply(
+            song,
+            &Action::Generate {
+                track: 0,
+                phrase: 0,
+                column: ShapeColumn::Fx { slot, command },
+                span: Span::Lane,
+                shape: list,
             },
-            span: Span::Lane,
-            shape: lengths,
-        },
-    );
+        );
+    }
     let mut track = song.tracks[0].clone();
     assert_eq!(
         first_phrase(&track).steps(),
         written,
-        "the live length loop writes what the song has"
+        "the live loops write what the song has"
     );
     panel_knob(&mut track, 0, "Pitch loop", "mod4.length", (0x0000, 0x0F00));
     panel_knob(
@@ -1906,19 +1957,23 @@ fn kria_patch() -> PatchPreset {
         "mod5.length",
         (0x0000, 0x0F00),
     );
-    panel_knob(
-        &mut track,
-        2,
-        "Length loop",
-        "lane1.length",
-        (0x7D00, 0x8C00),
-    );
+    let lane_knobs = [
+        ("Length loop", KRIA_LENGTHS.len()),
+        ("Ratchet loop", KRIA_RATCHETS.len()),
+        ("Chance loop", KRIA_CHANCES.len()),
+    ];
+    for (slot, (name, rows)) in lane_knobs.into_iter().enumerate() {
+        // From a lane of 1 row to one of 16, a row a step of the macro.
+        let shortest = (0x81 - rows as u16) << 8;
+        let longest = (0x90 - rows as u16) << 8;
+        let key = format!("lane{}.length", slot + 1);
+        panel_knob(&mut track, 2 + slot, name, &key, (shortest, longest));
+    }
     let mut preset = patch_of(&track);
     let phrase = first_phrase(&track);
-    preset
-        .patch
-        .generators
-        .push(PatchGen::of(&phrase.generators()[0], phrase));
+    for found in phrase.generators() {
+        preset.patch.generators.push(PatchGen::of(found, phrase));
+    }
     preset
 }
 

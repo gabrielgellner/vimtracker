@@ -550,19 +550,22 @@ fn the_browser_adds_a_shipped_patch_and_kria_brings_its_lane() {
     let picker = app.overlays.picker.as_ref().unwrap();
     assert_eq!(
         picker.current().unwrap().meaning,
-        "FX1 generator, 2 slots, 3 macros"
+        "FX1 generator, FX2 generator, FX3 generator, 2 slots, 5 macros"
     );
     special(&mut app, KeyCode::Enter);
     assert_eq!(
         app.services.status,
-        "Track 01 has Kria in mod slots 3 and 4, macros 1, 2 and 3 and live FX1 on phrase 00, keeping its sound: u undoes it"
+        "Track 01 has Kria in mod slots 3 and 4, macros 1, 2, 3, 4 and 5 and live FX1 FX2 FX3 on phrase 00, keeping its sound: u undoes it"
     );
     let track = &app.song().tracks[0];
-    assert_eq!(
-        track.phrases[&0].lane(0),
-        Some(vt_model::song::Lane::new(0, 4)),
-        "the length loop has its lane of 4"
-    );
+    let lanes = [(4, "length"), (3, "ratchet"), (7, "probability")];
+    for (slot, (rows, part)) in lanes.into_iter().enumerate() {
+        assert_eq!(
+            track.phrases[&0].lane(slot),
+            Some(vt_model::song::Lane::new(0, rows)),
+            "the {part} loop has its lane of {rows}, a row a step"
+        );
+    }
     let written: Vec<String> = ["gate:20", "gate:C0", "gate:08", "gate:E6"]
         .iter()
         .map(|cell| {
@@ -571,16 +574,20 @@ fn the_browser_adds_a_shipped_patch_and_kria_brings_its_lane() {
         })
         .collect();
     assert_eq!(fx1(&app, 0)[..4], written);
-    let names: Vec<_> = track.macros[..3].iter().map(|m| m.name.clone()).collect();
+    let names: Vec<_> = track.macros[..5].iter().map(|m| m.name.clone()).collect();
     assert_eq!(
         names,
         [
             Some("Pitch loop".into()),
             Some("Octave loop".into()),
-            Some("Length loop".into())
+            Some("Length loop".into()),
+            Some("Ratchet loop".into()),
+            Some("Chance loop".into())
         ]
     );
     assert_eq!(key_of(&track.macros[2].maps[0]), "lane1.length");
+    assert_eq!(key_of(&track.macros[3].maps[0]), "lane2.length");
+    assert_eq!(key_of(&track.macros[4].maps[0]), "lane3.length");
     assert_eq!(key_of(&track.macros[0].maps[0]), "mod3.length");
     assert_eq!(track.mods[3].steps.length, 3, "the octave loop's 3 steps");
 }
