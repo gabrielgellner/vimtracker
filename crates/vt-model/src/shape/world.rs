@@ -165,6 +165,10 @@ impl World {
     }
 
     /// Where it's from and how long it is, for a list to choose from.
+    #[allow(
+        clippy::match_same_arms,
+        reason = "a line for each rhythm, as the list has them"
+    )]
     pub fn description(self) -> &'static str {
         match self {
             Self::SonClave => "Cuba, 3-2, with the son's bass and conga, 16 rows",

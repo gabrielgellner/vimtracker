@@ -376,6 +376,7 @@ mod tests {
                     );
                     // Its furthest reaches are rare enough that keeping within the range hardly
                     // ever holds it at an end, and most of the range is used.
+                    #[allow(clippy::float_cmp, reason = "counts the values held at an end")]
                     let held = values.iter().filter(|value| value.abs() == 1.0).count();
                     assert!(held * 100 < values.len(), "{system:?} {deform} {at} {held}");
                     let low = values.iter().copied().fold(1.0, f32::min);

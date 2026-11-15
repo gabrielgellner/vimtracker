@@ -164,7 +164,7 @@ fn a_random_limit_walks_drunkenly_from_the_seed_and_a_render_repeats() {
     distinct.dedup();
     assert!(distinct.len() >= 4, "it wanders: {heard:?}");
     assert_eq!(notes(&drunk, 32), heard, "a render repeats");
-    let mut other = drunk.clone();
+    let mut other = drunk;
     other.seed = 6;
     assert_ne!(notes(&other, 32), heard, "another seed walks another way");
     // Bipolar, it goes below the note too.

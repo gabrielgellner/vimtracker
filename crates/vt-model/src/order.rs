@@ -308,13 +308,11 @@ impl Order {
         let row = match self {
             Self::Forward => visit,
             Self::Reverse => last - visit,
-            Self::UpDown if visit < rows => visit,
+            Self::UpDown | Self::UpDownInc if visit < rows => visit,
             Self::UpDown => 2 * last - visit,
-            Self::UpDownInc if visit < rows => visit,
             Self::UpDownInc => 2 * rows - 1 - visit,
-            Self::DownUp if visit < rows => last - visit,
+            Self::DownUp | Self::DownUpInc if visit < rows => last - visit,
             Self::DownUp => visit - last,
-            Self::DownUpInc if visit < rows => last - visit,
             Self::DownUpInc => visit - rows,
             Self::OddEven => {
                 let evens = rows.div_ceil(2);

@@ -668,6 +668,7 @@ mod tests {
                 })
                 .collect::<Vec<f32>>()
         };
+        #[allow(clippy::float_cmp, reason = "counts the samples that change at all")]
         let changes = |out: &[f32]| out.windows(2).filter(|p| p[0] != p[1]).count();
         let (slow, fast) = (changes(&run(48_000)), changes(&run(96_000)));
         assert!((slow as i32 - fast as i32).abs() <= 1, "{slow} and {fast}");

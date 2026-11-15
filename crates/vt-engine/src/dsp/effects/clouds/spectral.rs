@@ -596,6 +596,7 @@ fn warp(from: &[f32], to: &mut [f32], bins: usize, amount: f32) {
 
 /// Move the levels up or down by a ratio: read between bins going up, and share each between two
 /// going down.
+#[allow(clippy::float_cmp, reason = "a ratio of exactly 1 is a copy")]
 fn shift(from: &[f32], to: &mut [f32], bins: usize, ratio: f32) {
     if ratio == 1.0 {
         to[..bins].copy_from_slice(&from[..bins]);

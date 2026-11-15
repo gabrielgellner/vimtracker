@@ -229,6 +229,10 @@ impl ThreeBands {
 
     /// One frame through the bands. `same` says its two sides are the same, bit for bit.
     #[inline]
+    #[allow(
+        clippy::float_cmp,
+        reason = "the bands are worked out again only when a setting moves at all"
+    )]
     pub(crate) fn process(
         &mut self,
         input: [f32; 2],

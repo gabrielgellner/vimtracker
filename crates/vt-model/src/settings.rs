@@ -437,7 +437,7 @@ mod tests {
                 })))
                 .chain(labels(SettingId::macros()))
                 .chain(labels(SettingId::lanes()))
-                .chain(EVENTS.map(|event| event.name().to_owned()))
+                .chain(EVENTS.map(|event| event.name()))
         };
         for voice in SynthVoice::ALL {
             let mut seen = HashSet::new();

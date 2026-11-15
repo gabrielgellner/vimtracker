@@ -513,6 +513,10 @@ impl Echo {
 
     /// Feed one frame in and get what's wet out.
     #[inline]
+    #[allow(
+        clippy::float_cmp,
+        reason = "the tone is tuned again only when it moves at all"
+    )]
     pub fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
         let smoothing = self.smoothing;
         let drive = self.drive.next(smoothing);

@@ -198,7 +198,6 @@ fn fill_range(
                 }
             }
             Fill::Velocity(velocity) if has_note => target.velocity = *velocity,
-            Fill::Velocity(_) => {}
             Fill::Gate(gate) => target.gate = *gate,
             Fill::GateLength(length) if has_note => {
                 if length.is_some() || target.gate.is_some() {
@@ -208,11 +207,11 @@ fn fill_range(
                     });
                 }
             }
-            Fill::GateLength(_) => {}
             Fill::Nudge(nudge) if has_note || *nudge == 0 => {
                 target.nudge = (*nudge).clamp(-most, most);
             }
-            Fill::Nudge(_) => {}
+            // A velocity, a gate length or a nudge is left off a row without a note.
+            Fill::Velocity(_) | Fill::GateLength(_) | Fill::Nudge(_) => {}
             Fill::Slot(slot, value) => {
                 *target.fx.get_mut(*slot).ok_or(EditError::ColumnMismatch)? = snapped(*value);
             }

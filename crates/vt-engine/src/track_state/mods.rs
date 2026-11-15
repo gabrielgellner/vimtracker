@@ -856,6 +856,10 @@ impl TrackState {
         self.tell_slots_the_note();
         // Working it out again would change nothing while no slot moves anything, no glide runs,
         // each mod slot's share is where its switch is, and each slot's effect has what it keeps.
+        #[allow(
+            clippy::float_cmp,
+            reason = "a share settles on its switch's place exactly"
+        )]
         let still = !working
             && (stopped || self.gliding == 0)
             && self.slots.iter().zip(&track.mods).all(|(run, slot)| {

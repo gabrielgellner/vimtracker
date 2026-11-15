@@ -220,6 +220,10 @@ fn gen_family(param: GenParam) -> Family {
 }
 
 /// A control's family.
+#[allow(
+    clippy::match_same_arms,
+    reason = "the controls in the page's order, some with why"
+)]
 pub fn family(control: Control, track: &Track) -> Family {
     if let Control::Gen { param, .. } = control {
         return gen_family(param);
