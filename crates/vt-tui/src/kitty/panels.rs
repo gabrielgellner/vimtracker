@@ -14,7 +14,7 @@ use super::generators::GenDrawing;
 use super::plot::{self, LfoDrawing, MappingDrawing, Shade, TrackDrawing};
 use super::rgb;
 use super::slots::SlotDrawing;
-use crate::sample_wave::Thumbnail;
+use crate::sample_wave::{Thumbnail, Wave};
 use crate::theme;
 
 /// The settings a filter curve is drawn from: its type, the mode it plays, `Cut` and `Res` as
@@ -23,8 +23,8 @@ pub(crate) type FilterSettings = (FilterType, FilterMode, u8, u8, u8, bool, u8, 
 
 /// A panel that draws an image: the Sound page's filter curve and sampler's thumbnail, a mod
 /// slot's picture on the Mod page, an envelope's shape, an LFO's cycle or a Track slot's map, an
-/// FX slot's curve, or the zoomed one's, a live generator's preview, or the mapping view's
-/// response.
+/// FX slot's curve, or the zoomed one's, a live generator's preview, the mapping view's
+/// response, or the sample page's waveform and its overview.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PanelKey {
     Filter,
@@ -37,6 +37,9 @@ pub enum PanelKey {
     Gen(usize),
     /// The response of the mapping under the mapping view's cursor (decision 314).
     Mapping,
+    /// The sample page's waveform, and its overview of the whole sample under it.
+    SampleWave,
+    SampleOverview,
 }
 
 /// What a panel's picture was drawn from, which is all that's compared to tell if it's changed.
@@ -59,6 +62,9 @@ pub(crate) enum Shape {
     Gen(GenDrawing),
     /// A macro mapping's response.
     Mapping(MappingDrawing),
+    /// The sample page's waveform or its overview, drawn again only when the view, the points or
+    /// the file's frames change, never for the cursor.
+    Wave(Wave),
 }
 
 impl PartialEq for Shape {
@@ -72,6 +78,7 @@ impl PartialEq for Shape {
             (Self::Slot(a), Self::Slot(b)) => a == b,
             (Self::Gen(a), Self::Gen(b)) => a == b,
             (Self::Mapping(a), Self::Mapping(b)) => a == b,
+            (Self::Wave(a), Self::Wave(b)) => a == b,
             _ => false,
         }
     }
@@ -103,6 +110,8 @@ impl Shape {
             Self::Slot(drawing) => drawing.plot(rate, size).png(color),
             Self::Gen(drawing) => drawing.plot(size).png(color),
             Self::Mapping(drawing) => plot::mapping(*drawing, size).png(color),
+            // In the colours each part of it means, in any shade.
+            Self::Wave(wave) => wave.picture(cell).png(),
         }
     }
 }
