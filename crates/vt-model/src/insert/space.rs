@@ -6,7 +6,7 @@ use crate::constants::UNITY_LEVEL;
 use crate::lfo::DIVISION_NAMES;
 
 use super::{
-    GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, RETIMES, Setting, Units, WET_MIX_PARAM,
+    Columns, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, RETIMES, Units, WET_MIX_PARAM,
     from_middle, hex_param, is_zero,
 };
 
@@ -16,7 +16,6 @@ pub(crate) const DELAY_PARAMS: [Param; 11] = [
         name: "Time",
         key: "time",
         label: Some("TIME"),
-        setting: Setting::Time,
         kind: Kind::Stepped {
             choices: &DIVISION_NAMES,
             wraps: false,
@@ -24,18 +23,11 @@ pub(crate) const DELAY_PARAMS: [Param; 11] = [
         default: Delay::DEFAULT.time,
         place: Place::Own,
     },
-    hex_param(
-        "Feedback",
-        "feedback",
-        "FDBK",
-        Setting::Feedback,
-        Delay::DEFAULT.feedback,
-    ),
+    hex_param("Feedback", "feedback", "FDBK", Delay::DEFAULT.feedback),
     Param {
         name: "Ping-pong",
         key: "pingpong",
         label: Some("PING"),
-        setting: Setting::PingPong,
         kind: Kind::Stepped {
             choices: &OFF_ON,
             wraps: true,
@@ -43,39 +35,14 @@ pub(crate) const DELAY_PARAMS: [Param; 11] = [
         default: Delay::DEFAULT.ping_pong,
         place: Place::Own,
     },
-    hex_param(
-        "Width",
-        "width",
-        "WDTH",
-        Setting::Width,
-        Delay::DEFAULT.width,
-    ),
-    hex_param(
-        "Low cut",
-        "lowcut",
-        "LCUT",
-        Setting::LowCut,
-        Delay::DEFAULT.low_cut,
-    ),
-    hex_param(
-        "High cut",
-        "highcut",
-        "HCUT",
-        Setting::HighCut,
-        Delay::DEFAULT.high_cut,
-    ),
-    hex_param(
-        "Drive",
-        "drive",
-        "DRIV",
-        Setting::Drive,
-        Delay::DEFAULT.drive,
-    ),
+    hex_param("Width", "width", "WDTH", Delay::DEFAULT.width),
+    hex_param("Low cut", "lowcut", "LCUT", Delay::DEFAULT.low_cut),
+    hex_param("High cut", "highcut", "HCUT", Delay::DEFAULT.high_cut),
+    hex_param("Drive", "drive", "DRIV", Delay::DEFAULT.drive),
     Param {
         name: "Retime",
         key: "retime",
         label: Some("RTIM"),
-        setting: Setting::Retime,
         kind: Kind::Stepped {
             choices: &RETIMES,
             wraps: true,
@@ -83,9 +50,17 @@ pub(crate) const DELAY_PARAMS: [Param; 11] = [
         default: Delay::DEFAULT.retime,
         place: Place::Own,
     },
-    hex_param("Wow", "wow", "WOW", Setting::Wow, Delay::DEFAULT.wow),
+    hex_param("Wow", "wow", "WOW", Delay::DEFAULT.wow),
     WET_MIX_PARAM,
     GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page. Its repeats, their tone, how it gets to a new time, then what comes out.
+pub(super) const DELAY_GRID: Columns = &[
+    &["time", "feedback", "pingpong"],
+    &["lowcut", "highcut", "drive"],
+    &["retime", "wow"],
+    &["width", "mix", "gain"],
 ];
 
 /// A delay's settings. One a file doesn't have starts as new.
@@ -140,17 +115,17 @@ impl Delay {
     };
 
     effect_settings! {
-        time => Time,
-        feedback => Feedback,
-        ping_pong => PingPong,
-        width => Width,
-        low_cut => LowCut,
-        high_cut => HighCut,
-        drive => Drive,
-        retime => Retime,
-        wow => Wow,
-        mix => Mix,
-        gain => Gain,
+        time,
+        feedback,
+        ping_pong,
+        width,
+        low_cut,
+        high_cut,
+        drive,
+        retime,
+        wow,
+        mix,
+        gain,
     }
 }
 
@@ -255,7 +230,6 @@ pub(crate) const ECHO_PARAMS: [Param; 13] = [
         name: "Mode",
         key: "mode",
         label: Some("MODE"),
-        setting: Setting::EchoMode,
         kind: Kind::Stepped {
             choices: &ECHO_MODE_NAMES,
             wraps: true,
@@ -263,19 +237,11 @@ pub(crate) const ECHO_PARAMS: [Param; 13] = [
         default: Echo::DEFAULT.mode,
         place: Place::Type,
     },
-    hex_param(
-        "Rate",
-        "rate",
-        "RATE",
-        Setting::EchoRate,
-        Echo::DEFAULT.rate,
-    )
-    .units(Units::EchoRate),
+    hex_param("Rate", "rate", "RATE", Echo::DEFAULT.rate).units(Units::EchoRate),
     Param {
         name: "Sync",
         key: "sync",
         label: Some("SYNC"),
-        setting: Setting::EchoSync,
         kind: Kind::Stepped {
             choices: &ECHO_SYNC_NAMES,
             wraps: false,
@@ -283,64 +249,31 @@ pub(crate) const ECHO_PARAMS: [Param; 13] = [
         default: Echo::DEFAULT.sync,
         place: Place::Own,
     },
-    hex_param(
-        "Inertia",
-        "inertia",
-        "INRT",
-        Setting::Inertia,
-        Echo::DEFAULT.inertia,
-    ),
-    hex_param(
-        "Intensity",
-        "intensity",
-        "INTS",
-        Setting::Feedback,
-        Echo::DEFAULT.intensity,
-    ),
-    hex_param(
-        "Input",
-        "input",
-        "INPT",
-        Setting::EchoInput,
-        Echo::DEFAULT.input,
-    )
-    .units(Units::EchoInput)
-    .centred(),
-    hex_param("Wow", "wow", "WOW", Setting::Wow, Echo::DEFAULT.wow),
-    hex_param(
-        "Bass",
-        "bass",
-        "BASS",
-        Setting::EchoBass,
-        Echo::DEFAULT.bass,
-    )
-    .units(Units::EchoBass)
-    .centred(),
-    hex_param(
-        "Treble",
-        "treble",
-        "TREB",
-        Setting::EchoTreble,
-        Echo::DEFAULT.treble,
-    )
-    .units(Units::EchoTreble)
-    .centred(),
-    hex_param(
-        "Reverb",
-        "reverb",
-        "VERB",
-        Setting::ReverbAmount,
-        Echo::DEFAULT.reverb,
-    ),
-    hex_param(
-        "Echo",
-        "echo",
-        "ECHO",
-        Setting::EchoLevel,
-        Echo::DEFAULT.echo,
-    ),
+    hex_param("Inertia", "inertia", "INRT", Echo::DEFAULT.inertia),
+    hex_param("Intensity", "intensity", "INTS", Echo::DEFAULT.intensity),
+    hex_param("Input", "input", "INPT", Echo::DEFAULT.input)
+        .units(Units::EchoInput)
+        .centred(),
+    hex_param("Wow", "wow", "WOW", Echo::DEFAULT.wow),
+    hex_param("Bass", "bass", "BASS", Echo::DEFAULT.bass)
+        .units(Units::EchoBass)
+        .centred(),
+    hex_param("Treble", "treble", "TREB", Echo::DEFAULT.treble)
+        .units(Units::EchoTreble)
+        .centred(),
+    hex_param("Reverb", "reverb", "VERB", Echo::DEFAULT.reverb),
+    hex_param("Echo", "echo", "ECHO", Echo::DEFAULT.echo),
     WET_MIX_PARAM,
     GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page. The tape's speed and how it gets there; the loop; the tone and the reverb; then the
+/// repeats' level over what comes out. Its mode is in the title.
+pub(super) const ECHO_GRID: Columns = &[
+    &["rate", "sync", "inertia"],
+    &["intensity", "input", "wow"],
+    &["bass", "treble", "reverb"],
+    &["echo", "mix", "gain"],
 ];
 
 /// A Space Echo's settings: a Roland RE-201's tape loop, three playback heads and spring reverb,
@@ -404,47 +337,29 @@ impl Echo {
     };
 
     effect_settings! {
-        mode => EchoMode,
-        rate => EchoRate,
-        sync => EchoSync,
-        inertia => Inertia,
-        intensity => Feedback,
-        input => EchoInput,
-        wow => Wow,
-        bass => EchoBass,
-        treble => EchoTreble,
-        reverb => ReverbAmount,
-        echo => EchoLevel,
-        mix => Mix,
-        gain => Gain,
+        mode,
+        rate,
+        sync,
+        inertia,
+        intensity,
+        input,
+        wow,
+        bass,
+        treble,
+        reverb,
+        echo,
+        mix,
+        gain,
     }
 }
 
 /// A reverb's, in the order the page shows them.
 pub(crate) const REVERB_PARAMS: [Param; 7] = [
-    hex_param("Pre", "pre", "PRE", Setting::Pre, Reverb::DEFAULT.pre),
-    hex_param(
-        "Decay",
-        "decay",
-        "DCAY",
-        Setting::Decay,
-        Reverb::DEFAULT.decay,
-    ),
-    hex_param("Damp", "damp", "DAMP", Setting::Damp, Reverb::DEFAULT.damp),
-    hex_param(
-        "Low cut",
-        "lowcut",
-        "LCUT",
-        Setting::LowCut,
-        Reverb::DEFAULT.low_cut,
-    ),
-    hex_param(
-        "High cut",
-        "highcut",
-        "HCUT",
-        Setting::HighCut,
-        Reverb::DEFAULT.high_cut,
-    ),
+    hex_param("Pre", "pre", "PRE", Reverb::DEFAULT.pre),
+    hex_param("Decay", "decay", "DCAY", Reverb::DEFAULT.decay),
+    hex_param("Damp", "damp", "DAMP", Reverb::DEFAULT.damp),
+    hex_param("Low cut", "lowcut", "LCUT", Reverb::DEFAULT.low_cut),
+    hex_param("High cut", "highcut", "HCUT", Reverb::DEFAULT.high_cut),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -487,42 +402,24 @@ impl Reverb {
     };
 
     effect_settings! {
-        pre => Pre,
-        decay => Decay,
-        damp => Damp,
-        low_cut => LowCut,
-        high_cut => HighCut,
-        mix => Mix,
-        gain => Gain,
+        pre,
+        decay,
+        damp,
+        low_cut,
+        high_cut,
+        mix,
+        gain,
     }
 }
 
 /// A plate's, in the order the page shows them. Those it shares with the reverb are named as its.
 pub(crate) const PLATE_PARAMS: [Param; 8] = [
-    hex_param("Pre", "pre", "PRE", Setting::Pre, Plate::DEFAULT.pre),
-    hex_param(
-        "Decay",
-        "decay",
-        "DCAY",
-        Setting::Decay,
-        Plate::DEFAULT.decay,
-    ),
-    hex_param("Damp", "damp", "DAMP", Setting::Damp, Plate::DEFAULT.damp),
-    hex_param(
-        "High cut",
-        "highcut",
-        "HCUT",
-        Setting::HighCut,
-        Plate::DEFAULT.high_cut,
-    ),
-    hex_param("Size", "size", "SIZE", Setting::Size, Plate::DEFAULT.size).units(Units::PlateSize),
-    hex_param(
-        "Mod",
-        "mod",
-        "MOD",
-        Setting::Excursion,
-        Plate::DEFAULT.excursion,
-    ),
+    hex_param("Pre", "pre", "PRE", Plate::DEFAULT.pre),
+    hex_param("Decay", "decay", "DCAY", Plate::DEFAULT.decay),
+    hex_param("Damp", "damp", "DAMP", Plate::DEFAULT.damp),
+    hex_param("High cut", "highcut", "HCUT", Plate::DEFAULT.high_cut),
+    hex_param("Size", "size", "SIZE", Plate::DEFAULT.size).units(Units::PlateSize),
+    hex_param("Mod", "mod", "MOD", Plate::DEFAULT.excursion),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -569,14 +466,14 @@ impl Plate {
     };
 
     effect_settings! {
-        pre => Pre,
-        decay => Decay,
-        damp => Damp,
-        high_cut => HighCut,
-        size => Size,
-        excursion => Excursion,
-        mix => Mix,
-        gain => Gain,
+        pre,
+        decay,
+        damp,
+        high_cut,
+        size,
+        excursion,
+        mix,
+        gain,
     }
 }
 
@@ -590,41 +487,16 @@ pub fn plate_size(value: f32) -> f32 {
 /// its springs are and how dark; then its chirp and its reflections; then its wander and its
 /// knock; then the mix and gain. Those it shares with the reverb are named as its.
 pub(crate) const SPRING_PARAMS: [Param; 9] = [
-    hex_param(
-        "Decay",
-        "decay",
-        "DCAY",
-        Setting::Decay,
-        Spring::DEFAULT.decay,
-    ),
-    hex_param(
-        "Size",
-        "size",
-        "SIZE",
-        Setting::SpringSize,
-        Spring::DEFAULT.size,
-    ),
-    hex_param("Damp", "damp", "DAMP", Setting::Damp, Spring::DEFAULT.damp),
-    hex_param("Spin", "spin", "SPIN", Setting::Spin, Spring::DEFAULT.spin),
-    hex_param(
-        "Reflect",
-        "reflect",
-        "REFL",
-        Setting::Reflections,
-        Spring::DEFAULT.reflect,
-    ),
-    hex_param(
-        "Chaos",
-        "chaos",
-        "CHAO",
-        Setting::Chaos,
-        Spring::DEFAULT.chaos,
-    ),
+    hex_param("Decay", "decay", "DCAY", Spring::DEFAULT.decay),
+    hex_param("Size", "size", "SIZE", Spring::DEFAULT.size),
+    hex_param("Damp", "damp", "DAMP", Spring::DEFAULT.damp),
+    hex_param("Spin", "spin", "SPIN", Spring::DEFAULT.spin),
+    hex_param("Reflect", "reflect", "REFL", Spring::DEFAULT.reflect),
+    hex_param("Chaos", "chaos", "CHAO", Spring::DEFAULT.chaos),
     Param {
         name: "Knock",
         key: "knock",
         label: Some("KNCK"),
-        setting: Setting::Knock,
         kind: Kind::Stepped {
             choices: &OFF_ON,
             wraps: true,
@@ -634,6 +506,14 @@ pub(crate) const SPRING_PARAMS: [Param; 9] = [
     },
     WET_MIX_PARAM,
     GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page.
+pub(super) const SPRING_GRID: Columns = &[
+    &["decay", "size", "damp"],
+    &["spin", "reflect"],
+    &["chaos", "knock"],
+    &["mix", "gain"],
 ];
 
 /// A spring reverb's settings: ChowDSP's model of a spring tank, as Surge ships it. One a file
@@ -681,43 +561,25 @@ impl Spring {
     };
 
     effect_settings! {
-        decay => Decay,
-        size => SpringSize,
-        damp => Damp,
-        spin => Spin,
-        reflect => Reflections,
-        chaos => Chaos,
-        knock => Knock,
-        mix => Mix,
-        gain => Gain,
+        decay,
+        size,
+        damp,
+        spin,
+        reflect,
+        chaos,
+        knock,
+        mix,
+        gain,
     }
 }
 
 /// A space's, in the order the page shows them: how long it rings, how big and how dark it is,
 /// then its wobble, then the mix and gain. Those it shares with the reverbs are named as theirs.
 pub(crate) const SPACE_PARAMS: [Param; 6] = [
-    hex_param(
-        "Decay",
-        "decay",
-        "DCAY",
-        Setting::Decay,
-        Space::DEFAULT.decay,
-    ),
-    hex_param(
-        "Size",
-        "size",
-        "SIZE",
-        Setting::SpaceSize,
-        Space::DEFAULT.size,
-    ),
-    hex_param("Damp", "damp", "DAMP", Setting::Damp, Space::DEFAULT.damp),
-    hex_param(
-        "Mod",
-        "mod",
-        "MOD",
-        Setting::Excursion,
-        Space::DEFAULT.excursion,
-    ),
+    hex_param("Decay", "decay", "DCAY", Space::DEFAULT.decay),
+    hex_param("Size", "size", "SIZE", Space::DEFAULT.size),
+    hex_param("Damp", "damp", "DAMP", Space::DEFAULT.damp),
+    hex_param("Mod", "mod", "MOD", Space::DEFAULT.excursion),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -759,12 +621,12 @@ impl Space {
     };
 
     effect_settings! {
-        decay => Decay,
-        size => SpaceSize,
-        damp => Damp,
-        excursion => Excursion,
-        mix => Mix,
-        gain => Gain,
+        decay,
+        size,
+        damp,
+        excursion,
+        mix,
+        gain,
     }
 }
 
@@ -804,7 +666,6 @@ pub(crate) const STUTTER_PARAMS: [Param; 6] = [
         name: "Trig",
         key: "trig",
         label: Some("TRIG"),
-        setting: Setting::Trig,
         kind: Kind::Stepped {
             choices: &OFF_ON,
             wraps: true,
@@ -816,7 +677,6 @@ pub(crate) const STUTTER_PARAMS: [Param; 6] = [
         name: "Length",
         key: "length",
         label: Some("LEN"),
-        setting: Setting::RepeatLength,
         kind: Kind::Stepped {
             choices: &REPEAT_LENGTH_NAMES,
             wraps: false,
@@ -828,7 +688,6 @@ pub(crate) const STUTTER_PARAMS: [Param; 6] = [
         name: "Repeats",
         key: "repeats",
         label: Some("RPTS"),
-        setting: Setting::Repeats,
         kind: Kind::Stepped {
             choices: &REPEAT_NAMES,
             wraps: false,
@@ -836,20 +695,17 @@ pub(crate) const STUTTER_PARAMS: [Param; 6] = [
         default: Stutter::DEFAULT.repeats,
         place: Place::Own,
     },
-    hex_param(
-        "Decay",
-        "decay",
-        "DCAY",
-        Setting::RepeatDecay,
-        Stutter::DEFAULT.decay,
-    )
-    .units(Units::RepeatDecay),
+    hex_param("Decay", "decay", "DCAY", Stutter::DEFAULT.decay).units(Units::RepeatDecay),
     Param {
         default: 0xFF,
         ..MIX_PARAM
     },
     GAIN_PARAM,
 ];
+
+/// Where its settings sit on the FX page.
+pub(super) const STUTTER_GRID: Columns =
+    &[&["trig"], &["length", "repeats", "decay"], &["mix", "gain"]];
 
 /// A stutter's settings: a piece of what comes in, repeated on the grid when a step switches
 /// `Trig` on, after sst's Microgate. One a file doesn't have starts as new.
@@ -890,11 +746,11 @@ impl Stutter {
     };
 
     effect_settings! {
-        trig => Trig,
-        length => RepeatLength,
-        repeats => Repeats,
-        decay => RepeatDecay,
-        mix => Mix,
-        gain => Gain,
+        trig,
+        length,
+        repeats,
+        decay,
+        mix,
+        gain,
     }
 }

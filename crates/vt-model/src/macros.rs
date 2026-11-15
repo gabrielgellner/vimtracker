@@ -453,7 +453,7 @@ impl Track {
                 // A distortion keeps every mode's settings, so one its mode doesn't show still
                 // reads.
                 if insert.kind() == Some(effect) {
-                    insert.read(effect.params()[at].setting).unwrap_or(0)
+                    insert.read(at).unwrap_or(0)
                 } else {
                     id.entry().default
                 }
@@ -493,8 +493,7 @@ impl Track {
             (Owner::Slot { slot, effect }, at) => {
                 let insert = self.inserts[slot];
                 if insert.kind() == Some(effect) {
-                    self.inserts[slot] =
-                        insert.write(effect.params()[at].setting, f32::from(coarse));
+                    self.inserts[slot] = insert.write(at, f32::from(coarse));
                 }
             }
             (Owner::Track, _) => {

@@ -7,7 +7,7 @@ use crate::lfo::SWEEP_NAMES;
 
 use super::pitch::{MOST_SHIFT, PITCH_PARAMS};
 use super::{
-    GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, SOURCE_NAMES, Setting, Units, WET_MIX_PARAM,
+    Columns, GAIN_PARAM, Kind, MIX_PARAM, OFF_ON, Param, Place, SOURCE_NAMES, Units, WET_MIX_PARAM,
     from_middle, hex_param, source_track,
 };
 
@@ -52,7 +52,6 @@ pub(crate) const CHORUS_PARAMS: [Param; 5] = [
         key: "type",
         // Choosing a mode chooses a sound, so steps don't lock it.
         label: None,
-        setting: Setting::ChorusType,
         kind: Kind::Stepped {
             choices: &CHORUS_TYPE_NAMES,
             wraps: true,
@@ -60,14 +59,8 @@ pub(crate) const CHORUS_PARAMS: [Param; 5] = [
         default: 0,
         place: Place::Type,
     },
-    hex_param("Rate", "rate", "RATE", Setting::Rate, Chorus::DEFAULT.rate),
-    hex_param(
-        "Depth",
-        "depth",
-        "DPTH",
-        Setting::Depth,
-        Chorus::DEFAULT.depth,
-    ),
+    hex_param("Rate", "rate", "RATE", Chorus::DEFAULT.rate),
+    hex_param("Depth", "depth", "DPTH", Chorus::DEFAULT.depth),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -104,11 +97,11 @@ impl Chorus {
     };
 
     effect_settings! {
-        kind: ChorusType => ChorusType,
-        rate => Rate,
-        depth => Depth,
-        mix => Mix,
-        gain => Gain,
+        kind: ChorusType,
+        rate,
+        depth,
+        mix,
+        gain,
     }
 }
 
@@ -138,7 +131,6 @@ const fn sweep_param(default: u8) -> Param {
         name: "Rate",
         key: "rate",
         label: Some("RATE"),
-        setting: Setting::SweepRate,
         kind: Kind::Stepped {
             choices: &SWEEP_NAMES,
             wraps: false,
@@ -151,33 +143,13 @@ const fn sweep_param(default: u8) -> Param {
 /// A phaser's, in the order the page shows them.
 pub(crate) const PHASER_PARAMS: [Param; 7] = [
     sweep_param(Phaser::DEFAULT.rate),
-    hex_param(
-        "Depth",
-        "depth",
-        "DPTH",
-        Setting::Depth,
-        Phaser::DEFAULT.depth,
-    ),
-    hex_param(
-        "Centre",
-        "centre",
-        "CNTR",
-        Setting::Centre,
-        Phaser::DEFAULT.centre,
-    )
-    .units(Units::Hertz),
-    hex_param(
-        "Feedback",
-        "feedback",
-        "FDBK",
-        Setting::Feedback,
-        Phaser::DEFAULT.feedback,
-    ),
+    hex_param("Depth", "depth", "DPTH", Phaser::DEFAULT.depth),
+    hex_param("Centre", "centre", "CNTR", Phaser::DEFAULT.centre).units(Units::Hertz),
+    hex_param("Feedback", "feedback", "FDBK", Phaser::DEFAULT.feedback),
     Param {
         name: "Stages",
         key: "stages",
         label: Some("STGS"),
-        setting: Setting::Stages,
         kind: Kind::Stepped {
             choices: &STAGE_NAMES,
             wraps: false,
@@ -228,42 +200,22 @@ impl Phaser {
     };
 
     effect_settings! {
-        rate => SweepRate,
-        depth => Depth,
-        centre => Centre,
-        feedback => Feedback,
-        stages => Stages,
-        mix => Mix,
-        gain => Gain,
+        rate,
+        depth,
+        centre,
+        feedback,
+        stages,
+        mix,
+        gain,
     }
 }
 
 /// A flanger's, in the order the page shows them.
 pub(crate) const FLANGER_PARAMS: [Param; 6] = [
     sweep_param(Flanger::DEFAULT.rate),
-    hex_param(
-        "Depth",
-        "depth",
-        "DPTH",
-        Setting::Depth,
-        Flanger::DEFAULT.depth,
-    ),
-    hex_param(
-        "Delay",
-        "delay",
-        "DLAY",
-        Setting::FlangerDelay,
-        Flanger::DEFAULT.delay,
-    )
-    .units(Units::FlangerDelay),
-    hex_param(
-        "Feedback",
-        "feedback",
-        "FDBK",
-        Setting::FlangerFeedback,
-        Flanger::DEFAULT.feedback,
-    )
-    .centred(),
+    hex_param("Depth", "depth", "DPTH", Flanger::DEFAULT.depth),
+    hex_param("Delay", "delay", "DLAY", Flanger::DEFAULT.delay).units(Units::FlangerDelay),
+    hex_param("Feedback", "feedback", "FDBK", Flanger::DEFAULT.feedback).centred(),
     WET_MIX_PARAM,
     GAIN_PARAM,
 ];
@@ -305,12 +257,12 @@ impl Flanger {
     };
 
     effect_settings! {
-        rate => SweepRate,
-        depth => Depth,
-        delay => FlangerDelay,
-        feedback => FlangerFeedback,
-        mix => Mix,
-        gain => Gain,
+        rate,
+        depth,
+        delay,
+        feedback,
+        mix,
+        gain,
     }
 }
 
@@ -325,7 +277,6 @@ pub(crate) const ROTARY_PARAMS: [Param; 8] = [
         name: "Fast",
         key: "fast",
         label: Some("FAST"),
-        setting: Setting::Fast,
         kind: Kind::Stepped {
             choices: &OFF_ON,
             wraps: true,
@@ -333,46 +284,24 @@ pub(crate) const ROTARY_PARAMS: [Param; 8] = [
         default: Rotary::DEFAULT.fast,
         place: Place::Own,
     },
-    hex_param(
-        "Inertia",
-        "inertia",
-        "INRT",
-        Setting::Inertia,
-        Rotary::DEFAULT.inertia,
-    ),
-    hex_param(
-        "Doppler",
-        "doppler",
-        "DOPL",
-        Setting::Doppler,
-        Rotary::DEFAULT.doppler,
-    ),
-    hex_param(
-        "Tremolo",
-        "tremolo",
-        "TREM",
-        Setting::Tremolo,
-        Rotary::DEFAULT.tremolo,
-    ),
-    hex_param(
-        "Drive",
-        "drive",
-        "DRIV",
-        Setting::Drive,
-        Rotary::DEFAULT.drive,
-    ),
-    hex_param(
-        "Width",
-        "width",
-        "WDTH",
-        Setting::Width,
-        Rotary::DEFAULT.width,
-    ),
+    hex_param("Inertia", "inertia", "INRT", Rotary::DEFAULT.inertia),
+    hex_param("Doppler", "doppler", "DOPL", Rotary::DEFAULT.doppler),
+    hex_param("Tremolo", "tremolo", "TREM", Rotary::DEFAULT.tremolo),
+    hex_param("Drive", "drive", "DRIV", Rotary::DEFAULT.drive),
+    hex_param("Width", "width", "WDTH", Rotary::DEFAULT.width),
     Param {
         default: 0xFF,
         ..MIX_PARAM
     },
     GAIN_PARAM,
+];
+
+/// Where its settings sit on the FX page.
+pub(super) const ROTARY_GRID: Columns = &[
+    &["fast", "inertia"],
+    &["doppler", "tremolo"],
+    &["drive", "width"],
+    &["mix", "gain"],
 ];
 
 /// A rotary speaker's settings: a Leslie's horn and drum, after sst's, with rotors that take time
@@ -418,14 +347,14 @@ impl Rotary {
     };
 
     effect_settings! {
-        fast => Fast,
-        inertia => Inertia,
-        doppler => Doppler,
-        tremolo => Tremolo,
-        drive => Drive,
-        width => Width,
-        mix => Mix,
-        gain => Gain,
+        fast,
+        inertia,
+        doppler,
+        tremolo,
+        drive,
+        width,
+        mix,
+        gain,
     }
 }
 
@@ -486,27 +415,13 @@ pub fn algorithm_blend(value: f32) -> (usize, usize, f32) {
 /// Warps', in the order the page shows them, as columns of two: the algorithm and its setting,
 /// the modulator and how hard it's driven, then the oscillator's pitch and waveform.
 pub(crate) const WARPS_PARAMS: [Param; 8] = [
-    hex_param(
-        "Algo",
-        "algo",
-        "ALGO",
-        Setting::Algorithm,
-        Warps::DEFAULT.algorithm,
-    )
-    .units(Units::Algorithm),
-    hex_param(
-        "Timbre",
-        "timbre",
-        "TMBR",
-        Setting::Timbre,
-        Warps::DEFAULT.timbre,
-    ),
+    hex_param("Algo", "algo", "ALGO", Warps::DEFAULT.algorithm).units(Units::Algorithm),
+    hex_param("Timbre", "timbre", "TMBR", Warps::DEFAULT.timbre),
     Param {
         name: "Source",
         key: "source",
         // What it hears is part of how it's set up, so steps don't change it.
         label: None,
-        setting: Setting::Source,
         kind: Kind::Stepped {
             choices: &WARPS_SOURCE_NAMES,
             wraps: false,
@@ -514,13 +429,7 @@ pub(crate) const WARPS_PARAMS: [Param; 8] = [
         default: Warps::DEFAULT.source,
         place: Place::Own,
     },
-    hex_param(
-        "Level",
-        "level",
-        "LEVL",
-        Setting::ModulatorLevel,
-        Warps::DEFAULT.level,
-    ),
+    hex_param("Level", "level", "LEVL", Warps::DEFAULT.level),
     Param {
         default: Warps::DEFAULT.pitch,
         ..PITCH_PARAMS[0]
@@ -529,7 +438,6 @@ pub(crate) const WARPS_PARAMS: [Param; 8] = [
         name: "Shape",
         key: "shape",
         label: Some("SHAP"),
-        setting: Setting::Wave,
         kind: Kind::Stepped {
             choices: &WAVE_NAMES,
             wraps: true,
@@ -597,13 +505,13 @@ impl Warps {
     }
 
     effect_settings! {
-        algorithm => Algorithm,
-        timbre => Timbre,
-        source => Source,
-        level => ModulatorLevel,
-        pitch => Shift,
-        shape => Wave,
-        mix => Mix,
-        gain => Gain,
+        algorithm,
+        timbre,
+        source,
+        level,
+        pitch,
+        shape,
+        mix,
+        gain,
     }
 }
