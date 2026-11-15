@@ -413,7 +413,9 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             Mode::Keys => theme::YELLOW,
         }))
         .add_modifier(Modifier::BOLD);
-    let pending = if app.pending().is_empty() {
+    // An overlay's own sequences, the picker's `gg` and `zz`, aren't said here, as they never
+    // were.
+    let pending = if app.pending().is_empty() || app.modes.mode == Mode::Picker {
         String::new()
     } else {
         let keys: Vec<String> = app.pending().iter().map(Key::to_string).collect();

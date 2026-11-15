@@ -5,6 +5,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 
 use ratatui::crossterm::event::KeyCode;
 
@@ -22,13 +23,15 @@ use crate::app::{App, Entry};
 use crate::controls::{Control, set};
 use crate::input::keys::Key;
 use crate::input::mode::Mode;
+use crate::overlays;
 use crate::overlays::picker::explorer::Purpose;
 use crate::overlays::picker::exploring::kit_preview;
-use crate::overlays::picker::{KitChoice, Outcome, Pick, Picker, Preview, Shown};
+use crate::overlays::picker::{KitChoice, Pick, Picker, Preview, Shown};
 use crate::pages::chain::ChainView;
 use crate::pages::phrase::PhraseView;
 use crate::pages::song::COLUMNS_BEFORE_TRACKS;
 use crate::pages::track::tuning::set_tuning;
+use crate::pages::{CtxMut, Outcome};
 use crate::services::banking::Seed;
 
 impl App {
@@ -224,7 +227,8 @@ impl App {
         ));
     }
 
-    pub(crate) fn picker_key(&mut self, key: Key) {
+    /// Give the open picker a key, through the overlays' seam, and settle what it asks for.
+    pub(crate) fn picker_key(&mut self, key: Key, now: Instant) {
         let Some(picker) = self.overlays.picker.as_mut() else {
             self.modes.mode = Mode::Normal;
             return;
@@ -234,39 +238,49 @@ impl App {
             && let KeyCode::Char(digit @ '1'..='8') = key.code
         {
             self.overlays.picker = None;
+            self.grammar.pending.clear();
+            self.grammar.pending_since = None;
             self.modes.mode = self.mode_after_picker();
             self.map_to_macro(usize::from(digit as u8 - b'1'));
             return;
         }
-        match picker.key(key) {
-            Outcome::Stay => {
+        // A key with Alt or Cmd means nothing to it, and leaves a `g` or a `z` waiting, and
+        // Shift on an arrow is the arrow.
+        if key.alt || key.command {
+            self.refresh_preview();
+            self.follow_file();
+            return;
+        }
+        let key = Key {
+            shift: false,
+            ..key
+        };
+        let was_waiting = !self.grammar.pending.is_empty();
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        let pending = &mut self.grammar.pending;
+        let outcome = overlays::press(picker, &self.table, pending, key, &mut ctx);
+        // Which-key lists what follows a `g` or a `z` from when it was typed.
+        match (was_waiting, self.grammar.pending.is_empty()) {
+            (false, false) => self.grammar.pending_since = Some(now),
+            (_, true) => self.grammar.pending_since = None,
+            (true, false) => {}
+        }
+        match outcome {
+            Outcome::Done | Outcome::Passed => {
                 self.refresh_preview();
                 self.follow_file();
             }
-            Outcome::Close => {
-                self.overlays.picker = None;
-                // A shape waiting for its command is given up.
-                self.overlays.shape_command = None;
-                self.modes.mode = self.mode_after_picker();
-                self.leave_explorer();
-            }
-            Outcome::Tag { item, tags } => {
-                self.tag_item(item, tags);
-                self.refresh_preview();
-            }
-            Outcome::Choose(pick) => {
-                let naming = self.explorer.naming.take();
-                self.overlays.picker = None;
-                self.modes.mode = self.mode_after_picker();
-                self.leave_explorer();
-                self.explorer.naming = naming;
-                self.choose(pick);
+            outcome => {
+                self.settled(outcome, false);
             }
         }
     }
 
     /// Do what a picker's choice says.
-    fn choose(&mut self, pick: Pick) {
+    pub(crate) fn choose(&mut self, pick: Pick) {
         match pick {
             Pick::View(view) => self.jump_to_view(view),
             Pick::TrackPage(page) => self.show_track_page(page),

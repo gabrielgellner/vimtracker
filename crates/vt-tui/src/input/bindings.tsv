@@ -882,3 +882,32 @@ VisualStep	Space o	RotateSpeeds(false)	Rotate the speeds round the tracks select
 VisualStep	.	Repeat	Repeat the last change on the selection
 VisualStep	u	Undo	Undo the last change, keeping the selection
 VisualStep	C-r	Redo	Redo, keeping the selection
+Picker	j	InPicker(Down)	Down, by a count
+Picker	Down	InPicker(Down)	Down, by a count
+Picker	C-n	InPicker(Down)	Down, by a count
+Picker	k	InPicker(Up)	Up, by a count
+Picker	Up	InPicker(Up)	Up, by a count
+Picker	C-p	InPicker(Up)	Up, by a count
+Picker	C-d	InPicker(HalfPageDown)	Half a page down
+Picker	C-u	InPicker(HalfPageUp)	Half a page up
+Picker	g g	InPicker(First)	The first row
+Picker	G	InPicker(Last)	The last row, or the row a count names
+Picker	z z	InPicker(Middle)	The cursor's row to the middle
+Picker	z t	InPicker(Top)	The cursor's row to the top
+Picker	z b	InPicker(Bottom)	The cursor's row to the bottom
+Picker	l	InPicker(Into)	Open a category or a folder, or choose
+Picker	h	InPicker(Out)	Close the category or the folder
+Picker	Enter	InPicker(Choose)	Choose, or after digits, choose by number
+Picker	L	InPicker(Wider)	The wider choice, where the list has one
+Picker	/	InPicker(Search)	Search
+Picker	Esc	InPicker(Close)	Close, or let a count go
+Picker	Right	InPicker(Open)	In the explorer: open a folder, or choose
+Picker	Left	InPicker(Shut)	In the explorer: close the folder
+Picker	Backspace	InPicker(Parent)	In the explorer: up to the folder above
+Picker	H	InPicker(Hidden)	In the explorer: show or hide hidden files
+Picker	P	InPicker(Preview)	In the explorer: the preview on or off
+Picker	A	InPicker(Audition)	In the explorer: playing what's under the cursor on or off
+Picker	T	InPicker(Tags)	In the explorer: change the tags
+Picker	Space	InPicker(Mark)	In a kit: mark the sound, or a count of them
+Picker	x	InPicker(Mark)	In a kit: mark the sound, or a count of them
+Picker	a	InPicker(MarkAll)	In a kit: mark every sound, or none
