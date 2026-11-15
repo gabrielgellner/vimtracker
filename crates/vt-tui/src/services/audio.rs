@@ -659,15 +659,7 @@ impl Output {
                         let count = frames.len() / channels;
                         let block = &mut scratch[..count * 2];
                         realtime.process(block);
-                        for (frame, stereo) in frames
-                            .chunks_exact_mut(channels)
-                            .zip(block.as_chunks::<2>().0)
-                        {
-                            // Whatever the limiter setting, nothing over full reaches the device.
-                            frame[0] = stereo[0].clamp(-1.0, 1.0);
-                            frame[1] = stereo[1].clamp(-1.0, 1.0);
-                            frame[2..].fill(0.0);
-                        }
+                        copy_out(block, frames, channels);
                     }
                     let frames = out.len() / channels;
                     let budget = frames as f64 / rate;
@@ -734,6 +726,22 @@ pub(crate) struct CallbackThread {
     pub(crate) period_us: u32,
     pub(crate) computation_us: u32,
     pub(crate) constraint_us: u32,
+}
+
+/// The engine's stereo block into the device's frames of `channels`, on the audio thread: whatever
+/// the limiter setting, nothing over full reaches the device, and channels past the first two are
+/// silent. The stream that plays and the one `bench --device` measures both copy through this, so
+/// they cost the same.
+#[inline]
+fn copy_out(block: &[f32], frames: &mut [f32], channels: usize) {
+    for (frame, stereo) in frames
+        .chunks_exact_mut(channels)
+        .zip(block.as_chunks::<2>().0)
+    {
+        frame[0] = stereo[0].clamp(-1.0, 1.0);
+        frame[1] = stereo[1].clamp(-1.0, 1.0);
+        frame[2..].fill(0.0);
+    }
 }
 
 /// The CPU time the calling thread has had.
@@ -855,14 +863,7 @@ impl Output {
                         process += processing.elapsed();
                         engine += realtime.engine_time();
                         // The same as the stream that plays, so it costs the same.
-                        for (frame, stereo) in frames
-                            .chunks_exact_mut(channels)
-                            .zip(block.as_chunks::<2>().0)
-                        {
-                            frame[0] = stereo[0].clamp(-1.0, 1.0);
-                            frame[1] = stereo[1].clamp(-1.0, 1.0);
-                            frame[2..].fill(0.0);
-                        }
+                        copy_out(block, frames, channels);
                     }
                     // Then nothing is heard.
                     std::hint::black_box(&mut *out).fill(0.0);
