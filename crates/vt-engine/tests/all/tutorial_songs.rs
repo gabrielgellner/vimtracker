@@ -1052,7 +1052,7 @@ fn random_rhythm() -> Song {
     voice(&mut song, 2, "HH", SynthVoice::Hat, &texts(&first("C-4")));
     set(&mut song, 2, "hat.decay", 0x28);
     song.tracks[2].level = 0xB0;
-    for track in &mut song.tracks[..3] {
+    for track in song.tracks.iter_mut().take(3) {
         track.speed = Speed::ThirtySecond;
     }
     voice(
@@ -1318,7 +1318,7 @@ fn world_rhythms() -> Song {
     voice(&mut song, 4, "BD", SynthVoice::Kick, &twelve);
     set(&mut song, 4, "kick.decay", 0x60);
     song.tracks[4].level = 0xD8;
-    for track in &mut song.tracks[3..] {
+    for track in song.tracks.iter_mut().skip(3) {
         track.speed = Speed::EighthTriplet;
     }
     let notes = empty_notes(&song);

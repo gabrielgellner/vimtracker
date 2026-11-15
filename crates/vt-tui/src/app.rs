@@ -384,9 +384,15 @@ impl App {
         song.auto_jump = self.services.live.auto_jump;
         song.read_only = self.services.live.read_only;
         song.view = self.services.folds.view();
-        for (track, live) in song.tracks.iter_mut().zip(&self.services.live.levels) {
-            track.mute = live.mute;
-            track.solo = live.solo;
+        // Only a track whose mute or solo differs is written to, as writing to one copies it.
+        for (index, live) in self.services.live.levels.iter().enumerate() {
+            let differs =
+                |track: &vt_model::song::Track| (track.mute, track.solo) != (live.mute, live.solo);
+            if song.tracks.get(index).is_some_and(differs) {
+                let track = &mut song.tracks[index];
+                track.mute = live.mute;
+                track.solo = live.solo;
+            }
         }
         // While a mute or solo key is down it may yet be a hold, which goes back when it's let go,
         // so what's saved is how it was. A tap marks the song changed again when it's let go.

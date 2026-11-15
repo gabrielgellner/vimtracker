@@ -4,16 +4,20 @@
 //! Each figure is the song's time with each block at its fastest over several runs, less the same
 //! song's without the part, so it's what the part adds while it plays. A thing over about 1% of a core an instance, 208 ns a frame, is
 //! marked. `just costs worst` plays only a 16-track song of the heaviest parts, and
-//! `just costs save folder` saves that song as a project, to bench or open. `just costs blocks`
+//! `just costs save folder` saves that song as a project, to bench or open, and
+//! `just costs save folder large` the large song an edit is timed on. `just costs blocks`
 //! times the slowest block of the effects that do their work a part at a time, against a block's
-//! budget at 192 kHz.
+//! budget at 192 kHz. `just costs edits` times one edit of a large song on the edit thread, and the
+//! engine taking its version (#871).
 
 use std::sync::Arc;
 use std::time::Instant;
 
 use vt_engine::engine::Engine;
-use vt_engine::published::Published;
+use vt_engine::published::{Handover, Published};
+use vt_model::action::{Action, edit};
 use vt_model::bank::{BankEntry, ContentHash};
+use vt_model::history::History;
 use vt_model::insert::{
     BEADS_QUALITY_NAMES, Beads, BeadsMode, Chorus, ChorusType, Clouds, CloudsMode, Compressor,
     CompressorType, Distort, DistortType, Echo, Exciter, FreqShift, Grains, INSERTS, Insert, Pitch,
@@ -23,7 +27,8 @@ use vt_model::modulation::{MOD_SLOTS, ModKind};
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
 use vt_model::settings::SettingId;
-use vt_model::song::{FilterType, Machine, Song, SynthVoice, Track};
+use vt_model::song::{Chain, ChainEntry, FilterType, Machine, Phrase, Song, SynthVoice, Track};
+use vt_model::step::Note;
 
 const RATE: u32 = 48_000;
 const BLOCK: usize = 512;
@@ -572,15 +577,160 @@ fn blocks(pool: &Arc<SamplePool>) {
     }
 }
 
+/// A large song for [`edits`]: 32 sound tracks, each as [`worst_song`]'s, with a chain of 32
+/// phrases of 64 rows, a note on every other row.
+fn large_song() -> Song {
+    const TRACKS: usize = 32;
+    const PHRASES: u32 = 32;
+    const ROWS: usize = 64;
+    let worst = worst_song();
+    let mut song = Song::new(TRACKS);
+    for index in 0..TRACKS {
+        let track = &mut song.tracks[index];
+        let from = &worst.tracks[index % 16];
+        track.machine = from.machine;
+        track.filter = from.filter;
+        track.inserts = from.inserts;
+        track.mods = from.mods;
+        track.settings = from.settings.clone();
+        // A setting of its own on every track, as a song worked on has.
+        track.set_setting(SettingId::CUT, 0x90);
+        track.set_setting(SettingId::RES, 0x50);
+        track.phrases.clear();
+        let mut entries = Vec::new();
+        for id in 0..PHRASES {
+            let mut phrase = Phrase::new(ROWS);
+            for row in (0..ROWS).step_by(2) {
+                *phrase.step_mut(row).unwrap() =
+                    NOTES[(row / 2 + id as usize) % 4].parse().unwrap();
+            }
+            track.phrases.insert(id, Arc::new(phrase));
+            entries.push(ChainEntry {
+                phrase: id,
+                transpose: 0,
+            });
+        }
+        let label = String::new();
+        track.chains.insert(0, Arc::new(Chain { entries, label }));
+    }
+    song
+}
+
+/// The times of some runs, in microseconds, reported as their fastest, their median and their
+/// worst: the median, as a run the system put aside for another thread would move an average, and
+/// the fastest for a busy machine, where even the median moves.
+#[derive(Default, Clone)]
+struct Took(Vec<f64>);
+
+impl Took {
+    fn add(&mut self, started: Instant) {
+        self.0.push(started.elapsed().as_secs_f64() * 1e6);
+    }
+
+    fn line(&self, name: &str) -> String {
+        let mut sorted = self.0.clone();
+        sorted.sort_by(f64::total_cmp);
+        let median = sorted.get(sorted.len() / 2).copied().unwrap_or(0.0);
+        let fastest = sorted.first().copied().unwrap_or(0.0);
+        let worst = sorted.last().copied().unwrap_or(0.0);
+        format!("  {name:<30} {fastest:>8.1} us {median:>8.1} us {worst:>8.1} us")
+    }
+}
+
+/// A kind of edit to time: its name, and the action that's the edit of a number.
+type Kind = (&'static str, fn(u32) -> Action);
+
+/// What one edit of a large song takes: on the edit thread, the edit itself, committing it to the
+/// undo history, building its version and the room for its generators; then, while playing, the
+/// engine taking the version, as the callback does. A turn of the Roto or the wheel makes one of
+/// these a frame. The edits are to the last sound track, so whatever compares the tracks in order
+/// passes over all the others first.
+fn edits(pool: &Arc<SamplePool>) {
+    const EDITS: u32 = 400;
+    let song = Arc::new(large_song());
+    let steps: usize = song
+        .tracks
+        .iter()
+        .flat_map(|track| track.phrases.values())
+        .map(|phrase| phrase.len())
+        .sum();
+    println!();
+    println!(
+        "One edit of {} sound tracks and {steps} rows, the fastest, the median and the worst of {EDITS}",
+        song.sound_tracks()
+    );
+    const LAST: usize = 31;
+    let kinds: [Kind; 2] = [
+        ("a turn of track 32's Cut", |edit| Action::SetTrackSetting {
+            track: LAST,
+            setting: SettingId::CUT,
+            value: 0x40 + (edit % 2) as u8,
+        }),
+        ("a note on track 32", |edit| Action::SetNote {
+            track: LAST,
+            phrase: 0,
+            step: 1,
+            note: Note::On(60 + (edit % 2) as u8),
+        }),
+    ];
+    for (name, action) in kinds {
+        let mut history = History::new(Arc::clone(&song));
+        let mut last = Arc::new(Published::new(Arc::clone(&song), Arc::clone(pool)));
+        let mut engine = Engine::new(RATE, Arc::clone(&last));
+        engine.play_from(0);
+        let mut out = vec![0.0_f32; BLOCK * 2];
+        let [
+            mut edited,
+            mut committed,
+            mut published,
+            mut room,
+            mut whole,
+            mut taken,
+        ] = std::array::from_fn(|_| Took::default());
+        for count in 0..EDITS {
+            let action = action(count);
+            let started = Instant::now();
+            let next = edit(history.current(), &action).unwrap();
+            edited.add(started);
+            let commit = Instant::now();
+            assert!(history.commit(Arc::clone(&next)));
+            committed.add(commit);
+            let publish = Instant::now();
+            let version = Arc::new(Published::after(next, Arc::clone(pool), Some(&last)));
+            published.add(publish);
+            let scratch = Instant::now();
+            let handover = Handover::new(Arc::clone(&version));
+            room.add(scratch);
+            whole.add(started);
+            let take = Instant::now();
+            let old = engine.hand_over(handover);
+            taken.add(take);
+            drop(old);
+            last = version;
+            engine.process(&mut out);
+        }
+        std::hint::black_box(&out);
+        println!("{name}");
+        println!("{}", edited.line("edit"));
+        println!("{}", committed.line("History::commit"));
+        println!("{}", published.line("Published::after"));
+        println!("{}", room.line("Handover::new"));
+        println!("{}", whole.line("all four, on the edit thread"));
+        println!("{}", taken.line("Engine::hand_over, playing"));
+    }
+}
+
 fn main() {
     let pool = pool();
     let only: Vec<String> = std::env::args().skip(1).collect();
-    if let [save, folder] = only.as_slice()
+    if let [save, folder, which @ ..] = only.as_slice()
         && save == "save"
     {
-        // The worst case as a project, for `vimtracker bench` and the program itself.
-        let mut song = worst_song();
-        song.name = "worst case".to_owned();
+        // The worst case as a project, for `vimtracker bench` and the program itself, or with
+        // `large` after the folder, the large song an edit is timed on.
+        let large = which.first().is_some_and(|which| which == "large");
+        let mut song = if large { large_song() } else { worst_song() };
+        song.name = if large { "large" } else { "worst case" }.to_owned();
         vt_model::project::save_song(std::path::Path::new(folder), &song).unwrap();
         return;
     }
@@ -606,5 +756,8 @@ fn main() {
     }
     if wanted("blocks") {
         blocks(&pool);
+    }
+    if wanted("edits") {
+        edits(&pool);
     }
 }
