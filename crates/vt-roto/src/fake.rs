@@ -13,6 +13,7 @@ use crate::serial::{
     self, Code, MAX_PLUGIN_SETUPS, MIDI_SETUPS, Mode, Notice, PluginKnobConfig, PluginSwitchConfig,
     Reply, Request, StoredKind, StoredPlugin,
 };
+use crate::store::Serial;
 use crate::sysex::{
     CONTROLS, ControlType, Daw, FirmwareVersion, FromRoto, LearnParam, PluginDetails, PluginKind,
     ToRoto, TrackDetails,
@@ -740,5 +741,18 @@ impl Ports for FakePorts {
         Ok(Box::new(FakeSend {
             shared: self.shared.clone(),
         }))
+    }
+}
+
+impl Serial for FakeRoto {
+    fn exchange(&mut self, request: &Request) -> Result<Result<Reply, Code>, LinkError> {
+        let reply = self.serial_in(&request.encode());
+        Ok(request.decode_reply(&reply)?)
+    }
+}
+
+impl Serial for FakePorts {
+    fn exchange(&mut self, request: &Request) -> Result<Result<Reply, Code>, LinkError> {
+        self.with(|roto| roto.exchange(request))
     }
 }

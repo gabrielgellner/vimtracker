@@ -419,8 +419,10 @@ impl Engine {
         if self.section_place < song.section_plays(here) as u64 {
             // A loop cued lands on the grid's next line, and its first section starts there if
             // the one playing isn't one of its.
-            if self.loop_cued.is_some() && self.on_grid_line(self.realign_grid()) {
-                let sections = self.loop_cued.take().unwrap_or_else(|| unreachable!());
+            if let Some(sections) = self.loop_cued
+                && self.on_grid_line(self.realign_grid())
+            {
+                self.loop_cued = None;
                 self.looping = Some(sections);
                 if !sections.holds(self.section) {
                     let (from, first) = (self.section, sections.first.min(count - 1));
