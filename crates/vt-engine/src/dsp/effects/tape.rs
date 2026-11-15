@@ -44,6 +44,8 @@ use vt_model::insert::{Tape as Settings, from_middle, tape_drive_db};
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 
 /// The rate Airwindows' filters and slews are tuned at, and Beads' delays.
 const AIRWINDOWS_RATE: f32 = 44_100.0;
@@ -644,6 +646,38 @@ impl Tape {
         }
         self.at = (self.at + 1) % 32;
         out
+    }
+}
+
+impl SlotEffect for Tape {
+    type Settings = Settings;
+
+    /// A tape's, with a line for its wow and flutter.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.quiet_frames()
+    }
+}
+
+impl Rung for Tape {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 

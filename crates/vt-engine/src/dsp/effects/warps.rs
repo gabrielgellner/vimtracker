@@ -41,6 +41,8 @@ use crate::dsp::blocks::oversampler::PairOversampler;
 use crate::dsp::blocks::plaits_parts::{DcBlocker, Svf};
 use crate::dsp::blocks::smoother::Smoothed;
 use crate::dsp::effects::distort::saturating_gains;
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::SlotEffect;
 use crate::dsp::voices::drums::soft_clip;
 
 /// Where `Algo` is at `FF`, out of 256.
@@ -605,12 +607,6 @@ impl Warps {
         self.level.settle();
     }
 
-    /// One frame in with no other track, and the frame out, for the pool's own use.
-    #[inline]
-    pub fn process_alone(&mut self, input: [f32; 2]) -> [f32; 2] {
-        [self.process(input, None, 60.0, 1.0); 2]
-    }
-
     /// One frame of the carrier, and of the modulator if it's a track rather than the
     /// oscillator, which plays `note` and its `Pitch` above it. What comes out is all wet, mono,
     /// and held to full scale, as Warps' converter holds it.
@@ -666,6 +662,31 @@ impl Warps {
         let towards_modulator = 2.0 * vocoder_amount.min(1.0 - vocoder_amount);
         let main = main + towards_modulator * (modulator - main);
         self.dc_blocker.process(main).clamp(-1.0, 1.0)
+    }
+}
+
+impl SlotEffect for Warps {
+    type Settings = Settings;
+
+    /// Warps', for its vocoder's filter bank.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.quiet_frames()
     }
 }
 

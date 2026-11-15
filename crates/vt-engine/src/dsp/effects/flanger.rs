@@ -20,6 +20,8 @@ use vt_model::lfo::SWEEP_TICKS;
 
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::filters::filter::soft_clip;
 
 /// The most feedback goes to either way, so the comb rings but never runs away.
@@ -176,6 +178,38 @@ impl Flanger {
             self.lines[side][self.write] = soft_clip(fed / HEADROOM) * HEADROOM;
         }
         out
+    }
+}
+
+impl SlotEffect for Flanger {
+    type Settings = Settings;
+
+    /// A flanger's.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, song: SongPlace, _frames: u64) {
+        self.follow(settings, song.frames_per_tick);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.frames() as u32
+    }
+}
+
+impl Rung for Flanger {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 
