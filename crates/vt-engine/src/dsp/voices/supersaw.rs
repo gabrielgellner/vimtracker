@@ -20,6 +20,7 @@ use wide::f32x4;
 
 use super::virtual_analog::{BLOCK, Settings};
 use crate::dsp::blocks::drift::Drift;
+use crate::voice::SynthEngine;
 
 /// The most saws it stacks, and how many go in each four lanes.
 pub const MAX_SAWS: usize = 8;
@@ -276,8 +277,10 @@ pub struct Supersaw {
     fresh: bool,
 }
 
-impl Supersaw {
-    pub fn new(rate: u32) -> Self {
+impl SynthEngine for Supersaw {
+    const DRIFTS: bool = true;
+
+    fn new(rate: u32) -> Self {
         Self {
             stacks: [Stack::new(); STACKS],
             drift: Drift::new(),
@@ -300,7 +303,7 @@ impl Supersaw {
     /// Roll a note's drift and where its saws start from its seed, so each note differs but a
     /// render repeats. `Phase` as the note starts says how far into their cycles they may start: all
     /// at the top at `00`, anywhere at `FF`.
-    pub fn seed(&mut self, seed: u32, settings: Settings) {
+    fn seed_drift(&mut self, seed: u32, settings: Settings) {
         self.drift.seed(seed);
         for tuning in &mut self.tuning {
             *tuning = self.drift.tuning();
@@ -315,13 +318,20 @@ impl Supersaw {
     }
 
     /// What its note's envelope times are multiplied by.
-    pub fn time(&self, settings: Settings) -> f32 {
+    fn time(&self, settings: Settings) -> f32 {
         self.drift.time(settings.at(DRIFT))
+    }
+
+    /// Both sides of the next frame as one. A voice plays both, from [`Supersaw::next_sides`].
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        let [left, right] = self.next_sides(frequency, settings);
+        0.5 * (left + right)
     }
 
     /// The next stereo frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> [f32; 2] {
+    fn next_sides(&mut self, frequency: f32, settings: Settings) -> [f32; 2] {
         if self.at == BLOCK {
             let plan = self.plan(frequency, settings);
             play(&mut self.stacks, &plan, &mut self.output);
@@ -331,7 +341,9 @@ impl Supersaw {
         self.at += 1;
         frame
     }
+}
 
+impl Supersaw {
     /// Work out the block's targets from the settings, and leave them as where the next block
     /// starts.
     fn plan(&mut self, frequency: f32, settings: Settings) -> Plan {
@@ -480,9 +492,9 @@ mod tests {
 
     fn run(hertz: f32, settings: Settings, frames: usize) -> Vec<[f32; 2]> {
         let mut voice = Supersaw::new(RATE);
-        voice.seed(7, settings);
+        voice.seed_drift(7, settings);
         (0..frames)
-            .map(|_| voice.next(hertz / RATE as f32, settings))
+            .map(|_| voice.next_sides(hertz / RATE as f32, settings))
             .collect()
     }
 
@@ -553,7 +565,7 @@ mod tests {
     fn the_lanes_play_what_one_saw_at_a_time_does() {
         // Every count, both shapes and between, with the count, shape and pitch moving.
         let mut lanes = Supersaw::new(RATE);
-        lanes.seed(3, plain());
+        lanes.seed_drift(3, plain());
         let mut reference = lanes;
         let mut worst = 0.0_f32;
         for block in 0..3_000 {
@@ -724,16 +736,16 @@ mod tests {
     fn the_same_seed_renders_the_same_and_phase_none_starts_every_saw_at_the_top() {
         assert_eq!(run(220.0, plain(), 4_800), run(220.0, plain(), 4_800));
         let mut other = Supersaw::new(RATE);
-        other.seed(8, plain());
+        other.seed_drift(8, plain());
         let other: Vec<[f32; 2]> = (0..4_800)
-            .map(|_| other.next(220.0 / RATE as f32, plain()))
+            .map(|_| other.next_sides(220.0 / RATE as f32, plain()))
             .collect();
         assert_ne!(run(220.0, plain(), 4_800), other);
         let together = plain().with(PHASE, 0.0);
         let mut seeded = Supersaw::new(RATE);
-        seeded.seed(8, together);
+        seeded.seed_drift(8, together);
         let seeded: Vec<[f32; 2]> = (0..4_800)
-            .map(|_| seeded.next(220.0 / RATE as f32, together))
+            .map(|_| seeded.next_sides(220.0 / RATE as f32, together))
             .collect();
         assert_eq!(run(220.0, together, 4_800), seeded);
     }
@@ -744,10 +756,10 @@ mod tests {
         let drifting = still.with(DRIFT, 1.0);
         let one = energy(&mono(&run(1_760.0, still, 48_000)));
         let mut voice = Supersaw::new(RATE);
-        voice.seed(1, drifting);
+        voice.seed_drift(1, drifting);
         let apart: Vec<f32> = mono(
             &(0..48_000)
-                .map(|_| voice.next(1_760.0 / RATE as f32, drifting))
+                .map(|_| voice.next_sides(1_760.0 / RATE as f32, drifting))
                 .collect::<Vec<_>>(),
         );
         // In tune, seven like saws add up; drifting apart, they beat and come out quieter.
@@ -803,12 +815,12 @@ mod tests {
         let four = eight.with(VOICES, count(4));
         let one = eight.with(VOICES, count(1));
         let mut lanes = Supersaw::new(RATE);
-        lanes.seed(1, eight);
+        lanes.seed_drift(1, eight);
         time("Supersaw, 8 saws in lanes", || {
-            lanes.next(black_box(0.004_6), eight)[0]
+            lanes.next_sides(black_box(0.004_6), eight)[0]
         });
         let mut one_at_a_time = Supersaw::new(RATE);
-        one_at_a_time.seed(1, eight);
+        one_at_a_time.seed_drift(1, eight);
         let mut block = [[0.0; 2]; BLOCK];
         let mut at = BLOCK;
         time("Supersaw, 8 saws one at a time", || {
@@ -822,13 +834,13 @@ mod tests {
         });
         for (name, settings) in [("4 saws", four), ("1 saw", one)] {
             let mut lanes = Supersaw::new(RATE);
-            lanes.seed(1, settings);
+            lanes.seed_drift(1, settings);
             time(&format!("Supersaw, {name} in lanes"), || {
-                lanes.next(black_box(0.004_6), settings)[0]
+                lanes.next_sides(black_box(0.004_6), settings)[0]
             });
         }
         let mut swarm = Swarm::new();
-        swarm.seed(1);
+        swarm.seed_noise(1);
         time("Swarm", || {
             swarm.next(black_box(0.004_6), Settings::default())
         });

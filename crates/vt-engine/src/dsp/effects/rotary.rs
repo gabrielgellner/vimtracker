@@ -28,6 +28,8 @@ use vt_model::insert::{FAST_SPEED, Rotary as Settings};
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::sine_table::SINE;
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 
 /// The horn's and the drum's speeds, slow and fast, in turns a second, about a Leslie 122's.
 const HORN_HZ: [f32; 2] = [0.8, 6.7];
@@ -340,6 +342,38 @@ impl Rotary {
         // Width, as the delay's: what differs between the sides, turned down toward mono.
         let (mid, apart) = (0.5 * (out[0] + out[1]), 0.5 * (out[0] - out[1]) * width);
         [mid + apart, mid - apart]
+    }
+}
+
+impl SlotEffect for Rotary {
+    type Settings = Settings;
+
+    /// A rotary speaker's, with a line for the horn's furthest delay.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.frames() as u32
+    }
+}
+
+impl Rung for Rotary {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process_alone(input)
     }
 }
 

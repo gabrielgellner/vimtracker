@@ -23,6 +23,7 @@
 use super::virtual_analog::{BLOCK, Moving, Settings};
 use crate::dsp::blocks::plaits_parts::interpolate;
 use crate::dsp::blocks::sine_table::SINE;
+use crate::voice::SynthEngine;
 
 /// How many harmonics are summed.
 const HARMONICS: usize = 24;
@@ -69,22 +70,14 @@ impl Default for Additive {
     }
 }
 
-impl Additive {
-    pub fn new() -> Self {
-        Self {
-            phase: 0.0,
-            frequency: 0.0,
-            spectrum: [0.0; HARMONICS],
-            levels: [0.0; HARMONICS],
-            output: [0.0; BLOCK],
-            at: BLOCK,
-            fresh: true,
-        }
+impl SynthEngine for Additive {
+    fn new(_rate: u32) -> Self {
+        Self::default()
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             // Written so a bad frequency falls to silence rather than through.
             let f0 = if frequency > 0.0 {
@@ -98,6 +91,20 @@ impl Additive {
         let sample = self.output[self.at];
         self.at += 1;
         sample * LEVEL
+    }
+}
+
+impl Additive {
+    pub fn new() -> Self {
+        Self {
+            phase: 0.0,
+            frequency: 0.0,
+            spectrum: [0.0; HARMONICS],
+            levels: [0.0; HARMONICS],
+            output: [0.0; BLOCK],
+            at: BLOCK,
+            fresh: true,
+        }
     }
 
     /// Moves the spectrum towards a peak at `centroid`, falling away by `slope` either side, with

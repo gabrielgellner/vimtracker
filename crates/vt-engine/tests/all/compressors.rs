@@ -6,10 +6,9 @@ use std::f32::consts::TAU;
 use std::sync::Arc;
 
 use vt_engine::dsp::compressor::{Compressor, curve_db};
-use vt_engine::dsp::effects::distort::InsertState;
+use vt_engine::dsp::effects::slot::{InsertState, Keys};
 use vt_engine::engine::Engine;
 use vt_engine::published::Published;
-use vt_engine::track_state::Keys;
 use vt_model::insert::{
     CONSOLE_AUTO_RELEASE, Compressor as Settings, CompressorType, GLUE_AUTO_RELEASE, Insert,
     MOST_MAKEUP_DB, attack_ms, makeup_db, threshold_db,

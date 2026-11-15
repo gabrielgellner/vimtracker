@@ -41,7 +41,9 @@ use vt_model::insert::{Comb as Settings, CombMode, from_middle, shift_semitones}
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::response::{Gain, one_pole, warped};
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
 use crate::dsp::effects::resonator::{Limiter, QUIET_GAIN, semitones};
+use crate::dsp::effects::slot::SlotEffect;
 
 /// How many frames it plays between workings-out of its loop, about a millisecond and a half at
 /// 48 kHz.
@@ -431,12 +433,6 @@ impl Comb {
         self.left = 0;
     }
 
-    /// One frame in, with no note, for the pool's own use.
-    #[inline]
-    pub fn process_alone(&mut self, input: [f32; 2]) -> [f32; 2] {
-        self.process(input, 60.0, 1.0)
-    }
-
     /// A line's sound a number of frames back, read between samples through four of them.
     #[inline]
     fn read(&self, side: usize, frames: f32) -> f32 {
@@ -747,6 +743,31 @@ impl Loop {
     }
 }
 
+impl SlotEffect for Comb {
+    type Settings = Settings;
+
+    /// A comb's, for its lines.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.quiet_frames()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use vt_model::constants::UNITY_LEVEL;
@@ -885,8 +906,8 @@ mod tests {
     fn its_curve_is_what_a_sweep_through_the_slot_measures() {
         use vt_model::insert::Insert;
 
+        use crate::dsp::effects::slot::Keys;
         use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
-        use crate::track_state::Keys;
         // Each long enough for its loop, ringing longest, to settle within 0.01 dB.
         let cases = [
             (Settings::DEFAULT, 60.0, 3.0),

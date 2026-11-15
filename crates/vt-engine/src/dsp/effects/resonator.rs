@@ -26,6 +26,8 @@ use vt_model::insert::{Resonator as Settings, shift_semitones};
 use crate::dsp::blocks::plaits_parts::{CosineOscillator, STIFFNESS, interpolate, tan_fast};
 use crate::dsp::blocks::response::{Gain, svf, warped};
 use crate::dsp::blocks::smoother::Smoothed;
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::SlotEffect;
 use crate::dsp::voices::drums::soft_clip;
 
 /// How many modes there are, as many as Plaits has.
@@ -377,12 +379,6 @@ impl Resonator {
         self.left = 0;
     }
 
-    /// One frame in, with no note, for the pool's own use.
-    #[inline]
-    pub fn process_alone(&mut self, input: [f32; 2]) -> [f32; 2] {
-        self.process(input, 60.0, 1.0)
-    }
-
     /// One frame of the slot's sound striking the bank, tuned to `note` and its `Tune` above it,
     /// and the frame out, all wet and within full scale.
     #[inline]
@@ -461,6 +457,31 @@ impl Resonator {
     #[cfg(test)]
     fn limiting(&self) -> f32 {
         self.limiter.gain()
+    }
+}
+
+impl SlotEffect for Resonator {
+    type Settings = Settings;
+
+    /// A resonator's, for its modes and their gains.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, _frames: u64) {
+        self.follow(settings);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.quiet_frames()
     }
 }
 
@@ -573,8 +594,8 @@ mod tests {
     fn its_curve_is_what_a_sweep_through_the_slot_measures() {
         use vt_model::insert::Insert;
 
+        use crate::dsp::effects::slot::Keys;
         use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
-        use crate::track_state::Keys;
         let cases = [
             // Long enough for what rings longest, a third of a second at middle C, to settle within
             // 0.01 dB.

@@ -5,8 +5,7 @@
 
 use std::f32::consts::TAU;
 
-use vt_engine::dsp::effects::distort::InsertState;
-use vt_engine::track_state::Keys;
+use vt_engine::dsp::effects::slot::{InsertState, Keys};
 use vt_model::insert::{Distort, DistortType, Insert};
 
 use crate::support::golden;

@@ -75,33 +75,158 @@ struct Gliding {
     share: f64,
 }
 
-/// A synth playing a note. The audio thread can't allocate, so each voice has room for any of them.
-#[derive(Debug, Clone, Copy)]
-#[allow(clippy::large_enum_variant)]
-enum Synth {
+/// What a synth does to play a note on a voice. Each is plain data, held inline in a [`Synth`], so
+/// the audio thread never allocates for one and reaches it through a match, never `dyn`. What
+/// most synths don't do has a default.
+pub(crate) trait SynthEngine: Copy {
+    /// Whether it drifts as an analog synth does, which a seed for each note gives it.
+    const DRIFTS: bool = false;
+    /// Whether it draws noise, which a seed for each note chooses.
+    const NOISE: bool = false;
+
+    /// A new note, at a sample rate.
+    fn new(rate: u32) -> Self;
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32;
+
+    /// The next frame, on both sides: the same on each unless it spreads them, as `Supersaw` does.
+    #[inline]
+    fn next_sides(&mut self, frequency: f32, settings: Settings) -> [f32; 2] {
+        let sample = self.next(frequency, settings);
+        [sample, sample]
+    }
+
+    /// Start a note, for a synth with envelopes of its own that an accent changes.
+    fn trigger(&mut self, _accent: bool) {}
+
+    /// Let go of the note, for a synth with envelopes of its own.
+    fn release(&mut self) {}
+
+    /// Whether nothing it carries from note to note is left, so a voice let go can stop. `Acid`'s
+    /// accent sweep drains between notes, as a 303's does, and the next note carries on from it.
+    fn settled(&self) -> bool {
+        true
+    }
+
+    /// Roll a new note's drift, and its noise floor, from a seed, for a synth that drifts.
+    /// `Drift` as the note starts says whether its oscillators start anywhere in their cycles.
+    fn seed_drift(&mut self, _seed: u32, _settings: Settings) {}
+
+    /// What `Drift` multiplies the note's envelope times by. `Acid`'s own envelopes take it
+    /// themselves.
+    fn time(&self, _settings: Settings) -> f32 {
+        1.0
+    }
+
+    /// Choose the noise of a synth that draws any, so each hit differs but a render repeats.
+    fn seed_noise(&mut self, _seed: u32) {}
+}
+
+/// Writes [`Synth`] from one list of the `SynthVoice`s and the engines that play them: the enum,
+/// `Synth::new` by voice, and the forwarding of each [`SynthEngine`] method.
+macro_rules! synths {
+    ($($voice:ident($engine:ty)),+ $(,)?) => {
+        /// A synth playing a note. The audio thread can't allocate, so each voice has room for any
+        /// of them.
+        #[derive(Debug, Clone, Copy)]
+        #[allow(clippy::large_enum_variant)]
+        enum Synth {
+            $($voice($engine),)+
+        }
+
+        impl Synth {
+            /// A new note on a voice.
+            fn new(voice: SynthVoice, rate: u32) -> Self {
+                match voice {
+                    $(SynthVoice::$voice => Self::$voice(SynthEngine::new(rate)),)+
+                }
+            }
+
+            #[inline]
+            fn next_sides(&mut self, frequency: f32, settings: Settings) -> [f32; 2] {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::next_sides(synth, frequency, settings),)+
+                }
+            }
+
+            fn trigger(&mut self, accent: bool) {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::trigger(synth, accent),)+
+                }
+            }
+
+            fn release(&mut self) {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::release(synth),)+
+                }
+            }
+
+            fn settled(&self) -> bool {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::settled(synth),)+
+                }
+            }
+
+            fn drifts(&self) -> bool {
+                match self {
+                    $(Self::$voice(_) => <$engine as SynthEngine>::DRIFTS,)+
+                }
+            }
+
+            fn seed_drift(&mut self, seed: u32, settings: Settings) {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::seed_drift(synth, seed, settings),)+
+                }
+            }
+
+            fn time(&self, settings: Settings) -> f32 {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::time(synth, settings),)+
+                }
+            }
+
+            fn uses_noise(&self) -> bool {
+                match self {
+                    $(Self::$voice(_) => <$engine as SynthEngine>::NOISE,)+
+                }
+            }
+
+            fn seed_noise(&mut self, seed: u32) {
+                match self {
+                    $(Self::$voice(synth) => SynthEngine::seed_noise(synth, seed),)+
+                }
+            }
+        }
+    };
+}
+
+// Each voice and its engine, in `SynthVoice`'s order.
+synths! {
     VirtualAnalog(VirtualAnalog),
     VirtualAnalogVcf(VirtualAnalogVcf),
     Acid(Acid),
     Supersaw(Supersaw),
     Fm(Fm),
     PhaseDistortion(PhaseDistortion),
+    Waveshaping(Waveshaping),
     Formant(Grain),
     Additive(Additive),
-    Swarm(Swarm),
-    WaveTerrain(WaveTerrain),
-    Chord(Chord),
-    Chiptune(Chiptune),
-    Kick(Kick),
-    Snare(Snare),
-    Hat(Hat),
-    Waveshaping(Waveshaping),
     Wavetable(Wavetable),
+    WaveTerrain(WaveTerrain),
     SixOp(SixOp),
     FourOp(FourOp),
+    Chord(Chord),
+    Chiptune(Chiptune),
+    Swarm(Swarm),
     String(StringModel),
     Modal(Modal),
     Dust(ParticleNoise),
     Noise(Noise),
+    Kick(Kick),
+    Snare(Snare),
+    Hat(Hat),
+    Speech(Speech),
     CSaw(CSaw),
     Morph(Morph),
     SawSquare(SawSquare),
@@ -127,195 +252,6 @@ enum Synth {
     Clocked(ClockedNoise),
     GrainCloud(GranularCloud),
     Modem(DigitalModulation),
-    Speech(Speech),
-}
-
-impl Synth {
-    /// A new note on a voice.
-    fn new(voice: SynthVoice, rate: u32) -> Self {
-        match voice {
-            SynthVoice::VirtualAnalog => Self::VirtualAnalog(VirtualAnalog::new()),
-            SynthVoice::VirtualAnalogVcf => Self::VirtualAnalogVcf(VirtualAnalogVcf::new()),
-            SynthVoice::Acid => Self::Acid(Acid::new(rate)),
-            SynthVoice::Supersaw => Self::Supersaw(Supersaw::new(rate)),
-            SynthVoice::PhaseDistortion => Self::PhaseDistortion(PhaseDistortion::new()),
-            SynthVoice::Formant => Self::Formant(Grain::new()),
-            SynthVoice::Additive => Self::Additive(Additive::new()),
-            SynthVoice::Swarm => Self::Swarm(Swarm::new()),
-            SynthVoice::WaveTerrain => Self::WaveTerrain(WaveTerrain::new()),
-            SynthVoice::Chord => Self::Chord(Chord::new()),
-            SynthVoice::Chiptune => Self::Chiptune(Chiptune::new()),
-            SynthVoice::Fm => Self::Fm(Fm::new(rate)),
-            SynthVoice::Waveshaping => Self::Waveshaping(Waveshaping::new()),
-            SynthVoice::Wavetable => Self::Wavetable(Wavetable::new()),
-            SynthVoice::SixOp => Self::SixOp(SixOp::new(rate)),
-            SynthVoice::FourOp => Self::FourOp(FourOp::new(rate)),
-            SynthVoice::String => Self::String(StringModel::new(rate)),
-            SynthVoice::Modal => Self::Modal(Modal::new()),
-            SynthVoice::Dust => Self::Dust(ParticleNoise::new()),
-            SynthVoice::Noise => Self::Noise(Noise::new()),
-            SynthVoice::Kick => Self::Kick(Kick::new(rate)),
-            SynthVoice::Snare => Self::Snare(Snare::new(rate)),
-            SynthVoice::Hat => Self::Hat(Hat::new(rate)),
-            SynthVoice::CSaw => Self::CSaw(CSaw::new(rate)),
-            SynthVoice::Morph => Self::Morph(Morph::new(rate)),
-            SynthVoice::SawSquare => Self::SawSquare(SawSquare::new(rate)),
-            SynthVoice::HardSync => Self::HardSync(HardSync::new(rate)),
-            SynthVoice::Triple => Self::Triple(Triple::new(rate)),
-            SynthVoice::Ring => Self::Ring(Ring::new(rate)),
-            SynthVoice::SawComb => Self::SawComb(SawComb::new(rate)),
-            SynthVoice::Toy => Self::Toy(Toy::new(rate)),
-            SynthVoice::ZFilter => Self::ZFilter(DigitalFilter::new(rate)),
-            SynthVoice::FeedbackFm => Self::FeedbackFm(FeedbackFm::new(rate)),
-            SynthVoice::ChaoticFm => Self::ChaoticFm(ChaoticFm::new(rate)),
-            SynthVoice::Vosim => Self::Vosim(Vosim::new(rate)),
-            SynthVoice::Fof => Self::Fof(Fof::new(rate)),
-            SynthVoice::Bowed => Self::Bowed(Bowed::new(rate)),
-            SynthVoice::Blown => Self::Blown(Blown::new(rate)),
-            SynthVoice::Fluted => Self::Fluted(Fluted::new(rate)),
-            SynthVoice::Bell => Self::Bell(StruckBell::new(rate)),
-            SynthVoice::Drum => Self::Drum(StruckDrum::new(rate)),
-            SynthVoice::WaveMap => Self::WaveMap(WaveMap::new(rate)),
-            SynthVoice::WaveLine => Self::WaveLine(WaveLine::new(rate)),
-            SynthVoice::Paraphonic => Self::Paraphonic(Paraphonic::new(rate)),
-            SynthVoice::TwinPeaks => Self::TwinPeaks(TwinPeaks::new(rate)),
-            SynthVoice::Clocked => Self::Clocked(ClockedNoise::new(rate)),
-            SynthVoice::GrainCloud => Self::GrainCloud(GranularCloud::new(rate)),
-            SynthVoice::Modem => Self::Modem(DigitalModulation::new(rate)),
-            SynthVoice::Speech => Self::Speech(Speech::new(rate)),
-        }
-    }
-
-    /// The next frame, on both sides: the same on each but for `Supersaw`, which spreads its saws.
-    #[inline]
-    fn next_sides(&mut self, frequency: f32, settings: Settings) -> [f32; 2] {
-        if let Self::Supersaw(synth) = self {
-            return synth.next(frequency, settings);
-        }
-        let sample = self.next(frequency, settings);
-        [sample, sample]
-    }
-
-    #[inline]
-    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        match self {
-            Self::Supersaw(synth) => {
-                let [left, right] = synth.next(frequency, settings);
-                0.5 * (left + right)
-            }
-            Self::VirtualAnalog(synth) => synth.next(frequency, settings),
-            Self::VirtualAnalogVcf(synth) => synth.next(frequency, settings),
-            Self::Acid(synth) => synth.next(frequency, settings),
-            Self::PhaseDistortion(synth) => synth.next(frequency, settings),
-            Self::Formant(synth) => synth.next(frequency, settings),
-            Self::Additive(synth) => synth.next(frequency, settings),
-            Self::Swarm(synth) => synth.next(frequency, settings),
-            Self::WaveTerrain(synth) => synth.next(frequency, settings),
-            Self::Chord(synth) => synth.next(frequency, settings),
-            Self::Chiptune(synth) => synth.next(frequency, settings),
-            Self::Fm(synth) => synth.next(frequency, settings),
-            Self::Kick(synth) => synth.next(frequency, settings),
-            Self::Snare(synth) => synth.next(frequency, settings),
-            Self::Hat(synth) => synth.next(frequency, settings),
-            Self::Waveshaping(synth) => synth.next(frequency, settings),
-            Self::Wavetable(synth) => synth.next(frequency, settings),
-            Self::SixOp(synth) => synth.next(frequency, settings),
-            Self::FourOp(synth) => synth.next(frequency, settings),
-            Self::String(synth) => synth.next(frequency, settings),
-            Self::Modal(synth) => synth.next(frequency, settings),
-            Self::Dust(synth) => synth.next(frequency, settings),
-            Self::Noise(synth) => synth.next(frequency, settings),
-            Self::CSaw(synth) => synth.next(frequency, settings),
-            Self::Morph(synth) => synth.next(frequency, settings),
-            Self::SawSquare(synth) => synth.next(frequency, settings),
-            Self::HardSync(synth) => synth.next(frequency, settings),
-            Self::Triple(synth) => synth.next(frequency, settings),
-            Self::Ring(synth) => synth.next(frequency, settings),
-            Self::SawComb(synth) => synth.next(frequency, settings),
-            Self::Toy(synth) => synth.next(frequency, settings),
-            Self::ZFilter(synth) => synth.next(frequency, settings),
-            Self::FeedbackFm(synth) => synth.next(frequency, settings),
-            Self::ChaoticFm(synth) => synth.next(frequency, settings),
-            Self::Vosim(synth) => synth.next(frequency, settings),
-            Self::Fof(synth) => synth.next(frequency, settings),
-            Self::Bowed(synth) => synth.next(frequency, settings),
-            Self::Blown(synth) => synth.next(frequency, settings),
-            Self::Fluted(synth) => synth.next(frequency, settings),
-            Self::Bell(synth) => synth.next(frequency, settings),
-            Self::Drum(synth) => synth.next(frequency, settings),
-            Self::WaveMap(synth) => synth.next(frequency, settings),
-            Self::WaveLine(synth) => synth.next(frequency, settings),
-            Self::Paraphonic(synth) => synth.next(frequency, settings),
-            Self::TwinPeaks(synth) => synth.next(frequency, settings),
-            Self::Clocked(synth) => synth.next(frequency, settings),
-            Self::GrainCloud(synth) => synth.next(frequency, settings),
-            Self::Modem(synth) => synth.next(frequency, settings),
-            Self::Speech(synth) => synth.next(frequency, settings),
-        }
-    }
-
-    /// Let go of the note, for a synth with envelopes of its own.
-    fn release(&mut self) {
-        match self {
-            Self::SixOp(synth) => synth.release(),
-            Self::FourOp(synth) => synth.release(),
-            Self::Acid(synth) => synth.release(),
-            _ => {}
-        }
-    }
-
-    /// Whether nothing it carries from note to note is left, so a voice let go can stop. `Acid`'s
-    /// accent sweep drains between notes, as a 303's does, and the next note carries on from it.
-    fn settled(&self) -> bool {
-        match self {
-            Self::Acid(synth) => synth.settled(),
-            _ => true,
-        }
-    }
-
-    /// Start a note, for a synth with envelopes of its own that an accent changes.
-    fn trigger(&mut self, accent: bool) {
-        if let Self::Acid(synth) = self {
-            synth.trigger(accent);
-        }
-    }
-
-    /// Whether it drifts as an analog synth does, which a seed for each note gives it.
-    fn drifts(&self) -> bool {
-        matches!(
-            self,
-            Self::VirtualAnalog(_)
-                | Self::VirtualAnalogVcf(_)
-                | Self::Acid(_)
-                | Self::Chiptune(_)
-                | Self::Supersaw(_)
-        )
-    }
-
-    /// Roll a new note's drift, and its noise floor, from a seed. `Drift` as the note starts
-    /// says whether its oscillators start anywhere in their cycles.
-    fn seed_drift(&mut self, seed: u32, settings: Settings) {
-        match self {
-            Self::VirtualAnalog(synth) => synth.seed(seed, settings),
-            Self::VirtualAnalogVcf(synth) => synth.seed(seed, settings),
-            Self::Chiptune(synth) => synth.seed(seed, settings),
-            Self::Supersaw(synth) => synth.seed(seed, settings),
-            Self::Acid(synth) => synth.seed(seed),
-            _ => {}
-        }
-    }
-
-    /// What `Drift` multiplies the note's envelope times by. `Acid`'s own envelopes take it
-    /// themselves.
-    fn time(&self, settings: Settings) -> f32 {
-        match self {
-            Self::VirtualAnalog(synth) => synth.time(settings),
-            Self::VirtualAnalogVcf(synth) => synth.time(settings),
-            Self::Chiptune(synth) => synth.time(settings),
-            Self::Supersaw(synth) => synth.time(settings),
-            _ => 1.0,
-        }
-    }
 }
 
 /// One playing note. It keeps its sample ID until it ends, so replacing an instrument's sample
@@ -469,25 +405,10 @@ impl Voice {
         }
     }
 
-    /// Whether it is sounding.
-    /// Choose the noise of a synth that uses any, so each hit differs but a render repeats.
+    /// Choose the noise of a synth that draws any, so each hit differs but a render repeats.
     pub fn seed_noise(&mut self, seed: u32) {
-        match &mut self.synth {
-            Some(Synth::Snare(synth)) => synth.seed(seed),
-            Some(Synth::Hat(synth)) => synth.seed(seed),
-            Some(Synth::String(synth)) => synth.seed(seed),
-            Some(Synth::Dust(synth)) => synth.seed(seed),
-            Some(Synth::Noise(synth)) => synth.seed(seed),
-            Some(Synth::Swarm(synth)) => synth.seed(seed),
-            Some(Synth::Blown(synth)) => synth.seed(seed),
-            Some(Synth::Fluted(synth)) => synth.seed(seed),
-            Some(Synth::Drum(synth)) => synth.seed(seed),
-            Some(Synth::Paraphonic(synth)) => synth.seed(seed),
-            Some(Synth::TwinPeaks(synth)) => synth.seed(seed),
-            Some(Synth::Clocked(synth)) => synth.seed(seed),
-            Some(Synth::GrainCloud(synth)) => synth.seed(seed),
-            Some(Synth::Speech(synth)) => synth.seed(seed),
-            _ => {}
+        if let Some(synth) = &mut self.synth {
+            synth.seed_noise(seed);
         }
     }
 
@@ -507,27 +428,9 @@ impl Voice {
         self.synth.as_ref().is_some_and(Synth::drifts)
     }
 
-    /// Whether this note's synth draws noise.
+    /// Whether this note's synth draws noise, and so wants [`Voice::seed_noise`].
     pub fn uses_noise(&self) -> bool {
-        matches!(
-            self.synth,
-            Some(
-                Synth::Snare(_)
-                    | Synth::Hat(_)
-                    | Synth::String(_)
-                    | Synth::Dust(_)
-                    | Synth::Noise(_)
-                    | Synth::Swarm(_)
-                    | Synth::Blown(_)
-                    | Synth::Fluted(_)
-                    | Synth::Drum(_)
-                    | Synth::Paraphonic(_)
-                    | Synth::TwinPeaks(_)
-                    | Synth::Clocked(_)
-                    | Synth::GrainCloud(_)
-                    | Synth::Speech(_)
-            )
-        )
+        self.synth.as_ref().is_some_and(Synth::uses_noise)
     }
 
     /// Start the release of a note that would otherwise hold until something ended it.

@@ -24,6 +24,8 @@ use vt_model::insert::{HOLD_REPEATS, REPEAT_LENGTHS, Stutter as Settings, repeat
 use vt_model::lfo::DIVISION_TICKS;
 
 use crate::dsp::blocks::clip::within;
+use crate::dsp::effects::memory::SongPlace;
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::engine::sample_of_tick;
 
 /// The longest it waits for a crossing, in seconds: a little over a period of 80 Hz.
@@ -337,6 +339,42 @@ impl Stutter {
         }
         self.taken.since = self.taken.since.saturating_add(1);
         out
+    }
+}
+
+impl SlotEffect for Stutter {
+    type Settings = Settings;
+
+    /// A stutter's, which holds a beat at the slowest tempo.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, song: SongPlace, _frames: u64) {
+        self.follow(settings, song.frames_per_tick);
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, _rate: u32) -> u32 {
+        self.quiet_frames()
+    }
+
+    fn waking(&self) -> bool {
+        self.waking()
+    }
+
+    fn strike(&mut self) {
+        self.strike();
+    }
+}
+
+impl Rung for Stutter {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 

@@ -22,6 +22,7 @@
 use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
 use crate::dsp::blocks::plaits_parts::OnePole;
 use crate::dsp::blocks::sine_table::SINE;
+use crate::voice::SynthEngine;
 
 /// The highest frequency an oscillator runs at, as a fraction of the sample rate.
 const MAX_FREQUENCY: f32 = 0.25;
@@ -190,6 +191,25 @@ impl Default for Grain {
     }
 }
 
+impl SynthEngine for Grain {
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        if self.at == BLOCK {
+            self.render(frequency.clamp(1e-5, 0.49), settings);
+            self.at = 0;
+        }
+        let sample = self.output[self.at];
+        self.at += 1;
+        // Plaits clips what's left as it turns it into 16-bit samples.
+        (sample * LEVEL).clamp(-1.0, 1.0)
+    }
+}
+
 impl Grain {
     pub fn new() -> Self {
         Self {
@@ -199,19 +219,6 @@ impl Grain {
             at: BLOCK,
             fresh: true,
         }
-    }
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        if self.at == BLOCK {
-            self.render(frequency.clamp(1e-5, 0.49), settings);
-            self.at = 0;
-        }
-        let sample = self.output[self.at];
-        self.at += 1;
-        // Plaits clips what's left as it turns it into 16-bit samples.
-        (sample * LEVEL).clamp(-1.0, 1.0)
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {

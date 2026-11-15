@@ -13,6 +13,7 @@ use vt_model::constants::{
     TAKE_QUEUE, TELEMETRY_QUEUE,
 };
 use vt_model::growing::Growing;
+use vt_model::insert::EffectKind;
 
 use vt_model::sample::SampleData;
 use vt_model::scale::Scale;
@@ -314,88 +315,14 @@ impl Handle {
     /// Make the long buffers a version needs, or ask for back those it doesn't. They go ahead of
     /// it, so what it needs is there when it arrives.
     fn meet_memory_needs(&mut self, needed: MemoryCount) {
-        for _ in self.held.delay..needed.delay {
-            self.unsent.push(Memory::delay(self.rate));
+        for kind in EffectKind::ALL {
+            for _ in self.held[kind]..needed[kind] {
+                self.unsent.extend(Memory::new(kind, self.rate));
+            }
         }
-        for _ in self.held.reverb..needed.reverb {
-            self.unsent.push(Memory::reverb(self.rate));
-        }
-        for _ in self.held.chorus..needed.chorus {
-            self.unsent.push(Memory::chorus(self.rate));
-        }
-        for _ in self.held.limit..needed.limit {
-            self.unsent.push(Memory::limit(self.rate));
-        }
-        for _ in self.held.flanger..needed.flanger {
-            self.unsent.push(Memory::flanger(self.rate));
-        }
-        for _ in self.held.tape..needed.tape {
-            self.unsent.push(Memory::tape(self.rate));
-        }
-        for _ in self.held.plate..needed.plate {
-            self.unsent.push(Memory::plate(self.rate));
-        }
-        for _ in self.held.pitch..needed.pitch {
-            self.unsent.push(Memory::pitch(self.rate));
-        }
-        for _ in self.held.grains..needed.grains {
-            self.unsent.push(Memory::grains(self.rate));
-        }
-        for _ in self.held.warps..needed.warps {
-            self.unsent.push(Memory::warps(self.rate));
-        }
-        for _ in self.held.reso..needed.reso {
-            self.unsent.push(Memory::reso(self.rate));
-        }
-        for _ in self.held.comb..needed.comb {
-            self.unsent.push(Memory::comb(self.rate));
-        }
-        for _ in self.held.freq_shift..needed.freq_shift {
-            self.unsent.push(Memory::freq_shift(self.rate));
-        }
-        for _ in self.held.spring..needed.spring {
-            self.unsent.push(Memory::spring(self.rate));
-        }
-        for _ in self.held.stutter..needed.stutter {
-            self.unsent.push(Memory::stutter(self.rate));
-        }
-        for _ in self.held.rotary..needed.rotary {
-            self.unsent.push(Memory::rotary(self.rate));
-        }
-        for _ in self.held.space..needed.space {
-            self.unsent.push(Memory::space(self.rate));
-        }
-        for _ in self.held.clouds..needed.clouds {
-            self.unsent.push(Memory::clouds(self.rate));
-        }
-        for _ in self.held.beads..needed.beads {
-            self.unsent.push(Memory::beads(self.rate));
-        }
-        for _ in self.held.echo..needed.echo {
-            self.unsent.push(Memory::echo(self.rate));
-        }
-        let spare = MemoryCount {
-            delay: self.held.delay.saturating_sub(needed.delay),
-            reverb: self.held.reverb.saturating_sub(needed.reverb),
-            chorus: self.held.chorus.saturating_sub(needed.chorus),
-            limit: self.held.limit.saturating_sub(needed.limit),
-            flanger: self.held.flanger.saturating_sub(needed.flanger),
-            tape: self.held.tape.saturating_sub(needed.tape),
-            plate: self.held.plate.saturating_sub(needed.plate),
-            pitch: self.held.pitch.saturating_sub(needed.pitch),
-            grains: self.held.grains.saturating_sub(needed.grains),
-            warps: self.held.warps.saturating_sub(needed.warps),
-            reso: self.held.reso.saturating_sub(needed.reso),
-            comb: self.held.comb.saturating_sub(needed.comb),
-            freq_shift: self.held.freq_shift.saturating_sub(needed.freq_shift),
-            spring: self.held.spring.saturating_sub(needed.spring),
-            stutter: self.held.stutter.saturating_sub(needed.stutter),
-            rotary: self.held.rotary.saturating_sub(needed.rotary),
-            space: self.held.space.saturating_sub(needed.space),
-            clouds: self.held.clouds.saturating_sub(needed.clouds),
-            beads: self.held.beads.saturating_sub(needed.beads),
-            echo: self.held.echo.saturating_sub(needed.echo),
-        };
+        let spare = MemoryCount(std::array::from_fn(|at| {
+            self.held.0[at].saturating_sub(needed.0[at])
+        }));
         if spare != MemoryCount::default() {
             self.send(Command::ReleaseMemory(spare));
         }
@@ -744,6 +671,7 @@ mod tests {
     use vt_model::step::{Note, Step};
 
     use super::*;
+    use crate::dsp::memory::BUFFERED;
     use crate::recorder::RecordQuantise;
     use crate::rt_guard::forbidden;
 
@@ -1022,31 +950,13 @@ mod tests {
         more.tracks[5].inserts = [WARPS, COMB, RESO, SHIFT];
         more.tracks[0].inserts[3] = ECHO;
         handle.publish(published(more, &pool));
-        assert_eq!(
-            handle.held,
-            MemoryCount {
-                delay: needed.delay + 1,
-                reverb: needed.reverb + 1,
-                chorus: needed.chorus + 1,
-                limit: needed.limit + 1,
-                flanger: needed.flanger + 1,
-                tape: needed.tape + 1,
-                plate: needed.plate + 1,
-                pitch: needed.pitch + 1,
-                grains: needed.grains + 1,
-                warps: needed.warps + 1,
-                reso: needed.reso + 1,
-                comb: needed.comb + 1,
-                freq_shift: needed.freq_shift + 1,
-                spring: needed.spring + 1,
-                space: needed.space + 1,
-                rotary: needed.rotary + 1,
-                stutter: needed.stutter + 1,
-                clouds: needed.clouds + 1,
-                beads: needed.beads + 1,
-                echo: needed.echo + 1,
+        let mut one_more = needed;
+        for kind in EffectKind::ALL {
+            if BUFFERED[kind as usize] {
+                one_more[kind] += 1;
             }
-        );
+        }
+        assert_eq!(handle.held, one_more);
         blocks(&mut rt, 1);
         assert_eq!(rt.engine().spare_memory(), 0, "the slots have theirs");
 
