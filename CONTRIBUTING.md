@@ -106,6 +106,15 @@ tests' signals in `vt-engine`'s `src/dsp/signals.rs`. One file's tests run with
   the render sounded like: its peak, RMS, DC, where it ends and how bright it is. A changed hash
   fails with each of them before and after and whether it stayed in its band, as a small fix
   keeps it; say in the commit why a sound that left one moved, and the bless's diff shows how.
+- **Screenshots.** The manual's pictures in `docs/manual/src/images/` are goldens too: the test
+  of `vt-tui`'s `screenshots` example makes each one and compares it with the committed SVG, byte
+  for byte, so a change to what a page draws fails `just ci` until they're made again. After a
+  change on purpose, bless them with
+  `VT_BLESS=1 cargo test -p vt-tui --example screenshots` or `just screenshots`, which write the
+  same bytes from the same function, and read the SVGs' diff before committing them. A failing
+  run says which pictures differ and leaves the new ones in a temporary folder it names. A new
+  shot's SVG is committed with it, and a shot taken away takes its SVG with it, as the test also
+  fails on an SVG nothing makes.
 - **The Roto.** `vt-roto`'s tests are the four files in its `tests/`, against the fake Roto in
   memory. The fake is built only with the crate's `fake` feature, which its own tests and
   `vt-tui`'s turn on as a dev-dependency, so a release build leaves it out.

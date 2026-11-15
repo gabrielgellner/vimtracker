@@ -1430,7 +1430,7 @@ every pair of values still met, and all of them under `cargo test --release`.
 | Graphics | Unit tests in `graphics/`, and beside the drawing of the pages, overlays and widgets | The commands sent, and the PNGs, pinned by their size and CRC |
 | Other paths | `crates/vt-tui/tests/all/probe.rs`, `notes.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, `notes`' timing of a song's track, the analysis thread and its cache, and importing kits from Ableton |
 | Comparison harness | `tools/compare/tests/`, with `uv run python -m unittest discover tests` | The Live bridge, against stand-ins for Live's objects. Not in CI, as nothing in `tools/compare` is |
-| Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | Not a test: the SVGs are committed, so a change to what's drawn shows in the PR's diff |
+| Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | The example's own tests: each shot comes out the same twice, and is the committed SVG byte for byte, so a change to what's drawn fails until the SVGs are made again, with `VT_BLESS=1` or `just screenshots`, and then shows in the PR's diff |
 
 `crates/vt-tui/examples/big_image.rs` and `sample_page_cost.rs` measure what sending pictures costs,
 in a real terminal. `just live` drives the release build in a kitty window of its own, to check a
