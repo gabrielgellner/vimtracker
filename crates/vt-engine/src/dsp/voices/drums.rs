@@ -19,11 +19,12 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::virtual_analog::{BLOCK, Settings};
+use super::Settings;
+use super::virtual_analog::BLOCK;
 use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::plaits_parts::Svf;
+use crate::dsp::voices::SynthEngine;
 use crate::rng::Pcg32;
-use crate::voice::SynthEngine;
 
 #[inline]
 fn semitones(interval: f32) -> f32 {

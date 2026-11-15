@@ -28,10 +28,10 @@
 // The loops index by operator and stage, as Plaits does, so the port reads against it line by line.
 #![allow(clippy::needless_range_loop)]
 
-use super::virtual_analog::Settings;
+use super::Settings;
 use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::sine_table::sine_pm;
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 /// How many frames are worked out at once, as in Plaits, whose envelopes move once a block.
 const BLOCK: usize = 24;

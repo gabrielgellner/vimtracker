@@ -30,7 +30,7 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::virtual_analog::Settings;
+use super::Settings;
 use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::coefficient::of_corner;
 use crate::dsp::blocks::drift::Drift;
@@ -39,7 +39,7 @@ use crate::dsp::blocks::smoother::{Smoothed, coefficient as smoothing_coefficien
 use crate::dsp::filters::diode_filter::{
     DiodeFilter, HIGH_PASS_RATIO, RESONANT_SHARE, feedback_coefficient,
 };
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 use vt_model::settings::slide_ms;
 use vt_model::settings::{
     ACID_HIGHEST_CUTOFF, ACID_LOWEST_CUTOFF, acid_cutoff_position, acid_decay_ms, acid_drive_db,

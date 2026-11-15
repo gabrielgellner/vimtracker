@@ -19,9 +19,10 @@
 //! DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-use super::virtual_analog::{BLOCK, Moving, Settings};
+use super::Settings;
+use super::virtual_analog::{BLOCK, Moving};
 use crate::dsp::blocks::sine_table::sine_pm;
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 
 const OVERSAMPLING: usize = 4;
 #[allow(clippy::excessive_precision)]

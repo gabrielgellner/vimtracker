@@ -14,9 +14,10 @@
 
 use wide::f32x4;
 
-use super::virtual_analog::{BLOCK, Settings};
+use super::Settings;
+use super::virtual_analog::BLOCK;
 use crate::dsp::blocks::oversampler::Decimator;
-use crate::voice::SynthEngine;
+use crate::dsp::voices::SynthEngine;
 use vt_model::settings::{FOUR_OP_ALGORITHMS, FOUR_OP_EACH, FOUR_OP_SHARED};
 
 /// How many operators, one to a lane.

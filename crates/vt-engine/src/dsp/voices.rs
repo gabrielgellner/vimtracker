@@ -1,7 +1,8 @@
 //! The voices, which make a track's sound from its notes. Most are ported from Mutable Instruments'
-//! Plaits, and share its settings, blocks and band-limited steps through [`virtual_analog`]; the
+//! Plaits, and share its blocks and band-limited steps through [`virtual_analog`]; the
 //! `braids_` ones are from Braids, its older macro-oscillator, and run at twice the rate through
-//! `braids_parts`. The tables they read are in `voices/tables/`.
+//! `braids_parts`. The tables they read are in `voices/tables/`. What each implements,
+//! [`SynthEngine`], and the [`Settings`] it's given are here.
 
 pub(crate) mod acid;
 pub(crate) mod additive;
@@ -37,3 +38,106 @@ pub(crate) mod wave_terrain;
 pub(crate) mod waveshaping;
 mod waveshaping_tables;
 pub(crate) mod wavetable;
+
+use vt_model::settings::MAX_MACHINE_SETTINGS;
+
+/// What a synth does to play a note on a voice. Each is plain data, held inline in a `Synth`, so
+/// the audio thread never allocates for one and reaches it through a match, never `dyn`. What
+/// most synths don't do has a default.
+pub(crate) trait SynthEngine: Copy {
+    /// Whether it drifts as an analog synth does, which a seed for each note gives it.
+    const DRIFTS: bool = false;
+    /// Whether it draws noise, which a seed for each note chooses.
+    const NOISE: bool = false;
+
+    /// A new note, at a sample rate.
+    fn new(rate: u32) -> Self;
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32;
+
+    /// The next frame, on both sides: the same on each unless it spreads them, as `Supersaw` does.
+    #[inline]
+    fn next_sides(&mut self, frequency: f32, settings: Settings) -> [f32; 2] {
+        let sample = self.next(frequency, settings);
+        [sample, sample]
+    }
+
+    /// Start a note, for a synth with envelopes of its own that an accent changes.
+    fn trigger(&mut self, _accent: bool) {}
+
+    /// Let go of the note, for a synth with envelopes of its own.
+    fn release(&mut self) {}
+
+    /// Whether nothing it carries from note to note is left, so a voice let go can stop. `Acid`'s
+    /// accent sweep drains between notes, as a 303's does, and the next note carries on from it.
+    fn settled(&self) -> bool {
+        true
+    }
+
+    /// Roll a new note's drift, and its noise floor, from a seed, for a synth that drifts.
+    /// `Drift` as the note starts says whether its oscillators start anywhere in their cycles.
+    fn seed_drift(&mut self, _seed: u32, _settings: Settings) {}
+
+    /// What `Drift` multiplies the note's envelope times by. `Acid`'s own envelopes take it
+    /// themselves.
+    fn time(&self, _settings: Settings) -> f32 {
+        1.0
+    }
+
+    /// Choose the noise of a synth that draws any, so each hit differs but a render repeats.
+    fn seed_noise(&mut self, _seed: u32) {}
+}
+
+/// The settings, each on `0..=1`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Settings {
+    /// Detunes the saw from the square, with the middle in tune.
+    pub harmonics: f32,
+    /// The square, from nothing to a narrow pulse, to a full square, to hard sync.
+    pub timbre: f32,
+    /// The saw, from a triangle to a saw, to a saw with a widening notch.
+    pub morph: f32,
+    /// How hard a note is struck, for the voices that use it. Plaits' default is 0.8.
+    pub accent: f32,
+    /// The settings after the first four, for a voice with more.
+    pub further: [f32; MAX_MACHINE_SETTINGS - 4],
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            harmonics: 0.5,
+            timbre: 0.0,
+            morph: 0.5,
+            accent: 0.8,
+            further: [0.0; MAX_MACHINE_SETTINGS - 4],
+        }
+    }
+}
+
+impl Settings {
+    /// A setting by its place among the voice's.
+    #[inline]
+    pub(crate) fn at(&self, place: usize) -> f32 {
+        match place {
+            0 => self.harmonics,
+            1 => self.timbre,
+            2 => self.morph,
+            3 => self.accent,
+            _ => self.further.get(place - 4).copied().unwrap_or(0.0),
+        }
+    }
+
+    /// The settings in their places, as the track holds them.
+    pub(crate) fn from_places(places: [f32; MAX_MACHINE_SETTINGS]) -> Self {
+        let [harmonics, timbre, morph, accent, further @ ..] = places;
+        Self {
+            harmonics,
+            timbre,
+            morph,
+            accent,
+            further,
+        }
+    }
+}
