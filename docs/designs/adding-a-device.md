@@ -47,8 +47,10 @@ in its row and its Roto layout in `layouts.rs`, and neither is worked out from t
    (`colour`, `dynamics`, `filters`, `modulation`, `pitch` or `space`):
    - the struct, `#[serde(default)]`, with `DEFAULT` and `Default`;
    - `effect_settings!`, listing its fields in the order its `*_PARAMS` keeps them;
-   - `*_PARAMS`, with `*_GRID` if it places its settings by meaning, or `*_SHOWN` if each type shows
-     its own;
+   - `*_PARAMS`, a list of the registry's `Entry`s, each with its kind, units, default and place
+     (decision 357), with `*_GRID` if it places its settings by meaning, or `*_SHOWN` if each type
+     shows its own. The FX page, `K`, typing and the status line read them through
+     `Entry::described`, so they need nothing of their own;
    - a new `Units` in `settings/units.rs`, only if none fits.
 
    `insert/tests.rs` checks the defaults, the order, the ranges and `MAX_PARAMS`.
@@ -106,7 +108,9 @@ its own named in `effect_golden`. The release tests.
    role, gate). The compiler asks for the row, and `Machine::ALL` won't build unless each voice is
    in exactly one kind.
 2. **`vt-model/src/settings/voices.rs`**: its list of `Entry`s, which its row names, at most
-   `MAX_MACHINE_SETTINGS`. `machine.rs`'s tests check that its grid places each setting once.
+   `MAX_MACHINE_SETTINGS`, each `place: Place::Own`. `machine.rs`'s tests check that its grid
+   places each setting once. The Sound page's cells, `K` and typing read them through
+   `Entry::described`.
 3. **Its DSP**, in `vt-engine/src/dsp/voices/<name>.rs`, with a `pub(crate) mod` line in
    `dsp/voices.rs`. Implement that file's `SynthEngine`: `new` and `next`, and `DRIFTS`, `NOISE`,
    `trigger`, `release` and the rest only where it has them. It reads each setting with
