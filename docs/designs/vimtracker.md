@@ -641,7 +641,10 @@ of decoded audio at the program's rate, and `bank`, 256 places of `Option<Arc<Pl
 each bank number. It also carries what's worked out once rather than every block: how far ahead
 steps are worked out so a groove or a nudge can play them early (`lead` and `groove_lead`), and
 flags that let the engine skip looking for nudges, `GRV`, `RATE` and other speeds in a song that has
-none.
+none. Those come from reading every row, so each track's part of them (`TrackRows`: the grooves
+its steps choose, its earliest nudge, its longest step) is kept with the version, and
+`Published::after` reads again only a track that isn't the very one the last version had, by
+`Tracks::same`.
 
 For live generators it carries the steps under each one, which a moving generator renders from.
 Beside it, not in it, goes a `GenScratch`, room made ahead for every track's runs and cells:
