@@ -9,15 +9,16 @@ use vt_model::scale::Scale;
 use vt_model::song::{Song, trim_gain};
 use vt_model::speed::Speed;
 
-use crate::dsp::memory::MemoryPool;
-use crate::dsp::smoother::{coefficient, fast_coefficient};
+use crate::dsp::blocks::smoother::{coefficient, fast_coefficient};
+use crate::dsp::effects::memory::MemoryPool;
+use crate::dsp::effects::slot::Keys;
 use crate::gens::{GenHeard, GenReport, GenScratch};
 use crate::mixer::Reading;
 use crate::preview::{Files, Previews};
 use crate::published::Published;
 use crate::recorder::Recorder;
 use crate::timing::Stopwatch;
-use crate::track_state::{Keys, MasterRest, SongTime, TrackState};
+use crate::track_state::{MasterRest, SongTime, TrackState};
 
 mod block;
 mod controls;

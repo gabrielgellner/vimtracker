@@ -5,9 +5,10 @@ use vt_model::settings::SettingId;
 use vt_model::song::{FilterMode, FilterType};
 
 use crate::dsp::blocks::sides::same_sides;
-use crate::dsp::filter::{Coefficients, Ramp, safe_resonance};
+use crate::dsp::effects::slot::Keys;
+use crate::dsp::filters::filter::{Coefficients, Ramp, safe_resonance};
 
-use super::{Keys, TrackState};
+use super::TrackState;
 
 /// How often filter coefficients are recalculated while the cutoff moves, in frames. The track's
 /// filter ramps to each new set over as many frames.

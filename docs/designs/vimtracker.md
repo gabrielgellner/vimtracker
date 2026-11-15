@@ -284,8 +284,8 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     button's press back into the `Action` a key would give ([`roto-control.md`](roto-control.md)).
 *   **What the interface borrows from the engine.** Besides `Published` and the queues, `vt-tui`
     calls the engine's DSP to draw what a sound does: the track filter's response, a compressor's
-    static curve and an EQ's response come from `dsp::filter`, `dsp::compressor` and `dsp::eq`, so a
-    drawing is the sound's own maths. `dsp.rs` re-exports those at their old paths.
+    static curve and an EQ's response come from `dsp::filters::filter`, `dsp::dynamics::compressor`
+    and `dsp::dynamics::eq`, so a drawing is the sound's own maths.
 *   **A new setting needs no new interface.** Every setting a step can lock or a modulator can move
     is registered once, in `vt-model`'s `settings.rs`, with the key songs store it by, a name, a
     label for the grid, a kind and a default. The track page, `K`, the grid and the engine all read
@@ -731,9 +731,8 @@ implements `SlotEffect` (and `Rung`, if the slot plays it through `ring`) and ta
 `memories!`; the slot reaches it by `match`, never `dyn` (decision 340). A part that two folders
 would share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of
 #260, goes in `blocks/`. A binary table sits in a `tables/` beside the modules that read it, so
-their `include_bytes!` paths stay short. `dsp.rs` re-exports the modules used outside `dsp` at their
-old paths, such as `dsp::filter` and `dsp::compressor`, so the rest of the engine and `vt-tui` name
-them as before.
+their `include_bytes!` paths stay short. The rest of the engine and `vt-tui` name each module by its
+folder, as `dsp::filters::filter` and `dsp::dynamics::compressor`.
 
 Where the unclear ones went: `comb`, `lpg` and `vowel` are slot effects, but filters by what they do,
 as Vital files its comb and formant filters. `resonator` is the `Reso` slot effect's code; the `Modal`

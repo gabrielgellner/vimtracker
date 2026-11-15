@@ -11,7 +11,7 @@ use vt_model::settings::{
 use vt_model::song::{Track, level_gain};
 use vt_model::step::{FxSlot, Mark};
 
-use crate::dsp::virtual_analog::Settings;
+use crate::dsp::voices::virtual_analog::Settings;
 
 use super::TrackState;
 use super::mods::SongTime;

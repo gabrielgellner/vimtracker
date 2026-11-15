@@ -9,10 +9,10 @@
 
 use std::cmp::Ordering;
 
-use vt_engine::dsp::compressor::curve_db;
-use vt_engine::dsp::distort::transfer;
-use vt_engine::dsp::eq::response_db as eq_response_db;
-use vt_engine::dsp::filter::track_response_db;
+use vt_engine::dsp::dynamics::compressor::curve_db;
+use vt_engine::dsp::dynamics::eq::response_db as eq_response_db;
+use vt_engine::dsp::effects::distort::transfer;
+use vt_engine::dsp::filters::filter::track_response_db;
 use vt_model::attractor::{Attractor, System, view};
 use vt_model::envelope::{Adsr, Envelope};
 use vt_model::insert::{Compressor, Distort, Equaliser, threshold_db};

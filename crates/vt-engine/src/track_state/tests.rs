@@ -2,6 +2,8 @@ use vt_model::modulation::ModKind;
 use vt_model::song::{Machine, level_gain};
 use vt_model::step::Mark;
 
+use crate::dsp::effects::slot::Keys;
+
 use super::mods::in_scale;
 use super::shaping::{pan_gains, pan_position};
 use super::*;

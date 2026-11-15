@@ -623,7 +623,7 @@ impl FourOp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dsp::virtual_analog::VirtualAnalog;
+    use crate::dsp::voices::virtual_analog::VirtualAnalog;
     use vt_model::settings::{MAX_MACHINE_SETTINGS, SettingId};
     use vt_model::song::SynthVoice;
 
@@ -873,13 +873,13 @@ mod tests {
         time("4-op, all bending, with a warp and a wave", || {
             voice.next(black_box(0.004_6), busy)
         });
-        let mut fm = crate::dsp::fm::Fm::new(RATE);
+        let mut fm = crate::dsp::voices::fm::Fm::new(RATE);
         let bent = Settings {
             timbre: 0.5,
             ..Settings::default()
         };
         time("FM", || fm.next(black_box(0.004_6), bent));
-        let mut six_op = crate::dsp::six_op::SixOp::new(RATE);
+        let mut six_op = crate::dsp::voices::six_op::SixOp::new(RATE);
         time("6-op", || {
             six_op.next(black_box(0.004_6), Settings::default())
         });

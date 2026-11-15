@@ -447,8 +447,8 @@ impl Supersaw {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dsp::swarm::Swarm;
-    use crate::dsp::virtual_analog::{BLOCK, VirtualAnalog};
+    use crate::dsp::voices::swarm::Swarm;
+    use crate::dsp::voices::virtual_analog::{BLOCK, VirtualAnalog};
     use vt_model::settings::MAX_MACHINE_SETTINGS;
 
     const RATE: u32 = 48_000;

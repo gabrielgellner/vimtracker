@@ -12,7 +12,7 @@ use vt_model::samples::SampleId;
 use vt_model::settings::{PlayMode, SettingId};
 use vt_model::song::{Song, Track};
 
-use crate::dsp::memory::{Memory, MemoryCount};
+use crate::dsp::effects::memory::{Memory, MemoryCount};
 use crate::gens::GenScratch;
 use crate::published::{Bank, Published, Span};
 use crate::track_state::base_of;
