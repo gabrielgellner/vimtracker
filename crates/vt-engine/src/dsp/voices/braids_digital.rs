@@ -25,6 +25,8 @@ use super::braids_parts::{
     AnalogOscillator, INNER, MODERATE_OVERDRIVE, Macro, Model, NO_SYNC, Pitch, Shape, sine,
     waveshape,
 };
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// A sine ring modulated by two more, each up to 32 semitones either way of the note.
 pub(crate) type Ring = Macro<RingModel>;
@@ -46,10 +48,12 @@ impl Model for RingModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
+        const FIRST: usize = voice_place(SynthVoice::Ring, "first");
+        const SECOND: usize = voice_place(SynthVoice::Ring, "second");
         let increments = [
             pitch.increment(0.0),
-            pitch.increment((settings.at(0) - 0.5) * 64.0),
-            pitch.increment((settings.at(1) - 0.5) * 64.0),
+            pitch.increment((settings.at(FIRST) - 0.5) * 64.0),
+            pitch.increment((settings.at(SECOND) - 0.5) * 64.0),
         ];
         for out in out.iter_mut() {
             for (phase, increment) in self.phases.iter_mut().zip(increments) {
@@ -90,7 +94,9 @@ impl Model for SawCombModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (tuning, feedback) = (settings.at(0), settings.at(1));
+        const TUNE: usize = voice_place(SynthVoice::SawComb, "tune");
+        const FEEDBACK: usize = voice_place(SynthVoice::SawComb, "feedback");
+        let (tuning, feedback) = (settings.at(TUNE), settings.at(FEEDBACK));
         let increment = pitch.increment(0.0);
         self.saw
             .render(Shape::Saw, increment, 0.0, 0.0, &NO_SYNC, out, None);
@@ -143,10 +149,12 @@ impl Model for ToyModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
+        const CLOCK: usize = voice_place(SynthVoice::Toy, "clock");
+        const BEND: usize = voice_place(SynthVoice::Toy, "bend");
         // In Braids' own whole numbers, as it's made of their bits.
         let increment = (pitch.increment(0.0) * 4_294_967_296.0 / 4.0) as u32;
-        let rate = (settings.at(0) * 32_767.0) as u16;
-        let bend = ((settings.at(1) * 32_767.0) as u16 >> 8) as u8;
+        let rate = (settings.at(CLOCK) * 32_767.0) as u16;
+        let bend = ((settings.at(BEND) * 32_767.0) as u16 >> 8) as u8;
         // How many of its four steps a frame each held value lasts.
         let count = 512 - (rate >> 6);
         for out in out.iter_mut() {

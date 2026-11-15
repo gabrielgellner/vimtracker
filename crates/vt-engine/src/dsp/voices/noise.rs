@@ -24,6 +24,8 @@ use super::virtual_analog::{next_blep, this_blep};
 use crate::dsp::blocks::plaits_parts::{Limiter, Svf, tan_accurate};
 use crate::dsp::voices::SynthEngine;
 use crate::rng::Pcg32;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
@@ -156,9 +158,12 @@ impl Noise {
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
-        let mode = settings.harmonics.clamp(0.0, 1.0);
-        let timbre = settings.timbre.clamp(0.0, 1.0);
-        let morph = settings.morph.clamp(0.0, 1.0);
+        const TYPE: usize = voice_place(SynthVoice::Noise, "type");
+        const CLOCK: usize = voice_place(SynthVoice::Noise, "clock");
+        const RING: usize = voice_place(SynthVoice::Noise, "ring");
+        let mode = settings.at(TYPE).clamp(0.0, 1.0);
+        let timbre = settings.at(CLOCK).clamp(0.0, 1.0);
+        let morph = settings.at(RING).clamp(0.0, 1.0);
         // The clock runs from two octaves below the lowest note to the top of the range.
         let clock_f = note_frequency(timbre * 152.0 - 24.0);
         let q = 0.5 * semitones(morph * 120.0);

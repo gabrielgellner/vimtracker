@@ -21,11 +21,13 @@
 
 use super::Settings;
 use super::variable_shape::VariableShape;
-use super::virtual_analog::{BLOCK, DRIFT, Moving};
+use super::virtual_analog::{BLOCK, Moving};
 use crate::dsp::blocks::clip::soft_clip;
 use crate::dsp::blocks::drift::Drift;
 use crate::dsp::blocks::plaits_parts::{DcBlocker, Svf};
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// How loud it is against the other machines. Its filter and clipping leave it near the virtual
 /// analog voice's level already: at 220 Hz with the filter half open, a saw is a decibel under it
@@ -66,6 +68,12 @@ impl Default for VirtualAnalogVcf {
         Self::new()
     }
 }
+
+/// Where its settings are among the voice's, by the keys they're stored under.
+const RESONANCE: usize = voice_place(SynthVoice::VirtualAnalogVcf, "resonance");
+const FREQUENCY: usize = voice_place(SynthVoice::VirtualAnalogVcf, "frequency");
+const WAVE: usize = voice_place(SynthVoice::VirtualAnalogVcf, "wave");
+const DRIFT: usize = voice_place(SynthVoice::VirtualAnalogVcf, "drift");
 
 impl SynthEngine for VirtualAnalogVcf {
     const DRIFTS: bool = true;
@@ -122,9 +130,9 @@ impl VirtualAnalogVcf {
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
-        let harmonics = settings.harmonics.clamp(0.0, 1.0);
-        let timbre = settings.timbre.clamp(0.0, 1.0);
-        let morph = settings.morph.clamp(0.0, 1.0);
+        let harmonics = settings.at(RESONANCE).clamp(0.0, 1.0);
+        let timbre = settings.at(FREQUENCY).clamp(0.0, 1.0);
+        let morph = settings.at(WAVE).clamp(0.0, 1.0);
 
         // From a saw at a quarter, to a square at a half, to a narrow pulse and back to a square,
         // with the sub-oscillator coming in at either end.

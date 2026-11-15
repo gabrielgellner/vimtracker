@@ -12,6 +12,7 @@ use super::{
     ROTARY_PARAMS, SPACE_PARAMS, SPRING_GRID, SPRING_PARAMS, STUTTER_GRID, STUTTER_PARAMS,
     TAPE_PARAMS, VOWEL_PARAMS, WARPS_PARAMS,
 };
+use crate::settings::same_key;
 
 impl EffectKind {
     /// Its description.
@@ -85,7 +86,7 @@ pub struct Mode {
 pub(super) const fn place_of(params: &[Param], key: &str) -> u8 {
     let mut at = 0;
     while at < params.len() {
-        if same(params[at].key.as_bytes(), key.as_bytes()) {
+        if same_key(params[at].key, key) {
             return at as u8;
         }
         at += 1;
@@ -102,20 +103,6 @@ pub(super) const fn places_of<const N: usize>(params: &[Param], keys: [&str; N])
         at += 1;
     }
     places
-}
-
-const fn same(one: &[u8], other: &[u8]) -> bool {
-    if one.len() != other.len() {
-        return false;
-    }
-    let mut at = 0;
-    while at < one.len() {
-        if one[at] != other[at] {
-            return false;
-        }
-        at += 1;
-    }
-    true
 }
 
 /// Every place among an effect's settings, for one that shows them all.

@@ -23,6 +23,8 @@ use super::Settings;
 use crate::dsp::blocks::plaits_parts::{CosineOscillator, Limiter, Svf, tan_dirty};
 use crate::dsp::voices::SynthEngine;
 use crate::rng::Pcg32;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
@@ -223,6 +225,11 @@ impl Default for ParticleNoise {
     }
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const SPREAD: usize = voice_place(SynthVoice::Dust, "spread");
+const DENSITY: usize = voice_place(SynthVoice::Dust, "density");
+const FILTER: usize = voice_place(SynthVoice::Dust, "filter");
+
 impl SynthEngine for ParticleNoise {
     const NOISE: bool = true;
 
@@ -263,9 +270,9 @@ impl ParticleNoise {
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
-        let harmonics = settings.harmonics.clamp(0.0, 1.0);
-        let timbre = settings.timbre.clamp(0.0, 1.0);
-        let morph = settings.morph.clamp(0.0, 1.0);
+        let harmonics = settings.at(SPREAD).clamp(0.0, 1.0);
+        let timbre = settings.at(DENSITY).clamp(0.0, 1.0);
+        let morph = settings.at(FILTER).clamp(0.0, 1.0);
         let density_sqrt = note_frequency(60.0 + timbre * timbre * 72.0);
         let density = density_sqrt * density_sqrt * (1.0 / PARTICLES as f32);
         let gain = 1.0 / density;

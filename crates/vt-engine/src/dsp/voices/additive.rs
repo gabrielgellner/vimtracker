@@ -25,6 +25,8 @@ use super::virtual_analog::{BLOCK, Moving};
 use crate::dsp::blocks::plaits_parts::interpolate;
 use crate::dsp::blocks::sine_table::SINE;
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// How many harmonics are summed.
 const HARMONICS: usize = 24;
@@ -70,6 +72,11 @@ impl Default for Additive {
         Self::new()
     }
 }
+
+/// Where its settings are among the voice's, by the keys they're stored under.
+const BUMPS: usize = voice_place(SynthVoice::Additive, "bumps");
+const PEAK: usize = voice_place(SynthVoice::Additive, "peak");
+const SHAPE: usize = voice_place(SynthVoice::Additive, "shape");
 
 impl SynthEngine for Additive {
     fn new(_rate: u32) -> Self {
@@ -134,9 +141,9 @@ impl Additive {
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
-        let raw_bumps = settings.harmonics.clamp(0.0, 1.0);
-        let centroid = settings.timbre.clamp(0.0, 1.0);
-        let raw_slope = (1.0 - 0.6 * raw_bumps) * settings.morph.clamp(0.0, 1.0);
+        let raw_bumps = settings.at(BUMPS).clamp(0.0, 1.0);
+        let centroid = settings.at(PEAK).clamp(0.0, 1.0);
+        let raw_slope = (1.0 - 0.6 * raw_bumps) * settings.at(SHAPE).clamp(0.0, 1.0);
         let slope = 0.01 + 1.99 * raw_slope * raw_slope * raw_slope;
         let bumps = 16.0 * raw_bumps * raw_bumps;
         self.update_spectrum(centroid, slope, bumps);

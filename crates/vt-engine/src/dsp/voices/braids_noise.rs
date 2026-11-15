@@ -25,6 +25,8 @@ use super::Settings;
 use super::braids_parts::{
     BRAIDS_BLOCK, INNER, Lcg, MODERATE_OVERDRIVE, Macro, Model, Pitch, sine, waveshape, whole,
 };
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// Noise through two resonant peaks, one at the note and one up to five octaves either way.
 pub(crate) type TwinPeaks = Macro<TwinPeaksModel>;
@@ -172,7 +174,9 @@ impl Model for TwinPeaksModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (sharpness, spacing) = (whole(settings.at(0)), whole(settings.at(1)));
+        const SHARPNESS: usize = voice_place(SynthVoice::TwinPeaks, "sharpness");
+        const SPACING: usize = voice_place(SynthVoice::TwinPeaks, "spacing");
+        let (sharpness, spacing) = (whole(settings.at(SHARPNESS)), whole(settings.at(SPACING)));
         // In 64 bits, as Braids works these out unsigned, past what 32 signed bits hold.
         let q = i64::from(65_240 + (sharpness >> 7));
         let q_squared = ((q * q) >> 17) as i32;
@@ -231,8 +235,10 @@ impl Model for ClockedNoiseModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
+        const LOOP: usize = voice_place(SynthVoice::Clocked, "loop");
+        const STEPS: usize = voice_place(SynthVoice::Clocked, "steps");
         // A little hysteresis, so a setting resting between two values doesn't flicker.
-        let (length, steps) = (whole(settings.at(0)), whole(settings.at(1)));
+        let (length, steps) = (whole(settings.at(LOOP)), whole(settings.at(STEPS)));
         let [mut held_length, mut held_steps] = self.held.unwrap_or([length, steps]);
         if (steps - held_steps).abs() > 64 {
             held_steps = steps;
@@ -311,7 +317,9 @@ impl Model for GranularCloudModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (length, spread) = (whole(settings.at(0)), whole(settings.at(1)));
+        const LENGTH: usize = voice_place(SynthVoice::GrainCloud, "length");
+        const SPREAD: usize = voice_place(SynthVoice::GrainCloud, "spread");
+        let (length, spread) = (whole(settings.at(LENGTH)), whole(settings.at(SPREAD)));
         let increment = (pitch.increment(0.0) * 4_294_967_296.0) as u32;
         // Braids gives each idle grain a quarter's chance to start each of its blocks, and these
         // blocks are longer, so the chance is too.
@@ -376,7 +384,9 @@ impl Model for DigitalModulationModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (rate, data) = (settings.at(0), whole(settings.at(1)));
+        const BAUD: usize = voice_place(SynthVoice::Modem, "baud");
+        const DATA: usize = voice_place(SynthVoice::Modem, "data");
+        let (rate, data) = (settings.at(BAUD), whole(settings.at(DATA)));
         let increment = pitch.increment(0.0);
         // Symbols from an octave under the note, down to three more octaves under.
         let symbol_increment = pitch.increment(-12.0 - (1.0 - rate) * 32.0);
