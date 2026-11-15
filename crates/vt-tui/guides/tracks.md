@@ -2181,6 +2181,9 @@ stays where it is. Moving the value by hand takes it over from the steps, marked
 `󰝁`, until `Space e` gives the track's faders back, or `Space E` every track's: see
 **Fader automation and relative modulation** in **FX commands**.
 
+A fader a macro holds shows where the macro puts it, as on the track page, and its fader
+beside the meters stands there too; see **Macros**.
+
 The tracks come first, then the groups, then `A`, `B` and `M`, with a gap between each
 part, and a rule over each part's strips names it, `Tracks`, `Groups` or `Returns`, the
 master being under `Returns`. The part with the cursor has the brighter rule. Under a
