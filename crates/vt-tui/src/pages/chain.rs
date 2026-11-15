@@ -5,19 +5,24 @@
 //! copied, its moves between the columns, the edits of a row, `yy` and `p`, and its drawing, in
 //! `draw`, given a [`Ctx`]. It's a [`Page`], with its rows of the binding table, [`Page::KEYS`],
 //! here beside it. Going to another row moves the cursor every page shares and the phrase view's
-//! first row, so it's `App`'s, in `app/tree.rs`, as are `dd`, which keeps the cursor on a
-//! row, the phrase picker, Insert, `;`, and the tree's own keys, `gd`, `grr`, `gc` and `gC`.
+//! first row, so it's `App`'s, in the `impl App` below, as are `dd`, which keeps the cursor on a
+//! row, the phrase picker, Insert and `;`. The tree's own keys, `gd`, `grr`, `gc` and `gC`, are in
+//! `app/tree.rs`.
 
 pub mod draw;
 
 use ratatui::Frame;
+use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Rect;
 use vt_model::action::Action;
 use vt_model::constants::{MAX_TRANSPOSE, MIN_TRANSPOSE};
 use vt_model::selection::Motion;
 use vt_model::song::ChainEntry;
 
+use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
+use crate::input::mode::Mode;
+use crate::overlays::picker::{Item, Pick, Picker};
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
 use crate::services::Services;
 
@@ -204,5 +209,210 @@ impl Page for ChainView {
             ChainColumn::Phrase => "Phrase".to_owned(),
             ChainColumn::Transpose => "Transpose".to_owned(),
         }
+    }
+}
+
+impl App {
+    /// List the phrases to choose from for this row, with the one it plays highlighted.
+    fn open_phrase_picker(&mut self) {
+        if self.chain_view.column != ChainColumn::Phrase {
+            self.services.status = "K chooses a phrase on the Phrase column".to_owned();
+            return;
+        }
+        let Some(_) = self.services.chain_id() else {
+            self.services.status = "This track has no chain".to_owned();
+            return;
+        };
+        let current = self
+            .services
+            .chain_entries()
+            .get(self.services.cursor.slot)
+            .map(|e| e.phrase);
+        let phrases: Vec<(u32, usize)> =
+            self.services.track_here().map_or_else(Vec::new, |track| {
+                track
+                    .phrases
+                    .iter()
+                    .map(|(id, phrase)| (*id, phrase.len()))
+                    .collect()
+            });
+        let position = phrases.iter().position(|(id, _)| Some(*id) == current);
+        let items = phrases
+            .iter()
+            .map(|(id, length)| {
+                let shared = if self.services.phrase_uses(*id).len() > 1 {
+                    "*"
+                } else {
+                    ""
+                };
+                Item::new(format!("{id:02X}{shared}"), Pick::RowPhrase(*id))
+                    .meaning(format!("{length} steps"))
+            })
+            .collect();
+        self.show_picker(Picker::new("Phrases", items).opened_on(position));
+    }
+
+    /// Play a chosen phrase on this row, or on a new one if the cursor is past the last.
+    pub(crate) fn pick_row_phrase(&mut self, phrase: u32) {
+        let Some(chain) = self.services.chain_id() else {
+            return;
+        };
+        let slot = self.services.cursor.slot;
+        let action = match self.services.chain_entries().get(slot).copied() {
+            Some(entry) => Action::SetChainEntry {
+                track: self.services.cursor.track,
+                chain,
+                slot,
+                entry: ChainEntry { phrase, ..entry },
+            },
+            None => Action::InsertChainEntry {
+                track: self.services.cursor.track,
+                chain,
+                at: slot,
+                entry: ChainEntry {
+                    phrase,
+                    transpose: 0,
+                },
+            },
+        };
+        self.services.apply(&action);
+    }
+
+    /// Run a command the chain view passed back: a move to another row, `dd`, which keeps the
+    /// cursor on a row, the phrase picker, Insert or `;`. Returns false if it means the same as
+    /// anywhere, or is the tree's.
+    pub(crate) fn run_chain_passed(&mut self, cmd: Cmd) -> bool {
+        let count = self.modes.count.take();
+        let times = count.unwrap_or(1).max(1);
+        let rows = self.services.chain_entries().len();
+        let chain = self.services.chain_id();
+        match cmd {
+            Cmd::Move(Motion::Down) => {
+                self.move_slot((self.services.cursor.slot + times).min(rows))
+            }
+            Cmd::Move(Motion::Up) => {
+                self.move_slot(self.services.cursor.slot.saturating_sub(times))
+            }
+            Cmd::Move(Motion::First) => self.move_slot(0),
+            Cmd::Move(Motion::Last) => self.move_slot(rows),
+            Cmd::Audition if self.services.cursor.slot < rows => {
+                let section_step = self.services.section_step(self.modes.view);
+                self.audition(section_step);
+            }
+            Cmd::Audition => {}
+            Cmd::PickValue => self.open_phrase_picker(),
+            Cmd::RemoveRow => {
+                if let (Some(chain), Some(entry)) = (
+                    chain,
+                    self.services
+                        .chain_entries()
+                        .get(self.services.cursor.slot)
+                        .copied(),
+                ) {
+                    self.chain_view.yanked = Some(entry);
+                    self.services.apply(&Action::RemoveChainEntry {
+                        track: self.services.cursor.track,
+                        chain,
+                        at: self.services.cursor.slot,
+                    });
+                    self.services.clamp_cursor(self.modes.view);
+                }
+            }
+            Cmd::EnterInsert => {
+                if self.chain_view.column == ChainColumn::Transpose
+                    && self.services.cursor.slot >= rows
+                {
+                    self.services.status = "Add a phrase to this row first".to_owned();
+                } else {
+                    self.modes.entry = Entry::default();
+                    self.modes.mode = Mode::Insert;
+                }
+            }
+            _ => {
+                self.modes.count = count;
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Type a phrase ID in hex, or a transpose in semitones, then `Enter`.
+    pub(crate) fn insert_chain_row(&mut self, key: KeyCode) {
+        let phrase = self.chain_view.column == ChainColumn::Phrase;
+        match key {
+            KeyCode::Esc => {
+                self.modes.entry = Entry::default();
+                self.modes.mode = Mode::Normal;
+            }
+            KeyCode::Backspace => {
+                self.modes.entry.text.pop();
+            }
+            KeyCode::Enter => self.commit_chain_row(),
+            KeyCode::Char(c)
+                if phrase && c.is_ascii_hexdigit() && self.modes.entry.text.len() < 8 =>
+            {
+                self.modes.entry.text.push(c.to_ascii_uppercase());
+            }
+            KeyCode::Char(c)
+                if !phrase
+                    && self.modes.entry.text.len() < 4
+                    && (c.is_ascii_digit()
+                        || (self.modes.entry.text.is_empty() && matches!(c, '-' | '+'))) =>
+            {
+                self.modes.entry.text.push(c);
+            }
+            _ => {}
+        }
+    }
+
+    fn commit_chain_row(&mut self) {
+        let text = self.modes.entry.text.take();
+        self.modes.mode = Mode::Normal;
+        let Some(chain) = self.services.chain_id() else {
+            return;
+        };
+        let slot = self.services.cursor.slot;
+        let existing = self.services.chain_entries().get(slot).copied();
+        let action = match self.chain_view.column {
+            ChainColumn::Phrase => {
+                let Ok(phrase) = u32::from_str_radix(&text, 16) else {
+                    return;
+                };
+                match existing {
+                    Some(entry) => Action::SetChainEntry {
+                        track: self.services.cursor.track,
+                        chain,
+                        slot,
+                        entry: ChainEntry { phrase, ..entry },
+                    },
+                    None => Action::InsertChainEntry {
+                        track: self.services.cursor.track,
+                        chain,
+                        at: slot,
+                        entry: ChainEntry {
+                            phrase,
+                            transpose: 0,
+                        },
+                    },
+                }
+            }
+            ChainColumn::Transpose => {
+                let Ok(transpose) = text.parse::<i8>() else {
+                    self.services.status =
+                        format!("Transpose goes from {MIN_TRANSPOSE} to {MAX_TRANSPOSE}");
+                    return;
+                };
+                let Some(entry) = existing else {
+                    return;
+                };
+                Action::SetChainEntry {
+                    track: self.services.cursor.track,
+                    chain,
+                    slot,
+                    entry: ChainEntry { transpose, ..entry },
+                }
+            }
+        };
+        self.services.apply(&action);
     }
 }

@@ -26,8 +26,8 @@ use vt_model::song::Song;
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
 use crate::app::grammar::{Adjustments, Change, SelectionPlace};
+use crate::app::jumps::Place;
 use crate::app::recording::Recording;
-use crate::app::tree::Place;
 use crate::input::bindings::{Op, Table};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
@@ -50,6 +50,7 @@ mod commands;
 mod cursor;
 mod entry;
 pub mod grammar;
+mod jumps;
 mod keys;
 mod loops;
 pub mod recording;
