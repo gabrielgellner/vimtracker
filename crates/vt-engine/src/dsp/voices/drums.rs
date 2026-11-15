@@ -23,6 +23,7 @@ use super::virtual_analog::{BLOCK, Settings};
 use crate::dsp::blocks::clip::within;
 use crate::dsp::blocks::plaits_parts::Svf;
 use crate::rng::Pcg32;
+use crate::voice::SynthEngine;
 
 #[inline]
 fn semitones(interval: f32) -> f32 {
@@ -65,8 +66,10 @@ pub struct Snare {
     at: usize,
 }
 
-impl Snare {
-    pub fn new(rate: u32) -> Self {
+impl SynthEngine for Snare {
+    const NOISE: bool = true;
+
+    fn new(rate: u32) -> Self {
         Self {
             rate: rate as f32,
             rng: Pcg32::new(0, 0),
@@ -84,13 +87,13 @@ impl Snare {
     }
 
     /// Choose this hit's noise.
-    pub fn seed(&mut self, seed: u32) {
+    fn seed_noise(&mut self, seed: u32) {
         self.rng = Pcg32::new(u64::from(seed), 1);
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             self.render(frequency.max(1e-5), settings);
             self.at = 0;
@@ -99,7 +102,9 @@ impl Snare {
         self.at += 1;
         sample
     }
+}
 
+impl Snare {
     fn render(&mut self, f0: f32, settings: Settings) {
         let Settings {
             harmonics: snappy,
@@ -199,8 +204,10 @@ pub struct Hat {
     at: usize,
 }
 
-impl Hat {
-    pub fn new(rate: u32) -> Self {
+impl SynthEngine for Hat {
+    const NOISE: bool = true;
+
+    fn new(rate: u32) -> Self {
         Self {
             rate: rate as f32,
             rng: Pcg32::new(0, 0),
@@ -217,13 +224,13 @@ impl Hat {
     }
 
     /// Choose this hit's noise.
-    pub fn seed(&mut self, seed: u32) {
+    fn seed_noise(&mut self, seed: u32) {
         self.rng = Pcg32::new(u64::from(seed), 2);
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             self.render(frequency.max(1e-5), settings);
             self.at = 0;
@@ -232,7 +239,9 @@ impl Hat {
         self.at += 1;
         sample
     }
+}
 
+impl Hat {
     fn render(&mut self, f0: f32, settings: Settings) {
         let Settings {
             harmonics: noisiness,
@@ -347,7 +356,7 @@ mod tests {
         // With none it's only the shell, and the same whatever the noise.
         let hit = |harmonics: f32, seed: u32| {
             let mut voice = Snare::new(RATE);
-            voice.seed(seed);
+            voice.seed_noise(seed);
             let settings = Settings {
                 harmonics,
                 ..plain()

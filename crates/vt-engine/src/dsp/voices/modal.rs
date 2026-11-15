@@ -24,6 +24,7 @@
 use super::virtual_analog::Settings;
 use crate::dsp::blocks::plaits_parts::{CosineOscillator, Limiter, tan_fast};
 use crate::dsp::effects::resonator::{MODES, Modes, semitones};
+use crate::voice::SynthEngine;
 
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
@@ -76,6 +77,24 @@ impl Default for Modal {
     }
 }
 
+impl SynthEngine for Modal {
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        if self.at == BLOCK {
+            self.render(frequency.clamp(1e-5, 0.49), settings);
+            self.at = 0;
+        }
+        let sample = self.output[self.at];
+        self.at += 1;
+        sample * LEVEL
+    }
+}
+
 impl Modal {
     pub fn new() -> Self {
         // Where it's struck, which sets how loud each mode is.
@@ -90,18 +109,6 @@ impl Modal {
             at: BLOCK,
             fresh: true,
         }
-    }
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        if self.at == BLOCK {
-            self.render(frequency.clamp(1e-5, 0.49), settings);
-            self.at = 0;
-        }
-        let sample = self.output[self.at];
-        self.at += 1;
-        sample * LEVEL
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {

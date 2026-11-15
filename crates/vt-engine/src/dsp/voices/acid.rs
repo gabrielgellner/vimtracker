@@ -38,6 +38,7 @@ use crate::dsp::blocks::smoother::{Smoothed, coefficient as smoothing_coefficien
 use crate::dsp::filters::diode_filter::{
     DiodeFilter, HIGH_PASS_RATIO, RESONANT_SHARE, feedback_coefficient,
 };
+use crate::voice::SynthEngine;
 use vt_model::settings::slide_ms;
 use vt_model::settings::{
     ACID_HIGHEST_CUTOFF, ACID_LOWEST_CUTOFF, acid_cutoff_position, acid_decay_ms, acid_drive_db,
@@ -284,8 +285,10 @@ pub struct Acid {
     high_pass_coefficient: f32,
 }
 
-impl Acid {
-    pub fn new(rate: u32) -> Self {
+impl SynthEngine for Acid {
+    const DRIFTS: bool = true;
+
+    fn new(rate: u32) -> Self {
         let rate = rate as f32;
         Self {
             rate,
@@ -336,13 +339,13 @@ impl Acid {
     /// oscillator runs free, and its gate only opens the envelopes, so a note from silence starts
     /// anywhere in its cycle, whatever `Drift` is, and a note after it carries on from where the
     /// last left it (decision 191).
-    pub fn seed(&mut self, seed: u32) {
+    fn seed_drift(&mut self, seed: u32, _settings: Settings) {
         self.drift.seed(seed);
         self.phase = self.drift.phase();
     }
 
     /// Start a note, from wherever the last one left the filter and the accent sweep.
-    pub fn trigger(&mut self, accent: bool) {
+    fn trigger(&mut self, accent: bool) {
         self.drift.roll();
         // A note let go and played again before it has fallen away starts from where it fell to.
         if !self.gate && !self.accented {
@@ -361,58 +364,23 @@ impl Acid {
         self.countdown = 0;
     }
 
-    /// Glide to the next note with the gate held, so neither envelope starts again. The note
-    /// slid to brings its own accent, which sets the filter envelope's decay from here. It takes
-    /// as long as its `Slide` says, or a time it's given, from the track's `Glide`.
-    pub fn slide(&mut self, accent: bool, ms: Option<f32>) {
-        self.accented = accent;
-        self.sliding = true;
-        self.slide_ms = ms;
-        self.countdown = 0;
-    }
-
     /// Let go of the note.
-    pub fn release(&mut self) {
+    fn release(&mut self) {
         if self.gate {
             self.released_for = 0;
         }
         self.gate = false;
     }
 
-    /// How much of a plain note's level is left as it ends: all of it while it's held and for
-    /// the hold after, then falling in a straight line to nothing.
-    fn closing(&self) -> f32 {
-        if self.gate || self.accented {
-            return 1.0;
-        }
-        let falling_for = self.released_for.saturating_sub(self.hold_frames) as f32;
-        (1.0 - falling_for / self.fall_frames).max(0.0)
-    }
-
     /// Whether its level and accent sweep have fallen away, so a note after it would start as
     /// if from nothing.
-    pub fn settled(&self) -> bool {
+    fn settled(&self) -> bool {
         self.level < SETTLED && self.sweep < SETTLED
-    }
-
-    /// The cutoff it played the latest frame at, in Hz.
-    pub fn cutoff(&self) -> f32 {
-        self.cutoff
-    }
-
-    /// The frequency it played the latest frame at, as a fraction of the rate.
-    pub fn heard(&self) -> f32 {
-        self.heard
-    }
-
-    /// The filter envelope's level.
-    pub fn envelope(&self) -> f32 {
-        self.envelope
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         for (place, smoothed) in self.smoothed.iter_mut().enumerate() {
             smoothed.target = settings.at(place + 1).clamp(0.0, 1.0);
         }
@@ -559,6 +527,43 @@ impl Acid {
         }) * loss
             / FILTER_LEVEL;
         HEADROOM * soft_clip(filtered * self.amplitude * self.drift_level * LEVEL / HEADROOM)
+    }
+}
+
+impl Acid {
+    /// Glide to the next note with the gate held, so neither envelope starts again. The note
+    /// slid to brings its own accent, which sets the filter envelope's decay from here. It takes
+    /// as long as its `Slide` says, or a time it's given, from the track's `Glide`.
+    pub fn slide(&mut self, accent: bool, ms: Option<f32>) {
+        self.accented = accent;
+        self.sliding = true;
+        self.slide_ms = ms;
+        self.countdown = 0;
+    }
+
+    /// How much of a plain note's level is left as it ends: all of it while it's held and for
+    /// the hold after, then falling in a straight line to nothing.
+    fn closing(&self) -> f32 {
+        if self.gate || self.accented {
+            return 1.0;
+        }
+        let falling_for = self.released_for.saturating_sub(self.hold_frames) as f32;
+        (1.0 - falling_for / self.fall_frames).max(0.0)
+    }
+
+    /// The cutoff it played the latest frame at, in Hz.
+    pub fn cutoff(&self) -> f32 {
+        self.cutoff
+    }
+
+    /// The frequency it played the latest frame at, as a fraction of the rate.
+    pub fn heard(&self) -> f32 {
+        self.heard
+    }
+
+    /// The filter envelope's level.
+    pub fn envelope(&self) -> f32 {
+        self.envelope
     }
 }
 

@@ -170,6 +170,7 @@ impl Model for ToyModel {
 mod tests {
     use super::*;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
+    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 

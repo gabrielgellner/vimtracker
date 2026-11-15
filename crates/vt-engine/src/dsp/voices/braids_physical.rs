@@ -174,6 +174,7 @@ pub struct BlownModel {
 
 impl Model for BlownModel {
     const LEVEL: f32 = 1.0;
+    const NOISE: bool = true;
 
     fn new() -> Self {
         Self {
@@ -240,6 +241,7 @@ pub struct FlutedModel {
 
 impl Model for FlutedModel {
     const LEVEL: f32 = 0.55;
+    const NOISE: bool = true;
 
     fn new() -> Self {
         Self {
@@ -417,6 +419,7 @@ pub struct DrumModel {
 
 impl Model for DrumModel {
     const LEVEL: f32 = 0.8;
+    const NOISE: bool = true;
 
     fn new() -> Self {
         Self {
@@ -619,6 +622,7 @@ const FLUTE_BODY_FILTER: [u16; 128] = [
 mod tests {
     use super::*;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
+    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 
@@ -630,7 +634,7 @@ mod tests {
 
     fn run<M: Model>(hertz: f32, values: [f32; 2], frames: usize) -> Vec<f32> {
         let mut voice = Macro::<M>::new(RATE);
-        voice.seed(7);
+        voice.seed_noise(7);
         (0..frames)
             .map(|_| voice.next(hertz / RATE as f32, settings(values)))
             .collect()
@@ -744,7 +748,7 @@ mod tests {
     fn a_seed_changes_the_breath_and_a_render_repeats() {
         let with = |seed| {
             let mut voice = Macro::<BlownModel>::new(RATE);
-            voice.seed(seed);
+            voice.seed_noise(seed);
             (0..4_800)
                 .map(|_| voice.next(220.0 / RATE as f32, settings([0.5, 0.5])))
                 .collect::<Vec<f32>>()

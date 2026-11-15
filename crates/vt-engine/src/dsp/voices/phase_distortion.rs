@@ -23,6 +23,7 @@ use super::fm::ratio;
 use super::variable_shape::VariableShape;
 use super::virtual_analog::{BLOCK, Settings};
 use crate::dsp::blocks::sine_table::SINE;
+use crate::voice::SynthEngine;
 
 /// It runs at twice the rate, then drops every other frame, as Plaits does.
 const OVERSAMPLING: usize = 2;
@@ -55,18 +56,14 @@ impl Default for PhaseDistortion {
     }
 }
 
-impl PhaseDistortion {
-    pub fn new() -> Self {
-        Self {
-            shaper: VariableShape::new(),
-            output: [0.0; BLOCK],
-            at: BLOCK,
-        }
+impl SynthEngine for PhaseDistortion {
+    fn new(_rate: u32) -> Self {
+        Self::default()
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             self.render(frequency.clamp(1e-5, 0.49), settings);
             self.at = 0;
@@ -74,6 +71,16 @@ impl PhaseDistortion {
         let sample = self.output[self.at];
         self.at += 1;
         sample * LEVEL
+    }
+}
+
+impl PhaseDistortion {
+    pub fn new() -> Self {
+        Self {
+            shaper: VariableShape::new(),
+            output: [0.0; BLOCK],
+            at: BLOCK,
+        }
     }
 
     fn render(&mut self, frequency: f32, settings: Settings) {

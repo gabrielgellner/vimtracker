@@ -20,6 +20,7 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use crate::dsp::blocks::drift::Drift;
+use crate::voice::SynthEngine;
 use vt_model::settings::MAX_MACHINE_SETTINGS;
 
 /// How many frames are worked out at once, with settings moving in a line across them.
@@ -415,6 +416,42 @@ pub struct VirtualAnalog {
     fresh: bool,
 }
 
+impl SynthEngine for VirtualAnalog {
+    const DRIFTS: bool = true;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// Roll a note's drift from its seed, so each note differs but a render repeats. With `Drift`
+    /// up as the note starts, its oscillators start anywhere in their cycles, as free-running ones
+    /// would; at `00` they start at the top, for the same attack every time (decision 190).
+    fn seed_drift(&mut self, seed: u32, settings: Settings) {
+        self.drift.seed(seed);
+        if settings.at(DRIFT) > 0.0 {
+            self.square.start_at(self.drift.phase());
+            self.saw.start_at(self.drift.phase());
+        }
+    }
+
+    /// What its note's envelope times are multiplied by.
+    fn time(&self, settings: Settings) -> f32 {
+        self.drift.time(settings.at(DRIFT))
+    }
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        if self.at == BLOCK {
+            self.render(frequency, settings);
+            self.at = 0;
+        }
+        let sample = self.output[self.at];
+        self.at += 1;
+        sample
+    }
+}
+
 impl VirtualAnalog {
     pub fn new() -> Self {
         Self {
@@ -427,34 +464,6 @@ impl VirtualAnalog {
             at: BLOCK,
             fresh: true,
         }
-    }
-
-    /// Roll a note's drift from its seed, so each note differs but a render repeats. With `Drift`
-    /// up as the note starts, its oscillators start anywhere in their cycles, as free-running ones
-    /// would; at `00` they start at the top, for the same attack every time (decision 190).
-    pub fn seed(&mut self, seed: u32, settings: Settings) {
-        self.drift.seed(seed);
-        if settings.at(DRIFT) > 0.0 {
-            self.square.start_at(self.drift.phase());
-            self.saw.start_at(self.drift.phase());
-        }
-    }
-
-    /// What its note's envelope times are multiplied by.
-    pub fn time(&self, settings: Settings) -> f32 {
-        self.drift.time(settings.at(DRIFT))
-    }
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        if self.at == BLOCK {
-            self.render(frequency, settings);
-            self.at = 0;
-        }
-        let sample = self.output[self.at];
-        self.at += 1;
-        sample
     }
 
     fn render(&mut self, frequency: f32, settings: Settings) {
@@ -651,7 +660,7 @@ mod tests {
 
     fn seeded(seed: u32, settings: Settings, frames: usize) -> Vec<f32> {
         let mut voice = VirtualAnalog::new();
-        voice.seed(seed, settings);
+        voice.seed_drift(seed, settings);
         (0..frames)
             .map(|_| voice.next(110.0 / RATE, settings))
             .collect()

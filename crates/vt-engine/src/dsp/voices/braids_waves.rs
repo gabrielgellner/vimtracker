@@ -249,6 +249,7 @@ pub struct ParaphonicModel {
 
 impl Model for ParaphonicModel {
     const LEVEL: f32 = 1.1;
+    const NOISE: bool = true;
 
     fn new() -> Self {
         Self {
@@ -305,6 +306,7 @@ impl Model for ParaphonicModel {
 mod tests {
     use super::*;
     use crate::dsp::voices::virtual_analog::VirtualAnalog;
+    use crate::voice::SynthEngine;
 
     const RATE: u32 = 48_000;
 
@@ -316,7 +318,7 @@ mod tests {
 
     fn run<M: Model>(hertz: f32, values: [f32; 2], frames: usize) -> Vec<f32> {
         let mut voice = Macro::<M>::new(RATE);
-        voice.seed(7);
+        voice.seed_noise(7);
         (0..frames)
             .map(|_| voice.next(hertz / RATE as f32, settings(values)))
             .collect()
