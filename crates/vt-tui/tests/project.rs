@@ -756,7 +756,7 @@ fn the_project_page_sets_the_tempo_and_its_fine_part_as_bpm_does_with_undo() {
     assert_eq!(app.song().millibpm, 121_000, "each change is an undo step");
     // l goes onto the fine part, which moves by hundredths and carries into the whole.
     tap(&mut app, "l");
-    assert!(app.project_fine);
+    assert!(app.project_page.fine);
     assert_eq!(app.project_control(), ProjectControl::Bpm);
     tap(&mut app, "-");
     assert_eq!(app.song().millibpm, 120_990);
@@ -1130,13 +1130,13 @@ fn the_project_page_keeps_the_column_through_j_and_k() {
     project_cursor_on(&mut app, ProjectControl::Scale);
     tap(&mut app, "0");
     assert_eq!(app.project_control(), ProjectControl::Bpm);
-    assert!(!app.project_fine);
+    assert!(!app.project_page.fine);
     tap(&mut app, "$");
     assert_eq!(app.project_control(), ProjectControl::Scale);
     // h from the right column lands on the tempo's fine part, as the track page's does.
     tap(&mut app, "h");
     assert_eq!(app.project_control(), ProjectControl::Bpm);
-    assert!(app.project_fine);
+    assert!(app.project_page.fine);
     // The status line names the row.
     assert_eq!(vt_tui::views::status::column_name(&app), "BPM");
 }
@@ -1197,7 +1197,7 @@ fn changing_a_groove_that_comes_with_it_makes_one_of_the_projects_own() {
     tap(&mut app, "=");
     assert_eq!(app.song().groove, custom, "the project plays the copy");
     assert_eq!(app.song().grooves[0].pushes(), &[0, 78]);
-    assert_eq!(app.groove_shown, Some(custom));
+    assert_eq!(app.project_page.groove_shown, Some(custom));
     assert!(
         app.services.status.contains("copied to Custom 1"),
         "{}",
@@ -1288,12 +1288,12 @@ fn the_project_page_has_the_songs_settings_then_this_machines_audio_on_h_and_l()
     assert_eq!(app.modes.mode, Mode::Normal);
     press(&mut app, "jL");
     assert_eq!(app.modes.view, View::Audio, "L stops at the last");
-    assert_eq!(app.audio_row, 1);
+    assert_eq!(app.audio_page.row, 1);
     press(&mut app, "H");
     assert_eq!(app.modes.view, View::Project);
-    assert_eq!(app.project_row, 2, "each keeps its cursor");
+    assert_eq!(app.project_page.row, 2, "each keeps its cursor");
     press(&mut app, "HL");
-    assert_eq!((app.modes.view, app.audio_row), (View::Audio, 1));
+    assert_eq!((app.modes.view, app.audio_page.row), (View::Audio, 1));
 
     // Space 9 opens whichever showed last, as a jump C-o comes back from.
     press(&mut app, " 3 9");

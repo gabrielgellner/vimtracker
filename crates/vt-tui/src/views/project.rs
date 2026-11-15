@@ -1,6 +1,7 @@
 //! The project page's Song sub-page, and the title both its sub-pages share. The Song sub-page
 //! has the project's name and folder, how it plays and how notes go in, a groove drawn as its
 //! pushes, the audio output it plays through, and the actions that save, render and open projects.
+//! It's drawn from the page's own state and what it reads of the program through a [`Ctx`].
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -14,10 +15,13 @@ use crate::app::App;
 use crate::config::home_folder;
 use crate::explorer::place_name;
 use crate::input::mode::View;
-use crate::project_page::{PROJECT_PAGES, PROJECT_ROWS, ProjectControl};
+use crate::page::Ctx;
+use crate::project_page::{PROJECT_PAGES, PROJECT_ROWS, ProjectControl, ProjectPage};
 use crate::theme;
 use crate::views::status::grid_name;
+use crate::views::widgets::grid::CellWidths;
 use crate::views::widgets::meter::{EIGHTHS, hanging_cell};
+use crate::views::widgets::param::{Face, ParamCell, ParamState, Tone};
 use crate::views::widgets::setting::{self, Focus};
 use crate::views::widgets::table::{Columns, blank_row, take_top};
 
@@ -30,6 +34,14 @@ const FOLDER_WIDTH: usize = 64;
 /// before its units.
 const STEP_WIDTH: u16 = 5;
 const UNITS_GAP: u16 = 2;
+/// The room a setting's cell has in the left column: its name, then its value and what's after
+/// it. None has a bar.
+const CELL: CellWidths = CellWidths {
+    name: LABEL,
+    value: RIGHT_COLUMN - LABEL,
+    bar_cells: 0,
+    gap: 0,
+};
 
 /// A path that fits, keeping its end, which says most about where it is.
 fn kept_end(path: String) -> String {
@@ -42,43 +54,38 @@ fn kept_end(path: String) -> String {
 }
 
 /// A setting's value as text, apart from the tempo's fine part.
-fn value(app: &App, control: ProjectControl) -> String {
-    let song = app.song();
+fn value(ctx: &Ctx, page: &ProjectPage, control: ProjectControl) -> String {
+    let song = ctx.song();
     let on_off = |on: bool| if on { "on" } else { "off" }.to_owned();
+    let shown = || page.shown_groove(song);
     match control {
-        ProjectControl::Name => app.project_name(),
-        ProjectControl::Folder => app.services.folder.as_deref().map_or_else(
+        ProjectControl::Name => ctx.project_name(),
+        ProjectControl::Folder => ctx.folder().map_or_else(
             || "Not saved yet".to_owned(),
             |folder| kept_end(place_name(folder, home_folder().as_deref())),
         ),
         ProjectControl::Bpm => (song.millibpm / 1000).to_string(),
         ProjectControl::Groove => song.groove.name().to_owned(),
-        ProjectControl::GrooveShown => app.shown_groove().0.name().to_owned(),
-        ProjectControl::GrooveSteps => app.shown_groove().1.steps().to_string(),
-        ProjectControl::Humanise => format!("{} ticks", app.shown_groove().1.humanise()),
-        ProjectControl::Push(step) => push_text(app.shown_groove().1.push(usize::from(step))),
-        ProjectControl::Velocity(step) => {
-            format!("{}", app.shown_groove().1.velocity(usize::from(step)))
-        }
+        ProjectControl::GrooveShown => shown().0.name().to_owned(),
+        ProjectControl::GrooveSteps => shown().1.steps().to_string(),
+        ProjectControl::Humanise => format!("{} ticks", shown().1.humanise()),
+        ProjectControl::Push(step) => push_text(shown().1.push(usize::from(step))),
+        ProjectControl::Velocity(step) => format!("{}", shown().1.velocity(usize::from(step))),
         ProjectControl::Launch => song.launch.to_string(),
-        ProjectControl::Reset => match app
-            .services
-            .section_here()
-            .and_then(|section| section.reset)
-        {
+        ProjectControl::Reset => match ctx.section_here().and_then(|section| section.reset) {
             Some(1) => "1 step".to_owned(),
             Some(steps) => format!("{steps} steps"),
             None => "off".to_owned(),
         },
         ProjectControl::Seed => song.seed.to_string(),
-        ProjectControl::Scale if app.scale.on => app.scale.kind.name().to_owned(),
+        ProjectControl::Scale if ctx.scale().on => ctx.scale().kind.name().to_owned(),
         ProjectControl::Scale => "off".to_owned(),
-        ProjectControl::Root => app.scale.root_name().to_owned(),
+        ProjectControl::Root => ctx.scale().root_name().to_owned(),
         ProjectControl::Grid => grid_name(song.skip),
-        ProjectControl::AutoJump => on_off(app.auto_jump),
-        ProjectControl::ReadOnly => on_off(app.read_only),
-        ProjectControl::Audio if app.audio.device.is_empty() => "None".to_owned(),
-        ProjectControl::Audio => format!("{}, {} Hz", app.audio.device, app.services.rate),
+        ProjectControl::AutoJump => on_off(ctx.auto_jump()),
+        ProjectControl::ReadOnly => on_off(ctx.read_only()),
+        ProjectControl::Audio if ctx.audio().device.is_empty() => "None".to_owned(),
+        ProjectControl::Audio => format!("{}, {} Hz", ctx.audio().device, ctx.rate()),
         ProjectControl::Save
         | ProjectControl::SaveAs
         | ProjectControl::Render
@@ -98,24 +105,24 @@ fn fine(millibpm: u32) -> String {
 }
 
 /// What a setting says dim after its value, if anything.
-fn after(app: &App, control: ProjectControl) -> Option<String> {
+fn after(ctx: &Ctx, page: &ProjectPage, control: ProjectControl) -> Option<String> {
     match control {
-        ProjectControl::Folder if app.services.folder.is_none() => None,
-        ProjectControl::Folder if app.services.dirty => Some("unsaved changes".to_owned()),
+        ProjectControl::Folder if ctx.folder().is_none() => None,
+        ProjectControl::Folder if ctx.dirty() => Some("unsaved changes".to_owned()),
         ProjectControl::Folder => Some("saved".to_owned()),
-        ProjectControl::ReadOnly if app.read_only => {
+        ProjectControl::ReadOnly if ctx.read_only() => {
             Some(":w refuses, so Save as makes a copy to change".to_owned())
         }
         // A reset belongs to a section, so with more than one it says which.
-        ProjectControl::Reset if app.song().sections.len() > 1 => {
-            Some(format!("in section {}", app.services.cursor.section + 1))
+        ProjectControl::Reset if ctx.song().sections.len() > 1 => {
+            Some(format!("in section {}", ctx.cursor().section + 1))
         }
-        ProjectControl::Audio if !app.audio.running => Some("stopped".to_owned()),
+        ProjectControl::Audio if !ctx.audio().running => Some("stopped".to_owned()),
         // The groove drawn says whether the project plays it, and one that comes with the program
         // that changing it copies.
         ProjectControl::GrooveShown => {
-            let (id, _) = app.shown_groove();
-            let plays = id == app.song().groove;
+            let (id, _) = page.shown_groove(ctx.song());
+            let plays = id == ctx.song().groove;
             Some(match (id.custom_number(), plays) {
                 (Some(_), true) => "the project's own, which it plays".to_owned(),
                 (Some(_), false) => "the project's own".to_owned(),
@@ -133,44 +140,58 @@ fn columns() -> Columns {
     Columns::new([LABEL, RIGHT_COLUMN - LABEL, LABEL, 0]).open_ended()
 }
 
-/// One row: each setting's name dim, then its value, the cursor's under it. A value with nothing to
-/// its right has the rest of the row.
-fn row(app: &App, controls: &[ProjectControl], columns: &Columns) -> Row<'static> {
-    let here = app.project_control();
+/// One row: each setting's name dim, then its value, the cursor's under it, as a setting's cell
+/// has them. A value with nothing to its right has the rest of the row.
+fn row(
+    ctx: &Ctx,
+    page: &ProjectPage,
+    controls: &[ProjectControl],
+    columns: &Columns,
+) -> Row<'static> {
+    let here = page.control(ctx.song());
     let mut cells = columns.row();
     for (index, control) in controls.iter().enumerate() {
         cells.to(control.column() * 2);
         let is_here = *control == here;
-        let look = app.ctx().look(Focus::at(is_here, app.project_fine));
-        let text = setting::text(&look, || value(app, *control));
-        let default = *control == ProjectControl::Root && !app.scale.on
-            || *control == ProjectControl::Folder && app.services.folder.is_none();
-        let style = setting::style(&look, default);
+        let look = ctx.look(Focus::at(is_here, page.fine));
+        let default = *control == ProjectControl::Root && !ctx.scale().on
+            || *control == ProjectControl::Folder && ctx.folder().is_none();
         // An action is its own name, so the cursor is on that rather than a value beside it, and
         // what it does is in the value's place.
-        let mut spans = Vec::new();
+        let mut shown = Line::default();
         if control.is_action() {
-            cells.cell(Line::styled(text, style));
+            let text = setting::text(&look, || value(ctx, page, *control));
+            cells.cell(Line::styled(text, setting::style(&look, default)));
         } else {
-            cells.cell(Line::styled(control.label(), theme::dim()));
-            spans.push(Span::styled(text, style));
+            let tone = if default { Tone::Default } else { Tone::Plain };
+            let cell = ParamCell {
+                name: control.label().into(),
+                face: Face::Word,
+                text: value(ctx, page, *control),
+                place: None,
+                state: ParamState::new(tone),
+                look,
+            };
+            let parts = cell.parts(CELL);
+            cells.cell(parts.name);
+            shown = parts.value;
         }
         if *control == ProjectControl::Bpm {
             let digits = match look.typed.filter(|_| look.focus == Focus::Fine) {
                 Some(typed) => format!(".{typed}_"),
-                None => fine(app.song().millibpm),
+                None => fine(ctx.song().millibpm),
             };
-            spans.push(Span::styled(digits, setting::fine_style(&look)));
+            shown.push_span(Span::styled(digits, setting::fine_style(&look)));
         }
-        if let Some(note) = after(app, *control) {
-            if !spans.is_empty() {
-                spans.push(Span::raw("  "));
+        if let Some(note) = after(ctx, page, *control) {
+            if !shown.spans.is_empty() {
+                shown.push_span(Span::raw("  "));
             }
-            spans.push(Span::styled(note, theme::dim()));
+            shown.push_span(Span::styled(note, theme::dim()));
         }
         let alone = index + 1 == controls.len();
         let span = if alone { 3 - control.column() * 2 } else { 1 };
-        cells.span(spans, span);
+        cells.span(shown, span);
     }
     cells.done()
 }
@@ -195,9 +216,9 @@ fn groove_columns(steps: usize) -> Columns {
 /// A groove's pushes drawn as ticks above a line for the steps that land late and below it for
 /// those that land early, each as tall as its push, and its values under it, then its velocities,
 /// the cursor's under it. One colour, as the curves are.
-fn groove_rows(app: &App, columns: &Columns) -> Vec<Row<'static>> {
-    let (_, groove) = app.shown_groove();
-    let here = app.project_control();
+fn groove_rows(ctx: &Ctx, page: &ProjectPage, columns: &Columns) -> Vec<Row<'static>> {
+    let (_, groove) = page.shown_groove(ctx.song());
+    let here = page.control(ctx.song());
     let steps = groove.steps();
     // Each tick sits over the last digit of its value.
     let tick = |filled: usize, late: bool| {
@@ -232,8 +253,8 @@ fn groove_rows(app: &App, columns: &Columns) -> Vec<Row<'static>> {
         for step in 0..steps {
             let field = control(step as u8);
             let is_here = field == here;
-            let look = app.ctx().look(Focus::at(is_here, false));
-            let text = setting::text(&look, || value(app, field));
+            let look = ctx.look(Focus::at(is_here, false));
+            let text = setting::text(&look, || value(ctx, page, field));
             // What's left on the grid or at full velocity matters less.
             let default = field == ProjectControl::Push(0)
                 || matches!(field, ProjectControl::Velocity(_))
@@ -265,12 +286,12 @@ fn page_name(view: View) -> &'static str {
 
 /// The project page's title, on either sub-page: `Project`, then each sub-page's name, the one
 /// shown bold and the other dim, as the track page's pages are.
-pub fn title(app: &App) -> Line<'static> {
+pub fn title(ctx: &Ctx) -> Line<'static> {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     let mut title = vec![Span::styled("Project ", bold)];
     title.extend(PROJECT_PAGES.map(|view| {
         let text = format!(" {} ", page_name(view));
-        if view == app.modes.view {
+        if view == ctx.view() {
             Span::styled(text, bold)
         } else {
             Span::styled(text, theme::dim())
@@ -279,9 +300,15 @@ pub fn title(app: &App) -> Line<'static> {
     Line::from(title)
 }
 
+/// Draw the Song sub-page of the app's project page.
 pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
+    draw_page(frame, area, &app.project_page, &app.ctx());
+}
+
+/// Draw the Song sub-page, as its `Page::draw`.
+pub(crate) fn draw_page(frame: &mut Frame, area: Rect, page: &ProjectPage, ctx: &Ctx) {
     let mut rest = area;
-    frame.render_widget(Paragraph::new(title(app)), take_top(&mut rest, 2));
+    frame.render_widget(Paragraph::new(title(ctx)), take_top(&mut rest, 2));
     let columns = columns();
     let mut rows = Vec::new();
     for controls in PROJECT_ROWS {
@@ -296,15 +323,15 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
             // The pushes and velocities are drawn together, in columns of their own.
             Some(ProjectControl::Push(_)) => {
                 columns.stack(frame, &mut rest, std::mem::take(&mut rows));
-                let groove = groove_columns(app.shown_groove().1.steps());
-                let drawn = groove_rows(app, &groove);
+                let groove = groove_columns(page.shown_groove(ctx.song()).1.steps());
+                let drawn = groove_rows(ctx, page, &groove);
                 groove.stack(frame, &mut rest, drawn);
                 continue;
             }
             Some(ProjectControl::Velocity(_)) => continue,
             _ => {}
         }
-        rows.push(row(app, controls, &columns));
+        rows.push(row(ctx, page, controls, &columns));
     }
     columns.stack(frame, &mut rest, rows);
 }

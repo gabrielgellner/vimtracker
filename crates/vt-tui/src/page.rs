@@ -18,6 +18,7 @@
 //! here, and nothing else of `App`'s.
 
 use std::borrow::Cow;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -29,19 +30,22 @@ use vt_engine::track_state::{Faders, LiveValues};
 use vt_model::generator::Generator;
 use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
-use vt_model::song::{Song, Track};
+use vt_model::scale::Scale;
+use vt_model::song::{Section, Song, Track};
 
-use crate::app::{App, Cursor, Entry, Modes, TrackLive};
+use crate::app::{App, AudioState, Cursor, Entry, Modes, TrackLive};
 use crate::folding::Folds;
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
 use crate::jumping::FieldJump;
 use crate::kitty::{PanelIds, PanelWant};
 use crate::meter::Meter;
+use crate::roto::Roto;
 use crate::services::Services;
 use crate::shaping::LiveGen;
 use crate::track_page::Control;
 use crate::views::widgets::setting::{CellLook, Focus};
+use crate::wheel::WheelSetting;
 
 /// What a key did, as far as the page alone can tell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,8 +60,8 @@ pub enum Outcome {
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
-/// pictures. The track page and the mixer are so far (#739); the other pages' keys and drawing
-/// are still `App`'s.
+/// pictures. The track page, the mixer and the project page's two sub-pages are so far (#739);
+/// the other pages' keys and drawing are still `App`'s.
 pub(crate) trait Page {
     /// Its rows of the binding table, as `(keys, Cmd, description)`, in the order which-key and
     /// `Space k` list them. The table is still assembled in one place, `input::bindings`, under
@@ -112,8 +116,7 @@ impl App {
         match self.modes.view {
             View::Track | View::Mixer => self.run_track_pages(cmd),
             View::Chain => self.run_chain(cmd),
-            View::Audio => self.run_audio_page(cmd),
-            View::Project => self.run_project_page(cmd),
+            View::Audio | View::Project => self.run_project_pages(cmd),
             View::Sample => self.run_sample_page(cmd),
             View::Song => self.run_song(cmd),
             View::Phrase => false,
@@ -153,6 +156,35 @@ impl App {
                 self.modes.count = count;
                 false
             }
+        }
+    }
+
+    /// Run a command on the project page's Song or Audio sub-page: the page's own key, a move,
+    /// and then what it passes back, an edit or `H` and `L`, which are `App`'s, as an edit runs
+    /// its row's command or opens another output. The count stays for what takes it, as `gg` and
+    /// `G` go to the row it names.
+    fn run_project_pages(&mut self, cmd: Cmd) -> bool {
+        let times = self.modes.count.unwrap_or(1).max(1);
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        let outcome = match self.modes.view {
+            View::Audio => self.audio_page.key(cmd, times, &mut ctx),
+            _ => self.project_page.key(cmd, times, &mut ctx),
+        };
+        match outcome {
+            Outcome::Done => {
+                self.modes.count = None;
+                true
+            }
+            Outcome::Refused(why) => {
+                self.modes.count = None;
+                self.services.status = why.to_owned();
+                true
+            }
+            Outcome::Passed if self.modes.view == View::Audio => self.run_audio_page(cmd),
+            Outcome::Passed => self.run_project_page(cmd),
         }
     }
 }
@@ -327,6 +359,66 @@ impl<'a> Ctx<'a> {
     /// The program's sample rate, which the pictures of filters and tails are worked out at.
     pub fn rate(&self) -> u32 {
         self.app.services.rate
+    }
+
+    /// The project's name, which is the song's own.
+    pub fn project_name(&self) -> String {
+        self.app.project_name()
+    }
+
+    /// The folder the project is saved in, if it's been saved.
+    pub fn folder(&self) -> Option<&'a Path> {
+        self.app.services.folder.as_deref()
+    }
+
+    /// Whether the project has changed since it was last saved.
+    pub fn dirty(&self) -> bool {
+        self.app.services.dirty
+    }
+
+    /// The section the cursor is in, or the last if it's past them.
+    pub fn section_here(&self) -> Option<&'a Section> {
+        self.app.services.section_here()
+    }
+
+    /// The scale notes are entered in.
+    pub fn scale(&self) -> Scale {
+        self.app.scale
+    }
+
+    /// Whether entering in Insert moves on by the grid.
+    pub fn auto_jump(&self) -> bool {
+        self.app.auto_jump
+    }
+
+    /// Whether `:w` refuses to write over the project.
+    pub fn read_only(&self) -> bool {
+        self.app.read_only
+    }
+
+    /// The audio output as it plays, and what the audio page chooses from.
+    pub fn audio(&self) -> &'a AudioState {
+        &self.app.audio
+    }
+
+    /// The Roto-Control: whether it's on, and the link to it.
+    pub fn roto(&self) -> &'a Roto {
+        &self.app.services.roto
+    }
+
+    /// Whether the mouse wheel turns the cursor's setting, and which way.
+    pub fn wheel(&self) -> WheelSetting {
+        self.app.wheel.setting
+    }
+
+    /// The CPU the audio takes, as the system line shows it, in percent.
+    pub fn cpu_percent(&self) -> u64 {
+        self.app.cpu.percent()
+    }
+
+    /// Whether power saving has slowed the CPU, so the figure is more than it would be.
+    pub fn slowed(&self) -> bool {
+        self.app.slowdown.slowed()
     }
 
     /// Whether something is drawn over the page, which a picture placed above the text would show
