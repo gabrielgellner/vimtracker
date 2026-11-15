@@ -6,8 +6,7 @@ use std::time::Instant;
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::{Action, FieldValue, Fill};
 use vt_model::selection::{
-    Block, FIRST_FX_ORDER, FX_GROUP, Field, LARGE_NUDGE, Motion, Scope, Shift, StepRange, Target,
-    first_value,
+    Block, Field, LARGE_NUDGE, Motion, Scope, Shift, StepRange, Target, first_value,
 };
 use vt_model::shape::{Shape, ShapeColumn};
 use vt_model::song::Song;
@@ -17,6 +16,7 @@ use crate::app::{App, Cursor, Entry, Selection, TrackSpan};
 use crate::input::bindings::{Cmd, Op, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
+use crate::phrase_view::PhraseView;
 use crate::shaping::ShapePanel;
 
 /// The register that holds the last copy. A cut doesn't touch it.
@@ -283,9 +283,9 @@ impl App {
         SelectionPlace {
             mode: self.modes.mode,
             cursor: self.services.cursor,
-            anchor: self.anchor,
-            anchor_track: self.anchor_track,
-            scope: self.selection_scope,
+            anchor: self.phrase_view.anchor,
+            anchor_track: self.phrase_view.anchor_track,
+            scope: self.phrase_view.scope,
             adjustments: self.adjustments.clone(),
         }
     }
@@ -293,9 +293,9 @@ impl App {
     fn return_to(&mut self, place: SelectionPlace) {
         self.modes.mode = place.mode;
         self.services.cursor = place.cursor;
-        self.anchor = place.anchor;
-        self.anchor_track = place.anchor_track;
-        self.selection_scope = place.scope;
+        self.phrase_view.anchor = place.anchor;
+        self.phrase_view.anchor_track = place.anchor_track;
+        self.phrase_view.scope = place.scope;
         self.adjustments = place.adjustments;
         self.clamp_cursor();
     }
@@ -315,7 +315,7 @@ impl App {
             // `Esc` is what ends a selection kept through its changes, and `gv` brings it back,
             // as in Vim. Its total goes with it.
             if self.modes.mode.is_visual() {
-                self.last_selection = Some(self.current_selection());
+                self.phrase_view.last_selection = Some(self.current_selection());
                 if self
                     .adjusted_total()
                     .is_some_and(|total| total == self.services.status)
@@ -420,8 +420,6 @@ impl App {
                 self.modes.count = None;
             }
             Cmd::CycleMark => self.cycle_mark_key(),
-            Cmd::NextTrack if self.modes.mode.is_visual() => self.reach_track(1),
-            Cmd::PreviousTrack if self.modes.mode.is_visual() => self.reach_track(-1),
             Cmd::Paste | Cmd::PasteAfter | Cmd::PasteMerge => {
                 let change = Change::Paste {
                     register: self.register,
@@ -463,14 +461,7 @@ impl App {
             return;
         }
         let count = self.modes.count.take();
-        if motion.is_horizontal() {
-            for _ in 0..count.unwrap_or(1) {
-                self.move_horizontal(motion);
-            }
-        } else {
-            self.services.cursor.step =
-                motion.step(self.services.cursor.step, count, self.motion_extent(motion));
-        }
+        PhraseView::move_cursor(motion, count, &mut self.services);
     }
 
     fn operator_key(&mut self, op: Op) {
@@ -508,14 +499,14 @@ impl App {
         if self.modes.mode.is_visual() {
             let count = self.modes.count.take();
             let (range, scope) = self.target_range(target, count);
-            self.anchor = Some((range.first, scope));
+            self.phrase_view.anchor = Some((range.first, scope));
             self.services.cursor.step = range.last;
             self.modes.mode = if scope.is_whole() {
                 Mode::VisualStep
             } else {
                 Mode::VisualField
             };
-            self.selection_scope = Some(scope);
+            self.phrase_view.scope = Some(scope);
             return;
         }
         let count = self.take_count();
@@ -553,7 +544,14 @@ impl App {
                 },
             ),
             Cover::Motion(motion, count) => (
-                StepRange::between(step, motion.step(step, count, self.motion_extent(motion))),
+                StepRange::between(
+                    step,
+                    motion.step(
+                        step,
+                        count,
+                        PhraseView::motion_extent(motion, &self.services),
+                    ),
+                ),
                 column,
             ),
             Cover::Target(target, count) => self.target_range(target, count),
@@ -1238,23 +1236,15 @@ impl App {
         }
     }
 
-    /// Reach another track from a selection. The cursor stays where it is, so moving between
-    /// tracks of different lengths doesn't change which rows are selected.
-    fn reach_track(&mut self, by: isize) {
-        let last = self.song().tracks.len() as isize - 1;
-        let from = self.anchor_track.unwrap_or(self.services.cursor.track) as isize;
-        self.anchor_track = Some((from + by).clamp(0, last) as usize);
-    }
-
     fn enter_visual(&mut self, mode: Mode) {
         let scope = if mode == Mode::VisualStep {
             Scope::WHOLE
         } else {
             Scope::column(self.services.cursor.field.group())
         };
-        self.anchor = Some((self.services.cursor.step, scope));
-        self.anchor_track = Some(self.services.cursor.track);
-        self.selection_scope = None;
+        self.phrase_view.anchor = Some((self.services.cursor.step, scope));
+        self.phrase_view.anchor_track = Some(self.services.cursor.track);
+        self.phrase_view.scope = None;
         self.adjustments = Adjustments::default();
         self.modes.mode = mode;
         self.modes.count = None;
@@ -1262,27 +1252,8 @@ impl App {
 
     /// The current selection in a Visual mode.
     pub fn current_selection(&self) -> Selection {
-        let (start, start_scope) = self.anchor.unwrap_or((
-            self.services.cursor.step,
-            Scope::column(self.services.cursor.field.group()),
-        ));
-        let scope = match (self.modes.mode, self.selection_scope) {
-            (_, Some(fixed)) => fixed,
-            (Mode::VisualStep, _) => Scope::WHOLE,
-            _ => {
-                let here = self.services.cursor.field.group();
-                Scope {
-                    first: start_scope.first.min(here),
-                    last: start_scope.last.max(here),
-                }
-            }
-        };
-        let anchor_track = self.anchor_track.unwrap_or(self.services.cursor.track);
-        Selection {
-            range: StepRange::between(start, self.services.cursor.step),
-            scope,
-            tracks: TrackSpan::between(anchor_track, self.services.cursor.track),
-        }
+        self.phrase_view
+            .selection(self.modes.mode, self.services.cursor)
     }
 
     /// Finish selecting, for something that goes on to use the selection.
@@ -1301,26 +1272,26 @@ impl App {
     }
 
     fn leave_visual(&mut self, selection: Selection) {
-        self.last_selection = Some(selection);
+        self.phrase_view.last_selection = Some(selection);
         self.adjustments = Adjustments::default();
         self.services.cursor.step = selection.range.first;
         self.modes.mode = Mode::Normal;
-        self.anchor = None;
-        self.anchor_track = None;
+        self.phrase_view.anchor = None;
+        self.phrase_view.anchor_track = None;
         self.services
             .go_to_track_at(selection.tracks.first, self.modes.view);
-        self.selection_scope = None;
+        self.phrase_view.scope = None;
         self.clamp_cursor();
     }
 
     fn reselect(&mut self) {
-        let Some(selection) = self.last_selection else {
+        let Some(selection) = self.phrase_view.last_selection else {
             self.services.status = "No earlier selection".to_owned();
             return;
         };
-        self.anchor = Some((selection.range.first, selection.scope));
-        self.anchor_track = Some(selection.tracks.last);
-        self.selection_scope = Some(selection.scope);
+        self.phrase_view.anchor = Some((selection.range.first, selection.scope));
+        self.phrase_view.anchor_track = Some(selection.tracks.last);
+        self.phrase_view.scope = Some(selection.scope);
         self.adjustments = Adjustments::default();
         self.services
             .go_to_track_at(selection.tracks.first, self.modes.view);
@@ -1331,50 +1302,5 @@ impl App {
             Mode::VisualField
         };
         self.clamp_cursor();
-    }
-
-    /// Move between fields, or between the step's parts: the note with its velocity and gate,
-    /// then each FX slot, as the headings over the grid name them.
-    fn move_horizontal(&mut self, motion: Motion) {
-        let slots = self.slots();
-        let last = FIRST_FX_ORDER - 1 + slots * 3;
-        let order = self.services.cursor.field.order();
-        let group = self.services.cursor.field.group();
-        // A value with no fine part has no fine digits to land on, so they're passed over.
-        let landable = |field: Field| match field {
-            Field::FxFine(slot) => self
-                .current_slot(slot)
-                .and_then(|cell| cell.command)
-                .is_some_and(FxCommand::has_fine),
-            _ => true,
-        };
-        let step = |from: usize, forward: bool| {
-            let next = if forward {
-                (from + 1).min(last)
-            } else {
-                from.saturating_sub(1)
-            };
-            let field = Field::from_order(next);
-            if landable(field) {
-                field
-            } else if forward && next < last {
-                Field::from_order(next + 1)
-            } else {
-                Field::from_order(next.saturating_sub(1))
-            }
-        };
-        self.services.cursor.field = match motion {
-            Motion::Right => step(order, true),
-            Motion::Left => step(order, false),
-            Motion::NextGroup if slots == 0 => self.services.cursor.field,
-            Motion::NextGroup => {
-                Field::of_group(group.max(FX_GROUP - 1).saturating_add(1).min(2 + slots))
-            }
-            Motion::RowStart => Field::Note,
-            Motion::RowEnd if landable(Field::from_order(last)) => Field::from_order(last),
-            Motion::RowEnd => Field::from_order(last - 1),
-            _ if group > FX_GROUP => Field::of_group(group - 1),
-            _ => Field::Note,
-        };
     }
 }

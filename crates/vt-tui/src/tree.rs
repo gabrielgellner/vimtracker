@@ -45,19 +45,12 @@ pub struct Place {
 impl App {
     /// The chain on the cursor's track.
     pub fn chain_id(&self) -> Option<u32> {
-        let section = self.services.section_here()?;
-        section
-            .chains
-            .get(self.services.cursor.track)
-            .copied()
-            .flatten()
+        self.services.chain_id()
     }
 
     /// The rows in the cursor's chain.
     pub fn chain_entries(&self) -> &[ChainEntry] {
-        self.chain_id()
-            .and_then(|id| self.services.track_here()?.chains.get(&id))
-            .map_or(&[], |chain| chain.entries.as_slice())
+        self.services.chain_entries()
     }
 
     fn here(&self) -> Place {

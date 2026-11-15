@@ -542,13 +542,13 @@ fn viewport_keys_move_within_the_screen() {
     keys(&mut app, "M");
     assert_eq!(app.services.cursor.step, 10);
     keys(&mut app, "^e");
-    assert_eq!(app.top, 3);
+    assert_eq!(app.phrase_view.top, 3);
     assert_eq!(
         app.services.cursor.step, 10,
         "the cursor stays while it's on screen"
     );
     keys(&mut app, "H^y");
-    assert_eq!(app.top, 0);
+    assert_eq!(app.phrase_view.top, 0);
     assert_eq!(app.services.cursor.step, 3);
 }
 
@@ -651,7 +651,7 @@ fn slides_keep_the_row_and_scroll_the_notes_under_it() {
     keys(&mut app, "]l");
     assert_eq!(app.song().tracks[0].phrases[&0].start(), 1);
     assert_eq!(app.services.cursor.step, 2, "still row 01");
-    assert_eq!(app.top, 1, "and the screen moved with it");
+    assert_eq!(app.phrase_view.top, 1, "and the screen moved with it");
     keys(&mut app, "[l");
     assert_eq!(app.song().tracks[0].phrases[&0].start(), 0);
     assert_eq!(app.services.cursor.step, 1);
@@ -669,18 +669,21 @@ fn a_slide_keeps_row_zero_still_when_the_phrase_fits_on_screen() {
     let (mut app, _rt) = app_with(&[E; 8]);
     keys(&mut app, ":len 4<Enter>");
     app.follow_cursor(24);
-    assert_eq!(app.top, 0);
+    assert_eq!(app.phrase_view.top, 0);
     keys(&mut app, "2]l");
     app.follow_cursor(24);
-    assert_eq!(app.top, 2, "row 00 is still the top row");
+    assert_eq!(app.phrase_view.top, 2, "row 00 is still the top row");
     assert_eq!(app.services.cursor.step, 2);
     // Scrolling up still shows what is above the loop, and it stays there.
     keys(&mut app, "^y");
     app.follow_cursor(24);
-    assert_eq!(app.top, 0);
+    assert_eq!(app.phrase_view.top, 0);
     keys(&mut app, "[l");
     app.follow_cursor(24);
-    assert_eq!(app.top, 0, "nothing is above the top to keep row 00 still");
+    assert_eq!(
+        app.phrase_view.top, 0,
+        "nothing is above the top to keep row 00 still"
+    );
 }
 
 #[test]
@@ -764,7 +767,7 @@ fn going_to_a_phrase_lands_on_its_loop_start() {
     assert_eq!(app.services.cursor.step, 5);
     keys(&mut app, "]P[P");
     assert_eq!(app.services.cursor.step, 4);
-    assert_eq!(app.top, 4);
+    assert_eq!(app.phrase_view.top, 4);
 }
 
 #[test]

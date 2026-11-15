@@ -9,9 +9,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use vt_model::step::{FxCommand, FxSlot, GateKind, Mark, Note, Step, nudge_text};
 
-use crate::app::{App, Field};
+use crate::app::Field;
+use crate::page::Ctx;
 use crate::theme;
-use crate::views::status::phrase_value;
 use crate::views::widgets::{self, bar::ValueBar, popup};
 
 /// The narrowest it's drawn: a label, a value and room for what it means.
@@ -72,10 +72,12 @@ fn text(value: String) -> Vec<Span<'static>> {
 }
 
 /// The lines spelling out a row.
-fn lines(app: &App, step: &Step) -> Vec<Line<'static>> {
+fn lines(ctx: &Ctx, step: &Step) -> Vec<Line<'static>> {
     let mut lines = vec![Line::raw("")];
     let note = match step.note {
-        Note::On(midi) => phrase_value(app, Field::Note).unwrap_or(format!("MIDI {midi}")),
+        Note::On(midi) => ctx
+            .phrase_value(Field::Note)
+            .unwrap_or(format!("MIDI {midi}")),
         Note::Off => "ends the note sounding".to_owned(),
         Note::Empty => "nothing plays".to_owned(),
     };
@@ -92,8 +94,8 @@ fn lines(app: &App, step: &Step) -> Vec<Line<'static>> {
         None => part("Velocity", text("··".to_owned()), "full".to_owned()),
     });
     if step.nudge != 0 {
-        let nudge = phrase_value(app, Field::Nudge).unwrap_or_default();
-        let most = app.most_nudge_here();
+        let nudge = ctx.phrase_value(Field::Nudge).unwrap_or_default();
+        let most = ctx.most_nudge_here();
         lines.push(part("Nudge", text(nudge_text(step.nudge, most)), nudge));
     }
     lines.push(match step.gate {
@@ -108,7 +110,7 @@ fn lines(app: &App, step: &Step) -> Vec<Line<'static>> {
             gate_meaning(GateKind::Single, 1),
         ),
     });
-    let length = phrase_value(app, Field::GateLength).unwrap_or_default();
+    let length = ctx.phrase_value(Field::GateLength).unwrap_or_default();
     lines.push(match step.length() {
         Some(own) => part("Length", text(format!("{own:02X}")), length),
         None => part(
@@ -131,12 +133,9 @@ fn lines(app: &App, step: &Step) -> Vec<Line<'static>> {
         // label and value, with what it does.
         let line = match command {
             FxCommand::Set(id) => {
-                let on_track = app
-                    .services
-                    .track_here()
-                    .is_some_and(|track| id.exists_on(track));
+                let on_track = ctx.track_here().is_some_and(|track| id.exists_on(track));
                 let mut meaning: Vec<String> =
-                    phrase_value(app, Field::FxValue(at)).into_iter().collect();
+                    ctx.phrase_value(Field::FxValue(at)).into_iter().collect();
                 if !on_track {
                     meaning.push("not on this track".to_owned());
                 }
@@ -154,7 +153,8 @@ fn lines(app: &App, step: &Step) -> Vec<Line<'static>> {
                     format!("{} {:02X}", event.name(), slot.coarse()),
                     Style::new().fg(theme::PEACH),
                 )],
-                phrase_value(app, Field::FxValue(at)).unwrap_or_else(|| event.meaning()),
+                ctx.phrase_value(Field::FxValue(at))
+                    .unwrap_or_else(|| event.meaning()),
             ),
         };
         lines.push(line);
@@ -163,11 +163,10 @@ fn lines(app: &App, step: &Step) -> Vec<Line<'static>> {
 }
 
 /// Draw it in an area, over the row under the cursor.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App, row: &str) {
-    let Some(step) = app
-        .services
+pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, row: &str) {
+    let Some(step) = ctx
         .phrase_here()
-        .and_then(|phrase| phrase.steps().get(app.services.cursor.step))
+        .and_then(|phrase| phrase.steps().get(ctx.cursor().step))
     else {
         return;
     };
@@ -178,7 +177,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App, row: &str) {
             Span::styled(format!("Row {row}"), theme::dim()),
             Span::raw(" "),
         ]));
-    let mut lines = lines(app, step);
+    let mut lines = lines(ctx, step);
     lines.push(Line::raw(""));
     // As tall as the row needs, with a nudge or without.
     let area = popup::top_left(area, area.width, lines.len() as u16 + 2);

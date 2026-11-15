@@ -217,7 +217,7 @@ fn rows_count_from_the_loop_start_and_dim_outside_it() {
     command(&mut app, "len 4");
     press(&mut app, "2]l");
     // A slide keeps row 00 where it was on screen, so scroll up to see what is above it.
-    app.top = 0;
+    app.phrase_view.top = 0;
     let buffer = screen(&app);
     assert_eq!(row_number_at(&buffer, 2), "-02");
     assert_eq!(row_number_at(&buffer, 3), "-01");
@@ -253,7 +253,7 @@ fn other_tracks_are_blank_above_row_00_and_keep_going_past_this_loop() {
     let mut app = App::new(song, None, samples, handle, 48_000);
     command(&mut app, "len 4");
     press(&mut app, "]L");
-    app.top = 0;
+    app.phrase_view.top = 0;
     let buffer = screen(&app);
     let neighbour = |y: u16| -> String { (74..77).map(|x| buffer[(x, y)].symbol()).collect() };
     assert_eq!(neighbour(2), "   ", "above the loop");
@@ -273,7 +273,7 @@ fn the_playhead_marks_where_the_loop_is_playing() {
     on_the_row_being_edited(&mut app);
     app.services.transport = Transport::Playing;
     app.set_playhead(1);
-    app.top = 0;
+    app.phrase_view.top = 0;
     let buffer = screen(&app);
     // The loop starts at stored step 8, so row 01 is on the screen's row 11.
     assert_eq!(row_number_at(&buffer, 11), " 01");
@@ -441,7 +441,7 @@ fn space_i_shows_the_rows_inspector_beside_the_overview_and_hides_it() {
     let text = |app: &App| drawn_lines(&screen_wide(app)).join("\n");
     assert!(!text(&app).contains("Row 00"), "hidden at first");
     press(&mut app, " i");
-    assert!(app.inspector);
+    assert!(app.phrase_view.inspector);
     let lines = drawn_lines(&screen_wide(&app));
     // Its frame level with the grid's, past the eight tracks' columns.
     let top = &lines[1];
@@ -475,7 +475,7 @@ fn the_rows_inspector_gives_way_when_the_overview_needs_the_room() {
     assert!(!lines.join("\n").contains("Row 00"), "it gives way");
     // And every track keeps its column.
     assert!(lines[1].contains("16"), "{}", lines[1]);
-    assert!(app.inspector, "it comes back when there's room");
+    assert!(app.phrase_view.inspector, "it comes back when there's room");
 }
 
 /// The phrase view at the author's 163 columns, less the meter beside it.
@@ -579,7 +579,7 @@ fn rows_past_a_short_phrase_keep_the_box_and_have_nothing_above_the_loop() {
 
     // A row above the selected track's loop start is above every other track's too.
     press(&mut app, "]l");
-    app.top = 0;
+    app.phrase_view.top = 0;
     let buffer = screen(&app);
     assert_eq!(beside(&buffer, 1, 0).0, "    ");
     assert_eq!(beside(&buffer, 1, 1).0, " C-3");
@@ -905,7 +905,7 @@ fn a_beat_row_is_one_that_starts_on_a_beat_in_time() {
     // Rows 00 and 01 last 2 pulses each, so row 02 starts on the second beat.
     // Collapsed, a row a line, as the timeline would put rows 00 and 01 over two lines each.
     press(&mut app, "lllrSGL2jrSGL2ggzi");
-    app.top = 0;
+    app.phrase_view.top = 0;
     let buffer = screen(&app);
     let number_colour = |row: u16| buffer[(5, row + 2)].fg;
     let beat = number_colour(0);
@@ -919,7 +919,7 @@ fn a_beat_row_is_one_that_starts_on_a_beat_in_time() {
 fn a_rule_under_a_row_marks_where_the_next_beat_or_bar_begins() {
     let (mut app, _realtime) = app();
     command(&mut app, "len 20");
-    app.top = 0;
+    app.phrase_view.top = 0;
     let buffer = screen(&app);
     let beat = Some(vt_tui::theme::SURFACE1);
     let bar = Some(vt_tui::theme::OVERLAY0);
@@ -944,7 +944,7 @@ fn the_rules_follow_rows_that_last_several_pulses() {
     // Rows 00 and 01 last 2 pulses each, so row 02 starts on the second beat.
     // Collapsed, a row a line, as the timeline would put rows 00 and 01 over two lines each.
     press(&mut app, "lllrSGL2jrSGL2ggzi");
-    app.top = 0;
+    app.phrase_view.top = 0;
     let buffer = screen(&app);
     assert_eq!(rule_under(&buffer, 2), None, "row 01 starts at step 2");
     assert_eq!(
@@ -960,7 +960,7 @@ fn the_loops_last_row_is_followed_by_a_bar() {
     let (mut app, _realtime) = app();
     command(&mut app, "len 4");
     press(&mut app, "2]l");
-    app.top = 0;
+    app.phrase_view.top = 0;
     let buffer = screen(&app);
     // Rows -02 and -01 come before the loop, which plays rows 00 to 03 of those kept.
     assert_eq!(row_number_at(&buffer, 7), " 03");
