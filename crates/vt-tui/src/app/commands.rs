@@ -397,6 +397,8 @@ impl App {
         self.services.folds = Folds::from_view(&song.view);
         self.send_live();
         self.services.history = History::new(Arc::new(song));
+        // A song whose generators were saved in another scale than its own takes its own.
+        self.services.follow_scale();
         // Another song's rows and generators aren't these.
         self.services.reported.heard_pitches.clear();
         self.services.reported.heard_passes.clear();

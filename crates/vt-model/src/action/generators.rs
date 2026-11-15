@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use super::EditError;
 use crate::generator::{Generator, reads};
+use crate::scale::Scale;
 use crate::shape::{FillKind, Shape, Source};
 use crate::song::{Phrase, Song};
 use crate::step::Step;
@@ -79,6 +80,66 @@ pub fn hold_generators(song: &mut Song) {
             }
         }
     }
+}
+
+/// The song with every live generator on a Note column going through this scale, its notes
+/// written again, and every `Follow` of a phrase that changes written again after it, or none if
+/// they all go through it already. A live generator's notes follow the song's scale as it is now
+/// (decision 360), and the scale is changed outside undo, so this isn't an edit: whoever changes
+/// the scale puts the result in the place of the version it was made from. A phrase with no such
+/// generator is left as it is, shared with the song given.
+pub fn rescale_generators(song: &Song, scale: Scale) -> Option<Song> {
+    let stale = |phrase: &Phrase| {
+        phrase
+            .generators()
+            .iter()
+            .any(|generator| generator.scale().is_some_and(|its| its != scale))
+    };
+    if !song
+        .tracks
+        .iter()
+        .any(|track| track.phrases.values().any(|phrase| stale(phrase)))
+    {
+        return None;
+    }
+    let mut next = song.clone();
+    for index in 0..next.tracks.len() {
+        let due: Vec<u32> = next.tracks[index]
+            .phrases
+            .iter()
+            .filter(|(_, phrase)| stale(phrase))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in due {
+            let Some(found) = next.tracks[index].phrases.get(&id) else {
+                continue;
+            };
+            // Each `Follow` from its source as it is: one whose source changes too is written
+            // again below, after it.
+            let sources = sources_of(&next, found);
+            let looked: Vec<Option<Vec<Step>>> = found
+                .generators()
+                .iter()
+                .map(|generator| {
+                    generator
+                        .source()
+                        .and_then(|source| looked_up(&sources, source))
+                        .map(<[Step]>::to_vec)
+                })
+                .collect();
+            let phrase = Arc::make_mut(
+                next.tracks[index]
+                    .phrases
+                    .get_mut(&id)
+                    .expect("found above"),
+            );
+            for (at, source) in looked.into_iter().enumerate() {
+                phrase.rescale_generator(at, scale, source.as_deref());
+            }
+        }
+    }
+    follow_generators(song, &mut next);
+    Some(next)
 }
 
 /// The phrase a `Follow` shape reads, to copy it once, or none for any other shape.

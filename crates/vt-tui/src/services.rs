@@ -30,7 +30,7 @@ use vt_engine::gens::{GenPass, GenRow};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::track_state::{Faders, LaneRead, LiveValues, NotePitch};
-use vt_model::action::{Action, edit};
+use vt_model::action::{Action, edit, rescale_generators};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, FX_SLOTS, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::history::History;
 use vt_model::lane::Heard;
@@ -277,6 +277,19 @@ impl Services {
             }
             Err(error) => self.status = error.to_string(),
         }
+    }
+
+    /// Have the song's live generators on Note columns go through the scale as it is now, their
+    /// notes written again in the current version, in its place and so with no undo step, as the
+    /// scale is outside undo (decision 360): true if that changed it, for the caller to publish.
+    /// Only the current version is changed, as doing every kept one took over a second on a full
+    /// history, so whatever brings another version back, as undo and redo do, calls this again.
+    pub(crate) fn follow_scale(&mut self) -> bool {
+        let Some(next) = rescale_generators(self.song(), self.live.scale) else {
+            return false;
+        };
+        self.history.replace_current(Arc::new(next));
+        true
     }
 
     /// Send the current version to the audio thread. Only the bank entries that changed are

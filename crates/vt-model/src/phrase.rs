@@ -7,6 +7,7 @@ use crate::generator::{Generator, GeneratorFile, Span};
 pub use crate::lane::Lane;
 use crate::lane::MOST_DIVISION;
 use crate::order::{Deal, Order, Round};
+use crate::scale::Scale;
 use crate::selection::{Extent, StepRange};
 use crate::shape::{Shape, ShapeColumn, Source};
 use crate::step::{FxCommand, FxSlot, Step};
@@ -240,6 +241,20 @@ impl Phrase {
         self.generators
             .get_mut(index)
             .is_some_and(|generator| generator.hold(steps, held, source))
+    }
+
+    /// Have a live generator on the Note column go through this scale, writing its notes again,
+    /// a `Follow` from `source`: false if it isn't on that column or has the scale already.
+    pub fn rescale_generator(
+        &mut self,
+        index: usize,
+        scale: Scale,
+        source: Option<&[Step]>,
+    ) -> bool {
+        let steps = &mut self.steps;
+        self.generators
+            .get_mut(index)
+            .is_some_and(|generator| generator.rescale(steps, scale, source))
     }
 
     /// Write a live `Follow` again from its source's loop, which an edit changed: true if that

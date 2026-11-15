@@ -488,3 +488,92 @@ fn an_lfo_on_a_macro_sweeps_a_random_fills_spread_and_bias() {
     let (kept, ..) = play(&plain(&song, heard), 16);
     assert!(out == kept, "the rows heard, written in, play the same");
 }
+
+/// A live generator on a Note column whose scale was changed after it was made (decision 360):
+/// the version the engine is handed has its notes written through the new scale, and moving, as
+/// with its `To` held at another number, the engine renders it through the new scale too.
+#[test]
+fn a_moving_generator_on_notes_renders_through_the_scale_it_was_given() {
+    use vt_model::action::rescale_generators;
+    use vt_model::scale::{Scale, ScaleKind};
+    use vt_model::step::Note;
+    let major = Scale {
+        on: true,
+        root: 0,
+        kind: ScaleKind::Major,
+    };
+    let minor = Scale {
+        kind: ScaleKind::Minor,
+        ..major
+    };
+    let mut song = Song::new(1);
+    song.scale = major;
+    song.tracks[0].machine = Machine::Plaits(SynthVoice::VirtualAnalog);
+    let rests = Phrase::from_steps(vec![Step::default(); 16]);
+    song.tracks[0].phrases.insert(0, Arc::new(rests));
+    let column = ShapeColumn::Note {
+        scale: major,
+        writes: Some(0x64),
+    };
+    let song = apply(
+        song,
+        &Action::Generate {
+            track: 0,
+            phrase: 0,
+            column,
+            span: Span::rows(StepRange::between(0, 15)),
+            shape: Shape {
+                from: 60,
+                to: 72,
+                seed: 7,
+                ..Shape::default()
+            },
+        },
+    );
+    let song = rescale_generators(&song, minor).expect("it was in major");
+    let pitches = |steps: &[Step]| -> Vec<u8> {
+        steps
+            .iter()
+            .filter_map(|step| match step.note {
+                Note::On(note) => Some(note),
+                _ => None,
+            })
+            .collect()
+    };
+    // At rest, what's written, in minor with notes major hasn't.
+    let at_rest = pitches(&written(&song));
+    assert_eq!(at_rest.len(), 16);
+    assert!(
+        at_rest.iter().all(|note| minor.contains(*note)),
+        "{at_rest:?}"
+    );
+    assert!(
+        at_rest.iter().any(|note| !major.contains(*note)),
+        "{at_rest:?}"
+    );
+    // Moving, up two octaves, not one.
+    let mut engine = Engine::new(RATE, version(&song));
+    engine.set_scale(minor);
+    engine.hold_generator(0, column, GenParam::To, Some(84));
+    engine.play_from(0);
+    let mut rows = Vec::new();
+    let mut block = vec![0.0; STEP * 2];
+    for _ in 0..16 {
+        engine.process(&mut block);
+        engine.take_gen_reports(|_, report| {
+            if let GenReport::Row(row) = report {
+                rows.push(row);
+            }
+        });
+    }
+    let moving = pitches(&as_heard(&song, &rows));
+    assert_ne!(moving, at_rest, "it moved");
+    assert!(
+        moving.iter().all(|note| minor.contains(*note)),
+        "{moving:?}"
+    );
+    assert!(
+        moving.iter().any(|note| !major.contains(*note)),
+        "{moving:?}"
+    );
+}

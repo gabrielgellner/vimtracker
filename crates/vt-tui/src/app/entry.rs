@@ -711,6 +711,10 @@ impl Services {
         self.live.scale = scale;
         self.handle.send(Command::SetScale { scale });
         self.dirty = true;
+        // The live generators' notes go through it too, written again and sent as a version.
+        if self.follow_scale() {
+            self.publish();
+        }
         self.status = if scale.on {
             format!("Scale {} {}", scale.root_name(), scale.kind.name())
         } else {
