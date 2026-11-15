@@ -713,11 +713,10 @@ impl App {
         self.services
             .history
             .replace_current(Arc::clone(&panel.base));
-        if *result != *panel.base {
-            if panel.live.is_none() {
-                self.services.say_applied(&result);
-            }
-            self.services.history.commit(result);
+        if panel.live.is_none() {
+            self.services.say_applied(&result);
+        }
+        if self.services.history.commit(result) {
             self.services.dirty = true;
         }
         self.services.publish();

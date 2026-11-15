@@ -44,6 +44,26 @@ fn a_new_edit_clears_redo() {
 }
 
 #[test]
+fn a_version_the_same_as_the_current_one_is_no_undo_step_and_keeps_redo() {
+    let first = Arc::new(Song::new(1));
+    let mut history = History::new(Arc::clone(&first));
+    let second = edit(history.current(), &set_note(0, 0, 60)).unwrap();
+    assert!(history.commit(Arc::clone(&second)));
+    history.undo();
+    // The tempo it already has, then the same note again: new versions, equal to the current.
+    let same = edit(history.current(), &Action::SetMilliBpm(first.millibpm)).unwrap();
+    assert!(!Arc::ptr_eq(&same, &first));
+    assert!(!history.commit(same));
+    assert!(Arc::ptr_eq(history.current(), &first));
+    assert_eq!(history.undo_depth(), 0);
+    assert!(Arc::ptr_eq(history.redo().unwrap(), &second), "redo stays");
+    let again = edit(history.current(), &set_note(0, 0, 60)).unwrap();
+    assert!(!history.commit(again));
+    assert!(Arc::ptr_eq(history.current(), &second));
+    assert_eq!(history.undo_depth(), 1);
+}
+
+#[test]
 fn unchanged_items_stay_the_same_arc() {
     let song = Arc::new(Song::new(2));
     let next = edit(&song, &set_note(0, 0, 60)).unwrap();

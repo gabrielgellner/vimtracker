@@ -1170,6 +1170,20 @@ fn rotating_all_the_way_round_leaves_no_undo_step() {
 }
 
 #[test]
+fn x_on_an_empty_step_and_a_note_at_its_top_leave_no_undo_step() {
+    let (mut app, _rt) = app_with(&[E, "G-8 7F --- --- ---"]);
+    app.services.dirty = false;
+    let depth = app.services.history.undo_depth();
+    keys(&mut app, "xlxj=h=");
+    assert_eq!(steps(&app), [E, "G-8 7F --- --- ---"]);
+    assert_eq!(app.services.history.undo_depth(), depth);
+    assert!(!app.services.dirty);
+    keys(&mut app, "x");
+    assert_eq!(steps(&app)[1], "--- 7F --- --- ---");
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+}
+
+#[test]
 fn level_fx_values_snap_to_the_top_of_the_scale() {
     let (mut app, _rt) = app_with(&[E, E]);
     keys(&mut app, "lllllrVOL<Enter>FF");
@@ -3288,7 +3302,8 @@ fn undo_while_selected_takes_back_one_press_and_keeps_the_selection() {
 #[test]
 fn undo_past_the_selections_own_changes_keeps_it_and_redo_comes_back_in_step() {
     let (mut app, _rt) = app_with(&[N]);
-    keys(&mut app, "ra");
+    // A change before the selection: E over its C, as C over it would change nothing.
+    keys(&mut app, "rd");
     keys(&mut app, "v+u");
     assert_eq!(app.adjusted_total(), None);
     keys(&mut app, "u");
