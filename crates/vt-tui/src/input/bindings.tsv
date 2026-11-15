@@ -911,6 +911,7 @@ Picker	T	InPicker(Tags)	In the explorer: change the tags
 Picker	Space	InPicker(Mark)	In a kit: mark the sound, or a count of them
 Picker	x	InPicker(Mark)	In a kit: mark the sound, or a count of them
 Picker	a	InPicker(MarkAll)	In a kit: mark every sound, or none
+Picker	?	InPicker(Help)	These keys
 Help	j	InHelp(Down)	Scroll down
 Help	Down	InHelp(Down)	Scroll down
 Help	k	InHelp(Up)	Scroll up

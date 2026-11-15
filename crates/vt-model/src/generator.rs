@@ -361,6 +361,34 @@ impl Generator {
         self.render(steps, source);
     }
 
+    /// The scale its notes go through, if it's on the Note column.
+    pub fn scale(&self) -> Option<Scale> {
+        match self.column {
+            ShapeColumn::Note { scale, .. } => Some(scale),
+            _ => None,
+        }
+    }
+
+    /// Take the scale its notes go through, as the song's is now, and write them again through
+    /// it, a `Follow` from `source`: false if it isn't on the Note column or has that scale
+    /// already, and nothing is written.
+    pub(crate) fn rescale(
+        &mut self,
+        steps: &mut [Step],
+        scale: Scale,
+        source: Option<&[Step]>,
+    ) -> bool {
+        let ShapeColumn::Note { scale: mine, .. } = &mut self.column else {
+            return false;
+        };
+        if *mine == scale {
+            return false;
+        }
+        *mine = scale;
+        self.render(steps, source);
+        true
+    }
+
     /// Write its values over what's under it, changing its own cells only: the cells
     /// [`render_into`] leaves, laid over the steps. A `Follow` with nothing to read, as its source
     /// has gone, leaves what it last wrote, for the edit to apply.

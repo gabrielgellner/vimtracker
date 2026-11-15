@@ -37,12 +37,14 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, app: &App, now: Instant) {
 }
 
 /// `Space k`: every key, from the binding table. `j` and `k` scroll, and any other key closes it.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Help {
     /// Its rows, as they were when it opened.
     rows: Vec<String>,
     /// How far it has scrolled.
     pub scroll: usize,
+    /// The mode it goes back to when it closes: Normal, or the picker's where `?` opened it.
+    pub back: Mode,
 }
 
 /// A key of `Space k`'s list.
@@ -52,10 +54,27 @@ pub enum HelpKey {
     Up,
 }
 
+impl Default for Help {
+    fn default() -> Self {
+        Self::over(Vec::new())
+    }
+}
+
 impl Help {
     /// The list from its top, over these rows.
     pub(crate) fn over(rows: Vec<String>) -> Self {
-        Self { rows, scroll: 0 }
+        Self {
+            rows,
+            scroll: 0,
+            back: Mode::Normal,
+        }
+    }
+
+    /// The list scrolled to a mode's keys, going back to `back` when it closes.
+    pub(crate) fn at(rows: Vec<String>, mode: Mode, back: Mode) -> Self {
+        let heading = format!("{mode:?}");
+        let scroll = rows.iter().position(|row| *row == heading).unwrap_or(0);
+        Self { rows, scroll, back }
     }
 }
 

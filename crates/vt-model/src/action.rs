@@ -45,7 +45,7 @@ mod steps;
 mod tracks;
 
 use generators::follow_generators;
-pub use generators::hold_generators;
+pub use generators::{hold_generators, rescale_generators};
 
 /// A new value for one field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
