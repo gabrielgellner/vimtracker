@@ -88,7 +88,12 @@ impl App {
             return;
         }
         if self.modes.view == View::Project {
-            self.insert_project_page(key);
+            let entry = &mut self.modes.entry;
+            let page = &mut self.project_page;
+            if let Some(outcome) = page.insert(key, entry, &mut self.names, &mut self.services) {
+                self.modes.mode = Mode::Normal;
+                self.settled(outcome, false);
+            }
             return;
         }
         if self.modes.view != View::Phrase {
@@ -112,7 +117,7 @@ impl App {
             return;
         }
         if key.code == KeyCode::Char(';') && !key.ctrl && !key.alt {
-            self.toggle_auto_jump();
+            self.services.toggle_auto_jump();
             return;
         }
         match self.services.cursor.field {
@@ -126,21 +131,9 @@ impl App {
         }
     }
 
-    /// Set the scale, which isn't an edit to undo, and say what it now does.
-    pub(crate) fn set_scale(&mut self, scale: Scale) {
-        self.services.scale = scale;
-        self.services.handle.send(Command::SetScale { scale });
-        self.services.dirty = true;
-        self.services.status = if scale.on {
-            format!("Scale {} {}", scale.root_name(), scale.kind.name())
-        } else {
-            "Scale off".to_owned()
-        };
-    }
-
     pub(super) fn toggle_scale(&mut self) {
         self.modes.count = None;
-        self.set_scale(Scale {
+        self.services.set_scale(Scale {
             on: !self.services.scale.on,
             ..self.services.scale
         });
@@ -692,18 +685,6 @@ impl App {
         }
     }
 
-    /// `;` in Insert: whether entering moves on by the grid. Like the scale, it isn't an edit to
-    /// undo.
-    pub(crate) fn toggle_auto_jump(&mut self) {
-        self.services.auto_jump = !self.services.auto_jump;
-        self.services.dirty = true;
-        self.services.status = if self.services.auto_jump {
-            "Auto-jump on: each entry moves on by the grid".to_owned()
-        } else {
-            "Auto-jump off: entering stays put".to_owned()
-        };
-    }
-
     fn write_note(&mut self, note: Note) {
         let Some(phrase) = self.services.phrase_id() else {
             self.services.status = "This track has no phrase here".to_owned();
@@ -719,6 +700,30 @@ impl App {
 }
 
 impl Services {
+    /// Set the scale, which isn't an edit to undo, and say what it now does.
+    pub(crate) fn set_scale(&mut self, scale: Scale) {
+        self.scale = scale;
+        self.handle.send(Command::SetScale { scale });
+        self.dirty = true;
+        self.status = if scale.on {
+            format!("Scale {} {}", scale.root_name(), scale.kind.name())
+        } else {
+            "Scale off".to_owned()
+        };
+    }
+
+    /// `;` in Insert: whether entering moves on by the grid. Like the scale, it isn't an edit to
+    /// undo.
+    pub(crate) fn toggle_auto_jump(&mut self) {
+        self.auto_jump = !self.auto_jump;
+        self.dirty = true;
+        self.status = if self.auto_jump {
+            "Auto-jump on: each entry moves on by the grid".to_owned()
+        } else {
+            "Auto-jump off: entering stays put".to_owned()
+        };
+    }
+
     /// An FX slot of the row under the cursor.
     pub(crate) fn current_slot(&self, slot: usize) -> Option<FxSlot> {
         let phrase = self.phrase_here()?;
