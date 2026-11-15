@@ -32,7 +32,7 @@ use crate::config::Settings;
 use crate::input::command_history::CommandHistory;
 use crate::input::keys::{KEYBOARD_FLAGS, Key};
 use crate::input::mode::{Mode, View};
-use crate::kitty::{self, Graphics, Placements, SampleLines};
+use crate::kitty::{self, Graphics, PanelIds, Placements, SampleLines};
 use crate::page::Page;
 use crate::places::RecentPlaces;
 use crate::theme;
@@ -601,12 +601,12 @@ impl App {
         if self.modes.view == View::Sample {
             // So `h` and `l` move the cursor's line by a pixel of these.
             self.sample_page.cell_width = Some(graphics.cell().0);
-            self.sample_images = match self.sample_page_here() {
-                Ok(shown) => Some(graphics.sample(&shown, &self.sample_page, out)?),
-                Err(_) => None,
-            };
+            let _ = self.sample_page_here();
+            let wants = self.sample_page.panels(&self.ctx());
+            let ids = graphics.sample_panels(&wants, rate, out)?;
+            self.sample_page.take_panels(ids, &wants, rate);
         } else {
-            self.sample_images = None;
+            self.sample_page.images = PanelIds::default();
         }
         let shown = self
             .picker
@@ -640,14 +640,15 @@ impl App {
             [None; MOD_SLOTS]
         };
         let page = &self.sample_page;
+        let ctx = self.ctx();
         let sample = SampleLines {
             page,
-            marks: views::sample::marks_placed(self, now),
-            playheads: views::sample::lines_placed(self, now),
+            marks: views::sample::marks_placed(page, &ctx, now),
+            playheads: views::sample::lines_placed(page, &ctx, now),
             cursor: self.modes.view == View::Sample
                 && page.cursor_line
-                && self.sample_images.is_some()
-                && !views::sample::overlaid(self, now),
+                && page.wave_images().is_some()
+                && !ctx.overlaid(now),
             // With the focus on the settings rows, `h` and `l` go along them, so the line is set
             // back to show it isn't what moves.
             dimmed: page.setting.is_some() && self.modes.mode != Mode::Keys,
@@ -691,7 +692,12 @@ pub fn draw_screen(
         View::Mixer => app.mixer_page.draw(frame, view, &app.ctx()),
         View::Audio => app.audio_page.draw(frame, view, &app.ctx()),
         View::Project => app.project_page.draw(frame, view, &app.ctx()),
-        View::Sample => views::sample::draw(frame, view, app),
+        View::Sample => {
+            // Laid out for the room first, so it settles on the columns it's drawn with.
+            app.sample_page.lay_out(view);
+            let _ = app.sample_page_here();
+            app.sample_page.on_screen = app.sample_page.draw(frame, view, &app.ctx());
+        }
         View::Song => app.song_view.draw(frame, view, &app.ctx()),
     }
     // Inside the box the track page has while the keyboard plays it.

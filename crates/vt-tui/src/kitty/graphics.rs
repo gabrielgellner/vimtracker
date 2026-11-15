@@ -1,7 +1,7 @@
 //! `Graphics`, which sends the pictures the screen shows and keeps track of which images the
 //! terminal has. It reads no `App`: each page says which of its panels' pictures it wants as
-//! [`PanelWant`]s and is given back their ids, the scope, the picker's preview and the sample
-//! page are handed what they're drawn from, and what's placed directly comes as [`Placements`].
+//! [`PanelWant`]s and is given back their ids, the scope and the picker's preview are handed what
+//! they're drawn from, and what's placed directly comes as [`Placements`].
 
 use std::collections::BTreeMap;
 use std::io::{self, Write};
@@ -12,7 +12,6 @@ use ratatui::crossterm::terminal;
 use ratatui::style::Color;
 use vt_engine::engine::PLAYHEADS;
 use vt_engine::track_state::LfoNow;
-use vt_model::bank::{ContentHash, Points};
 use vt_model::modulation::{MOD_SLOTS, ModKind, ModSlot};
 
 use super::encoding::{Picture, scope_png, spans_png};
@@ -24,8 +23,7 @@ use super::protocol::{
 use super::switches::{self, Look};
 use super::{CELL_DOTS_ACROSS, CELL_DOTS_DOWN, rgb};
 use crate::input::picker::Shown;
-use crate::sample_page::{SamplePage, Shown as SampleShown};
-use crate::sample_wave::Drawing;
+use crate::sample_page::SamplePage;
 use crate::scope::Scope;
 use crate::theme;
 use crate::views::meter::{SCOPE_HEIGHT, SCOPE_WIDTH};
@@ -64,32 +62,6 @@ fn mark_picture(kind: MarkKind, cell: (usize, usize)) -> Picture {
         picture.pixels[y * width + inset..(y + 1) * width - inset].fill(1);
     }
     picture
-}
-
-/// An entry's points as the waveform draws them, where they are and nothing else, so changing a
-/// slice's own settings or a letter doesn't send the picture again.
-fn drawn_points(points: &Points) -> Points {
-    let mut drawn = points.clone();
-    drawn.marks.clear();
-    for slice in &mut drawn.slices {
-        slice.over = Default::default();
-    }
-    drawn
-}
-
-/// What the sample page's waveform or overview was drawn from, which is all that's compared to
-/// tell if it has to be drawn again.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct WaveKey {
-    hash: ContentHash,
-    /// Whether the file's frames were there to draw closer than the analysis goes.
-    loaded: bool,
-    points: Points,
-    first: u64,
-    zoom: u64,
-    columns: usize,
-    rows: usize,
-    cell: (usize, usize),
 }
 
 /// How many pixels across an LFO's dot is for characters of this size: a little over half a
@@ -229,9 +201,12 @@ pub struct Graphics {
     scope: Option<(Vec<(usize, usize)>, u32)>,
     /// The picker's preview and its images.
     preview: Option<(Arc<Shown>, PreviewImages)>,
-    /// The sample page's waveform and its overview, with what each was drawn from.
-    sample_wave: Option<(WaveKey, u32)>,
-    sample_overview: Option<(WaveKey, u32)>,
+    /// The sample page's waveform and its overview, and the character size they were drawn for.
+    /// They're held apart from the track page's panels, as each is sent again as soon as what it
+    /// shows changes, and only then: they follow the keys, not a modulated setting, and a window
+    /// that changes size leaves them be.
+    sample_panels: PanelImages,
+    sample_cell: (usize, usize),
     /// The image of the sample page's cursor as a line, and how tall it is in pixels.
     cursor_line: Option<(usize, u32)>,
     /// Where the line is placed, if it's on screen.
@@ -280,8 +255,8 @@ impl Graphics {
             panels: PanelImages::default(),
             scope: None,
             preview: None,
-            sample_wave: None,
-            sample_overview: None,
+            sample_panels: PanelImages::default(),
+            sample_cell: DEFAULT_CELL,
             cursor_line: None,
             cursor_placed: None,
             cursor_dimmed: false,
@@ -348,11 +323,7 @@ impl Graphics {
             let id = self.base | self.next;
             let in_use = self.panels.ids().any(|held| held == id)
                 || self.scope.as_ref().is_some_and(|image| image.1 == id)
-                || self.sample_wave.as_ref().is_some_and(|image| image.1 == id)
-                || self
-                    .sample_overview
-                    .as_ref()
-                    .is_some_and(|image| image.1 == id)
+                || self.sample_panels.ids().any(|held| held == id)
                 || self.cursor_line.is_some_and(|image| image.1 == id)
                 || self.playhead_line.is_some_and(|image| image.1 == id)
                 || self.mark_images.is_some_and(|(_, ids)| ids.contains(&id))
@@ -666,73 +637,6 @@ impl Graphics {
         Ok(Some(id))
     }
 
-    /// Send the sample page's waveform and overview, if the terminal lacks them. Each is drawn
-    /// again only when what it shows changes: the zoom, the view, the points or the window, never
-    /// for the cursor alone. It gives back their ids.
-    pub fn sample(
-        &mut self,
-        shown: &SampleShown,
-        page: &SamplePage,
-        out: &mut impl Write,
-    ) -> io::Result<(u32, u32)> {
-        let wave = WaveKey {
-            hash: shown.analysis.hash,
-            loaded: shown.frames.is_some(),
-            points: drawn_points(&shown.entry.edit.points),
-            first: page.first_frame(),
-            zoom: page.zoom,
-            columns: page.columns,
-            rows: usize::from(WAVE_ROWS),
-            cell: self.cell,
-        };
-        let overview = WaveKey {
-            first: 0,
-            zoom: page.fit(shown.length()),
-            rows: 1,
-            ..wave.clone()
-        };
-        let mut ids = [0; 2];
-        for (index, key) in [wave, overview].into_iter().enumerate() {
-            let held = if index == 0 {
-                self.sample_wave.take()
-            } else {
-                self.sample_overview.take()
-            };
-            let (key, id) = match held {
-                Some((drawn, id)) if drawn == key => (drawn, id),
-                old => {
-                    // Retired first, so the new one can't be given its id.
-                    self.retired.extend(old.map(|(_, id)| id));
-                    let id = self.new_id();
-                    let drawing = Drawing {
-                        analysis: &shown.analysis,
-                        frames: shown
-                            .frames
-                            .as_ref()
-                            .map(|(data, rates)| (data.as_ref(), *rates)),
-                        points: &key.points,
-                        first: key.first,
-                        zoom: key.zoom,
-                        columns: key.columns,
-                        rows: key.rows,
-                        cell: key.cell,
-                        merged: index == 1,
-                    };
-                    let png = drawing.picture().png();
-                    self.send(out, id, &png, key.columns, key.rows)?;
-                    (key, id)
-                }
-            };
-            ids[index] = id;
-            if index == 0 {
-                self.sample_wave = Some((key, id));
-            } else {
-                self.sample_overview = Some((key, id));
-            }
-        }
-        Ok((ids[0], ids[1]))
-    }
-
     /// Place the sample page's cursor as a thin line at its frame, or take it away when it isn't
     /// on screen, is shown as its column, or something is drawn over the page. It's an image of its
     /// own, sent once, and moving it is placing it again, so the waveform isn't sent again.
@@ -878,33 +782,67 @@ impl Graphics {
     ) -> io::Result<PanelIds> {
         let mut ids = PanelIds::default();
         for want in wants {
-            ids.insert(want.key, self.panel(want, rate, out)?);
+            ids.insert(want.key, self.panel(false, want, rate, out)?);
+        }
+        Ok(ids)
+    }
+
+    /// Send whichever of the sample page's pictures, its waveform and its overview, the terminal
+    /// lacks, and give back their ids. Each is sent again the moment what it shows changes, the
+    /// zoom, the view, the points or the size of the characters, never for the cursor alone.
+    pub(crate) fn sample_panels(
+        &mut self,
+        wants: &[PanelWant],
+        rate: u32,
+        out: &mut impl Write,
+    ) -> io::Result<PanelIds> {
+        let mut ids = PanelIds::default();
+        if !wants.is_empty() && self.sample_cell != self.cell {
+            // Drawn for another size of character: the old ones go, retired before the new ones
+            // are given ids.
+            self.retired.extend(self.sample_panels.clear());
+            self.sample_cell = self.cell;
+        }
+        for want in wants {
+            ids.insert(want.key, self.panel(true, want, rate, out)?);
         }
         Ok(ids)
     }
 
     /// The id of a panel's picture in a shade, sending it first if the terminal lacks one that
-    /// shows its shape.
-    fn panel(&mut self, want: &PanelWant, rate: u32, out: &mut impl Write) -> io::Result<u32> {
+    /// shows its shape: one of the sample page's, or another page's, which waits a little after a
+    /// change before it's sent again.
+    fn panel(
+        &mut self,
+        sample: bool,
+        want: &PanelWant,
+        rate: u32,
+        out: &mut impl Write,
+    ) -> io::Result<u32> {
         let PanelWant {
             key,
             shade,
             shape,
             cells,
         } = want;
-        match self
-            .panels
-            .find(*key, *shade, shape, self.frames, PANEL_FRAMES)
-        {
+        let (images, every) = if sample {
+            (&self.sample_panels, 0)
+        } else {
+            (&self.panels, PANEL_FRAMES)
+        };
+        match images.find(*key, *shade, shape, self.frames, every) {
             Found::Current(id) | Found::Waiting(id) => return Ok(id),
             Found::Missing => {}
         }
         let id = self.new_id();
         let png = shape.png(*cells, self.cell, *shade, rate);
         self.send(out, id, &png, cells.0, cells.1)?;
-        let replaced = self
-            .panels
-            .hold(*key, *shade, shape.clone(), id, self.frames);
+        let images = if sample {
+            &mut self.sample_panels
+        } else {
+            &mut self.panels
+        };
+        let replaced = images.hold(*key, *shade, shape.clone(), id, self.frames);
         self.retired.extend(replaced);
         Ok(id)
     }
@@ -929,14 +867,12 @@ impl Graphics {
 
     /// Have the terminal forget the images.
     pub fn forget(&self, out: &mut impl Write) -> io::Result<()> {
-        let panels: Vec<u32> = self.panels.ids().collect();
+        let panels: Vec<u32> = self.panels.ids().chain(self.sample_panels.ids()).collect();
         let scope = self.scope.iter().map(|image| &image.1);
         let sample = self
-            .sample_wave
+            .cursor_line
             .iter()
-            .chain(&self.sample_overview)
             .map(|image| &image.1)
-            .chain(self.cursor_line.iter().map(|image| &image.1))
             .chain(self.playhead_line.iter().map(|image| &image.1))
             .chain(self.mark_images.iter().flat_map(|(_, ids)| ids))
             .chain(self.dot_images.iter().flat_map(|(_, ids)| ids))

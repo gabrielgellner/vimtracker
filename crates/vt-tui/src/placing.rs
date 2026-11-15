@@ -6,14 +6,15 @@
 //! point placed goes to the nearest zero crossing.
 //!
 //! Each is one undo step on the bank entry, through the actions `:slice` and `:mark` use, so the
-//! steps' `SLI` locks and the letters follow their slices as they renumber.
+//! steps' `SLI` locks and the letters follow their slices as they renumber. They're the page's
+//! own edits, applied through the [`Services`] it's given.
 
 use vt_model::action::Action;
 use vt_model::bank::{BankEntry, Loop};
 
-use crate::app::App;
 use crate::banking::sample_text;
-use crate::sample_page::Shown;
+use crate::sample_page::{SamplePage, Shown};
+use crate::services::Services;
 use crate::views::sample::time;
 
 /// A point of an entry other than a slice's start.
@@ -179,30 +180,30 @@ impl Shown {
     }
 }
 
-impl App {
+impl SamplePage {
     /// A frame a point is to be placed at, on the nearest zero crossing within a column if the
     /// entry snaps, and only that way from it if it's moving one way.
     fn snapped(&self, shown: &Shown, frame: u64, toward: Option<bool>) -> u64 {
         if !shown.entry.edit.play.snap_zero {
             return frame;
         }
-        let within = self.sample_page.zoom.max(1);
+        let within = self.zoom.max(1);
         shown.zero_crossing(frame, within, toward).unwrap_or(frame)
     }
 
     /// The point under the cursor: the nearest within half a column of it.
     pub fn point_here(&self, shown: &Shown) -> Option<Point> {
-        let reach = self.sample_page.zoom / 2;
-        shown.point_near(self.sample_page.cursor, reach)
+        let reach = self.zoom / 2;
+        shown.point_near(self.cursor, reach)
     }
 
     /// Where the newest sound of the entry shown is, in its file's frames, for `Enter` to split at
     /// while it plays: what the page itself played, if it's still playing, or else the track's
     /// note of it, which comes before its tail in the report.
-    fn tapped_frame(&self, shown: &Shown) -> Option<u64> {
+    fn tapped_frame(&self, shown: &Shown, services: &Services) -> Option<u64> {
         let (_, rates) = shown.frames.as_ref()?;
-        let heard = self.sample_page.heard == Some((shown.number, shown.analysis.hash));
-        let heads: Vec<_> = self.services.playheads.iter().flatten().collect();
+        let heard = self.heard == Some((shown.number, shown.analysis.hash));
+        let heads: Vec<_> = services.playheads.iter().flatten().collect();
         let own = heads.iter().find(|head| head.entry.is_none() && heard);
         let note = heads.iter().find(|head| head.entry == Some(shown.number));
         own.or(note).map(|head| rates.file_frame(head.frame))
@@ -210,16 +211,16 @@ impl App {
 
     /// `Enter`: split the slice at the cursor, or at the playhead while the entry plays, so a break
     /// can be sliced by tapping along to it. The part before keeps the slice's id and letters.
-    pub(crate) fn split_here(&mut self, shown: &Shown) {
-        let (at, tapped) = match self.tapped_frame(shown) {
+    pub(crate) fn split_here(&self, shown: &Shown, services: &mut Services) {
+        let (at, tapped) = match self.tapped_frame(shown, services) {
             Some(frame) => (frame, true),
-            None => (self.sample_page.cursor, false),
+            None => (self.cursor, false),
         };
         let at = self.snapped(shown, at, None);
         let points = &shown.entry.edit.points;
         let rate = shown.rate();
         if points.split_starts(at).is_none() {
-            self.services.status = if points.slices.iter().any(|slice| slice.start == at) {
+            services.status = if points.slices.iter().any(|slice| slice.start == at) {
                 format!("A slice already starts at {}", time(at, rate))
             } else {
                 "Slices split between the start and the end".to_owned()
@@ -227,42 +228,41 @@ impl App {
             return;
         }
         let number = shown.number;
-        self.services.apply(&Action::SplitSlice { number, at });
-        let Some(entry) = self.song().bank.get(number) else {
+        services.apply(&Action::SplitSlice { number, at });
+        let Some(entry) = services.song().bank.get(number) else {
             return;
         };
         let slice = entry.edit.points.slice_at(at);
         let count = entry.edit.points.slices.len();
         let by = if tapped { "the playhead" } else { "the cursor" };
-        self.services.status = format!(
+        services.status = format!(
             "Slice {slice:02X} of {count} from {} at {by}: u to undo",
             time(at, rate)
         );
     }
 
     /// `J`: join the slice under the cursor with the next, which it takes in with its letters.
-    pub(crate) fn join_here(&mut self, shown: &Shown) {
+    pub(crate) fn join_here(&self, shown: &Shown, services: &mut Services) {
         let points = &shown.entry.edit.points;
         if points.slices.is_empty() {
-            self.services.status = format!("{} has no slices to join", shown.entry.title());
+            services.status = format!("{} has no slices to join", shown.entry.title());
             return;
         }
-        let (slice, _) = shown.slice_at(self.sample_page.cursor);
+        let (slice, _) = shown.slice_at(self.cursor);
         if slice + 1 >= points.slices.len() {
-            self.services.status =
-                format!("Slice {slice:02X} is the last: there's none after to join");
+            services.status = format!("Slice {slice:02X} is the last: there's none after to join");
             return;
         }
-        self.services.apply(&Action::JoinSlices {
+        services.apply(&Action::JoinSlices {
             number: shown.number,
             slice: slice as u8,
         });
-        let count = self
+        let count = services
             .song()
             .bank
             .get(shown.number)
             .map_or(0, |entry| entry.edit.points.slices.len());
-        self.services.status = format!(
+        services.status = format!(
             "Joined slices {slice:02X} and {:02X}, so there are {count}: u to undo",
             slice + 1
         );
@@ -271,43 +271,43 @@ impl App {
     /// `x`: take away the point under the cursor, never the audio. A slice's start joins it to the
     /// slice before; the start goes back to the file's, the end to the file's, and either loop
     /// point takes the loop away.
-    pub(crate) fn remove_point(&mut self, shown: &Shown) {
+    pub(crate) fn remove_point(&self, shown: &Shown, services: &mut Services) {
         let Some(point) = self.point_here(shown) else {
-            self.services.status = "No point under the cursor: ]] and [[ go to one".to_owned();
+            services.status = "No point under the cursor: ]] and [[ go to one".to_owned();
             return;
         };
         let number = shown.number;
-        let name = sample_text(self.song(), number);
+        let name = sample_text(services.song(), number);
         let mut entry = shown.entry.clone();
         let points = &mut entry.edit.points;
         let said = match point {
             Point::Slice(0) if points.slices.len() == 1 => {
-                self.services.apply(&Action::SetSlices {
+                services.apply(&Action::SetSlices {
                     number,
                     starts: Vec::new(),
                 });
-                self.services.status = format!("{name} plays as one again: u to undo");
+                services.status = format!("{name} plays as one again: u to undo");
                 return;
             }
             Point::Slice(0) => {
-                self.services.status =
+                services.status =
                     "Slice 00 is where the slices start: J joins it with 01, or :slice clear"
                         .to_owned();
                 return;
             }
             Point::Slice(slice) => {
-                self.services.apply(&Action::JoinSlices {
+                services.apply(&Action::JoinSlices {
                     number,
                     slice: (slice - 1) as u8,
                 });
-                self.services.status = format!(
+                services.status = format!(
                     "Took slice {slice:02X}'s start away, so {:02X} plays on through it: u to undo",
                     slice - 1
                 );
                 return;
             }
             Point::Edge(Edge::Start) if points.start == 0 => {
-                self.services.status = "The start is already the file's".to_owned();
+                services.status = "The start is already the file's".to_owned();
                 return;
             }
             Point::Edge(Edge::Start) => {
@@ -315,7 +315,7 @@ impl App {
                 "starts with its file again"
             }
             Point::Edge(Edge::End) if points.end.is_none() => {
-                self.services.status = "The end is already the file's".to_owned();
+                services.status = "The end is already the file's".to_owned();
                 return;
             }
             Point::Edge(Edge::End) => {
@@ -327,32 +327,37 @@ impl App {
                 "has no loop of its own"
             }
         };
-        self.services.apply(&Action::SetBankEntry {
+        services.apply(&Action::SetBankEntry {
             number,
             entry: Some(entry),
         });
-        self.services.status = format!("{name} {said}: u to undo");
+        services.status = format!("{name} {said}: u to undo");
     }
 
     /// `=` `-`, `+` `_` and Cmd-h/l: move the point under the cursor by a pixel, a column or a
     /// frame, `times` over, no further than its neighbours, with the cursor following it so the
     /// next nudge moves it again. With snap on, a pixel's or a column's nudge goes on to the next
     /// zero crossing that way; a frame's never snaps, as it's for placing by hand.
-    pub(crate) fn nudge_point(&mut self, shown: &Shown, by: Nudge, later: bool, times: u64) {
+    pub(crate) fn nudge_point(
+        &mut self,
+        shown: &Shown,
+        by: Nudge,
+        later: bool,
+        times: u64,
+        services: &mut Services,
+    ) {
         let Some(point) = self.point_here(shown) else {
-            self.services.status =
-                "No point under the cursor to nudge: ]] and [[ go to one".to_owned();
+            services.status = "No point under the cursor to nudge: ]] and [[ go to one".to_owned();
             return;
         };
         let Some(from) = shown.point_frame(point) else {
             return;
         };
-        let page = &self.sample_page;
-        let zoom = page.zoom.max(1);
+        let zoom = self.zoom.max(1);
         let to = match by {
             Nudge::Frame => step_frames(from, times, later),
             Nudge::Column => step_frames(from, times.saturating_mul(zoom), later),
-            Nudge::Pixel => match page.cell_width {
+            Nudge::Pixel => match self.cell_width {
                 Some(cell) if cell > 1 => pixels_along(from, times, later, zoom, cell as u64),
                 // With no pictures drawn there's no pixel, so a column, as `h` and `l` move.
                 _ => step_frames(from, times.saturating_mul(zoom), later),
@@ -367,15 +372,15 @@ impl App {
         let to = to.clamp(*bounds.start(), *bounds.end());
         let length = shown.length();
         if to == from {
-            self.services.status = format!("{} can't go further that way", point_name(point));
+            services.status = format!("{} can't go further that way", point_name(point));
             return;
         }
-        self.services.apply(&Action::SetBankEntry {
+        services.apply(&Action::SetBankEntry {
             number: shown.number,
             entry: Some(shown.moved(point, to)),
         });
-        self.sample_page.go(to, length);
-        self.services.status = format!(
+        self.go(to, length);
+        services.status = format!(
             "{} at {}, frame {to}: u to undo",
             point_name(point),
             time(to, shown.rate())
@@ -385,8 +390,8 @@ impl App {
     /// `g s`, `g e`, `g l` and `g L`: put the start, the end, or the loop's start or end at the
     /// cursor. With no loop, `g l` loops from the cursor to the end and `g L` from the start to
     /// the cursor.
-    pub(crate) fn set_point(&mut self, shown: &Shown, edge: Edge) {
-        let at = self.snapped(shown, self.sample_page.cursor, None);
+    pub(crate) fn set_point(&self, shown: &Shown, edge: Edge, services: &mut Services) {
+        let at = self.snapped(shown, self.cursor, None);
         let mut entry = shown.entry.clone();
         let length = shown.length();
         let end = shown.end();
@@ -423,14 +428,14 @@ impl App {
             }
         };
         if let Some(why) = refused {
-            self.services.status = why.to_owned();
+            services.status = why.to_owned();
             return;
         }
-        self.services.apply(&Action::SetBankEntry {
+        services.apply(&Action::SetBankEntry {
             number: shown.number,
             entry: Some(entry),
         });
-        self.services.status = format!(
+        services.status = format!(
             "{} at {}, frame {at}: u to undo",
             edge.name(),
             time(at, shown.rate())

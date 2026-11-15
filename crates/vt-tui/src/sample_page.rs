@@ -6,26 +6,42 @@
 //! `placing.rs` edits the entry's points from here, `sample_settings.rs` its settings, and `v`
 //! selects frames to hear.
 //!
+//! `SamplePage` is the page as a component (#320): its cursor, zoom, view, selection and the
+//! settings' focus, the pictures it shows, its moves and its edits of the entry, through the
+//! [`Services`]' actions, and its drawing, in `views::sample`, given a [`Ctx`]. What plays, the
+//! pads, the marks' letters and jumps and the picker are still `App`'s, which the page passes its
+//! keys back to. It's a [`Page`], with its rows of the binding table, [`Page::KEYS`], here beside
+//! it.
+//!
 //! Everything here is in frames at the file's own rate, as an entry's points are, so the cursor
 //! stays on the same sound whatever rate the program plays at.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use ratatui::Frame;
+use ratatui::layout::Rect;
+use vt_engine::engine::Playhead;
 use vt_model::analysis::{Analysis, Pyramid, SILENCE_DB};
 use vt_model::bank::{BankEntry, ContentHash, Points};
 use vt_model::onsets::decay;
 use vt_model::sample::SampleData;
-use vt_model::samples::Rates;
+use vt_model::samples::{Rates, SamplePool};
 use vt_model::selection::Motion;
+use vt_model::song::Song;
 
 use crate::app::App;
 use crate::input::bindings::Cmd;
 use crate::input::mode::{Mode, View};
+use crate::kitty::plot::Shade;
+use crate::kitty::{PanelIds, PanelKey, PanelWant, Shape};
 use crate::marking::MarkWait;
+use crate::page::{Ctx, CtxMut, Outcome, Page};
 use crate::placing::{Edge, Nudge};
 use crate::sample_settings::SampleSetting;
-use crate::views::sample::WaveOnScreen;
+use crate::sample_wave::{Wave, drawn_points};
+use crate::services::Services;
+use crate::views::sample::{WAVE_ROWS, WaveOnScreen, page_size, wave_columns};
 
 /// How many columns the waveform has until the page is first drawn: the author's screen, 163
 /// characters across, less a column either side.
@@ -103,8 +119,10 @@ pub enum SampleKey {
     Reverse,
 }
 
-/// Where the sample page is, kept while other views are shown, and started afresh for another
-/// sample.
+/// The sample page as a component: where it is, kept while other views are shown, and started
+/// afresh for another sample, and the pictures it shows. What it shows is the bank entry the
+/// cursor's track plays, which it reads from the song each time, holding none of its own. It's
+/// drawn with [`Page::draw`], given the rest of the program as a [`Ctx`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SamplePage {
     /// The bank entry and the content it was set up for.
@@ -146,6 +164,9 @@ pub struct SamplePage {
     pub last_selection: Option<(u64, u64)>,
     /// The setting the settings rows have the focus on, if they have it rather than the waveform.
     pub setting: Option<SampleSetting>,
+    /// The ids of the pictures of the waveform and its overview, for the drawing to put
+    /// placeholders for, or none while they aren't drawn, as in a render.
+    pub images: PanelIds,
 }
 
 /// A run of `h` or `l` as it's held, which speeds up from a pixel a repeat to a column, as an
@@ -179,6 +200,7 @@ impl Default for SamplePage {
             anchor: None,
             last_selection: None,
             setting: None,
+            images: PanelIds::default(),
         }
     }
 }
@@ -195,6 +217,31 @@ pub struct Shown {
 }
 
 impl Shown {
+    /// A bank entry by its number, with its analysis and frames as the pool holds them, or why it
+    /// can't be shown: it has no file, or its file is still being analysed or can't be found.
+    pub fn of(samples: &SamplePool, number: u8, entry: &BankEntry) -> Result<Self, String> {
+        let Some(source) = entry.source() else {
+            return Err(format!("Sample {number:02X} has no file"));
+        };
+        let Some(analysis) = samples.analysis(source.hash) else {
+            return Err(if source.hash.is_known() {
+                format!("Analysing {}…", entry.title())
+            } else {
+                format!("{} can't be found, so it can't be shown", source.path)
+            });
+        };
+        let frames = samples.id_of(&source.path).and_then(|id| {
+            let data = samples.shared(id)?;
+            Some((Arc::clone(data), samples.rates(id)))
+        });
+        Ok(Self {
+            number,
+            entry: entry.clone(),
+            analysis: Arc::clone(analysis),
+            frames,
+        })
+    }
+
     /// The file's length in frames.
     pub fn length(&self) -> u64 {
         self.analysis.frames()
@@ -348,6 +395,17 @@ impl Shown {
 }
 
 impl SamplePage {
+    /// The page's text objects, while it selects: a sound is a word, and a slice a paragraph.
+    /// They're its rows of the binding table beside [`Page::KEYS`], under its Visual mode.
+    pub const OBJECTS: &'static [(&'static str, Cmd, &'static str)] = &[
+        (
+            "i s",
+            Cmd::Sample(SampleKey::ThisSound),
+            "This sound, from its start to where it decays",
+        ),
+        ("i p", Cmd::Sample(SampleKey::ThisSlice), "This slice"),
+    ];
+
     /// The widest zoom: as many frames to a column as fit the whole sample across the view.
     pub fn fit(&self, length: u64) -> u64 {
         length.div_ceil(self.columns.max(1) as u64).max(1)
@@ -557,53 +615,745 @@ impl SamplePage {
     }
 }
 
+impl SamplePage {
+    /// The bank entry the page shows while a track is the cursor's: one a jump chose for it, or
+    /// the one it plays, by its number, or why there's none.
+    pub fn entry_here<'a>(
+        &self,
+        song: &'a Song,
+        track: usize,
+    ) -> Result<(u8, &'a BankEntry), String> {
+        let number = match self.pinned {
+            Some((pinned, number)) if pinned == track => number,
+            _ => song.tracks.get(track).map_or(0, |track| track.sample()),
+        };
+        match song.bank.get(number) {
+            Some(entry) => Ok((number, entry)),
+            None => Err(format!(
+                "Track {:02} plays no sample. :sample chooses one",
+                track + 1
+            )),
+        }
+    }
+
+    /// What the page shows for the cursor's track, with its analysis, or why it can't show it.
+    /// An entry still recording isn't shown either, which the program, whose recording it is,
+    /// says first, in [`App::sample_shown`].
+    pub fn shown(&self, services: &Services) -> Result<Shown, String> {
+        let (number, entry) = self.entry_here(services.song(), services.cursor.track)?;
+        Shown::of(&services.samples, number, entry)
+    }
+
+    /// Bring the page up to date with what it shows, starting afresh if it's another sample.
+    pub fn settle_on(&mut self, shown: &Shown) {
+        if self.shown != Some((shown.number, shown.analysis.hash)) {
+            self.start_on(shown);
+        }
+        self.settle(shown.length());
+    }
+
+    /// Lay the page out for this much room, so the waveform has as many columns as it's drawn
+    /// with.
+    pub fn lay_out(&mut self, area: Rect) {
+        self.columns = wave_columns(page_size(area).0);
+    }
+
+    /// The ids of the waveform's picture and the overview's, while the terminal has both.
+    pub fn wave_images(&self) -> Option<(u32, u32)> {
+        let images = &self.images;
+        images
+            .get(PanelKey::SampleWave)
+            .zip(images.get(PanelKey::SampleOverview))
+    }
+
+    /// Where the voices playing the entry shown are, in its file's frames, for the playheads: the
+    /// track's own notes of it, any of its notes on the preview voices, and what the page itself
+    /// played, of the playheads the engine last reported.
+    pub fn playheads(&self, shown: &Shown, heads: &[Option<Playhead>]) -> Vec<u64> {
+        let Some((_, rates)) = &shown.frames else {
+            return Vec::new();
+        };
+        let heard = self.heard == Some((shown.number, shown.analysis.hash));
+        heads
+            .iter()
+            .flatten()
+            .filter(|head| match head.entry {
+                Some(number) => number == shown.number,
+                None => heard,
+            })
+            .map(|head| rates.file_frame(head.frame))
+            .collect()
+    }
+
+    /// Run one of the page's own keys on what it shows, `times` over, at least once, with `count`
+    /// the count as typed, as `gg` and `G` go to the slice it names: a move, a jump by sound or
+    /// point, a zoom, a selection, or an edit of a point or a setting, through the services'
+    /// actions. What plays, the pads, the marks' jumps and the picker are passed back, as the
+    /// program's. Every motion is handled here, so none reaches the phrase.
+    pub fn key_on(
+        &mut self,
+        cmd: Cmd,
+        times: u64,
+        count: Option<usize>,
+        shown: &Shown,
+        services: &mut Services,
+    ) -> Outcome {
+        let length = shown.length();
+        let beat = beat_frames(shown.rate(), services.song().millibpm);
+        let (repeating, now) = (services.repeating, services.now);
+        // With the focus on the settings rows, `h` and `l` go along them and the keys that change
+        // values change the setting rather than a point.
+        if let Some(setting) = self.setting {
+            let large = matches!(cmd, Cmd::IncreaseLarge | Cmd::DecreaseLarge);
+            let up = matches!(cmd, Cmd::Increase | Cmd::IncreaseLarge);
+            match cmd {
+                Cmd::Move(Motion::Left) | Cmd::Move(Motion::Right) => {
+                    let later = cmd == Cmd::Move(Motion::Right);
+                    self.move_setting(shown, later, times as usize, services);
+                    return Outcome::Done;
+                }
+                Cmd::Move(Motion::RowStart) | Cmd::Move(Motion::RowEnd) => {
+                    let later = cmd == Cmd::Move(Motion::RowEnd);
+                    self.move_setting(shown, later, usize::MAX, services);
+                    return Outcome::Done;
+                }
+                Cmd::Increase | Cmd::Decrease | Cmd::IncreaseLarge | Cmd::DecreaseLarge => {
+                    self.change_setting(shown, setting, up, large, times, services);
+                    return Outcome::Done;
+                }
+                Cmd::Sample(SampleKey::NudgeFrame { later }) => {
+                    self.change_setting(shown, setting, later, false, times, services);
+                    return Outcome::Done;
+                }
+                Cmd::ClearField => {
+                    self.reset_setting(shown, setting, services);
+                    return Outcome::Done;
+                }
+                // Its values are listed in the program's picker.
+                Cmd::PickValue => return Outcome::Passed,
+                _ => {}
+            }
+        }
+        let zoom = self.zoom;
+        let columns = self.columns as u64;
+        // Any other key ends a held `h` or `l`'s run.
+        if !matches!(cmd, Cmd::Move(Motion::Left) | Cmd::Move(Motion::Right)) {
+            self.held_step = None;
+        }
+        match cmd {
+            Cmd::Move(Motion::Left) | Cmd::Move(Motion::Right) => {
+                let later = cmd == Cmd::Move(Motion::Right);
+                self.step(later, count, repeating, now, length);
+            }
+            Cmd::Move(Motion::RowStart) => self.go(shown.slice_at(self.cursor).1.start, length),
+            Cmd::Move(Motion::RowEnd) => {
+                let slice = shown.slice_at(self.cursor).1;
+                self.go(slice.end.saturating_sub(1).max(slice.start), length);
+            }
+            Cmd::Move(Motion::First) | Cmd::Move(Motion::Last) if count.is_some() => {
+                let number = count.unwrap_or(0);
+                self.go(shown.slice(number).start, length);
+            }
+            Cmd::Move(Motion::First) => self.go(0, length),
+            Cmd::Move(Motion::Last) => self.go(length, length),
+            Cmd::Move(Motion::Down) | Cmd::Move(Motion::Up) => {
+                let (number, _) = shown.slice_at(self.cursor);
+                let number = if cmd == Cmd::Move(Motion::Down) {
+                    number.saturating_add(times as usize)
+                } else {
+                    number.saturating_sub(times as usize)
+                };
+                self.go(shown.slice(number).start, length);
+            }
+            Cmd::Move(Motion::NextBeat) | Cmd::Move(Motion::PreviousBeat) => {
+                let later = cmd == Cmd::Move(Motion::NextBeat);
+                let to = beat_from(
+                    self.cursor,
+                    shown.entry.edit.points.start,
+                    beat,
+                    times,
+                    later,
+                );
+                self.go(to, length);
+            }
+            Cmd::ViewTop => {
+                self.go((self.column + times - 1) * zoom, length);
+            }
+            Cmd::ViewMiddle => self.go((self.column + columns / 2) * zoom, length),
+            Cmd::ViewBottom => {
+                let back = (times - 1).min(columns - 1);
+                self.go((self.column + columns - 1 - back) * zoom, length);
+            }
+            Cmd::HalfPageDown | Cmd::HalfPageUp => {
+                let by = (columns / 2).max(1) * times;
+                let later = cmd == Cmd::HalfPageDown;
+                if later {
+                    self.column += by;
+                    self.cursor = self.cursor.saturating_add(by * zoom);
+                } else {
+                    self.column = self.column.saturating_sub(by);
+                    self.cursor = self.cursor.saturating_sub(by * zoom);
+                }
+                self.clamp_view(length);
+                self.go(self.cursor, length);
+            }
+            Cmd::ScrollDown | Cmd::ScrollUp => {
+                if cmd == Cmd::ScrollDown {
+                    self.column += times;
+                } else {
+                    self.column = self.column.saturating_sub(times);
+                }
+                self.clamp_view(length);
+                // A cursor scrolled off the view goes to the nearest column still in it, keeping
+                // its place in its column, as Vim keeps the cursor on screen.
+                let within = self.cursor % zoom;
+                let cursor_column = self.column_of(self.cursor);
+                let column = cursor_column.clamp(self.column, self.column + columns - 1);
+                if column != cursor_column {
+                    self.cursor = (column * zoom + within).min(length.saturating_sub(1));
+                }
+            }
+            Cmd::NarrowGrid => zoom_by(self, times, true, length),
+            Cmd::WidenGrid => zoom_by(self, times, false, length),
+            Cmd::Sample(key) => return self.sample_key(key, shown, times, services),
+            Cmd::Increase | Cmd::Decrease | Cmd::IncreaseLarge | Cmd::DecreaseLarge => {
+                let by = if matches!(cmd, Cmd::Increase | Cmd::Decrease) {
+                    Nudge::Pixel
+                } else {
+                    Nudge::Column
+                };
+                let later = matches!(cmd, Cmd::Increase | Cmd::IncreaseLarge);
+                self.nudge_point(shown, by, later, times, services);
+            }
+            Cmd::ClearField => self.remove_point(shown, services),
+            Cmd::VisualField => {
+                if self.anchor.is_some() {
+                    self.end_selection();
+                } else {
+                    self.anchor = Some(self.cursor);
+                }
+            }
+            Cmd::Reselect => match self.last_selection {
+                Some((first, last)) => {
+                    self.anchor = Some(first);
+                    self.go(last, length);
+                }
+                None => return Outcome::Refused("No selection yet: v starts one"),
+            },
+            Cmd::VisualStep | Cmd::Operator(_) => {
+                return Outcome::Refused(
+                    "Whole slices and the operators come later: v selects frames to hear",
+                );
+            }
+            Cmd::Replace
+            | Cmd::Substitute
+            | Cmd::IncreaseChromatic
+            | Cmd::DecreaseChromatic
+            | Cmd::CycleMark
+            | Cmd::Paste
+            | Cmd::PasteAfter
+            | Cmd::PasteMerge
+            | Cmd::Repeat => return Outcome::Refused("That doesn't work on the sample page yet"),
+            // `;`, `Space c`, `i` and `K` are the program's, as they play, start the pads or open
+            // the picker, and the rest mean what they do on every page.
+            _ => return Outcome::Passed,
+        }
+        Outcome::Done
+    }
+
+    /// One of the page's own keys beside the motions it shares with the other views. `'`, `m`,
+    /// `]'` and `['` are passed back, as the program waits for their letter or keeps the jump.
+    fn sample_key(
+        &mut self,
+        key: SampleKey,
+        shown: &Shown,
+        times: u64,
+        services: &mut Services,
+    ) -> Outcome {
+        let length = shown.length();
+        match key {
+            SampleKey::FirstSound | SampleKey::LastSound => {
+                let last = key == SampleKey::LastSound;
+                let (number, slice) = shown.slice_at(self.cursor);
+                match shown.sound_edge(slice, last) {
+                    Some(frame) => self.go(frame, length),
+                    None => services.status = format!("Slice {number:02X} is all silence"),
+                }
+            }
+            SampleKey::NextPoint | SampleKey::PreviousPoint => {
+                let points = shown.points();
+                let cursor = self.cursor;
+                let mut to = None;
+                for _ in 0..times {
+                    let from = to.unwrap_or(cursor);
+                    let next = if key == SampleKey::NextPoint {
+                        points.iter().find(|point| **point > from)
+                    } else {
+                        points.iter().rev().find(|point| **point < from)
+                    };
+                    match next {
+                        Some(point) => to = Some(*point),
+                        None => break,
+                    }
+                }
+                match to {
+                    Some(frame) => self.go(frame, length),
+                    None => return Outcome::Refused("No point further that way"),
+                }
+            }
+            SampleKey::NextSound | SampleKey::PreviousSound => {
+                let later = key == SampleKey::NextSound;
+                let onsets = shown.onsets();
+                let cursor = self.cursor;
+                // As far as there are sounds, as a count past the last stops on it.
+                let found = if later {
+                    let first = onsets.partition_point(|onset| *onset <= cursor);
+                    let last = onsets.len().saturating_sub(1);
+                    onsets.get((first + times as usize - 1).min(last).max(first))
+                } else {
+                    let past = onsets.partition_point(|onset| *onset < cursor);
+                    past.checked_sub(1)
+                        .map(|last| &onsets[last.saturating_sub(times as usize - 1)])
+                };
+                match found {
+                    Some(frame) => self.go(*frame, length),
+                    None if onsets.is_empty() => services.status = no_sounds(shown),
+                    None => {
+                        return Outcome::Refused(
+                            "No sound further that way: a higher Sens finds more",
+                        );
+                    }
+                }
+            }
+            SampleKey::SoundEnd => {
+                let onsets = shown.onsets();
+                if onsets.is_empty() {
+                    services.status = no_sounds(shown);
+                    return Outcome::Done;
+                }
+                let mut at = Shown::sound_at(&onsets, self.cursor);
+                let mut to = self.cursor;
+                for _ in 0..times {
+                    // Its last frame, as Vim's `e` lands on a word's last character, or the next
+                    // sound's from there.
+                    let mut end = shown.sound(&onsets, at).end - 1;
+                    if end <= to && at + 1 < onsets.len() {
+                        at += 1;
+                        end = shown.sound(&onsets, at).end - 1;
+                    }
+                    if end <= to {
+                        break;
+                    }
+                    to = end;
+                }
+                if to == self.cursor {
+                    return Outcome::Refused("No sound ends further that way");
+                }
+                self.go(to, length);
+            }
+            SampleKey::ThisSound | SampleKey::ThisSlice => {
+                if self.anchor.is_none() {
+                    return Outcome::Refused("is and ip select while selecting: v starts it");
+                }
+                let cursor = self.cursor;
+                let selected = if key == SampleKey::ThisSlice {
+                    let (number, here) = shown.slice_at(cursor);
+                    let last = number + times as usize - 1;
+                    here.start..shown.slice(last).end.max(here.start + 1)
+                } else {
+                    let onsets = shown.onsets();
+                    if onsets.is_empty() {
+                        services.status = no_sounds(shown);
+                        return Outcome::Done;
+                    }
+                    let first = Shown::sound_at(&onsets, cursor);
+                    let last = (first + times as usize - 1).min(onsets.len() - 1);
+                    shown.sound(&onsets, first).start..shown.sound(&onsets, last).end
+                };
+                self.anchor = Some(selected.start);
+                self.go(selected.end - 1, length);
+            }
+            SampleKey::Mark
+            | SampleKey::NameSlice
+            | SampleKey::NextMark
+            | SampleKey::PreviousMark => return Outcome::Passed,
+            SampleKey::Split => self.split_here(shown, services),
+            SampleKey::Join => self.join_here(shown, services),
+            SampleKey::NudgeFrame { later } => {
+                self.nudge_point(shown, Nudge::Frame, later, times, services);
+            }
+            SampleKey::SetPoint(edge) => self.set_point(shown, edge, services),
+            SampleKey::OtherEnd => match self.anchor {
+                Some(anchor) => {
+                    self.anchor = Some(self.cursor);
+                    self.go(anchor, length);
+                }
+                None => return Outcome::Refused("o swaps a selection's ends: v starts one"),
+            },
+            SampleKey::GainUp | SampleKey::GainDown => {
+                let up = key == SampleKey::GainUp;
+                self.change_setting(shown, SampleSetting::Gain, up, false, times, services);
+            }
+            SampleKey::Reverse => self.reverse_here(shown, services),
+            SampleKey::CursorMiddle => {
+                self.middle_on_cursor();
+                self.clamp_view(length);
+            }
+            SampleKey::CursorLeft => {
+                self.column = self.column_of(self.cursor);
+                self.clamp_view(length);
+            }
+            SampleKey::CursorRight => {
+                let back = self.columns.saturating_sub(1) as u64;
+                self.column = self.column_of(self.cursor).saturating_sub(back);
+                self.clamp_view(length);
+            }
+            SampleKey::ZoomIn => zoom_by(self, times, true, length),
+            SampleKey::ZoomOut => zoom_by(self, times, false, length),
+            SampleKey::ZoomAll => {
+                self.zoom = self.fit(length);
+                self.column = 0;
+            }
+            SampleKey::ZoomSlice => {
+                let (_, slice) = shown.slice_at(self.cursor);
+                let wanted = (slice.end - slice.start).div_ceil(self.columns.max(1) as u64);
+                let fit = self.fit(length);
+                let mut zoom = fit;
+                while SamplePage::zoomed_in(zoom) >= wanted.max(1) && zoom > 1 {
+                    zoom = SamplePage::zoomed_in(zoom);
+                }
+                self.zoom = zoom;
+                // The slice's middle in the view's.
+                let middle = (slice.start + slice.end) / 2;
+                self.column = self
+                    .column_of(middle)
+                    .saturating_sub((self.columns / 2) as u64);
+                self.clamp_view(length);
+                if self.cursor_on_screen().is_none() {
+                    self.cursor = slice.start.min(length.saturating_sub(1));
+                }
+            }
+            SampleKey::CursorStyle => {
+                self.cursor_line = !self.cursor_line;
+                services.status = if self.cursor_line {
+                    "The cursor is a line at its frame: zc for its column".to_owned()
+                } else {
+                    "The cursor is its column: zc for a line at its frame".to_owned()
+                };
+            }
+        }
+        Outcome::Done
+    }
+}
+
+impl Page for SamplePage {
+    /// A sample is a buffer and a cell column a character, and the slice is the line, but the
+    /// cursor is a line placed to the pixel, so `h` and `l` move a pixel at the zoom shown,
+    /// speeding up as they're held.
+    const KEYS: &'static [(&'static str, Cmd, &'static str)] = &[
+        ("h", Cmd::Move(Motion::Left), "A pixel earlier, faster held"),
+        ("l", Cmd::Move(Motion::Right), "A pixel later, faster held"),
+        ("0", Cmd::Move(Motion::RowStart), "Start of the slice"),
+        ("$", Cmd::Move(Motion::RowEnd), "End of the slice"),
+        (
+            "^",
+            Cmd::Sample(SampleKey::FirstSound),
+            "First sound in the slice",
+        ),
+        (
+            "g _",
+            Cmd::Sample(SampleKey::LastSound),
+            "Last sound in the slice",
+        ),
+        ("j", Cmd::Move(Motion::Down), "Next slice"),
+        ("k", Cmd::Move(Motion::Up), "Previous slice"),
+        (
+            "g g",
+            Cmd::Move(Motion::First),
+            "Start of the sample, or slice n",
+        ),
+        (
+            "G",
+            Cmd::Move(Motion::Last),
+            "End of the sample, or slice n",
+        ),
+        (
+            "}",
+            Cmd::Move(Motion::NextBeat),
+            "Next beat, from the start, at the tempo",
+        ),
+        (
+            "{",
+            Cmd::Move(Motion::PreviousBeat),
+            "Previous beat, from the start, at the tempo",
+        ),
+        (
+            "w",
+            Cmd::Sample(SampleKey::NextSound),
+            "Next sound's start, as Sens finds them",
+        ),
+        (
+            "b",
+            Cmd::Sample(SampleKey::PreviousSound),
+            "Previous sound's start, as Sens finds them",
+        ),
+        (
+            "e",
+            Cmd::Sample(SampleKey::SoundEnd),
+            "Where the sound decays, or the next one",
+        ),
+        (
+            "] ]",
+            Cmd::Sample(SampleKey::NextPoint),
+            "Next point: a slice, the start, end or loop",
+        ),
+        (
+            "[ [",
+            Cmd::Sample(SampleKey::PreviousPoint),
+            "Previous point: a slice, the start, end or loop",
+        ),
+        (
+            "'",
+            Cmd::Sample(SampleKey::Mark),
+            "Then a letter: the slice it names, as a jump",
+        ),
+        (
+            "] '",
+            Cmd::Sample(SampleKey::NextMark),
+            "Next slice a letter names, as a jump",
+        ),
+        (
+            "[ '",
+            Cmd::Sample(SampleKey::PreviousMark),
+            "Previous slice a letter names, as a jump",
+        ),
+        ("H", Cmd::ViewTop, "Cursor to the left of the view"),
+        ("M", Cmd::ViewMiddle, "Cursor to the middle of the view"),
+        ("L", Cmd::ViewBottom, "Cursor to the right of the view"),
+        ("C-d", Cmd::HalfPageDown, "Half a screen later"),
+        ("C-u", Cmd::HalfPageUp, "Half a screen earlier"),
+        ("C-e", Cmd::ScrollDown, "Scroll the view a column later"),
+        ("C-y", Cmd::ScrollUp, "Scroll the view a column earlier"),
+        (
+            "z z",
+            Cmd::Sample(SampleKey::CursorMiddle),
+            "View with the cursor in its middle",
+        ),
+        (
+            "z s",
+            Cmd::Sample(SampleKey::CursorLeft),
+            "View with the cursor at its left",
+        ),
+        (
+            "z e",
+            Cmd::Sample(SampleKey::CursorRight),
+            "View with the cursor at its right",
+        ),
+        (
+            "z i",
+            Cmd::Sample(SampleKey::ZoomIn),
+            "Zoom in by 2, on the cursor",
+        ),
+        (
+            "z o",
+            Cmd::Sample(SampleKey::ZoomOut),
+            "Zoom out by 2, on the cursor",
+        ),
+        ("z O", Cmd::Sample(SampleKey::ZoomAll), "The whole sample"),
+        (
+            "z v",
+            Cmd::Sample(SampleKey::ZoomSlice),
+            "The slice, filling the view",
+        ),
+        ("M-1", Cmd::NarrowGrid, "Zoom in by 2, as z i"),
+        ("M-2", Cmd::WidenGrid, "Zoom out by 2, as z o"),
+        (
+            "z c",
+            Cmd::Sample(SampleKey::CursorStyle),
+            "The cursor as a line, or as its column",
+        ),
+        (
+            ";",
+            Cmd::Audition,
+            "Hear the slice, or the selection; held, until let go",
+        ),
+        (
+            "Enter",
+            Cmd::Sample(SampleKey::Split),
+            "Split the slice here, or at the playhead as it plays",
+        ),
+        (
+            "J",
+            Cmd::Sample(SampleKey::Join),
+            "Join the slice with the next",
+        ),
+        (
+            "x",
+            Cmd::ClearField,
+            "Take the point here away, or a setting back",
+        ),
+        (
+            "=",
+            Cmd::Increase,
+            "Nudge the point here a pixel later, or a setting up",
+        ),
+        (
+            "-",
+            Cmd::Decrease,
+            "Nudge the point here a pixel earlier, or a setting down",
+        ),
+        (
+            "+",
+            Cmd::IncreaseLarge,
+            "Nudge the point here a column later, or a setting up more",
+        ),
+        (
+            "_",
+            Cmd::DecreaseLarge,
+            "Nudge the point here a column earlier, or a setting down more",
+        ),
+        (
+            "D-l",
+            Cmd::Sample(SampleKey::NudgeFrame { later: true }),
+            "Nudge the point here a frame later",
+        ),
+        (
+            "D-h",
+            Cmd::Sample(SampleKey::NudgeFrame { later: false }),
+            "Nudge the point here a frame earlier",
+        ),
+        (
+            "g s",
+            Cmd::Sample(SampleKey::SetPoint(Edge::Start)),
+            "Start the sample here",
+        ),
+        (
+            "g e",
+            Cmd::Sample(SampleKey::SetPoint(Edge::End)),
+            "End the sample here",
+        ),
+        (
+            "g l",
+            Cmd::Sample(SampleKey::SetPoint(Edge::LoopStart)),
+            "Start the loop here",
+        ),
+        (
+            "g L",
+            Cmd::Sample(SampleKey::SetPoint(Edge::LoopEnd)),
+            "End the loop here",
+        ),
+        (
+            "m",
+            Cmd::Sample(SampleKey::NameSlice),
+            "Then a letter: name the slice here with it",
+        ),
+        ("v", Cmd::VisualField, "Select frames, or end the selection"),
+        ("g v", Cmd::Reselect, "Select the last selection again"),
+        (
+            "o",
+            Cmd::Sample(SampleKey::OtherEnd),
+            "To the selection's other end",
+        ),
+        (
+            ">",
+            Cmd::Sample(SampleKey::GainUp),
+            "The slice's gain up a dB",
+        ),
+        (
+            "<",
+            Cmd::Sample(SampleKey::GainDown),
+            "The slice's gain down a dB",
+        ),
+        ("~", Cmd::Sample(SampleKey::Reverse), "Reverse the slice"),
+        (
+            "R",
+            Cmd::ToggleSampling,
+            "Record into a new sample, as Space R, and show it once done",
+        ),
+        (
+            "K",
+            Cmd::PickValue,
+            "Choose a setting to change, or list its values",
+        ),
+    ];
+
+    type Drawn = Option<WaveOnScreen>;
+
+    /// Run a key as the program gives it to the page, on the sample the cursor's track plays: one
+    /// of the page's own keys, [`SamplePage::key_on`], or passed back.
+    fn key(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
+        let Ok(shown) = self.shown(ctx.services) else {
+            return Outcome::Passed;
+        };
+        let count = ctx.modes.count;
+        self.key_on(cmd, times as u64, count, &shown, ctx.services)
+    }
+
+    /// Draw the page, giving back where its waveform is on screen, if it's drawn, for the lines
+    /// and marks the terminal places over it.
+    fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) -> Option<WaveOnScreen> {
+        crate::views::sample::draw_page(frame, area, self, ctx)
+    }
+
+    /// The waveform and the overview of the whole sample under it, as the view and the points
+    /// have them, or none with no sample to show.
+    fn panels(&self, ctx: &Ctx) -> Vec<PanelWant> {
+        let Ok(shown) = ctx.sample_shown() else {
+            return Vec::new();
+        };
+        let wave = Wave {
+            analysis: Arc::clone(&shown.analysis),
+            frames: shown.frames.clone(),
+            points: drawn_points(&shown.entry.edit.points),
+            first: self.first_frame(),
+            zoom: self.zoom,
+            columns: self.columns,
+            rows: usize::from(WAVE_ROWS),
+            merged: false,
+        };
+        let overview = Wave {
+            first: 0,
+            zoom: self.fit(shown.length()),
+            rows: 1,
+            merged: true,
+            ..wave.clone()
+        };
+        [
+            (PanelKey::SampleWave, wave),
+            (PanelKey::SampleOverview, overview),
+        ]
+        .into_iter()
+        .map(|(key, wave)| PanelWant {
+            key,
+            shade: Shade::Focused,
+            cells: (wave.columns, wave.rows),
+            shape: Shape::Wave(wave),
+        })
+        .collect()
+    }
+
+    fn take_panels(&mut self, ids: PanelIds, _wants: &[PanelWant], _rate: u32) {
+        self.images = ids;
+    }
+}
+
 impl App {
     /// The bank entry the cursor's track plays, or one a jump chose for it, with its analysis, or
     /// why the page can't show it.
     pub fn sample_shown(&self) -> Result<Shown, String> {
-        let track = self.services.cursor.track;
-        let number = match self.sample_page.pinned {
-            Some((pinned, number)) if pinned == track => number,
-            _ => self
-                .song()
-                .tracks
-                .get(track)
-                .map_or(0, |track| track.sample()),
-        };
-        let Some(entry) = self.song().bank.get(number) else {
-            return Err(format!(
-                "Track {:02} plays no sample. :sample chooses one",
-                track + 1
-            ));
-        };
+        let (number, entry) = self
+            .sample_page
+            .entry_here(self.song(), self.services.cursor.track)?;
         self.shown_of(number, entry)
     }
 
-    /// A bank entry by its number, with its analysis, as the page would show it, or why it can't.
+    /// A bank entry by its number, with its analysis, as the page would show it, or why it can't:
+    /// it's still recording, or as [`Shown::of`] says.
     pub fn shown_of(&self, number: u8, entry: &BankEntry) -> Result<Shown, String> {
         if let Some(why) = self.still_recording(number) {
             return Err(why);
         }
-        let Some(source) = entry.source() else {
-            return Err(format!("Sample {number:02X} has no file"));
-        };
-        let Some(analysis) = self.services.samples.analysis(source.hash) else {
-            return Err(if source.hash.is_known() {
-                format!("Analysing {}…", entry.title())
-            } else {
-                format!("{} can't be found, so it can't be shown", source.path)
-            });
-        };
-        let frames = self.services.samples.id_of(&source.path).and_then(|id| {
-            let data = self.services.samples.shared(id)?;
-            Some((Arc::clone(data), self.services.samples.rates(id)))
-        });
-        Ok(Shown {
-            number,
-            entry: entry.clone(),
-            analysis: Arc::clone(analysis),
-            frames,
-        })
+        Shown::of(&self.services.samples, number, entry)
     }
 
     /// The sample page's own modes, as the status line's badge names them: `PADS` for the keys
@@ -651,200 +1401,39 @@ impl App {
     /// it's another, and say what it shows.
     pub fn sample_page_here(&mut self) -> Result<Shown, String> {
         let shown = self.sample_shown()?;
-        let page = &mut self.sample_page;
-        if page.shown != Some((shown.number, shown.analysis.hash)) {
-            page.start_on(&shown);
-        }
-        page.settle(shown.length());
+        self.sample_page.settle_on(&shown);
         Ok(shown)
     }
 
-    /// Run a key on the sample page. Every motion is handled here, so none reaches the phrase.
-    pub(crate) fn run_sample_page(&mut self, cmd: Cmd) -> bool {
-        let shown = match self.sample_page_here() {
-            Ok(shown) => Some(shown),
-            Err(why) => {
-                if is_sample_motion(cmd) {
-                    self.services.status = why;
-                    self.modes.count = None;
-                    return true;
-                }
-                None
-            }
-        };
-        let Some(shown) = shown else {
-            return false;
-        };
+    /// Run a key the sample page passed back, on what it shows: `;` and `Space c`, which play
+    /// through the cursor's track, `i`, the pads, `'` and `m`, which wait for a letter, `]'` and
+    /// `['`, which are jumps, and `K`, the picker of the settings or of a setting's values.
+    /// Returns false if it means what it does on every page.
+    pub(crate) fn run_sample_passed(&mut self, cmd: Cmd, shown: &Shown) -> bool {
         let count = self.modes.count.take();
-        let times = count.unwrap_or(1).max(1) as u64;
-        let length = shown.length();
-        let beat = beat_frames(shown.rate(), self.song().millibpm);
-        let (repeating, now) = (self.repeating, self.services.now);
-        // With the focus on the settings rows, `h` and `l` go along them and the keys that change
-        // values change the setting rather than a point.
-        if let Some(setting) = self.sample_page.setting {
-            let large = matches!(cmd, Cmd::IncreaseLarge | Cmd::DecreaseLarge);
-            let up = matches!(cmd, Cmd::Increase | Cmd::IncreaseLarge);
-            match cmd {
-                Cmd::Move(Motion::Left) | Cmd::Move(Motion::Right) => {
-                    let later = cmd == Cmd::Move(Motion::Right);
-                    self.move_setting(&shown, later, times as usize);
-                    return true;
-                }
-                Cmd::Move(Motion::RowStart) | Cmd::Move(Motion::RowEnd) => {
-                    let later = cmd == Cmd::Move(Motion::RowEnd);
-                    self.move_setting(&shown, later, usize::MAX);
-                    return true;
-                }
-                Cmd::Increase | Cmd::Decrease | Cmd::IncreaseLarge | Cmd::DecreaseLarge => {
-                    self.change_setting(&shown, setting, up, large, times);
-                    return true;
-                }
-                Cmd::Sample(SampleKey::NudgeFrame { later }) => {
-                    self.change_setting(&shown, setting, later, false, times);
-                    return true;
-                }
-                Cmd::ClearField => {
-                    self.reset_setting(&shown, setting);
-                    return true;
-                }
-                Cmd::PickValue => {
-                    self.open_setting_values_picker(&shown, setting);
-                    return true;
-                }
-                _ => {}
-            }
-        }
-        let page = &mut self.sample_page;
-        let zoom = page.zoom;
-        let columns = page.columns as u64;
-        // Any other key ends a held `h` or `l`'s run.
-        if !matches!(cmd, Cmd::Move(Motion::Left) | Cmd::Move(Motion::Right)) {
-            page.held_step = None;
-        }
+        let times = count.unwrap_or(1).max(1);
         match cmd {
-            Cmd::Move(Motion::Left) | Cmd::Move(Motion::Right) => {
-                let later = cmd == Cmd::Move(Motion::Right);
-                page.step(later, count, repeating, now, length);
-            }
-            Cmd::Move(Motion::RowStart) => page.go(shown.slice_at(page.cursor).1.start, length),
-            Cmd::Move(Motion::RowEnd) => {
-                let slice = shown.slice_at(page.cursor).1;
-                page.go(slice.end.saturating_sub(1).max(slice.start), length);
-            }
-            Cmd::Move(Motion::First) | Cmd::Move(Motion::Last) if count.is_some() => {
-                let number = count.unwrap_or(0);
-                page.go(shown.slice(number).start, length);
-            }
-            Cmd::Move(Motion::First) => page.go(0, length),
-            Cmd::Move(Motion::Last) => page.go(length, length),
-            Cmd::Move(Motion::Down) | Cmd::Move(Motion::Up) => {
-                let (number, _) = shown.slice_at(page.cursor);
-                let number = if cmd == Cmd::Move(Motion::Down) {
-                    number.saturating_add(times as usize)
-                } else {
-                    number.saturating_sub(times as usize)
+            Cmd::PickValue => {
+                let picker = match self.sample_page.setting {
+                    Some(setting) => {
+                        let millibpm = self.song().millibpm;
+                        self.sample_page.values_picker(shown, setting, millibpm)
+                    }
+                    None => self.sample_page.settings_picker(shown),
                 };
-                page.go(shown.slice(number).start, length);
+                self.show_picker(picker);
             }
-            Cmd::Move(Motion::NextBeat) | Cmd::Move(Motion::PreviousBeat) => {
-                let later = cmd == Cmd::Move(Motion::NextBeat);
-                let to = beat_from(
-                    page.cursor,
-                    shown.entry.edit.points.start,
-                    beat,
-                    times,
-                    later,
-                );
-                page.go(to, length);
+            Cmd::Sample(SampleKey::Mark) => self.awaiting_mark = Some(MarkWait::Jump),
+            Cmd::Sample(SampleKey::NameSlice) => self.awaiting_mark = Some(MarkWait::Name),
+            Cmd::Sample(key @ (SampleKey::NextMark | SampleKey::PreviousMark)) => {
+                self.jump_to_next_mark(key == SampleKey::NextMark, times);
             }
-            Cmd::ViewTop => {
-                page.go((page.column + times - 1) * zoom, length);
-            }
-            Cmd::ViewMiddle => page.go((page.column + columns / 2) * zoom, length),
-            Cmd::ViewBottom => {
-                let back = (times - 1).min(columns - 1);
-                page.go((page.column + columns - 1 - back) * zoom, length);
-            }
-            Cmd::HalfPageDown | Cmd::HalfPageUp => {
-                let by = (columns / 2).max(1) * times;
-                let later = cmd == Cmd::HalfPageDown;
-                if later {
-                    page.column += by;
-                    page.cursor = page.cursor.saturating_add(by * zoom);
-                } else {
-                    page.column = page.column.saturating_sub(by);
-                    page.cursor = page.cursor.saturating_sub(by * zoom);
-                }
-                page.clamp_view(length);
-                page.go(page.cursor, length);
-            }
-            Cmd::ScrollDown | Cmd::ScrollUp => {
-                if cmd == Cmd::ScrollDown {
-                    page.column += times;
-                } else {
-                    page.column = page.column.saturating_sub(times);
-                }
-                page.clamp_view(length);
-                // A cursor scrolled off the view goes to the nearest column still in it, keeping
-                // its place in its column, as Vim keeps the cursor on screen.
-                let within = page.cursor % zoom;
-                let cursor_column = page.column_of(page.cursor);
-                let column = cursor_column.clamp(page.column, page.column + columns - 1);
-                if column != cursor_column {
-                    page.cursor = (column * zoom + within).min(length.saturating_sub(1));
-                }
-            }
-            Cmd::NarrowGrid => zoom_by(page, times, true, length),
-            Cmd::WidenGrid => zoom_by(page, times, false, length),
-            Cmd::Sample(key) => self.run_sample_key(key, &shown, times),
-            Cmd::Audition => match page.selection() {
-                Some(selected) => self.audition_frames(&shown, selected),
-                None => self.audition_slice(&shown),
+            Cmd::Audition => match self.sample_page.selection() {
+                Some(selected) => self.audition_frames(shown, selected),
+                None => self.audition_slice(shown),
             },
-            Cmd::PlayFromCursor => self.audition_from_cursor(&shown),
+            Cmd::PlayFromCursor => self.audition_from_cursor(shown),
             Cmd::EnterInsert => self.start_pads(),
-            Cmd::Increase | Cmd::Decrease | Cmd::IncreaseLarge | Cmd::DecreaseLarge => {
-                let by = if matches!(cmd, Cmd::Increase | Cmd::Decrease) {
-                    Nudge::Pixel
-                } else {
-                    Nudge::Column
-                };
-                let later = matches!(cmd, Cmd::Increase | Cmd::IncreaseLarge);
-                self.nudge_point(&shown, by, later, times);
-            }
-            Cmd::ClearField => self.remove_point(&shown),
-            Cmd::PickValue => self.open_settings_picker(&shown),
-            Cmd::VisualField => {
-                if page.anchor.is_some() {
-                    page.end_selection();
-                } else {
-                    page.anchor = Some(page.cursor);
-                }
-            }
-            Cmd::Reselect => match page.last_selection {
-                Some((first, last)) => {
-                    page.anchor = Some(first);
-                    page.go(last, length);
-                }
-                None => self.services.status = "No selection yet: v starts one".to_owned(),
-            },
-            Cmd::VisualStep | Cmd::Operator(_) => {
-                self.services.status =
-                    "Whole slices and the operators come later: v selects frames to hear"
-                        .to_owned();
-            }
-            Cmd::Replace
-            | Cmd::Substitute
-            | Cmd::IncreaseChromatic
-            | Cmd::DecreaseChromatic
-            | Cmd::CycleMark
-            | Cmd::Paste
-            | Cmd::PasteAfter
-            | Cmd::PasteMerge
-            | Cmd::Repeat => {
-                self.services.status = "That doesn't work on the sample page yet".to_owned();
-            }
             _ => {
                 self.modes.count = count;
                 return false;
@@ -853,184 +1442,18 @@ impl App {
         true
     }
 
-    fn run_sample_key(&mut self, key: SampleKey, shown: &Shown, times: u64) {
-        let length = shown.length();
-        let page = &mut self.sample_page;
-        match key {
-            SampleKey::FirstSound | SampleKey::LastSound => {
-                let last = key == SampleKey::LastSound;
-                let (number, slice) = shown.slice_at(page.cursor);
-                match shown.sound_edge(slice, last) {
-                    Some(frame) => page.go(frame, length),
-                    None => self.services.status = format!("Slice {number:02X} is all silence"),
-                }
-            }
-            SampleKey::NextPoint | SampleKey::PreviousPoint => {
-                let points = shown.points();
-                let cursor = page.cursor;
-                let mut to = None;
-                for _ in 0..times {
-                    let from = to.unwrap_or(cursor);
-                    let next = if key == SampleKey::NextPoint {
-                        points.iter().find(|point| **point > from)
-                    } else {
-                        points.iter().rev().find(|point| **point < from)
-                    };
-                    match next {
-                        Some(point) => to = Some(*point),
-                        None => break,
-                    }
-                }
-                match to {
-                    Some(frame) => page.go(frame, length),
-                    None => self.services.status = "No point further that way".to_owned(),
-                }
-            }
-            SampleKey::NextSound | SampleKey::PreviousSound => {
-                let later = key == SampleKey::NextSound;
-                let onsets = shown.onsets();
-                let cursor = page.cursor;
-                // As far as there are sounds, as a count past the last stops on it.
-                let found = if later {
-                    let first = onsets.partition_point(|onset| *onset <= cursor);
-                    let last = onsets.len().saturating_sub(1);
-                    onsets.get((first + times as usize - 1).min(last).max(first))
-                } else {
-                    let past = onsets.partition_point(|onset| *onset < cursor);
-                    past.checked_sub(1)
-                        .map(|last| &onsets[last.saturating_sub(times as usize - 1)])
-                };
-                match found {
-                    Some(frame) => page.go(*frame, length),
-                    None if onsets.is_empty() => self.services.status = no_sounds(shown),
-                    None => {
-                        self.services.status =
-                            "No sound further that way: a higher Sens finds more".to_owned()
-                    }
-                }
-            }
-            SampleKey::SoundEnd => {
-                let onsets = shown.onsets();
-                if onsets.is_empty() {
-                    self.services.status = no_sounds(shown);
-                    return;
-                }
-                let mut at = Shown::sound_at(&onsets, page.cursor);
-                let mut to = page.cursor;
-                for _ in 0..times {
-                    // Its last frame, as Vim's `e` lands on a word's last character, or the next
-                    // sound's from there.
-                    let mut end = shown.sound(&onsets, at).end - 1;
-                    if end <= to && at + 1 < onsets.len() {
-                        at += 1;
-                        end = shown.sound(&onsets, at).end - 1;
-                    }
-                    if end <= to {
-                        break;
-                    }
-                    to = end;
-                }
-                if to == page.cursor {
-                    self.services.status = "No sound ends further that way".to_owned();
-                } else {
-                    page.go(to, length);
-                }
-            }
-            SampleKey::ThisSound | SampleKey::ThisSlice => {
-                if page.anchor.is_none() {
-                    self.services.status =
-                        "is and ip select while selecting: v starts it".to_owned();
-                    return;
-                }
-                let cursor = page.cursor;
-                let selected = if key == SampleKey::ThisSlice {
-                    let (number, here) = shown.slice_at(cursor);
-                    let last = number + times as usize - 1;
-                    here.start..shown.slice(last).end.max(here.start + 1)
-                } else {
-                    let onsets = shown.onsets();
-                    if onsets.is_empty() {
-                        self.services.status = no_sounds(shown);
-                        return;
-                    }
-                    let first = Shown::sound_at(&onsets, cursor);
-                    let last = (first + times as usize - 1).min(onsets.len() - 1);
-                    shown.sound(&onsets, first).start..shown.sound(&onsets, last).end
-                };
-                page.anchor = Some(selected.start);
-                page.go(selected.end - 1, length);
-            }
-            SampleKey::Mark => self.awaiting_mark = Some(MarkWait::Jump),
-            SampleKey::NameSlice => self.awaiting_mark = Some(MarkWait::Name),
-            SampleKey::Split => self.split_here(shown),
-            SampleKey::Join => self.join_here(shown),
-            SampleKey::NudgeFrame { later } => {
-                self.nudge_point(shown, Nudge::Frame, later, times);
-            }
-            SampleKey::SetPoint(edge) => self.set_point(shown, edge),
-            SampleKey::OtherEnd => match page.anchor {
-                Some(anchor) => {
-                    page.anchor = Some(page.cursor);
-                    page.go(anchor, length);
-                }
-                None => {
-                    self.services.status = "o swaps a selection's ends: v starts one".to_owned()
-                }
-            },
-            SampleKey::GainUp | SampleKey::GainDown => {
-                let up = key == SampleKey::GainUp;
-                self.change_setting(shown, SampleSetting::Gain, up, false, times);
-            }
-            SampleKey::Reverse => self.reverse_here(shown),
-            SampleKey::NextMark | SampleKey::PreviousMark => {
-                self.jump_to_next_mark(key == SampleKey::NextMark, times as usize);
-            }
-            SampleKey::CursorMiddle => {
-                page.middle_on_cursor();
-                page.clamp_view(length);
-            }
-            SampleKey::CursorLeft => {
-                page.column = page.column_of(page.cursor);
-                page.clamp_view(length);
-            }
-            SampleKey::CursorRight => {
-                let back = page.columns.saturating_sub(1) as u64;
-                page.column = page.column_of(page.cursor).saturating_sub(back);
-                page.clamp_view(length);
-            }
-            SampleKey::ZoomIn => zoom_by(page, times, true, length),
-            SampleKey::ZoomOut => zoom_by(page, times, false, length),
-            SampleKey::ZoomAll => {
-                page.zoom = page.fit(length);
-                page.column = 0;
-            }
-            SampleKey::ZoomSlice => {
-                let (_, slice) = shown.slice_at(page.cursor);
-                let wanted = (slice.end - slice.start).div_ceil(page.columns.max(1) as u64);
-                let fit = page.fit(length);
-                let mut zoom = fit;
-                while SamplePage::zoomed_in(zoom) >= wanted.max(1) && zoom > 1 {
-                    zoom = SamplePage::zoomed_in(zoom);
-                }
-                page.zoom = zoom;
-                // The slice's middle in the view's.
-                let middle = (slice.start + slice.end) / 2;
-                page.column = page
-                    .column_of(middle)
-                    .saturating_sub((page.columns / 2) as u64);
-                page.clamp_view(length);
-                if page.cursor_on_screen().is_none() {
-                    page.cursor = slice.start.min(length.saturating_sub(1));
-                }
-            }
-            SampleKey::CursorStyle => {
-                page.cursor_line = !page.cursor_line;
-                self.services.status = if page.cursor_line {
-                    "The cursor is a line at its frame: zc for its column".to_owned()
-                } else {
-                    "The cursor is its column: zc for a line at its frame".to_owned()
-                };
-            }
+    /// A setting chosen from `K` on the waveform: the focus goes to it on the rows.
+    /// The status line says `SETTINGS` while it's there, and how to change it under that.
+    pub(crate) fn pick_sample_setting(&mut self, setting: SampleSetting) {
+        self.sample_page.setting = Some(setting);
+        self.services.status.clear();
+    }
+
+    /// A value chosen from `K` on the rows.
+    pub(crate) fn pick_sample_value(&mut self, setting: SampleSetting, value: Option<i32>) {
+        if let Ok(shown) = self.sample_page_here() {
+            self.sample_page
+                .put_setting(&shown, setting, value, &mut self.services);
         }
     }
 }
@@ -1083,7 +1506,7 @@ fn beat_from(frame: u64, start: u64, beat: f64, times: u64, later: bool) -> u64 
 }
 
 /// Whether a key moves over the sample, so it means nothing while there's no sample to show.
-fn is_sample_motion(cmd: Cmd) -> bool {
+pub(crate) fn is_sample_motion(cmd: Cmd) -> bool {
     matches!(
         cmd,
         Cmd::Move(_)
