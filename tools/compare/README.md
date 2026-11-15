@@ -673,7 +673,7 @@ A spec has `notes` for a voice or an `input` for an effect, not both. An effect'
 | `impulse` | `level`, `seconds` | one sample at `level`, then nothing, for a filter to ring from |
 
 Levels are dB of full scale at the peak, times are in seconds and frequencies in Hz. `spec.py`
-makes them by the same formulas as `crates/vt-tui/src/dsp_probe.rs`, in double precision.
+makes them by the same formulas as `crates/vt-tui/src/offline/dsp_probe.rs`, in double precision.
 
 Our side plays a note as the keyboard does, held through a track, so the track's voice, filter and
 effects are all heard and nothing is sequenced; notes that overlap slide on a voice that slides, as

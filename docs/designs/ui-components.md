@@ -13,7 +13,7 @@ The parallel device-description study (`device-interface.md`) came in near the e
 study builds on its `ParamView` (§2.5 there) and its PR names (M1, S1, M2, S2, E6/V3/G3), and §3.1
 lists four gaps in that contract. It does not redesign the description.
 
-**As built** (2026-11-15). The plan in §8 is built but for U13. The study below is kept as it was
+**As built** (2026-11-15). The plan in §8 is built but for U13's `pub(crate)`. The study below is kept as it was
 written, so its "today" is `main` before the plan; the design's
 [Architecture](vimtracker.md#architecture) describes the code as it is.
 
@@ -38,6 +38,7 @@ written, so its "today" is `main` before the plan; the design's
 | E6/V3/G3, the Roto lookups (#731) | #778 |
 | The answers to §1.5 and §9.3: faders with macros, the macro mark, `gd` to a macro | #764, #767, #768 |
 | #719's vt-tui part, one test binary | #785 |
+| U13 the folders (#733) | the first of two PRs; §7 has what changed |
 
 Where it differs from the plan:
 - #719's vt-tui part landed after the pages, not before the split.
@@ -52,7 +53,8 @@ Where it differs from the plan:
 - Pages still pass keys back to `App` only to reach the picker, the views and `:` lines (#784's
   item 2).
 
-What's left: U13, the module layout (#733), and #784's other items: 2 and 9 to 13.
+What's left: U13's second half, `pub(crate)` and the dead-code lint (#733), and #784's other
+items: 2 and 10 to 13.
 
 ---
 
@@ -1262,6 +1264,39 @@ src/
 - **Where feature files go.** Those that are really `impl App` blocks (`banking`, `slicing`,
   `shaping`, `picking`…) move to the page, overlay or service they belong to, as #320 says. The
   layout above is where each lands.
+
+**As built** (2026-11-15, #733). The folders are as above, with these differences. The
+Architecture's [Interface](vimtracker.md#interface) has the layout as it is.
+- **No `mod.rs`.** A folder's module is the file beside it, `pages/track.rs` beside `pages/track/`,
+  as the rest of the workspace has them.
+- **`page.rs` is `pages.rs`,** `Page`, `Outcome`, `Ctx` and `CtxMut` together; `Ctx` didn't need a
+  file of its own once it held the services, the modes and a `PageState` (#787).
+- **Each page's drawing is its `draw` module,** `pages/<page>/draw.rs`, and the track page's
+  `draw/` keeps the Sound, Mod, Gen and zoom drawing and `TrackCells`. `views/` is gone.
+- **`app/` takes `grammar.rs`,** which is `impl App` over the operator and register fields, not
+  input parsing, and `accent_slide.rs` and `recording.rs`, while their state is `App`'s (#784
+  item 10).
+- **`tree.rs` split three ways:** the jump list is `app/jumps.rs`, so "jump" names one thing; the
+  chain view's passed keys, its phrase picker and Insert are an `impl App` in `pages/chain.rs`; and
+  `gd`, cloning and the uses stay in `app/tree.rs`.
+- **`ParamView`** and what it steps and reads by moved from `track_page/view.rs` to
+  `widgets/param/view.rs`, as `widgets/param/edit.rs` read it; the track page's `view` and `set`
+  stay on the page.
+- **`services/`** also takes `folding.rs` (the song view and the mixer fold too, not only the
+  phrase view), `sampling.rs` (the recorder) and `audio.rs` (the cpal device the main loop and the
+  audio page share). `places.rs` is the picker's, in `overlays/picker/`.
+- **`overlays/`:** `command.rs` is the `:` line's keys, with `command/parse.rs`, `completion.rs`
+  and `history.rs`; `help.rs` is the which-key popup and `Space k`; `guides.rs` with `guides/draw.rs`;
+  `field_jump.rs` is `/` (it was `jumping.rs`).
+- **`graphics/`** is `kitty/` renamed, with `views/curve.rs`; `kitty/graphics.rs` is
+  `graphics/sender.rs`, as clippy refuses a module named after its parent.
+- **`input/`** keeps `keys.rs`, `bindings.rs` and `bindings.tsv`, `mode.rs` and `typed.rs`, and
+  takes `wheel.rs`.
+- **Not split yet:** `shaping.rs` moved whole to `overlays/shape.rs`, the live generators
+  (`LiveGen`, `with_live`, `Services::live_generator`) with it, as they share the panel's `Part`,
+  `settle` and `follow_sources`; and `macroing.rs` whole to `overlays/mapping.rs`, `M` with the
+  mapping view. They split as #784's item 2 gives the overlays their own types.
+- **No `pub use` block** keeps the old paths: the tests changed their `use` lines.
 
 ---
 

@@ -3,7 +3,7 @@
 A spec is TOML (decision 110). Our side reads `[ours]`, the reference side `[reference]` or the
 list `[[references]]`, and both read `rate`, `duration`, and `notes` or `input`, which a case can
 change. The input signals and the notes' timing here must
-match `crates/vt-tui/src/dsp_probe.rs`: `run.py` checks the signals against the probe's own.
+match `crates/vt-tui/src/offline/dsp_probe.rs`: `run.py` checks the signals against the probe's own.
 """
 
 from __future__ import annotations

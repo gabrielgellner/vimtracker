@@ -1,6 +1,6 @@
 #!/bin/sh
 # Make the manual's Nerd Font: Symbols Nerd Font Mono from Nerd Fonts' release, cut down to the
-# symbols the program draws, which are those in crates/vt-tui/src/glyphs.rs. The manual's pages
+# symbols the program draws, which are those in crates/vt-tui/src/widgets/glyphs.rs. The manual's pages
 # use it, as a browser has no Nerd Font of its own, and the screenshots draw its symbols as
 # paths, which scripts/symbol-paths.py writes from it.
 #
@@ -24,7 +24,7 @@ unzip -q -o "$work/symbols.zip" SymbolsNerdFontMono-Regular.ttf LICENSE -d "$wor
 # Every symbol written as \u{...} in glyphs.rs that's in a private use area, where Nerd Fonts puts
 # its symbols, so the no-break space and the like are left to the page's own fonts.
 mkdir -p "$out"
-grep -o '\\u{[0-9a-fA-F]*}' "$root/crates/vt-tui/src/glyphs.rs" |
+grep -o '\\u{[0-9a-fA-F]*}' "$root/crates/vt-tui/src/widgets/glyphs.rs" |
     sed 's/\\u{\(.*\)}/\1/' |
     while read -r hex; do
         if [ "$((0x$hex))" -ge "$((0xE000))" ]; then
