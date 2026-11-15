@@ -23,6 +23,8 @@
 
 use super::Settings;
 use super::braids_parts::{INNER, Lcg, Macro, Model, Pitch, whole};
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// A map of waves to wander over, one setting across it and the other down.
 pub(crate) type WaveMap = Macro<WaveMapModel>;
@@ -102,8 +104,11 @@ impl Model for WaveMapModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
+        const ACROSS: usize = voice_place(SynthVoice::WaveMap, "across");
+        const DOWN: usize = voice_place(SynthVoice::WaveMap, "down");
         // The grid is 16 by 16, so there are 15 squares to blend across each way.
-        let p = [whole(settings.at(0)), whole(settings.at(1))].map(|p| ((p * 15) >> 4) as u32);
+        let p =
+            [whole(settings.at(ACROSS)), whole(settings.at(DOWN))].map(|p| ((p * 15) >> 4) as u32);
         let fade = p.map(|p| (p << 5) & 0xFFFF);
         let at = p.map(|p| (p >> 11) as usize);
         let waves: [[&[u8]; 2]; 2] = std::array::from_fn(|i| {
@@ -163,7 +168,12 @@ impl Model for WaveLineModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
-        let (scan, style) = (whole(settings.at(0)) as u32, whole(settings.at(1)) as u32);
+        const SCAN: usize = voice_place(SynthVoice::WaveLine, "scan");
+        const STEPS: usize = voice_place(SynthVoice::WaveLine, "steps");
+        let (scan, style) = (
+            whole(settings.at(SCAN)) as u32,
+            whole(settings.at(STEPS)) as u32,
+        );
         let smoothed = match self.smoothed {
             Some(was) => (3 * was + (scan << 1)) >> 2,
             None => {
@@ -264,6 +274,8 @@ impl Model for ParaphonicModel {
     }
 
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]) {
+        const WAVE: usize = voice_place(SynthVoice::Paraphonic, "wave");
+        const CHORD: usize = voice_place(SynthVoice::Paraphonic, "chord");
         if !self.struck {
             // Each voice starts anywhere in its cycle.
             for phase in &mut self.phases {
@@ -271,7 +283,7 @@ impl Model for ParaphonicModel {
             }
             self.struck = true;
         }
-        let (scan, chord) = (whole(settings.at(0)) as u32, whole(settings.at(1)));
+        let (scan, chord) = (whole(settings.at(WAVE)) as u32, whole(settings.at(CHORD)));
         let index = (chord >> 11) as usize;
         // Catch on each chord for most of its stretch, then slide to the next.
         let fraction = ((chord << 5) & 0xFFFF) as u32;

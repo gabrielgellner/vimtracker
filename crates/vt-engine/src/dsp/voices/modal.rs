@@ -25,6 +25,8 @@ use super::Settings;
 use crate::dsp::blocks::plaits_parts::{CosineOscillator, Limiter, tan_fast};
 use crate::dsp::effects::resonator::{MODES, Modes, semitones};
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
@@ -77,6 +79,12 @@ impl Default for Modal {
     }
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const MATERIAL: usize = voice_place(SynthVoice::Modal, "material");
+const BRIGHT: usize = voice_place(SynthVoice::Modal, "bright");
+const DECAY: usize = voice_place(SynthVoice::Modal, "decay");
+const ACCENT: usize = voice_place(SynthVoice::Modal, "accent");
+
 impl SynthEngine for Modal {
     fn new(_rate: u32) -> Self {
         Self::default()
@@ -113,16 +121,16 @@ impl Modal {
 
     fn render(&mut self, f0: f32, settings: Settings) {
         let trigger = self.fresh;
-        let harmonics = settings.harmonics.clamp(0.0, 1.0);
+        let harmonics = settings.at(MATERIAL).clamp(0.0, 1.0);
         if self.fresh {
             self.harmonics_lp = harmonics;
             self.fresh = false;
         }
         self.harmonics_lp += 0.01 * (harmonics - self.harmonics_lp);
         let structure = self.harmonics_lp;
-        let mut brightness = settings.timbre.clamp(0.0, 1.0);
-        let mut damping = settings.morph.clamp(0.0, 1.0);
-        let accent = settings.accent.clamp(0.0, 1.0);
+        let mut brightness = settings.at(BRIGHT).clamp(0.0, 1.0);
+        let mut damping = settings.at(DECAY).clamp(0.0, 1.0);
+        let accent = settings.at(ACCENT).clamp(0.0, 1.0);
         brightness += 0.25 * accent * (1.0 - brightness);
         damping += 0.25 * accent * (1.0 - damping);
 

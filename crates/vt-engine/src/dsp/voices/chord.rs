@@ -25,6 +25,8 @@ use super::chord_bank::{ChordBank, VOICES};
 use super::virtual_analog::{BLOCK, Moving, next_blep, this_blep};
 use super::wavetable::{PER_BANK, WAVE, stored};
 use crate::dsp::voices::SynthEngine;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// The highest frequency a wavetable voice runs at, as a fraction of the sample rate.
 const MAX_FREQUENCY: f32 = 0.25;
@@ -291,6 +293,11 @@ impl Default for Chord {
     }
 }
 
+/// Where its settings are among the voice's, by the keys they're stored under.
+const CHORD: usize = voice_place(SynthVoice::Chord, "chord");
+const INVERSION: usize = voice_place(SynthVoice::Chord, "inversion");
+const WAVE_PLACE: usize = voice_place(SynthVoice::Chord, "wave");
+
 impl SynthEngine for Chord {
     fn new(_rate: u32) -> Self {
         Self::default()
@@ -324,8 +331,8 @@ impl Chord {
     }
 
     fn render(&mut self, frequency: f32, settings: Settings) {
-        let morph = settings.morph.clamp(0.0, 1.0);
-        let timbre = settings.timbre.clamp(0.0, 1.0);
+        let morph = settings.at(WAVE_PLACE).clamp(0.0, 1.0);
+        let timbre = settings.at(INVERSION).clamp(0.0, 1.0);
         if self.fresh {
             // A new note starts where the settings are, rather than sweeping up from nothing.
             (self.morph, self.timbre) = (morph, timbre);
@@ -334,7 +341,7 @@ impl Chord {
         self.morph += 0.1 * (morph - self.morph);
         self.timbre += 0.1 * (timbre - self.timbre);
         // Harmonics is a place in the list of chords.
-        self.chords.set_listed(settings.harmonics.clamp(0.0, 1.0));
+        self.chords.set_listed(settings.at(CHORD).clamp(0.0, 1.0));
 
         // The lower half of Morph runs back through the registrations, the upper scans the waves.
         let harmonics = registration((1.0 - self.morph * 2.15).max(0.0));

@@ -29,6 +29,8 @@ use crate::dsp::blocks::plaits_parts::{
 };
 use crate::dsp::voices::SynthEngine;
 use crate::rng::Pcg32;
+use vt_model::machine::SynthVoice;
+use vt_model::settings::voice_place;
 
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
@@ -67,6 +69,12 @@ pub(crate) struct StringModel {
     at: usize,
     fresh: bool,
 }
+
+/// Where its settings are among the voice's, by the keys they're stored under.
+const MATERIAL: usize = voice_place(SynthVoice::String, "material");
+const BRIGHT: usize = voice_place(SynthVoice::String, "bright");
+const DECAY: usize = voice_place(SynthVoice::String, "decay");
+const ACCENT: usize = voice_place(SynthVoice::String, "accent");
 
 impl SynthEngine for StringModel {
     const NOISE: bool = true;
@@ -115,11 +123,11 @@ impl SynthEngine for StringModel {
 impl StringModel {
     fn render(&mut self, f0: f32, settings: Settings) {
         let trigger = self.fresh;
-        let structure = settings.harmonics.clamp(0.0, 1.0);
-        let timbre = settings.timbre.clamp(0.0, 1.0);
+        let structure = settings.at(MATERIAL).clamp(0.0, 1.0);
+        let timbre = settings.at(BRIGHT).clamp(0.0, 1.0);
         let mut brightness = timbre * timbre;
-        let mut damping = settings.morph.clamp(0.0, 1.0);
-        let accent = settings.accent.clamp(0.0, 1.0);
+        let mut damping = settings.at(DECAY).clamp(0.0, 1.0);
+        let accent = settings.at(ACCENT).clamp(0.0, 1.0);
         brightness += 0.25 * accent * (1.0 - brightness);
         damping += 0.25 * accent * (1.0 - damping);
 
