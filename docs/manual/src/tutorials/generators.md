@@ -499,7 +499,7 @@ loop`, `Note loop`, `Oct loop`, `Acc loop` and `Sld loop`, each from 1 row to 16
 *   `:len 13` on track 1, a trigger loop that drifts against the bar too.
 *   `Rate` `1/8` on the octave loop, so it turns over half as fast, as Kria's clock divisions do.
 *   The lane's length: `:len 5` with the cursor on FX 1, or `Length loop` on the patch.
-*   `Rate` `×2` on the Gen page's `FX1 Lane`, so each length lasts two steps, or `:lane /3` on
+*   `Rate` `÷2` on the Gen page's `FX1 Lane`, so each length lasts two steps, or `:lane /3` on
     FX 1 for three: Kria's clock division on one part.
 *   On track 2, `Acc loop` `16` against `Trig loop` `12`: the accents fall somewhere new each
     bar for three bars. Or every loop at `16`, and it's an ordinary 16-row `Acid` line again.

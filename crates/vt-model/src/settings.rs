@@ -235,8 +235,8 @@ const SLOT_OWN: [Entry; 1] = [Entry {
 }];
 
 /// Each FX column's lane's, which move every phrase's lane on that column from its own (decision
-/// 347): how many rows it's heard for, one a step either side of `80`, and what its division is
-/// multiplied by. With the column's number after each, as `LLEN1`.
+/// 347): how many rows it's heard for, one a step either side of `80`, and how much slower or
+/// faster its rows go (decision 349). With the column's number after each, as `LLEN1`.
 const LANE: [Entry; 2] = [
     Entry {
         key: "length",

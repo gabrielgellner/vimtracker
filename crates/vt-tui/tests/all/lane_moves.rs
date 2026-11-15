@@ -109,7 +109,8 @@ fn length_and_rate_turn_reset_and_list_as_the_tracks_own() {
     keys(&mut app, "i-3<Enter>");
     assert_eq!(app.song().tracks[0].lanes[0].length, 0x7D, "typed in rows");
     keys(&mut app, "x");
-    // `Rate` is a list: `K` lists its 31 choices, opened on `×1`, and `+` goes to the end.
+    // `Rate` is a list: `K` lists its 31 choices, opened on `×1`, `=` goes faster, and `+` to
+    // the end, the fastest.
     keys(&mut app, "l");
     assert_eq!(app.track_control(), Control::Lane(0, LaneField::Rate));
     keys(&mut app, "K");
@@ -118,6 +119,23 @@ fn length_and_rate_turn_reset_and_list_as_the_tracks_own() {
     assert_eq!(picker.items().len(), LANE_RATES.len());
     assert_eq!(picker.current().unwrap().label, "×1");
     special(&mut app, KeyCode::Esc);
+    keys(&mut app, "=");
+    assert_eq!(app.song().tracks[0].lanes[0].rate, 16, "×2");
+    let line = status_line(&app);
+    assert!(
+        line.contains("×2: each row of a lane on FX1 lasts its own steps over 2, faster"),
+        "{line}"
+    );
+    assert!(
+        line.contains("a row a step is as fast as a lane goes"),
+        "{line}"
+    );
+    keys(&mut app, "--");
+    let line = status_line(&app);
+    assert!(
+        line.contains("÷2: each row of a lane on FX1 lasts 2 times its own steps, slower"),
+        "{line}"
+    );
     keys(&mut app, "+");
     assert_eq!(app.song().tracks[0].lanes[0].rate, 30, "×16");
 }
@@ -155,13 +173,13 @@ fn the_title_shows_what_a_lane_is_heard_as_and_its_own_and_the_playhead_the_row_
         (0..100).map(|x| buffer[(x, 0)].symbol()).collect()
     };
     assert!(title(&app).contains("FX1:4/2"), "{}", title(&app));
-    // Two more rows and twice the division: what's heard first, its own after.
+    // Two more rows at `÷2`, half as fast: what's heard first, its own after.
     let moved = vt_model::action::Action::SetLaneMove {
         track: 0,
         slot: 0,
         moved: vt_model::lane::LaneMove {
             length: 0x82,
-            rate: 16,
+            rate: 14,
         },
     };
     app.services.apply(&moved);
