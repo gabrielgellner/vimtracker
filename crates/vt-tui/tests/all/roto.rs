@@ -297,7 +297,7 @@ fn the_roto_is_off_until_turned_on_on_the_audio_page() {
 #[test]
 fn turned_on_the_roto_shows_the_tracks_devices_live_and_stores_nothing() {
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
-    app.set_roto(true);
+    app.services.set_roto(true);
     let devices = live_devices(&app.song().tracks[0], None, app.song(), false);
     assert!(tick_until(&mut app, &ports, |fake| {
         fake.knob(1).is_some_and(|knob| knob.learned.is_some())
@@ -342,7 +342,7 @@ fn turned_on_the_roto_shows_the_tracks_devices_live_and_stores_nothing() {
 #[test]
 fn a_stepped_knob_turned_on_the_roto_shows_its_steps_name() {
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
-    app.set_roto(true);
+    app.services.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
     // The Play device, whose fifth knob is `Speed`, twelve steps from `1/32` to `1/1`.
     ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(PLAY))]);
@@ -370,7 +370,7 @@ fn a_stepped_knob_turned_on_the_roto_shows_its_steps_name() {
 #[test]
 fn turning_the_roto_off_hands_it_back_and_closes_the_link() {
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
-    app.set_roto(true);
+    app.services.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
     press(&mut app, " 9LG-");
     assert!(!app.services.roto.setting.on);
@@ -400,17 +400,17 @@ fn the_setting_is_saved_for_this_machine_and_read_back() {
     let (mut app, _realtime, ports) = app_with_a_fake_roto();
     app.services.roto.setting_path = Some(path.clone());
     assert_eq!(RotoSetting::load_from(&path), RotoSetting { on: false });
-    app.set_roto(true);
+    app.services.set_roto(true);
     assert_eq!(RotoSetting::load_from(&path), RotoSetting { on: true });
     // The next start reads it and connects.
     let (mut next, _realtime, next_ports) = app_with_a_fake_roto();
     next.services.roto.setting = RotoSetting::load_from(&path);
-    next.start_roto_if_on();
+    next.services.start_roto_if_on();
     assert!(next.services.roto.is_linked());
     assert!(tick_until(&mut next, &next_ports, |fake| fake
         .shown
         .is_some()));
-    app.set_roto(false);
+    app.services.set_roto(false);
     assert_eq!(RotoSetting::load_from(&path), RotoSetting { on: false });
     drop(ports);
     std::fs::remove_dir_all(&folder).unwrap();
@@ -440,7 +440,7 @@ fn the_audio_page_says_whether_the_roto_is_on_and_connected() {
         "{}",
         text(&app)
     );
-    app.set_roto(true);
+    app.services.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
     assert!(tick_until_app(&mut app, |app| matches!(
         app.services.roto.connection,
@@ -455,7 +455,7 @@ fn the_audio_page_says_whether_the_roto_is_on_and_connected() {
 fn showing(device: u8) -> (App, vt_engine::link::Realtime, FakePorts) {
     let (mut app, realtime, ports) = app_with_a_fake_roto();
     app.services.roto.gesture_pause = Duration::ZERO;
-    app.set_roto(true);
+    app.services.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
     ports.from_roto(vec![ports.with(|fake| fake.choose_plugin(device))]);
     assert!(tick_until(&mut app, &ports, |fake| {
@@ -952,7 +952,7 @@ fn a_device_with_buttons_is_stored_and_its_buttons_switch_its_settings_lit_from_
     });
     let auto = glue.params().iter().position(|p| p.key == "auto").unwrap();
     let auto_on = |song: &Song| song.tracks[0].inserts[0].value(auto) != 0;
-    app.set_roto(true);
+    app.services.set_roto(true);
     // vimtracker's setups are written beside Live's, under its own hashes alone.
     let wanted = stored_setups().len();
     assert!(tick_until(&mut app, &ports, |fake| fake.setups.len() == wanted + 1));
@@ -1014,7 +1014,7 @@ fn without_vimtrackers_setups_a_devices_buttons_are_two_step_knobs() {
     app.services.roto.serial = Some(std::sync::Arc::new(|| {
         Err::<Box<dyn Serial + Send>, _>(vt_roto::transport::LinkError::NotFound)
     }));
-    app.set_roto(true);
+    app.services.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake.shown.is_some()));
     // The serial port is tried a few times, a second apart, before it gives up.
     let deadline = Instant::now() + Duration::from_secs(5);

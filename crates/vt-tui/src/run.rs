@@ -275,7 +275,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     // Only one vimtracker on this machine has the Roto at a time: the one holding this lock.
     app.services.roto.lock_path = vt_model::analysis::program_cache_folder()
         .map(|folder| folder.join(crate::roto::LOCK_FILE));
-    app.start_roto_if_on();
+    app.services.start_roto_if_on();
     // Off unless it was turned on here before, so the terminal keeps its mouse otherwise.
     if let Some(path) = crate::input::wheel::WheelSetting::path() {
         app.wheel.setting = crate::input::wheel::WheelSetting::load_from(&path);

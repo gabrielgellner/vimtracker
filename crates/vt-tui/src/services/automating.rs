@@ -199,7 +199,8 @@ impl App {
         let name = if every {
             "Every track".to_owned()
         } else {
-            self.track_name(self.services.cursor.track)
+            let track = self.services.cursor.track;
+            self.song().tracks[track].title(track)
         };
         if taken.is_empty() {
             self.services.status = format!("{name} has no fader taken over from the steps");
@@ -225,14 +226,6 @@ impl App {
         self.services.handle.send(Command::GiveBack { track: None });
         self.services.fader_wishes.clear();
         self.services.faders = [Faders::default(); vt_model::constants::MAX_TRACKS];
-    }
-
-    /// A track's name for the status line: `Track 01`, or a fixed track's title.
-    fn track_name(&self, track: usize) -> String {
-        match self.song().tracks.get(track) {
-            Some(found) if !found.is_sound() => found.kind.title().to_owned(),
-            _ => format!("Track {:02}", track + 1),
-        }
     }
 
     /// The status line's word on a fader's value, after it in real units: from the steps, or

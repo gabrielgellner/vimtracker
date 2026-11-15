@@ -44,7 +44,7 @@ fn mixing(tracks: usize) -> (App, Realtime, FakePorts) {
         ..Options::default()
     };
     app.services.roto.gesture_pause = Duration::ZERO;
-    app.set_roto(true);
+    app.services.set_roto(true);
     assert!(tick_until(&mut app, &ports, |fake| fake
         .meter_thresholds
         .is_some()));
@@ -597,17 +597,17 @@ fn a_second_vimtracker_leaves_the_roto_to_the_one_that_has_it_and_says_so() {
     let folder = crate::common::folder();
     let lock = folder.join(vt_tui::roto::LOCK_FILE);
     let (mut first, _realtime, first_ports) = mixing(2);
-    first.set_roto(false);
+    first.services.set_roto(false);
     first.services.roto.lock_path = Some(lock.clone());
-    first.set_roto(true);
+    first.services.set_roto(true);
     assert!(tick_until(&mut first, &first_ports, |fake| {
         fake.meter_thresholds.is_some()
     }));
     let (mut second, _second_realtime, second_ports) = mixing(2);
-    second.set_roto(false);
+    second.services.set_roto(false);
     second.services.roto.lock_path = Some(lock);
     let sent = second_ports.with(|fake| fake.received.len());
-    second.set_roto(true);
+    second.services.set_roto(true);
     assert_eq!(second.services.roto.connection, Connection::Taken);
     assert!(
         second.services.status.contains("another vimtracker"),
@@ -629,7 +629,7 @@ fn a_second_vimtracker_leaves_the_roto_to_the_one_that_has_it_and_says_so() {
         "nothing sent while the other has it"
     );
     // The first lets it go, and the second takes it.
-    first.set_roto(false);
+    first.services.set_roto(false);
     assert!(tick_until_app(&mut second, |app| {
         matches!(app.services.roto.connection, Connection::Connected { .. })
     }));

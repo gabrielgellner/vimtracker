@@ -83,12 +83,7 @@ pub(crate) fn draw(frame: &mut Frame, area: Rect, page: &SongView, ctx: &Ctx) {
         "", "Length", "Rpt", "Start"
     ))];
     for &track in &shown_tracks {
-        let name = &song.tracks[track].name;
-        let label = if name.is_empty() {
-            format!("{:02}", track + 1)
-        } else {
-            name.clone()
-        };
+        let label = song.tracks[track].label(track);
         // A group with its tracks folded into it says so, as the mixer does, beside its whole
         // name, as its column has room for both.
         let width = column_width(song, track);

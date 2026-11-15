@@ -314,6 +314,26 @@ impl Track {
         }
     }
 
+    /// Its name, or its number, as `03`, if it has none: the grids' headers and the views'
+    /// titles. `index` is where it is in the song.
+    pub fn label(&self, index: usize) -> String {
+        if self.name.is_empty() {
+            format!("{:02}", index + 1)
+        } else {
+            self.name.clone()
+        }
+    }
+
+    /// What the status line calls it: `Track 03`, or a fixed track's title, as `Return A`.
+    /// `index` is where it is in the song.
+    pub fn title(&self, index: usize) -> String {
+        if self.is_sound() {
+            format!("Track {:02}", index + 1)
+        } else {
+            self.kind.title()
+        }
+    }
+
     /// Whether this track plays sounds.
     pub fn is_sound(&self) -> bool {
         self.kind == TrackKind::Sound
@@ -1294,6 +1314,25 @@ mod tests {
         for wrong in ["0", "0bar", "1025", "65bar", "", "x", "-1", "0x"] {
             assert_eq!(reset_named(wrong), None, "{wrong}");
         }
+    }
+
+    #[test]
+    fn a_track_is_labelled_by_its_name_and_titled_by_its_kind() {
+        let mut track = Track::default();
+        assert_eq!(
+            (track.label(2), track.title(2)),
+            ("03".into(), "Track 03".into())
+        );
+        track.name = "BD".to_owned();
+        assert_eq!(
+            (track.label(2), track.title(2)),
+            ("BD".into(), "Track 03".into())
+        );
+        let master = Track::fixed(TrackKind::Master);
+        assert_eq!(
+            (master.label(9), master.title(9)),
+            ("M".into(), "Master".into())
+        );
     }
 
     #[test]

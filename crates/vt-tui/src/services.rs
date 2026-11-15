@@ -326,16 +326,10 @@ impl Services {
 
     /// A track's name, or its number if it has none.
     pub(crate) fn track_name(&self, track: usize) -> String {
-        let name = self
-            .song()
+        self.song()
             .tracks
             .get(track)
-            .map_or("", |t| t.name.as_str());
-        if name.is_empty() {
-            format!("{:02}", track + 1)
-        } else {
-            name.to_owned()
-        }
+            .map_or_else(|| format!("{:02}", track + 1), |found| found.label(track))
     }
 
     /// The cursor's track as the latest report's live values were worked out from, which is a

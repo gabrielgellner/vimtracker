@@ -801,9 +801,11 @@ state: 76 fields, and 47 files besides `app.rs` add an `impl App` block, such as
 `Services::apply` running an action on it and `Services::publish` sending the result, the
 program's cursor and the folds, the project's folder and whether it's changed, the status line,
 the sample pool and its `Analyst`, this
-machine's `Settings`, the Roto, and the engine's `Handle` with everything it last reported (the
-transport and playheads, where each track is and what it's launched onto, the live mutes and solos,
-the live values, the faders, the live generators' rows as heard, and the meters and the scope).
+machine's `Settings`, the Roto, which `RotoDriver` (`roto.rs`) answers from the services alone,
+lent the view and whether recording is armed, and the engine's `Handle` with everything it last
+reported (the transport and playheads, where each track is and what it's launched onto, the live
+mutes and solos, the live values, the faders, the live generators' rows as heard, and the meters
+and the scope).
 `App::song` reads the song through it, and the cursor's place in the song is its reads too
 (`Services::track_here`, `phrase_id`, `phrase_here`, `section_here`, `extent` and `section_step`,
 given the view), with `Services::move_track` and `go_to_track_at` moving it across tracks.
