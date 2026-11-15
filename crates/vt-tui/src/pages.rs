@@ -55,13 +55,14 @@ use crate::overlays::help::POPUP_DELAY;
 use crate::overlays::shape::LiveGen;
 use crate::pages::phrase::PhraseView;
 use crate::pages::sample::{SamplePage, Shown, is_sample_motion};
-use crate::pages::track::{Control, ParamView};
+use crate::pages::track::Control;
 use crate::roto::Roto;
 use crate::services::Services;
 use crate::services::audio::SlowdownReadout;
 use crate::services::folding::Folds;
 use crate::services::meter::Meter;
 use crate::services::sampling::still_recording;
+use crate::widgets::param::view::ParamView;
 use crate::widgets::setting::{CellLook, Focus};
 
 /// What a key did, as far as the page alone can tell.

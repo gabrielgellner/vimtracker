@@ -17,7 +17,8 @@ use crate::widgets::param::edit;
 use super::Control;
 use super::controls::no_modes;
 use super::tuning::{adjust_tuning, set_tuning};
-use super::view::{ParamView, set, view};
+use super::view::{set, view};
+use crate::widgets::param::view::ParamView;
 
 /// Write a value into a setting, as its view counts it. A macro's, the accumulator's, the
 /// arpeggio's and `Safe` are only written when they change. The rest are written even where they

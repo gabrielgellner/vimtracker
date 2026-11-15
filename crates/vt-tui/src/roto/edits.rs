@@ -24,8 +24,9 @@ use vt_roto::live::{share_of, step_at};
 use crate::overlays::shape::live_shown;
 use crate::pages::track::draw::toggle_on;
 use crate::pages::track::tuning::{tuning, tuning_most};
-use crate::pages::track::{Control, ParamView, set, view};
+use crate::pages::track::{Control, set, view};
 use crate::widgets::param::edit;
+use crate::widgets::param::view::ParamView;
 
 use super::devices::{hold_steps, knob, knob_view, places, rate_position, time_steps};
 

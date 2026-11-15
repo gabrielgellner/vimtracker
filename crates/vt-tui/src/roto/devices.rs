@@ -40,10 +40,10 @@ use super::layouts::{self, Setting, Turn};
 use crate::overlays::shape::{column_label, with_live};
 use crate::pages::track::draw::toggle_on;
 use crate::pages::track::tuning::{tuning, tuning_most};
-use crate::pages::track::view::Reads;
 use crate::pages::track::{
-    AccumulatorField, ArpField, Control, DeviceSpec, Page, ParamView, macros_device, view,
+    AccumulatorField, ArpField, Control, DeviceSpec, Page, macros_device, view,
 };
+use crate::widgets::param::view::{ParamView, Reads};
 use crate::widgets::theme;
 
 /// What a setting is for, which gives its knob's colour, the same wherever the setting is.

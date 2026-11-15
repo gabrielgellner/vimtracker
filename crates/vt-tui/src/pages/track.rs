@@ -33,7 +33,7 @@ pub use device::{
 pub use fx::TakenInsert;
 pub(crate) use generators::macros_device;
 pub(crate) use modulation::modulator_bypassed;
-pub use view::{ParamView, Steps, set, view};
+pub use view::{set, view};
 
 use std::sync::Arc;
 

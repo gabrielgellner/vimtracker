@@ -5,7 +5,7 @@
 
 use vt_model::step::Note;
 
-use crate::pages::track::view::{Choice, Pace, ParamView, Reads, Steps};
+use super::view::{Choice, Pace, ParamView, Reads, Steps};
 
 /// How many small steps of a fine part a large one is.
 const FINE_JUMP: i64 = 0x10;
