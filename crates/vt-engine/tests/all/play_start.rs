@@ -82,7 +82,7 @@ const PLAIN: &[&str] = &["C-3 -- cha:80 --- ---", "D-3 -- --- --- ---"];
 fn five(seed: u64) -> Song {
     let mut song = song("tone", &[HELD, HELD, HELD, HELD, HELD]);
     song.seed = seed;
-    for track in &mut song.tracks[3..5] {
+    for track in song.tracks.iter_mut().skip(3).take(2) {
         track.inserts[0] = Insert::Distort(Distort {
             kind: DistortType::Overdrive,
             amount: 0xC0,

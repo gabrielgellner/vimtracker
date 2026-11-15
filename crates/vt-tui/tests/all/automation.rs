@@ -20,7 +20,7 @@ use crate::common::*;
 /// from the top until the steps have set them.
 fn automated() -> (App, Realtime) {
     let mut song = Song::new(2);
-    for track in &mut song.tracks[..2] {
+    for track in song.tracks.iter_mut().take(2) {
         *Arc::make_mut(track.phrases.get_mut(&0).unwrap())
             .step_mut(0)
             .unwrap() = "C-3 -- level:80h pan:20h ---".parse().unwrap();

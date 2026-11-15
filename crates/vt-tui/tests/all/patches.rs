@@ -234,7 +234,7 @@ fn the_browser_and_k_add_a_patch() {
 /// `Hits` on macro 1.
 fn euclid_on_first() -> (App, vt_engine::link::Realtime, PathBuf) {
     let mut song = Song::new(2);
-    for track in &mut song.tracks[..2] {
+    for track in song.tracks.iter_mut().take(2) {
         let steps: Vec<Step> = (0..8)
             .map(|_| "--- -- --- --- ---".parse().unwrap())
             .collect();
