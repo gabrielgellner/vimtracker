@@ -538,3 +538,72 @@ fn a_fader_a_macro_holds_shows_where_the_macro_puts_it_as_the_track_page_does() 
     assert!(filled(&text, 0) < before, "{text:?}");
     assert_eq!(filled(&text, 1), before, "{text:?}");
 }
+
+/// An app whose first track's fader is held by each of the macros `at`, over its whole range.
+/// `M` keeps a setting on one macro, so a song with two holding it is made by hand.
+fn held_by(id: vt_model::settings::SettingId, at: &[usize]) -> (App, vt_engine::link::Realtime) {
+    use vt_model::macros::{MacroMap, MacroTarget};
+    let mut song = vt_model::song::Song::new(2);
+    for at in at {
+        song.tracks[0].macros[*at]
+            .maps
+            .push(MacroMap::whole(MacroTarget::Setting(id)));
+    }
+    app_for(song)
+}
+
+/// `C-o`, back from a jump.
+fn jump_back(app: &mut App) {
+    let back = vt_tui::input::keys::parse_sequence("C-o").unwrap()[0];
+    app.key(back, std::time::Instant::now());
+}
+
+#[test]
+fn gd_on_a_fader_a_macro_holds_goes_to_its_macro_and_c_o_comes_back() {
+    use vt_model::settings::SettingId;
+    use vt_tui::pages::track::{Control, Page};
+    use vt_tui::screen::status::column_name;
+    let (mut app, _realtime) = held_by(SettingId::PAN, &[2]);
+    press(&mut app, " 4j");
+    assert_eq!(column_name(&app), "Pan");
+    press(&mut app, "gd");
+    assert_eq!(app.modes.view, View::Track);
+    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(app.track_control(), Control::Macro(2), "on the macro");
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    assert_eq!(app.overlays.mapping.as_ref().unwrap().at, 2);
+    special(&mut app, KeyCode::Esc);
+    jump_back(&mut app);
+    assert_eq!(app.modes.view, View::Mixer, "back on the mixer");
+    assert_eq!(column_name(&app), "Pan", "on the fader it left from");
+    assert_eq!(app.services.cursor.track, 0);
+}
+
+#[test]
+fn gd_on_a_fader_two_macros_hold_lists_them_and_on_one_none_holds_says_so() {
+    use vt_model::settings::SettingId;
+    use vt_tui::pages::track::Control;
+    let (mut app, _realtime) = held_by(SettingId::LEVEL, &[0, 4]);
+    press(&mut app, " 4gd");
+    assert_eq!(app.modes.mode, Mode::Picker);
+    let items: Vec<String> = app
+        .overlays
+        .picker
+        .as_ref()
+        .unwrap()
+        .items()
+        .iter()
+        .map(listed)
+        .collect();
+    assert_eq!(items.len(), 2, "{items:?}");
+    assert!(items[1].starts_with("5 "), "{items:?}");
+    special(&mut app, KeyCode::Down);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.track_control(), Control::Macro(4));
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    // The next track's level is its own.
+    special(&mut app, KeyCode::Esc);
+    press(&mut app, " 4lgd");
+    assert_eq!(app.modes.view, View::Mixer, "it stays");
+    assert!(app.services.status.contains("macro holding a fader"));
+}

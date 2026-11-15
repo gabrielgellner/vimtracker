@@ -136,7 +136,8 @@ as `Cut, 1.05 kHz: on macro 1 Bite, 170 Hz to 9.56 kHz`. One with no bar, such a
 page value or a device's title, has a faint dot after its value instead, `1/16 •`, after the dot
 Live puts on a control it automates. Turning it is refused, as Live greys a mapped control out:
 turn its macro, or open its range with `gm`. `gd` on it goes to its macro in the Gen page's
-`Macros` band, with the mapping view open on its row, and `C-o` comes back to it.
+`Macros` band, with the mapping view open on its row, and `C-o` comes back to it. So does
+`gd` on a fader on the mixer a macro holds, and `C-o` comes back to the mixer.
 
 **The mapping view**, `gm`, lists each setting the macro holds with its `Min`, its `Max`, and
 the `Curve` and `S` of its response, with a drawing of the response of the one under the cursor

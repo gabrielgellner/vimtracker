@@ -145,6 +145,7 @@ impl Page for MixerPage {
         ("x", Cmd::ClearField, "Back to its default"),
         ("K", Cmd::PickValue, "Switch mute or solo"),
         ("/", Cmd::FieldJump, "Jump to a setting by its name"),
+        ("g d", Cmd::OpenItem, "Go to the macro holding this fader"),
     ];
 
     type Drawn = ();
