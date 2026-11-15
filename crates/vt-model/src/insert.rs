@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::constants::{MAX_GROUPS, MAX_LEVEL, MAX_SOUND_TRACKS, UNITY_LEVEL};
 use crate::grid::{GRID_ROWS, Grid};
 use crate::settings::{Entry, Kind, Units};
+pub use crate::settings::{OFF_ON, Place};
 
 /// An effect's `read` and `written`, from one list of its fields, so a field is named once here
 /// rather than twice. It goes in the effect's `impl`, and lists its fields in the order its
@@ -176,109 +177,9 @@ effects! {
     Echo(Echo),
 }
 
-/// One setting an effect declares. The pages, stepping, `x`, `K`, typing and the status line read
-/// these, so a new effect needs no new page code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Param {
-    pub name: &'static str,
-    /// The name songs store it by, which never changes.
-    pub key: &'static str,
-    /// The grid's short label, 3 or 4 letters, after the slot's digit. Without one, a step can't
-    /// lock it.
-    pub label: Option<&'static str>,
-    /// Its range and the units it reads in, or its choices. A choice that's a scale stops at its
-    /// ends, and one that's a list goes round.
-    pub kind: Kind,
-    pub default: u8,
-    /// What it is to its effect.
-    pub place: Place,
-}
-
-/// Where a setting sits in its effect.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Place {
-    /// One of the effect's own, in its grid.
-    Own,
-    /// What the effect is: its type or mode, in the slot's title rather than its grid.
-    Type,
-    /// In the title too, after its type, but a played setting: Beads' quality.
-    Title,
-    /// What comes out, `Mix` and `Gain`: most effects' last column.
-    Output,
-}
-
-/// The choices of a setting that's off or on, such as a delay's `Ping-pong`.
-pub const OFF_ON: [&str; 2] = ["Off", "On"];
 /// How a delay goes to a new time: gliding there, which bends the repeats' pitch as tape does, or
 /// jumping, crossfading from where it read to where it reads now, so they keep their pitch.
 pub const RETIMES: [&str; 2] = ["Glide", "Jump"];
-
-impl Param {
-    /// What it chooses between, in order, or nothing for a value in hex.
-    pub const fn choices(&self) -> &'static [&'static str] {
-        match self.kind {
-            Kind::Stepped { choices, .. } => choices,
-            Kind::Continuous { .. } => &[],
-        }
-    }
-
-    /// Whether stepping past its last choice goes round to the first, or stops.
-    pub const fn wraps(&self) -> bool {
-        matches!(self.kind, Kind::Stepped { wraps: true, .. })
-    }
-
-    /// Whether it's off or on and nothing else, which the pages show as a toggle.
-    pub fn is_toggle(&self) -> bool {
-        self.choices() == OFF_ON
-    }
-
-    /// What full modulation moves it by, on the scale a step gives: the whole of a list, and `FF`
-    /// for a value, as a depth is in hex steps of what it moves. `Gain` too, though it stops at
-    /// the level scale's top, as the faders do.
-    pub fn span(&self) -> f32 {
-        match self.kind {
-            Kind::Stepped { .. } => f32::from(self.kind.top()),
-            Kind::Continuous { .. } => 255.0,
-        }
-    }
-
-    /// It as an entry in the table of every setting.
-    pub const fn entry(&self) -> Entry {
-        Entry {
-            key: self.key,
-            name: self.name,
-            label: self.label,
-            kind: self.kind,
-            default: self.default,
-        }
-    }
-
-    /// The same, reading in `units`.
-    const fn units(self, units: Units) -> Self {
-        let Kind::Continuous { top, middle, .. } = self.kind else {
-            return self;
-        };
-        Self {
-            kind: Kind::Continuous { top, middle, units },
-            ..self
-        }
-    }
-
-    /// The same, with its middle at `80`, either way of which it reads.
-    const fn centred(self) -> Self {
-        let Kind::Continuous { top, units, .. } = self.kind else {
-            return self;
-        };
-        Self {
-            kind: Kind::Continuous {
-                top,
-                middle: true,
-                units,
-            },
-            ..self
-        }
-    }
-}
 
 /// The most settings any effect shows at once, in the type or mode it's in: a grid's twelve and
 /// its type or mode in the title, and Beads' quality beside its mode there.
@@ -287,7 +188,7 @@ pub const MAX_PARAMS: usize = 14;
 /// most [`MAX_PARAMS`]. A compressor keeps each type's own.
 pub const MAX_KEPT_PARAMS: usize = 17;
 
-const MIX_PARAM: Param = Param {
+const MIX_PARAM: Entry = Entry {
     name: "Mix",
     key: "mix",
     label: Some("MIX"),
@@ -299,7 +200,7 @@ const MIX_PARAM: Param = Param {
     default: 0xFF,
     place: Place::Output,
 };
-const GAIN_PARAM: Param = Param {
+const GAIN_PARAM: Entry = Entry {
     name: "Gain",
     key: "gain",
     label: Some("GAIN"),
@@ -311,7 +212,7 @@ const GAIN_PARAM: Param = Param {
     default: UNITY_LEVEL,
     place: Place::Output,
 };
-const AMOUNT_PARAM: Param = Param {
+const AMOUNT_PARAM: Entry = Entry {
     name: "Amount",
     key: "amount",
     label: Some("AMNT"),
@@ -325,7 +226,7 @@ const AMOUNT_PARAM: Param = Param {
 };
 
 /// A delay or reverb's mix. It starts half wet in a slot, so the sound stays under it.
-const WET_MIX_PARAM: Param = Param {
+const WET_MIX_PARAM: Entry = Entry {
     default: 0x80,
     ..MIX_PARAM
 };
@@ -335,8 +236,8 @@ const fn hex_param(
     key: &'static str,
     label: &'static str,
     default: u8,
-) -> Param {
-    Param {
+) -> Entry {
+    Entry {
         name,
         key,
         label: Some(label),
