@@ -274,7 +274,7 @@ impl Services {
                     root: if scale.on { scale.root } else { 0 },
                     ..scale
                 };
-                let low = root.degree(0, self.octave).min(MAX_NOTE - 12);
+                let low = root.degree(0, self.live.octave).min(MAX_NOTE - 12);
                 (low, low + 12)
             }
             column => (column.lowest(), column.highest()),

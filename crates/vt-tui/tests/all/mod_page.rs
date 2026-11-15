@@ -1054,7 +1054,7 @@ fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_pla
 
     // Each running LFO's dot is where its wave is, on its cycle drawn from its phase.
     let turns = [Some(0.1), Some(0.6), Some(0.3)];
-    app.services.live = Some(reported(&app, turns));
+    app.services.reported.live = Some(reported(&app, turns));
     let (synced, placed) = frame(&mut app, &mut graphics);
     assert!(!synced.contains("a=T"), "the cycles are as they were");
     assert_eq!(
@@ -1100,7 +1100,7 @@ fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_pla
     // Moving on, each is placed again, and nothing is sent: no image, only the two placements.
     let ids: Vec<u32> = middles.iter().map(|(id, _)| *id).collect();
     let turns = [Some(0.35), Some(0.95), Some(0.5)];
-    app.services.live = Some(reported(&app, turns));
+    app.services.reported.live = Some(reported(&app, turns));
     let (synced, placed) = frame(&mut app, &mut graphics);
     assert!(
         !synced.contains("a=T") && !placed.contains("a=t"),
@@ -1150,12 +1150,12 @@ fn an_lfos_dot_rides_its_cycle_where_the_engine_says_it_is_and_moves_only_by_pla
     all.push_str(&placed);
 
     // Stopped, the engine reports none running, and they go.
-    app.services.live = Some(reported(&app, [None; LFOS]));
+    app.services.reported.live = Some(reported(&app, [None; LFOS]));
     let (_, placed) = frame(&mut app, &mut graphics);
     all.push_str(&placed);
     assert!(dot_middles(&all).is_empty(), "{placed:?}");
     // And off the Mod page too.
-    app.services.live = Some(reported(&app, turns));
+    app.services.reported.live = Some(reported(&app, turns));
     let (_, placed) = frame(&mut app, &mut graphics);
     all.push_str(&placed);
     assert_eq!(dot_middles(&all).len(), 2);
@@ -1982,7 +1982,7 @@ fn the_step_playing_is_lit_in_the_playheads_colour() {
     let (mut app, _realtime) = with_steps();
     let mut live = LiveValues::default();
     live.steps[3] = Some(2);
-    app.services.live = Some(live);
+    app.services.reported.live = Some(live);
     let backend = ratatui::backend::TestBackend::new(163, 40);
     let mut terminal = ratatui::Terminal::new(backend).unwrap();
     terminal
@@ -2185,7 +2185,7 @@ fn a_track_slots_map_is_sent_with_a_dot_at_the_last_note() {
     assert_eq!(placed, "", "no note yet, so no dot");
     let corner = app.track_page.lfo_cycles_at[3].expect("its map is placed");
     // The engine says the last note was half way along its velocities, and so half way up.
-    app.services.live = Some(LiveValues {
+    app.services.reported.live = Some(LiveValues {
         mods: std::array::from_fn(|slot| (slot == 3).then(|| LfoNow::along(0.5, 0.5))),
         ..LiveValues::default()
     });
@@ -2278,7 +2278,7 @@ fn space_g_a_keeps_what_mutate_drew_as_the_values_heard_in_one_undo_step() {
     let heard = cutoffs_heard(&mut realtime, &mut app, 4);
     let drawn = realtime.engine().live(0).drawn[3];
     assert_eq!(
-        app.services.live.unwrap().drawn[3],
+        app.services.reported.live.unwrap().drawn[3],
         drawn,
         "the report has the draws"
     );

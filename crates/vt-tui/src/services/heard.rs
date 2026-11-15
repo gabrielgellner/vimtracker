@@ -45,16 +45,19 @@ impl App {
         match report {
             GenReport::Pass(pass) => {
                 self.services
+                    .reported
                     .heard_passes
                     .insert((track, pass.phrase, pass.generator), pass);
             }
             GenReport::Row(row) => {
                 self.services
+                    .reported
                     .heard_rows
                     .insert((track, row.phrase, row.generator, row.row), row);
             }
             GenReport::Rest { phrase } => self
                 .services
+                .reported
                 .heard_rows
                 .retain(|(on, at, ..), _| (*on, *at) != (track, phrase)),
         }
@@ -73,7 +76,11 @@ impl Services {
         let span = held.generators().get(generator)?.rows()?;
         let (mut rows, mut heard, mut pass) = (Vec::new(), 0, 0);
         for row in span.first..=span.last {
-            let Some(report) = self.heard_rows.get(&(track, phrase, generator, row)) else {
+            let Some(report) = self
+                .reported
+                .heard_rows
+                .get(&(track, phrase, generator, row))
+            else {
                 continue;
             };
             heard += 1;
@@ -154,7 +161,10 @@ impl Services {
         generator: usize,
         row: usize,
     ) -> Option<(Step, i64)> {
-        let heard = self.heard_rows.get(&(track, phrase, generator, row))?;
+        let heard = self
+            .reported
+            .heard_rows
+            .get(&(track, phrase, generator, row))?;
         let owner = self.song().tracks.get(track)?;
         let held = owner.phrases.get(&phrase)?;
         let live = held.generators().get(generator)?;
@@ -174,7 +184,7 @@ impl Services {
         let mut moved = false;
         for (index, generator) in held.generators().iter().enumerate() {
             if self.heard_cell(track, phrase, index, row).is_some()
-                && let Some(cell) = self.heard_rows[&(track, phrase, index, row)].cell
+                && let Some(cell) = self.reported.heard_rows[&(track, phrase, index, row)].cell
             {
                 generator.lay_heard(row, cell, &mut step);
                 moved = true;
@@ -186,9 +196,12 @@ impl Services {
     /// Whether a live generator was heard otherwise than written on any of its rows, which the
     /// phrase's title marks with `~`.
     pub(crate) fn generator_moving(&self, track: usize, phrase: u32, generator: usize) -> bool {
-        self.heard_rows.keys().any(|&(on, at, index, row)| {
-            (on, at, index) == (track, phrase, generator)
-                && self.heard_cell(track, phrase, generator, row).is_some()
-        })
+        self.reported
+            .heard_rows
+            .keys()
+            .any(|&(on, at, index, row)| {
+                (on, at, index) == (track, phrase, generator)
+                    && self.heard_cell(track, phrase, generator, row).is_some()
+            })
     }
 }

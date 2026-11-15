@@ -285,7 +285,7 @@ fn launch_sets_when_launches_start_and_shows_it() {
 fn a_playhead_follows_the_chain_a_track_is_on_whichever_row_shows_it() {
     let (mut app, mut realtime) = jamming();
     play_on(&mut app, &mut realtime, 3);
-    assert_eq!(app.services.playing_section, 0);
+    assert_eq!(app.services.reported.playing_section, 0);
     assert_eq!(app.services.cursor.section, 1);
     assert_eq!(
         app.chain_playhead(0, 1),
@@ -296,7 +296,7 @@ fn a_playhead_follows_the_chain_a_track_is_on_whichever_row_shows_it() {
     press(&mut app, "0lll");
     special(&mut app, KeyCode::Enter);
     play_on(&mut app, &mut realtime, 16);
-    assert_eq!(app.services.jam[0].playing, Some(Some(1)));
+    assert_eq!(app.services.reported.jam[0].playing, Some(Some(1)));
     assert_eq!(app.chain_playhead(0, 0), None, "replaced by the launch");
     let launched = app.chain_playhead(0, 1).unwrap();
     assert!(launched < 16, "from the launch's own start: {launched}");
@@ -310,7 +310,7 @@ fn space_c_in_a_phrase_plays_from_that_step_of_its_chain() {
     block(&mut realtime, &mut app);
     block(&mut realtime, &mut app);
     app.tick();
-    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.reported.transport, Transport::Playing);
     assert_eq!(app.chain_playhead(0, 0), Some(5));
 }
 
@@ -490,7 +490,7 @@ fn loop_and_transport_keys_reach_the_section_being_edited() {
     press(&mut app, " 1a");
     block(&mut realtime, &mut app);
     command(&mut app, "loop");
-    assert_eq!(app.services.looping, Some(SectionLoop::one(1)));
+    assert_eq!(app.services.reported.looping, Some(SectionLoop::one(1)));
     assert!(
         app.services.status.contains("section 02"),
         "{}",
@@ -500,13 +500,13 @@ fn loop_and_transport_keys_reach_the_section_being_edited() {
     block(&mut realtime, &mut app);
     block(&mut realtime, &mut app);
     app.tick();
-    assert_eq!(app.services.playing_section, 1);
+    assert_eq!(app.services.reported.playing_section, 1);
     press(&mut app, " 1k");
     assert!(song_text(&app)[4].contains(">02"), "{:?}", song_text(&app));
     command(&mut app, "loop");
-    assert_eq!(app.services.looping, Some(SectionLoop::one(0)));
+    assert_eq!(app.services.reported.looping, Some(SectionLoop::one(0)));
     command(&mut app, "loop");
-    assert_eq!(app.services.looping, None);
+    assert_eq!(app.services.reported.looping, None);
 }
 
 #[test]
@@ -524,7 +524,7 @@ fn capital_v_over_sections_then_loop_loops_them_from_the_next_launch_line() {
     );
     press(&mut app, "j");
     command(&mut app, "loop");
-    assert_eq!(app.services.looping, Some(SectionLoop::new(1, 2)));
+    assert_eq!(app.services.reported.looping, Some(SectionLoop::new(1, 2)));
     assert_eq!(app.services.status, "Looping sections 02-03");
     assert_eq!(app.song_view.anchor, None, "the command ends the selection");
     assert!(status_line(&app).contains("Sec 3/3 loop 2-3"));
@@ -545,25 +545,25 @@ fn capital_v_over_sections_then_loop_loops_them_from_the_next_launch_line() {
         "Looping sections 02-03 on the 1bar grid"
     );
     block(&mut rt, &mut app);
-    assert!(app.services.loop_waiting);
+    assert!(app.services.reported.loop_waiting);
     assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} LOOP  ")));
-    assert_eq!(app.services.playing_section, 0);
+    assert_eq!(app.services.reported.playing_section, 0);
     for _ in 0..800 {
         block(&mut rt, &mut app);
     }
-    assert!(!app.services.loop_waiting, "landed on the bar");
-    assert_eq!(app.services.playing_section, 1);
+    assert!(!app.services.reported.loop_waiting, "landed on the bar");
+    assert_eq!(app.services.reported.playing_section, 1);
 
     // One that holds the section playing only changes what comes next, so it's at once.
     press(&mut app, "kkVj");
     command(&mut app, "loop");
     block(&mut rt, &mut app);
-    assert!(!app.services.loop_waiting);
+    assert!(!app.services.reported.loop_waiting);
     assert_eq!(rt.engine().looping(), Some(SectionLoop::new(0, 1)));
 
     // `:loop` alone on one of them goes back to the song.
     command(&mut app, "loop");
-    assert_eq!(app.services.looping, None);
+    assert_eq!(app.services.reported.looping, None);
     assert_eq!(app.services.status, "Playing the song");
     block(&mut rt, &mut app);
     assert_eq!(rt.engine().looping(), None);
@@ -621,7 +621,7 @@ fn jamming() -> (App, Realtime) {
     press(&mut app, "\t");
     special(&mut app, KeyCode::Tab);
     play_on(&mut app, &mut realtime, 1);
-    assert_eq!(app.services.transport, Transport::Playing);
+    assert_eq!(app.services.reported.transport, Transport::Playing);
     (app, realtime)
 }
 
@@ -629,26 +629,26 @@ fn jamming() -> (App, Realtime) {
 fn enter_cues_this_chain_on_one_track_and_holds_the_section() {
     let (mut app, mut realtime) = jamming();
     assert_eq!(app.services.cursor.section, 1);
-    assert_eq!(app.services.playing_section, 0);
+    assert_eq!(app.services.reported.playing_section, 0);
     press(&mut app, "0lll");
     special(&mut app, KeyCode::Enter);
     assert_eq!(
-        app.services.looping,
+        app.services.reported.looping,
         Some(SectionLoop::one(0)),
         "the jam stays here"
     );
     play_on(&mut app, &mut realtime, 1);
-    assert_eq!(app.services.jam[0].cued, Some(Some(1)));
+    assert_eq!(app.services.reported.jam[0].cued, Some(Some(1)));
     assert!(
         song_text(&app)[4].contains("01~"),
         "{:?}",
         song_text(&app)[4]
     );
     play_on(&mut app, &mut realtime, 16);
-    assert_eq!(app.services.jam[0].playing, Some(Some(1)));
-    assert_eq!(app.services.jam[0].cued, None);
+    assert_eq!(app.services.reported.jam[0].playing, Some(Some(1)));
+    assert_eq!(app.services.reported.jam[0].cued, None);
     assert_eq!(
-        app.services.jam[1].playing, None,
+        app.services.reported.jam[1].playing, None,
         "the other track is untouched"
     );
     assert!(
@@ -697,7 +697,7 @@ fn c_captures_what_each_track_is_playing_as_one_undo() {
     press(&mut app, "0lll");
     special(&mut app, KeyCode::Enter);
     play_on(&mut app, &mut realtime, 17);
-    assert_eq!(app.services.jam[0].playing, Some(Some(1)));
+    assert_eq!(app.services.reported.jam[0].playing, Some(Some(1)));
     press(&mut app, "C");
     assert_eq!(app.song().sections.len(), 3);
     assert_eq!(app.song().sections[1].chains[0], Some(1), "launched");
@@ -708,14 +708,14 @@ fn c_captures_what_each_track_is_playing_as_one_undo() {
         "the row it came from"
     );
     assert_eq!(app.services.cursor.section, 1);
-    assert_eq!(app.services.looping, Some(SectionLoop::one(1)));
+    assert_eq!(app.services.reported.looping, Some(SectionLoop::one(1)));
     play_on(&mut app, &mut realtime, 1);
     assert_eq!(
-        app.services.playing_section, 1,
+        app.services.reported.playing_section, 1,
         "it carries on in the new row"
     );
     assert_eq!(
-        app.services.jam[0].playing,
+        app.services.reported.jam[0].playing,
         Some(Some(1)),
         "without restarting"
     );
@@ -744,7 +744,7 @@ fn a_stopped_track_captures_as_empty_and_nothing_playing_is_refused() {
     press(&mut app, "x");
     special(&mut app, KeyCode::Enter);
     play_on(&mut app, &mut realtime, 17);
-    assert_eq!(app.services.jam[0].playing, Some(None));
+    assert_eq!(app.services.reported.jam[0].playing, Some(None));
     press(&mut app, "C");
     assert_eq!(app.song().sections[1].chains[0], None);
     assert!(app.song().sections[1].chains[1].is_some());

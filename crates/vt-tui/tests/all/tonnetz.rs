@@ -69,7 +69,12 @@ fn on_the_chord_voice_each_row_is_a_root_with_its_chord_locked() {
     let names: Vec<String> = panel
         .shape
         .tonnetz
-        .chords(panel.shape.from, panel.shape.seed, app.services.scale, 8)
+        .chords(
+            panel.shape.from,
+            panel.shape.seed,
+            app.services.live.scale,
+            8,
+        )
         .into_iter()
         .map(|chord| chord.name())
         .collect();

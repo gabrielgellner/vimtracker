@@ -1033,7 +1033,7 @@ impl SamplePage {
                 }
                 self.zoom = zoom;
                 // The slice's middle in the view's.
-                let middle = (slice.start + slice.end) / 2;
+                let middle = slice.start.midpoint(slice.end);
                 self.column = self
                     .column_of(middle)
                     .saturating_sub((self.columns / 2) as u64);

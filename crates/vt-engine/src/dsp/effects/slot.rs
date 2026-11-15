@@ -117,8 +117,10 @@ impl Default for Keys {
 }
 
 impl Keys {
-    /// A track's latest frame, or silence for one that isn't there.
+    /// A track's latest frame, or silence for one that isn't there. A setting's range keeps a
+    /// key on a track, so one past them is a mistake the tests should hear of.
     pub(crate) fn of(&self, track: usize) -> [f32; 2] {
+        debug_assert!(track < self.frames.len(), "no track {track} to key from");
         self.frames.get(track).copied().unwrap_or_default()
     }
 }
@@ -616,6 +618,8 @@ impl InsertState {
     }
 
     /// The slot as it is but for its long buffer, which it doesn't have, to try a frame on.
+    /// Each field is copied by hand rather than by `..self.clone()`, as cloning the slot would
+    /// copy its `Memory` too, allocating on the audio thread.
     fn without_memory(&self) -> Self {
         let Self {
             memory: _,

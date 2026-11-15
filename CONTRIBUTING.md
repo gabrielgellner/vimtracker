@@ -102,7 +102,10 @@ tests' signals in `vt-engine`'s `src/dsp/signals.rs`. One file's tests run with
   It counts only while a test arms it.
 - **Goldens.** The engine's `tests/golden/*.hash` and the model's `tests/golden/*.txt` are
   written again with `VT_BLESS=1`, only after a change on purpose. The engine's
-  `tests/all/goldens.rs` fails while an effect or a voice has no golden.
+  `tests/all/goldens.rs` fails while an effect or a voice has no golden. Beside each hash is what
+  the render sounded like: its peak, RMS, DC, where it ends and how bright it is. A changed hash
+  fails with each of them before and after and whether it stayed in its band, as a small fix
+  keeps it; say in the commit why a sound that left one moved, and the bless's diff shows how.
 - **The Roto.** `vt-roto`'s tests are the four files in its `tests/`, against the fake Roto in
   memory. The fake is built only with the crate's `fake` feature, which its own tests and
   `vt-tui`'s turn on as a dev-dependency, so a release build leaves it out.

@@ -106,7 +106,7 @@ fn catch_up(app: &mut App, realtime: &mut Realtime) {
 
 /// Live values that are the song's but for what a test changes.
 fn live(app: &App) -> LiveValues {
-    app.services.live.unwrap_or_default()
+    app.services.reported.live.unwrap_or_default()
 }
 
 /// The Sound page of the first track, a sampler.
@@ -231,7 +231,7 @@ fn a_jump_labels_the_names_it_finds_and_their_values() {
 fn the_bar_follows_whats_playing_and_marks_whats_set() {
     let (mut app, mut realtime) = on_sound();
     catch_up(&mut app, &mut realtime);
-    app.services.live = Some(LiveValues {
+    app.services.reported.live = Some(LiveValues {
         cutoff: 0x40,
         resonance: 0x30,
         ..live(&app)
@@ -263,7 +263,7 @@ fn the_bar_follows_whats_playing_and_marks_whats_set() {
 fn a_fader_the_steps_drive_is_in_the_playing_colour_and_one_taken_over_is_marked() {
     let (mut app, mut realtime) = on_sound();
     catch_up(&mut app, &mut realtime);
-    app.services.live = Some(LiveValues {
+    app.services.reported.live = Some(LiveValues {
         level: 0x60,
         ..live(&app)
     });
@@ -279,7 +279,7 @@ fn a_fader_the_steps_drive_is_in_the_playing_colour_and_one_taken_over_is_marked
             "d fg BASE bg MAUVE",
         ],
     );
-    app.services.faders[0].automated[0] = true;
+    app.services.reported.faders[0].automated[0] = true;
     assert_drawn(
         &cell(&app, "Level", 29),
         &[
@@ -291,7 +291,7 @@ fn a_fader_the_steps_drive_is_in_the_playing_colour_and_one_taken_over_is_marked
             "d fg BASE bg MAUVE",
         ],
     );
-    app.services.faders[0].taken[0] = true;
+    app.services.reported.faders[0].taken[0] = true;
     assert_drawn(
         &cell(&app, "Level", 29),
         &[
@@ -712,7 +712,7 @@ fn a_slots_bar_follows_whats_playing_and_a_macros_range() {
         };
         live.inserts[slot][param] = heard;
     }
-    app.services.live = Some(live);
+    app.services.reported.live = Some(live);
     assert_drawn(
         &row(&app, 4, 1, 110),
         &[
@@ -735,8 +735,8 @@ fn a_slot_a_steps_lock_switches_out_fades_but_for_the_cursor() {
     catch_up(&mut app, &mut realtime);
     let mut live = live(&app);
     live.bypassed[0] = true;
-    app.services.live = Some(live);
-    app.services.transport = Transport::Playing;
+    app.services.reported.live = Some(live);
+    app.services.reported.transport = Transport::Playing;
     assert_drawn(
         &row(&app, 2, 0, 40),
         &[
@@ -767,7 +767,7 @@ fn the_macros_band_shows_where_each_is_heard() {
     catch_up(&mut app, &mut realtime);
     let mut live = live(&app);
     live.macros[1] = 0x8000;
-    app.services.live = Some(live);
+    app.services.reported.live = Some(live);
     assert_drawn(
         &row(&app, 4, 1, 70),
         &[

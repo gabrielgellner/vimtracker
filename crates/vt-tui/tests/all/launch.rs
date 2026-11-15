@@ -29,7 +29,7 @@ fn space_a_realigns_the_cursors_track_on_the_launch_grid_while_playing() {
     block(&mut rt, &mut app);
     assert!(rt.engine().track_realign_waiting(0));
     assert!(!rt.engine().realign_waiting(), "only this track");
-    assert!(app.services.realigning_tracks[0]);
+    assert!(app.services.reported.realigning_tracks[0]);
     assert!(status_line(&app).contains(&realign_shown()));
     assert!(!app.services.dirty, "it moves playback, not the song");
 
@@ -43,11 +43,14 @@ fn space_a_realigns_the_cursors_track_on_the_launch_grid_while_playing() {
     // Asked for again, it lands on the bar and is done.
     tap(&mut app, " a");
     block(&mut rt, &mut app);
-    assert!(app.services.realigning_tracks[0]);
+    assert!(app.services.reported.realigning_tracks[0]);
     for _ in 0..400 {
         block(&mut rt, &mut app);
     }
-    assert!(!app.services.realigning_tracks[0], "landed on the bar");
+    assert!(
+        !app.services.reported.realigning_tracks[0],
+        "landed on the bar"
+    );
     press(&mut app, "u");
     assert!(!app.services.dirty);
 }
@@ -62,9 +65,9 @@ fn space_g_m_mutes_the_cursors_track_on_the_launch_grid_while_playing() {
         app.services.status,
         "Track 01 muted at once, as nothing's playing"
     );
-    assert!(app.services.levels[0].mute);
+    assert!(app.services.live.levels[0].mute);
     tap(&mut app, " gm");
-    assert!(!app.services.levels[0].mute);
+    assert!(!app.services.live.levels[0].mute);
 
     special(&mut app, KeyCode::Tab);
     block(&mut rt, &mut app);
@@ -75,8 +78,8 @@ fn space_g_m_mutes_the_cursors_track_on_the_launch_grid_while_playing() {
     );
     block(&mut rt, &mut app);
     assert!(rt.engine().mute_waiting(0));
-    assert!(app.services.jam[0].mute_waiting);
-    assert!(!app.services.levels[0].mute, "not until the line");
+    assert!(app.services.reported.jam[0].mute_waiting);
+    assert!(!app.services.live.levels[0].mute, "not until the line");
     assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} MUTE  ")));
     press(&mut app, " 4");
     assert!(
@@ -100,8 +103,11 @@ fn space_g_m_mutes_the_cursors_track_on_the_launch_grid_while_playing() {
     for _ in 0..400 {
         block(&mut rt, &mut app);
     }
-    assert!(!app.services.jam[0].mute_waiting, "landed on the bar");
-    assert!(app.services.levels[0].mute);
+    assert!(
+        !app.services.reported.jam[0].mute_waiting,
+        "landed on the bar"
+    );
+    assert!(app.services.live.levels[0].mute);
     assert!(app.services.dirty);
 
     // `Space g s` solos the same way, and unmuting by hand meanwhile leaves it waiting.
@@ -112,13 +118,13 @@ fn space_g_m_mutes_the_cursors_track_on_the_launch_grid_while_playing() {
     );
     tap(&mut app, " m");
     block(&mut rt, &mut app);
-    assert!(app.services.jam[0].solo_waiting);
+    assert!(app.services.reported.jam[0].solo_waiting);
     assert!(status_line(&app).contains(&format!(" {PLAY} {WAITING} SOLO  ")));
     for _ in 0..400 {
         block(&mut rt, &mut app);
     }
-    assert!(app.services.levels[0].solo);
-    assert!(!app.services.levels[0].mute);
+    assert!(app.services.live.levels[0].solo);
+    assert!(!app.services.live.levels[0].mute);
 }
 
 #[test]
@@ -130,7 +136,7 @@ fn mutes_armed_on_two_tracks_land_together_and_space_capital_m_takes_them_back()
     app.services.cursor.track = 1;
     tap(&mut app, " gm");
     block(&mut rt, &mut app);
-    assert!(app.services.jam[0].mute_waiting && app.services.jam[1].mute_waiting);
+    assert!(app.services.reported.jam[0].mute_waiting && app.services.reported.jam[1].mute_waiting);
     tap(&mut app, " M");
     block(&mut rt, &mut app);
     assert!(!rt.engine().mute_waiting(0) && !rt.engine().mute_waiting(1));
@@ -141,7 +147,10 @@ fn mutes_armed_on_two_tracks_land_together_and_space_capital_m_takes_them_back()
     let mut landed = None;
     for blocks in 0..400 {
         block(&mut rt, &mut app);
-        let both = (app.services.levels[0].mute, app.services.levels[1].mute);
+        let both = (
+            app.services.live.levels[0].mute,
+            app.services.live.levels[1].mute,
+        );
         if both != (false, false) {
             landed = Some((blocks, both));
             break;
@@ -206,7 +215,7 @@ fn space_a_realigns_every_track_on_the_launch_grid_while_playing() {
     );
     block(&mut rt, &mut app);
     assert!(rt.engine().realign_waiting());
-    assert!(app.services.realigning);
+    assert!(app.services.reported.realigning);
     assert!(status_line(&app).contains(&realign_shown()));
     assert!(!app.services.dirty, "it moves playback, not the song");
 
@@ -220,12 +229,12 @@ fn space_a_realigns_every_track_on_the_launch_grid_while_playing() {
     // Asked for again, it lands on the bar and is done.
     tap(&mut app, " A");
     block(&mut rt, &mut app);
-    assert!(app.services.realigning);
+    assert!(app.services.reported.realigning);
     for _ in 0..400 {
         block(&mut rt, &mut app);
     }
-    assert!(!app.services.realigning, "landed on the bar");
-    assert_eq!(app.services.transport, Transport::Playing);
+    assert!(!app.services.reported.realigning, "landed on the bar");
+    assert_eq!(app.services.reported.transport, Transport::Playing);
 
     // Nothing to undo.
     press(&mut app, "u");
