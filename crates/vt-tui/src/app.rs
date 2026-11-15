@@ -264,8 +264,6 @@ pub struct App {
     /// When the loader or the analyst started on what they're doing, while they are, for the
     /// spinner on the status line.
     pub(crate) work_since: Option<Instant>,
-    /// Makes the random names that name lines start with and `C-r` rolls, seeded from the clock.
-    pub(crate) names: Names,
 }
 
 /// The keys that play while the track page's keyboard is on, from C to F. The rest stay the
@@ -297,7 +295,7 @@ impl App {
         let mut song = song;
         name_song(&mut song, folder.as_deref(), &mut names);
         let mut app = Self {
-            services: Services::new(song, folder, samples, handle, rate),
+            services: Services::new(song, folder, samples, handle, rate, names),
             modes: Modes::default(),
             mixer_page: MixerPage::default(),
             song_view: SongView::default(),
@@ -323,7 +321,6 @@ impl App {
             grammar: Grammar::default(),
             explorer: Explorer::new(rate),
             work_since: None,
-            names,
         };
         app.services.live_song = Some(Arc::clone(app.song()));
         app.send_live();

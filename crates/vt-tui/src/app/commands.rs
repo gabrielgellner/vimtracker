@@ -385,7 +385,7 @@ impl App {
 
     /// Replace the song and undo history, loading any samples it needs.
     pub(crate) fn replace_song(&mut self, mut song: Song, folder: Option<PathBuf>) {
-        name_song(&mut song, folder.as_deref(), &mut self.names);
+        name_song(&mut song, folder.as_deref(), &mut self.services.names);
         let notes = project::find_sources(folder.as_deref(), &mut song);
         let mut pool = SamplePool::clone(&self.services.samples);
         let errors = project::load_samples(folder.as_deref(), &song, self.services.rate, &mut pool);

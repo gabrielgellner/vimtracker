@@ -40,7 +40,8 @@ fn tap_special(app: &mut App, code: KeyCode) {
 fn menu(app: &App) -> (Vec<String>, String) {
     let menu = app
         .overlays
-        .command_menu
+        .command
+        .menu
         .as_ref()
         .expect("the list is open");
     let labels = menu
@@ -58,18 +59,18 @@ fn tab_completes_a_command_name_in_place() {
     let (mut app, _rt) = app();
     press(&mut app, ":sa");
     tap_special(&mut app, KeyCode::Tab);
-    assert_eq!(app.overlays.command_line, "sample");
+    assert_eq!(app.overlays.command.line, "sample");
     assert!(
-        app.overlays.command_menu.is_none(),
+        app.overlays.command.menu.is_none(),
         "one match needs no list"
     );
     special(&mut app, KeyCode::Esc);
     press(&mut app, ":set sc");
     tap_special(&mut app, KeyCode::Tab);
-    assert_eq!(app.overlays.command_line, "set scale=");
+    assert_eq!(app.overlays.command.line, "set scale=");
     press(&mut app, "dor");
     tap_special(&mut app, KeyCode::Tab);
-    assert_eq!(app.overlays.command_line, "set scale=dorian");
+    assert_eq!(app.overlays.command.line, "set scale=dorian");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.services.status, "Scale C Dorian", "it parses and runs");
     assert!(app.services.live.scale.on);
@@ -80,7 +81,7 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     let (mut app, _rt) = app();
     press(&mut app, ":s");
     tap_special(&mut app, KeyCode::Tab);
-    assert_eq!(app.overlays.command_line, "s", "nothing more in common");
+    assert_eq!(app.overlays.command.line, "s", "nothing more in common");
     assert_eq!(
         menu(&app),
         (
@@ -96,7 +97,7 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     assert_eq!(menu(&app).1, "scale");
     tap_special(&mut app, KeyCode::BackTab);
     assert_eq!(menu(&app).1, "set");
-    assert_eq!(app.overlays.command_line, "s", "moving puts nothing in");
+    assert_eq!(app.overlays.command.line, "s", "moving puts nothing in");
     // Typing narrows it, keeping the highlight.
     tap(&mut app, "e");
     assert_eq!(
@@ -107,8 +108,8 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     tap_special(&mut app, KeyCode::Tab);
     assert_eq!(menu(&app).1, "set", "it goes round");
     special(&mut app, KeyCode::Enter);
-    assert_eq!(app.overlays.command_line, "set", "Enter takes it");
-    assert!(app.overlays.command_menu.is_none());
+    assert_eq!(app.overlays.command.line, "set", "Enter takes it");
+    assert!(app.overlays.command.menu.is_none());
     assert_eq!(app.modes.mode, Mode::Command, "and the line stays open");
     // Esc closes the list and keeps what's typed.
     press(&mut app, " ");
@@ -121,9 +122,9 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     tap(&mut app, "r");
     assert_eq!(menu(&app).0, ["root=", "readonly", "readwrite"]);
     special(&mut app, KeyCode::Esc);
-    assert!(app.overlays.command_menu.is_none());
+    assert!(app.overlays.command.menu.is_none());
     assert_eq!(
-        (app.modes.mode, app.overlays.command_line.as_str()),
+        (app.modes.mode, app.overlays.command.line.as_str()),
         (Mode::Command, "set r")
     );
     // Shift-Tab opens on the last, and a new word closes the list.
@@ -135,13 +136,13 @@ fn several_matches_list_above_the_command_line_and_tab_moves_through_them() {
     assert_eq!(menu(&app).0, ["add"]);
     tap(&mut app, "dd");
     press(&mut app, " ");
-    assert!(app.overlays.command_menu.is_none());
+    assert!(app.overlays.command.menu.is_none());
     // Backspace widens it again, and a word nothing matches closes it.
     special(&mut app, KeyCode::Esc);
     press(&mut app, ":se");
     tap_special(&mut app, KeyCode::Tab);
     tap(&mut app, "x");
-    assert!(app.overlays.command_menu.is_none());
+    assert!(app.overlays.command.menu.is_none());
 }
 
 #[test]
@@ -156,12 +157,12 @@ fn paths_and_kits_complete_from_the_disk() {
     press(&mut app, &format!(":e {}/so", root.display()));
     tap_special(&mut app, KeyCode::Tab);
     assert_eq!(
-        app.overlays.command_line,
+        app.overlays.command.line,
         format!("e {}/songs/", root.display())
     );
     tap_special(&mut app, KeyCode::Tab);
     assert_eq!(
-        app.overlays.command_line,
+        app.overlays.command.line,
         format!("e {}/songs/verse/", root.display())
     );
     special(&mut app, KeyCode::Esc);
@@ -181,10 +182,10 @@ fn paths_and_kits_complete_from_the_disk() {
     press(&mut app, "9");
     special(&mut app, KeyCode::Esc);
     tap_special(&mut app, KeyCode::Tab);
-    assert_eq!(app.overlays.command_line, "kit 909");
+    assert_eq!(app.overlays.command.line, "kit 909");
     press(&mut app, " a");
     tap_special(&mut app, KeyCode::Tab);
-    assert_eq!(app.overlays.command_line, "kit 909 all");
+    assert_eq!(app.overlays.command.line, "kit 909 all");
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -195,37 +196,37 @@ fn up_and_down_go_through_earlier_commands_and_search_with_what_is_typed() {
         command(&mut app, line);
     }
     assert_eq!(
-        app.overlays.command_history.lines(),
+        app.overlays.command.history.lines(),
         ["bpm 130", "bpm 140", "set skip=4"],
         "a line run again moves to the end"
     );
     press(&mut app, ":");
     tap_special(&mut app, KeyCode::Up);
-    assert_eq!(app.overlays.command_line, "set skip=4");
+    assert_eq!(app.overlays.command.line, "set skip=4");
     tap_special(&mut app, KeyCode::Up);
-    assert_eq!(app.overlays.command_line, "bpm 140");
+    assert_eq!(app.overlays.command.line, "bpm 140");
     tap_special(&mut app, KeyCode::Down);
     tap_special(&mut app, KeyCode::Down);
-    assert_eq!(app.overlays.command_line, "", "back to what was typed");
+    assert_eq!(app.overlays.command.line, "", "back to what was typed");
     press(&mut app, "b");
     tap_special(&mut app, KeyCode::Up);
-    assert_eq!(app.overlays.command_line, "bpm 140");
+    assert_eq!(app.overlays.command.line, "bpm 140");
     tap_special(&mut app, KeyCode::Up);
-    assert_eq!(app.overlays.command_line, "bpm 130");
+    assert_eq!(app.overlays.command.line, "bpm 130");
     tap_special(&mut app, KeyCode::Up);
     assert_eq!(
-        app.overlays.command_line, "bpm 130",
+        app.overlays.command.line, "bpm 130",
         "nothing older starts with b"
     );
     tap_special(&mut app, KeyCode::Down);
-    assert_eq!(app.overlays.command_line, "bpm 140");
+    assert_eq!(app.overlays.command.line, "bpm 140");
     // Editing a line found starts a new search from it.
     for _ in 0..3 {
         tap_special(&mut app, KeyCode::Backspace);
     }
-    assert_eq!(app.overlays.command_line, "bpm ");
+    assert_eq!(app.overlays.command.line, "bpm ");
     tap_special(&mut app, KeyCode::Up);
-    assert_eq!(app.overlays.command_line, "bpm 140");
+    assert_eq!(app.overlays.command.line, "bpm 140");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.song().millibpm, 140_000);
     // A line that doesn't parse is kept too, to be put right, but Esc keeps nothing.
@@ -234,10 +235,25 @@ fn up_and_down_go_through_earlier_commands_and_search_with_what_is_typed() {
     special(&mut app, KeyCode::Esc);
     assert_eq!(
         app.overlays
-            .command_history
+            .command
+            .history
             .lines()
             .last()
             .map(String::as_str),
         Some("bmp 120")
     );
+}
+
+#[test]
+fn the_keys_of_the_command_line_are_in_the_binding_table() {
+    let (app, _rt) = app();
+    let help = app.help_rows();
+    let at = help.iter().position(|line| line == "Command").unwrap();
+    let rows: Vec<&String> = help[at + 1..]
+        .iter()
+        .take_while(|line| !line.is_empty())
+        .collect();
+    for row in ["Run the line", "another random name", "the next match"] {
+        assert!(rows.iter().any(|line| line.contains(row)), "{row}");
+    }
 }

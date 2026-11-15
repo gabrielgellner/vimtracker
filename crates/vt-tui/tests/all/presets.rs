@@ -316,7 +316,7 @@ fn k_on_the_machine_lists_the_presets_and_the_browser_loads_one() {
     press(&mut app, "/save");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Command);
-    assert_eq!(app.overlays.command_line, "preset save ");
+    assert_eq!(app.overlays.command.line, "preset save ");
 }
 
 #[test]

@@ -401,10 +401,13 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     empties the return queue each frame, and the versions are freed there. A track's page is heard
     at once: `hand_over` looks up only the settings `Track::settings_moved_from` names, those of
     what differs between the track's two versions and those either keeps a value or a fine part of
-    that the other doesn't, so a track the edit didn't touch costs comparisons and no look-ups
-    (#842). It's worked out in the callback rather than with the version, as the version a
-    callback swaps from isn't always the one the next was built after: a waiting one can be
-    replaced.
+    that the other doesn't (#842). A track the edit didn't touch is the very `Arc<Track>` the
+    callback's version has, so `follow_base` and `keep_places` pass over it by
+    `Tracks::same`, one pointer compared, and only its macros, if it has any mapped, put what
+    they hold again (#871). It's worked out in the callback rather than with the version, as the
+    version a callback swaps from isn't always the one the next was built after: a waiting one
+    can be replaced. The callback drops no track either: its tracks are its version's, which
+    goes back whole.
 5.  **Long buffers**, for the effects with memory such as delays and reverbs, are made on the edit
     thread for what a version needs (`MemoryCount`) and sent ahead of it. Spare ones are asked back
     with `Command::ReleaseMemory`, and come back on a queue of their own to be freed.
@@ -926,9 +929,14 @@ each has a line that's typed into, so `Overlay::text` takes a key as text, every
 the explorer's `H` is passed back on a plain list and starts a search; and there's no count,
 as an overlay that counts keeps its own digits. `overlays::press` gives an overlay a key that
 way, with the keys of a sequence typed so far in `Grammar::pending`, as Normal's are. The
-picker, `Space k`'s list (`Help`) and an open guide (`GuideView`) are behind it, the last two
-given their keys by `overlays::give` straight from `App::handle_key`; the others still read
-their keys in `App`'s methods.
+picker, `Space k`'s list (`Help`), an open guide (`GuideView`) and the `:` line
+(`CommandLine`) are behind it, the last three given their keys by `overlays::give`. The `:` line
+answers `Run` with the line typed, `Close` on `Esc` or a line that doesn't parse, and
+`Enter(Normal)` on `Backspace` in an empty line; `App::command_line_key` lends it the folder of
+the presets `:preset` lists here, which only the track page knows, and once it's left by `Esc`
+or run, ends the song view's selection and says if the history couldn't be kept. The random
+names it rolls with `C-r` are `Services::names`. The others still read their keys in `App`'s
+methods.
 
 A key goes, in this order, to the first that takes it:
 

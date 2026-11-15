@@ -218,7 +218,7 @@ fn the_browser_and_k_add_a_patch() {
     press(&mut app, "/save as a p");
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Command);
-    assert_eq!(app.overlays.command_line, "patch save ");
+    assert_eq!(app.overlays.command.line, "patch save ");
 
     // And on a macro, the patch's knob, on the Gen page.
     special(&mut app, KeyCode::Esc);

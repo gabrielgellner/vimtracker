@@ -14,7 +14,7 @@ use vt_model::groove::{
     CUSTOM_GROOVES, FULL_VELOCITY, Groove, GrooveId, MAX_GROOVE_STEPS, MAX_GROOVE_VELOCITY,
     MAX_HUMANISE, MAX_PUSH,
 };
-use vt_model::names::{Names, is_project_name};
+use vt_model::names::is_project_name;
 use vt_model::scale::{ROOTS, Scale, parse_root};
 use vt_model::song::Launch;
 
@@ -488,13 +488,12 @@ impl ProjectPage {
     }
 
     /// A key while typing on the page, into what Insert has typed: `Enter` sets what's typed,
-    /// `Esc` leaves it, and on the name `C-r` rolls a new one from `names` and `C-u` clears it.
+    /// `Esc` leaves it, and on the name `C-r` rolls a new random one and `C-u` clears it.
     /// Gives what ending Insert does, once it ends.
     pub(crate) fn insert(
         &mut self,
         key: Key,
         entry: &mut Entry,
-        names: &mut Names,
         services: &mut Services,
     ) -> Option<Outcome> {
         let control = self.control(services.song());
@@ -512,7 +511,7 @@ impl ProjectPage {
                         std::collections::HashSet::new,
                         crate::overlays::picker::exploring::taken_in,
                     );
-                entry.text = names.fresh(|name| taken.contains(name)).into();
+                entry.text = services.names.fresh(|name| taken.contains(name)).into();
             }
             KeyCode::Char('u') if key.ctrl => entry.text.clear(),
             KeyCode::Backspace => {

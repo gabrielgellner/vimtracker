@@ -309,8 +309,8 @@ impl App {
                 self.add_factory_patch(&name, over);
             }
             Pick::Prompt(text) => {
-                self.overlays.command_line = text;
-                self.overlays.command_menu = None;
+                self.overlays.command.line = text;
+                self.overlays.command.menu = None;
                 self.modes.mode = Mode::Command;
                 self.services.status =
                     "Type a name, with folders before it if you like, then Enter".to_owned();

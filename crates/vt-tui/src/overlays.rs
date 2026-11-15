@@ -22,8 +22,7 @@ use crate::input::keys::Key;
 use crate::input::mode::Mode;
 use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::services::Services;
-use command::completion::CommandMenu;
-use command::history::CommandHistory;
+use command::CommandLine;
 use guides::GuideView;
 use help::Help;
 use mapping::MappingView;
@@ -172,12 +171,8 @@ pub(crate) fn give<O: Overlay>(
 pub struct Overlays {
     /// The open picker or explorer.
     pub picker: Option<Picker>,
-    /// The `:` line as typed so far.
-    pub command_line: String,
-    /// The list of matches above the command line, while there's more than one.
-    pub command_menu: Option<CommandMenu>,
-    /// The command lines run before, which `Up` and `Down` go through.
-    pub command_history: CommandHistory,
+    /// The `:` line as typed so far, its list of matches and the lines run before.
+    pub command: CommandLine,
     /// `Space k`'s list of every key, and how far it has scrolled.
     pub help: Help,
     /// The open guide, how far it has scrolled, and how many of its rows fit.
