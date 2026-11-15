@@ -10,6 +10,7 @@ use vt_engine::published::Published;
 use vt_model::modulation::ModSlot;
 use vt_model::sample::SampleData;
 use vt_model::samples::SamplePool;
+use vt_model::scale::{Scale, ScaleKind};
 use vt_model::settings::SettingId;
 use vt_model::song::{Phrase, Song};
 use vt_model::steps::{Loop, StepRate, Steps, StepsMode};
@@ -291,4 +292,55 @@ fn smooth_glides_into_each_step_or_plucks_it() {
     close(through(0x80), (0xA0, 0x60));
     // Down to `-80`, a pluck: the step's value falling to nothing across it.
     close(through(-0x80), (0x50, 0x70));
+}
+
+/// What the Steps slot in `Mod 4` moved the first row's note by on `Pitch`, in semitones, with
+/// the scale set by command before playing if one is given, as `:scale` does.
+fn pitch_moved(song: &Song, live: Option<Scale>) -> f32 {
+    let version = Arc::new(Published::new(Arc::new(song.clone()), flat()));
+    let mut engine = Engine::new(RATE, version);
+    if let Some(scale) = live {
+        engine.set_scale(scale);
+    }
+    engine.play_from(0);
+    let mut out = vec![0.0; STEP];
+    engine.process(&mut out);
+    let pitch = engine
+        .take_note_pitch(0)
+        .expect("the row's note is reported");
+    pitch.moves[3]
+}
+
+/// A slot's `Pitch in scale` follows the scale as it is now, which `:scale` sets by command
+/// without making a new version of the song, not the one the song was opened with (#882).
+#[test]
+fn pitch_in_scale_follows_a_scale_changed_by_command() {
+    // Up three semitones from `C-3`, to `D#3`: between C major's `D` and `E`, so the lower.
+    let up_three = Steps {
+        values: values(&[3]),
+        length: 1,
+        mode: StepsMode::Note,
+        ..Steps::default()
+    };
+    let major = Scale {
+        on: true,
+        root: 0,
+        kind: ScaleKind::Major,
+    };
+    let off = Scale { on: false, ..major };
+    let song_in = |scale| {
+        let mut song = song(&["C-3 64 --- --- ---"], Steps::default());
+        song.scale = scale;
+        song.tracks[0].mods[3] = ModSlot {
+            in_scale: true,
+            ..ModSlot::steps(Some(SettingId::PITCH), up_three)
+        };
+        song
+    };
+    // As the song has it, with nothing sent.
+    assert_eq!(pitch_moved(&song_in(off), None), 3.0);
+    assert_eq!(pitch_moved(&song_in(major), None), 2.0);
+    // Turned on by command, and turned off by command, over what the song has.
+    assert_eq!(pitch_moved(&song_in(off), Some(major)), 2.0);
+    assert_eq!(pitch_moved(&song_in(major), Some(off)), 3.0);
 }
