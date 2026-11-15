@@ -3,8 +3,7 @@
 //! as working out both does, and the same on both sides, as a sound goes from the same on both to
 //! not and back. Every effect that claims either is checked, so a new one that opts in is too.
 
-use vt_engine::dsp::distort::{InsertState, Mono};
-use vt_engine::track_state::Keys;
+use vt_engine::dsp::slot::{InsertState, Keys, Mono};
 use vt_model::insert::{
     Compressor, CompressorType, Distort, DistortType, Equaliser, Exciter, GateMode, Insert,
     LowPassGate, Vowel,
