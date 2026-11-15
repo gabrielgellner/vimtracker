@@ -9,6 +9,12 @@
 //! what `From`, `To`, `Hits` and `Rotate` mean hangs on the column filled, which a [`Context`]
 //! says. Each read and change is a pure function of the shape and its context, so the edit thread
 //! and, later, the engine work them out alike.
+//!
+//! What's fixed of each setting is a row of [`GEN_PARAMS`]: its key, name and units, how it's
+//! typed, its bounds and steps, and how it's read and set as a number (decision 342). What hangs
+//! on the shape besides, which shapes have it and how it's shown, put back, typed and chosen from
+//! a list, is [`GenParam`]'s own, as each fill's own settings' places are its
+//! [`FillSpec`](super::FillSpec)'s.
 
 use crate::grid::{GRID_COLUMNS, GRID_ROWS, Grid};
 use crate::lfo::{Shape as Wave, note_rates};
@@ -17,9 +23,9 @@ use crate::step::Step;
 
 use super::{
     Acid, Bar, Bits, CellStart, Channel, DEFAULT_RATE, DEFAULT_RULE, Degrees, Division, Divisions,
-    DrumPart, EUCLID_HITS, Edge, FillKind, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS, MAX_DEPTH,
-    MAX_FACTOR, MAX_LOOP, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION, MAX_ORDER, MAX_RING,
-    MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, MoveList, Moves, Mutations, Pink, Quality,
+    DrumPart, EUCLID_HITS, Edge, FillKind, Follow, Grids, MAX_ACID_NOTES, MAX_BEND, MAX_BIAS,
+    MAX_DEPTH, MAX_FACTOR, MAX_LOOP, MAX_MOVE_LOOP, MAX_MOVE_WEIGHT, MAX_MUTATION, MAX_ORDER,
+    MAX_RING, MAX_SPREAD, MAX_TRANSPOSE, MAX_TURN, MIN_DEPTH, MoveList, Moves, Pink, Quality,
     Random, Ring, Shape, ShapeColumn, Source, Tonnetz, TonnetzVoice, VARIES, Values, Variation,
     WAVES, WaveRate, Where, default_step, degree_count, degree_name, first_note,
 };
@@ -272,7 +278,8 @@ pub enum Units {
 }
 
 /// A generator's setting. [`GenParam::ALL`] is every one, in the order the shape panel lists
-/// them; [`GenParam::exists_for`] says which a shape has.
+/// them; [`GenParam::exists_for`] says which a shape has, and [`GEN_PARAMS`] describes each, in
+/// the order they're declared here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GenParam {
     /// What goes in the rows, which decides the rest.
@@ -524,109 +531,15 @@ impl GenParam {
         Self::Vary,
     ];
 
+    /// Its description, which the rest of these read.
+    #[inline]
+    pub const fn spec(self) -> &'static GenParamSpec {
+        &GEN_PARAMS[self as usize]
+    }
+
     /// The name a song or a mapping stores it by, which never changes.
-    pub fn key(self) -> &'static str {
-        match self {
-            Self::Fill => "fill",
-            Self::From => "from",
-            Self::To => "to",
-            Self::Notes => "notes",
-            Self::Octave => "octave",
-            Self::Density => "density",
-            Self::Accent => "accent",
-            Self::Slide => "slide",
-            Self::Pitches => "pitches",
-            Self::TrigLoop => "trigloop",
-            Self::NoteLoop => "noteloop",
-            Self::OctaveLoop => "octloop",
-            Self::AccentLoop => "accloop",
-            Self::SlideLoop => "slideloop",
-            Self::Source => "source",
-            Self::Transpose => "transpose",
-            Self::Invert => "invert",
-            Self::Axis => "axis",
-            Self::Reverse => "reverse",
-            Self::Late => "late",
-            Self::CopyFx => "fx",
-            Self::Mutation => "mutation",
-            Self::Repitch => "repitch",
-            Self::Shift => "shift",
-            Self::Retro => "retro",
-            Self::Ratchet => "ratchet",
-            Self::DropAdd => "drop",
-            Self::Step => "step",
-            Self::Edge => "edge",
-            Self::Depth => "depth",
-            Self::Spread => "spread",
-            Self::Bias => "bias",
-            Self::Steps => "steps",
-            Self::Weights => "weights",
-            Self::Factor => "factor",
-            Self::Masks => "masks",
-            Self::Part => "part",
-            Self::Pitch => "note",
-            Self::MapX => "x",
-            Self::MapY => "y",
-            Self::KickDensity => "bd",
-            Self::SnareDensity => "sd",
-            Self::HatDensity => "hh",
-            Self::Chaos => "chaos",
-            Self::Rows => "rows",
-            Self::Channel => "channel",
-            Self::Bar => "bar",
-            Self::Quarters => "d4",
-            Self::Eighths => "d8",
-            Self::Sixteenths => "d16",
-            Self::QuarterTriplets => "d4t",
-            Self::EighthTriplets => "d8t",
-            Self::SixteenthTriplets => "d16t",
-            Self::QuartersB => "b4",
-            Self::EighthsB => "b8",
-            Self::SixteenthsB => "b16",
-            Self::QuarterTripletsB => "b4t",
-            Self::EighthTripletsB => "b8t",
-            Self::SixteenthTripletsB => "b16t",
-            Self::Change => "change",
-            Self::Ones => "ones",
-            Self::RingLength => "length",
-            Self::Triad => "triad",
-            Self::Voice => "voice",
-            Self::Moves => "moves",
-            Self::MoveList => "list",
-            Self::PWeight => "p",
-            Self::LWeight => "l",
-            Self::RWeight => "r",
-            Self::LoopLength => "loop",
-            Self::InScale => "inscale",
-            Self::Order => "order",
-            Self::Temperature => "temperature",
-            Self::Flip => "flip",
-            Self::Keep => "keep",
-            Self::Turn => "turn",
-            Self::Curve => "curve",
-            Self::S => "s",
-            Self::Wave => "wave",
-            Self::Rate => "rate",
-            Self::Phase => "phase",
-            Self::Values => "values",
-            Self::Run => "run",
-            Self::Where => "where",
-            Self::Every => "every",
-            Self::Chance => "chance",
-            Self::Hits => "hits",
-            Self::Rotate => "rotate",
-            Self::Clusters => "clusters",
-            Self::Markov => "markov",
-            Self::States => "states",
-            Self::Share => "share",
-            Self::Side => "side",
-            Self::Rhythm => "rhythm",
-            Self::Role => "role",
-            Self::Child => "child",
-            Self::Rule => "rule",
-            Self::CellStart => "start",
-            Self::Vary => "vary",
-        }
+    pub const fn key(self) -> &'static str {
+        self.spec().key
     }
 
     /// The setting stored by a key.
@@ -636,225 +549,22 @@ impl GenParam {
 
     /// Its name on screen. An `Every`'s step, a `Chance`'s percent and the amounts of Marbles'
     /// rhythms are each its `Where`'s amount.
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Fill => "Fill",
-            Self::From => "From",
-            Self::To => "To",
-            Self::Notes => "Notes",
-            Self::Octave => "Octave",
-            Self::Density => "Density",
-            Self::Accent => "Accent",
-            Self::Slide => "Slide",
-            Self::Pitches => "Pitches",
-            Self::TrigLoop => "Trig loop",
-            Self::NoteLoop => "Note loop",
-            Self::OctaveLoop => "Oct loop",
-            Self::AccentLoop => "Acc loop",
-            Self::SlideLoop => "Sld loop",
-            Self::Source => "Source",
-            Self::Transpose => "Transpose",
-            Self::Invert => "Invert",
-            Self::Axis => "About",
-            Self::Reverse => "Reverse",
-            Self::Late => "Rotate",
-            Self::CopyFx => "FX",
-            Self::Mutation => "Mutation",
-            Self::Repitch => "Repitch",
-            Self::Shift => "Shift",
-            Self::Retro => "Retro",
-            Self::Ratchet => "Ratchet",
-            Self::DropAdd => "Drop/add",
-            Self::Step => "Step",
-            Self::Edge => "Edge",
-            Self::Depth => "Depth",
-            Self::Spread => "Spread",
-            Self::Bias => "Bias",
-            Self::Steps => "Steps",
-            Self::Weights => "Weights",
-            Self::Factor => "Factor",
-            Self::Masks => "Masks",
-            Self::Part => "Part",
-            Self::Pitch => "Note",
-            Self::MapX => "X",
-            Self::MapY => "Y",
-            Self::KickDensity => "BD fill",
-            Self::SnareDensity => "SD fill",
-            Self::HatDensity => "HH fill",
-            Self::Chaos => "Chaos",
-            Self::Rows => "Rows",
-            Self::Channel => "Channel",
-            Self::Bar => "Bar",
-            Self::Quarters => "1/4",
-            Self::Eighths => "1/8",
-            Self::Sixteenths => "1/16",
-            Self::QuarterTriplets => "1/4T",
-            Self::EighthTriplets => "1/8T",
-            Self::SixteenthTriplets => "1/16T",
-            Self::QuartersB => "B 1/4",
-            Self::EighthsB => "B 1/8",
-            Self::SixteenthsB => "B 1/16",
-            Self::QuarterTripletsB => "B 1/4T",
-            Self::EighthTripletsB => "B 1/8T",
-            Self::SixteenthTripletsB => "B 1/16T",
-            Self::Change => "Change",
-            Self::Ones => "Chance",
-            Self::RingLength => "Length",
-            Self::Triad => "Triad",
-            Self::Voice => "Voice",
-            Self::Moves => "Moves",
-            Self::MoveList => "List",
-            Self::PWeight => "P",
-            Self::LWeight => "L",
-            Self::RWeight => "R",
-            Self::LoopLength => "Length",
-            Self::InScale => "Scale",
-            Self::Order => "Order",
-            Self::Temperature => "Temp",
-            Self::Flip => "Flip",
-            Self::Keep => "Keep",
-            Self::Turn => "Turn",
-            Self::Curve => "Curve",
-            Self::S => "S",
-            Self::Wave => "Shape",
-            Self::Rate => "Rate",
-            Self::Phase => "Phase",
-            Self::Values => "Values",
-            Self::Run => "Run",
-            Self::Where => "Where",
-            Self::Every
-            | Self::Chance
-            | Self::Clusters
-            | Self::Markov
-            | Self::States
-            | Self::Share => "Amount",
-            Self::Side => "Side",
-            Self::Rhythm => "Rhythm",
-            Self::Role => "Part",
-            Self::Child => "Child",
-            Self::Hits => "Hits",
-            Self::Rotate => "Rotate",
-            Self::Rule => "Rule",
-            Self::CellStart => "Start",
-            Self::Vary => "Vary",
-        }
+    pub const fn name(self) -> &'static str {
+        self.spec().name
     }
 
     /// How its values read.
-    pub fn units(self) -> Units {
-        match self {
-            Self::From | Self::To | Self::Values | Self::Axis | Self::Pitch => Units::Column,
-            Self::Curve | Self::S | Self::Bias => Units::Bend,
-            Self::Transpose => Units::Interval,
-            Self::Phase => Units::Degrees,
-            Self::Notes
-            | Self::Run
-            | Self::Rotate
-            | Self::Depth
-            | Self::Factor
-            | Self::Turn
-            | Self::Steps
-            | Self::RingLength
-            | Self::Order
-            | Self::Mutation
-            | Self::Rule
-            | Self::TrigLoop
-            | Self::NoteLoop
-            | Self::OctaveLoop
-            | Self::AccentLoop
-            | Self::SlideLoop
-            | Self::PWeight
-            | Self::LWeight
-            | Self::RWeight
-            | Self::LoopLength => Units::Count,
-            Self::Weights => Units::Weights,
-            Self::Flip | Self::Keep => Units::Bits,
-            Self::Step => Units::Step,
-            Self::Every | Self::Late => Units::Rows,
-            Self::Hits => Units::OfRows,
-            Self::Octave
-            | Self::Density
-            | Self::Accent
-            | Self::Slide
-            | Self::Chance
-            | Self::Clusters
-            | Self::Markov
-            | Self::States
-            | Self::Share
-            | Self::Child
-            | Self::Spread
-            | Self::Temperature
-            | Self::Change
-            | Self::Ones
-            | Self::Quarters
-            | Self::Eighths
-            | Self::Sixteenths
-            | Self::QuarterTriplets
-            | Self::EighthTriplets
-            | Self::SixteenthTriplets
-            | Self::QuartersB
-            | Self::EighthsB
-            | Self::SixteenthsB
-            | Self::QuarterTripletsB
-            | Self::EighthTripletsB
-            | Self::SixteenthTripletsB => Units::Percent,
-            Self::MapX
-            | Self::MapY
-            | Self::KickDensity
-            | Self::SnareDensity
-            | Self::HatDensity
-            | Self::Chaos => Units::Byte,
-            Self::Fill
-            | Self::Wave
-            | Self::Rate
-            | Self::Where
-            | Self::Pitches
-            | Self::Source
-            | Self::Invert
-            | Self::Reverse
-            | Self::CopyFx
-            | Self::Repitch
-            | Self::Shift
-            | Self::Retro
-            | Self::Ratchet
-            | Self::DropAdd
-            | Self::Edge
-            | Self::Masks
-            | Self::Part
-            | Self::Rows
-            | Self::Side
-            | Self::Rhythm
-            | Self::Role
-            | Self::Channel
-            | Self::Bar
-            | Self::CellStart
-            | Self::Triad
-            | Self::Voice
-            | Self::Moves
-            | Self::MoveList
-            | Self::InScale
-            | Self::Vary => Units::Named,
-        }
+    pub const fn units(self) -> Units {
+        self.spec().units
     }
 
     /// Whether the engine can hold it as it plays, so a macro's lock or modulation reaches it
     /// (decision 300): not a list setting, whose choices are a `Vec` built as they're asked for,
     /// nor a `List`'s values or a `Random`'s weights, which have no number. A macro on `Wave` or
     /// `Rate` writes its column by hand instead (decision 294).
-    pub fn held_in_engine(self) -> bool {
-        !matches!(
-            self,
-            Self::Fill
-                | Self::Wave
-                | Self::Rate
-                | Self::Where
-                | Self::Source
-                | Self::Values
-                | Self::Weights
-                | Self::MoveList
-        )
+    pub const fn held_in_engine(self) -> bool {
+        self.spec().engine
     }
-
     /// Whether a shape has it. A wave and `Alternate` have their own settings in place of a
     /// curve, a `List` has its values in place of the two ends, a transform but `Scale` works from
     /// the values there with no settings of its own, and a `Where`'s amount only comes with the
@@ -1027,134 +737,58 @@ impl GenParam {
     }
 
     /// Where a shape's other settings sit on the Gen page, in columns of rows, top to bottom (the
-    /// study's §3.2): the fill's own in the first two, and its `Where`'s at the foot of the third,
-    /// so they stay put as the fill changes, with `Acid`'s `Density` or a random fill's `Weights`
-    /// above them. A random fill's curve does nothing, so it isn't placed, and only the settings
-    /// the shape has on its `column` are. `Grids` has the map and chaos first, then its part's
-    /// density, and has no `Where`. A `Follow` has none either, so its `Mutation` and the kinds
-    /// it may make take the third column and the fourth. `Acid`'s three are full, so its riff's
-    /// `Spread` and `Bias` take the fourth. A `Tonnetz` has its first chord and its voice, then
-    /// its moves, and its moves' weights in the fourth.
+    /// study's §3.2): the fill's own in the first two, as its [`FillSpec`](super::FillSpec) places
+    /// them, and its `Where`'s at the foot of the third, so they stay put as the fill changes,
+    /// with `Acid`'s `Density` or a random fill's `Weights` above them. A random fill's curve does
+    /// nothing, so it isn't placed, and only the settings the shape has on its `column` are.
+    /// `Grids` has the map and chaos first, then its part's density, and has no `Where`.
+    /// `Divisions` has its channel's chances, then `B`'s where it plays `A+B`. A `Follow` has no
+    /// `Where` either, so its `Mutation` and the kinds it may make take the third column and the
+    /// fourth. `Acid`'s three are full, so its riff's `Spread` and `Bias` take the fourth. A
+    /// `Tonnetz` has its first chord and its voice, then its moves, and its moves' weights in the
+    /// fourth.
     pub fn grid(shape: &Shape, column: ShapeColumn, generates: bool) -> Grid<Self> {
         use GenParam::*;
         let none = [None; GRID_ROWS];
         let has =
             |param: Option<Self>| param.filter(|param| param.exists_for(shape, column, generates));
-        let placed = |columns: [[Option<Self>; GRID_ROWS]; GRID_COLUMNS]| {
-            Grid::from_columns(&columns.map(|places| places.map(has)))
-        };
-        if shape.kind == FillKind::Grids {
-            let grid = match shape.grids.part {
-                Some(part) => [
-                    [Some(MapX), Some(MapY), Some(Chaos)],
-                    [Some(Self::density_of(part)), Some(Pitch), Some(Rows)],
-                    none,
-                    none,
-                ],
-                None => [
-                    [Some(MapX), Some(MapY), Some(Chaos)],
-                    [Some(KickDensity), Some(SnareDensity), Some(HatDensity)],
-                    [Some(Pitch), Some(Rows), None],
-                    none,
-                ],
+        let mut fill = shape.kind.spec().grid;
+        let mut last = none;
+        if shape.kind.has_where() {
+            last = match shape.place {
+                super::Where::Every(_) => [None, None, Some(Every)],
+                super::Where::Chance(_) => [None, None, Some(Chance)],
+                super::Where::Euclid { .. } => [None, Some(Hits), Some(Rotate)],
+                super::Where::Clusters(_) => [None, None, Some(Clusters)],
+                super::Where::Markov(_) => [None, None, Some(Markov)],
+                super::Where::States(_) => [None, None, Some(States)],
+                super::Where::Complementary { .. } => [None, Some(Share), Some(Side)],
+                super::Where::Rhythm { .. } => [Some(Rhythm), Some(Role), Some(Child)],
+                super::Where::Cells(_) => [None, Some(Rule), Some(CellStart)],
+                _ => none,
             };
-            return placed(grid);
         }
-        if shape.kind == FillKind::Divisions {
-            let straight = [Some(Quarters), Some(Eighths), Some(Sixteenths)];
-            let triplets = [
-                Some(QuarterTriplets),
-                Some(EighthTriplets),
-                Some(SixteenthTriplets),
-            ];
-            // `A+B`'s twelve chances fill the page, so its `Note` is the panel's alone.
-            let grid = match shape.divisions.channel {
-                Some(super::Channel::A | super::Channel::B) => {
-                    [straight, triplets, [Some(Pitch), None, None], none]
-                }
-                _ => [
-                    straight,
-                    triplets,
-                    [Some(QuartersB), Some(EighthsB), Some(SixteenthsB)],
-                    [
-                        Some(QuarterTripletsB),
-                        Some(EighthTripletsB),
-                        Some(SixteenthTripletsB),
-                    ],
-                ],
-            };
-            return placed(grid);
-        }
-        let fill: [[Option<Self>; GRID_ROWS]; 2] = match shape.kind {
-            FillKind::Ramp => [
-                [Some(From), Some(To), Some(Run)],
-                [Some(Curve), Some(S), None],
-            ],
-            FillKind::Random => [
-                [Some(From), Some(To), Some(Run)],
-                [Some(Spread), Some(Bias), Some(Steps)],
-            ],
-            FillKind::Alternate => [[Some(From), Some(To), Some(Run)], none],
-            FillKind::Walk => [
-                [Some(From), Some(To), Some(Run)],
-                [Some(Step), Some(Edge), None],
-            ],
-            FillKind::Pink => [[Some(From), Some(To), Some(Run)], [Some(Depth), None, None]],
-            FillKind::Wave => [
-                [Some(From), Some(To), Some(Wave)],
-                [Some(Rate), Some(Phase), Some(Run)],
-            ],
-            FillKind::List => [[Some(Values), Some(Run), None], none],
-            FillKind::Acid => [
-                [Some(From), Some(To), Some(Notes)],
-                [Some(Octave), Some(Accent), Some(Slide)],
-            ],
-            FillKind::Follow => [
-                [Some(Transpose), Some(Invert), Some(Axis)],
-                [Some(Reverse), Some(Late), Some(CopyFx)],
-            ],
-            FillKind::Scale => [[Some(From), Some(To), Some(Curve)], [Some(S), None, None]],
-            FillKind::Multiply => [[Some(Factor), Some(Masks), None], none],
-            FillKind::Variation => [[Some(Order), Some(Temperature), None], none],
-            FillKind::Ring => [
-                [Some(From), Some(To), None],
-                [Some(Change), Some(Ones), Some(RingLength)],
-            ],
-            FillKind::Tonnetz => {
-                let moves = match shape.tonnetz.moves {
-                    super::Moves::Loop => LoopLength,
-                    _ => MoveList,
-                };
-                [
-                    [Some(From), Some(Triad), Some(Voice)],
-                    [Some(Moves), Some(moves), Some(InScale)],
-                ]
-            }
-            FillKind::Grids | FillKind::Divisions => unreachable!("laid out above"),
-            FillKind::InvertBits => [[Some(Flip), None, None], none],
-            FillKind::MaskBits => [[Some(Keep), None, None], none],
-            FillKind::RotateBits => [[Some(Turn), None, None], none],
-            FillKind::Invert | FillKind::Shuffle | FillKind::Reverse | FillKind::Snap => {
-                [none, none]
-            }
-        };
-        let mut last = match shape.place {
-            super::Where::Every(_) => [None, None, Some(Every)],
-            super::Where::Chance(_) => [None, None, Some(Chance)],
-            super::Where::Euclid { .. } => [None, Some(Hits), Some(Rotate)],
-            super::Where::Clusters(_) => [None, None, Some(Clusters)],
-            super::Where::Markov(_) => [None, None, Some(Markov)],
-            super::Where::States(_) => [None, None, Some(States)],
-            super::Where::Complementary { .. } => [None, Some(Share), Some(Side)],
-            super::Where::Rhythm { .. } => [Some(Rhythm), Some(Role), Some(Child)],
-            super::Where::Cells(_) => [None, Some(Rule), Some(CellStart)],
-            _ => none,
-        };
         let mut more = none;
         // A named rhythm's name, where the fill takes the top of the third column, goes to the
         // fourth.
         let rhythm = last[0];
         match shape.kind {
+            FillKind::Grids => match shape.grids.part {
+                Some(part) => fill[1] = [Some(Self::density_of(part)), Some(Pitch), Some(Rows)],
+                None => last = [Some(Pitch), Some(Rows), None],
+            },
+            FillKind::Divisions => match shape.divisions.channel {
+                // `A+B`'s twelve chances fill the page, so its `Note` is the panel's alone.
+                Some(super::Channel::A | super::Channel::B) => last = [Some(Pitch), None, None],
+                _ => {
+                    last = [Some(QuartersB), Some(EighthsB), Some(SixteenthsB)];
+                    more = [
+                        Some(QuarterTripletsB),
+                        Some(EighthTripletsB),
+                        Some(SixteenthTripletsB),
+                    ];
+                }
+            },
             FillKind::Acid => {
                 last[0] = Some(Density);
                 more = [Some(Spread), Some(Bias), rhythm];
@@ -1167,12 +801,17 @@ impl GenParam {
                 last = [Some(Mutation), Some(Repitch), Some(Shift)];
                 more = [Some(Retro), Some(Ratchet), Some(DropAdd)];
             }
-            FillKind::Tonnetz => more = [Some(PWeight), Some(LWeight), Some(RWeight)],
+            FillKind::Tonnetz => {
+                if shape.tonnetz.moves == super::Moves::Loop {
+                    fill[1][1] = Some(LoopLength);
+                }
+                more = [Some(PWeight), Some(LWeight), Some(RWeight)];
+            }
             _ => {}
         }
-        placed([fill[0], fill[1], last, more])
+        let columns = [fill[0], fill[1], last, more];
+        Grid::from_columns(&columns.map(|places| places.map(has)))
     }
-
     /// Whether it's one of an `Acid` line's loops.
     pub fn is_loop(self) -> bool {
         matches!(
@@ -1211,110 +850,6 @@ impl GenParam {
         }
     }
 
-    /// A `Grids` setting that's a byte, as its field.
-    fn grids_byte(self, grids: &mut Grids) -> Option<&mut u8> {
-        Some(match self {
-            Self::MapX => &mut grids.x,
-            Self::MapY => &mut grids.y,
-            Self::KickDensity => &mut grids.density[DrumPart::Kick.index()],
-            Self::SnareDensity => &mut grids.density[DrumPart::Snare.index()],
-            Self::HatDensity => &mut grids.density[DrumPart::Hats.index()],
-            Self::Chaos => &mut grids.chaos,
-            _ => return None,
-        })
-    }
-
-    /// The same, read.
-    fn grids_value(self, grids: Grids) -> Option<u8> {
-        let mut grids = grids;
-        self.grids_byte(&mut grids).map(|value| *value)
-    }
-
-    /// A `Divisions` chance, as its set, the track's own channel's or `B`'s, and its division.
-    pub fn division(self) -> Option<(usize, Division)> {
-        Some(match self {
-            Self::Quarters => (0, Division::Quarter),
-            Self::Eighths => (0, Division::Eighth),
-            Self::Sixteenths => (0, Division::Sixteenth),
-            Self::QuarterTriplets => (0, Division::QuarterTriplet),
-            Self::EighthTriplets => (0, Division::EighthTriplet),
-            Self::SixteenthTriplets => (0, Division::SixteenthTriplet),
-            Self::QuartersB => (1, Division::Quarter),
-            Self::EighthsB => (1, Division::Eighth),
-            Self::SixteenthsB => (1, Division::Sixteenth),
-            Self::QuarterTripletsB => (1, Division::QuarterTriplet),
-            Self::EighthTripletsB => (1, Division::EighthTriplet),
-            Self::SixteenthTripletsB => (1, Division::SixteenthTriplet),
-            _ => return None,
-        })
-    }
-
-    /// A `Divisions` chance's field.
-    fn chance_mut(self, divisions: &mut Divisions) -> Option<&mut u8> {
-        let (set, division) = self.division()?;
-        Some(&mut divisions.chances[set][division.index()])
-    }
-
-    /// The same, read.
-    fn chance_of(self, divisions: Divisions) -> Option<u8> {
-        let mut divisions = divisions;
-        self.chance_mut(&mut divisions).map(|chance| *chance)
-    }
-
-    /// A kind of mutation a `Follow` may make, as its switch.
-    fn mutation_kind_mut(self, mutations: &mut Mutations) -> Option<&mut bool> {
-        Some(match self {
-            Self::Repitch => &mut mutations.repitch,
-            Self::Shift => &mut mutations.shift,
-            Self::Retro => &mut mutations.retro,
-            Self::Ratchet => &mut mutations.ratchet,
-            Self::DropAdd => &mut mutations.drop,
-            _ => return None,
-        })
-    }
-
-    /// The same, read.
-    fn mutation_kind(self, mutations: Mutations) -> Option<bool> {
-        let mut mutations = mutations;
-        self.mutation_kind_mut(&mut mutations).map(|on| *on)
-    }
-
-    /// The amount of one of Marbles' rhythms, as its `Where`'s field, where the `Where` is the one
-    /// it's the amount of.
-    fn marbles_amount_mut(self, place: &mut Where) -> Option<&mut u8> {
-        match (self, place) {
-            (Self::Clusters, Where::Clusters(amount))
-            | (Self::Markov, Where::Markov(amount))
-            | (Self::States, Where::States(amount))
-            | (Self::Share, Where::Complementary { share: amount, .. })
-            | (Self::Child, Where::Rhythm { child: amount, .. }) => Some(amount),
-            _ => None,
-        }
-    }
-
-    /// The same, read.
-    fn marbles_amount(self, place: Where) -> Option<u8> {
-        let mut place = place;
-        self.marbles_amount_mut(&mut place).map(|amount| *amount)
-    }
-
-    /// A `Tonnetz` move's weight, as its field.
-    fn weight_mut(self, tonnetz: &mut Tonnetz) -> Option<&mut u8> {
-        let at = match self {
-            Self::PWeight => 0,
-            Self::LWeight => 1,
-            Self::RWeight => 2,
-            _ => return None,
-        };
-        Some(&mut tonnetz.weights[at])
-    }
-
-    /// The same, read.
-    fn weight(self, tonnetz: Tonnetz) -> Option<u8> {
-        let mut tonnetz = tonnetz;
-        self.weight_mut(&mut tonnetz).map(|weight| *weight)
-    }
-
     /// The settings a shape has on a column, in order.
     pub fn of(shape: &Shape, column: ShapeColumn, generates: bool) -> Vec<Self> {
         Self::ALL
@@ -1327,6 +862,7 @@ impl GenParam {
     /// A random fill has no curve, so it shows `--` there.
     pub fn shown(self, shape: &Shape, context: &Context) -> String {
         let column = context.column;
+        let number = || self.number(shape, context);
         match self {
             Self::From => column.show(shape.from),
             Self::To => column.show(shape.to),
@@ -1359,9 +895,9 @@ impl GenParam {
                 Where::Euclid { rotate, .. } => rotate.to_string(),
                 _ => String::new(),
             },
-            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => self
-                .marbles_amount(shape.place)
-                .map_or_else(String::new, |amount| format!("{amount}%")),
+            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => {
+                number().map_or_else(String::new, |amount| format!("{amount}%"))
+            }
             Self::Side => match shape.place {
                 Where::Complementary { second: true, .. } => "Second".to_owned(),
                 Where::Complementary { .. } => "First".to_owned(),
@@ -1385,7 +921,7 @@ impl GenParam {
             },
             Self::Notes => shape.acid.notes.to_string(),
             Self::Octave | Self::Density | Self::Accent | Self::Slide => {
-                format!("{}%", acid_chance(shape.acid, self).unwrap_or(0))
+                format!("{}%", number().unwrap_or(0))
             }
             Self::Pitches if shape.acid.keep => "Keep".to_owned(),
             Self::Pitches => "Roll".to_owned(),
@@ -1393,7 +929,7 @@ impl GenParam {
             | Self::NoteLoop
             | Self::OctaveLoop
             | Self::AccentLoop
-            | Self::SlideLoop => match acid_loop(shape.acid, self).unwrap_or(0) {
+            | Self::SlideLoop => match number().unwrap_or(0) {
                 0 => "Off".to_owned(),
                 1 => "1 row".to_owned(),
                 rows => format!("{rows} rows"),
@@ -1432,7 +968,7 @@ impl GenParam {
                 changes => format!("{changes} changes"),
             },
             Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
-                on_off(self.mutation_kind(shape.follow.mutate).unwrap_or(false))
+                on_off(number() == Some(1))
             }
             Self::Step => {
                 let step = shape.walk.step;
@@ -1471,7 +1007,7 @@ impl GenParam {
             | Self::KickDensity
             | Self::SnareDensity
             | Self::HatDensity
-            | Self::Chaos => format!("{:02X}", self.grids_value(shape.grids).unwrap_or(0)),
+            | Self::Chaos => format!("{:02X}", number().unwrap_or(0)),
             Self::Rows if shape.grids.fine => "1/32".to_owned(),
             Self::Rows => "1/16".to_owned(),
             Self::Channel => shape
@@ -1492,7 +1028,7 @@ impl GenParam {
             | Self::QuarterTripletsB
             | Self::EighthTripletsB
             | Self::SixteenthTripletsB => {
-                format!("{}%", self.chance_of(shape.divisions).unwrap_or(0))
+                format!("{}%", number().unwrap_or(0))
             }
             Self::Order => shape.variation.order.to_string(),
             Self::Temperature => format!("{}%", shape.variation.temperature),
@@ -1507,9 +1043,7 @@ impl GenParam {
                 .to_owned(),
             Self::Moves => shape.tonnetz.moves.name().to_owned(),
             Self::MoveList => shape.tonnetz.list.to_string(),
-            Self::PWeight | Self::LWeight | Self::RWeight => {
-                self.weight(shape.tonnetz).unwrap_or(0).to_string()
-            }
+            Self::PWeight | Self::LWeight | Self::RWeight => number().unwrap_or(0).to_string(),
             Self::LoopLength => match shape.tonnetz.length {
                 1 => "1 move".to_owned(),
                 moves => format!("{moves} moves"),
@@ -1552,55 +1086,15 @@ impl GenParam {
         }
     }
 
-    /// How its value is typed.
+    /// How its value is typed: an end, a walk's step and a `List`'s values in hex on a column
+    /// whose values are.
     pub fn typing(self, column: ShapeColumn) -> Typing {
-        let hex = typed_in_hex(column);
         match self {
-            Self::Fill | Self::Wave | Self::Where | Self::Source | Self::Vary => Typing::Listed,
-            Self::Pitches
-            | Self::Invert
-            | Self::Reverse
-            | Self::CopyFx
-            | Self::Repitch
-            | Self::Shift
-            | Self::Retro
-            | Self::Ratchet
-            | Self::DropAdd
-            | Self::Edge
-            | Self::Masks
-            | Self::Rows
-            | Self::Side
-            | Self::Triad
-            | Self::InScale => Typing::Toggled,
-            Self::MoveList => Typing::Moves,
-            Self::Part
-            | Self::Channel
-            | Self::Bar
-            | Self::Rhythm
-            | Self::Role
-            | Self::CellStart
-            | Self::Moves
-            | Self::Voice => Typing::Listed,
-            Self::Axis | Self::Pitch => Typing::Named { list: false },
-            Self::MapX
-            | Self::MapY
-            | Self::KickDensity
-            | Self::SnareDensity
-            | Self::HatDensity
-            | Self::Chaos
-            | Self::Flip
-            | Self::Keep => Typing::Hex,
-            Self::From | Self::To | Self::Step if hex => Typing::Hex,
-            Self::From | Self::To => Typing::Named { list: false },
-            Self::Values if hex => Typing::HexList,
-            Self::Values => Typing::Named { list: true },
-            Self::Rate => Typing::Rate,
-            Self::Weights => Typing::Weights,
-            Self::Curve | Self::S | Self::Transpose | Self::Bias => Typing::Whole { signed: true },
-            _ => Typing::Whole { signed: false },
+            Self::From | Self::To | Self::Step if typed_in_hex(column) => Typing::Hex,
+            Self::Values if typed_in_hex(column) => Typing::HexList,
+            _ => self.spec().typing,
         }
     }
-
     /// The choices a list setting offers, in order, or none for a setting that isn't one.
     pub fn choices(self, context: &Context) -> Option<Vec<Choice>> {
         Some(match self {
@@ -1675,26 +1169,6 @@ impl GenParam {
             Self::From => shape.from = stepped(column, shape.from, sign, large),
             Self::To => shape.to = stepped(column, shape.to, sign, large),
             Self::Pitch => shape.from = stepped(column, shape.from, sign, large),
-            Self::Fill
-            | Self::Wave
-            | Self::Where
-            | Self::Source
-            | Self::Part
-            | Self::Channel
-            | Self::Bar
-            | Self::Rhythm
-            | Self::Role
-            | Self::CellStart
-            | Self::Moves
-            | Self::Voice
-            | Self::Vary => {
-                let choices = self.choices(context).unwrap_or_default();
-                if !choices.is_empty() {
-                    let at = self.chosen(shape, context).unwrap_or(0);
-                    let next = if sign > 0 { 1 } else { choices.len() - 1 };
-                    choices[(at + next) % choices.len()].apply(shape);
-                }
-            }
             Self::Rate if large => shape.rate = shape.rate.jumped(sign > 0),
             Self::Rate => shape.rate = shape.rate.nudged(sign > 0),
             Self::Values => {
@@ -1715,11 +1189,23 @@ impl GenParam {
                 );
             }
             Self::MoveList => return Err("Type the moves with i, like P L R L"),
+            _ if self.spec().typing == Typing::Listed => {
+                let choices = self.choices(context).unwrap_or_default();
+                if !choices.is_empty() {
+                    let at = self.chosen(shape, context).unwrap_or(0);
+                    let next = if sign > 0 { 1 } else { choices.len() - 1 };
+                    choices[(at + next) % choices.len()].apply(shape);
+                }
+            }
             _ => {
                 if let (Some(stepping), Some(number)) =
-                    (self.stepping(column), self.number(shape, context))
+                    (self.spec().stepping, self.number(shape, context))
                 {
-                    let by = if large { stepping.jump } else { stepping.nudge };
+                    let by = if large {
+                        stepping.jump.on(column)
+                    } else {
+                        stepping.nudge
+                    };
                     self.put(shape, context, number + sign * by);
                 }
             }
@@ -1727,154 +1213,17 @@ impl GenParam {
         Ok(())
     }
 
-    /// How far it moves as a number, for one stepped so: by a small step and a large one, and
-    /// whether past an end it goes round to the other, as a phase, a rotation and a switch do,
-    /// rather than stopping there. None for an end, a list, a rate and what's only typed, which
-    /// [`step`](Self::step) moves as they are.
-    fn stepping(self, column: ShapeColumn) -> Option<Stepping> {
-        let stops = |nudge, jump| {
-            Some(Stepping {
-                nudge,
-                jump,
-                round: false,
-            })
-        };
-        let round = |nudge, jump| {
-            Some(Stepping {
-                nudge,
-                jump,
-                round: true,
-            })
-        };
-        match self {
-            Self::From
-            | Self::To
-            | Self::Pitch
-            | Self::Axis
-            | Self::Fill
-            | Self::Wave
-            | Self::Where
-            | Self::Source
-            | Self::Part
-            | Self::Channel
-            | Self::Bar
-            | Self::Rhythm
-            | Self::Role
-            | Self::CellStart
-            | Self::Moves
-            | Self::Voice
-            | Self::Vary
-            | Self::Rate
-            | Self::Values
-            | Self::Weights
-            | Self::MoveList => None,
-            Self::Curve | Self::S | Self::Bias => stops(BEND_NUDGE, BEND_JUMP),
-            Self::Phase => round(PHASE_NUDGE, PHASE_JUMP),
-            Self::Run => stops(1, RUN_JUMP),
-            Self::Every => stops(1, EVERY_JUMP),
-            Self::Chance
-            | Self::Clusters
-            | Self::Markov
-            | Self::States
-            | Self::Share
-            | Self::Child
-            | Self::Octave
-            | Self::Density
-            | Self::Accent
-            | Self::Slide
-            | Self::Spread
-            | Self::Temperature
-            | Self::Change
-            | Self::Ones
-            | Self::Quarters
-            | Self::Eighths
-            | Self::Sixteenths
-            | Self::QuarterTriplets
-            | Self::EighthTriplets
-            | Self::SixteenthTriplets
-            | Self::QuartersB
-            | Self::EighthsB
-            | Self::SixteenthsB
-            | Self::QuarterTripletsB
-            | Self::EighthTripletsB
-            | Self::SixteenthTripletsB => stops(1, CHANCE_JUMP),
-            Self::Hits
-            | Self::Notes
-            | Self::Steps
-            | Self::RingLength
-            | Self::TrigLoop
-            | Self::NoteLoop
-            | Self::OctaveLoop
-            | Self::AccentLoop
-            | Self::SlideLoop => stops(1, EUCLID_JUMP),
-            Self::Rotate | Self::Late => round(1, EUCLID_JUMP),
-            Self::Rule => stops(1, RULE_JUMP),
-            Self::Transpose => {
-                let octave = match column {
-                    ShapeColumn::Note { scale, .. } if scale.on => {
-                        scale.kind.intervals().len() as i32
-                    }
-                    _ => 12,
-                };
-                stops(1, octave)
-            }
-            Self::Mutation => stops(1, 4),
-            // On notes by one or an octave, of degrees while the scale is on; on a nudge by one
-            // or four 24ths of a sixteenth; anything else by one or `10` in hex.
-            Self::Step => {
-                let jump = match column {
-                    ShapeColumn::Note { scale, .. } if scale.on => {
-                        scale.kind.intervals().len() as i32
-                    }
-                    column => large_step(column),
-                };
-                stops(1, jump)
-            }
-            Self::Depth => stops(1, 2),
-            Self::Factor => stops(1, FACTOR_JUMP),
-            Self::MapX
-            | Self::MapY
-            | Self::KickDensity
-            | Self::SnareDensity
-            | Self::HatDensity
-            | Self::Chaos
-            | Self::Flip
-            | Self::Keep => stops(1, HEX_JUMP),
-            Self::Order => stops(1, 1),
-            Self::PWeight | Self::LWeight | Self::RWeight => stops(1, WEIGHT_JUMP),
-            Self::LoopLength => stops(1, LOOP_JUMP),
-            Self::Turn => round(1, 4),
-            Self::Side
-            | Self::Pitches
-            | Self::Invert
-            | Self::Reverse
-            | Self::CopyFx
-            | Self::Repitch
-            | Self::Shift
-            | Self::Retro
-            | Self::Ratchet
-            | Self::DropAdd
-            | Self::Edge
-            | Self::Masks
-            | Self::Rows
-            | Self::Triad
-            | Self::InScale => round(1, 1),
-        }
-    }
-
     /// Set it to a number stepped or typed: taken round within its bounds where it goes round
     /// past its ends, then kept within them by [`set_number`](Self::set_number), as everything
     /// that sets it is.
     fn put(self, shape: &mut Shape, context: &Context, number: i32) {
-        let number = match (self.stepping(context.column), self.bounds(context)) {
-            (Some(Stepping { round: true, .. }), Some((low, high))) => {
-                low + (number - low).rem_euclid(high - low + 1)
-            }
+        let round = self.spec().stepping.is_some_and(|stepping| stepping.round);
+        let number = match self.bounds(context) {
+            Some((low, high)) if round => low + (number - low).rem_euclid(high - low + 1),
             _ => number,
         };
         self.set_number(shape, context, number);
     }
-
     /// Put it back to what it starts as: `From`, `To` and `Source` to where they `start`, a
     /// `Where` to its column's, and an amount to its own.
     pub fn reset(self, shape: &mut Shape, context: &Context, starts: Starts) {
@@ -1900,23 +1249,18 @@ impl GenParam {
             }
             Self::Notes => shape.acid.notes = Acid::default().notes,
             Self::Octave | Self::Density | Self::Accent | Self::Slide => {
-                let start = acid_chance(Acid::default(), self);
-                if let (Some(percent), Some(start)) =
-                    (acid_chance_mut(&mut shape.acid, self), start)
-                {
-                    *percent = start;
-                }
+                let start = Shape {
+                    acid: Acid::default(),
+                    ..*shape
+                };
+                self.take(shape, context, &start);
             }
             Self::Pitches => shape.acid.keep = false,
             Self::TrigLoop
             | Self::NoteLoop
             | Self::OctaveLoop
             | Self::AccentLoop
-            | Self::SlideLoop => {
-                if let Some(rows) = acid_loop_mut(&mut shape.acid, self) {
-                    *rows = 0;
-                }
-            }
+            | Self::SlideLoop => (self.spec().set)(shape, context, 0),
             Self::Source => {
                 if let Some(source) = starts.source {
                     shape.follow.source = source;
@@ -1930,12 +1274,11 @@ impl GenParam {
             Self::CopyFx => shape.follow.fx = false,
             Self::Mutation => shape.follow.mutation = 0,
             Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
-                let start = self.mutation_kind(Mutations::default());
-                if let (Some(on), Some(start)) =
-                    (self.mutation_kind_mut(&mut shape.follow.mutate), start)
-                {
-                    *on = start;
-                }
+                let start = Shape {
+                    follow: Follow::default(),
+                    ..*shape
+                };
+                self.take(shape, context, &start);
             }
             Self::Step => shape.walk.step = default_step(context.column),
             Self::Edge => shape.walk.edge = Edge::default(),
@@ -1954,10 +1297,11 @@ impl GenParam {
             | Self::SnareDensity
             | Self::HatDensity
             | Self::Chaos => {
-                let start = self.grids_value(Grids::default());
-                if let (Some(value), Some(start)) = (self.grids_byte(&mut shape.grids), start) {
-                    *value = start;
-                }
+                let start = Shape {
+                    grids: Grids::default(),
+                    ..*shape
+                };
+                self.take(shape, context, &start);
             }
             Self::Rows => shape.grids.fine = Grids::default().fine,
             Self::Channel => shape.divisions.channel = Some(Channel::default()),
@@ -1974,11 +1318,11 @@ impl GenParam {
             | Self::QuarterTripletsB
             | Self::EighthTripletsB
             | Self::SixteenthTripletsB => {
-                let start = self.chance_of(Divisions::default());
-                if let (Some(chance), Some(start)) = (self.chance_mut(&mut shape.divisions), start)
-                {
-                    *chance = start;
-                }
+                let start = Shape {
+                    divisions: Divisions::default(),
+                    ..*shape
+                };
+                self.take(shape, context, &start);
             }
             Self::Order => shape.variation.order = Variation::default().order,
             Self::Temperature => shape.variation.temperature = Variation::default().temperature,
@@ -1989,10 +1333,11 @@ impl GenParam {
             Self::Moves => shape.tonnetz.moves = Moves::default(),
             Self::MoveList => shape.tonnetz.list = MoveList::default(),
             Self::PWeight | Self::LWeight | Self::RWeight => {
-                let start = self.weight(Tonnetz::default());
-                if let (Some(weight), Some(start)) = (self.weight_mut(&mut shape.tonnetz), start) {
-                    *weight = start;
-                }
+                let start = Shape {
+                    tonnetz: Tonnetz::default(),
+                    ..*shape
+                };
+                self.take(shape, context, &start);
             }
             Self::LoopLength => shape.tonnetz.length = Tonnetz::default().length,
             Self::InScale => shape.tonnetz.in_scale = false,
@@ -2021,9 +1366,7 @@ impl GenParam {
                     Self::Child => CHILD,
                     _ => SHARE,
                 };
-                if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
-                    *amount = start;
-                }
+                (self.spec().set)(shape, context, i32::from(start));
             }
             // Which side of the coin a track is, so the other track of the two keeps its own, and
             // which part of a rhythm or voice of a chord it plays, so the others keep theirs.
@@ -2309,216 +1652,19 @@ impl GenParam {
     /// keep), and `About` is a note. A `List`'s values have none.
     pub fn bounds(self, context: &Context) -> Option<(i32, i32)> {
         let column = context.column;
-        let open = context.open as i32;
-        let most = i32::from(MAX_BEND);
-        Some(match self {
-            Self::From | Self::To | Self::Pitch => {
-                (i32::from(column.lowest()), i32::from(column.highest()))
-            }
-            Self::Curve | Self::S => (-most, most),
-            // Its parts' places, without a list, so the engine can hold it.
-            Self::Part => (0, DrumPart::ALL.len() as i32 - 1),
-            Self::MapX
-            | Self::MapY
-            | Self::KickDensity
-            | Self::SnareDensity
-            | Self::HatDensity
-            | Self::Chaos => (0, 0xFF),
-            Self::Rows | Self::Side => (0, 1),
-            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => (0, 100),
-            // Its choices' places, without a list, so the engine can hold them.
-            Self::Channel => (0, Channel::ALL.len() as i32 - 1),
-            Self::Rhythm => (0, World::ALL.len() as i32 - 1),
-            Self::Role => (0, Role::ALL.len() as i32 - 1),
-            Self::Bar => (0, Bar::ALL.len() as i32 - 1),
-            Self::CellStart => (0, CellStart::ALL.len() as i32 - 1),
-            Self::Rule => (0, 0xFF),
-            Self::Quarters
-            | Self::Eighths
-            | Self::Sixteenths
-            | Self::QuarterTriplets
-            | Self::EighthTriplets
-            | Self::SixteenthTriplets
-            | Self::QuartersB
-            | Self::EighthsB
-            | Self::SixteenthsB
-            | Self::QuarterTripletsB
-            | Self::EighthTripletsB
-            | Self::SixteenthTripletsB => (0, 100),
-            Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Source => {
-                (0, self.choices(context)?.len().checked_sub(1)? as i32)
-            }
-            Self::Axis => (i32::from(column.lowest()), i32::from(column.highest())),
-            Self::Transpose => (-i32::from(MAX_TRANSPOSE), i32::from(MAX_TRANSPOSE)),
-            Self::Late => (0, context.source_rows() as i32 - 1),
-            Self::Invert | Self::Reverse | Self::CopyFx | Self::Edge | Self::Masks => (0, 1),
-            Self::Mutation => (0, i32::from(MAX_MUTATION)),
-            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => (0, 1),
-            Self::Factor => (1, i32::from(MAX_FACTOR)),
-            Self::Flip | Self::Keep => (0, i32::from(u8::MAX)),
-            Self::Turn => (0, i32::from(MAX_TURN)),
-            Self::Order => (1, i32::from(MAX_ORDER)),
-            Self::Temperature | Self::Change | Self::Ones => (0, 100),
-            Self::RingLength => (1, i32::from(MAX_RING)),
-            Self::Triad | Self::InScale => (0, 1),
-            Self::Moves => (0, Moves::ALL.len() as i32 - 1),
-            Self::Voice => (0, TonnetzVoice::ALL.len() as i32 - 1),
-            Self::MoveList => return None,
-            Self::PWeight | Self::LWeight | Self::RWeight => (0, i32::from(MAX_MOVE_WEIGHT)),
-            Self::LoopLength => (1, i32::from(MAX_MOVE_LOOP)),
-            Self::Step => (1, i32::from(longest_step(column))),
-            Self::Depth => (i32::from(MIN_DEPTH), i32::from(MAX_DEPTH)),
-            Self::Spread => (0, i32::from(MAX_SPREAD)),
-            Self::Bias => (-i32::from(MAX_BIAS), i32::from(MAX_BIAS)),
-            Self::Steps => match column {
-                ShapeColumn::Note { scale, .. } => (1, degree_count(scale) as i32),
-                _ => return None,
-            },
-            Self::Weights => return None,
-            Self::Phase => (0, 359),
-            Self::Values => return None,
-            Self::Run => (1, i32::from(MAX_RUN)),
-            Self::Every => (1, i32::from(MAX_EVERY)),
-            Self::Chance | Self::Octave | Self::Density | Self::Accent | Self::Slide => (0, 100),
-            Self::Hits => (0, open),
-            Self::Rotate => (0, (open - 1).max(0)),
-            Self::Notes => (1, i32::from(MAX_ACID_NOTES)),
-            Self::Pitches => (0, 1),
-            Self::TrigLoop
-            | Self::NoteLoop
-            | Self::OctaveLoop
-            | Self::AccentLoop
-            | Self::SlideLoop => (0, i32::from(MAX_LOOP)),
-            // Its choices' places, worked out without listing them, so the engine can hold it.
-            Self::Vary => (0, VARIES.len() as i32 - 1),
-        })
+        match self.spec().bounds {
+            Bounds::Fixed(low, high) => Some((low, high)),
+            Bounds::Column => Some((i32::from(column.lowest()), i32::from(column.highest()))),
+            Bounds::Listed => Some((0, self.choices(context)?.len().checked_sub(1)? as i32)),
+            Bounds::Contextual(bounds) => bounds(context),
+            Bounds::Typed => None,
+        }
     }
 
     /// Its value as a number within its [`bounds`](Self::bounds), if it has one now: not a
     /// `Where`'s amount the `Where` doesn't have, or a rate typed that isn't listed.
     pub fn number(self, shape: &Shape, context: &Context) -> Option<i32> {
-        Some(match self {
-            Self::From => i32::from(shape.from),
-            Self::To => i32::from(shape.to),
-            Self::Curve => i32::from(shape.curve),
-            Self::S => i32::from(shape.s),
-            Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Source => {
-                self.chosen(shape, context)? as i32
-            }
-            Self::Axis => i32::from(shape.follow.axis.or(context.source.and_then(first_note))?),
-            Self::Transpose => i32::from(shape.follow.transpose),
-            Self::Late => i32::from(shape.follow.rotate),
-            Self::Invert => i32::from(shape.follow.invert),
-            Self::Reverse => i32::from(shape.follow.reverse),
-            Self::CopyFx => i32::from(shape.follow.fx),
-            Self::Mutation => i32::from(shape.follow.mutation),
-            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
-                i32::from(self.mutation_kind(shape.follow.mutate)?)
-            }
-            Self::Step => i32::from(shape.walk.step),
-            Self::Edge => i32::from(shape.walk.edge == Edge::Wrap),
-            Self::Depth => i32::from(shape.pink.depth),
-            Self::Spread => i32::from(shape.random.spread),
-            Self::Bias => i32::from(shape.random.bias),
-            Self::Steps => match context.column {
-                ShapeColumn::Note { scale, .. } => shape.random.kept(scale) as i32,
-                _ => return None,
-            },
-            Self::Weights => return None,
-            Self::Factor => i32::from(shape.bits.factor),
-            Self::Masks => i32::from(shape.bits.masks),
-            Self::Part => shape.grids.part?.index() as i32,
-            Self::Pitch => i32::from(shape.from),
-            Self::MapX
-            | Self::MapY
-            | Self::KickDensity
-            | Self::SnareDensity
-            | Self::HatDensity
-            | Self::Chaos => i32::from(self.grids_value(shape.grids)?),
-            Self::Rows => i32::from(shape.grids.fine),
-            Self::Channel => shape.divisions.channel?.index() as i32,
-            Self::Bar => shape.divisions.bar.index() as i32,
-            Self::Quarters
-            | Self::Eighths
-            | Self::Sixteenths
-            | Self::QuarterTriplets
-            | Self::EighthTriplets
-            | Self::SixteenthTriplets
-            | Self::QuartersB
-            | Self::EighthsB
-            | Self::SixteenthsB
-            | Self::QuarterTripletsB
-            | Self::EighthTripletsB
-            | Self::SixteenthTripletsB => i32::from(self.chance_of(shape.divisions)?),
-            Self::Flip => i32::from(shape.bits.flip),
-            Self::Keep => i32::from(shape.bits.keep),
-            Self::Turn => i32::from(shape.bits.turn),
-            Self::Order => i32::from(shape.variation.order),
-            Self::Temperature => i32::from(shape.variation.temperature),
-            Self::Change => i32::from(shape.ring.change),
-            Self::Ones => i32::from(shape.ring.chance),
-            Self::RingLength => i32::from(shape.ring.length),
-            Self::Triad => i32::from(shape.tonnetz.quality == Quality::Minor),
-            Self::InScale => i32::from(shape.tonnetz.in_scale),
-            Self::Moves => shape.tonnetz.moves.index() as i32,
-            Self::Voice => shape.tonnetz.voice?.index() as i32,
-            Self::MoveList => return None,
-            Self::PWeight | Self::LWeight | Self::RWeight => i32::from(self.weight(shape.tonnetz)?),
-            Self::LoopLength => i32::from(shape.tonnetz.length),
-            Self::Phase => i32::from(shape.phase),
-            Self::Values => return None,
-            Self::Run => i32::from(shape.run),
-            Self::Every => match shape.place {
-                Where::Every(every) => i32::from(every),
-                _ => return None,
-            },
-            Self::Chance => match shape.place {
-                Where::Chance(percent) => i32::from(percent),
-                _ => return None,
-            },
-            Self::Hits => match shape.place {
-                Where::Euclid { hits, .. } => i32::from(hits).min(context.open as i32),
-                _ => return None,
-            },
-            Self::Rotate => match shape.place {
-                Where::Euclid { rotate, .. } => i32::from(rotate),
-                _ => return None,
-            },
-            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => {
-                i32::from(self.marbles_amount(shape.place)?)
-            }
-            Self::Side => match shape.place {
-                Where::Complementary { second, .. } => i32::from(second),
-                _ => return None,
-            },
-            Self::Rhythm => match shape.place {
-                Where::Rhythm { rhythm, .. } => rhythm.index() as i32,
-                _ => return None,
-            },
-            Self::Role => match shape.place {
-                Where::Rhythm { part, .. } => part.index() as i32,
-                _ => return None,
-            },
-            Self::Rule => match shape.place {
-                Where::Cells(cells) => i32::from(cells.rule),
-                _ => return None,
-            },
-            Self::CellStart => match shape.place {
-                Where::Cells(cells) => cells.start.index() as i32,
-                _ => return None,
-            },
-            Self::Notes => i32::from(shape.acid.notes),
-            Self::Octave | Self::Density | Self::Accent | Self::Slide => {
-                i32::from(acid_chance(shape.acid, self)?)
-            }
-            Self::Pitches => i32::from(shape.acid.keep),
-            Self::TrigLoop
-            | Self::NoteLoop
-            | Self::OctaveLoop
-            | Self::AccentLoop
-            | Self::SlideLoop => i32::from(acid_loop(shape.acid, self)?),
-            Self::Vary => VARIES.iter().position(|passes| *passes == shape.vary)? as i32,
-        })
+        (self.spec().get)(shape, context)
     }
 
     /// Set it to a number, kept within its bounds. A list setting already on that choice keeps
@@ -2527,180 +1673,1385 @@ impl GenParam {
         let Some((low, high)) = self.bounds(context) else {
             return;
         };
-        let number = number.clamp(low, high);
-        match self {
-            Self::From => shape.from = number as u8,
-            Self::To => shape.to = number as u8,
-            Self::Curve => shape.curve = number as i8,
-            Self::S => shape.s = number as i8,
-            Self::Fill | Self::Wave | Self::Rate | Self::Where | Self::Source => {
-                if self.chosen(shape, context) != Some(number as usize)
-                    && let Some(choice) = self
-                        .choices(context)
-                        .and_then(|choices| choices.get(number as usize).copied())
-                {
-                    choice.apply(shape);
-                }
-            }
-            Self::Phase => shape.phase = number as u16,
-            Self::Values => {}
-            Self::Run => shape.run = number as u16,
-            Self::Every => {
-                if let Where::Every(_) = shape.place {
-                    shape.place = Where::Every(number as u16);
-                }
-            }
-            Self::Chance => {
-                if let Where::Chance(_) = shape.place {
-                    shape.place = Where::Chance(number as u8);
-                }
-            }
-            Self::Hits => {
-                if let Where::Euclid { rotate, .. } = shape.place {
-                    shape.place = Where::Euclid {
-                        hits: number as u16,
-                        rotate,
-                    };
-                }
-            }
-            Self::Rotate => {
-                if let Where::Euclid { hits, .. } = shape.place {
-                    shape.place = Where::Euclid {
-                        hits,
-                        rotate: number as u16,
-                    };
-                }
-            }
-            Self::Clusters | Self::Markov | Self::States | Self::Share | Self::Child => {
-                if let Some(amount) = self.marbles_amount_mut(&mut shape.place) {
-                    *amount = number as u8;
-                }
-            }
-            Self::Side => {
-                if let Where::Complementary { second, .. } = &mut shape.place {
-                    *second = number != 0;
-                }
-            }
-            Self::Rhythm => Choice::World(World::ALL[number as usize]).apply(shape),
-            Self::Role => Choice::Role(Role::ALL[number as usize]).apply(shape),
-            Self::Rule => {
-                if let Where::Cells(cells) = &mut shape.place {
-                    cells.rule = number as u8;
-                }
-            }
-            Self::CellStart => {
-                if let Where::Cells(cells) = &mut shape.place {
-                    cells.start = CellStart::ALL[number as usize];
-                }
-            }
-            Self::Notes => shape.acid.notes = number as u8,
-            Self::Octave | Self::Density | Self::Accent | Self::Slide => {
-                if let Some(percent) = acid_chance_mut(&mut shape.acid, self) {
-                    *percent = number as u8;
-                }
-            }
-            Self::Pitches => shape.acid.keep = number != 0,
-            Self::TrigLoop
-            | Self::NoteLoop
-            | Self::OctaveLoop
-            | Self::AccentLoop
-            | Self::SlideLoop => {
-                if let Some(rows) = acid_loop_mut(&mut shape.acid, self) {
-                    *rows = number as u8;
-                }
-            }
-            Self::Axis => shape.follow.axis = Some(number as u8),
-            Self::Transpose => shape.follow.transpose = number as i8,
-            Self::Late => shape.follow.rotate = number as u16,
-            Self::Invert => shape.follow.invert = number != 0,
-            Self::Reverse => shape.follow.reverse = number != 0,
-            Self::CopyFx => shape.follow.fx = number != 0,
-            Self::Mutation => shape.follow.mutation = number as u8,
-            Self::Repitch | Self::Shift | Self::Retro | Self::Ratchet | Self::DropAdd => {
-                if let Some(on) = self.mutation_kind_mut(&mut shape.follow.mutate) {
-                    *on = number != 0;
-                }
-            }
-            Self::Step => shape.walk.step = number as u8,
-            Self::Edge => {
-                shape.walk.edge = if number != 0 {
-                    Edge::Wrap
-                } else {
-                    Edge::Reflect
-                };
-            }
-            Self::Depth => shape.pink.depth = number as u8,
-            Self::Spread => shape.random.spread = number as u8,
-            Self::Bias => shape.random.bias = number as i8,
-            Self::Steps => {
-                if let ShapeColumn::Note { scale, .. } = context.column {
-                    shape.random.steps = steps_kept(number, scale);
-                }
-            }
-            Self::Weights => {}
-            Self::Factor => shape.bits.factor = number as u8,
-            Self::Masks => shape.bits.masks = number != 0,
-            Self::Part => shape.grids.part = Some(DrumPart::ALL[number as usize]),
-            Self::Pitch => shape.from = number as u8,
-            Self::MapX
-            | Self::MapY
-            | Self::KickDensity
-            | Self::SnareDensity
-            | Self::HatDensity
-            | Self::Chaos => {
-                if let Some(value) = self.grids_byte(&mut shape.grids) {
-                    *value = number as u8;
-                }
-            }
-            Self::Rows => shape.grids.fine = number != 0,
-            Self::Channel => shape.divisions.channel = Some(Channel::ALL[number as usize]),
-            Self::Bar => shape.divisions = shape.divisions.with_bar(Bar::ALL[number as usize]),
-            Self::Quarters
-            | Self::Eighths
-            | Self::Sixteenths
-            | Self::QuarterTriplets
-            | Self::EighthTriplets
-            | Self::SixteenthTriplets
-            | Self::QuartersB
-            | Self::EighthsB
-            | Self::SixteenthsB
-            | Self::QuarterTripletsB
-            | Self::EighthTripletsB
-            | Self::SixteenthTripletsB => {
-                if let Some(chance) = self.chance_mut(&mut shape.divisions) {
-                    *chance = number as u8;
-                }
-            }
-            Self::Flip => shape.bits.flip = number as u8,
-            Self::Keep => shape.bits.keep = number as u8,
-            Self::Turn => shape.bits.turn = number as u8,
-            Self::Order => shape.variation.order = number as u8,
-            Self::Temperature => shape.variation.temperature = number as u8,
-            Self::Change => shape.ring.change = number as u8,
-            Self::Ones => shape.ring.chance = number as u8,
-            Self::RingLength => shape.ring.length = number as u8,
-            Self::Triad => {
-                shape.tonnetz.quality = if number != 0 {
-                    Quality::Minor
-                } else {
-                    Quality::Major
-                };
-            }
-            Self::InScale => shape.tonnetz.in_scale = number != 0,
-            Self::Moves => shape.tonnetz.moves = Moves::ALL[number as usize],
-            Self::Voice => shape.tonnetz.voice = Some(TonnetzVoice::ALL[number as usize]),
-            Self::MoveList => {}
-            Self::PWeight | Self::LWeight | Self::RWeight => {
-                if let Some(weight) = self.weight_mut(&mut shape.tonnetz) {
-                    *weight = number as u8;
-                }
-            }
-            Self::LoopLength => shape.tonnetz.length = number as u8,
-            Self::Vary => shape.vary = VARIES[number as usize],
+        (self.spec().set)(shape, context, number.clamp(low, high));
+    }
+
+    /// Set it to what it is on `start`, a shape with the part it belongs to as that starts.
+    fn take(self, shape: &mut Shape, context: &Context, start: &Shape) {
+        if let Some(number) = (self.spec().get)(start, context) {
+            (self.spec().set)(shape, context, number);
+        }
+    }
+
+    /// Where the shape is among a list setting's choices, as a number.
+    fn chosen_number(self, shape: &Shape, context: &Context) -> Option<i32> {
+        self.chosen(shape, context).map(|at| at as i32)
+    }
+
+    /// Give it the choice at a place, unless it's on that choice already, so a `Where` keeps its
+    /// amount.
+    fn choose(self, shape: &mut Shape, context: &Context, at: i32) {
+        if self.chosen(shape, context) != Some(at as usize)
+            && let Some(choice) = self
+                .choices(context)
+                .and_then(|choices| choices.get(at as usize).copied())
+        {
+            choice.apply(shape);
         }
     }
 }
 
+/// One generator setting, described once: the part of it that's the same whatever the shape and
+/// its column. What hangs on them besides, which shapes have it and how it's shown, put back,
+/// typed and chosen from a list, is [`GenParam`]'s own (the design's `device-interface.md` §4.2).
+#[derive(Debug, Clone, Copy)]
+pub struct GenParamSpec {
+    /// What a song or a mapping stores it by, which never changes.
+    pub key: &'static str,
+    /// Its name on screen.
+    pub name: &'static str,
+    /// How its values read.
+    pub units: Units,
+    /// How its value is typed, on a column whose values aren't in hex.
+    pub typing: Typing,
+    /// The lowest and highest it takes as a number.
+    pub bounds: Bounds,
+    /// How far it moves stepped as a number, or none for one stepped as it is: an end, a list, a
+    /// rate and what's only typed.
+    pub stepping: Option<Stepping>,
+    /// Whether the engine can hold it as it plays.
+    pub engine: bool,
+    /// Its value as a number, if it has one now.
+    pub get: fn(&Shape, &Context) -> Option<i32>,
+    /// Set it to a number already within its bounds.
+    pub set: fn(&mut Shape, &Context, i32),
+}
+
+/// The lowest and highest a setting takes as a number.
+#[derive(Debug, Clone, Copy)]
+pub enum Bounds {
+    /// These, whatever it acts on.
+    Fixed(i32, i32),
+    /// The column's own lowest and highest values.
+    Column,
+    /// Its choices' places.
+    Listed,
+    /// Worked out from what it acts on: the rows a column could change, the source a `Follow`
+    /// reads, or the column's range or scale.
+    Contextual(fn(&Context) -> Option<(i32, i32)>),
+    /// None: it's only typed, as a `List`'s values are.
+    Typed,
+}
+
+/// How a setting stepped as a number moves: by a small step and a large one, and whether past an
+/// end it goes round to the other, as a phase, a rotation and a switch do, rather than stopping
+/// there.
+#[derive(Debug, Clone, Copy)]
+pub struct Stepping {
+    pub nudge: i32,
+    pub jump: Jump,
+    pub round: bool,
+}
+
+/// How far a setting's large step moves it.
+#[derive(Debug, Clone, Copy)]
+pub enum Jump {
+    /// So far, whatever the column.
+    By(i32),
+    /// An octave, of the scale's degrees on notes while it's on, and otherwise of semitones.
+    Octave,
+    /// As far as a large step moves the column's own values: an octave of notes, of degrees
+    /// while the scale is on, four 24ths of a nudge, or `10` in hex.
+    Column,
+}
+
+impl Jump {
+    /// How far it moves on a column.
+    fn on(self, column: ShapeColumn) -> i32 {
+        let degrees = match column {
+            ShapeColumn::Note { scale, .. } if scale.on => {
+                Some(scale.kind.intervals().len() as i32)
+            }
+            _ => None,
+        };
+        match self {
+            Self::By(jump) => jump,
+            Self::Octave => degrees.unwrap_or(12),
+            Self::Column => degrees.unwrap_or_else(|| large_step(column)),
+        }
+    }
+}
+
+/// Stepped by `nudge` and `jump`, stopping at its ends.
+const fn stops(nudge: i32, jump: i32) -> Option<Stepping> {
+    Some(Stepping {
+        nudge,
+        jump: Jump::By(jump),
+        round: false,
+    })
+}
+
+/// Stepped by `nudge` and `jump`, going round past its ends.
+const fn round(nudge: i32, jump: i32) -> Option<Stepping> {
+    Some(Stepping {
+        nudge,
+        jump: Jump::By(jump),
+        round: true,
+    })
+}
+
+/// A switch, off or on, which a step turns over.
+const SWITCH: Option<Stepping> = round(1, 1);
+/// A percent, by one or [`CHANCE_JUMP`].
+const PERCENT: Option<Stepping> = stops(1, CHANCE_JUMP);
+/// A bend, by [`BEND_NUDGE`] or [`BEND_JUMP`].
+const BEND: Option<Stepping> = stops(BEND_NUDGE, BEND_JUMP);
+/// A byte in hex, by one or `10`.
+const HEX: Option<Stepping> = stops(1, HEX_JUMP);
+/// A count, by one or [`EUCLID_JUMP`].
+const COUNT: Option<Stepping> = stops(1, EUCLID_JUMP);
+const WHOLE: Typing = Typing::Whole { signed: false };
+const SIGNED: Typing = Typing::Whole { signed: true };
+
+/// A `Divisions` chance, of its set, the track's own channel's or `B`'s, and its division.
+fn division_chance(shape: &Shape, set: usize, division: Division) -> Option<i32> {
+    Some(i32::from(shape.divisions.chances[set][division.index()]))
+}
+
+fn set_division_chance(shape: &mut Shape, set: usize, division: Division, number: i32) {
+    shape.divisions.chances[set][division.index()] = number as u8;
+}
+
+/// Every generator setting's description, by [`GenParam`].
+pub const GEN_PARAMS: [GenParamSpec; GenParam::ALL.len()] = [
+    GenParamSpec {
+        key: "fill",
+        name: "Fill",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Listed,
+        stepping: None,
+        engine: false,
+        get: |shape, context| GenParam::Fill.chosen_number(shape, context),
+        set: |shape, context, at| GenParam::Fill.choose(shape, context, at),
+    },
+    GenParamSpec {
+        key: "from",
+        name: "From",
+        units: Units::Column,
+        typing: Typing::Named { list: false },
+        bounds: Bounds::Column,
+        stepping: None,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.from)),
+        set: |shape, _, number| shape.from = number as u8,
+    },
+    GenParamSpec {
+        key: "to",
+        name: "To",
+        units: Units::Column,
+        typing: Typing::Named { list: false },
+        bounds: Bounds::Column,
+        stepping: None,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.to)),
+        set: |shape, _, number| shape.to = number as u8,
+    },
+    GenParamSpec {
+        key: "notes",
+        name: "Notes",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(1, MAX_ACID_NOTES as i32),
+        stepping: COUNT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.notes)),
+        set: |shape, _, number| shape.acid.notes = number as u8,
+    },
+    GenParamSpec {
+        key: "octave",
+        name: "Octave",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.octave)),
+        set: |shape, _, number| shape.acid.octave = number as u8,
+    },
+    GenParamSpec {
+        key: "density",
+        name: "Density",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.density)),
+        set: |shape, _, number| shape.acid.density = number as u8,
+    },
+    GenParamSpec {
+        key: "accent",
+        name: "Accent",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.accent)),
+        set: |shape, _, number| shape.acid.accent = number as u8,
+    },
+    GenParamSpec {
+        key: "slide",
+        name: "Slide",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.slide)),
+        set: |shape, _, number| shape.acid.slide = number as u8,
+    },
+    // `1` to keep the pitches.
+    GenParamSpec {
+        key: "pitches",
+        name: "Pitches",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.keep)),
+        set: |shape, _, number| shape.acid.keep = number != 0,
+    },
+    GenParamSpec {
+        key: "trigloop",
+        name: "Trig loop",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_LOOP as i32),
+        stepping: COUNT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.loops.trigs)),
+        set: |shape, _, number| shape.acid.loops.trigs = number as u8,
+    },
+    GenParamSpec {
+        key: "noteloop",
+        name: "Note loop",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_LOOP as i32),
+        stepping: COUNT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.loops.notes)),
+        set: |shape, _, number| shape.acid.loops.notes = number as u8,
+    },
+    GenParamSpec {
+        key: "octloop",
+        name: "Oct loop",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_LOOP as i32),
+        stepping: COUNT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.loops.octaves)),
+        set: |shape, _, number| shape.acid.loops.octaves = number as u8,
+    },
+    GenParamSpec {
+        key: "accloop",
+        name: "Acc loop",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_LOOP as i32),
+        stepping: COUNT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.loops.accents)),
+        set: |shape, _, number| shape.acid.loops.accents = number as u8,
+    },
+    GenParamSpec {
+        key: "slideloop",
+        name: "Sld loop",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_LOOP as i32),
+        stepping: COUNT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.acid.loops.slides)),
+        set: |shape, _, number| shape.acid.loops.slides = number as u8,
+    },
+    GenParamSpec {
+        key: "source",
+        name: "Source",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Listed,
+        stepping: None,
+        engine: false,
+        get: |shape, context| GenParam::Source.chosen_number(shape, context),
+        set: |shape, context, at| GenParam::Source.choose(shape, context, at),
+    },
+    GenParamSpec {
+        key: "transpose",
+        name: "Transpose",
+        units: Units::Interval,
+        typing: SIGNED,
+        bounds: Bounds::Fixed(-(MAX_TRANSPOSE as i32), MAX_TRANSPOSE as i32),
+        stepping: Some(Stepping {
+            nudge: 1,
+            jump: Jump::Octave,
+            round: false,
+        }),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.transpose)),
+        set: |shape, _, number| shape.follow.transpose = number as i8,
+    },
+    GenParamSpec {
+        key: "invert",
+        name: "Invert",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.invert)),
+        set: |shape, _, number| shape.follow.invert = number != 0,
+    },
+    // The note it turns about: the first note of the source until it's set.
+    GenParamSpec {
+        key: "axis",
+        name: "About",
+        units: Units::Column,
+        typing: Typing::Named { list: false },
+        bounds: Bounds::Column,
+        stepping: None,
+        engine: true,
+        get: |shape, context| {
+            let axis = shape.follow.axis.or(context.source.and_then(first_note));
+            axis.map(i32::from)
+        },
+        set: |shape, _, number| shape.follow.axis = Some(number as u8),
+    },
+    GenParamSpec {
+        key: "reverse",
+        name: "Reverse",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.reverse)),
+        set: |shape, _, number| shape.follow.reverse = number != 0,
+    },
+    // How many rows late it is, round the source's loop.
+    GenParamSpec {
+        key: "late",
+        name: "Rotate",
+        units: Units::Rows,
+        typing: WHOLE,
+        bounds: Bounds::Contextual(|context| Some((0, context.source_rows() as i32 - 1))),
+        stepping: round(1, EUCLID_JUMP),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.rotate)),
+        set: |shape, _, number| shape.follow.rotate = number as u16,
+    },
+    GenParamSpec {
+        key: "fx",
+        name: "FX",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.fx)),
+        set: |shape, _, number| shape.follow.fx = number != 0,
+    },
+    GenParamSpec {
+        key: "mutation",
+        name: "Mutation",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_MUTATION as i32),
+        stepping: stops(1, 4),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.mutation)),
+        set: |shape, _, number| shape.follow.mutation = number as u8,
+    },
+    GenParamSpec {
+        key: "repitch",
+        name: "Repitch",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.mutate.repitch)),
+        set: |shape, _, number| shape.follow.mutate.repitch = number != 0,
+    },
+    GenParamSpec {
+        key: "shift",
+        name: "Shift",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.mutate.shift)),
+        set: |shape, _, number| shape.follow.mutate.shift = number != 0,
+    },
+    GenParamSpec {
+        key: "retro",
+        name: "Retro",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.mutate.retro)),
+        set: |shape, _, number| shape.follow.mutate.retro = number != 0,
+    },
+    GenParamSpec {
+        key: "ratchet",
+        name: "Ratchet",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.mutate.ratchet)),
+        set: |shape, _, number| shape.follow.mutate.ratchet = number != 0,
+    },
+    GenParamSpec {
+        key: "drop",
+        name: "Drop/add",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.follow.mutate.drop)),
+        set: |shape, _, number| shape.follow.mutate.drop = number != 0,
+    },
+    // In hex on a column whose values are, and as a number on notes and nudges.
+    GenParamSpec {
+        key: "step",
+        name: "Step",
+        units: Units::Step,
+        typing: WHOLE,
+        bounds: Bounds::Contextual(|context| Some((1, i32::from(longest_step(context.column))))),
+        stepping: Some(Stepping {
+            nudge: 1,
+            jump: Jump::Column,
+            round: false,
+        }),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.walk.step)),
+        set: |shape, _, number| shape.walk.step = number as u8,
+    },
+    // `1` to wrap.
+    GenParamSpec {
+        key: "edge",
+        name: "Edge",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.walk.edge == Edge::Wrap)),
+        set: |shape, _, number| {
+            shape.walk.edge = if number != 0 {
+                Edge::Wrap
+            } else {
+                Edge::Reflect
+            };
+        },
+    },
+    GenParamSpec {
+        key: "depth",
+        name: "Depth",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(MIN_DEPTH as i32, MAX_DEPTH as i32),
+        stepping: stops(1, 2),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.pink.depth)),
+        set: |shape, _, number| shape.pink.depth = number as u8,
+    },
+    GenParamSpec {
+        key: "spread",
+        name: "Spread",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_SPREAD as i32),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.random.spread)),
+        set: |shape, _, number| shape.random.spread = number as u8,
+    },
+    GenParamSpec {
+        key: "bias",
+        name: "Bias",
+        units: Units::Bend,
+        typing: SIGNED,
+        bounds: Bounds::Fixed(-(MAX_BIAS as i32), MAX_BIAS as i32),
+        stepping: BEND,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.random.bias)),
+        set: |shape, _, number| shape.random.bias = number as i8,
+    },
+    // How many of the scale's degrees it lets through, on notes alone.
+    GenParamSpec {
+        key: "steps",
+        name: "Steps",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Contextual(|context| match context.column {
+            ShapeColumn::Note { scale, .. } => Some((1, degree_count(scale) as i32)),
+            _ => None,
+        }),
+        stepping: COUNT,
+        engine: true,
+        get: |shape, context| match context.column {
+            ShapeColumn::Note { scale, .. } => Some(shape.random.kept(scale) as i32),
+            _ => None,
+        },
+        set: |shape, context, number| {
+            if let ShapeColumn::Note { scale, .. } = context.column {
+                shape.random.steps = steps_kept(number, scale);
+            }
+        },
+    },
+    GenParamSpec {
+        key: "weights",
+        name: "Weights",
+        units: Units::Weights,
+        typing: Typing::Weights,
+        bounds: Bounds::Typed,
+        stepping: None,
+        engine: false,
+        get: |_, _| None,
+        set: |_, _, _| {},
+    },
+    GenParamSpec {
+        key: "factor",
+        name: "Factor",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(1, MAX_FACTOR as i32),
+        stepping: stops(1, FACTOR_JUMP),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.bits.factor)),
+        set: |shape, _, number| shape.bits.factor = number as u8,
+    },
+    GenParamSpec {
+        key: "masks",
+        name: "Masks",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.bits.masks)),
+        set: |shape, _, number| shape.bits.masks = number != 0,
+    },
+    // Its parts' places, without a list, so the engine can hold it.
+    GenParamSpec {
+        key: "part",
+        name: "Part",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Fixed(0, DrumPart::ALL.len() as i32 - 1),
+        stepping: None,
+        engine: true,
+        get: |shape, _| Some(shape.grids.part?.index() as i32),
+        set: |shape, _, at| shape.grids.part = Some(DrumPart::ALL[at as usize]),
+    },
+    // The note a `Grids` or `Divisions` writes on an empty column, its `From`.
+    GenParamSpec {
+        key: "note",
+        name: "Note",
+        units: Units::Column,
+        typing: Typing::Named { list: false },
+        bounds: Bounds::Column,
+        stepping: None,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.from)),
+        set: |shape, _, number| shape.from = number as u8,
+    },
+    GenParamSpec {
+        key: "x",
+        name: "X",
+        units: Units::Byte,
+        typing: Typing::Hex,
+        bounds: Bounds::Fixed(0, 0xFF),
+        stepping: HEX,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.grids.x)),
+        set: |shape, _, number| shape.grids.x = number as u8,
+    },
+    GenParamSpec {
+        key: "y",
+        name: "Y",
+        units: Units::Byte,
+        typing: Typing::Hex,
+        bounds: Bounds::Fixed(0, 0xFF),
+        stepping: HEX,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.grids.y)),
+        set: |shape, _, number| shape.grids.y = number as u8,
+    },
+    GenParamSpec {
+        key: "bd",
+        name: "BD fill",
+        units: Units::Byte,
+        typing: Typing::Hex,
+        bounds: Bounds::Fixed(0, 0xFF),
+        stepping: HEX,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.grids.density[DrumPart::Kick.index()])),
+        set: |shape, _, number| shape.grids.density[DrumPart::Kick.index()] = number as u8,
+    },
+    GenParamSpec {
+        key: "sd",
+        name: "SD fill",
+        units: Units::Byte,
+        typing: Typing::Hex,
+        bounds: Bounds::Fixed(0, 0xFF),
+        stepping: HEX,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.grids.density[DrumPart::Snare.index()])),
+        set: |shape, _, number| shape.grids.density[DrumPart::Snare.index()] = number as u8,
+    },
+    GenParamSpec {
+        key: "hh",
+        name: "HH fill",
+        units: Units::Byte,
+        typing: Typing::Hex,
+        bounds: Bounds::Fixed(0, 0xFF),
+        stepping: HEX,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.grids.density[DrumPart::Hats.index()])),
+        set: |shape, _, number| shape.grids.density[DrumPart::Hats.index()] = number as u8,
+    },
+    GenParamSpec {
+        key: "chaos",
+        name: "Chaos",
+        units: Units::Byte,
+        typing: Typing::Hex,
+        bounds: Bounds::Fixed(0, 0xFF),
+        stepping: HEX,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.grids.chaos)),
+        set: |shape, _, number| shape.grids.chaos = number as u8,
+    },
+    // `1` for a row of a 32nd.
+    GenParamSpec {
+        key: "rows",
+        name: "Rows",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.grids.fine)),
+        set: |shape, _, number| shape.grids.fine = number != 0,
+    },
+    // Its choices' places, without a list, so the engine can hold it, as for each list below.
+    GenParamSpec {
+        key: "channel",
+        name: "Channel",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Fixed(0, Channel::ALL.len() as i32 - 1),
+        stepping: None,
+        engine: true,
+        get: |shape, _| Some(shape.divisions.channel?.index() as i32),
+        set: |shape, _, at| shape.divisions.channel = Some(Channel::ALL[at as usize]),
+    },
+    GenParamSpec {
+        key: "bar",
+        name: "Bar",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Fixed(0, Bar::ALL.len() as i32 - 1),
+        stepping: None,
+        engine: true,
+        get: |shape, _| Some(shape.divisions.bar.index() as i32),
+        set: |shape, _, at| shape.divisions = shape.divisions.with_bar(Bar::ALL[at as usize]),
+    },
+    GenParamSpec {
+        key: "d4",
+        name: "1/4",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 0, Division::Quarter),
+        set: |shape, _, number| set_division_chance(shape, 0, Division::Quarter, number),
+    },
+    GenParamSpec {
+        key: "d8",
+        name: "1/8",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 0, Division::Eighth),
+        set: |shape, _, number| set_division_chance(shape, 0, Division::Eighth, number),
+    },
+    GenParamSpec {
+        key: "d16",
+        name: "1/16",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 0, Division::Sixteenth),
+        set: |shape, _, number| set_division_chance(shape, 0, Division::Sixteenth, number),
+    },
+    GenParamSpec {
+        key: "d4t",
+        name: "1/4T",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 0, Division::QuarterTriplet),
+        set: |shape, _, number| set_division_chance(shape, 0, Division::QuarterTriplet, number),
+    },
+    GenParamSpec {
+        key: "d8t",
+        name: "1/8T",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 0, Division::EighthTriplet),
+        set: |shape, _, number| set_division_chance(shape, 0, Division::EighthTriplet, number),
+    },
+    GenParamSpec {
+        key: "d16t",
+        name: "1/16T",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 0, Division::SixteenthTriplet),
+        set: |shape, _, number| set_division_chance(shape, 0, Division::SixteenthTriplet, number),
+    },
+    GenParamSpec {
+        key: "b4",
+        name: "B 1/4",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 1, Division::Quarter),
+        set: |shape, _, number| set_division_chance(shape, 1, Division::Quarter, number),
+    },
+    GenParamSpec {
+        key: "b8",
+        name: "B 1/8",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 1, Division::Eighth),
+        set: |shape, _, number| set_division_chance(shape, 1, Division::Eighth, number),
+    },
+    GenParamSpec {
+        key: "b16",
+        name: "B 1/16",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 1, Division::Sixteenth),
+        set: |shape, _, number| set_division_chance(shape, 1, Division::Sixteenth, number),
+    },
+    GenParamSpec {
+        key: "b4t",
+        name: "B 1/4T",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 1, Division::QuarterTriplet),
+        set: |shape, _, number| set_division_chance(shape, 1, Division::QuarterTriplet, number),
+    },
+    GenParamSpec {
+        key: "b8t",
+        name: "B 1/8T",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 1, Division::EighthTriplet),
+        set: |shape, _, number| set_division_chance(shape, 1, Division::EighthTriplet, number),
+    },
+    GenParamSpec {
+        key: "b16t",
+        name: "B 1/16T",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| division_chance(shape, 1, Division::SixteenthTriplet),
+        set: |shape, _, number| set_division_chance(shape, 1, Division::SixteenthTriplet, number),
+    },
+    GenParamSpec {
+        key: "change",
+        name: "Change",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.ring.change)),
+        set: |shape, _, number| shape.ring.change = number as u8,
+    },
+    GenParamSpec {
+        key: "ones",
+        name: "Chance",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.ring.chance)),
+        set: |shape, _, number| shape.ring.chance = number as u8,
+    },
+    GenParamSpec {
+        key: "length",
+        name: "Length",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(1, MAX_RING as i32),
+        stepping: COUNT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.ring.length)),
+        set: |shape, _, number| shape.ring.length = number as u8,
+    },
+    // `1` for a minor first chord.
+    GenParamSpec {
+        key: "triad",
+        name: "Triad",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.tonnetz.quality == Quality::Minor)),
+        set: |shape, _, number| {
+            shape.tonnetz.quality = if number != 0 {
+                Quality::Minor
+            } else {
+                Quality::Major
+            };
+        },
+    },
+    GenParamSpec {
+        key: "voice",
+        name: "Voice",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Fixed(0, TonnetzVoice::ALL.len() as i32 - 1),
+        stepping: None,
+        engine: true,
+        get: |shape, _| Some(shape.tonnetz.voice?.index() as i32),
+        set: |shape, _, at| shape.tonnetz.voice = Some(TonnetzVoice::ALL[at as usize]),
+    },
+    GenParamSpec {
+        key: "moves",
+        name: "Moves",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Fixed(0, Moves::ALL.len() as i32 - 1),
+        stepping: None,
+        engine: true,
+        get: |shape, _| Some(shape.tonnetz.moves.index() as i32),
+        set: |shape, _, at| shape.tonnetz.moves = Moves::ALL[at as usize],
+    },
+    GenParamSpec {
+        key: "list",
+        name: "List",
+        units: Units::Named,
+        typing: Typing::Moves,
+        bounds: Bounds::Typed,
+        stepping: None,
+        engine: false,
+        get: |_, _| None,
+        set: |_, _, _| {},
+    },
+    GenParamSpec {
+        key: "p",
+        name: "P",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_MOVE_WEIGHT as i32),
+        stepping: stops(1, WEIGHT_JUMP),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.tonnetz.weights[0])),
+        set: |shape, _, number| shape.tonnetz.weights[0] = number as u8,
+    },
+    GenParamSpec {
+        key: "l",
+        name: "L",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_MOVE_WEIGHT as i32),
+        stepping: stops(1, WEIGHT_JUMP),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.tonnetz.weights[1])),
+        set: |shape, _, number| shape.tonnetz.weights[1] = number as u8,
+    },
+    GenParamSpec {
+        key: "r",
+        name: "R",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_MOVE_WEIGHT as i32),
+        stepping: stops(1, WEIGHT_JUMP),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.tonnetz.weights[2])),
+        set: |shape, _, number| shape.tonnetz.weights[2] = number as u8,
+    },
+    GenParamSpec {
+        key: "loop",
+        name: "Length",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(1, MAX_MOVE_LOOP as i32),
+        stepping: stops(1, LOOP_JUMP),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.tonnetz.length)),
+        set: |shape, _, number| shape.tonnetz.length = number as u8,
+    },
+    GenParamSpec {
+        key: "inscale",
+        name: "Scale",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.tonnetz.in_scale)),
+        set: |shape, _, number| shape.tonnetz.in_scale = number != 0,
+    },
+    GenParamSpec {
+        key: "order",
+        name: "Order",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(1, MAX_ORDER as i32),
+        stepping: stops(1, 1),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.variation.order)),
+        set: |shape, _, number| shape.variation.order = number as u8,
+    },
+    GenParamSpec {
+        key: "temperature",
+        name: "Temp",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.variation.temperature)),
+        set: |shape, _, number| shape.variation.temperature = number as u8,
+    },
+    GenParamSpec {
+        key: "flip",
+        name: "Flip",
+        units: Units::Bits,
+        typing: Typing::Hex,
+        bounds: Bounds::Fixed(0, u8::MAX as i32),
+        stepping: HEX,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.bits.flip)),
+        set: |shape, _, number| shape.bits.flip = number as u8,
+    },
+    GenParamSpec {
+        key: "keep",
+        name: "Keep",
+        units: Units::Bits,
+        typing: Typing::Hex,
+        bounds: Bounds::Fixed(0, u8::MAX as i32),
+        stepping: HEX,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.bits.keep)),
+        set: |shape, _, number| shape.bits.keep = number as u8,
+    },
+    GenParamSpec {
+        key: "turn",
+        name: "Turn",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, MAX_TURN as i32),
+        stepping: round(1, 4),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.bits.turn)),
+        set: |shape, _, number| shape.bits.turn = number as u8,
+    },
+    GenParamSpec {
+        key: "curve",
+        name: "Curve",
+        units: Units::Bend,
+        typing: SIGNED,
+        bounds: Bounds::Fixed(-(MAX_BEND as i32), MAX_BEND as i32),
+        stepping: BEND,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.curve)),
+        set: |shape, _, number| shape.curve = number as i8,
+    },
+    GenParamSpec {
+        key: "s",
+        name: "S",
+        units: Units::Bend,
+        typing: SIGNED,
+        bounds: Bounds::Fixed(-(MAX_BEND as i32), MAX_BEND as i32),
+        stepping: BEND,
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.s)),
+        set: |shape, _, number| shape.s = number as i8,
+    },
+    GenParamSpec {
+        key: "wave",
+        name: "Shape",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Listed,
+        stepping: None,
+        engine: false,
+        get: |shape, context| GenParam::Wave.chosen_number(shape, context),
+        set: |shape, context, at| GenParam::Wave.choose(shape, context, at),
+    },
+    GenParamSpec {
+        key: "rate",
+        name: "Rate",
+        units: Units::Named,
+        typing: Typing::Rate,
+        bounds: Bounds::Listed,
+        stepping: None,
+        engine: false,
+        get: |shape, context| GenParam::Rate.chosen_number(shape, context),
+        set: |shape, context, at| GenParam::Rate.choose(shape, context, at),
+    },
+    GenParamSpec {
+        key: "phase",
+        name: "Phase",
+        units: Units::Degrees,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 359),
+        stepping: round(PHASE_NUDGE, PHASE_JUMP),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.phase)),
+        set: |shape, _, number| shape.phase = number as u16,
+    },
+    GenParamSpec {
+        key: "values",
+        name: "Values",
+        units: Units::Column,
+        typing: Typing::Named { list: true },
+        bounds: Bounds::Typed,
+        stepping: None,
+        engine: false,
+        get: |_, _| None,
+        set: |_, _, _| {},
+    },
+    GenParamSpec {
+        key: "run",
+        name: "Run",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(1, MAX_RUN as i32),
+        stepping: stops(1, RUN_JUMP),
+        engine: true,
+        get: |shape, _| Some(i32::from(shape.run)),
+        set: |shape, _, number| shape.run = number as u16,
+    },
+    GenParamSpec {
+        key: "where",
+        name: "Where",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Listed,
+        stepping: None,
+        engine: false,
+        get: |shape, context| GenParam::Where.chosen_number(shape, context),
+        set: |shape, context, at| GenParam::Where.choose(shape, context, at),
+    },
+    // The amount of the `Where` it's named for, as each below is, and none while it has another.
+    GenParamSpec {
+        key: "every",
+        name: "Amount",
+        units: Units::Rows,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(1, MAX_EVERY as i32),
+        stepping: stops(1, EVERY_JUMP),
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Every(every) => Some(i32::from(every)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Every(every) = &mut shape.place {
+                *every = number as u16;
+            }
+        },
+    },
+    GenParamSpec {
+        key: "chance",
+        name: "Amount",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Chance(percent) => Some(i32::from(percent)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Chance(percent) = &mut shape.place {
+                *percent = number as u8;
+            }
+        },
+    },
+    // Of the rows the column could change, so no more than them.
+    GenParamSpec {
+        key: "hits",
+        name: "Hits",
+        units: Units::OfRows,
+        typing: WHOLE,
+        bounds: Bounds::Contextual(|context| Some((0, context.open as i32))),
+        stepping: COUNT,
+        engine: true,
+        get: |shape, context| match shape.place {
+            Where::Euclid { hits, .. } => Some(i32::from(hits).min(context.open as i32)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Euclid { hits, .. } = &mut shape.place {
+                *hits = number as u16;
+            }
+        },
+    },
+    GenParamSpec {
+        key: "rotate",
+        name: "Rotate",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Contextual(|context| Some((0, (context.open as i32 - 1).max(0)))),
+        stepping: round(1, EUCLID_JUMP),
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Euclid { rotate, .. } => Some(i32::from(rotate)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Euclid { rotate, .. } = &mut shape.place {
+                *rotate = number as u16;
+            }
+        },
+    },
+    GenParamSpec {
+        key: "clusters",
+        name: "Amount",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Clusters(amount) => Some(i32::from(amount)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Clusters(amount) = &mut shape.place {
+                *amount = number as u8;
+            }
+        },
+    },
+    GenParamSpec {
+        key: "markov",
+        name: "Amount",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Markov(amount) => Some(i32::from(amount)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Markov(amount) = &mut shape.place {
+                *amount = number as u8;
+            }
+        },
+    },
+    GenParamSpec {
+        key: "states",
+        name: "Amount",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::States(amount) => Some(i32::from(amount)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::States(amount) = &mut shape.place {
+                *amount = number as u8;
+            }
+        },
+    },
+    GenParamSpec {
+        key: "share",
+        name: "Amount",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Complementary { share, .. } => Some(i32::from(share)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Complementary { share, .. } = &mut shape.place {
+                *share = number as u8;
+            }
+        },
+    },
+    // `1` for the second side of the coin.
+    GenParamSpec {
+        key: "side",
+        name: "Side",
+        units: Units::Named,
+        typing: Typing::Toggled,
+        bounds: Bounds::Fixed(0, 1),
+        stepping: SWITCH,
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Complementary { second, .. } => Some(i32::from(second)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Complementary { second, .. } = &mut shape.place {
+                *second = number != 0;
+            }
+        },
+    },
+    GenParamSpec {
+        key: "rhythm",
+        name: "Rhythm",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Fixed(0, World::ALL.len() as i32 - 1),
+        stepping: None,
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Rhythm { rhythm, .. } => Some(rhythm.index() as i32),
+            _ => None,
+        },
+        set: |shape, _, at| Choice::World(World::ALL[at as usize]).apply(shape),
+    },
+    GenParamSpec {
+        key: "role",
+        name: "Part",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Fixed(0, Role::ALL.len() as i32 - 1),
+        stepping: None,
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Rhythm { part, .. } => Some(part.index() as i32),
+            _ => None,
+        },
+        set: |shape, _, at| Choice::Role(Role::ALL[at as usize]).apply(shape),
+    },
+    GenParamSpec {
+        key: "child",
+        name: "Child",
+        units: Units::Percent,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 100),
+        stepping: PERCENT,
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Rhythm { child, .. } => Some(i32::from(child)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Rhythm { child, .. } = &mut shape.place {
+                *child = number as u8;
+            }
+        },
+    },
+    GenParamSpec {
+        key: "rule",
+        name: "Rule",
+        units: Units::Count,
+        typing: WHOLE,
+        bounds: Bounds::Fixed(0, 0xFF),
+        stepping: stops(1, RULE_JUMP),
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Cells(cells) => Some(i32::from(cells.rule)),
+            _ => None,
+        },
+        set: |shape, _, number| {
+            if let Where::Cells(cells) = &mut shape.place {
+                cells.rule = number as u8;
+            }
+        },
+    },
+    GenParamSpec {
+        key: "start",
+        name: "Start",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Fixed(0, CellStart::ALL.len() as i32 - 1),
+        stepping: None,
+        engine: true,
+        get: |shape, _| match shape.place {
+            Where::Cells(cells) => Some(cells.start.index() as i32),
+            _ => None,
+        },
+        set: |shape, _, at| {
+            if let Where::Cells(cells) = &mut shape.place {
+                cells.start = CellStart::ALL[at as usize];
+            }
+        },
+    },
+    // Its choices' places, worked out without listing them, so the engine can hold it.
+    GenParamSpec {
+        key: "vary",
+        name: "Vary",
+        units: Units::Named,
+        typing: Typing::Listed,
+        bounds: Bounds::Fixed(0, VARIES.len() as i32 - 1),
+        stepping: None,
+        engine: true,
+        get: |shape, _| Some(VARIES.iter().position(|passes| *passes == shape.vary)? as i32),
+        set: |shape, _, at| shape.vary = VARIES[at as usize],
+    },
+];
 /// How long each of a generator's variations lasts, as `Vary` reads: `Once` for none, as the seed
 /// written plays every pass.
 fn vary_name(passes: u8) -> String {
@@ -2750,15 +3101,6 @@ fn bend(value: i8) -> String {
     }
 }
 
-/// How a setting stepped as a number moves: by a small step and a large one, and whether past an
-/// end it goes round to the other rather than stopping there.
-#[derive(Debug, Clone, Copy)]
-struct Stepping {
-    nudge: i32,
-    jump: i32,
-    round: bool,
-}
-
 /// An end moved a small or a large step: a note by a semitone or an octave, or by a degree or an
 /// octave of them while the scale is on; a nudge by one or four 24ths; anything else by one or
 /// `10` in hex.
@@ -2801,72 +3143,19 @@ fn typed_in_hex(column: ShapeColumn) -> bool {
     !matches!(column, ShapeColumn::Note { .. } | ShapeColumn::Nudge { .. })
 }
 
-/// The chance in percent an `Acid` setting is: of an octave, a row playing, an accent or a slide.
-fn acid_chance(acid: Acid, param: GenParam) -> Option<u8> {
-    let mut acid = acid;
-    acid_chance_mut(&mut acid, param).map(|percent| *percent)
-}
-
-fn acid_chance_mut(acid: &mut Acid, param: GenParam) -> Option<&mut u8> {
-    match param {
-        GenParam::Octave => Some(&mut acid.octave),
-        GenParam::Density => Some(&mut acid.density),
-        GenParam::Accent => Some(&mut acid.accent),
-        GenParam::Slide => Some(&mut acid.slide),
-        _ => None,
-    }
-}
-
-/// How many rows a part of an `Acid` line loops on, by its setting.
-fn acid_loop(acid: Acid, param: GenParam) -> Option<u8> {
-    let mut acid = acid;
-    acid_loop_mut(&mut acid, param).map(|rows| *rows)
-}
-
-fn acid_loop_mut(acid: &mut Acid, param: GenParam) -> Option<&mut u8> {
-    let loops = &mut acid.loops;
-    match param {
-        GenParam::TrigLoop => Some(&mut loops.trigs),
-        GenParam::NoteLoop => Some(&mut loops.notes),
-        GenParam::OctaveLoop => Some(&mut loops.octaves),
-        GenParam::AccentLoop => Some(&mut loops.accents),
-        GenParam::SlideLoop => Some(&mut loops.slides),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::scale::Scale;
-    use crate::shape::Follow;
 
     fn shape(kind: FillKind) -> Shape {
         Shape {
             from: 0x20,
             to: 0x80,
-            curve: 0,
-            s: 0,
             kind,
-            wave: Wave::Sine,
-            rate: DEFAULT_RATE,
-            phase: 0,
-            run: 1,
-            values: Values::default(),
             place: Where::Notes,
             seed: 1,
-            acid: Acid::default(),
-            follow: Follow::default(),
-            walk: crate::shape::Walk::default(),
-            pink: Pink::default(),
-            bits: Bits::default(),
-            grids: Grids::default(),
-            random: crate::shape::Random::default(),
-            vary: 0,
-            variation: crate::shape::Variation::default(),
-            divisions: crate::shape::Divisions::default(),
-            ring: crate::shape::Ring::default(),
-            tonnetz: crate::shape::Tonnetz::default(),
+            ..Shape::default()
         }
     }
 
@@ -3235,7 +3524,7 @@ mod tests {
         );
         // `A+B` has B's chances, and its twelve fill the page.
         let mut both = GenParam::of(&divisions, note(), false);
-        both.retain(|param| param.division().is_some());
+        both.retain(|param| param.units() == Units::Percent);
         assert_eq!(both, [own, theirs].concat());
         assert_eq!(
             GenParam::title(&divisions),

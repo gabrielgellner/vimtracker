@@ -296,7 +296,12 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     (decision 339). A synth voice's come in the same way, from its `VoiceSpec` row in
     `machine.rs`'s `VOICES`, by `SynthVoice`, with its key, name, meaning and entries (in
     `settings/voices.rs`), and what its Machine device takes from it: the setting its title shows,
-    any placing of its grid of its own, its role and its gate.
+    any placing of its grid of its own, its role and its gate. A generator's settings, which go
+    past a byte and hang on the column filled, have a table of their own: one `GenParamSpec` row
+    each in `shape/params.rs`'s `GEN_PARAMS`, by `GenParam`, with its key, name, units, typing,
+    bounds, steps and a `get` and `set` of it as a number, and one `FillSpec` row each in
+    `shape.rs`'s `FILLS`, by `FillKind`, with its name, meaning and its own settings' places on
+    the Gen page (decision 342).
 
 **Decisions:** 29, 30, 59, 60, 158, 159 and 161, the [M14](#m14-design-one-list-of-settings) and
 [M14b](#m14b-design-kinds-of-setting) designs, and the three crates of the
@@ -1425,7 +1430,9 @@ data. A generator that can still be changed is that panel kept live (decision 17
 **Its settings are declared once,** in `vt-model`'s `shape/params.rs` (decision 278): a `GenParam` for each, with the key a
 mapping stores it by, its name, its units, which shapes have it (`exists_for`), and how it's shown, stepped, typed, put back,
 chosen from a list and read as a number within its bounds, each a pure function of the `Shape` and a `Context` (the column,
-the rows it could change, whether it generates). The shape panel's rows are these, and the Gen page, the Roto and macros
+the rows it could change, whether it generates). What's fixed of each, its key, name, units, typing, bounds, steps and how
+it's read and set as a number, is its `GenParamSpec` row in `GEN_PARAMS`; the rest hangs on the shape and stays in
+`GenParam`'s methods (decision 342). The shape panel's rows are these, and the Gen page, the Roto and macros
 read the same table, as a machine's grid and Roto layout read the registry.
 
 **Shape panel.** Built ahead of live generators, by the author's decision: Visual `S` opens a panel whose result is a

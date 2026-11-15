@@ -6,14 +6,10 @@ use std::sync::Arc;
 
 use vt_model::action::{Action, EditError, FieldValue, edit};
 use vt_model::generator::{Span, applied, reads, unfollowed};
-use vt_model::lfo::Shape as Wave;
 use vt_model::project::{load_song, save_song};
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
-use vt_model::shape::{
-    Acid, Bits, DEFAULT_RATE, FillKind, Follow, Pink, Shape, ShapeColumn, Source, Values, Walk,
-    Where,
-};
+use vt_model::shape::{FillKind, Follow, Shape, ShapeColumn, Source};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::{Note, Step};
 
@@ -65,30 +61,10 @@ fn note_column() -> ShapeColumn {
 
 fn following(source: Source, follow: Follow) -> Shape {
     Shape {
-        from: 0,
-        to: 0,
-        curve: 0,
-        s: 0,
         kind: FillKind::Follow,
-        wave: Wave::Sine,
-        rate: DEFAULT_RATE,
-        phase: 0,
-        run: 1,
-        values: Values::default(),
-        place: Where::AllRows,
         seed: 1,
-        acid: Acid::default(),
         follow: Follow { source, ..follow },
-        walk: Walk::default(),
-        pink: Pink::default(),
-        bits: Bits::default(),
-        grids: vt_model::shape::Grids::default(),
-        random: vt_model::shape::Random::default(),
-        vary: 0,
-        variation: vt_model::shape::Variation::default(),
-        divisions: vt_model::shape::Divisions::default(),
-        ring: vt_model::shape::Ring::default(),
-        tonnetz: vt_model::shape::Tonnetz::default(),
+        ..Shape::default()
     }
 }
 
