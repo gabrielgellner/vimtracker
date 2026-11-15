@@ -8,13 +8,14 @@ use vt_model::shape::params::Typing;
 use vt_model::steps::{StepRate, Steps};
 
 use crate::app::{App, Entry};
-use crate::input::mode::Mode;
+use crate::input::mode::{Mode, View};
 use crate::input::typed::{HEX, Rule, Typed};
 use crate::services::Services;
 use crate::widgets::param::edit;
 
 use super::Control;
 use super::editing::{set_fine_here, set_mod, view_on, write};
+use super::generators::{gen_typing, type_gen};
 use super::tuning::type_tuning;
 
 /// The longest a generator's value can be typed: a list of eight notes and the spaces between.
@@ -27,7 +28,10 @@ impl App {
         // A generator's ends on a column of hex values enter themselves, as levels do, and a
         // list of notes takes more room.
         let (hex, longest) = match control {
-            Control::Gen { .. } => (self.gen_typing() == Some(Typing::Hex), GEN_TEXT),
+            Control::Gen { .. } => (
+                gen_typing(&self.services, control) == Some(Typing::Hex),
+                GEN_TEXT,
+            ),
             _ => (control.is_hex(), 12),
         };
         let rule = if hex { HEX } else { Rule::Text { longest } };
@@ -44,19 +48,19 @@ impl App {
                         set_fine_here(&mut self.services, control, fine);
                     }
                 } else if !text.is_empty() {
-                    self.commit_typed(control, &text);
+                    commit_typed(&mut self.services, self.modes.view, control, &text);
                 }
             }
         }
     }
+}
 
-    /// Write what was typed into the setting: a generator's into its shape, and the rest as the
-    /// track page's settings take it.
-    fn commit_typed(&mut self, control: Control, text: &str) {
-        match control {
-            Control::Gen { .. } => self.type_gen(text),
-            _ => commit_control(&mut self.services, control, text),
-        }
+/// Write what was typed into the setting: a generator's into its shape, and the rest as the
+/// track page's settings take it.
+fn commit_typed(services: &mut Services, view: View, control: Control, text: &str) {
+    match control {
+        Control::Gen { .. } => type_gen(services, view, control, text),
+        _ => commit_control(services, control, text),
     }
 }
 
@@ -65,7 +69,7 @@ impl App {
 fn commit_control(services: &mut Services, control: Control, text: &str) {
     let track = services.page_track();
     match control {
-        // A generator's are typed into its shape, by `App::commit_typed`.
+        // A generator's are typed into its shape, by `commit_typed`.
         Control::Gen { .. } | Control::NewGenerator(_) => {}
         Control::Tune | Control::Cents => type_tuning(services, control, text),
         Control::Mod(slot, field @ (ModField::Rate | ModField::Fade)) => {

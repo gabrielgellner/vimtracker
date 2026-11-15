@@ -672,8 +672,8 @@ impl App {
             writes: Some(self.services.note_velocity),
         };
         let ends = self.services.generated_ends(column);
-        self.shape_seed = self.shape_seed.wrapping_add(1);
-        let seed = song.seed.wrapping_add(self.shape_seed);
+        self.services.shape_seed = self.services.shape_seed.wrapping_add(1);
+        let seed = song.seed.wrapping_add(self.services.shape_seed);
         let drums = self.drums_of(tracks);
         let actions: Vec<Action> = tracks
             .iter()
@@ -784,7 +784,7 @@ impl App {
         } else {
             default_ends(steps, first.range, first.column)
         };
-        self.shape_seed = self.shape_seed.wrapping_add(1);
+        self.services.shape_seed = self.services.shape_seed.wrapping_add(1);
         let place = if generates {
             Where::AllRows
         } else {
@@ -797,7 +797,7 @@ impl App {
             _ => (Vec::new(), None),
         };
         let mut shape = starting_shape(column, (from, to), place);
-        shape.seed = base.seed.wrapping_add(self.shape_seed);
+        shape.seed = base.seed.wrapping_add(self.services.shape_seed);
         // Across tracks, each takes its own part, and its own channel; a track at `1/32` reads
         // its rows as 32nds, and `Divisions` plays its rows as long as the track's step.
         shape.grids.part = alone.then_some(first.drum);
@@ -1073,7 +1073,8 @@ impl App {
         let track = self.services.cursor.track;
         let name =
             generator_label(&self.song().tracks[track].phrases[&phrase].generators()[generator]);
-        self.apply_generator(track, phrase, generator, &name);
+        self.services
+            .apply_generator(track, phrase, generator, &name);
     }
 
     /// Put back what was there before the panel opened.
@@ -1143,8 +1144,8 @@ impl App {
         } else {
             default_ends(steps_on(track, phrase), first, column)
         };
-        self.shape_seed = self.shape_seed.wrapping_add(1);
-        let seed = song.seed.wrapping_add(self.shape_seed);
+        self.services.shape_seed = self.services.shape_seed.wrapping_add(1);
+        let seed = song.seed.wrapping_add(self.services.shape_seed);
         // Grids across tracks gives each its own part, as `S` does, and `Divisions` each its own
         // channel.
         let tracks: Vec<usize> = places.iter().map(|place| place.0).collect();
@@ -1256,27 +1257,12 @@ impl App {
                 let Some(mut shape) = self.shape.as_ref().map(|panel| panel.shape) else {
                     return;
                 };
-                self.roll(&mut shape);
+                self.services.roll(&mut shape);
                 self.change_shape(|panel| panel.shape = shape);
             }
             KeyCode::Char('K') => self.open_shape_picker(),
             KeyCode::Char('i') => self.start_shape_typing(),
             _ => {}
-        }
-    }
-
-    /// Roll a shape's seed again, as `r` does: with `Acid`'s pitches kept, only its second die,
-    /// the accents, slides and octaves; and a `Ring` starts again from its new seed, letting go of
-    /// a register it kept, as an `Acid`'s loops start again from their first rows.
-    pub(crate) fn roll(&mut self, shape: &mut Shape) {
-        self.shape_seed = self.shape_seed.wrapping_add(1);
-        let seed = self.shape_seed;
-        if shape.kind == FillKind::Acid && shape.acid.keep {
-            shape.acid.roll = shape.acid.roll.wrapping_add(seed).wrapping_add(1);
-        } else {
-            shape.seed = self.song().seed.wrapping_add(seed);
-            shape.ring.kept = None;
-            shape.acid.at = 0;
         }
     }
 
@@ -1437,6 +1423,21 @@ impl App {
 }
 
 impl Services {
+    /// Roll a shape's seed again, as `r` does: with `Acid`'s pitches kept, only its second die,
+    /// the accents, slides and octaves; and a `Ring` starts again from its new seed, letting go of
+    /// a register it kept, as an `Acid`'s loops start again from their first rows.
+    pub(crate) fn roll(&mut self, shape: &mut Shape) {
+        self.shape_seed = self.shape_seed.wrapping_add(1);
+        let seed = self.shape_seed;
+        if shape.kind == FillKind::Acid && shape.acid.keep {
+            shape.acid.roll = shape.acid.roll.wrapping_add(seed).wrapping_add(1);
+        } else {
+            shape.seed = self.song().seed.wrapping_add(seed);
+            shape.ring.kept = None;
+            shape.acid.at = 0;
+        }
+    }
+
     /// The part of Grids' beat a track's sound plays, if it says: an 808 voice's, or its name's.
     fn drum_of(&self, track: usize) -> Option<DrumPart> {
         let track = self.song().tracks.get(track)?;

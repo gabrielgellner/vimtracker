@@ -5,6 +5,11 @@
 //! where it draws, and its grid the fill's settings, both from the declared table, [`GenParam`].
 //! Every turn goes through the `Reshape` the shape panel's does, so the column is written again as
 //! it turns, one undo step a press.
+//!
+//! The page's edits are the track page's, [`TrackPage::gen_edit`], over the [`Services`]: `K`'s
+//! lists come back in an [`Outcome::Open`] and `i` in an [`Outcome::Insert`] (#784). `Enter`
+//! stays `App`'s, as it opens the shape panel on the generator, and so do the choices made from
+//! `K`'s lists, as the picker's are, a column made live building a shape panel too.
 
 use vt_model::action::Action;
 use vt_model::constants::FX_SLOTS;
@@ -18,11 +23,13 @@ use vt_model::step::FxCommand;
 
 use crate::app::{App, Entry};
 use crate::input::bindings::Cmd;
-use crate::input::mode::{Mode, View};
+use crate::input::mode::View;
 use crate::overlays::picker::{Item, Pick, Picker};
-use crate::overlays::shape::generator_label;
+use crate::overlays::shape::{LiveGen, generator_label};
+use crate::pages::{CtxMut, Outcome};
+use crate::services::Services;
 
-use super::{Control, DEVICE_COLUMNS, DEVICE_ROWS, DeviceSpec, DeviceWidth};
+use super::{Control, DEVICE_COLUMNS, DEVICE_ROWS, DeviceSpec, DeviceWidth, Page, TrackPage};
 
 /// Where a column comes in the phrase view, which the page's devices follow: Note, Velocity,
 /// Nudge, Length, then the FX columns.
@@ -191,35 +198,118 @@ fn on_field(generator: &Generator, field: Field) -> bool {
     field_of(generator.column) == field
 }
 
-impl App {
-    /// The generator setting the cursor is on, on the Gen page: its phrase, its place in the
-    /// phrase's list and the setting.
-    pub(crate) fn gen_here(&self) -> Option<(u32, usize, GenParam)> {
-        match self.track_control() {
-            Control::Gen {
-                phrase,
-                generator,
-                param,
-            } => Some((phrase, generator, param)),
-            _ => None,
+/// The generator setting a control is, on the Gen page: its phrase, its place in the phrase's
+/// list and the setting.
+fn gen_of(control: Control) -> Option<(u32, usize, GenParam)> {
+    match control {
+        Control::Gen {
+            phrase,
+            generator,
+            param,
+        } => Some((phrase, generator, param)),
+        _ => None,
+    }
+}
+
+/// How the generator setting `control` is typed, if it's one.
+pub(super) fn gen_typing(services: &Services, control: Control) -> Option<Typing> {
+    let (phrase, generator, param) = gen_of(control)?;
+    let found = services.song().tracks[services.cursor.track]
+        .phrases
+        .get(&phrase)?;
+    Some(param.typing(found.generators().get(generator)?.column))
+}
+
+/// A typed value, for the generator setting `control`, the one under the cursor.
+pub(super) fn type_gen(services: &mut Services, view: View, control: Control, text: &str) {
+    GenEdit {
+        services,
+        view,
+        control,
+    }
+    .type_in(text);
+}
+
+impl TrackPage {
+    /// Whether a key on the setting under the cursor, `control`, is the Gen page's: the track
+    /// page is on Gen, and the cursor isn't on the macros' band, first on the page, which turns as
+    /// the other pages' settings do. It reads the page the track page is on, so it's also true on
+    /// the mixer while the track page is left on Gen, where `control` is the mixer's and the edits
+    /// find no generator in it.
+    pub(super) fn on_gen(&self, control: Control) -> bool {
+        self.page == Page::Gen && !matches!(control, Control::Macro(_))
+    }
+
+    /// Run one of the Gen page's edits, which reshape the generator setting under the cursor,
+    /// `control`, `times` being its count, at least 1: `=` `-` `+` `_`, `x`, `K`, `i`,
+    /// `Space g a`, `dd` and `r`, and `p`, which is refused. `Enter`, which opens the shape panel
+    /// in the phrase view, is passed back, as is any other key, and every key off the Gen page.
+    pub(super) fn gen_edit(
+        &self,
+        cmd: Cmd,
+        times: usize,
+        control: Control,
+        ctx: &mut CtxMut,
+    ) -> Outcome {
+        if !self.on_gen(control) {
+            return Outcome::Passed;
         }
+        let mut edit = GenEdit {
+            services: ctx.services,
+            view: ctx.modes.view,
+            control,
+        };
+        match cmd {
+            Cmd::Increase => edit.adjust(true, times, false),
+            Cmd::Decrease => edit.adjust(false, times, false),
+            Cmd::IncreaseLarge => edit.adjust(true, times, true),
+            Cmd::DecreaseLarge => edit.adjust(false, times, true),
+            Cmd::ClearField => edit.reset(),
+            Cmd::PickValue => return edit.open_picker(),
+            Cmd::EnterInsert => return edit.start_typing(),
+            Cmd::ApplyGenerator => edit.apply(),
+            Cmd::RemoveRow => edit.remove(),
+            Cmd::RollGenerator => edit.roll(),
+            Cmd::Paste => return Outcome::Refused("p puts an effect in a slot, on the FX page"),
+            _ => return Outcome::Passed,
+        }
+        Outcome::Done
+    }
+}
+
+/// What an edit on the Gen page reaches: the services, the view on screen, which a live
+/// generator is read for, and the setting under the cursor, on the track page or the mixer.
+struct GenEdit<'a> {
+    services: &'a mut Services,
+    view: View,
+    control: Control,
+}
+
+impl GenEdit<'_> {
+    /// The generator setting the cursor is on: its phrase, its place in the phrase's list and the
+    /// setting.
+    fn here(&self) -> Option<(u32, usize, GenParam)> {
+        gen_of(self.control)
+    }
+
+    /// The generator the cursor is on, as it plays, from its place in the phrase's list.
+    fn live(&self, phrase: u32, generator: usize) -> Option<LiveGen> {
+        self.services
+            .live_generator(self.services.cursor.track, phrase, generator, self.view)
     }
 
     /// Give the generator the cursor is on the shape `change` makes from its own and what its
     /// settings act on, as one undo step if it's a change.
-    fn reshape_here(&mut self, change: impl FnOnce(&mut App, GenParam, &mut Shape, &Context)) {
-        let Some((phrase, generator, param)) = self.gen_here() else {
+    fn reshape(&mut self, change: impl FnOnce(&mut Services, GenParam, &mut Shape, &Context)) {
+        let Some((phrase, generator, param)) = self.here() else {
             return;
         };
         let track = self.services.cursor.track;
-        let Some(live) = self
-            .services
-            .live_generator(track, phrase, generator, self.modes.view)
-        else {
+        let Some(live) = self.live(phrase, generator) else {
             return;
         };
         let mut shape = live.generator.shape;
-        change(self, param, &mut shape, &live.context());
+        change(self.services, param, &mut shape, &live.context());
         live.settle(&mut shape);
         if let Some(why) = live.refusal(&shape) {
             self.services.status = why;
@@ -236,12 +326,12 @@ impl App {
     }
 
     /// `=` `-` `+` `_`, `count` times.
-    pub(super) fn adjust_gen(&mut self, up: bool, count: usize, large: bool) {
+    fn adjust(&mut self, up: bool, count: usize, large: bool) {
         let sign = if up { 1 } else { -1 };
-        self.reshape_here(|app, param, shape, context| {
+        self.reshape(|services, param, shape, context| {
             for _ in 0..count {
                 if let Err(why) = param.step(shape, context, sign, large) {
-                    app.services.status = why.to_owned();
+                    services.status = why.to_owned();
                     return;
                 }
             }
@@ -249,58 +339,47 @@ impl App {
     }
 
     /// `x`: the setting back to what it starts as.
-    pub(super) fn reset_gen(&mut self) {
-        let Some((phrase, generator, _)) = self.gen_here() else {
+    fn reset(&mut self) {
+        let Some((phrase, generator, _)) = self.here() else {
             return;
         };
-        let Some(live) = self.services.live_generator(
-            self.services.cursor.track,
-            phrase,
-            generator,
-            self.modes.view,
-        ) else {
+        let Some(live) = self.live(phrase, generator) else {
             return;
         };
         let starts = live.starts;
-        self.reshape_here(|_, param, shape, context| param.reset(shape, context, starts));
+        self.reshape(|_, param, shape, context| param.reset(shape, context, starts));
     }
 
     /// `r`: roll the generator's seed again, from anywhere in its device, as the panel does.
-    pub(super) fn roll_gen(&mut self) {
-        if self.gen_here().is_none() {
+    fn roll(&mut self) {
+        if self.here().is_none() {
             self.services.status = "r rolls a generator again: go to one first".to_owned();
             return;
         }
-        self.reshape_here(|app, _, shape, _| app.roll(shape));
+        self.reshape(|services, _, shape, _| services.roll(shape));
     }
 
     /// `K`: list a list setting's choices; one that's off or on switches. On `Empty`, the
     /// columns to make live.
-    pub(super) fn open_gen_picker(&mut self) {
-        if let Control::NewGenerator(_) = self.track_control() {
-            self.open_column_picker();
-            return;
+    fn open_picker(&mut self) -> Outcome {
+        if let Control::NewGenerator(_) = self.control {
+            return self.open_column_picker();
         }
-        let Some((phrase, generator, param)) = self.gen_here() else {
-            return;
+        let Some((phrase, generator, param)) = self.here() else {
+            return Outcome::Done;
         };
-        let Some(live) = self.services.live_generator(
-            self.services.cursor.track,
-            phrase,
-            generator,
-            self.modes.view,
-        ) else {
-            return;
+        let Some(live) = self.live(phrase, generator) else {
+            return Outcome::Done;
         };
         let context = live.context();
         if param.typing(context.column) == Typing::Toggled {
-            self.adjust_gen(true, 1, false);
-            return;
+            self.adjust(true, 1, false);
+            return Outcome::Done;
         }
         let Some(choices) = param.choices(&context) else {
             self.services.status =
                 format!("{} isn't a list: = and - turn it, i types it", param.name());
-            return;
+            return Outcome::Done;
         };
         let position = param.chosen(&live.generator.shape, &context).unwrap_or(0);
         let items = choices
@@ -320,67 +399,30 @@ impl App {
                 }
             })
             .collect();
-        self.show_picker(Picker::new(param.name(), items).opened_on(Some(position)));
-    }
-
-    /// A choice from `K`'s list, for a generator.
-    pub(crate) fn pick_gen_choice(&mut self, phrase: u32, generator: usize, choice: Choice) {
-        let track = self.services.cursor.track;
-        let Some(live) = self
-            .services
-            .live_generator(track, phrase, generator, self.modes.view)
-        else {
-            return;
-        };
-        let mut shape = live.generator.shape;
-        choice.apply(&mut shape);
-        live.settle(&mut shape);
-        if let Some(why) = live.refusal(&shape) {
-            self.services.status = why;
-            return;
-        }
-        if shape != live.generator.shape {
-            self.services.apply(&Action::Reshape {
-                track,
-                phrase,
-                generator,
-                shape,
-            });
-        }
+        let picker = Picker::new(param.name(), items).opened_on(Some(position));
+        Outcome::Open(Box::new(picker))
     }
 
     /// `i`: a list's choices, a switch turned over, or a value to type.
-    pub(super) fn start_gen_typing(&mut self) {
-        match self.gen_typing() {
-            None | Some(Typing::Listed | Typing::Toggled) => self.open_gen_picker(),
-            Some(_) => {
-                self.modes.entry = Entry::default();
-                self.modes.mode = Mode::Insert;
-            }
+    fn start_typing(&mut self) -> Outcome {
+        match gen_typing(self.services, self.control) {
+            None | Some(Typing::Listed | Typing::Toggled) => self.open_picker(),
+            Some(_) => Outcome::Insert(Entry::default()),
         }
     }
 
-    /// How the generator setting under the cursor is typed, if it's one.
-    pub(super) fn gen_typing(&self) -> Option<Typing> {
-        let (phrase, generator, param) = self.gen_here()?;
-        let found = self.song().tracks[self.services.cursor.track]
-            .phrases
-            .get(&phrase)?;
-        Some(param.typing(found.generators().get(generator)?.column))
-    }
-
     /// A typed value, for the generator setting under the cursor.
-    pub(super) fn type_gen(&mut self, text: &str) {
-        self.reshape_here(|app, param, shape, context| {
+    fn type_in(&mut self, text: &str) {
+        self.reshape(|services, param, shape, context| {
             if let Err(why) = param.typed(shape, context, text) {
-                app.services.status = why.to_owned();
+                services.status = why.to_owned();
             }
         });
     }
 
     /// The name of the generator the cursor is on, as the phrase's heading names it.
-    fn gen_name(&self, phrase: u32, generator: usize) -> String {
-        self.song().tracks[self.services.cursor.track]
+    fn name(&self, phrase: u32, generator: usize) -> String {
+        self.services.song().tracks[self.services.cursor.track]
             .phrases
             .get(&phrase)
             .and_then(|found| found.generators().get(generator))
@@ -391,24 +433,22 @@ impl App {
     /// something moved it; or, for one that varies, keep the variation last heard, as its seed,
     /// with `Vary` back to `Once`, so it stays live. A `Cells` generation isn't a seed, so one
     /// that evolves is applied as last heard, as one a macro moves is.
-    pub(super) fn apply_gen(&mut self) {
-        let Some((phrase, generator, _)) = self.gen_here() else {
+    fn apply(&mut self) {
+        let Some((phrase, generator, _)) = self.here() else {
             self.services.status = "Space g a applies a generator: go to one first".to_owned();
             return;
         };
-        let name = self.gen_name(phrase, generator);
-        if let Some(live) = self.services.live_generator(
-            self.services.cursor.track,
-            phrase,
-            generator,
-            self.modes.view,
-        ) && live.generator.heard().varies()
+        let name = self.name(phrase, generator);
+        if let Some(live) = self.live(phrase, generator)
+            && live.generator.heard().varies()
             && !live.generator.heard().evolves()
         {
             self.keep_variation(phrase, generator, &name);
             return;
         }
-        self.apply_generator(self.services.cursor.track, phrase, generator, &name);
+        let track = self.services.cursor.track;
+        self.services
+            .apply_generator(track, phrase, generator, &name);
     }
 
     /// Keep the variation of a generator that varies last heard: the seeds it played that pass
@@ -421,10 +461,7 @@ impl App {
     /// so the pass heard plays first and its loops go on from there (decision 331).
     fn keep_variation(&mut self, phrase: u32, generator: usize, name: &str) {
         let track = self.services.cursor.track;
-        let Some(live) = self
-            .services
-            .live_generator(track, phrase, generator, self.modes.view)
-        else {
+        let Some(live) = self.live(phrase, generator) else {
             return;
         };
         let heard = self
@@ -475,12 +512,12 @@ impl App {
     }
 
     /// `dd`: take the generator away, putting back what was under it.
-    pub(super) fn remove_gen(&mut self) {
-        let Some((phrase, generator, _)) = self.gen_here() else {
+    fn remove(&mut self) {
+        let Some((phrase, generator, _)) = self.here() else {
             self.services.status = "dd takes a generator away: go to one first".to_owned();
             return;
         };
-        let name = self.gen_name(phrase, generator);
+        let name = self.name(phrase, generator);
         self.services.apply(&Action::RemoveGenerator {
             track: self.services.cursor.track,
             phrase,
@@ -490,9 +527,60 @@ impl App {
             format!("{name} is gone, and what was under it is back. u brings it back");
     }
 
-    /// `Enter`: open the shape panel on the generator, in the phrase view, as `gl` does there.
+    /// `K` on `Empty`: the columns of the phrase with no generator, to make one live.
+    fn open_column_picker(&mut self) -> Outcome {
+        let Some(phrase) = self.services.phrase_here() else {
+            self.services.status = "This track has no phrase here to make live".to_owned();
+            return Outcome::Done;
+        };
+        let generators = phrase.generators();
+        let items: Vec<Item> = columns()
+            .into_iter()
+            .filter(|(field, _)| !generators.iter().any(|found| on_field(found, *field)))
+            .map(|(field, name)| {
+                Item::new(name, Pick::GenColumn(field)).meaning("Make it live over the loop")
+            })
+            .collect();
+        if items.is_empty() {
+            self.services.status = "Every column of this phrase is live".to_owned();
+            return Outcome::Done;
+        }
+        Outcome::Open(Box::new(Picker::new("Make live", items)))
+    }
+}
+
+impl App {
+    /// A choice from `K`'s list, for a generator.
+    pub(crate) fn pick_gen_choice(&mut self, phrase: u32, generator: usize, choice: Choice) {
+        let track = self.services.cursor.track;
+        let Some(live) = self
+            .services
+            .live_generator(track, phrase, generator, self.modes.view)
+        else {
+            return;
+        };
+        let mut shape = live.generator.shape;
+        choice.apply(&mut shape);
+        live.settle(&mut shape);
+        if let Some(why) = live.refusal(&shape) {
+            self.services.status = why;
+            return;
+        }
+        if shape != live.generator.shape {
+            self.services.apply(&Action::Reshape {
+                track,
+                phrase,
+                generator,
+                shape,
+            });
+        }
+    }
+
+    /// `Enter` on the Gen page: open the shape panel on the generator, in the phrase view, as
+    /// `gl` does there. It stays `App`'s, as it reopens the panel, which is drawn over the phrase
+    /// view.
     pub(super) fn open_gen_panel(&mut self) {
-        let Some((phrase, generator, _)) = self.gen_here() else {
+        let Some((phrase, generator, _)) = gen_of(self.track_control()) else {
             self.services.status =
                 "Enter opens the shape panel on a generator: go to one first".to_owned();
             return;
@@ -511,27 +599,6 @@ impl App {
         self.reopen_generator();
     }
 
-    /// `K` on `Empty`: the columns of the phrase with no generator, to make one live.
-    fn open_column_picker(&mut self) {
-        let Some(phrase) = self.services.phrase_here() else {
-            self.services.status = "This track has no phrase here to make live".to_owned();
-            return;
-        };
-        let generators = phrase.generators();
-        let items: Vec<Item> = columns()
-            .into_iter()
-            .filter(|(field, _)| !generators.iter().any(|found| on_field(found, *field)))
-            .map(|(field, name)| {
-                Item::new(name, Pick::GenColumn(field)).meaning("Make it live over the loop")
-            })
-            .collect();
-        if items.is_empty() {
-            self.services.status = "Every column of this phrase is live".to_owned();
-            return;
-        }
-        self.show_picker(Picker::new("Make live", items));
-    }
-
     /// A column chosen on `Empty`, made live with the command chosen for an empty FX column,
     /// and its device the cursor's.
     pub(crate) fn pick_gen_column(&mut self, field: Field, command: Option<FxCommand>) {
@@ -548,30 +615,5 @@ impl App {
         if let Some(device) = device {
             self.move_control(device * DEVICE_ROWS, 0);
         }
-    }
-}
-
-impl App {
-    /// A key on the Gen page that means something else there: the edits, which reshape the
-    /// generator the cursor is on. Says whether it was one.
-    pub(super) fn run_gen_page(&mut self, cmd: Cmd, times: usize) -> bool {
-        match cmd {
-            Cmd::Increase => self.adjust_gen(true, times, false),
-            Cmd::Decrease => self.adjust_gen(false, times, false),
-            Cmd::IncreaseLarge => self.adjust_gen(true, times, true),
-            Cmd::DecreaseLarge => self.adjust_gen(false, times, true),
-            Cmd::ClearField => self.reset_gen(),
-            Cmd::PickValue => self.open_gen_picker(),
-            Cmd::EnterInsert => self.start_gen_typing(),
-            Cmd::ApplyGenerator => self.apply_gen(),
-            Cmd::RemoveRow => self.remove_gen(),
-            Cmd::RollGenerator => self.roll_gen(),
-            Cmd::ReopenGenerator => self.open_gen_panel(),
-            Cmd::Paste => {
-                self.services.status = "p puts an effect in a slot, on the FX page".to_owned()
-            }
-            _ => return false,
-        }
-        true
     }
 }

@@ -150,6 +150,8 @@ pub struct Services {
     pub octave: i8,
     /// The velocity new notes are written with, like the octave.
     pub note_velocity: u8,
+    /// Changes each time random values are wanted anew: a shape's seed, a roll, a bloom's.
+    pub(crate) shape_seed: u64,
 }
 
 impl Services {
@@ -218,6 +220,7 @@ impl Services {
             fill: false,
             octave: 3,
             note_velocity: DEFAULT_NOTE_VELOCITY,
+            shape_seed: 0,
         }
     }
 

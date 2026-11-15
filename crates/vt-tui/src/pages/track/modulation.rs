@@ -198,7 +198,7 @@ impl App {
         // its place in the list until it goes.
         let moving: Vec<usize> = (0..held.generators().len())
             .rev()
-            .filter(|at| self.heard_rows_of(track, phrase, *at).is_some())
+            .filter(|at| self.services.heard_rows_of(track, phrase, *at).is_some())
             .collect();
         let (first, last) = selected.map_or((0, steps.len().saturating_sub(1)), |range| {
             (range.first, range.last.min(steps.len().saturating_sub(1)))
