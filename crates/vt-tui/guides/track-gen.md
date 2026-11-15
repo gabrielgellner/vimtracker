@@ -31,7 +31,7 @@ again, `in step again every 420 rows, the phrase every 105 passes`. A value with
 as its bar shows how many of how many; the status line says it in full, `Hits, 9
 of the 16 rows`.
 
-**A lane's `Length` and `Rate`.** Each FX column with a lane in the phrase has a
+**A lane's Length and Rate.** Each FX column with a lane in the phrase has a
 device of its own, `FX1 Lane`, under that column's generator if it has one, as
 `Loops` sits under `Acid`, and where its column comes if not. Its two settings are
 the track's, not the phrase's: they move every phrase's lane on that column from
