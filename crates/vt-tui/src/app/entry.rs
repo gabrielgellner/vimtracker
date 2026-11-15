@@ -709,6 +709,7 @@ impl App {
 }
 
 impl Services {
+    /// An FX slot of the row under the cursor.
     pub(crate) fn current_slot(&self, slot: usize) -> Option<FxSlot> {
         let phrase = self.phrase_here()?;
         phrase.steps().get(self.cursor.step)?.fx.get(slot).copied()

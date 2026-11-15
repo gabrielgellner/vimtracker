@@ -577,6 +577,14 @@ impl App {
     }
 }
 
+impl Services {
+    /// The project's name, which is the song's own: the random one it was given when it was
+    /// made, its folder's when it's saved somewhere new, or what the project page names it.
+    pub fn project_name(&self) -> String {
+        self.song().name.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -659,13 +667,5 @@ mod tests {
         );
         assert_eq!(sample_note(&info(48_000, 1, 12.5)), "12.5 s  48 kHz  mono");
         assert_eq!(sample_note(&info(48_000, 2, 125.0)), "2:05  48 kHz  stereo");
-    }
-}
-
-impl Services {
-    /// The project's name, which is the song's own: the random one it was given when it was
-    /// made, its folder's when it's saved somewhere new, or what the project page names it.
-    pub fn project_name(&self) -> String {
-        self.song().name.clone()
     }
 }
