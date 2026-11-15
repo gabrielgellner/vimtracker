@@ -385,8 +385,8 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
 **How a version reaches the callback** (`link.rs`):
 
 1.  An `Action` goes through `vt_model::action::edit`, the only path that changes a song, which
-    returns a new `Arc<Song>`. Chains and phrases are each an `Arc`, so the new version shares
-    every one it didn't change. `History` keeps versions for undo, up to `HISTORY_LIMIT`, and
+    returns a new `Arc<Song>`. Tracks, and the chains and phrases in them, are each an `Arc`, so
+    the new version shares every one it didn't change (decision 356). `History` keeps versions for undo, up to `HISTORY_LIMIT`, and
     `Services::apply` commits the new one and calls `Services::publish`.
 2.  `Services::publish` builds a `Published` from the song, the sample pool and the last version,
     which compiles the bank ([What the engine sees](#what-the-engine-sees)), and gives it to
@@ -498,7 +498,12 @@ Song                               song.ron, refused unless format_version is FO
  '- view                           ViewState: the folded and opened groups, not undone
 ```
 
-*   **Tracks.** Up to `MAX_SOUND_TRACKS` (64) sound tracks, then the fixed tracks every song has:
+*   **Tracks.** `Song.tracks` is a `Tracks` (`song/tracks.rs`): a list of `Arc<Track>` that reads
+    as a `Vec<Track>`, copies a track only when something asks for it mutably, and tells whether
+    two versions hold the very same track with `same`. Asking for a `&mut Track` copies a shared
+    one whether or not it's then written to, so code goes through every track mutably only to
+    change every one.
+    Up to `MAX_SOUND_TRACKS` (64) sound tracks, then the fixed tracks every song has:
     `MAX_GROUPS` (4) groups, `G1` to `G4`, the returns `A` and `B`, which start with a delay and a
     reverb in their first slot, and the master `M`. Every kind has steps, inserts and a page, and
     only a sound track has a machine. A sound track's level scales what it sends, and `send_a` and
@@ -904,7 +909,23 @@ held while it's down (`Hold`), or the phrase view started afresh after a move on
 (`Moved`), which `App::settled` does once the page has given its borrows back (#784);
 `Page::draw`, given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data
 for `Graphics` and the ids they're given. `App` holds one of each page and dispatches by `View`
-with a plain `match`, so there's no `dyn`. A key goes, in this order, to the first that takes it:
+with a plain `match`, so there's no `dyn`.
+
+**`Overlay`** (`overlays.rs`, #872) is the same seam for what's drawn over a page: `Overlay::KEYS`,
+its rows of the binding table under `Overlay::MODE`, so which-key and `Space k` list them;
+`Overlay::key`, given a `CtxMut`, which answers with the pages' `Outcome`, closing with nothing
+chosen (`Close`), with a choice for `App` to do (`Choose`), or tagging an item (`Tag`) among
+what it can ask for; and `Overlay::draw`. Where it differs from a page is what overlays are:
+each has a line that's typed into, so `Overlay::text` takes a key as text, every key while
+`Overlay::takes_text` and otherwise one the table doesn't bind or that `key` passed back, as
+the explorer's `H` is passed back on a plain list and starts a search; and there's no count,
+as an overlay that counts keeps its own digits. `overlays::press` gives an overlay a key that
+way, with the keys of a sequence typed so far in `Grammar::pending`, as Normal's are. The
+picker, `Space k`'s list (`Help`) and an open guide (`GuideView`) are behind it, the last two
+given their keys by `overlays::give` straight from `App::handle_key`; the others still read
+their keys in `App`'s methods.
+
+A key goes, in this order, to the first that takes it:
 
 1.  the overlay for the `Mode`: the picker, the shape panel, the mapping view, the command line,
     Insert, a jump, a guide or help (`App::handle_key`);
@@ -957,7 +978,8 @@ only name Normal's keys on those pages, for the binding table.
     into one undo step (`History::squash_to`, as the Roto's touch to let-go), and in a selection
     `Adjustments::join_from` keeps its running total in step (decisions 162 and 163).
 *   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description,
-    assembled from its own rows and each component page's `Page::KEYS`, and pinned row by row in
+    assembled from its own rows, each component page's `Page::KEYS` and each overlay's
+    `Overlay::KEYS`, and pinned row by row in
     `bindings.tsv` by a test (`VT_PIN_BINDINGS=1` pins it again after a change on purpose). The
     which-key popup and `Space k` are generated from it. `CMD_ADJUSTS` is the one rule for Cmd
     with `h` `j` `k` `l`: `bindings` gives every mode that binds `=` `-` `+` `_` their Cmd keys
@@ -1435,7 +1457,7 @@ every pair of values still met, and all of them under `cargo test --release`.
 | Graphics | Unit tests in `graphics/`, and beside the drawing of the pages, overlays and widgets | The commands sent, and the PNGs, pinned by their size and CRC |
 | Other paths | `crates/vt-tui/tests/all/probe.rs`, `notes.rs`, `analysis.rs` and `ableton.rs` | `probe`'s specs, `notes`' timing of a song's track, the analysis thread and its cache, and importing kits from Ableton |
 | Comparison harness | `tools/compare/tests/`, with `uv run python -m unittest discover tests` | The Live bridge, against stand-ins for Live's objects. Not in CI, as nothing in `tools/compare` is |
-| Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | Not a test: the SVGs are committed, so a change to what's drawn shows in the PR's diff |
+| Screenshots | `just screenshots`, from `crates/vt-tui/examples/screenshots.rs`, into `docs/manual/src/images/` | The example's own tests: each shot comes out the same twice, and is the committed SVG byte for byte, so a change to what's drawn fails until the SVGs are made again, with `VT_BLESS=1` or `just screenshots`, and then shows in the PR's diff |
 
 `crates/vt-tui/examples/big_image.rs` and `sample_page_cost.rs` measure what sending pictures costs,
 in a real terminal. `just live` drives the release build in a kitty window of its own, to check a

@@ -9,6 +9,10 @@ use vt_model::selection::{Motion, Target};
 use crate::controls::Page;
 use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
+use crate::overlays::Overlay as _;
+use crate::overlays::guides::{GuideKey, GuideView};
+use crate::overlays::help::{Help, HelpKey};
+use crate::overlays::picker::{Picker, PickerKey};
 use crate::pages::Page as _;
 use crate::pages::audio::AudioPage;
 use crate::pages::chain::ChainView;
@@ -194,6 +198,12 @@ pub enum Cmd {
     OctaveDown,
     /// A key of the sample page's own.
     Sample(SampleKey),
+    /// A key of the picker's list.
+    InPicker(PickerKey),
+    /// A key of `Space k`'s list.
+    InHelp(HelpKey),
+    /// A key of an open guide.
+    InGuide(GuideKey),
 }
 
 /// One row of the table.
@@ -361,7 +371,8 @@ const FOLDS: &[(&str, Cmd, &str)] = &[
 ];
 
 /// Every default key, in the order help shows them. A page that's a component keeps its own rows
-/// beside it, as its `Page::KEYS`, and they're put in here under its mode.
+/// beside it, as its `Page::KEYS`, and they're put in here under its mode, and after the pages'
+/// an overlay's, its `Overlay::KEYS`.
 pub fn bindings() -> Vec<Binding> {
     let mut rows = Vec::new();
     let mut add = |mode: Mode, group: &[(&'static str, Cmd, &'static str)]| {
@@ -416,6 +427,10 @@ pub fn bindings() -> Vec<Binding> {
         add(mode, PhraseView::TARGETS);
         add(mode, PhraseView::VISUAL);
     }
+    // The overlays' rows, each under its own mode.
+    add(Picker::MODE, Picker::KEYS);
+    add(Help::MODE, Help::KEYS);
+    add(GuideView::MODE, GuideView::KEYS);
     with_cmd_adjusts(rows)
 }
 

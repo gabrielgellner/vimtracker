@@ -65,8 +65,8 @@ pub(super) fn edit(next: &mut Song, action: &Action) -> Result<(), EditError> {
             if first > last || *last >= next.sound_tracks() {
                 return Err(EditError::GroupMember);
             }
-            for track in &mut next.tracks[*first..=*last] {
-                track.group = *group;
+            for track in *first..=*last {
+                next.tracks[track].group = *group;
             }
         }
         Action::SetTrackGateLength { track, gate_length } => {

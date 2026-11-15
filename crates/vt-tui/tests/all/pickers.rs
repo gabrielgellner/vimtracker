@@ -161,3 +161,35 @@ fn the_view_picker_lists_each_view_with_the_key_that_shows_it() {
         (View::Track, Page::Mod)
     );
 }
+
+#[test]
+fn the_pickers_keys_are_in_the_binding_table_so_which_key_and_help_list_them() {
+    use std::time::Duration;
+    use vt_tui::overlays::help::POPUP_DELAY;
+    let (mut app, _realtime) = app();
+    press(&mut app, "  ");
+    assert_eq!(app.modes.mode, Mode::Picker);
+    // The start of a sequence waits, and which-key says what can follow it.
+    press(&mut app, "z");
+    let later = Instant::now() + Duration::from_secs(1);
+    let rows = app.popup_rows(later, POPUP_DELAY);
+    let keys: Vec<&str> = rows.iter().map(|(keys, _)| keys.as_str()).collect();
+    assert_eq!(keys, ["z", "t", "b"]);
+    // `Esc` lets it go and leaves the picker open.
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.modes.mode, Mode::Picker);
+    assert!(app.popup_rows(later, POPUP_DELAY).is_empty());
+    // A `g` not followed by `g` is dropped, and the key after it means what it does alone.
+    let before = app.overlays.picker.as_ref().unwrap().selected;
+    press(&mut app, "gj");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().selected, before + 1);
+    press(&mut app, "gg");
+    assert_eq!(app.overlays.picker.as_ref().unwrap().selected, 0);
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert!(app.pending().is_empty());
+    // `Space k` lists them under the picker's mode.
+    let help = app.help_rows();
+    let at = help.iter().position(|row| row == "Picker").unwrap();
+    assert!(help[at + 1..].iter().any(|row| row.contains("z z")));
+}

@@ -45,7 +45,8 @@ symbols-font:
     scripts/symbols-font.sh
 
 # What each machine, filter, slot effect and mod slot costs to play, one track at a time, and a
-# worst-case song: just costs, just costs effects worst, or just costs save folder for that song
+# worst-case song: just costs, just costs effects worst, or just costs save folder for that song.
+# just costs edits times one edit of a large song, and the engine taking its version
 costs *args:
     cargo run --release -q -p vt-engine --example costs -- {{args}}
 

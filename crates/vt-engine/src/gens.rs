@@ -708,7 +708,7 @@ mod tests {
     fn song(rows: usize) -> Song {
         let mut song = Song::new(2);
         song.millibpm = vt_model::constants::MAX_MILLIBPM;
-        for track in &mut song.tracks[..2] {
+        for track in song.tracks.iter_mut().take(2) {
             track.machine = Machine::Plaits(SynthVoice::Acid);
         }
         let notes = Phrase::from_steps(vec!["C-3 64 --- --- ---".parse().unwrap(); 16]);

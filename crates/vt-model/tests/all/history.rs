@@ -4,6 +4,7 @@ use vt_model::action::{Action, EditError, KitSound, edit};
 use vt_model::bank::{BankEntry, ContentHash};
 use vt_model::constants::{MAX_SOUND_TRACKS, UNITY_LEVEL};
 use vt_model::history::History;
+use vt_model::settings::SettingId;
 use vt_model::song::{Launch, Song, TrackKind};
 use vt_model::step::Note;
 
@@ -80,6 +81,33 @@ fn unchanged_items_stay_the_same_arc() {
         &next.tracks[0].chains[&0]
     ));
     assert_eq!(song.tracks[0].phrases[&0].steps()[0].note, Note::Empty);
+}
+
+#[test]
+fn an_edit_to_one_track_shares_every_other_track() {
+    let song = Arc::new(Song::new(4));
+    let cut = Action::SetTrackSetting {
+        track: 0,
+        setting: SettingId::CUT,
+        value: 0x40,
+    };
+    for action in [set_note(0, 0, 60), cut] {
+        let next = edit(&song, &action).unwrap();
+        assert!(!next.tracks.same(0, &song.tracks, 0), "{action:?}");
+        for other in 1..song.tracks.len() {
+            assert!(next.tracks.same(other, &song.tracks, other), "{action:?}");
+        }
+        assert_eq!(
+            song.tracks[0],
+            Song::new(4).tracks[0],
+            "the old one is as it was"
+        );
+    }
+    // One to the song alone shares them all.
+    let faster = edit(&song, &Action::SetMilliBpm(140_000)).unwrap();
+    for track in 0..song.tracks.len() {
+        assert!(faster.tracks.same(track, &song.tracks, track));
+    }
 }
 
 #[test]

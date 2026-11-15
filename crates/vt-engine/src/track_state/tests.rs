@@ -365,3 +365,23 @@ fn safe_is_heard_only_on_the_types_that_ring_by_themselves() {
         assert_eq!(plain != safe, filter.has_safe(), "{filter:?}");
     }
 }
+
+/// A voice has room for the biggest synth, as the audio thread can't allocate, and a note
+/// starting writes a whole one and may copy the last to the tail, so its size is watched. It's
+/// 17,360 bytes, nearly all of it `ParticleNoise` (16,720), with `SawComb` (16,536) and `Speech`
+/// (15,128) close behind and every other synth under 6 KB. In a release build a start took about
+/// 1.2 µs and the copy to the tail about 1.1 µs, a twentieth of a percent of a block of 256
+/// frames, so it's left; past this, a synth's long buffer wants to come out of the voice.
+#[test]
+fn a_voice_stays_under_twenty_kilobytes() {
+    let size = size_of::<Voice>();
+    assert!(size <= 20 * 1024, "{size} bytes");
+}
+
+/// A track's state is in the engine once for each track there can be. It's 137,104 bytes,
+/// 34,720 of them its voice and its tail.
+#[test]
+fn a_tracks_state_stays_under_160_kilobytes() {
+    let size = size_of::<TrackState>();
+    assert!(size <= 160 * 1024, "{size} bytes");
+}

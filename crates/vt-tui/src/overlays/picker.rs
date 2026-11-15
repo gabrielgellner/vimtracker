@@ -25,10 +25,13 @@ use vt_model::step::{FxCommand, GateKind};
 use vt_model::tag::Tag;
 
 use crate::controls::Page;
+use crate::input::bindings::Cmd;
 use crate::input::keys::Key;
-use crate::input::mode::View;
+use crate::input::mode::{Mode, View};
+use crate::overlays::Overlay;
 use crate::overlays::command::parse::Line;
 use crate::overlays::guides::Guide;
+use crate::pages::{Ctx, CtxMut, Outcome};
 use crate::services::audio::AudioChoice;
 
 pub mod draw;
@@ -330,17 +333,43 @@ pub enum Focus {
     Tags,
 }
 
-/// What a key did to an open picker.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Outcome {
-    Stay,
-    Choose(Pick),
+/// A key of the picker's list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PickerKey {
+    Down,
+    Up,
+    HalfPageDown,
+    HalfPageUp,
+    /// `zz`, `zt` and `zb`: the cursor's row to the middle, the top or the bottom.
+    Middle,
+    Top,
+    Bottom,
+    /// `gg` and `G`: the first row and the last, or `G` the row a count names.
+    First,
+    Last,
+    /// `l`: open a category or a folder and go into it, or choose an item without confirming.
+    Into,
+    /// `Enter`: choose, or digits then `Enter` choose by number.
+    Choose,
+    /// `L`: the wider choice, where the list has one.
+    Wider,
+    /// `h`: close the category or folder the cursor is in.
+    Out,
+    /// The explorer's `Right`, `Left` and `Backspace`.
+    Open,
+    Shut,
+    Parent,
+    /// The explorer's `H`, `P` and `A`.
+    Hidden,
+    Preview,
+    Audition,
+    /// The kit dialog's `Space` or `x`, and `a`.
+    Mark,
+    MarkAll,
+    /// The explorer's `T`.
+    Tags,
+    Search,
     Close,
-    /// Give an item in the explorer these tags, as typed after `T`, and stay open.
-    Tag {
-        item: usize,
-        tags: Vec<String>,
-    },
 }
 
 /// What the preview shows for the item under the cursor, once it's been loaded.
@@ -419,10 +448,8 @@ pub struct Picker {
     pub tag_line: String,
     /// The item already chosen, which the list marks.
     current: Option<usize>,
-    /// Digits typed for a count, and a `g` or a `z` waiting for another key.
+    /// Digits typed for a count.
     count: String,
-    pending_g: bool,
-    pending_z: bool,
     /// The preview of the item under the cursor, and the images of its lines once sent.
     pub preview: Option<Arc<Shown>>,
     pub preview_images: Vec<Option<u32>>,
@@ -489,8 +516,6 @@ impl Picker {
             tag_line: String::new(),
             current: None,
             count: String::new(),
-            pending_g: false,
-            pending_z: false,
             preview: None,
             preview_images: Vec::new(),
             waves: HashMap::new(),
@@ -769,7 +794,7 @@ impl Picker {
                 self.categories[category].open = true;
                 self.rebuild();
                 self.move_highlight(1);
-                Outcome::Stay
+                Outcome::Done
             }
             Some(Row::Item(item)) => {
                 let item = &self.items[item];
@@ -805,13 +830,41 @@ impl Picker {
         }
     }
 
-    /// Act on a key.
-    pub fn key(&mut self, key: Key) -> Outcome {
+    /// Run one of the list's keys from the binding table. One that means nothing on this list,
+    /// such as the explorer's `H` on a plain one, is passed back with nothing changed, to be
+    /// typed as any other letter is.
+    pub fn run(&mut self, key: PickerKey) -> Outcome {
+        let applies = match key {
+            PickerKey::Wider => self.items.iter().any(|item| item.wider.is_some()),
+            PickerKey::Open
+            | PickerKey::Shut
+            | PickerKey::Parent
+            | PickerKey::Hidden
+            | PickerKey::Preview => self.tree.is_some(),
+            PickerKey::Audition => self
+                .tree
+                .as_ref()
+                .is_some_and(|tree| tree.purpose.auditions()),
+            PickerKey::Mark | PickerKey::MarkAll => self.marks_sounds(),
+            PickerKey::Tags => self.taggable().is_some(),
+            _ => true,
+        };
+        if !applies {
+            return Outcome::Passed;
+        }
+        let outcome = self.list_key(key);
+        self.scroll(self.first_shown);
+        outcome
+    }
+
+    /// Take a key as text: every key while the search or an item's tags are typed, and on the
+    /// list a digit of a count, or a letter that starts a search with itself.
+    pub fn typed(&mut self, key: Key) -> Outcome {
         if key.alt || key.command {
-            return Outcome::Stay;
+            return Outcome::Done;
         }
         let outcome = match self.focus {
-            Focus::List => self.list_key(key),
+            Focus::List => self.list_text(key),
             Focus::Search => self.search_key(key),
             Focus::Tags => self.tag_key(key),
         };
@@ -819,87 +872,88 @@ impl Picker {
         outcome
     }
 
-    fn list_key(&mut self, key: Key) -> Outcome {
-        let after_g = std::mem::take(&mut self.pending_g);
-        let after_z = std::mem::take(&mut self.pending_z);
+    /// Let go of a count as a `g` or a `z` is typed before its second key, as the list always
+    /// has.
+    pub fn forget_count(&mut self) {
+        self.count.clear();
+    }
+
+    fn list_key(&mut self, key: PickerKey) -> Outcome {
         let digits = std::mem::take(&mut self.count);
         let count = digits.parse::<usize>().ok();
         let by = count.unwrap_or(1).min(isize::MAX as usize) as isize;
-        match key.code {
-            // A count, as in Vim, where `0` alone isn't one.
-            KeyCode::Char(c @ '0'..='9') if !key.ctrl && (c != '0' || !digits.is_empty()) => {
-                self.count = format!("{digits}{c}");
-            }
-            KeyCode::Char('n') if key.ctrl => self.move_highlight(by),
-            KeyCode::Char('p') if key.ctrl => self.move_highlight(-by),
-            KeyCode::Char('d') if key.ctrl => self.half_page(1),
-            KeyCode::Char('u') if key.ctrl => self.half_page(-1),
-            _ if key.ctrl => {}
-            KeyCode::Char('j') | KeyCode::Down => self.move_highlight(by),
-            KeyCode::Char('k') | KeyCode::Up => self.move_highlight(-by),
+        match key {
+            PickerKey::Down => self.move_highlight(by),
+            PickerKey::Up => self.move_highlight(-by),
+            PickerKey::HalfPageDown => self.half_page(1),
+            PickerKey::HalfPageUp => self.half_page(-1),
             // The cursor's row to the middle, top or bottom, as Vim's `zz`, `zt` and `zb` put it,
             // keeping the margin and the list's ends.
-            KeyCode::Char('z') if after_z => {
+            PickerKey::Middle => {
                 self.scroll_past_end(
                     self.selected
                         .saturating_sub(self.room.saturating_sub(1) / 2),
                 );
             }
-            KeyCode::Char('t') if after_z => self.scroll_past_end(self.selected),
-            KeyCode::Char('b') if after_z => {
-                self.scroll((self.selected + 1).saturating_sub(self.room))
-            }
-            KeyCode::Char('z') => self.pending_z = true,
-            KeyCode::Char('g') if after_g => self.selected = 0,
-            KeyCode::Char('g') => self.pending_g = true,
-            KeyCode::Char('G') => {
+            PickerKey::Top => self.scroll_past_end(self.selected),
+            PickerKey::Bottom => self.scroll((self.selected + 1).saturating_sub(self.room)),
+            PickerKey::First => self.selected = 0,
+            PickerKey::Last => {
                 self.selected = count.map_or(usize::MAX, |row| row.saturating_sub(1));
                 self.move_highlight(0);
             }
             // Digits then `Enter` choose by number, as a search for them.
-            KeyCode::Enter if !digits.is_empty() => {
+            PickerKey::Choose if !digits.is_empty() => {
                 self.set_query(digits);
                 return self.enter(false, true);
             }
-            KeyCode::Char('l') => return self.enter(false, false),
-            KeyCode::Enter => return self.enter(false, true),
-            // Only a list with a wider choice keeps `L` from the search.
-            KeyCode::Char('L') if self.items.iter().any(|item| item.wider.is_some()) => {
-                return self.enter(true, true);
-            }
+            PickerKey::Into | PickerKey::Open => return self.enter(false, false),
+            PickerKey::Choose => return self.enter(false, true),
+            PickerKey::Wider => return self.enter(true, true),
             // The explorer's own keys, after snacks' explorer.
-            KeyCode::Right if self.tree.is_some() => return self.enter(false, false),
-            KeyCode::Left if self.tree.is_some() => self.close_tree(),
-            KeyCode::Backspace if self.tree.is_some() => self.up(),
-            KeyCode::Char('H') if self.tree.is_some() => self.toggle_hidden(),
-            KeyCode::Char('P') if let Some(tree) = self.tree.as_mut() => {
-                tree.preview = !tree.preview;
+            PickerKey::Shut => self.close_tree(),
+            PickerKey::Parent => self.up(),
+            PickerKey::Hidden => self.toggle_hidden(),
+            PickerKey::Preview => {
+                if let Some(tree) = self.tree.as_mut() {
+                    tree.preview = !tree.preview;
+                }
             }
-            KeyCode::Char('A')
-                if let Some(tree) = self.tree.as_mut()
-                    && tree.purpose.auditions() =>
-            {
-                tree.audition = !tree.audition;
+            PickerKey::Audition => {
+                if let Some(tree) = self.tree.as_mut() {
+                    tree.audition = !tree.audition;
+                }
             }
             // The kit dialog marks sounds to load, as nnn's `Space` and `a` select files.
-            KeyCode::Char(' ' | 'x') if self.marks_sounds() => {
-                self.toggle_marks(count.unwrap_or(1));
-            }
-            KeyCode::Char('a') if self.marks_sounds() => self.mark_all(),
+            PickerKey::Mark => self.toggle_marks(count.unwrap_or(1)),
+            PickerKey::MarkAll => self.mark_all(),
             // Its tags, to change, after Ableton's and Splice's tags.
-            KeyCode::Char('T') if self.taggable().is_some() => self.start_tagging(),
-            KeyCode::Char('h') => self.close_category(),
-            KeyCode::Char('/') => self.focus = Focus::Search,
-            // A count, a `g` or a `z` is let go first, as in Vim.
-            KeyCode::Esc if !digits.is_empty() || after_g || after_z => {}
-            KeyCode::Esc => return Outcome::Close,
+            PickerKey::Tags => self.start_tagging(),
+            PickerKey::Out => self.close_category(),
+            PickerKey::Search => self.focus = Focus::Search,
+            // A count is let go first, as in Vim.
+            PickerKey::Close if !digits.is_empty() => {}
+            PickerKey::Close => return Outcome::Close,
+        }
+        Outcome::Done
+    }
+
+    /// A key on the list that isn't one of its own: a digit of a count, as in Vim, where `0`
+    /// alone isn't one, or any other letter, which starts a search with itself.
+    fn list_text(&mut self, key: Key) -> Outcome {
+        let digits = std::mem::take(&mut self.count);
+        match key.code {
+            KeyCode::Char(c @ '0'..='9') if !key.ctrl && (c != '0' || !digits.is_empty()) => {
+                self.count = format!("{digits}{c}");
+            }
+            _ if key.ctrl => {}
             KeyCode::Char(c) => {
                 self.focus = Focus::Search;
                 self.set_query(format!("{digits}{c}"));
             }
             _ => {}
         }
-        Outcome::Stay
+        Outcome::Done
     }
 
     fn search_key(&mut self, key: Key) -> Outcome {
@@ -926,7 +980,150 @@ impl Picker {
             }
             _ => {}
         }
-        Outcome::Stay
+        Outcome::Done
+    }
+}
+
+impl Overlay for Picker {
+    const MODE: Mode = Mode::Picker;
+
+    const KEYS: &'static [(&'static str, Cmd, &'static str)] = &[
+        ("j", Cmd::InPicker(PickerKey::Down), "Down, by a count"),
+        ("Down", Cmd::InPicker(PickerKey::Down), "Down, by a count"),
+        ("C-n", Cmd::InPicker(PickerKey::Down), "Down, by a count"),
+        ("k", Cmd::InPicker(PickerKey::Up), "Up, by a count"),
+        ("Up", Cmd::InPicker(PickerKey::Up), "Up, by a count"),
+        ("C-p", Cmd::InPicker(PickerKey::Up), "Up, by a count"),
+        (
+            "C-d",
+            Cmd::InPicker(PickerKey::HalfPageDown),
+            "Half a page down",
+        ),
+        (
+            "C-u",
+            Cmd::InPicker(PickerKey::HalfPageUp),
+            "Half a page up",
+        ),
+        ("g g", Cmd::InPicker(PickerKey::First), "The first row"),
+        (
+            "G",
+            Cmd::InPicker(PickerKey::Last),
+            "The last row, or the row a count names",
+        ),
+        (
+            "z z",
+            Cmd::InPicker(PickerKey::Middle),
+            "The cursor's row to the middle",
+        ),
+        (
+            "z t",
+            Cmd::InPicker(PickerKey::Top),
+            "The cursor's row to the top",
+        ),
+        (
+            "z b",
+            Cmd::InPicker(PickerKey::Bottom),
+            "The cursor's row to the bottom",
+        ),
+        (
+            "l",
+            Cmd::InPicker(PickerKey::Into),
+            "Open a category or a folder, or choose",
+        ),
+        (
+            "h",
+            Cmd::InPicker(PickerKey::Out),
+            "Close the category or the folder",
+        ),
+        (
+            "Enter",
+            Cmd::InPicker(PickerKey::Choose),
+            "Choose, or after digits, choose by number",
+        ),
+        (
+            "L",
+            Cmd::InPicker(PickerKey::Wider),
+            "The wider choice, where the list has one",
+        ),
+        ("/", Cmd::InPicker(PickerKey::Search), "Search"),
+        (
+            "Esc",
+            Cmd::InPicker(PickerKey::Close),
+            "Close, or let a count go",
+        ),
+        (
+            "Right",
+            Cmd::InPicker(PickerKey::Open),
+            "In the explorer: open a folder, or choose",
+        ),
+        (
+            "Left",
+            Cmd::InPicker(PickerKey::Shut),
+            "In the explorer: close the folder",
+        ),
+        (
+            "Backspace",
+            Cmd::InPicker(PickerKey::Parent),
+            "In the explorer: up to the folder above",
+        ),
+        (
+            "H",
+            Cmd::InPicker(PickerKey::Hidden),
+            "In the explorer: show or hide hidden files",
+        ),
+        (
+            "P",
+            Cmd::InPicker(PickerKey::Preview),
+            "In the explorer: the preview on or off",
+        ),
+        (
+            "A",
+            Cmd::InPicker(PickerKey::Audition),
+            "In the explorer: playing what's under the cursor on or off",
+        ),
+        (
+            "T",
+            Cmd::InPicker(PickerKey::Tags),
+            "In the explorer: change the tags",
+        ),
+        (
+            "Space",
+            Cmd::InPicker(PickerKey::Mark),
+            "In a kit: mark the sound, or a count of them",
+        ),
+        (
+            "x",
+            Cmd::InPicker(PickerKey::Mark),
+            "In a kit: mark the sound, or a count of them",
+        ),
+        (
+            "a",
+            Cmd::InPicker(PickerKey::MarkAll),
+            "In a kit: mark every sound, or none",
+        ),
+    ];
+
+    fn key(&mut self, cmd: Cmd, _ctx: &mut CtxMut) -> Outcome {
+        match cmd {
+            Cmd::InPicker(key) => self.run(key),
+            _ => Outcome::Passed,
+        }
+    }
+
+    fn takes_text(&self) -> bool {
+        self.focus != Focus::List
+    }
+
+    fn text(&mut self, key: Key, _ctx: &mut CtxMut) -> Outcome {
+        self.typed(key)
+    }
+
+    fn waiting(&mut self) {
+        self.forget_count();
+    }
+
+    fn draw(&mut self, frame: &mut ratatui::Frame, area: ratatui::layout::Rect, _ctx: &Ctx) {
+        draw::draw(frame, area, self);
     }
 }
 

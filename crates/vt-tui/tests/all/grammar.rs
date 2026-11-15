@@ -821,7 +821,7 @@ fn help_lists_keys_from_the_table_and_any_key_closes_it() {
     );
     assert!(rows.iter().any(|r| r.contains("i b")));
     keys(&mut app, "j");
-    assert_eq!(app.overlays.help_scroll, 1);
+    assert_eq!(app.overlays.help.scroll, 1);
     keys(&mut app, "q");
     assert_eq!(app.modes.mode, Mode::Normal);
 }

@@ -119,22 +119,25 @@ pub(super) fn followed_live(
 /// phrases that follow those, so a source and all its followers are one edit and one undo; a
 /// `Follow` whose source has gone, with its track, is applied.
 ///
-/// Every phrase is passed over by pointer to find the ones the edit changed, so the phrases that
-/// follow another are gathered in the same pass rather than kept in an index, which every way of
-/// changing a song would have to keep in step.
+/// Every phrase is passed over to find the ones the edit changed, by its track's pointer and then
+/// its own, so the phrases that follow another are gathered in the same pass rather than kept in
+/// an index, which every way of changing a song would have to keep in step.
 pub(super) fn follow_generators(before: &Song, after: &mut Song) {
     let mut changed: Vec<Source> = Vec::new();
     let mut followers: Vec<Source> = Vec::new();
     for (index, track) in after.tracks.iter().enumerate() {
         let old = before.tracks.get(index);
+        // A track the edit left shared has every phrase it had, so none is looked up.
+        let shared = after.tracks.same(index, &before.tracks, index);
         for (id, phrase) in &track.phrases {
             let here = Source {
                 track: index,
                 phrase: *id,
             };
-            let kept = old
-                .and_then(|old| old.phrases.get(id))
-                .is_some_and(|old| Arc::ptr_eq(old, phrase));
+            let kept = shared
+                || old
+                    .and_then(|old| old.phrases.get(id))
+                    .is_some_and(|old| Arc::ptr_eq(old, phrase));
             if !kept {
                 changed.push(here);
             }
@@ -145,7 +148,12 @@ pub(super) fn follow_generators(before: &Song, after: &mut Song) {
     }
     // A track gone takes its phrases with it, which counts as changing them.
     let sound = before.sound_tracks();
+    let still = after.sound_tracks();
     for (index, track) in before.tracks.iter().enumerate().take(sound) {
+        // One still shared, and still a sound track, has lost none.
+        if index < still && after.tracks.same(index, &before.tracks, index) {
+            continue;
+        }
         for id in track.phrases.keys() {
             let here = Source {
                 track: index,
