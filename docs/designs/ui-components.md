@@ -77,13 +77,14 @@ about vt-engine, vt-model and vt-roto, with a short list for vt-tui:
 `App` has 27 fields, down from 141 on 11-13, and its `impl App` blocks are 49 files and 471
 methods.
 
-What's left, for the user to decide:
-- **An edit that changes nothing still makes an undo step** (#809 item 8). This one changes what
-  the user sees, so it waits for an answer.
-- **The dead-code lint for the integration tests** (#784): moving them inside the crate would give
-  the full lint, at the cost of recompiling the library on every test edit.
-- **The Roto's Source choices** (#784): `with_live` passes no follow sources, so a Follow
-  generator's Source has no choices on the Roto.
+Decided by the user, 2026-11-15:
+- An edit that changes nothing makes no undo step, isn't dirty and isn't published (#826,
+  decision 343).
+- The Roto's Source choices stay off the Roto for now.
+- A count steps a list that many choices; a hex value follows the hex (#828, decision 344).
+
+Still open: the dead-code lint for the integration tests (#784). Moving them inside the crate
+would give the full lint, at the cost of recompiling the library on every test edit.
 
 The `GenParam` macro (#809 item 6) is left until a generator is next added; see
 [device-interface.md](device-interface.md)'s As built.
