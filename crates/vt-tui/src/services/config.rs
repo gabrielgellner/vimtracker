@@ -54,7 +54,7 @@ pub struct Settings {
     pub kits: Vec<String>,
     pub samples: Vec<String>,
     /// The one folder presets are saved in and loaded from, made on the first save, or empty for
-    /// none (decision 310).
+    /// none.
     pub presets: String,
 }
 

@@ -1,11 +1,11 @@
 //! A setting's cell, as the track page's grids and devices' titles draw one: its name, its value
 //! and its bar, from what the setting reads as, how it is now and how the modes show it (the UI
-//! plan's §3.2, #739). The cell doesn't format the setting's value: the page passes the text in,
-//! so the widget reads nothing of the track or the program. What it does is lay the parts out the
-//! one way every page has them: a jump's labels and a taken-over mark on the name, what's typed in
-//! the value's place, the cursor's colour and the value's tone, a fine part set back, a macro's
-//! mark after a value with no bar, a word after the value in the bar's room, and a bar filled to
-//! what's heard with a mark where it's set.
+//! plan's §3.2). The cell doesn't format the setting's value: the page passes the text in, so the
+//! widget reads nothing of the track or the program. What it does is lay the parts out the one way
+//! every page has them: a jump's labels and a taken-over mark on the name, what's typed in the
+//! value's place, the cursor's colour and the value's tone, a fine part set back, a macro's mark
+//! after a value with no bar, a word after the value in the bar's room, and a bar filled to what's
+//! heard with a mark where it's set.
 
 use std::borrow::Cow;
 
@@ -26,7 +26,7 @@ pub(crate) mod view;
 /// keeps the fine digits where they are.
 const COARSE_WIDTH: usize = 2;
 /// After a value a macro holds that has no bar to draw the macro's range on, after the dot Live
-/// puts on a control it automates: faint, as the range is behind a bar (decision 341).
+/// puts on a control it automates: faint, as the range is behind a bar.
 pub(crate) const MACRO_MARK: &str = "•";
 
 /// How a setting's value reads in its cell.
@@ -70,9 +70,9 @@ pub(crate) struct Place {
 /// faders by the page, never by the widget.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ParamState {
-    /// What it plays with now, on the bar's 0 to 255, from [`heard`] (#421).
+    /// What it plays with now, on the bar's 0 to 255, from [`heard`].
     pub heard: u8,
-    /// Filled to the fader with a mark at what's heard, rather than the other way (decision 174).
+    /// Filled to the fader with a mark at what's heard, rather than the other way.
     pub fader: bool,
     /// The range a macro holding it can take it over, which its bar draws behind the fill. A cell
     /// with no bar has [`MACRO_MARK`] after its value instead.
@@ -215,9 +215,9 @@ impl ParamCell<'_> {
 /// has moved since the version the report was of: what it's set to now, what the report says it
 /// plays with, and what it was set to then. A report is a frame or so behind a setting being
 /// changed, so the fill would trail the hand and a mark for the setting would flicker at its edge;
-/// this way it follows the hand at once, and what modulation adds keeps moving it (#421). With no
-/// report of the same setting, it's what's set. It's in a macro's 16 bits, 0 to `FF00`; a byte is
-/// the same shifted up by 8.
+/// this way it follows the hand at once, and what modulation adds keeps moving it. With no report
+/// of the same setting, it's what's set. It's in a macro's 16 bits, 0 to `FF00`; a byte is the same
+/// shifted up by 8.
 pub(crate) fn heard(set: u16, live: Option<u16>, then: Option<u16>) -> u16 {
     match (live, then) {
         (Some(live), Some(then)) => {

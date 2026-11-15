@@ -245,10 +245,10 @@ impl App {
 
     /// Rotate the speeds round the tracks selected, the cursor's group or, `every`, every track
     /// that plays sounds: each takes the next one's `Speed` and the last the first's, as the 4ms
-    /// Shuffling Clock Multiplier's Rotate passes its outputs' multiplications along (decision
-    /// 328). A count rotates that many times, so as many presses as tracks bring them back. It's
-    /// one undo step. While recording, the speeds go in as held `RATE`s on the next row each track
-    /// plays instead, so the pass plays the rotation back where it fell.
+    /// Shuffling Clock Multiplier's Rotate passes its outputs' multiplications along. A count
+    /// rotates that many times, so as many presses as tracks bring them back. It's one undo step.
+    /// While recording, the speeds go in as held `RATE`s on the next row each track plays instead,
+    /// so the pass plays the rotation back where it fell.
     pub(crate) fn rotate_speeds(&mut self, every: bool) {
         let times = self.modes.count.take().unwrap_or(1);
         let tracks = match self.tracks_to_rotate(every) {
@@ -366,7 +366,7 @@ impl App {
     }
 
     /// `:name`: name the cursor's track, in two characters, or on a group's own track up to
-    /// five, as `:group name` does (decision 308).
+    /// five, as `:group name` does.
     pub(super) fn name_track(&mut self, name: Option<String>) {
         if self.song().tracks[self.services.cursor.track].is_group() {
             self.name_group(name);

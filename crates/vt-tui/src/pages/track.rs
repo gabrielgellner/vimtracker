@@ -177,8 +177,8 @@ pub struct TrackPage {
     /// The phrase the Gen page shows: the one under the app's cursor, which the app gives it
     /// as each key comes, so the page itself holds no song.
     pub phrase: Option<u32>,
-    /// Whether the FX page is zoomed in on the cursor's slot, `z i`, rather than showing the rack
-    /// (decision 329). It's kept while other pages show, as the FX page's own.
+    /// Whether the FX page is zoomed in on the cursor's slot, `z i`, rather than showing the rack.
+    /// It's kept while other pages show, as the FX page's own.
     pub zoomed: bool,
     /// The ids of the terminal's images of the pictures the page last wanted, by panel: the
     /// filter's curve and a sampler's thumbnail, the Mod page's slots, the FX page's slots or its

@@ -27,7 +27,7 @@ pub struct Loaded {
     pub sample: Arc<SampleData>,
     pub info: SampleInfo,
     pub wave: Vec<(usize, usize)>,
-    /// A loop or a one-shot by how its sound ends, if that says (decision 315).
+    /// A loop or a one-shot by how its sound ends, if that says.
     pub heard: Option<&'static str>,
 }
 

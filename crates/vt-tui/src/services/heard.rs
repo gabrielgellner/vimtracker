@@ -1,7 +1,7 @@
-//! What the engine heard of live generators (decision 300): each row a generator played while a
-//! macro's lock, glide or modulation, or `Vary`, moved it, as the engine reports it. The grid shows
-//! what's written; the playhead's row, the overview, the phrase's title and the status line show
-//! what was heard, and `Space g a` and `Space g A` keep it.
+//! What the engine heard of live generators: each row a generator played while a macro's lock,
+//! glide or modulation, or `Vary`, moved it, as the engine reports it. The grid shows what's
+//! written; the playhead's row, the overview, the phrase's title and the status line show what was
+//! heard, and `Space g a` and `Space g A` keep it.
 
 use vt_engine::gens::GenReport;
 use vt_model::action::Action;

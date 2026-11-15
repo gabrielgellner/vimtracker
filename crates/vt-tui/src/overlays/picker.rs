@@ -77,7 +77,7 @@ pub enum Pick {
         kind: vt_model::preset::PresetKind,
         path: PathBuf,
     },
-    /// Add the shipped patch of this name to the cursor's track (decision 318).
+    /// Add the shipped patch of this name to the cursor's track.
     FactoryPatch(String),
     /// Open the command line with this typed, to finish there, as `:preset save ` is.
     Prompt(String),
@@ -237,7 +237,7 @@ pub struct Item {
     pub preview: Option<Preview>,
     /// How its name is drawn, as a track in a group is in the group's colour.
     pub style: Style,
-    /// In the explorer, its tags, which a search with `#` finds it by (decision 315).
+    /// In the explorer, its tags, which a search with `#` finds it by.
     pub tags: Vec<Tag>,
 }
 
@@ -886,7 +886,7 @@ impl Picker {
                 self.toggle_marks(count.unwrap_or(1));
             }
             KeyCode::Char('a') if self.marks_sounds() => self.mark_all(),
-            // Its tags, to change, after Ableton's and Splice's tags (decision 315).
+            // Its tags, to change, after Ableton's and Splice's tags.
             KeyCode::Char('T') if self.taggable().is_some() => self.start_tagging(),
             KeyCode::Char('h') => self.close_category(),
             KeyCode::Char('/') => self.focus = Focus::Search,

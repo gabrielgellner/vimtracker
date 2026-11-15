@@ -1,7 +1,6 @@
-//! Presets on the track page (decision 310): saving the cursor's track's sound, or on the FX page
-//! the effect in the slot under the cursor, into the presets folder, and loading one from the
-//! browser or by name, as one undo step that leaves the track's place in the song and its phrases
-//! alone.
+//! Presets on the track page: saving the cursor's track's sound, or on the FX page the effect in
+//! the slot under the cursor, into the presets folder, and loading one from the browser or by name,
+//! as one undo step that leaves the track's place in the song and its phrases alone.
 
 use std::path::{Path, PathBuf};
 

@@ -2,7 +2,7 @@
 //! [`DeviceLayout`] for every kind of device, each pages of eight knobs over eight buttons naming
 //! settings by key (`vt-roto`'s [`Layout`]). The mapping in [`super::devices`] reads only these,
 //! never the track page's grid, so the screen and the Roto can each be laid out for themselves
-//! (issue #419, the design note's §4.3).
+//! (the design note's §4.3).
 //!
 //! **The order** is musical, the same rules for every device:
 //!
@@ -901,8 +901,8 @@ const LPG_ENVELOPE: DeviceLayout = stored(
 
 /// An LFO slot's: its rate and shape, how far it goes, where in its cycle it starts, how its wave
 /// bends, how it fades after each note, then its mode, a musical list of five that leaves the
-/// layout as it is (#86), with its polarity on the button under `Depth`, lit for `Bi`; where it
-/// goes on the next page.
+/// layout as it is, with its polarity on the button under `Depth`, lit for `Bi`; where it goes on
+/// the next page.
 const LFO: DeviceLayout = stored(
     "lfo",
     &[
@@ -1021,8 +1021,7 @@ const ARPEGGIO: DeviceLayout = stored(
     )],
 );
 
-/// The track's eight macros, knob 1 to 8 as they're numbered, each named by its macro (decision
-/// 286).
+/// The track's eight macros, knob 1 to 8 as they're numbered, each named by its macro.
 const MACROS: DeviceLayout = live(
     "macros",
     &[knobs(
@@ -1779,7 +1778,7 @@ const GEN_ACID_LOOPS: DeviceLayout = live(
         ],
     )],
 );
-/// An FX column's lane's `Length` and `Rate`, its own device as on the Gen page (decision 347).
+/// An FX column's lane's `Length` and `Rate`, its own device as on the Gen page.
 const GEN_LANE: DeviceLayout = live(
     "gen/lane",
     &[knobs(
@@ -1789,7 +1788,7 @@ const GEN_LANE: DeviceLayout = live(
 );
 /// A canon's moves; it writes every row, so it has no `Where`. Then its mutations, a Bloom
 /// branch's, on a page of their own, with `Vary` on knob 6 as elsewhere, as it draws once it
-/// mutates (decision 307).
+/// mutates.
 const GEN_FOLLOW: DeviceLayout = live(
     "gen/follow",
     &[

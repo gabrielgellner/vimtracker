@@ -47,7 +47,7 @@ fn generating(place: Where, column: ShapeColumn) -> Where {
 
 /// A `Where` of `Cells` on the `nth` of the tracks shaped at once, each its own cell of one
 /// automaton, the row they start from worked out once for all of them, from `seed` or from
-/// `hits`, whether each has a note on its first row (decision 326). Any other is as it is.
+/// `hits`, whether each has a note on its first row. Any other is as it is.
 fn cells_across(place: Where, seed: u64, nth: usize, hits: &[bool]) -> Where {
     match place {
         Where::Cells(cells) => Where::Cells(cells.for_track(seed, nth, hits)),
@@ -470,8 +470,8 @@ impl App {
     }
 
     /// After a kit's sounds are loaded as tracks, offer a beat from Grids' map on the first kick,
-    /// snare and hat among them, each playing its own part as `S` across them would (decision
-    /// 296), in a list whose `Enter` writes it and whose `Esc` leaves the tracks empty.
+    /// snare and hat among them, each playing its own part as `S` across them would, in a list
+    /// whose `Enter` writes it and whose `Esc` leaves the tracks empty.
     pub(crate) fn offer_kit_beat(&mut self, tracks: &[usize]) {
         let mut found = [false; DrumPart::ALL.len()];
         let drums: Vec<usize> = tracks
@@ -641,7 +641,7 @@ impl App {
             .divisions
             .for_step(base.tracks[first.track].speed.ticks());
         // A `Tonnetz` on the `Chord` voice writes its chords for it, and on any other its roots;
-        // across tracks, each takes a voice of the triad (decision 332).
+        // across tracks, each takes a voice of the triad.
         shape.tonnetz.voice = alone.then(|| match base.tracks[first.track].machine {
             Machine::Plaits(SynthVoice::Chord) => TonnetzVoice::Chord,
             _ => TonnetzVoice::Root,

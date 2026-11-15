@@ -1,7 +1,7 @@
-//! A macro's mapping view, after Live's mapping browser (decision 285): a window over the track
-//! page listing each setting the macro holds, with the ends of its range, `Min` at the macro's
-//! `00` and `Max` at its `FF`, and its response's `Curve` and `S`, the cursor on one of them, and
-//! beside them the response of the mapping under the cursor, drawn (decision 314).
+//! A macro's mapping view, after Live's mapping browser: a window over the track page listing each
+//! setting the macro holds, with the ends of its range, `Min` at the macro's `00` and `Max` at its
+//! `FF`, and its response's `Curve` and `S`, the cursor on one of them, and beside them the
+//! response of the mapping under the cursor, drawn.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;

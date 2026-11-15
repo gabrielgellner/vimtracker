@@ -118,7 +118,7 @@ impl App {
 
     /// `:bloom`: grow branches from the phrase at the cursor's slot, the trunk, each a new phrase
     /// following the one before it and mutating as it copies, and put the path through them in
-    /// the slot's place (decision 307). Each bloom draws a seed of its own, as `S` does.
+    /// the slot's place. Each bloom draws a seed of its own, as `S` does.
     pub(crate) fn grow_bloom(&mut self, branches: Option<u8>, mutation: Option<u8>, path: Path) {
         let (Some(chain), Some(trunk)) = (self.services.chain_id(), self.services.phrase_id())
         else {

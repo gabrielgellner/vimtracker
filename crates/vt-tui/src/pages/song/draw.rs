@@ -1,9 +1,8 @@
 //! The song view: a row per section, with its length, how it starts and each track's chain, and a
-//! bar down the sections `:loop` keeps playing (decision 173). A group with no tracks in it is
-//! faint, as it plays nothing (decision 126). A group and its tracks are named in its colour, and
-//! a folded group's tracks are left out, its name marked, while an empty group is folded away
-//! unless it's opened (decision 128). What each track is for is a rule under its name
-//! (decision 316).
+//! bar down the sections `:loop` keeps playing. A group with no tracks in it is faint, as it plays
+//! nothing. A group and its tracks are named in its colour, and a folded group's tracks are left
+//! out, its name marked, while an empty group is folded away unless it's opened. What each track is
+//! for is a rule under its name.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -33,8 +32,7 @@ const REPEAT_WIDTH: usize = 5;
 const START_WIDTH: usize = 7;
 /// A track's column: two hex digits, or a name over them, and a gap.
 const TRACK_WIDTH: usize = 4;
-/// A group's column: its whole name, the mark beside it while it's folded, and a gap
-/// (decision 308).
+/// A group's column: its whole name, the mark beside it while it's folded, and a gap.
 const GROUP_WIDTH: usize = GROUP_NAME_CHARS + 2;
 /// The rows that aren't sections: the title, a gap and the column names.
 const ROWS_AROUND_SECTIONS: u16 = 3;

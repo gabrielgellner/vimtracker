@@ -50,7 +50,7 @@ fn preset(argument: &str, force: bool) -> Result<Line, LineError> {
     Ok(Line::Preset(line))
 }
 
-/// What `:patch` does, on the cursor's track (decision 311).
+/// What `:patch` does, on the cursor's track.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PatchLine {
     /// List the presets folder's patches, to add one; `over` puts it over the last mod slots and
@@ -88,7 +88,7 @@ fn patch(argument: &str, force: bool) -> Result<Line, LineError> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Line {
     /// Save, or save to a new folder. With no folder yet, the explorer chooses one. Forced, it
-    /// writes over a read-only song in its own folder (decision 313).
+    /// writes over a read-only song in its own folder.
     Write {
         path: Option<PathBuf>,
         force: bool,
@@ -214,9 +214,9 @@ pub enum Line {
     TrackLevel(u8),
     /// Name the macro under the cursor, or with nothing give it back its first mapping's name.
     MacroName(String),
-    /// Browse, save or load a preset for what's under the cursor (decision 310).
+    /// Browse, save or load a preset for what's under the cursor.
     Preset(PresetLine),
-    /// Browse, save or add a patch on the cursor's track (decision 311).
+    /// Browse, save or add a patch on the cursor's track.
     Patch(PatchLine),
     Reset(Option<usize>),
     /// Set when launched chains start, or show it.
@@ -661,7 +661,7 @@ fn millibpm(text: &str) -> Option<u32> {
 /// in hex on screen.
 /// What `:lane` asks for: none, to follow the notes again; or a lane of so many rows, each lasting
 /// so many of the track's steps after a slash, as `4/2`, either left out to keep the lane's own,
-/// as `/3` (decision 346).
+/// as `/3`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaneLine {
     Off,

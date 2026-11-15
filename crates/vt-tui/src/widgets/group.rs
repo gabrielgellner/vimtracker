@@ -1,5 +1,5 @@
-//! How a group shows (decision 126): its colour, which it shares with the mark on each of its
-//! tracks, the tracks it sums, and a mute or solo a track has from its group rather than its own.
+//! How a group shows: its colour, which it shares with the mark on each of its tracks, the tracks
+//! it sums, and a mute or solo a track has from its group rather than its own.
 
 use ratatui::style::Style;
 use ratatui::text::Span;
@@ -28,7 +28,7 @@ pub(crate) fn given_name(track: &Track) -> Option<&str> {
 }
 
 /// A fixed track's title, as `Group 1`, with a group's name after it once it has one, as
-/// `Group 1 DRUMS` (decision 308).
+/// `Group 1 DRUMS`.
 pub fn title(track: &Track) -> String {
     match given_name(track) {
         Some(name) => format!("{} {name}", track.kind.title()),
@@ -42,7 +42,7 @@ pub fn style(song: &Song, track: usize) -> Option<Style> {
 }
 
 /// The mark of a sound track in a group, `G1` in the group's colour, as under its strip on the
-/// mixer and after its name in a view's title (decision 128).
+/// mixer and after its name in a view's title.
 pub fn mark(song: &Song, track: usize) -> Option<Span<'static>> {
     let number = number(song, track).filter(|_| song.tracks[track].is_sound())?;
     Some(Span::styled(format!("G{number}"), style(song, track)?))

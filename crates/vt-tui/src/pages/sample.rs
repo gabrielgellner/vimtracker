@@ -6,13 +6,13 @@
 //! `placing` edits the entry's points from here, `settings` its settings, and `v`
 //! selects frames to hear.
 //!
-//! `SamplePage` is the page as a component (#320): its cursor, zoom, view, selection and the
-//! settings' focus, the pictures it shows, its moves and its edits of the entry, through the
-//! [`Services`]' actions, what it plays, in `auditioning`, and its drawing, in `draw`, given a
-//! [`Ctx`]. What only `App` can do its keys ask for in their [`Outcome`]: the picker, the pads'
-//! keys mode, and what plays held while the key is down (#784). The marks' letters and jumps are
-//! `App`'s, as they wait for a letter and go on the jump list, so the page passes them back. It's a
-//! [`Page`], with its rows of the binding table, [`Page::KEYS`], here beside it.
+//! `SamplePage` is the page as a component: its cursor, zoom, view, selection and the settings'
+//! focus, the pictures it shows, its moves and its edits of the entry, through the [`Services`]'
+//! actions, what it plays, in `auditioning`, and its drawing, in `draw`, given a [`Ctx`]. What only
+//! `App` can do its keys ask for in their [`Outcome`]: the picker, the pads' keys mode, and what
+//! plays held while the key is down. The marks' letters and jumps are `App`'s, as they wait for a
+//! letter and go on the jump list, so the page passes them back. It's a [`Page`], with its rows of
+//! the binding table, [`Page::KEYS`], here beside it.
 //!
 //! Everything here is in frames at the file's own rate, as an entry's points are, so the cursor
 //! stays on the same sound whatever rate the program plays at.

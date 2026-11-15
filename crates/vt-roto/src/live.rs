@@ -557,7 +557,7 @@ impl PluginView {
 
     /// What a knob of the page shown says as it's turned to a position: a stepped knob's step,
     /// by its name, which the Roto shows only when it's told, as Ableton's script tells it each
-    /// value. A smooth knob's value is the app's to say, as it edits the song (#414).
+    /// value. A smooth knob's value is the app's to say, as it edits the song.
     pub fn knob_turned(&self, knob: u8, position: u16) -> Vec<ToRoto> {
         let index = u16::from(self.page) * CONTROLS as u16 + u16::from(knob) + 1;
         let Some(control) = self.selected().and_then(|device| device.control(index)) else {

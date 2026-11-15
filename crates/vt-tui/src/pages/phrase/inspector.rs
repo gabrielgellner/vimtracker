@@ -1,6 +1,6 @@
 //! The row inspector: the cursor's row spelled out in words, in the room right of the phrase
 //! view's overview, as the Sound page spells out a voice and the M8's and Elektron's parameter
-//! pages name what a value means. `Space i` shows or hides it (decision 255).
+//! pages name what a value means. `Space i` shows or hides it.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;

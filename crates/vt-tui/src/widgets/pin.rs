@@ -1,6 +1,6 @@
 //! For the widgets' tests: what a buffer draws, as lines a test can pin, its look as well as its
 //! letters, so a change to how a widget is built can be checked to draw the same (the UI plan's
-//! U2, #739).
+//! U2).
 //!
 //! Each row is two lines: its text, an image's placeholder as `▒`, and under it a letter for each
 //! cell naming its style, `.` for none. After the rows, each letter's style: its colours, by the

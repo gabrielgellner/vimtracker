@@ -1,4 +1,4 @@
-//! The mouse wheel and the trackpad as a knob on the cursor's setting (#425).
+//! The mouse wheel and the trackpad as a knob on the cursor's setting.
 //!
 //! Each tick is `=` or `-` where the cursor is, wherever those keys adjust something, a locked
 //! selection included, and with Shift `+` or `_`. Up and down and sideways are one knob, as a
@@ -9,8 +9,8 @@
 //! the swipe is twice the change, and only a fast swipe takes more at a time, up to one of `=`'s
 //! steps. Where the pointer is doesn't matter, and clicks and drags do nothing.
 //!
-//! One gesture is one undo step, as a Roto knob's touch to let-go is (decision 160): it ends once
-//! the wheel pauses for [`GESTURE_PAUSE`], or at any key.
+//! One gesture is one undo step, as a Roto knob's touch to let-go is: it ends once the wheel pauses
+//! for [`GESTURE_PAUSE`], or at any key.
 //!
 //! It's off until turned on, on the audio page, as the terminal sends the program its mouse
 //! only while it asks, and then keeps plain drags for itself no more: in kitty and Ghostty,
@@ -41,7 +41,7 @@ pub(crate) const CAPTURE_ON: &str = "\x1b[?1000h\x1b[?1006h";
 /// Gives the mouse back to the terminal, for selecting text.
 pub(crate) const CAPTURE_OFF: &str = "\x1b[?1006l\x1b[?1000l";
 
-/// The wheel's feel, all in one place for tuning by hand (decision 163).
+/// The wheel's feel, all in one place for tuning by hand.
 pub mod feel {
     use std::time::Duration;
 
@@ -84,7 +84,7 @@ pub mod feel {
 #[serde(default)]
 pub struct WheelSetting {
     /// Off unless turned on, as the terminal's own drag to select text is lost while it's on
-    /// (the author's decision of 2026-11-11, #425).
+    /// (the author's decision of 2026-11-11).
     pub on: bool,
     /// The value goes against the fingers rather than with them.
     pub reversed: bool,

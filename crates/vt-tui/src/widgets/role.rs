@@ -1,7 +1,7 @@
 //! What a track is for, as a thin rule under its name in the role's colour wherever the track is
-//! named (decision 316): the song view's columns, the mixer's strips, the phrase view's labels and
-//! titles, the track list and the track page's title. It's an underline, as the phrase grid's beat
-//! rules are, so it costs no cell and leaves the name's own colour, a group's, as it was.
+//! named: the song view's columns, the mixer's strips, the phrase view's labels and titles, the
+//! track list and the track page's title. It's an underline, as the phrase grid's beat rules are,
+//! so it costs no cell and leaves the name's own colour, a group's, as it was.
 
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;

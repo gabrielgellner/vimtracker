@@ -3,12 +3,12 @@
 //! projects, and `H` and `L` between its sub-pages. Each row changes its value as its
 //! `:` command does, through the same parser, so the two can't disagree.
 //!
-//! `ProjectPage` is the Song sub-page as a component (#320): its cursor and the groove it shows,
-//! its moves, its edits, in `editing`, and its drawing, in `draw`, given a [`Ctx`]. It's a
-//! [`Page`], with its rows of the binding table, [`Page::KEYS`], here beside it. An edit that runs
-//! its row's command asks for it in its [`Outcome`], as one that opens a picker, the explorer or
-//! the Audio sub-page does (#784). The lists of grooves and scales `:groove` and `:scale` open
-//! are built in `pickers`.
+//! `ProjectPage` is the Song sub-page as a component: its cursor and the groove it shows, its
+//! moves, its edits, in `editing`, and its drawing, in `draw`, given a [`Ctx`]. It's a [`Page`],
+//! with its rows of the binding table, [`Page::KEYS`], here beside it. An edit that runs its row's
+//! command asks for it in its [`Outcome`], as one that opens a picker, the explorer or the Audio
+//! sub-page does. The lists of grooves and scales `:groove` and `:scale` open are built in
+//! `pickers`.
 
 pub mod draw;
 pub(crate) mod editing;
@@ -44,7 +44,7 @@ const LONGEST_TYPED: usize = 12;
 
 /// The project page's sub-pages, in order, moved between with `H` and `L`: the song's own
 /// settings, then the audio of the machine it plays on, which is kept in the config folder
-/// rather than the song (decision 297). Each is a view of its own, so each keeps its cursor.
+/// rather than the song. Each is a view of its own, so each keeps its cursor.
 pub(crate) const PROJECT_PAGES: [View; 2] = [View::Project, View::Audio];
 
 /// One row's setting, or what it does.
@@ -53,7 +53,7 @@ pub enum ProjectControl {
     Name,
     /// Where it's saved, and whether there are changes since. It only shows.
     Folder,
-    /// Whether `:w` refuses to write over it, as `:set readonly` sets (decision 313).
+    /// Whether `:w` refuses to write over it, as `:set readonly` sets.
     ReadOnly,
     Bpm,
     /// The groove every track plays with unless it has its own.

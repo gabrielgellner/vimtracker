@@ -1,7 +1,7 @@
 //! The explorer's tree: its folders, read as they're opened and closed, and the
 //! `Backspace`, `H` and `h` that go up, show hidden files and close a folder. In the kit explorer,
 //! the kit dialog, `Space` or `x` marks one of a kit's sounds, `a` marks them all, and `Enter`
-//! loads what's marked as new tracks (decision 306).
+//! loads what's marked as new tracks.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -64,7 +64,7 @@ pub struct Tree {
     /// In the kit dialog, the sounds marked to load, by their places under their kit's path, all
     /// in one kit.
     pub marked: Vec<PathBuf>,
-    /// The tags given by hand, for what's listed (decision 315).
+    /// The tags given by hand, for what's listed.
     pub library: Arc<TagLibrary>,
     /// Whether a search by tag stopped reading at [`MOST_READ`].
     pub(crate) read_short: bool,
@@ -973,7 +973,7 @@ impl Picker {
 
     /// The hint under the list: the kit dialog's marking keys while the cursor is in a kit's
     /// sounds or any are marked, and otherwise the list's own, without `T tag` on a shipped
-    /// patch or their `Factory` group, which `T` passes over (decision 318).
+    /// patch or their `Factory` group, which `T` passes over.
     pub fn shown_hint(&self) -> Option<&'static str> {
         if self.focus == super::Focus::Tags {
             return Some(TAGGING_HINT);

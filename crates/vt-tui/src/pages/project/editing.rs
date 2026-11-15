@@ -1,7 +1,7 @@
 //! The Song sub-page's edits: `=` `-` `+` `_`, `x`, `K`, `i` and what's typed, and `H` and `L`.
 //! Each row changes its value as its `:` command does, so most edits ask for that command's
 //! [`Line`] to run, in [`Outcome::Run`]; the rest change the song, the scale or the groove drawn
-//! through the [`Services`], or ask for a picker, the explorer or the Audio sub-page (#784).
+//! through the [`Services`], or ask for a picker, the explorer or the Audio sub-page.
 
 use std::sync::Arc;
 

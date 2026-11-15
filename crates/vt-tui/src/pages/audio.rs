@@ -5,9 +5,9 @@
 //! which way it turns, and turn on the Roto-Control (`roto`), as Live's MIDI preferences choose
 //! its control surfaces.
 //!
-//! `AudioPage` is the page as a component (#320): the row its cursor is on, its moves, and its
-//! drawing, in `draw`, given a [`Ctx`]. It's a [`Page`], with its rows of the binding
-//! table, [`Page::KEYS`], here beside it.
+//! `AudioPage` is the page as a component: the row its cursor is on, its moves, and its drawing, in
+//! `draw`, given a [`Ctx`]. It's a [`Page`], with its rows of the binding table, [`Page::KEYS`],
+//! here beside it.
 
 pub mod draw;
 

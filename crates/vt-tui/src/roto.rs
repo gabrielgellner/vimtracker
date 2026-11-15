@@ -194,7 +194,7 @@ pub(crate) const METERS_EVERY: Duration = Duration::from_millis(1000 / 12);
 
 /// The Roto's transport buttons, in the order it numbers them (CC 28 to 37), as the vendor's
 /// scripts use them: play, stop and record are vimtracker's; session record, loop, punch in and
-/// out, automation and the arrows have nothing yet (decision 159's answer 4).
+/// out, automation and the arrows have nothing yet.
 const PLAY_BUTTON: u8 = 0;
 const STOP_BUTTON: u8 = 1;
 const RECORD_BUTTON: u8 = 2;

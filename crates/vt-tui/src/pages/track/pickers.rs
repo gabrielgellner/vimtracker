@@ -36,9 +36,9 @@ const TYPE_TITLES: [&str; MOD_SLOTS] = [
 ];
 
 /// A list of what a machine or a slot can be, with loading and saving a preset of it after them,
-/// as Ableton's hot-swap is on a device's title (decision 310).
-/// The machines' list draws each with its icon, so these have the presets folder's, which also
-/// keeps a search for a machine, as `sa` for `Sampler`, from finding them first.
+/// as Ableton's hot-swap is on a device's title. The machines' list draws each with its icon, so
+/// these have the presets folder's, which also keeps a search for a machine, as `sa` for `Sampler`,
+/// from finding them first.
 fn with_presets(mut items: Vec<Item>, kind: PresetKind) -> Vec<Item> {
     if kind == PresetKind::Patch {
         return with_patches(items);
@@ -71,7 +71,7 @@ fn with_presets(mut items: Vec<Item>, kind: PresetKind) -> Vec<Item> {
 }
 
 /// A list on the Mod page or the macros, with adding a patch and saving the track's as one after
-/// it (decision 311).
+/// it.
 pub(crate) fn with_patches(mut items: Vec<Item>) -> Vec<Item> {
     items.push(
         Item::new(

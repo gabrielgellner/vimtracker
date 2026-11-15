@@ -2,8 +2,7 @@
 //! UP and DOWN keys are pressed with a note or after it. `'`, `/`, `k` and `,` tapped after a note
 //! switch it on or off on the row just written, and held while notes are played, write them with
 //! it. None needs a new notation: an accent is a velocity of [`ACCENT_VELOCITY`] or more, a slide
-//! is `HLD` on the gate (decision 46), and an octave is the note itself, so all work on every
-//! track.
+//! is `HLD` on the gate, and an octave is the note itself, so all work on every track.
 
 use ratatui::crossterm::event::KeyCode;
 use vt_model::action::Action;

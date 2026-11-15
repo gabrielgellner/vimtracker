@@ -65,7 +65,7 @@ pub fn level_at(position: u16) -> u8 {
 }
 
 /// A track's level as MIX mode's Level knob has it: whole steps, as the level scale has no fine
-/// part (decision 175).
+/// part.
 fn track_level(track: &Track) -> f64 {
     f64::from(track.level)
 }
@@ -142,7 +142,7 @@ fn position(control: Control, track: &Track, song: &Song) -> Option<u16> {
 
 /// Every track as MIX mode shows it, in its two lists, with the mutes and solos the keys and the
 /// Roto set while playing, and each fader where the steps have it while they drive it, so its
-/// motor follows them (decision 174).
+/// motor follows them.
 pub fn strips(song: &Song, levels: &[TrackLive], faders: &[Faders]) -> [Vec<Strip>; 2] {
     let live = |at: usize| levels.get(at).copied().unwrap_or_default();
     let silenced = |at: usize| (live(at).mute, live(at).solo);

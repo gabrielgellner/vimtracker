@@ -1,6 +1,6 @@
-//! What a page is given to run its keys and draw with: the program's shared services, borrowed
-//! (#320). A page, such as the track page or the mixer, keeps its own state, its cursor, its
-//! images and where it last drew them, and reaches everything else through what it's given.
+//! What a page is given to run its keys and draw with: the program's shared services, borrowed. A
+//! page, such as the track page or the mixer, keeps its own state, its cursor, its images and where
+//! it last drew them, and reaches everything else through what it's given.
 //!
 //! - **[`CtxMut`]**, to run a key: the [`Services`], the song, the cursor and the rest, borrowed
 //!   mutably apart from the page itself, so a key can change the page and apply an action at once,
@@ -8,7 +8,7 @@
 //! - **[`Ctx`]**, to be drawn: everything a page reads, the song, the cursor's place in it, the
 //!   view and the modes that span pages, which groups are folded, and what the engine last
 //!   reported, the tracks' meters among it. It only reads: the [`Services`] and the [`Modes`],
-//!   and the little of `App`'s own a page shows, a [`PageState`] `App` fills as it's drawn (#784).
+//!   and the little of `App`'s own a page shows, a [`PageState`] `App` fills as it's drawn.
 //!
 //! - **[`Page`]**, what a page is as a component: its keys in the binding table, how it runs one,
 //!   and its drawing and pictures. `App` holds one of each page and dispatches by `View` with a
@@ -72,8 +72,8 @@ use crate::widgets::setting::{CellLook, Focus};
 /// What a key did, as far as the page alone can tell, and what it asks for that only `App` can
 /// do: open the picker, show another view or run a `:` line, and start Insert or another mode,
 /// open the explorer to name a file, hold what lasts while the key is down, or start the phrase
-/// view afresh (#784). [`App::settled`] does what it asks once the page has given its borrows
-/// back, so a page needn't pass a key back to reach them.
+/// view afresh. [`App::settled`] does what it asks once the page has given its borrows back, so a
+/// page needn't pass a key back to reach them.
 #[derive(Debug, Clone)]
 pub enum Outcome {
     /// The page did it.
@@ -110,7 +110,7 @@ pub enum Outcome {
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
 /// pictures. Every page is one: the song view, the chain view, the phrase view, the track page,
-/// the mixer, the project page's two sub-pages and the sample page (#739).
+/// the mixer, the project page's two sub-pages and the sample page.
 pub(crate) trait Page {
     /// Its rows of the binding table, as `(keys, Cmd, description)`, in the order which-key and
     /// `Space k` list them. The table is assembled in one place, `input::bindings`, under the

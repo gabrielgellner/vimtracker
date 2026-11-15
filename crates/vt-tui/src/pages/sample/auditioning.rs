@@ -4,14 +4,14 @@
 //! voice, as the explorer plays a file, from the frames the pool already holds, so nothing is
 //! loaded or copied.
 //!
-//! As decision 53 has it, a key held for [`HOLD_TIME`](crate::app::HOLD_TIME) or more plays only
-//! while it's down, and a tap plays to the end. One plays at a time, as a track plays one note at a
-//! time, so the next fades out the last. Where each sound is shows as a playhead over the waveform,
-//! for these and for the track's own notes of the entry shown.
+//! A key held for [`HOLD_TIME`](crate::app::HOLD_TIME) or more plays only while it's down, and a
+//! tap plays to the end. One plays at a time, as a track plays one note at a time, so the next
+//! fades out the last. Where each sound is shows as a playhead over the waveform, for these and for
+//! the track's own notes of the entry shown.
 //!
 //! What plays is the page's, through the [`Services`]: each gives back the [`Momentary`] it
 //! started, which the page's key hands to `App` in [`Outcome::Hold`](crate::pages::Outcome::Hold)
-//! to end when the key is let go (#784). The keys mode itself is `App`'s, as a mode of its keys.
+//! to end when the key is let go. The keys mode itself is `App`'s, as a mode of its keys.
 
 use vt_engine::link::Command;
 use vt_model::playable::{Playable, Span};

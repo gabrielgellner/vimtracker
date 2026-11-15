@@ -1,6 +1,6 @@
 //! `vimtracker probe`: play one voice or one effect with no song, offline, from a spec that the
 //! reference side in `tools/compare/` reads too, so a comparison is written once and rendered by
-//! both (#186, decision 110).
+//! both.
 //!
 //! A spec is TOML. Its `[ours]` names a machine and the effects in a track's slots, and sets them
 //! by the keys songs store, such as `acid.cutoff` or `1.comp.threshold`, with the values the

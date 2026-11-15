@@ -4,17 +4,16 @@
 //! so it's tested with no Roto at all.
 //!
 //! **Where each setting goes** is its kind of device's layout ([`layouts`]), and nothing else:
-//! not the track page's grid, which is laid out for the screen (issue #419). A device with off/on
-//! settings is stored on the Roto, once vimtracker's setups are there, so they're on buttons; a
-//! live device has them on two-step knobs.
+//! not the track page's grid, which is laid out for the screen. A device with off/on settings is
+//! stored on the Roto, once vimtracker's setups are there, so they're on buttons; a live device has
+//! them on two-step knobs.
 //!
 //! **Colours** are by family, from the one table [`FAMILY_COLOURS`].
 //!
-//! **Feel** follows the setting's kind, as issue #411's table has it: a list of up to 16 choices
-//! clicks through them, each named; of 17 to 24, it clicks with names for the first 16; a longer
-//! list, or one that changes with the track, such as an LFO's `Dest` or the song's samples, turns
-//! smoothly; an off/on setting is a switch; a centred value has a notch at its middle; and any
-//! other value turns smoothly.
+//! **Feel** follows the setting's kind: a list of up to 16 choices clicks through them, each named;
+//! of 17 to 24, it clicks with names for the first 16; a longer list, or one that changes with the
+//! track, such as an LFO's `Dest` or the song's samples, turns smoothly; an off/on setting is a
+//! switch; a centred value has a notch at its middle; and any other value turns smoothly.
 
 use vt_model::action::TrackControl;
 use vt_model::constants::{BAR_STEPS, MAX_ENVELOPE_MS, TICKS_PER_STEP};
@@ -850,7 +849,7 @@ pub fn track_devices(track: &Track, phrase: Option<u32>) -> Vec<(Page, usize, De
                 .map(move |(slot, spec)| (page, slot, spec))
                 .collect::<Vec<_>>()
         });
-    // The macros first, before the machine, as the Gen page has them first (decision 286).
+    // The macros first, before the machine, as the Gen page has them first.
     std::iter::once((Page::Gen, 0, macros_device()))
         .chain(pages)
         .collect()

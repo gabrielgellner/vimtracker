@@ -3,8 +3,8 @@
 //! value or its fine digits or off it, dim at a default, typing, a jump's labels, what's playing
 //! moving the bar off what's set, a macro's range, a fader the steps drive and one taken over from
 //! them, a slot a step's lock switches out, words, choices and toggles. They're drawn through the
-//! whole page, so one way of building the cells can be swapped for another (the UI plan's U4,
-//! #739) and checked to draw the same.
+//! whole page, so one way of building the cells can be swapped for another (the UI plan's U4) and
+//! checked to draw the same.
 
 use std::sync::Arc;
 

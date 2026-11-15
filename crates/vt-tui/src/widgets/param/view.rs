@@ -1,5 +1,5 @@
-//! A setting as a widget draws and edits it (the UI plan's §3.1, #739): a [`ParamView`], with how
-//! it steps ([`Steps`], [`Pace`]), what its text reads ([`Reads`]) and its [`Choice`]s. A page
+//! A setting as a widget draws and edits it (the UI plan's §3.1): a [`ParamView`], with how it
+//! steps ([`Steps`], [`Pace`]), what its text reads ([`Reads`]) and its [`Choice`]s. A page
 //! resolves each of its settings into one, as the track page's `view` does, and
 //! [`edit`](super::edit) reads only this, so it knows no page and no device.
 

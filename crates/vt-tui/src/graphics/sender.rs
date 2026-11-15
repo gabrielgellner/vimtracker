@@ -229,7 +229,7 @@ pub struct Graphics {
     /// Where each LFO's dot is placed, and in which shade, by its slot, its placement id less one.
     dots_placed: [Option<(Shade, Placement)>; MOD_SLOTS],
     /// The pictures of the on/off switches, one for each look shown so far, drawn for the
-    /// character size in `cell` (decision 256).
+    /// character size in `cell`.
     pub(super) switch_images: BTreeMap<Look, u32>,
     /// The switches on the screen as last drawn, by the cell of each one's glyph, which
     /// [`Graphics::find_switches`] finds once ratatui has drawn it.
@@ -377,8 +377,8 @@ impl Graphics {
     }
 
     /// Find the on/off switches on the screen ratatui has just drawn, for [`Graphics::place`] to
-    /// place their pictures over, and hide their glyphs under them (decision 256). Called on the
-    /// frame being drawn, before it reaches the terminal.
+    /// place their pictures over, and hide their glyphs under them. Called on the frame being
+    /// drawn, before it reaches the terminal.
     pub(crate) fn find_switches(&mut self, buffer: &mut Buffer) {
         self.switches_wanted = switches::find(buffer);
     }

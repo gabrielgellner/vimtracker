@@ -2,8 +2,8 @@
 //! in tree mode (`input/picker.rs`) over the folders it starts from, read a folder at a time as
 //! they're opened. A kit opens like a folder, to its sounds, and a sound with variants or layers
 //! opens to those; in the kit explorer, the kit dialog, its sounds are marked to load as tracks.
-//! The preset browser lists the presets folder's sounds or effects (decision 310), or its patches
-//! (decision 311). Each sample, kit sound and preset is listed with its tags (decision 315).
+//! The preset browser lists the presets folder's sounds or effects, or its patches. Each sample,
+//! kit sound and preset is listed with its tags.
 
 use std::path::{Path, PathBuf};
 
@@ -49,7 +49,7 @@ impl Purpose {
     }
 
     /// Whether what it lists has tags, which a search finds with `#` and `T` changes: samples,
-    /// kits' sounds and presets (decision 315).
+    /// kits' sounds and presets.
     pub fn tags(self) -> bool {
         matches!(self, Self::Sample | Self::Kit | Self::Preset(_))
     }
@@ -187,7 +187,7 @@ pub(crate) fn preset_tags(fixed: Vec<String>, own: Vec<String>) -> Vec<Tag> {
 }
 
 /// A sample file's tags: what's guessed from where it is, its name and, for one of a kit's
-/// sounds, its label, and what's kept for it by hand (decision 315).
+/// sounds, its label, and what's kept for it by hand.
 pub(crate) fn file_tags(path: &Path, label: &str, library: &TagLibrary) -> Vec<Tag> {
     tag::file_tags(&tag::guess(path, label), library.of_file(path))
 }

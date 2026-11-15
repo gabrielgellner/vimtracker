@@ -62,7 +62,7 @@ pub enum Mode {
     Help,
     /// The shape panel is open.
     Shape,
-    /// A macro's mapping view is open, its settings and their ranges (decision 285).
+    /// A macro's mapping view is open, its settings and their ranges.
     Mapping,
     /// Searching the track page for a setting to jump to.
     Jump,

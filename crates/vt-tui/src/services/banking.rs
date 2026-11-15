@@ -98,7 +98,7 @@ const GENERIC_WORDS: [&str; 12] = [
     "kit", "kits", "drum", "drums", "core", "pack", "packs", "rack", "racks", "set", "the", "vol",
 ];
 
-/// What a group whose kit's name says nothing better is called (decision 308).
+/// What a group whose kit's name says nothing better is called.
 pub(crate) const KIT_GROUP_NAME: &str = "DRUMS";
 
 /// A name's words, split at spaces and punctuation, leaving out those that only say it's a kit.
@@ -111,7 +111,7 @@ fn telling_words(name: &str) -> impl Iterator<Item = &str> {
 /// A group's name from its kit's: the first word of its name, in capitals, up to the five
 /// characters a group's name holds, so `909 Core Kit` names it `909` and `Rytm Analog` `RYTM`.
 /// A first word that's generic, as `Kit-808`'s `Kit` is, gives way to the kit's category, by its
-/// first word that isn't and fits whole, or else `DRUMS`, as `Drum Machines` gives (decision 308).
+/// first word that isn't and fits whole, or else `DRUMS`, as `Drum Machines` gives.
 pub fn group_name(kit: &str, category: &str) -> String {
     let first = kit
         .split(|c: char| !c.is_ascii_alphanumeric())
@@ -267,7 +267,7 @@ impl App {
     /// Find a sound preset's bank entry in the bank, or load its file to add it: the number it's at,
     /// and the edit that adds it if it's new. Its file is kept as a sample added from where it is
     /// would be, inside the project by its place there, and an entry the same in every way is the
-    /// same entry, so loading a preset twice adds it once (decision 310).
+    /// same entry, so loading a preset twice adds it once.
     pub(crate) fn bank_preset_sample(
         &mut self,
         entry: &BankEntry,
@@ -498,7 +498,7 @@ impl App {
                 track,
                 choke: sound.choke,
             });
-            // A kit's sounds are drums, which a sampler alone can't say (decision 316).
+            // A kit's sounds are drums, which a sampler alone can't say.
             adds.push(Action::SetTrackRole {
                 track,
                 role: Role::Drums,

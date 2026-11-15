@@ -1,5 +1,5 @@
 //! A window's hint, along the bottom of its border: what its keys do, and after that the keys that
-//! flip something on and off, each with a switch that shows whether it's on (decision 101).
+//! flip something on and off, each with a switch that shows whether it's on.
 
 use ratatui::text::{Line, Span};
 

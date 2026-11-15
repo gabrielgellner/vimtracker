@@ -193,13 +193,13 @@ impl App {
         self.follow_recording();
     }
 
-    /// Rotate the speeds round these tracks into the recording (decision 328): each track's next
-    /// row gets a held `RATE` of the speed the track after it would play there, so the pass plays
-    /// the rotation back where it fell, and the tracks' own speeds stay as they were for the start.
-    /// What a track would play on its next row is that row's own `RATE`, as an earlier press or
-    /// pass wrote it, or else the speed it's playing at. The `RATE` goes in the column holding
-    /// one, or else the first empty one; a column with a lane is left alone. The rows go into the
-    /// pass's one undo step.
+    /// Rotate the speeds round these tracks into the recording: each track's next row gets a held
+    /// `RATE` of the speed the track after it would play there, so the pass plays the rotation back
+    /// where it fell, and the tracks' own speeds stay as they were for the start. What a track
+    /// would play on its next row is that row's own `RATE`, as an earlier press or pass wrote it,
+    /// or else the speed it's playing at. The `RATE` goes in the column holding one, or else the
+    /// first empty one; a column with a lane is left alone. The rows go into the pass's one undo
+    /// step.
     pub(crate) fn record_rotation(&mut self, tracks: &[usize], times: usize) {
         struct Next {
             track: usize,

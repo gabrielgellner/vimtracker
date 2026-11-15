@@ -78,7 +78,7 @@ impl App {
     /// The edit that puts a patch's generator live on a column of the phrase under the cursor,
     /// over its loop or its lane, judged as `S` judges the column: an empty Note column is
     /// generated and notes are reshaped, and the generator already live there, `live`, is
-    /// reshaped in place (decision 311). Or why it can't go there.
+    /// reshaped in place. Or why it can't go there.
     pub(crate) fn patch_generator(
         &mut self,
         field: Field,
@@ -195,7 +195,7 @@ impl App {
     }
 
     /// Apply the live generator under the cursor, leaving its values as plain ones: as last heard
-    /// where something moved it as it played (decision 300).
+    /// where something moved it as it played.
     pub(crate) fn apply_generator_here(&mut self) {
         let Some((phrase, generator)) = self.generator_here() else {
             self.services.status = "No live column here to apply".to_owned();

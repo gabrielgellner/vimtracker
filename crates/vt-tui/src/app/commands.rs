@@ -267,7 +267,7 @@ impl App {
 
     /// Save, or save a copy to a new folder, which isn't read-only, so it can be carried on in. A
     /// read-only song is written over in its own folder only when forced, as Vim's `:w!`, and stays
-    /// read-only (decision 313).
+    /// read-only.
     fn write(&mut self, path: Option<PathBuf>, force: bool) {
         let same = path
             .as_deref()

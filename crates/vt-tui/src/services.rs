@@ -1,4 +1,4 @@
-//! What every page shares (#320).
+//! What every page shares.
 //!
 //! It's the song and its history, which actions are applied to, the program's cursor in it and
 //! which groups are folded, the engine and what it last reported, the sample pool and its analyses,
@@ -57,7 +57,7 @@ pub struct Services {
     /// Where the cursor is in the song, which every page reads and some move.
     pub cursor: Cursor,
     /// Which groups are folded, read from the song's `view` when it opens and written into it
-    /// when it's saved, not undone (decisions 128 and 305).
+    /// when it's saved, not undone.
     pub folds: Folds,
     pub folder: Option<PathBuf>,
     pub dirty: bool,
@@ -76,8 +76,8 @@ pub struct Services {
     published: Option<Arc<Published>>,
     /// The songs of the versions sent that a report could still be of, by their ids, oldest
     /// first, and the song the live values were worked out from, so a bar draws what's playing
-    /// against the setting it was reported with (#421). The engine starts on the song the app
-    /// starts with, before any version is sent.
+    /// against the setting it was reported with. The engine starts on the song the app starts with,
+    /// before any version is sent.
     pub(crate) sent: VecDeque<(u64, Arc<Song>)>,
     pub(crate) live_song: Option<Arc<Song>>,
     /// The track the engine is asked to report the live values of.
@@ -90,9 +90,9 @@ pub struct Services {
     /// page's `h` and `l`, which speed up as they're held.
     pub(crate) repeating: bool,
     pub(crate) last_tick: Instant,
-    /// What the engine last said (#834).
+    /// What the engine last said.
     pub reported: Reported,
-    /// The controls kept outside undo (#834).
+    /// The controls kept outside undo.
     pub live: Live,
     pub(crate) fader_wishes: Vec<crate::services::automating::Wish>,
     /// The main output's level.
@@ -132,19 +132,18 @@ pub struct Reported {
     pub live: Option<LiveValues>,
     /// What each mod slot moved each row's note by on `Pitch` the last time it was heard, and
     /// what the row's own `RND`s moved it by, by track, phrase and row, in semitones, for
-    /// `Space g A` (#569, decision 323).
+    /// `Space g A`.
     pub(crate) heard_pitches: HashMap<(usize, u32, usize), NotePitch>,
     /// The pass each live generator that varies was last heard on and the seeds it played, by
-    /// track, phrase and its place in the phrase's list, for `Space g a` on the Gen page to keep
-    /// (decision 293).
+    /// track, phrase and its place in the phrase's list, for `Space g a` on the Gen page to keep.
     pub(crate) heard_passes: HashMap<(usize, u32, usize), GenPass>,
     /// Each row of a live generator as it was last heard, by track, phrase, the generator's place
     /// in the phrase's list and the stored row, where something moved it from what's written:
     /// for the playhead's row, the overview, the phrase's `~` and the status line to show, and
-    /// `Space g a` and `Space g A` to keep (decision 300).
+    /// `Space g a` and `Space g A` to keep.
     pub(crate) heard_rows: HashMap<(usize, u32, usize, usize), GenRow>,
     /// Every track's faders as they're heard: where the steps have them, and which a hand has
-    /// taken over, with what's been asked of it since in `Services::fader_wishes` (decision 174).
+    /// taken over, with what's been asked of it since in `Services::fader_wishes`.
     pub(crate) faders: [Faders; MAX_TRACKS],
     /// Where each voice playing a sample through the cursor's track is in it, for the sample
     /// page's playheads.
@@ -184,7 +183,7 @@ pub struct Live {
     pub scale: Scale,
     /// Whether entering in Insert moves on by the grid.
     pub auto_jump: bool,
-    /// Whether the song is read-only, so `:w` to its own folder refuses (decision 313).
+    /// Whether the song is read-only, so `:w` to its own folder refuses.
     pub read_only: bool,
     /// Whether fill is on, for `CND`'s `FILL` and `!FILL`.
     pub fill: bool,
@@ -264,8 +263,8 @@ impl Services {
 
     /// Run an action and make the result current. A fader it moves that the steps drive is
     /// taken over by the hand that moved it. One that changes nothing leaves no undo step, keeps
-    /// the song as saved and isn't sent again (decision 343); the take-over still happens, as
-    /// the hand moved the fader off what the steps had it at.
+    /// the song as saved and isn't sent again; the take-over still happens, as the hand moved the
+    /// fader off what the steps had it at.
     pub fn apply(&mut self, action: &Action) {
         match edit(self.song(), action) {
             Ok(next) => {
@@ -352,7 +351,7 @@ impl Services {
 
     /// Where each FX column of the cursor's phrase with a lane of its own is reading, if it's the
     /// one playing: the stored row, as the engine reports it read, so on a lane heard longer than
-    /// its own, the row it's copying (decision 348).
+    /// its own, the row it's copying.
     pub(crate) fn lane_playheads(&self, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
         let mut playheads = [None; FX_SLOTS];
         if self.playhead_step().is_none() {
@@ -574,7 +573,7 @@ impl Services {
     }
 
     /// Move to the track as many along as `by`, stepping over those folded away, a folded group
-    /// one stop on a view that has them (decisions 128 and 305).
+    /// one stop on a view that has them.
     pub(crate) fn move_track(&mut self, by: isize, view: View) {
         let order = Order::of(view);
         let track = self.folds.step(self.song(), self.cursor.track, by, order);

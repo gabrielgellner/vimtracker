@@ -31,11 +31,11 @@ pub enum PanelKey {
     Waveform,
     Mod(usize),
     Slot(usize),
-    /// The FX page's zoomed slot, whichever it is (decision 329).
+    /// The FX page's zoomed slot, whichever it is.
     Zoom,
     /// A live generator's preview on the Gen page, by its place in its phrase's list.
     Gen(usize),
-    /// The response of the mapping under the mapping view's cursor (decision 314).
+    /// The response of the mapping under the mapping view's cursor.
     Mapping,
     /// The sample page's waveform, and its overview of the whole sample under it.
     SampleWave,

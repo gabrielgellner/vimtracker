@@ -8,8 +8,8 @@ use crate::services::scope::{fold, rows_of};
 
 /// The rows a sample's waveform covers in each of `columns` columns, as the track page's curves are
 /// given, with a line from top to bottom at each of `markers`, given as frames into the sample.
-/// The sample bank's start, end, loop and slice points (#189) are what markers are for; the Sample
-/// machine has none of them yet.
+/// The sample bank's start, end, loop and slice points are what markers are for; the Sample machine
+/// has none of them yet.
 pub(crate) fn spans(
     frames: &[[f32; 2]],
     markers: &[usize],

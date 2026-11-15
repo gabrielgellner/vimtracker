@@ -1,16 +1,16 @@
 //! A knob turned on the Roto as an edit of the song: the way back from [`super::devices`], a
 //! knob's position to the setting's value it stands for, written as a key writes it, by the
-//! setting's view and `pages::track::set` (#739), and the value as the app writes it, for the Roto
-//! to show. Pure, like the mapping: a track and its song in, an action out, so it's tested with
-//! no Roto at all.
+//! setting's view and `pages::track::set`, and the value as the app writes it, for the Roto to
+//! show. Pure, like the mapping: a track and its song in, an action out, so it's tested with no
+//! Roto at all.
 //!
 //! **Where a position lands** is where the mapping puts that value, so a knob left alone sends
 //! back what it was sent: both read the knob's places and range from the setting's view
-//! (`devices::places` and `devices::knob_view`, #784), a list's step by [`step_at`], a value by
-//! its share of the way from the bottom to its top, a setting with fine digits to its fine part,
-//! an envelope's time by the steps `=` takes, and an LFO's rate the nearest of its own kind, a
-//! note division staying a note division. A knob that lands where the setting already is gives
-//! no action, so it leaves no undo step.
+//! (`devices::places` and `devices::knob_view`), a list's step by [`step_at`], a value by its share
+//! of the way from the bottom to its top, a setting with fine digits to its fine part, an
+//! envelope's time by the steps `=` takes, and an LFO's rate the nearest of its own kind, a note
+//! division staying a note division. A knob that lands where the setting already is gives no
+//! action, so it leaves no undo step.
 
 use vt_model::action::Action;
 use vt_model::envelope::Hold;
