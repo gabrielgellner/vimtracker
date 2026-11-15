@@ -16,6 +16,7 @@ use crate::input::bindings::Cmd;
 use crate::input::command::Line;
 use crate::input::mode::{Mode, View};
 use crate::input::picker::{Item, Pick, Picker};
+use crate::services::Services;
 use crate::track_page::{Control, Page};
 
 /// How many places the jump list remembers.
@@ -174,47 +175,11 @@ impl App {
         self.say_if_shared();
     }
 
-    /// Which sections and slots play a phrase of the cursor's track.
-    pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize)> {
-        let Some(track) = self.services.track_here() else {
-            return Vec::new();
-        };
-        let mut uses = Vec::new();
-        for (number, section) in self.song().sections.iter().enumerate() {
-            let chain = section
-                .chains
-                .get(self.services.cursor.track)
-                .copied()
-                .flatten();
-            let Some(chain) = chain.and_then(|id| track.chains.get(&id)) else {
-                continue;
-            };
-            for (slot, entry) in chain.entries.iter().enumerate() {
-                if entry.phrase == phrase {
-                    uses.push((number, slot));
-                }
-            }
-        }
-        uses
-    }
-
-    /// How many sections play the cursor's chain.
-    pub fn chain_uses(&self) -> usize {
-        let Some(chain) = self.services.chain_id() else {
-            return 0;
-        };
-        let sections = &self.song().sections;
-        let chains = sections
-            .iter()
-            .filter_map(|section| section.chains.get(self.services.cursor.track));
-        chains.filter(|c| **c == Some(chain)).count()
-    }
-
     fn say_if_shared(&mut self) {
         let Some(phrase) = self.services.phrase_id() else {
             return;
         };
-        let uses = self.phrase_uses(phrase).len();
+        let uses = self.services.phrase_uses(phrase).len();
         if uses > 1 {
             self.services.status =
                 format!("Phrase {phrase:02X} is used {uses} times: gc makes a copy here");
@@ -237,7 +202,7 @@ impl App {
             slot: self.services.cursor.slot,
             new,
         });
-        self.services.status = if self.chain_uses() > 1 {
+        self.services.status = if self.services.chain_uses() > 1 {
             format!(
                 "Cloned {old:02X} to {new:02X}. This chain is shared, so all its uses change: gC copies it"
             )
@@ -269,7 +234,7 @@ impl App {
             track: self.services.cursor.track,
             chain,
             slot: self.services.cursor.slot,
-            scale: self.scale,
+            scale: self.services.scale,
             bloom,
         });
         if Arc::ptr_eq(&before, self.song()) {
@@ -287,7 +252,7 @@ impl App {
             })
             .map(|id| format!("{id:02X}"))
             .collect();
-        let shared = if self.chain_uses() > 1 {
+        let shared = if self.services.chain_uses() > 1 {
             ". This chain is shared, so all its uses play it"
         } else {
             ""
@@ -361,6 +326,7 @@ impl App {
         };
         let track = self.services.cursor.track;
         let items = self
+            .services
             .phrase_uses(phrase)
             .into_iter()
             .map(|(section, slot)| {
@@ -442,7 +408,7 @@ impl App {
         let items = phrases
             .iter()
             .map(|(id, length)| {
-                let shared = if self.phrase_uses(*id).len() > 1 {
+                let shared = if self.services.phrase_uses(*id).len() > 1 {
                     "*"
                 } else {
                     ""
@@ -628,5 +594,39 @@ impl App {
         self.services.cursor.slot = 0;
         self.services.cursor.step = 0;
         self.services.clamp_cursor(self.modes.view);
+    }
+}
+
+impl Services {
+    /// Which sections and slots play a phrase of the cursor's track.
+    pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize)> {
+        let Some(track) = self.track_here() else {
+            return Vec::new();
+        };
+        let mut uses = Vec::new();
+        for (number, section) in self.song().sections.iter().enumerate() {
+            let chain = section.chains.get(self.cursor.track).copied().flatten();
+            let Some(chain) = chain.and_then(|id| track.chains.get(&id)) else {
+                continue;
+            };
+            for (slot, entry) in chain.entries.iter().enumerate() {
+                if entry.phrase == phrase {
+                    uses.push((number, slot));
+                }
+            }
+        }
+        uses
+    }
+
+    /// How many sections play the cursor's chain.
+    pub fn chain_uses(&self) -> usize {
+        let Some(chain) = self.chain_id() else {
+            return 0;
+        };
+        let sections = &self.song().sections;
+        let chains = sections
+            .iter()
+            .filter_map(|section| section.chains.get(self.cursor.track));
+        chains.filter(|c| **c == Some(chain)).count()
     }
 }

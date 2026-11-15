@@ -20,6 +20,7 @@ use crate::input::bindings::{Cmd, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::input::typed::{HEX, Typed};
+use crate::services::Services;
 
 use super::{App, Entry, GRID_SIZES, LONGEST_LABEL, next_note_velocity, snap_by};
 
@@ -117,7 +118,7 @@ impl App {
 
     /// Set the scale, which isn't an edit to undo, and say what it now does.
     pub(crate) fn set_scale(&mut self, scale: Scale) {
-        self.scale = scale;
+        self.services.scale = scale;
         self.services.handle.send(Command::SetScale { scale });
         self.services.dirty = true;
         self.services.status = if scale.on {
@@ -130,14 +131,14 @@ impl App {
     pub(super) fn toggle_scale(&mut self) {
         self.modes.count = None;
         self.set_scale(Scale {
-            on: !self.scale.on,
-            ..self.scale
+            on: !self.services.scale.on,
+            ..self.services.scale
         });
     }
 
     /// Move this phrase's notes to the nearest in the scale.
     pub(super) fn fit_to_scale(&mut self) {
-        if !self.scale.on {
+        if !self.services.scale.on {
             self.services.status = "The scale is off".to_owned();
             return;
         }
@@ -145,7 +146,7 @@ impl App {
             self.services.apply(&Action::FitToScale {
                 track: self.services.cursor.track,
                 phrase,
-                scale: self.scale,
+                scale: self.services.scale,
             });
         }
     }
@@ -185,12 +186,18 @@ impl App {
                 self.back_for_clearing();
                 self.clear_note();
             }
-            KeyCode::Char('z') => self.octave = (self.octave - 1).max(LOWEST_OCTAVE),
-            KeyCode::Char('x') => self.octave = (self.octave + 1).min(HIGHEST_OCTAVE),
-            KeyCode::Char('c') => {
-                self.note_velocity = next_note_velocity(self.note_velocity, false)
+            KeyCode::Char('z') => {
+                self.services.octave = (self.services.octave - 1).max(LOWEST_OCTAVE)
             }
-            KeyCode::Char('v') => self.note_velocity = next_note_velocity(self.note_velocity, true),
+            KeyCode::Char('x') => {
+                self.services.octave = (self.services.octave + 1).min(HIGHEST_OCTAVE)
+            }
+            KeyCode::Char('c') => {
+                self.services.note_velocity = next_note_velocity(self.services.note_velocity, false)
+            }
+            KeyCode::Char('v') => {
+                self.services.note_velocity = next_note_velocity(self.services.note_velocity, true)
+            }
             // A note, and an OFF, is written once however long its key is held.
             KeyCode::Char('1') => {
                 self.repeats_ignored = true;
@@ -206,7 +213,7 @@ impl App {
                     && self.modes.mode == Mode::Insert
                 {
                     self.record_note(key, midi);
-                    let velocity = self.flagged_velocity(self.note_velocity);
+                    let velocity = self.flagged_velocity(self.services.note_velocity);
                     self.hold_note(key, midi, velocity);
                 } else if let Some(midi) = played {
                     let on_step =
@@ -215,7 +222,7 @@ impl App {
                         });
                     let velocity = on_step
                         .as_ref()
-                        .map_or(self.note_velocity, |step| self.played_with(step));
+                        .map_or(self.services.note_velocity, |step| self.played_with(step));
                     let velocity = self.flagged_velocity(velocity);
                     let (track, step) = (self.services.cursor.track, self.services.cursor.step);
                     let phrase = self.write_played_note(midi);
@@ -280,9 +287,9 @@ impl App {
     /// The velocity a played note takes. Replacing keeps what the step has.
     fn played_with(&self, step: &Step) -> u8 {
         if self.modes.mode == Mode::Replace {
-            step.velocity.unwrap_or(self.note_velocity)
+            step.velocity.unwrap_or(self.services.note_velocity)
         } else {
-            self.note_velocity
+            self.services.note_velocity
         }
     }
 
@@ -368,7 +375,7 @@ impl App {
                 self.set_field(FieldValue::Velocity(Some(value.min(MAX_VELOCITY))));
             }
             Field::FxValue(slot) => {
-                let current = self.current_slot(slot).unwrap_or_default();
+                let current = self.services.current_slot(slot).unwrap_or_default();
                 // A condition's value is one of a list, and anything else is refused.
                 let command = self.modes.entry.command.or(current.command);
                 if command == Some(FxCommand::Cnd) && Condition::from_value(value).is_none() {
@@ -419,7 +426,7 @@ impl App {
                 }
             }
             KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
-                let current = self.current_slot(slot).unwrap_or_default();
+                let current = self.services.current_slot(slot).unwrap_or_default();
                 if !current.command.is_some_and(FxCommand::has_fine) {
                     self.services.status = "Only a setting that sweeps has a fine part".to_owned();
                     return;
@@ -437,7 +444,7 @@ impl App {
 
     /// Set a value's fine part, where it has one.
     pub(crate) fn set_fine(&mut self, slot: usize, fine: u8) {
-        let current = self.current_slot(slot).unwrap_or_default();
+        let current = self.services.current_slot(slot).unwrap_or_default();
         if current.command.is_some_and(FxCommand::has_fine) {
             self.set_field(FieldValue::Slot(
                 slot,
@@ -463,16 +470,6 @@ impl App {
             .filter_map(|step| step.fx.get(slot))
             .find(|fx| fx.is_value())
             .map_or(Mark::default(), |fx| fx.mark)
-    }
-
-    pub(crate) fn current_slot(&self, slot: usize) -> Option<FxSlot> {
-        let phrase = self.services.phrase_here()?;
-        phrase
-            .steps()
-            .get(self.services.cursor.step)?
-            .fx
-            .get(slot)
-            .copied()
     }
 
     /// A label, then `Enter`, moves to the value. One that isn't on the track opens the list.
@@ -533,6 +530,7 @@ impl App {
                 let name = self.modes.entry.text.take();
                 let kind = match name.as_str() {
                     "" => self
+                        .services
                         .current_gate()
                         .map_or(GateKind::Single, |gate| gate.kind),
                     name => match GateKind::from_name(name) {
@@ -544,7 +542,7 @@ impl App {
                         }
                     },
                 };
-                let length = self.current_gate().and_then(|gate| gate.length);
+                let length = self.services.current_gate().and_then(|gate| gate.length);
                 self.set_field(FieldValue::Gate(Some(Gate {
                     kind,
                     pulses,
@@ -597,7 +595,7 @@ impl App {
     /// take it away so the note plays at the track's `Gate`. An empty cell gets one pulse of `SGL`
     /// to hold a length, which is how it played.
     pub(crate) fn set_length(&mut self, length: Option<u8>) {
-        let gate = match self.current_gate() {
+        let gate = match self.services.current_gate() {
             Some(gate) => Some(Gate { length, ..gate }),
             None if length.is_some() => Some(Gate {
                 length,
@@ -628,7 +626,7 @@ impl App {
                 self.modes.entry.text = if sign == '-' { "-" } else { "+" }.into();
             }
             KeyCode::Char(c) if !key.ctrl && c.is_ascii_hexdigit() => {
-                let most = self.most_nudge_here();
+                let most = self.services.most_nudge_here();
                 let early = self.modes.entry.text.starts_with('-');
                 let mut digits: String = self
                     .modes
@@ -661,31 +659,9 @@ impl App {
         }
     }
 
-    /// The furthest the cursor's track's nudges go at its speed.
-    pub(crate) fn most_nudge_here(&self) -> i8 {
-        self.services
-            .track_here()
-            .map_or(Speed::Sixteenth, |track| track.speed)
-            .most_nudge()
-    }
-
     /// Nudge the row under the cursor, or put it back on the grid with 0.
     pub(crate) fn set_nudge(&mut self, nudge: i8) {
         self.set_field(FieldValue::Nudge(nudge));
-    }
-
-    /// How far the row under the cursor is nudged, in 24ths of a sixteenth.
-    pub(crate) fn current_nudge(&self) -> i8 {
-        self.services
-            .phrase_here()
-            .and_then(|phrase| phrase.steps().get(self.services.cursor.step))
-            .map_or(0, |step| step.nudge)
-    }
-
-    /// The gate cell under the cursor.
-    pub(crate) fn current_gate(&self) -> Option<Gate> {
-        let phrase = self.services.phrase_here()?;
-        phrase.steps().get(self.services.cursor.step)?.gate
     }
 
     fn advance(&mut self) {
@@ -693,7 +669,7 @@ impl App {
             self.finish_replace();
             return;
         }
-        if self.auto_jump {
+        if self.services.auto_jump {
             self.services.move_step(self.song().skip as isize);
         }
     }
@@ -701,7 +677,7 @@ impl App {
     /// Before `Backspace` clears: with auto-jump, back one grid cell to the last entry, and
     /// without, it clears where it is.
     fn back_for_clearing(&mut self) {
-        if self.auto_jump {
+        if self.services.auto_jump {
             self.services.move_step(-(self.song().skip as isize));
         }
     }
@@ -709,9 +685,9 @@ impl App {
     /// `;` in Insert: whether entering moves on by the grid. Like the scale, it isn't an edit to
     /// undo.
     pub(crate) fn toggle_auto_jump(&mut self) {
-        self.auto_jump = !self.auto_jump;
+        self.services.auto_jump = !self.services.auto_jump;
         self.services.dirty = true;
-        self.services.status = if self.auto_jump {
+        self.services.status = if self.services.auto_jump {
             "Auto-jump on: each entry moves on by the grid".to_owned()
         } else {
             "Auto-jump off: entering stays put".to_owned()
@@ -729,5 +705,33 @@ impl App {
             step: self.services.cursor.step,
             note,
         });
+    }
+}
+
+impl Services {
+    /// An FX slot of the row under the cursor.
+    pub(crate) fn current_slot(&self, slot: usize) -> Option<FxSlot> {
+        let phrase = self.phrase_here()?;
+        phrase.steps().get(self.cursor.step)?.fx.get(slot).copied()
+    }
+
+    /// The furthest the cursor's track's nudges go at its speed.
+    pub(crate) fn most_nudge_here(&self) -> i8 {
+        self.track_here()
+            .map_or(Speed::Sixteenth, |track| track.speed)
+            .most_nudge()
+    }
+
+    /// How far the row under the cursor is nudged, in 24ths of a sixteenth.
+    pub(crate) fn current_nudge(&self) -> i8 {
+        self.phrase_here()
+            .and_then(|phrase| phrase.steps().get(self.cursor.step))
+            .map_or(0, |step| step.nudge)
+    }
+
+    /// The gate cell under the cursor.
+    pub(crate) fn current_gate(&self) -> Option<Gate> {
+        let phrase = self.phrase_here()?;
+        phrase.steps().get(self.cursor.step)?.gate
     }
 }

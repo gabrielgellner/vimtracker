@@ -21,9 +21,8 @@ use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::kit::KitEntry;
 use vt_model::names::Names;
 use vt_model::samples::SamplePool;
-use vt_model::scale::Scale;
 use vt_model::selection::{Block, Field, Scope, StepRange};
-use vt_model::song::{Song, Track};
+use vt_model::song::Song;
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
 use crate::grammar::{Adjustments, Change, SelectionPlace};
@@ -267,11 +266,6 @@ pub struct App {
     pub(crate) jumped_from: Option<Place>,
     pub(crate) last_autosave: Option<Instant>,
     pub(crate) autosaved: Option<Arc<Song>>,
-    /// The octave the keys play and enter notes in, as note names number it: 3, where `a` is
-    /// `C-3`, middle C.
-    pub octave: i8,
-    /// The velocity new notes are written with, like the octave.
-    pub note_velocity: u8,
     /// The field a replace started on, since typing an FX command moves on to its value.
     pub(crate) replacing: Option<Field>,
     pub command_line: String,
@@ -291,15 +285,6 @@ pub struct App {
     /// How slowed the audio thread is, for the leaf beside it.
     pub slowdown: SlowdownReadout,
     pub should_quit: bool,
-    /// The scale, kept outside undo and written to the song on save as the live mutes and solos
-    /// are, as it's for entering notes and isn't part of what's undone.
-    pub scale: Scale,
-    /// Whether entering in Insert moves on by the grid, likewise.
-    pub auto_jump: bool,
-    /// Whether the song is read-only, so `:w` to its own folder refuses (decision 313), likewise.
-    pub read_only: bool,
-    /// Whether fill is on, for `CND`'s `FILL` and `!FILL`. It's a live control, never saved.
-    pub fill: bool,
     /// The key last pressed, as it is on the keyboard, until it's let go.
     key_down: Option<KeyCode>,
     /// Whether the key that's down ignores its repeats, as a transport key and a held note do.
@@ -393,7 +378,7 @@ impl App {
     /// Why `:e`, `:new` or `:q` refused unsaved changes, and the ways on: `or` is the forced
     /// command and what it does. A read-only song's `:w` refuses too, so it's offered `:w path`.
     pub(crate) fn unsaved(&self, or: &str) -> String {
-        if self.read_only {
+        if self.services.read_only {
             format!("Unsaved changes to a read-only song: :w path to save a copy, or {or}")
         } else {
             format!("Unsaved changes: :w to save, or {or}")
@@ -408,9 +393,6 @@ impl App {
         handle: Handle,
         rate: u32,
     ) -> Self {
-        let scale = song.scale;
-        let auto_jump = song.auto_jump;
-        let read_only = song.read_only;
         let mut names = Names::from_clock();
         let mut song = song;
         name_song(&mut song, folder.as_deref(), &mut names);
@@ -436,8 +418,6 @@ impl App {
             jumped_from: None,
             last_autosave: None,
             autosaved: None,
-            octave: 3,
-            note_velocity: DEFAULT_NOTE_VELOCITY,
             replacing: None,
             command_line: String::new(),
             command_menu: None,
@@ -449,10 +429,6 @@ impl App {
             cpu: LoadReadout::default(),
             slowdown: SlowdownReadout::default(),
             should_quit: false,
-            scale,
-            auto_jump,
-            read_only,
-            fill: false,
             key_down: None,
             repeats_ignored: false,
             held_notes: Vec::new(),
@@ -535,9 +511,9 @@ impl App {
     /// Tell the engine every track's live controls, and the scale `ACU` moves notes through, after
     /// loading a song.
     fn send_live(&mut self) {
-        self.services
-            .handle
-            .send(Command::SetScale { scale: self.scale });
+        self.services.handle.send(Command::SetScale {
+            scale: self.services.scale,
+        });
         for (track, live) in self.services.levels.clone().into_iter().enumerate() {
             self.services.handle.send(Command::SetMute {
                 track,
@@ -553,9 +529,9 @@ impl App {
     /// The song as saved: with live mute, solo, the scale and the folds written into it.
     pub(crate) fn song_to_save(&self) -> Arc<Song> {
         let mut song = Song::clone(self.song());
-        song.scale = self.scale;
-        song.auto_jump = self.auto_jump;
-        song.read_only = self.read_only;
+        song.scale = self.services.scale;
+        song.auto_jump = self.services.auto_jump;
+        song.read_only = self.services.read_only;
         song.view = self.services.folds.view();
         for (track, live) in song.tracks.iter_mut().zip(&self.services.levels) {
             track.mute = live.mute;
@@ -624,17 +600,6 @@ impl App {
         let start = self.services.extent().start;
         self.services.cursor.step = start;
         self.phrase_view.top = start;
-    }
-
-    /// The cursor's track as the latest report's live values were worked out from, which is a
-    /// frame or so behind the song while it's being changed.
-    pub fn reported_track(&self) -> Option<&Track> {
-        let song = self
-            .services
-            .live_song
-            .as_ref()
-            .unwrap_or_else(|| self.song());
-        song.tracks.get(self.services.cursor.track)
     }
 
     /// Do the work due each frame: send waiting versions and read the callback's report.
@@ -759,8 +724,8 @@ impl App {
     /// `--when-focus-on title:vimtracker` matches it, so its `Cmd` shortcuts can be left to this
     /// window alone.
     pub fn window_title(&self) -> String {
-        let read_only = if self.read_only { " [RO]" } else { "" };
-        format!("vimtracker: {}{read_only}", self.project_name())
+        let read_only = if self.services.read_only { " [RO]" } else { "" };
+        format!("vimtracker: {}{read_only}", self.services.project_name())
     }
 }
 
@@ -798,7 +763,7 @@ fn next_note_velocity(velocity: u8, up: bool) -> u8 {
 }
 
 /// Whether a delay since a time has passed. Copied from gmuse's `src/ui/mod.rs`.
-fn which_key_due(since: Option<Instant>, now: Instant, delay: Duration) -> bool {
+pub(crate) fn which_key_due(since: Option<Instant>, now: Instant, delay: Duration) -> bool {
     match since {
         Some(started) => now.saturating_duration_since(started) >= delay,
         None => false,

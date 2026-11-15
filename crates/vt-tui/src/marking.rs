@@ -36,7 +36,7 @@ impl App {
             {
                 number
             }
-            _ => self.track_sample_number(),
+            _ => self.services.track_sample_number(),
         }
     }
 
@@ -244,7 +244,8 @@ impl App {
         let track = self.services.cursor.track;
         self.record_jump();
         self.show_view(View::Sample);
-        self.sample_page.pinned = (number != self.track_sample_number()).then_some((track, number));
+        self.sample_page.pinned =
+            (number != self.services.track_sample_number()).then_some((track, number));
         match self.sample_page_here() {
             Ok(shown) => {
                 let start = shown.slice(slice).start;

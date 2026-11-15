@@ -279,7 +279,7 @@ impl App {
 
     /// Turn fill on or off, saying which.
     pub(crate) fn set_fill(&mut self, on: bool) {
-        self.fill = on;
+        self.services.fill = on;
         self.services.handle.send(Command::SetFill { on });
         self.services.status = if on { "Fill on" } else { "Fill off" }.to_owned();
     }

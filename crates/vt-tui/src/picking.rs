@@ -315,7 +315,7 @@ impl App {
             .to_vec();
         let at = ScaleKind::ALL
             .iter()
-            .position(|kind| *kind == self.scale.kind);
+            .position(|kind| *kind == self.services.scale.kind);
         self.show_picker(Picker::new("Scales", items).opened_on(at));
     }
 
@@ -413,26 +413,28 @@ impl App {
         match self.services.cursor.field {
             // A condition's value is one of a list, so `K` on it lists them.
             Field::FxValue(slot)
-                if self.current_slot(slot).and_then(|s| s.command) == Some(FxCommand::Cnd) =>
+                if self.services.current_slot(slot).and_then(|s| s.command)
+                    == Some(FxCommand::Cnd) =>
             {
                 self.open_condition_picker(slot);
             }
             // So is an amount, as a signed byte is hard to type.
             Field::FxValue(slot)
-                if self.current_slot(slot).and_then(|s| s.command) == Some(FxCommand::Acu) =>
+                if self.services.current_slot(slot).and_then(|s| s.command)
+                    == Some(FxCommand::Acu) =>
             {
                 self.open_amount_picker(slot);
             }
             // And a sample lock's is one of the bank's.
             Field::FxValue(slot)
-                if self.current_slot(slot).and_then(|s| s.command)
+                if self.services.current_slot(slot).and_then(|s| s.command)
                     == Some(FxCommand::Set(SettingId::SAMPLE)) =>
             {
                 self.open_sample_lock_picker(slot);
             }
             // And a slice lock's is one of the slices of the sample the step plays.
             Field::FxValue(slot)
-                if self.current_slot(slot).and_then(|s| s.command)
+                if self.services.current_slot(slot).and_then(|s| s.command)
                     == Some(FxCommand::Set(SettingId::SLICE)) =>
             {
                 self.open_slice_lock_picker(slot);
@@ -450,7 +452,7 @@ impl App {
 
     /// List the gate types, with what each does and the cell's current one highlighted.
     fn open_gate_picker(&mut self) {
-        let current = self.current_gate().map(|gate| gate.kind);
+        let current = self.services.current_gate().map(|gate| gate.kind);
         let empty = Item::new("---", Pick::Gate(None)).meaning("Empty, one pulse of SGL");
         let items = std::iter::once(empty)
             .chain(GateKind::ALL.iter().map(|kind| {
@@ -466,7 +468,7 @@ impl App {
 
     /// Put a chosen gate type in the cell, keeping its pulses and length, or empty it.
     fn pick_gate(&mut self, kind: Option<GateKind>) {
-        let current = self.current_gate().unwrap_or_default();
+        let current = self.services.current_gate().unwrap_or_default();
         let gate = kind.map(|kind| Gate { kind, ..current });
         self.set_field(FieldValue::Gate(gate));
     }
@@ -487,7 +489,7 @@ impl App {
                     .meaning(format!("{}%, {meaning}", gate_percent(*length)))
             }))
             .collect();
-        let current = self.current_gate().and_then(|gate| gate.length);
+        let current = self.services.current_gate().and_then(|gate| gate.length);
         let exact = match current {
             None => Some(0),
             Some(current) => LENGTHS
@@ -513,7 +515,7 @@ impl App {
     /// voice, each slot's effect, then the events. It opens on its search, so typing finds a label or
     /// a name at once, and `Esc` goes to the list. A query starts it searching for that.
     pub(crate) fn open_fx_picker(&mut self, slot: usize, query: &str) {
-        let current = self.current_slot(slot).and_then(|s| s.command);
+        let current = self.services.current_slot(slot).and_then(|s| s.command);
         let empty = Item::new(
             "---",
             Pick::FxCommand {
@@ -576,7 +578,7 @@ impl App {
             return;
         };
         self.services.cursor.field = Field::FxValue(slot);
-        let current = self.current_slot(slot);
+        let current = self.services.current_slot(slot);
         let has_condition = current
             .filter(|s| s.command.is_some())
             .is_some_and(|s| Condition::from_value(s.coarse()).is_some());
@@ -623,6 +625,7 @@ impl App {
     /// groups, opening on the slot's own and on its search, as the FX commands' list does.
     pub(crate) fn open_condition_picker(&mut self, slot: usize) {
         let current = self
+            .services
             .current_slot(slot)
             .filter(|s| s.command == Some(FxCommand::Cnd))
             .and_then(|s| Condition::from_value(s.coarse()));
@@ -655,6 +658,7 @@ impl App {
     /// as the scale is on or off, opening on the slot's own, or on one up.
     pub(crate) fn open_amount_picker(&mut self, slot: usize) {
         let current = self
+            .services
             .current_slot(slot)
             .filter(|s| s.command == Some(FxCommand::Acu))
             .and_then(|s| amount(s.coarse()))
@@ -669,7 +673,7 @@ impl App {
                 Item::new(format!("{amount:+}"), Pick::Amount { slot, value })
                     .meaning(format!(
                         "{value:02X}  {}",
-                        capitalised(&amount_text(amount, self.scale.on))
+                        capitalised(&amount_text(amount, self.services.scale.on))
                     ))
                     .category(if amount > 0 { "Up" } else { "Down" })
             })
@@ -932,7 +936,7 @@ impl App {
             Pick::Scale(kind) => self.set_scale(Scale {
                 on: true,
                 kind,
-                ..self.scale
+                ..self.services.scale
             }),
             Pick::ShapeChoice(choice) => self.pick_shape_choice(choice),
             Pick::GenChoice {

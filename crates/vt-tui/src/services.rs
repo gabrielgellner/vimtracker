@@ -15,10 +15,11 @@ use vt_engine::link::{Handle, JamState};
 use vt_engine::published::Published;
 use vt_engine::track_state::{Faders, LiveValues, NotePitch};
 use vt_model::action::{Action, edit};
-use vt_model::constants::{MAX_TRACKS, TICKS_PER_STEP};
+use vt_model::constants::{DEFAULT_NOTE_VELOCITY, FX_SLOTS, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::history::History;
 use vt_model::order::Dealer;
 use vt_model::samples::SamplePool;
+use vt_model::scale::Scale;
 use vt_model::selection::{Extent, Field};
 use vt_model::song::{ChainEntry, Phrase, Section, Song, Track};
 
@@ -122,6 +123,20 @@ pub struct Services {
     pub scope: crate::scope::Scope,
     /// Each track's level, for the mixer.
     pub track_meters: Vec<Meter>,
+    /// The scale, kept outside undo and written to the song on save as the live mutes and solos
+    /// are, as it's for entering notes and isn't part of what's undone.
+    pub scale: Scale,
+    /// Whether entering in Insert moves on by the grid, likewise.
+    pub auto_jump: bool,
+    /// Whether the song is read-only, so `:w` to its own folder refuses (decision 313), likewise.
+    pub read_only: bool,
+    /// Whether fill is on, for `CND`'s `FILL` and `!FILL`. It's a live control, never saved.
+    pub fill: bool,
+    /// The octave the keys play and enter notes in, as note names number it: 3, where `a` is
+    /// `C-3`, middle C.
+    pub octave: i8,
+    /// The velocity new notes are written with, like the octave.
+    pub note_velocity: u8,
 }
 
 impl Services {
@@ -135,6 +150,7 @@ impl Services {
     ) -> Self {
         let levels = live_from(&song);
         let folds = Folds::from_view(&song.view);
+        let (scale, auto_jump, read_only) = (song.scale, song.auto_jump, song.read_only);
         Self {
             history: History::new(Arc::new(song)),
             cursor: Cursor {
@@ -183,6 +199,12 @@ impl Services {
             meter: Meter::default(),
             scope: crate::scope::Scope::new(rate),
             track_meters: vec![Meter::default(); MAX_TRACKS],
+            scale,
+            auto_jump,
+            read_only,
+            fill: false,
+            octave: 3,
+            note_velocity: DEFAULT_NOTE_VELOCITY,
         }
     }
 
@@ -248,6 +270,66 @@ impl Services {
         let place = self.places.get(track)?.count - jam.started;
         let laps = place.div_euclid(length).max(0);
         Some((laps * length + place.rem_euclid(length)) as usize)
+    }
+
+    /// Which step of the cursor's phrase the playhead is on, if it's on this phrase.
+    pub(crate) fn playhead_step(&self) -> Option<usize> {
+        self.playhead_place().map(|(step, _)| step)
+    }
+
+    /// Which step of the cursor's phrase the playhead is on, and which of the step's pulses, if
+    /// it's on this phrase.
+    pub(crate) fn playhead_place(&self) -> Option<(usize, usize)> {
+        let owner = self.track_here()?;
+        let chain = (*self.section_here()?.chains.get(self.cursor.track)?)?;
+        let playhead = self.playing_place(self.cursor.track, chain)?;
+        let position = owner.chain_position(chain, playhead, self.dealer(self.cursor.track))?;
+        let start = owner.phrases.get(&position.phrase)?.start();
+        (position.slot == self.cursor.slot && Some(position.phrase) == self.phrase_id())
+            .then_some((start + position.step, position.pulse))
+    }
+
+    /// The note the cursor's track's row playing was heard at, before its chain's transpose,
+    /// where an accumulator or an `RND` moved it.
+    pub(crate) fn heard_note(&self) -> Option<u8> {
+        self.places.get(self.cursor.track)?.accumulated
+    }
+
+    /// Where each FX column of the cursor's phrase with a lane of its own is reading, if it's the
+    /// one playing.
+    pub(crate) fn lane_playheads(&self, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
+        let mut playheads = [None; FX_SLOTS];
+        let Some(jam) = self.playhead_step().and(self.jam.get(self.cursor.track)) else {
+            return playheads;
+        };
+        let count = self.places[self.cursor.track].count - jam.started;
+        for (slot, playhead) in playheads.iter_mut().enumerate() {
+            *playhead = phrase
+                .lane(slot)
+                .map(|lane| lane.step_at(count + jam.lane_offsets[slot]));
+        }
+        playheads
+    }
+
+    /// A track's name, or its number if it has none.
+    pub(crate) fn track_name(&self, track: usize) -> String {
+        let name = self
+            .song()
+            .tracks
+            .get(track)
+            .map_or("", |t| t.name.as_str());
+        if name.is_empty() {
+            format!("{:02}", track + 1)
+        } else {
+            name.to_owned()
+        }
+    }
+
+    /// The cursor's track as the latest report's live values were worked out from, which is a
+    /// frame or so behind the song while it's being changed.
+    pub fn reported_track(&self) -> Option<&Track> {
+        let song = self.live_song.as_ref().unwrap_or_else(|| self.song());
+        song.tracks.get(self.cursor.track)
     }
 
     /// What a track's dealt orders are dealt from, as the engine deals them.

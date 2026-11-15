@@ -620,7 +620,9 @@ impl App {
     /// The phrase whose live generators are the Roto's track's last devices: the one level with
     /// the cursor on that track, as the Gen page shows the cursor's own.
     fn roto_phrase(&self, at: usize) -> Option<u32> {
-        self.phrase_beside(at).map(|(phrase, _)| phrase)
+        self.services
+            .phrase_beside(at, self.modes.view)
+            .map(|(phrase, _)| phrase)
     }
 
     /// The devices PLUGIN mode shows, from the song as it is.

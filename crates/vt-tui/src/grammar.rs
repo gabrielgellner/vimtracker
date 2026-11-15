@@ -17,6 +17,7 @@ use crate::input::bindings::{Cmd, Op, Resolved};
 use crate::input::keys::Key;
 use crate::input::mode::{Mode, View};
 use crate::phrase_view::PhraseView;
+use crate::services::Services;
 use crate::shaping::ShapePanel;
 
 /// The register that holds the last copy. A cut doesn't touch it.
@@ -264,7 +265,7 @@ impl App {
 
     /// A move on the selection, counted in its unit.
     fn moved(&self, kind: Shift, by: i32, scope: Scope) -> Adjustment {
-        let (unit, size) = Unit::of(kind, scope, self.scale.on);
+        let (unit, size) = Unit::of(kind, scope, self.services.scale.on);
         Adjustment::Moved(unit, by.saturating_mul(size))
     }
 
@@ -594,28 +595,10 @@ impl App {
         }
     }
 
-    /// The phrase a track is on, level with the cursor, and where its loop starts.
-    pub(crate) fn phrase_beside(&self, track: usize) -> Option<(u32, usize)> {
-        let song = self.song();
-        let id = if track == self.services.cursor.track {
-            self.services.phrase_id()?
-        } else {
-            let chain = (*self.services.section_here()?.chains.get(track)?)?;
-            song.tracks[track]
-                .chain_position(
-                    chain,
-                    self.services.section_step(self.modes.view),
-                    self.services.dealer(track),
-                )?
-                .phrase
-        };
-        Some((id, song.tracks.get(track)?.phrases.get(&id)?.start()))
-    }
-
     /// Where these rows of the focused phrase fall on a track. Rows count from each phrase's own
     /// loop start, as they do on screen, and any a phrase doesn't have are left out.
     pub(crate) fn place_on(&self, track: usize, range: StepRange) -> Option<(u32, StepRange)> {
-        let (phrase, start) = self.phrase_beside(track)?;
+        let (phrase, start) = self.services.phrase_beside(track, self.modes.view)?;
         let focus = self.services.extent().start as isize;
         let stored = self.song().tracks[track]
             .phrases
@@ -662,7 +645,7 @@ impl App {
             Op::Copy => self.copy_block(range, scope, tracks, true),
             Op::ShiftUp | Op::ShiftDown => {
                 let by = if op == Op::ShiftUp { 1 } else { -1 };
-                let scale = self.scale.on.then_some(self.scale);
+                let scale = self.services.scale.on.then_some(self.services.scale);
                 self.edit_across(range, tracks, |track, phrase, range| Action::Shift {
                     track,
                     phrase,
@@ -800,13 +783,18 @@ impl App {
             return;
         }
         if let Field::FxValue(slot) = self.services.cursor.field
-            && self.current_slot(slot).and_then(|s| s.command).is_none()
+            && self
+                .services
+                .current_slot(slot)
+                .and_then(|s| s.command)
+                .is_none()
         {
             self.services.status = "Type an FX command first".to_owned();
             return;
         }
         if let Field::FxFine(slot) = self.services.cursor.field
             && !self
+                .services
                 .current_slot(slot)
                 .and_then(|s| s.command)
                 .is_some_and(FxCommand::has_fine)
@@ -870,7 +858,7 @@ impl App {
     pub(crate) fn substitute(&mut self) {
         self.modes.count = None;
         let command = match self.services.cursor.field {
-            Field::FxValue(slot) => self.current_slot(slot).and_then(|s| s.command),
+            Field::FxValue(slot) => self.services.current_slot(slot).and_then(|s| s.command),
             // The fine part goes back to 00 and is typed again.
             Field::FxFine(_) => {
                 self.do_change(&Change::ClearField);
@@ -926,7 +914,7 @@ impl App {
         let fill = match field {
             Field::Note => Fill::Note {
                 note: value.note,
-                velocity: self.note_velocity,
+                velocity: self.services.note_velocity,
             },
             Field::Velocity => Fill::Velocity(value.velocity),
             Field::Nudge => Fill::Nudge(value.nudge),
@@ -952,7 +940,7 @@ impl App {
         tracks: TrackSpan,
         kind: Shift,
     ) {
-        let scale = self.scale.on.then_some(self.scale);
+        let scale = self.services.scale.on.then_some(self.services.scale);
         self.edit_across(range, tracks, |track, phrase, range| Action::Shift {
             track,
             phrase,
@@ -1143,7 +1131,8 @@ impl App {
                     // Further tracks take theirs at the same row, and past the last are dropped.
                     for (offset, steps) in block.other_tracks.iter().enumerate() {
                         let track = self.services.cursor.track + offset + 1;
-                        if let Some((phrase, start)) = self.phrase_beside(track)
+                        if let Some((phrase, start)) =
+                            self.services.phrase_beside(track, self.modes.view)
                             && let Ok(at) = usize::try_from(start as isize + row)
                         {
                             actions.push(Action::Paste {
@@ -1303,5 +1292,21 @@ impl App {
             Mode::VisualField
         };
         self.services.clamp_cursor(self.modes.view);
+    }
+}
+
+impl Services {
+    /// The phrase a track is on, level with the cursor on a view, and where its loop starts.
+    pub(crate) fn phrase_beside(&self, track: usize, view: View) -> Option<(u32, usize)> {
+        let song = self.song();
+        let id = if track == self.cursor.track {
+            self.phrase_id()?
+        } else {
+            let chain = (*self.section_here()?.chains.get(track)?)?;
+            song.tracks[track]
+                .chain_position(chain, self.section_step(view), self.dealer(track))?
+                .phrase
+        };
+        Some((id, song.tracks.get(track)?.phrases.get(&id)?.start()))
     }
 }
