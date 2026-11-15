@@ -2025,7 +2025,7 @@ Issues create the files they name. Files marked **copy** come from `gmuse`, are 
 *   `src/playhead.rs`: per-track position, swing and version-change rules.
 *   `src/fx.rs`: the FX interpreter.
 *   `src/track_state.rs`: fixed-size per-track state.
-*   `src/voice.rs`: sample playback and envelope. `src/preview.rs`: the preview voices.
+*   `src/voice.rs`: sample playback and envelope, and `SynthEngine`, which each synth voice in `dsp/voices/` implements, with the `synths!` list that makes `Synth` of them. `src/preview.rs`: the preview voices.
 *   `src/dsp/`: the voices, filters, effects and dynamics in `voices/`, `filters/`, `effects/` and `dynamics/`, on the shared building blocks in `blocks/`, as "DSP layout" in the Technical Plan gives them.
 *   `src/mixer.rs`: track mix, sends and limiter.
 *   `src/rng.rs`: PCG32.

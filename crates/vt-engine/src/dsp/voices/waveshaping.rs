@@ -21,6 +21,7 @@
 
 use super::virtual_analog::{BLOCK, Moving, Settings, next_integrated_blep, this_integrated_blep};
 use super::waveshaping_tables::{FOLD, SHAPES};
+use crate::voice::SynthEngine;
 
 const MAX_FREQUENCY: f32 = 0.25;
 const MIN_FREQUENCY: f32 = 0.000_001;
@@ -93,6 +94,24 @@ pub struct Waveshaping {
     at: usize,
 }
 
+impl SynthEngine for Waveshaping {
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        if self.at == BLOCK {
+            self.render(frequency, settings);
+            self.at = 0;
+        }
+        let sample = self.output[self.at];
+        self.at += 1;
+        sample * LEVEL
+    }
+}
+
 impl Waveshaping {
     pub fn new() -> Self {
         Self {
@@ -107,18 +126,6 @@ impl Waveshaping {
             output: [0.0; BLOCK],
             at: BLOCK,
         }
-    }
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        if self.at == BLOCK {
-            self.render(frequency, settings);
-            self.at = 0;
-        }
-        let sample = self.output[self.at];
-        self.at += 1;
-        sample * LEVEL
     }
 
     /// A slope, with its corners smoothed so they don't alias.

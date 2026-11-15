@@ -30,6 +30,7 @@
 
 use super::virtual_analog::Settings;
 use crate::dsp::blocks::sine_table::sine_pm;
+use crate::voice::SynthEngine;
 
 /// How many frames are worked out at once, as in Plaits, whose envelopes move once a block.
 const BLOCK: usize = 24;
@@ -730,8 +731,8 @@ pub struct SixOp {
     at: usize,
 }
 
-impl SixOp {
-    pub fn new(rate: u32) -> Self {
+impl SynthEngine for SixOp {
+    fn new(rate: u32) -> Self {
         let rate = rate as f32;
         // Its envelopes count in the DX7's own rate.
         let scale = 44_100.0 / rate;
@@ -760,13 +761,13 @@ impl SixOp {
     }
 
     /// Let go of the note, so its envelopes start their release.
-    pub fn release(&mut self) {
+    fn release(&mut self) {
         self.gate = false;
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             self.render(frequency, settings);
             self.at = 0;
@@ -775,7 +776,9 @@ impl SixOp {
         self.at += 1;
         sample * LEVEL
     }
+}
 
+impl SixOp {
     /// Load the patch a note starts with, and work out what stays the same while it plays.
     fn load(&mut self, index: usize) {
         let patch = Patch::load(index);

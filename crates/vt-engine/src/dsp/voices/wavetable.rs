@@ -22,6 +22,7 @@
 //! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 use super::virtual_analog::Settings;
+use crate::voice::SynthEngine;
 
 /// How many frames are worked out at once, as in Plaits, whose smoothing is set per block.
 const BLOCK: usize = 24;
@@ -111,6 +112,24 @@ impl Default for Wavetable {
     }
 }
 
+impl SynthEngine for Wavetable {
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        if self.at == BLOCK {
+            self.render(frequency, settings);
+            self.at = 0;
+        }
+        let sample = self.output[self.at];
+        self.at += 1;
+        sample * LEVEL
+    }
+}
+
 impl Wavetable {
     pub fn new() -> Self {
         Self {
@@ -125,18 +144,6 @@ impl Wavetable {
             at: BLOCK,
             fresh: true,
         }
-    }
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        if self.at == BLOCK {
-            self.render(frequency, settings);
-            self.at = 0;
-        }
-        let sample = self.output[self.at];
-        self.at += 1;
-        sample * LEVEL
     }
 
     /// Where the three settings put the grid: Timbre across a row, Morph down the rows, and

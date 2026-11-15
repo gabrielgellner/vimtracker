@@ -27,6 +27,7 @@ use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
 use crate::dsp::blocks::oversampler::Decimator;
 use crate::dsp::blocks::plaits_parts::DcBlocker;
 use crate::dsp::blocks::sine_table::SINE;
+use crate::voice::SynthEngine;
 
 /// Braids renders at 96 kHz, and these at twice the program's rate, which at 48 kHz is the same.
 pub(super) const OVERSAMPLING: usize = 2;
@@ -150,6 +151,8 @@ pub(super) fn mix(a: f32, b: f32, balance: f32) -> f32 {
 pub trait Model: Copy {
     /// How loud it comes out against the other machines.
     const LEVEL: f32;
+    /// Whether it draws noise, which [`Model::seed`] chooses.
+    const NOISE: bool = false;
     fn new() -> Self;
     fn render(&mut self, pitch: Pitch, settings: &Settings, out: &mut [f32; INNER]);
     /// Choose the noise it draws, for a model that draws any, so each note differs but a render
@@ -170,8 +173,10 @@ pub struct Macro<M> {
     at: usize,
 }
 
-impl<M: Model> Macro<M> {
-    pub fn new(rate: u32) -> Self {
+impl<M: Model> SynthEngine for Macro<M> {
+    const NOISE: bool = M::NOISE;
+
+    fn new(rate: u32) -> Self {
         let rate = rate as f32 * OVERSAMPLING as f32;
         Self {
             model: M::new(),
@@ -184,13 +189,13 @@ impl<M: Model> Macro<M> {
     }
 
     /// Choose the noise its model draws, if it draws any.
-    pub fn seed(&mut self, seed: u32) {
+    fn seed_noise(&mut self, seed: u32) {
         self.model.seed(seed);
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             self.render(frequency, settings);
             self.at = 0;
@@ -199,7 +204,9 @@ impl<M: Model> Macro<M> {
         self.at += 1;
         sample
     }
+}
 
+impl<M: Model> Macro<M> {
     fn render(&mut self, frequency: f32, settings: Settings) {
         let hertz = frequency.max(1e-6) * self.rate / OVERSAMPLING as f32;
         let pitch = Pitch {
