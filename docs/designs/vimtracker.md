@@ -301,7 +301,10 @@ The same engine runs on the calling thread, with no sound device, for `render`, 
     each in `shape/params.rs`'s `GEN_PARAMS`, by `GenParam`, with its key, name, units, typing,
     bounds, steps and a `get` and `set` of it as a number, and one `FillSpec` row each in
     `shape.rs`'s `FILLS`, by `FillKind`, with its name, meaning and its own settings' places on
-    the Gen page (decision 342).
+    the Gen page (decision 342). The effects' enums, both `ALL`s and their forwarding are written
+    from one list by `insert.rs`'s `effects!` (#784). [Adding a device](adding-a-device.md) lists
+    every place a new effect, voice, generator or mod type takes, what the compiler catches and
+    which pins show it.
 
 **Decisions:** 29, 30, 59, 60, 158, 159 and 161, the [M14](#m14-design-one-list-of-settings) and
 [M14b](#m14b-design-kinds-of-setting) designs, and the three crates of the
@@ -728,7 +731,9 @@ module per file, each keeping its port's licence notice:
 
 A new voice, filter, effect or dynamics tool goes in its folder. A slot effect with a long buffer
 implements `SlotEffect` (and `Rung`, if the slot plays it through `ring`) and takes one line of
-`memories!`; the slot reaches it by `match`, never `dyn` (decision 340). A part that two folders
+`memories!`; the slot reaches it by `match`, never `dyn` (decision 340). A voice implements
+`SynthEngine` and takes one line of `synths!`. [Adding a device](adding-a-device.md) has the rest
+of each family's checklist. A part that two folders
 would share, such as the antiderivative antialiasing, 4x oversampling and state variable filter of
 #260, goes in `blocks/`. A binary table sits in a `tables/` beside the modules that read it, so
 their `include_bytes!` paths stay short. The rest of the engine and `vt-tui` name each module by its
@@ -755,7 +760,7 @@ where they were written and are borrowed across folders; #260 may move shared sh
 drive it directly. It holds the shared services, `App::services`, beside the pages (`track_page`,
 `mixer_page`, `project_page`, `audio_page`, `sample_page`, `song_view`, `chain_view` and
 `phrase_view`), `App::modes`, the picker, the command line, help, the jump list and the keys' own
-state: 82 fields, and 45 files besides `app.rs` add an `impl App` block each, such as
+state: 76 fields, and 45 files besides `app.rs` add an `impl App` block, such as
 `track_page.rs`, `banking.rs`, `slicing.rs`, `shaping.rs`, `picking.rs`, `recording.rs` (live
 recording, `Space r`), `project_page.rs`, `audio_page.rs` and `sample_page.rs`.
 
@@ -780,21 +785,23 @@ holds, the recording and the audio's readouts (#784). What a page reads is worke
 services, given the view where it depends on it, as a live generator's sources do, so the scale,
 the octave and the rest of what entering notes reads are the services' too.
 
-**`Page`** (`page.rs`, #739) is a page as a component, which the track page, the mixer, the
-project page's Song and Audio sub-pages, the sample page, the song view, the chain view and the
-phrase view are so far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
-`input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a count through a
-`CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed back; `Page::draw`,
-given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and
-the ids they're given. `App` holds one of each page and dispatches by `View` with a plain `match`,
-so there's no `dyn`. A key goes, in this order, to the first that takes it:
+**`Page`** (`page.rs`, #739) is a page as a component, which every page is: the track page, the
+mixer, the project page's Song and Audio sub-pages, the sample page, the song view, the chain view
+and the phrase view. A `Page` has its rows of the binding table, `Page::KEYS`, kept beside it and
+assembled by `input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a
+count through a `CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed
+back; `Page::draw`, given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data
+for `Graphics` and the ids they're given. `App` holds one of each page and dispatches by `View` with
+a plain `match`, so there's no `dyn`. A key goes, in this order, to the first that takes it:
 
 1.  the overlay for the `Mode`: the picker, the shape panel, the mapping view, the command line,
     Insert, a jump, a guide or help (`App::handle_key`);
-2.  the page on screen (`App::run_page`), through `Page::key` for a component, or the page's own
-    `run_*` for the pages that aren't yet;
-3.  `App`'s commands across pages, for what the page passed back: `i`'s mode, `/`, `M`, `gm`, the
-    Keys mode, the pickers, and then the track page's edits, which the mixer shares;
+2.  the page on screen (`App::run_page`), through `Page::key`;
+3.  what the page passed back, which is `App`'s: for the track page and the mixer,
+    `App::run_across_pages`, the commands across pages (`i`'s mode, `/`, `M`, `gm`, the Keys mode,
+    the Gen page's keys and the pickers) and then the track page's edits, which the mixer shares;
+    for the others, each page's own, `App::run_project_page`, `run_audio_page`,
+    `run_sample_passed`, `run_song_passed` and `run_chain_passed`, while the phrase view's go on;
 4.  the tree of chains and phrases (`App::run_tree`);
 5.  the grammar's operators, the motion after one, and the Visual modes (`App::run_grammar`);
 6.  the global `match` in `App::run`.
@@ -918,30 +925,30 @@ digits, and where it was left on each of the other pages, which `TrackPage::show
 (decision 209); whether the FX page is zoomed; the ids of the terminal's images it shows, as one
 `PanelIds` by panel (the Mod page's slots, the filter's curve, the sample's thumbnail, the FX page's
 slots and zoom, the Gen page's previews), with the zoomed slot's caption, and where it last drew the
-pictures that carry a dot; the effect `dd` took, for `p`; and the cursor's track's meters it shows, held as they fall
-(each slot's gain reduction and its two bars of history, and the level after the trim), which
-`App::tick` brings up to date from the engine's report. Its methods are given the cursor's track
-(`App::track_here`) and read no `App`: `TrackPage::rows`, `place`, `control`, `devices` and
-`device_cursor` say where the cursor is and on what, and `TrackPage::key` runs the page's own keys,
-the moves, `{` and `}` and the pages either side, returning an `Outcome`: done, refused with a
-reason for the status line, or passed back. What else it reads of the program comes through a `Ctx`
-(`page.rs`), which borrows the shared services: the song and the cursor's place in it, the view
-and the modes that span pages (the mode, what Insert has typed, a field jump's labels), and what
-the engine last reported (the transport, the live values, where each track is and what it's
-launched onto, the faders, the live generators). `App::ctx` lends one. `TrackPage::run` puts the
-cursor where it's seen and runs one of its own keys, given a `CtxMut`, and its `Page::draw` draws
-the page (`views/track.rs` and `views/track/`), giving back where its pictures with dots are.
-`run::draw_view` draws any view's page from an `App`, as the tests do.
-`App::run_track_page` hands each key to `TrackPage::run`, the page and the services borrowed apart,
-runs what spans the pages itself (`/`, `M`, `gm`, the Keys mode, the Gen page's keys, `K` and `i`),
-and hands the edits to `TrackPage::edit`, given the control under the cursor (`App::track_control`,
-the track page's or the mixer's) and the `Services`: `b`, `dd` and `p` are the page's own methods,
-in `fx.rs`, as what `dd` took is the page's, and the rest are functions over the services that
-the mixer shares, as it turns the same controls: `editing.rs` (`=`, `-`, the fine digits and `x`),
+pictures that carry a dot; the effect `dd` took, for `p`; and the cursor's track's meters it shows,
+held as they fall (each slot's gain reduction and its two bars of history, and the level after the
+trim), which `App::tick` brings up to date from the engine's report. Its methods are given the
+cursor's track (`Services::track_here`) and read no `App`: `TrackPage::rows`, `place`, `control`,
+`devices` and `device_cursor` say where the cursor is and on what, and `TrackPage::key` runs the
+page's own keys, the moves, `{` and `}` and the pages either side, returning an `Outcome`: done,
+refused with a reason for the status line, or passed back. What else it reads of the program comes
+through a `Ctx` (`page.rs`), which borrows the shared services: the song and the cursor's place in
+it, the view and the modes that span pages (the mode, what Insert has typed, a field jump's labels),
+and what the engine last reported (the transport, the live values, where each track is and what it's
+launched onto, the faders, the live generators). `App::ctx` lends one. `TrackPage::key`, its
+`Page::key`, puts the cursor where it's seen and runs one of its own keys, given a `CtxMut`, and
+its `Page::draw` draws the page (`views/track.rs` and `views/track/`), giving back where its
+pictures with dots are. `run::draw_view` draws any view's page from an `App`, as the tests do.
+`App::run_track_pages` (`page.rs`) hands each key to `TrackPage::key`, the page and the services
+borrowed apart, and what it passes back to `App::run_across_pages` (`track_page.rs`), which runs
+what spans the pages itself (`/`, `M`, `gm`, the Keys mode, the Gen page's keys, `K` and `i`), and
+hands the edits to `TrackPage::edit`, given the control under the cursor (`App::track_control`, the
+track page's or the mixer's) and the `Services`: `b`, `dd` and `p` are the page's own methods, in
+`fx.rs`, as what `dd` took is the page's, and the rest are functions over the services that the
+mixer shares, as it turns the same controls: `editing.rs` (`=`, `-`, the fine digits and `x`),
 `tuning.rs` (`Tune` and `Cents`) and `typing.rs`'s `commit_control` (what `i` typed). What stays
-`App`'s: `pickers.rs` (`K`), which opens the program's picker, typing's keys into
-`App::modes`' entry, and `generators.rs`, which works through the live generators' sources and
-the shape panel.
+`App`'s: `pickers.rs` (`K`), which opens the program's picker, typing's keys into `App::modes`'
+entry, and `generators.rs`, which works through the live generators' sources and the shape panel.
 
 *   **Each page's settings in its own file:** `sound.rs` has the Sound page's devices on a sound
     track and the fixed tracks' Outputs, `modulation.rs` the Mod page's devices, and
@@ -974,8 +981,8 @@ the shape panel.
 *   **Macros on the page** (`macroing.rs`, decision 285). `M` maps the setting under the cursor,
     `Control::setting_for_macro`, through a picker; `gm` opens `App::mapping`, a `MappingView` in
     `Mode::Mapping`, drawn by `views/mapping.rs`. A setting a macro holds refuses a turn in
-    `run_track_page`, and the pages draw `Track::with_macros`, a copy with each mapped setting
-    where its macro's turn puts it, never edited.
+    `run_across_pages` (`App::refuses_turn`), and the pages draw `Track::with_macros`, a copy with
+    each mapped setting where its macro's turn puts it, never edited.
 *   **Racks** (`device.rs`). `Page::devices` asks each page's file for its `DeviceSpec`s: the FX
     page a slot each (`DeviceSpec::slot`), and the Mod page each mod slot of the left column, then
     the one three after it beside it, `Mod 1`, `Mod 4`, `Mod 2` and so on, each with its type's
@@ -1019,18 +1026,18 @@ the shape panel.
     half-width devices), its panel (`widgets::panel`), and, for the Mod page's two columns,
     `widgets::device::rack_areas`.
 
-**The mixer** (`mixer_page.rs`, decision 25) is a component the same way (#320).
-`App::mixer_page` is a `MixerPage`: the row its cursor is on, `MIXER`'s `Level` to start with,
-kept on a track that hasn't it and kept while other views show; the track it's on is the program's
-cursor, and nothing else is the mixer's own, as which strips show follows from the cursor and the
-folds each time it's drawn, and the tracks' meters are the Roto's too. `MixerPage::row_here`
-and `control` are given the cursor's track, as `TrackPage`'s are. `MixerPage::run` runs its own
-keys, `j`, `k`, `gg` and `G` down and up a strip, and `h`, `l`, `0` and `$` across the strips,
-moving the program's cursor through `Services::move_track` and `go_to_track_at`, which keep its
-place in the section, `0` and `$` to the strip `MixerPage::end_track` finds, returning an
-`Outcome`, given a `CtxMut`; `MixerPage::draw` draws it (`views/mixer.rs`) through a `Ctx`.
-`App::run_mixer` hands each key to it, and a key it passes back to `App::run_track_page`, whose
-edits the mixer shares.
+**The mixer** (`mixer_page.rs`, decision 25) is a component the same way (#320). `App::mixer_page`
+is a `MixerPage`: the row its cursor is on, `MIXER`'s `Level` to start with, kept on a track that
+hasn't it and kept while other views show; the track it's on is the program's cursor, and nothing
+else is the mixer's own, as which strips show follows from the cursor and the folds each time it's
+drawn, and the tracks' meters are the Roto's too. `MixerPage::row_here` and `control` are given the
+cursor's track, as `TrackPage`'s are. `MixerPage::key`, its `Page::key`, runs its own keys, `j`,
+`k`, `gg` and `G` down and up a strip, and `h`, `l`, `0` and `$` across the strips, moving the
+program's cursor through `Services::move_track` and `go_to_track_at`, which keep its place in the
+section, `0` and `$` to the strip `MixerPage::end_track` finds, returning an `Outcome`, given a
+`CtxMut`; `MixerPage::draw` draws it (`views/mixer.rs`) through a `Ctx`. `App::run_track_pages`
+hands each key to it, and a key it passes back to `TrackPage::key` and then `App::run_across_pages`,
+whose edits the mixer shares.
 
 Colours are in `theme.rs`, and the Nerd Font glyphs in `glyphs.rs`, each named with its codepoint.
 The guides (`guides.rs`) are the Markdown files in `crates/vt-tui/guides/`, built into the program
@@ -1038,14 +1045,14 @@ with `include_str!` and opened with `Space ?`; the manual includes the same file
 differ.
 
 **The phrase view's timeline** (`timeline.rs`). The phrase view draws lines, not rows: a row of the
-loop takes a line for each of its pulses, a line being one step of the track's `Speed`, unless
-`z a` has collapsed it to a line a row (`App::rows_collapsed`). `timeline::lines` lays the rows out,
-each line with its row, its pulse and when it starts, and `views/phrase.rs` draws a row's own line,
-its dim continuation lines and the lines past the phrase from that, the beat rules from each line's
-start, and the other tracks' columns from the ticks each line covers (`timeline::starting_in`).
-The cursor, counts, selections and `App::top` stay in rows, so only scrolling counts lines: the
-row-to-line helpers there are what `App::follow_cursor`, `H`, `M`, `L`, `Ctrl-d`, `Ctrl-u` and the
-view's furthest scroll go by.
+loop takes a line for each of its pulses, a line being one step of the track's `Speed`, unless `z a`
+has collapsed it to a line a row (`PhraseView::rows_collapsed`). `timeline::lines` lays the rows
+out, each line with its row, its pulse and when it starts, and `views/phrase.rs` draws a row's own
+line, its dim continuation lines and the lines past the phrase from that, the beat rules from each
+line's start, and the other tracks' columns from the ticks each line covers
+(`timeline::starting_in`). The cursor, counts, selections and `PhraseView::top` stay in rows, so only
+scrolling counts lines: the row-to-line helpers there are what `App::follow_cursor`, `H`, `M`, `L`,
+`Ctrl-d`, `Ctrl-u` and the view's furthest scroll go by.
 
 **Folding groups** (`folding.rs`). `Services::folds` says which groups are folded, `z a`, `zM` and `zR`
 setting each, and a group none has set is folded while it's empty. `Folds::hides` is what the song
@@ -1060,19 +1067,21 @@ kept out of the undo history: the song's `view` (`vt_model::view::ViewState`) is
 `Services::folds` when a song opens and written back by `song_to_save`, and `App::fold_group` sets one
 from code (decision 305).
 
-**Where it's going** (#320, the track page's and the mixer's state, own keys and drawing done, and
-the services split from `App`). Each page becomes a component that owns its state, keys and
-drawing, `TrackPage`, `ProjectPage`, `MixerPage`, `SamplePage`, `SongView` and the phrase and chain
-views among them, with `fn run(&mut self, cmd, times, ctx: &mut CtxMut) -> Outcome` and
+**Every page a component** (#320, #739). Each page owns its state, its own keys and its drawing:
+`TrackPage`, `MixerPage`, `ProjectPage`, `AudioPage`, `SamplePage`, `SongView`, `ChainView` and
+`PhraseView`, each a `Page` with `fn key(&mut self, cmd, count, ctx: &mut CtxMut) -> Outcome` and
 `fn draw(&self, frame, area, ctx: &Ctx)`. `App` holds the `Services` every page shares beside the
 pages, the current view, the modes and popups that span pages (the picker, the command line and
-help) and the jump list, and the feature files become methods on the page or service they belong
-to. It goes a page per PR, the track page first, with keys, drawing and screenshots unchanged.
+help) and the jump list. What a page passes back, where it opens the picker, changes `Modes` or
+reaches across pages, stays `impl App`; moving the feature files onto the page or service they
+belong to, with the folders and `pub(crate)`, is U13 (#733), and what's passed back only to reach
+the picker, the views and `:` lines is the third architecture review's item 2 (#784).
 `TrackPage` and `MixerPage` have their state, their own keys, their edits and their drawing: the
 edits are `TrackPage::edit`, the page's methods and functions over the `Services`, and the
-mixer's moves across tracks are its own keys. `App` still dispatches to them, in
-`run_track_page` and `run_mixer`, and keeps the track page's pickers, typing and Gen page, which
-open its picker, edit `Modes` and work through the shape panel. The track page says which pictures
+mixer's moves across tracks are its own keys. `App` dispatches to them in `App::run_track_pages`
+and `App::run_across_pages`, and keeps the track page's lists that aren't a setting's choices,
+Insert's typing on it and the Gen page's keys, which open its picker, edit `Modes` and work through
+the shape panel. The track page says which pictures
 it wants as data and where its dots go, and `Graphics` reads no `App` (#728, below).
 `ProjectPage` (`project_page.rs`) and `AudioPage` (`audio_page.rs`), the project page's Song and
 Audio sub-pages, have their state, their moves and their drawing, through a `Ctx`, the Song

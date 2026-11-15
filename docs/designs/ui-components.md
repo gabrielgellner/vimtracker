@@ -13,6 +13,47 @@ The parallel device-description study (`device-interface.md`) came in near the e
 study builds on its `ParamView` (§2.5 there) and its PR names (M1, S1, M2, S2, E6/V3/G3), and §3.1
 lists four gaps in that contract. It does not redesign the description.
 
+**As built** (2026-11-15). The plan in §8 is built but for U13. The study below is kept as it was
+written, so its "today" is `main` before the plan; the design's
+[Architecture](vimtracker.md#architecture) describes the code as it is.
+
+| Step | Built in |
+|---|---|
+| The services split (#320) | #742, #743 |
+| U1 popups | #748 |
+| U2 widget pins | #747 |
+| U3 `CellLook` | #751 |
+| U4 `ParamCell` and `TrackCells` | #756 |
+| U5 pictures as data (#728) | #753 |
+| U6 `TypedValue` | #754 |
+| M2 (#726) | #761 |
+| U7 `view` and `set` | #772 |
+| U8 `param::edit` and `choice_picker` | #782 |
+| U9 `Page` and `Page::KEYS` | #759 |
+| U10a project and audio pages | #769 |
+| U10b sample page | #773 |
+| U10c song view | #776 |
+| U10d chain view | #779 |
+| U10e phrase view | #781 |
+| E6/V3/G3, the Roto lookups (#731) | #778 |
+| The answers to §1.5 and §9.3: faders with macros, the macro mark, `gd` to a macro | #764, #767, #768 |
+| #719's vt-tui part, one test binary | #785 |
+
+Where it differs from the plan:
+- #719's vt-tui part landed after the pages, not before the split.
+- U10 was five PRs, a to e.
+- `Ctx` read through `&App` until the third architecture review's item 1 (#784) made it the
+  services, the modes and a `PageState`, in #787.
+- The Roto's knob feel kept a match on each `Control` until #784's item 3 read it from the view,
+  in #788.
+- Each view kept a `draw` taking `&App` for the tests, and the sample page settled on what it
+  shows while it was drawn, until #784's item 4 gave the tests `run::draw_view` and settled the
+  page after keys and each frame's work.
+- Pages still pass keys back to `App` only to reach the picker, the views and `:` lines (#784's
+  item 2).
+
+What's left: U13, the module layout (#733), and #784's other items: 2 and 9 to 13.
+
 ---
 
 ## 0. The recommendation on one page
@@ -1155,8 +1196,9 @@ old path.
 
 ## 7. Module layout
 
-**Today.** `lib.rs` has 59 flat `pub mod`s, 48 of them adding `impl App` (#718 item 15, #733).
-Because everything is `pub`, the dead-code lint can't see anything.
+**Today.** `lib.rs` has 62 flat `pub mod`s, and 46 files add an `impl App` block, 47 blocks in 34
+of those modules (counted on 2026-11-15, after #787; #718 item 15, #733). Because everything is
+`pub`, the dead-code lint can't see anything.
 
 **Target.** Folders by what a module is. Pages co-locate their state, keys, edits and drawing, as
 gitui's `components/` and helix's `ui/` keep a component's events and rendering together [known].
@@ -1254,7 +1296,7 @@ src/
 | U9 | `Page` trait and `Page::KEYS`: `TrackPage` and `MixerPage` implement it; the key slices move beside them; a test pins the assembled table | S | split | `page.rs`, `input/bindings.rs`, `track_page.rs`, `mixer_page.rs` | 2 now, 8 by U10 | – |
 | U10a–f | The remaining pages as components (#320), one each: project + audio together, sample, song, chain, phrase. Each moves its fields off `App`, implements `Page`, and draws its settings rows with `ParamCell::parts` where it has them | M each (phrase L: the 630-line `draw`) | U9; U4 for rows | each page's files | 6 pages | #320 |
 | (E6/V3/G3) | *The device study's Roto PRs*: layout lookups by kind, `key()` and `resolve` from the specs. Here, add only: knob turns in `roto/edits.rs` go through `param::edit` and `set`, the same path as a key | S–M | U8; after #736 merges; not during the split | `roto/` | 3 lookups, the edits' mirror | **#731** |
-| U13 | Module layout: `pages/`, `overlays/`, `services/`, `graphics/`, `offline/`, `widgets/`, `screen/`; `pub(crate)`; the dead-code lint back | M | all the above | all of vt-tui, moves only | 59 modules | **#733** |
+| U13 | Module layout: `pages/`, `overlays/`, `services/`, `graphics/`, `offline/`, `widgets/`, `screen/`; `pub(crate)`; the dead-code lint back | M | all the above | all of vt-tui, moves only | 62 modules | **#733** |
 
 **Alongside, not blocked by this plan.**
 - **#730**, splitting `guides/tracks.md` by page: docs, on a quiet day. It pairs naturally with
