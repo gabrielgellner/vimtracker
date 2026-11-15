@@ -413,8 +413,8 @@ impl App {
                     kit.name,
                     kit.sounds.len()
                 );
-                self.kit = kit.sounds;
-                self.kit_file = Some(path.to_path_buf());
+                self.explorer.kit = kit.sounds;
+                self.explorer.kit_file = Some(path.to_path_buf());
             }
             Err(error) => self.services.status = error.to_string(),
         }
@@ -773,12 +773,13 @@ impl App {
     /// Choose this track's sample in the explorer, with the kit's sounds first.
     pub(crate) fn open_default_sample_picker(&mut self) {
         let kit_name = self
+            .explorer
             .kit_file
             .as_deref()
             .and_then(Path::file_stem)
             .map(|stem| format!("Kit {}", stem.to_string_lossy()))
             .unwrap_or_else(|| "Kit".to_owned());
-        let kit = self.kit.iter().map(kit_item).collect();
+        let kit = self.explorer.kit.iter().map(kit_item).collect();
         self.open_sample_explorer(kit, kit_name);
     }
 
@@ -813,11 +814,11 @@ impl App {
                 self.refresh_preview();
             }
             Outcome::Choose(pick) => {
-                let naming = self.naming.take();
+                let naming = self.explorer.naming.take();
                 self.picker = None;
                 self.modes.mode = self.mode_after_picker();
                 self.leave_explorer();
-                self.naming = naming;
+                self.explorer.naming = naming;
                 self.choose(pick);
             }
         }
@@ -849,7 +850,7 @@ impl App {
                 self.load_preset(kind, &path);
             }
             Pick::FactoryPatch(name) => {
-                let over = std::mem::take(&mut self.patch_over);
+                let over = std::mem::take(&mut self.explorer.patch_over);
                 self.add_factory_patch(&name, over);
             }
             Pick::Prompt(text) => {
@@ -861,7 +862,7 @@ impl App {
             }
             Pick::Project(folder) => {
                 self.note_place_of(Purpose::Project, &folder);
-                let force = std::mem::take(&mut self.opening_discards);
+                let force = std::mem::take(&mut self.explorer.opening_discards);
                 self.line(crate::overlays::command::parse::Line::Edit {
                     path: Some(folder),
                     force,

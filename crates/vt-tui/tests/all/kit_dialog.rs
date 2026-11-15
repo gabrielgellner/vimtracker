@@ -171,7 +171,7 @@ fn moving_onto_a_kits_sound_plays_it_and_marking_plays_nothing_more() {
         }
         assert_eq!(realtime.engine().previews_sounding(), 0);
     };
-    let playing = |app: &App| app.file_playing.clone().unwrap_or_default();
+    let playing = |app: &App| app.explorer.file_playing.clone().unwrap_or_default();
     open_kit(&mut app);
     app.finish_loading();
     assert!(
@@ -222,9 +222,12 @@ fn moving_onto_a_kits_sound_plays_it_and_marking_plays_nothing_more() {
     );
     // A turns it off, as in the sample explorer.
     press(&mut app, "A");
-    assert_eq!(app.file_playing, None);
+    assert_eq!(app.explorer.file_playing, None);
     press(&mut app, "j");
-    assert_eq!(app.file_wanted, None, "nothing plays while it's off");
+    assert_eq!(
+        app.explorer.file_wanted, None,
+        "nothing plays while it's off"
+    );
     assert_eq!(sounding(&mut realtime, &mut app), 0);
 }
 

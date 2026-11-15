@@ -5,8 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::overlays::picker::draw::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
-use crate::overlays::picker::exploring::Naming;
-use crate::overlays::picker::places::RecentPlaces;
+use crate::overlays::picker::exploring::Explorer;
 use crate::pages::audio::AudioPage;
 use crate::pages::chain::ChainView;
 use crate::screen::Readouts;
@@ -16,7 +15,6 @@ use crate::widgets::glyphs;
 use vt_engine::engine::{PLAYHEADS, TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
-use vt_model::kit::KitEntry;
 use vt_model::names::Names;
 use vt_model::samples::SamplePool;
 use vt_model::selection::{Field, Scope, StepRange};
@@ -229,9 +227,6 @@ pub struct App {
     pub audio_page: AudioPage,
     /// The mouse wheel as a knob on the cursor's setting, while its setting is on.
     pub wheel: crate::input::wheel::Wheel,
-    /// The sample library the sample explorer lists, such as Ableton Live's, if this machine has
-    /// one: found as the program starts, and none in tests.
-    pub library: Option<PathBuf>,
     /// The mixer: the row its cursor is on.
     pub mixer_page: MixerPage,
     /// The song view: the column its cursor is on, and where `V` started selecting sections.
@@ -282,35 +277,12 @@ pub struct App {
     pub mapping: Option<crate::overlays::mapping::MappingView>,
     /// A selection to shape once the command for its empty FX column is chosen, and its field.
     pub(crate) shape_command: Option<(Selection, Field)>,
-    /// The sounds of the kit in use, to choose from for a track.
-    pub kit: Vec<KitEntry>,
-    /// The file of the kit in use, which the kit picker opens on.
-    pub kit_file: Option<PathBuf>,
-    /// Reads the files the explorer previews and plays, off this thread.
-    pub loader: Loader,
+    /// The file explorer: the kit in use, the files it reads and plays, its places and tags, and
+    /// what a folder chosen in it goes on to.
+    pub explorer: Explorer,
     /// When the loader or the analyst started on what they're doing, while they are, for the
     /// spinner on the status line.
     pub(crate) work_since: Option<Instant>,
-    /// Whether the explorer plays the sample its cursor moves onto, which `A` switches and the
-    /// next one opened keeps.
-    pub audition_files: bool,
-    /// The sample the explorer's cursor is on, to play once it's read, and the one playing.
-    pub file_wanted: Option<PathBuf>,
-    pub file_playing: Option<PathBuf>,
-    /// The folders the explorer was last used in.
-    pub recent_places: RecentPlaces,
-    /// The tags given to files by hand, by their content (decision 315).
-    pub tag_library: std::sync::Arc<vt_model::tag::TagLibrary>,
-    /// What each sample read for the explorer is by how its sound ends, `loop` or `one-shot`,
-    /// kept for the session.
-    pub heard_tags: std::collections::HashMap<PathBuf, &'static str>,
-    /// The command line a folder chosen in the explorer goes on to.
-    pub naming: Option<Naming>,
-    /// Whether the project the explorer opens throws away unsaved changes, as after `:e!`.
-    pub(crate) opening_discards: bool,
-    /// Whether the patch the explorer adds goes over the last mod slots and macros where there
-    /// are too few free, as after `:patch!`.
-    pub(crate) patch_over: bool,
     /// Makes the random names that name lines start with and `C-r` rolls, seeded from the clock.
     pub(crate) names: Names,
 }
@@ -354,7 +326,6 @@ impl App {
             project_page: ProjectPage::default(),
             audio: AudioState::default(),
             audio_request: None,
-            library: None,
             audio_page: AudioPage::default(),
             wheel: crate::input::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
@@ -380,19 +351,8 @@ impl App {
             shape: None,
             mapping: None,
             shape_command: None,
-            kit: Vec::new(),
-            kit_file: None,
-            loader: Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT)),
+            explorer: Explorer::new(rate),
             work_since: None,
-            audition_files: true,
-            file_wanted: None,
-            file_playing: None,
-            recent_places: RecentPlaces::default(),
-            tag_library: std::sync::Arc::default(),
-            heard_tags: std::collections::HashMap::new(),
-            naming: None,
-            opening_discards: false,
-            patch_over: false,
             names,
         };
         app.services.live_song = Some(Arc::clone(app.song()));
@@ -411,8 +371,8 @@ impl App {
         samples.keep_analyses(&self.services.samples);
         self.services.samples = Arc::new(samples);
         self.services.rate = rate;
-        self.loader = Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
-        self.file_playing = None;
+        self.explorer.loader = Loader::new(rate, (PREVIEW_SAMPLE_WIDTH, PREVIEW_SAMPLE_HEIGHT));
+        self.explorer.file_playing = None;
         self.services.scope = crate::services::scope::Scope::new(rate);
         self.services.transport = Transport::Stopped;
         self.services.playhead = 0;
@@ -618,7 +578,7 @@ impl App {
         self.wheel_frame(now);
         self.follow_recording();
         self.follow_sampling();
-        let working = self.loader.is_waiting() || self.services.analyst.is_waiting();
+        let working = self.explorer.loader.is_waiting() || self.services.analyst.is_waiting();
         self.work_since = working.then(|| self.work_since.unwrap_or(now));
         self.settle_sample_page();
     }

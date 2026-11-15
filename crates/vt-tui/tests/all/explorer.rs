@@ -139,7 +139,7 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
     let depth = app.services.history.undo_depth();
     special(&mut app, KeyCode::Enter);
     assert_eq!(app.modes.mode, Mode::Normal);
-    assert_eq!(app.kit.len(), 2);
+    assert_eq!(app.explorer.kit.len(), 2);
     assert_eq!(app.services.history.undo_depth(), depth);
     assert!(
         app.services
@@ -149,7 +149,8 @@ fn kit_explores_the_kit_folders_with_each_kits_sounds_beside_them() {
         app.services.status
     );
     assert_eq!(
-        app.recent_places
+        app.explorer
+            .recent_places
             .of(vt_tui::overlays::picker::explorer::Purpose::Kit),
         [root.join("Ableton/Drum Machines")],
         "its folder is a recent place"
@@ -364,11 +365,12 @@ fn the_sample_explorer_opens_a_kit_like_a_folder_and_plays_and_chooses_its_sound
     // It plays as the cursor moves onto it, with its waveform beside the list.
     app.finish_loading();
     assert!(
-        app.file_playing
+        app.explorer
+            .file_playing
             .as_ref()
             .is_some_and(|path| path.ends_with("drums/kick.wav")),
         "{:?}",
-        app.file_playing
+        app.explorer.file_playing
     );
     let shown = app.picker.as_ref().unwrap().preview.clone().unwrap();
     assert_eq!(shown.heading, "kick.wav");
@@ -618,7 +620,7 @@ fn the_sample_explorer_lists_the_kits_and_the_library_and_no_other_ron_files() {
         samples: Vec::new(),
         presets: String::new(),
     };
-    app.library = Some(library.clone());
+    app.explorer.library = Some(library.clone());
     command(&mut app, "sample");
     let meanings: Vec<String> = explorer_roots(&app)
         .into_iter()
@@ -671,7 +673,7 @@ fn a_samples_preview_is_read_in_the_background_with_its_waveform_length_and_rate
     assert_eq!(picker.current().unwrap().label, "break.wav");
     let shown = picker.preview.as_deref().unwrap();
     assert_eq!(shown.heading, "break.wav");
-    if app.loader.is_waiting() {
+    if app.explorer.loader.is_waiting() {
         assert_eq!(shown.note, "Loading", "a placeholder until it's read");
         assert_eq!(shown.wave, None);
     }
@@ -833,10 +835,13 @@ fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
         out[out.len() - 2].abs()
     };
     command(&mut app, "sample");
-    assert_eq!(app.file_wanted, None, "a folder plays nothing");
+    assert_eq!(app.explorer.file_wanted, None, "a folder plays nothing");
     press(&mut app, "l");
     app.finish_loading();
-    assert_eq!(app.file_playing, Some(library.join("loops/break.wav")));
+    assert_eq!(
+        app.explorer.file_playing,
+        Some(library.join("loops/break.wav"))
+    );
     assert!(heard(&mut realtime, &mut app) > 0.01, "it plays");
     assert_eq!(realtime.engine().previews_sounding(), 1);
     assert!(sample_of(&app, 0).is_none(), "and isn't put on the track");
@@ -844,25 +849,31 @@ fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
     // The next one takes over.
     press(&mut app, "j");
     app.finish_loading();
-    assert_eq!(app.file_playing, Some(library.join("loops/fill.wav")));
+    assert_eq!(
+        app.explorer.file_playing,
+        Some(library.join("loops/fill.wav"))
+    );
     heard(&mut realtime, &mut app);
 
     // A turns it off, and stops what's playing.
     press(&mut app, "A");
-    assert_eq!(app.file_playing, None);
+    assert_eq!(app.explorer.file_playing, None);
     for _ in 0..8 {
         heard(&mut realtime, &mut app);
     }
     assert_eq!(realtime.engine().previews_sounding(), 0, "stopped");
     press(&mut app, "k");
-    assert_eq!(app.file_wanted, None, "nothing plays while it's off");
+    assert_eq!(
+        app.explorer.file_wanted, None,
+        "nothing plays while it's off"
+    );
     press(&mut app, "A");
     app.finish_loading();
-    assert!(app.file_playing.is_some(), "A turns it on again");
+    assert!(app.explorer.file_playing.is_some(), "A turns it on again");
 
     // Leaving the explorer stops it.
     special(&mut app, KeyCode::Esc);
-    assert_eq!(app.file_playing, None);
+    assert_eq!(app.explorer.file_playing, None);
     for _ in 0..8 {
         heard(&mut realtime, &mut app);
     }
@@ -874,6 +885,6 @@ fn moving_onto_a_sample_plays_it_on_the_track_until_the_cursor_moves_off() {
     command(&mut app, "sample");
     press(&mut app, "l");
     assert!(!app.picker.as_ref().unwrap().tree().unwrap().audition);
-    assert_eq!(app.file_wanted, None);
+    assert_eq!(app.explorer.file_wanted, None);
     std::fs::remove_dir_all(&library).unwrap();
 }

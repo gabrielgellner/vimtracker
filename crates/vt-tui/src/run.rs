@@ -224,7 +224,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     {
         status = note;
     }
-    app.library = crate::offline::ableton::default_samples();
+    app.explorer.library = crate::offline::ableton::default_samples();
     if let Some(path) = Settings::path() {
         let (settings, note) = Settings::load(&path);
         app.services.settings = settings;
@@ -246,7 +246,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     if let Some(folder) = crate::services::config::config_folder() {
         let path = folder.join(vt_model::tag::TAGS_FILE);
         let (library, note) = vt_model::tag::TagLibrary::load(&path);
-        app.tag_library = std::sync::Arc::new(library);
+        app.explorer.tag_library = std::sync::Arc::new(library);
         if let Some(note) = note
             && status.is_empty()
         {
@@ -255,7 +255,7 @@ pub fn run(path: Option<PathBuf>) -> Result<(), RunError> {
     }
     if let Some(path) = RecentPlaces::default_path() {
         let (places, note) = RecentPlaces::load(&path);
-        app.recent_places = places;
+        app.explorer.recent_places = places;
         if let Some(note) = note
             && status.is_empty()
         {

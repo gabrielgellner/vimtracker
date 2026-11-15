@@ -140,9 +140,9 @@ fn a_kit_with_all_fills_tracks_and_a_bad_one_keeps_the_last() {
     command(&mut app, &format!("kit {} all", kit.display()));
     assert!(sample_of(&app, 2).unwrap().ends_with("hat.wav"));
     command(&mut app, &format!("kit {}", kit.display()));
-    assert_eq!(app.kit.len(), 3);
+    assert_eq!(app.explorer.kit.len(), 3);
     command(&mut app, "kit nothing-here");
-    assert_eq!(app.kit.len(), 3, "still the last one");
+    assert_eq!(app.explorer.kit.len(), 3, "still the last one");
 }
 
 #[test]

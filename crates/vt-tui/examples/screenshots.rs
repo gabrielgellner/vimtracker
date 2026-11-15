@@ -677,7 +677,7 @@ fn explore(app: &mut App, purpose: Purpose, folder: &Path, meaning: &str, home: 
     };
     app.picker = Some(
         Picker::explorer(purpose, roots, Some(home.to_path_buf()))
-            .with_tags(Arc::clone(&app.tag_library))
+            .with_tags(Arc::clone(&app.explorer.tag_library))
             .opening_first()
             .hinted(hint),
     );

@@ -125,7 +125,7 @@ impl App {
         if self.patch_track().is_none() {
             return;
         }
-        self.patch_over = over;
+        self.explorer.patch_over = over;
         let purpose = Purpose::Preset(PresetKind::Patch);
         let mut roots = self.places(purpose);
         roots.push(factory_root());
