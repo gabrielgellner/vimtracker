@@ -715,7 +715,7 @@ pub fn project_cursor_on(app: &mut App, control: vt_tui::project_page::ProjectCo
         tap(app, "l");
     }
     // The tempo's fine part is a stop of its own.
-    if field > 0 && app.project_fine {
+    if field > 0 && app.project_page.fine {
         tap(app, "l");
     }
     assert_eq!(app.project_control(), control);

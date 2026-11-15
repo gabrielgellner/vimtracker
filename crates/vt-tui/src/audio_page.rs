@@ -4,7 +4,13 @@
 //! rows turn the mouse wheel on and off as a knob on the cursor's setting (`wheel`), and say
 //! which way it turns, and turn on the Roto-Control (`roto`), as Live's MIDI preferences choose
 //! its control surfaces.
+//!
+//! `AudioPage` is the page as a component (#320): the row its cursor is on, its moves, and its
+//! drawing, in `views::audio`, given a [`Ctx`]. It's a [`Page`], with its rows of the binding
+//! table, [`Page::KEYS`], here beside it.
 
+use ratatui::Frame;
+use ratatui::layout::Rect;
 use vt_model::selection::Motion;
 
 use crate::app::App;
@@ -13,6 +19,7 @@ use crate::glyphs;
 use crate::input::bindings::Cmd;
 use crate::input::mode::View;
 use crate::input::picker::{Item, Pick, Picker};
+use crate::page::{Ctx, CtxMut, Outcome, Page};
 
 /// The page's rows, in order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,6 +61,71 @@ impl AudioRow {
     }
 }
 
+/// The audio page as a component: the row its cursor is on, kept while other views are shown,
+/// and its moves. What it shows and chooses from is the program's: the output as it plays, which
+/// the main loop and the status line read too, and the wheel's and the Roto's settings, so the
+/// changes stay `App`'s. It's drawn with [`Page::draw`], given the rest of the program as a
+/// [`Ctx`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AudioPage {
+    /// The row the cursor is on, by its place in [`AudioRow::ALL`].
+    pub row: usize,
+}
+
+impl AudioPage {
+    /// The row the cursor is on.
+    pub fn row_here(&self) -> AudioRow {
+        AudioRow::ALL[self.row.min(AudioRow::ALL.len() - 1)]
+    }
+
+    /// Run one of the page's own keys, `j` and `k` up and down its rows and `gg` and `G` to its
+    /// ends. `times` is its count, at least 1.
+    pub fn key_on(&mut self, cmd: Cmd, times: usize) -> Outcome {
+        let last = AudioRow::ALL.len() - 1;
+        match cmd {
+            Cmd::Move(Motion::Down) => self.row = (self.row + times).min(last),
+            Cmd::Move(Motion::Up) => self.row = self.row.saturating_sub(times),
+            Cmd::Move(Motion::First) => self.row = 0,
+            Cmd::Move(Motion::Last) => self.row = last,
+            _ => return Outcome::Passed,
+        }
+        Outcome::Done
+    }
+}
+
+impl Page for AudioPage {
+    const KEYS: &'static [(&'static str, Cmd, &'static str)] = &[
+        ("H", Cmd::PreviousPage, "Previous page: Song, Audio"),
+        ("L", Cmd::NextPage, "Next page: Song, Audio"),
+        ("j", Cmd::Move(Motion::Down), "Next setting"),
+        ("k", Cmd::Move(Motion::Up), "Previous setting"),
+        ("g g", Cmd::Move(Motion::First), "First setting"),
+        ("G", Cmd::Move(Motion::Last), "Last setting"),
+        ("=", Cmd::Increase, "The next choice"),
+        ("-", Cmd::Decrease, "The previous choice"),
+        // There's no large step through a list of choices, so `+` and `_` aren't bound, but Cmd-k
+        // and Cmd-j stepped through it before the one rule for Cmd keys, and still do (decision
+        // 148).
+        ("D-k", Cmd::IncreaseLarge, "The next choice, as D-l"),
+        ("D-j", Cmd::DecreaseLarge, "The previous choice, as D-h"),
+        ("x", Cmd::ClearField, "Back to the system's own choice"),
+        ("K", Cmd::PickValue, "List the choices"),
+    ];
+
+    type Drawn = ();
+
+    /// Run a key as the program gives it to the page: one of its moves, [`AudioPage::key_on`], or
+    /// passed back, for a change, or `H` and `L`, which show the sub-page beside it.
+    fn key(&mut self, cmd: Cmd, times: usize, _ctx: &mut CtxMut) -> Outcome {
+        self.key_on(cmd, times)
+    }
+
+    /// Draw the Audio sub-page.
+    fn draw(&self, frame: &mut Frame, area: Rect, ctx: &Ctx) {
+        crate::views::audio::draw_page(frame, area, self, ctx);
+    }
+}
+
 /// How long a buffer lasts, in milliseconds, at a rate.
 pub fn buffer_ms(frames: u32, rate: u32) -> f64 {
     f64::from(frames) * 1000.0 / f64::from(rate.max(1))
@@ -73,7 +145,7 @@ impl App {
 
     /// The row the cursor is on.
     pub fn audio_row_here(&self) -> AudioRow {
-        AudioRow::ALL[self.audio_row.min(AudioRow::ALL.len() - 1)]
+        self.audio_page.row_here()
     }
 
     /// The device playing, or chosen, as the page lists it.
@@ -263,11 +335,11 @@ impl App {
         }
     }
 
-    /// Run a command on the audio page. Returns false if it means the same as anywhere.
+    /// Run a command the audio page passed back: a change to the setting under the cursor, or `H`
+    /// and `L`. Returns false if it means the same as anywhere.
     pub(crate) fn run_audio_page(&mut self, cmd: Cmd) -> bool {
         let count = self.modes.count.take();
         let times = count.unwrap_or(1).max(1);
-        let last = AudioRow::ALL.len() - 1;
         if matches!(cmd, Cmd::PreviousPage | Cmd::NextPage) {
             self.show_project_page_beside(cmd == Cmd::NextPage);
             return true;
@@ -282,10 +354,6 @@ impl App {
             return true;
         }
         match cmd {
-            Cmd::Move(Motion::Down) => self.audio_row = (self.audio_row + times).min(last),
-            Cmd::Move(Motion::Up) => self.audio_row = self.audio_row.saturating_sub(times),
-            Cmd::Move(Motion::First) => self.audio_row = 0,
-            Cmd::Move(Motion::Last) => self.audio_row = last,
             Cmd::Increase | Cmd::Decrease | Cmd::IncreaseLarge | Cmd::DecreaseLarge => {
                 let up = matches!(cmd, Cmd::Increase | Cmd::IncreaseLarge);
                 let (options, current) = self.audio_options(self.audio_row_here());
