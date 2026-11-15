@@ -39,8 +39,9 @@ impl History {
     /// same as the current version isn't a new one, as an edit that changed nothing makes: it
     /// leaves no undo step and redo as it was, and says so with false.
     pub fn commit(&mut self, song: Arc<Song>) -> bool {
-        // `Arc`'s `==` checks the pointer first, so the chains and phrases a version shares with
-        // the last aren't compared, only those the edit copied.
+        // `Arc`'s `==` checks the pointer first, so the tracks a version shares with the last
+        // aren't compared, nor the chains and phrases of a track the edit copied, only what it
+        // changed in that track: its own fields and settings, and the phrases it copied.
         if song == self.current {
             return false;
         }
