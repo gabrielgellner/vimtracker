@@ -38,11 +38,12 @@ each machine.
 | `;` | `a` `w` `s` `e` `d` `f` play C to F, `<` `>` the octave, until `;` |
 
 A count before `=` `-` `+` `_` goes that many steps. On a value each is its step, so `10=`
-moves a hex value `0A`. On one of the track's lists, Machine, the filter's Type and Mode, Role,
-Speed, Groove, a slot's effect or one of an effect's lists, each step is the next choice, so
-`3=` moves three choices, and `+` and `_` move one as `=` and `-` do. Machine, Type, Mode, Role
-and a slot's effect go round past either end; Speed and Groove stop there. A machine's own lists,
-such as the 6-op's patches, step as hex values do: `=` one choice and `+` sixteen.
+moves a hex value `0A`. On a list, `=` and `-` move one choice and `+` and `_` sixteen, so `3=`
+moves three choices: the track's lists, Machine, the filter's Type and Mode, Role, Speed, Groove,
+a slot's effect and an effect's lists, a machine's own, such as the 6-op's patches, a mod slot's
+and the Gen page's all go so. Machine, Type, Mode, Role, a slot's effect and a mod slot's lists go
+round past either end with `=` and `-`; `+` and `_` stop at the first or last, as every key does
+on Speed, Groove and a machine's own lists.
 
 A note holds for as long as its key is down, and several keys down play a
 chord, up to eight notes; a ninth takes over the oldest. Letting go of one key

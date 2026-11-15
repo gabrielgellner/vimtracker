@@ -82,6 +82,8 @@ Decided by the user, 2026-11-15:
   decision 343).
 - The Roto's Source choices stay off the Roto for now.
 - A count steps a list that many choices; a hex value follows the hex (#828, decision 344).
+- `+` and `_` move every list sixteen choices, stopping at its ends, as a machine's lists did
+  (decision 345).
 
 Still open: the dead-code lint for the integration tests (#784). Moving them inside the crate
 would give the full lint, at the cost of recompiling the library on every test edit.

@@ -879,6 +879,15 @@ mod tests {
         assert_eq!(random.vary, 8, "it goes round");
         assert_eq!(GenParam::Vary.bounds(&velocity), Some((0, 4)));
         assert_eq!(GenParam::Vary.number(&random, &velocity), Some(4));
+        // A large step is sixteen choices, stopping at the ends rather than going round.
+        GenParam::Vary
+            .step(&mut random, &velocity, 1, true)
+            .unwrap();
+        assert_eq!(random.vary, 8, "it stops at the last");
+        GenParam::Vary
+            .step(&mut random, &velocity, -1, true)
+            .unwrap();
+        assert_eq!(random.vary, 0, "and at the first");
         GenParam::Vary.set_number(&mut random, &velocity, 2);
         assert_eq!(random.vary, 2);
         assert_eq!(GenParam::Vary.typing(ShapeColumn::Velocity), Typing::Listed);
