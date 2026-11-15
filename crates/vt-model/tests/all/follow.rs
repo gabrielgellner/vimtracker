@@ -9,6 +9,7 @@ use vt_model::generator::{Span, applied, reads, unfollowed};
 use vt_model::project::{load_song, save_song};
 use vt_model::scale::{Scale, ScaleKind};
 use vt_model::selection::StepRange;
+use vt_model::settings::SettingId;
 use vt_model::shape::{FillKind, Follow, Shape, ShapeColumn, Source};
 use vt_model::song::{Phrase, Song};
 use vt_model::step::{Note, Step};
@@ -183,6 +184,33 @@ fn an_edit_elsewhere_leaves_the_followers_as_they_were() {
     let long = follow_on(&canon(2, 6), 1, 4, plain(at(0))).unwrap();
     let beside = set_note(&long, 1, 5, Note::On(72));
     assert_eq!(phrase(&beside, 1).generators().len(), 1);
+}
+
+#[test]
+fn a_turn_of_a_setting_shares_every_phrase_and_every_other_track() {
+    let start = follow_on(&canon(3, 4), 1, 4, plain(at(0))).unwrap();
+    // On the source's track, the follower's and one beside them: the track is copied, with the
+    // phrases it had, and the followers are left as they were.
+    for track in 0..3 {
+        let action = Action::SetTrackSetting {
+            track,
+            setting: SettingId::CUT,
+            value: 0x40,
+        };
+        let turned = edit(&start, &action).unwrap();
+        for other in 0..start.tracks.len() {
+            let shared = turned.tracks.same(other, &start.tracks, other);
+            assert_eq!(
+                shared,
+                other != track,
+                "track {other} after a turn on {track}"
+            );
+            if other < 3 {
+                assert!(Arc::ptr_eq(phrase(&start, other), phrase(&turned, other)));
+            }
+        }
+        assert_eq!(phrase(&turned, 1).generators().len(), 1);
+    }
 }
 
 #[test]
