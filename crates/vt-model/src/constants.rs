@@ -59,39 +59,6 @@ pub const MIN_MILLIBPM: u32 = 20_000;
 pub const MAX_MILLIBPM: u32 = 400_000;
 /// Undo versions kept.
 pub const HISTORY_LIMIT: usize = 1000;
-/// Song versions waiting for the callback.
-pub const PUBLISH_QUEUE: usize = 1;
-/// Long buffers on their way to or from the callback at once. More wait their turn.
-pub const MEMORY_QUEUE: usize = 256;
-/// Versions waiting to be freed.
-pub const RETURN_QUEUE: usize = 16;
-/// Transport, preview and mute messages.
-pub const COMMAND_QUEUE: usize = 64;
-/// One-off files on their way to the callback to be heard, as the sample browser sends them, and
-/// on their way back to be freed.
-pub const FILE_QUEUE: usize = 4;
-/// Recordings on their way to the callback's recorder.
-pub const TAKE_QUEUE: usize = 4;
-/// The recorder's starts and ends on their way back, each end with its recording to be freed.
-pub const RECORDER_QUEUE: usize = 16;
-/// The audio input's samples on their way to the callback, interleaved stereo: about a sixth of a
-/// second at 48 kHz, as the input's callback and the output's take turns.
-pub const INPUT_QUEUE: usize = 16_384;
-/// The most input frames kept waiting for the output's callback. Past it, the oldest are dropped,
-/// so the two devices' clocks drifting apart can't make the input later and later.
-pub const INPUT_MOST_WAITING: usize = 4096;
-/// Playhead and load messages. New ones are dropped when it is full.
-pub const TELEMETRY_QUEUE: usize = 64;
-/// The pitch each mod slot moved a row's note by, on their way to the app for `Space g A`. New
-/// ones are dropped when it is full.
-pub const NOTE_PITCH_QUEUE: usize = 256;
-/// What was heard of live generators: each pass of one that varies, each row a moving one played and
-/// each come to rest, on their way to the app for `Space g a` and the playhead's row. New ones are
-/// dropped when it is full.
-pub const GEN_HEARD_QUEUE: usize = 256;
-/// Samples of the main output on their way to the scope, about a third of a second at 48 kHz. New
-/// ones are dropped when it is full.
-pub const SCOPE_QUEUE: usize = 16_384;
 
 /// Tuning: smoother time for filter, volume and pan changes.
 pub const SMOOTHING_MS: u32 = 10;
@@ -106,8 +73,6 @@ pub const PREVIEW_MS: u32 = 250;
 /// Tuning: how many notes the keyboard can sound at once, for chords. A ninth takes over the
 /// oldest.
 pub const PREVIEW_VOICES: usize = 8;
-/// Tuning: time between redraws.
-pub const FRAME_MS: u64 = 33;
 
 /// The longest attack or release, in milliseconds.
 pub const MAX_ENVELOPE_MS: u16 = 8000;
@@ -117,6 +82,3 @@ pub const MIN_TRANSPOSE: i8 = -48;
 
 /// The highest chain transpose, in semitones.
 pub const MAX_TRANSPOSE: i8 = 48;
-
-/// How often unsaved work is written aside.
-pub const AUTOSAVE_SECONDS: u64 = 60;

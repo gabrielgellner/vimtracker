@@ -14,6 +14,17 @@ change. Why the code is shaped this way is in [device-interface.md](device-inter
 - **Every key is for ever:** an effect's or a voice's `key`, each setting's `key`, each
   `GenParam` key and each Roto layout's `kind`. Pick them once.
 
+**Why the screen's grid is in the model and the Roto's layout isn't.** Each family's descriptor
+row in `vt-model` ends with a grid: where the device's settings sit on its page of the screen.
+Its Roto layout is in `vt-tui/src/roto/layouts.rs`. Both are layouts of a device for a surface,
+keyed by setting, and by the Roto's own rule (it's laid out for itself, never from the page's
+grid) the grid could as well sit in `vt-tui`. It stays in the row because the page is the
+device's canonical face, as an Elektron machine's parameter page is part of the machine, and
+because the model's own tests check it with the row it belongs to (`machine.rs`'s and
+`insert/tests.rs`'s). The Roto is one surface that may or may not be plugged in, laid out by hand
+for eight knobs, so its layouts live with the program that drives it. So a new device's grid goes
+in its row and its Roto layout in `layouts.rs`, and neither is worked out from the other.
+
 **The pins.** Each list below ends with what shows the change. These are what they mean:
 - **`stable_names`** (`vt-model/tests/all/stable_names.rs`) keeps every name a song stores in
   `vt-model/tests/golden/*.txt`. A new device adds lines. Write them with
