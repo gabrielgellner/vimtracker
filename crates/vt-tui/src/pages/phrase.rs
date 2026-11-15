@@ -52,6 +52,9 @@ pub struct PhraseView {
     pub(crate) scope: Option<Scope>,
     /// The selection `gv` brings back.
     pub(crate) last_selection: Option<Selection>,
+    /// How many rows `C-d` and `C-u` go, once a count has set it, as Vim's `scroll` option: half
+    /// a screen until then.
+    pub(crate) half_page_rows: Option<usize>,
 }
 
 impl Default for PhraseView {
@@ -65,6 +68,7 @@ impl Default for PhraseView {
             anchor_track: None,
             scope: None,
             last_selection: None,
+            half_page_rows: None,
         }
     }
 }
@@ -133,27 +137,37 @@ impl PhraseView {
         self.top = self.top.min(last_top);
     }
 
-    /// `H`, `M` and `L`: the cursor to the top, the middle or the bottom of the view.
-    fn view_cursor(&self, cmd: Cmd, services: &mut Services, view: View) {
+    /// `H`, `M` and `L`: the cursor to the top, the middle or the bottom of the view. A count
+    /// goes to that row from the top or the bottom, as `5H` and `3L` do in Vim, and stays on
+    /// screen; `M` has none.
+    fn view_cursor(&self, cmd: Cmd, count: Option<usize>, services: &mut Services, view: View) {
         let counts = self.row_line_counts(services);
         let all = timeline::lines_over(&counts, 0..services.extent().stored.max(1));
         let height = self.height.min(all);
         // The bottom is the last row whose lines all fit, so the view doesn't move to show it.
+        let bottom = timeline::row_at_line(&counts, self.top, height)
+            .saturating_sub(1)
+            .max(self.top);
+        let from_end = count.unwrap_or(1).max(1) - 1;
         services.cursor.step = match cmd {
-            Cmd::ViewTop => self.top,
+            Cmd::ViewTop => (self.top + from_end).min(bottom),
             Cmd::ViewMiddle => timeline::row_at_line(&counts, self.top, height / 2),
-            _ => timeline::row_at_line(&counts, self.top, height)
-                .saturating_sub(1)
-                .max(self.top),
+            _ => bottom.saturating_sub(from_end).max(self.top),
         };
         services.clamp_cursor(view);
     }
 
-    /// Half a screen down or up, with the cursor's row in the middle.
-    fn half_page(&mut self, sign: isize, services: &mut Services) {
-        let counts = self.row_line_counts(services);
-        let half = (self.height / 2).max(1);
-        let rows = timeline::rows_over(&counts, services.cursor.step, half, sign > 0).max(1);
+    /// Half a screen down or up, with the cursor's row in the middle. A count sets how many rows
+    /// it goes, then and after, as Vim's `scroll` option.
+    fn half_page(&mut self, sign: isize, count: Option<usize>, services: &mut Services) {
+        if let Some(rows) = count {
+            self.half_page_rows = Some(rows.max(1));
+        }
+        let rows = self.half_page_rows.unwrap_or_else(|| {
+            let counts = self.row_line_counts(services);
+            let half = (self.height / 2).max(1);
+            timeline::rows_over(&counts, services.cursor.step, half, sign > 0).max(1)
+        });
         services.move_step(sign * rows as isize);
         let counts = self.row_line_counts(services);
         self.top = timeline::row_lines_before(&counts, services.cursor.step, self.height / 2);
@@ -286,16 +300,6 @@ impl PhraseView {
             _ if group > FX_GROUP => Field::of_group(group - 1),
             _ => Field::Note,
         };
-    }
-
-    /// Whether one of the view's own keys takes the count typed before it: a move does, as `5j`
-    /// and `5G` do, and `zi` and `Space i` drop it. The keys over the view and reaching another
-    /// track leave it for the key after them.
-    pub(crate) fn takes_count(cmd: Cmd) -> bool {
-        matches!(
-            cmd,
-            Cmd::Move(_) | Cmd::ToggleTimeline | Cmd::ToggleInspector
-        )
     }
 
     /// Motions work in Normal mode, after an operator, and in Visual modes.
@@ -561,8 +565,10 @@ impl Page for PhraseView {
     /// Run a key as the program gives it to the view: a move, a key over the view, reaching
     /// another track from a selection, or `zi` and `Space i`, or pass it back. A move after an
     /// operator is what the operator covers, so it's the grammar's. The count is read as the
-    /// motion takes it, as `5G` goes to step 5 where `5j` moves 5.
-    fn key(&mut self, cmd: Cmd, _times: usize, ctx: &mut CtxMut) -> Outcome {
+    /// motion takes it, as `5G` goes to step 5 where `5j` moves 5. Every key the view does takes
+    /// the count, as Vim's do: `3C-e` scrolls 3 rows, `5H` goes to the 5th row on screen, `3W`
+    /// reaches 3 tracks on, and `M`, `zi` and `Space i`, which have no use for it, drop it.
+    fn key(&mut self, cmd: Cmd, times: usize, ctx: &mut CtxMut) -> Outcome {
         let mode = ctx.modes.mode;
         let view = ctx.modes.view;
         let services = &mut *ctx.services;
@@ -570,14 +576,16 @@ impl Page for PhraseView {
             Cmd::Move(_) if mode == Mode::OperatorPending => return Outcome::Passed,
             Cmd::Move(motion) => Self::move_cursor(motion, ctx.modes.count, services),
             Cmd::ViewTop | Cmd::ViewMiddle | Cmd::ViewBottom => {
-                self.view_cursor(cmd, services, view);
+                self.view_cursor(cmd, ctx.modes.count, services, view);
             }
-            Cmd::HalfPageDown => self.half_page(1, services),
-            Cmd::HalfPageUp => self.half_page(-1, services),
-            Cmd::ScrollDown => self.scroll(3, services, view),
-            Cmd::ScrollUp => self.scroll(-3, services, view),
-            Cmd::NextTrack if mode.is_visual() => self.reach_track(1, services),
-            Cmd::PreviousTrack if mode.is_visual() => self.reach_track(-1, services),
+            Cmd::HalfPageDown => self.half_page(1, ctx.modes.count, services),
+            Cmd::HalfPageUp => self.half_page(-1, ctx.modes.count, services),
+            Cmd::ScrollDown => self.scroll(scroll_rows(ctx.modes.count), services, view),
+            Cmd::ScrollUp => self.scroll(-scroll_rows(ctx.modes.count), services, view),
+            Cmd::NextTrack if mode.is_visual() => self.reach_track(times as isize, services),
+            Cmd::PreviousTrack if mode.is_visual() => {
+                self.reach_track(-(times as isize), services);
+            }
             Cmd::ToggleTimeline => self.toggle_timeline(services),
             Cmd::ToggleInspector => self.toggle_inspector(services),
             _ => return Outcome::Passed,
@@ -605,6 +613,11 @@ impl Page for PhraseView {
             }
         }
     }
+}
+
+/// How many rows `C-e` and `C-y` scroll: the count, or 3 without one.
+fn scroll_rows(count: Option<usize>) -> isize {
+    count.map_or(3, |rows| rows.max(1)) as isize
 }
 
 /// An FX cell's name: what it locks, by its group and name, and whether it's on this track, or
