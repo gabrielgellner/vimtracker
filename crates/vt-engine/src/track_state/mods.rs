@@ -17,6 +17,7 @@ use crate::dsp::effects::memory::{MemoryPool, SongPlace};
 use crate::dsp::effects::slot::{BYPASS_FADE_MS, InsertState};
 use crate::dsp::filters::filter::Channel;
 use crate::rng::Pcg32;
+use crate::voice::NoteOn;
 
 use super::TrackState;
 use super::live::LfoNow;
@@ -361,6 +362,95 @@ impl SlotRun {
         self.out = 0.0;
         self.glide_left = 0.0;
     }
+
+    /// What an envelope, a drum's or a low-pass gate's included, gives now, at a depth of `+FF`.
+    #[inline]
+    fn run_envelope(&self, slot: &ModSlot, now: SongTime) -> f32 {
+        let level = self.envelope.level(&slot.envelope(), now.clock, now.rate);
+        self.polarity(slot).of(Polarity::Uni, level)
+    }
+
+    /// What an LFO gives now, at a depth of `+FF`, at its `phase` and `deform` as they're heard,
+    /// faded in from the last note. Its random waves are picked by `key`.
+    #[inline]
+    fn run_lfo(
+        &mut self,
+        slot: &ModSlot,
+        now: SongTime,
+        noted: Option<LfoStart>,
+        key: u64,
+        phase: f64,
+        deform: f32,
+    ) -> f32 {
+        let cycles = lfo_cycles(slot, self, noted, now);
+        // An attractor's phase is the way it's looked at, which axis is heard, as it has no cycle
+        // to start part way through; the Mod page draws it from the next axis round, so its dot
+        // goes across by that one.
+        let value = if let Some(system) = System::of(slot.lfo.shape) {
+            let point = self.attractor_at(system, cycles, key, deform);
+            let value = view(point, phase);
+            let across = view(point, phase + 1.0 / 3.0);
+            self.now = Some(LfoNow::across(across, value));
+            value
+        } else {
+            let value = deformed_wave(slot.lfo.shape, cycles + phase, key, deform);
+            self.now = Some(LfoNow::of(cycles + phase, value));
+            value
+        };
+        let since_note = noted.map(|note| now.tick - note.tick);
+        self.polarity(slot).of(Polarity::Bi, value) * slot.lfo.fade.gain(since_note)
+    }
+
+    /// What Steps gives now, at a depth of `+FF`: the value of the step it's on, from `start`, as
+    /// written, smoothed toward the next as `Smooth` says, or nothing before the note it waits for.
+    #[inline]
+    fn run_steps(
+        &mut self,
+        slot: &ModSlot,
+        now: SongTime,
+        start: usize,
+        key: u64,
+        step_ticks: u64,
+        pass: i64,
+    ) -> f32 {
+        let steps = &slot.steps;
+        let Some((count, through)) = steps_count(slot, self, now, step_ticks, pass) else {
+            return 0.0;
+        };
+        let step = steps.step_at(start, count, key);
+        self.playing = Some(step as u8);
+        self.mutate(steps, step, count);
+        let heard = |count: i64| self.heard(steps, steps.step_at(start, count, key));
+        let smooth = f32::from(steps.smooth) / f32::from(MAX_STEP);
+        match through {
+            Some(through) if smooth != 0.0 => smoothed(
+                [
+                    heard(count - 2),
+                    heard(count - 1),
+                    heard(count),
+                    heard(count + 1),
+                ],
+                through,
+                smooth,
+            ),
+            _ => heard(count),
+        }
+    }
+
+    /// What Track gives now, at a depth of `+FF`: the last note's value on its map, held to the
+    /// next note, or none before any note.
+    #[inline]
+    fn run_track(&mut self, slot: &ModSlot, last_note: Option<NoteOn>) -> Option<f32> {
+        let played = last_note?;
+        let tracking = &slot.track;
+        let value = tracking.value(played.note, played.velocity, self.roll);
+        let level = tracking.bounds().level(f32::from(value));
+        self.now = Some(LfoNow::along(
+            tracking.source.along(f32::from(value)),
+            level,
+        ));
+        Some(self.polarity(slot).of(Polarity::Uni, level))
+    }
 }
 
 /// Start one slot's envelope for a note, from nothing or from where it is, and its cycles again if
@@ -641,7 +731,6 @@ impl TrackState {
                     .map_or(0.0, |id| offsets[id.index()] + moved.at(id.index()))
             };
             let [depth, phase, _, deform] = run.values;
-            let polarity = run.polarity(slot);
             // An envelope's depth is whole, as its page sets it, so it moves by exactly that.
             let held = match slot.kind {
                 ModKind::Adsr
@@ -680,96 +769,86 @@ impl TrackState {
                     added
                 }
             };
-            match slot.kind {
+            let key = || now.seed ^ ((index as u64) << 8 | wave_key(at));
+            let level = match slot.kind {
                 ModKind::Adsr | ModKind::Ahd | ModKind::Drum | ModKind::Lpg => {
-                    let level = run.envelope.level(&slot.envelope(), now.clock, now.rate);
-                    let level = polarity.of(Polarity::Uni, level);
-                    let added = run.add(slot.kind, tuned(level * depth / 255.0) * share);
-                    moved.add(destination.index(), added);
+                    run.run_envelope(slot, now)
                 }
                 ModKind::Lfo => {
-                    let cycles = lfo_cycles(slot, run, noted, now);
-                    let key = now.seed ^ ((index as u64) << 8 | wave_key(at));
                     let phase = f64::from(phase_of(phase) + moved_by(1));
                     let deform = ((depth_of(deform) + moved_by(3) * 255.0) / f32::from(MAX_DEFORM))
                         .clamp(-1.0, 1.0);
-                    // An attractor's phase is the way it's looked at, which axis is heard, as it has
-                    // no cycle to start part way through; the Mod page draws it from the next
-                    // axis round, so its dot goes across by that one.
-                    let value = if let Some(system) = System::of(slot.lfo.shape) {
-                        let point = run.attractor_at(system, cycles, key, deform);
-                        let value = view(point, phase);
-                        let across = view(point, phase + 1.0 / 3.0);
-                        run.now = Some(LfoNow::across(across, value));
-                        value
-                    } else {
-                        let value = deformed_wave(slot.lfo.shape, cycles + phase, key, deform);
-                        run.now = Some(LfoNow::of(cycles + phase, value));
-                        value
-                    };
-                    let since_note = noted.map(|note| now.tick - note.tick);
-                    let value = polarity.of(Polarity::Bi, value) * slot.lfo.fade.gain(since_note);
-                    offsets[destination.index()] +=
-                        run.add(slot.kind, tuned(value * depth / 255.0) * share);
-                    self.offset_marks[marks] = Some(destination.index());
-                    marks += 1;
+                    run.run_lfo(slot, now, noted, key(), phase, deform)
                 }
-                // A step's value, heard as written at a depth of `+FF`, through the fast
-                // smoothers as an envelope's is, as it moves in steps.
                 ModKind::Steps => {
-                    let steps = &slot.steps;
-                    let start = steps.start_of(phase + moved_by(1) * 256.0);
-                    let key = now.seed ^ ((index as u64) << 8 | wave_key(at));
-                    let level = match steps_count(slot, run, now, step_ticks, pass) {
-                        None => 0.0,
-                        Some((count, through)) => {
-                            let step = steps.step_at(start, count, key);
-                            run.playing = Some(step as u8);
-                            run.mutate(steps, step, count);
-                            let heard =
-                                |count: i64| run.heard(steps, steps.step_at(start, count, key));
-                            let smooth = f32::from(steps.smooth) / f32::from(MAX_STEP);
-                            match through {
-                                Some(through) if smooth != 0.0 => smoothed(
-                                    [
-                                        heard(count - 2),
-                                        heard(count - 1),
-                                        heard(count),
-                                        heard(count + 1),
-                                    ],
-                                    through,
-                                    smooth,
-                                ),
-                                _ => heard(count),
-                            }
-                        }
-                    };
-                    let added = run.add(slot.kind, tuned(level * depth / 255.0) * share);
-                    moved.add(destination.index(), added);
+                    let start = slot.steps.start_of(phase + moved_by(1) * 256.0);
+                    run.run_steps(slot, now, start, key(), step_ticks, pass)
                 }
-                // The last note's value on the map, held to the next note, through the fast
-                // smoothers as a step's value is. Before any note it moves nothing.
-                ModKind::Track => {
-                    let Some(played) = last_note else {
+                ModKind::Track => match run.run_track(slot, last_note) {
+                    Some(level) => level,
+                    None => {
                         run.rest(slot.kind);
                         continue;
-                    };
-                    let tracking = &slot.track;
-                    let value = tracking.value(played.note, played.velocity, run.roll);
-                    let level = tracking.bounds().level(f32::from(value));
-                    run.now = Some(LfoNow::along(
-                        tracking.source.along(f32::from(value)),
-                        level,
-                    ));
-                    let level = polarity.of(Polarity::Uni, level);
-                    let added = run.add(slot.kind, tuned(level * depth / 255.0) * share);
-                    moved.add(destination.index(), added);
-                }
+                    }
+                },
+            };
+            let added = run.add(slot.kind, tuned(level * depth / 255.0) * share);
+            if slot.kind == ModKind::Lfo {
+                // What an LFO moves goes straight into the offsets, through the slow smoothers.
+                offsets[destination.index()] += added;
+                self.offset_marks[marks] = Some(destination.index());
+                marks += 1;
+            } else {
+                // The rest move by the note or in steps, through the fast smoothers.
+                moved.add(destination.index(), added);
             }
         }
         self.filter_moving = filter_moving;
-        // The note just started is heard from here, so what each slot moves its pitch by is
-        // reported, every path above having left what it added in `out`.
+        self.report_pitch(track);
+        // A different filter starts from silence rather than from another's state.
+        if self.filter_type != track.filter {
+            self.filter_type = track.filter;
+            self.filter = [Channel::default(); 2];
+            self.coefficients = None;
+        }
+        self.drive.target = f32::from(track.drive) / 255.0;
+        self.punch.target = f32::from(track.punch) / 255.0;
+        self.safe.target = f32::from(u8::from(track.safe));
+        self.low_cut.target = f32::from(track.low_cut) / 255.0;
+        self.high_cut.target = f32::from(track.high_cut) / 255.0;
+        self.cut_offset.target = self.offsets[SettingId::CUT.index()];
+        self.res_offset.target = self.offsets[SettingId::RES.index()];
+        self.pan_offset.target = self.offsets[SettingId::PAN.index()];
+        self.cut_envelope.target = moved.at(SettingId::CUT.index());
+        self.res_envelope.target = moved.at(SettingId::RES.index());
+        self.pan_envelope.target = moved.at(SettingId::PAN.index());
+        for &(index, envelope) in moved.entries() {
+            self.offsets[index] += envelope;
+            self.offset_marks[marks] = Some(index);
+            marks += 1;
+        }
+        // Each macro puts what it holds where it has it now, before the voice and the slots' effects
+        // are given their settings, so they hear it this time; a mod slot's, the next.
+        // With none mapped, that comes to forgetting where each was heard (#187).
+        if track.has_macro_maps() {
+            let moves = std::array::from_fn(|at| {
+                SettingId::macro_at(at).map_or(0.0, |id| self.offsets[id.index()])
+            });
+            self.put_macros(track, &moves);
+        } else {
+            self.macro_heard = [None; MACROS];
+        }
+        self.hold_slots(track, memory, now, stopped);
+        self.follow_pitch();
+        self.voice.set_synth(self.synth_settings());
+        self.update_gains();
+        self.tell_slots_the_note();
+        self.rest_if_still(track, now, stopped, working);
+    }
+
+    /// Report what each slot moves the pitch of the note just started by, as it's heard from
+    /// here, every path through the slots having left what it added in `out`.
+    fn report_pitch(&mut self, track: &Track) {
         if let Some(row) = self.pitch_row.take() {
             let on_pitch = |at: usize| track.mods[at].destination == Some(SettingId::PITCH);
             self.pitched = Some(NotePitch {
@@ -784,41 +863,12 @@ impl TrackState {
                 }),
             });
         }
-        // A different filter starts from silence rather than from another's state.
-        if self.filter_type != track.filter {
-            self.filter_type = track.filter;
-            self.filter = [Channel::default(); 2];
-            self.coefficients = None;
-        }
-        self.drive.target = f32::from(track.drive) / 255.0;
-        self.punch.target = f32::from(track.punch) / 255.0;
-        self.safe.target = f32::from(u8::from(track.safe));
-        self.low_cut.target = f32::from(track.low_cut) / 255.0;
-        self.high_cut.target = f32::from(track.high_cut) / 255.0;
-        self.cut_offset.target = offsets[SettingId::CUT.index()];
-        self.res_offset.target = offsets[SettingId::RES.index()];
-        self.pan_offset.target = offsets[SettingId::PAN.index()];
-        self.cut_envelope.target = moved.at(SettingId::CUT.index());
-        self.res_envelope.target = moved.at(SettingId::RES.index());
-        self.pan_envelope.target = moved.at(SettingId::PAN.index());
-        for &(index, envelope) in moved.entries() {
-            offsets[index] += envelope;
-            self.offset_marks[marks] = Some(index);
-            marks += 1;
-        }
-        // Each macro puts what it holds where it has it now, before the voice and the slots' effects
-        // are given their settings, so they hear it this time; a mod slot's, the next.
-        // With none mapped, that comes to forgetting where each was heard (#187).
-        if track.has_macro_maps() {
-            let moves = std::array::from_fn(|at| {
-                SettingId::macro_at(at).map_or(0.0, |id| offsets[id.index()])
-            });
-            self.put_macros(track, &moves);
-        } else {
-            self.macro_heard = [None; MACROS];
-        }
-        let offsets = &mut self.offsets;
-        // Each slot's effect gets finished values, and doesn't know where they came from.
+    }
+
+    /// Give each slot's effect finished values, which don't say where they came from: the held
+    /// ones with what modulation adds.
+    fn hold_slots(&mut self, track: &Track, memory: &mut MemoryPool, now: SongTime, stopped: bool) {
+        let offsets = &self.offsets;
         for (slot, insert) in track.inserts.into_iter().enumerate() {
             let mut resolved = insert;
             self.slot_moving[slot] = false;
@@ -844,18 +894,25 @@ impl TrackState {
             }
             self.inserts[slot].bypass(self.bypassed[slot]);
         }
-        let semitones = self.held_pitch - 128.0 + offsets[SettingId::PITCH.index()] * 255.0;
+    }
+
+    /// The voice's pitch, from the held `Pitch` and what modulation adds, worked out again only
+    /// when that moves.
+    fn follow_pitch(&mut self) {
+        let offset = self.offsets[SettingId::PITCH.index()];
+        let semitones = self.held_pitch - 128.0 + offset * 255.0;
         if self.pitch_from != Some(semitones.to_bits()) {
             self.pitch_from = Some(semitones.to_bits());
             self.pitch = 2_f64.powf(f64::from(semitones.clamp(-96.0, 96.0)) / 12.0);
             self.pitch_octaves = self.pitch.log2() as f32;
         }
         self.voice.set_pitch(self.pitch);
-        self.voice.set_synth(self.synth_settings());
-        self.update_gains();
-        self.tell_slots_the_note();
-        // Working it out again would change nothing while no slot moves anything, no glide runs,
-        // each mod slot's share is where its switch is, and each slot's effect has what it keeps.
+    }
+
+    /// Rest while working the modulation out again would change nothing: no slot moves anything,
+    /// or might, no glide runs, each mod slot's share is where its switch is, and each slot's
+    /// effect has what it keeps.
+    fn rest_if_still(&mut self, track: &Track, now: SongTime, stopped: bool, working: bool) {
         #[allow(
             clippy::float_cmp,
             reason = "a share settles on its switch's place exactly"
