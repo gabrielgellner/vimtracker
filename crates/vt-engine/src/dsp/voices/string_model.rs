@@ -28,6 +28,7 @@ use crate::dsp::blocks::plaits_parts::{
     DcBlocker, DelayLine, Limiter, SVF_SHIFT, Svf, interpolate, random, tan_dirty,
 };
 use crate::rng::Pcg32;
+use crate::voice::SynthEngine;
 
 /// How many frames are worked out at once, as in Plaits.
 const BLOCK: usize = 24;
@@ -67,8 +68,10 @@ pub struct StringModel {
     fresh: bool,
 }
 
-impl StringModel {
-    pub fn new(rate: u32) -> Self {
+impl SynthEngine for StringModel {
+    const NOISE: bool = true;
+
+    fn new(rate: u32) -> Self {
         let rate = rate as f32;
         Self {
             rate,
@@ -92,13 +95,13 @@ impl StringModel {
     }
 
     /// Choose the noise of the pluck, so each differs but a render repeats.
-    pub fn seed(&mut self, seed: u32) {
+    fn seed_noise(&mut self, seed: u32) {
         self.rng = Pcg32::new(u64::from(seed), 2);
     }
 
     /// The next frame, at a frequency as a fraction of the sample rate.
     #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
         if self.at == BLOCK {
             self.render(frequency.clamp(1e-5, 0.25), settings);
             self.at = 0;
@@ -107,7 +110,9 @@ impl StringModel {
         self.at += 1;
         sample * LEVEL
     }
+}
 
+impl StringModel {
     fn render(&mut self, f0: f32, settings: Settings) {
         let trigger = self.fresh;
         let structure = settings.harmonics.clamp(0.0, 1.0);

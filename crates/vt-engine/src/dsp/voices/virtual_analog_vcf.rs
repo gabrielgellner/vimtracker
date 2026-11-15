@@ -24,6 +24,7 @@ use super::variable_shape::VariableShape;
 use super::virtual_analog::{BLOCK, DRIFT, Moving, Settings};
 use crate::dsp::blocks::drift::Drift;
 use crate::dsp::blocks::plaits_parts::{DcBlocker, Svf};
+use crate::voice::SynthEngine;
 
 /// How loud it is against the other machines. Its filter and clipping leave it near the virtual
 /// analog voice's level already: at 220 Hz with the filter half open, a saw is a decibel under it
@@ -65,6 +66,42 @@ impl Default for VirtualAnalogVcf {
     }
 }
 
+impl SynthEngine for VirtualAnalogVcf {
+    const DRIFTS: bool = true;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// Roll a note's drift and its noise floor from its seed, so each note differs but a render
+    /// repeats. With `Drift` up as the note starts, its oscillators start anywhere in their cycles
+    /// (decision 190).
+    fn seed_drift(&mut self, seed: u32, settings: Settings) {
+        self.drift.seed(seed);
+        if settings.at(DRIFT) > 0.0 {
+            self.oscillator.start_at(self.drift.phase());
+            self.sub_oscillator.start_at(self.drift.phase());
+        }
+    }
+
+    /// What its note's envelope times are multiplied by.
+    fn time(&self, settings: Settings) -> f32 {
+        self.drift.time(settings.at(DRIFT))
+    }
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        if self.at == BLOCK {
+            self.render(frequency.clamp(1e-5, 0.49), settings);
+            self.at = 0;
+        }
+        let sample = self.output[self.at];
+        self.at += 1;
+        sample * LEVEL
+    }
+}
+
 impl VirtualAnalogVcf {
     pub fn new() -> Self {
         Self {
@@ -82,34 +119,6 @@ impl VirtualAnalogVcf {
             at: BLOCK,
             fresh: true,
         }
-    }
-
-    /// Roll a note's drift and its noise floor from its seed, so each note differs but a render
-    /// repeats. With `Drift` up as the note starts, its oscillators start anywhere in their cycles
-    /// (decision 190).
-    pub fn seed(&mut self, seed: u32, settings: Settings) {
-        self.drift.seed(seed);
-        if settings.at(DRIFT) > 0.0 {
-            self.oscillator.start_at(self.drift.phase());
-            self.sub_oscillator.start_at(self.drift.phase());
-        }
-    }
-
-    /// What its note's envelope times are multiplied by.
-    pub fn time(&self, settings: Settings) -> f32 {
-        self.drift.time(settings.at(DRIFT))
-    }
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        if self.at == BLOCK {
-            self.render(frequency.clamp(1e-5, 0.49), settings);
-            self.at = 0;
-        }
-        let sample = self.output[self.at];
-        self.at += 1;
-        sample * LEVEL
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
@@ -358,7 +367,7 @@ mod tests {
 
     fn seeded(seed: u32, settings: Settings, frames: usize) -> Vec<f32> {
         let mut voice = VirtualAnalogVcf::new();
-        voice.seed(seed, settings);
+        voice.seed_drift(seed, settings);
         (0..frames)
             .map(|_| voice.next(220.0 / RATE, settings))
             .collect()

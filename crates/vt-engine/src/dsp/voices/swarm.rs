@@ -23,6 +23,7 @@ use super::virtual_analog::{BLOCK, Moving, Settings, next_blep, this_blep};
 use crate::dsp::blocks::plaits_parts::{Limiter, interpolate, random};
 use crate::dsp::blocks::sine_table::SINE;
 use crate::rng::Pcg32;
+use crate::voice::SynthEngine;
 
 const VOICES: usize = 8;
 /// The highest frequency a saw runs at, as a fraction of the sample rate.
@@ -209,6 +210,31 @@ impl Default for Swarm {
     }
 }
 
+impl SynthEngine for Swarm {
+    const NOISE: bool = true;
+
+    fn new(_rate: u32) -> Self {
+        Self::default()
+    }
+
+    /// Choose its grains, so each note differs but a render repeats.
+    fn seed_noise(&mut self, seed: u32) {
+        self.rng = Pcg32::new(u64::from(seed), 5);
+    }
+
+    /// The next frame, at a frequency as a fraction of the sample rate.
+    #[inline]
+    fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
+        if self.at == BLOCK {
+            self.render(frequency.clamp(1e-5, 0.49), settings);
+            self.at = 0;
+        }
+        let sample = self.output[self.at];
+        self.at += 1;
+        sample * LEVEL
+    }
+}
+
 impl Swarm {
     pub fn new() -> Self {
         // Plaits works out the middle in whole numbers, so the ranks run from -1 to 4/3.
@@ -222,23 +248,6 @@ impl Swarm {
             at: BLOCK,
             fresh: true,
         }
-    }
-
-    /// Choose its grains, so each note differs but a render repeats.
-    pub fn seed(&mut self, seed: u32) {
-        self.rng = Pcg32::new(u64::from(seed), 5);
-    }
-
-    /// The next frame, at a frequency as a fraction of the sample rate.
-    #[inline]
-    pub fn next(&mut self, frequency: f32, settings: Settings) -> f32 {
-        if self.at == BLOCK {
-            self.render(frequency.clamp(1e-5, 0.49), settings);
-            self.at = 0;
-        }
-        let sample = self.output[self.at];
-        self.at += 1;
-        sample * LEVEL
     }
 
     fn render(&mut self, f0: f32, settings: Settings) {
@@ -280,7 +289,7 @@ mod tests {
 
     fn run(hertz: f32, settings: Settings, frames: usize) -> Vec<f32> {
         let mut voice = Swarm::new();
-        voice.seed(7);
+        voice.seed_noise(7);
         (0..frames)
             .map(|_| voice.next(hertz / RATE, settings))
             .collect()
@@ -348,7 +357,7 @@ mod tests {
     fn the_same_seed_renders_the_same_samples() {
         assert_eq!(run(220.0, plain(), 4_800), run(220.0, plain(), 4_800));
         let mut other = Swarm::new();
-        other.seed(8);
+        other.seed_noise(8);
         let other: Vec<f32> = (0..4_800)
             .map(|_| other.next(220.0 / RATE, plain()))
             .collect();
