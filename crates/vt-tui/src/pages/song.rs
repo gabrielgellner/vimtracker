@@ -184,13 +184,11 @@ impl SongView {
         let Some(track) = self.track() else {
             return;
         };
-        if Self::cell_chain(track, services) != chain {
-            services.apply(&Action::SetSectionChain {
-                section: services.cursor.section,
-                track,
-                chain,
-            });
-        }
+        services.apply(&Action::SetSectionChain {
+            section: services.cursor.section,
+            track,
+            chain,
+        });
     }
 
     /// `gC`: copy the chain under the cursor and its phrases, for this cell alone.
@@ -320,36 +318,24 @@ impl SongView {
             return;
         };
         match self.track() {
-            None if self.column == LENGTH_COLUMN => {
-                if here.length.is_some() {
-                    services.apply(&Action::SetSectionLength {
-                        section,
-                        length: None,
-                    });
-                }
-            }
-            None if self.column == REPEAT_COLUMN => {
-                if here.repeat != Repeat::default() {
-                    services.apply(&Action::SetSectionRepeat {
-                        section,
-                        repeat: Repeat::default(),
-                    });
-                }
-            }
+            None if self.column == LENGTH_COLUMN => services.apply(&Action::SetSectionLength {
+                section,
+                length: None,
+            }),
+            None if self.column == REPEAT_COLUMN => services.apply(&Action::SetSectionRepeat {
+                section,
+                repeat: Repeat::default(),
+            }),
             None => {
                 if here.start != SectionStart::New {
                     Self::switch_start(services);
                 }
             }
-            Some(track) => {
-                if here.chains.get(track).copied().flatten().is_some() {
-                    services.apply(&Action::SetSectionChain {
-                        section,
-                        track,
-                        chain: None,
-                    });
-                }
-            }
+            Some(track) => services.apply(&Action::SetSectionChain {
+                section,
+                track,
+                chain: None,
+            }),
         }
     }
 

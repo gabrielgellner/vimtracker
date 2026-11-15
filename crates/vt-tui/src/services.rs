@@ -231,15 +231,18 @@ impl Services {
     }
 
     /// Run an action and make the result current. A fader it moves that the steps drive is
-    /// taken over by the hand that moved it.
+    /// taken over by the hand that moved it. One that changes nothing leaves no undo step, keeps
+    /// the song as saved and isn't sent again (decision 343); the take-over still happens, as
+    /// the hand moved the fader off what the steps had it at.
     pub fn apply(&mut self, action: &Action) {
         match edit(self.song(), action) {
             Ok(next) => {
                 self.say_applied(&next);
                 self.take_over_moved(action);
-                self.history.commit(next);
-                self.dirty = true;
-                self.publish();
+                if self.history.commit(next) {
+                    self.dirty = true;
+                    self.publish();
+                }
             }
             Err(error) => self.status = error.to_string(),
         }

@@ -49,14 +49,9 @@ impl App {
         }
     }
 
-    /// Rotate the loop's steps. The cursor stays on its row. Going all the way round changes
-    /// nothing, so it doesn't leave an undo step.
+    /// Rotate the loop's steps. The cursor stays on its row.
     pub(super) fn rotate_loop(&mut self, by: isize) {
-        let length = self.services.extent().length as isize;
-        if length > 0
-            && by.rem_euclid(length) != 0
-            && let Some(phrase) = self.services.phrase_id()
-        {
+        if let Some(phrase) = self.services.phrase_id() {
             self.services.apply(&Action::RotateLoop {
                 track: self.services.cursor.track,
                 phrase,
@@ -123,9 +118,7 @@ impl App {
             return;
         }
         let by = self.services.extent().row(self.services.cursor.step);
-        if by != 0
-            && let Some(phrase) = self.services.phrase_id()
-        {
+        if let Some(phrase) = self.services.phrase_id() {
             self.services.apply(&Action::SlideLoop {
                 track: self.services.cursor.track,
                 phrase,
@@ -149,19 +142,15 @@ impl App {
             self.set_lane(slot, Some(Lane { start, length }));
             return;
         }
-        let extent = self.services.extent();
-        let Ok(row) = usize::try_from(extent.row(self.services.cursor.step)) else {
+        let Ok(row) = usize::try_from(self.services.extent().row(self.services.cursor.step)) else {
             self.services.status = "The loop can't end above its start".to_owned();
             return;
         };
-        let length = row + 1;
-        if let Some(phrase) = self.services.phrase_id()
-            && length != extent.length
-        {
+        if let Some(phrase) = self.services.phrase_id() {
             self.services.apply(&Action::SetLength {
                 track: self.services.cursor.track,
                 phrase,
-                length,
+                length: row + 1,
             });
         }
     }

@@ -851,7 +851,7 @@ the values it left.
 | `gm` | Merge: empty cells in the copy leave what is there alone |
 | `"a` | Use register `a`, before `y`, `d` or `p`. `a` to `z` all work |
 | `"0` | The last thing you copied with `y`, which a cut can't replace |
-| `u` `C-r` | Undo and redo |
+| `u` `C-r` | Undo and redo. An edit that changed nothing isn't one to undo |
 
 A small step is a semitone, or 1 on a value. A large step is an octave, or `10`
 in hex, which changes the left digit. Counts work: `3=`. `RET` is different,

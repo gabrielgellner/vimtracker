@@ -648,6 +648,54 @@ fn the_track_page_sets_base_values_and_undoes() {
 }
 
 #[test]
+fn an_edit_that_changes_nothing_leaves_no_undo_step_and_sends_nothing() {
+    let (mut app, mut realtime) = on_track_page();
+    // The version the engine plays, once it's taken what was sent.
+    let heard = |app: &mut App, realtime: &mut Realtime| {
+        app.tick();
+        realtime.process(&mut [0.0; 512]);
+        realtime.engine().current().id
+    };
+    let cutoff = |app: &App| app.song().tracks[0].cutoff;
+    // Cut is at its top, which is its default, and the song is as saved.
+    assert_eq!(cutoff(&app), 0xFF);
+    app.services.dirty = false;
+    let (depth, version) = (
+        app.services.history.undo_depth(),
+        heard(&mut app, &mut realtime),
+    );
+    for key in ["=", "x", "9="] {
+        press(&mut app, key);
+        assert_eq!(cutoff(&app), 0xFF);
+        assert_eq!(app.services.history.undo_depth(), depth, "{key}");
+        assert!(!app.services.dirty, "{key}");
+        assert_eq!(heard(&mut app, &mut realtime), version, "{key}");
+    }
+
+    // A real edit still is one, and `u` takes it back past the ones that did nothing.
+    press(&mut app, "i40");
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+    assert!(app.services.dirty);
+    let edited = heard(&mut app, &mut realtime);
+    assert_ne!(edited, version);
+    app.services.dirty = false;
+    press(&mut app, "i40");
+    assert_eq!(app.services.history.undo_depth(), depth + 1);
+    assert!(
+        !app.services.dirty,
+        "typing the value it has changes nothing"
+    );
+    assert_eq!(heard(&mut app, &mut realtime), edited);
+    press(&mut app, "x");
+    assert_eq!(cutoff(&app), 0xFF);
+    press(&mut app, "u");
+    assert_eq!(cutoff(&app), 0x40);
+    press(&mut app, "u");
+    assert_eq!(cutoff(&app), 0xFF);
+    assert_eq!(app.services.history.undo_depth(), depth);
+}
+
+#[test]
 fn levels_snap_to_the_top_of_the_scale_and_filter_values_do_not() {
     let (mut app, _realtime) = on_track_page();
     let track = |app: &App| app.song().tracks[0].clone();
