@@ -49,8 +49,9 @@ impl App {
                 return false;
             }
             Err(Refusal::Command(track)) => {
-                let (_, items) =
-                    self.fx_command_items(track, |command| Pick::GenCommand { field, command });
+                let (_, items) = self
+                    .services
+                    .fx_command_items(track, |command| Pick::GenCommand { field, command });
                 self.show_picker(Picker::new("FX commands", items).searching(""));
                 self.services.status =
                     "Choose the command to write on the empty FX column".to_owned();

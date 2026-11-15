@@ -286,16 +286,6 @@ impl App {
             }
         }
     }
-
-    /// The FX commands a track has, as [`Services::fx_command_items`] lists them, for the shape
-    /// panel's lists.
-    pub(crate) fn fx_command_items(
-        &self,
-        track: usize,
-        pick: impl Fn(FxCommand) -> Pick,
-    ) -> (Vec<FxCommand>, Vec<Item>) {
-        self.services.fx_command_items(track, pick)
-    }
 }
 
 /// Text with its first letter a capital, as a list's meanings start.
