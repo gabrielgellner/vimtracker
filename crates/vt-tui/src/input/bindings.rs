@@ -7,6 +7,7 @@
 use vt_model::selection::{Motion, Target};
 
 use crate::audio_page::AudioPage;
+use crate::chain_view::ChainView;
 use crate::input::keys::{Key, parse, parse_sequence};
 use crate::input::mode::{Mode, View};
 use crate::mixer_page::MixerPage;
@@ -343,46 +344,6 @@ pub fn adjusting_key(key: Key) -> Option<Key> {
         .and_then(|(plain, _)| parse(plain).ok())
 }
 
-/// Keys for the chain view.
-const CHAIN: &[(&str, Cmd, &str)] = &[
-    ("j", Cmd::Move(Motion::Down), "Next row"),
-    ("k", Cmd::Move(Motion::Up), "Previous row"),
-    ("g g", Cmd::Move(Motion::First), "First row"),
-    ("G", Cmd::Move(Motion::Last), "The empty row at the end"),
-    ("h", Cmd::Move(Motion::Left), "Phrase column"),
-    ("l", Cmd::Move(Motion::Right), "Transpose column"),
-    ("0", Cmd::Move(Motion::RowStart), "Phrase column"),
-    ("$", Cmd::Move(Motion::RowEnd), "Transpose column"),
-    ("=", Cmd::Increase, "Next phrase, or transpose up"),
-    ("-", Cmd::Decrease, "Previous phrase, or transpose down"),
-    (
-        "+",
-        Cmd::IncreaseLarge,
-        "Next phrase, or transpose up, a large step",
-    ),
-    (
-        "_",
-        Cmd::DecreaseLarge,
-        "Previous phrase, or transpose down, a large step",
-    ),
-    ("C-a", Cmd::Increase, "Next phrase, or transpose up"),
-    ("C-x", Cmd::Decrease, "Previous phrase, or transpose down"),
-    ("x", Cmd::ClearField, "Transpose back to 0"),
-    ("K", Cmd::PickValue, "Choose this row's phrase from a list"),
-    ("d d", Cmd::RemoveRow, "Remove this row"),
-    ("y y", Cmd::CopyRow, "Copy this row"),
-    ("p", Cmd::Paste, "Add the copied row below"),
-    (
-        ";",
-        Cmd::Audition,
-        "Audition the start of this row, every track",
-    ),
-    ("g d", Cmd::OpenItem, "Open this phrase, or add one"),
-    ("g r r", Cmd::ListUses, "List where this phrase plays"),
-    ("g c", Cmd::ClonePhrase, "Copy this phrase here"),
-    ("g C", Cmd::CloneChain, "Copy this chain and its phrases"),
-];
-
 /// Keys to fold a group's tracks into it, after Vim's folds, in every view that shows tracks
 /// (decisions 128 and 305).
 const FOLDS: &[(&str, Cmd, &str)] = &[
@@ -419,7 +380,7 @@ pub fn bindings() -> Vec<Binding> {
     add(Mode::Normal, FOLDS);
     add(Mode::Normal, EVERY_VIEW);
     add(Mode::Insert, PhraseView::INSERT_NOTE);
-    add(Mode::Chain, CHAIN);
+    add(Mode::Chain, ChainView::KEYS);
     add(Mode::Chain, FOLDS);
     add(Mode::Chain, EVERY_VIEW);
     add(Mode::Track, TrackPage::KEYS);

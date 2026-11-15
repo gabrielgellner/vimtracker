@@ -65,10 +65,9 @@ pub enum Outcome {
 }
 
 /// One of the program's pages as a component: its own state, its keys, its drawing and its
-/// pictures. The track page, the mixer, the project page's two sub-pages, the sample page and the
 /// pictures. The track page, the mixer, the project page's two sub-pages, the sample page, the
-/// song view and the phrase view are so far (#739); the other pages' keys and drawing are still
-/// `App`'s.
+/// song view, the chain view and the phrase view are so far (#739); the other pages' keys and
+/// drawing are still `App`'s.
 pub(crate) trait Page {
     /// Its rows of the binding table, as `(keys, Cmd, description)`, in the order which-key and
     /// `Space k` list them. The table is still assembled in one place, `input::bindings`, under
@@ -122,7 +121,7 @@ impl App {
     pub(crate) fn run_page(&mut self, cmd: Cmd) -> bool {
         match self.modes.view {
             View::Track | View::Mixer => self.run_track_pages(cmd),
-            View::Chain => self.run_chain(cmd),
+            View::Chain => self.run_chain_view(cmd),
             View::Audio | View::Project => self.run_project_pages(cmd),
             View::Sample => self.run_sample_page(cmd),
             View::Song => self.run_song_view(cmd),
@@ -252,6 +251,29 @@ impl App {
         }
     }
 
+    /// Run a command in the chain view: the view's own key, and then what it passes back, a move
+    /// to another row, `dd`, the phrase picker, Insert and `;`, which are `App`'s. What neither
+    /// takes goes on to the tree. The count stays for what takes it.
+    fn run_chain_view(&mut self, cmd: Cmd) -> bool {
+        let times = self.modes.count.unwrap_or(1).max(1);
+        let mut ctx = CtxMut {
+            services: &mut self.services,
+            modes: &self.modes,
+        };
+        match self.chain_view.key(cmd, times, &mut ctx) {
+            Outcome::Done => {
+                self.modes.count = None;
+                true
+            }
+            Outcome::Refused(why) => {
+                self.modes.count = None;
+                self.services.status = why.to_owned();
+                true
+            }
+            Outcome::Passed => self.run_chain_passed(cmd),
+        }
+    }
+
     /// Run a command in the phrase view: the view's own key, a move or one over the view, or
     /// pass it back for what's `App`'s, the tree's keys, the grammar's operators, edits and Visual
     /// modes, Insert, the loop's keys, recording and the pickers. A move takes the count, and a
@@ -305,6 +327,31 @@ impl<'a> Ctx<'a> {
     /// The track under the cursor.
     pub fn track_here(&self) -> Option<&'a Track> {
         self.app.services.track_here()
+    }
+
+    /// A track's name, or its number if it has none.
+    pub fn track_name(&self, track: usize) -> String {
+        crate::views::phrase::track_name(self.app, track)
+    }
+
+    /// The chain on the cursor's track.
+    pub fn chain_id(&self) -> Option<u32> {
+        self.app.services.chain_id()
+    }
+
+    /// The rows in the cursor's chain.
+    pub fn chain_entries(&self) -> &'a [ChainEntry] {
+        self.app.services.chain_entries()
+    }
+
+    /// How many sections play the cursor's chain.
+    pub fn chain_uses(&self) -> usize {
+        self.app.chain_uses()
+    }
+
+    /// Which sections and slots play a phrase of the cursor's track.
+    pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize)> {
+        self.app.phrase_uses(phrase)
     }
 
     /// Which groups are folded, so their tracks are left out where tracks are drawn side by side.
@@ -568,21 +615,6 @@ impl<'a> Ctx<'a> {
     /// Where the cursor's phrase's loop sits.
     pub fn extent(&self) -> Extent {
         self.app.services.extent()
-    }
-
-    /// The chain on the cursor's track.
-    pub fn chain_id(&self) -> Option<u32> {
-        self.app.services.chain_id()
-    }
-
-    /// The rows in the cursor's chain.
-    pub fn chain_entries(&self) -> &'a [ChainEntry] {
-        self.app.services.chain_entries()
-    }
-
-    /// Which sections and slots play a phrase of the cursor's track.
-    pub fn phrase_uses(&self, phrase: u32) -> Vec<(usize, usize)> {
-        self.app.phrase_uses(phrase)
     }
 
     /// The cursor's position within the section, on the view on screen.

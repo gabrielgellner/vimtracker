@@ -732,12 +732,7 @@ fn row_number(row: isize) -> String {
 
 /// A track's name, or its number if it has none.
 pub(crate) fn track_name(app: &App, track: usize) -> String {
-    name_of(app.song(), track)
-}
-
-/// A track of a song's name, or its number if it has none.
-fn name_of(song: &Song, track: usize) -> String {
-    let name = song.tracks.get(track).map_or("", |t| t.name.as_str());
+    let name = app.song().tracks.get(track).map_or("", |t| t.name.as_str());
     if name.is_empty() {
         format!("{:02}", track + 1)
     } else {
@@ -771,7 +766,7 @@ pub(crate) fn level_glyph(ctx: &Ctx, track: usize) -> Option<(char, Style)> {
 /// name: the start of its name, and its mute or solo glyph after it if it has one, or a group's
 /// mark that its tracks are folded into it. Without a glyph, the name fills the cells.
 fn column_label(ctx: &Ctx, track: usize) -> (String, Option<(char, Style)>) {
-    let name = name_of(ctx.song(), track);
+    let name = ctx.track_name(track);
     let cells = neighbour_width(ctx.song(), track) - 2;
     let folded = (track != ctx.cursor().track && ctx.folds().holds(ctx.song(), track)).then(|| {
         let style = group::style(ctx.song(), track).unwrap_or_default();
@@ -873,7 +868,7 @@ fn title(ctx: &Ctx, phrase: &Phrase, width: u16) -> Line<'static> {
     title.extend(role::ruled(
         ctx.song(),
         ctx.cursor().track,
-        &name_of(ctx.song(), ctx.cursor().track),
+        &ctx.track_name(ctx.cursor().track),
         bold,
     ));
     // A track in a group carries its mark, in the group's colour, as on the mixer.

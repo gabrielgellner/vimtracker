@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use crate::accent_slide::{HeldFlag, Moved, Written};
 use crate::audio::{AudioChoice, DeviceInfo, LoadReadout, SlowdownReadout};
 use crate::audio_page::AudioPage;
+use crate::chain_view::ChainView;
 use crate::exploring::Naming;
 use crate::glyphs;
 use crate::loading::Loader;
@@ -23,7 +24,7 @@ use vt_model::samples::SamplePool;
 use vt_model::scale::Scale;
 pub use vt_model::selection::Field;
 use vt_model::selection::{Block, Scope, StepRange};
-use vt_model::song::{ChainEntry, Song, Track};
+use vt_model::song::{Song, Track};
 use vt_model::step::{FxCommand, MAX_VELOCITY};
 
 use crate::grammar::{Adjustments, Change, SelectionPlace};
@@ -44,7 +45,7 @@ use crate::services::Services;
 use crate::shaping::ShapePanel;
 use crate::song_view::SongView;
 use crate::track_page::TrackPage;
-use crate::tree::{ChainColumn, Place};
+use crate::tree::Place;
 
 mod commands;
 mod cursor;
@@ -259,8 +260,8 @@ pub struct App {
     /// Most recently used first, starting with the view on screen.
     pub recent_views: Vec<View>,
     pub picker: Option<Picker>,
-    pub chain_column: ChainColumn,
-    pub(crate) yanked_row: Option<ChainEntry>,
+    /// The chain view: the column its cursor is on, and the row last copied.
+    pub chain_view: ChainView,
     pub(crate) jumps: Vec<Place>,
     pub(crate) jump_index: usize,
     /// Where the latest jump left from, for `''` to go back to, as Vim's previous context mark.
@@ -430,8 +431,7 @@ impl App {
             wheel: crate::wheel::Wheel::default(),
             recent_views: View::ALL.to_vec(),
             picker: None,
-            chain_column: ChainColumn::Phrase,
-            yanked_row: None,
+            chain_view: ChainView::default(),
             jumps: Vec::new(),
             jump_index: 0,
             jumped_from: None,

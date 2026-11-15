@@ -11,6 +11,7 @@ pub mod automating;
 pub mod autosave;
 pub mod banking;
 pub mod bench;
+pub mod chain_view;
 pub mod command_line;
 pub mod config;
 pub mod dsp_probe;
