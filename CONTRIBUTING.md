@@ -137,6 +137,19 @@ A new effect, voice, generator or mod type has a checklist of its own,
 [docs/designs/adding-a-device.md](docs/designs/adding-a-device.md): every place it takes, what the
 compiler catches if one is missed, and which pinned names and goldens show the change.
 
+### Dependencies
+
+`Cargo.lock` is committed and keeps builds reproducible, and `just ci` passes `--locked`, so a
+manifest changed without its lock fails. `Cargo.toml` gives each dependency as a caret range,
+`ratatui = "0.30.2"`, so `cargo update` takes patch and minor releases without editing it. The
+exception is a crate whose arithmetic a golden render hears, pinned with `=` so an update can't
+move a hash unasked: `realfft`, for `Clouds`' spectral mode, and `wide`, for the Supersaw's and the
+4-op's lanes. Reading files, resampling them or drawing doesn't count, as the goldens build their
+sounds in memory, so `hound`, `symphonia` and `rubato` take ranges too. A new crate whose output a
+golden hears is pinned the same way, with a comment saying which goldens (decision 352). The lock
+also holds what those crates bring in, such as `rustfft` under `realfft`, which `cargo update`
+moves, so run the tests after one.
+
 ## The manual
 
 The manual is in `docs/manual`, and it includes the guides in `crates/vt-tui/guides`. The
