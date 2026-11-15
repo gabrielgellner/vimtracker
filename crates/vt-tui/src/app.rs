@@ -14,7 +14,7 @@ use crate::loading::Loader;
 use crate::places::RecentPlaces;
 use crate::views::picker::{PREVIEW_SAMPLE_HEIGHT, PREVIEW_SAMPLE_WIDTH};
 use ratatui::crossterm::event::KeyCode;
-use vt_engine::engine::{PLAYHEADS, SectionLoop, TrackPlace, Transport};
+use vt_engine::engine::{PLAYHEADS, TrackPlace, Transport};
 use vt_engine::link::{Command, Handle, JamState};
 use vt_model::constants::{DEFAULT_NOTE_VELOCITY, MAX_TRACKS, TICKS_PER_STEP};
 use vt_model::kit::KitEntry;
@@ -41,6 +41,7 @@ use crate::project_page::ProjectPage;
 use crate::recording::Recording;
 use crate::services::Services;
 use crate::shaping::ShapePanel;
+use crate::song_view::SongView;
 use crate::track_page::TrackPage;
 use crate::tree::{ChainColumn, Place};
 
@@ -244,11 +245,8 @@ pub struct App {
     pub library: Option<PathBuf>,
     /// The mixer: the row its cursor is on.
     pub mixer_page: MixerPage,
-    pub song_column: usize,
-    /// The sections being kept playing, set with `:loop`.
-    pub looping: Option<SectionLoop>,
-    /// Where a selection of sections in the song view started, while `V` selects them.
-    pub section_anchor: Option<usize>,
+    /// The song view: the column its cursor is on, and where `V` started selecting sections.
+    pub song_view: SongView,
     /// The track page: which of its pages shows, where its cursor is, and the images it shows.
     pub track_page: TrackPage,
     /// Where the sample page is, and the ids of the images of its waveform and its overview.
@@ -434,9 +432,7 @@ impl App {
             services: Services::new(song, folder, samples, handle, rate),
             modes: Modes::default(),
             mixer_page: MixerPage::default(),
-            song_column: 0,
-            looping: None,
-            section_anchor: None,
+            song_view: SongView::default(),
             track_page: TrackPage::default(),
             sample_page: crate::sample_page::SamplePage::default(),
             sample_images: None,

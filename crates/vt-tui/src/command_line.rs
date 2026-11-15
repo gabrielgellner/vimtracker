@@ -20,7 +20,7 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.leave_command_line();
-                self.section_anchor = None;
+                self.song_view.anchor = None;
             }
             KeyCode::Enter => {
                 self.leave_command_line();
@@ -31,7 +31,7 @@ impl App {
                     Err(error) => self.services.status = error.to_string(),
                 }
                 // Sections selected for the command are done with, as Vim's `:'<,'>` ends Visual.
-                self.section_anchor = None;
+                self.song_view.anchor = None;
                 if let Err(error) = kept
                     && self.services.status.is_empty()
                 {

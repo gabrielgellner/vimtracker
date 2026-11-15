@@ -98,7 +98,7 @@ pub fn column_name(app: &App) -> String {
                     |track| control.name_on(track).to_owned(),
                 )
         }
-        View::Song => match app.song_column {
+        View::Song => match app.song_view.column {
             LENGTH_COLUMN => "Length".to_owned(),
             REPEAT_COLUMN => "Rpt".to_owned(),
             START_COLUMN => "Start".to_owned(),
@@ -513,7 +513,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // slot says so, in the page's own colour, but the keyboard's mode is named over it.
     let special = app
         .sample_mode()
-        .or_else(|| app.section_anchor.map(|_| Mode::VisualField.label()))
+        .or_else(|| app.song_view.anchor.map(|_| Mode::VisualField.label()))
         .or_else(|| (app.fx_zoomed() && app.modes.mode != Mode::Keys).then_some("ZOOM"));
     let badge = match special {
         Some("SETTINGS") => Some(theme::ROSEWATER),
@@ -580,7 +580,7 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
         .map_or_else(String::new, |steps| format!("Reset {steps}  "));
     let sections = app.song().sections.len();
     let section = if sections > 1 {
-        let looping = match app.looping {
+        let looping = match app.services.looping {
             Some(sections) if sections.first != sections.last => {
                 format!(" loop {}-{}", sections.first + 1, sections.last + 1)
             }
