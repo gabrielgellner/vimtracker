@@ -58,10 +58,14 @@ change. Why the code is shaped this way is in [device-interface.md](device-inter
    - **With a long buffer:** one line of `memories!` in `dsp/effects/memory.rs`, under `rung:`, or
      under `played_by_slot:` with an arm of its own in `slot.rs`'s `effect` if it needs the note or
      another track.
-   - **Small enough for every slot:** a `KEPT_IN_SLOT` row in `dsp/effects/slot.rs`, an
-     `InsertState` field with its default, and its arms in `take`, `effect`, `without_memory` and
-     `kept_as`. The compiler asks only for `without_memory`'s. A missed `effect` arm rings a buffer
-     it hasn't, so its wet sound is silent, and its golden render is what shows it.
+   - **Small enough for every slot:** one line of `kept!` in `dsp/effects/slot.rs`, under
+     `settling:` if a frame of silence can leave it as it was, bit for bit, which takes `SameBits`
+     and `Default` of its DSP, or under `moving:` if it goes on by itself, as a phaser's sweep
+     does. The macro writes its `Kept` variant, its `KEPT_IN_SLOT` row, its fresh state, and the
+     forwarding of `follow` and of the comparison a settled slot is found by. Then its arm in
+     `InsertState::effect`, which plays it, and in `InsertState::settle`, which says whether
+     playing from the top jumps it to its settings. The compiler asks for both, as neither `match`
+     has a catch-all.
 
    `FACTS` won't build if the effect is in neither list or in both, or lacks the `Mix` or `Gain`
    its `MIXING` needs. `slot.rs`'s `the_slot_reads_each_effects_levels_from_its_own_settings`
