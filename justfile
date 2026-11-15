@@ -49,8 +49,9 @@ symbols-font:
 costs *args:
     cargo run --release -q -p vt-engine --example costs -- {{args}}
 
-# cargo-nextest runs each test in a process of its own, as many at once as there are cores, and
-# takes about a third of the time `cargo test` does, which runs one test binary at a time.
+# cargo-nextest runs each test in a process of its own, as many at once as there are cores.
+# `cargo test` runs one test binary at a time, and since each crate's integration tests became one
+# binary (#719) it takes about a quarter longer than nextest, not three times as long.
 #
 # Run every test, under cargo-nextest when it's installed and cargo test when it isn't
 test:
@@ -62,7 +63,7 @@ test:
         cargo test --workspace --locked --doc
     else
         echo "cargo-nextest isn't installed, so the tests run under cargo test, a binary at a time."
-        echo "nextest is about three times faster: cargo install cargo-nextest --locked"
+        echo "nextest takes about four fifths of the time: cargo install cargo-nextest --locked"
         cargo test --workspace --locked
     fi
 

@@ -1,0 +1,642 @@
+//! Macros on the track page (decision 285): `M` maps the setting under the cursor to a macro,
+//! moves it or takes it off, `gm` opens a macro's mapping and edits its ranges, `:macro` names
+//! one, a setting a macro holds refuses a turn and shows where the macro puts it with its range
+//! drawn on its bar, and the Macros band turns them.
+
+use ratatui::crossterm::event::KeyCode;
+use vt_model::macros::MacroTarget;
+use vt_model::settings::SettingId;
+use vt_tui::app::App;
+use vt_tui::input::mode::{Mode, View};
+use vt_tui::track_page::Control;
+
+use crate::common::*;
+use vt_tui::kitty::PanelKey;
+
+/// On `Cut`, the Filter's first setting.
+fn on_cut() -> (App, vt_engine::link::Realtime) {
+    let (mut app, realtime) = tracks_of_different_lengths();
+    press(&mut app, " 5}j");
+    assert_eq!(app.modes.view, View::Track);
+    assert_eq!(
+        app.track_control(),
+        Control::Base(vt_model::action::TrackControl::Cutoff)
+    );
+    (app, realtime)
+}
+
+/// The track page as lines of text, as big as it is on the author's screen.
+fn page_text(app: &App) -> Vec<String> {
+    let (width, height) = (150, 40);
+    let backend = ratatui::backend::TestBackend::new(width, height);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::track::draw(frame, frame.area(), app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    (0..height)
+        .map(|y| (0..width).map(|x| buffer[(x, y)].symbol()).collect())
+        .collect()
+}
+
+fn cut() -> MacroTarget {
+    MacroTarget::Setting(SettingId::CUT)
+}
+
+#[test]
+fn m_and_a_digit_map_a_setting_to_a_macro_turned_to_where_it_is() {
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "i40");
+    press(&mut app, "M");
+    assert_eq!(app.modes.mode, Mode::Picker);
+    assert_eq!(app.picker.as_ref().unwrap().items().len(), 8);
+    press(&mut app, "5");
+    assert_eq!(app.modes.mode, Mode::Normal);
+    let track = &app.song().tracks[0];
+    let (at, map) = track.macro_holding(cut()).unwrap();
+    assert_eq!(at, 4);
+    assert_eq!(
+        (map.min, map.max),
+        (0, 0xFF00),
+        "its whole range to start with"
+    );
+    assert_eq!(
+        track.macros[4].value >> 8,
+        0x40,
+        "turned to where Cut was, so it doesn't jump"
+    );
+    assert_eq!(track.macros[4].shown_name().as_deref(), Some("Cut"));
+    assert!(
+        app.services.status.contains("macro 5"),
+        "{}",
+        app.services.status
+    );
+    // One undo step takes it all back.
+    press(&mut app, "u");
+    assert!(app.song().tracks[0].macro_holding(cut()).is_none());
+    assert_eq!(app.song().tracks[0].macros[4].value, 0);
+}
+
+#[test]
+fn a_mapped_setting_refuses_a_turn_and_says_where_to_turn_it() {
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "M3");
+    let before = app.song().clone();
+    for keys in ["=", "-", "+", "x", "i"] {
+        press(&mut app, keys);
+        assert_eq!(app.modes.mode, Mode::Normal, "{keys}");
+        assert_eq!(
+            app.song().tracks[0].cutoff,
+            before.tracks[0].cutoff,
+            "{keys}"
+        );
+        assert!(
+            app.services.status.contains("is on macro 3"),
+            "{keys}: {}",
+            app.services.status
+        );
+    }
+}
+
+#[test]
+fn m_on_a_mapped_setting_takes_it_off_its_macro_or_moves_it_to_another() {
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "M2");
+    press(&mut app, "M");
+    assert_eq!(
+        app.picker.as_ref().unwrap().selected,
+        1,
+        "opened on its macro"
+    );
+    press(&mut app, "7");
+    assert_eq!(app.song().tracks[0].macro_holding(cut()).unwrap().0, 6);
+    assert!(app.song().tracks[0].macros[1].maps.is_empty());
+    press(&mut app, "M7");
+    assert!(app.song().tracks[0].macro_holding(cut()).is_none());
+    assert!(
+        app.services.status.contains("off macro 7"),
+        "{}",
+        app.services.status
+    );
+}
+
+#[test]
+fn gm_opens_the_mapping_and_moves_swaps_types_and_unmaps_its_ends() {
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "M1");
+    // Res, beside it, on the same macro.
+    press(&mut app, "jM1");
+    press(&mut app, "kgm");
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    let map = |app: &App, target| *app.song().tracks[0].macro_holding(target).unwrap().1;
+    // On Cut's Min: up a large step and one, then to Max and type it.
+    press(&mut app, "+=");
+    assert_eq!(map(&app, cut()).min, 0x1100);
+    press(&mut app, "li");
+    press(&mut app, "A0");
+    assert_eq!(map(&app, cut()).max, 0xA000);
+    press(&mut app, "~");
+    assert_eq!(
+        (map(&app, cut()).min, map(&app, cut()).max),
+        (0xA000, 0x1100)
+    );
+    assert!(
+        app.services.status.contains("At 00 the macro sets Cut"),
+        "{}",
+        app.services.status
+    );
+    // Down to Res, and off the macro, and back with u.
+    let res = MacroTarget::Setting(SettingId::RES);
+    press(&mut app, "jdd");
+    assert!(app.song().tracks[0].macro_holding(res).is_none());
+    assert_eq!(app.modes.mode, Mode::Mapping, "Cut is still on it");
+    press(&mut app, "u");
+    assert!(app.song().tracks[0].macro_holding(res).is_some());
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    // gm on a setting on no macro says so.
+    press(&mut app, "jjgm");
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert!(
+        app.services.status.contains("isn't on a macro"),
+        "{}",
+        app.services.status
+    );
+}
+
+#[test]
+fn gm_bends_a_mappings_response_with_curve_and_s_as_the_shape_panel_does() {
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "i40M1gm");
+    let map = |app: &App| *app.song().tracks[0].macro_holding(cut()).unwrap().1;
+    assert_eq!(
+        (map(&app).curve, map(&app).s),
+        (0, 0),
+        "straight to start with"
+    );
+    // Across to Curve: a large step and a small one, 25 and 5, as the shape panel's.
+    press(&mut app, "ll");
+    assert!(
+        app.services.status.contains("Curve 0 bends Cut from Min"),
+        "{}",
+        app.services.status
+    );
+    press(&mut app, "+=");
+    assert_eq!(map(&app).curve, 30);
+    // S: down, then typed as a signed number and Enter, kept to 100, and straight again with x.
+    press(&mut app, "l-_");
+    assert_eq!(map(&app).s, -30);
+    press(&mut app, "i-40");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(map(&app).s, -40);
+    press(&mut app, "i250");
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(map(&app).s, 100);
+    press(&mut app, "lx");
+    assert_eq!(map(&app).s, 0, "l stays on S, the row's last");
+    press(&mut app, "u");
+    assert_eq!(map(&app).s, 100, "each change is an undo step");
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    // The ends are as they were, and the status line on one says the bend.
+    assert_eq!((map(&app).min, map(&app).max), (0, 0xFF00));
+    press(&mut app, "hhh");
+    assert!(
+        app.services
+            .status
+            .contains("at FF to 20.0 kHz, along Curve +30 S +100"),
+        "{}",
+        app.services.status
+    );
+    // The view has the columns and the drawing's box; the page shows Cut where the bent
+    // response puts it, its range still drawn from Min to Max.
+    let rows = screen_rows(&mut app);
+    let cut_row = rows.iter().find(|row| row.contains("›Cut")).unwrap();
+    assert!(cut_row.contains("00     FF     +30   +100"), "{cut_row}");
+    assert!(
+        rows.iter().any(|row| row.contains("Curve S")),
+        "{}",
+        rows.join("\n")
+    );
+    assert!(rows.iter().any(|row| row.contains("┌─────────────┐")));
+    special(&mut app, KeyCode::Esc);
+    let track = &app.song().tracks[0];
+    let bent = map(&app).at(f32::from(track.macros[0].value) / 256.0) >> 8;
+    assert_ne!(bent, 0x40, "the curve moves it");
+    let line = page_text(&app)
+        .into_iter()
+        .find(|line| line.contains(" Cut "))
+        .unwrap();
+    assert!(line.contains(&format!("Cut       {bent:02X}")), "{line}");
+    assert!(line.contains('░'), "the range is drawn: {line}");
+}
+
+#[test]
+fn the_mapping_views_response_is_sent_once_and_again_only_when_it_bends() {
+    use vt_tui::kitty::Graphics;
+    let (mut app, _realtime) = on_cut();
+    let mut graphics = Graphics::new();
+    // The response is 13 by 5 characters; the Sound page's own pictures are other sizes.
+    let sync = |app: &mut App, graphics: &mut Graphics| {
+        let mut out = Vec::new();
+        app.send_pictures(graphics, &mut out).unwrap();
+        String::from_utf8(out)
+            .unwrap()
+            .matches(",c=13,r=5,")
+            .count()
+    };
+    press(&mut app, "i40M1");
+    assert_eq!(sync(&mut app, &mut graphics), 0, "no view, no response");
+    press(&mut app, "gm");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    let first = app
+        .mapping
+        .as_ref()
+        .and_then(|view| view.images.get(PanelKey::Mapping))
+        .unwrap();
+    assert_eq!(sync(&mut app, &mut graphics), 0, "nothing has changed");
+    // An end moved draws the same; a bend doesn't.
+    press(&mut app, "=");
+    assert_eq!(sync(&mut app, &mut graphics), 0);
+    assert_eq!(
+        app.mapping
+            .as_ref()
+            .and_then(|view| view.images.get(PanelKey::Mapping)),
+        Some(first)
+    );
+    press(&mut app, "ll+");
+    assert_eq!(sync(&mut app, &mut graphics), 1);
+    assert_ne!(
+        app.mapping
+            .as_ref()
+            .and_then(|view| view.images.get(PanelKey::Mapping)),
+        Some(first)
+    );
+    special(&mut app, KeyCode::Esc);
+    sync(&mut app, &mut graphics);
+    assert_eq!(
+        app.mapping
+            .as_ref()
+            .and_then(|view| view.images.get(PanelKey::Mapping)),
+        None,
+        "closed, it has none"
+    );
+}
+
+#[test]
+fn the_page_shows_where_the_macro_puts_a_setting_and_its_range_on_its_bar() {
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "i40M1gm");
+    press(&mut app, "i20li");
+    press(&mut app, "C0");
+    special(&mut app, KeyCode::Esc);
+    // The macro at 40 of its 20 to C0: 20 + A0 * 40 / FF, about 48.
+    let shown = |app: &App| {
+        page_text(app)
+            .into_iter()
+            .find(|line| line.contains(" Cut "))
+            .unwrap()
+    };
+    let line = shown(&app);
+    assert!(
+        line.contains("Cut       48"),
+        "{line}\n{}",
+        page_text(&app).join("\n")
+    );
+    assert!(line.contains('░'), "the range is drawn: {line}");
+    let backend = ratatui::backend::TestBackend::new(163, 2);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::status::draw(frame, frame.area(), &app))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let status: String = (0..163).map(|x| buffer[(x, 0)].symbol()).collect();
+    assert!(status.contains("on macro 1 Cut"), "{status}");
+}
+
+#[test]
+fn the_macros_band_turns_a_macro_and_colon_macro_names_it() {
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "M1");
+    // The Gen page, its first band the macros.
+    press(&mut app, "LLL");
+    assert_eq!(app.track_page.page, vt_tui::track_page::Page::Gen);
+    press(&mut app, "gg0");
+    assert_eq!(app.track_control(), Control::Macro(0));
+    press(&mut app, "iFF");
+    assert_eq!(app.song().tracks[0].macros[0].value, 0xFF00);
+    press(&mut app, "-");
+    assert_eq!(app.song().tracks[0].macros[0].value, 0xFE00);
+    command(&mut app, "macro Bite");
+    assert_eq!(app.song().tracks[0].macros[0].name.as_deref(), Some("Bite"));
+    let text = page_text(&app).join("\n");
+    assert!(text.contains("Bite"), "{text}");
+    assert!(text.contains("Macros"), "{text}");
+    assert!(text.contains("Bite → Cut"), "what it holds: {text}");
+    command(&mut app, "macro");
+    assert_eq!(app.song().tracks[0].macros[0].name, None);
+    // gm on the band opens its mapping, and M refuses a macro.
+    press(&mut app, "M");
+    assert!(
+        app.services.status.contains("can't hold a macro"),
+        "{}",
+        app.services.status
+    );
+    press(&mut app, "gm");
+    assert_eq!(app.modes.mode, Mode::Mapping);
+}
+
+/// Eight empty rows with a tresillo of notes kept live on them, then the Gen page, on its `Hits`.
+fn on_hits() -> (App, vt_engine::link::Realtime) {
+    use std::sync::Arc;
+    let mut song = vt_model::song::Song::new(1);
+    let steps: Vec<vt_model::step::Step> = (0..8)
+        .map(|_| "--- -- --- --- ---".parse().unwrap())
+        .collect();
+    song.tracks[0]
+        .phrases
+        .insert(0, Arc::new(vt_model::song::Phrase::from_steps(steps)));
+    let samples = Arc::new(vt_model::samples::SamplePool::default());
+    let version = Arc::new(vt_engine::published::Published::new(
+        Arc::new(song.clone()),
+        Arc::clone(&samples),
+    ));
+    let (handle, realtime) =
+        vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, "vGSjjjjjj===");
+    special(&mut app, KeyCode::Char('L'));
+    press(&mut app, " 8}kjj$");
+    assert!(matches!(
+        app.track_control(),
+        Control::Gen {
+            param: vt_model::shape::GenParam::Hits,
+            ..
+        }
+    ));
+    (app, realtime)
+}
+
+/// How many of the phrase's rows have a note.
+fn notes(app: &App) -> usize {
+    app.song().tracks[0].phrases[&0]
+        .steps()
+        .iter()
+        .filter(|step| matches!(step.note, vt_model::step::Note::On(_)))
+        .count()
+}
+
+#[test]
+fn m_maps_a_generators_hits_and_turning_the_macro_writes_the_column_again() {
+    let (mut app, _realtime) = on_hits();
+    assert_eq!(notes(&app), 3);
+    press(&mut app, "M2");
+    let target = MacroTarget::Gen {
+        column: vt_model::macros::GenColumn::Note,
+        param: vt_model::shape::GenParam::Hits,
+    };
+    let (at, map) = app.song().tracks[0].macro_holding(target).unwrap();
+    let map = *map;
+    assert_eq!(at, 1);
+    assert_eq!(
+        (map.number_at(0.0), map.number_at(255.0)),
+        (0, 8),
+        "its bounds"
+    );
+    assert_eq!(
+        notes(&app),
+        3,
+        "the macro turned to where Hits is, so nothing jumps"
+    );
+    // Its own turn is refused, and the band turns it.
+    press(&mut app, "=");
+    assert!(
+        app.services.status.contains("is on macro 2"),
+        "{}",
+        app.services.status
+    );
+    press(&mut app, "gg0l");
+    assert_eq!(app.track_control(), Control::Macro(1));
+    press(&mut app, "iFF");
+    assert_eq!(notes(&app), 8);
+    press(&mut app, "i00");
+    assert_eq!(notes(&app), 0);
+    // The generator keeps its own underneath.
+    let generator = &app.song().tracks[0].phrases[&0].generators()[0];
+    assert_eq!(
+        generator.shape.place,
+        vt_model::shape::Where::Euclid { hits: 3, rotate: 0 }
+    );
+    // The engine holds `Hits` as it plays, so a lock or an LFO reaches it: it isn't by hand.
+    press(&mut app, "gm");
+    assert!(
+        !app.services.status.contains("by hand"),
+        "{}",
+        app.services.status
+    );
+    let backend = ratatui::backend::TestBackend::new(150, 40);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    let view = app.mapping.clone().unwrap();
+    terminal
+        .draw(|frame| vt_tui::views::mapping::draw(frame, frame.area(), &app, &view))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let text: String = (0..40)
+        .map(|y| {
+            (0..150)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                + "\n"
+        })
+        .collect();
+    assert!(text.contains("Note Hits"), "{text}");
+    assert!(!text.contains("by hand"), "{text}");
+}
+
+#[test]
+fn the_roto_shows_the_macros_first_each_knob_named_by_its_macro_and_turns_them() {
+    use vt_model::action::Action;
+    use vt_tui::roto::devices::live_devices;
+    use vt_tui::roto::edits::turned;
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "M3");
+    command(&mut app, "macro A long macro name");
+    assert!(
+        app.services.status.contains("12"),
+        "{}",
+        app.services.status
+    );
+    command(&mut app, "macro Twelve chars");
+    let song = app.song().clone();
+    let devices = live_devices(&song.tracks[0], None, &song, false);
+    assert_eq!(devices[0].name.as_str(), "Macros");
+    assert_eq!(
+        devices[1].name.as_str(),
+        "Sampler",
+        "the machine after them"
+    );
+    let names: Vec<&str> = (1..=8)
+        .map(|knob| devices[0].control(knob).unwrap().name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "Macro 1",
+            "Macro 2",
+            "Twelve chars",
+            "Macro 4",
+            "Macro 5",
+            "Macro 6",
+            "Macro 7",
+            "Macro 8"
+        ]
+    );
+    // A knob turned to its bottom turns its macro to `00`, one action: it's at `FF`, where Cut
+    // was as it was mapped.
+    assert_eq!(song.tracks[0].macros[2].value, 0xFF00);
+    let action = turned(Control::Macro(2), 0, &song, 0).unwrap();
+    assert_eq!(
+        action,
+        Action::SetMacro {
+            track: 0,
+            at: 2,
+            value: 0
+        }
+    );
+}
+
+#[test]
+fn m_on_an_lfos_rate_maps_it_and_its_ends_read_as_rates() {
+    use vt_tui::track_page::ModField;
+    let (mut app, _realtime) = app();
+    press(&mut app, " 5L");
+    press(&mut app, &format!("{}jj", to_lfo(0)));
+    assert_eq!(app.track_control(), Control::Mod(3, ModField::Rate));
+    press(&mut app, "M1");
+    let rate = MacroTarget::Setting(SettingId::mod_own(3, 9).unwrap());
+    let track = &app.song().tracks[0];
+    let (at, _) = track.macro_holding(rate).unwrap();
+    assert_eq!(at, 0);
+    assert_eq!(
+        track.macros[0].value >> 8,
+        0x79,
+        "turned to where 1/4 is, so it doesn't jump"
+    );
+    press(&mut app, "gm");
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    assert!(
+        app.services
+            .status
+            .contains("At 00 the macro sets M4 Rate to 64 bars, at FF to 1/64")
+            && app.services.status.contains("so Rate is 1/4"),
+        "{}",
+        app.services.status
+    );
+}
+
+/// `C-o`, back from a jump.
+fn jump_back(app: &mut App) {
+    let back = vt_tui::input::keys::parse_sequence("C-o").unwrap()[0];
+    app.key(back, std::time::Instant::now());
+}
+
+#[test]
+fn gd_on_a_setting_a_macro_holds_goes_to_its_mapping_on_the_gen_page_and_c_o_comes_back() {
+    use vt_tui::track_page::Page;
+    let (mut app, _realtime) = on_cut();
+    // Res on macro 1, then Cut, its second mapping.
+    press(&mut app, "jM1kM1");
+    let cut_here = app.track_control();
+    press(&mut app, "gd");
+    assert_eq!(app.modes.view, View::Track);
+    assert_eq!(app.track_page.page, Page::Gen);
+    assert_eq!(
+        app.track_control(),
+        Control::Macro(0),
+        "on the macro, in the band"
+    );
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    let view = app.mapping.as_ref().unwrap();
+    assert_eq!((view.at, view.row), (0, 1), "on Cut's mapping");
+    special(&mut app, KeyCode::Esc);
+    assert_eq!(app.modes.mode, Mode::Normal);
+    jump_back(&mut app);
+    assert_eq!(app.track_page.page, Page::Sound);
+    assert_eq!(app.track_control(), cut_here, "back on Cut");
+    // On a macro, gd opens its mapping view, as gm does.
+    press(&mut app, " 8gg0");
+    assert_eq!(app.track_control(), Control::Macro(0));
+    press(&mut app, "gd");
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    assert_eq!(app.mapping.as_ref().unwrap().at, 0);
+}
+
+#[test]
+fn gd_on_a_generators_setting_goes_up_the_gen_page_to_its_macro_as_a_jump() {
+    let (mut app, _realtime) = on_hits();
+    press(&mut app, "M2");
+    let hits = app.track_control();
+    press(&mut app, "gd");
+    assert_eq!(app.track_control(), Control::Macro(1));
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    special(&mut app, KeyCode::Esc);
+    jump_back(&mut app);
+    assert_eq!(
+        app.track_control(),
+        hits,
+        "a jump on the same page comes back too"
+    );
+}
+
+#[test]
+fn gd_on_a_setting_no_macro_holds_says_what_it_opens() {
+    use vt_tui::track_page::Page;
+    let (mut app, _realtime) = on_cut();
+    press(&mut app, "gd");
+    assert_eq!(app.track_page.page, Page::Sound, "it stays");
+    assert_eq!(app.modes.mode, Mode::Normal);
+    assert!(
+        app.services
+            .status
+            .contains("a macro from a setting it holds"),
+        "{}",
+        app.services.status
+    );
+}
+
+#[test]
+fn gd_on_a_setting_two_macros_hold_lists_them_to_go_to() {
+    use std::sync::Arc;
+    use vt_model::macros::MacroMap;
+    // `M` keeps a setting on one macro, so a song that has two hold it is made by hand.
+    let mut song = vt_model::song::Song::new(2);
+    song.tracks[0].macros[0].maps.push(MacroMap::whole(cut()));
+    song.tracks[0].macros[2].maps.push(MacroMap {
+        max: 0x8000,
+        ..MacroMap::whole(cut())
+    });
+    let samples = Arc::new(vt_model::samples::SamplePool::default());
+    let version = Arc::new(vt_engine::published::Published::new(
+        Arc::new(song.clone()),
+        Arc::clone(&samples),
+    ));
+    let (handle, _realtime) =
+        vt_engine::link::connect(vt_engine::engine::Engine::new(48_000, version));
+    let mut app = App::new(song, None, samples, handle, 48_000);
+    press(&mut app, " 5}j");
+    assert_eq!(
+        app.track_control(),
+        Control::Base(vt_model::action::TrackControl::Cutoff)
+    );
+    press(&mut app, "gd");
+    assert_eq!(app.modes.mode, Mode::Picker);
+    let picker = app.picker.as_ref().unwrap();
+    let items: Vec<String> = picker.items().iter().map(listed).collect();
+    assert_eq!(items.len(), 2, "{items:?}");
+    assert!(items[0].starts_with("1 Cut"), "{items:?}");
+    assert!(items[1].starts_with("3 Cut"), "{items:?}");
+    special(&mut app, KeyCode::Down);
+    special(&mut app, KeyCode::Enter);
+    assert_eq!(app.track_control(), Control::Macro(2));
+    assert_eq!(app.modes.mode, Mode::Mapping);
+    assert_eq!(app.mapping.as_ref().unwrap().at, 2);
+}
