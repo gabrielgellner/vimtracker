@@ -1,0 +1,883 @@
+Normal	h	Move(Left)	Previous field
+Normal	l	Move(Right)	Next field
+Normal	j	Move(Down)	Next step
+Normal	k	Move(Up)	Previous step
+Normal	w	Move(NextGroup)	Next part: the note, then each FX
+Normal	b	Move(PreviousGroup)	Previous part: an FX, or the note
+Normal	0	Move(RowStart)	Start of the row
+Normal	$	Move(RowEnd)	End of the row
+Normal	}	Move(NextBeat)	Next beat
+Normal	{	Move(PreviousBeat)	Previous beat
+Normal	g g	Move(First)	First step, or step n
+Normal	G	Move(Last)	Last step, or step n
+Normal	H	ViewTop	Cursor to the top of the view
+Normal	M	ViewMiddle	Cursor to the middle of the view
+Normal	L	ViewBottom	Cursor to the bottom of the view
+Normal	C-d	HalfPageDown	Half a screen down, centred
+Normal	C-u	HalfPageUp	Half a screen up, centred
+Normal	C-e	ScrollDown	Scroll the view down
+Normal	C-y	ScrollUp	Scroll the view up
+Normal	d	Operator(Clear)	Clear
+Normal	y	Operator(Copy)	Copy
+Normal	>	Operator(ShiftUp)	Shift up
+Normal	<	Operator(ShiftDown)	Shift down
+Normal	x	ClearField	Clear this field
+Normal	p	Paste	Paste over from the cursor
+Normal	g p	PasteAfter	Paste over, and land just after it
+Normal	g m	PasteMerge	Paste, keeping what the copy leaves empty
+Normal	;	Audition	Audition this row on every track
+Normal	r	Replace	Replace this field, and stay here
+Normal	s	Substitute	Clear this field and start Insert
+Normal	=	Increase	Increase the value
+Normal	D-l	Increase	Increase the value
+Normal	-	Decrease	Decrease the value
+Normal	D-h	Decrease	Decrease the value
+Normal	+	IncreaseLarge	Increase the value, a large step
+Normal	D-k	IncreaseLarge	Increase the value, a large step
+Normal	_	DecreaseLarge	Decrease the value, a large step
+Normal	D-j	DecreaseLarge	Decrease the value, a large step
+Normal	C-a	IncreaseChromatic	Increase the value, by a semitone in a scale
+Normal	C-x	DecreaseChromatic	Decrease the value, by a semitone in a scale
+Normal	~	CycleMark	Cycle a value's mark: lock, hold, glide
+Normal	.	Repeat	Repeat the last change
+Normal	v	VisualField	Select fields
+Normal	V	VisualStep	Select whole steps
+Normal	g v	Reselect	Reselect the last selection
+Normal	M-1	NarrowGrid	Narrower grid for the arrows in Insert
+Normal	M-2	WidenGrid	Wider grid for the arrows in Insert
+Normal	M-s	ToggleScale	Scale on or off
+Normal	z i	ToggleTimeline	Collapse the timeline to a line a row, or open it again
+Normal	Space i	ToggleInspector	Inspect the cursor's row beside the overview, or stop
+Normal	Space p d	Double	Double this phrase
+Normal	g l	ReopenGenerator	Open the shape panel again on the live column here
+Normal	Space g a	ApplyGenerator	Apply the live column here, leaving plain values
+Normal	Space g A	BakeMods	Write the pitch the mod slots played into the notes
+Normal	Space r	ToggleRecord	Record notes played in Insert, while playing
+Normal	K	PickValue	Choose this field from a list
+Normal	g d	OpenItem	On an SLI's value, open the sample page on its slice
+Normal	g r r	ListUses	List where this phrase plays
+Normal	g c	ClonePhrase	Copy this phrase here
+Normal	g C	CloneChain	Copy this chain and its phrases
+Normal	] p	NextSlot	Next phrase in the chain
+Normal	[ p	PreviousSlot	Previous phrase in the chain
+Normal	] P	LastSlot	Last phrase in the chain
+Normal	[ P	FirstSlot	First phrase in the chain
+Normal	] l	SlideLoop(1)	Slide the loop a step later
+Normal	[ l	SlideLoop(-1)	Slide the loop a step earlier
+Normal	] L	SlideLoop(4)	Slide the loop a beat later
+Normal	[ L	SlideLoop(-4)	Slide the loop a beat earlier
+Normal	] r	RotateLoop(1)	Rotate the loop's steps later
+Normal	[ r	RotateLoop(-1)	Rotate the loop's steps earlier
+Normal	g s	StartLoopHere	Start the loop on this step
+Normal	g e	EndLoopHere	End the loop on this step
+Normal	z a	ToggleFold	Fold this group, or the one this track is in, or open it
+Normal	z M	FoldAll(true)	Fold every group
+Normal	z R	FoldAll(false)	Open every group, the empty ones too
+Normal	u	Undo	Undo
+Normal	C-r	Redo	Redo
+Normal	:	EnterCommand	Command
+Normal	i	EnterInsert	Insert
+Normal	Tab	PauseOrResume	Play, or pause in place
+Normal	S-Tab	PlayFromStart	Play from the start
+Normal	Space c	PlayFromCursor	Play from the cursor
+Normal	Space q q	Quit	Quit
+Normal	Space m	ToggleMute	Mute or unmute; held, until let go
+Normal	Space s	ToggleSolo	Solo or unsolo; held, until let go
+Normal	Space g m	MuteOnGrid	Mute or unmute on the launch grid, or take it back
+Normal	Space g s	SoloOnGrid	Solo or unsolo on the launch grid, or take it back
+Normal	Space M	ClearMutes	Clear all mutes and solos
+Normal	Space R	ToggleSampling	Record the master, a track or the input into a new sample, or stop
+Normal	Space l	ToggleFill	Fill on or off; held, until let go
+Normal	Space A	Realign	Realign every track on the launch grid, or take it back
+Normal	Space a	RealignTrack	Realign this track on the launch grid, or take it back
+Normal	Space o	RotateSpeeds(false)	Rotate the speeds round this group: each takes the next's
+Normal	Space O	RotateSpeeds(true)	Rotate the speeds round every track: each takes the next's
+Normal	Space e	GiveBack	Give this track's faders back to the steps' automation
+Normal	Space E	GiveBackAll	Give every track's faders back to the steps' automation
+Normal	Space 1	ShowView(Song)	Song view
+Normal	Space 2	ShowView(Chain)	Chain view
+Normal	Space 3	ShowView(Phrase)	Phrase view
+Normal	Space 4	ShowView(Mixer)	Mixer
+Normal	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
+Normal	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
+Normal	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
+Normal	Space 8	ShowTrackPage(Gen)	Gen page: the live generators
+Normal	Space 9	ShowProject	Project: song settings, and audio
+Normal	Space 0	ShowView(Sample)	Sample page: the sample, big
+Normal	Space Space	Picker	Open the view picker
+Normal	Space f f	Picker	Open the view picker
+Normal	Space f b	TrackPicker	Open the track picker
+Normal	Space ?	Guides	Open a guide
+Normal	Space k	Help	Show every key
+Normal	C-o	JumpBack	Jump back
+Normal	C-i	JumpForward	Jump forward
+Normal	W	NextTrack	Next track
+Normal	B	PreviousTrack	Previous track
+Normal	] b	NextTrack	Next track
+Normal	[ b	PreviousTrack	Previous track
+Normal	] g	NextGroupTrack	Next group, folded or open
+Normal	[ g	PreviousGroupTrack	Previous group, folded or open
+Insert	'	Accent	Note column: accent the note just written; held, the notes played
+Insert	/	Slide	Note column: slide from the note just written; held, the notes played
+Insert	k	OctaveUp	Note column: the note just written an octave up; held, the notes played
+Insert	,	OctaveDown	Note column: the note just written an octave down; held, the notes played
+Insert	o	WidenGrid	Note column: wider grid, as M-2
+Insert	l	NarrowGrid	Note column: narrower grid, as M-1
+Chain	j	Move(Down)	Next row
+Chain	k	Move(Up)	Previous row
+Chain	g g	Move(First)	First row
+Chain	G	Move(Last)	The empty row at the end
+Chain	h	Move(Left)	Phrase column
+Chain	l	Move(Right)	Transpose column
+Chain	0	Move(RowStart)	Phrase column
+Chain	$	Move(RowEnd)	Transpose column
+Chain	=	Increase	Next phrase, or transpose up
+Chain	D-l	Increase	Next phrase, or transpose up
+Chain	-	Decrease	Previous phrase, or transpose down
+Chain	D-h	Decrease	Previous phrase, or transpose down
+Chain	+	IncreaseLarge	Next phrase, or transpose up, a large step
+Chain	D-k	IncreaseLarge	Next phrase, or transpose up, a large step
+Chain	_	DecreaseLarge	Previous phrase, or transpose down, a large step
+Chain	D-j	DecreaseLarge	Previous phrase, or transpose down, a large step
+Chain	C-a	Increase	Next phrase, or transpose up
+Chain	C-x	Decrease	Previous phrase, or transpose down
+Chain	x	ClearField	Transpose back to 0
+Chain	K	PickValue	Choose this row's phrase from a list
+Chain	d d	RemoveRow	Remove this row
+Chain	y y	CopyRow	Copy this row
+Chain	p	Paste	Add the copied row below
+Chain	;	Audition	Audition the start of this row, every track
+Chain	g d	OpenItem	Open this phrase, or add one
+Chain	g r r	ListUses	List where this phrase plays
+Chain	g c	ClonePhrase	Copy this phrase here
+Chain	g C	CloneChain	Copy this chain and its phrases
+Chain	z a	ToggleFold	Fold this group, or the one this track is in, or open it
+Chain	z M	FoldAll(true)	Fold every group
+Chain	z R	FoldAll(false)	Open every group, the empty ones too
+Chain	u	Undo	Undo
+Chain	C-r	Redo	Redo
+Chain	:	EnterCommand	Command
+Chain	i	EnterInsert	Insert
+Chain	Tab	PauseOrResume	Play, or pause in place
+Chain	S-Tab	PlayFromStart	Play from the start
+Chain	Space c	PlayFromCursor	Play from the cursor
+Chain	Space q q	Quit	Quit
+Chain	Space m	ToggleMute	Mute or unmute; held, until let go
+Chain	Space s	ToggleSolo	Solo or unsolo; held, until let go
+Chain	Space g m	MuteOnGrid	Mute or unmute on the launch grid, or take it back
+Chain	Space g s	SoloOnGrid	Solo or unsolo on the launch grid, or take it back
+Chain	Space M	ClearMutes	Clear all mutes and solos
+Chain	Space R	ToggleSampling	Record the master, a track or the input into a new sample, or stop
+Chain	Space l	ToggleFill	Fill on or off; held, until let go
+Chain	Space A	Realign	Realign every track on the launch grid, or take it back
+Chain	Space a	RealignTrack	Realign this track on the launch grid, or take it back
+Chain	Space o	RotateSpeeds(false)	Rotate the speeds round this group: each takes the next's
+Chain	Space O	RotateSpeeds(true)	Rotate the speeds round every track: each takes the next's
+Chain	Space e	GiveBack	Give this track's faders back to the steps' automation
+Chain	Space E	GiveBackAll	Give every track's faders back to the steps' automation
+Chain	Space 1	ShowView(Song)	Song view
+Chain	Space 2	ShowView(Chain)	Chain view
+Chain	Space 3	ShowView(Phrase)	Phrase view
+Chain	Space 4	ShowView(Mixer)	Mixer
+Chain	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
+Chain	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
+Chain	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
+Chain	Space 8	ShowTrackPage(Gen)	Gen page: the live generators
+Chain	Space 9	ShowProject	Project: song settings, and audio
+Chain	Space 0	ShowView(Sample)	Sample page: the sample, big
+Chain	Space Space	Picker	Open the view picker
+Chain	Space f f	Picker	Open the view picker
+Chain	Space f b	TrackPicker	Open the track picker
+Chain	Space ?	Guides	Open a guide
+Chain	Space k	Help	Show every key
+Chain	C-o	JumpBack	Jump back
+Chain	C-i	JumpForward	Jump forward
+Chain	W	NextTrack	Next track
+Chain	B	PreviousTrack	Previous track
+Chain	] b	NextTrack	Next track
+Chain	[ b	PreviousTrack	Previous track
+Chain	] g	NextGroupTrack	Next group, folded or open
+Chain	[ g	PreviousGroupTrack	Previous group, folded or open
+Track	j	Move(Down)	Next row
+Track	k	Move(Up)	Previous row
+Track	g g	Move(First)	First row, of this column of devices
+Track	G	Move(Last)	Last row, of this column of devices
+Track	H	PreviousPage	Previous page: Sound, Mod, FX, Gen
+Track	L	NextPage	Next page: Sound, Mod, FX, Gen
+Track	d d	RemoveRow	Take an effect out of its slot, or a generator away
+Track	p	Paste	Put the effect taken in this slot
+Track	b	Bypass	Switch this effect or modulator out, or back in
+Track	z i	ZoomSlot	On the FX page, zoom in on this slot, or back out
+Track	z o	ZoomRack	On the FX page, back out to every slot
+Track	/	FieldJump	Jump to a setting by its name
+Track	M	MapMacro	Map this setting to a macro, or move it, or take it off
+Track	g m	MacroMapping	This macro's mapping, or the one this setting is on
+Track	g d	OpenItem	On Sample, open the sample page on it
+Track	Space g a	ApplyGenerator	On a Steps slot, keep what Mutate drew; on Gen, apply it
+Track	r	RollGenerator	On the Gen page, roll the generator again
+Track	Enter	ReopenGenerator	On the Gen page, open the shape panel on it
+Track	}	Move(NextBeat)	Next device down, in the same column
+Track	{	Move(PreviousBeat)	Previous device up, in the same column
+Track	h	Move(Left)	Previous setting, or the device on the left
+Track	l	Move(Right)	Next setting, or the device on the right
+Track	0	Move(RowStart)	First setting
+Track	$	Move(RowEnd)	Last setting
+Track	=	Increase	Increase the value
+Track	D-l	Increase	Increase the value
+Track	-	Decrease	Decrease the value
+Track	D-h	Decrease	Decrease the value
+Track	+	IncreaseLarge	Increase the value, a large step
+Track	D-k	IncreaseLarge	Increase the value, a large step
+Track	_	DecreaseLarge	Decrease the value, a large step
+Track	D-j	DecreaseLarge	Decrease the value, a large step
+Track	C-a	Increase	Increase the value
+Track	C-x	Decrease	Decrease the value
+Track	x	ClearField	Back to its default
+Track	K	PickValue	Choose this setting from a list
+Track	;	Audition	Play the sound on a w s e d f, until ; again
+Track	z a	ToggleFold	Fold this group, or the one this track is in, or open it
+Track	z M	FoldAll(true)	Fold every group
+Track	z R	FoldAll(false)	Open every group, the empty ones too
+Track	u	Undo	Undo
+Track	C-r	Redo	Redo
+Track	:	EnterCommand	Command
+Track	i	EnterInsert	Insert
+Track	Tab	PauseOrResume	Play, or pause in place
+Track	S-Tab	PlayFromStart	Play from the start
+Track	Space c	PlayFromCursor	Play from the cursor
+Track	Space q q	Quit	Quit
+Track	Space m	ToggleMute	Mute or unmute; held, until let go
+Track	Space s	ToggleSolo	Solo or unsolo; held, until let go
+Track	Space g m	MuteOnGrid	Mute or unmute on the launch grid, or take it back
+Track	Space g s	SoloOnGrid	Solo or unsolo on the launch grid, or take it back
+Track	Space M	ClearMutes	Clear all mutes and solos
+Track	Space R	ToggleSampling	Record the master, a track or the input into a new sample, or stop
+Track	Space l	ToggleFill	Fill on or off; held, until let go
+Track	Space A	Realign	Realign every track on the launch grid, or take it back
+Track	Space a	RealignTrack	Realign this track on the launch grid, or take it back
+Track	Space o	RotateSpeeds(false)	Rotate the speeds round this group: each takes the next's
+Track	Space O	RotateSpeeds(true)	Rotate the speeds round every track: each takes the next's
+Track	Space e	GiveBack	Give this track's faders back to the steps' automation
+Track	Space E	GiveBackAll	Give every track's faders back to the steps' automation
+Track	Space 1	ShowView(Song)	Song view
+Track	Space 2	ShowView(Chain)	Chain view
+Track	Space 3	ShowView(Phrase)	Phrase view
+Track	Space 4	ShowView(Mixer)	Mixer
+Track	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
+Track	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
+Track	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
+Track	Space 8	ShowTrackPage(Gen)	Gen page: the live generators
+Track	Space 9	ShowProject	Project: song settings, and audio
+Track	Space 0	ShowView(Sample)	Sample page: the sample, big
+Track	Space Space	Picker	Open the view picker
+Track	Space f f	Picker	Open the view picker
+Track	Space f b	TrackPicker	Open the track picker
+Track	Space ?	Guides	Open a guide
+Track	Space k	Help	Show every key
+Track	C-o	JumpBack	Jump back
+Track	C-i	JumpForward	Jump forward
+Track	W	NextTrack	Next track
+Track	B	PreviousTrack	Previous track
+Track	] b	NextTrack	Next track
+Track	[ b	PreviousTrack	Previous track
+Track	] g	NextGroupTrack	Next group, folded or open
+Track	[ g	PreviousGroupTrack	Previous group, folded or open
+Song	j	Move(Down)	Next section
+Song	k	Move(Up)	Previous section
+Song	g g	Move(First)	First section
+Song	G	Move(Last)	Last section
+Song	h	Move(Left)	Previous column
+Song	l	Move(Right)	Next column
+Song	0	Move(RowStart)	Length column
+Song	$	Move(RowEnd)	Last track's column
+Song	=	Increase	Increase the value
+Song	D-l	Increase	Increase the value
+Song	-	Decrease	Decrease the value
+Song	D-h	Decrease	Decrease the value
+Song	+	IncreaseLarge	Increase the value, a large step
+Song	D-k	IncreaseLarge	Increase the value, a large step
+Song	_	DecreaseLarge	Decrease the value, a large step
+Song	D-j	DecreaseLarge	Decrease the value, a large step
+Song	C-a	Increase	Increase the value
+Song	C-x	Decrease	Decrease the value
+Song	x	ClearField	Follow the longest chain, new, or no chain
+Song	K	PickValue	Switch new and reset, or choose this cell's chain
+Song	g d	OpenItem	Open this chain's phrase, its rows, or add one
+Song	g C	CloneChain	Copy this chain and its phrases
+Song	a	AddSection	Add an empty section after this one
+Song	g c	CloneSection	Copy this section after itself
+Song	Enter	Launch	Play this chain on its track next, or stop on --
+Song	C	Capture	Add a section of what's playing, and stay on it
+Song	d d	RemoveRow	Remove this section
+Song	;	Audition	Hear the start of this section
+Song	V	VisualStep	Select sections, for :loop; V or Esc ends it
+Song	z a	ToggleFold	Fold this group, or the one this track is in, or open it
+Song	z M	FoldAll(true)	Fold every group
+Song	z R	FoldAll(false)	Open every group, the empty ones too
+Song	u	Undo	Undo
+Song	C-r	Redo	Redo
+Song	:	EnterCommand	Command
+Song	i	EnterInsert	Insert
+Song	Tab	PauseOrResume	Play, or pause in place
+Song	S-Tab	PlayFromStart	Play from the start
+Song	Space c	PlayFromCursor	Play from the cursor
+Song	Space q q	Quit	Quit
+Song	Space m	ToggleMute	Mute or unmute; held, until let go
+Song	Space s	ToggleSolo	Solo or unsolo; held, until let go
+Song	Space g m	MuteOnGrid	Mute or unmute on the launch grid, or take it back
+Song	Space g s	SoloOnGrid	Solo or unsolo on the launch grid, or take it back
+Song	Space M	ClearMutes	Clear all mutes and solos
+Song	Space R	ToggleSampling	Record the master, a track or the input into a new sample, or stop
+Song	Space l	ToggleFill	Fill on or off; held, until let go
+Song	Space A	Realign	Realign every track on the launch grid, or take it back
+Song	Space a	RealignTrack	Realign this track on the launch grid, or take it back
+Song	Space o	RotateSpeeds(false)	Rotate the speeds round this group: each takes the next's
+Song	Space O	RotateSpeeds(true)	Rotate the speeds round every track: each takes the next's
+Song	Space e	GiveBack	Give this track's faders back to the steps' automation
+Song	Space E	GiveBackAll	Give every track's faders back to the steps' automation
+Song	Space 1	ShowView(Song)	Song view
+Song	Space 2	ShowView(Chain)	Chain view
+Song	Space 3	ShowView(Phrase)	Phrase view
+Song	Space 4	ShowView(Mixer)	Mixer
+Song	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
+Song	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
+Song	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
+Song	Space 8	ShowTrackPage(Gen)	Gen page: the live generators
+Song	Space 9	ShowProject	Project: song settings, and audio
+Song	Space 0	ShowView(Sample)	Sample page: the sample, big
+Song	Space Space	Picker	Open the view picker
+Song	Space f f	Picker	Open the view picker
+Song	Space f b	TrackPicker	Open the track picker
+Song	Space ?	Guides	Open a guide
+Song	Space k	Help	Show every key
+Song	C-o	JumpBack	Jump back
+Song	C-i	JumpForward	Jump forward
+Song	W	NextTrack	Next track
+Song	B	PreviousTrack	Previous track
+Song	] b	NextTrack	Next track
+Song	[ b	PreviousTrack	Previous track
+Song	] g	NextGroupTrack	Next group, folded or open
+Song	[ g	PreviousGroupTrack	Previous group, folded or open
+Mixer	h	Move(Left)	Previous track
+Mixer	l	Move(Right)	Next track
+Mixer	0	Move(RowStart)	First track
+Mixer	$	Move(RowEnd)	Last track
+Mixer	j	Move(Down)	Next setting
+Mixer	k	Move(Up)	Previous setting
+Mixer	g g	Move(First)	First setting
+Mixer	G	Move(Last)	Last setting
+Mixer	=	Increase	Increase the value, or switch on
+Mixer	D-l	Increase	Increase the value, or switch on
+Mixer	-	Decrease	Decrease the value, or switch off
+Mixer	D-h	Decrease	Decrease the value, or switch off
+Mixer	+	IncreaseLarge	Increase the value, a large step
+Mixer	D-k	IncreaseLarge	Increase the value, a large step
+Mixer	_	DecreaseLarge	Decrease the value, a large step
+Mixer	D-j	DecreaseLarge	Decrease the value, a large step
+Mixer	C-a	Increase	Increase the value
+Mixer	C-x	Decrease	Decrease the value
+Mixer	x	ClearField	Back to its default
+Mixer	K	PickValue	Switch mute or solo
+Mixer	/	FieldJump	Jump to a setting by its name
+Mixer	z a	ToggleFold	Fold this group, or the one this track is in, or open it
+Mixer	z M	FoldAll(true)	Fold every group
+Mixer	z R	FoldAll(false)	Open every group, the empty ones too
+Mixer	u	Undo	Undo
+Mixer	C-r	Redo	Redo
+Mixer	:	EnterCommand	Command
+Mixer	i	EnterInsert	Insert
+Mixer	Tab	PauseOrResume	Play, or pause in place
+Mixer	S-Tab	PlayFromStart	Play from the start
+Mixer	Space c	PlayFromCursor	Play from the cursor
+Mixer	Space q q	Quit	Quit
+Mixer	Space m	ToggleMute	Mute or unmute; held, until let go
+Mixer	Space s	ToggleSolo	Solo or unsolo; held, until let go
+Mixer	Space g m	MuteOnGrid	Mute or unmute on the launch grid, or take it back
+Mixer	Space g s	SoloOnGrid	Solo or unsolo on the launch grid, or take it back
+Mixer	Space M	ClearMutes	Clear all mutes and solos
+Mixer	Space R	ToggleSampling	Record the master, a track or the input into a new sample, or stop
+Mixer	Space l	ToggleFill	Fill on or off; held, until let go
+Mixer	Space A	Realign	Realign every track on the launch grid, or take it back
+Mixer	Space a	RealignTrack	Realign this track on the launch grid, or take it back
+Mixer	Space o	RotateSpeeds(false)	Rotate the speeds round this group: each takes the next's
+Mixer	Space O	RotateSpeeds(true)	Rotate the speeds round every track: each takes the next's
+Mixer	Space e	GiveBack	Give this track's faders back to the steps' automation
+Mixer	Space E	GiveBackAll	Give every track's faders back to the steps' automation
+Mixer	Space 1	ShowView(Song)	Song view
+Mixer	Space 2	ShowView(Chain)	Chain view
+Mixer	Space 3	ShowView(Phrase)	Phrase view
+Mixer	Space 4	ShowView(Mixer)	Mixer
+Mixer	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
+Mixer	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
+Mixer	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
+Mixer	Space 8	ShowTrackPage(Gen)	Gen page: the live generators
+Mixer	Space 9	ShowProject	Project: song settings, and audio
+Mixer	Space 0	ShowView(Sample)	Sample page: the sample, big
+Mixer	Space Space	Picker	Open the view picker
+Mixer	Space f f	Picker	Open the view picker
+Mixer	Space f b	TrackPicker	Open the track picker
+Mixer	Space ?	Guides	Open a guide
+Mixer	Space k	Help	Show every key
+Mixer	C-o	JumpBack	Jump back
+Mixer	C-i	JumpForward	Jump forward
+Mixer	W	NextTrack	Next track
+Mixer	B	PreviousTrack	Previous track
+Mixer	] b	NextTrack	Next track
+Mixer	[ b	PreviousTrack	Previous track
+Mixer	] g	NextGroupTrack	Next group, folded or open
+Mixer	[ g	PreviousGroupTrack	Previous group, folded or open
+Audio	H	PreviousPage	Previous page: Song, Audio
+Audio	L	NextPage	Next page: Song, Audio
+Audio	j	Move(Down)	Next setting
+Audio	k	Move(Up)	Previous setting
+Audio	g g	Move(First)	First setting
+Audio	G	Move(Last)	Last setting
+Audio	=	Increase	The next choice
+Audio	D-l	Increase	The next choice
+Audio	-	Decrease	The previous choice
+Audio	D-h	Decrease	The previous choice
+Audio	D-k	IncreaseLarge	The next choice, as D-l
+Audio	D-j	DecreaseLarge	The previous choice, as D-h
+Audio	x	ClearField	Back to the system's own choice
+Audio	K	PickValue	List the choices
+Audio	u	Undo	Undo
+Audio	C-r	Redo	Redo
+Audio	:	EnterCommand	Command
+Audio	i	EnterInsert	Insert
+Audio	Tab	PauseOrResume	Play, or pause in place
+Audio	S-Tab	PlayFromStart	Play from the start
+Audio	Space c	PlayFromCursor	Play from the cursor
+Audio	Space q q	Quit	Quit
+Audio	Space m	ToggleMute	Mute or unmute; held, until let go
+Audio	Space s	ToggleSolo	Solo or unsolo; held, until let go
+Audio	Space g m	MuteOnGrid	Mute or unmute on the launch grid, or take it back
+Audio	Space g s	SoloOnGrid	Solo or unsolo on the launch grid, or take it back
+Audio	Space M	ClearMutes	Clear all mutes and solos
+Audio	Space R	ToggleSampling	Record the master, a track or the input into a new sample, or stop
+Audio	Space l	ToggleFill	Fill on or off; held, until let go
+Audio	Space A	Realign	Realign every track on the launch grid, or take it back
+Audio	Space a	RealignTrack	Realign this track on the launch grid, or take it back
+Audio	Space o	RotateSpeeds(false)	Rotate the speeds round this group: each takes the next's
+Audio	Space O	RotateSpeeds(true)	Rotate the speeds round every track: each takes the next's
+Audio	Space e	GiveBack	Give this track's faders back to the steps' automation
+Audio	Space E	GiveBackAll	Give every track's faders back to the steps' automation
+Audio	Space 1	ShowView(Song)	Song view
+Audio	Space 2	ShowView(Chain)	Chain view
+Audio	Space 3	ShowView(Phrase)	Phrase view
+Audio	Space 4	ShowView(Mixer)	Mixer
+Audio	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
+Audio	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
+Audio	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
+Audio	Space 8	ShowTrackPage(Gen)	Gen page: the live generators
+Audio	Space 9	ShowProject	Project: song settings, and audio
+Audio	Space 0	ShowView(Sample)	Sample page: the sample, big
+Audio	Space Space	Picker	Open the view picker
+Audio	Space f f	Picker	Open the view picker
+Audio	Space f b	TrackPicker	Open the track picker
+Audio	Space ?	Guides	Open a guide
+Audio	Space k	Help	Show every key
+Audio	C-o	JumpBack	Jump back
+Audio	C-i	JumpForward	Jump forward
+Audio	W	NextTrack	Next track
+Audio	B	PreviousTrack	Previous track
+Audio	] b	NextTrack	Next track
+Audio	[ b	PreviousTrack	Previous track
+Audio	] g	NextGroupTrack	Next group, folded or open
+Audio	[ g	PreviousGroupTrack	Previous group, folded or open
+Project	j	Move(Down)	Next row
+Project	k	Move(Up)	Previous row
+Project	g g	Move(First)	First row, or row n
+Project	G	Move(Last)	Last row, or row n
+Project	h	Move(Left)	Previous setting
+Project	l	Move(Right)	Next setting, or the tempo's fine part
+Project	0	Move(RowStart)	First setting
+Project	$	Move(RowEnd)	Last setting
+Project	=	Increase	Increase the value, or switch on
+Project	D-l	Increase	Increase the value, or switch on
+Project	-	Decrease	Decrease the value, or switch off
+Project	D-h	Decrease	Decrease the value, or switch off
+Project	+	IncreaseLarge	Increase the value, a large step
+Project	D-k	IncreaseLarge	Increase the value, a large step
+Project	_	DecreaseLarge	Decrease the value, a large step
+Project	D-j	DecreaseLarge	Decrease the value, a large step
+Project	C-a	Increase	Increase the value
+Project	C-x	Decrease	Decrease the value
+Project	x	ClearField	Back to a new project's
+Project	K	PickValue	Choose from a list, switch, or do it
+Project	Enter	PickValue	Do this action, or open the Audio page
+Project	H	PreviousPage	Previous page: Song, Audio
+Project	L	NextPage	Next page: Song, Audio
+Project	u	Undo	Undo
+Project	C-r	Redo	Redo
+Project	:	EnterCommand	Command
+Project	i	EnterInsert	Insert
+Project	Tab	PauseOrResume	Play, or pause in place
+Project	S-Tab	PlayFromStart	Play from the start
+Project	Space c	PlayFromCursor	Play from the cursor
+Project	Space q q	Quit	Quit
+Project	Space m	ToggleMute	Mute or unmute; held, until let go
+Project	Space s	ToggleSolo	Solo or unsolo; held, until let go
+Project	Space g m	MuteOnGrid	Mute or unmute on the launch grid, or take it back
+Project	Space g s	SoloOnGrid	Solo or unsolo on the launch grid, or take it back
+Project	Space M	ClearMutes	Clear all mutes and solos
+Project	Space R	ToggleSampling	Record the master, a track or the input into a new sample, or stop
+Project	Space l	ToggleFill	Fill on or off; held, until let go
+Project	Space A	Realign	Realign every track on the launch grid, or take it back
+Project	Space a	RealignTrack	Realign this track on the launch grid, or take it back
+Project	Space o	RotateSpeeds(false)	Rotate the speeds round this group: each takes the next's
+Project	Space O	RotateSpeeds(true)	Rotate the speeds round every track: each takes the next's
+Project	Space e	GiveBack	Give this track's faders back to the steps' automation
+Project	Space E	GiveBackAll	Give every track's faders back to the steps' automation
+Project	Space 1	ShowView(Song)	Song view
+Project	Space 2	ShowView(Chain)	Chain view
+Project	Space 3	ShowView(Phrase)	Phrase view
+Project	Space 4	ShowView(Mixer)	Mixer
+Project	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
+Project	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
+Project	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
+Project	Space 8	ShowTrackPage(Gen)	Gen page: the live generators
+Project	Space 9	ShowProject	Project: song settings, and audio
+Project	Space 0	ShowView(Sample)	Sample page: the sample, big
+Project	Space Space	Picker	Open the view picker
+Project	Space f f	Picker	Open the view picker
+Project	Space f b	TrackPicker	Open the track picker
+Project	Space ?	Guides	Open a guide
+Project	Space k	Help	Show every key
+Project	C-o	JumpBack	Jump back
+Project	C-i	JumpForward	Jump forward
+Project	W	NextTrack	Next track
+Project	B	PreviousTrack	Previous track
+Project	] b	NextTrack	Next track
+Project	[ b	PreviousTrack	Previous track
+Project	] g	NextGroupTrack	Next group, folded or open
+Project	[ g	PreviousGroupTrack	Previous group, folded or open
+Sample	h	Move(Left)	A pixel earlier, faster held
+Sample	l	Move(Right)	A pixel later, faster held
+Sample	0	Move(RowStart)	Start of the slice
+Sample	$	Move(RowEnd)	End of the slice
+Sample	^	Sample(FirstSound)	First sound in the slice
+Sample	g _	Sample(LastSound)	Last sound in the slice
+Sample	j	Move(Down)	Next slice
+Sample	k	Move(Up)	Previous slice
+Sample	g g	Move(First)	Start of the sample, or slice n
+Sample	G	Move(Last)	End of the sample, or slice n
+Sample	}	Move(NextBeat)	Next beat, from the start, at the tempo
+Sample	{	Move(PreviousBeat)	Previous beat, from the start, at the tempo
+Sample	w	Sample(NextSound)	Next sound's start, as Sens finds them
+Sample	b	Sample(PreviousSound)	Previous sound's start, as Sens finds them
+Sample	e	Sample(SoundEnd)	Where the sound decays, or the next one
+Sample	] ]	Sample(NextPoint)	Next point: a slice, the start, end or loop
+Sample	[ [	Sample(PreviousPoint)	Previous point: a slice, the start, end or loop
+Sample	'	Sample(Mark)	Then a letter: the slice it names, as a jump
+Sample	] '	Sample(NextMark)	Next slice a letter names, as a jump
+Sample	[ '	Sample(PreviousMark)	Previous slice a letter names, as a jump
+Sample	H	ViewTop	Cursor to the left of the view
+Sample	M	ViewMiddle	Cursor to the middle of the view
+Sample	L	ViewBottom	Cursor to the right of the view
+Sample	C-d	HalfPageDown	Half a screen later
+Sample	C-u	HalfPageUp	Half a screen earlier
+Sample	C-e	ScrollDown	Scroll the view a column later
+Sample	C-y	ScrollUp	Scroll the view a column earlier
+Sample	z z	Sample(CursorMiddle)	View with the cursor in its middle
+Sample	z s	Sample(CursorLeft)	View with the cursor at its left
+Sample	z e	Sample(CursorRight)	View with the cursor at its right
+Sample	z i	Sample(ZoomIn)	Zoom in by 2, on the cursor
+Sample	z o	Sample(ZoomOut)	Zoom out by 2, on the cursor
+Sample	z O	Sample(ZoomAll)	The whole sample
+Sample	z v	Sample(ZoomSlice)	The slice, filling the view
+Sample	M-1	NarrowGrid	Zoom in by 2, as z i
+Sample	M-2	WidenGrid	Zoom out by 2, as z o
+Sample	z c	Sample(CursorStyle)	The cursor as a line, or as its column
+Sample	;	Audition	Hear the slice, or the selection; held, until let go
+Sample	Enter	Sample(Split)	Split the slice here, or at the playhead as it plays
+Sample	J	Sample(Join)	Join the slice with the next
+Sample	x	ClearField	Take the point here away, or a setting back
+Sample	=	Increase	Nudge the point here a pixel later, or a setting up
+Sample	-	Decrease	Nudge the point here a pixel earlier, or a setting down
+Sample	+	IncreaseLarge	Nudge the point here a column later, or a setting up more
+Sample	D-k	IncreaseLarge	Nudge the point here a column later, or a setting up more
+Sample	_	DecreaseLarge	Nudge the point here a column earlier, or a setting down more
+Sample	D-j	DecreaseLarge	Nudge the point here a column earlier, or a setting down more
+Sample	D-l	Sample(NudgeFrame { later: true })	Nudge the point here a frame later
+Sample	D-h	Sample(NudgeFrame { later: false })	Nudge the point here a frame earlier
+Sample	g s	Sample(SetPoint(Start))	Start the sample here
+Sample	g e	Sample(SetPoint(End))	End the sample here
+Sample	g l	Sample(SetPoint(LoopStart))	Start the loop here
+Sample	g L	Sample(SetPoint(LoopEnd))	End the loop here
+Sample	m	Sample(NameSlice)	Then a letter: name the slice here with it
+Sample	v	VisualField	Select frames, or end the selection
+Sample	g v	Reselect	Select the last selection again
+Sample	o	Sample(OtherEnd)	To the selection's other end
+Sample	>	Sample(GainUp)	The slice's gain up a dB
+Sample	<	Sample(GainDown)	The slice's gain down a dB
+Sample	~	Sample(Reverse)	Reverse the slice
+Sample	R	ToggleSampling	Record into a new sample, as Space R, and show it once done
+Sample	K	PickValue	Choose a setting to change, or list its values
+Sample	u	Undo	Undo
+Sample	C-r	Redo	Redo
+Sample	:	EnterCommand	Command
+Sample	i	EnterInsert	Insert
+Sample	Tab	PauseOrResume	Play, or pause in place
+Sample	S-Tab	PlayFromStart	Play from the start
+Sample	Space c	PlayFromCursor	Play from the cursor
+Sample	Space q q	Quit	Quit
+Sample	Space m	ToggleMute	Mute or unmute; held, until let go
+Sample	Space s	ToggleSolo	Solo or unsolo; held, until let go
+Sample	Space g m	MuteOnGrid	Mute or unmute on the launch grid, or take it back
+Sample	Space g s	SoloOnGrid	Solo or unsolo on the launch grid, or take it back
+Sample	Space M	ClearMutes	Clear all mutes and solos
+Sample	Space R	ToggleSampling	Record the master, a track or the input into a new sample, or stop
+Sample	Space l	ToggleFill	Fill on or off; held, until let go
+Sample	Space A	Realign	Realign every track on the launch grid, or take it back
+Sample	Space a	RealignTrack	Realign this track on the launch grid, or take it back
+Sample	Space o	RotateSpeeds(false)	Rotate the speeds round this group: each takes the next's
+Sample	Space O	RotateSpeeds(true)	Rotate the speeds round every track: each takes the next's
+Sample	Space e	GiveBack	Give this track's faders back to the steps' automation
+Sample	Space E	GiveBackAll	Give every track's faders back to the steps' automation
+Sample	Space 1	ShowView(Song)	Song view
+Sample	Space 2	ShowView(Chain)	Chain view
+Sample	Space 3	ShowView(Phrase)	Phrase view
+Sample	Space 4	ShowView(Mixer)	Mixer
+Sample	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
+Sample	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
+Sample	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
+Sample	Space 8	ShowTrackPage(Gen)	Gen page: the live generators
+Sample	Space 9	ShowProject	Project: song settings, and audio
+Sample	Space 0	ShowView(Sample)	Sample page: the sample, big
+Sample	Space Space	Picker	Open the view picker
+Sample	Space f f	Picker	Open the view picker
+Sample	Space f b	TrackPicker	Open the track picker
+Sample	Space ?	Guides	Open a guide
+Sample	Space k	Help	Show every key
+Sample	C-o	JumpBack	Jump back
+Sample	C-i	JumpForward	Jump forward
+Sample	W	NextTrack	Next track
+Sample	B	PreviousTrack	Previous track
+Sample	] b	NextTrack	Next track
+Sample	[ b	PreviousTrack	Previous track
+Sample	] g	NextGroupTrack	Next group, folded or open
+Sample	[ g	PreviousGroupTrack	Previous group, folded or open
+SampleVisual	h	Move(Left)	A pixel earlier, faster held
+SampleVisual	l	Move(Right)	A pixel later, faster held
+SampleVisual	0	Move(RowStart)	Start of the slice
+SampleVisual	$	Move(RowEnd)	End of the slice
+SampleVisual	^	Sample(FirstSound)	First sound in the slice
+SampleVisual	g _	Sample(LastSound)	Last sound in the slice
+SampleVisual	j	Move(Down)	Next slice
+SampleVisual	k	Move(Up)	Previous slice
+SampleVisual	g g	Move(First)	Start of the sample, or slice n
+SampleVisual	G	Move(Last)	End of the sample, or slice n
+SampleVisual	}	Move(NextBeat)	Next beat, from the start, at the tempo
+SampleVisual	{	Move(PreviousBeat)	Previous beat, from the start, at the tempo
+SampleVisual	w	Sample(NextSound)	Next sound's start, as Sens finds them
+SampleVisual	b	Sample(PreviousSound)	Previous sound's start, as Sens finds them
+SampleVisual	e	Sample(SoundEnd)	Where the sound decays, or the next one
+SampleVisual	] ]	Sample(NextPoint)	Next point: a slice, the start, end or loop
+SampleVisual	[ [	Sample(PreviousPoint)	Previous point: a slice, the start, end or loop
+SampleVisual	'	Sample(Mark)	Then a letter: the slice it names, as a jump
+SampleVisual	] '	Sample(NextMark)	Next slice a letter names, as a jump
+SampleVisual	[ '	Sample(PreviousMark)	Previous slice a letter names, as a jump
+SampleVisual	H	ViewTop	Cursor to the left of the view
+SampleVisual	M	ViewMiddle	Cursor to the middle of the view
+SampleVisual	L	ViewBottom	Cursor to the right of the view
+SampleVisual	C-d	HalfPageDown	Half a screen later
+SampleVisual	C-u	HalfPageUp	Half a screen earlier
+SampleVisual	C-e	ScrollDown	Scroll the view a column later
+SampleVisual	C-y	ScrollUp	Scroll the view a column earlier
+SampleVisual	z z	Sample(CursorMiddle)	View with the cursor in its middle
+SampleVisual	z s	Sample(CursorLeft)	View with the cursor at its left
+SampleVisual	z e	Sample(CursorRight)	View with the cursor at its right
+SampleVisual	z i	Sample(ZoomIn)	Zoom in by 2, on the cursor
+SampleVisual	z o	Sample(ZoomOut)	Zoom out by 2, on the cursor
+SampleVisual	z O	Sample(ZoomAll)	The whole sample
+SampleVisual	z v	Sample(ZoomSlice)	The slice, filling the view
+SampleVisual	M-1	NarrowGrid	Zoom in by 2, as z i
+SampleVisual	M-2	WidenGrid	Zoom out by 2, as z o
+SampleVisual	z c	Sample(CursorStyle)	The cursor as a line, or as its column
+SampleVisual	;	Audition	Hear the slice, or the selection; held, until let go
+SampleVisual	Enter	Sample(Split)	Split the slice here, or at the playhead as it plays
+SampleVisual	J	Sample(Join)	Join the slice with the next
+SampleVisual	x	ClearField	Take the point here away, or a setting back
+SampleVisual	=	Increase	Nudge the point here a pixel later, or a setting up
+SampleVisual	-	Decrease	Nudge the point here a pixel earlier, or a setting down
+SampleVisual	+	IncreaseLarge	Nudge the point here a column later, or a setting up more
+SampleVisual	D-k	IncreaseLarge	Nudge the point here a column later, or a setting up more
+SampleVisual	_	DecreaseLarge	Nudge the point here a column earlier, or a setting down more
+SampleVisual	D-j	DecreaseLarge	Nudge the point here a column earlier, or a setting down more
+SampleVisual	D-l	Sample(NudgeFrame { later: true })	Nudge the point here a frame later
+SampleVisual	D-h	Sample(NudgeFrame { later: false })	Nudge the point here a frame earlier
+SampleVisual	g s	Sample(SetPoint(Start))	Start the sample here
+SampleVisual	g e	Sample(SetPoint(End))	End the sample here
+SampleVisual	g l	Sample(SetPoint(LoopStart))	Start the loop here
+SampleVisual	g L	Sample(SetPoint(LoopEnd))	End the loop here
+SampleVisual	m	Sample(NameSlice)	Then a letter: name the slice here with it
+SampleVisual	v	VisualField	Select frames, or end the selection
+SampleVisual	g v	Reselect	Select the last selection again
+SampleVisual	o	Sample(OtherEnd)	To the selection's other end
+SampleVisual	>	Sample(GainUp)	The slice's gain up a dB
+SampleVisual	<	Sample(GainDown)	The slice's gain down a dB
+SampleVisual	~	Sample(Reverse)	Reverse the slice
+SampleVisual	R	ToggleSampling	Record into a new sample, as Space R, and show it once done
+SampleVisual	K	PickValue	Choose a setting to change, or list its values
+SampleVisual	i s	Sample(ThisSound)	This sound, from its start to where it decays
+SampleVisual	i p	Sample(ThisSlice)	This slice
+SampleVisual	u	Undo	Undo
+SampleVisual	C-r	Redo	Redo
+SampleVisual	:	EnterCommand	Command
+SampleVisual	Tab	PauseOrResume	Play, or pause in place
+SampleVisual	S-Tab	PlayFromStart	Play from the start
+SampleVisual	Space c	PlayFromCursor	Play from the cursor
+SampleVisual	Space q q	Quit	Quit
+SampleVisual	Space m	ToggleMute	Mute or unmute; held, until let go
+SampleVisual	Space s	ToggleSolo	Solo or unsolo; held, until let go
+SampleVisual	Space g m	MuteOnGrid	Mute or unmute on the launch grid, or take it back
+SampleVisual	Space g s	SoloOnGrid	Solo or unsolo on the launch grid, or take it back
+SampleVisual	Space M	ClearMutes	Clear all mutes and solos
+SampleVisual	Space R	ToggleSampling	Record the master, a track or the input into a new sample, or stop
+SampleVisual	Space l	ToggleFill	Fill on or off; held, until let go
+SampleVisual	Space A	Realign	Realign every track on the launch grid, or take it back
+SampleVisual	Space a	RealignTrack	Realign this track on the launch grid, or take it back
+SampleVisual	Space o	RotateSpeeds(false)	Rotate the speeds round this group: each takes the next's
+SampleVisual	Space O	RotateSpeeds(true)	Rotate the speeds round every track: each takes the next's
+SampleVisual	Space e	GiveBack	Give this track's faders back to the steps' automation
+SampleVisual	Space E	GiveBackAll	Give every track's faders back to the steps' automation
+SampleVisual	Space 1	ShowView(Song)	Song view
+SampleVisual	Space 2	ShowView(Chain)	Chain view
+SampleVisual	Space 3	ShowView(Phrase)	Phrase view
+SampleVisual	Space 4	ShowView(Mixer)	Mixer
+SampleVisual	Space 5	ShowTrackPage(Sound)	Sound page: machine, filter, output
+SampleVisual	Space 6	ShowTrackPage(Mod)	Mod page: envelopes, LFOs, mods
+SampleVisual	Space 7	ShowTrackPage(Fx)	FX page: the track's effects
+SampleVisual	Space 8	ShowTrackPage(Gen)	Gen page: the live generators
+SampleVisual	Space 9	ShowProject	Project: song settings, and audio
+SampleVisual	Space 0	ShowView(Sample)	Sample page: the sample, big
+SampleVisual	Space Space	Picker	Open the view picker
+SampleVisual	Space f f	Picker	Open the view picker
+SampleVisual	Space f b	TrackPicker	Open the track picker
+SampleVisual	Space ?	Guides	Open a guide
+SampleVisual	Space k	Help	Show every key
+SampleVisual	C-o	JumpBack	Jump back
+SampleVisual	C-i	JumpForward	Jump forward
+SampleVisual	W	NextTrack	Next track
+SampleVisual	B	PreviousTrack	Previous track
+SampleVisual	] b	NextTrack	Next track
+SampleVisual	[ b	PreviousTrack	Previous track
+SampleVisual	] g	NextGroupTrack	Next group, folded or open
+SampleVisual	[ g	PreviousGroupTrack	Previous group, folded or open
+OperatorPending	h	Move(Left)	Previous field
+OperatorPending	l	Move(Right)	Next field
+OperatorPending	j	Move(Down)	Next step
+OperatorPending	k	Move(Up)	Previous step
+OperatorPending	w	Move(NextGroup)	Next part: the note, then each FX
+OperatorPending	b	Move(PreviousGroup)	Previous part: an FX, or the note
+OperatorPending	0	Move(RowStart)	Start of the row
+OperatorPending	$	Move(RowEnd)	End of the row
+OperatorPending	}	Move(NextBeat)	Next beat
+OperatorPending	{	Move(PreviousBeat)	Previous beat
+OperatorPending	g g	Move(First)	First step, or step n
+OperatorPending	G	Move(Last)	Last step, or step n
+OperatorPending	i b	On(Beat)	This beat, whole steps
+OperatorPending	i c	On(Column)	This column, whole phrase
+OperatorPending	i p	On(Phrase)	This phrase, whole steps
+OperatorPending	d	WholeStep	This step
+OperatorPending	y	WholeStep	This step
+OperatorPending	>	WholeStep	This step
+OperatorPending	<	WholeStep	This step
+VisualField	h	Move(Left)	Previous field
+VisualField	l	Move(Right)	Next field
+VisualField	j	Move(Down)	Next step
+VisualField	k	Move(Up)	Previous step
+VisualField	w	Move(NextGroup)	Next part: the note, then each FX
+VisualField	b	Move(PreviousGroup)	Previous part: an FX, or the note
+VisualField	0	Move(RowStart)	Start of the row
+VisualField	$	Move(RowEnd)	End of the row
+VisualField	}	Move(NextBeat)	Next beat
+VisualField	{	Move(PreviousBeat)	Previous beat
+VisualField	g g	Move(First)	First step, or step n
+VisualField	G	Move(Last)	Last step, or step n
+VisualField	H	ViewTop	Cursor to the top of the view
+VisualField	M	ViewMiddle	Cursor to the middle of the view
+VisualField	L	ViewBottom	Cursor to the bottom of the view
+VisualField	C-d	HalfPageDown	Half a screen down, centred
+VisualField	C-u	HalfPageUp	Half a screen up, centred
+VisualField	C-e	ScrollDown	Scroll the view down
+VisualField	C-y	ScrollUp	Scroll the view up
+VisualField	i b	On(Beat)	This beat, whole steps
+VisualField	i c	On(Column)	This column, whole phrase
+VisualField	i p	On(Phrase)	This phrase, whole steps
+VisualField	W	NextTrack	Reach the next track
+VisualField	B	PreviousTrack	Reach the previous track
+VisualField	] b	NextTrack	Reach the next track
+VisualField	[ b	PreviousTrack	Reach the previous track
+VisualField	d	Operator(Clear)	Clear the selection
+VisualField	y	Operator(Copy)	Copy the selection
+VisualField	>	Operator(ShiftUp)	Shift the selection up
+VisualField	<	Operator(ShiftDown)	Shift the selection down
+VisualField	x	Operator(Clear)	Clear the selection
+VisualField	r	Replace	Replace this column across the selection
+VisualField	S	Shape	Fill this column with a ramp or random values
+VisualField	=	Increase	Increase the selection's values
+VisualField	D-l	Increase	Increase the selection's values
+VisualField	-	Decrease	Decrease the selection's values
+VisualField	D-h	Decrease	Decrease the selection's values
+VisualField	+	IncreaseLarge	Increase the selection's values, a large step
+VisualField	D-k	IncreaseLarge	Increase the selection's values, a large step
+VisualField	_	DecreaseLarge	Decrease the selection's values, a large step
+VisualField	D-j	DecreaseLarge	Decrease the selection's values, a large step
+VisualField	C-a	IncreaseChromatic	Increase the selection's values, by a semitone in a scale
+VisualField	C-x	DecreaseChromatic	Decrease the selection's values, by a semitone in a scale
+VisualField	~	CycleMark	Cycle the selected values' marks
+VisualField	Space g A	BakeMods	Write the pitch the mod slots played into the selected notes
+VisualField	Space o	RotateSpeeds(false)	Rotate the speeds round the tracks selected
+VisualField	.	Repeat	Repeat the last change on the selection
+VisualField	u	Undo	Undo the last change, keeping the selection
+VisualField	C-r	Redo	Redo, keeping the selection
+VisualStep	h	Move(Left)	Previous field
+VisualStep	l	Move(Right)	Next field
+VisualStep	j	Move(Down)	Next step
+VisualStep	k	Move(Up)	Previous step
+VisualStep	w	Move(NextGroup)	Next part: the note, then each FX
+VisualStep	b	Move(PreviousGroup)	Previous part: an FX, or the note
+VisualStep	0	Move(RowStart)	Start of the row
+VisualStep	$	Move(RowEnd)	End of the row
+VisualStep	}	Move(NextBeat)	Next beat
+VisualStep	{	Move(PreviousBeat)	Previous beat
+VisualStep	g g	Move(First)	First step, or step n
+VisualStep	G	Move(Last)	Last step, or step n
+VisualStep	H	ViewTop	Cursor to the top of the view
+VisualStep	M	ViewMiddle	Cursor to the middle of the view
+VisualStep	L	ViewBottom	Cursor to the bottom of the view
+VisualStep	C-d	HalfPageDown	Half a screen down, centred
+VisualStep	C-u	HalfPageUp	Half a screen up, centred
+VisualStep	C-e	ScrollDown	Scroll the view down
+VisualStep	C-y	ScrollUp	Scroll the view up
+VisualStep	i b	On(Beat)	This beat, whole steps
+VisualStep	i c	On(Column)	This column, whole phrase
+VisualStep	i p	On(Phrase)	This phrase, whole steps
+VisualStep	W	NextTrack	Reach the next track
+VisualStep	B	PreviousTrack	Reach the previous track
+VisualStep	] b	NextTrack	Reach the next track
+VisualStep	[ b	PreviousTrack	Reach the previous track
+VisualStep	d	Operator(Clear)	Clear the selection
+VisualStep	y	Operator(Copy)	Copy the selection
+VisualStep	>	Operator(ShiftUp)	Shift the selection up
+VisualStep	<	Operator(ShiftDown)	Shift the selection down
+VisualStep	x	Operator(Clear)	Clear the selection
+VisualStep	r	Replace	Replace this column across the selection
+VisualStep	S	Shape	Fill this column with a ramp or random values
+VisualStep	=	Increase	Increase the selection's values
+VisualStep	D-l	Increase	Increase the selection's values
+VisualStep	-	Decrease	Decrease the selection's values
+VisualStep	D-h	Decrease	Decrease the selection's values
+VisualStep	+	IncreaseLarge	Increase the selection's values, a large step
+VisualStep	D-k	IncreaseLarge	Increase the selection's values, a large step
+VisualStep	_	DecreaseLarge	Decrease the selection's values, a large step
+VisualStep	D-j	DecreaseLarge	Decrease the selection's values, a large step
+VisualStep	C-a	IncreaseChromatic	Increase the selection's values, by a semitone in a scale
+VisualStep	C-x	DecreaseChromatic	Decrease the selection's values, by a semitone in a scale
+VisualStep	~	CycleMark	Cycle the selected values' marks
+VisualStep	Space g A	BakeMods	Write the pitch the mod slots played into the selected notes
+VisualStep	Space o	RotateSpeeds(false)	Rotate the speeds round the tracks selected
+VisualStep	.	Repeat	Repeat the last change on the selection
+VisualStep	u	Undo	Undo the last change, keeping the selection
+VisualStep	C-r	Redo	Redo, keeping the selection

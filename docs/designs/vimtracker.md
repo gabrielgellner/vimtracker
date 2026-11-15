@@ -759,6 +759,24 @@ apply an action at once, and the modes to read; `Ctx`, which a page is drawn wit
 reads through `App`, as drawing is given `&App` and some of what's drawn, such as a live
 generator's sources, is `App`'s to work out.
 
+**`Page`** (`page.rs`, #739) is a page as a component, which the track page and the mixer are so
+far: its rows of the binding table, `Page::KEYS`, kept beside it and assembled by
+`input/bindings.rs` under its mode; `Page::key`, which runs one of its keys with a count through a
+`CtxMut` and says what it did as an `Outcome`, done, refused with why, or passed back; `Page::draw`,
+given a `Ctx`; and `Page::panels` and `Page::take_panels`, its pictures as data for `Graphics` and
+the ids they're given. `App` holds one of each page and dispatches by `View` with a plain `match`,
+so there's no `dyn`. A key goes, in this order, to the first that takes it:
+
+1.  the overlay for the `Mode`: the picker, the shape panel, the mapping view, the command line,
+    Insert, a jump, a guide or help (`App::handle_key`);
+2.  the page on screen (`App::run_page`), through `Page::key` for a component, or the page's own
+    `run_*` for the pages that aren't yet;
+3.  `App`'s commands across pages, for what the page passed back: `i`'s mode, `/`, `M`, `gm`, the
+    Keys mode, the pickers, and then the track page's edits, which the mixer shares;
+4.  the tree of chains and phrases (`App::run_tree`);
+5.  the grammar's motions, operators and Visual modes (`App::run_grammar`);
+6.  the global `match` in `App::run`.
+
 **`TypedValue`** (`input/typed.rs`) is what's typed into a value: Insert's in `Modes`, the shape
 panel's row and the mapping view's end. `TypedValue::key` takes a key by a `Rule`, a shape
 setting's `Typing` or plain text up to a length, and says whether it's still typing, committed or
@@ -797,7 +815,9 @@ only name Normal's keys on those pages, for the binding table.
     cursor is put on its fine part for the press and back after. A gesture's presses are squashed
     into one undo step (`History::squash_to`, as the Roto's touch to let-go), and in a selection
     `Adjustments::join_from` keeps its running total in step (decisions 162 and 163).
-*   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description. The
+*   **`bindings.rs`:** the binding table, one list of mode, key sequence, `Cmd` and description,
+    assembled from its own rows and each component page's `Page::KEYS`, and pinned row by row in
+    `bindings.tsv` by a test (`VT_PIN_BINDINGS=1` pins it again after a change on purpose). The
     which-key popup and `Space k` are generated from it. `CMD_ADJUSTS` is the one rule for Cmd
     with `h` `j` `k` `l`: `bindings` gives every mode that binds `=` `-` `+` `_` their Cmd keys
     beside them, unless the mode binds one itself, and `adjusting_key` turns them into those keys
