@@ -800,6 +800,7 @@ impl App {
             Pick::View(view) => self.jump_to_view(view),
             Pick::TrackPage(page) => self.show_track_page(page),
             Pick::Macro(at) => self.map_to_macro(at),
+            Pick::MacroHolding(at) => self.go_to_macro(at),
             Pick::Use {
                 section,
                 track,

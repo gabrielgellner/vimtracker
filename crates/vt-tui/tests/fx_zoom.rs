@@ -150,6 +150,29 @@ fn z_i_zooms_in_on_the_cursors_slot_under_a_strip_of_them_all_and_z_o_goes_back(
 }
 
 #[test]
+fn an_empty_slots_tile_in_the_strip_says_empty_dim() {
+    let (mut app, _realtime) = on_fx_page();
+    // A Glue in the first slot, and the others empty.
+    press(&mut app, "KComp");
+    special(&mut app, KeyCode::Enter);
+    press(&mut app, "l==h");
+    press(&mut app, "zi");
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(163, 42)).unwrap();
+    terminal
+        .draw(|frame| vt_tui::run::draw_screen(frame, &mut app, None, Instant::now()))
+        .unwrap();
+    let buffer = terminal.backend().buffer().clone();
+    let row: String = (0..163)
+        .map(|x| buffer[(x, 2)].symbol())
+        .collect::<String>();
+    let at = row.find("Empty").expect("an empty tile") as u16;
+    let x = row[..at as usize].chars().count() as u16;
+    assert_eq!(buffer[(x, 2)].fg, vt_tui::theme::OVERLAY2, "{row}");
+    let glue = row[..row.find("Glue").unwrap()].chars().count() as u16;
+    assert_ne!(buffer[(glue, 2)].fg, vt_tui::theme::OVERLAY2, "{row}");
+}
+
+#[test]
 fn the_zoomed_meter_and_its_two_bars_show_how_far_it_turned_down() {
     let (mut app, _realtime) = on_fx_page();
     press(&mut app, "K");
