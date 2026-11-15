@@ -514,15 +514,21 @@ fn reshapes(track: &Track) -> bool {
             .any(|slot| slot.destination.is_some_and(SettingId::is_mod_own))
 }
 
-/// A mod slot as it's heard: a copy with each of its type's own settings put in where it isn't
-/// the song's, from its held value, `held`, and what modulation adds, `moved` of a setting's
-/// place, so the slot's own code reads it as it reads the song's and allocates nothing.
-pub(super) fn heard_slot(
+/// A mod slot as it's heard, where its own settings may be other than the song's, `reshaped`
+/// ([`reshapes`]): a copy with each of its type's own settings put in where it isn't the song's,
+/// from its held value, `held`, and what modulation adds, `moved` of a setting's place, so the
+/// slot's own code reads it as it reads the song's and allocates nothing. None where they can't
+/// be, as the song's slot is heard as it is.
+fn heard_slot(
     slot: &ModSlot,
     at: usize,
+    reshaped: bool,
     held: &[f32; MOD_OWN_SETTINGS],
     moved: impl Fn(usize) -> f32,
-) -> ModSlot {
+) -> Option<ModSlot> {
+    if !reshaped {
+        return None;
+    }
     let mut heard = *slot;
     for (own, held) in held.iter().enumerate() {
         let (Some(written), Some(id)) = (slot.own_value(own), SettingId::mod_own(at, own)) else {
@@ -533,7 +539,7 @@ pub(super) fn heard_slot(
             heard.set_own(own, held + by * 255.0);
         }
     }
-    heard
+    Some(heard)
 }
 
 impl TrackState {
@@ -541,10 +547,10 @@ impl TrackState {
     /// them, for what reads a slot outside its working out, a note's start and end and its shape.
     pub fn heard_mod(&self, track: &Track, at: usize) -> ModSlot {
         let slot = &track.mods[at];
-        if !reshapes(track) {
-            return *slot;
-        }
-        heard_slot(slot, at, &self.own_held[at], |index| self.offsets[index])
+        heard_slot(slot, at, reshapes(track), &self.own_held[at], |index| {
+            self.offsets[index]
+        })
+        .unwrap_or(*slot)
     }
 
     /// Count every slot's cycles from the top of the song, as playing starts there, keeping the
@@ -606,15 +612,10 @@ impl TrackState {
         let reshaped = reshapes(track);
         let own_held = &self.own_held;
         for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
-            let heard;
-            let slot = if reshaped {
-                heard = heard_slot(slot, at, &own_held[at], |index| {
-                    offsets[index] + moved.at(index)
-                });
-                &heard
-            } else {
-                slot
-            };
+            let heard = heard_slot(slot, at, reshaped, &own_held[at], |index| {
+                offsets[index] + moved.at(index)
+            });
+            let slot = heard.as_ref().unwrap_or(slot);
             run.now = None;
             run.playing = None;
             // Each rate as it's heard now goes on from where its last left off, whatever the
@@ -937,11 +938,8 @@ impl TrackState {
         let reshaped = reshapes(track);
         let (own_held, offsets) = (&self.own_held, &self.offsets);
         for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
-            let slot = if reshaped {
-                heard_slot(slot, at, &own_held[at], |index| offsets[index])
-            } else {
-                *slot
-            };
+            let slot = heard_slot(slot, at, reshaped, &own_held[at], |index| offsets[index])
+                .unwrap_or(*slot);
             trigger_slot(&slot, run, now, self.chain_pass);
         }
         self.noted = Some(LfoStart {
@@ -957,11 +955,8 @@ impl TrackState {
         let reshaped = reshapes(track);
         let (own_held, offsets) = (&self.own_held, &self.offsets);
         for (at, (slot, run)) in track.mods.iter().zip(&mut self.slots).enumerate() {
-            let slot = if reshaped {
-                heard_slot(slot, at, &own_held[at], |index| offsets[index])
-            } else {
-                *slot
-            };
+            let slot = heard_slot(slot, at, reshaped, &own_held[at], |index| offsets[index])
+                .unwrap_or(*slot);
             let envelope = slot.envelope();
             if matches!(run.envelope, EnvelopeRun::Held { .. }) && !envelope.one_shot() {
                 let from = run.envelope.level(&envelope, now.clock, now.rate);

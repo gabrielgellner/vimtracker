@@ -271,7 +271,7 @@ pub struct TrackState {
     macro_heard: [Option<f32>; MACROS],
     /// The held values of each mod slot's type's own settings, and of the accumulator's and the
     /// arpeggio's, which a macro sets as a hand does. What's heard is read through a copy with
-    /// them put in, [`heard_slot`], wherever they differ from the song's.
+    /// them put in, [`heard_slot`](mods::heard_slot), wherever they differ from the song's.
     own_held: [[f32; MOD_OWN_SETTINGS]; MOD_SLOTS],
     played_held: [f32; PLAYED_SETTINGS],
 }

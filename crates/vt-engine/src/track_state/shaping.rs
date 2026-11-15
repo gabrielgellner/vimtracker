@@ -34,6 +34,13 @@ pub(super) fn pan_position(value: f32) -> f32 {
     }
 }
 
+/// Which smoother a value follows: the fast one while modulation moves it, so it keeps up, and
+/// otherwise the usual one, so a change on its own doesn't jump.
+#[inline]
+fn smoother(moving: bool, smoothing: f32, fast: f32) -> f32 {
+    if moving { fast } else { smoothing }
+}
+
 /// What the master does every frame while it rests: what it takes in after its trim, what its
 /// slots give, and what it gives.
 #[derive(Debug, Clone, Copy)]
@@ -68,6 +75,12 @@ impl TrackState {
             self.panned = (position, pan_gains(position));
         }
         self.panned.1
+    }
+
+    /// Which smoother a setting's gain follows, by whether modulation moves it now.
+    #[inline]
+    fn smoother_for(&self, target: SettingId, smoothing: f32, fast: f32) -> f32 {
+        smoother(self.offsets[target.index()] != 0.0, smoothing, fast)
     }
 
     /// The utility filter. It's out of the way when wide open, and coefficients are only worked out
@@ -212,13 +225,7 @@ impl TrackState {
         let filtered = self.through_slots(filtered, smoothing, fast, rate, keys);
         self.key = filtered;
         // What's moved by modulation keeps up, and a change on its own doesn't jump.
-        let keeping_up = |target: SettingId| {
-            if self.offsets[target.index()] == 0.0 {
-                smoothing
-            } else {
-                fast
-            }
-        };
+        let keeping_up = |target| self.smoother_for(target, smoothing, fast);
         let (vol, to_a, to_b) = (
             keeping_up(SettingId::VOL),
             keeping_up(SettingId::SEND_A),
@@ -264,11 +271,7 @@ impl TrackState {
                 continue;
             }
             // A setting being modulated keeps up, and a change on its own doesn't jump.
-            let keeping_up = if self.slot_moving[slot] {
-                fast
-            } else {
-                smoothing
-            };
+            let keeping_up = smoother(self.slot_moving[slot], smoothing, fast);
             (frame, same) = self.slot_times.time(slot, !insert.is_empty(), || {
                 insert.process_sides(frame, same, keeping_up, rate, keys)
             });
@@ -291,11 +294,7 @@ impl TrackState {
         self.take_in_after_trim(frame);
         let frame = self.through_slots(frame, smoothing, fast, rate, keys);
         self.key = frame;
-        let vol = if self.offsets[SettingId::VOL.index()] == 0.0 {
-            smoothing
-        } else {
-            fast
-        };
+        let vol = self.smoother_for(SettingId::VOL, smoothing, fast);
         let gain = self.gain.next(vol) * self.level.next(smoothing);
         [frame[0] * gain, frame[1] * gain]
     }
@@ -346,13 +345,7 @@ impl TrackState {
         keys: &Keys,
     ) -> ShapedFrame {
         let dry = self.process_return(input, smoothing, fast, rate, keys);
-        let keeping_up = |target: SettingId| {
-            if self.offsets[target.index()] == 0.0 {
-                smoothing
-            } else {
-                fast
-            }
-        };
+        let keeping_up = |target| self.smoother_for(target, smoothing, fast);
         let (to_a, to_b) = (keeping_up(SettingId::SEND_A), keeping_up(SettingId::SEND_B));
         let send_a = self.send_a_gain.next(to_a);
         let send_b = self.send_b_gain.next(to_b);
@@ -367,13 +360,7 @@ impl TrackState {
     /// frame, so it can be skipped until something comes in (#558): its slots aren't ringing, so it
     /// does no work, and what it sends isn't moving.
     pub fn group_rests(&self, smoothing: f32, fast: f32, rate: u32) -> bool {
-        let keeping_up = |target: SettingId| {
-            if self.offsets[target.index()] == 0.0 {
-                smoothing
-            } else {
-                fast
-            }
-        };
+        let keeping_up = |target| self.smoother_for(target, smoothing, fast);
         !self.ringing(rate)
             && self.send_a_gain.still(keeping_up(SettingId::SEND_A))
             && self.send_b_gain.still(keeping_up(SettingId::SEND_B))
@@ -398,11 +385,7 @@ impl TrackState {
         rate: u32,
         keys: &Keys,
     ) -> Option<MasterRest> {
-        let vol = if self.offsets[SettingId::VOL.index()] == 0.0 {
-            smoothing
-        } else {
-            fast
-        };
+        let vol = self.smoother_for(SettingId::VOL, smoothing, fast);
         if !self.input_trim.still(smoothing)
             || !self.gain.still(vol)
             || !self.level.still(smoothing)
@@ -413,11 +396,7 @@ impl TrackState {
         let mut frame = trimmed;
         let mut same = same_sides(frame);
         for (slot, insert) in self.inserts.iter().enumerate() {
-            let keeping_up = if self.slot_moving[slot] {
-                fast
-            } else {
-                smoothing
-            };
+            let keeping_up = smoother(self.slot_moving[slot], smoothing, fast);
             (frame, same) = insert.settled(frame, same, keeping_up, rate, keys)?;
         }
         let gain = self.gain.value * self.level.value;
