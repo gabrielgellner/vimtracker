@@ -813,6 +813,14 @@ leave. Notes generated on an empty column keep live the same way, with their
 velocities as its own too: turning `Rotate` moves the notes along, and `gl`
 opens it generating again.
 
+**The scale.** A live column of notes follows the song's scale as it is now.
+Change the scale, with `:set scale=`, `:set root=` or the project page, and
+every live Note column in the song is filled again through the new one at
+once, as it plays: the grid shows the new notes, and they're what's saved. It
+isn't an undo step, as the scale itself isn't, and `u` never brings back notes
+in the old scale. Notes applied, or typed, are plain ones, which a scale change
+leaves where they are.
+
 **While it moves.** A `MAC` lock, a glide or an LFO on a macro holding one of
 its settings moves it as it plays, and so does `Vary`; the grid still shows
 what's written, which is what you edit. The phrase's title marks the column
