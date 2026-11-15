@@ -42,7 +42,7 @@ impl Engine {
         self.tracks[index].playing = self.track_chain(index);
         let place = self.track_place(index, running);
         let count = running - self.tracks[index].started;
-        // Each lane is read once a step, here, in order, so it counts along (decision 348).
+        // Each lane is read once a step, here, in order, so it counts along.
         let lanes = self.read_lanes(index, place, count);
         // The groove counts the track's own steps from the start or the last reset, not its
         // loop, so an odd length stays on the beat, and a track at an eighth swings its eighths.
@@ -389,7 +389,7 @@ impl Engine {
         }
         // A `MAC` lock on the row reaches what its macro holds of the generators on the row itself,
         // as it reaches any other setting: the macros are put now, and the row read again if that
-        // moved a generator, so its note is heard with it (decision 300).
+        // moved a generator, so its note is heard with it.
         let (step, gate, event) = if row && first && self.tracks[index].put_macros_now(owner) {
             let step = self.view_row(index, read, row_at, written, played);
             let gate = step.gate_kind();
@@ -1075,7 +1075,7 @@ fn passes(song: &Song, index: usize, read: Read) -> Passes {
 }
 
 /// Whether a lane's FX is put again on its row's later steps: a lock or a hold, which holds through
-/// the row, and not an event or a glide, which act once, as its row starts (decision 346).
+/// the row, and not an event or a glide, which act once, as its row starts.
 fn holds_through(slot: &FxSlot) -> bool {
     matches!(slot.command, Some(FxCommand::Set(_))) && slot.mark != Mark::Glide
 }

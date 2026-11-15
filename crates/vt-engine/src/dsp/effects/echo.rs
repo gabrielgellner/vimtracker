@@ -11,9 +11,9 @@
 //! the machine's does. The capstan's wobble moves every head's read together, at a rate that goes
 //! with the tape's speed, by as much in pitch at any speed, with a slow drift seeded from the track.
 //!
-//! The spring reverb is this program's `Spring`, ChowDSP's model (decision 206), at one setting,
-//! fed from what comes in. `Bass` and `Treble` are shelves on what comes out, as the RE-201's tone
-//! controls are on its echo and reverb, not in the loop.
+//! The spring reverb is this program's `Spring`, ChowDSP's model, at one setting, fed from what
+//! comes in. `Bass` and `Treble` are shelves on what comes out, as the RE-201's tone controls are
+//! on its echo and reverb, not in the loop.
 
 use std::f64::consts::TAU;
 

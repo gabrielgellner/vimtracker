@@ -1,7 +1,6 @@
 //! What makes each note of an analog synth a little different from the last, for the voices with a
-//! `Drift` setting (decision 190), and the noise floor under their filters (decision 191). Every
-//! value comes from a generator seeded for each note, so a render repeats, where OB-Xf and Surge
-//! both call `rand()`.
+//! `Drift` setting, and the noise floor under their filters. Every value comes from a generator
+//! seeded for each note, so a render repeats, where OB-Xf and Surge both call `rand()`.
 //!
 //! The offsets each note rolls are OB-Xf's "slop": one value for each oscillator's tuning, the
 //! cutoff, the level and the envelopes' times (`OBXF/OscillatorBlock.h`, `OBXF/Voice.h`,
@@ -31,7 +30,7 @@ const LEVEL_DB: f32 = 1.5;
 /// How much longer or shorter the envelopes are at `Drift` full, as a share. OB-Xf's go to a half.
 const TIME_SHARE: f32 = 0.2;
 /// The noise under the filter, as a share of full scale: -90 dB, so a filter at full resonance
-/// rings from silence as an analog one does (decision 191).
+/// rings from silence as an analog one does.
 const NOISE_FLOOR: f32 = 3.162_278e-5;
 /// Its generator's stream, apart from the other voices' noise.
 const STREAM: u64 = 9;

@@ -62,9 +62,8 @@ const DIODE_HIGH_TUNING: f32 = 2.1;
 const DIODE_TOP_TUNING: f32 = 100.0;
 /// The highest its feedback high-pass's corner goes, as a share of the cutoff. Vital's sits at
 /// 20 Hz, which near the bottom of the range takes so much of the loop's gain that it wouldn't ring
-/// on its own under about 100 Hz (#333). So under 400 Hz the corner moves down with the cutoff,
-/// which keeps the loop the same shape and its ringing as quick to start, in cycles, all the way
-/// down.
+/// on its own under about 100 Hz. So under 400 Hz the corner moves down with the cutoff, which
+/// keeps the loop the same shape and its ringing as quick to start, in cycles, all the way down.
 const DIODE_FEEDBACK_SHARE: f32 = 0.05;
 /// How far its feedback high-pass pulls its resonance sharp, which the cutoff is set that much
 /// lower to undo: by `1 + 10.4 x^2`, for the corner `x` as a share of the cutoff, fitted to where
@@ -78,7 +77,7 @@ const TANH_RANGE: f32 = 5.0;
 const FLAT_DAMPING: f32 = std::f32::consts::SQRT_2;
 /// The clean low-pass's, high-pass's and notch's Q at Res 0: 0.5, two equal poles, so the gain at
 /// `Cut` is 6 dB down, as Cytomic's The Drop's OSR and Arturia's Filter SEM both have it, an OTA
-/// state-variable filter and the Oberheim SEM's, with their resonance down (decision 137).
+/// state-variable filter and the Oberheim SEM's, with their resonance down.
 const CLEAN_LEAST_Q: f32 = 0.5;
 /// The band-pass's Q at Res 0, and the utility filters' and anything else's with no resonance: a
 /// Butterworth's 0.707. The two references' band-passes differ, OSR's being its high-pass and
@@ -142,13 +141,13 @@ const PHASER_LOW_6_LEVELS: (f32, f32) = (0.880_1, 0.5);
 /// How many points each family's `Res` taper is given at, a twentieth of the knob's turn apart.
 const TAPER_POINTS: usize = 21;
 /// How far each family's resonance is turned at each twentieth of `Res`, as a share of its most, so
-/// each equal turn raises the peak by about as much as Cytomic's The Drop's knob does (#333). Each
-/// was fitted with `tools/compare`'s `filter-taper-*` specs, where the first 85% of the knob, to
-/// `D9`, is set against The Drop's 0 to 100%: by how far the peak stands over the passband, which
-/// rises evenly from Res 0 and then steeply over the last few percent before it rings. The
-/// saturating types ring by themselves from 85%, as The Drop's circuits do over 100%, and the last
-/// 15% takes them on to their most, which is where they were before, so they ring in tune at full
-/// `Res` as they did. The clean types never ring, and climb to their highest peak over the last 20%.
+/// each equal turn raises the peak by about as much as Cytomic's The Drop's knob does. Each was
+/// fitted with `tools/compare`'s `filter-taper-*` specs, where the first 85% of the knob, to `D9`,
+/// is set against The Drop's 0 to 100%: by how far the peak stands over the passband, which rises
+/// evenly from Res 0 and then steeply over the last few percent before it rings. The saturating
+/// types ring by themselves from 85%, as The Drop's circuits do over 100%, and the last 15% takes
+/// them on to their most, which is where they were before, so they ring in tune at full `Res` as
+/// they did. The clean types never ring, and climb to their highest peak over the last 20%.
 ///
 /// The clean low-pass, high-pass and notch against The Drop's OSR, an OTA state-variable filter,
 /// from a Q of 0.5 to 10 (decision 137): fitted by the peak's height over the passband, which now
@@ -213,10 +212,10 @@ const SAFE_POINTS: usize = 17;
 /// at each sixteenth of `Cut`'s: where a quiet click's ring dies away by `SAFE_DECAY_DB` a
 /// cycle, the lower of 44.1 and 48 kHz's and of no drive and full, measured by
 /// `where_safe_stops` (decision 242). That's 1 to 5 steps of `Res` short of where each starts to
-/// ring by itself, between `D9` and `E0` (decision 120), at any `Cut`, but for two. The diode
-/// rings sooner the higher its `Cut`, from about 2 kHz. `Dirty`'s loop is eased off at high
-/// cutoffs, so it rings later there, and `Drive` gives it more resonance, so it has a table at full
-/// drive too, read between by `Drive`; the others hardly hear `Drive`'s.
+/// ring by itself, between `D9` and `E0`, at any `Cut`, but for two. The diode rings sooner the
+/// higher its `Cut`, from about 2 kHz. `Dirty`'s loop is eased off at high cutoffs, so it rings
+/// later there, and `Drive` gives it more resonance, so it has a table at full drive too, read
+/// between by `Drive`; the others hardly hear `Drive`'s.
 const SAFE_LADDER: [f32; SAFE_POINTS] = [
     0.8447, 0.8447, 0.8447, 0.8447, 0.8447, 0.8447, 0.8448, 0.8448, 0.8448, 0.8448, 0.8448, 0.8448,
     0.8448, 0.8445, 0.8442, 0.8436, 0.8429,
@@ -507,8 +506,8 @@ impl Coefficients {
 /// A track's filter coefficients, moved a step each frame from where they were toward each new
 /// set, so a fast sweep glides rather than climbing a staircase of held sets. Held for 32 frames,
 /// a self-oscillating ladder swept across its range eight times a second had sidebands 1.5 kHz
-/// either side of its pitch 16 dB louder than with coefficients worked out every frame (#463).
-/// After Surge's `FilterCoefficientMaker`, which ramps every coefficient across its block.
+/// either side of its pitch 16 dB louder than with coefficients worked out every frame. After
+/// Surge's `FilterCoefficientMaker`, which ramps every coefficient across its block.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Ramp {
     now: Coefficients,
@@ -901,7 +900,7 @@ impl Channel {
 
     /// With nothing coming in, start each part `kind` uses again from nothing once all it keeps
     /// is far below anything heard, so it falls to an exact zero rather than trading denormals for
-    /// good (#260).
+    /// good.
     #[inline]
     fn let_go(&mut self, kind: FilterType) {
         flush(&mut self.svf);
@@ -1220,7 +1219,7 @@ mod tests {
         // ringing by itself, and high enough that the diode's high-pass far under the cutoff
         // dies away within the time: at 40 Hz, nine octaves under it takes a minute and a half. Left to themselves, they fell into the denormals and
         // traded the smallest floats between their states for good, so a delay after them rang
-        // for ever (#260).
+        // for ever.
         for kind in FilterType::ALL {
             for &mode in kind.modes() {
                 for drive in [0.0, 0.6] {
@@ -1396,7 +1395,7 @@ mod tests {
 
     #[test]
     fn low_pass_passes_lows_and_slopes_at_12_db() {
-        // Two equal poles at Res 0, so 6 dB down at `Cut`, as OSR and Filter SEM are (decision 137).
+        // Two equal poles at Res 0, so 6 dB down at `Cut`, as OSR and Filter SEM are.
         let db = |hertz| gain_db(FilterType::LowPass, 1000.0, 0.0, 0.0, hertz, 0.1);
         near(db(100.0), 0.0, 0.1);
         near(db(1000.0), -6.0, 0.3);
@@ -1451,15 +1450,15 @@ mod tests {
     #[test]
     fn each_quarter_of_res_raises_the_peak_as_the_drops_knob_does() {
         // How far the peak has risen over its height at Res 0, at a quarter, half and three
-        // quarters of the knob (#333), with The Drop's paired circuit's rise beside it, averaged
-        // over 200 Hz, 988 Hz and 5 kHz in `tools/compare`'s `filter-taper-*` specs. The old
-        // taper's clean low-pass had risen 9.9, 14.8 and 18.0 dB. The diode and `Dirty` follow
-        // PRD's, scaled to reach where it does just before it rings. The Korg 35s' three quarters
-        // is their linear response, which a quiet sweep hears 2 to 4 dB lower as it saturates, as
-        // MS1 does. The clean types now start from OSR's Q of 0.5 (decision 137), where they
-        // were at 0.707 and 1.4 dB higher, and `MS20 HP` follows where MS1's high-pass and
-        // Filter MS-20's agree on the peak's height, rather than MS1's rise from its own Res 0,
-        // as MS1's high-pass falls at 12 dB an octave where the MS-20's and ours fall at 6.
+        // quarters of the knob, with The Drop's paired circuit's rise beside it, averaged over 200
+        // Hz, 988 Hz and 5 kHz in `tools/compare`'s `filter-taper-*` specs. The old taper's clean
+        // low-pass had risen 9.9, 14.8 and 18.0 dB. The diode and `Dirty` follow PRD's, scaled to
+        // reach where it does just before it rings. The Korg 35s' three quarters is their linear
+        // response, which a quiet sweep hears 2 to 4 dB lower as it saturates, as MS1 does. The
+        // clean types now start from OSR's Q of 0.5, where they were at 0.707 and 1.4 dB higher,
+        // and `MS20 HP` follows where MS1's high-pass and Filter MS-20's agree on the peak's
+        // height, rather than MS1's rise from its own Res 0, as MS1's high-pass falls at 12 dB an
+        // octave where the MS-20's and ours fall at 6.
         let expected = [
             // OSR's low-pass, 4.9, 11.0 and 14.8, and high-pass, 4.5, 10.6 and 14.2.
             (FilterType::LowPass, [4.8, 10.9, 14.6]),
@@ -1616,7 +1615,7 @@ mod tests {
     fn the_diode_self_oscillates_at_its_cutoff_across_the_range() {
         // At full resonance, one quiet click and then silence, at every sixteenth of Cut's turn up
         // to 13 kHz. Under 100 Hz it used to die away, and elsewhere it rang 34 cents flat to 42
-        // sharp (#333).
+        // sharp.
         for rate in [44_100, 48_000] {
             for knob in (0x00..=0xF0).step_by(0x10) {
                 let value = knob as f32 / 255.0;
@@ -1895,8 +1894,8 @@ mod tests {
     #[test]
     fn the_notch_starts_with_two_equal_poles_and_the_band_pass_as_it_was() {
         // At Res 0 the notch is 4.4 dB down an octave from `Cut`, a Q of 0.5, as OSR's and Filter
-        // SEM's are (decision 137); the band-pass is still 3.3 dB down there, a Q of 0.707, as the
-        // two references' band-passes differ.
+        // SEM's are; the band-pass is still 3.3 dB down there, a Q of 0.707, as the two references'
+        // band-passes differ.
         let notch = gain_db(FilterType::Notch, 1000.0, 0.0, 0.0, 2000.0, 0.1);
         near(notch, -4.4, 0.3);
         let band = gain_db(FilterType::BandPass, 1000.0, 0.0, 0.0, 2000.0, 0.1);
@@ -1922,8 +1921,8 @@ mod tests {
     #[test]
     fn the_korg_35s_ring_as_loud_as_ms1_and_filter_ms20_agree() {
         // Where The Drop's MS1 and Arturia's Filter MS-20 agree, from 640 Hz to 3.6 kHz, both
-        // ring at full resonance at −5.1 to −6.5 dBFS (decision 137). `MS20 LP` rang 2.3 dB under
-        // that, and now rings as `MS20 HP` does.
+        // ring at full resonance at −5.1 to −6.5 dBFS. `MS20 LP` rang 2.3 dB under that, and now
+        // rings as `MS20 HP` does.
         for cut in [640.0, 1530.0, 3630.0] {
             for kind in [FilterType::Ms20LowPass, FilterType::Ms20HighPass] {
                 let level = ringing_db(kind, cut, 1.0);
@@ -2047,7 +2046,7 @@ mod tests {
     #[test]
     fn a_fast_sweep_ramps_its_coefficients_without_stepping_sidebands() {
         // With its coefficients held for 32 frames, as they were, the sidebands were at -44 dB,
-        // 16 dB louder than with coefficients worked out every frame, at -60 (#463).
+        // 16 dB louder than with coefficients worked out every frame, at -60.
         let ramped = sweep_sidebands_db(false);
         let every_frame = sweep_sidebands_db(true);
         assert!(

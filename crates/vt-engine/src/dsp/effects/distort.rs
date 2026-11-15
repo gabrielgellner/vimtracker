@@ -149,7 +149,7 @@ impl Shaper {
         shape: impl Fn(f32) -> f32,
     ) -> f32 {
         // With nothing coming in, all it keeps goes once it's tiny, so it falls to an exact zero
-        // rather than trading denormals round its oversampling for good (#260). Each shape's
+        // rather than trading denormals round its oversampling for good. Each shape's
         // antiderivative is nothing at nothing, so the last sample and its antiderivative go
         // together.
         if input == 0.0 {
@@ -196,7 +196,7 @@ fn shaped(kind: DistortType, driven: f32) -> f32 {
             (adjusted - adjusted.floor()).mul_add(-4.0, 2.0).abs() - 1.0
         }
         // `sin(pi x / 2)`, its turn taken about nothing so that nothing gives exactly nothing,
-        // where a turn about a half gave `sin(pi)`, about -141 dB, for good (#260).
+        // where a turn about a half gave `sin(pi)`, about -141 dB, for good.
         DistortType::Sine => {
             let turn = driven * 0.25;
             ((turn - turn.round()) * std::f32::consts::TAU).sin()

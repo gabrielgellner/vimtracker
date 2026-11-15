@@ -1,6 +1,6 @@
 //! Each FX column's lane as it plays: counted along, a row at a time, so a turn of the track's
 //! `Length` or `Rate` for it takes effect at its next row rather than moving it, as an LFO's
-//! `Rate` carries on from where it is (decisions 301 and 348, the lanes study's §5).
+//! `Rate` carries on from where it is (the lanes study's §5).
 
 use vt_model::lane::{Heard, LANE_RATES, Lane, LaneMove};
 use vt_model::settings::{LANE_SETTINGS, SettingId};
@@ -145,9 +145,9 @@ pub(crate) struct LaneAhead {
 impl TrackState {
     /// Where an FX column's lane reads at a count of the track's steps since its chain started,
     /// in an entry of its chain, and how it's heard there: the one place every lane is read from
-    /// as the track plays (decision 348). Read once a step, as the step is worked out, in order,
-    /// it counts along; a step it wasn't waiting for, as after playing starts, a seek, a reset or
-    /// a new entry of the chain, places it again from the count.
+    /// as the track plays. Read once a step, as the step is worked out, in order, it counts along;
+    /// a step it wasn't waiting for, as after playing starts, a seek, a reset or a new entry of the
+    /// chain, places it again from the count.
     pub(crate) fn lane_row(
         &mut self,
         slot: usize,

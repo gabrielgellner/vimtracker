@@ -275,7 +275,7 @@ impl Formants {
         }
         let (now, a1) = (&self.now, &self.a1);
         let out = self.filters.process(input, same, |filters, sample| {
-            // With nothing coming in, each formant's state goes once it's tiny (#260).
+            // With nothing coming in, each formant's state goes once it's tiny.
             if sample == 0.0 {
                 filters.iter_mut().for_each(flush);
             }
@@ -380,7 +380,7 @@ fn bank([vowel, size, resonance, track, note]: [f32; 5], rate: u32) -> Bank {
 /// How much a `Vowel` slot leaves a quiet sine at each frequency, in Hz, in dB, once it's settled
 /// on its settings and the track's `note`: its five formants' band-passes, from the tuning and gains it
 /// plays with, added as it adds them, turned down by the limiter's quiet 0.8, and mixed with the
-/// sound by `Mix`, before `Gain`. For drawing its curve on the FX page's zoom (decision 333).
+/// sound by `Mix`, before `Gain`. For drawing its curve on the FX page's zoom.
 pub fn response(settings: Settings, note: f32, rate: u32) -> impl Fn(f32) -> f32 {
     let values = [
         f32::from(settings.vowel),

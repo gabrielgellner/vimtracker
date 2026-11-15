@@ -237,8 +237,8 @@ pub struct RowKey {
 
 /// How far each mod slot moved a row's note on `Pitch` as it started, in semitones, as it was
 /// heard, `Pitch in scale`'s snap and a slot's switch included, and how far the row's own `RND`s
-/// moved it: what `Space g A` writes into the notes (#569, decision 323). The row is counted from
-/// the phrase's first step, not its loop's.
+/// moved it: what `Space g A` writes into the notes. The row is counted from the phrase's first
+/// step, not its loop's.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NotePitch {
     pub row: RowKey,

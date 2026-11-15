@@ -32,7 +32,7 @@ use crate::voice::SynthEngine;
 /// adds up to 10 dB more, as it does in Plaits.
 const LEVEL: f32 = 0.9;
 /// The DC blocker's pole before the filter: a corner of 12 Hz at 48 kHz, so a pulse's offset
-/// doesn't push the filter off its centre (decision 191).
+/// doesn't push the filter off its centre.
 const DC_POLE: f32 = 1.0 - std::f32::consts::TAU * 12.0 / 48_000.0;
 
 #[inline]
@@ -74,8 +74,7 @@ impl SynthEngine for VirtualAnalogVcf {
     }
 
     /// Roll a note's drift and its noise floor from its seed, so each note differs but a render
-    /// repeats. With `Drift` up as the note starts, its oscillators start anywhere in their cycles
-    /// (decision 190).
+    /// repeats. With `Drift` up as the note starts, its oscillators start anywhere in their cycles.
     fn seed_drift(&mut self, seed: u32, settings: Settings) {
         self.drift.seed(seed);
         if settings.at(DRIFT) > 0.0 {

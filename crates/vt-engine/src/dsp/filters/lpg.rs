@@ -179,7 +179,7 @@ impl Follower {
     /// sound is all the way.
     #[inline]
     fn process(&mut self, input: f32) -> f32 {
-        // With nothing coming in, the splits' states go once they're tiny (#260).
+        // With nothing coming in, the splits' states go once they're tiny.
         if input == 0.0 {
             self.low.let_go();
             self.medium.let_go();
@@ -427,7 +427,7 @@ impl LowPassGate {
         let (g, q) = tuning(self.cutoff, resonance, rate);
         let (filtered, level) = (1.0 - vca, self.level);
         self.filters.process(input, same, |filter, sample| {
-            // With nothing coming in, its state goes once it's tiny (#260).
+            // With nothing coming in, its state goes once it's tiny.
             if sample == 0.0 {
                 filter.let_go();
             }
@@ -479,8 +479,7 @@ pub fn opened(settings: Settings) -> (f32, f32) {
 /// `(level, cutoff)`,
 /// which `LowPassGate::opening` reports and [`resting`] and [`opened`] give the ends of: its
 /// filter's low-pass, from the tuning it plays with, or none as a VCA, at its level, and mixed
-/// with the sound by `Mix`, before `Gain`. For drawing its curve on the FX page's zoom (decision
-/// 333).
+/// with the sound by `Mix`, before `Gain`. For drawing its curve on the FX page's zoom.
 pub fn response(settings: Settings, (level, cutoff): (f32, f32), rate: u32) -> impl Fn(f32) -> f32 {
     let (g, q) = tuning(cutoff, f32::from(settings.resonance) / 255.0, rate);
     let mix = f64::from(settings.mix) / 255.0;

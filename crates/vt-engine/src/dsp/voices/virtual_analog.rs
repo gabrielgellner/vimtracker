@@ -425,7 +425,7 @@ impl SynthEngine for VirtualAnalog {
 
     /// Roll a note's drift from its seed, so each note differs but a render repeats. With `Drift`
     /// up as the note starts, its oscillators start anywhere in their cycles, as free-running ones
-    /// would; at `00` they start at the top, for the same attack every time (decision 190).
+    /// would; at `00` they start at the top, for the same attack every time.
     fn seed_drift(&mut self, seed: u32, settings: Settings) {
         self.drift.seed(seed);
         if settings.at(DRIFT) > 0.0 {

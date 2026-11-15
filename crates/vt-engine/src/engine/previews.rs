@@ -350,10 +350,9 @@ impl Engine {
     }
 }
 
-/// The velocity every `Acid` note plays at, whatever its own: 99, where decision 117 fitted its
-/// level, so a note there sounds as it did before velocity was taken away from it (decision 121).
-/// An accented note plays at it too, as all an accent adds to the level is the voice's own accent
-/// circuit's (decision 127).
+/// The velocity every `Acid` note plays at, whatever its own: 99, where its level was fitted, so a
+/// note there sounds as it did before velocity was taken away from it. An accented note
+/// plays at it too, as all an accent adds to the level is the voice's own accent circuit's.
 const ACID_VELOCITY: u8 = 99;
 
 /// The gain of a step's velocity.

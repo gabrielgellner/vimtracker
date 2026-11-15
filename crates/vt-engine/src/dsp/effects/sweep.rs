@@ -1,5 +1,5 @@
 //! Sines swept through a slot and measured, for the tests that hold the slot effects' curves to
-//! what's heard (decision 333).
+//! what's heard.
 
 use std::f64::consts::TAU;
 

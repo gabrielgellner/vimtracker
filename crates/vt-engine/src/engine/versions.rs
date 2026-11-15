@@ -285,7 +285,7 @@ impl Engine {
                     continue;
                 };
                 // Where this column was going to read, which it keeps if its lane still has the
-                // step, as the lane counts it now (decision 348).
+                // step, as the lane counts it now.
                 let ahead =
                     old_lane.map(|old| (old, state.lane_ahead(slot, old, was_entry, count)));
                 let was_reading = match ahead {
@@ -342,7 +342,7 @@ impl Engine {
                 &fresh
             };
             // Only what may have moved is looked up, which on a track the edit didn't touch is
-            // nothing (#842).
+            // nothing.
             for id in track.settings_moved_from(before).iter() {
                 let (was, now) = (base_of(id, before), base_of(id, track));
                 if was != now {
@@ -350,7 +350,7 @@ impl Engine {
                 }
             }
             // A setting a macro no longer holds goes back to the song's, and the macros put what
-            // they hold where they have it again, as their maps may have changed (decision 284).
+            // they hold where they have it again, as their maps may have changed.
             for map in before.macros.iter().flat_map(|held| &held.maps) {
                 if track.macro_holding(map.target).is_none()
                     && let Some(id) = map.target.setting()

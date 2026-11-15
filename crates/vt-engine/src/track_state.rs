@@ -92,7 +92,7 @@ pub(crate) struct TrackState {
     /// on its step, where it's placed from the count. Anything that sets `started` again sets
     /// these back to 0.
     pub lane_offsets: [i64; FX_SLOTS],
-    /// Where each FX column's lane is as it plays, counted along a row at a time (decision 348).
+    /// Where each FX column's lane is as it plays, counted along a row at a time.
     lane_runs: [LaneRun; FX_SLOTS],
     /// The held values of each FX column's `Length` and `Rate`, on the `00` to `FF` scale, which a
     /// lane reads as each of its rows starts.
@@ -154,7 +154,7 @@ pub(crate) struct TrackState {
     /// The voice and effects whose settings are heard now.
     loaded_voice: Option<SynthVoice>,
     /// Where each of the loaded voice's settings is in the registry, by its place among the
-    /// voice's, looked up as it's loaded rather than at every update (#187).
+    /// voice's, looked up as it's loaded rather than at every update.
     voice_settings: [Option<usize>; MAX_MACHINE_SETTINGS],
     loaded_effects: [Option<EffectKind>; INSERTS],
     /// Held `VOL`, `SNA` and `SNB`, as level values, so `E0` is exactly 0 dB. What's smoothed is the gain they come to, so the
@@ -246,7 +246,7 @@ pub(crate) struct TrackState {
     /// What modulation multiplies a note's speed by.
     pitch: f64,
     /// The same in octaves, and the semitones both were worked out from, bit for bit, as `powf`
-    /// and `log2` are only worth working out again when it moves (#187).
+    /// and `log2` are only worth working out again when it moves.
     pitch_octaves: f32,
     pitch_from: Option<u32>,
     /// The held pitch, on the `00` to `FF` scale, as steps and the page set it.
@@ -267,7 +267,7 @@ pub(crate) struct TrackState {
     /// The frames rendered when the shares last moved.
     shared_at: u64,
     /// What its modulation was last worked out with, if that left nothing moving, so working it
-    /// out again changes nothing until something it reads does, which wakes it (#547).
+    /// out again changes nothing until something it reads does, which wakes it.
     rest: Option<Rest>,
     /// The loaded voice's held settings, in its order, on `0..=1`.
     synth: [f32; MAX_MACHINE_SETTINGS],

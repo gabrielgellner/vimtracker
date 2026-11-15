@@ -177,7 +177,7 @@ impl Exciter {
     }
 
     /// One frame in, and what it makes of it out, to be added to the sound. `same` says the frame's
-    /// sides are the same, bit for bit (decision 147).
+    /// sides are the same, bit for bit.
     #[inline]
     #[allow(
         clippy::float_cmp,
@@ -210,7 +210,7 @@ impl Exciter {
         let (attack, release) = (self.attack, self.release);
         self.sides.process(input, same, |side, input| {
             // With nothing coming in, all it keeps goes once it's tiny, so it falls to an exact
-            // zero rather than trading denormals for good (#260).
+            // zero rather than trading denormals for good.
             if input == 0.0 {
                 flush(side);
             }

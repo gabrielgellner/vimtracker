@@ -28,7 +28,7 @@ pub struct LiveValues {
     /// How far each slot's compressor or limiter is turning down, in dB, for a meter.
     pub reduction: [f32; INSERTS],
     /// How far each slot's low-pass gate is open, its level and cutoff from 0 to 1, for the FX
-    /// page's zoom to draw its curve (decision 333): none for any other effect.
+    /// page's zoom to draw its curve: none for any other effect.
     pub openings: [Option<(f32, f32)>; INSERTS],
     /// The note the slots follow, with the track's `Pitch`, as a MIDI note: middle C before the
     /// track's first, for the zoom to draw a resonator's, comb's or vowel filter's curve at.
@@ -47,7 +47,7 @@ pub struct LiveValues {
     /// light: none for one that isn't running, as an LFO's place is.
     pub steps: [Option<u8>; MOD_SLOTS],
     /// What each mod slot that's Steps has drawn with `Mutate` in place of its written values, as
-    /// it's heard, for `Space g a` to keep (#530): nothing while `Mutate` is at none.
+    /// it's heard, for `Space g a` to keep: nothing while `Mutate` is at none.
     pub drawn: [Drawn; MOD_SLOTS],
     /// Where each macro is as it's heard, with a lock or modulation, from `0000` to `FF00`.
     pub macros: [u16; MACROS],
@@ -94,7 +94,7 @@ impl Default for LiveValues {
 }
 
 /// A track's faders as they're heard, `LEV`, `PAN`, `SNA` and `SNB` in [`FADERS`]' order, for the
-/// mixer, the Output device and the Roto to show (decision 174).
+/// mixer, the Output device and the Roto to show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Faders {
     /// Where each is: a step's value while the steps drive it, or the track page's, with a coarse

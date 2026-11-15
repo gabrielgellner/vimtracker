@@ -44,7 +44,7 @@ impl Engine {
     /// Work out what each track's mod slots add now, and give its voice and slots their settings.
     /// A track resting, where that would change nothing, is left as it is while it's silent, with
     /// no tail ringing and no preview through it; the groups, returns and master, which hear the
-    /// others, while every sound track is (#547).
+    /// others, while every sound track is.
     pub(super) fn update_lfos(&mut self) {
         let now = self.song_time();
         let stopped = self.transport == Transport::Stopped;

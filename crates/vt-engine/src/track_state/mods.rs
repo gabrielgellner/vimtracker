@@ -199,9 +199,9 @@ pub(super) struct SlotRun {
     steps_lap: Lap<StepRate>,
     /// Where its LFO was at the track's last note, which `Hold` holds.
     held: f64,
-    /// Its LFO's attractor while its shape is one (#592), which can't be worked out from where the
-    /// song is as a wave can, so it's stepped on in the LFO's cycles: none until it's first heard
-    /// after a start, so it's seeded there.
+    /// Its LFO's attractor while its shape is one, which can't be worked out from where the song is
+    /// as a wave can, so it's stepped on in the LFO's cycles: none until it's first heard after a
+    /// start, so it's seeded there.
     chaos: Option<Attractor>,
     /// Its held depth, phase, polarity and deform, on the `00` to `FF` scale, as steps and the
     /// page set them. The polarity is below zero until it's first set, which is the slot's own.
@@ -718,7 +718,7 @@ impl TrackState {
             };
             // A low-pass gate's fall closes the track's filter too, by its `Colour`, wherever it
             // goes and whatever its depth, the notes' shape included, through the fast smoothers
-            // as an envelope's moves are (#45). One going nowhere does nothing, as any slot.
+            // as an envelope's moves are. One going nowhere does nothing, as any slot.
             if slot.kind == ModKind::Lpg && slot.lpg.colour > 0 && has_cut && !stopped {
                 let level = run.envelope.level(&slot.envelope(), now.clock, now.rate);
                 let closed = f32::from(slot.lpg.colour) / 255.0 * Lpg::closing(level);
@@ -829,7 +829,7 @@ impl TrackState {
         }
         // Each macro puts what it holds where it has it now, before the voice and the slots' effects
         // are given their settings, so they hear it this time; a mod slot's, the next.
-        // With none mapped, that comes to forgetting where each was heard (#187).
+        // With none mapped, that comes to forgetting where each was heard.
         if track.has_macro_maps() {
             let moves = std::array::from_fn(|at| {
                 SettingId::macro_at(at).map_or(0.0, |id| self.offsets[id.index()])

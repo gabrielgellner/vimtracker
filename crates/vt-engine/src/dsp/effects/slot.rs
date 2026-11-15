@@ -4,7 +4,7 @@
 //!
 //! What the slot needs to know of each effect comes from its DSP's [`SlotEffect`] and from its
 //! description in the model, so an effect with a long buffer that the slot rings needs nothing
-//! here (decision 340).
+//! here.
 
 use vt_model::constants::{MAX_TRACKS, UNITY_LEVEL};
 use vt_model::insert::{Distort, DistortType, EffectKind, Insert, Param, Place, Shown, Warps};
@@ -44,8 +44,8 @@ pub(crate) trait SlotEffect: Sized {
     /// Its settings, as its `Insert` holds them.
     type Settings: Copy;
 
-    /// What it does with a sound that's the same on both sides (decision 147). `Mono::Stereo` is
-    /// always safe, and `tests/all/mono.rs` checks every other claim.
+    /// What it does with a sound that's the same on both sides. `Mono::Stereo` is always safe, and
+    /// `tests/all/mono.rs` checks every other claim.
     const MONO: Mono = Mono::Stereo;
     /// How the slot blends what it gives with the sound going in, and turns it up or down.
     const MIXING: Mixing = Mixing::Wet;
@@ -126,8 +126,8 @@ impl SidechainFrames {
 }
 
 /// What an effect does with a sound that's the same on both sides, bit for bit, as a mono voice's
-/// is until something spreads it (decision 147). A slot is told whether what comes in is, by the
-/// slot before or by the track looking once, and an effect that keeps it so tells the slot after.
+/// is until something spreads it. A slot is told whether what comes in is, by the slot before or by
+/// the track looking once, and an effect that keeps it so tells the slot after.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mono {
     /// Each side goes through the same steps with its own state and nothing between them, so it
@@ -416,7 +416,7 @@ impl InsertState {
         frames: u64,
     ) {
         // An empty slot taking an empty slot again has nothing to set: an empty slot's own
-        // settings are never heard, and an effect put in it starts afresh (#187).
+        // settings are never heard, and an effect put in it starts afresh.
         if matches!((self.insert, insert), (Insert::Empty, Insert::Empty)) && self.memory.is_none()
         {
             return;
@@ -579,9 +579,8 @@ impl InsertState {
     /// What the slot would give for `input`, and whether its two sides are the same, if taking it
     /// would leave everything it keeps as it was, so that it would give the same for the same
     /// input every frame after. A mix bus whose slots all have settled like this with silence
-    /// coming in can skip them until something comes in or changes (#558). What it hears from
-    /// another track has to stay as `sidechains` has it now. `smoothing` is what its settings move
-    /// by.
+    /// coming in can skip them until something comes in or changes. What it hears from another
+    /// track has to stay as `sidechains` has it now. `smoothing` is what its settings move by.
     ///
     /// A copy of the slot, without its long buffer, takes the frame, and what it keeps is compared
     /// with the slot's bit for bit. One with a long buffer does no work only with nothing coming in
@@ -841,7 +840,7 @@ impl InsertState {
     /// What an empty slot gives for a frame while it isn't fading, which is all
     /// [`InsertState::process_sides`] does with one: the frame as it came, with a NaN or an
     /// infinity heard as silence, and whether its sides are the same. It keeps nothing, so it's
-    /// passed by without working through the rest (#187). None for any other slot.
+    /// passed by without working through the rest. None for any other slot.
     #[inline]
     #[allow(
         clippy::float_cmp,
@@ -855,8 +854,8 @@ impl InsertState {
         Some((out, same || same_sides(out)))
     }
 
-    /// What its effect does with a sound that's the same on both sides (decision 147), as its
-    /// DSP's `SlotEffect::MONO` says. An empty slot is linked: it passes the sound as it came.
+    /// What its effect does with a sound that's the same on both sides, as its DSP's
+    /// `SlotEffect::MONO` says. An empty slot is linked: it passes the sound as it came.
     pub fn mono(&self) -> Mono {
         facts(self.insert).mono
     }
@@ -889,8 +888,8 @@ impl InsertState {
         sidechains: &SidechainFrames,
     ) -> ([f32; 2], bool) {
         // A NaN or an infinity would stay in any filter or loop it reached, silencing the slot for
-        // good whatever clips it on the way round, so it's heard as a frame of silence instead
-        // (#461). Sides that were the same, bit for bit, still are.
+        // good whatever clips it on the way round, so it's heard as a frame of silence instead.
+        // Sides that were the same, bit for bit, still are.
         let input = input.map(|sample| if sample.is_finite() { sample } else { 0.0 });
         let kept = same && self.mono() == Mono::Linked;
         let wet = self.effect(input, same, smoothing, rate, sidechains);
@@ -1349,7 +1348,7 @@ mod tests {
     #[test]
     fn a_settled_slot_gives_what_it_said_it_would_for_silence() {
         // After a sound, it's asked every 16 frames of silence, and each frame until the next is
-        // worked out as usual and has to be what it said, as a resting mix trusts it (#558).
+        // worked out as usual and has to be what it said, as a resting mix trusts it.
         let smoothing = crate::dsp::blocks::smoother::coefficient(RATE);
         let sidechains = SidechainFrames::default();
         for insert in every_effect() {
@@ -1422,10 +1421,10 @@ mod tests {
     fn every_effect_falls_to_an_exact_silence_after_a_sound() {
         // Left to itself, a filter's state fell into the denormals and traded the smallest floats
         // between its states for good, so a delay after it rang for ever and a resting mix never
-        // rested (#260). Each slot now gives exact silence soon after a sound, and has settled
-        // too, but for what moves by itself and what takes longer by design: a compressor's
-        // `Auto` follows the level for a minute and a half before it settles (decision 260), and
-        // a low-pass gate's vactrol takes minutes to forget it was lit.
+        // rested. Each slot now gives exact silence soon after a sound, and has settled too, but
+        // for what moves by itself and what takes longer by design: a compressor's `Auto` follows
+        // the level for a minute and a half before it settles, and a low-pass gate's vactrol takes
+        // minutes to forget it was lit.
         for insert in every_effect() {
             let settles = !matches!(
                 insert,

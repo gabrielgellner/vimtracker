@@ -51,7 +51,7 @@ const MOST_TREMOLO: f32 = 0.6;
 const FURTHEST: f32 = 4.2;
 /// How often where the rotors are is worked out, in frames. In between it's ramped.
 const CONTROL_FRAMES: u32 = 16;
-/// How far the filters' states can go, so a NaN dies away in them rather than staying (#461).
+/// How far the filters' states can go, so a NaN dies away in them rather than staying.
 const HEADROOM: f32 = 16.0;
 /// How much of `Drive` it takes to drive fully into the soft clip, from clean at `00`, and where
 /// sst starts turning it down to make up.

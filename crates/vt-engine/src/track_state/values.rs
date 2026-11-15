@@ -128,8 +128,8 @@ impl TrackState {
                 match map.target {
                     MacroTarget::Setting(id) => self.set_base(id, map.at(value)),
                     // A generator's is held for the engine to render with as it reads each row,
-                    // so a lock, a glide or modulation reaches it (decision 300); at the macro's
-                    // turn, it's what the phrase holds, so nothing renders.
+                    // so a lock, a glide or modulation reaches it; at the macro's turn, it's what
+                    // the phrase holds, so nothing renders.
                     MacroTarget::Gen { column, param } => {
                         self.gen_holds
                             .hold_by_macro(column, param, map.number_at(value));

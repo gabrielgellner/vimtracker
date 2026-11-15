@@ -765,7 +765,7 @@ mod tests {
     }
 
     /// Lanes changing, their divisions too, and each track's `Length` and `Rate` for every FX
-    /// column turned every block (decision 348).
+    /// column turned every block.
     #[test]
     fn lanes_changing_while_playing_never_allocate_in_the_callback() {
         let pool = samples();
@@ -1801,13 +1801,13 @@ mod tests {
                     SettingId::slot(0, vt_model::insert::EffectKind::Flanger, 0).unwrap(),
                     SettingId::mod_own(1, 1).unwrap(),
                     SettingId::mod_own(4, 7).unwrap(),
-                    // Steps' and an LFO's `Rate`, which keep a running phase (decision 301).
+                    // Steps' and an LFO's `Rate`, which keep a running phase.
                     SettingId::mod_own(4, 9).unwrap(),
                     SettingId::mod_own(5, 9).unwrap(),
                     SettingId::accumulation(0).unwrap(),
                     SettingId::arpeggio(1).unwrap(),
                 ];
-                // Bent, as a mapping's response is worked out each block (decision 314).
+                // Bent, as a mapping's response is worked out each block.
                 let bend = [0, 60, -80][index % 3];
                 for target in targets {
                     track.macros[index % 2]
@@ -1918,11 +1918,11 @@ mod tests {
         assert!(ended >= 8, "{ended} recordings ended");
     }
 
-    /// A report is copied into its ring every block, so its size is watched (#836). It's about
-    /// 14 KB, nearly all of it the arrays of a place for every track there can be, `places` most
-    /// of all. Filling those took about 3 µs a block in a release build, a few percent of a light
-    /// song's block at 256 frames, so they're still sent every block; past this, it's time to send
-    /// them less often or only for the tracks in use.
+    /// A report is copied into its ring every block, so its size is watched. It's about 14 KB,
+    /// nearly all of it the arrays of a place for every track there can be, `places` most of all.
+    /// Filling those took about 3 µs a block in a release build, a few percent of a light song's
+    /// block at 256 frames, so they're still sent every block; past this, it's time to send them
+    /// less often or only for the tracks in use.
     #[test]
     fn a_report_stays_under_sixteen_kilobytes() {
         let size = size_of::<Telemetry>();

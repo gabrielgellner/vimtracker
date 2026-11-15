@@ -102,7 +102,7 @@ impl Svf {
     }
 
     /// Start its state again from nothing once all of it is far below anything heard, for a frame
-    /// with nothing coming in, so it falls to an exact zero rather than trading denormals (#260).
+    /// with nothing coming in, so it falls to an exact zero rather than trading denormals.
     #[inline]
     pub(in crate::dsp) fn let_go(&mut self) {
         if [self.state_1, self.state_2].tiny() {

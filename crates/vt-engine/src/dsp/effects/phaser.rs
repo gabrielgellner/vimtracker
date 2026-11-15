@@ -72,7 +72,7 @@ impl Side {
     #[inline]
     fn process(&mut self, input: f32, coefficient: f32, feedback: f32, taps: [f32; 3]) -> f32 {
         // With nothing coming in, all it keeps goes once it's tiny, so it falls to an exact zero
-        // rather than trading denormals round its loop for good (#260).
+        // rather than trading denormals round its loop for good.
         if input == 0.0 {
             flush(self);
         }
