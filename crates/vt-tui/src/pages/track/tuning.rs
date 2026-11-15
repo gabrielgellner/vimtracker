@@ -23,7 +23,7 @@ use super::Control;
 
 /// Whose tune `Tune` is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TuneOf {
+pub(crate) enum TuneOf {
     /// The sample's own, which every slice without its own plays with.
     Sample,
     /// The slice's own, by its number, which it plays in place of the sample's.
@@ -33,7 +33,7 @@ pub enum TuneOf {
 /// The tuning a sampler track's `Tune` and `Cents` show and change: the bank entry it plays, by
 /// its number, and whose tune `Tune` is.
 #[derive(Debug, Clone, Copy)]
-pub struct Tuning<'a> {
+pub(crate) struct Tuning<'a> {
     pub number: u8,
     pub entry: &'a BankEntry,
     pub of: TuneOf,
@@ -41,7 +41,7 @@ pub struct Tuning<'a> {
 
 /// The tuning a track's `Tune` and `Cents` are of, or none for a track that isn't a sampler or
 /// plays no sample, whose two are dim.
-pub fn tuning<'a>(song: &'a Song, track: &Track) -> Option<Tuning<'a>> {
+pub(crate) fn tuning<'a>(song: &'a Song, track: &Track) -> Option<Tuning<'a>> {
     if !track.is_sound() || track.machine != Machine::Sampler {
         return None;
     }
@@ -58,7 +58,7 @@ pub fn tuning<'a>(song: &'a Song, track: &Track) -> Option<Tuning<'a>> {
 }
 
 /// The lowest and highest `Tune` or `Cents` goes, either side of none.
-pub fn tuning_most(control: Control) -> i8 {
+pub(crate) fn tuning_most(control: Control) -> i8 {
     if control == Control::Cents {
         MAX_CENTS
     } else {
@@ -76,7 +76,7 @@ fn steps(control: Control) -> (i32, i32) {
 }
 
 /// A value of `Tune` or `Cents` as the device and the status line say it, as `+7 st` or `-20 ct`.
-pub fn tuning_text(control: Control, value: i8) -> String {
+pub(crate) fn tuning_text(control: Control, value: i8) -> String {
     let units = if control == Control::Cents {
         "ct"
     } else {
@@ -87,7 +87,7 @@ pub fn tuning_text(control: Control, value: i8) -> String {
 
 impl Tuning<'_> {
     /// `Tune` in semitones, the slice's own or the sample's, or `Cents`.
-    pub fn value(&self, control: Control) -> i8 {
+    pub(crate) fn value(&self, control: Control) -> i8 {
         let play = self.entry.edit.play;
         match (control, self.of) {
             (Control::Tune, TuneOf::Slice(slice)) => self.entry.edit.points.slices[slice]
@@ -101,18 +101,18 @@ impl Tuning<'_> {
 
     /// Whether it's left as a new sample has it, so the device shows it dim: the sample's own at
     /// none. A slice's own is never left alone, as it has one.
-    pub fn at_rest(&self, control: Control) -> bool {
+    pub(crate) fn at_rest(&self, control: Control) -> bool {
         self.value(control) == 0 && (control == Control::Cents || self.of == TuneOf::Sample)
     }
 
     /// Whether the sample has slices, so the device says whose `Tune` is.
-    pub fn sliced(&self) -> bool {
+    pub(crate) fn sliced(&self) -> bool {
         !self.entry.edit.points.slices.is_empty()
     }
 
     /// The entry with `Tune` or `Cents` set, or with none, a slice's tune back to the sample's and
     /// the sample's to none.
-    pub fn with(&self, control: Control, value: Option<i8>) -> BankEntry {
+    pub(crate) fn with(&self, control: Control, value: Option<i8>) -> BankEntry {
         let mut entry = self.entry.clone();
         let limit = tuning_most(control);
         let value = value.map(|value| value.clamp(-limit, limit));
@@ -136,7 +136,7 @@ impl Tuning<'_> {
 }
 
 /// What the status line says of `Tune` or `Cents` on a track: its value and whose it is.
-pub fn tuning_shown(song: &Song, track: &Track, control: Control) -> String {
+pub(crate) fn tuning_shown(song: &Song, track: &Track, control: Control) -> String {
     let Some(tuning) = tuning(song, track) else {
         return "no sample: K on Sample chooses one".to_owned();
     };

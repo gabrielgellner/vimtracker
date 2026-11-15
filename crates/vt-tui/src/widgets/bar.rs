@@ -15,7 +15,7 @@ use crate::widgets::theme;
 const BAR_START: &str = "▕";
 const BAR_END: &str = "▏";
 /// How many cells the ends take.
-pub const BAR_ENDS: u16 = 2;
+pub(crate) const BAR_ENDS: u16 = 2;
 /// A centred bar's middle, faint like its ends, so a mark off it shows which way and how far.
 /// Dashed, so it can't be taken for the dim mark of a setting.
 const CENTRE_TICK: &str = "┊";

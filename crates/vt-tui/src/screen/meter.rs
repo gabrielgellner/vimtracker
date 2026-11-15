@@ -24,8 +24,8 @@ const MARKS: [i32; 9] = [0, 6, -12, -24, -6, -48, -18, -36, -60];
 /// The most gain reduction the G bar can show, in dB.
 const MOST_REDUCTION: f32 = 12.0;
 /// The scope's size in characters. It sits above the meter, after the meter's gap on the left.
-pub const SCOPE_WIDTH: usize = 12;
-pub const SCOPE_HEIGHT: usize = 3;
+pub(crate) const SCOPE_WIDTH: usize = 12;
+pub(crate) const SCOPE_HEIGHT: usize = 3;
 /// The rows the scope takes from the meter's column: itself, and a gap below it.
 const SCOPE_ROWS: u16 = SCOPE_HEIGHT as u16 + 1;
 
@@ -40,7 +40,7 @@ pub fn split(body: Rect) -> (Rect, Option<Rect>) {
 }
 
 /// Split the meter's column into the scope at the top, if there's room for it, and the meter.
-pub fn split_scope(column: Rect) -> (Option<Rect>, Rect) {
+pub(crate) fn split_scope(column: Rect) -> (Option<Rect>, Rect) {
     if column.height < LOWEST_METER + SCOPE_ROWS {
         return (None, column);
     }
@@ -59,7 +59,7 @@ pub fn split_scope(column: Rect) -> (Option<Rect>, Rect) {
 }
 
 /// Draw the scope: the placeholders for its image.
-pub fn draw_scope(frame: &mut Frame, area: Rect, id: u32) {
+pub(crate) fn draw_scope(frame: &mut Frame, area: Rect, id: u32) {
     let lines: Vec<Line> = image::rows(id, SCOPE_WIDTH, SCOPE_HEIGHT)
         .into_iter()
         .map(Line::from)

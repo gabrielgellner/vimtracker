@@ -37,7 +37,7 @@ use vt_model::song::{FilterMode, FilterType, Machine, Song, SynthVoice, Track};
 use vt_model::step::{ACCENT_VELOCITY, MAX_VELOCITY};
 
 /// The rate a spec renders at unless it says.
-pub const DEFAULT_RATE: u32 = 48_000;
+pub(crate) const DEFAULT_RATE: u32 = 48_000;
 /// The rates a spec may ask for.
 const RATES: std::ops::RangeInclusive<u32> = 8_000..=192_000;
 /// The longest render, in seconds, so a mistyped duration can't fill the disk.
@@ -86,7 +86,8 @@ pub struct Spec {
     pub input: Option<Input>,
     pub ours: Ours,
     /// The reference plugin and its parameters, which only the reference side reads.
-    pub reference: Option<toml::Table>,
+    #[expect(dead_code, reason = "a spec names it, and only tools/compare reads it")]
+    pub(crate) reference: Option<toml::Table>,
     /// Several reference plugins, each with a `name`, which only the reference side reads.
     #[serde(default)]
     pub references: Vec<toml::Table>,
@@ -128,7 +129,8 @@ pub struct Case {
     pub ours: toml::Table,
     /// The reference's parameters it changes or adds, which only the reference side reads.
     #[serde(default)]
-    pub reference: toml::Table,
+    #[expect(dead_code, reason = "a spec names it, and only tools/compare reads it")]
+    pub(crate) reference: toml::Table,
     /// Each named reference's parameters it changes or adds, which only the reference side reads.
     #[serde(default)]
     pub references: toml::Table,

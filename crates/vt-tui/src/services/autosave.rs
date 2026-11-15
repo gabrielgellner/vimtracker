@@ -51,7 +51,7 @@ impl App {
     }
 
     /// If this project's autosave is newer than its song, ask whether to restore it.
-    pub fn offer_restore(&mut self) {
+    pub(crate) fn offer_restore(&mut self) {
         let Some(folder) = &self.services.folder else {
             return;
         };

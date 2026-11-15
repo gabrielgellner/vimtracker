@@ -95,7 +95,7 @@ impl SampleSetting {
     }
 
     /// Whether it's the whole entry's, rather than the slice's under the cursor.
-    pub fn is_entrys(self) -> bool {
+    pub(crate) fn is_entrys(self) -> bool {
         matches!(self, Self::Snap | Self::Sens | Self::Steps | Self::Warp)
     }
 
@@ -188,7 +188,7 @@ fn warp_of(value: i32) -> Warp {
 impl Shown {
     /// How much faster than it was recorded the entry plays under `Play`'s `Tempo`, lasting so
     /// many steps at a tempo: its length over theirs.
-    pub fn tempo_speed(&self, steps: u32, millibpm: u32) -> f64 {
+    pub(crate) fn tempo_speed(&self, steps: u32, millibpm: u32) -> f64 {
         let rate = self.rate();
         let start = self.entry.edit.points.start.min(self.end());
         let own = (self.end() - start) as f64;
@@ -216,13 +216,13 @@ fn fade_text(frames: i32, rate: u32) -> String {
 impl Shown {
     /// The slice the cursor's settings are of: the one a frame is in, or none for an entry with no
     /// slices, whose settings are its own.
-    pub fn settings_slice(&self, frame: u64) -> Option<usize> {
+    pub(crate) fn settings_slice(&self, frame: u64) -> Option<usize> {
         (!self.entry.edit.points.slices.is_empty()).then(|| self.slice_at(frame).0)
     }
 
     /// A setting's value as it plays, for the slice a frame is in, and whether it's the slice's
     /// own rather than the entry's.
-    pub fn setting_value(&self, setting: SampleSetting, frame: u64) -> (i32, bool) {
+    pub(crate) fn setting_value(&self, setting: SampleSetting, frame: u64) -> (i32, bool) {
         let play = self.entry.edit.play;
         let entry = match setting {
             SampleSetting::Snap => i32::from(play.snap_zero),

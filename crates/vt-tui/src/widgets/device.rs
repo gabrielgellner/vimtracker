@@ -17,7 +17,7 @@ use crate::widgets::toggle;
 
 /// How tall every device is, whatever it holds, so nothing moves when what's in it changes: its
 /// frame, a blank line, three rows of settings with a blank line after each, and its frame.
-pub const DEVICE_HEIGHT: u16 = GRID_HEIGHT + 4;
+pub(crate) const DEVICE_HEIGHT: u16 = GRID_HEIGHT + 4;
 /// The room between the frame and what's inside it, at each side.
 const PADDING: u16 = 2;
 /// Where the title starts along the top border, after the corner and a line.
@@ -25,7 +25,7 @@ const TITLE_INDENT: u16 = 2;
 /// The room between the title's parts.
 const TITLE_GAP: &str = "  ";
 /// The room between two half-width devices side by side.
-pub const HALF_GAP: u16 = 2;
+pub(crate) const HALF_GAP: u16 = 2;
 
 /// What's in a title's place for its switch.
 #[derive(Clone, Copy)]
@@ -37,7 +37,7 @@ enum Switch {
 }
 
 /// A device's frame and title.
-pub struct Device {
+pub(crate) struct Device {
     identity: String,
     switch: Option<Switch>,
     controls: Vec<Line<'static>>,
@@ -48,7 +48,7 @@ pub struct Device {
 
 impl Device {
     /// A device named by this, such as a slot's digit.
-    pub fn new(identity: impl Into<String>) -> Self {
+    pub(crate) fn new(identity: impl Into<String>) -> Self {
         Self {
             identity: identity.into(),
             switch: None,
@@ -60,7 +60,7 @@ impl Device {
 
     /// The same with its switch after its name, on or off.
     #[must_use]
-    pub fn switch(self, on: bool) -> Self {
+    pub(crate) fn switch(self, on: bool) -> Self {
         Self {
             switch: Some(Switch::Toggle(on)),
             ..self
@@ -70,7 +70,7 @@ impl Device {
     /// The same with the room for a switch after its name, as one that has nothing to switch
     /// leaves, so what's after it is where it is on the others.
     #[must_use]
-    pub fn switch_room(self) -> Self {
+    pub(crate) fn switch_room(self) -> Self {
         Self {
             switch: Some(Switch::Room),
             ..self
@@ -79,14 +79,14 @@ impl Device {
 
     /// The same with these controls in its title, each already in its own style.
     #[must_use]
-    pub fn controls(self, controls: Vec<Line<'static>>) -> Self {
+    pub(crate) fn controls(self, controls: Vec<Line<'static>>) -> Self {
         Self { controls, ..self }
     }
 
     /// The same with this after its controls, a space on, in its own style: where a generator
     /// acts, which isn't one of its controls.
     #[must_use]
-    pub fn after(self, after: Line<'static>) -> Self {
+    pub(crate) fn after(self, after: Line<'static>) -> Self {
         Self {
             after: Some(after),
             ..self
@@ -95,12 +95,12 @@ impl Device {
 
     /// The same with the cursor in it, or not.
     #[must_use]
-    pub fn focused(self, focused: bool) -> Self {
+    pub(crate) fn focused(self, focused: bool) -> Self {
         Self { focused, ..self }
     }
 
     /// Where a device's settings go in its area: in from its frame, after a blank line.
-    pub fn settings_area(area: Rect) -> Rect {
+    pub(crate) fn settings_area(area: Rect) -> Rect {
         let inner = inner(area);
         let x = inner.x + PADDING;
         Rect::new(
@@ -113,7 +113,7 @@ impl Device {
 
     /// Where a graphic panel this wide goes in a device's area: against its right side, in from
     /// its frame, as tall as all inside it.
-    pub fn panel_area(area: Rect, width: u16) -> Rect {
+    pub(crate) fn panel_area(area: Rect, width: u16) -> Rect {
         let inner = inner(area);
         let right = inner.right().saturating_sub(PADDING);
         let width = width.min(right.saturating_sub(inner.x));
@@ -130,7 +130,11 @@ fn inner(area: Rect) -> Rect {
 /// for the whole width, or 0 or 1 for the left or the right half, with a gap between. Each band is
 /// a device tall. Where fewer bands fit than there are, the rack goes by whole bands to keep the
 /// band `keep` in view, as low as it can be, and a device out of view has no area.
-pub fn rack_areas(area: Rect, places: &[(usize, Option<usize>)], keep: usize) -> Vec<Option<Rect>> {
+pub(crate) fn rack_areas(
+    area: Rect,
+    places: &[(usize, Option<usize>)],
+    keep: usize,
+) -> Vec<Option<Rect>> {
     let fit = usize::from(area.height / DEVICE_HEIGHT).max(1);
     let first = (keep + 1).saturating_sub(fit);
     let half = area.width.saturating_sub(HALF_GAP) / 2;

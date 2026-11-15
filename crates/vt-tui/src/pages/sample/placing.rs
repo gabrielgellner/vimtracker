@@ -40,14 +40,14 @@ impl Edge {
 
 /// A point on the sample page: where a slice starts, by its number, or one of the entry's edges.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Point {
+pub(crate) enum Point {
     Slice(usize),
     Edge(Edge),
 }
 
 /// How far a nudge moves a point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Nudge {
+pub(crate) enum Nudge {
     /// `=` and `-`: a pixel of the waveform at the zoom shown, as `h` and `l` move the cursor.
     Pixel,
     /// `+` and `_`: a column, a character's width.
@@ -58,7 +58,7 @@ pub enum Nudge {
 
 impl Shown {
     /// Where a point is, in the file's frames, if the entry has it.
-    pub fn point_frame(&self, point: Point) -> Option<u64> {
+    pub(crate) fn point_frame(&self, point: Point) -> Option<u64> {
         let points = &self.entry.edit.points;
         match point {
             Point::Slice(number) => points.slices.get(number).map(|slice| slice.start),
@@ -72,7 +72,7 @@ impl Shown {
     /// The point nearest a frame, no further than `reach` frames from it. Where two are as near, a
     /// slice's start comes first, then the start, the end and the loop's, as slicing is what the
     /// page is mostly for and `g s`, `g e`, `g l` and `g L` place the others.
-    pub fn point_near(&self, frame: u64, reach: u64) -> Option<Point> {
+    pub(crate) fn point_near(&self, frame: u64, reach: u64) -> Option<Point> {
         let slices = (0..self.entry.edit.points.slices.len()).map(Point::Slice);
         let edges = [Edge::Start, Edge::End, Edge::LoopStart, Edge::LoopEnd].map(Point::Edge);
         let mut nearest: Option<(u64, Point)> = None;
@@ -91,7 +91,7 @@ impl Shown {
     /// Where a point can go without passing its neighbours: a slice's start between the slices
     /// either side of it, inside the entry; the start before the end and the end after the start;
     /// and the loop's start before its end and its end after its start, inside the file.
-    pub fn point_bounds(&self, point: Point) -> std::ops::RangeInclusive<u64> {
+    pub(crate) fn point_bounds(&self, point: Point) -> std::ops::RangeInclusive<u64> {
         let points = &self.entry.edit.points;
         let length = self.length();
         let end = self.end();
@@ -192,7 +192,7 @@ impl SamplePage {
     }
 
     /// The point under the cursor: the nearest within half a column of it.
-    pub fn point_here(&self, shown: &Shown) -> Option<Point> {
+    pub(crate) fn point_here(&self, shown: &Shown) -> Option<Point> {
         let reach = self.zoom / 2;
         shown.point_near(self.cursor, reach)
     }
@@ -463,7 +463,7 @@ fn step_frames(frame: u64, by: u64, later: bool) -> u64 {
 /// A frame moved this many pixels of the waveform along at a zoom, for characters `cell` pixels
 /// wide: to the first frame of the pixel that many along, so its line moves exactly that many
 /// pixels, as `h` and `l` move the cursor's. Closer than a frame a pixel, a pixel is a frame.
-pub fn pixels_along(frame: u64, pixels: u64, later: bool, zoom: u64, cell: u64) -> u64 {
+pub(crate) fn pixels_along(frame: u64, pixels: u64, later: bool, zoom: u64, cell: u64) -> u64 {
     if zoom < cell {
         return step_frames(frame, pixels, later);
     }

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 /// The settings file's name, in the config folder.
-pub const SETTINGS_FILE: &str = "settings.ron";
+pub(crate) const SETTINGS_FILE: &str = "settings.ron";
 
 /// What a new settings file says: the defaults, with a note on each.
 const TEMPLATE: &str = r#"// vimtracker's settings for this machine. A path can start with ~/ for your home folder.
@@ -21,7 +21,7 @@ const TEMPLATE: &str = r#"// vimtracker's settings for this machine. A path can 
 "#;
 
 /// The config folder: `$XDG_CONFIG_HOME/vimtracker`, or `~/.config/vimtracker`.
-pub fn config_folder() -> Option<PathBuf> {
+pub(crate) fn config_folder() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
@@ -29,12 +29,12 @@ pub fn config_folder() -> Option<PathBuf> {
 }
 
 /// A path as it's written, with a leading `~/` meaning the home folder.
-pub fn expand_home(text: &str) -> PathBuf {
+pub(crate) fn expand_home(text: &str) -> PathBuf {
     expand_from(text, home_folder().as_deref())
 }
 
 /// A path as it's written, with a leading `~/` meaning this home folder, if there is one.
-pub fn expand_from(text: &str, home: Option<&Path>) -> PathBuf {
+pub(crate) fn expand_from(text: &str, home: Option<&Path>) -> PathBuf {
     match (text.strip_prefix("~/"), home) {
         (Some(rest), Some(home)) => home.join(rest),
         _ => PathBuf::from(text),
@@ -42,7 +42,7 @@ pub fn expand_from(text: &str, home: Option<&Path>) -> PathBuf {
 }
 
 /// The home folder, which `~` stands for.
-pub fn home_folder() -> Option<PathBuf> {
+pub(crate) fn home_folder() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 
@@ -126,12 +126,12 @@ impl Settings {
     }
 
     /// The presets folder, with `~/` expanded, if there's one.
-    pub fn preset_folder(&self) -> Option<PathBuf> {
+    pub(crate) fn preset_folder(&self) -> Option<PathBuf> {
         (!self.presets.is_empty()).then(|| expand_home(&self.presets))
     }
 
     /// The folders the sample browser lists, with `~/` expanded.
-    pub fn sample_folders(&self) -> Vec<PathBuf> {
+    pub(crate) fn sample_folders(&self) -> Vec<PathBuf> {
         self.samples
             .iter()
             .map(|folder| expand_home(folder))

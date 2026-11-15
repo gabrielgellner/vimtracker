@@ -4,8 +4,9 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use ratatui::buffer::Buffer;
 
-use super::encoding::{adler32, crc32};
-use super::protocol::{CHUNK, QUERY_ID, answer};
+use super::encoding::{adler32, crc32, scope_png, spans_png};
+use super::protocol::{CHUNK, Image, MOST_CELLS, QUERY_ID, answer, transmit};
+use super::sender::mark_png;
 use super::switches::Look;
 use super::*;
 use crate::overlays::picker::draw::{

@@ -42,7 +42,7 @@ fn capitalised(words: &str) -> String {
 }
 
 /// A bank entry's number and name as a list or a row shows it: `03 BD Bass Drum`, or `Off`.
-pub fn sample_text(song: &Song, number: u8) -> String {
+pub(crate) fn sample_text(song: &Song, number: u8) -> String {
     match (number, song.bank.get(number)) {
         (0, _) => "Off".to_owned(),
         (number, Some(entry)) => format!("{number:02X} {}", entry.title()),
@@ -99,7 +99,7 @@ const GENERIC_WORDS: [&str; 12] = [
 ];
 
 /// What a group whose kit's name says nothing better is called (decision 308).
-pub const KIT_GROUP_NAME: &str = "DRUMS";
+pub(crate) const KIT_GROUP_NAME: &str = "DRUMS";
 
 /// A name's words, split at spaces and punctuation, leaving out those that only say it's a kit.
 fn telling_words(name: &str) -> impl Iterator<Item = &str> {
@@ -449,7 +449,7 @@ impl App {
     /// group with none, named after the kit and folded. It is one undo step, and if any sound
     /// won't load, nothing changes. Where the tracks have a kick, a snare or a hat, a beat from
     /// Grids' map is offered after.
-    pub fn load_kit_tracks(&mut self, path: &Path, chosen: &[KitChoice]) {
+    pub(crate) fn load_kit_tracks(&mut self, path: &Path, chosen: &[KitChoice]) {
         if chosen.is_empty() {
             return;
         }

@@ -20,7 +20,7 @@ use crate::services::meter::{Meter, height_of};
 use vt_engine::track_state::Faders;
 
 /// The sends, in order: what each send's knob moves.
-pub const SENDS: [TrackControl; 2] = [TrackControl::SendA, TrackControl::SendB];
+pub(crate) const SENDS: [TrackControl; 2] = [TrackControl::SendA, TrackControl::SendB];
 
 /// Where the Roto's meters turn yellow and red, in dB: where the app's own meters turn yellow
 /// and peach (`theme::level`).
@@ -86,7 +86,7 @@ pub fn turned(control: Control, at: usize, song: &Song, position: u16) -> Option
 }
 
 /// The setting a fader is on a track.
-pub fn control_of(fader: Fader) -> Option<Control> {
+pub(crate) fn control_of(fader: Fader) -> Option<Control> {
     match fader {
         Fader::Level => Some(Control::Level),
         Fader::Pan => Some(Control::Base(TrackControl::Pan)),
@@ -102,7 +102,7 @@ fn tracks_before_returns(song: &Song) -> usize {
 }
 
 /// The song's track at a place in MIX mode's lists.
-pub fn track_of(song: &Song, (list, index): Place) -> Option<usize> {
+pub(crate) fn track_of(song: &Song, (list, index): Place) -> Option<usize> {
     let at = match list {
         AllTracks::Audio => usize::from(index),
         AllTracks::MasterReturn => tracks_before_returns(song) + usize::from(index),
@@ -115,7 +115,7 @@ pub fn track_of(song: &Song, (list, index): Place) -> Option<usize> {
 }
 
 /// Where a song's track is in MIX mode's lists.
-pub fn place_of(song: &Song, track: usize) -> Place {
+pub(crate) fn place_of(song: &Song, track: usize) -> Place {
     let returns = tracks_before_returns(song);
     if track < returns {
         (AllTracks::Audio, track as u16)
@@ -183,13 +183,13 @@ pub fn meter_level(db: f32) -> u8 {
 
 /// A track's meter for the Roto, left and right: each channel's peak as it falls, as the
 /// mixer page draws it.
-pub fn meter_levels(meter: &Meter) -> [u8; 2] {
+pub(crate) fn meter_levels(meter: &Meter) -> [u8; 2] {
     meter.channels.map(|channel| meter_level(channel.peak.now))
 }
 
 /// Where a fader's knob goes when the Roto asks for its default: where a new track has it, with
 /// no fine digits.
-pub fn default_position(control: Control, track: &Track, song: &Song) -> Option<u16> {
+pub(crate) fn default_position(control: Control, track: &Track, song: &Song) -> Option<u16> {
     let new = Track::default();
     let mut track = track.clone();
     match control {

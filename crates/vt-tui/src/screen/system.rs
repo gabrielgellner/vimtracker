@@ -13,7 +13,7 @@ use crate::services::audio::AudioStats;
 use crate::widgets::{glyphs, theme};
 
 /// The text, and whether something has gone wrong and needs noticing.
-pub fn text(cpu: u64, late: u64, xruns: u64) -> (String, bool) {
+pub(crate) fn text(cpu: u64, late: u64, xruns: u64) -> (String, bool) {
     (
         format!("CPU {cpu:>2}%  late {late}  xruns {xruns} "),
         late > 0 || xruns > 0,
@@ -22,7 +22,7 @@ pub fn text(cpu: u64, late: u64, xruns: u64) -> (String, bool) {
 
 /// The leaf before the CPU figure, while the audio thread is slowed. It comes before the figure
 /// rather than after, so nothing else moves when it comes and goes.
-pub fn leaf(slowed: bool) -> Option<Span<'static>> {
+pub(crate) fn leaf(slowed: bool) -> Option<Span<'static>> {
     slowed.then(|| Span::styled(format!("{} ", glyphs::LEAF), theme::dim()))
 }
 
@@ -44,7 +44,7 @@ fn free_row(frame: &mut Frame, area: Rect, width: u16) -> Rect {
 }
 
 /// Draw it in the area a view has. Call this after drawing the view.
-pub fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, app: &App, stats: Option<&AudioStats>) {
     let (late, xruns) = stats.map_or((0, 0), |s| {
         (
             s.late.load(Ordering::Relaxed),

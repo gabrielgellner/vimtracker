@@ -25,9 +25,9 @@ const WAIT: Duration = Duration::from_secs(30);
 
 /// One file's analysis, or why there's none.
 #[derive(Debug)]
-pub struct Analysed {
+pub(crate) struct Analysed {
     /// The content it was asked for by. The analysis is of another if the file has changed since.
-    pub asked: ContentHash,
+    pub(crate) asked: ContentHash,
     pub result: Result<(Arc<Analysis>, Found), String>,
 }
 
@@ -102,7 +102,7 @@ impl Analyst {
     }
 
     /// Take in the analyses done since last asked.
-    pub fn poll(&mut self) -> Vec<Analysed> {
+    pub(crate) fn poll(&mut self) -> Vec<Analysed> {
         let mut done = Vec::new();
         while let Some(Ok(analysed)) = self.results.as_ref().map(Receiver::try_recv) {
             self.count(&analysed);
@@ -112,7 +112,7 @@ impl Analyst {
     }
 
     /// Wait up to `limit` for every file asked for, as a render must and as tests do.
-    pub fn wait(&mut self, limit: Duration) -> Vec<Analysed> {
+    pub(crate) fn wait(&mut self, limit: Duration) -> Vec<Analysed> {
         let until = Instant::now() + limit;
         let mut done = self.poll();
         while self.is_waiting() {

@@ -20,13 +20,13 @@ use crate::pages::sample::{SamplePage, Shown};
 /// The keys that play slices in the keys mode, by row: the home row from `a`, then the row above
 /// from `q`, eight each, so the home row plays `00` to `07` and the row above `08` to `0F`. That's
 /// sixteen, as an MPC's bank of pads or an Elektron's trig keys, and a hex digit's worth of slices.
-pub const PAD_ROWS: [&str; 2] = ["asdfghjk", "qwertyui"];
+pub(crate) const PAD_ROWS: [&str; 2] = ["asdfghjk", "qwertyui"];
 
 /// How many slices the keys play at once, as one page of them.
-pub const PADS: usize = 16;
+pub(crate) const PADS: usize = 16;
 
 /// The pad a key is, counted from the home row's first, if it's one.
-pub fn pad_key(c: char) -> Option<usize> {
+pub(crate) fn pad_key(c: char) -> Option<usize> {
     PAD_ROWS.iter().enumerate().find_map(|(row, keys)| {
         let at = keys.chars().position(|key| key == c)?;
         Some(row * keys.len() + at)

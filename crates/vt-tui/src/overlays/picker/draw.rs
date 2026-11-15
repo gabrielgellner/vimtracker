@@ -32,14 +32,14 @@ const MIN_MENU_WIDTH: usize = 12;
 const MAX_MENU_ROWS: usize = 10;
 /// The preview's width, and the rows a box with one has.
 const PREVIEW_WIDTH: usize = 40;
-pub const PREVIEW_ROWS: usize = 18;
+pub(crate) const PREVIEW_ROWS: usize = 18;
 /// The size of each waveform in a kit's preview, in characters.
-pub const PREVIEW_WAVE_WIDTH: usize = 8;
-pub const PREVIEW_WAVE_HEIGHT: usize = 1;
+pub(crate) const PREVIEW_WAVE_WIDTH: usize = 8;
+pub(crate) const PREVIEW_WAVE_HEIGHT: usize = 1;
 /// The size of a sample's waveform in its preview, in characters. It was as wide as the program's
 /// placeholders could number at first; they now number 297, and it stays 28 to fit the preview.
-pub const PREVIEW_SAMPLE_WIDTH: usize = 28;
-pub const PREVIEW_SAMPLE_HEIGHT: usize = 4;
+pub(crate) const PREVIEW_SAMPLE_WIDTH: usize = 28;
+pub(crate) const PREVIEW_SAMPLE_HEIGHT: usize = 4;
 /// Room for a label in a kit's preview, such as `BD`.
 const PREVIEW_LABEL_WIDTH: usize = 4;
 /// The explorer's list's width, inside its border, as its tree grows and shrinks. It's 67 so the
@@ -154,7 +154,7 @@ fn hint(picker: &Picker, hint: &str) -> Line<'static> {
 /// line, above the command line in the bottom row of `status`, with its names under the word
 /// they finish, which starts `column` characters in. It's after Vim's popup menu, with no search
 /// line, as the command line is its search.
-pub fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: &mut Picker) {
+pub(crate) fn draw_menu(frame: &mut Frame, status: Rect, column: usize, picker: &mut Picker) {
     let area = frame.area();
     let columns = Columns::of(picker);
     let list_width =

@@ -868,7 +868,7 @@ pub fn control_at(
 
 /// The setting on the button the Roto numbers `index`, from 1 across the pages, of a track's
 /// `device`th device, if it's stored and has one there.
-pub fn button_at(
+pub(crate) fn button_at(
     track: &Track,
     phrase: Option<u32>,
     device: usize,
@@ -968,7 +968,7 @@ pub fn stored_setups() -> Vec<OwnSetup> {
 /// What switches a track's `device`th device in and out, as its enabled state on the Roto: an
 /// FX slot's bypass, or a mod slot's own switch. Other devices are always in, generators among
 /// them, which come last, so they're left out here.
-pub fn device_switch(track: &Track, device: usize) -> Option<Control> {
+pub(crate) fn device_switch(track: &Track, device: usize) -> Option<Control> {
     let (_, _, spec) = track_devices(track, None).into_iter().nth(device)?;
     match spec.title[0]? {
         control @ Control::Insert(_) => Some(control),

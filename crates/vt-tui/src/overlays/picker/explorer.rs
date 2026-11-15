@@ -38,13 +38,13 @@ pub enum Purpose {
 
 impl Purpose {
     /// Whether it chooses a folder, which `Enter` does, before a name line.
-    pub fn chooses_folder(self) -> bool {
+    pub(crate) fn chooses_folder(self) -> bool {
         matches!(self, Self::Save | Self::Render)
     }
 
     /// Whether the preview starts open: only where there's something to show. A preset says
     /// what it is beside its name instead.
-    pub fn previews(self) -> bool {
+    pub(crate) fn previews(self) -> bool {
         !self.chooses_folder() && !matches!(self, Self::Preset(_))
     }
 
@@ -173,7 +173,7 @@ fn listed<P: Preset>(
 }
 
 /// A preset's tags: those it always has, then its own that aren't among them.
-pub fn preset_tags(fixed: Vec<String>, own: Vec<String>) -> Vec<Tag> {
+pub(crate) fn preset_tags(fixed: Vec<String>, own: Vec<String>) -> Vec<Tag> {
     let mut tags: Vec<Tag> = fixed
         .into_iter()
         .map(|name| Tag::new(name, Source::Fixed))
@@ -188,13 +188,13 @@ pub fn preset_tags(fixed: Vec<String>, own: Vec<String>) -> Vec<Tag> {
 
 /// A sample file's tags: what's guessed from where it is, its name and, for one of a kit's
 /// sounds, its label, and what's kept for it by hand (decision 315).
-pub fn file_tags(path: &Path, label: &str, library: &TagLibrary) -> Vec<Tag> {
+pub(crate) fn file_tags(path: &Path, label: &str, library: &TagLibrary) -> Vec<Tag> {
     tag::file_tags(&tag::guess(path, label), library.of_file(path))
 }
 
 /// The icon for a sample file a kit names: a loop's if its tags say so, or a warning if it isn't
 /// there.
-pub fn sample_icon(path: &Path, tags: &[Tag]) -> Icon {
+pub(crate) fn sample_icon(path: &Path, tags: &[Tag]) -> Icon {
     if !path.exists() {
         Icon::Missing
     } else if tag::has(tags, tag::LOOP) {
@@ -205,7 +205,7 @@ pub fn sample_icon(path: &Path, tags: &[Tag]) -> Icon {
 }
 
 /// The icon for one of a kit's sounds, played from this file: a warning if it isn't there.
-pub fn kit_sound_icon(path: &Path, layered: bool) -> Icon {
+pub(crate) fn kit_sound_icon(path: &Path, layered: bool) -> Icon {
     if !path.exists() {
         Icon::Missing
     } else if layered {
@@ -216,7 +216,7 @@ pub fn kit_sound_icon(path: &Path, layered: bool) -> Icon {
 }
 
 /// What a path is, for a purpose, or none if it isn't listed.
-pub fn kind_of(path: &Path, purpose: Purpose) -> Option<Kind> {
+pub(crate) fn kind_of(path: &Path, purpose: Purpose) -> Option<Kind> {
     if path.is_dir() {
         return Some(if purpose == Purpose::Project && is_project(path) {
             Kind::Project
@@ -238,7 +238,7 @@ pub fn kind_of(path: &Path, purpose: Purpose) -> Option<Kind> {
 }
 
 /// Whether a name is hidden, as a dot file is.
-pub fn is_hidden(path: &Path) -> bool {
+pub(crate) fn is_hidden(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|name| name.to_string_lossy().starts_with('.'))
 }
@@ -332,7 +332,7 @@ pub struct Entry {
 /// A kit's sounds are known by their places in it, under the kit's own path, as
 /// `909 Core Kit.ron/0`, and a sound's files by their places under the sound's, so the tree finds
 /// them again as it finds files.
-pub fn contents(
+pub(crate) fn contents(
     path: &Path,
     purpose: Purpose,
     hidden: bool,

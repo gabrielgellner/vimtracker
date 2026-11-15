@@ -87,7 +87,7 @@ impl PartialEq for Shape {
 impl Shape {
     /// Its picture in a shade, as a PNG, for a panel this many characters across and down at
     /// characters of `cell` pixels, at the program's sample rate.
-    pub fn png(
+    pub(crate) fn png(
         &self,
         cells: (usize, usize),
         cell: (usize, usize),
@@ -172,7 +172,7 @@ struct Held {
 
 /// What [`PanelImages::find`] found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Found {
+pub(crate) enum Found {
     /// The image shows what's asked for.
     Current(u32),
     /// It shows something older, but it was sent too lately to send another yet.
@@ -183,7 +183,7 @@ pub enum Found {
 
 /// Every panel's images, in each of their shades.
 #[derive(Debug, Default)]
-pub struct PanelImages {
+pub(crate) struct PanelImages {
     held: BTreeMap<(PanelKey, Shade), Held>,
 }
 
@@ -192,7 +192,7 @@ impl PanelImages {
     /// was itself sent for a change fewer than `every` frames before `frame`, is kept a little
     /// longer, so a picture that follows a modulated setting is sent at most once in that many
     /// frames, while one change after a rest is sent at once.
-    pub fn find(
+    pub(super) fn find(
         &self,
         key: PanelKey,
         shade: Shade,
@@ -213,7 +213,7 @@ impl PanelImages {
 
     /// Hold a panel's new image in a shade, sent in `frame`, giving back the id of the one it
     /// replaces.
-    pub fn hold(
+    pub(super) fn hold(
         &mut self,
         key: PanelKey,
         shade: Shade,
@@ -232,13 +232,13 @@ impl PanelImages {
     }
 
     /// Every image's id.
-    pub fn ids(&self) -> impl Iterator<Item = u32> + '_ {
+    pub(super) fn ids(&self) -> impl Iterator<Item = u32> + '_ {
         self.held.values().map(|held| held.id)
     }
 
     /// Let go of every image, as after the screen is cleared or the characters change size, giving
     /// back their ids to forget, so each panel is drawn and sent again.
-    pub fn clear(&mut self) -> Vec<u32> {
+    pub(super) fn clear(&mut self) -> Vec<u32> {
         std::mem::take(&mut self.held)
             .into_values()
             .map(|held| held.id)

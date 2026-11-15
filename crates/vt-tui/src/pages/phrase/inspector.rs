@@ -15,11 +15,11 @@ use crate::widgets::theme;
 use crate::widgets::{self, bar::ValueBar, popup};
 
 /// The narrowest it's drawn: a label, a value and room for what it means.
-pub const NARROWEST: u16 = 39;
+pub(crate) const NARROWEST: u16 = 39;
 /// The widest it grows to where there's room.
-pub const WIDEST: u16 = 60;
+pub(crate) const WIDEST: u16 = 60;
 /// Its tallest: a line for each of the row's parts, a blank line above and below, and the frame.
-pub const HEIGHT: u16 = 13;
+pub(crate) const HEIGHT: u16 = 13;
 
 /// The width of a part's label, and of its value after it.
 const LABEL: usize = 9;
@@ -163,7 +163,7 @@ fn lines(ctx: &Ctx, step: &Step) -> Vec<Line<'static>> {
 }
 
 /// Draw it in an area, over the row under the cursor.
-pub fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, row: &str) {
+pub(crate) fn draw(frame: &mut Frame, area: Rect, ctx: &Ctx, row: &str) {
     let Some(step) = ctx
         .phrase_here()
         .and_then(|phrase| phrase.steps().get(ctx.cursor().step))

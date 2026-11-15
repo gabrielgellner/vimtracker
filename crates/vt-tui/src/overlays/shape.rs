@@ -145,7 +145,7 @@ impl ShapePanel {
     }
 
     /// The loop of the phrase a `Follow` reads, as the panel opened on it.
-    pub fn source_steps(&self) -> Option<&[Step]> {
+    pub(crate) fn source_steps(&self) -> Option<&[Step]> {
         if self.shape.kind != FillKind::Follow {
             return None;
         }
@@ -225,7 +225,7 @@ impl ShapePanel {
     }
 
     /// Why a `Variation` has nothing to learn from, if every part has too few notes.
-    pub fn too_few_notes(&self) -> Option<String> {
+    pub(crate) fn too_few_notes(&self) -> Option<String> {
         let most = self
             .parts
             .iter()
@@ -323,7 +323,7 @@ impl ShapePanel {
 /// A live generator as the Gen page edits it: a copy of it, with its phrase's steps as they'd be
 /// without it, the phrases a `Follow` can read and the loop it reads, and what `x` puts back.
 #[derive(Debug, Clone)]
-pub struct LiveGen {
+pub(crate) struct LiveGen {
     pub generator: Generator,
     pub under: Vec<Step>,
     sources: Vec<Source>,
@@ -334,7 +334,7 @@ pub struct LiveGen {
 impl LiveGen {
     /// What its settings act on. It always covers rows, as [`Services::live_generator`] gives
     /// one only then.
-    pub fn context(&self) -> Context<'_> {
+    pub(crate) fn context(&self) -> Context<'_> {
         let rows = self.generator.rows().unwrap_or(StepRange::between(0, 0));
         let source = (self.generator.shape.kind == FillKind::Follow)
             .then_some(self.source.as_deref())
@@ -352,7 +352,7 @@ impl LiveGen {
 
     /// A shape it's given, made whole as the panel makes it: a list starts as the two ends, and
     /// a `Follow` reads a phrase it can.
-    pub fn settle(&self, shape: &mut Shape) {
+    pub(crate) fn settle(&self, shape: &mut Shape) {
         settle(shape, &self.sources, self.starts.source);
     }
 }
@@ -370,7 +370,7 @@ fn too_few(shape: &Shape, notes: usize) -> Option<String> {
 
 impl LiveGen {
     /// Why a shape it's given would be refused: a `Variation` with too few notes under it.
-    pub fn refusal(&self, shape: &Shape) -> Option<String> {
+    pub(crate) fn refusal(&self, shape: &Shape) -> Option<String> {
         let rows = self.generator.rows()?;
         too_few(shape, variation_notes(&self.under, rows))
     }
@@ -410,7 +410,7 @@ fn starting_shape(column: ShapeColumn, (from, to): (u8, u8), place: Where) -> Sh
 /// its settings act on, from the song alone, as the Roto and the page's text do: `None` if
 /// there's no such generator. A `Follow`'s sources aren't listed here, so its `Source` has no
 /// choices; [`Services::live_generator`] lists them, for the app's own edits.
-pub fn with_live<R>(
+pub(crate) fn with_live<R>(
     song: &Song,
     track: &Track,
     phrase: u32,
@@ -430,7 +430,7 @@ pub fn with_live<R>(
 
 /// A live generator's setting as the Gen page shows it, from the song alone, or nothing if
 /// there's no such generator.
-pub fn live_shown(
+pub(crate) fn live_shown(
     song: &Song,
     track: &Track,
     phrase: u32,
@@ -445,7 +445,7 @@ pub fn live_shown(
 
 /// A live generator's name in the phrase's heading: its column, and for a `Follow` what it
 /// follows, like `Note←T02:05`.
-pub fn generator_label(generator: &Generator) -> String {
+pub(crate) fn generator_label(generator: &Generator) -> String {
     let column = column_label(generator.column);
     match generator.source() {
         Some(source) => format!("{column}←{source}"),
@@ -454,7 +454,7 @@ pub fn generator_label(generator: &Generator) -> String {
 }
 
 /// A column's short name, as the phrase's heading names its live ones.
-pub fn column_label(column: ShapeColumn) -> String {
+pub(crate) fn column_label(column: ShapeColumn) -> String {
     match column {
         ShapeColumn::Note { .. } => "Note".to_owned(),
         ShapeColumn::Velocity => "Vel".to_owned(),

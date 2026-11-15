@@ -30,7 +30,7 @@ impl FieldJump {
     }
 
     /// The label on a setting as text, or nothing: one of `LABELS`, as a cell draws it.
-    pub fn label_text(&self, control: Control) -> &'static str {
+    pub(crate) fn label_text(&self, control: Control) -> &'static str {
         self.label(control)
             .and_then(|label| {
                 LABELS

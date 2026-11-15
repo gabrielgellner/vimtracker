@@ -13,7 +13,7 @@ use super::plot::Plot;
 
 /// How a column's values are drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GenLook {
+pub(crate) enum GenLook {
     /// A short line a note, at its pitch.
     Notes,
     /// A bar up from the bottom a row.
@@ -27,8 +27,8 @@ pub enum GenLook {
 /// What a generator's preview shows: how it's drawn, and each row's value from 0 at the bottom
 /// to 1 at the top, or nothing where the row has none.
 #[derive(Debug, Clone, PartialEq)]
-pub struct GenDrawing {
-    pub look: GenLook,
+pub(crate) struct GenDrawing {
+    pub(crate) look: GenLook,
     pub levels: Vec<Option<f32>>,
 }
 
@@ -63,7 +63,7 @@ fn value(column: ShapeColumn, step: &Step) -> Option<f32> {
 impl GenDrawing {
     /// A live generator's, from its phrase's steps. Notes go from the lowest in its span at the
     /// bottom to the highest at the top, or across the middle if there's one pitch.
-    pub fn of(generator: &Generator, steps: &[Step]) -> Option<Self> {
+    pub(crate) fn of(generator: &Generator, steps: &[Step]) -> Option<Self> {
         let rows = generator.rows()?;
         let column = generator.column;
         let mut levels: Vec<Option<f32>> = (rows.first..=rows.last)
@@ -91,13 +91,13 @@ impl GenDrawing {
     }
 
     /// Where a row's middle is across, from 0 to 1.
-    pub fn x_of(&self, row: usize) -> f32 {
+    pub(crate) fn x_of(&self, row: usize) -> f32 {
         (row as f32 + 0.5) / self.levels.len().max(1) as f32
     }
 
     /// Where the dot rides on a row: at its value, or with none, at the bottom, or the middle
     /// for nudges.
-    pub fn point(&self, row: usize) -> (f32, f32) {
+    pub(crate) fn point(&self, row: usize) -> (f32, f32) {
         let rest = if self.look == GenLook::Centred {
             0.5
         } else {
@@ -108,7 +108,7 @@ impl GenDrawing {
     }
 
     /// Its picture, this many pixels across and down.
-    pub fn plot(&self, size: (usize, usize)) -> Plot {
+    pub(crate) fn plot(&self, size: (usize, usize)) -> Plot {
         let mut plot = Plot::new(size.0, size.1);
         let half = 0.35 / self.levels.len().max(1) as f32;
         let mut line = Vec::new();

@@ -17,7 +17,7 @@ use crate::services::config::expand_from;
 
 /// Where completion looks for files: the kit folders, and the home folder `~` stands for.
 #[derive(Debug, Clone, Copy)]
-pub struct Places<'a> {
+pub(crate) struct Places<'a> {
     pub kit_folders: &'a [PathBuf],
     pub home: Option<&'a Path>,
     /// The presets folder's `sounds` or `effects`, for what `:preset` acts on here.
@@ -28,7 +28,7 @@ pub struct Places<'a> {
 
 /// One way to finish the word: the text that replaces it, and the name and meaning the list shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Candidate {
+pub(crate) struct Candidate {
     pub text: String,
     pub label: String,
     pub meaning: String,
@@ -55,10 +55,10 @@ impl Candidate {
 /// What Tab can do with a command line: where the word being completed starts, in bytes, what the
 /// list of ways to finish it is called, and the ways, in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Completions {
+pub(crate) struct Completions {
     pub start: usize,
     pub title: &'static str,
-    pub candidates: Vec<Candidate>,
+    pub(crate) candidates: Vec<Candidate>,
 }
 
 impl Completions {
@@ -71,7 +71,7 @@ impl Completions {
     }
 
     /// The text every candidate starts with, ignoring case, in the first one's case.
-    pub fn common(&self) -> &str {
+    pub(crate) fn common(&self) -> &str {
         let Some((first, rest)) = self.candidates.split_first() else {
             return "";
         };
@@ -90,7 +90,7 @@ impl Completions {
     }
 
     /// A picker over the candidates, which the list above the command line shows.
-    pub fn picker(&self) -> Picker {
+    pub(crate) fn picker(&self) -> Picker {
         let items = self
             .candidates
             .iter()
@@ -146,7 +146,7 @@ impl CommandMenu {
 }
 
 /// The line with the text from `start` on replaced.
-pub fn replaced(line: &str, start: usize, text: &str) -> String {
+pub(crate) fn replaced(line: &str, start: usize, text: &str) -> String {
     format!("{}{text}", &line[..start.min(line.len())])
 }
 
@@ -174,7 +174,7 @@ fn words<'a>(
 }
 
 /// What can finish a command line, without its leading `:`, as the cursor stands at its end.
-pub fn complete(line: &str, places: Places) -> Completions {
+pub(crate) fn complete(line: &str, places: Places) -> Completions {
     // A range before the command, as `'<,'>`, is passed over.
     let after_range = match parse::split_range(line) {
         Ok((_, rest)) => rest,

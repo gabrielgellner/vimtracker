@@ -53,7 +53,7 @@ impl Order {
 
 impl Folds {
     /// The folds a song was saved with.
-    pub fn from_view(view: &ViewState) -> Self {
+    pub(crate) fn from_view(view: &ViewState) -> Self {
         let mut folds = Self::default();
         for &number in &view.opened {
             folds.set(number, false);
@@ -125,7 +125,7 @@ impl Folds {
     }
 
     /// The tracks shown, in an order.
-    pub fn ordered(&self, song: &Song, order: Order) -> Vec<usize> {
+    pub(crate) fn ordered(&self, song: &Song, order: Order) -> Vec<usize> {
         let mut tracks: Vec<usize> = self.shown(song).collect();
         tracks.sort_by_key(|&track| self.place(song, track, order));
         tracks
@@ -154,7 +154,7 @@ impl Folds {
 
     /// The group as many groups along from this track as `by` in an order, folded or open, or none
     /// if there aren't that many that way. Empty groups folded away aren't counted.
-    pub fn step_to_group(
+    pub(crate) fn step_to_group(
         &self,
         song: &Song,
         from: usize,
@@ -181,7 +181,7 @@ impl Folds {
 
     /// Where a cursor on a folded track stands: on its group, as Vim's stands on a closed fold, or
     /// for an empty group folded away, the nearest track shown after it, or else before it.
-    pub fn stand_in(&self, song: &Song, track: usize) -> usize {
+    pub(crate) fn stand_in(&self, song: &Song, track: usize) -> usize {
         if !self.hides(song, track) {
             return track;
         }
@@ -211,7 +211,7 @@ impl Folds {
     }
 
     /// Open the fold a track is in, so it's shown.
-    pub fn open_over(&mut self, song: &Song, track: usize) {
+    pub(crate) fn open_over(&mut self, song: &Song, track: usize) {
         if self.hides(song, track)
             && let Some(number) = group::number(song, track)
         {

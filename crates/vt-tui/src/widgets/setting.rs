@@ -44,9 +44,9 @@ pub struct CellLook<'a> {
     /// A field jump's query, while one is under way.
     pub query: Option<&'a str>,
     /// The labels a jump puts over the name, or nothing.
-    pub name_labels: &'a str,
+    pub(crate) name_labels: &'a str,
     /// The label a jump puts over the value's first letter.
-    pub value_label: Option<char>,
+    pub(crate) value_label: Option<char>,
 }
 
 /// A part of a setting's value as text: while Insert has the cursor on it, what's been typed, with
@@ -74,7 +74,7 @@ pub fn text(look: &CellLook, value: impl FnOnce() -> String) -> String {
 }
 
 /// A setting's fine part as text, as `text` has its value.
-pub fn fine_text(look: &CellLook, value: impl FnOnce() -> String) -> String {
+pub(crate) fn fine_text(look: &CellLook, value: impl FnOnce() -> String) -> String {
     part_text(look, Focus::Fine, value)
 }
 
@@ -85,17 +85,17 @@ pub fn style(look: &CellLook, default: bool) -> Style {
 }
 
 /// A setting's fine part's style: the cursor's under the cursor, and dim otherwise.
-pub fn fine_style(look: &CellLook) -> Style {
+pub(crate) fn fine_style(look: &CellLook) -> Style {
     part_style(look, Focus::Fine, true)
 }
 
 /// A value's style away from the cursor: dim where it's left at its default, plain otherwise.
-pub fn resting(default: bool) -> Style {
+pub(crate) fn resting(default: bool) -> Style {
     if default { theme::dim() } else { Style::new() }
 }
 
 /// A setting's value, with a jump's label over its first letter if it has one.
-pub fn value_spans(look: &CellLook, text: String, style: Style) -> Vec<Span<'static>> {
+pub(crate) fn value_spans(look: &CellLook, text: String, style: Style) -> Vec<Span<'static>> {
     match look.value_label {
         Some(label) => vec![
             Span::styled(label.to_string(), theme::jump_label()),
@@ -108,7 +108,7 @@ pub fn value_spans(look: &CellLook, text: String, style: Style) -> Vec<Span<'sta
 /// A setting's name in its column, with any labels from a jump over the letters just after what's
 /// been typed, as flash.nvim draws them, since that's where the eye is while searching. The labels
 /// stay inside the room the column has.
-pub fn name_line(look: &CellLook, name: &str, room: u16) -> Line<'static> {
+pub(crate) fn name_line(look: &CellLook, name: &str, room: u16) -> Line<'static> {
     let labels = look.name_labels;
     let letters: Vec<char> = name.chars().collect();
     let typed = look.query.and_then(|query| {

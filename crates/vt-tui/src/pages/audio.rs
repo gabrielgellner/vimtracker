@@ -75,7 +75,7 @@ pub struct AudioPage {
 
 impl AudioPage {
     /// The row the cursor is on.
-    pub fn row_here(&self) -> AudioRow {
+    pub(crate) fn row_here(&self) -> AudioRow {
         AudioRow::ALL[self.row.min(AudioRow::ALL.len() - 1)]
     }
 
@@ -139,7 +139,7 @@ impl Page for AudioPage {
 }
 
 /// How long a buffer lasts, in milliseconds, at a rate.
-pub fn buffer_ms(frames: u32, rate: u32) -> f64 {
+pub(crate) fn buffer_ms(frames: u32, rate: u32) -> f64 {
     f64::from(frames) * 1000.0 / f64::from(rate.max(1))
 }
 
@@ -150,7 +150,7 @@ impl App {
     }
 
     /// The device playing, or chosen, as the page lists it.
-    pub fn audio_device_here(&self) -> Option<&DeviceInfo> {
+    pub(crate) fn audio_device_here(&self) -> Option<&DeviceInfo> {
         let devices = &self.audio.devices;
         match &self.audio.choice.device {
             Some(id) => devices.iter().find(|device| device.id == *id),

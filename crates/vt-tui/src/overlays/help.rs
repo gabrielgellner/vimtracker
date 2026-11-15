@@ -32,7 +32,7 @@ pub fn draw_popup(frame: &mut Frame, area: Rect, app: &App, now: Instant) {
 }
 
 /// Draw every key. `j` and `k` scroll, and any other key closes it.
-pub fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
+pub(crate) fn draw_help(frame: &mut Frame, area: Rect, app: &App) {
     let lines: Vec<Line> = app
         .help_rows()
         .into_iter()

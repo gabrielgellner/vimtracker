@@ -28,10 +28,10 @@ use crate::pages::{Ctx, CtxMut, Outcome, Page};
 use crate::services::Services;
 
 /// The columns before the tracks': Length, Rpt and Start.
-pub const LENGTH_COLUMN: usize = 0;
-pub const REPEAT_COLUMN: usize = 1;
-pub const START_COLUMN: usize = 2;
-pub const COLUMNS_BEFORE_TRACKS: usize = 3;
+pub(crate) const LENGTH_COLUMN: usize = 0;
+pub(crate) const REPEAT_COLUMN: usize = 1;
+pub(crate) const START_COLUMN: usize = 2;
+pub(crate) const COLUMNS_BEFORE_TRACKS: usize = 3;
 /// How far a large step moves a repeat count.
 const LARGE_REPEAT: i64 = 4;
 /// How far a large step moves a chain ID: its top digit.

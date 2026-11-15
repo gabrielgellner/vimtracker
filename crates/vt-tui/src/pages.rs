@@ -129,7 +129,7 @@ pub struct Ctx<'a> {
 /// pages, the selection a replace or the shape panel holds, the recording, and the audio's
 /// readouts. `App` fills it each time a page is given a [`Ctx`].
 #[derive(Clone, Copy)]
-pub struct PageState<'a> {
+pub(crate) struct PageState<'a> {
     /// Whether a picker, a guide, the shape panel, help or the command line's list is drawn over
     /// the page.
     covered: bool,
@@ -149,14 +149,14 @@ pub struct PageState<'a> {
 
 /// What a page is given to run a key: the shared services, to read and change, and the modes that
 /// span the pages, to read, borrowed apart from the page.
-pub struct CtxMut<'a> {
+pub(crate) struct CtxMut<'a> {
     pub services: &'a mut Services,
     pub modes: &'a Modes,
 }
 
 impl App {
     /// What a page reads, to be drawn with.
-    pub fn ctx(&self) -> Ctx<'_> {
+    pub(crate) fn ctx(&self) -> Ctx<'_> {
         Ctx {
             services: &self.services,
             modes: &self.modes,
@@ -345,12 +345,12 @@ impl App {
 
 impl CtxMut<'_> {
     /// The current song.
-    pub fn song(&self) -> &Arc<Song> {
+    pub(crate) fn song(&self) -> &Arc<Song> {
         self.services.song()
     }
 
     /// The track under the cursor.
-    pub fn track_here(&self) -> Option<&Track> {
+    pub(crate) fn track_here(&self) -> Option<&Track> {
         self.song().tracks.get(self.services.cursor.track)
     }
 }
@@ -372,7 +372,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// A track's name, or its number if it has none.
-    pub fn track_name(&self, track: usize) -> String {
+    pub(crate) fn track_name(&self, track: usize) -> String {
         self.services.track_name(track)
     }
 
@@ -424,7 +424,7 @@ impl<'a> Ctx<'a> {
     /// How the modes show a setting's cell with the cursor on it this way: in the mode's colour,
     /// with what Insert has typed while the cursor's on it, and with no jump's labels, for a
     /// setting a jump doesn't reach.
-    pub fn look(&self, focus: Focus) -> CellLook<'a> {
+    pub(crate) fn look(&self, focus: Focus) -> CellLook<'a> {
         let mode = self.mode();
         let typing = mode == Mode::Insert && focus != Focus::Off;
         CellLook {
@@ -438,7 +438,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// How the modes show a setting's cell, as `look`, with the labels a jump puts on it.
-    pub fn look_on(&self, control: Control, focus: Focus) -> CellLook<'a> {
+    pub(crate) fn look_on(&self, control: Control, focus: Focus) -> CellLook<'a> {
         let jump = self.field_jump();
         CellLook {
             name_labels: jump.map_or("", |jump| jump.label_text(control)),
@@ -449,7 +449,7 @@ impl<'a> Ctx<'a> {
 
     /// One of the track page's settings on a track of the song, as a widget draws it, with an
     /// accumulator's limits counted as the scale lock has them.
-    pub fn param_view(&self, control: Control, track: &Track) -> Option<ParamView> {
+    pub(crate) fn param_view(&self, control: Control, track: &Track) -> Option<ParamView> {
         crate::pages::track::view(control, track, self.song(), self.services.scale.on)
     }
 
@@ -479,7 +479,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// The cursor's track as the latest report's live values were worked out from.
-    pub fn reported_track(&self) -> Option<&'a Track> {
+    pub(crate) fn reported_track(&self) -> Option<&'a Track> {
         self.services.reported_track()
     }
 
@@ -494,12 +494,12 @@ impl<'a> Ctx<'a> {
     }
 
     /// How far a track is through this chain, if it's playing it, counting every time round it.
-    pub fn playing_place(&self, track: usize, chain: u32) -> Option<usize> {
+    pub(crate) fn playing_place(&self, track: usize, chain: u32) -> Option<usize> {
         self.services.playing_place(track, chain)
     }
 
     /// What a track's dealt orders are dealt from, as the engine deals them.
-    pub fn dealer(&self, track: usize) -> Dealer {
+    pub(crate) fn dealer(&self, track: usize) -> Dealer {
         self.services.dealer(track)
     }
 
@@ -510,12 +510,12 @@ impl<'a> Ctx<'a> {
 
     /// A track as the pages draw it: where its macros put what they hold, then its faders where
     /// the steps have them while they drive them.
-    pub fn track_shown(&self, track: usize) -> Option<Cow<'a, Track>> {
+    pub(crate) fn track_shown(&self, track: usize) -> Option<Cow<'a, Track>> {
         self.services.track_shown(track)
     }
 
     /// A track's level, as its meter holds it.
-    pub fn track_meter(&self, track: usize) -> Meter {
+    pub(crate) fn track_meter(&self, track: usize) -> Meter {
         self.services
             .track_meters
             .get(track)
@@ -612,7 +612,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// The CPU the audio takes, as the system line shows it, in percent.
-    pub fn cpu_percent(&self) -> u64 {
+    pub(crate) fn cpu_percent(&self) -> u64 {
         self.page.cpu_percent
     }
 
@@ -623,7 +623,7 @@ impl<'a> Ctx<'a> {
 
     /// What the leaf before the CPU figure means, while it shows, as `slowed ×3.6 by power saving,
     /// about 8% at full speed`.
-    pub fn slowed_meaning(&self) -> Option<String> {
+    pub(crate) fn slowed_meaning(&self) -> Option<String> {
         self.page.slowdown.explanation(self.page.cpu_percent)
     }
 
@@ -645,13 +645,13 @@ impl<'a> Ctx<'a> {
 
     /// Whether something is drawn over the page, which a picture placed above the text would show
     /// through.
-    pub fn overlaid(&self, now: Instant) -> bool {
+    pub(crate) fn overlaid(&self, now: Instant) -> bool {
         self.page.covered || which_key_due(self.page.keys_since, now, POPUP_DELAY)
     }
 
     /// Which slice of its sample a track plays, as the Sound page's `Slice` says it after its
     /// number.
-    pub fn slice_choice(&self, track: &Track) -> String {
+    pub(crate) fn slice_choice(&self, track: &Track) -> String {
         self.services.slice_choice(track)
     }
 
@@ -666,17 +666,17 @@ impl<'a> Ctx<'a> {
     }
 
     /// An FX slot of the row under the cursor.
-    pub fn slot_here(&self, slot: usize) -> Option<FxSlot> {
+    pub(crate) fn slot_here(&self, slot: usize) -> Option<FxSlot> {
         self.services.current_slot(slot)
     }
 
     /// The gate cell under the cursor.
-    pub fn gate_here(&self) -> Option<Gate> {
+    pub(crate) fn gate_here(&self) -> Option<Gate> {
         self.services.current_gate()
     }
 
     /// Where the cursor's phrase's loop sits.
-    pub fn extent(&self) -> Extent {
+    pub(crate) fn extent(&self) -> Extent {
         self.services.extent()
     }
 
@@ -686,36 +686,36 @@ impl<'a> Ctx<'a> {
     }
 
     /// The step of its own that one track is at when another is at this one of its own.
-    pub fn step_on(&self, track: usize, from: usize, step: usize) -> usize {
+    pub(crate) fn step_on(&self, track: usize, from: usize, step: usize) -> usize {
         self.services.step_on(track, from, step)
     }
 
     /// The selection a replace across it or the shape panel is filling, which shows while Visual
     /// has ended.
-    pub fn held_selection(&self) -> Option<Selection> {
+    pub(crate) fn held_selection(&self) -> Option<Selection> {
         self.page.held_selection
     }
 
     /// Which step of the cursor's phrase the playhead is on, and which of the step's pulses, if
     /// it's on this phrase.
-    pub fn playhead_place(&self) -> Option<(usize, usize)> {
+    pub(crate) fn playhead_place(&self) -> Option<(usize, usize)> {
         self.services.playhead_place()
     }
 
     /// Where each FX column of the cursor's phrase with a lane of its own is reading, if it's the
     /// one playing.
-    pub fn lane_playheads(&self, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
+    pub(crate) fn lane_playheads(&self, phrase: &Phrase) -> [Option<usize>; FX_SLOTS] {
         self.services.lane_playheads(phrase)
     }
 
     /// The note the cursor's track's row playing was heard at, where an accumulator or an `RND`
     /// moved it.
-    pub fn heard_note(&self) -> Option<u8> {
+    pub(crate) fn heard_note(&self) -> Option<u8> {
         self.services.heard_note()
     }
 
     /// Whether the row the cursor's track is playing was skipped this time, by its `CHA` or `CND`.
-    pub fn row_skipped(&self) -> bool {
+    pub(crate) fn row_skipped(&self) -> bool {
         let services = self.services;
         services
             .places
@@ -725,13 +725,13 @@ impl<'a> Ctx<'a> {
 
     /// A row with each live generator on it laid as last heard, if any was heard otherwise than
     /// written.
-    pub fn heard_step(&self, track: usize, phrase: u32, row: usize) -> Option<Step> {
+    pub(crate) fn heard_step(&self, track: usize, phrase: u32, row: usize) -> Option<Step> {
         self.services.heard_step(track, phrase, row)
     }
 
     /// A row of a live generator as it was last heard, if that wasn't what's written: the step
     /// as heard, and on which pass.
-    pub fn heard_cell(
+    pub(crate) fn heard_cell(
         &self,
         track: usize,
         phrase: u32,
@@ -742,18 +742,18 @@ impl<'a> Ctx<'a> {
     }
 
     /// Whether a live generator was heard otherwise than written on any of its rows.
-    pub fn generator_moving(&self, track: usize, phrase: u32, generator: usize) -> bool {
+    pub(crate) fn generator_moving(&self, track: usize, phrase: u32, generator: usize) -> bool {
         self.services.generator_moving(track, phrase, generator)
     }
 
     /// A field of the row under the cursor in its setting's units, where it has them, as the
     /// status line and the row inspector say it.
-    pub fn phrase_value(&self, field: Field) -> Option<String> {
+    pub(crate) fn phrase_value(&self, field: Field) -> Option<String> {
         crate::screen::status::phrase_value(self.services, field)
     }
 
     /// The furthest the cursor's track's nudges go at its speed.
-    pub fn most_nudge_here(&self) -> i8 {
+    pub(crate) fn most_nudge_here(&self) -> i8 {
         self.services.most_nudge_here()
     }
 }

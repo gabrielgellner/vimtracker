@@ -13,7 +13,7 @@ The parallel device-description study (`device-interface.md`) came in near the e
 study builds on its `ParamView` (§2.5 there) and its PR names (M1, S1, M2, S2, E6/V3/G3), and §3.1
 lists four gaps in that contract. It does not redesign the description.
 
-**As built** (2026-11-15). The plan in §8 is built but for U13's `pub(crate)`. The study below is kept as it was
+**As built** (2026-11-15). The plan in §8 is built. The study below is kept as it was
 written, so its "today" is `main` before the plan; the design's
 [Architecture](vimtracker.md#architecture) describes the code as it is.
 
@@ -38,7 +38,8 @@ written, so its "today" is `main` before the plan; the design's
 | E6/V3/G3, the Roto lookups (#731) | #778 |
 | The answers to §1.5 and §9.3: faders with macros, the macro mark, `gd` to a macro | #764, #767, #768 |
 | #719's vt-tui part, one test binary | #785 |
-| U13 the folders (#733) | the first of two PRs; §7 has what changed |
+| U13 the folders (#733) | #793; §7 has what changed |
+| U13 `pub(crate)` and the dead-code lint (#733) | the second PR; §7 |
 
 Where it differs from the plan:
 - #719's vt-tui part landed after the pages, not before the split.
@@ -53,8 +54,7 @@ Where it differs from the plan:
 - Pages still pass keys back to `App` only to reach the picker, the views and `:` lines (#784's
   item 2).
 
-What's left: U13's second half, `pub(crate)` and the dead-code lint (#733), and #784's other
-items: 2 and 10 to 13.
+What's left: #784's other items, 2 and 10 to 13.
 
 ---
 
@@ -1297,6 +1297,21 @@ Architecture's [Interface](vimtracker.md#interface) has the layout as it is.
   `settle` and `follow_sources`; and `macroing.rs` whole to `overlays/mapping.rs`, `M` with the
   mapping view. They split as #784's item 2 gives the overlays their own types.
 - **No `pub use` block** keeps the old paths: the tests changed their `use` lines.
+- **Public surface**, in a second PR. What nothing outside the library names is `pub(crate)`:
+  an item stays `pub` only where its name appears in `tests/`, `examples/` or `main.rs`, and
+  `App`'s fields all stay `pub`, with the types the tests reach through them. That's 50 of the
+  120 modules, about 1,010 of 1,720 items and 110 of 680 fields. The twelve top folders stay
+  `pub`, as the tests use something in each. `lib.rs` warns on `unreachable_pub`, so a `pub` in
+  a module only the crate sees is a lint, not a review comment.
+- **The dead-code lint** then found ten things nothing used. Gone: `Columns::area_of` and
+  `map`, `Columns::spaced` with the room between columns it set, always none outside its test,
+  `SamplePage::slice_starts`, `edit::places` (the Roto counts its own since #788) and
+  `keys::LEADER`. Kept for their tests, under `#[cfg(test)]`: `plot::envelope`, the picker's
+  `rank` and `screenshot::to_svg`, shorthands for what the program calls. Kept with a reason: a
+  probe spec's `reference` fields, which only `tools/compare` reads.
+- **Still blind**: the tests are a crate of their own (one binary, #785), so whatever
+  a `pub` item reaches stays live to the lint, and a name the tests use for something else keeps
+  an item `pub`.
 
 ---
 

@@ -18,7 +18,7 @@ use crate::pages::track::Control;
 use crate::pages::{Ctx, CtxMut, Outcome, Page};
 
 /// The mixer's columns.
-pub const MIXER: [Control; 7] = [
+pub(crate) const MIXER: [Control; 7] = [
     Control::Trim,
     Control::Level,
     Control::Base(TrackControl::Pan),
@@ -29,10 +29,10 @@ pub const MIXER: [Control; 7] = [
 ];
 
 /// The mixer's row it opens on, its `Level`, as it's for the mix.
-pub const MIXER_START: usize = 1;
+pub(crate) const MIXER_START: usize = 1;
 
 /// The mixer's columns, as rows like a page's.
-pub const MIXER_ROWS: [&[Control]; 1] = [&MIXER];
+pub(crate) const MIXER_ROWS: [&[Control]; 1] = [&MIXER];
 
 /// The mixer as a component: the row its cursor is on, kept while other views are shown. Which
 /// track it's on is the program's cursor, and what rows there are depends on that track, so each
@@ -62,7 +62,7 @@ impl MixerPage {
 
     /// The row the cursor is on. On a track without the row it was on, it's the nearest above it,
     /// and the row it was on is kept, so going back to a track that has it finds it again.
-    pub fn row_here(&self, track: Option<&Track>) -> usize {
+    pub(crate) fn row_here(&self, track: Option<&Track>) -> usize {
         let rows = Self::rows(track);
         let wanted = self.row.min(MIXER.len() - 1);
         rows.iter()
@@ -79,7 +79,7 @@ impl MixerPage {
     }
 
     /// What the cursor is on, on the cursor's track.
-    pub fn control_here(&self, ctx: &Ctx) -> Control {
+    pub(crate) fn control_here(&self, ctx: &Ctx) -> Control {
         self.control(ctx.track_here())
     }
 
@@ -110,7 +110,7 @@ impl MixerPage {
 
     /// `0` and `$`: the first or last strip shown that has the row the cursor is on, for the
     /// program's cursor to go to, with that row kept for it. A folded strip is stepped over.
-    pub fn end_track(&mut self, last: bool, ctx: &CtxMut) -> Option<usize> {
+    pub(crate) fn end_track(&mut self, last: bool, ctx: &CtxMut) -> Option<usize> {
         let row = self.row_here(ctx.track_here());
         let tracks = &ctx.song().tracks;
         let mut shown = ctx

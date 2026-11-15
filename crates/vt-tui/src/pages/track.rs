@@ -17,20 +17,19 @@ pub(crate) mod editing;
 mod fx;
 mod generators;
 mod modulation;
-pub mod patches;
+pub(crate) mod patches;
 mod pickers;
 mod pictures;
-pub mod presets;
+pub(crate) mod presets;
 mod sound;
 pub(crate) mod tuning;
 mod typing;
 pub(crate) mod view;
 
 pub use controls::{AccumulatorField, ArpField, Control};
-pub use device::{
-    DEVICE_COLUMNS, DEVICE_ROWS, DeviceCursor, DeviceSpec, DeviceWidth, RackPlace, rack_places,
-};
-pub use fx::TakenInsert;
+pub(crate) use device::{DEVICE_COLUMNS, DEVICE_ROWS, DeviceWidth, rack_places};
+pub use device::{DeviceCursor, DeviceSpec};
+pub(crate) use fx::TakenInsert;
 pub(crate) use generators::macros_device;
 pub(crate) use modulation::modulator_bypassed;
 pub use view::{set, view};
@@ -107,7 +106,7 @@ impl Page {
 
     /// The page's devices, the Gen page's being a device for each live generator of this phrase
     /// of the track, then `Empty`.
-    pub fn devices_on(self, track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
+    pub(crate) fn devices_on(self, track: &Track, phrase: Option<u32>) -> Vec<DeviceSpec> {
         match self {
             Self::Sound => sound::devices(track),
             Self::Mod => modulation::devices(track),
@@ -293,7 +292,7 @@ impl TrackPage {
     }
 
     /// What the cursor is on, on the cursor's track.
-    pub fn control_here(&self, ctx: &Ctx) -> Control {
+    pub(crate) fn control_here(&self, ctx: &Ctx) -> Control {
         self.control(ctx.track_here())
     }
 

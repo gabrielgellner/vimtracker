@@ -176,13 +176,17 @@ fn line_png(spans: &[(usize, usize)], rows: usize, color: [u8; 3]) -> Vec<u8> {
 }
 
 /// The scope's picture as a PNG, from the rows it covers in each column of dots.
-pub fn scope_png(spans: &[(usize, usize)], color: [u8; 3]) -> Vec<u8> {
+pub(crate) fn scope_png(spans: &[(usize, usize)], color: [u8; 3]) -> Vec<u8> {
     line_png(spans, SCOPE_HEIGHT * CELL_DOTS_DOWN, color)
 }
 
 /// The rows a waveform covers in each column of dots, for a drawing this many characters across
 /// and down, to keep in place of the sample and draw later with [`spans_png`].
-pub fn waveform_spans(frames: &[[f32; 2]], columns: usize, rows: usize) -> Vec<(usize, usize)> {
+pub(crate) fn waveform_spans(
+    frames: &[[f32; 2]],
+    columns: usize,
+    rows: usize,
+) -> Vec<(usize, usize)> {
     waveform::spans(
         frames,
         &[],
@@ -192,6 +196,6 @@ pub fn waveform_spans(frames: &[[f32; 2]], columns: usize, rows: usize) -> Vec<(
 }
 
 /// A drawing worked out by [`waveform_spans`] as a PNG, `rows` characters down.
-pub fn spans_png(spans: &[(usize, usize)], rows: usize, color: [u8; 3]) -> Vec<u8> {
+pub(crate) fn spans_png(spans: &[(usize, usize)], rows: usize, color: [u8; 3]) -> Vec<u8> {
     line_png(spans, rows * CELL_DOTS_DOWN, color)
 }

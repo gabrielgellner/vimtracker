@@ -46,7 +46,7 @@ impl DeviceSpec {
 
 /// An effect taken out of a slot, waiting to be put in another.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TakenInsert {
+pub(crate) struct TakenInsert {
     pub insert: Insert,
     pub track: usize,
     pub slot: usize,

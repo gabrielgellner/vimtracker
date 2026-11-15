@@ -190,7 +190,7 @@ pub struct ParamView {
     /// How a count's steps follow one another.
     pub pace: Pace,
     /// Goes round past either end: a phase, a list that wraps.
-    pub wraps: bool,
+    pub(crate) wraps: bool,
     /// Its bar draws from the middle: pan, trim, a band's boost.
     pub centred: bool,
     /// Where it sits on its bar, 0 to 255, or none for a value with no bar.
@@ -214,11 +214,11 @@ pub struct ParamView {
     /// How what `i` takes reads as a value.
     pub reads: Reads,
     /// What the status line says when it doesn't.
-    pub why_not: Cow<'static, str>,
+    pub(crate) why_not: Cow<'static, str>,
     /// The registry's units, for one of its settings.
     pub units: Option<Units>,
     /// Not dim: away from its default, or doing something on this track.
-    pub engaged: bool,
+    pub(crate) engaged: bool,
 }
 
 /// How far a small step moves an envelope time. Short times need finer steps than long ones.
