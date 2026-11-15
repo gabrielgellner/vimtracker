@@ -205,7 +205,7 @@ pub(crate) struct CtxMut<'a> {
 
 impl App {
     /// What a page reads, to be drawn with.
-    pub(crate) fn ctx(&self) -> Ctx<'_> {
+    pub fn ctx(&self) -> Ctx<'_> {
         Ctx {
             services: &self.services,
             modes: &self.modes,
@@ -409,6 +409,10 @@ impl App {
                 Mode::Command => self.modes.mode = Mode::Normal,
                 Mode::Jump => {
                     self.overlays.field_jump = None;
+                    self.modes.mode = Mode::Normal;
+                }
+                Mode::Mapping => {
+                    self.overlays.mapping = None;
                     self.modes.mode = Mode::Normal;
                 }
                 _ => {

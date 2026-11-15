@@ -416,8 +416,10 @@ pub fn draw(frame: &mut Frame, area: Rect, app: &App) {
     // An overlay's own sequences, the picker's `gg` and `zz`, aren't said here, as they never
     // were.
     let pending = if app.pending().is_empty()
-        || matches!(app.modes.mode, Mode::Picker | Mode::Command | Mode::Jump)
-    {
+        || matches!(
+            app.modes.mode,
+            Mode::Picker | Mode::Command | Mode::Jump | Mode::Mapping
+        ) {
         String::new()
     } else {
         let keys: Vec<String> = app.pending().iter().map(Key::to_string).collect();
