@@ -529,8 +529,8 @@ mod tests {
     fn its_curve_is_what_a_sweep_through_the_slot_measures() {
         use vt_model::insert::Insert;
 
+        use crate::dsp::effects::slot::Keys;
         use crate::dsp::effects::sweep::{across, agrees, measured_db, slot};
-        use crate::track_state::Keys;
         // It hears the second track: silent, or held at a steady level, so it rests or stays open
         // part of the way as the sines go through.
         let mut keys = Keys {

@@ -16,24 +16,23 @@
 //! smoothly; an off/on setting is a switch; a centred value has a notch at its middle; and any
 //! other value turns smoothly.
 
-use vt_model::accumulator::{Adds, AtLimit, MOST_DEGREES, Moves, Reset};
+use vt_model::accumulator::{MOST_DEGREES, Reset};
 use vt_model::action::TrackControl;
-use vt_model::arpeggio::{ArpMode, ArpRate, MOST_OCTAVES};
+use vt_model::arpeggio::MOST_OCTAVES;
 use vt_model::constants::{
     BAR_STEPS, MAX_ENVELOPE_MS, MAX_GROUPS, MAX_TRACK_RESET, TICKS_PER_STEP,
 };
-use vt_model::envelope::{Curve, Hold, MAX_HOLD_MS, MAX_RATCHET};
+use vt_model::envelope::{Hold, MAX_HOLD_MS};
 use vt_model::insert::Insert;
 use vt_model::kit::CHOKE_GROUPS;
-use vt_model::lfo::{Fade, LfoMode, Rate, Shape};
+use vt_model::lfo::{Fade, Rate};
+use vt_model::listed::{Listed, choices_of};
 use vt_model::modulation::{MAX_DEPTH, ModKind, Polarity};
 use vt_model::settings::{Kind, SettingId, Units};
 use vt_model::shape::GenParam;
 use vt_model::shape::params::Units as GenUnits;
-use vt_model::song::{FilterType, Machine, Role, Song, Track, TrackKind};
-use vt_model::speed::Speed;
-use vt_model::steps::{Loop, MAX_MUTATE, STEPS, StepRate, StepsMode};
-use vt_model::tracking::Source;
+use vt_model::song::{FilterType, Machine, Song, Track, TrackKind};
+use vt_model::steps::{Loop, StepRate};
 use vt_roto::Label;
 use vt_roto::bytes::Rgb;
 use vt_roto::colour;
@@ -346,6 +345,12 @@ fn list(names: impl IntoIterator<Item = String>, at: usize) -> (Feel, u16) {
     }
 }
 
+/// A knob for one of a [`Listed`] type's values, on the one it has.
+fn listed<X: Listed>(current: X) -> (Feel, u16) {
+    let at = X::ALL.iter().position(|each| *each == current).unwrap_or(0);
+    list(choices_of::<X>().map(str::to_owned), at)
+}
+
 /// A knob for one of a list that changes with the track or the song, such as a destination: it
 /// turns smoothly, as its steps would move under it.
 fn changing(at: usize, count: usize) -> (Feel, u16) {
@@ -478,13 +483,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             param,
         } => return gen_feel(song, track, phrase, generator, param),
         Control::NewGenerator(_) => return None,
-        Control::Machine => list(
-            Machine::ALL.iter().map(|machine| machine.name().to_owned()),
-            Machine::ALL
-                .iter()
-                .position(|machine| *machine == track.machine)
-                .unwrap_or(0),
-        ),
+        Control::Machine => listed(track.machine),
         Control::Sample => {
             let numbers: Vec<u8> = std::iter::once(0)
                 .chain(song.bank.iter().map(|(number, _)| number))
@@ -509,30 +508,13 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             let most = i16::from(tuning_most(control));
             value((i16::from(set) + most) as u16, (2 * most) as u16, true)
         }
-        Control::Base(which) => match which.setting() {
-            Some(id) => {
-                let coarse = match which {
-                    TrackControl::Cutoff => track.cutoff,
-                    TrackControl::Resonance => track.resonance,
-                    TrackControl::Pan => track.pan,
-                    TrackControl::SendA => track.send_a,
-                    TrackControl::SendB => track.send_b,
-                    TrackControl::VelocityDelta => track.velocity_delta,
-                    TrackControl::Quantise => track.quantise,
-                    _ => track.pitch,
-                };
-                registry(id, coarse, track.fine(id))
+        Control::Base(which) => {
+            let coarse = track.control(which);
+            match which.setting() {
+                Some(id) => registry(id, coarse, track.fine(id)),
+                None => value(u16::from(coarse), 0xFF, false),
             }
-            None => {
-                let coarse = match which {
-                    TrackControl::Drive => track.drive,
-                    TrackControl::Punch => track.punch,
-                    TrackControl::LowCut => track.low_cut,
-                    _ => track.high_cut,
-                };
-                value(u16::from(coarse), 0xFF, false)
-            }
-        },
+        }
         Control::Level => registry(SettingId::LEVEL, track.level, 0),
         // `80` is 0 dB, so the notch is where it neither cuts nor boosts.
         Control::Trim => value(u16::from(track.trim), 0xFF, true),
@@ -555,33 +537,16 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             std::iter::once("Off".to_owned()).chain((1..=MAX_GROUPS).map(|g| format!("G{g}"))),
             usize::from(track.group.unwrap_or(0)),
         ),
-        Control::Role => list(
-            Role::ALL.iter().map(|role| role.name().to_owned()),
-            Role::ALL
-                .iter()
-                .position(|role| *role == track.role)
-                .unwrap_or(0),
-        ),
+        Control::Role => listed(track.role),
         Control::GateLength => value(
             u16::from(vt_model::settings::gate_percent(track.gate_length())) - 1,
             99,
             false,
         ),
-        Control::Speed => list(
-            Speed::ALL.iter().map(|speed| speed.name().to_owned()),
-            usize::from(track.speed.index()),
-        ),
+        Control::Speed => listed(track.speed),
         Control::Reset => value(track.reset.unwrap_or(0), MAX_TRACK_RESET, false),
         Control::Glide => value(u16::from(track.glide), 0xFF, false),
-        Control::FilterType => list(
-            FilterType::ALL
-                .iter()
-                .map(|filter| filter.name().to_owned()),
-            FilterType::ALL
-                .iter()
-                .position(|filter| *filter == track.filter)
-                .unwrap_or(0),
-        ),
+        Control::FilterType => listed(track.filter),
         Control::FilterMode => {
             let modes = track.filter.modes();
             if modes.is_empty() {
@@ -595,99 +560,7 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
         }
         Control::Mod(slot, field) => {
             let modulator = &track.mods[slot];
-            let (adsr, ahd, drum, lpg, lfo) = (
-                &modulator.adsr,
-                &modulator.ahd,
-                &modulator.drum,
-                &modulator.lpg,
-                &modulator.lfo,
-            );
-            let ahd_kind = modulator.kind == ModKind::Ahd;
-            let drum_kind = modulator.kind == ModKind::Drum;
-            let lpg_kind = modulator.kind == ModKind::Lpg;
-            let steps = &modulator.steps;
-            let numbered = |at: u8| {
-                list(
-                    (1..=STEPS).map(|step| step.to_string()),
-                    usize::from(at).min(STEPS - 1),
-                )
-            };
             match field {
-                // Steps' mode, rate and loop are musical lists, which leave the layout as it is.
-                ModField::Mode if modulator.kind == ModKind::Steps => list(
-                    StepsMode::ALL.iter().map(|mode| mode.name().to_owned()),
-                    StepsMode::ALL
-                        .iter()
-                        .position(|mode| *mode == steps.mode)
-                        .unwrap_or(0),
-                ),
-                ModField::Rate if modulator.kind == ModKind::Steps => list(
-                    StepRate::ALL.iter().map(ToString::to_string),
-                    StepRate::ALL
-                        .iter()
-                        .position(|rate| *rate == steps.rate)
-                        .unwrap_or(0),
-                ),
-                ModField::Length => numbered(steps.length.saturating_sub(1)),
-                ModField::Start => numbered(steps.start),
-                ModField::Loop => list(
-                    Loop::ALL.iter().map(ToString::to_string),
-                    Loop::ALL
-                        .iter()
-                        .position(|each| *each == steps.looping)
-                        .unwrap_or(0),
-                ),
-                ModField::Mutate => value(u16::from(steps.mutate.min(MAX_MUTATE)), 100, false),
-                ModField::Smooth => depth(steps.smooth),
-                // Each value either way of none, with the depth's centre notch.
-                ModField::Step(at) => depth(steps.values[usize::from(at)]),
-                // What Track follows is a musical list of three, which leaves the layout as it is.
-                ModField::Mode if modulator.kind == ModKind::Track => list(
-                    Source::ALL.iter().map(|source| source.name().to_owned()),
-                    Source::ALL
-                        .iter()
-                        .position(|source| *source == modulator.track.source)
-                        .unwrap_or(0),
-                ),
-                // Smooth across its source's values, its note or hex shown as it turns.
-                ModField::Low | ModField::High => {
-                    let tracking = &modulator.track;
-                    let bounds = tracking.bounds();
-                    let at = if field == ModField::Low {
-                        bounds.low
-                    } else {
-                        bounds.high
-                    };
-                    let (lowest, highest) = tracking.source.span();
-                    value(
-                        u16::from(at.clamp(lowest, highest) - lowest),
-                        u16::from(highest - lowest),
-                        false,
-                    )
-                }
-                // An envelope's curve is a musical list, which leaves the layout as it is.
-                ModField::Mode if modulator.kind.is_envelope() => {
-                    let curve = match modulator.kind {
-                        ModKind::Ahd => ahd.curve,
-                        ModKind::Drum => drum.curve,
-                        _ => adsr.curve,
-                    };
-                    list(
-                        Curve::ALL.iter().map(|curve| curve.name().to_owned()),
-                        Curve::ALL
-                            .iter()
-                            .position(|each| *each == curve)
-                            .unwrap_or(0),
-                    )
-                }
-                // How notes start an LFO, a musical list of five, which leaves the layout as it is.
-                ModField::Mode => list(
-                    LfoMode::ALL.iter().map(|mode| mode.name().to_owned()),
-                    LfoMode::ALL
-                        .iter()
-                        .position(|mode| *mode == lfo.mode)
-                        .unwrap_or(0),
-                ),
                 // What a slot is, the app's alone.
                 ModField::Type | ModField::Polarity | ModField::Reset => return None,
                 ModField::Destination => {
@@ -696,47 +569,60 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
                         .destination
                         .and_then(|to| choices.iter().position(|choice| *choice == to))
                         .map_or(0, |at| at + 1);
-                    changing(at, choices.len() + 1)
+                    return Some(changing(at, choices.len() + 1));
                 }
-                ModField::Depth => depth(modulator.depth),
-                ModField::Attack if ahd_kind => (Feel::Smooth, time_position(ahd.attack_ms)),
-                ModField::Attack if lpg_kind => (Feel::Smooth, time_position(lpg.attack_ms)),
-                ModField::Decay if lpg_kind => (Feel::Smooth, time_position(lpg.decay_ms)),
-                ModField::Colour => value(u16::from(lpg.colour), 0xFF, false),
-                ModField::Attack => (Feel::Smooth, time_position(adsr.attack_ms)),
-                ModField::Decay if ahd_kind => (Feel::Smooth, time_position(ahd.decay_ms)),
-                ModField::Decay if drum_kind => (Feel::Smooth, time_position(drum.decay_ms)),
-                ModField::Peak => (Feel::Smooth, time_position(drum.peak_ms)),
-                ModField::Body => value(u16::from(drum.body.min(100)), 100, false),
-                ModField::Ratchet => list(
-                    (1..=MAX_RATCHET).map(|strikes| strikes.to_string()),
-                    usize::from(drum.ratchet.clamp(1, MAX_RATCHET) - 1),
-                ),
-                ModField::Decay => (Feel::Smooth, time_position(adsr.decay_ms)),
-                // Smooth, its value shown as it turns, with `Note` at the bottom.
-                ModField::Hold => (Feel::Smooth, hold_position(ahd.hold)),
-                ModField::Release => (Feel::Smooth, time_position(adsr.release_ms)),
-                ModField::Sustain => value(u16::from(adsr.sustain.min(100)), 100, false),
-                ModField::Shape => list(
-                    Shape::ALL.iter().map(|shape| shape.name().to_owned()),
-                    Shape::ALL
-                        .iter()
-                        .position(|shape| *shape == lfo.shape)
-                        .unwrap_or(0),
-                ),
+                // Steps' rate is a musical list, which leaves the layout as it is.
+                ModField::Rate if modulator.kind == ModKind::Steps => {
+                    let steps = &modulator.steps;
+                    return Some(list(
+                        StepRate::ALL.iter().map(ToString::to_string),
+                        StepRate::ALL
+                            .iter()
+                            .position(|rate| *rate == steps.rate)
+                            .unwrap_or(0),
+                    ));
+                }
                 // Smooth over every kind of rate, its value shown as it turns: a stored knob keeps
                 // at most 16 steps, and a note value has 24 (the author's choice, 2026-11-11).
-                ModField::Rate => (Feel::Smooth, rate_position(lfo.rate)),
-                ModField::Phase => value(lfo.phase.min(359), 359, false),
-                ModField::Deform => depth(lfo.deform),
-                // Smooth through every fade, out, none and in, its value shown as it turns.
-                ModField::Fade => list(
-                    Fade::ALL.iter().map(ToString::to_string),
-                    Fade::ALL
-                        .iter()
-                        .position(|fade| *fade == lfo.fade)
-                        .unwrap_or(0),
+                ModField::Rate => return Some((Feel::Smooth, rate_position(modulator.lfo.rate))),
+                // Smooth, its value shown as it turns, with `Note` at the bottom.
+                ModField::Hold => return Some((Feel::Smooth, hold_position(modulator.ahd.hold))),
+                _ => {}
+            }
+            let at = modulator.field(field)?;
+            let (lowest, highest) = modulator.bounds(field)?;
+            let place = (at.clamp(lowest, highest) - lowest) as usize;
+            let top = (highest - lowest) as u16;
+            match field {
+                // An envelope's curve, how notes start an LFO or Steps, and what Track follows are
+                // musical lists, which leave the layout as it is.
+                ModField::Mode => list(
+                    modulator
+                        .kind
+                        .modes()
+                        .into_iter()
+                        .map(|(name, _)| name.to_owned()),
+                    place,
                 ),
+                ModField::Shape => listed(modulator.lfo.shape),
+                // Smooth through every fade, out, none and in, its value shown as it turns.
+                ModField::Fade => list(Fade::ALL.iter().map(ToString::to_string), place),
+                ModField::Loop => list(Loop::ALL.iter().map(ToString::to_string), place),
+                // Counts and places, numbered from 1.
+                ModField::Length | ModField::Start | ModField::Ratchet => list(
+                    (1..=usize::from(top) + 1).map(|count| count.to_string()),
+                    place,
+                ),
+                ModField::Attack | ModField::Decay | ModField::Release | ModField::Peak => {
+                    (Feel::Smooth, time_position(at as u16))
+                }
+                // Each either way of none, with the depth's centre notch.
+                ModField::Depth | ModField::Deform | ModField::Smooth | ModField::Step(_) => {
+                    depth(at as i16)
+                }
+                // Smooth from its lowest to its highest: a level, a percentage, degrees, or Track's
+                // map across its source's values, its note or hex shown as it turns.
+                _ => value(place as u16, top, false),
             }
         }
         Control::Accumulator(field) => {
@@ -750,27 +636,9 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
             match field {
                 AccumulatorField::Up => degrees(accumulation.up),
                 AccumulatorField::Down => degrees(accumulation.down),
-                AccumulatorField::Moves => list(
-                    Moves::ALL.iter().map(|moves| moves.name().to_owned()),
-                    Moves::ALL
-                        .iter()
-                        .position(|moves| *moves == accumulation.moves)
-                        .unwrap_or(0),
-                ),
-                AccumulatorField::AtLimit => list(
-                    AtLimit::ALL.iter().map(|at| at.name().to_owned()),
-                    AtLimit::ALL
-                        .iter()
-                        .position(|at| *at == accumulation.at_limit)
-                        .unwrap_or(0),
-                ),
-                AccumulatorField::Adds => list(
-                    Adds::ALL.iter().map(|adds| adds.name().to_owned()),
-                    Adds::ALL
-                        .iter()
-                        .position(|adds| *adds == accumulation.adds)
-                        .unwrap_or(0),
-                ),
+                AccumulatorField::Moves => listed(accumulation.moves),
+                AccumulatorField::AtLimit => listed(accumulation.at_limit),
+                AccumulatorField::Adds => listed(accumulation.adds),
                 AccumulatorField::Reset => {
                     let resets: Vec<Reset> = Reset::all().collect();
                     list(
@@ -786,20 +654,8 @@ fn feel(control: Control, track: &Track, song: &Song) -> Option<(Feel, u16)> {
         Control::Arpeggio(field) => {
             let arpeggio = track.arpeggio;
             match field {
-                ArpField::Rate => list(
-                    ArpRate::ALL.iter().map(|rate| rate.name().to_owned()),
-                    ArpRate::ALL
-                        .iter()
-                        .position(|rate| *rate == arpeggio.rate)
-                        .unwrap_or(0),
-                ),
-                ArpField::Mode => list(
-                    ArpMode::ALL.iter().map(|mode| mode.name().to_owned()),
-                    ArpMode::ALL
-                        .iter()
-                        .position(|mode| *mode == arpeggio.mode)
-                        .unwrap_or(0),
-                ),
+                ArpField::Rate => listed(arpeggio.rate),
+                ArpField::Mode => listed(arpeggio.mode),
                 ArpField::Octaves => list(
                     (1..=MOST_OCTAVES).map(|octaves| octaves.to_string()),
                     usize::from(arpeggio.octaves.saturating_sub(1)),

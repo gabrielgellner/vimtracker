@@ -34,6 +34,8 @@
 use vt_model::insert::{Plate as Settings, plate_size};
 
 use crate::dsp::blocks::smoother::{Smoothed, coefficient};
+use crate::dsp::effects::memory::{REVERB_QUIET_SECONDS, SongPlace};
+use crate::dsp::effects::slot::{Rung, SlotEffect};
 use crate::dsp::effects::tail::{self, Complex, TAIL_HZ, Tail};
 
 /// The rate the paper's lengths are written for.
@@ -433,6 +435,42 @@ impl Plate {
                 * WET;
         }
         out
+    }
+}
+
+impl SlotEffect for Plate {
+    type Settings = Settings;
+
+    /// A plate's, long enough for the biggest.
+    fn new(rate: u32) -> Self {
+        Self::new(rate)
+    }
+
+    fn follow(&mut self, settings: Settings, _song: SongPlace, frames: u64) {
+        self.follow(settings, frames);
+    }
+
+    fn settle(&mut self) {
+        self.settle();
+    }
+
+    fn clear(&mut self) {
+        self.clear();
+    }
+
+    fn quiet_frames(&self, rate: u32) -> u32 {
+        (REVERB_QUIET_SECONDS * rate as f32) as u32
+    }
+
+    fn keep_time(&mut self, frames: u64, _song: SongPlace) {
+        self.keep_time(frames);
+    }
+}
+
+impl Rung for Plate {
+    #[inline]
+    fn process(&mut self, input: [f32; 2]) -> [f32; 2] {
+        self.process(input)
     }
 }
 
